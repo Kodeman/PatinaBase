@@ -26,11 +26,17 @@ import { useRouter } from 'next/navigation';
 import { useCreateLead } from '@patina/supabase';
 import { useQueryClient } from '@tanstack/react-query';
 import { DocSheet } from './doc-sheet';
+import { DocumentAction, DocumentActionGroup } from '../document-action';
 
 /** R65 — quick suggestion chips for "Where from". Clicking one fills the
  *  free-text field with a canonical label; the designer can also type any
  *  channel. The chosen string lands in `leads.source` (00223). */
-const SOURCE_CHIPS = ['Referral', 'Website quiz', 'Instagram', 'Past client'] as const;
+const SOURCE_CHIPS = [
+  'Referral',
+  'Website quiz',
+  'Instagram',
+  'Past client',
+] as const;
 
 /** Cheap email vs phone discrimination. The table carries `contact_email` only
  *  (no phone column); a phone is preserved in the Brief one-liner instead of
@@ -39,7 +45,13 @@ function looksLikeEmail(v: string): boolean {
   return /\S+@\S+\.\S+/.test(v.trim());
 }
 
-export function CaptureLeadSheet({ open, onClose }: { open: boolean; onClose: () => void }) {
+export function CaptureLeadSheet({
+  open,
+  onClose,
+}: {
+  open: boolean;
+  onClose: () => void;
+}) {
   const router = useRouter();
   const createLead = useCreateLead();
   const queryClient = useQueryClient();
@@ -66,7 +78,8 @@ export function CaptureLeadSheet({ open, onClose }: { open: boolean; onClose: ()
     setError(null);
 
     const trimmedContact = contact.trim();
-    const contactIsEmail = trimmedContact !== '' && looksLikeEmail(trimmedContact);
+    const contactIsEmail =
+      trimmedContact !== '' && looksLikeEmail(trimmedContact);
 
     // The Brief one-liner carries the project line and any non-email contact
     // (phone) — the table has no `phone` column, so it lives honestly in the
@@ -74,7 +87,8 @@ export function CaptureLeadSheet({ open, onClose }: { open: boolean; onClose: ()
     // folded into the one-liner.
     const descParts: string[] = [];
     if (project.trim()) descParts.push(project.trim());
-    if (trimmedContact && !contactIsEmail) descParts.push(`Contact: ${trimmedContact}`);
+    if (trimmedContact && !contactIsEmail)
+      descParts.push(`Contact: ${trimmedContact}`);
     const description = descParts.join(' · ');
 
     createLead.mutate(
@@ -96,7 +110,9 @@ export function CaptureLeadSheet({ open, onClose }: { open: boolean; onClose: ()
           // R65 — capture opens the new Brief so the designer keeps filling it
           // in the document. The Desk also re-derives (Shape C) for when they
           // put it down. (useCreateLead already invalidates ['leads'].)
-          queryClient.invalidateQueries({ queryKey: ['document-state', 'desk'] });
+          queryClient.invalidateQueries({
+            queryKey: ['document-state', 'desk'],
+          });
           onClose();
           router.push(`/doc/${lead.id}`);
         },
@@ -117,7 +133,8 @@ export function CaptureLeadSheet({ open, onClose }: { open: boolean; onClose: ()
           Who just came in?
         </h2>
         <p className="mt-1.5 text-[13px] leading-relaxed text-[var(--color-mocha)]">
-          Just enough to begin. The Brief fills in as you go — nothing else is required.
+          Just enough to begin. The Brief fills in as you go — nothing else is
+          required.
         </p>
 
         <div className="mt-7 space-y-5">
@@ -148,7 +165,11 @@ export function CaptureLeadSheet({ open, onClose }: { open: boolean; onClose: ()
           </div>
 
           <Field label="Where from">
-            <Input value={source} onChange={setSource} placeholder="how they found you" />
+            <Input
+              value={source}
+              onChange={setSource}
+              placeholder="how they found you"
+            />
             <div className="mt-2 flex flex-wrap gap-1.5">
               {SOURCE_CHIPS.map((s) => {
                 const on = source.trim().toLowerCase() === s.toLowerCase();
@@ -158,7 +179,7 @@ export function CaptureLeadSheet({ open, onClose }: { open: boolean; onClose: ()
                     type="button"
                     aria-pressed={on}
                     onClick={() => setSource(s)}
-                    className={`rounded-[4px] border px-3 py-1.5 font-mono text-[10px] uppercase tracking-[0.06em] transition-colors ${
+                    className={`min-h-11 rounded-[4px] border px-3 py-1.5 font-mono text-[10px] uppercase tracking-[0.06em] transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-clay)] ${
                       on
                         ? 'border-[var(--color-clay)] bg-[rgba(196,165,123,0.18)] text-[var(--color-charcoal)]'
                         : 'border-[var(--color-pearl)] text-[var(--color-aged-oak)] hover:border-[var(--color-clay)]'
@@ -173,36 +194,53 @@ export function CaptureLeadSheet({ open, onClose }: { open: boolean; onClose: ()
         </div>
 
         {error && (
-          <p className="mt-5 text-[12px] text-[var(--color-terracotta)]" role="alert">
+          <p
+            className="mt-5 text-[12px] text-[var(--color-terracotta)]"
+            role="alert"
+          >
             {error}
           </p>
         )}
 
-        <div className="mt-8 flex items-center gap-4">
-          <button
+        <DocumentActionGroup
+          surfaceKey="desk"
+          regionKey="capture-lead-sheet"
+          className="mt-8"
+          aria-label="Capture lead actions"
+        >
+          <DocumentAction
+            actionKey="begin-brief"
+            variant="primary"
             type="submit"
-            disabled={createLead.isPending}
-            className="rounded-[4px] bg-[var(--color-clay)] px-4 py-2 font-mono text-[11px] font-semibold uppercase tracking-[0.08em] text-[var(--color-charcoal)] transition-colors hover:bg-[var(--color-aged-oak)] disabled:opacity-50"
+            loading={createLead.isPending}
+            loadingLabel="Beginning…"
+            trailing="→"
           >
-            {createLead.isPending ? 'Beginning…' : 'Begin the Brief →'}
-          </button>
-          <button
-            type="button"
+            Begin the Brief
+          </DocumentAction>
+          <DocumentAction
+            actionKey="cancel-capture-lead"
+            variant="tertiary"
             onClick={onClose}
-            className="font-mono text-[11px] uppercase tracking-[0.08em] text-[var(--color-aged-oak)] hover:text-[var(--color-charcoal)]"
           >
             Cancel
-          </button>
+          </DocumentAction>
           <span className="ml-auto font-mono text-[9px] uppercase tracking-[0.06em] text-[var(--color-aged-oak)]">
             opens the Brief
           </span>
-        </div>
+        </DocumentActionGroup>
       </form>
     </DocSheet>
   );
 }
 
-function Field({ label, children }: { label: string; children: React.ReactNode }) {
+function Field({
+  label,
+  children,
+}: {
+  label: string;
+  children: React.ReactNode;
+}) {
   return (
     <label className="block">
       <span className="mb-1.5 block font-mono text-[10px] uppercase tracking-[0.1em] text-[var(--color-aged-oak)]">

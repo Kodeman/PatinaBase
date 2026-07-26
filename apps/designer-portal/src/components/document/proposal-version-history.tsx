@@ -13,6 +13,7 @@
 
 import { useState } from 'react';
 import { useProposalVersions } from '@/hooks/use-proposals';
+import { DocumentAction } from './document-action';
 import { DocSheet } from './overlays/doc-sheet';
 import { ProposalBlocksReadOnly } from './proposal-blocks-readonly';
 
@@ -40,7 +41,9 @@ export function ProposalVersionHistory({ proposalId }: { proposalId: string }) {
   if (!versions || versions.length <= 1) return null;
 
   // Ascending so the strip reads v1 → v2 left to right.
-  const ordered = [...versions].sort((a, b) => (a.version ?? 0) - (b.version ?? 0));
+  const ordered = [...versions].sort(
+    (a, b) => (a.version ?? 0) - (b.version ?? 0),
+  );
 
   return (
     <>
@@ -60,14 +63,15 @@ export function ProposalVersionHistory({ proposalId }: { proposalId: string }) {
             );
           }
           return (
-            <button
+            <DocumentAction
               key={v.id}
-              type="button"
+              actionKey={`open-proposal-version-${v.version}`}
+              variant="tertiary"
               onClick={() => setViewing(v.id)}
-              className="font-mono text-[9px] uppercase tracking-[0.08em] text-[var(--text-muted)] hover:text-[var(--color-clay)]"
+              className="min-h-11 px-1"
             >
               v{v.version} · {label}
-            </button>
+            </DocumentAction>
           );
         })}
       </div>
@@ -78,7 +82,9 @@ export function ProposalVersionHistory({ proposalId }: { proposalId: string }) {
             <p className="font-mono text-[9px] font-semibold uppercase tracking-[0.08em] text-[var(--color-aged-oak)]">
               {(() => {
                 const v = versions.find((x) => x.id === viewing);
-                return v ? `v${v.version} · ${versionLabel(v)} · read-only` : 'read-only';
+                return v
+                  ? `v${v.version} · ${versionLabel(v)} · read-only`
+                  : 'read-only';
               })()}
             </p>
             {/* The canonical blocks render dark ink on the laid paper sheet (R96). */}

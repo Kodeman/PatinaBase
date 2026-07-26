@@ -30,6 +30,12 @@ import { PromoteToStudioModal } from '@/components/products/promotion/promote-to
 import { NominateToCatalogModal } from '@/components/products/nomination/nominate-to-catalog-modal';
 import { useDocumentSurface } from '@/lib/help-system/use-document-surface';
 import { DOCUMENT_SURFACE_KEYS } from '@/lib/help-system/document-surface-keys';
+import {
+  DocumentAction,
+  DocumentActionGroup,
+  DocumentActionRow,
+} from '../../document-action';
+import { useMobilePrimaryAction } from '../../mobile/mobile-shell';
 
 export function LibraryRoom() {
   useDocumentSurface(DOCUMENT_SURFACE_KEYS.library); // R89 — scope help to the Library room
@@ -47,14 +53,18 @@ export function LibraryRoom() {
   };
 
   const studioId = useMemo(() => {
-    const first = ((orgs ?? []) as unknown as Array<Record<string, unknown>>)[0];
+    const first = (
+      (orgs ?? []) as unknown as Array<Record<string, unknown>>
+    )[0];
     return (first?.organization_id as string) ?? (first?.id as string) ?? null;
   }, [orgs]);
 
   const teachingIds = useMemo(() => {
     const rows = (queue ?? []) as Array<Record<string, unknown>>;
     return new Set(
-      rows.map((r) => (r.product_id ?? r.id) as string | undefined).filter(Boolean) as string[],
+      rows
+        .map((r) => (r.product_id ?? r.id) as string | undefined)
+        .filter(Boolean) as string[],
     );
   }, [queue]);
 
@@ -63,11 +73,15 @@ export function LibraryRoom() {
   const validationIds = useMemo(() => {
     const rows = (validationQueue ?? []) as Array<Record<string, unknown>>;
     return new Set(
-      rows.map((r) => (r.product_id ?? r.id) as string | undefined).filter(Boolean) as string[],
+      rows
+        .map((r) => (r.product_id ?? r.id) as string | undefined)
+        .filter(Boolean) as string[],
     );
   }, [validationQueue]);
 
-  const total = counts ? counts.personal + counts.studio + counts.catalog : null;
+  const total = counts
+    ? counts.personal + counts.studio + counts.catalog
+    : null;
 
   const [captureOpen, setCaptureOpen] = useState(false);
   const [importOpen, setImportOpen] = useState(false);
@@ -75,6 +89,14 @@ export function LibraryRoom() {
   const [promoteId, setPromoteId] = useState<string | null>(null);
   const [nominateVendorId, setNominateVendorId] = useState<string | null>(null);
   const [toast, setToast] = useState<string | null>(null);
+
+  useMobilePrimaryAction({
+    actionKey: 'capture-piece',
+    surfaceKey: 'library',
+    regionKey: 'room-head',
+    label: 'Capture',
+    target: { kind: 'press', onPress: () => setCaptureOpen(true) },
+  });
 
   useEffect(() => {
     if (!toast) return;
@@ -94,7 +116,8 @@ export function LibraryRoom() {
         .select('vendor_id')
         .eq('id', productId)
         .maybeSingle();
-      const vendorId = (data as { vendor_id?: string } | null)?.vendor_id ?? null;
+      const vendorId =
+        (data as { vendor_id?: string } | null)?.vendor_id ?? null;
       if (!vendorId) {
         setToast('This piece has no maker on file to nominate.');
         return;
@@ -110,28 +133,36 @@ export function LibraryRoom() {
       title="The Library"
       count={total != null ? `${total} pieces` : undefined}
       action={
-        <div className="flex items-center gap-2">
-          <button
-            type="button"
-            onClick={enterCompose}
-            className="inline-flex items-center gap-1.5 rounded-[5px] border border-[var(--doc-ink-border)] bg-white px-3 py-2 font-mono text-[9px] font-semibold uppercase tracking-[0.08em] text-[var(--color-charcoal)] transition-colors hover:border-[var(--color-clay)]"
-          >
-            <span aria-hidden>✎</span> Compose a piece
-          </button>
-          <button
-            type="button"
+        <DocumentActionGroup
+          surfaceKey="library"
+          regionKey="room-head"
+          aria-label="Library actions"
+        >
+          <DocumentAction
+            actionKey="capture-piece"
+            variant="primary"
+            leading="⊕"
             onClick={() => setCaptureOpen(true)}
-            className="inline-flex items-center gap-1.5 rounded-[5px] bg-[var(--color-charcoal)] px-3 py-2 font-mono text-[9px] font-semibold uppercase tracking-[0.08em] text-[var(--color-off-white)] transition-opacity hover:opacity-85"
           >
-            <span aria-hidden>⊕</span> Capture
-          </button>
-        </div>
+            Capture
+          </DocumentAction>
+          <DocumentAction
+            actionKey="compose-piece"
+            variant="secondary"
+            leading="✎"
+            onClick={enterCompose}
+          >
+            Compose a piece
+          </DocumentAction>
+        </DocumentActionGroup>
       }
     >
       <div className="mx-auto max-w-[1240px]">
         <LibrarianBar
           onPlaced={(pieceName, whereName) =>
-            setToast(`Placed “${pieceName}” into ${whereName} — via the Engine.`)
+            setToast(
+              `Placed “${pieceName}” into ${whereName} — via the Engine.`,
+            )
           }
         />
 
@@ -148,22 +179,26 @@ export function LibraryRoom() {
             onDeep={(id, name) => setDeep({ id, name })}
             onPromote={(id) => setPromoteId(id)}
             actions={
-              <>
-                <button
-                  type="button"
+              <DocumentActionRow
+                surfaceKey="library"
+                regionKey="personal-shelf"
+                aria-label="My Library shelf actions"
+              >
+                <DocumentAction
+                  actionKey="import-pieces"
+                  variant="tertiary"
                   onClick={() => setImportOpen(true)}
-                  className="font-mono text-[9px] font-semibold uppercase tracking-[0.08em] text-[var(--color-clay)] hover:text-[var(--color-aged-oak)]"
                 >
                   Import…
-                </button>
-                <button
-                  type="button"
+                </DocumentAction>
+                <DocumentAction
+                  actionKey="capture-piece"
+                  variant="tertiary"
                   onClick={() => setCaptureOpen(true)}
-                  className="font-mono text-[9px] font-semibold uppercase tracking-[0.08em] text-[var(--color-clay)] hover:text-[var(--color-aged-oak)]"
                 >
                   + Capture
-                </button>
-              </>
+                </DocumentAction>
+              </DocumentActionRow>
             }
           />
 
@@ -194,7 +229,9 @@ export function LibraryRoom() {
       <CaptureSheet
         open={captureOpen}
         onClose={() => setCaptureOpen(false)}
-        onCaptured={(name) => setToast(`Captured → My Library. “${name}” is on your shelf, raw.`)}
+        onCaptured={(name) =>
+          setToast(`Captured → My Library. “${name}” is on your shelf, raw.`)
+        }
       />
 
       {/* Import… — bring a maker's spreadsheet onto My Library, raw (R88). */}
@@ -214,7 +251,9 @@ export function LibraryRoom() {
           productId={deep.id}
           productName={deep.name}
           onClose={() => setDeep(null)}
-          onSaved={() => setToast(`Taught — “${deep.name}” is mapped. Your eye, learned.`)}
+          onSaved={() =>
+            setToast(`Taught — “${deep.name}” is mapped. Your eye, learned.`)
+          }
         />
       )}
 
@@ -225,7 +264,11 @@ export function LibraryRoom() {
         productId={promoteId}
         asSheet
         onClose={() => setPromoteId(null)}
-        onSuccess={() => setToast('Promoted to the Studio Library — proven, and shared with the studio.')}
+        onSuccess={() =>
+          setToast(
+            'Promoted to the Studio Library — proven, and shared with the studio.',
+          )
+        }
       />
       <NominateToCatalogModal
         open={nominateVendorId !== null}

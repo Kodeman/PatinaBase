@@ -45,11 +45,7 @@ import {
 import type { SectionTask } from '@/hooks/use-section-work';
 import { deriveBlocksKind } from '@/lib/document/coordination-derivation';
 import { canDeleteDecision } from '@/lib/document/decision-edges';
-import {
-  ITEM_TYPE_ORDER,
-  itemTypeToken,
-  chipStyle,
-} from './item-type';
+import { ITEM_TYPE_ORDER, itemTypeToken, chipStyle } from './item-type';
 import { courtToken, partyFor } from './party';
 import { COURT_ORDER } from '@/lib/document/coordination-derivation';
 import {
@@ -60,6 +56,7 @@ import {
   type DecisionOptionValue,
 } from '@/components/portal/decision-option-builder';
 import { ComposerOptionBuilder } from './composer-option-builder';
+import { DocumentAction, DocumentActionGroup } from '../document-action';
 
 /** An FF&E line the composer can gate (subset of project_ffe_items). */
 export interface ComposerFfeItem {
@@ -200,16 +197,24 @@ export function ItemComposer({
   const [confirmingDelete, setConfirmingDelete] = useState(false);
 
   // ── facet state (hydrated from editItem when re-opening a draft) ──
-  const [kind, setKind] = useState<CoordinationKind>(editItem?.coordination_kind ?? 'selection');
+  const [kind, setKind] = useState<CoordinationKind>(
+    editItem?.coordination_kind ?? 'selection',
+  );
   const [decisionType, setDecisionType] = useState<DecisionType>(
     (editItem?.decision_type as DecisionType | null) ?? 'product',
   );
   const [court, setCourt] = useState<Court>(editItem?.court ?? 'client');
-  const [courtPartyId, setCourtPartyId] = useState<string | null>(editItem?.court_party_id ?? null);
+  const [courtPartyId, setCourtPartyId] = useState<string | null>(
+    editItem?.court_party_id ?? null,
+  );
   const [prompt, setPrompt] = useState(editItem?.title ?? initialTitle ?? '');
   const [context, setContext] = useState(editItem?.context ?? '');
-  const [phaseId, setPhaseId] = useState<string | null>(editItem?.phase_id ?? null);
-  const [due, setDue] = useState(editItem?.due_date ? editItem.due_date.slice(0, 10) : '');
+  const [phaseId, setPhaseId] = useState<string | null>(
+    editItem?.phase_id ?? null,
+  );
+  const [due, setDue] = useState(
+    editItem?.due_date ? editItem.due_date.slice(0, 10) : '',
+  );
 
   // The task/phase checklist holds task ids + the PHASE_PICK sentinel.
   const [blocks, setBlocks] = useState<Set<string>>(() => {
@@ -226,7 +231,9 @@ export function ItemComposer({
   const [ffeBlocks, setFfeBlocks] = useState<Set<string>>(() => {
     if (!editItem) return new Set();
     return new Set(
-      ffeItems.filter((f) => f.blocked_by_decision_id === editItem.id).map((f) => f.id),
+      ffeItems
+        .filter((f) => f.blocked_by_decision_id === editItem.id)
+        .map((f) => f.id),
     );
   });
 
@@ -245,7 +252,10 @@ export function ItemComposer({
   const [saving, setSaving] = useState(false);
 
   // Only incomplete tasks are pickable as "what does this block?".
-  const openTasks = useMemo(() => tasks.filter((t) => t.status !== 'done'), [tasks]);
+  const openTasks = useMemo(
+    () => tasks.filter((t) => t.status !== 'done'),
+    [tasks],
+  );
 
   // Parties for the currently-picked court (gc/vendor name a concrete row).
   const courtParties = useMemo(
@@ -338,12 +348,15 @@ export function ItemComposer({
           blocksKind,
           decisionType: decisionTypeFinal,
           phaseId: phaseId || null,
-          options: kind === 'selection' ? optionInput ?? [] : [],
+          options: kind === 'selection' ? (optionInput ?? []) : [],
           blockedFfeItemIds,
           blockedTaskIds,
         });
         if (!asDraft) {
-          await publishItem.mutateAsync({ itemId: editItem.id, designerClientId });
+          await publishItem.mutateAsync({
+            itemId: editItem.id,
+            designerClientId,
+          });
         }
       } else {
         // CREATE — draft or publish straight to pending (one act).
@@ -360,12 +373,15 @@ export function ItemComposer({
           decisionType: decisionTypeFinal,
           phaseId: phaseId || null,
           options: optionInput,
-          blockedFfeItemIds: blockedFfeItemIds.length > 0 ? blockedFfeItemIds : undefined,
-          blockedTaskIds: blockedTaskIds.length > 0 ? blockedTaskIds : undefined,
+          blockedFfeItemIds:
+            blockedFfeItemIds.length > 0 ? blockedFfeItemIds : undefined,
+          blockedTaskIds:
+            blockedTaskIds.length > 0 ? blockedTaskIds : undefined,
           status: asDraft ? 'draft' : 'pending',
         });
         // C4 — hand the created decision to the host so it can link the flag.
-        if (created && onCreatedItem) onCreatedItem(created as CoordinationItem);
+        if (created && onCreatedItem)
+          onCreatedItem(created as CoordinationItem);
       }
 
       onCreated();
@@ -399,7 +415,9 @@ export function ItemComposer({
         {isEdit ? 'Edit draft' : 'New decision'}
       </div>
       <h2 className="mt-2 font-heading text-[1.4rem] leading-tight text-[var(--color-charcoal)]">
-        {isEdit ? 'Pick this draft back up' : 'Raise something that needs a decision'}
+        {isEdit
+          ? 'Pick this draft back up'
+          : 'Raise something that needs a decision'}
       </h2>
       <p className="mb-6 mt-2 text-[0.74rem] leading-relaxed text-[var(--color-aged-oak)]">
         Pick what it is, whose court it&rsquo;s in, and what it blocks.
@@ -417,7 +435,7 @@ export function ItemComposer({
               type="button"
               onClick={() => setKind(k)}
               aria-pressed={on}
-              className="rounded-[7px] border px-2 py-2.5 text-center transition-colors"
+              className="min-h-11 rounded-[7px] border px-2 py-2.5 text-center transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-clay)]"
               style={{
                 borderColor: on ? 'var(--color-clay)' : 'var(--color-pearl)',
                 background: on ? 'rgba(196,165,123,0.08)' : 'transparent',
@@ -455,9 +473,11 @@ export function ItemComposer({
                   type="button"
                   onClick={() => setDecisionType(t.key)}
                   aria-pressed={on}
-                  className="rounded-[5px] border px-2.5 py-1 font-mono text-[9px] font-semibold uppercase tracking-[0.04em] transition-colors"
+                  className="min-h-11 rounded-[5px] border px-2.5 py-1 font-mono text-[9px] font-semibold uppercase tracking-[0.04em] transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-clay)]"
                   style={{
-                    borderColor: on ? 'var(--color-clay)' : 'var(--color-pearl)',
+                    borderColor: on
+                      ? 'var(--color-clay)'
+                      : 'var(--color-pearl)',
                     background: on ? 'rgba(196,165,123,0.1)' : 'transparent',
                     color: on ? 'var(--color-clay)' : 'var(--color-aged-oak)',
                   }}
@@ -471,7 +491,9 @@ export function ItemComposer({
       )}
 
       {/* ── Whose court — the 4-court grid ── */}
-      <label className={fieldLabelCls}>Whose court &mdash; who owns the next move</label>
+      <label className={fieldLabelCls}>
+        Whose court &mdash; who owns the next move
+      </label>
       <div className="mb-2 grid grid-cols-4 gap-1.5">
         {COURT_ORDER.map((c) => {
           const token = courtToken(c);
@@ -482,7 +504,7 @@ export function ItemComposer({
               type="button"
               onClick={() => pickCourt(c)}
               aria-pressed={on}
-              className="rounded-[7px] border px-2 py-2 text-center transition-colors"
+              className="min-h-11 rounded-[7px] border px-2 py-2 text-center transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-clay)]"
               style={{
                 borderColor: on ? 'var(--color-clay)' : 'var(--color-pearl)',
                 background: on ? 'rgba(196,165,123,0.08)' : 'transparent',
@@ -524,7 +546,8 @@ export function ItemComposer({
       )}
       {(court === 'gc' || court === 'vendor') && courtParties.length === 0 && (
         <p className="mb-5 mt-1 text-[0.66rem] italic text-[var(--color-aged-oak)]">
-          No {court === 'gc' ? 'GC' : 'vendors'} on this project yet &mdash; it&rsquo;ll wait in the {court === 'gc' ? 'GC' : 'vendor'} court.
+          No {court === 'gc' ? 'GC' : 'vendors'} on this project yet &mdash;
+          it&rsquo;ll wait in the {court === 'gc' ? 'GC' : 'vendor'} court.
         </p>
       )}
       {court !== 'gc' && court !== 'vendor' && <div className="mb-5" />}
@@ -561,7 +584,9 @@ export function ItemComposer({
       {/* ── Options (selection only) — the shipped option builder ── */}
       {kind === 'selection' && (
         <div className="mb-5">
-          <label className={fieldLabelCls}>Options &mdash; materialize the choices</label>
+          <label className={fieldLabelCls}>
+            Options &mdash; materialize the choices
+          </label>
           <ComposerOptionBuilder value={options} onChange={setOptions} />
         </div>
       )}
@@ -592,7 +617,10 @@ export function ItemComposer({
               <span className="flex-1 truncate">
                 {line.name}
                 {line.roomName ? (
-                  <span className="text-[var(--color-aged-oak)]"> &middot; {line.roomName}</span>
+                  <span className="text-[var(--color-aged-oak)]">
+                    {' '}
+                    &middot; {line.roomName}
+                  </span>
                 ) : null}
               </span>
               <span className="ml-auto font-mono text-[8.5px] uppercase tracking-[0.04em] text-[var(--color-aged-oak)]">
@@ -635,8 +663,12 @@ export function ItemComposer({
           aria-pressed={blocks.has(PHASE_PICK)}
           className="flex items-center gap-2.5 rounded-[6px] border px-2.5 py-2 text-left text-[0.74rem] text-[var(--color-charcoal)] transition-colors"
           style={{
-            borderColor: blocks.has(PHASE_PICK) ? 'var(--color-clay)' : 'var(--color-pearl)',
-            background: blocks.has(PHASE_PICK) ? 'rgba(196,165,123,0.06)' : 'transparent',
+            borderColor: blocks.has(PHASE_PICK)
+              ? 'var(--color-clay)'
+              : 'var(--color-pearl)',
+            background: blocks.has(PHASE_PICK)
+              ? 'rgba(196,165,123,0.06)'
+              : 'transparent',
           }}
         >
           <BlockTick on={blocks.has(PHASE_PICK)} />
@@ -675,66 +707,71 @@ export function ItemComposer({
       </div>
 
       {/* ── Footer: Save as draft / Publish → + the lands-hint ── */}
-      <div className="mt-6 flex flex-wrap items-center gap-2.5 border-t border-[var(--doc-ink-border)] pt-4">
-        <button
-          type="button"
-          disabled={!canSave}
-          onClick={() => handleSave(true)}
-          className="rounded-[6px] border border-[var(--color-pearl)] bg-white px-4 py-2 font-mono text-[9.5px] font-semibold uppercase tracking-[0.06em] text-[var(--color-charcoal)] transition-colors hover:border-[var(--color-clay)] disabled:opacity-40"
-        >
-          Save as draft
-        </button>
-        <button
-          type="button"
+      <DocumentActionGroup
+        surfaceKey="coordination"
+        regionKey="item-composer"
+        className="mt-6 border-t border-[var(--doc-ink-border)] pt-4"
+      >
+        <DocumentAction
+          actionKey="publish-coordination-item"
+          variant="primary"
           disabled={!canSave}
           onClick={() => handleSave(false)}
-          className="rounded-[6px] border border-[var(--color-clay)] bg-[var(--color-clay)] px-4 py-2 font-mono text-[9.5px] font-semibold uppercase tracking-[0.06em] text-white transition-opacity hover:opacity-90 disabled:opacity-40"
         >
-          {isEdit ? 'Publish draft →' : 'Publish →'}
-        </button>
-        <button
-          type="button"
+          {isEdit ? 'Publish draft' : 'Publish'}
+        </DocumentAction>
+        <DocumentAction
+          actionKey="save-coordination-draft"
+          variant="secondary"
+          disabled={!canSave}
+          onClick={() => handleSave(true)}
+        >
+          Save as draft
+        </DocumentAction>
+        <DocumentAction
+          actionKey="cancel-coordination-item"
+          variant="tertiary"
           onClick={onClose}
-          className="font-mono text-[9px] uppercase tracking-[0.05em] text-[var(--color-aged-oak)] hover:text-[var(--color-charcoal)]"
         >
           Cancel
-        </button>
+        </DocumentAction>
 
         {/* Delete (draft only, R87) — a two-tap inline confirm, never a modal (D1). */}
         {canDelete &&
           (confirmingDelete ? (
-            <span className="flex items-center gap-2 font-mono text-[9px] uppercase tracking-[0.05em] text-[var(--color-aged-oak)]">
+            <span className="flex flex-wrap items-center gap-2 font-mono text-[9px] uppercase tracking-[0.05em] text-[var(--color-aged-oak)]">
               Delete draft?
-              <button
-                type="button"
+              <DocumentAction
+                actionKey="confirm-delete-coordination-draft"
+                variant="danger"
                 disabled={saving}
                 onClick={handleDelete}
-                className="font-semibold text-[var(--color-clay)] hover:opacity-80 disabled:opacity-40"
               >
-                Yes
-              </button>
-              <button
-                type="button"
+                Delete
+              </DocumentAction>
+              <DocumentAction
+                actionKey="cancel-delete-coordination-draft"
+                variant="tertiary"
                 onClick={() => setConfirmingDelete(false)}
-                className="hover:text-[var(--color-charcoal)]"
               >
-                No
-              </button>
+                Keep
+              </DocumentAction>
             </span>
           ) : (
-            <button
-              type="button"
+            <DocumentAction
+              actionKey="open-delete-coordination-draft"
+              variant="tertiary"
               onClick={() => setConfirmingDelete(true)}
-              className="font-mono text-[9px] uppercase tracking-[0.05em] text-[var(--color-aged-oak)] hover:text-[var(--color-clay)]"
+              className="text-[var(--color-terracotta)]"
             >
               Delete
-            </button>
+            </DocumentAction>
           ))}
 
         <span className="ml-auto font-mono text-[9px] uppercase tracking-[0.04em] text-[var(--color-aged-oak)]">
           {landsHint}
         </span>
-      </div>
+      </DocumentActionGroup>
     </div>
   );
 }

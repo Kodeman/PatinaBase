@@ -62,7 +62,9 @@ export function rememberDocumentInHand(
   }
   if (!engagementId || !doc?.title) return;
   try {
-    const rest = readRecentDocumentsInHand().filter((entry) => entry.id !== engagementId);
+    const rest = readRecentDocumentsInHand().filter(
+      (entry) => entry.id !== engagementId,
+    );
     const entry: RecentDocumentInHand = { id: engagementId, title: doc.title };
     if (doc.subtitle) entry.subtitle = doc.subtitle;
     const next = [entry, ...rest].slice(0, RECENT_DOCS_MAX);
@@ -113,11 +115,16 @@ const commandBar = {
     track('document_command_bar_queried', props),
 
   /** A query matched nothing. */
-  zeroResult: (props: { query_length: number }) => track('document_command_bar_zero_result', props),
+  zeroResult: (props: { query_length: number }) =>
+    track('document_command_bar_zero_result', props),
 
   /** A row was chosen — document, ledger, action, person, or the Engine. */
-  selected: (props: { kind: string; key: string; position: number; query_length: number }) =>
-    track('document_command_bar_selected', props),
+  selected: (props: {
+    kind: string;
+    key: string;
+    position: number;
+    query_length: number;
+  }) => track('document_command_bar_selected', props),
 };
 
 /** F1 — the doorway grammar: doors, Rooms, help, margin notes, and Contents
@@ -125,8 +132,11 @@ const commandBar = {
 const wayfinding = {
   /** A doorway was opened — drawer ledger, ⌘K row, Contents entry, or a
    *  keyboard shortcut. */
-  doorOpened: (props: { key: string; weight: DoorWeight; source: WayfindingSource }) =>
-    track('document_wayfinding_door_opened', props),
+  doorOpened: (props: {
+    key: string;
+    weight: DoorWeight;
+    source: WayfindingSource;
+  }) => track('document_wayfinding_door_opened', props),
 
   /** A Room (D14 room-weight door) was actually entered. */
   roomEntered: (props: { key: string; source: WayfindingSource }) =>
@@ -142,22 +152,42 @@ const wayfinding = {
   }) => track('document_help_opened', props),
 
   /** A margin note's lifecycle (R94 — notes recede permanently on use). */
-  marginNote: (props: { key: string; action: 'shown' | 'dismissed' | 'acted' }) =>
-    track('document_margin_note', props),
+  marginNote: (props: {
+    key: string;
+    action: 'shown' | 'dismissed' | 'acted';
+  }) => track('document_margin_note', props),
 
   /** An act taken from the Desk's Contents index (R95 — labels + doorways
    *  only; this event is the metric, not a badge on the index itself). */
-  contentsActed: (props: { key: string; kind: string }) => track('document_desk_contents_acted', props),
+  contentsActed: (props: { key: string; kind: string }) =>
+    track('document_desk_contents_acted', props),
 
   /** R97 — the Desk Walkthrough started, and from where. The package's
    *  help.tour.started carries no source, so this parallel event holds the
    *  attribution ('first_signin' auto-modal, 'command_bar' replay, or the
    *  existing-designer 'margin_note' offer) for the activation funnel. */
-  walkthroughStarted: (props: { source: 'first_signin' | 'command_bar' | 'margin_note' }) =>
-    track('document_walkthrough_started', props),
+  walkthroughStarted: (props: {
+    source: 'first_signin' | 'command_bar' | 'margin_note';
+  }) => track('document_walkthrough_started', props),
 };
 
 export const documentEvents = {
+  actionShown: (props: {
+    surface_key: string;
+    region_key: string;
+    action_key: string;
+    variant: 'primary' | 'secondary' | 'tertiary' | 'danger';
+    presentation: 'inline' | 'mobile_dock';
+  }) => track('document_action_shown', props),
+
+  actionSelected: (props: {
+    surface_key: string;
+    region_key: string;
+    action_key: string;
+    variant: 'primary' | 'secondary' | 'tertiary' | 'danger';
+    presentation: 'inline' | 'mobile_dock';
+  }) => track('document_action_selected', props),
+
   /** An old-zone route visited after the flip (R21 flight telemetry). */
   zoneFlight: (fromRoute: string) =>
     track('document_zone_flight', {
@@ -188,8 +218,11 @@ export const documentEvents = {
   }) => track('desk_zero_row_read', props),
 
   /** Log-strip engagement (R20/D10): logged or discarded, adjusted, idle. */
-  logStripActed: (props: { action: 'log' | 'discard'; adjusted: boolean; had_idle: boolean }) =>
-    track('document_log_strip_acted', props),
+  logStripActed: (props: {
+    action: 'log' | 'discard';
+    adjusted: boolean;
+    had_idle: boolean;
+  }) => track('document_log_strip_acted', props),
 
   /** Designer Handoff (Wave 1B) — a pool request claimed from the Desk's
    *  Open requests strip. Unprefixed (not `document_*`) per the task-level
@@ -203,8 +236,11 @@ export const documentEvents = {
 
   /** Arrival Arc (R106) — the Match Ceremony surface rendered for a lead.
    *  Unprefixed `ceremony_*` family, sibling to `design_request_*`. */
-  ceremonyOpened: (props: { lead_id: string; has_scan: boolean; has_draft: boolean }) =>
-    track('ceremony_opened', props),
+  ceremonyOpened: (props: {
+    lead_id: string;
+    has_scan: boolean;
+    has_draft: boolean;
+  }) => track('ceremony_opened', props),
 
   /** R106 §3 — the ceremony parked mid-write: the explicit "Put down for
    *  now", or route-leave with a dirty (autosaved) draft still open. */
@@ -240,7 +276,10 @@ export const documentEvents = {
 
   /** R106 §4 — the stale-offered-slots chip actually rendered ("offered times
    *  went by · offer fresh ones"). Same once-per-ceremony-per-session dedup. */
-  freshTimesRequested: (props: { ceremony_id: string; lead_id: string | null }) => {
+  freshTimesRequested: (props: {
+    ceremony_id: string;
+    lead_id: string | null;
+  }) => {
     if (freshTimesRequestedSeen.has(props.ceremony_id)) return;
     freshTimesRequestedSeen.add(props.ceremony_id);
     track('fresh_times_requested', props);

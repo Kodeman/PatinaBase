@@ -11,15 +11,44 @@ import { useState } from 'react';
 import { DocPaperSheet } from '../overlays/doc-paper-sheet';
 import { useCreateMarginNote } from '@/hooks/use-margin-notes';
 import type { BlockKey } from '@/lib/document/discovery-readiness';
+import { DocumentAction, DocumentActionGroup } from '../document-action';
 
 const CHECKLIST: { block: BlockKey; q: string; sub: string }[] = [
-  { block: 'scope', q: 'The project & the rooms', sub: 'what they want transformed' },
-  { block: 'lifestyle', q: 'How they live each space', sub: 'host, work, rest, kids, pets — the daily flow' },
-  { block: 'budget', q: 'Budget comfort', sub: 'set the financial expectation early' },
-  { block: 'timeline', q: 'Timeline & hard dates', sub: 'events, move-in, deadlines' },
-  { block: 'style', q: 'Style & what they love', sub: 'and ask for an inspiration board' },
-  { block: 'keep_avoid', q: 'Keep & avoid', sub: "sentimental pieces; hard no's" },
-  { block: 'deciders', q: 'Who decides + how to reach them', sub: 'approval roles, cadence' },
+  {
+    block: 'scope',
+    q: 'The project & the rooms',
+    sub: 'what they want transformed',
+  },
+  {
+    block: 'lifestyle',
+    q: 'How they live each space',
+    sub: 'host, work, rest, kids, pets — the daily flow',
+  },
+  {
+    block: 'budget',
+    q: 'Budget comfort',
+    sub: 'set the financial expectation early',
+  },
+  {
+    block: 'timeline',
+    q: 'Timeline & hard dates',
+    sub: 'events, move-in, deadlines',
+  },
+  {
+    block: 'style',
+    q: 'Style & what they love',
+    sub: 'and ask for an inspiration board',
+  },
+  {
+    block: 'keep_avoid',
+    q: 'Keep & avoid',
+    sub: "sentimental pieces; hard no's",
+  },
+  {
+    block: 'deciders',
+    q: 'Who decides + how to reach them',
+    sub: 'approval roles, cadence',
+  },
 ];
 
 export function DiscoveryCallSheet({
@@ -42,13 +71,23 @@ export function DiscoveryCallSheet({
     const text = note.trim();
     if (!text) return;
     createNote.mutate(
-      { projectId: null, proposalId: null, designerClientId, body: text, anchorKind: 'letterhead' },
-      { onSuccess: () => setNote('') }
+      {
+        projectId: null,
+        proposalId: null,
+        designerClientId,
+        body: text,
+        anchorKind: 'letterhead',
+      },
+      { onSuccess: () => setNote('') },
     );
   };
 
   return (
-    <DocPaperSheet open={open} onClose={onClose} title="The discovery call · checklist">
+    <DocPaperSheet
+      open={open}
+      onClose={onClose}
+      title="The discovery call · checklist"
+    >
       <span className="mb-3 inline-block rounded-[2px] border border-[var(--color-rule-strong,#D8CCB8)] px-2 py-0.5 font-mono text-[9.5px] uppercase tracking-[0.1em] text-[var(--color-mocha)]">
         The discovery call · checklist
       </span>
@@ -56,7 +95,8 @@ export function DiscoveryCallSheet({
         What to draw out
       </h2>
       <p className="mb-4 text-[13px] text-[var(--text-muted)]">
-        Tap a line to open its block. The form captures facts; the call captures the person.
+        Tap a line to open its block. The form captures facts; the call captures
+        the person.
       </p>
 
       <div>
@@ -65,7 +105,7 @@ export function DiscoveryCallSheet({
             key={c.block}
             type="button"
             onClick={() => onOpenBlock(c.block)}
-            className="flex w-full items-start gap-3 border-b border-[var(--color-pearl)] py-2.5 text-left last:border-b-0"
+            className="flex min-h-11 w-full items-start gap-3 rounded-[3px] border-b border-[var(--color-pearl)] py-2.5 text-left last:border-b-0 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-clay)]"
           >
             <span
               aria-hidden
@@ -78,8 +118,12 @@ export function DiscoveryCallSheet({
               ✓
             </span>
             <span>
-              <span className="block text-[14px] text-[var(--color-charcoal)]">{c.q}</span>
-              <span className="block text-[12px] text-[var(--text-muted)]">{c.sub}</span>
+              <span className="block text-[14px] text-[var(--color-charcoal)]">
+                {c.q}
+              </span>
+              <span className="block text-[12px] text-[var(--text-muted)]">
+                {c.sub}
+              </span>
             </span>
           </button>
         ))}
@@ -96,23 +140,29 @@ export function DiscoveryCallSheet({
           placeholder='She hesitated on budget — wants to "see options first."'
           className="w-full resize-none rounded-[4px] border border-[var(--color-pearl)] bg-white px-2.5 py-1.5 text-[12.5px] text-[var(--color-charcoal)] outline-none focus:border-[var(--color-clay)]"
         />
-        <div className="mt-2 flex items-center gap-3">
-          <button
-            type="button"
+        <DocumentActionGroup
+          surfaceKey="discovery"
+          regionKey="call-note"
+          className="mt-2"
+        >
+          <DocumentAction
+            actionKey="save-discovery-call-note"
+            variant="primary"
             onClick={saveNote}
             disabled={!note.trim() || createNote.isPending}
-            className="rounded-[3px] border border-[var(--color-mocha)] bg-[var(--color-mocha)] px-3 py-1.5 font-mono text-[11px] uppercase tracking-[0.04em] text-[#f6efe2] disabled:opacity-50"
+            loading={createNote.isPending}
+            loadingLabel="Saving…"
           >
             Save the note
-          </button>
-          <button
-            type="button"
+          </DocumentAction>
+          <DocumentAction
+            actionKey="close-discovery-call"
+            variant="tertiary"
             onClick={onClose}
-            className="font-mono text-[11px] uppercase tracking-[0.04em] text-[var(--text-muted)]"
           >
             Done — back to the document
-          </button>
-        </div>
+          </DocumentAction>
+        </DocumentActionGroup>
       </div>
     </DocPaperSheet>
   );

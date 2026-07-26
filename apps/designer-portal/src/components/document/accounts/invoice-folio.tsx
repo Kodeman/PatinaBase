@@ -35,6 +35,7 @@ import {
   timeLineHoursLabel,
 } from '@patina/shared';
 import { useQueryClient } from '@tanstack/react-query';
+import { DocumentAction, DocumentActionGroup } from '../document-action';
 import { Stamp } from '../stamp';
 import { todayYmd } from '@/lib/document/format';
 import { dollarsToCents } from '@/lib/document/invoice-composer';
@@ -43,12 +44,23 @@ const SAGE_INK = '#85947C';
 const TERRACOTTA_INK = '#C4836F';
 
 /** Paper-ink stamp palette (the ledger page's dark palette re-inked for cream). */
-const FOLIO_STAMP: Record<string, { label: string; color: string; ink?: string }> = {
+const FOLIO_STAMP: Record<
+  string,
+  { label: string; color: string; ink?: string }
+> = {
   draft: { label: 'draft', color: '#C9C2B6', ink: 'var(--text-muted)' },
   sent: { label: 'sent', color: 'var(--color-dusty-blue)', ink: '#7E8FA6' },
-  partially_paid: { label: 'part paid', color: 'var(--color-golden-hour)', ink: '#B89A2E' },
+  partially_paid: {
+    label: 'part paid',
+    color: 'var(--color-golden-hour)',
+    ink: '#B89A2E',
+  },
   paid: { label: 'paid', color: 'var(--color-sage)', ink: SAGE_INK },
-  void: { label: 'void', color: 'var(--color-terracotta)', ink: TERRACOTTA_INK },
+  void: {
+    label: 'void',
+    color: 'var(--color-terracotta)',
+    ink: TERRACOTTA_INK,
+  },
 };
 
 const MANUAL_METHODS: Exclude<InvoicePaymentMethod, 'stripe'>[] = [
@@ -59,11 +71,8 @@ const MANUAL_METHODS: Exclude<InvoicePaymentMethod, 'stripe'>[] = [
   'other',
 ];
 
-const LABEL = 'font-mono text-[8px] uppercase tracking-[0.08em] text-[var(--text-muted)]';
-const ACT =
-  'whitespace-nowrap rounded-[4px] border border-[rgba(196,165,123,0.5)] px-2.5 py-1 font-mono text-[9px] font-semibold uppercase tracking-[0.06em] text-[var(--color-clay)] transition-colors hover:bg-[var(--color-clay)] hover:text-white disabled:opacity-40 disabled:hover:bg-transparent disabled:hover:text-[var(--color-clay)]';
-const ACT_QUIET =
-  'whitespace-nowrap font-mono text-[9px] uppercase tracking-[0.06em] text-[var(--color-clay)] hover:opacity-80 disabled:opacity-40';
+const LABEL =
+  'font-mono text-[8px] uppercase tracking-[0.08em] text-[var(--text-muted)]';
 const INPUT =
   'rounded-[3px] border border-[var(--color-pearl)] bg-transparent px-2 py-1.5 text-[11.5px] text-[var(--color-charcoal)] focus:border-[var(--color-clay)] focus:outline-none';
 
@@ -90,7 +99,8 @@ export function InvoiceFolio({
   const [message, setMessage] = useState('');
   const [voidReason, setVoidReason] = useState('');
   const [amountDollars, setAmountDollars] = useState('');
-  const [method, setMethod] = useState<Exclude<InvoicePaymentMethod, 'stripe'>>('check');
+  const [method, setMethod] =
+    useState<Exclude<InvoicePaymentMethod, 'stripe'>>('check');
   const [reference, setReference] = useState('');
   const [receivedDate, setReceivedDate] = useState(() => todayYmd());
 
@@ -106,14 +116,18 @@ export function InvoiceFolio({
   const overdue = isInvoiceOverdue(invoice);
   const balance = invoiceBalanceCents(invoice);
   const isDraft = invoice.status === 'draft';
-  const canRecordPayment = invoice.status === 'sent' || invoice.status === 'partially_paid';
+  const canRecordPayment =
+    invoice.status === 'sent' || invoice.status === 'partially_paid';
   const canResend = canRecordPayment;
   const canVoid =
     ['draft', 'sent', 'partially_paid'].includes(invoice.status) &&
     invoice.amount_paid_cents === 0;
   const canPrint = !isDraft && invoice.status !== 'void';
   const busy =
-    issue.isPending || send.isPending || recordPayment.isPending || voidInvoice.isPending;
+    issue.isPending ||
+    send.isPending ||
+    recordPayment.isPending ||
+    voidInvoice.isPending;
 
   const openPanel = (panel: ActPanel) => {
     setNote(null);
@@ -127,7 +141,10 @@ export function InvoiceFolio({
     setNote(null);
     let issued: Invoice;
     try {
-      issued = await issue.mutateAsync({ invoiceId, projectId: invoice.project_id });
+      issued = await issue.mutateAsync({
+        invoiceId,
+        projectId: invoice.project_id,
+      });
     } catch (e) {
       setNote(
         `Could not issue — ${e instanceof Error ? e.message : 'try again'}`,
@@ -173,12 +190,15 @@ export function InvoiceFolio({
       setAct(null);
       setMessage('');
     } catch (e) {
-      setNote(`Could not send — ${e instanceof Error ? e.message : 'try again'}`);
+      setNote(
+        `Could not send — ${e instanceof Error ? e.message : 'try again'}`,
+      );
     }
   };
 
   const amountCents = dollarsToCents(amountDollars);
-  const paymentValid = amountCents > 0 && amountCents <= balance && !!receivedDate;
+  const paymentValid =
+    amountCents > 0 && amountCents <= balance && !!receivedDate;
 
   const doRecordPayment = async () => {
     if (!paymentValid) return;
@@ -199,7 +219,9 @@ export function InvoiceFolio({
       // The Desk reads receivables under its own key — one act, every surface.
       void qc.invalidateQueries({ queryKey: ['document-state'] });
     } catch (e) {
-      setNote(`Could not record — ${e instanceof Error ? e.message : 'try again'}`);
+      setNote(
+        `Could not record — ${e instanceof Error ? e.message : 'try again'}`,
+      );
     }
   };
 
@@ -217,7 +239,9 @@ export function InvoiceFolio({
       setVoidReason('');
       void qc.invalidateQueries({ queryKey: ['document-state'] });
     } catch (e) {
-      setNote(`Could not void — ${e instanceof Error ? e.message : 'try again'}`);
+      setNote(
+        `Could not void — ${e instanceof Error ? e.message : 'try again'}`,
+      );
     }
   };
 
@@ -239,29 +263,38 @@ export function InvoiceFolio({
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0">
           <h2 className="font-heading text-[20px] font-medium text-[var(--color-charcoal)]">
-            {invoice.invoice_number ? `Invoice ${invoice.invoice_number}` : 'Draft invoice'}
+            {invoice.invoice_number
+              ? `Invoice ${invoice.invoice_number}`
+              : 'Draft invoice'}
           </h2>
           <p className="mt-0.5 truncate font-mono text-[9px] uppercase tracking-[0.06em] text-[var(--text-muted)]">
             {[
               invoice.client?.full_name ?? invoice.client?.email,
               invoice.project?.name,
-              overdue ? null : INVOICE_STATUS_LABELS[invoice.status].toLowerCase(),
+              overdue
+                ? null
+                : INVOICE_STATUS_LABELS[invoice.status].toLowerCase(),
             ]
               .filter(Boolean)
               .join(' · ')}
-            {overdue && <span style={{ color: TERRACOTTA_INK }}> · overdue</span>}
+            {overdue && (
+              <span style={{ color: TERRACOTTA_INK }}> · overdue</span>
+            )}
           </p>
         </div>
         <div className="flex shrink-0 items-center gap-2.5">
           <Stamp label={stamp.label} color={stamp.color} ink={stamp.ink} />
           {invoice.project && onOpenDocument && (
-            <button
-              type="button"
+            <DocumentAction
+              actionKey="open-invoice-document"
+              surfaceKey="accounts"
+              regionKey="invoice-letterhead"
+              variant="tertiary"
               onClick={() => onOpenDocument(invoice.project_id)}
-              className={`${ACT_QUIET} folio-no-print`}
+              className="folio-no-print"
             >
               document ↗
-            </button>
+            </DocumentAction>
           )}
         </div>
       </div>
@@ -278,7 +311,9 @@ export function InvoiceFolio({
           <span className={LABEL}>due</span>
           <span
             className="font-mono text-[10.5px]"
-            style={{ color: overdue ? TERRACOTTA_INK : 'var(--color-charcoal)' }}
+            style={{
+              color: overdue ? TERRACOTTA_INK : 'var(--color-charcoal)',
+            }}
           >
             {formatInvoiceDate(invoice.due_date)}
             {isDraft ? ` (net ${invoice.payment_terms_days})` : ''}
@@ -309,7 +344,9 @@ export function InvoiceFolio({
                     : SAGE_INK,
             }}
           >
-            {invoice.status === 'void' ? '—' : formatCurrency(balance, invoice.currency)}
+            {invoice.status === 'void'
+              ? '—'
+              : formatCurrency(balance, invoice.currency)}
           </span>
         </span>
       </div>
@@ -344,7 +381,9 @@ export function InvoiceFolio({
                 {line.kind === 'time' && (
                   <span className="ml-1.5 font-mono text-[8px] uppercase tracking-[0.05em] text-[var(--text-muted)]">
                     logged time
-                    {timeLineHoursLabel(line.metadata) ? ` · ${timeLineHoursLabel(line.metadata)}` : ''}
+                    {timeLineHoursLabel(line.metadata)
+                      ? ` · ${timeLineHoursLabel(line.metadata)}`
+                      : ''}
                   </span>
                 )}
               </span>
@@ -354,7 +393,9 @@ export function InvoiceFolio({
                 {line.kind === 'time' ? '—' : Number(line.quantity)}
               </span>
               <span className="text-right font-mono text-[10px] text-[var(--text-muted)]">
-                {line.kind === 'time' ? '—' : formatCurrency(line.unit_amount_cents, invoice.currency)}
+                {line.kind === 'time'
+                  ? '—'
+                  : formatCurrency(line.unit_amount_cents, invoice.currency)}
               </span>
               <span className="text-right font-mono text-[10.5px] text-[var(--color-charcoal)]">
                 {formatCurrency(line.amount_cents, invoice.currency)}
@@ -373,7 +414,11 @@ export function InvoiceFolio({
           </div>
           <div className="flex justify-between py-0.5">
             <span className={LABEL}>
-              tax ({(Number(invoice.tax_rate) * 100).toFixed(2).replace(/\.?0+$/, '') || '0'}%)
+              tax (
+              {(Number(invoice.tax_rate) * 100)
+                .toFixed(2)
+                .replace(/\.?0+$/, '') || '0'}
+              %)
             </span>
             <span className="font-mono text-[10.5px] text-[var(--color-charcoal)]">
               {formatCurrency(invoice.tax_cents, invoice.currency)}
@@ -389,7 +434,9 @@ export function InvoiceFolio({
       </div>
 
       {invoice.memo && (
-        <p className="mt-3 text-[11px] italic text-[var(--text-muted)]">{invoice.memo}</p>
+        <p className="mt-3 text-[11px] italic text-[var(--text-muted)]">
+          {invoice.memo}
+        </p>
       )}
 
       {/* ── Payment history ─────────────────────────────────────────────── */}
@@ -407,8 +454,16 @@ export function InvoiceFolio({
                 </span>
                 <span className="min-w-0 truncate text-[11px] text-[var(--color-charcoal)]">
                   {INVOICE_PAYMENT_METHOD_LABELS[p.method]}
-                  {p.reference && <span className="ml-1.5 text-[var(--text-muted)]">{p.reference}</span>}
-                  {p.note && <span className="ml-1.5 italic text-[var(--text-muted)]">{p.note}</span>}
+                  {p.reference && (
+                    <span className="ml-1.5 text-[var(--text-muted)]">
+                      {p.reference}
+                    </span>
+                  )}
+                  {p.note && (
+                    <span className="ml-1.5 italic text-[var(--text-muted)]">
+                      {p.note}
+                    </span>
+                  )}
                 </span>
                 <span
                   className="font-mono text-[8px] uppercase tracking-[0.06em]"
@@ -438,53 +493,59 @@ export function InvoiceFolio({
 
       {/* ── The acts row ────────────────────────────────────────────────── */}
       <div className="folio-no-print mt-5 border-t border-[var(--color-pearl)] pt-3">
-        <div className="flex flex-wrap items-center gap-2.5">
+        <DocumentActionGroup surfaceKey="accounts" regionKey="invoice-actions">
           {isDraft && (
-            <button type="button" disabled={busy} onClick={() => openPanel('send')} className={ACT}>
-              Issue &amp; send →
-            </button>
+            <DocumentAction
+              actionKey="issue-and-send-invoice"
+              variant="primary"
+              disabled={busy}
+              onClick={() => openPanel('send')}
+            >
+              Issue &amp; send
+            </DocumentAction>
           )}
           {canRecordPayment && (
-            <button
-              type="button"
+            <DocumentAction
+              actionKey="record-invoice-payment"
+              variant="primary"
               disabled={busy}
               onClick={() => openPanel('payment')}
-              className={ACT}
             >
               Record payment
-            </button>
+            </DocumentAction>
           )}
           {canResend && (
-            <button
-              type="button"
+            <DocumentAction
+              actionKey="resend-invoice"
+              variant="secondary"
               disabled={busy}
               onClick={() => openPanel('resend')}
-              className={ACT_QUIET}
             >
               Resend
-            </button>
+            </DocumentAction>
           )}
           {canVoid && (
-            <button
-              type="button"
+            <DocumentAction
+              actionKey="open-void-invoice"
+              variant="tertiary"
               disabled={busy}
               onClick={() => openPanel('void')}
-              className="whitespace-nowrap font-mono text-[9px] uppercase tracking-[0.06em] hover:opacity-80 disabled:opacity-40"
-              style={{ color: TERRACOTTA_INK }}
+              className="text-[var(--color-terracotta)]"
             >
               Void
-            </button>
+            </DocumentAction>
           )}
           {canPrint && (
-            <button
-              type="button"
+            <DocumentAction
+              actionKey="print-invoice"
+              variant="tertiary"
               onClick={() => window.print()}
-              className={`${ACT_QUIET} ml-auto`}
+              className="ml-auto"
             >
               Print
-            </button>
+            </DocumentAction>
           )}
-        </div>
+        </DocumentActionGroup>
 
         {/* Quiet confirmation / R83 inline failure — at the act site. */}
         {note && (
@@ -508,7 +569,11 @@ export function InvoiceFolio({
                 ? 'Issuing assigns the number, locks the totals, and emails the invoice'
                 : 'Sends the invoice email again'}
               {invoice.client?.email ? (
-                <> — to <span className="font-medium">{invoice.client.email}</span>.</>
+                <>
+                  {' '}
+                  — to{' '}
+                  <span className="font-medium">{invoice.client.email}</span>.
+                </>
               ) : (
                 <> — to the client on this project.</>
               )}
@@ -521,27 +586,41 @@ export function InvoiceFolio({
               aria-label="Personal note"
               className={`${INPUT} mt-1.5 w-full resize-none`}
             />
-            <div className="mt-1.5 flex items-center gap-3">
-              <button
-                type="button"
+            <DocumentActionGroup
+              surfaceKey="accounts"
+              regionKey="invoice-send-confirmation"
+              className="mt-1.5"
+            >
+              <DocumentAction
+                actionKey={
+                  act === 'send' ? 'confirm-issue-and-send' : 'confirm-resend'
+                }
+                variant="primary"
                 disabled={busy}
-                onClick={() => void (act === 'send' ? doIssueAndSend() : doResend())}
-                className={ACT}
+                loading={busy}
+                loadingLabel="Sending…"
+                onClick={() =>
+                  void (act === 'send' ? doIssueAndSend() : doResend())
+                }
               >
-                {busy ? 'sending…' : act === 'send' ? 'Issue & send' : 'Resend email'}
-              </button>
-              <button type="button" onClick={() => setAct(null)} className={ACT_QUIET}>
+                {act === 'send' ? 'Issue & send' : 'Resend email'}
+              </DocumentAction>
+              <DocumentAction
+                actionKey="cancel-invoice-send"
+                variant="tertiary"
+                onClick={() => setAct(null)}
+              >
                 never mind
-              </button>
-            </div>
+              </DocumentAction>
+            </DocumentActionGroup>
           </div>
         )}
 
         {act === 'payment' && (
           <div className="mt-3 border-t border-dashed border-[var(--color-pearl)] pt-2.5">
             <p className="text-[11px] text-[var(--color-charcoal)]">
-              Balance {formatCurrency(balance, invoice.currency)} — record a payment received
-              outside Stripe.
+              Balance {formatCurrency(balance, invoice.currency)} — record a
+              payment received outside Stripe.
             </p>
             <div className="mt-1.5 grid grid-cols-2 gap-2 sm:grid-cols-4">
               <label className="flex flex-col gap-0.5">
@@ -560,7 +639,9 @@ export function InvoiceFolio({
                 <select
                   value={method}
                   onChange={(e) =>
-                    setMethod(e.target.value as Exclude<InvoicePaymentMethod, 'stripe'>)
+                    setMethod(
+                      e.target.value as Exclude<InvoicePaymentMethod, 'stripe'>,
+                    )
                   }
                   className={`${INPUT} [&_option]:bg-[var(--doc-paper,#FAF7F2)]`}
                 >
@@ -591,31 +672,44 @@ export function InvoiceFolio({
               </label>
             </div>
             {amountCents > balance && (
-              <p className="mt-1 font-mono text-[9px] uppercase tracking-[0.05em]" style={{ color: TERRACOTTA_INK }}>
+              <p
+                className="mt-1 font-mono text-[9px] uppercase tracking-[0.05em]"
+                style={{ color: TERRACOTTA_INK }}
+              >
                 amount exceeds the remaining balance
               </p>
             )}
-            <div className="mt-2 flex items-center gap-3">
-              <button
-                type="button"
+            <DocumentActionGroup
+              surfaceKey="accounts"
+              regionKey="invoice-payment-confirmation"
+              className="mt-2"
+            >
+              <DocumentAction
+                actionKey="confirm-record-payment"
+                variant="primary"
                 disabled={!paymentValid || busy}
+                loading={busy}
+                loadingLabel="Recording…"
                 onClick={() => void doRecordPayment()}
-                className={ACT}
               >
-                {busy ? 'recording…' : 'Record payment'}
-              </button>
-              <button type="button" onClick={() => setAct(null)} className={ACT_QUIET}>
+                Record payment
+              </DocumentAction>
+              <DocumentAction
+                actionKey="cancel-record-payment"
+                variant="tertiary"
+                onClick={() => setAct(null)}
+              >
                 never mind
-              </button>
-            </div>
+              </DocumentAction>
+            </DocumentActionGroup>
           </div>
         )}
 
         {act === 'void' && (
           <div className="mt-3 border-t border-dashed border-[var(--color-pearl)] pt-2.5">
             <p className="text-[11px] text-[var(--color-charcoal)]">
-              Voiding releases any linked payment milestones and time entries so they can be
-              billed again. This cannot be undone.
+              Voiding releases any linked payment milestones and time entries so
+              they can be billed again. This cannot be undone.
             </p>
             <textarea
               autoFocus
@@ -626,20 +720,29 @@ export function InvoiceFolio({
               aria-label="Void reason"
               className={`${INPUT} mt-1.5 w-full resize-none`}
             />
-            <div className="mt-1.5 flex items-center gap-3">
-              <button
-                type="button"
+            <DocumentActionGroup
+              surfaceKey="accounts"
+              regionKey="void-invoice-confirmation"
+              className="mt-1.5"
+            >
+              <DocumentAction
+                actionKey="confirm-void-invoice"
+                variant="danger"
                 disabled={!voidReason.trim() || busy}
+                loading={busy}
+                loadingLabel="Voiding…"
                 onClick={() => void doVoid()}
-                className="whitespace-nowrap rounded-[4px] border border-[rgba(196,131,111,0.5)] px-2.5 py-1 font-mono text-[9px] font-semibold uppercase tracking-[0.06em] transition-colors hover:bg-[#C4836F] hover:text-white disabled:opacity-40 disabled:hover:bg-transparent"
-                style={{ color: TERRACOTTA_INK }}
               >
-                {busy ? 'voiding…' : 'Void invoice'}
-              </button>
-              <button type="button" onClick={() => setAct(null)} className={ACT_QUIET}>
+                Void invoice
+              </DocumentAction>
+              <DocumentAction
+                actionKey="cancel-void-invoice"
+                variant="tertiary"
+                onClick={() => setAct(null)}
+              >
                 never mind
-              </button>
-            </div>
+              </DocumentAction>
+            </DocumentActionGroup>
           </div>
         )}
       </div>

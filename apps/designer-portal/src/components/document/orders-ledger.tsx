@@ -17,7 +17,11 @@
 import { Fragment, useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useQueryClient } from '@tanstack/react-query';
-import { usePurchaseOrders, useUpdatePurchaseOrderETA, useVendors } from '@patina/supabase';
+import {
+  usePurchaseOrders,
+  useUpdatePurchaseOrderETA,
+  useVendors,
+} from '@patina/supabase';
 import { clientVendorEmailHint } from '@/components/portal/procurement/po-send-actions';
 import { Stamp } from './stamp';
 import { LogAckInline, PoPreview } from './po-preview';
@@ -31,6 +35,7 @@ import type { OpenLedgerContext } from './command-bar';
 import { DocSheetHead } from './overlays/doc-sheet';
 import { STUDIO_LEDGERS } from '@/lib/document/registry';
 import { DOCUMENT_SURFACE_KEYS } from '@/lib/help-system/document-surface-keys';
+import { DocumentAction } from './document-action';
 
 type BookPage = 'ledger' | 'week' | 'receiving' | 'vendors';
 
@@ -78,7 +83,7 @@ function LensLink({
       type="button"
       onClick={onClick}
       aria-pressed={active}
-      className={`font-mono text-[8.5px] uppercase tracking-[0.06em] transition-colors ${
+      className={`min-h-11 min-w-11 font-mono text-[8.5px] uppercase tracking-[0.06em] transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-clay)] ${
         active
           ? 'text-[var(--color-clay)]'
           : 'text-[var(--color-aged-oak)] hover:text-[var(--color-charcoal)]'
@@ -113,7 +118,10 @@ export function OrdersLedger({
   };
   // useVendors returns { data, pagination } — unwrap, and ask for the
   // whole directory (the vendor pane is a book, not a feed).
-  const { data: vendorsPage } = useVendors(undefined, { page: 1, pageSize: 200 }) as {
+  const { data: vendorsPage } = useVendors(undefined, {
+    page: 1,
+    pageSize: 200,
+  }) as {
     data: { data: AnyRecord[] } | undefined;
   };
   const vendors = vendorsPage?.data;
@@ -123,7 +131,9 @@ export function OrdersLedger({
   // pre-addresses straight onto Vendors with the document's project. (page is
   // a free string on the shared context — narrow it to this book's pages.)
   const [page, setPage] = useState<BookPage>(
-    PAGES.some((p) => p.key === initialContext?.page) ? (initialContext!.page as BookPage) : 'ledger',
+    PAGES.some((p) => p.key === initialContext?.page)
+      ? (initialContext!.page as BookPage)
+      : 'ledger',
   );
   // R18: send / resend through the shared preview-confirm.
   const [previewPo, setPreviewPo] = useState<AnyRecord | null>(null);
@@ -135,7 +145,9 @@ export function OrdersLedger({
   // PRC-06 (R84): the quiet lenses — project + payment state, DM-mono text
   // (the portal's FacetedFilterPopover facets, without the pills).
   const [projectLens, setProjectLens] = useState<string | null>(null);
-  const [paymentLens, setPaymentLens] = useState<'due' | 'pending' | 'paid' | null>(null);
+  const [paymentLens, setPaymentLens] = useState<
+    'due' | 'pending' | 'paid' | null
+  >(null);
 
   const vendorById = useMemo(() => {
     const map = new Map<string, AnyRecord>();
@@ -163,7 +175,9 @@ export function OrdersLedger({
 
   const groups = useMemo(() => {
     const lensed = live
-      .filter((o) => !projectLens || (o.project_id ?? o.project?.id) === projectLens)
+      .filter(
+        (o) => !projectLens || (o.project_id ?? o.project?.id) === projectLens,
+      )
       .filter(
         (o) =>
           !paymentLens ||
@@ -178,7 +192,8 @@ export function OrdersLedger({
     return [...byVendor.entries()]
       .map(([vendorId, pos]) => ({
         vendorId,
-        vendorName: vendorById.get(vendorId)?.name ?? pos[0]?.vendor?.name ?? 'Vendor',
+        vendorName:
+          vendorById.get(vendorId)?.name ?? pos[0]?.vendor?.name ?? 'Vendor',
         pos,
       }))
       .sort((a, b) => a.vendorName.localeCompare(b.vendorName));
@@ -230,11 +245,12 @@ export function OrdersLedger({
       />
       <div className="mb-3">
         <h2 className="font-heading text-xl text-[var(--color-charcoal)]">
-          Orders <em className="italic text-[var(--color-clay)]">· the studio book</em>
+          Orders{' '}
+          <em className="italic text-[var(--color-clay)]">· the studio book</em>
         </h2>
         <p className="mt-0.5 text-[11px] text-[var(--color-aged-oak)]">
-          A lens over every document — pulled over whatever you&apos;re holding, put back when
-          done.
+          A lens over every document — pulled over whatever you&apos;re holding,
+          put back when done.
         </p>
       </div>
 
@@ -269,7 +285,9 @@ export function OrdersLedger({
 
       {page === 'week' && <WeekBookPage />}
 
-      {page === 'receiving' && <ReceivingBookPage onOpenDocument={openDocument} />}
+      {page === 'receiving' && (
+        <ReceivingBookPage onOpenDocument={openDocument} />
+      )}
 
       {page === 'ledger' && (
         <>
@@ -295,14 +313,19 @@ export function OrdersLedger({
                   <span className="font-mono text-[8px] uppercase tracking-[0.08em] text-[var(--color-aged-oak)]">
                     project ·
                   </span>
-                  <LensLink active={!projectLens} onClick={() => setProjectLens(null)}>
+                  <LensLink
+                    active={!projectLens}
+                    onClick={() => setProjectLens(null)}
+                  >
                     all
                   </LensLink>
                   {projectOptions.map((p) => (
                     <LensLink
                       key={p.id}
                       active={projectLens === p.id}
-                      onClick={() => setProjectLens((cur) => (cur === p.id ? null : p.id))}
+                      onClick={() =>
+                        setProjectLens((cur) => (cur === p.id ? null : p.id))
+                      }
                     >
                       {p.name}
                     </LensLink>
@@ -313,25 +336,33 @@ export function OrdersLedger({
               <span className="font-mono text-[8px] uppercase tracking-[0.08em] text-[var(--color-aged-oak)]">
                 payment ·
               </span>
-              <LensLink active={!paymentLens} onClick={() => setPaymentLens(null)}>
+              <LensLink
+                active={!paymentLens}
+                onClick={() => setPaymentLens(null)}
+              >
                 all
               </LensLink>
               {(['due', 'pending', 'paid'] as const).map((s) => (
                 <LensLink
                   key={s}
                   active={paymentLens === s}
-                  onClick={() => setPaymentLens((cur) => (cur === s ? null : s))}
+                  onClick={() =>
+                    setPaymentLens((cur) => (cur === s ? null : s))
+                  }
                 >
                   {s}
                 </LensLink>
               ))}
             </div>
           )}
-          {!isLoading && live.length > 0 && groups.length === 0 && (projectLens || paymentLens) && (
-            <p className="py-2 text-[11px] italic text-[var(--color-aged-oak)]">
-              Nothing under this lens.
-            </p>
-          )}
+          {!isLoading &&
+            live.length > 0 &&
+            groups.length === 0 &&
+            (projectLens || paymentLens) && (
+              <p className="py-2 text-[11px] italic text-[var(--color-aged-oak)]">
+                Nothing under this lens.
+              </p>
+            )}
           {/* The zero-PO state (help-desk Wave 1, copy §E.3) — the page was
               blank here before; a quiet heading + teaching line, no chrome. */}
           {!isLoading && live.length === 0 && (
@@ -340,8 +371,9 @@ export function OrdersLedger({
                 No purchase orders yet
               </p>
               <p className="mt-1.5 max-w-[52ch] text-[12px] leading-relaxed text-[var(--color-aged-oak)]">
-                When you order what a proposal specifies, each PO lands here and tracks itself
-                from production to your door. Draw the first from a project&apos;s schedule.
+                When you order what a proposal specifies, each PO lands here and
+                tracks itself from production to your door. Draw the first from
+                a project&apos;s schedule.
               </p>
             </div>
           )}
@@ -351,7 +383,7 @@ export function OrdersLedger({
                 {g.vendorName}
               </p>
               <ul>
-                {g.pos.map((po) => {
+                {g.pos.map((po, index) => {
                   const stamp = PO_STAMP[po.status] ?? PO_STAMP.draft;
                   // PRC-07 (R84): the ack act lives where the row narrates
                   // "no ack" — sent, unacknowledged, non-catalog, not
@@ -363,99 +395,119 @@ export function OrdersLedger({
                     po.status !== 'cancelled';
                   return (
                     <Fragment key={po.id}>
-                    <li
-                      className="grid grid-cols-[auto_1fr_auto_auto_auto_auto] items-center gap-3 border-b border-[var(--color-pearl)] px-1 py-2.5"
-                    >
-                      <input
-                        type="checkbox"
-                        aria-label={`Select ${po.vendor_po_number ?? po.sidemark ?? 'PO'}`}
-                        checked={selected.includes(po.id)}
-                        onChange={(e) =>
-                          setSelected((prev) =>
-                            e.target.checked
-                              ? [...prev, po.id]
-                              : prev.filter((x) => x !== po.id),
-                          )
-                        }
-                      />
-                      <div>
-                        <p className="text-[12.5px] font-medium text-[var(--color-charcoal)]">
-                          {po.po_number ?? po.vendor_po_number ?? po.sidemark ?? 'PO drafted'}
-                        </p>
-                        <p className="font-mono text-[9px] uppercase tracking-[0.05em] text-[var(--color-aged-oak)]">
-                          {[
-                            po.project?.name ?? 'Project',
-                            po.total_cents != null ? fmtUsd(po.total_cents) : '—',
-                            // R18: the row narrates the send lifecycle.
-                            po.sent_at
-                              ? `sent ${fmtDay(po.sent_at)}${po.acknowledged_at ? ' · ack' : ' · no ack'}`
-                              : 'not sent',
-                          ].join(' · ')}
-                          {canAck && (
-                            <>
-                              {' · '}
-                              <button
-                                type="button"
-                                onClick={() =>
-                                  setAckPoId((cur) => (cur === po.id ? null : po.id))
-                                }
-                                aria-expanded={ackPoId === po.id}
-                                className="uppercase tracking-[0.05em] text-[var(--color-clay)] hover:underline"
-                              >
-                                log ack {ackPoId === po.id ? '↑' : '↓'}
-                              </button>
-                            </>
-                          )}
-                        </p>
-                      </div>
-                      <Stamp
-                        label={po.status.replace(/_/g, ' ')}
-                        color={stamp.color}
-                        ink={stamp.ink}
-                      />
-                      <span
-                        className="whitespace-nowrap font-heading text-[12.5px]"
-                        style={
-                          // R18: unscheduled shipment — a quiet row mark, never a banner.
-                          !po.confirmed_eta && po.status === 'shipped'
-                            ? { color: '#D8BE56', fontFamily: 'var(--font-mono, monospace)', fontSize: '10px', letterSpacing: '0.05em' }
-                            : { color: 'var(--color-charcoal)' }
-                        }
-                      >
-                        {po.confirmed_eta
-                          ? `~${fmtDay(po.confirmed_eta)}`
-                          : po.status === 'shipped'
-                            ? 'NO DATE'
-                            : '—'}
-                      </span>
-                      <button
-                        type="button"
-                        onClick={() => setPreviewPo(po)}
-                        className="whitespace-nowrap text-[10.5px] text-[var(--color-clay)] hover:underline"
-                      >
-                        {po.sent_at ? 'resend' : po.status === 'draft' ? 'send →' : 'pdf'}
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => openDocument(po.project_id ?? po.project?.id ?? null)}
-                        className="whitespace-nowrap text-[10.5px] text-[var(--color-clay)] hover:underline"
-                      >
-                        open document →
-                      </button>
-                    </li>
-                    {/* PRC-07: the unfolded log-acknowledgment band — quiet
-                        act under the row, closed by logging or refolding. */}
-                    {canAck && ackPoId === po.id && (
-                      <li className="border-b border-[var(--color-pearl)] py-2.5 pl-8 pr-1">
-                        <LogAckInline
-                          purchaseOrderId={po.id}
-                          vendorPoNumber={po.vendor_po_number}
-                          confirmedEta={po.confirmed_eta}
-                          sentAt={po.sent_at}
-                          tone="book"
+                      <li className="grid grid-cols-[auto_1fr_auto_auto_auto_auto] items-center gap-3 border-b border-[var(--color-pearl)] px-1 py-2.5">
+                        <input
+                          type="checkbox"
+                          aria-label={`Select ${po.vendor_po_number ?? po.sidemark ?? 'PO'}`}
+                          checked={selected.includes(po.id)}
+                          onChange={(e) =>
+                            setSelected((prev) =>
+                              e.target.checked
+                                ? [...prev, po.id]
+                                : prev.filter((x) => x !== po.id),
+                            )
+                          }
                         />
+                        <div>
+                          <p className="text-[12.5px] font-medium text-[var(--color-charcoal)]">
+                            {po.po_number ??
+                              po.vendor_po_number ??
+                              po.sidemark ??
+                              'PO drafted'}
+                          </p>
+                          <p className="font-mono text-[9px] uppercase tracking-[0.05em] text-[var(--color-aged-oak)]">
+                            {[
+                              po.project?.name ?? 'Project',
+                              po.total_cents != null
+                                ? fmtUsd(po.total_cents)
+                                : '—',
+                              // R18: the row narrates the send lifecycle.
+                              po.sent_at
+                                ? `sent ${fmtDay(po.sent_at)}${po.acknowledged_at ? ' · ack' : ' · no ack'}`
+                                : 'not sent',
+                            ].join(' · ')}
+                            {canAck && (
+                              <>
+                                {' · '}
+                                <button
+                                  type="button"
+                                  onClick={() =>
+                                    setAckPoId((cur) =>
+                                      cur === po.id ? null : po.id,
+                                    )
+                                  }
+                                  aria-expanded={ackPoId === po.id}
+                                  className="inline-flex min-h-11 min-w-11 items-center uppercase tracking-[0.05em] text-[var(--color-clay)] hover:underline focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-clay)]"
+                                >
+                                  log ack {ackPoId === po.id ? '↑' : '↓'}
+                                </button>
+                              </>
+                            )}
+                          </p>
+                        </div>
+                        <Stamp
+                          label={po.status.replace(/_/g, ' ')}
+                          color={stamp.color}
+                          ink={stamp.ink}
+                        />
+                        <span
+                          className="whitespace-nowrap font-heading text-[12.5px]"
+                          style={
+                            // R18: unscheduled shipment — a quiet row mark, never a banner.
+                            !po.confirmed_eta && po.status === 'shipped'
+                              ? {
+                                  color: '#D8BE56',
+                                  fontFamily: 'var(--font-mono, monospace)',
+                                  fontSize: '10px',
+                                  letterSpacing: '0.05em',
+                                }
+                              : { color: 'var(--color-charcoal)' }
+                          }
+                        >
+                          {po.confirmed_eta
+                            ? `~${fmtDay(po.confirmed_eta)}`
+                            : po.status === 'shipped'
+                              ? 'NO DATE'
+                              : '—'}
+                        </span>
+                        <DocumentAction
+                          actionKey="open-purchase-order-preview"
+                          surfaceKey="orders"
+                          regionKey={`purchase-order-row-${index + 1}`}
+                          variant="secondary"
+                          onClick={() => setPreviewPo(po)}
+                        >
+                          {po.sent_at
+                            ? 'resend'
+                            : po.status === 'draft'
+                              ? 'send →'
+                              : 'pdf'}
+                        </DocumentAction>
+                        <button
+                          type="button"
+                          onClick={() =>
+                            openDocument(
+                              po.project_id ?? po.project?.id ?? null,
+                            )
+                          }
+                          className="min-h-11 min-w-11 whitespace-nowrap text-[10.5px] text-[var(--color-clay)] hover:underline focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-clay)]"
+                        >
+                          open document →
+                        </button>
                       </li>
-                    )}
+                      {/* PRC-07: the unfolded log-acknowledgment band — quiet
+                        act under the row, closed by logging or refolding. */}
+                      {canAck && ackPoId === po.id && (
+                        <li className="border-b border-[var(--color-pearl)] py-2.5 pl-8 pr-1">
+                          <LogAckInline
+                            purchaseOrderId={po.id}
+                            vendorPoNumber={po.vendor_po_number}
+                            confirmedEta={po.confirmed_eta}
+                            sentAt={po.sent_at}
+                            tone="book"
+                          />
+                        </li>
+                      )}
                     </Fragment>
                   );
                 })}
@@ -464,29 +516,37 @@ export function OrdersLedger({
           ))}
 
           {previewPo && (
-        <PoPreview
-          open
-          onOpenChange={(o: boolean) => {
-            if (!o) setPreviewPo(null);
-          }}
-          purchaseOrderId={previewPo.id}
-          vendorName={vendorById.get(previewPo.vendor_id)?.name ?? previewPo.vendor?.name ?? 'the vendor'}
-          vendorEmailHint={clientVendorEmailHint(vendorById.get(previewPo.vendor_id))}
-          mode={previewPo.sent_at ? 'resend' : 'send'}
-          onSent={() => setPreviewPo(null)}
-          // PRC-07: the resend paper offers the ack act for unacked sends.
-          sentAt={previewPo.sent_at}
-          acknowledgedAt={previewPo.acknowledged_at}
-          vendorPoNumber={previewPo.vendor_po_number}
-          confirmedEta={previewPo.confirmed_eta}
-        />
-      )}
+            <PoPreview
+              open
+              onOpenChange={(o: boolean) => {
+                if (!o) setPreviewPo(null);
+              }}
+              purchaseOrderId={previewPo.id}
+              vendorName={
+                vendorById.get(previewPo.vendor_id)?.name ??
+                previewPo.vendor?.name ??
+                'the vendor'
+              }
+              vendorEmailHint={clientVendorEmailHint(
+                vendorById.get(previewPo.vendor_id),
+              )}
+              mode={previewPo.sent_at ? 'resend' : 'send'}
+              onSent={() => setPreviewPo(null)}
+              // PRC-07: the resend paper offers the ack act for unacked sends.
+              sentAt={previewPo.sent_at}
+              acknowledgedAt={previewPo.acknowledged_at}
+              vendorPoNumber={previewPo.vendor_po_number}
+              confirmedEta={previewPo.confirmed_eta}
+            />
+          )}
 
-      {selected.length >= 2 && (
+          {selected.length >= 2 && (
             <div className="mt-3 flex flex-wrap items-center gap-2 rounded-[5px] border border-[rgba(196,165,123,0.3)] bg-[rgba(196,165,123,0.05)] px-3 py-2.5">
               <p className="text-[11.5px] text-[var(--color-charcoal)]">
                 {selected.length} orders{' '}
-                {selectedVendor ? '— same truck?' : '— pick one vendor to batch'}
+                {selectedVendor
+                  ? '— same truck?'
+                  : '— pick one vendor to batch'}
               </p>
               {selectedVendor && (
                 <>
@@ -497,14 +557,18 @@ export function OrdersLedger({
                     value={truckEta}
                     onChange={(e) => setTruckEta(e.target.value)}
                   />
-                  <button
-                    type="button"
+                  <DocumentAction
+                    actionKey="align-purchase-order-eta"
+                    surfaceKey="orders"
+                    regionKey="same-truck"
+                    variant="primary"
                     disabled={!truckEta || batchBusy}
+                    loading={batchBusy}
+                    loadingLabel="Aligning…"
                     onClick={sameTruck}
-                    className="rounded-[4px] border border-[var(--color-clay)] bg-[var(--color-clay)] px-2.5 py-1 text-[11px] font-medium text-white hover:opacity-90 disabled:opacity-50"
                   >
-                    {batchBusy ? 'Aligning…' : 'Align ETA'}
-                  </button>
+                    Align ETA
+                  </DocumentAction>
                 </>
               )}
             </div>

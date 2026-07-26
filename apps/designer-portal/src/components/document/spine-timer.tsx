@@ -10,12 +10,14 @@
 import { useState } from 'react';
 import { useDocumentTime } from '@/hooks/document-time-provider';
 import { ACTIVITIES, fmtElapsedQuiet } from '@/lib/document/time-derivation';
+import { DocumentAction, DocumentActionRow } from './document-action';
 
 const T_BTN =
-  'rounded-[3px] border border-[var(--color-pearl)] px-2 py-[3px] font-mono text-[8.5px] uppercase tracking-[0.06em] text-[var(--text-muted)] hover:border-[var(--color-clay)] hover:text-[var(--color-clay)] disabled:opacity-50';
+  'min-h-11 min-w-11 rounded-[3px] border border-[var(--color-pearl)] px-2 py-[3px] font-mono text-[8.5px] uppercase tracking-[0.06em] text-[var(--text-muted)] hover:border-[var(--color-clay)] hover:text-[var(--color-clay)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-clay)] disabled:opacity-50';
 
 export function SpineTimer() {
-  const { heldProjectId, running, paused, elapsedSeconds, manualLog } = useDocumentTime();
+  const { heldProjectId, running, paused, elapsedSeconds, manualLog } =
+    useDocumentTime();
   const { pause, resume } = useDocumentTime();
   const [formOpen, setFormOpen] = useState(false);
   const [minutes, setMinutes] = useState('');
@@ -47,7 +49,9 @@ export function SpineTimer() {
         <span
           aria-hidden
           className="inline-block h-[6px] w-[6px] rounded-full"
-          style={{ background: paused ? 'var(--color-pearl)' : 'var(--color-sage)' }}
+          style={{
+            background: paused ? 'var(--color-pearl)' : 'var(--color-sage)',
+          }}
         />
         In hand{paused ? ' · paused' : ''}
       </p>
@@ -65,9 +69,15 @@ export function SpineTimer() {
             Resume
           </button>
         )}
-        <button type="button" className={T_BTN} onClick={() => setFormOpen((v) => !v)}>
+        <DocumentAction
+          actionKey="open-manual-time-entry"
+          surfaceKey="timer"
+          regionKey="timer-controls"
+          variant="secondary"
+          onClick={() => setFormOpen((v) => !v)}
+        >
           + Log
-        </button>
+        </DocumentAction>
       </div>
       {formOpen && (
         <div className="mt-2 space-y-1.5">
@@ -95,14 +105,22 @@ export function SpineTimer() {
               </option>
             ))}
           </select>
-          <button
-            type="button"
-            disabled={!valid || busy}
-            onClick={() => void addEntry()}
-            className="rounded-[3px] border border-[var(--color-clay)] bg-[var(--color-clay)] px-2.5 py-1 text-[10.5px] font-medium text-white hover:opacity-90 disabled:opacity-50"
+          <DocumentActionRow
+            surfaceKey="timer"
+            regionKey="manual-time-entry"
+            aria-label="Manual time entry actions"
           >
-            Add entry
-          </button>
+            <DocumentAction
+              actionKey="add-manual-time-entry"
+              variant="primary"
+              disabled={!valid || busy}
+              loading={busy}
+              loadingLabel="Adding…"
+              onClick={() => void addEntry()}
+            >
+              Add entry
+            </DocumentAction>
+          </DocumentActionRow>
         </div>
       )}
     </div>

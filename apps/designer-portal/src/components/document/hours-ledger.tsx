@@ -39,6 +39,7 @@ import type { OpenLedgerContext } from './command-bar';
 import { DocSheetHead } from './overlays/doc-sheet';
 import { STUDIO_LEDGERS } from '@/lib/document/registry';
 import { DOCUMENT_SURFACE_KEYS } from '@/lib/help-system/document-surface-keys';
+import { DocumentAction, DocumentActionGroup } from './document-action';
 
 // R96 — the registry is the single source of the surface icon (no drift).
 const HOURS_ICON = STUDIO_LEDGERS.find((l) => l.key === 'hours')!.icon;
@@ -85,7 +86,10 @@ export function HoursLedger({
     initialContext?.projectId ?? null,
   );
   const [weekOffset, setWeekOffset] = useState(0);
-  const { start: weekStart, end: weekEnd } = useMemo(() => weekRange(weekOffset), [weekOffset]);
+  const { start: weekStart, end: weekEnd } = useMemo(
+    () => weekRange(weekOffset),
+    [weekOffset],
+  );
 
   const { data: entries, refetch } = useQuery({
     queryKey: ['document-hours-week', weekOffset, lensProjectId],
@@ -158,14 +162,20 @@ export function HoursLedger({
   const unbilledById = useMemo(() => {
     const map = new Map<string, UnbilledInfo>();
     for (const row of unbilledRows ?? [])
-      map.set(row.id, { amount_cents: row.amount_cents ?? 0, project_id: row.project_id });
+      map.set(row.id, {
+        amount_cents: row.amount_cents ?? 0,
+        project_id: row.project_id,
+      });
     return map;
   }, [unbilledRows]);
   const unbilledMinutes = (unbilledRows ?? []).reduce(
     (s, r) => s + (r.duration_minutes ?? 0),
     0,
   );
-  const unbilledCents = (unbilledRows ?? []).reduce((s, r) => s + (r.amount_cents ?? 0), 0);
+  const unbilledCents = (unbilledRows ?? []).reduce(
+    (s, r) => s + (r.amount_cents ?? 0),
+    0,
+  );
   const unbilledProjects = useMemo(
     () => [...new Set((unbilledRows ?? []).map((r) => r.project_id as string))],
     [unbilledRows],
@@ -191,7 +201,10 @@ export function HoursLedger({
   const todayMin = (entries ?? [])
     .filter((e) => new Date(e.started_at).toDateString() === todayKey)
     .reduce((s, e) => s + (e.duration_minutes ?? 0), 0);
-  const weekMin = (entries ?? []).reduce((s, e) => s + (e.duration_minutes ?? 0), 0);
+  const weekMin = (entries ?? []).reduce(
+    (s, e) => s + (e.duration_minutes ?? 0),
+    0,
+  );
   const util = hoursUtilization(entries ?? []);
 
   // R75 — the shown week's exportable share: billable, completed, unclaimed.
@@ -222,7 +235,9 @@ export function HoursLedger({
       void refetch();
       void refetchUnbilled();
     } catch (e) {
-      setNote(`Could not add — ${e instanceof Error ? e.message : 'try again'}`);
+      setNote(
+        `Could not add — ${e instanceof Error ? e.message : 'try again'}`,
+      );
     } finally {
       setAddBusy(false);
     }
@@ -237,7 +252,9 @@ export function HoursLedger({
           void refetchUnbilled();
         },
         onError: (e) =>
-          setNote(`Could not save — ${e instanceof Error ? e.message : 'try again'}`),
+          setNote(
+            `Could not save — ${e instanceof Error ? e.message : 'try again'}`,
+          ),
       },
     );
   };
@@ -245,7 +262,8 @@ export function HoursLedger({
   const lensName =
     lensProjectId != null
       ? ((projects ?? []).find((p) => p.id === lensProjectId)?.name ??
-        (entries ?? []).find((e) => e.project_id === lensProjectId)?.project?.name ??
+        (entries ?? []).find((e) => e.project_id === lensProjectId)?.project
+          ?.name ??
         'one document')
       : null;
 
@@ -256,11 +274,16 @@ export function HoursLedger({
 
   return (
     <div className="mx-auto max-w-3xl">
-      <DocSheetHead icon={HOURS_ICON} title="Hours" helpKey={DOCUMENT_SURFACE_KEYS.hours} />
+      <DocSheetHead
+        icon={HOURS_ICON}
+        title="Hours"
+        helpKey={DOCUMENT_SURFACE_KEYS.hours}
+      />
       <div className="mb-4 flex items-baseline justify-between gap-3">
         <div className="min-w-0">
           <h2 className="font-heading text-xl text-[var(--color-charcoal)]">
-            Hours <em className="italic text-[var(--color-clay)]">· {weekLabel}</em>
+            Hours{' '}
+            <em className="italic text-[var(--color-clay)]">· {weekLabel}</em>
             {lensName && (
               <span className="ml-2 font-mono text-[10px] uppercase tracking-[0.06em] text-[var(--color-aged-oak)]">
                 · {lensName}
@@ -275,7 +298,9 @@ export function HoursLedger({
             )}
           </h2>
           <p className="mt-0.5 font-mono text-[9px] uppercase tracking-[0.07em] text-[var(--color-aged-oak)]">
-            {weekOffset === 0 && <>Today · {fmtMinutes(todayMin)} &nbsp;·&nbsp; </>}
+            {weekOffset === 0 && (
+              <>Today · {fmtMinutes(todayMin)} &nbsp;·&nbsp; </>
+            )}
             Week · {fmtMinutes(weekMin)}
             {/* R77 — week paging: walk the history, quietly. */}
             <button
@@ -308,7 +333,10 @@ export function HoursLedger({
             openInvoiceComposer({
               // One document → land scoped; several → the composer asks and
               // ticks that document's share of the week (R75).
-              projectId: weekUnbilledProjects.length === 1 ? weekUnbilledProjects[0] : undefined,
+              projectId:
+                weekUnbilledProjects.length === 1
+                  ? weekUnbilledProjects[0]
+                  : undefined,
               initialTimeEntryIds: weekUnbilled.map((e) => e.id),
             })
           }
@@ -322,12 +350,20 @@ export function HoursLedger({
       <LedgerFrontMatter
         caption="utilization"
         stats={[
-          { label: `logged ${weekLabel}`, value: fmtMinutes(util.totalMinutes) },
+          {
+            label: `logged ${weekLabel}`,
+            value: fmtMinutes(util.totalMinutes),
+          },
           ...(util.billablePct !== null
             ? [{ label: 'billable', value: `${util.billablePct}%` }]
             : []),
           ...((openEstimateMinutes ?? 0) > 0 && weekOffset === 0
-            ? [{ label: 'of open work est.', value: fmtMinutes(openEstimateMinutes ?? 0) }]
+            ? [
+                {
+                  label: 'of open work est.',
+                  value: fmtMinutes(openEstimateMinutes ?? 0),
+                },
+              ]
             : []),
         ]}
       />
@@ -339,21 +375,29 @@ export function HoursLedger({
           <span className="text-[var(--color-charcoal)]">
             {fmtUsd(unbilledCents)} · {fmtMinutes(unbilledMinutes)}
           </span>
-          {unbilledProjects.length > 1 && <span>· {unbilledProjects.length} documents</span>}
-          <button
-            type="button"
+          {unbilledProjects.length > 1 && (
+            <span>· {unbilledProjects.length} documents</span>
+          )}
+          <DocumentAction
+            actionKey="bill-unbilled-time"
+            surfaceKey="hours"
+            regionKey="unbilled-balance"
+            variant="primary"
             onClick={() =>
               openInvoiceComposer({
                 projectId:
                   lensProjectId ??
-                  (unbilledProjects.length === 1 ? unbilledProjects[0] : undefined),
-                initialTimeEntryIds: (unbilledRows ?? []).map((r) => r.id as string),
+                  (unbilledProjects.length === 1
+                    ? unbilledProjects[0]
+                    : undefined),
+                initialTimeEntryIds: (unbilledRows ?? []).map(
+                  (r) => r.id as string,
+                ),
               })
             }
-            className="text-[var(--color-clay)] hover:opacity-80"
           >
-            bill it →
-          </button>
+            Bill it
+          </DocumentAction>
         </div>
       )}
 
@@ -376,8 +420,9 @@ export function HoursLedger({
               No hours logged yet
             </p>
             <p className="mt-1.5 max-w-[52ch] text-[12px] leading-relaxed text-[var(--color-aged-oak)]">
-              Time logs itself while a document is in your hand; you can also add an entry by
-              hand. What you track here is what you draw onto an invoice later.
+              Time logs itself while a document is in your hand; you can also
+              add an entry by hand. What you track here is what you draw onto an
+              invoice later.
             </p>
           </div>
         ) : (
@@ -391,9 +436,13 @@ export function HoursLedger({
       {days.map(([day, rows]) => (
         <section key={day} className="mb-4">
           <p className="mb-1 flex items-baseline justify-between font-mono text-[9px] font-semibold uppercase tracking-[0.07em] text-[var(--color-clay)]">
-            <span>{day === todayKey ? 'Today' : fmtDay(rows[0].started_at)}</span>
+            <span>
+              {day === todayKey ? 'Today' : fmtDay(rows[0].started_at)}
+            </span>
             <span className="text-[var(--color-aged-oak)]">
-              {fmtMinutes(rows.reduce((s, e) => s + (e.duration_minutes ?? 0), 0))}
+              {fmtMinutes(
+                rows.reduce((s, e) => s + (e.duration_minutes ?? 0), 0),
+              )}
             </span>
           </p>
           <ul>
@@ -449,14 +498,18 @@ export function HoursLedger({
             </option>
           ))}
         </select>
-        <button
-          type="button"
+        <DocumentAction
+          actionKey="add-time-entry"
+          surfaceKey="hours"
+          regionKey="batch-entry"
+          variant="primary"
           disabled={!addValid || addBusy}
+          loading={addBusy}
+          loadingLabel="Adding…"
           onClick={() => void batchAdd()}
-          className="rounded-[4px] border border-[var(--color-clay)] bg-[var(--color-clay)] px-3 py-1.5 text-[11px] font-medium text-white hover:opacity-90 disabled:opacity-50"
         >
           Add
-        </button>
+        </DocumentAction>
       </div>
     </div>
   );
@@ -503,7 +556,9 @@ function EntryRow({
               e.phase_key,
               SOURCE_LABEL[e.source] ?? e.source,
               // The money the 00177 view resolved for this entry (BIL-08).
-              unbilled && unbilled.amount_cents > 0 ? fmtUsd(unbilled.amount_cents) : null,
+              unbilled && unbilled.amount_cents > 0
+                ? fmtUsd(unbilled.amount_cents)
+                : null,
             ]
               .filter(Boolean)
               .join(' · ')}
@@ -552,41 +607,52 @@ function EntryRow({
         {/* R77 — delete-with-confirm; a billed entry is history, immutable. */}
         {!billed ? (
           confirming ? (
-            <span className="flex items-baseline gap-1.5 whitespace-nowrap font-mono text-[9px] uppercase tracking-[0.05em]">
+            <DocumentActionGroup
+              surfaceKey="hours"
+              regionKey="delete-entry-confirmation"
+              className="items-center"
+            >
               <span className="text-[var(--color-aged-oak)]">delete?</span>
-              <button
-                type="button"
+              <DocumentAction
+                actionKey="confirm-delete-time-entry"
+                variant="danger"
                 disabled={deleteEntry.isPending}
+                loading={deleteEntry.isPending}
+                loadingLabel="Deleting…"
                 onClick={() => void doDelete()}
-                className="hover:opacity-80 disabled:opacity-40"
-                style={{ color: TERRACOTTA_INK }}
               >
-                {deleteEntry.isPending ? '…' : 'yes'}
-              </button>
-              <button
-                type="button"
+                Delete
+              </DocumentAction>
+              <DocumentAction
+                actionKey="cancel-delete-time-entry"
+                variant="tertiary"
                 onClick={() => setConfirming(false)}
-                className="text-[var(--color-aged-oak)] hover:text-[var(--color-charcoal)]"
               >
-                no
-              </button>
-            </span>
+                Keep
+              </DocumentAction>
+            </DocumentActionGroup>
           ) : (
-            <button
-              type="button"
+            <DocumentAction
+              actionKey="open-delete-time-entry-confirmation"
+              surfaceKey="hours"
+              regionKey="time-entry-actions"
+              variant="tertiary"
               aria-label="Delete entry"
               onClick={() => setConfirming(true)}
-              className="text-[13px] leading-none text-[var(--color-aged-oak)] hover:text-[#C4836F]"
+              className="text-[13px] leading-none text-[var(--color-aged-oak)] decoration-transparent hover:text-[#C4836F]"
             >
               ×
-            </button>
+            </DocumentAction>
           )
         ) : (
           <span aria-hidden className="w-[13px]" />
         )}
       </div>
       {rowNote && (
-        <p className="mt-1 font-mono text-[9px] uppercase tracking-[0.05em]" style={{ color: TERRACOTTA_INK }}>
+        <p
+          className="mt-1 font-mono text-[9px] uppercase tracking-[0.05em]"
+          style={{ color: TERRACOTTA_INK }}
+        >
           {rowNote}
         </p>
       )}

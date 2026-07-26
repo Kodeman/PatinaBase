@@ -27,7 +27,14 @@
  * ink weight, and pearl hairlines.
  */
 
-import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import {
+  Fragment,
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from 'react';
 import {
   useCoordinationItems,
   useProjectParties,
@@ -47,7 +54,11 @@ import {
   mapPhaseRowToScheduleInput,
   mapMilestoneRowToScheduleInput,
 } from '@patina/supabase';
-import type { ResolvedPhase, SchedulePhaseInput, ScheduleMilestoneInput } from '@patina/utils';
+import type {
+  ResolvedPhase,
+  SchedulePhaseInput,
+  ScheduleMilestoneInput,
+} from '@patina/utils';
 import { useSectionTasks } from '@/hooks/use-section-work';
 import { scheduleEvents } from '@/lib/analytics/schedule-events';
 import {
@@ -65,7 +76,10 @@ import {
   sortItemsBlockingFirst,
 } from '@/lib/document/coordination-derivation';
 import { phaseAnchorId } from '@/lib/document/phase-anchor';
-import { useScheduleNav, type ScheduleRevealTarget } from './schedule-nav-context';
+import {
+  useScheduleNav,
+  type ScheduleRevealTarget,
+} from './schedule-nav-context';
 import { useRippleSession } from './schedule-ripple-context';
 import { StrataMiniRule } from '../strata-mini-rule';
 import { DocSheet } from '../overlays/doc-sheet';
@@ -86,6 +100,7 @@ import { MilestoneComposer, type MilestoneDraft } from './milestone-composer';
 import { ScheduleEntryField } from './schedule-entry-field';
 import { RevisionLedger } from './revision-ledger';
 import type { PastProjectOption } from './past-project-picker';
+import { DocumentAction } from '../document-action';
 
 /** Best-effort phase_key from a free-typed name (phase_key is nullable + not
  *  unique on project_phases, so a plain slug is safe — no dedupe needed). */
@@ -101,7 +116,10 @@ function slugifyPhaseKey(name: string): string {
 }
 
 /** Which inline compose panel is open, and on which phase (one across the spine). */
-type ComposeState = { phaseId: string; kind: 'edit' | 'milestone' | 'delete' } | null;
+type ComposeState = {
+  phaseId: string;
+  kind: 'edit' | 'milestone' | 'delete';
+} | null;
 
 // ── schedule-spine.tsx (orchestrator; owns ALL sheet-open LOCAL state) ──
 // Props byte-identical to CoordinationBandProps — the spine replaces the band
@@ -123,7 +141,9 @@ export function ScheduleSpine({
   clientName,
 }: ScheduleSpineProps) {
   // ── designer_clients.id resolution (work-block.tsx pattern) ──
-  const { data: designerClient } = useDesignerClientForClientUser(clientUserId ?? '');
+  const { data: designerClient } = useDesignerClientForClientUser(
+    clientUserId ?? '',
+  );
   const designerClientId = designerClient?.id ?? null;
 
   // ── live data (the band's hooks) + the schedule's single door ──
@@ -151,7 +171,8 @@ export function ScheduleSpine({
   //    with a phase count (the copy RPC refuses a target that already has
   //    phases, and a source with none has nothing to copy). ──
   const { data: projectRows, isPending: projectsPending } = useProjects();
-  const { data: phaseCounts, isPending: countsPending } = useProjectPhaseCounts();
+  const { data: phaseCounts, isPending: countsPending } =
+    useProjectPhaseCounts();
 
   // The Rule (the minimap) reveals phases/milestones here through the nav
   // context. Inert when no provider is above (the spine works standalone).
@@ -210,8 +231,8 @@ export function ScheduleSpine({
 
   const activePhaseId = useMemo(
     () =>
-      mainLane.find((p) => phaseState(rowById.get(p.id)?.status) === 'active')?.id ??
-      null,
+      mainLane.find((p) => phaseState(rowById.get(p.id)?.status) === 'active')
+        ?.id ?? null,
     [mainLane, rowById],
   );
 
@@ -255,24 +276,29 @@ export function ScheduleSpine({
         );
 
         // ── the meta line's inputs (per-state; phaseMeta drops empties) ──
-        const linkedCount = allItems.filter((i) => i.phase_id === phase.id).length;
+        const linkedCount = allItems.filter(
+          (i) => i.phase_id === phase.id,
+        ).length;
         const blockingCount = phaseItems.filter(
           (i) => blocksText(i, allTasks) !== null,
         ).length;
         let lastSigned: { name: string; date: string | null } | null = null;
         for (const m of milestones) {
           if (m.derivedStatus !== 'signed' || m.date == null) continue;
-          if (lastSigned == null || (lastSigned.date != null && m.date > lastSigned.date)) {
+          if (
+            lastSigned == null ||
+            (lastSigned.date != null && m.date > lastSigned.date)
+          ) {
             lastSigned = { name: m.name, date: m.date };
           }
         }
         const durationDays =
           row == null
             ? null
-            : row.duration_days ??
-              (row.duration_weeks != null ? row.duration_weeks * 7 : null);
+            : (row.duration_days ??
+              (row.duration_weeks != null ? row.duration_weeks * 7 : null));
         const predecessorName = row?.follows_phase_id
-          ? rowById.get(row.follows_phase_id)?.name ?? null
+          ? (rowById.get(row.follows_phase_id)?.name ?? null)
           : null;
 
         // Slice 03 — a chain_does_not_fit conflict tags BOTH phaseId and
@@ -298,7 +324,10 @@ export function ScheduleSpine({
           slackDays: phase.slackDays,
           overrun:
             chainConflict && phase.start
-              ? { anchorDate: phase.start, overrunDays: chainConflict.overrunDays ?? 0 }
+              ? {
+                  anchorDate: phase.start,
+                  overrunDays: chainConflict.overrunDays ?? 0,
+                }
               : null,
         });
 
@@ -309,7 +338,9 @@ export function ScheduleSpine({
               ? { phase: thread, name: rowById.get(tid)?.name ?? '' }
               : null;
           })
-          .filter((t): t is { phase: ResolvedPhase; name: string } => t != null);
+          .filter(
+            (t): t is { phase: ResolvedPhase; name: string } => t != null,
+          );
 
         return {
           phase,
@@ -377,7 +408,10 @@ export function ScheduleSpine({
   );
 
   const pastProjectOptions = useMemo<PastProjectOption[]>(() => {
-    const rows = (projectRows ?? []) as Array<{ id: string; name?: string | null }>;
+    const rows = (projectRows ?? []) as Array<{
+      id: string;
+      name?: string | null;
+    }>;
     return rows
       .filter((p) => p.id !== projectId && (phaseCounts?.[p.id] ?? 0) > 0)
       .map((p) => ({
@@ -417,9 +451,17 @@ export function ScheduleSpine({
       {
         onSuccess: () => {
           if (wasEmpty) {
-            scheduleEvents.scheduleBorn({ surface: 'project', project_id: projectId, kind: 'blank' });
+            scheduleEvents.scheduleBorn({
+              surface: 'project',
+              project_id: projectId,
+              kind: 'blank',
+            });
           }
-          scheduleEvents.schedulePhaseAdded({ surface: 'project', project_id: projectId, via: 'ghost_line' });
+          scheduleEvents.schedulePhaseAdded({
+            surface: 'project',
+            project_id: projectId,
+            via: 'ghost_line',
+          });
           if (input.anchorDate) {
             scheduleEvents.scheduleAnchorSet({
               surface: 'project',
@@ -448,7 +490,10 @@ export function ScheduleSpine({
   // immediately as before. (Rule-side drags begin the same ripple with origin
   // 'rule'; both surfaces share one session.)
   const handleEditDuration = (phaseId: string, days: number) => {
-    ripple.begin({ kind: 'phase-duration', phaseId, durationDays: days }, 'spine');
+    ripple.begin(
+      { kind: 'phase-duration', phaseId, durationDays: days },
+      'spine',
+    );
     closeCompose(); // the strip takes over the preview + commit
   };
   const handleSetAnchor = (phaseId: string, date: string) => {
@@ -460,7 +505,12 @@ export function ScheduleSpine({
       { phaseId, projectId, anchorDate: null },
       {
         onSuccess: () =>
-          scheduleEvents.scheduleAnchorSet({ surface: 'project', project_id: projectId, target: 'phase', set: false }),
+          scheduleEvents.scheduleAnchorSet({
+            surface: 'project',
+            project_id: projectId,
+            target: 'phase',
+            set: false,
+          }),
       },
     );
   };
@@ -509,7 +559,10 @@ export function ScheduleSpine({
     // relink FIRST (followers → deleted phase's own predecessor), then delete —
     // relinkOnDelete computes the patch the hook applies before the DELETE.
     const relinkUpdates = relinkOnDelete(
-      schedule.phases.map((r) => ({ id: r.id, followsPhaseId: r.follows_phase_id ?? null })),
+      schedule.phases.map((r) => ({
+        id: r.id,
+        followsPhaseId: r.follows_phase_id ?? null,
+      })),
       phaseId,
     ).map((u) => ({ phaseId: u.id, followsPhaseId: u.followsPhaseId }));
     // Close ONLY on success — the sequence is not transactional (relinks may
@@ -525,7 +578,11 @@ export function ScheduleSpine({
       { projectId, templateSlug: 'patina_six' },
       {
         onSuccess: () =>
-          scheduleEvents.scheduleBorn({ surface: 'project', project_id: projectId, kind: 'patina_six' }),
+          scheduleEvents.scheduleBorn({
+            surface: 'project',
+            project_id: projectId,
+            kind: 'patina_six',
+          }),
       },
     );
   };
@@ -561,7 +618,10 @@ export function ScheduleSpine({
   // The item currently in the OpenItemSheet (resolved fresh from the live query
   // so the sheet always reads the latest row after an optimistic update).
   const activeItem = useMemo(
-    () => (sheet?.kind === 'item' ? allItems.find((i) => i.id === sheet.id) ?? null : null),
+    () =>
+      sheet?.kind === 'item'
+        ? (allItems.find((i) => i.id === sheet.id) ?? null)
+        : null,
     [sheet, allItems],
   );
 
@@ -603,7 +663,9 @@ export function ScheduleSpine({
 
   // ── minimap reveal — the Rule asks the spine to surface a phase/milestone.
   // A milestone target also flashes its row (~1.6s transient highlight). ──
-  const [highlightMilestoneId, setHighlightMilestoneId] = useState<string | null>(null);
+  const [highlightMilestoneId, setHighlightMilestoneId] = useState<
+    string | null
+  >(null);
   const highlightTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const handleReveal = useCallback((target: ScheduleRevealTarget) => {
@@ -619,7 +681,10 @@ export function ScheduleSpine({
     if (target.kind === 'milestone') {
       setHighlightMilestoneId(target.milestoneId);
       if (highlightTimer.current) clearTimeout(highlightTimer.current);
-      highlightTimer.current = setTimeout(() => setHighlightMilestoneId(null), 1600);
+      highlightTimer.current = setTimeout(
+        () => setHighlightMilestoneId(null),
+        1600,
+      );
     }
 
     // Scroll after the unfold paints — the page's rAF + smooth + scroll-mt
@@ -653,13 +718,15 @@ export function ScheduleSpine({
           Schedule
         </h2>
         {designerClientId && (
-          <button
-            type="button"
+          <DocumentAction
+            actionKey="new-open-item"
+            surfaceKey="open-document"
+            regionKey="schedule-head"
+            variant="secondary"
             onClick={openComposer}
-            className="font-mono text-[9px] uppercase tracking-[0.05em] text-[var(--color-clay)] hover:opacity-80"
           >
             + New open item
-          </button>
+          </DocumentAction>
         )}
       </div>
       <StrataMiniRule className="mt-1.5" />
@@ -693,10 +760,11 @@ export function ScheduleSpine({
           ) : (
             <div className="mt-5">
               {entries.map((entry, i) => {
-                const composeKind = compose?.phaseId === entry.phase.id ? compose.kind : null;
+                const composeKind =
+                  compose?.phaseId === entry.phase.id ? compose.kind : null;
                 const row = rowById.get(entry.phase.id);
                 const predecessorName = row?.follows_phase_id
-                  ? rowById.get(row.follows_phase_id)?.name ?? null
+                  ? (rowById.get(row.follows_phase_id)?.name ?? null)
                   : null;
                 const followerCount = schedule.phases.filter(
                   (p) => p.follows_phase_id === entry.phase.id,
@@ -715,8 +783,10 @@ export function ScheduleSpine({
                 const baselineDurationDays =
                   row == null
                     ? null
-                    : row.duration_days ??
-                      (row.duration_weeks != null ? row.duration_weeks * 7 : null);
+                    : (row.duration_days ??
+                      (row.duration_weeks != null
+                        ? row.duration_weeks * 7
+                        : null));
 
                 // The revealed compose surface for this phase, per open kind.
                 const composePanel =
@@ -731,7 +801,8 @@ export function ScheduleSpine({
                         baselineDays={baselineDurationDays}
                         placeholder="Duration — 4w · 28d · +5d"
                         onCommit={(e) =>
-                          e.kind === 'duration' && handleEditDuration(entry.phase.id, e.days)
+                          e.kind === 'duration' &&
+                          handleEditDuration(entry.phase.id, e.days)
                         }
                         onCancel={closeCompose}
                       />
@@ -742,7 +813,8 @@ export function ScheduleSpine({
                         autoFocus={false}
                         placeholder="Anchor a date — Sep 21"
                         onCommit={(e) =>
-                          e.kind === 'anchor' && handleSetAnchor(entry.phase.id, e.date)
+                          e.kind === 'anchor' &&
+                          handleSetAnchor(entry.phase.id, e.date)
                         }
                         onCancel={closeCompose}
                       />
@@ -753,11 +825,15 @@ export function ScheduleSpine({
                   ) : composeKind === 'milestone' ? (
                     <MilestoneComposer
                       today={today}
-                      onSubmit={(draft) => handleAddMilestone(entry.phase.id, draft)}
+                      onSubmit={(draft) =>
+                        handleAddMilestone(entry.phase.id, draft)
+                      }
                       onCancel={closeCompose}
                       busy={addMilestone.isPending}
                       errorText={
-                        addMilestone.isError ? 'Add failed — nothing was saved' : null
+                        addMilestone.isError
+                          ? 'Add failed — nothing was saved'
+                          : null
                       }
                     />
                   ) : composeKind === 'delete' ? (
@@ -786,7 +862,11 @@ export function ScheduleSpine({
                       state={entry.state}
                       anchorId={phaseAnchorId(entry.phase.id)}
                       highlightMilestoneId={highlightMilestoneId}
-                      expanded={entry.state === 'active' ? true : unfolded.has(entry.phase.id)}
+                      expanded={
+                        entry.state === 'active'
+                          ? true
+                          : unfolded.has(entry.phase.id)
+                      }
                       onToggle={
                         entry.state === 'active'
                           ? null
@@ -817,20 +897,33 @@ export function ScheduleSpine({
                           // fresh panel never opens wearing an old failure.
                           onAddMilestone={() => {
                             addMilestone.reset();
-                            setCompose({ phaseId: entry.phase.id, kind: 'milestone' });
+                            setCompose({
+                              phaseId: entry.phase.id,
+                              kind: 'milestone',
+                            });
                           }}
                           // Opens the duration/anchor entry panel. No mutation
                           // reset needed — the panel begins a ripple preview, it
                           // never carries a stale write error (the strip does).
-                          onEditDates={() => setCompose({ phaseId: entry.phase.id, kind: 'edit' })}
+                          onEditDates={() =>
+                            setCompose({
+                              phaseId: entry.phase.id,
+                              kind: 'edit',
+                            })
+                          }
                           onDelete={() => {
                             deletePhaseWithRelink.reset();
-                            setCompose({ phaseId: entry.phase.id, kind: 'delete' });
+                            setCompose({
+                              phaseId: entry.phase.id,
+                              kind: 'delete',
+                            });
                           }}
                         />
                       }
                       composePanel={composePanel}
-                      onUnpinPhaseAnchor={() => handleUnpinPhase(entry.phase.id)}
+                      onUnpinPhaseAnchor={() =>
+                        handleUnpinPhase(entry.phase.id)
+                      }
                       onUnpinMilestoneAnchor={handleUnpinMilestone}
                     />
                   </Fragment>
@@ -855,7 +948,11 @@ export function ScheduleSpine({
 
           {/* The work + the dependency web — lives here pending a design
               ruling; a blocked ⊘ tick opens its blocker's sheet. */}
-          <CoordinationWork projectId={projectId} items={allItems} onOpenItem={openItem} />
+          <CoordinationWork
+            projectId={projectId}
+            items={allItems}
+            onOpenItem={openItem}
+          />
 
           {/* R100 "Memory" — the schedule's own append-only ledger at the
               spine's foot: v · reason · who · when, newest first, no actions.

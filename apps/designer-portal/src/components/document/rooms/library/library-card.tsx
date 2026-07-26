@@ -20,6 +20,7 @@ import {
   type LayerProductLayer,
 } from '@patina/supabase';
 import { StrataSweep } from '@/components/ui/strata-sweep';
+import { DocumentAction, DocumentActionRow } from '../../document-action';
 
 export interface LibraryItem {
   id: string;
@@ -79,7 +80,12 @@ export function LibraryCard({
         className="relative flex h-[150px] items-center justify-center overflow-hidden bg-[var(--doc-sheet-2)]"
       >
         {img ? (
-          <img src={img} alt="" className="h-full w-full object-cover" loading="lazy" />
+          <img
+            src={img}
+            alt=""
+            className="h-full w-full object-cover"
+            loading="lazy"
+          />
         ) : (
           <span className="font-mono text-[9px] uppercase tracking-[0.14em] text-[var(--color-aged-oak)] opacity-50">
             {item.category ?? 'piece'}
@@ -116,7 +122,9 @@ export function LibraryCard({
         >
           {item.name}
         </Link>
-        <div className="mt-0.5 text-[0.66rem] text-[var(--color-aged-oak)]">{sub}</div>
+        <div className="mt-0.5 text-[0.66rem] text-[var(--color-aged-oak)]">
+          {sub}
+        </div>
 
         <div className="mt-2.5 flex items-center justify-between gap-2">
           <span className="font-mono text-[9px] uppercase tracking-[0.06em] text-[var(--color-aged-oak)] opacity-60">
@@ -124,17 +132,28 @@ export function LibraryCard({
           </span>
           <div className="flex items-center gap-1.5">
             {foldable && (
-              <CardLink onClick={() => setOpen((v) => !v)}>
+              <CardLink
+                actionKey="open-piece-teaching"
+                onClick={() => setOpen((v) => !v)}
+              >
                 {open ? 'Close' : needsValidation ? 'Validate →' : 'Teach →'}
               </CardLink>
             )}
             {onPromote && (
-              <CardLink subtle onClick={() => onPromote(item.id)}>
+              <CardLink
+                actionKey="promote-piece"
+                subtle
+                onClick={() => onPromote(item.id)}
+              >
                 Promote ↑
               </CardLink>
             )}
             {onNominate && (
-              <CardLink subtle onClick={() => onNominate(item.id)}>
+              <CardLink
+                actionKey="nominate-maker"
+                subtle
+                onClick={() => onNominate(item.id)}
+              >
                 Nominate ↗
               </CardLink>
             )}
@@ -143,7 +162,10 @@ export function LibraryCard({
       </div>
 
       {open && needsValidation && (
-        <InlineValidate productId={item.id} onDeep={() => onDeep(item.id, item.name)} />
+        <InlineValidate
+          productId={item.id}
+          onDeep={() => onDeep(item.id, item.name)}
+        />
       )}
 
       {open && !needsValidation && needsTeaching && (
@@ -167,23 +189,24 @@ function CardLink({
   children,
   onClick,
   subtle,
+  actionKey,
 }: {
   children: React.ReactNode;
   onClick: () => void;
   subtle?: boolean;
+  actionKey: string;
 }) {
   return (
-    <button
-      type="button"
+    <DocumentAction
+      actionKey={actionKey}
+      surfaceKey="library"
+      regionKey="library-card"
+      variant="secondary"
       onClick={onClick}
-      className={`rounded-[4px] border px-2 py-1 font-mono text-[9px] font-semibold uppercase tracking-[0.06em] transition-colors ${
-        subtle
-          ? 'border-[var(--color-pearl)] text-[var(--color-aged-oak)] hover:border-[var(--color-aged-oak)] hover:text-[var(--color-mocha)]'
-          : 'border-[rgba(196,165,123,0.4)] text-[var(--color-clay)] hover:bg-[var(--color-clay)] hover:text-white'
-      }`}
+      className={subtle ? 'text-[var(--color-aged-oak)]' : undefined}
     >
       {children}
-    </button>
+    </DocumentAction>
   );
 }
 
@@ -205,7 +228,12 @@ function InlineQuickTags({
 
   const save = async () => {
     if (!picked) return;
-    await assignStyle.mutateAsync({ productId, styleId: picked, isPrimary: true, confidence: 1.0 });
+    await assignStyle.mutateAsync({
+      productId,
+      styleId: picked,
+      isPrimary: true,
+      confidence: 1.0,
+    });
     onSaved();
   };
 
@@ -223,7 +251,7 @@ function InlineQuickTags({
               key={s.id}
               type="button"
               onClick={() => setPicked((p) => (p === s.id ? null : s.id))}
-              className={`rounded-[14px] border px-2.5 py-1 text-[0.66rem] transition-colors ${
+              className={`min-h-11 min-w-11 rounded-[14px] border px-2.5 py-1 text-[0.66rem] transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-clay)] ${
                 picked === s.id
                   ? 'border-[var(--color-clay)] bg-[var(--color-clay)] text-white'
                   : 'border-[var(--color-pearl)] bg-white text-[var(--text-body)] hover:border-[var(--color-clay)]'
@@ -234,23 +262,31 @@ function InlineQuickTags({
           ))}
         </div>
       )}
-      <div className="mt-3 flex items-center gap-3">
-        <button
-          type="button"
+      <DocumentActionRow
+        surfaceKey="library"
+        regionKey="quick-teaching"
+        className="mt-3"
+        aria-label="Quick teaching actions"
+      >
+        <DocumentAction
+          actionKey="save-piece-teaching"
+          variant="primary"
           disabled={!picked || assignStyle.isPending}
+          loading={assignStyle.isPending}
+          loadingLabel="Saving…"
           onClick={() => void save()}
-          className="rounded-[4px] bg-[var(--color-charcoal)] px-2.5 py-1.5 font-mono text-[8px] font-semibold uppercase tracking-[0.06em] text-white disabled:opacity-40"
         >
-          {assignStyle.isPending ? 'Saving…' : 'Save teaching'}
-        </button>
-        <button
-          type="button"
+          Save teaching
+        </DocumentAction>
+        <DocumentAction
+          actionKey="open-deep-analysis"
+          variant="secondary"
           onClick={onDeep}
-          className="font-mono text-[8px] font-semibold uppercase tracking-[0.06em] text-[var(--color-aged-oak)] hover:text-[var(--color-clay)]"
+          trailing="→"
         >
-          Deep analysis →
-        </button>
-      </div>
+          Deep analysis
+        </DocumentAction>
+      </DocumentActionRow>
     </div>
   );
 }
@@ -260,16 +296,24 @@ function InlineQuickTags({
  *  asks for a second eye: Agree confirms it, Disagree flags it for review. Votes
  *  go through the real useSubmitValidation path (errorSurface 'inline' → no
  *  toast, D2/R83). The card's "Needs a look" badge lifts on the queue refetch. */
-function InlineValidate({ productId, onDeep }: { productId: string; onDeep: () => void }) {
+function InlineValidate({
+  productId,
+  onDeep,
+}: {
+  productId: string;
+  onDeep: () => void;
+}) {
   const { data: styleRows, isLoading } = useProductStyles(productId);
   const submit = useSubmitValidation({ errorSurface: 'inline' });
   const [done, setDone] = useState<null | 'confirm' | 'flag'>(null);
   const [error, setError] = useState<string | null>(null);
 
-  const read = ((styleRows ?? []) as Array<{
-    is_primary?: boolean;
-    style?: { name?: string | null } | null;
-  }>)
+  const read = (
+    (styleRows ?? []) as Array<{
+      is_primary?: boolean;
+      style?: { name?: string | null } | null;
+    }>
+  )
     .map((r) => ({ name: r.style?.name ?? null, primary: !!r.is_primary }))
     .filter((r): r is { name: string; primary: boolean } => !!r.name)
     .sort((a, b) => Number(b.primary) - Number(a.primary));
@@ -280,7 +324,9 @@ function InlineValidate({ productId, onDeep }: { productId: string; onDeep: () =
       await submit.mutateAsync({ productId, vote: v });
       setDone(v);
     } catch (e) {
-      setError(e instanceof Error ? e.message : 'Could not record your judgment.');
+      setError(
+        e instanceof Error ? e.message : 'Could not record your judgment.',
+      );
     }
   };
 
@@ -310,7 +356,8 @@ function InlineValidate({ productId, onDeep }: { productId: string; onDeep: () =
         </div>
       ) : (
         <p className="text-[0.7rem] italic text-[var(--color-aged-oak)]">
-          No read on file — confirm it belongs on the shelf, or flag it for a closer look.
+          No read on file — confirm it belongs on the shelf, or flag it for a
+          closer look.
         </p>
       )}
 
@@ -321,34 +368,48 @@ function InlineValidate({ productId, onDeep }: { productId: string; onDeep: () =
             : 'Flagged for another eye.'}
         </p>
       ) : (
-        <div className="mt-3 flex items-center gap-3">
-          <button
-            type="button"
+        <DocumentActionRow
+          surfaceKey="library"
+          regionKey="piece-validation"
+          className="mt-3"
+          aria-label="Piece validation actions"
+        >
+          <DocumentAction
+            actionKey="confirm-piece-read"
+            variant="primary"
+            loading={submit.isPending && submit.variables?.vote === 'confirm'}
             disabled={submit.isPending}
+            loadingLabel="Recording…"
             onClick={() => void vote('confirm')}
-            className="rounded-[4px] bg-[var(--color-charcoal)] px-2.5 py-1.5 font-mono text-[8px] font-semibold uppercase tracking-[0.06em] text-white disabled:opacity-40"
           >
-            {submit.isPending ? 'Recording…' : 'Agree'}
-          </button>
-          <button
-            type="button"
+            Agree
+          </DocumentAction>
+          <DocumentAction
+            actionKey="flag-piece-read"
+            variant="secondary"
             disabled={submit.isPending}
+            loading={submit.isPending && submit.variables?.vote === 'flag'}
+            loadingLabel="Recording…"
             onClick={() => void vote('flag')}
-            className="rounded-[4px] border border-[var(--color-pearl)] px-2.5 py-1.5 font-mono text-[8px] font-semibold uppercase tracking-[0.06em] text-[var(--color-charcoal)] disabled:opacity-40"
           >
             Disagree
-          </button>
-          <button
-            type="button"
+          </DocumentAction>
+          <DocumentAction
+            actionKey="open-deep-analysis"
+            variant="tertiary"
             onClick={onDeep}
-            className="font-mono text-[8px] font-semibold uppercase tracking-[0.06em] text-[var(--color-aged-oak)] hover:text-[var(--color-clay)]"
+            trailing="→"
           >
-            Deep analysis →
-          </button>
-        </div>
+            Deep analysis
+          </DocumentAction>
+        </DocumentActionRow>
       )}
 
-      {error && <p className="mt-2 text-[0.7rem] text-[var(--color-terracotta)]">{error}</p>}
+      {error && (
+        <p className="mt-2 text-[0.7rem] text-[var(--color-terracotta)]">
+          {error}
+        </p>
+      )}
     </div>
   );
 }

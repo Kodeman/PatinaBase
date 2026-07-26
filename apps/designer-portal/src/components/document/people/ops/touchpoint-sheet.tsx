@@ -16,6 +16,7 @@ import { useState } from 'react';
 import { useCreateTouchpoint, type TouchpointType } from '@patina/supabase';
 import { RoomSheet } from '../../rooms/room-sheet';
 import { todayYmd } from '@/lib/document/format';
+import { DocumentAction, DocumentActionGroup } from '../../document-action';
 
 const KINDS: Array<[TouchpointType, string]> = [
   ['check_in', 'Personal check-in'],
@@ -50,7 +51,9 @@ export function TouchpointSheet({
 
   const submit = () => {
     if (!designerClientId) {
-      setError('Touchpoints are for clients — open this person to reach them another way.');
+      setError(
+        'Touchpoints are for clients — open this person to reach them another way.',
+      );
       return;
     }
     setError(null);
@@ -63,22 +66,33 @@ export function TouchpointSheet({
       },
       {
         onSuccess: () => {
-          onScheduled(`Touchpoint scheduled for ${clientName.split(/\s+/)[0] || clientName}.`);
+          onScheduled(
+            `Touchpoint scheduled for ${clientName.split(/\s+/)[0] || clientName}.`,
+          );
           onClose();
         },
         onError: (e) =>
-          setError(e instanceof Error ? e.message : 'Could not schedule the touchpoint.'),
+          setError(
+            e instanceof Error
+              ? e.message
+              : 'Could not schedule the touchpoint.',
+          ),
       },
     );
   };
 
   return (
-    <RoomSheet open={open} onClose={onClose} title={`Reach out to ${clientName}`}>
+    <RoomSheet
+      open={open}
+      onClose={onClose}
+      title={`Reach out to ${clientName}`}
+    >
       <h2 className="font-heading text-[1.4rem] font-medium leading-tight text-[var(--color-charcoal)]">
         Reach out to {clientName}
       </h2>
       <p className="mt-1 text-[0.76rem] text-[var(--color-aged-oak)]">
-        A warm touch keeps the relationship alive — pick the occasion and when it should go.
+        A warm touch keeps the relationship alive — pick the occasion and when
+        it should go.
       </p>
 
       <div className="mt-5 space-y-4">
@@ -95,7 +109,7 @@ export function TouchpointSheet({
                   type="button"
                   onClick={() => setKind(key)}
                   aria-pressed={on}
-                  className={`rounded-[16px] border px-3 py-1.5 text-[0.72rem] transition-colors ${
+                  className={`min-h-11 rounded-[16px] border px-3 py-1.5 text-[0.72rem] transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-clay)] ${
                     on
                       ? 'border-[var(--color-clay)] bg-[rgba(196,165,123,0.12)] text-[var(--color-charcoal)]'
                       : 'border-[var(--color-pearl)] bg-white text-[var(--color-aged-oak)] hover:border-[var(--color-clay)]'
@@ -143,23 +157,29 @@ export function TouchpointSheet({
 
         {error && <p className="text-[0.72rem] text-[#C77B6E]">{error}</p>}
 
-        <div className="flex items-center justify-end gap-2 pt-1">
-          <button
-            type="button"
+        <DocumentActionGroup
+          surfaceKey="people"
+          regionKey="touchpoint-sheet"
+          className="justify-end pt-1"
+        >
+          <DocumentAction
+            actionKey="cancel-touchpoint"
+            variant="tertiary"
             onClick={onClose}
-            className="rounded-[6px] border border-[var(--color-pearl)] px-3.5 py-2 font-mono text-[0.5rem] font-semibold uppercase tracking-[0.06em] text-[var(--color-charcoal)] transition-colors hover:border-[var(--color-clay)]"
           >
             Cancel
-          </button>
-          <button
-            type="button"
+          </DocumentAction>
+          <DocumentAction
+            actionKey="schedule-touchpoint"
+            variant="primary"
             onClick={submit}
             disabled={create.isPending}
-            className="rounded-[6px] border border-[var(--color-clay)] bg-[var(--color-clay)] px-3.5 py-2 font-mono text-[0.5rem] font-semibold uppercase tracking-[0.06em] text-white transition-opacity hover:opacity-90 disabled:opacity-50"
+            loading={create.isPending}
+            loadingLabel="Scheduling…"
           >
-            {create.isPending ? 'Scheduling…' : 'Schedule the touchpoint'}
-          </button>
-        </div>
+            Schedule the touchpoint
+          </DocumentAction>
+        </DocumentActionGroup>
       </div>
     </RoomSheet>
   );

@@ -21,6 +21,7 @@ import {
   resolveSpectrumPrefill,
 } from '@patina/supabase';
 import type { SpectrumValues } from '@patina/types';
+import { DocumentAction, DocumentActionGroup } from '../../document-action';
 import { RoomSheet } from '../room-sheet';
 import { StyleAttributionPanel } from '@/components/teaching/StyleAttributionPanel';
 import { ClientMatchingPanel } from '@/components/teaching/ClientMatchingPanel';
@@ -52,7 +53,10 @@ export function DeepAnalysisSheet({
   };
   const { data: dnaDraft } = useProductDnaDraft(productId);
   const spectrumTouchedRef = useRef(false);
-  const prefill = resolveSpectrumPrefill(canonical ?? null, dnaDraft?.draft ?? null);
+  const prefill = resolveSpectrumPrefill(
+    canonical ?? null,
+    dnaDraft?.draft ?? null,
+  );
 
   useEffect(() => {
     if (spectrumTouchedRef.current) return;
@@ -91,13 +95,14 @@ export function DeepAnalysisSheet({
         Map {productName}
       </h2>
       <p className="mb-2 mt-1 text-[0.74rem] text-[var(--color-aged-oak)]">
-        Full intelligence mapping. The more you give, the better the Engine matches — for every
-        designer after you, too. Nothing is required; save what you know.
+        Full intelligence mapping. The more you give, the better the Engine
+        matches — for every designer after you, too. Nothing is required; save
+        what you know.
       </p>
       {prefill.source === 'draft' && (
         <p className="mb-4 border-l-2 border-[var(--color-clay)] pl-2.5 text-[0.7rem] italic text-[var(--color-aged-oak)]">
-          The spectrum starts at the Engine&apos;s first read of this piece — adjust anything and
-          save to confirm it in your hand.
+          The spectrum starts at the Engine&apos;s first read of this piece —
+          adjust anything and save to confirm it in your hand.
         </p>
       )}
       {prefill.source !== 'draft' && <div className="mb-4" />}
@@ -125,25 +130,34 @@ export function DeepAnalysisSheet({
         />
       </div>
 
-      {error && <p className="mt-4 text-[0.72rem] text-[var(--color-terracotta)]">{error}</p>}
+      {error && (
+        <p className="mt-4 text-[0.72rem] text-[var(--color-terracotta)]">
+          {error}
+        </p>
+      )}
 
-      <div className="mt-6 flex items-center gap-2.5 border-t border-[var(--color-pearl)] pt-4">
-        <button
-          type="button"
-          disabled={submit.isPending}
+      <DocumentActionGroup
+        surfaceKey="library"
+        regionKey="deep-analysis-sheet"
+        className="mt-6 border-t border-[var(--color-pearl)] pt-4"
+      >
+        <DocumentAction
+          actionKey="save-full-analysis"
+          variant="primary"
+          loading={submit.isPending}
+          loadingLabel="Saving…"
           onClick={() => void save()}
-          className="rounded-[5px] bg-[var(--color-charcoal)] px-4 py-2 font-mono text-[10px] font-semibold uppercase tracking-[0.06em] text-[var(--color-off-white)] disabled:opacity-50"
         >
-          {submit.isPending ? 'Saving…' : 'Save full analysis'}
-        </button>
-        <button
-          type="button"
+          Save full analysis
+        </DocumentAction>
+        <DocumentAction
+          actionKey="save-analysis-later"
+          variant="tertiary"
           onClick={onClose}
-          className="rounded-[5px] border border-[var(--color-pearl)] px-4 py-2 font-mono text-[10px] font-semibold uppercase tracking-[0.06em] text-[var(--color-charcoal)]"
         >
           Later
-        </button>
-      </div>
+        </DocumentAction>
+      </DocumentActionGroup>
     </RoomSheet>
   );
 }

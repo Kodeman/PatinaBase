@@ -22,6 +22,7 @@ import { ViewHeader, EmptyTeach } from '../view-shell';
 import { Avatar } from '../person-bits';
 import { ReviewRequestSheet } from '../ops/review-request-sheet';
 import type { PeopleViewProps } from '../types';
+import { DocumentAction } from '../../document-action';
 
 type ReviewTab = 'pending' | 'collected' | 'queued';
 
@@ -58,9 +59,14 @@ export function ReviewsView({ notify }: PeopleViewProps) {
   const { data: collected, isLoading: loadingCollected } = useClientReviews({
     requestStatus: 'collected',
   });
-  const { data: sent, isLoading: loadingSent } = useClientReviews({ requestStatus: 'sent' });
-  const { data: queued, isLoading: loadingQueued } = useClientReviews({ requestStatus: 'queued' });
-  const { data: toRequest, isLoading: loadingToRequest } = useCompletedProjectsWithoutReview();
+  const { data: sent, isLoading: loadingSent } = useClientReviews({
+    requestStatus: 'sent',
+  });
+  const { data: queued, isLoading: loadingQueued } = useClientReviews({
+    requestStatus: 'queued',
+  });
+  const { data: toRequest, isLoading: loadingToRequest } =
+    useCompletedProjectsWithoutReview();
   const togglePublish = useTogglePortfolioPublish();
 
   const pendingCount = (toRequest?.length ?? 0) + (sent?.length ?? 0);
@@ -76,7 +82,9 @@ export function ReviewsView({ notify }: PeopleViewProps) {
     (tab === 'queued' && loadingQueued);
 
   const reviewClientName = (r: ClientReview) =>
-    r.designer_client?.client_name || r.designer_client?.client?.full_name || 'Client';
+    r.designer_client?.client_name ||
+    r.designer_client?.client?.full_name ||
+    'Client';
 
   const body = useMemo(() => {
     if (loading) {
@@ -96,7 +104,7 @@ export function ReviewsView({ notify }: PeopleViewProps) {
       }
       return (
         <ul className="space-y-1.5">
-          {(toRequest ?? []).map((p) => {
+          {(toRequest ?? []).map((p, index) => {
             const { designerClientId, name } = clientOf(p);
             return (
               <QueueRow
@@ -105,6 +113,7 @@ export function ReviewsView({ notify }: PeopleViewProps) {
                 why="Project complete — request the review now"
                 action={
                   <RequestButton
+                    regionKey={`pending-review-${index + 1}`}
                     onClick={() =>
                       setRequest({
                         designerClientId,
@@ -131,25 +140,41 @@ export function ReviewsView({ notify }: PeopleViewProps) {
 
     if (tab === 'collected') {
       if ((collected?.length ?? 0) === 0) {
-        return <EmptyBlock text="No reviews collected yet — they'll gather here as clients reply." />;
+        return (
+          <EmptyBlock text="No reviews collected yet — they'll gather here as clients reply." />
+        );
       }
       return (
         <ul className="space-y-1.5">
-          {(collected ?? []).map((r) => (
+          {(collected ?? []).map((r, index) => (
             <QueueRow
               key={r.id}
               name={reviewClientName(r)}
               why={
                 <>
                   {stars(r.rating) && (
-                    <span className="text-[var(--color-golden-hour)]">{stars(r.rating)} </span>
+                    <span className="text-[var(--color-golden-hour)]">
+                      {stars(r.rating)}{' '}
+                    </span>
                   )}
                   {r.review_text ? `“${r.review_text}”` : 'Review collected.'}
                 </>
               }
               action={
-                <button
-                  type="button"
+                <DocumentAction
+                  actionKey={
+                    r.published_to_portfolio
+                      ? 'remove-review-from-portfolio'
+                      : 'publish-review-to-portfolio'
+                  }
+                  surfaceKey="people"
+                  regionKey={`collected-review-${index + 1}`}
+                  variant={r.published_to_portfolio ? 'tertiary' : 'primary'}
+                  loading={
+                    togglePublish.isPending &&
+                    togglePublish.variables?.reviewId === r.id
+                  }
+                  loadingLabel="Saving…"
                   onClick={() =>
                     togglePublish.mutate(
                       { reviewId: r.id, published: !r.published_to_portfolio },
@@ -163,14 +188,11 @@ export function ReviewsView({ notify }: PeopleViewProps) {
                       },
                     )
                   }
-                  className={`shrink-0 rounded-[6px] border px-3 py-1.5 font-mono text-[0.46rem] font-semibold uppercase tracking-[0.06em] transition-colors ${
-                    r.published_to_portfolio
-                      ? 'border-[var(--color-sage)] bg-[rgba(168,181,160,0.16)] text-[#6f8268]'
-                      : 'border-[var(--color-pearl)] text-[var(--color-charcoal)] hover:border-[var(--color-clay)]'
-                  }`}
                 >
-                  {r.published_to_portfolio ? 'On portfolio' : 'Show on portfolio'}
-                </button>
+                  {r.published_to_portfolio
+                    ? 'On portfolio'
+                    : 'Show on portfolio'}
+                </DocumentAction>
               }
             />
           ))}
@@ -230,8 +252,10 @@ export function ReviewsView({ notify }: PeopleViewProps) {
               type="button"
               onClick={() => setTab(key)}
               aria-pressed={on}
-              className={`relative pb-1.5 font-mono text-[0.54rem] font-semibold uppercase tracking-[0.06em] transition-colors ${
-                on ? 'text-[var(--color-charcoal)]' : 'text-[var(--color-aged-oak)] hover:text-[var(--color-mocha)]'
+              className={`relative min-h-11 min-w-11 pb-1.5 font-mono text-[0.54rem] font-semibold uppercase tracking-[0.06em] transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-clay)] ${
+                on
+                  ? 'text-[var(--color-charcoal)]'
+                  : 'text-[var(--color-aged-oak)] hover:text-[var(--color-mocha)]'
               }`}
             >
               {label} · {counts[key]}
@@ -299,15 +323,23 @@ function QueueRow({
   );
 }
 
-function RequestButton({ onClick }: { onClick: () => void }) {
+function RequestButton({
+  onClick,
+  regionKey,
+}: {
+  onClick: () => void;
+  regionKey: string;
+}) {
   return (
-    <button
-      type="button"
+    <DocumentAction
+      actionKey="request-client-review"
+      surfaceKey="people"
+      regionKey={regionKey}
+      variant="primary"
       onClick={onClick}
-      className="shrink-0 rounded-[6px] border border-[var(--color-clay)] bg-[var(--color-clay)] px-3 py-1.5 font-mono text-[0.46rem] font-semibold uppercase tracking-[0.06em] text-white transition-opacity hover:opacity-90"
     >
       Request
-    </button>
+    </DocumentAction>
   );
 }
 

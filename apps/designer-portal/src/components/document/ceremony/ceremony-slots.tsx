@@ -13,6 +13,7 @@
  */
 
 import type { CeremonySlot } from '@patina/supabase';
+import { DocumentAction } from '../document-action';
 
 export const SLOT_DURATION_MINUTES = 45;
 export const MAX_SLOTS = 3;
@@ -28,7 +29,9 @@ function toLocalInputValue(iso: string): string {
 /** A fresh default: 10:00 AM the day after the latest slot (or tomorrow). */
 function nextDefaultStart(existing: CeremonySlot[]): string {
   const base = existing.length
-    ? new Date(Math.max(...existing.map((s) => new Date(s.starts_at).getTime())))
+    ? new Date(
+        Math.max(...existing.map((s) => new Date(s.starts_at).getTime())),
+      )
     : new Date();
   const d = new Date(base);
   d.setDate(d.getDate() + 1);
@@ -52,7 +55,11 @@ export function CeremonySlots({
     if (slots.length >= MAX_SLOTS) return;
     onChange([
       ...slots,
-      { id: slotId(), starts_at: nextDefaultStart(slots), duration_minutes: SLOT_DURATION_MINUTES },
+      {
+        id: slotId(),
+        starts_at: nextDefaultStart(slots),
+        duration_minutes: SLOT_DURATION_MINUTES,
+      },
     ]);
   };
 
@@ -62,7 +69,9 @@ export function CeremonySlots({
     const parsed = new Date(localValue);
     if (Number.isNaN(parsed.getTime())) return; // ignore a half-typed value
     onChange(
-      slots.map((s) => (s.id === id ? { ...s, starts_at: parsed.toISOString() } : s)),
+      slots.map((s) =>
+        s.id === id ? { ...s, starts_at: parsed.toISOString() } : s,
+      ),
     );
   };
 
@@ -89,7 +98,7 @@ export function CeremonySlots({
             type="button"
             onClick={() => removeSlot(slot.id)}
             aria-label="Remove this time"
-            className="shrink-0 px-1 font-mono text-[12px] leading-none text-[var(--text-muted)] hover:text-[var(--color-terracotta)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-clay)]"
+            className="inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-[3px] font-mono text-[12px] leading-none text-[var(--text-muted)] hover:text-[var(--color-terracotta)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-clay)]"
           >
             ×
           </button>
@@ -97,17 +106,20 @@ export function CeremonySlots({
       ))}
 
       {n < MAX_SLOTS && (
-        <button
-          type="button"
+        <DocumentAction
+          actionKey="add-ceremony-time"
+          surfaceKey="ceremony"
+          regionKey="offered-times"
+          variant="secondary"
           onClick={addSlot}
-          className="rounded-full border border-[var(--color-pearl)] px-4 py-2 font-mono text-[10px] uppercase tracking-[0.1em] text-[var(--color-mocha)] hover:border-[var(--color-clay)] hover:text-[var(--text-primary)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-clay)]"
         >
-          ＋ Add a time
-        </button>
+          Add a time
+        </DocumentAction>
       )}
 
       <p className="mt-3 font-mono text-[10px] uppercase tracking-[0.1em] text-[var(--text-muted)]">
-        {n} of {MAX_SLOTS} offered · {n < 2 ? 'offer at least two' : 'offer two or three'}
+        {n} of {MAX_SLOTS} offered ·{' '}
+        {n < 2 ? 'offer at least two' : 'offer two or three'}
       </p>
     </div>
   );

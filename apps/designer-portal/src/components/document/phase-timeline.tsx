@@ -16,6 +16,7 @@ import { useMemo, useState } from 'react';
 import { useProjectPhases, useUpdateProjectPhaseDates } from '@patina/supabase';
 import { getPhaseLabel } from '@patina/types';
 import { fmtDay } from '@/lib/document/format';
+import { DocumentAction, DocumentActionRow } from './document-action';
 
 interface PhaseRow {
   id: string;
@@ -38,7 +39,11 @@ function parseDate(iso: string | null | undefined): number | null {
 }
 
 /** Status → segment fill + ink (the doc's existing status color conventions). */
-function phaseColor(status: string): { fill: string; ink: string; muted: boolean } {
+function phaseColor(status: string): {
+  fill: string;
+  ink: string;
+  muted: boolean;
+} {
   switch (status) {
     case 'completed':
       return { fill: 'var(--color-sage)', ink: '#fff', muted: false };
@@ -48,7 +53,11 @@ function phaseColor(status: string): { fill: string; ink: string; muted: boolean
     case 'delayed':
       return { fill: 'var(--color-terracotta)', ink: '#fff', muted: false };
     default: // pending / unknown
-      return { fill: 'var(--color-pearl)', ink: 'var(--color-charcoal)', muted: true };
+      return {
+        fill: 'var(--color-pearl)',
+        ink: 'var(--color-charcoal)',
+        muted: true,
+      };
   }
 }
 
@@ -72,7 +81,9 @@ export function PhaseTimeline({ projectId }: { projectId: string }) {
   );
 
   const { dated, unplaced, windowStart, span } = useMemo(() => {
-    const withDates = phases.filter((p) => parseDate(p.start_date) && parseDate(p.target_end_date));
+    const withDates = phases.filter(
+      (p) => parseDate(p.start_date) && parseDate(p.target_end_date),
+    );
     const without = phases.filter(
       (p) => !(parseDate(p.start_date) && parseDate(p.target_end_date)),
     );
@@ -89,7 +100,12 @@ export function PhaseTimeline({ projectId }: { projectId: string }) {
     const pad = Math.max((hi - lo) * 0.04, DAY_MS);
     lo -= pad;
     hi += pad;
-    return { dated: withDates, unplaced: without, windowStart: lo, span: hi - lo || 1 };
+    return {
+      dated: withDates,
+      unplaced: without,
+      windowStart: lo,
+      span: hi - lo || 1,
+    };
   }, [phases]);
 
   const openEditor = (p: PhaseRow) => {
@@ -122,8 +138,10 @@ export function PhaseTimeline({ projectId }: { projectId: string }) {
   if (phases.length === 0) return null;
 
   const todayPct =
-    span > 0 ? Math.min(100, Math.max(0, ((Date.now() - windowStart) / span) * 100)) : null;
-  const editing = editId ? phases.find((p) => p.id === editId) ?? null : null;
+    span > 0
+      ? Math.min(100, Math.max(0, ((Date.now() - windowStart) / span) * 100))
+      : null;
+  const editing = editId ? (phases.find((p) => p.id === editId) ?? null) : null;
 
   return (
     <section aria-label="Phase timeline" className="mb-6 mt-2">
@@ -151,10 +169,16 @@ export function PhaseTimeline({ projectId }: { projectId: string }) {
                 type="button"
                 onClick={() => openEditor(p)}
                 title={`${phaseLabel(p)} · ${p.start_date ? fmtDay(p.start_date) : '—'} – ${p.target_end_date ? fmtDay(p.target_end_date) : '—'}`}
-                className={`absolute top-[3px] flex h-[calc(100%-6px)] items-center overflow-hidden rounded-[4px] px-2 text-left transition-opacity hover:opacity-90 ${
-                  editId === p.id ? 'outline outline-[1.5px] outline-offset-[1px] outline-[var(--color-clay)]' : ''
+                className={`absolute top-[3px] flex h-[calc(100%-6px)] items-center overflow-hidden rounded-[4px] px-2 text-left transition-opacity hover:opacity-90 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-clay)] ${
+                  editId === p.id
+                    ? 'outline outline-[1.5px] outline-offset-[1px] outline-[var(--color-clay)]'
+                    : ''
                 } ${muted ? 'border border-dashed border-[var(--color-aged-oak)]' : ''}`}
-                style={{ left: `${left}%`, width: `${width}%`, background: fill }}
+                style={{
+                  left: `${left}%`,
+                  width: `${width}%`,
+                  background: fill,
+                }}
               >
                 <span
                   className="truncate font-mono text-[8.5px] font-semibold uppercase tracking-[0.04em]"
@@ -198,7 +222,7 @@ export function PhaseTimeline({ projectId }: { projectId: string }) {
                 key={p.id}
                 type="button"
                 onClick={() => openEditor(p)}
-                className={`rounded-[4px] border px-2 py-1 font-mono text-[8.5px] uppercase tracking-[0.04em] transition-colors hover:border-[var(--color-clay)] ${
+                className={`min-h-11 min-w-11 rounded-[4px] border px-2 py-1 font-mono text-[8.5px] uppercase tracking-[0.04em] transition-colors hover:border-[var(--color-clay)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-clay)] ${
                   editId === p.id
                     ? 'border-[var(--color-clay)] text-[var(--color-clay)]'
                     : 'border-[var(--color-pearl)] text-[var(--color-aged-oak)]'
@@ -221,12 +245,17 @@ export function PhaseTimeline({ projectId }: { projectId: string }) {
             <button
               type="button"
               onClick={() => setEditId(null)}
-              className="font-mono text-[8px] uppercase tracking-[0.06em] text-[var(--text-muted)] hover:text-[var(--color-clay)]"
+              className="min-h-11 min-w-11 font-mono text-[8px] uppercase tracking-[0.06em] text-[var(--text-muted)] hover:text-[var(--color-clay)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-clay)]"
             >
               Close
             </button>
           </div>
-          <div className="flex flex-wrap items-end gap-2.5">
+          <DocumentActionRow
+            surfaceKey="open-document"
+            regionKey="phase-dates"
+            className="items-end"
+            aria-label="Phase date actions"
+          >
             <label className="flex flex-col gap-0.5 font-mono text-[8px] uppercase tracking-[0.06em] text-[var(--color-aged-oak)]">
               Starts
               <input
@@ -248,25 +277,27 @@ export function PhaseTimeline({ projectId }: { projectId: string }) {
                 className="rounded-[4px] border border-[var(--color-pearl)] bg-white px-2 py-1 text-[11px] normal-case tracking-normal text-[var(--color-charcoal)] focus:border-[var(--color-clay)] focus:outline-none"
               />
             </label>
-            <button
-              type="button"
+            <DocumentAction
+              actionKey="save-phase-dates"
+              variant="primary"
               onClick={saveEditor}
-              disabled={updateDates.isPending}
-              className="rounded-[5px] bg-[var(--color-charcoal)] px-3 py-1.5 font-mono text-[9px] font-semibold uppercase tracking-[0.06em] text-[var(--color-off-white)] disabled:opacity-50"
+              loading={updateDates.isPending}
+              loadingLabel="Saving…"
             >
-              {updateDates.isPending ? 'Saving…' : 'Save'}
-            </button>
+              Save
+            </DocumentAction>
             {(editing.start_date || editing.target_end_date) && (
-              <button
-                type="button"
+              <DocumentAction
+                actionKey="clear-phase-dates"
+                variant="tertiary"
                 onClick={clearEditor}
                 disabled={updateDates.isPending}
-                className="font-mono text-[8px] uppercase tracking-[0.06em] text-[var(--text-muted)] hover:text-[var(--color-terracotta)] disabled:opacity-50"
+                className="text-[var(--color-terracotta)] decoration-[var(--color-terracotta)]"
               >
                 Clear
-              </button>
+              </DocumentAction>
             )}
-          </div>
+          </DocumentActionRow>
           {updateDates.isError && (
             <p className="mt-1.5 text-[10px] text-[var(--color-terracotta)]">
               Couldn’t save — try again.

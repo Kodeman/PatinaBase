@@ -22,11 +22,7 @@ import {
   type ResolvePanelProps,
 } from '../open-item-sheet';
 
-export function ResolveRfi({
-  item,
-  projectId,
-  onResolved,
-}: ResolvePanelProps) {
+export function ResolveRfi({ item, projectId, onResolved }: ResolvePanelProps) {
   const resolve = useResolveCoordinationItem(projectId);
   const [answer, setAnswer] = useState('');
   const [done, setDone] = useState(false);
@@ -47,7 +43,9 @@ export function ResolveRfi({
 
   return (
     <ResolveShell>
-      <ResolveQuestion>Answer the RFI — your response unblocks the GC.</ResolveQuestion>
+      <ResolveQuestion>
+        Answer the RFI — your response unblocks the GC.
+      </ResolveQuestion>
       <Field label="Your answer">
         <ResolveTextarea
           autoFocus
@@ -60,17 +58,28 @@ export function ResolveRfi({
       </Field>
       <ButtonRow>
         <ResolveButton
+          actionKey="send-rfi-answer"
           tone="gold"
           onClick={send}
           disabled={!answer.trim() || resolve.isPending || done}
         >
           {resolve.isPending ? 'Sending…' : 'Send answer →'}
         </ResolveButton>
-        <ResolveButton tone="plain" onClick={onResolved} disabled={resolve.isPending}>
+        <ResolveButton
+          actionKey="close-rfi-for-later"
+          tone="plain"
+          variant="tertiary"
+          onClick={onResolved}
+          disabled={resolve.isPending}
+        >
           Later
         </ResolveButton>
       </ButtonRow>
-      {done && <QuietConfirm>Answered — the GC is unblocked. Downstream work re-sorts.</QuietConfirm>}
+      {done && (
+        <QuietConfirm>
+          Answered — the GC is unblocked. Downstream work re-sorts.
+        </QuietConfirm>
+      )}
     </ResolveShell>
   );
 }

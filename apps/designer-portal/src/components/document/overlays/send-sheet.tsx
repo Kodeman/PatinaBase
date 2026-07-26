@@ -27,6 +27,7 @@ import { ClientPicker } from '@/components/portal/client-picker';
 import { useToast } from '@/components/portal/toast-provider';
 import { proposalEvents } from '@/lib/analytics';
 import { DocSheet } from './doc-sheet';
+import { DocumentAction, DocumentActionGroup } from '../document-action';
 
 const EXPIRY_OPTIONS = [
   { value: '7', label: '7 days' },
@@ -140,17 +141,22 @@ export function SendSheet({
     <DocSheet open={open} onClose={onClose} title="Send proposal">
       <div className="mx-auto max-w-xl">
         <p className={labelCls}>
-          {proposal?.title ?? 'Proposal'} &middot; v{proposal?.version || 1}.0 &middot; ${total}
+          {proposal?.title ?? 'Proposal'} &middot; v{proposal?.version || 1}.0
+          &middot; ${total}
         </p>
-        <h2 className="mt-1 font-heading text-xl text-[var(--color-charcoal)]">Send proposal</h2>
+        <h2 className="mt-1 font-heading text-xl text-[var(--color-charcoal)]">
+          Send proposal
+        </h2>
         <p className="mt-1 text-[12.5px] leading-relaxed text-[var(--color-mocha)]">
-          The client receives a branded email with your note and a link to the full proposal — same
-          design, same fonts. They sign at the bottom; you&rsquo;re notified when they open, view,
-          and sign.
+          The client receives a branded email with your note and a link to the
+          full proposal — same design, same fonts. They sign at the bottom;
+          you&rsquo;re notified when they open, view, and sign.
         </p>
 
         {!proposal ? (
-          <p className="mt-6 text-[12.5px] italic text-[var(--color-aged-oak)]">Loading…</p>
+          <p className="mt-6 text-[12.5px] italic text-[var(--color-aged-oak)]">
+            Loading…
+          </p>
         ) : (
           <div className="mt-5 space-y-5">
             {/* Link-a-client banner */}
@@ -160,8 +166,9 @@ export function SendSheet({
                   Link a client to send
                 </p>
                 <p className="mb-3 text-[12.5px] leading-relaxed text-[var(--color-mocha)]">
-                  This proposal isn&rsquo;t linked to a client yet. Choose the client it belongs to
-                  so they receive the proposal and can sign it.
+                  This proposal isn&rsquo;t linked to a client yet. Choose the
+                  client it belongs to so they receive the proposal and can sign
+                  it.
                 </p>
                 <div className="max-w-[320px]">
                   <ClientPicker
@@ -192,7 +199,10 @@ export function SendSheet({
                     role="alert"
                     className="mt-2 text-[11px] leading-snug text-[var(--color-terracotta)]"
                   >
-                    {linkError} <span className="opacity-80">Pick the client again to retry.</span>
+                    {linkError}{' '}
+                    <span className="opacity-80">
+                      Pick the client again to retry.
+                    </span>
                   </p>
                 )}
               </div>
@@ -205,8 +215,8 @@ export function SendSheet({
                   Another version is already accepted
                 </p>
                 <p className="text-[12.5px] leading-relaxed text-[var(--color-mocha)]">
-                  Another version of this proposal has already been accepted. Sending this version
-                  will not affect the accepted one.
+                  Another version of this proposal has already been accepted.
+                  Sending this version will not affect the accepted one.
                 </p>
               </div>
             )}
@@ -219,7 +229,9 @@ export function SendSheet({
               {proposal.client_id ? (
                 <div className="rounded-[4px] border border-[var(--color-pearl)] bg-white px-3 py-2 text-[13px]">
                   <span className="text-[var(--color-charcoal)]">
-                    {proposal.client?.full_name || proposal.client?.email || 'Linked client'}
+                    {proposal.client?.full_name ||
+                      proposal.client?.email ||
+                      'Linked client'}
                   </span>
                   {proposal.client?.email && (
                     <span className="ml-2 text-[var(--color-aged-oak)]">
@@ -232,13 +244,18 @@ export function SendSheet({
                   Link a client above to set the recipient.
                 </p>
               )}
-              <button
-                type="button"
+              <DocumentAction
+                actionKey="toggle-alternate-recipient"
+                surfaceKey="open-document"
+                regionKey="send-proposal-sheet"
+                variant="tertiary"
                 onClick={() => setShowAltAddress((s) => !s)}
-                className="mt-0.5 self-start font-mono text-[9px] uppercase tracking-[0.05em] text-[var(--color-aged-oak)] hover:text-[var(--color-clay)]"
+                className="mt-0.5 self-start"
               >
-                {showAltAddress ? 'Hide alternate address' : 'Send to a different address'}
-              </button>
+                {showAltAddress
+                  ? 'Hide alternate address'
+                  : 'Send to a different address'}
+              </DocumentAction>
               {showAltAddress && (
                 <input
                   id="send-sheet-recipient"
@@ -318,23 +335,31 @@ export function SendSheet({
             )}
 
             {/* Actions */}
-            <div className="flex items-center gap-4 border-t border-[var(--color-pearl)] pt-5">
-              <button
-                type="button"
+            <DocumentActionGroup
+              surfaceKey="open-document"
+              regionKey="send-proposal-sheet"
+              className="border-t border-[var(--color-pearl)] pt-5"
+              aria-label="Send proposal actions"
+            >
+              <DocumentAction
+                actionKey="send-proposal"
+                variant="primary"
                 onClick={handleSend}
-                disabled={!proposal.client_id || !recipientEmail || sendProposal.isPending}
-                className="rounded-[4px] bg-[var(--color-clay)] px-4 py-2 text-[12px] font-medium text-[var(--color-charcoal)] transition-opacity disabled:opacity-40"
+                disabled={!proposal.client_id || !recipientEmail}
+                loading={sendProposal.isPending}
+                loadingLabel="Sending…"
+                trailing="→"
               >
-                {sendProposal.isPending ? 'Sending…' : 'Send proposal →'}
-              </button>
-              <button
-                type="button"
+                Send proposal
+              </DocumentAction>
+              <DocumentAction
+                actionKey="send-later"
+                variant="tertiary"
                 onClick={onClose}
-                className="font-mono text-[9px] uppercase tracking-[0.06em] text-[var(--color-aged-oak)] hover:text-[var(--color-charcoal)]"
               >
                 Send later
-              </button>
-            </div>
+              </DocumentAction>
+            </DocumentActionGroup>
           </div>
         )}
       </div>

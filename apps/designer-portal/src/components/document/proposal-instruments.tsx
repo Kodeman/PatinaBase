@@ -25,12 +25,17 @@ import { usePathname, useRouter } from 'next/navigation';
 import { useProposal } from '@/hooks/use-proposals';
 import { rememberRoomOrigin } from '@/lib/document/room-origin';
 import { useDraftingState } from '@/hooks/use-drafting-state';
-import { Instrument, InstrumentRow } from './instrument';
+import {
+  DocumentAction,
+  DocumentActionGroup,
+  DocumentActionRow,
+} from './document-action';
 import { StrataMark } from './strata-mark';
 import { SendSheet } from './overlays/send-sheet';
 import { ProposalVersionHistory } from './proposal-version-history';
 import { ProposalShareInstrument } from './proposal-share-instrument';
 import { ProposalWatch } from './proposal-watch';
+import { useMobilePrimaryAction } from './mobile/mobile-shell';
 
 export function ProposalInstruments({
   proposalId,
@@ -53,7 +58,11 @@ export function ProposalInstruments({
   const isDraft = status === 'draft';
   // The shared drafting progress (the SAME mark the Drafting Room shows) — only
   // polled while a draft, used to weight "Draft" vs "Send" as the lead act.
-  const { state: draftState, pct, fill } = useDraftingState(proposalId, isDraft);
+  const {
+    state: draftState,
+    pct,
+    fill,
+  } = useDraftingState(proposalId, isDraft);
   const readyToSend = draftState === 'Ready to send';
 
   // F6: the doorway is a <button> (D1 — documents carry no nav links), so
@@ -83,6 +92,27 @@ export function ProposalInstruments({
     router.push(`/drafting/${proposalId}`);
   };
 
+  useMobilePrimaryAction(
+    isDraft
+      ? {
+          actionKey: readyToSend ? 'send-proposal' : 'continue-drafting',
+          surfaceKey: 'open-document',
+          regionKey: 'proposal-draft-actions',
+          label: readyToSend ? 'Send the proposal' : 'Continue drafting',
+          target: {
+            kind: 'press',
+            onPress: () => {
+              if (entering) return;
+              if (readyToSend) setSendOpen(true);
+              else enterDrafting();
+            },
+          },
+          loading: entering,
+        }
+      : null,
+    { priority: 10 },
+  );
+
   // Out the door — the Proposal section becomes the watch view (R71). It carries
   // its own acts (Preview · Revise · Resend) and overlays.
   if (!isDraft) {
@@ -94,13 +124,24 @@ export function ProposalInstruments({
   // steps back to a quiet mono second below. Flat: tint + fill, no shadow (D4).
   return (
     <>
-      <div className="mt-1">
+      <DocumentActionGroup
+        surfaceKey="open-document"
+        regionKey="proposal-draft-actions"
+        className="mt-1 !block"
+        aria-label="Draft proposal actions"
+      >
         <div
           className={`mb-2.5 flex items-center gap-4 rounded-[3px] px-4 py-3.5 transition-colors ${
-            readyToSend ? 'bg-[rgba(168,181,160,0.16)]' : 'bg-[rgba(229,221,208,0.5)]'
+            readyToSend
+              ? 'bg-[rgba(168,181,160,0.16)]'
+              : 'bg-[rgba(229,221,208,0.5)]'
           }`}
         >
-          <StrataMark size="lg" fill={fill} label={`Drafting the proposal — ${pct}% written`} />
+          <StrataMark
+            size="lg"
+            fill={fill}
+            label={`Drafting the proposal — ${pct}% written`}
+          />
           <div className="min-w-0 flex-1">
             <p className="font-mono text-[10px] uppercase tracking-[0.08em] text-[var(--text-muted)]">
               Drafting the proposal
@@ -121,43 +162,58 @@ export function ProposalInstruments({
               )}
             </p>
           </div>
-          <button
-            type="button"
-            aria-busy={entering || undefined}
+          <DocumentAction
+            actionKey={readyToSend ? 'send-proposal' : 'continue-drafting'}
+            variant="primary"
+            loading={entering}
+            loadingLabel="Opening…"
+            trailing="→"
             onClick={() => {
               if (entering) return;
               if (readyToSend) setSendOpen(true);
               else enterDrafting();
             }}
-            className="shrink-0 rounded-[4px] bg-[var(--color-clay)] px-4 py-2 text-[12px] font-medium text-[var(--color-charcoal)] transition-opacity hover:opacity-90"
           >
-            {entering
-              ? 'Opening…'
-              : readyToSend
-                ? 'Send the proposal →'
-                : 'Open the Drafting Room →'}
-          </button>
+            {readyToSend ? 'Send the proposal' : 'Continue drafting'}
+          </DocumentAction>
         </div>
 
-        {/* The quiet second — the non-lead act stays a mono micro-action; the
-            version chain stays reachable (you draft v2 BECAUSE of v1). */}
-        <InstrumentRow>
+        <DocumentActionRow
+          surfaceKey="open-document"
+          regionKey="proposal-draft-actions"
+          aria-label="Other proposal actions"
+        >
           {readyToSend ? (
-            <Instrument variant="secondary" onClick={enterDrafting}>
+            <DocumentAction
+              actionKey="continue-drafting"
+              variant="secondary"
+              onClick={enterDrafting}
+            >
               Keep drafting
-            </Instrument>
+            </DocumentAction>
           ) : (
-            <Instrument variant="secondary" onClick={() => setSendOpen(true)}>
+            <DocumentAction
+              actionKey="send-proposal"
+              variant="secondary"
+              onClick={() => setSendOpen(true)}
+            >
               Send the proposal
-            </Instrument>
+            </DocumentAction>
           )}
-          <ProposalShareInstrument proposalId={proposalId} tier={proposal?.client_visibility_tier} />
+          <ProposalShareInstrument
+            proposalId={proposalId}
+            tier={proposal?.client_visibility_tier}
+          />
           <ProposalVersionHistory proposalId={proposalId} />
-        </InstrumentRow>
-      </div>
+        </DocumentActionRow>
+      </DocumentActionGroup>
 
       {/* Send — the charcoal DocSheet over the open Proposal (D1). */}
-      <SendSheet proposalId={proposalId} open={sendOpen} onClose={() => setSendOpen(false)} />
+      <SendSheet
+        proposalId={proposalId}
+        open={sendOpen}
+        onClose={() => setSendOpen(false)}
+      />
     </>
   );
 }

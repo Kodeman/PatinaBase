@@ -45,6 +45,11 @@ import { ResolveSubmittal } from './item-resolve/resolve-submittal';
 import { ResolveSignoff } from './item-resolve/resolve-signoff';
 import { ResolvePunch } from './item-resolve/resolve-punch';
 import { ResolveWaiting } from './item-resolve/resolve-waiting';
+import {
+  DocumentAction,
+  DocumentActionGroup,
+  type DocumentActionVariant,
+} from '../document-action';
 
 // ════════════════════════════════════════════════════════════════════════
 // Shared resolve-panel primitives — the prototype's `.resolve` grammar.
@@ -70,7 +75,9 @@ export interface ResolvePanelProps {
 /** The `.resolve` shell: a hairline top rule, then the question + actions. */
 export function ResolveShell({ children }: { children: React.ReactNode }) {
   return (
-    <div className="mt-5 border-t border-[var(--doc-ink-border)] pt-4">{children}</div>
+    <div className="mt-5 border-t border-[var(--doc-ink-border)] pt-4">
+      {children}
+    </div>
   );
 }
 
@@ -105,50 +112,61 @@ const FIELD_CLS =
   'w-full rounded-[6px] border border-[var(--color-pearl)] bg-[var(--doc-paper)] px-3 py-2 font-body text-[0.82rem] text-[var(--color-charcoal)] outline-none transition-colors focus:border-[var(--color-clay)] placeholder:italic placeholder:text-[var(--text-muted)]';
 
 /** A paper text input matching the prototype `.field input`. */
-export function ResolveInput(props: React.InputHTMLAttributes<HTMLInputElement>) {
-  return <input {...props} className={`${FIELD_CLS} ${props.className ?? ''}`} />;
+export function ResolveInput(
+  props: React.InputHTMLAttributes<HTMLInputElement>,
+) {
+  return (
+    <input {...props} className={`${FIELD_CLS} ${props.className ?? ''}`} />
+  );
 }
 
 /** A paper textarea matching the prototype `.field textarea`. */
 export function ResolveTextarea(
   props: React.TextareaHTMLAttributes<HTMLTextAreaElement>,
 ) {
-  return <textarea {...props} className={`${FIELD_CLS} resize-vertical ${props.className ?? ''}`} />;
+  return (
+    <textarea
+      {...props}
+      className={`${FIELD_CLS} resize-vertical ${props.className ?? ''}`}
+    />
+  );
 }
 
 export type ResolveButtonTone = 'gold' | 'sage' | 'plain' | 'charcoal';
 
-const TONE_CLS: Record<ResolveButtonTone, string> = {
-  // The clay "gold" primary — fill clay, white ink (prototype `.btn.gold`).
-  gold: 'border-[var(--color-clay)] bg-[var(--color-clay)] text-white hover:opacity-88',
-  // Sage approve — fill sage, white ink (prototype `.btn.sage`).
-  sage: 'border-[var(--color-sage)] bg-[var(--color-sage)] text-white hover:opacity-88',
-  // Charcoal primary — the ground ink (prototype `.btn.primary`).
-  charcoal:
-    'border-[var(--color-charcoal)] bg-[var(--color-charcoal)] text-[var(--color-off-white)] hover:opacity-88',
-  // Plain — paper, hairline border, clay on hover (prototype `.btn`).
-  plain:
-    'border-[var(--color-pearl)] bg-[var(--doc-paper)] text-[var(--color-charcoal)] hover:border-[var(--color-clay)]',
-};
-
 /** A resolve action button (`.btn`) — mono uppercase, flat, shadow-free. */
 export function ResolveButton({
+  actionKey,
   tone = 'plain',
+  variant,
   className = '',
+  children,
   ...props
-}: { tone?: ResolveButtonTone } & React.ButtonHTMLAttributes<HTMLButtonElement>) {
+}: {
+  actionKey: string;
+  tone?: ResolveButtonTone;
+  variant?: DocumentActionVariant;
+  children: React.ReactNode;
+} & React.ButtonHTMLAttributes<HTMLButtonElement>) {
   return (
-    <button
-      type="button"
+    <DocumentAction
+      actionKey={actionKey}
+      variant={variant ?? (tone === 'plain' ? 'secondary' : 'primary')}
       {...props}
-      className={`rounded-[6px] border px-[1.1rem] py-2 font-mono text-[0.54rem] font-semibold uppercase tracking-[0.06em] transition-all disabled:opacity-40 ${TONE_CLS[tone]} ${className}`}
-    />
+      className={className}
+    >
+      {children}
+    </DocumentAction>
   );
 }
 
 /** The `.btn-row` — wrapped, aligned action cluster. */
 export function ButtonRow({ children }: { children: React.ReactNode }) {
-  return <div className="flex flex-wrap items-center gap-2">{children}</div>;
+  return (
+    <DocumentActionGroup surfaceKey="coordination" regionKey="item-resolution">
+      {children}
+    </DocumentActionGroup>
+  );
 }
 
 /**
@@ -200,7 +218,7 @@ export function OpenItemSheet({
     const row =
       item.court_party ??
       (item.court_party_id
-        ? parties.find((p) => p.id === item.court_party_id) ?? null
+        ? (parties.find((p) => p.id === item.court_party_id) ?? null)
         : null);
     return partyFor(item.court, { party: row, clientName });
   }, [item.court, item.court_party, item.court_party_id, parties, clientName]);
@@ -266,7 +284,7 @@ export function OpenItemSheet({
                 {blockedTasks.map((t) => {
                   const owner = courtToken(t.owner);
                   const ownerRow = t.owner_party_id
-                    ? parties.find((p) => p.id === t.owner_party_id) ?? null
+                    ? (parties.find((p) => p.id === t.owner_party_id) ?? null)
                     : null;
                   const ownerTok = partyFor(t.owner, {
                     party: ownerRow,
@@ -351,7 +369,7 @@ function Thread({
     party:
       item.court_party ??
       (item.court_party_id
-        ? parties.find((p) => p.id === item.court_party_id) ?? null
+        ? (parties.find((p) => p.id === item.court_party_id) ?? null)
         : null),
     clientName,
   });
@@ -359,7 +377,8 @@ function Thread({
   // Resolve the existing item thread; the helper creates it on first post.
   const { data: resolvedThreadId } = useCoordinationItemThread(item.id);
   // The embed on the item row gives the thread head before the resolver settles.
-  const threadId = resolvedThreadId ?? item.latest_thread_post?.thread_id ?? null;
+  const threadId =
+    resolvedThreadId ?? item.latest_thread_post?.thread_id ?? null;
 
   const ensureThread = useEnsureCoordinationItemThread();
   const sendMessage = useSendMessage();
@@ -386,7 +405,9 @@ function Thread({
       let tid = threadId;
       if (!tid) {
         if (!item.project_id) {
-          setError('This item has no project — start the thread from the project.');
+          setError(
+            'This item has no project — start the thread from the project.',
+          );
           return;
         }
         tid = await ensureThread.mutateAsync({
@@ -397,7 +418,9 @@ function Thread({
       await sendMessage.mutateAsync({ threadId: tid, body });
       setDraft('');
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Could not post to the thread.');
+      setError(
+        err instanceof Error ? err.message : 'Could not post to the thread.',
+      );
     }
   };
 
@@ -409,7 +432,9 @@ function Thread({
 
       {/* Messages — flat paper rows, oldest first. */}
       {threadId && isLoading ? (
-        <p className="text-[0.74rem] italic text-[var(--text-muted)]">Loading the thread…</p>
+        <p className="text-[0.74rem] italic text-[var(--text-muted)]">
+          Loading the thread…
+        </p>
       ) : messages.length > 0 ? (
         <ul className="space-y-3">
           {messages.map((msg) => {
@@ -438,7 +463,9 @@ function Thread({
                   </div>
                   <p className="mt-0.5 whitespace-pre-wrap text-[0.78rem] leading-[1.55] text-[var(--color-mocha)]">
                     {msg.deleted_at ? (
-                      <em className="text-[var(--text-muted)]">(message deleted)</em>
+                      <em className="text-[var(--text-muted)]">
+                        (message deleted)
+                      </em>
                     ) : (
                       msg.body
                     )}
@@ -476,16 +503,15 @@ function Thread({
           className="flex-1"
         />
         <ResolveButton
-          tone="plain"
+          actionKey="post-coordination-thread-note"
+          tone="charcoal"
           onClick={() => void handleSend()}
           disabled={busy || !draft.trim()}
         >
           {busy ? 'Posting…' : 'Post'}
         </ResolveButton>
       </div>
-      {error && (
-        <p className="mt-1.5 text-[0.68rem] text-[#C4836F]">{error}</p>
-      )}
+      {error && <p className="mt-1.5 text-[0.68rem] text-[#C4836F]">{error}</p>}
     </div>
   );
 }

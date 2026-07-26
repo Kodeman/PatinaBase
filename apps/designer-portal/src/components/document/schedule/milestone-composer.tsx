@@ -17,6 +17,7 @@
 
 import { useState, type KeyboardEvent } from 'react';
 import { parseScheduleEntry, type MilestoneKind } from '@patina/utils';
+import { DocumentAction, DocumentActionGroup } from '../document-action';
 
 export interface MilestoneDraft {
   name: string;
@@ -67,7 +68,9 @@ export function MilestoneComposer({
       onSubmit({ name: trimmedName, kind }); // at phase end (DB default offset)
       return;
     }
-    const parsed = parseScheduleEntry(trimmedWhen, today, { bareNumberUnit: 'days' });
+    const parsed = parseScheduleEntry(trimmedWhen, today, {
+      bareNumberUnit: 'days',
+    });
     if (parsed.kind === 'invalid') {
       setError(parsed.reason);
       return;
@@ -75,7 +78,8 @@ export function MilestoneComposer({
     // schedule_anchor_set (target 'milestone', the anchor arm) fires in the
     // caller's onSuccess (schedule-spine.tsx handleAddMilestone) — this
     // component only signals intent via onSubmit.
-    if (parsed.kind === 'duration') onSubmit({ name: trimmedName, kind, offsetDays: parsed.days });
+    if (parsed.kind === 'duration')
+      onSubmit({ name: trimmedName, kind, offsetDays: parsed.days });
     else onSubmit({ name: trimmedName, kind, anchorDate: parsed.date });
   };
 
@@ -119,7 +123,7 @@ export function MilestoneComposer({
               type="button"
               aria-pressed={selected}
               onClick={() => setKind(k.key)}
-              className={`rounded-[3px] border px-[0.5rem] py-[0.2rem] font-mono text-[0.58rem] uppercase tracking-[0.06em] ${
+              className={`min-h-11 rounded-[3px] border px-[0.5rem] py-[0.2rem] font-mono text-[0.58rem] uppercase tracking-[0.06em] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-clay)] ${
                 selected
                   ? 'border-[var(--color-charcoal)] text-[var(--color-charcoal)]'
                   : 'border-[var(--color-pearl)] text-[var(--color-aged-oak)]'
@@ -157,23 +161,29 @@ export function MilestoneComposer({
         </div>
       )}
 
-      <div className="mt-[0.6rem] flex items-center gap-[0.9rem]">
-        <button
-          type="button"
+      <DocumentActionGroup
+        surfaceKey="schedule"
+        regionKey="milestone-composer"
+        className="mt-[0.6rem]"
+      >
+        <DocumentAction
+          actionKey="add-milestone"
+          variant="primary"
           onClick={submit}
           disabled={busy}
-          className="font-mono text-[0.6rem] uppercase tracking-[0.07em] text-[var(--color-clay)] disabled:opacity-50"
+          loading={busy}
+          loadingLabel="Adding…"
         >
           Add milestone
-        </button>
-        <button
-          type="button"
+        </DocumentAction>
+        <DocumentAction
+          actionKey="cancel-add-milestone"
+          variant="tertiary"
           onClick={onCancel}
-          className="font-mono text-[0.6rem] uppercase tracking-[0.07em] text-[var(--color-aged-oak)]"
         >
           Cancel
-        </button>
-      </div>
+        </DocumentAction>
+      </DocumentActionGroup>
     </div>
   );
 }

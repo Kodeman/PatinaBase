@@ -21,6 +21,7 @@
  */
 
 import { render } from '@testing-library/react';
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import type { RoomGeometryDocument } from '@patina/supabase';
 import { RoomView } from '../room-view';
 import { prototypeRoom } from '@/lib/room-view/__fixtures__/room-fixture';
@@ -51,8 +52,8 @@ function parsedDoc(): RoomGeometryDocument {
  *  Matched by className scan — a CSS attribute selector with literal `[` from
  *  the Tailwind arbitrary value does not parse reliably in jsdom. */
 function stageGrid(container: HTMLElement): HTMLElement {
-  const el = Array.from(container.querySelectorAll<HTMLElement>('div')).find((d) =>
-    d.className.includes('grid-cols-[230px'),
+  const el = Array.from(container.querySelectorAll<HTMLElement>('div')).find(
+    (d) => d.className.includes('grid-cols-[230px'),
   );
   if (!el) throw new Error('rv-body stage grid not found');
   return el;
@@ -60,14 +61,19 @@ function stageGrid(container: HTMLElement): HTMLElement {
 
 describe('RoomView stage bounds', () => {
   it('sizes the stage track with minmax(0,1fr), never a bare 1fr', () => {
+    const queryClient = new QueryClient({
+      defaultOptions: { queries: { retry: false } },
+    });
     const { container } = render(
-      <RoomView
-        roomId="room-1"
-        doc={parsedDoc()}
-        geometry={prototypeRoom()}
-        thicknessConvention
-        isLoading={false}
-      />,
+      <QueryClientProvider client={queryClient}>
+        <RoomView
+          roomId="room-1"
+          doc={parsedDoc()}
+          geometry={prototypeRoom()}
+          thicknessConvention
+          isLoading={false}
+        />
+      </QueryClientProvider>,
     );
 
     const cls = stageGrid(container).className;

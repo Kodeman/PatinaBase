@@ -34,7 +34,11 @@ import { useProposalProject } from '@/hooks/use-proposal-project';
 import { useNudgeProposal, useProposal } from '@/hooks/use-proposals';
 import type { ProposalWatchModel } from '@/lib/document/proposal-watch-derivation';
 import { Stamp } from './stamp';
-import { Instrument, InstrumentRow } from './instrument';
+import {
+  DocumentAction,
+  DocumentActionGroup,
+  DocumentActionRow,
+} from './document-action';
 import { ProposalVersionHistory } from './proposal-version-history';
 import { ProposalShareInstrument } from './proposal-share-instrument';
 import { ProposalPreview } from './proposal-preview';
@@ -42,9 +46,12 @@ import { ProposalPreviewRail } from './drafting/proposal-mirror';
 import { SendSheet } from './overlays/send-sheet';
 import { ReviseSheet } from './overlays/revise-sheet';
 import { MarkSignedSheet } from './overlays/mark-signed-sheet';
+import { useMobilePrimaryAction } from './mobile/mobile-shell';
 
 const fmtDay = (iso: string) =>
-  new Intl.DateTimeFormat('en-US', { month: 'short', day: 'numeric' }).format(new Date(iso));
+  new Intl.DateTimeFormat('en-US', { month: 'short', day: 'numeric' }).format(
+    new Date(iso),
+  );
 
 const fmtTime = (iso: string) =>
   new Intl.DateTimeFormat('en-US', { hour: 'numeric', minute: '2-digit' })
@@ -80,7 +87,15 @@ function statusLine(w: ProposalWatchModel): string {
   }
 }
 
-function Figure({ label, value, sub }: { label: string; value: string; sub?: string }) {
+function Figure({
+  label,
+  value,
+  sub,
+}: {
+  label: string;
+  value: string;
+  sub?: string;
+}) {
   return (
     <div className="flex-1 px-4 first:pl-0">
       <p className="font-mono text-[9px] font-semibold uppercase tracking-[0.1em] text-[var(--color-aged-oak)]">
@@ -121,13 +136,16 @@ export function ProposalWatch({
 
   const nudge = useNudgeProposal();
   const family = familyLabel(clientName);
+  const signable =
+    w?.status === 'sent' || w?.status === 'viewed' || w?.status === 'expired';
 
   // Send the client a gentle reminder. The RPC stamps + cools down; the email is
   // best-effort (surfaced via _emailDispatched). The outcome reads inline at the
   // act (R83 — no toasts on Document surfaces).
-  const [nudgeNote, setNudgeNote] = useState<{ text: string; tone: 'ok' | 'warn' | 'err' } | null>(
-    null,
-  );
+  const [nudgeNote, setNudgeNote] = useState<{
+    text: string;
+    tone: 'ok' | 'warn' | 'err';
+  } | null>(null);
   const onNudge = async () => {
     setNudgeNote(null);
     try {
@@ -147,6 +165,27 @@ export function ProposalWatch({
       });
     }
   };
+
+  useMobilePrimaryAction(
+    w && !w.settled && signable
+      ? {
+          actionKey: 'mark-proposal-signed',
+          surfaceKey: 'open-document',
+          regionKey: 'proposal-watch-actions',
+          label: 'Mark signed',
+          target: { kind: 'press', onPress: () => setMarkSignedOpen(true) },
+        }
+      : w?.terminal
+        ? {
+            actionKey: 'revise-proposal',
+            surfaceKey: 'open-document',
+            regionKey: 'proposal-watch-actions',
+            label: 'Revise',
+            target: { kind: 'press', onPress: () => setReviseOpen(true) },
+          }
+        : null,
+    { priority: 10 },
+  );
 
   // Draft (handled by the work band) or still loading — nothing to watch.
   if (!w || (!w.awaitingClient && !w.terminal && !w.settled)) return null;
@@ -178,7 +217,11 @@ export function ProposalWatch({
         <Figure
           label="Opened"
           value={w.openedCount > 0 ? `${w.openedCount}×` : 'not yet'}
-          sub={w.openedCount > 0 && w.lastOpenedAt ? `last ${fmtDay(w.lastOpenedAt)}` : undefined}
+          sub={
+            w.openedCount > 0 && w.lastOpenedAt
+              ? `last ${fmtDay(w.lastOpenedAt)}`
+              : undefined
+          }
         />
         <Figure label="Reading" value={fmtMinutes(w.readingSeconds)} />
         <Figure label="Most read" value={w.mostReadSectionLabel ?? '—'} />
@@ -190,16 +233,21 @@ export function ProposalWatch({
           <span className="font-mono text-[9px] font-semibold uppercase tracking-[0.1em] text-[var(--color-aged-oak)]">
             The client&rsquo;s copy · as sent
           </span>
-          <button
-            type="button"
+          <DocumentAction
+            actionKey="preview-proposal-as-client"
+            surfaceKey="open-document"
+            regionKey="proposal-preview"
+            variant="secondary"
             onClick={() => setPreviewOpen(true)}
-            className="shrink-0 font-mono text-[10px] uppercase tracking-[0.06em] text-[var(--color-clay)] hover:opacity-80"
           >
-            Preview as {family} →
-          </button>
+            Preview as {family}
+          </DocumentAction>
         </div>
         <div className="relative max-h-[260px] overflow-hidden rounded-[8px] border border-[var(--doc-ink-border)] bg-white px-5 py-5">
-          <ProposalPreviewRail proposalId={proposalId} clientName={clientName} />
+          <ProposalPreviewRail
+            proposalId={proposalId}
+            clientName={clientName}
+          />
           <div
             aria-hidden
             className="pointer-events-none absolute inset-x-0 bottom-0 h-20 bg-gradient-to-t from-white to-transparent"
@@ -209,7 +257,9 @@ export function ProposalWatch({
 
       {/* The aging line + the record (the per-open log) */}
       <div className="mt-4 flex items-baseline justify-between gap-3">
-        <p className="text-[12px] text-[var(--color-aged-oak)]">{statusLine(w)}</p>
+        <p className="text-[12px] text-[var(--color-aged-oak)]">
+          {statusLine(w)}
+        </p>
         {w.record.length > 0 && (
           <button
             type="button"
@@ -245,29 +295,52 @@ export function ProposalWatch({
         </ol>
       )}
 
-      {/* Acts — terminal leads with Revise; the chain reads itself. */}
-      <InstrumentRow className="mt-4">
+      <DocumentActionGroup
+        surfaceKey="open-document"
+        regionKey="proposal-watch-actions"
+        className="mt-4"
+        aria-label="Proposal actions"
+      >
         {w.terminal ? (
           <>
-            <Instrument variant="primary" trailing="→" onClick={() => setReviseOpen(true)}>
+            <DocumentAction
+              actionKey="revise-proposal"
+              variant={signable ? 'secondary' : 'primary'}
+              trailing={signable ? undefined : '→'}
+              onClick={() => setReviseOpen(true)}
+            >
               Revise
-            </Instrument>
-            <Instrument variant="secondary" onClick={() => setResendOpen(true)}>
+            </DocumentAction>
+            <DocumentAction
+              actionKey="resend-proposal"
+              variant="secondary"
+              onClick={() => setResendOpen(true)}
+            >
               Resend · new expiry
-            </Instrument>
+            </DocumentAction>
           </>
         ) : (
           <>
-            <Instrument variant="secondary" onClick={() => setReviseOpen(true)}>
+            <DocumentAction
+              actionKey="revise-proposal"
+              variant="secondary"
+              onClick={() => setReviseOpen(true)}
+            >
               Request a change · Revise
-            </Instrument>
+            </DocumentAction>
             {/* Nudge — a gentle reminder while it's in their hands. After a nudge
                 it rests for the cooldown, reading "Nudged {date}" so the designer
                 sees it's already been done (and can't pester). */}
             {w.canNudge ? (
-              <Instrument variant="secondary" disabled={nudge.isPending} onClick={onNudge}>
+              <DocumentAction
+                actionKey="nudge-client"
+                variant="secondary"
+                loading={nudge.isPending}
+                loadingLabel="Nudging…"
+                onClick={onNudge}
+              >
                 {nudge.isPending ? 'Nudging…' : `Nudge ${family}`}
-              </Instrument>
+              </DocumentAction>
             ) : (
               w.lastNudgedAt && (
                 <span className="font-mono text-[10px] uppercase tracking-[0.06em] text-[var(--text-muted)]">
@@ -279,14 +352,22 @@ export function ProposalWatch({
         )}
         {/* Mark signed — the designer records a paper signature (R92). Only for a
             proposal that's out and still signable (not revised/declined). */}
-        {(w.status === 'sent' || w.status === 'viewed' || w.status === 'expired') && (
-          <Instrument variant="primary" trailing="→" onClick={() => setMarkSignedOpen(true)}>
+        {signable && (
+          <DocumentAction
+            actionKey="mark-proposal-signed"
+            variant="primary"
+            trailing="→"
+            onClick={() => setMarkSignedOpen(true)}
+          >
             Mark signed
-          </Instrument>
+          </DocumentAction>
         )}
-        <ProposalShareInstrument proposalId={proposalId} tier={proposal?.client_visibility_tier} />
+        <ProposalShareInstrument
+          proposalId={proposalId}
+          tier={proposal?.client_visibility_tier}
+        />
         <ProposalVersionHistory proposalId={proposalId} />
-      </InstrumentRow>
+      </DocumentActionGroup>
 
       {/* The nudge outcome — quiet, inline at the act (R83/R51 grammar). */}
       {nudgeNote && (
@@ -313,7 +394,11 @@ export function ProposalWatch({
         onClose={() => setReviseOpen(false)}
         onOpened={(newProposalId) => router.push(`/doc/${newProposalId}`)}
       />
-      <SendSheet proposalId={proposalId} open={resendOpen} onClose={() => setResendOpen(false)} />
+      <SendSheet
+        proposalId={proposalId}
+        open={resendOpen}
+        onClose={() => setResendOpen(false)}
+      />
       <MarkSignedSheet
         proposalId={proposalId}
         clientName={clientName}
@@ -379,51 +464,88 @@ function SignedSeal({
       void qc.invalidateQueries({ queryKey: ['proposal-project', proposalId] });
       router.push(`/doc/${newProjectId}`);
     } catch (e) {
-      setActivateError(e instanceof Error ? e.message : 'the activation did not go through');
+      setActivateError(
+        e instanceof Error ? e.message : 'the activation did not go through',
+      );
     }
   };
 
+  useMobilePrimaryAction(
+    projectId
+      ? {
+          actionKey: 'open-project',
+          surfaceKey: 'open-document',
+          regionKey: 'signed-proposal',
+          label: 'Open the project',
+          target: { kind: 'href', href: `/doc/${projectId}` },
+        }
+      : !isLoading
+        ? {
+            actionKey: 'open-project',
+            surfaceKey: 'open-document',
+            regionKey: 'signed-proposal',
+            label: 'Open the project',
+            target: { kind: 'press', onPress: () => void onOpenProject() },
+            loading: activate.isPending,
+          }
+        : null,
+    { priority: 10 },
+  );
+
   return (
-    <div className="mt-1 rounded-[5px] border border-[var(--color-pearl)] bg-[rgba(168,181,160,0.12)] px-4 py-3">
+    <DocumentActionGroup
+      surfaceKey="open-document"
+      regionKey="signed-proposal"
+      className="mt-1 !block rounded-[5px] border border-[var(--color-pearl)] bg-[rgba(168,181,160,0.12)] px-4 py-3"
+      aria-label="Signed proposal"
+    >
       <div className="flex items-center gap-3">
         <Stamp label="SIGNED" color="var(--color-sage)" />
         <p className="text-[12.5px] text-[var(--color-charcoal)]">
           {projectId ? (
-            <>
-              {signedLine} —{' '}
-              <button
-                type="button"
-                onClick={() => router.push(`/doc/${projectId}`)}
-                className="font-medium text-[var(--color-clay)] underline decoration-[rgba(196,165,123,0.45)] underline-offset-2 transition-colors hover:text-[var(--color-mocha)]"
-              >
-                the project is open →
-              </button>
-            </>
+            <>{signedLine} — the project is open.</>
           ) : isLoading ? (
             signedLine
           ) : (
             `${signedLine} — waiting on your hand to open the project.`
           )}
         </p>
-        <span className="ml-auto flex shrink-0 items-center gap-3">
-          {!isLoading && !projectId && (
-            <button
-              type="button"
-              disabled={activate.isPending}
-              onClick={() => void onOpenProject()}
-              className="rounded-[4px] bg-[var(--color-clay)] px-4 py-2 text-[12px] font-medium text-[var(--color-charcoal)] transition-opacity hover:opacity-90 disabled:opacity-50"
+        <DocumentActionRow
+          surfaceKey="open-document"
+          regionKey="signed-proposal"
+          className="ml-auto shrink-0"
+          aria-label="Signed proposal actions"
+        >
+          {projectId && (
+            <DocumentAction
+              actionKey="open-project"
+              variant="primary"
+              trailing="→"
+              href={`/doc/${projectId}`}
             >
-              {activate.isPending ? 'Opening…' : 'Open the project →'}
-            </button>
+              Open the project
+            </DocumentAction>
+          )}
+          {!isLoading && !projectId && (
+            <DocumentAction
+              actionKey="open-project"
+              variant="primary"
+              loading={activate.isPending}
+              loadingLabel="Opening…"
+              trailing="→"
+              onClick={() => void onOpenProject()}
+            >
+              Open the project
+            </DocumentAction>
           )}
           <ProposalVersionHistory proposalId={proposalId} />
-        </span>
+        </DocumentActionRow>
       </div>
       {activateError && (
         <p role="alert" className="mt-2 text-[11.5px] text-[#C77B6E]">
           Could not open the project — {activateError}. Try again.
         </p>
       )}
-    </div>
+    </DocumentActionGroup>
   );
 }

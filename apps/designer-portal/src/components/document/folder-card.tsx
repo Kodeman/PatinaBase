@@ -13,7 +13,9 @@
  */
 
 import Link from 'next/link';
+import { useEffect, useRef } from 'react';
 import { folderTab, type DeskFolder } from '@/lib/document/desk-derivation';
+import { documentEvents } from '@/lib/analytics/document-events';
 import { StatusChip } from './status-chip';
 import { openLedger } from './command-bar';
 import { TriageBar } from './triage-bar';
@@ -42,20 +44,52 @@ export function FolderCard({ folder }: { folder: DeskFolder }) {
   const phase = prettyPhase(row.current_phase);
   const stageLine = phase ? `${section} · ${phase}` : section;
   const tabLabel = `${folderTab(row)} · ${section}`;
+  const shown = useRef(false);
+
+  useEffect(() => {
+    if (!need.actionLabel || shown.current) return;
+    shown.current = true;
+    documentEvents.actionShown({
+      surface_key: 'desk',
+      region_key: 'needs-your-hand',
+      action_key: need.kind,
+      variant: 'primary',
+      presentation: 'inline',
+    });
+  }, [need.actionLabel, need.kind]);
+
+  const selectFolioAction = () => {
+    if (!need.actionLabel) return;
+    documentEvents.actionSelected({
+      surface_key: 'desk',
+      region_key: 'needs-your-hand',
+      action_key: need.kind,
+      variant: 'primary',
+      presentation: 'inline',
+    });
+  };
 
   // R36: the overdue-invoice need opens the Accounts book onto Receivables
   // (where the dunning act lives), not the document. Same paper face either way.
   const cardClassName =
     'group relative mt-[26px] block w-full cursor-grab rounded-[0_8px_8px_8px] text-left focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-clay)] active:cursor-grabbing';
-  const inner = <FolderFace folder={folder} stageLine={stageLine} tabLabel={tabLabel} />;
+  const inner = (
+    <FolderFace folder={folder} stageLine={stageLine} tabLabel={tabLabel} />
+  );
 
   if (need.ledger) {
     return (
       <button
         type="button"
-        onClick={() => openLedger(need.ledger!.name, need.ledger!.context)}
+        onClick={() => {
+          selectFolioAction();
+          openLedger(need.ledger!.name, need.ledger!.context);
+        }}
         className={cardClassName}
         aria-label={`${row.title} — ${need.text}`}
+        data-action-key={need.actionLabel ? need.kind : undefined}
+        data-action-variant={need.actionLabel ? 'primary' : undefined}
+        data-action-region={need.actionLabel ? 'needs-your-hand' : undefined}
       >
         {inner}
       </button>
@@ -65,8 +99,12 @@ export function FolderCard({ folder }: { folder: DeskFolder }) {
   return (
     <Link
       href={need.deepLink ?? `/doc/${row.engagement_id}`}
+      onClick={selectFolioAction}
       className={cardClassName}
       aria-label={`${row.title} — ${need.text}`}
+      data-action-key={need.actionLabel ? need.kind : undefined}
+      data-action-variant={need.actionLabel ? 'primary' : undefined}
+      data-action-region={need.actionLabel ? 'needs-your-hand' : undefined}
     >
       {inner}
     </Link>
@@ -117,7 +155,9 @@ function FolderFace({
           <h3 className="font-heading text-[1.6rem] font-medium leading-tight text-[var(--text-primary)]">
             {row.title}
           </h3>
-          <p className="mt-1 text-[12px] text-[var(--text-muted)]">{stageLine}</p>
+          <p className="mt-1 text-[12px] text-[var(--text-muted)]">
+            {stageLine}
+          </p>
           {/* R106 §3: the parked-ceremony card's held-draft preview. Renders
               ONLY for that one NeedKind — every other folder face stays
               byte-identical (the flag-off safety net at this layer). */}
@@ -136,8 +176,20 @@ function FolderFace({
               — for a new lead AND for a nurtured lead whose reconnect is now due.
               The bar's buttons stopPropagation so they never trip the card's
               link (D1). Shape C always carries lead_id. */}
-          {(need.kind === 'new_lead' || need.kind === 'reconnect_due') && row.lead_id && (
-            <TriageBar leadId={row.lead_id} variant="desk" />
+          {(need.kind === 'new_lead' || need.kind === 'reconnect_due') &&
+            row.lead_id && <TriageBar leadId={row.lead_id} variant="desk" />}
+          {need.actionLabel && (
+            <div className="mt-4 flex min-h-11 items-center justify-between gap-3 border-t border-[var(--color-pearl)] pt-3">
+              <span className="font-mono text-[12px] font-semibold uppercase tracking-[0.08em] text-[var(--color-charcoal)]">
+                {need.actionLabel}
+              </span>
+              <span
+                aria-hidden
+                className="text-[14px] text-[var(--color-clay)]"
+              >
+                →
+              </span>
+            </div>
           )}
         </div>
       </div>

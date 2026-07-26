@@ -14,6 +14,7 @@
 import { useState } from 'react';
 import { useCreateReviewRequest } from '@patina/supabase';
 import { RoomSheet } from '../../rooms/room-sheet';
+import { DocumentAction, DocumentActionGroup } from '../../document-action';
 
 export function ReviewRequestSheet({
   open,
@@ -61,20 +62,24 @@ export function ReviewRequestSheet({
           onClose();
         },
         onError: (e) =>
-          setError(e instanceof Error ? e.message : 'Could not send the request.'),
+          setError(
+            e instanceof Error ? e.message : 'Could not send the request.',
+          ),
       },
     );
   };
 
   return (
-    <RoomSheet open={open} onClose={onClose} title={`Request a review from ${clientName}`}>
+    <RoomSheet
+      open={open}
+      onClose={onClose}
+      title={`Request a review from ${clientName}`}
+    >
       <h2 className="font-heading text-[1.4rem] font-medium leading-tight text-[var(--color-charcoal)]">
         Request a review from {clientName}
       </h2>
       <p className="mt-1 text-[0.76rem] text-[var(--color-aged-oak)]">
-        {projectName
-          ? `For ${projectName}. `
-          : ''}
+        {projectName ? `For ${projectName}. ` : ''}
         The words a happy client writes are what bring the next one.
       </p>
 
@@ -114,23 +119,31 @@ export function ReviewRequestSheet({
 
         {error && <p className="text-[0.72rem] text-[#C77B6E]">{error}</p>}
 
-        <div className="flex items-center justify-end gap-2 pt-1">
-          <button
-            type="button"
+        <DocumentActionGroup
+          surfaceKey="people"
+          regionKey="review-request-sheet"
+          className="justify-end pt-1"
+        >
+          <DocumentAction
+            actionKey="cancel-review-request"
+            variant="tertiary"
             onClick={onClose}
-            className="rounded-[6px] border border-[var(--color-pearl)] px-3.5 py-2 font-mono text-[0.5rem] font-semibold uppercase tracking-[0.06em] text-[var(--color-charcoal)] transition-colors hover:border-[var(--color-clay)]"
           >
             Cancel
-          </button>
-          <button
-            type="button"
+          </DocumentAction>
+          <DocumentAction
+            actionKey={
+              scheduledFor ? 'queue-review-request' : 'send-review-request'
+            }
+            variant="primary"
             onClick={submit}
             disabled={create.isPending}
-            className="rounded-[6px] border border-[var(--color-clay)] bg-[var(--color-clay)] px-3.5 py-2 font-mono text-[0.5rem] font-semibold uppercase tracking-[0.06em] text-white transition-opacity hover:opacity-90 disabled:opacity-50"
+            loading={create.isPending}
+            loadingLabel="Sending…"
           >
-            {create.isPending ? 'Sending…' : scheduledFor ? 'Queue the request' : 'Send the request'}
-          </button>
-        </div>
+            {scheduledFor ? 'Queue the request' : 'Send the request'}
+          </DocumentAction>
+        </DocumentActionGroup>
       </div>
     </RoomSheet>
   );

@@ -68,7 +68,7 @@ function prettyRoomType(roomType: string): string {
 /** Mode-row button styling — active carries the clay underline + charcoal ink; inactive
  *  is quiet mocha that warms to charcoal on hover (matches the prototype's mode toggle). */
 function modeClass(active: boolean, pad: string): string {
-  const base = `${pad} pb-3 pt-2.5 font-mono text-[10.5px] uppercase tracking-[0.14em] transition-colors`;
+  const base = `${pad} min-h-11 rounded-[3px] pb-3 pt-2.5 font-mono text-[10.5px] uppercase tracking-[0.14em] transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-clay)]`;
   return active
     ? `${base} border-b-2 border-[var(--color-clay)] text-[var(--color-charcoal)]`
     : `${base} text-[var(--color-mocha)] hover:text-[var(--color-charcoal)]`;
@@ -105,7 +105,10 @@ export function RoomView({
   const docLink = useMemo(() => {
     if (!doc?.engagementId || !doc.activeSection) return null;
     const label = SECTION_LABEL[doc.activeSection] ?? doc.activeSection;
-    return { href: `/doc/${doc.engagementId}`, label: `→ the Document · ${label}` };
+    return {
+      href: `/doc/${doc.engagementId}`,
+      label: `→ the Document · ${label}`,
+    };
   }, [doc?.engagementId, doc?.activeSection]);
 
   // Both hooks called unconditionally, ahead of the loading/not-ready early
@@ -120,12 +123,16 @@ export function RoomView({
   // `room-file` flag is on, a generated room_file exists for the scan, AND the
   // scan is on a project (the route is project-nested). Absent otherwise.
   const { value: roomFileEnabled } = useFeatureFlag('room-file');
-  const { data: roomFilesForDoor } = useRoomFiles(roomFileEnabled ? roomId : undefined);
+  const { data: roomFilesForDoor } = useRoomFiles(
+    roomFileEnabled ? roomId : undefined,
+  );
   const { data: scanRow } = useRoomScan(roomFileEnabled ? roomId : '');
   const roomFileDoor = useMemo(() => {
     if (!roomFileEnabled) return undefined;
     const projectId = scanRow?.project?.id ?? scanRow?.project_id ?? null;
-    const hasGenerated = (roomFilesForDoor ?? []).some((rf) => rf.status === 'generated');
+    const hasGenerated = (roomFilesForDoor ?? []).some(
+      (rf) => rf.status === 'generated',
+    );
     if (!projectId || !hasGenerated) return undefined;
     return { href: `/portal/projects/${projectId}/room-file/${roomId}` };
   }, [roomFileEnabled, scanRow, roomFilesForDoor, roomId]);
@@ -142,14 +149,16 @@ export function RoomView({
   // absent / provenance null) → no poses → OrbitCanvas builds no marker group.
   const orbitPhotoPoses = useMemo<OrbitPhotoPose[]>(() => {
     if (!geometry || photos.length === 0 || !provenance) return [];
-    return buildPhotoMarkers(photos, provenance, planBounds(geometry)).map((m) => ({
-      x: m.x,
-      z: m.z,
-      y: m.y,
-      headingDeg: m.headingDeg,
-      count: m.count,
-      photoIndex: m.representativeIndex,
-    }));
+    return buildPhotoMarkers(photos, provenance, planBounds(geometry)).map(
+      (m) => ({
+        x: m.x,
+        z: m.z,
+        y: m.y,
+        headingDeg: m.headingDeg,
+        count: m.count,
+        photoIndex: m.representativeIndex,
+      }),
+    );
   }, [geometry, photos, provenance]);
 
   // Plan is the landing mode. Orbit stays UNMOUNTED (zero three.js cost) until the first
@@ -196,7 +205,8 @@ export function RoomView({
   // "armed" broadly = the tool is capturing clicks (armed or first-point
   // placed) — both the stagecap copy and the toolrow's button treatment key
   // off this; only 'complete' shows the Clear button.
-  const capturing = measure.state.phase === 'armed' || measure.state.phase === 'point';
+  const capturing =
+    measure.state.phase === 'armed' || measure.state.phase === 'point';
 
   return (
     <div className="mx-auto max-w-[1180px] px-6 pb-20 pt-8 sm:px-8">
@@ -204,7 +214,12 @@ export function RoomView({
       <div className="mb-1.5 flex flex-wrap items-baseline gap-4">
         <h1 className="font-heading text-[28px] font-medium text-[var(--color-charcoal)] sm:text-[34px]">
           {clientName ?? 'Untitled room'}
-          {roomType && <span className="italic text-[var(--color-mocha)]"> · {roomType}.</span>}
+          {roomType && (
+            <span className="italic text-[var(--color-mocha)]">
+              {' '}
+              · {roomType}.
+            </span>
+          )}
         </h1>
         {docLink && (
           <Link
@@ -264,7 +279,10 @@ export function RoomView({
           coveragePercentage={doc.coveragePercentage}
           photos={
             photos.length > 0
-              ? { count: photos.length, onOpen: () => viewer.openAtIndex(0, 'rail') }
+              ? {
+                  count: photos.length,
+                  onOpen: () => viewer.openAtIndex(0, 'rail'),
+                }
               : undefined
           }
           measure={{
@@ -281,7 +299,9 @@ export function RoomView({
           <div className={mode === 'plan' ? undefined : 'hidden'}>
             <PlanStage
               geometry={geometry}
-              stageCapRight={capturing ? 'click two points' : 'hover for dimensions'}
+              stageCapRight={
+                capturing ? 'click two points' : 'hover for dimensions'
+              }
               photoLayer={
                 <PhotoMarkers
                   geometry={geometry}
@@ -310,7 +330,10 @@ export function RoomView({
             </div>
           )}
           {/* The contact strip lives under the stage, inside the stage cell. */}
-          <PhotoStrip photos={photos} onOpen={(index) => viewer.openAtIndex(index, 'strip')} />
+          <PhotoStrip
+            photos={photos}
+            onOpen={(index) => viewer.openAtIndex(index, 'strip')}
+          />
         </div>
       </div>
 

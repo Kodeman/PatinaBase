@@ -20,7 +20,15 @@
  * Scrim dimming, no shadows (D4).
  */
 
-import { createContext, useContext, useEffect, useMemo, useState } from 'react';
+import {
+  createContext,
+  useCallback,
+  useContext,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from 'react';
 import type { SpineSection } from '@/lib/document/section-derivation';
 
 export interface MobileActiveDoc {
@@ -39,6 +47,18 @@ type Sheet =
   | { kind: 'drawer' }
   | { kind: 'margin-item'; itemId: string };
 
+export type MobilePrimaryAction = {
+  actionKey: string;
+  surfaceKey: string;
+  regionKey: string;
+  label: string;
+  target:
+    | { kind: 'press'; onPress: () => void }
+    | { kind: 'href'; href: string };
+  disabled?: boolean;
+  loading?: boolean;
+};
+
 interface MobileShellValue {
   activeDoc: MobileActiveDoc | null;
   setActiveDoc: (d: MobileActiveDoc | null) => void;
@@ -48,6 +68,12 @@ interface MobileShellValue {
   openDrawer: () => void;
   openMarginItem: (itemId: string) => void;
   closeSheet: () => void;
+  primaryAction: MobilePrimaryAction | null;
+  registerPrimaryAction: (
+    owner: symbol,
+    action: MobilePrimaryAction | null,
+    priority: number,
+  ) => void;
 }
 
 const Ctx = createContext<MobileShellValue | null>(null);
@@ -58,9 +84,43 @@ export function useMobileShell(): MobileShellValue {
   return v;
 }
 
-export function MobileShellProvider({ children }: { children: React.ReactNode }) {
+export function MobileShellProvider({
+  children,
+}: {
+  children: React.ReactNode;
+}) {
   const [activeDoc, setActiveDoc] = useState<MobileActiveDoc | null>(null);
   const [sheet, setSheet] = useState<Sheet | null>(null);
+  const [primaryAction, setPrimaryAction] =
+    useState<MobilePrimaryAction | null>(null);
+  const primaryRegistry = useRef(
+    new Map<
+      symbol,
+      { action: MobilePrimaryAction; priority: number; sequence: number }
+    >(),
+  );
+  const primarySequence = useRef(0);
+
+  const registerPrimaryAction = useCallback(
+    (owner: symbol, action: MobilePrimaryAction | null, priority: number) => {
+      if (action) {
+        const existing = primaryRegistry.current.get(owner);
+        primaryRegistry.current.set(owner, {
+          action,
+          priority,
+          sequence: existing?.sequence ?? ++primarySequence.current,
+        });
+      } else {
+        primaryRegistry.current.delete(owner);
+      }
+
+      const next = [...primaryRegistry.current.values()].sort(
+        (a, b) => b.priority - a.priority || b.sequence - a.sequence,
+      )[0]?.action;
+      setPrimaryAction(next ?? null);
+    },
+    [],
+  );
 
   const value = useMemo<MobileShellValue>(
     () => ({
@@ -70,13 +130,70 @@ export function MobileShellProvider({ children }: { children: React.ReactNode })
       openSpine: () => setSheet({ kind: 'spine' }),
       openTimer: () => setSheet({ kind: 'timer' }),
       openDrawer: () => setSheet({ kind: 'drawer' }),
-      openMarginItem: (itemId: string) => setSheet({ kind: 'margin-item', itemId }),
+      openMarginItem: (itemId: string) =>
+        setSheet({ kind: 'margin-item', itemId }),
       closeSheet: () => setSheet(null),
+      primaryAction,
+      registerPrimaryAction,
     }),
-    [activeDoc, sheet],
+    [activeDoc, primaryAction, registerPrimaryAction, sheet],
   );
 
   return <Ctx.Provider value={value}>{children}</Ctx.Provider>;
+}
+
+/** Surface-side: publish the active section or Room's one mobile forward act.
+ * Higher-priority lifecycle actions override quiet document fallbacks. */
+export function useMobilePrimaryAction(
+  action: MobilePrimaryAction | null,
+  options: { priority?: number } = {},
+) {
+  const { registerPrimaryAction } = useMobileShell();
+  const owner = useRef(Symbol('mobile-primary-action'));
+  const latest = useRef(action);
+  latest.current = action;
+  const priority = options.priority ?? 0;
+
+  const press = useCallback(() => {
+    const current = latest.current;
+    if (current?.target.kind === 'press') current.target.onPress();
+  }, []);
+
+  const actionKey = action?.actionKey ?? null;
+  const surfaceKey = action?.surfaceKey ?? null;
+  const regionKey = action?.regionKey ?? null;
+  const label = action?.label ?? null;
+  const disabled = action?.disabled ?? false;
+  const loading = action?.loading ?? false;
+  const targetKind = action?.target.kind ?? null;
+  const href = action?.target.kind === 'href' ? action.target.href : null;
+
+  useEffect(() => {
+    const current = latest.current;
+    const normalized: MobilePrimaryAction | null = current
+      ? {
+          ...current,
+          target:
+            current.target.kind === 'href'
+              ? { kind: 'href', href: current.target.href }
+              : { kind: 'press', onPress: press },
+        }
+      : null;
+    registerPrimaryAction(owner.current, normalized, priority);
+    return () => registerPrimaryAction(owner.current, null, priority);
+  }, [
+    actionKey,
+    disabled,
+    href,
+    label,
+    loading,
+    press,
+    priority,
+    regionKey,
+    registerPrimaryAction,
+    surfaceKey,
+    targetKind,
+  ]);
 }
 
 /** Page-side: publish the held document to the shell while mounted, and clear

@@ -23,6 +23,7 @@ import { LogInspectionDrawer } from '@/components/portal/procurement/log-inspect
 import { Stamp } from './stamp';
 import { receivingFrontMatter } from '@/lib/document/ledger-summary';
 import { fmtDay } from '@/lib/document/format';
+import { DocumentAction, DocumentActionGroup } from './document-action';
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type AnyRecord = any;
@@ -35,7 +36,15 @@ const isoOffsetDays = (days: number) =>
  * figures-strip grammar (divided columns, mono label over heading numeral),
  * inked for the laid paper sheet (R96).
  */
-function Figure({ label, value, sub }: { label: string; value: string; sub?: string }) {
+function Figure({
+  label,
+  value,
+  sub,
+}: {
+  label: string;
+  value: string;
+  sub?: string;
+}) {
   return (
     <div className="flex-1 px-4 first:pl-0">
       <p className="font-mono text-[9px] font-semibold uppercase tracking-[0.1em] text-[var(--color-aged-oak)]">
@@ -71,7 +80,9 @@ function OpenClaimRow({
   const qc = useQueryClient();
   const updateClaim = useUpdateDamageClaim({ errorSurface: 'inline' });
   const [act, setAct] = useState<'notify' | 'resolve' | null>(null);
-  const [description, setDescription] = useState<string>(claim.description ?? '');
+  const [description, setDescription] = useState<string>(
+    claim.description ?? '',
+  );
   const [note, setNote] = useState('');
   const [done, setDone] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -91,7 +102,9 @@ function OpenClaimRow({
         // Notify carries the reviewed description with it (the drawer's
         // review-then-notify); resolve carries the optional note.
         ...(state === 'vendor_notified' ? { description } : {}),
-        ...(state === 'resolved' && note.trim() ? { resolution_notes: note.trim() } : {}),
+        ...(state === 'resolved' && note.trim()
+          ? { resolution_notes: note.trim() }
+          : {}),
       });
       // One act, many surfaces (§5): line stamps, unfold, Desk claim need.
       void qc.invalidateQueries({ queryKey: ['project-ffe-items'] });
@@ -117,7 +130,9 @@ function OpenClaimRow({
           <p className="font-mono text-[9px] uppercase tracking-[0.05em] text-[var(--color-aged-oak)]">
             {[
               `drafted ${fmtDay(claim.created_at)}`,
-              claim.vendor_notified_at ? `vendor notified ${fmtDay(claim.vendor_notified_at)}` : null,
+              claim.vendor_notified_at
+                ? `vendor notified ${fmtDay(claim.vendor_notified_at)}`
+                : null,
               claim.inspection?.outcome ?? null,
             ]
               .filter(Boolean)
@@ -126,17 +141,25 @@ function OpenClaimRow({
         </div>
         <Stamp
           label={drafted ? 'claim drafted' : 'vendor notified'}
-          color={drafted ? 'var(--color-terracotta)' : 'var(--color-golden-hour)'}
+          color={
+            drafted ? 'var(--color-terracotta)' : 'var(--color-golden-hour)'
+          }
           ink={drafted ? undefined : '#D8BE56'}
         />
-        <button
-          type="button"
-          onClick={() => setAct((cur) => (cur ? null : drafted ? 'notify' : 'resolve'))}
+        <DocumentAction
+          actionKey={
+            drafted ? 'review-claim-notification' : 'review-claim-resolution'
+          }
+          surfaceKey="orders"
+          regionKey="damage-claim-row"
+          variant="secondary"
+          onClick={() =>
+            setAct((cur) => (cur ? null : drafted ? 'notify' : 'resolve'))
+          }
           aria-expanded={act != null}
-          className="whitespace-nowrap rounded-[3px] border border-[var(--color-clay)] px-2.5 py-1 text-[10.5px] text-[var(--color-clay)] hover:bg-[rgba(196,165,123,0.1)]"
         >
           {drafted ? 'Notify vendor' : 'Mark resolved'}
-        </button>
+        </DocumentAction>
         <button
           type="button"
           onClick={() => onOpenDocument(po?.project?.id ?? null)}
@@ -156,14 +179,18 @@ function OpenClaimRow({
             aria-label="Claim description"
             className="flex-1 resize-none rounded-[3px] border border-[var(--color-pearl)] bg-transparent px-2 py-1.5 text-[11px] text-[var(--color-charcoal)] outline-none placeholder:text-[var(--text-faint)]"
           />
-          <button
-            type="button"
+          <DocumentAction
+            actionKey="notify-vendor-of-claim"
+            surfaceKey="orders"
+            regionKey="claim-notification"
+            variant="primary"
             disabled={updateClaim.isPending}
+            loading={updateClaim.isPending}
+            loadingLabel="Notifying…"
             onClick={() => void run('vendor_notified')}
-            className="whitespace-nowrap rounded-[4px] border border-[var(--color-clay)] bg-[var(--color-clay)] px-2.5 py-1 text-[11px] font-medium text-white hover:opacity-90 disabled:opacity-50"
           >
-            {updateClaim.isPending ? 'Notifying…' : 'Notify vendor'}
-          </button>
+            Notify vendor
+          </DocumentAction>
         </div>
       )}
 
@@ -177,58 +204,82 @@ function OpenClaimRow({
             aria-label="Resolution notes"
             className="flex-1 resize-none rounded-[3px] border border-[var(--color-pearl)] bg-transparent px-2 py-1.5 text-[11px] text-[var(--color-charcoal)] outline-none placeholder:text-[var(--text-faint)]"
           />
-          <button
-            type="button"
+          <DocumentAction
+            actionKey="resolve-damage-claim"
+            surfaceKey="orders"
+            regionKey="claim-resolution"
+            variant="primary"
             disabled={updateClaim.isPending}
+            loading={updateClaim.isPending}
+            loadingLabel="Resolving…"
             onClick={() => void run('resolved')}
-            className="whitespace-nowrap rounded-[4px] border border-[var(--color-clay)] bg-[var(--color-clay)] px-2.5 py-1 text-[11px] font-medium text-white hover:opacity-90 disabled:opacity-50"
           >
-            {updateClaim.isPending ? 'Resolving…' : 'Mark resolved'}
-          </button>
+            Mark resolved
+          </DocumentAction>
         </div>
       )}
 
       {done && !error && (
         // R51: the quiet confirmation (the row leaves the open set on refetch).
-        <p className="mt-1.5 text-[10.5px] text-[var(--color-charcoal)]">{done}</p>
+        <p className="mt-1.5 text-[10.5px] text-[var(--color-charcoal)]">
+          {done}
+        </p>
       )}
       {error && (
         // R83: inline at the act — the reason and a retry.
-        <p role="alert" className="mt-1.5 text-[10.5px] text-[var(--color-terracotta)]">
-          {error}{' '}
-          <button
-            type="button"
-            onClick={() => void run(drafted ? 'vendor_notified' : 'resolved')}
-            className="underline hover:opacity-80"
+        <div
+          role="alert"
+          className="mt-1.5 text-[10.5px] text-[var(--color-terracotta)]"
+        >
+          <p>{error}</p>
+          <DocumentActionGroup
+            surfaceKey="orders"
+            regionKey="claim-error"
+            className="mt-2"
           >
-            try again
-          </button>
-        </p>
+            <DocumentAction
+              actionKey="retry-damage-claim"
+              variant="primary"
+              onClick={() => void run(drafted ? 'vendor_notified' : 'resolved')}
+            >
+              Try again
+            </DocumentAction>
+          </DocumentActionGroup>
+        </div>
       )}
     </li>
   );
 }
 
-export function ReceivingBookPage({ onOpenDocument }: { onOpenDocument: (projectId: string | null) => void }) {
+export function ReceivingBookPage({
+  onOpenDocument,
+}: {
+  onOpenDocument: (projectId: string | null) => void;
+}) {
   const since30 = useMemo(() => isoOffsetDays(-30), []);
   const { data: orders, isLoading: ordersLoading } = usePurchaseOrders() as {
     data: AnyRecord[] | undefined;
     isLoading: boolean;
   };
-  const { data: inspections, isLoading: inspLoading } = useReceivingInspections({
-    sinceDate: since30,
-  }) as { data: AnyRecord[] | undefined; isLoading: boolean };
+  const { data: inspections, isLoading: inspLoading } = useReceivingInspections(
+    {
+      sinceDate: since30,
+    },
+  ) as { data: AnyRecord[] | undefined; isLoading: boolean };
   const { data: draftedClaims } = useDamageClaims({ state: 'drafted' }) as {
     data: AnyRecord[] | undefined;
   };
-  const { data: notifiedClaims } = useDamageClaims({ state: 'vendor_notified' }) as {
+  const { data: notifiedClaims } = useDamageClaims({
+    state: 'vendor_notified',
+  }) as {
     data: AnyRecord[] | undefined;
   };
 
   const [target, setTarget] = useState<AnyRecord | null>(null);
   const [showCleared, setShowCleared] = useState(false);
 
-  const openClaimCount = (draftedClaims?.length ?? 0) + (notifiedClaims?.length ?? 0);
+  const openClaimCount =
+    (draftedClaims?.length ?? 0) + (notifiedClaims?.length ?? 0);
 
   // PRC-11: the open-claims group — drafted first (they need the notify act),
   // then vendor-notified, newest first within each (the hooks' order).
@@ -240,7 +291,9 @@ export function ReceivingBookPage({ onOpenDocument }: { onOpenDocument: (project
   // Warehouse-day queue: delivered POs with no inspection logged, oldest ETA
   // first (the day's work, in arrival order).
   const queue = useMemo(() => {
-    const inspectedPoIds = new Set((inspections ?? []).map((i) => i.purchase_order_id));
+    const inspectedPoIds = new Set(
+      (inspections ?? []).map((i) => i.purchase_order_id),
+    );
     return (orders ?? [])
       .filter((po) => po.status === 'delivered' && !inspectedPoIds.has(po.id))
       .sort((a, b) => {
@@ -257,7 +310,12 @@ export function ReceivingBookPage({ onOpenDocument }: { onOpenDocument: (project
   );
 
   const stats = useMemo(
-    () => receivingFrontMatter((orders ?? []) as AnyRecord[], (inspections ?? []) as AnyRecord[], openClaimCount),
+    () =>
+      receivingFrontMatter(
+        (orders ?? []) as AnyRecord[],
+        (inspections ?? []) as AnyRecord[],
+        openClaimCount,
+      ),
     [orders, inspections, openClaimCount],
   );
 
@@ -267,7 +325,10 @@ export function ReceivingBookPage({ onOpenDocument }: { onOpenDocument: (project
     <div className="mx-auto max-w-3xl">
       <div className="mb-4">
         <h2 className="font-heading text-xl text-[var(--color-charcoal)]">
-          Receiving <em className="italic text-[var(--color-clay)]">· the warehouse day</em>
+          Receiving{' '}
+          <em className="italic text-[var(--color-clay)]">
+            · the warehouse day
+          </em>
         </h2>
       </div>
 
@@ -300,7 +361,9 @@ export function ReceivingBookPage({ onOpenDocument }: { onOpenDocument: (project
       )}
 
       {isLoading ? (
-        <p className="py-3 text-[12px] italic text-[var(--color-aged-oak)]">Opening the book…</p>
+        <p className="py-3 text-[12px] italic text-[var(--color-aged-oak)]">
+          Opening the book…
+        </p>
       ) : (
         <>
           {/* The warehouse-day queue — delivered, awaiting the log. */}
@@ -315,8 +378,8 @@ export function ReceivingBookPage({ onOpenDocument }: { onOpenDocument: (project
               >
                 <div>
                   <p className="text-[12.5px] font-medium text-[var(--color-charcoal)]">
-                    {po.po_number ?? po.vendor_po_number ?? po.sidemark ?? 'PO'} ·{' '}
-                    {po.vendor?.name ?? 'Vendor'}
+                    {po.po_number ?? po.vendor_po_number ?? po.sidemark ?? 'PO'}{' '}
+                    · {po.vendor?.name ?? 'Vendor'}
                   </p>
                   <p className="font-mono text-[9px] uppercase tracking-[0.05em] text-[var(--color-aged-oak)]">
                     {[
@@ -331,16 +394,20 @@ export function ReceivingBookPage({ onOpenDocument }: { onOpenDocument: (project
                       .join(' · ')}
                   </p>
                 </div>
-                <button
-                  type="button"
+                <DocumentAction
+                  actionKey="inspect-delivery"
+                  surfaceKey="orders"
+                  regionKey="receiving-row"
+                  variant="primary"
                   onClick={() => setTarget(po)}
-                  className="whitespace-nowrap rounded-[3px] border border-[var(--color-clay)] px-2.5 py-1 text-[10.5px] text-[var(--color-clay)] hover:bg-[rgba(196,165,123,0.1)]"
                 >
                   Inspect
-                </button>
+                </DocumentAction>
                 <button
                   type="button"
-                  onClick={() => onOpenDocument(po.project_id ?? po.project?.id ?? null)}
+                  onClick={() =>
+                    onOpenDocument(po.project_id ?? po.project?.id ?? null)
+                  }
                   className="whitespace-nowrap text-[10.5px] text-[var(--color-clay)] hover:underline"
                 >
                   open document →
@@ -363,7 +430,11 @@ export function ReceivingBookPage({ onOpenDocument }: { onOpenDocument: (project
               </p>
               <ul className="mb-5">
                 {openClaims.map((c) => (
-                  <OpenClaimRow key={c.id} claim={c} onOpenDocument={onOpenDocument} />
+                  <OpenClaimRow
+                    key={c.id}
+                    claim={c}
+                    onOpenDocument={onOpenDocument}
+                  />
                 ))}
               </ul>
             </>
@@ -378,7 +449,8 @@ export function ReceivingBookPage({ onOpenDocument }: { onOpenDocument: (project
                 aria-expanded={showCleared}
                 className="font-mono text-[8.5px] uppercase tracking-[0.07em] text-[var(--color-aged-oak)] hover:text-[var(--color-clay)]"
               >
-                Settled · {cleared.length} cleared · 30 days {showCleared ? '↑' : '↓'}
+                Settled · {cleared.length} cleared · 30 days{' '}
+                {showCleared ? '↑' : '↓'}
               </button>
               {showCleared && (
                 <ul className="mt-1.5 opacity-70">
@@ -412,7 +484,12 @@ export function ReceivingBookPage({ onOpenDocument }: { onOpenDocument: (project
           }}
           purchaseOrderId={target.id}
           projectId={target.project_id ?? target.project?.id ?? undefined}
-          poLabel={target.vendor_po_number ?? target.po_number ?? target.sidemark ?? 'PO'}
+          poLabel={
+            target.vendor_po_number ??
+            target.po_number ??
+            target.sidemark ??
+            'PO'
+          }
           vendorName={target.vendor?.name ?? 'Vendor'}
           projectName={target.project?.name ?? 'Project'}
         />

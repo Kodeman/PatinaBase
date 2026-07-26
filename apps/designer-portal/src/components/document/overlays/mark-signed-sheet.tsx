@@ -17,6 +17,7 @@
 import { useEffect, useState } from 'react';
 import { useRecordOfflineSignature } from '@/hooks/use-proposals';
 import { DocSheet } from './doc-sheet';
+import { DocumentAction, DocumentActionGroup } from '../document-action';
 
 const todayYmd = () => new Date().toISOString().slice(0, 10);
 
@@ -80,8 +81,8 @@ export function MarkSignedSheet({
           Who signed, and when?
         </h2>
         <p className="mt-1.5 text-[13px] leading-relaxed text-[var(--color-mocha)]">
-          Records the paper signature against this proposal and opens the project — the same as if
-          they had signed here.
+          Records the paper signature against this proposal and opens the
+          project — the same as if they had signed here.
         </p>
 
         <div className="mt-7 space-y-5">
@@ -104,36 +105,54 @@ export function MarkSignedSheet({
         </div>
 
         {error && (
-          <p className="mt-5 text-[12px] text-[var(--color-terracotta)]" role="alert">
+          <p
+            className="mt-5 text-[12px] text-[var(--color-terracotta)]"
+            role="alert"
+          >
             {error}
           </p>
         )}
 
-        <div className="mt-8 flex items-center gap-4">
-          <button
+        <DocumentActionGroup
+          surfaceKey="open-document"
+          regionKey="mark-signed-sheet"
+          className="mt-8"
+          aria-label="Record signature actions"
+        >
+          <DocumentAction
+            actionKey="record-offline-signature"
+            variant="primary"
             type="submit"
-            disabled={signedName.trim().length < 2 || record.isPending}
-            className="rounded-[4px] bg-[var(--color-clay)] px-4 py-2 font-mono text-[11px] font-semibold uppercase tracking-[0.08em] text-[var(--color-charcoal)] transition-colors hover:bg-[var(--color-aged-oak)] disabled:opacity-50"
+            disabled={signedName.trim().length < 2}
+            loading={record.isPending}
+            loadingLabel="Recording…"
+            trailing="→"
           >
-            {record.isPending ? 'Recording…' : 'Record signed →'}
-          </button>
-          <button
-            type="button"
+            Record signed
+          </DocumentAction>
+          <DocumentAction
+            actionKey="cancel-record-signature"
+            variant="tertiary"
             onClick={onClose}
-            className="font-mono text-[11px] uppercase tracking-[0.08em] text-[var(--color-aged-oak)] hover:text-[var(--color-charcoal)]"
           >
             Cancel
-          </button>
+          </DocumentAction>
           <span className="ml-auto font-mono text-[9px] uppercase tracking-[0.06em] text-[var(--color-aged-oak)]">
             opens the project
           </span>
-        </div>
+        </DocumentActionGroup>
       </form>
     </DocSheet>
   );
 }
 
-function Field({ label, children }: { label: string; children: React.ReactNode }) {
+function Field({
+  label,
+  children,
+}: {
+  label: string;
+  children: React.ReactNode;
+}) {
   return (
     <label className="block">
       <span className="mb-1.5 block font-mono text-[10px] uppercase tracking-[0.1em] text-[var(--color-aged-oak)]">

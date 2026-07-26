@@ -32,7 +32,10 @@ import {
   type ItemFeedback,
   type TaughtAlternative,
 } from '@patina/supabase';
-import { extractAttributeKeywords, rankTaughtAlternatives } from '@patina/utils';
+import {
+  extractAttributeKeywords,
+  rankTaughtAlternatives,
+} from '@patina/utils';
 import type { ComposeDecisionRequest } from '@/lib/document/compose-decision';
 import { useUpdateProposalItem } from '@/hooks/use-proposals';
 import { StatusChip } from '@/components/document/status-chip';
@@ -45,14 +48,20 @@ import {
 import { LeadTimeSelect } from '@/components/portal/ffe/lead-time-select';
 import { leadTimeLabel } from '@/lib/scope/lead-time';
 import { StrataMark } from '@/components/document/strata-mark';
-import { pieceSections, pieceFill, piecePct } from '@/lib/document/piece-progress';
+import {
+  pieceSections,
+  pieceFill,
+  piecePct,
+} from '@/lib/document/piece-progress';
 // S² Wave 2 — custom fields (S6) + spec sheet PDF (S8)
 import { useSpecFieldDefs } from '@/hooks/use-spec-fields';
 import { withFieldValue, formatFieldValue } from '@/lib/scope/spec-fields';
 import { downloadSpecPdf } from '@/lib/scope/spec-pdf-client';
-
-const ACTION_BTN =
-  'rounded-[4px] border border-[var(--color-pearl)] px-2.5 py-1.5 text-[10.5px] font-medium text-[var(--color-charcoal)] hover:border-[var(--color-clay)] disabled:opacity-50';
+import {
+  DocumentAction,
+  DocumentActionGroup,
+  DocumentActionRow,
+} from '@/components/document/document-action';
 
 function fmtCents(cents: number | null | undefined): string {
   if (cents == null) return '—';
@@ -114,7 +123,9 @@ export function ScheduleLineUnfold({
   const lineFeedback = useMemo<ItemFeedback | null>(() => {
     const mine = allFeedback.filter((f) => f.proposal_item_id === item.id);
     if (mine.length === 0) return null;
-    return mine.reduce((latest, f) => (f.created_at > latest.created_at ? f : latest));
+    return mine.reduce((latest, f) =>
+      f.created_at > latest.created_at ? f : latest,
+    );
   }, [allFeedback, item.id]);
 
   // S6 — the document's custom field definitions (values live on the item).
@@ -126,7 +137,7 @@ export function ScheduleLineUnfold({
   const [clientNotes, setClientNotes] = useState(item.notes ?? '');
   const [internalNotes, setInternalNotes] = useState(item.internal_notes ?? '');
   const [customFields, setCustomFields] = useState<Record<string, unknown>>(
-    (item.custom_fields as Record<string, unknown> | null) ?? {}
+    (item.custom_fields as Record<string, unknown> | null) ?? {},
   );
   const [saved, setSaved] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -141,20 +152,24 @@ export function ScheduleLineUnfold({
     try {
       await downloadSpecPdf(
         { kind: 'item', proposalId, itemId: item.id },
-        `spec-${item.doc_code || item.id}.pdf`
+        `spec-${item.doc_code || item.id}.pdf`,
       );
       setSaved('spec sheet downloaded');
     } catch (e) {
-      setError(e instanceof Error ? e.message : 'The spec sheet could not be generated.');
+      setError(
+        e instanceof Error
+          ? e.message
+          : 'The spec sheet could not be generated.',
+      );
     } finally {
       setPdfBusy(false);
     }
   };
 
   const categoryLabelText = item.ffe_category
-    ? (categories as Array<{ slug: string; label: string }>).find(
-        (c) => c.slug === item.ffe_category
-      )?.label ?? item.ffe_category
+    ? ((categories as Array<{ slug: string; label: string }>).find(
+        (c) => c.slug === item.ffe_category,
+      )?.label ?? item.ffe_category)
     : null;
 
   // One quiet field-save path: confirm in a line of text, fail inline (R83).
@@ -164,13 +179,17 @@ export function ScheduleLineUnfold({
     updateItem
       .mutateAsync({ itemId: item.id, proposalId, updates })
       .then(() => setSaved(confirmation))
-      .catch((e: Error) => setError(e.message || 'The line could not be saved.'));
+      .catch((e: Error) =>
+        setError(e.message || 'The line could not be saved.'),
+      );
   };
 
   // Provenance completeness — the Strata Mark reads the linked piece's record
   // (piece-progress), never a stored progress column.
-  const images: string[] = product?.images ?? (item.image_url ? [item.image_url] : []);
-  const hasTeaching = ((product?.product_styles as unknown[] | null)?.length ?? 0) > 0;
+  const images: string[] =
+    product?.images ?? (item.image_url ? [item.image_url] : []);
+  const hasTeaching =
+    ((product?.product_styles as unknown[] | null)?.length ?? 0) > 0;
   const sections = product ? pieceSections(product, hasTeaching) : null;
   const fill = sections ? pieceFill(sections) : null;
   const pct = fill ? piecePct(fill) : null;
@@ -212,17 +231,24 @@ export function ScheduleLineUnfold({
               onBlur={() => {
                 const next = docCode.trim() || null;
                 if (next !== (item.doc_code ?? null)) {
-                  save({ doc_code: next }, next ? `code set — ${next}` : 'code cleared');
+                  save(
+                    { doc_code: next },
+                    next ? `code set — ${next}` : 'code cleared',
+                  );
                 }
               }}
               className="w-24 bg-transparent font-mono text-[11px] uppercase tracking-[0.04em] text-[var(--color-charcoal)] outline-none placeholder:text-[var(--text-muted)] disabled:opacity-50"
             />
           </label>
           {categoryLabelText && (
-            <p className="text-[10px] text-[var(--text-muted)]">{categoryLabelText}</p>
+            <p className="text-[10px] text-[var(--text-muted)]">
+              {categoryLabelText}
+            </p>
           )}
           {item.vendor_name && (
-            <p className="text-[10px] text-[var(--text-muted)]">{item.vendor_name}</p>
+            <p className="text-[10px] text-[var(--text-muted)]">
+              {item.vendor_name}
+            </p>
           )}
         </div>
 
@@ -234,7 +260,9 @@ export function ScheduleLineUnfold({
             onChange={(weeks) =>
               save(
                 { lead_time_weeks: weeks },
-                weeks == null ? 'lead time cleared' : `lead time — ${leadTimeLabel(weeks)}`
+                weeks == null
+                  ? 'lead time cleared'
+                  : `lead time — ${leadTimeLabel(weeks)}`,
               )
             }
             className="!w-auto"
@@ -248,7 +276,8 @@ export function ScheduleLineUnfold({
           <CellLabel>Pricing</CellLabel>
           {item.item_type === 'allowance' ? (
             <p className="text-[11.5px] font-medium text-[var(--color-charcoal)]">
-              {fmtCents(item.budget_min_cents)} – {fmtCents(item.budget_max_cents)}
+              {fmtCents(item.budget_min_cents)} –{' '}
+              {fmtCents(item.budget_max_cents)}
               <span className="ml-1 text-[10px] font-normal text-[var(--text-muted)]">
                 allowance
               </span>
@@ -283,14 +312,30 @@ export function ScheduleLineUnfold({
             <div key={def.id}>
               <CellLabel>{def.name}</CellLabel>
               <input
-                type={def.kind === 'number' ? 'number' : def.kind === 'url' ? 'url' : 'text'}
+                type={
+                  def.kind === 'number'
+                    ? 'number'
+                    : def.kind === 'url'
+                      ? 'url'
+                      : 'text'
+                }
                 value={formatFieldValue(customFields[def.field_key])}
                 disabled={updateItem.isPending}
                 onChange={(e) =>
-                  setCustomFields((cur) => withFieldValue(cur, def.field_key, def.kind, e.target.value))
+                  setCustomFields((cur) =>
+                    withFieldValue(
+                      cur,
+                      def.field_key,
+                      def.kind,
+                      e.target.value,
+                    ),
+                  )
                 }
                 onBlur={() => {
-                  const original = (item.custom_fields as Record<string, unknown> | null)?.[def.field_key] ?? null;
+                  const original =
+                    (item.custom_fields as Record<string, unknown> | null)?.[
+                      def.field_key
+                    ] ?? null;
                   const current = customFields[def.field_key] ?? null;
                   if (JSON.stringify(current) !== JSON.stringify(original)) {
                     save({ custom_fields: customFields }, `${def.name} saved`);
@@ -317,7 +362,9 @@ export function ScheduleLineUnfold({
             </span>
           )}
           {product.brand && (
-            <span className="text-[10.5px] text-[var(--color-mocha)]">{product.brand}</span>
+            <span className="text-[10.5px] text-[var(--color-mocha)]">
+              {product.brand}
+            </span>
           )}
           {product.source_url && (
             <a
@@ -339,19 +386,23 @@ export function ScheduleLineUnfold({
 
       {/* ── Client feedback (C3) — the line's verdict + thread + designer reply /
           resolve. Only when the client has actually left a verdict on this line. ── */}
-      {lineFeedback && <LineFeedbackBlock feedback={lineFeedback} proposalId={proposalId} />}
+      {lineFeedback && (
+        <LineFeedbackBlock feedback={lineFeedback} proposalId={proposalId} />
+      )}
 
       {/* ── Taught alternatives (A1) — only on an UNRESOLVED rejection. A shortlist
           from the designer's own corpus first, lightly filtered by the flag note. ── */}
-      {lineFeedback && lineFeedback.verdict === 'rejected' && !lineFeedback.resolved_at && (
-        <AlternativesBand
-          item={item}
-          feedback={lineFeedback}
-          proposalId={proposalId}
-          canComposeDecision={canComposeDecision}
-          onComposeDecision={onComposeDecision}
-        />
-      )}
+      {lineFeedback &&
+        lineFeedback.verdict === 'rejected' &&
+        !lineFeedback.resolved_at && (
+          <AlternativesBand
+            item={item}
+            feedback={lineFeedback}
+            proposalId={proposalId}
+            canComposeDecision={canComposeDecision}
+            onComposeDecision={onComposeDecision}
+          />
+        )}
 
       {/* ── Notes — the client's line vs the studio's ── */}
       <div className="mb-3 grid grid-cols-1 gap-3 sm:grid-cols-2">
@@ -364,7 +415,8 @@ export function ScheduleLineUnfold({
             onChange={(e) => setClientNotes(e.target.value)}
             onBlur={() => {
               const next = clientNotes.trim() || null;
-              if (next !== (item.notes ?? null)) save({ notes: next }, 'notes saved');
+              if (next !== (item.notes ?? null))
+                save({ notes: next }, 'notes saved');
             }}
             placeholder="Specification notes the client sees…"
             aria-label="Client notes"
@@ -402,22 +454,36 @@ export function ScheduleLineUnfold({
       )}
 
       {/* ── Acts ── */}
-      <div className="flex flex-wrap gap-1.5">
-        <button
-          type="button"
-          className={ACTION_BTN}
+      <DocumentActionRow
+        surfaceKey="drafting"
+        regionKey="schedule-line-utilities"
+        aria-label="Schedule line actions"
+      >
+        <DocumentAction
+          actionKey="edit-schedule-line"
+          variant="secondary"
           onClick={() => setEditing((v) => !v)}
           aria-expanded={editing}
         >
           {editing ? 'Close edit ↑' : 'Edit the line ✎'}
-        </button>
-        <button type="button" className={ACTION_BTN} onClick={handleSpecPdf} disabled={pdfBusy}>
-          {pdfBusy ? 'Preparing…' : 'Spec sheet (PDF) ↓'}
-        </button>
-        <button type="button" className={ACTION_BTN} onClick={onFold}>
+        </DocumentAction>
+        <DocumentAction
+          actionKey="download-spec-sheet"
+          variant="secondary"
+          onClick={handleSpecPdf}
+          loading={pdfBusy}
+          loadingLabel="Preparing…"
+        >
+          Spec sheet (PDF) ↓
+        </DocumentAction>
+        <DocumentAction
+          actionKey="fold-schedule-line"
+          variant="tertiary"
+          onClick={onFold}
+        >
           Fold ↑
-        </button>
-      </div>
+        </DocumentAction>
+      </DocumentActionRow>
 
       {/* The SAME edit form the legacy host mounts — one write path. */}
       {editing && (
@@ -426,7 +492,9 @@ export function ScheduleLineUnfold({
             item={item}
             proposalId={proposalId}
             rooms={rooms as ScheduleScopeRoom[]}
-            categories={(categories as Array<{ slug: string; label: string }>).map((c) => ({
+            categories={(
+              categories as Array<{ slug: string; label: string }>
+            ).map((c) => ({
               slug: c.slug,
               label: c.label,
             }))}
@@ -468,9 +536,18 @@ function AlternativesBand({
   const [saved, setSaved] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
-  const keywords = useMemo(() => extractAttributeKeywords(feedback.body), [feedback.body]);
-  const ranked = useMemo(() => rankTaughtAlternatives(raw, keywords), [raw, keywords]);
-  const shown = useMemo(() => ranked.filter((p) => !dismissed.has(p.id)), [ranked, dismissed]);
+  const keywords = useMemo(
+    () => extractAttributeKeywords(feedback.body),
+    [feedback.body],
+  );
+  const ranked = useMemo(
+    () => rankTaughtAlternatives(raw, keywords),
+    [raw, keywords],
+  );
+  const shown = useMemo(
+    () => ranked.filter((p) => !dismissed.has(p.id)),
+    [ranked, dismissed],
+  );
 
   // Log the shown batch once per distinct product set — a training receipt.
   const shownKeyRef = useRef<string | null>(null);
@@ -498,9 +575,17 @@ function AlternativesBand({
     setError(null);
     setSaved(null);
     swap
-      .mutateAsync({ proposalItemId: item.id, productId: p.id, feedbackId: feedback.id, proposalId, rank })
+      .mutateAsync({
+        proposalItemId: item.id,
+        productId: p.id,
+        feedbackId: feedback.id,
+        proposalId,
+        rank,
+      })
       .then(() => setSaved(`Swapped to ${p.name}.`))
-      .catch((e: Error) => setError(e.message || 'The line could not be swapped.'));
+      .catch((e: Error) =>
+        setError(e.message || 'The line could not be swapped.'),
+      );
   };
 
   const doDismiss = (p: TaughtAlternative, rank: number) => {
@@ -562,24 +647,43 @@ function AlternativesBand({
           <li key={p.id} className="flex items-center gap-2.5">
             <div className="h-10 w-10 shrink-0 overflow-hidden rounded-[3px] border border-[var(--color-pearl)] bg-[rgba(196,165,123,0.06)]">
               {p.images?.[0] && (
-                <img src={p.images[0]} alt="" loading="lazy" className="h-full w-full object-cover" />
+                <img
+                  src={p.images[0]}
+                  alt=""
+                  loading="lazy"
+                  className="h-full w-full object-cover"
+                />
               )}
             </div>
             <div className="min-w-0 flex-1">
-              <p className="truncate text-[11.5px] text-[var(--color-charcoal)]">{p.name}</p>
+              <p className="truncate text-[11.5px] text-[var(--color-charcoal)]">
+                {p.name}
+              </p>
               <p className="flex items-center gap-2 text-[9px] text-[var(--text-muted)]">
                 <LayerBadge layer={p.layer} />
-                {p.price_retail != null && <span>${Math.round(p.price_retail / 100).toLocaleString()}</span>}
+                {p.price_retail != null && (
+                  <span>
+                    ${Math.round(p.price_retail / 100).toLocaleString()}
+                  </span>
+                )}
                 {p.brand && <span className="truncate">{p.brand}</span>}
               </p>
             </div>
-            <button type="button" className={ACTION_BTN} disabled={swap.isPending} onClick={() => doSwap(p, i)}>
-              {swap.isPending ? 'Swapping…' : 'Swap'}
-            </button>
+            <DocumentAction
+              actionKey="swap-line-alternative"
+              surfaceKey="drafting"
+              regionKey={`line-alternative-${i + 1}`}
+              variant="secondary"
+              loading={swap.isPending}
+              loadingLabel="Swapping…"
+              onClick={() => doSwap(p, i)}
+            >
+              Swap
+            </DocumentAction>
             <button
               type="button"
               aria-label={`Dismiss ${p.name}`}
-              className="rounded-[4px] border border-transparent px-1.5 py-1 text-[12px] leading-none text-[var(--text-muted)] hover:border-[var(--color-pearl)] hover:text-[var(--color-charcoal)]"
+              className="inline-flex min-h-11 min-w-11 items-center justify-center rounded-[4px] border border-transparent px-1.5 py-1 text-[12px] leading-none text-[var(--text-muted)] hover:border-[var(--color-pearl)] hover:text-[var(--color-charcoal)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-clay)]"
               onClick={() => doDismiss(p, i)}
             >
               ×
@@ -589,14 +693,26 @@ function AlternativesBand({
       </ul>
 
       {canComposeDecision && onComposeDecision && (
-        <div className="mt-2 border-t border-dashed border-[var(--color-pearl)] pt-2">
-          <button type="button" className={ACTION_BTN} onClick={putToClient}>
-            Put it to the client →
-          </button>
-        </div>
+        <DocumentActionGroup
+          surfaceKey="drafting"
+          regionKey="line-alternatives-decision"
+          className="mt-2 border-t border-dashed border-[var(--color-pearl)] pt-2"
+          aria-label="Alternative decision actions"
+        >
+          <DocumentAction
+            actionKey="put-alternatives-to-client"
+            variant="primary"
+            trailing="→"
+            onClick={putToClient}
+          >
+            Put it to the client
+          </DocumentAction>
+        </DocumentActionGroup>
       )}
 
-      {saved && !error && <p className="mt-1.5 text-[10px] text-[var(--text-muted)]">{saved}</p>}
+      {saved && !error && (
+        <p className="mt-1.5 text-[10px] text-[var(--text-muted)]">{saved}</p>
+      )}
       {error && (
         <p role="alert" className="mt-1.5 text-[10px] text-[#C4836F]">
           {error}
@@ -608,7 +724,8 @@ function AlternativesBand({
 
 /** The taught-corpus provenance chip: your library / your studio / the catalog. */
 function LayerBadge({ layer }: { layer: string }) {
-  const label = layer === 'personal' ? 'Yours' : layer === 'studio' ? 'Studio' : 'Catalog';
+  const label =
+    layer === 'personal' ? 'Yours' : layer === 'studio' ? 'Studio' : 'Catalog';
   const taught = layer === 'personal' || layer === 'studio';
   return (
     <span
@@ -657,7 +774,9 @@ function LineFeedbackBlock({
         setReplyText('');
         setSaved('reply sent');
       })
-      .catch((e: Error) => setError(e.message || 'The reply could not be sent.'));
+      .catch((e: Error) =>
+        setError(e.message || 'The reply could not be sent.'),
+      );
   };
 
   const toggleResolved = (reopen: boolean) => {
@@ -677,17 +796,27 @@ function LineFeedbackBlock({
       </div>
 
       {feedback.body && (
-        <p className="text-[11.5px] leading-snug text-[var(--color-charcoal)]">{feedback.body}</p>
+        <p className="text-[11.5px] leading-snug text-[var(--color-charcoal)]">
+          {feedback.body}
+        </p>
       )}
 
       {/* The thread — created / replied / resolved / reopened, oldest first. */}
       {thread.length > 0 && (
         <ol className="mt-2 space-y-1 border-l border-[var(--color-pearl)] pl-2.5">
           {thread.map((ev) => (
-            <li key={ev.id} className="text-[10.5px] leading-snug text-[var(--text-muted)]">
-              <span className="font-mono text-[8px] uppercase tracking-[0.06em]">{ev.kind}</span>
+            <li
+              key={ev.id}
+              className="text-[10.5px] leading-snug text-[var(--text-muted)]"
+            >
+              <span className="font-mono text-[8px] uppercase tracking-[0.06em]">
+                {ev.kind}
+              </span>
               {ev.body ? (
-                <span className="text-[var(--color-charcoal)]"> · {ev.body}</span>
+                <span className="text-[var(--color-charcoal)]">
+                  {' '}
+                  · {ev.body}
+                </span>
               ) : null}
             </li>
           ))}
@@ -705,38 +834,49 @@ function LineFeedbackBlock({
         className="mt-2 w-full resize-none rounded-[3px] border border-[var(--color-pearl)] bg-transparent px-2 py-1.5 text-[11px] text-[var(--color-charcoal)] outline-none placeholder:text-[var(--text-muted)] disabled:opacity-50"
       />
 
-      <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
-        <button
-          type="button"
-          className={ACTION_BTN}
+      <DocumentActionRow
+        surfaceKey="drafting"
+        regionKey="line-feedback"
+        className="mt-1.5"
+        aria-label="Line feedback actions"
+      >
+        <DocumentAction
+          actionKey="reply-to-line-feedback"
+          variant="primary"
           disabled={reply.isPending || !replyText.trim()}
+          loading={reply.isPending}
+          loadingLabel="Sending…"
           onClick={sendReply}
         >
-          {reply.isPending ? 'Sending…' : 'Reply'}
-        </button>
+          Reply
+        </DocumentAction>
         {isFlag && !resolved && (
-          <button
-            type="button"
-            className={ACTION_BTN}
-            disabled={resolve.isPending}
+          <DocumentAction
+            actionKey="resolve-line-feedback"
+            variant="secondary"
+            loading={resolve.isPending}
+            loadingLabel="Saving…"
             onClick={() => toggleResolved(false)}
           >
-            {resolve.isPending ? 'Saving…' : 'Mark resolved'}
-          </button>
+            Mark resolved
+          </DocumentAction>
         )}
         {isFlag && resolved && (
-          <button
-            type="button"
-            className={ACTION_BTN}
-            disabled={resolve.isPending}
+          <DocumentAction
+            actionKey="reopen-line-feedback"
+            variant="secondary"
+            loading={resolve.isPending}
+            loadingLabel="Saving…"
             onClick={() => toggleResolved(true)}
           >
-            {resolve.isPending ? 'Saving…' : 'Reopen'}
-          </button>
+            Reopen
+          </DocumentAction>
         )}
-      </div>
+      </DocumentActionRow>
 
-      {saved && !error && <p className="mt-1.5 text-[10px] text-[var(--text-muted)]">{saved}</p>}
+      {saved && !error && (
+        <p className="mt-1.5 text-[10px] text-[var(--text-muted)]">{saved}</p>
+      )}
       {error && (
         <p role="alert" className="mt-1.5 text-[10px] text-[#C4836F]">
           {error}

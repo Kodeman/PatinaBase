@@ -40,10 +40,18 @@ import { useFeatureFlag } from '@/hooks/use-feature-flag';
 import { SectionEyebrow } from '@/components/document/section-eyebrow';
 import { relTime } from '@/lib/document/post-derivation';
 import { documentEvents } from '@/lib/analytics/document-events';
+import { DocumentAction } from './document-action';
 
-const pretty = (s: string) => s.replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase());
+const pretty = (s: string) =>
+  s.replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase());
 
-function RequestCard({ request, ceremonyPath }: { request: OpenDesignRequest; ceremonyPath: boolean }) {
+function RequestCard({
+  request,
+  ceremonyPath,
+}: {
+  request: OpenDesignRequest;
+  ceremonyPath: boolean;
+}) {
   const router = useRouter();
   const queryClient = useQueryClient();
   // R83 — this card renders already_claimed inline; opt the mutation out of
@@ -77,7 +85,9 @@ function RequestCard({ request, ceremonyPath }: { request: OpenDesignRequest; ce
             project_type: request.project_type,
             scan_count: request.scan_count ?? 0,
           });
-          void queryClient.invalidateQueries({ queryKey: ['document-state', 'desk'] });
+          void queryClient.invalidateQueries({
+            queryKey: ['document-state', 'desk'],
+          });
           router.push(`/ceremony/${result.lead_id}`);
         },
         onError,
@@ -94,17 +104,22 @@ function RequestCard({ request, ceremonyPath }: { request: OpenDesignRequest; ce
         // One-act-many-surfaces (spec §5), mirroring TriageBar's refreshDesk:
         // the claimed lead now needs to surface as a Brief folder without a
         // reload for whoever lands back on the Desk.
-        void queryClient.invalidateQueries({ queryKey: ['document-state', 'desk'] });
+        void queryClient.invalidateQueries({
+          queryKey: ['document-state', 'desk'],
+        });
         router.push(`/doc/${result.lead_id}`);
       },
       onError,
     });
   };
 
-  const chips = [request.budget_range, request.timeline ? pretty(request.timeline) : null].filter(
-    Boolean,
-  ) as string[];
-  const location = [request.location_city, request.location_state].filter(Boolean).join(', ');
+  const chips = [
+    request.budget_range,
+    request.timeline ? pretty(request.timeline) : null,
+  ].filter(Boolean) as string[];
+  const location = [request.location_city, request.location_state]
+    .filter(Boolean)
+    .join(', ');
 
   return (
     <div className="relative mt-[26px]">
@@ -132,7 +147,9 @@ function RequestCard({ request, ceremonyPath }: { request: OpenDesignRequest; ce
         <div className="min-w-0 flex-1">
           <div className="flex items-baseline justify-between gap-3">
             <h3 className="font-heading text-[1.15rem] font-medium leading-tight text-[var(--text-primary)]">
-              {request.project_type ? pretty(request.project_type) : 'Design request'}
+              {request.project_type
+                ? pretty(request.project_type)
+                : 'Design request'}
             </h3>
             {request.created_at && (
               <span className="shrink-0 font-mono text-[9px] uppercase tracking-[0.06em] text-[var(--text-muted)]">
@@ -152,7 +169,9 @@ function RequestCard({ request, ceremonyPath }: { request: OpenDesignRequest; ce
                 </span>
               ))}
               {location && (
-                <span className="text-[11px] text-[var(--text-muted)]">{location}</span>
+                <span className="text-[11px] text-[var(--text-muted)]">
+                  {location}
+                </span>
               )}
             </div>
           )}
@@ -165,7 +184,9 @@ function RequestCard({ request, ceremonyPath }: { request: OpenDesignRequest; ce
 
           <div className="mt-3.5 flex items-center justify-between gap-3 border-t border-[var(--border-default)] pt-3">
             <span className="font-mono text-[9px] uppercase tracking-[0.06em] text-[var(--text-muted)]">
-              {request.scan_count === 1 ? '1 scan' : `${request.scan_count ?? 0} scans`}
+              {request.scan_count === 1
+                ? '1 scan'
+                : `${request.scan_count ?? 0} scans`}
             </span>
 
             {taken ? (
@@ -179,14 +200,18 @@ function RequestCard({ request, ceremonyPath }: { request: OpenDesignRequest; ce
                     Couldn’t claim — try again.
                   </span>
                 )}
-                <button
-                  type="button"
+                <DocumentAction
+                  actionKey="accept-project-request"
+                  surfaceKey="project"
+                  regionKey="open-request"
+                  variant="primary"
                   onClick={onAccept}
                   disabled={claim.isPending || accept.isPending}
-                  className="rounded-[5px] bg-[var(--color-charcoal)] px-3.5 py-1.5 font-mono text-[10px] font-semibold uppercase tracking-[0.06em] text-[var(--color-off-white)] disabled:opacity-50"
+                  loading={claim.isPending || accept.isPending}
+                  loadingLabel="Accepting…"
                 >
-                  {claim.isPending || accept.isPending ? 'Accepting…' : 'Accept'}
-                </button>
+                  Accept
+                </DocumentAction>
               </div>
             )}
           </div>
@@ -200,12 +225,17 @@ export function OpenRequestsStrip() {
   // Fail-closed while the flag resolves — never flash the pool to a
   // non-pilot designer (matches procurement-workspace-pilot's gate). All
   // hooks stay above the render branch below (hook-order stability).
-  const { value: enabled, isLoading: flagLoading } = useFeatureFlag('design-request-pool');
+  const { value: enabled, isLoading: flagLoading } = useFeatureFlag(
+    'design-request-pool',
+  );
   // Arrival Arc (R106): flag-on, Accept opens the Match Ceremony instead of
   // landing straight in the Brief. Fail-closed — while resolving (or off),
   // the claim → /doc path below stays byte-identical.
-  const { value: arrivalArc, isLoading: arcLoading } = useFeatureFlag('arrival-arc');
-  const { data: requests } = useOpenDesignRequests({ enabled: !flagLoading && enabled });
+  const { value: arrivalArc, isLoading: arcLoading } =
+    useFeatureFlag('arrival-arc');
+  const { data: requests } = useOpenDesignRequests({
+    enabled: !flagLoading && enabled,
+  });
 
   if (flagLoading || !enabled) return null;
 
@@ -220,7 +250,11 @@ export function OpenRequestsStrip() {
       </SectionEyebrow>
       <div className="grid grid-cols-1 gap-x-10 gap-y-[46px] xl:grid-cols-2">
         {requests.map((r) => (
-          <RequestCard key={r.id} request={r} ceremonyPath={!arcLoading && arrivalArc} />
+          <RequestCard
+            key={r.id}
+            request={r}
+            ceremonyPath={!arcLoading && arrivalArc}
+          />
         ))}
       </div>
     </section>

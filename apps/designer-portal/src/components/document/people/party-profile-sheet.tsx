@@ -37,8 +37,10 @@ import {
 } from '@patina/types';
 import { fmtDay } from '@/lib/document/format';
 import { RoomSheet } from '../rooms/room-sheet';
+import { DocumentAction, DocumentActionRow } from '../document-action';
 
-const META = 'font-mono text-[9px] uppercase tracking-[0.08em] text-[var(--color-aged-oak)]';
+const META =
+  'font-mono text-[9px] uppercase tracking-[0.08em] text-[var(--color-aged-oak)]';
 
 function ConsentChip({ status }: { status: string | null | undefined }) {
   const cfg =
@@ -46,7 +48,10 @@ function ConsentChip({ status }: { status: string | null | undefined }) {
     SMS_CONSENT_DISPLAY.not_asked;
   return (
     <span className="inline-flex items-center gap-1.5 rounded-[4px] border border-[var(--color-pearl)] px-2 py-1 font-mono text-[9px] uppercase tracking-[0.06em] text-[var(--color-mocha)]">
-      <span aria-hidden className={`inline-block h-2 w-2 rounded-full ${cfg.dotClass}`} />
+      <span
+        aria-hidden
+        className={`inline-block h-2 w-2 rounded-full ${cfg.dotClass}`}
+      />
       {cfg.label}
     </span>
   );
@@ -82,7 +87,9 @@ function Bubble({ message }: { message: PartySmsMessage }) {
               ? 'bg-white text-[var(--color-charcoal)]'
               : 'bg-[var(--color-clay)] text-white'
           } ${message.needs_review ? 'outline outline-[1.5px] outline-offset-[-1.5px] outline-[rgba(232,197,71,0.6)]' : ''}`}
-          style={{ border: inbound ? '1px solid var(--color-pearl)' : undefined }}
+          style={{
+            border: inbound ? '1px solid var(--color-pearl)' : undefined,
+          }}
         >
           {message.body || <span className="opacity-70">(photo)</span>}
           {message.media.length > 0 && (
@@ -99,10 +106,16 @@ function Bubble({ message }: { message: PartySmsMessage }) {
           <span>{fmtDay(message.created_at)}</span>
           {/* Template provenance on outbound — which templated message this was. */}
           {!inbound && message.template_key && (
-            <span className="opacity-80">· {message.template_key.replace(/_/g, ' ')}</span>
+            <span className="opacity-80">
+              · {message.template_key.replace(/_/g, ' ')}
+            </span>
           )}
-          {message.twilio_status === 'dry_run' && <span className="opacity-80">· dry run</span>}
-          {message.needs_review && <span className="text-[var(--color-clay)]">· needs review</span>}
+          {message.twilio_status === 'dry_run' && (
+            <span className="opacity-80">· dry run</span>
+          )}
+          {message.needs_review && (
+            <span className="text-[var(--color-clay)]">· needs review</span>
+          )}
         </div>
       </div>
     </div>
@@ -133,12 +146,15 @@ export function PartyProfileSheet({
   const [linkError, setLinkError] = useState<string | null>(null);
 
   const meta = (person?.meta ?? {}) as Record<string, unknown>;
-  const consent = (person?.status_raw ?? (meta.sms_consent_status as string) ?? 'not_asked') as string;
+  const consent = (person?.status_raw ??
+    (meta.sms_consent_status as string) ??
+    'not_asked') as string;
   const granted = consent === 'granted';
   const trade = getFieldTradeLabel(meta.trade as string | undefined);
   const company = (meta.company_name as string | undefined) ?? null;
   const projectName = (meta.project_name as string | undefined) ?? null;
-  const phone = person?.phone ?? (meta.phone_e164 as string | undefined) ?? null;
+  const phone =
+    person?.phone ?? (meta.phone_e164 as string | undefined) ?? null;
 
   const contact: Array<[string, string | null]> = useMemo(
     () => [
@@ -167,7 +183,9 @@ export function PartyProfileSheet({
         /* clipboard blocked — the URL is shown for manual copy */
       }
     } catch (e) {
-      setLinkError(e instanceof Error ? e.message : 'Could not mint a link just now.');
+      setLinkError(
+        e instanceof Error ? e.message : 'Could not mint a link just now.',
+      );
     }
   };
 
@@ -178,7 +196,9 @@ export function PartyProfileSheet({
       await revokeLink.mutateAsync({ tokenId: activeLink.id, partyId });
       setMintedUrl(null);
     } catch (e) {
-      setLinkError(e instanceof Error ? e.message : 'Could not revoke the link.');
+      setLinkError(
+        e instanceof Error ? e.message : 'Could not revoke the link.',
+      );
     }
   };
 
@@ -207,7 +227,9 @@ export function PartyProfileSheet({
           .map(([label, value]) => (
             <div key={label}>
               <dt className={META}>{label}</dt>
-              <dd className="text-[0.82rem] text-[var(--color-charcoal)]">{value}</dd>
+              <dd className="text-[0.82rem] text-[var(--color-charcoal)]">
+                {value}
+              </dd>
             </div>
           ))}
       </dl>
@@ -217,19 +239,23 @@ export function PartyProfileSheet({
         <div className="mb-1.5 flex items-baseline justify-between">
           <span className={META}>Field link</span>
           {activeLink && (
-            <button
-              type="button"
+            <DocumentAction
+              actionKey="revoke-field-link"
+              surfaceKey="people"
+              regionKey="field-link"
+              variant="tertiary"
               onClick={() => void revoke()}
-              disabled={revokeLink.isPending}
-              className="font-mono text-[9px] uppercase tracking-[0.06em] text-[var(--color-aged-oak)] hover:text-[var(--color-terracotta)] disabled:opacity-50"
+              loading={revokeLink.isPending}
+              loadingLabel="Revoking…"
+              className="text-[var(--color-terracotta)] decoration-[var(--color-terracotta)]"
             >
               Revoke
-            </button>
+            </DocumentAction>
           )}
         </div>
         <p className="mb-2 text-[0.72rem] leading-relaxed text-[var(--color-aged-oak)]">
-          A no-login link to their tasks and punch list — big-thumb Done / Problem, no account
-          needed.{' '}
+          A no-login link to their tasks and punch list — big-thumb Done /
+          Problem, no account needed.{' '}
           {activeLink
             ? `A link is live${activeLink.last_used_at ? ` · last opened ${fmtDay(activeLink.last_used_at)}` : ''}.`
             : 'No link yet.'}
@@ -237,27 +263,33 @@ export function PartyProfileSheet({
         {mintedUrl && (
           <div className="mb-2 rounded-[6px] border border-[var(--color-sage)] bg-[rgba(133,148,124,0.07)] px-3 py-2">
             <p className="mb-1 font-mono text-[8px] uppercase tracking-[0.06em] text-[#6f8268]">
-              {copied ? 'Copied to clipboard · shown once' : 'Copy now — shown once'}
+              {copied
+                ? 'Copied to clipboard · shown once'
+                : 'Copy now — shown once'}
             </p>
             <p className="break-all font-mono text-[0.68rem] text-[var(--color-charcoal)]">
               {mintedUrl}
             </p>
           </div>
         )}
-        <button
-          type="button"
+        <DocumentAction
+          actionKey="mint-field-link"
+          surfaceKey="people"
+          regionKey="field-link"
+          variant="primary"
           onClick={() => void mint()}
           disabled={createLink.isPending || !partyId}
-          className="rounded-[5px] border border-[var(--color-clay)] px-3 py-1.5 font-mono text-[9px] font-semibold uppercase tracking-[0.06em] text-[var(--color-clay)] hover:bg-[rgba(196,165,123,0.08)] disabled:opacity-50"
+          loading={createLink.isPending}
+          loadingLabel="Minting…"
         >
-          {createLink.isPending
-            ? 'Minting…'
-            : activeLink || mintedUrl
-              ? 'Regenerate field link'
-              : 'Copy field link'}
-        </button>
+          {activeLink || mintedUrl
+            ? 'Regenerate field link'
+            : 'Copy field link'}
+        </DocumentAction>
         {linkError && (
-          <p className="mt-1.5 text-[0.7rem] text-[var(--color-terracotta)]">{linkError}</p>
+          <p className="mt-1.5 text-[0.7rem] text-[var(--color-terracotta)]">
+            {linkError}
+          </p>
         )}
       </section>
 
@@ -294,21 +326,30 @@ export function PartyProfileSheet({
               aria-label="Send a text"
               className="w-full resize-none rounded-[7px] border border-[var(--color-pearl)] bg-white px-3 py-2 text-[0.82rem] text-[var(--color-charcoal)] focus:border-[var(--color-clay)] focus:outline-none"
             />
-            <div className="mt-1.5 flex items-center gap-2.5">
-              <button
-                type="button"
+            <DocumentActionRow
+              surfaceKey="people"
+              regionKey="field-text-composer"
+              className="mt-1.5"
+              aria-label="Field text actions"
+            >
+              <DocumentAction
+                actionKey="send-field-text"
+                variant="primary"
                 onClick={doSend}
                 disabled={!body.trim() || send.isPending}
-                className="rounded-[5px] bg-[var(--color-charcoal)] px-3.5 py-1.5 font-mono text-[10px] font-semibold uppercase tracking-[0.06em] text-[var(--color-off-white)] disabled:opacity-50"
+                loading={send.isPending}
+                loadingLabel="Sending…"
               >
-                {send.isPending ? 'Sending…' : 'Send text'}
-              </button>
+                Send text
+              </DocumentAction>
               {send.isError && (
                 <span className="text-[0.7rem] text-[var(--color-terracotta)]">
-                  {send.error instanceof Error ? send.error.message : 'Send failed'}
+                  {send.error instanceof Error
+                    ? send.error.message
+                    : 'Send failed'}
                 </span>
               )}
-            </div>
+            </DocumentActionRow>
           </>
         ) : (
           <p className="rounded-[7px] border border-[var(--color-pearl)] bg-white/50 px-3 py-2.5 text-[0.74rem] leading-relaxed text-[var(--color-aged-oak)]">

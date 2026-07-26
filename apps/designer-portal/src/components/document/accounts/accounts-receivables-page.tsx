@@ -24,6 +24,7 @@ import {
 } from '@patina/supabase';
 import { fmtDay, fmtUsd } from '@/lib/document/format';
 import { invoiceBalanceCents } from '@/lib/document/account-summary';
+import { DocumentAction } from '../document-action';
 import { openInvoiceFolio } from './invoice-overlays';
 
 export function AccountsReceivablesPage({
@@ -100,7 +101,8 @@ function ReceivableRow({
 
   // The Desk's act lands here pre-addressed — scroll the named row into view.
   useEffect(() => {
-    if (highlight) ref.current?.scrollIntoView({ block: 'center', behavior: 'smooth' });
+    if (highlight)
+      ref.current?.scrollIntoView({ block: 'center', behavior: 'smooth' });
   }, [highlight]);
 
   const days = invoiceDaysOverdue(invoice);
@@ -120,12 +122,19 @@ function ReceivableRow({
         projectId: invoice.project_id,
         type: 'reminder',
       });
-      await chase.mutateAsync({ invoiceId: invoice.id, projectId: invoice.project_id });
+      await chase.mutateAsync({
+        invoiceId: invoice.id,
+        projectId: invoice.project_id,
+      });
       // The Desk reads invoices under its OWN key (['document-state','desk']),
       // not ['invoices'] — so clear that too, or the overdue-invoice need lingers
       // until the 60s tick. (The Orders book's same-truck batch does the same.)
       void qc.invalidateQueries({ queryKey: ['document-state'] });
-      setNote(result.suppressed ? 'chased · email opted out' : `reminded ${result.recipient}`);
+      setNote(
+        result.suppressed
+          ? 'chased · email opted out'
+          : `reminded ${result.recipient}`,
+      );
     } catch (e) {
       setNote(e instanceof Error ? e.message : 'Could not send the reminder');
     }
@@ -146,7 +155,9 @@ function ReceivableRow({
           onClick={() => openInvoiceFolio(invoice.id)}
           className="block w-full truncate rounded-[3px] text-left text-[12.5px] font-medium text-[var(--color-charcoal)] hover:bg-[rgba(196,165,123,0.06)]"
         >
-          {invoice.invoice_number ? `Invoice ${invoice.invoice_number}` : 'Draft invoice'}
+          {invoice.invoice_number
+            ? `Invoice ${invoice.invoice_number}`
+            : 'Draft invoice'}
           <span className="ml-2 font-mono text-[10px] font-medium text-[var(--color-charcoal)]">
             {fmtUsd(balance)}
           </span>
@@ -160,7 +171,9 @@ function ReceivableRow({
             invoice.due_date ? `due ${fmtDay(invoice.due_date)}` : null,
             overdue ? `${days}d overdue` : 'within terms',
             invoice.ar_flagged_at ? 'cadence exhausted' : null,
-            invoice.reminder_count > 0 ? `${invoice.reminder_count} reminded` : null,
+            invoice.reminder_count > 0
+              ? `${invoice.reminder_count} reminded`
+              : null,
           ]
             .filter(Boolean)
             .join(' · ')}
@@ -168,7 +181,9 @@ function ReceivableRow({
         {note && (
           <p
             className="mt-0.5 font-mono text-[9px] uppercase tracking-[0.05em]"
-            style={{ color: note.startsWith('Could not') ? '#C4836F' : '#85947C' }}
+            style={{
+              color: note.startsWith('Could not') ? '#C4836F' : '#85947C',
+            }}
           >
             {note}
           </p>
@@ -177,14 +192,18 @@ function ReceivableRow({
 
       {/* R22: only an OVERDUE receivable carries the chase act. */}
       {overdue ? (
-        <button
-          type="button"
+        <DocumentAction
+          actionKey="send-invoice-reminder"
+          surfaceKey="accounts"
+          regionKey="receivable-row"
+          variant="primary"
           disabled={busy}
           onClick={() => void doChase()}
-          className="whitespace-nowrap rounded-[4px] border border-[rgba(196,165,123,0.4)] px-2.5 py-1 font-mono text-[9px] font-semibold uppercase tracking-[0.06em] text-[var(--color-clay)] transition-colors hover:bg-[var(--color-clay)] hover:text-white disabled:opacity-40 disabled:hover:bg-transparent disabled:hover:text-[var(--color-clay)]"
+          loading={busy}
+          loadingLabel="Sending…"
         >
-          {busy ? 'sending…' : chasedAt ? 'chase again →' : 'send reminder →'}
-        </button>
+          {chasedAt ? 'Chase again' : 'Send reminder'}
+        </DocumentAction>
       ) : (
         <span className="whitespace-nowrap font-mono text-[9px] uppercase tracking-[0.06em] text-[var(--color-aged-oak)]">
           in motion
@@ -194,7 +213,7 @@ function ReceivableRow({
       <button
         type="button"
         onClick={() => onOpenDocument(invoice.project_id)}
-        className="whitespace-nowrap text-[10.5px] text-[var(--color-clay)] hover:underline"
+        className="min-h-11 whitespace-nowrap rounded-[3px] text-[10.5px] text-[var(--color-clay)] underline underline-offset-4 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-clay)]"
       >
         document ↗
       </button>

@@ -112,7 +112,9 @@ function ClientProfile({
   // designer_clients relationship for no-login households — see
   // use-person-documents.ts for the two-shape contract.
   const { data: documents } = usePersonDocuments(personId, profileId);
-  const { data: proposals } = useProposals(profileId ? { clientId: profileId } : undefined);
+  const { data: proposals } = useProposals(
+    profileId ? { clientId: profileId } : undefined,
+  );
   const { data: decisions } = useClientDecisions(personId);
   const { data: allThreads } = useThreads({ scope: 'inbox' });
   const { data: touchpoints } = useNurtureTouchpoints(
@@ -156,21 +158,25 @@ function ClientProfile({
       proposals: !profileId
         ? []
         : (proposals ?? []).map((p) => {
-        // `signed_at` lives on the raw row (select('*')) but isn't on the typed
-        // Proposal shape; fall back to responded_at when the proposal is accepted.
-        const rawSigned = (p as { signed_at?: string | null }).signed_at ?? null;
-        const signedAt = rawSigned ?? (p.status === 'accepted' ? p.responded_at : null);
-        return {
-          id: p.id,
-          title: p.title,
-          status: p.status,
-          created_at: p.created_at,
-          sent_at: p.sent_at,
-          signed_at: signedAt,
-          total_cents:
-            typeof p.total_amount === 'number' ? Math.round(p.total_amount * 100) : null,
-        };
-      }),
+            // `signed_at` lives on the raw row (select('*')) but isn't on the typed
+            // Proposal shape; fall back to responded_at when the proposal is accepted.
+            const rawSigned =
+              (p as { signed_at?: string | null }).signed_at ?? null;
+            const signedAt =
+              rawSigned ?? (p.status === 'accepted' ? p.responded_at : null);
+            return {
+              id: p.id,
+              title: p.title,
+              status: p.status,
+              created_at: p.created_at,
+              sent_at: p.sent_at,
+              signed_at: signedAt,
+              total_cents:
+                typeof p.total_amount === 'number'
+                  ? Math.round(p.total_amount * 100)
+                  : null,
+            };
+          }),
       projects: (projects ?? []).map((pj: Record<string, unknown>) => ({
         id: pj['id'] as string,
         name: (pj['name'] as string) ?? 'Project',
@@ -210,8 +216,22 @@ function ClientProfile({
     };
     return deriveRelationshipJourney(inputs, now);
   }, [
-    personId, role, name, email, phone, profileId, statusRaw, lastTouchAt, meta,
-    proposals, projects, decisions, threads, touchpointList, reviewList, now,
+    personId,
+    role,
+    name,
+    email,
+    phone,
+    profileId,
+    statusRaw,
+    lastTouchAt,
+    meta,
+    proposals,
+    projects,
+    decisions,
+    threads,
+    touchpointList,
+    reviewList,
+    now,
   ]);
 
   // Side-card rows: the Projects card lists this person's document_state
@@ -237,15 +257,33 @@ function ClientProfile({
 
   const due = isNurtureDue(
     {
-      person_id: personId, role, display_name: name, email, phone, profile_id: profileId,
-      project_id: null, designer_id: null, status_raw: statusRaw, last_touch_at: lastTouchAt, meta,
+      person_id: personId,
+      role,
+      display_name: name,
+      email,
+      phone,
+      profile_id: profileId,
+      project_id: null,
+      designer_id: null,
+      status_raw: statusRaw,
+      last_touch_at: lastTouchAt,
+      meta,
     },
     now,
   );
   const dot = deriveStatusDot(
     {
-      person_id: personId, role, display_name: name, email, phone, profile_id: profileId,
-      project_id: null, designer_id: null, status_raw: statusRaw, last_touch_at: lastTouchAt, meta,
+      person_id: personId,
+      role,
+      display_name: name,
+      email,
+      phone,
+      profile_id: profileId,
+      project_id: null,
+      designer_id: null,
+      status_raw: statusRaw,
+      last_touch_at: lastTouchAt,
+      meta,
     },
     now,
   );
@@ -253,7 +291,9 @@ function ClientProfile({
 
   const onMessage = () => {
     if (!profileId) {
-      notify(`${name} has no portal login yet — invite them to start a direct thread.`);
+      notify(
+        `${name} has no portal login yet — invite them to start a direct thread.`,
+      );
       return;
     }
     const existing = threads[0];
@@ -263,7 +303,8 @@ function ClientProfile({
     }
     startDirect.mutate(profileId, {
       onSuccess: (threadId) => openThread(threadId),
-      onError: () => notify(`Couldn't open a thread with ${name} just now — try again.`),
+      onError: () =>
+        notify(`Couldn't open a thread with ${name} just now — try again.`),
     });
   };
 
@@ -279,8 +320,14 @@ function ClientProfile({
         phone={phone}
         actions={
           <>
-            <ActionButton label="Message" tone="dark" onClick={onMessage} />
             <ActionButton
+              actionKey="message-person"
+              label="Message"
+              tone="dark"
+              onClick={onMessage}
+            />
+            <ActionButton
+              actionKey="schedule-touchpoint"
               label="Schedule a touchpoint"
               onClick={() =>
                 notify(
@@ -289,9 +336,12 @@ function ClientProfile({
               }
             />
             <ActionButton
+              actionKey="preview-as-person"
               label="View as them"
               onClick={() =>
-                notify(`Opens the client mirror — what ${firstName} sees of this relationship.`)
+                notify(
+                  `Opens the client mirror — what ${firstName} sees of this relationship.`,
+                )
               }
             />
           </>
@@ -305,7 +355,10 @@ function ClientProfile({
             preferences={client?.style_preferences ?? null}
             narrative={client?.inspiration_quote ?? null}
           />
-          <RelationshipJourney events={journey} onFollow={(href) => router.push(href)} />
+          <RelationshipJourney
+            events={journey}
+            onFollow={(href) => router.push(href)}
+          />
         </div>
         <div>
           <NurtureCard text={nurtureText} due={due} onReachOut={onMessage} />
@@ -331,14 +384,24 @@ function buildClientTrust(
   const out: string[] = [];
   if (client) {
     if (client.total_projects > 0)
-      out.push(`${client.total_projects} ${client.total_projects === 1 ? 'project' : 'projects'} together`);
+      out.push(
+        `${client.total_projects} ${client.total_projects === 1 ? 'project' : 'projects'} together`,
+      );
     if (client.total_revenue > 0)
-      out.push(`$${Math.round(client.total_revenue).toLocaleString('en-US')} in lifetime work`);
-    if (typeof client.satisfaction_score === 'number' && client.satisfaction_score > 0)
+      out.push(
+        `$${Math.round(client.total_revenue).toLocaleString('en-US')} in lifetime work`,
+      );
+    if (
+      typeof client.satisfaction_score === 'number' &&
+      client.satisfaction_score > 0
+    )
       out.push(`Satisfaction ${client.satisfaction_score.toFixed(1)} / 5`);
     if (client.source === 'referral') out.push('Came by referral');
   }
-  if (reviewCount > 0) out.push(`${reviewCount} ${reviewCount === 1 ? 'review' : 'reviews'} collected`);
+  if (reviewCount > 0)
+    out.push(
+      `${reviewCount} ${reviewCount === 1 ? 'review' : 'reviews'} collected`,
+    );
   if (out.length === 0) out.push('First engagement — building trust');
   return out;
 }
@@ -351,11 +414,15 @@ function nurtureLine(
   due: boolean,
   dot: string,
 ): string {
-  if (statusRaw === 'proposal') return 'Proposal out — a nudge or a call may be overdue.';
-  if (statusRaw === 'lead') return 'New relationship — open the conversation within a day.';
+  if (statusRaw === 'proposal')
+    return 'Proposal out — a nudge or a call may be overdue.';
+  if (statusRaw === 'lead')
+    return 'New relationship — open the conversation within a day.';
   if (statusRaw === 'completed' || statusRaw === 'nurture') {
-    if (due) return `${humanizeSince(lastTouchAt, now)} since last touch — the Engine recommends reconnecting now.`;
-    if (dot === 'warm') return `Drifting a little — last touched ${humanizeSince(lastTouchAt, now)}. Worth a check-in soon.`;
+    if (due)
+      return `${humanizeSince(lastTouchAt, now)} since last touch — the Engine recommends reconnecting now.`;
+    if (dot === 'warm')
+      return `Drifting a little — last touched ${humanizeSince(lastTouchAt, now)}. Worth a check-in soon.`;
     return 'A completed relationship — keep it warm with the occasional note.';
   }
   return 'On an active project together — the relationship is live.';
@@ -397,16 +464,43 @@ function NetworkProfile({
     const projectName = (meta['project_name'] as string) ?? null;
     const inputs: JourneyInputs = {
       person: {
-        person_id: personId, role, display_name: name, email, phone, profile_id: null,
-        project_id: projectId, designer_id: null, status_raw: statusRaw, last_touch_at: lastTouchAt, meta,
+        person_id: personId,
+        role,
+        display_name: name,
+        email,
+        phone,
+        profile_id: null,
+        project_id: projectId,
+        designer_id: null,
+        status_raw: statusRaw,
+        last_touch_at: lastTouchAt,
+        meta,
       },
       projects:
         projectId && projectName
-          ? [{ id: projectId, name: projectName, status: 'active', kickoff_date: lastTouchAt }]
+          ? [
+              {
+                id: projectId,
+                name: projectName,
+                status: 'active',
+                kickoff_date: lastTouchAt,
+              },
+            ]
           : [],
     };
     return deriveRelationshipJourney(inputs, now);
-  }, [personId, role, name, email, phone, projectId, statusRaw, lastTouchAt, meta, now]);
+  }, [
+    personId,
+    role,
+    name,
+    email,
+    phone,
+    projectId,
+    statusRaw,
+    lastTouchAt,
+    meta,
+    now,
+  ]);
 
   const track = buildNetworkTrack(role, meta);
   const projectRows: ProfileProjectRow[] = projectId
@@ -432,6 +526,7 @@ function NetworkProfile({
         actions={
           <>
             <ActionButton
+              actionKey="open-person-orders"
               label="Open in Orders"
               tone="dark"
               onClick={() =>
@@ -442,6 +537,7 @@ function NetworkProfile({
             />
             {isGc && projectId && (
               <ActionButton
+                actionKey="open-coordination"
                 label="Coordination"
                 onClick={() => router.push(`/doc/${projectId}`)}
               />
@@ -481,19 +577,29 @@ function NetworkProfile({
 }
 
 /** Track-record lines for a maker / GC, from the directory meta. */
-function buildNetworkTrack(role: PartyRole, meta: Record<string, unknown>): string[] {
+function buildNetworkTrack(
+  role: PartyRole,
+  meta: Record<string, unknown>,
+): string[] {
   const out: string[] = [];
   if (role === 'maker') {
     if (meta['founding_circle']) out.push('Founding Circle maker');
     const cat = (meta['primary_category'] as string) ?? '';
     if (cat) out.push(`Primary category — ${cat.replace(/_/g, ' ')}`);
     const lead = meta['lead_times'] as Record<string, unknown> | null;
-    if (lead && typeof lead['standard'] === 'number') out.push(`${lead['standard']}-day standard lead`);
+    if (lead && typeof lead['standard'] === 'number')
+      out.push(`${lead['standard']}-day standard lead`);
     if (meta['trade_terms']) out.push('Honors trade pricing');
     const reviews = meta['review_count'];
     const rating = meta['designer_rating_avg'];
-    if (typeof reviews === 'number' && reviews > 0 && typeof rating === 'number')
-      out.push(`${rating.toFixed(1)}★ across ${reviews} ${reviews === 1 ? 'review' : 'reviews'}`);
+    if (
+      typeof reviews === 'number' &&
+      reviews > 0 &&
+      typeof rating === 'number'
+    )
+      out.push(
+        `${rating.toFixed(1)}★ across ${reviews} ${reviews === 1 ? 'review' : 'reviews'}`,
+      );
     if (meta['made_in']) out.push(`Made in ${meta['made_in']}`);
   } else if (role === 'gc') {
     const company = (meta['company_name'] as string) ?? '';
@@ -528,7 +634,9 @@ function TeamProfile({
   notify: (m: string) => void;
 }) {
   const router = useRouter();
-  const studioRole = humanizeTeamRole(statusRaw ?? (meta['role'] as string) ?? null);
+  const studioRole = humanizeTeamRole(
+    statusRaw ?? (meta['role'] as string) ?? null,
+  );
   const projectName = (meta['project_name'] as string) ?? null;
 
   return (
@@ -541,6 +649,7 @@ function TeamProfile({
         phone={phone}
         actions={
           <ActionButton
+            actionKey="adjust-person-visibility"
             label="Adjust visibility"
             onClick={() =>
               notify(
@@ -557,12 +666,15 @@ function TeamProfile({
             The colophon · margin visibility
           </div>
           <p className="text-[0.78rem] leading-relaxed text-[var(--color-charcoal)]">
-            {name.split(' ')[0]} is on your studio as <b className="font-semibold">{studioRole}</b>.
-            Studio teammates read the document with margin visibility — they see the spine, the
-            margin, and the work, but cost and margin stay yours unless you grant it.
+            {name.split(' ')[0]} is on your studio as{' '}
+            <b className="font-semibold">{studioRole}</b>. Studio teammates read
+            the document with margin visibility — they see the spine, the
+            margin, and the work, but cost and margin stay yours unless you
+            grant it.
           </p>
           <p className="mt-3 text-[0.72rem] italic leading-relaxed text-[var(--color-aged-oak)]">
-            Margin visibility is granted per document, in studio settings — never global.
+            Margin visibility is granted per document, in studio settings —
+            never global.
           </p>
         </div>
         <div>
@@ -583,7 +695,10 @@ function TeamProfile({
           )}
           <TrustCard
             title="Studio role"
-            items={[`${studioRole}`, 'Reads the document with margin visibility']}
+            items={[
+              `${studioRole}`,
+              'Reads the document with margin visibility',
+            ]}
           />
         </div>
       </div>
@@ -629,7 +744,9 @@ export function PersonProfile({
       <>
         <BackLink onBack={onBack} />
         <p className="px-1 py-6 text-[0.76rem] text-[var(--color-aged-oak)]">
-          {isLoading ? 'Reading the relationship…' : `We couldn't find this ${roleLabel(role).toLowerCase()}.`}
+          {isLoading
+            ? 'Reading the relationship…'
+            : `We couldn't find this ${roleLabel(role).toLowerCase()}.`}
         </p>
       </>
     );
@@ -650,7 +767,11 @@ export function PersonProfile({
 
   if (person.role === 'client' || person.role === 'lead') {
     return (
-      <ClientProfile {...common} profileId={person.profile_id} openThread={openThread} />
+      <ClientProfile
+        {...common}
+        profileId={person.profile_id}
+        openThread={openThread}
+      />
     );
   }
 

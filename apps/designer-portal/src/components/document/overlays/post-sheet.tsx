@@ -77,14 +77,16 @@ export function PostSheet() {
   const [markReadError, setMarkReadError] = useState<string | null>(null);
 
   useInboxNotificationsRealtime();
-  const { data: notifications = [], isLoading: loadingInbox } = useInboxNotifications({
-    limit: 50,
-  });
+  const { data: notifications = [], isLoading: loadingInbox } =
+    useInboxNotifications({
+      limit: 50,
+    });
   // No realtime leg for procurement (00151 hook is poll-only, staleTime 60 s).
   const { data: procurement = [], isLoading: loadingProcurement } =
     useProcurementNotifications({ limit: 50 });
   const markProcurementRead = useMarkProcurementNotificationRead();
-  const { data: messages = [], isLoading: loadingLetters } = useInboxMessages(50);
+  const { data: messages = [], isLoading: loadingLetters } =
+    useInboxMessages(50);
   const loadingRecord = loadingInbox || loadingProcurement;
 
   // help-desk Wave 1 — the Post owns its own open state (unlike the drawer's
@@ -135,7 +137,8 @@ export function PostSheet() {
       }
     }
     return Array.from(byThread.values()).sort(
-      (a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime(),
+      (a, b) =>
+        new Date(b.created_at).getTime() - new Date(a.created_at).getTime(),
     );
   }, [messages]);
 
@@ -154,7 +157,9 @@ export function PostSheet() {
       qc.invalidateQueries({ queryKey: ['inbox'] });
     } catch (err) {
       setMarkReadError(
-        err instanceof Error ? err.message : 'Could not mark as read. Try again.',
+        err instanceof Error
+          ? err.message
+          : 'Could not mark as read. Try again.',
       );
     }
   }
@@ -172,7 +177,9 @@ export function PostSheet() {
       );
     } catch (err) {
       setMarkReadError(
-        err instanceof Error ? err.message : 'Could not mark as read. Try again.',
+        err instanceof Error
+          ? err.message
+          : 'Could not mark as read. Try again.',
       );
     }
   }
@@ -221,7 +228,7 @@ export function PostSheet() {
             <button
               type="button"
               onClick={markAllRead}
-              className="font-mono text-[9.5px] uppercase tracking-[0.08em] text-[var(--color-aged-oak)] transition-colors hover:text-[var(--color-clay)]"
+              className="min-h-11 rounded-[3px] font-mono text-[9.5px] uppercase tracking-[0.08em] text-[var(--color-aged-oak)] transition-colors hover:text-[var(--color-clay)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-clay)]"
             >
               Mark all read
             </button>
@@ -239,7 +246,7 @@ export function PostSheet() {
                 setPage(p.key);
               }}
               aria-current={page === p.key ? 'page' : undefined}
-              className={`font-mono text-[9.5px] uppercase tracking-[0.08em] transition-colors ${
+              className={`min-h-11 rounded-[3px] font-mono text-[9.5px] uppercase tracking-[0.08em] transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-clay)] ${
                 page === p.key
                   ? 'text-[var(--color-clay)]'
                   : 'text-[var(--color-aged-oak)] hover:text-[var(--color-charcoal)]'
@@ -261,9 +268,17 @@ export function PostSheet() {
         )}
 
         {page === 'record' ? (
-          <RecordList items={record} loading={loadingRecord} onOpen={openRecordRow} />
+          <RecordList
+            items={record}
+            loading={loadingRecord}
+            onOpen={openRecordRow}
+          />
         ) : (
-          <LetterList letters={letters} loading={loadingLetters} onOpen={openLetter} />
+          <LetterList
+            letters={letters}
+            loading={loadingLetters}
+            onOpen={openLetter}
+          />
         )}
       </div>
     </DocSheet>
@@ -346,7 +361,9 @@ function RecordRow({ item, onOpen }: { item: RecordItem; onOpen: () => void }) {
                 <>
                   <span aria-hidden>·</span>
                   {/* A quiet reference, not an act — the Desk already holds it. */}
-                  <span className="text-[var(--color-clay)]">on your Desk ↗</span>
+                  <span className="text-[var(--color-clay)]">
+                    on your Desk ↗
+                  </span>
                 </>
               )}
             </div>
@@ -386,8 +403,15 @@ function LetterList({
   );
 }
 
-function LetterRow({ message, onOpen }: { message: InboxMessage; onOpen: () => void }) {
-  const sender = message.sender?.full_name ?? (message.system ? 'System' : 'Unknown');
+function LetterRow({
+  message,
+  onOpen,
+}: {
+  message: InboxMessage;
+  onOpen: () => void;
+}) {
+  const sender =
+    message.sender?.full_name ?? (message.system ? 'System' : 'Unknown');
   const title = letterTitle(message);
   return (
     <li>
@@ -420,7 +444,9 @@ function LetterRow({ message, onOpen }: { message: InboxMessage; onOpen: () => v
               </span>
             </div>
             <p className="mt-1 line-clamp-2 text-[12px] text-[var(--color-mocha)]">
-              {message.deleted_at ? '(message withdrawn)' : message.body || '(no content)'}
+              {message.deleted_at
+                ? '(message withdrawn)'
+                : message.body || '(no content)'}
             </p>
             <div className="mt-1 font-mono text-[9px] uppercase tracking-[0.06em] text-[var(--color-aged-oak)]">
               {title}
@@ -436,7 +462,9 @@ function QuietLine({ text, hint }: { text: string; hint?: string }) {
   return (
     <div className="flex flex-col items-center gap-1.5 py-14 text-center">
       <p className="text-[13px] text-[var(--color-mocha)]">{text}</p>
-      {hint ? <p className="text-[12px] text-[var(--color-aged-oak)]">{hint}</p> : null}
+      {hint ? (
+        <p className="text-[12px] text-[var(--color-aged-oak)]">{hint}</p>
+      ) : null}
     </div>
   );
 }

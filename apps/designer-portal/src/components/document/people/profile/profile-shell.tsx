@@ -9,28 +9,27 @@
 
 import type { PartyRole } from '@patina/supabase';
 import { Avatar, RoleBadge } from '../person-bits';
+import { DocumentAction, DocumentActionGroup } from '../../document-action';
 
 export function ActionButton({
+  actionKey,
   label,
   onClick,
   tone = 'plain',
 }: {
+  actionKey: string;
   label: string;
   onClick: () => void;
   tone?: 'plain' | 'dark';
 }) {
-  const cls =
-    tone === 'dark'
-      ? 'border-[var(--color-charcoal)] bg-[var(--color-charcoal)] text-white hover:bg-[var(--color-mocha)]'
-      : 'border-[var(--color-pearl)] bg-white text-[var(--color-charcoal)] hover:border-[var(--color-clay)]';
   return (
-    <button
-      type="button"
+    <DocumentAction
+      actionKey={actionKey}
+      variant={tone === 'dark' ? 'primary' : 'secondary'}
       onClick={onClick}
-      className={`rounded-[6px] border px-[0.9rem] py-[0.55rem] font-mono text-[0.5rem] font-semibold uppercase tracking-[0.06em] transition-colors ${cls}`}
     >
       {label}
-    </button>
+    </DocumentAction>
   );
 }
 
@@ -59,10 +58,19 @@ export function ProfileHead({
         <div className="mt-1.5 flex flex-wrap items-center gap-2.5">
           <RoleBadge role={role} />
           {contact && (
-            <span className="text-[0.72rem] text-[var(--color-aged-oak)]">{contact}</span>
+            <span className="text-[0.72rem] text-[var(--color-aged-oak)]">
+              {contact}
+            </span>
           )}
         </div>
-        <div className="mt-3 flex flex-wrap items-center gap-2">{actions}</div>
+        <DocumentActionGroup
+          surfaceKey="people"
+          regionKey="profile-actions"
+          className="mt-3"
+          aria-label={`${role} profile actions`}
+        >
+          {actions}
+        </DocumentActionGroup>
       </div>
     </div>
   );
@@ -73,7 +81,7 @@ export function BackLink({ onBack }: { onBack: () => void }) {
     <button
       type="button"
       onClick={onBack}
-      className="mb-4 inline-block font-mono text-[0.52rem] uppercase tracking-[0.08em] text-[var(--color-aged-oak)] hover:text-[var(--color-mocha)]"
+      className="mb-4 inline-flex min-h-11 min-w-11 items-center font-mono text-[0.52rem] uppercase tracking-[0.08em] text-[var(--color-aged-oak)] hover:text-[var(--color-mocha)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-clay)]"
     >
       ← Directory
     </button>

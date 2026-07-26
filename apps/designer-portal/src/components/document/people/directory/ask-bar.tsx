@@ -27,7 +27,9 @@ export function routePeopleAsk(raw: string): AskRoute | null {
   const q = raw.trim();
   if (!q) return null;
   const lower = q.toLowerCase();
-  if (/(reconnect|quiet|touch|drift|nurture|dormant|out of touch)/.test(lower)) {
+  if (
+    /(reconnect|quiet|touch|drift|nurture|dormant|out of touch)/.test(lower)
+  ) {
     return { kind: 'nurture' };
   }
   if (/(maker|vendor|supplier|fabricator|workshop)/.test(lower)) {
@@ -73,7 +75,7 @@ export function AskBar({
             type="button"
             onClick={onAsk}
             aria-label="Ask"
-            className="flex h-[24px] w-[24px] shrink-0 items-center justify-center rounded-full bg-[var(--color-clay)] text-[0.72rem] text-white transition-opacity hover:opacity-85"
+            className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-[var(--color-clay)] text-[0.72rem] text-white transition-opacity hover:opacity-85 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-charcoal)]"
           >
             →
           </button>

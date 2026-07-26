@@ -31,6 +31,11 @@ import {
 } from '@/components/portal/procurement/order-assistant';
 import { Stamp } from './stamp';
 import { MItem } from './m-item';
+import {
+  DocumentAction,
+  DocumentActionGroup,
+  DocumentActionRow,
+} from './document-action';
 import { fmtDay, fmtUsd } from '@/lib/document/format';
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -43,7 +48,10 @@ const MONO_LABEL =
 const ROW_LINK = 'text-[10.5px] text-[var(--color-clay)] hover:underline';
 // The vendor message accent — dusty-blue (the message margin kind); MItem
 // repaints it clay for the studio's own voice.
-const MSG_ACCENT = { border: 'var(--color-dusty-blue)', label: 'var(--color-dusty-blue)' };
+const MSG_ACCENT = {
+  border: 'var(--color-dusty-blue)',
+  label: 'var(--color-dusty-blue)',
+};
 
 type VendorPage = 'terms' | 'thread' | 'orders';
 
@@ -57,7 +65,9 @@ const PO_STAMP: Record<string, { color: string; ink?: string }> = {
 };
 
 const termsLabel = (vendor: AnyRecord): string =>
-  vendor.default_payment_terms ? vendor.default_payment_terms.replace(/_/g, ' ') : 'terms n/a';
+  vendor.default_payment_terms
+    ? vendor.default_payment_terms.replace(/_/g, ' ')
+    : 'terms n/a';
 
 // ─── PRC-24 (R84): "Order all —" — the multi-line Order Assistant ──────────
 
@@ -101,7 +111,8 @@ function VendorOrderAll({ vendor }: { vendor: AnyRecord }) {
   // NOTE: a live queue keeps the mount alive even as the created POs drain
   // the orderable list (invalidateFfeCaches refetches mid-walk) — otherwise
   // the assistant's created step would vanish under the designer.
-  if (vendor.is_patina_catalog || (orderable.length === 0 && !active)) return null;
+  if (vendor.is_patina_catalog || (orderable.length === 0 && !active))
+    return null;
 
   const orderAll = () => {
     const assistantVendor: OrderAssistantVendor = {
@@ -145,16 +156,23 @@ function VendorOrderAll({ vendor }: { vendor: AnyRecord }) {
   return (
     <>
       {orderable.length > 0 && (
-        <div className="mb-2 flex items-baseline justify-between gap-3">
-          <button
-            type="button"
+        <DocumentActionGroup
+          surfaceKey="orders"
+          regionKey="vendor-order-all"
+          className="mb-2 justify-between"
+          aria-label="Vendor ordering actions"
+        >
+          <DocumentAction
+            actionKey="order-all-vendor-items"
+            variant="primary"
             onClick={orderAll}
-            className="font-mono text-[9px] uppercase tracking-[0.08em] text-[var(--color-clay)] hover:opacity-80"
+            trailing="→"
           >
-            Order all — {orderable.length} item{orderable.length === 1 ? '' : 's'} →
-          </button>
+            Order all — {orderable.length} item
+            {orderable.length === 1 ? '' : 's'}
+          </DocumentAction>
           <span className={MONO_LABEL}>approved · unordered</span>
-        </div>
+        </DocumentActionGroup>
       )}
       {/* D4 inside the book: the shared assistant carries shadow-xl in the
           old zones — strip it here without touching it (the R3/line-unfold
@@ -228,7 +246,7 @@ function VendorThread({
       <button
         type="button"
         onClick={() => onOpenDocument(thread.project_id)}
-        className="font-mono text-[8.5px] uppercase tracking-[0.1em] text-[var(--color-clay)] hover:opacity-80"
+        className="inline-flex min-h-11 min-w-11 items-center font-mono text-[8.5px] uppercase tracking-[0.1em] text-[var(--color-clay)] hover:opacity-80 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-clay)]"
       >
         re: {projectName} →
       </button>
@@ -239,8 +257,13 @@ function VendorThread({
       {deepLink && <div className="mb-1.5">{deepLink}</div>}
       <ul className="mb-2 space-y-1.5">
         {messages.map((m) => {
-          const own = !m.system && m.sender_id != null && m.sender_id === user?.id;
-          const sender = m.system ? 'The book' : own ? 'You' : (m.sender?.full_name ?? 'Message');
+          const own =
+            !m.system && m.sender_id != null && m.sender_id === user?.id;
+          const sender = m.system
+            ? 'The book'
+            : own
+              ? 'You'
+              : (m.sender?.full_name ?? 'Message');
           return (
             <MItem
               key={m.id}
@@ -253,10 +276,17 @@ function VendorThread({
           );
         })}
         {messages.length === 0 && (
-          <li className="text-[11px] italic text-[var(--color-aged-oak)]">Opening the thread…</li>
+          <li className="text-[11px] italic text-[var(--color-aged-oak)]">
+            Opening the thread…
+          </li>
         )}
       </ul>
-      <div className="flex items-end gap-2">
+      <DocumentActionRow
+        surfaceKey="orders"
+        regionKey="vendor-thread-reply"
+        className="items-end"
+        aria-label="Vendor reply actions"
+      >
         <textarea
           rows={2}
           placeholder="Reply…"
@@ -265,9 +295,12 @@ function VendorThread({
           value={body}
           onChange={(e) => setBody(e.target.value)}
         />
-        <button
-          type="button"
+        <DocumentAction
+          actionKey="send-vendor-reply"
+          variant="primary"
           disabled={!body.trim() || send.isPending}
+          loading={send.isPending}
+          loadingLabel="Sending…"
           onClick={() =>
             send.mutate(
               { threadId: thread.id, body: body.trim() },
@@ -280,11 +313,10 @@ function VendorThread({
               },
             )
           }
-          className="whitespace-nowrap font-mono text-[9px] uppercase tracking-[0.07em] text-[var(--color-clay)] hover:opacity-80 disabled:opacity-40"
         >
           Send
-        </button>
-      </div>
+        </DocumentAction>
+      </DocumentActionRow>
     </div>
   );
 }
@@ -318,7 +350,12 @@ function BriefComposer({
       <p className={MONO_LABEL}>
         + Brief vendor{briefProjectName ? ` · about ${briefProjectName}` : ''}
       </p>
-      <div className="mt-1 flex items-end gap-2">
+      <DocumentActionRow
+        surfaceKey="orders"
+        regionKey="vendor-brief"
+        className="mt-1 items-end"
+        aria-label="Vendor brief actions"
+      >
         <textarea
           rows={2}
           placeholder={`Brief ${vendor.name}…`}
@@ -327,9 +364,12 @@ function BriefComposer({
           value={body}
           onChange={(e) => setBody(e.target.value)}
         />
-        <button
-          type="button"
+        <DocumentAction
+          actionKey="open-vendor-brief"
+          variant="primary"
           disabled={!body.trim() || startBrief.isPending}
+          loading={startBrief.isPending}
+          loadingLabel="Opening…"
           onClick={() => {
             setError(null);
             startBrief.mutate(
@@ -344,16 +384,21 @@ function BriefComposer({
                   onOpened();
                 },
                 onError: (e: unknown) =>
-                  setError(e instanceof Error ? e.message : 'Could not open the brief'),
+                  setError(
+                    e instanceof Error ? e.message : 'Could not open the brief',
+                  ),
               },
             );
           }}
-          className="whitespace-nowrap font-mono text-[9px] uppercase tracking-[0.07em] text-[var(--color-clay)] hover:opacity-80 disabled:opacity-40"
         >
           Open brief
-        </button>
-      </div>
-      {error && <p className="mt-1 text-[10px] text-[var(--color-terracotta)]">{error}</p>}
+        </DocumentAction>
+      </DocumentActionRow>
+      {error && (
+        <p className="mt-1 text-[10px] text-[var(--color-terracotta)]">
+          {error}
+        </p>
+      )}
     </div>
   );
 }
@@ -378,7 +423,8 @@ function VendorBookbar({
   return (
     <div className="mb-3 flex flex-wrap items-baseline gap-x-4 gap-y-1 border-b border-[var(--color-pearl)] pb-2">
       <span className="font-heading text-[15px] font-medium text-[var(--color-charcoal)]">
-        {vendor.name} <em className="not-italic text-[var(--color-clay)]">· vendor</em>
+        {vendor.name}{' '}
+        <em className="not-italic text-[var(--color-clay)]">· vendor</em>
       </span>
       <span className="ml-auto flex flex-wrap items-baseline gap-x-3">
         {pages.map((p) => (
@@ -387,7 +433,7 @@ function VendorBookbar({
             type="button"
             onClick={() => onPage(p.key)}
             aria-current={page === p.key ? 'page' : undefined}
-            className={`font-mono text-[9px] uppercase tracking-[0.1em] transition-colors ${
+            className={`inline-flex min-h-11 min-w-11 items-center font-mono text-[9px] uppercase tracking-[0.1em] transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-clay)] ${
               page === p.key
                 ? 'text-[var(--color-clay)]'
                 : 'text-[var(--color-aged-oak)] hover:text-[var(--color-charcoal)]'
@@ -423,20 +469,28 @@ export function VendorsBookPage({
   const openPos = useMemo(
     () =>
       (orders ?? []).filter(
-        (o) => o.vendor_id === selectedId && o.status !== 'cancelled' && o.status !== 'delivered',
+        (o) =>
+          o.vendor_id === selectedId &&
+          o.status !== 'cancelled' &&
+          o.status !== 'delivered',
       ),
     [orders, selectedId],
   );
 
-  const { data: threads } = useVendorThreads(vendor?.contact_profile_id ?? null);
+  const { data: threads } = useVendorThreads(
+    vendor?.contact_profile_id ?? null,
+  );
   const [activeThreadId, setActiveThreadId] = useState<string | null>(null);
   const thread =
-    (threads ?? []).find((t) => t.id === activeThreadId) ?? (threads ?? [])[0] ?? null;
+    (threads ?? []).find((t) => t.id === activeThreadId) ??
+    (threads ?? [])[0] ??
+    null;
 
   const briefProjectName =
     briefProjectId != null
-      ? ((orders ?? []).find((o) => (o.project_id ?? o.project?.id) === briefProjectId)?.project
-          ?.name ?? null)
+      ? ((orders ?? []).find(
+          (o) => (o.project_id ?? o.project?.id) === briefProjectId,
+        )?.project?.name ?? null)
       : null;
 
   if (!vendor) {
@@ -451,17 +505,24 @@ export function VendorsBookPage({
               <button
                 type="button"
                 onClick={() => setSelectedId(v.id)}
-                className="text-left text-[13px] font-medium text-[var(--color-charcoal)] hover:text-[var(--color-clay)]"
+                className="min-h-11 min-w-11 text-left text-[13px] font-medium text-[var(--color-charcoal)] hover:text-[var(--color-clay)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-clay)]"
               >
                 {v.name}
               </button>
               <p className="font-mono text-[9px] uppercase tracking-[0.05em] text-[var(--color-aged-oak)]">
-                {[v.default_payment_terms?.replace(/_/g, ' '), v.trade_account_email]
+                {[
+                  v.default_payment_terms?.replace(/_/g, ' '),
+                  v.trade_account_email,
+                ]
                   .filter(Boolean)
                   .join(' · ') || 'No terms on file'}
               </p>
             </div>
-            <button type="button" onClick={() => setSelectedId(v.id)} className={ROW_LINK}>
+            <button
+              type="button"
+              onClick={() => setSelectedId(v.id)}
+              className={`${ROW_LINK} min-h-11 min-w-11 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-clay)]`}
+            >
               open page →
             </button>
           </li>
@@ -475,18 +536,26 @@ export function VendorsBookPage({
       <button
         type="button"
         onClick={() => setSelectedId(null)}
-        className="mb-2 font-mono text-[9px] uppercase tracking-[0.07em] text-[var(--color-aged-oak)] hover:text-[var(--color-clay)]"
+        className="mb-2 inline-flex min-h-11 min-w-11 items-center font-mono text-[9px] uppercase tracking-[0.07em] text-[var(--color-aged-oak)] hover:text-[var(--color-clay)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-clay)]"
       >
         ← all vendors
       </button>
 
-      <VendorBookbar vendor={vendor} page={page} openCount={openPos.length} onPage={setPage} />
+      <VendorBookbar
+        vendor={vendor}
+        page={page}
+        openCount={openPos.length}
+        onPage={setPage}
+      />
 
       {/* ── Terms page: the trade account + the brief opener ── */}
       {page === 'terms' && (
         <div>
           <p className="font-mono text-[10px] uppercase tracking-[0.06em] text-[var(--color-mocha)]">
-            {[vendor.default_payment_terms?.replace(/_/g, ' '), vendor.trade_account_email]
+            {[
+              vendor.default_payment_terms?.replace(/_/g, ' '),
+              vendor.trade_account_email,
+            ]
               .filter(Boolean)
               .join(' · ') || 'No terms on file'}
           </p>
@@ -495,60 +564,77 @@ export function VendorsBookPage({
               href={vendor.trade_portal_url}
               target="_blank"
               rel="noreferrer"
-              className="mt-1 inline-block text-[10.5px] text-[var(--color-clay)] hover:underline"
+              className="mt-1 inline-flex min-h-11 min-w-11 items-center text-[10.5px] text-[var(--color-clay)] hover:underline focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-clay)]"
             >
               trade portal →
             </a>
           )}
           {/* R78/R60 cross-link contract: trade lives here; the RELATIONSHIP lives in People. */}
-          <a href={`/people?person=${vendor.id}&role=maker`} className="mt-1 block text-[10.5px] text-[var(--color-clay)] hover:underline">their profile · in People →</a>
+          <a
+            href={`/people?person=${vendor.id}&role=maker`}
+            className="mt-1 inline-flex min-h-11 min-w-11 items-center text-[10.5px] text-[var(--color-clay)] hover:underline focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-clay)]"
+          >
+            their profile · in People →
+          </a>
         </div>
       )}
 
       {/* ── Orders page: open POs, PO-anchored, deep-link into documents ── */}
       {page === 'orders' && (
         <>
-        {/* PRC-24: the whole approved-unordered queue, one act. Keyed so a
+          {/* PRC-24: the whole approved-unordered queue, one act. Keyed so a
             vendor switch never carries another vendor's queue along. */}
-        <VendorOrderAll key={vendor.id} vendor={vendor} />
-        <ul>
-          {openPos.map((po) => {
-            const stamp = PO_STAMP[po.status] ?? PO_STAMP.draft;
-            return (
-              <li
-                key={po.id}
-                className="grid grid-cols-[1fr_auto_auto_auto] items-center gap-3 border-b border-[var(--color-pearl)] px-1 py-2"
-              >
-                <div>
-                  <p className="text-[12px] font-medium text-[var(--color-charcoal)]">
-                    {po.po_number ?? po.vendor_po_number ?? po.sidemark ?? 'PO drafted'}
-                  </p>
-                  <p className="font-mono text-[8.5px] uppercase tracking-[0.05em] text-[var(--color-aged-oak)]">
-                    {[po.project?.name ?? 'Project', po.total_cents != null ? fmtUsd(po.total_cents) : '—']
-                      .filter(Boolean)
-                      .join(' · ')}
-                  </p>
-                </div>
-                <Stamp label={po.status.replace(/_/g, ' ')} color={stamp.color} ink={stamp.ink} />
-                <span className="whitespace-nowrap font-mono text-[9.5px] text-[var(--color-mocha)]">
-                  {po.confirmed_eta ? `~${fmtDay(po.confirmed_eta)}` : '—'}
-                </span>
-                <button
-                  type="button"
-                  onClick={() => onOpenDocument(po.project_id ?? po.project?.id ?? null)}
-                  className={ROW_LINK}
+          <VendorOrderAll key={vendor.id} vendor={vendor} />
+          <ul>
+            {openPos.map((po) => {
+              const stamp = PO_STAMP[po.status] ?? PO_STAMP.draft;
+              return (
+                <li
+                  key={po.id}
+                  className="grid grid-cols-[1fr_auto_auto_auto] items-center gap-3 border-b border-[var(--color-pearl)] px-1 py-2"
                 >
-                  open document →
-                </button>
+                  <div>
+                    <p className="text-[12px] font-medium text-[var(--color-charcoal)]">
+                      {po.po_number ??
+                        po.vendor_po_number ??
+                        po.sidemark ??
+                        'PO drafted'}
+                    </p>
+                    <p className="font-mono text-[8.5px] uppercase tracking-[0.05em] text-[var(--color-aged-oak)]">
+                      {[
+                        po.project?.name ?? 'Project',
+                        po.total_cents != null ? fmtUsd(po.total_cents) : '—',
+                      ]
+                        .filter(Boolean)
+                        .join(' · ')}
+                    </p>
+                  </div>
+                  <Stamp
+                    label={po.status.replace(/_/g, ' ')}
+                    color={stamp.color}
+                    ink={stamp.ink}
+                  />
+                  <span className="whitespace-nowrap font-mono text-[9.5px] text-[var(--color-mocha)]">
+                    {po.confirmed_eta ? `~${fmtDay(po.confirmed_eta)}` : '—'}
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() =>
+                      onOpenDocument(po.project_id ?? po.project?.id ?? null)
+                    }
+                    className={`${ROW_LINK} min-h-11 min-w-11 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-clay)]`}
+                  >
+                    open document →
+                  </button>
+                </li>
+              );
+            })}
+            {openPos.length === 0 && (
+              <li className="py-1.5 text-[11px] italic text-[var(--color-aged-oak)]">
+                Nothing open with {vendor.name}.
               </li>
-            );
-          })}
-          {openPos.length === 0 && (
-            <li className="py-1.5 text-[11px] italic text-[var(--color-aged-oak)]">
-              Nothing open with {vendor.name}.
-            </li>
-          )}
-        </ul>
+            )}
+          </ul>
         </>
       )}
 
@@ -557,7 +643,8 @@ export function VendorsBookPage({
         <>
           {!vendor.contact_profile_id ? (
             <p className="text-[11px] italic text-[var(--color-aged-oak)]">
-              No comms profile on file for {vendor.name} — link one to open a thread.
+              No comms profile on file for {vendor.name} — link one to open a
+              thread.
             </p>
           ) : (threads ?? []).length > 0 && thread ? (
             <>
@@ -568,11 +655,11 @@ export function VendorsBookPage({
                       key={t.id}
                       type="button"
                       onClick={() => setActiveThreadId(t.id)}
-                      className={
+                      className={`inline-flex min-h-11 min-w-11 items-center focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-clay)] ${
                         t.id === thread.id
                           ? 'text-[var(--color-clay)]'
                           : 'text-[var(--color-aged-oak)] hover:text-[var(--color-clay)]'
-                      }
+                      }`}
                     >
                       {i > 0 ? ' · ' : ''}
                       {t.project?.name ?? 'General'}
@@ -591,7 +678,9 @@ export function VendorsBookPage({
             vendor={vendor}
             briefProjectId={briefProjectId}
             briefProjectName={briefProjectName}
-            onOpened={() => void qc.invalidateQueries({ queryKey: ['vendor-threads'] })}
+            onOpened={() =>
+              void qc.invalidateQueries({ queryKey: ['vendor-threads'] })
+            }
           />
         </>
       )}

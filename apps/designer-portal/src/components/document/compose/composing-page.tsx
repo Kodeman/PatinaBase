@@ -22,7 +22,10 @@ import { useStyleArchetypes } from '@patina/supabase';
 import { RoomShell } from '../rooms/room-shell';
 import { StrataMark } from '../strata-mark';
 import { ComposeSection, ComposeField } from './compose-section';
-import { useComposePiece, type ComposeDraftInput } from '@/hooks/use-compose-piece';
+import {
+  useComposePiece,
+  type ComposeDraftInput,
+} from '@/hooks/use-compose-piece';
 import {
   composeFill,
   composePct,
@@ -30,6 +33,8 @@ import {
   composeGaps,
   type ComposeSections,
 } from '@/lib/document/compose-progress';
+import { DocumentAction, DocumentActionGroup } from '../document-action';
+import { useMobilePrimaryAction } from '../mobile/mobile-shell';
 
 interface StyleArchetype {
   id: string;
@@ -69,12 +74,29 @@ export function ComposingPage() {
   const sections = useMemo<ComposeSections>(
     () => ({
       identity: !!(name.trim() && maker.trim()),
-      piece: !!(width.trim() && depth.trim() && height.trim() && materials.trim()),
+      piece: !!(
+        width.trim() &&
+        depth.trim() &&
+        height.trim() &&
+        materials.trim()
+      ),
       commerce: !!(trade.trim() && retail.trim() && lead.trim()),
       folio: images.length >= 1,
       eye: styleSel.size >= 1,
     }),
-    [name, maker, width, depth, height, materials, trade, retail, lead, images, styleSel],
+    [
+      name,
+      maker,
+      width,
+      depth,
+      height,
+      materials,
+      trade,
+      retail,
+      lead,
+      images,
+      styleSel,
+    ],
   );
 
   const fill = composeFill(sections);
@@ -127,7 +149,9 @@ export function ComposingPage() {
         .map((m) => m.trim())
         .filter(Boolean),
       dimensions:
-        width || depth || height ? { width: width.trim(), depth: depth.trim(), height: height.trim() } : null,
+        width || depth || height
+          ? { width: width.trim(), depth: depth.trim(), height: height.trim() }
+          : null,
       priceRetailDollars: num(retail),
       priceTradeDollars: num(trade),
       leadTimeWeeks: num(lead),
@@ -148,6 +172,15 @@ export function ComposingPage() {
     }
   };
 
+  useMobilePrimaryAction({
+    actionKey: 'save-piece-draft',
+    surfaceKey: 'compose',
+    regionKey: 'room-head',
+    label: 'Save draft',
+    target: { kind: 'press', onPress: () => void doSave() },
+    loading: save.isPending,
+  });
+
   const tone = STATE_TONE[state];
 
   return (
@@ -156,14 +189,21 @@ export function ComposingPage() {
       backTo="/library"
       backLabel="the Library"
       action={
-        <button
-          type="button"
-          onClick={() => void doSave()}
-          disabled={save.isPending}
-          className="rounded-[5px] border border-[var(--color-pearl)] bg-white px-3 py-2 font-mono text-[9px] font-semibold uppercase tracking-[0.08em] text-[var(--color-charcoal)] transition-colors hover:border-[var(--color-clay)] disabled:opacity-50"
+        <DocumentActionGroup
+          surfaceKey="compose"
+          regionKey="room-head"
+          aria-label="Compose actions"
         >
-          {save.isPending ? 'Saving…' : savedId ? 'Save draft ✓' : 'Save draft'}
-        </button>
+          <DocumentAction
+            actionKey="save-piece-draft"
+            variant="primary"
+            loading={save.isPending}
+            loadingLabel="Saving…"
+            onClick={() => void doSave()}
+          >
+            {savedId ? 'Save draft ✓' : 'Save draft'}
+          </DocumentAction>
+        </DocumentActionGroup>
       }
     >
       <div className="mx-auto max-w-[760px] px-6 sm:px-8">
@@ -172,7 +212,11 @@ export function ComposingPage() {
           <div className="flex items-center gap-5">
             <span className="flex h-[84px] w-[84px] shrink-0 items-center justify-center overflow-hidden rounded-[8px] bg-[var(--doc-sheet-2)]">
               {images[0] ? (
-                <img src={images[0]} alt="" className="h-full w-full object-cover" />
+                <img
+                  src={images[0]}
+                  alt=""
+                  className="h-full w-full object-cover"
+                />
               ) : (
                 <span className="font-mono text-[0.46rem] uppercase tracking-[0.08em] text-[var(--color-aged-oak)] opacity-60">
                   no image
@@ -198,11 +242,18 @@ export function ComposingPage() {
               <div className="mt-2 flex items-center gap-3">
                 <StrataMark size="lg" fill={fill} />
                 <span className="font-mono text-[0.6rem] tracking-[0.04em] text-[var(--color-aged-oak)]">
-                  <b className="font-heading text-[0.95rem] text-[var(--color-charcoal)]">{pct}</b>% composed
+                  <b className="font-heading text-[0.95rem] text-[var(--color-charcoal)]">
+                    {pct}
+                  </b>
+                  % composed
                 </span>
                 <span
                   className="rounded-[3px] border px-2 py-0.5 font-mono text-[0.5rem] uppercase tracking-[0.1em]"
-                  style={{ color: tone.color, borderColor: tone.color, background: tone.bg }}
+                  style={{
+                    color: tone.color,
+                    borderColor: tone.color,
+                    background: tone.bg,
+                  }}
                 >
                   {state}
                 </span>
@@ -216,79 +267,187 @@ export function ComposingPage() {
         </section>
 
         {/* ── Movement 1 · the record ── */}
-        <Movement name="The record" meta="Line 1 · what it is" hue="var(--color-mocha)">
+        <Movement
+          name="The record"
+          meta="Line 1 · what it is"
+          hue="var(--color-mocha)"
+        >
           <ComposeSection
             name="Identity"
-            status={sections.identity ? 'identity set' : name.trim() ? 'needs a maker' : 'not yet written'}
+            status={
+              sections.identity
+                ? 'identity set'
+                : name.trim()
+                  ? 'needs a maker'
+                  : 'not yet written'
+            }
             done={sections.identity}
             open={open.has('identity')}
             onToggle={() => toggle('identity')}
           >
-            <ComposeField label="Name" value={name} onChange={setName} placeholder="e.g. Heirloom Oak Dining Table" />
+            <ComposeField
+              label="Name"
+              value={name}
+              onChange={setName}
+              placeholder="e.g. Heirloom Oak Dining Table"
+            />
             <div className="flex gap-3">
               <div className="flex-1">
-                <ComposeField label="Maker" value={maker} onChange={setMaker} placeholder="Nordic Atelier" />
+                <ComposeField
+                  label="Maker"
+                  value={maker}
+                  onChange={setMaker}
+                  placeholder="Nordic Atelier"
+                />
               </div>
               <div className="flex-1">
-                <ComposeField label="Source URL" value={sourceUrl} onChange={setSourceUrl} placeholder="paste, or from a capture" />
+                <ComposeField
+                  label="Source URL"
+                  value={sourceUrl}
+                  onChange={setSourceUrl}
+                  placeholder="paste, or from a capture"
+                />
               </div>
             </div>
             <p className="mt-3 border-t border-[var(--doc-ink-border)] pt-2.5 text-[0.7rem] italic text-[var(--color-aged-oak)]">
-              Often this arrives pre-filled — a <b className="not-italic font-semibold text-[var(--color-mocha)]">capture</b> from the extension lands here already named.
+              Often this arrives pre-filled — a{' '}
+              <b className="not-italic font-semibold text-[var(--color-mocha)]">
+                capture
+              </b>{' '}
+              from the extension lands here already named.
             </p>
           </ComposeSection>
 
           <ComposeSection
             name="The piece"
-            status={sections.piece ? `${width}×${depth}×${height}` : width || depth || height || materials ? 'partly written' : 'not yet written'}
+            status={
+              sections.piece
+                ? `${width}×${depth}×${height}`
+                : width || depth || height || materials
+                  ? 'partly written'
+                  : 'not yet written'
+            }
             done={sections.piece}
             open={open.has('piece')}
             onToggle={() => toggle('piece')}
           >
             <div className="flex gap-3">
-              <div className="flex-1"><ComposeField label="Width" value={width} onChange={setWidth} placeholder={'72"'} /></div>
-              <div className="flex-1"><ComposeField label="Depth" value={depth} onChange={setDepth} placeholder={'38"'} /></div>
-              <div className="flex-1"><ComposeField label="Height" value={height} onChange={setHeight} placeholder={'30"'} /></div>
+              <div className="flex-1">
+                <ComposeField
+                  label="Width"
+                  value={width}
+                  onChange={setWidth}
+                  placeholder={'72"'}
+                />
+              </div>
+              <div className="flex-1">
+                <ComposeField
+                  label="Depth"
+                  value={depth}
+                  onChange={setDepth}
+                  placeholder={'38"'}
+                />
+              </div>
+              <div className="flex-1">
+                <ComposeField
+                  label="Height"
+                  value={height}
+                  onChange={setHeight}
+                  placeholder={'30"'}
+                />
+              </div>
             </div>
-            <ComposeField label="Materials" value={materials} onChange={setMaterials} placeholder="solid white oak, hand-rubbed oil" />
+            <ComposeField
+              label="Materials"
+              value={materials}
+              onChange={setMaterials}
+              placeholder="solid white oak, hand-rubbed oil"
+            />
           </ComposeSection>
         </Movement>
 
         {/* ── Movement 2 · the catalog ── */}
-        <Movement name="The catalog" meta="Line 2 · into the marketplace" hue="var(--color-clay)">
+        <Movement
+          name="The catalog"
+          meta="Line 2 · into the marketplace"
+          hue="var(--color-clay)"
+        >
           <ComposeSection
             name="Commerce"
-            status={sections.commerce ? `$${trade} trade` : trade || retail || lead ? 'partly written' : 'not yet written'}
+            status={
+              sections.commerce
+                ? `$${trade} trade`
+                : trade || retail || lead
+                  ? 'partly written'
+                  : 'not yet written'
+            }
             done={sections.commerce}
             open={open.has('commerce')}
             onToggle={() => toggle('commerce')}
           >
             <div className="flex gap-3">
-              <div className="flex-1"><ComposeField label="Trade price ($)" value={trade} onChange={setTrade} placeholder="3360" /></div>
-              <div className="flex-1"><ComposeField label="Retail ($)" value={retail} onChange={setRetail} placeholder="4200" /></div>
+              <div className="flex-1">
+                <ComposeField
+                  label="Trade price ($)"
+                  value={trade}
+                  onChange={setTrade}
+                  placeholder="3360"
+                />
+              </div>
+              <div className="flex-1">
+                <ComposeField
+                  label="Retail ($)"
+                  value={retail}
+                  onChange={setRetail}
+                  placeholder="4200"
+                />
+              </div>
             </div>
-            <ComposeField label="Lead time (weeks)" value={lead} onChange={setLead} placeholder="11" />
+            <ComposeField
+              label="Lead time (weeks)"
+              value={lead}
+              onChange={setLead}
+              placeholder="11"
+            />
             <p className="mt-3 border-t border-[var(--doc-ink-border)] pt-2.5 text-[0.7rem] italic text-[var(--color-aged-oak)]">
-              On the maker&apos;s side, <b className="not-italic font-semibold text-[var(--color-mocha)]">this section is theirs</b> — the manufacturer fills price and lead time in their portal; the designer adds the eye. One page, two authors.
+              On the maker&apos;s side,{' '}
+              <b className="not-italic font-semibold text-[var(--color-mocha)]">
+                this section is theirs
+              </b>{' '}
+              — the manufacturer fills price and lead time in their portal; the
+              designer adds the eye. One page, two authors.
             </p>
           </ComposeSection>
 
           <ComposeSection
             name="The folio"
-            status={images.length ? `${images.length} image${images.length > 1 ? 's' : ''}` : 'no images yet'}
+            status={
+              images.length
+                ? `${images.length} image${images.length > 1 ? 's' : ''}`
+                : 'no images yet'
+            }
             done={sections.folio}
             open={open.has('folio')}
             onToggle={() => toggle('folio')}
           >
             <div className="mt-2 flex flex-wrap gap-2">
               {images.map((src, i) => (
-                <span key={`${src}-${i}`} className="relative h-[72px] w-[72px] overflow-hidden rounded-[6px] border border-[var(--doc-ink-border)] bg-[var(--doc-sheet-2)]">
-                  <img src={src} alt="" className="h-full w-full object-cover" />
+                <span
+                  key={`${src}-${i}`}
+                  className="relative h-[72px] w-[72px] overflow-hidden rounded-[6px] border border-[var(--doc-ink-border)] bg-[var(--doc-sheet-2)]"
+                >
+                  <img
+                    src={src}
+                    alt=""
+                    className="h-full w-full object-cover"
+                  />
                   <button
                     type="button"
                     aria-label="Remove image"
-                    onClick={() => setImages((prev) => prev.filter((_, j) => j !== i))}
-                    className="absolute right-0 top-0 bg-[rgba(44,41,38,0.6)] px-1 font-mono text-[9px] text-white"
+                    onClick={() =>
+                      setImages((prev) => prev.filter((_, j) => j !== i))
+                    }
+                    className="absolute right-0 top-0 inline-flex min-h-11 min-w-11 items-center justify-center bg-[rgba(44,41,38,0.6)] px-1 font-mono text-[9px] text-white focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-[var(--color-clay)]"
                   >
                     ✕
                   </button>
@@ -299,29 +458,45 @@ export function ComposingPage() {
               <input
                 value={imageDraft}
                 onChange={(e) => setImageDraft(e.target.value)}
-                onKeyDown={(e) => e.key === 'Enter' && (e.preventDefault(), addImage())}
+                onKeyDown={(e) =>
+                  e.key === 'Enter' && (e.preventDefault(), addImage())
+                }
                 placeholder="paste an image URL (or a cut sheet)"
                 className="flex-1 rounded-[6px] border border-[var(--color-pearl)] bg-[var(--doc-paper)] px-3 py-2 text-[0.8rem] text-[var(--color-charcoal)] focus:border-[var(--color-clay)] focus:bg-white focus:outline-none"
               />
-              <button
-                type="button"
+              <DocumentAction
+                actionKey="add-folio-image-url"
+                surfaceKey="compose"
+                regionKey="folio"
+                variant="secondary"
                 onClick={addImage}
-                className="rounded-[6px] border border-[var(--color-clay)] px-3 py-2 font-mono text-[9px] font-semibold uppercase tracking-[0.06em] text-[var(--color-clay)] hover:bg-[var(--color-clay)] hover:text-white"
+                disabled={!imageDraft.trim()}
               >
                 + add
-              </button>
+              </DocumentAction>
             </div>
             <p className="mt-2 text-[0.66rem] italic text-[var(--color-aged-oak)]">
-              Images and cut sheets clip here — the same folio that lives on a document section.
+              Images and cut sheets clip here — the same folio that lives on a
+              document section.
             </p>
           </ComposeSection>
         </Movement>
 
         {/* ── Movement 3 · the eye (the teaching) ── */}
-        <Movement name="The eye" meta="Line 3 · the teaching" hue="var(--color-dusty-blue)">
+        <Movement
+          name="The eye"
+          meta="Line 3 · the teaching"
+          hue="var(--color-dusty-blue)"
+        >
           <ComposeSection
             name="Style & character"
-            status={sections.eye ? `taught · ${styleSel.size} trait${styleSel.size > 1 ? 's' : ''}` : styleSel.size ? 'teaching…' : 'untaught'}
+            status={
+              sections.eye
+                ? `taught · ${styleSel.size} trait${styleSel.size > 1 ? 's' : ''}`
+                : styleSel.size
+                  ? 'teaching…'
+                  : 'untaught'
+            }
             done={sections.eye}
             open={open.has('eye')}
             onToggle={() => toggle('eye')}
@@ -331,7 +506,9 @@ export function ComposingPage() {
             </span>
             <div className="flex flex-wrap gap-1.5">
               {styles.length === 0 && (
-                <span className="text-[0.72rem] italic text-[var(--color-aged-oak)]">Loading the style vocabulary…</span>
+                <span className="text-[0.72rem] italic text-[var(--color-aged-oak)]">
+                  Loading the style vocabulary…
+                </span>
               )}
               {styles.map((s) => {
                 const on = styleSel.has(s.id);
@@ -340,7 +517,7 @@ export function ComposingPage() {
                     key={s.id}
                     type="button"
                     onClick={() => toggleStyle(s.id)}
-                    className={`rounded-[16px] border px-2.5 py-1 text-[0.68rem] transition-colors ${
+                    className={`min-h-11 min-w-11 rounded-[16px] border px-2.5 py-1 text-[0.68rem] transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-clay)] ${
                       on
                         ? 'border-[var(--color-clay)] bg-[var(--color-clay)] text-white'
                         : 'border-[var(--color-pearl)] bg-[var(--doc-paper)] text-[var(--color-mocha)] hover:border-[var(--color-clay)]'
@@ -352,14 +529,20 @@ export function ComposingPage() {
               })}
             </div>
             <p className="mt-3 border-t border-[var(--doc-ink-border)] pt-2.5 text-[0.7rem] italic text-[var(--color-aged-oak)]">
-              <b className="not-italic font-semibold text-[var(--color-mocha)]">This is the teaching.</b> The same act you do inline on a card with Quick Tags — here, one section of the larger composition. Add it now, or leave the piece at draft and teach it later from the shelf.
+              <b className="not-italic font-semibold text-[var(--color-mocha)]">
+                This is the teaching.
+              </b>{' '}
+              The same act you do inline on a card with Quick Tags — here, one
+              section of the larger composition. Add it now, or leave the piece
+              at draft and teach it later from the shelf.
             </p>
           </ComposeSection>
         </Movement>
 
         <p className="mx-auto mt-8 max-w-[620px] border-t border-[var(--doc-ink-border)] py-5 text-center text-[0.72rem] italic text-[var(--color-aged-oak)]">
-          No Next. No Back. No Step 3 of 7. The page fills in any order, shows its own gaps, and is a real,
-          usable draft at every percent. The Strata Mark is the only progress indicator there is.
+          No Next. No Back. No Step 3 of 7. The page fills in any order, shows
+          its own gaps, and is a real, usable draft at every percent. The Strata
+          Mark is the only progress indicator there is.
         </p>
       </div>
 
@@ -390,9 +573,17 @@ function Movement({
   return (
     <section className="pb-1 pt-8">
       <div className="mb-1 flex items-baseline gap-3">
-        <span aria-hidden className="h-[4px] w-[34px] shrink-0 self-center rounded-[2px]" style={{ background: hue }} />
-        <h2 className="font-heading text-[1.2rem] font-medium italic text-[var(--color-charcoal)]">{name}</h2>
-        <span className="ml-auto font-mono text-[0.5rem] uppercase tracking-[0.06em] text-[var(--color-aged-oak)]">{meta}</span>
+        <span
+          aria-hidden
+          className="h-[4px] w-[34px] shrink-0 self-center rounded-[2px]"
+          style={{ background: hue }}
+        />
+        <h2 className="font-heading text-[1.2rem] font-medium italic text-[var(--color-charcoal)]">
+          {name}
+        </h2>
+        <span className="ml-auto font-mono text-[0.5rem] uppercase tracking-[0.06em] text-[var(--color-aged-oak)]">
+          {meta}
+        </span>
       </div>
       <div className="mb-4 h-px bg-[var(--doc-ink-border)]" />
       {children}

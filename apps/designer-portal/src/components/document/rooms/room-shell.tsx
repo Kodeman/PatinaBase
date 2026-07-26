@@ -123,7 +123,7 @@ export function RoomShell({
         <button
           type="button"
           onClick={leave}
-          className="inline-flex items-center gap-1.5 rounded-[4px] border border-transparent px-2 py-1 font-mono text-[10px] uppercase tracking-[0.1em] text-[var(--color-aged-oak)] transition-colors hover:border-[var(--doc-ink-border)] hover:text-[var(--color-mocha)]"
+          className="inline-flex min-h-11 min-w-11 items-center gap-1.5 rounded-[4px] border border-transparent px-2 py-1 font-mono text-[10px] uppercase tracking-[0.1em] text-[var(--color-aged-oak)] transition-colors hover:border-[var(--doc-ink-border)] hover:text-[var(--color-mocha)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-clay)]"
         >
           <span aria-hidden>←</span> {backLabel ?? originLabel(origin)}
         </button>

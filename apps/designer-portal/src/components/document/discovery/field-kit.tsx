@@ -8,6 +8,7 @@
  */
 
 import React from 'react';
+import { DocumentAction } from '../document-action';
 
 const inputCls =
   'w-full rounded-[4px] border border-[var(--color-pearl)] bg-white px-2.5 py-1.5 text-[12.5px] text-[var(--color-charcoal)] outline-none transition-colors focus:border-[var(--color-clay)]';
@@ -15,7 +16,13 @@ const inputCls =
 const labelCls =
   'mb-1 block font-mono text-[8.5px] uppercase tracking-[0.07em] text-[var(--text-muted)]';
 
-export function Field({ label, children }: { label: string; children: React.ReactNode }) {
+export function Field({
+  label,
+  children,
+}: {
+  label: string;
+  children: React.ReactNode;
+}) {
   return (
     <label className="block">
       <span className={labelCls}>{label}</span>
@@ -57,13 +64,19 @@ export function NumberInput({
 }) {
   return (
     <span className="flex items-center gap-1">
-      {prefix && <span className="font-mono text-[11px] text-[var(--text-muted)]">{prefix}</span>}
+      {prefix && (
+        <span className="font-mono text-[11px] text-[var(--text-muted)]">
+          {prefix}
+        </span>
+      )}
       <input
         type="number"
         className={inputCls}
         value={value ?? ''}
         placeholder={placeholder}
-        onChange={(e) => onChange(e.target.value === '' ? null : Number(e.target.value))}
+        onChange={(e) =>
+          onChange(e.target.value === '' ? null : Number(e.target.value))
+        }
       />
     </span>
   );
@@ -125,22 +138,31 @@ export function RemoveButton({ onClick }: { onClick: () => void }) {
       type="button"
       aria-label="Remove"
       onClick={onClick}
-      className="shrink-0 rounded-[3px] border border-[var(--color-pearl)] px-1.5 py-0.5 font-mono text-[11px] leading-none text-[var(--text-muted)] transition-colors hover:border-[var(--color-clay)] hover:text-[var(--color-charcoal)]"
+      className="inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-[3px] border border-[var(--color-pearl)] font-mono text-[11px] leading-none text-[var(--text-muted)] transition-colors hover:border-[var(--color-clay)] hover:text-[var(--color-charcoal)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-clay)]"
     >
       ✕
     </button>
   );
 }
 
-export function AddRowButton({ label, onClick }: { label: string; onClick: () => void }) {
+export function AddRowButton({
+  label,
+  onClick,
+}: {
+  label: string;
+  onClick: () => void;
+}) {
   return (
-    <button
-      type="button"
+    <DocumentAction
+      actionKey="add-discovery-row"
+      surfaceKey="discovery"
+      regionKey="structured-editor"
+      variant="secondary"
       onClick={onClick}
-      className="mt-1.5 rounded-[4px] border border-dashed border-[var(--color-pearl)] px-2.5 py-1.5 font-mono text-[10.5px] text-[var(--text-muted)] transition-colors hover:border-[var(--color-clay)] hover:text-[var(--color-charcoal)]"
+      className="mt-1.5"
     >
-      ＋ {label}
-    </button>
+      {label}
+    </DocumentAction>
   );
 }
 
@@ -163,7 +185,7 @@ export function ChipMultiSelect({
             key={o.value}
             type="button"
             onClick={() => onToggle(o.value)}
-            className={`rounded-[3px] border px-2.5 py-1 text-[11.5px] transition-colors ${
+            className={`min-h-11 rounded-[3px] border px-2.5 py-1 text-[11.5px] transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-clay)] ${
               on
                 ? 'border-[var(--color-clay)] bg-[rgba(196,165,123,0.12)] text-[var(--color-mocha)]'
                 : 'border-[var(--color-pearl)] bg-[var(--doc-paper)] text-[var(--color-charcoal)] hover:border-[var(--color-clay)]'
@@ -206,7 +228,7 @@ export function KeywordChips({
               type="button"
               aria-label={`Remove ${v}`}
               onClick={() => onChange(values.filter((x) => x !== v))}
-              className="leading-none text-[var(--color-aged-oak)]"
+              className="inline-flex h-11 w-11 items-center justify-center rounded-[3px] leading-none text-[var(--color-aged-oak)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-clay)]"
             >
               ✕
             </button>
@@ -259,7 +281,11 @@ export function RowListEditor({
   const listRef = React.useRef<HTMLDivElement>(null);
   const focusRow = React.useRef<number | null>(null);
 
-  const setCell = (i: number, key: string, val: string | number | boolean | null) => {
+  const setCell = (
+    i: number,
+    key: string,
+    val: string | number | boolean | null,
+  ) => {
     const next = rows.map((r, idx) => (idx === i ? { ...r, [key]: val } : r));
     onChange(next);
   };
@@ -274,7 +300,10 @@ export function RowListEditor({
   // who field), falling back to whatever control the row leads with.
   React.useEffect(() => {
     if (focusRow.current == null) return;
-    const row = listRef.current?.querySelectorAll<HTMLElement>('[data-row]')[focusRow.current];
+    const row =
+      listRef.current?.querySelectorAll<HTMLElement>('[data-row]')[
+        focusRow.current
+      ];
     focusRow.current = null;
     const target =
       row?.querySelector<HTMLElement>('input[type="text"]') ??
@@ -285,7 +314,11 @@ export function RowListEditor({
   return (
     <div ref={listRef}>
       {rows.map((row, i) => (
-        <div key={i} data-row className="mb-1.5 flex flex-wrap items-center gap-1.5">
+        <div
+          key={i}
+          data-row
+          className="mb-1.5 flex flex-wrap items-center gap-1.5"
+        >
           {columns.map((c) => {
             const v = row[c.key];
             if (c.type === 'checkbox') {
@@ -305,7 +338,10 @@ export function RowListEditor({
             }
             if (c.type === 'select') {
               return (
-                <span key={c.key} className={c.className ?? 'min-w-[110px] flex-1'}>
+                <span
+                  key={c.key}
+                  className={c.className ?? 'min-w-[110px] flex-1'}
+                >
                   <Select
                     value={(v as string) ?? null}
                     onChange={(val) => setCell(i, c.key, val)}
@@ -327,7 +363,10 @@ export function RowListEditor({
               );
             }
             return (
-              <span key={c.key} className={c.className ?? 'min-w-[120px] flex-1'}>
+              <span
+                key={c.key}
+                className={c.className ?? 'min-w-[120px] flex-1'}
+              >
                 <TextInput
                   value={(v as string) ?? ''}
                   onChange={(val) => setCell(i, c.key, val)}

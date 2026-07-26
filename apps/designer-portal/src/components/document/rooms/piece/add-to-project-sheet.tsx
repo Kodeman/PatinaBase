@@ -9,8 +9,12 @@
 
 import { useState } from 'react';
 import { useProjects } from '@patina/supabase';
+import { DocumentAction } from '../../document-action';
 import { RoomSheet } from '../room-sheet';
-import { usePlaceInDocument, type PlaceablePiece } from '@/hooks/use-place-in-document';
+import {
+  usePlaceInDocument,
+  type PlaceablePiece,
+} from '@/hooks/use-place-in-document';
 import { productEvents } from '@/lib/analytics/events';
 
 export function AddToProjectSheet({
@@ -29,8 +33,17 @@ export function AddToProjectSheet({
   const [busy, setBusy] = useState<string | null>(null);
   const [err, setErr] = useState<string | null>(null);
 
-  const targets = ((projects ?? []) as Array<{ id: string; name: string | null; status: string | null }>).filter(
-    (p) => p.status !== 'completed' && p.status !== 'archived' && p.status !== 'cancelled',
+  const targets = (
+    (projects ?? []) as Array<{
+      id: string;
+      name: string | null;
+      status: string | null;
+    }>
+  ).filter(
+    (p) =>
+      p.status !== 'completed' &&
+      p.status !== 'archived' &&
+      p.status !== 'cancelled',
   );
 
   const add = async (projectId: string, projectName: string) => {
@@ -49,34 +62,50 @@ export function AddToProjectSheet({
   };
 
   return (
-    <RoomSheet open={open} onClose={onClose} title={`Add “${piece.name}” to a project`}>
+    <RoomSheet
+      open={open}
+      onClose={onClose}
+      title={`Add “${piece.name}” to a project`}
+    >
       <p className="mb-4 text-[0.8rem] text-[var(--color-aged-oak)]">
-        The piece lands in the project’s schedule as a TBD line — refine the room, quantity, and price there.
+        The piece lands in the project’s schedule as a TBD line — refine the
+        room, quantity, and price there.
       </p>
       {isLoading ? (
-        <p className="text-[0.8rem] italic text-[var(--color-aged-oak)]">Reading your projects…</p>
+        <p className="text-[0.8rem] italic text-[var(--color-aged-oak)]">
+          Reading your projects…
+        </p>
       ) : targets.length === 0 ? (
-        <p className="text-[0.8rem] italic text-[var(--color-aged-oak)]">No open projects to add to yet.</p>
+        <p className="text-[0.8rem] italic text-[var(--color-aged-oak)]">
+          No open projects to add to yet.
+        </p>
       ) : (
         <ul className="flex flex-col gap-1.5">
-          {targets.map((p) => (
+          {targets.map((p, index) => (
             <li key={p.id}>
-              <button
-                type="button"
+              <DocumentAction
+                actionKey="add-piece-to-project"
+                surfaceKey="piece"
+                regionKey={`project-target-${index}`}
+                variant="primary"
                 onClick={() => void add(p.id, p.name ?? 'the project')}
                 disabled={busy !== null}
-                className="flex w-full items-center justify-between rounded-[7px] border border-[var(--color-pearl)] bg-white px-4 py-3 text-left transition-colors hover:border-[var(--color-clay)] disabled:opacity-50"
+                loading={busy === p.id}
+                loadingLabel={`Adding to ${p.name ?? 'project'}…`}
+                className="w-full justify-between text-left normal-case tracking-normal"
+                trailing={busy === p.id ? undefined : 'add →'}
               >
-                <span className="text-[0.86rem] text-[var(--color-charcoal)]">{p.name ?? 'Untitled project'}</span>
-                <span className="font-mono text-[9px] uppercase tracking-[0.08em] text-[var(--color-clay)]">
-                  {busy === p.id ? 'adding…' : 'add →'}
-                </span>
-              </button>
+                {p.name ?? 'Untitled project'}
+              </DocumentAction>
             </li>
           ))}
         </ul>
       )}
-      {err && <p className="mt-3 text-[0.74rem] text-[var(--color-terracotta)]">{err}</p>}
+      {err && (
+        <p className="mt-3 text-[0.74rem] text-[var(--color-terracotta)]">
+          {err}
+        </p>
+      )}
     </RoomSheet>
   );
 }

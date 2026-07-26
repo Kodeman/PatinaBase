@@ -11,6 +11,7 @@
 import { useState } from 'react';
 import { useCaptureProduct } from '@patina/supabase';
 import { useAuth } from '@/hooks/use-auth';
+import { DocumentAction, DocumentActionGroup } from '../../document-action';
 import { RoomSheet } from '../room-sheet';
 
 export function CaptureSheet({
@@ -73,7 +74,8 @@ export function CaptureSheet({
         Bring something in
       </h2>
       <p className="mb-5 mt-1 text-[0.74rem] text-[var(--color-aged-oak)]">
-        Captures land on your shelf raw — no taxonomy, no queue. You teach them when you’re ready.
+        Captures land on your shelf raw — no taxonomy, no queue. You teach them
+        when you’re ready.
       </p>
 
       <label className="mb-1 block font-mono text-[9px] uppercase tracking-[0.08em] text-[var(--color-aged-oak)]">
@@ -102,25 +104,34 @@ export function CaptureSheet({
         The Chrome extension and photo capture land on this same shelf.
       </p>
 
-      {error && <p className="mt-3 text-[0.72rem] text-[var(--color-terracotta)]">{error}</p>}
+      {error && (
+        <p className="mt-3 text-[0.72rem] text-[var(--color-terracotta)]">
+          {error}
+        </p>
+      )}
 
-      <div className="mt-5 flex items-center gap-2.5 border-t border-[var(--color-pearl)] pt-4">
-        <button
-          type="button"
-          disabled={capture.isPending}
+      <DocumentActionGroup
+        surfaceKey="library"
+        regionKey="capture-sheet"
+        className="mt-5 border-t border-[var(--color-pearl)] pt-4"
+      >
+        <DocumentAction
+          actionKey="capture-piece"
+          variant="primary"
+          loading={capture.isPending}
+          loadingLabel="Capturing…"
           onClick={() => void submit()}
-          className="rounded-[5px] bg-[var(--color-charcoal)] px-4 py-2 font-mono text-[10px] font-semibold uppercase tracking-[0.06em] text-[var(--color-off-white)] disabled:opacity-50"
         >
-          {capture.isPending ? 'Capturing…' : 'Capture to My Library'}
-        </button>
-        <button
-          type="button"
+          Capture to My Library
+        </DocumentAction>
+        <DocumentAction
+          actionKey="cancel-capture"
+          variant="tertiary"
           onClick={onClose}
-          className="rounded-[5px] border border-[var(--color-pearl)] px-4 py-2 font-mono text-[10px] font-semibold uppercase tracking-[0.06em] text-[var(--color-charcoal)]"
         >
           Cancel
-        </button>
-      </div>
+        </DocumentAction>
+      </DocumentActionGroup>
     </RoomSheet>
   );
 }

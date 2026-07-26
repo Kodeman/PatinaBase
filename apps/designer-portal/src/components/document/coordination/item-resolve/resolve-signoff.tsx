@@ -38,7 +38,9 @@ export function ResolveSignoff({
 
   // A sign-off may carry an Approve / Request-changes option pair (like a gate);
   // record the approving option when present, else record a plain approval note.
-  const approvingOption = (item.options ?? []).find((o) => o.is_recommended || o.name?.toLowerCase().includes('approve'));
+  const approvingOption = (item.options ?? []).find(
+    (o) => o.is_recommended || o.name?.toLowerCase().includes('approve'),
+  );
   const who = clientName ?? 'the client';
   const busy = resolve.isPending || nudge.isPending;
 
@@ -46,10 +48,15 @@ export function ResolveSignoff({
     resolve.mutate(
       approvingOption
         ? { itemId: item.id, selectedOptionId: approvingOption.id }
-        : { itemId: item.id, answer: `Signed off by ${who} — the phase can advance.` },
+        : {
+            itemId: item.id,
+            answer: `Signed off by ${who} — the phase can advance.`,
+          },
       {
         onSuccess: () => {
-          setConfirm('Signed off — the phase advances. The Strata Mark and the margin re-read.');
+          setConfirm(
+            'Signed off — the phase advances. The Strata Mark and the margin re-read.',
+          );
           window.setTimeout(onResolved, 900);
         },
       },
@@ -61,7 +68,9 @@ export function ResolveSignoff({
       { itemId: item.id },
       {
         onSuccess: () => {
-          setConfirm(`Nudge sent to ${who}. Logged on the item — nothing ages in the dark.`);
+          setConfirm(
+            `Nudge sent to ${who}. Logged on the item — nothing ages in the dark.`,
+          );
           window.setTimeout(onResolved, 900);
         },
       },
@@ -71,13 +80,24 @@ export function ResolveSignoff({
   return (
     <ResolveShell>
       <ResolveQuestion>
-        The sign-off gate — {who} approves in their mirror. Record it when they do.
+        The sign-off gate — {who} approves in their mirror. Record it when they
+        do.
       </ResolveQuestion>
       <ButtonRow>
-        <ResolveButton tone="gold" onClick={recordApproval} disabled={busy}>
+        <ResolveButton
+          actionKey="record-signoff-approval"
+          tone="gold"
+          onClick={recordApproval}
+          disabled={busy}
+        >
           {resolve.isPending ? 'Recording…' : 'Record their approval →'}
         </ResolveButton>
-        <ResolveButton tone="plain" onClick={sendNudge} disabled={busy}>
+        <ResolveButton
+          actionKey="nudge-signoff"
+          tone="plain"
+          onClick={sendNudge}
+          disabled={busy}
+        >
           {nudge.isPending ? 'Nudging…' : 'Nudge them'}
         </ResolveButton>
       </ButtonRow>

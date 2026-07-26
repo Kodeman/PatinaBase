@@ -54,7 +54,9 @@ export function ResolveWaiting({
   const tok = partyFor(item.court, {
     party:
       item.court_party ??
-      (item.court_party_id ? parties.find((p) => p.id === item.court_party_id) ?? null : null),
+      (item.court_party_id
+        ? (parties.find((p) => p.id === item.court_party_id) ?? null)
+        : null),
     clientName,
   });
   const busy = nudge.isPending || extend.isPending || reassign.isPending;
@@ -66,7 +68,9 @@ export function ResolveWaiting({
       { itemId: item.id },
       {
         onSuccess: () => {
-          setConfirm(`Nudge sent to ${tok.label}. Logged on the item — nothing ages in the dark.`);
+          setConfirm(
+            `Nudge sent to ${tok.label}. Logged on the item — nothing ages in the dark.`,
+          );
           close();
         },
       },
@@ -88,7 +92,9 @@ export function ResolveWaiting({
       { itemId: item.id, court, courtPartyId: partyId },
       {
         onSuccess: () => {
-          setConfirm('Reassigned — the ball moves to another court. Accountability follows the ball.');
+          setConfirm(
+            'Reassigned — the ball moves to another court. Accountability follows the ball.',
+          );
           close();
         },
       },
@@ -102,7 +108,11 @@ export function ResolveWaiting({
     label: courtToken(c).label,
   }));
   const partyTargets = parties.map((p) => ({
-    court: (p.party_kind === 'vendor' ? 'vendor' : p.party_kind === 'gc' ? 'gc' : 'client') as Court,
+    court: (p.party_kind === 'vendor'
+      ? 'vendor'
+      : p.party_kind === 'gc'
+        ? 'gc'
+        : 'client') as Court,
     partyId: p.id,
     label: p.display_name || p.company_name || 'Party',
   }));
@@ -111,15 +121,32 @@ export function ResolveWaiting({
     <ResolveShell>
       {mode === 'idle' && (
         <>
-          <ResolveQuestion>Waiting on {tok.label}. Keep it moving:</ResolveQuestion>
+          <ResolveQuestion>
+            Waiting on {tok.label}. Keep it moving:
+          </ResolveQuestion>
           <ButtonRow>
-            <ResolveButton tone="gold" onClick={sendNudge} disabled={busy}>
+            <ResolveButton
+              actionKey="nudge-waiting-item"
+              tone="gold"
+              onClick={sendNudge}
+              disabled={busy}
+            >
               {nudge.isPending ? 'Nudging…' : 'Send a nudge'}
             </ResolveButton>
-            <ResolveButton tone="plain" onClick={() => setMode('extend')} disabled={busy}>
+            <ResolveButton
+              actionKey="open-waiting-date-extension"
+              tone="plain"
+              onClick={() => setMode('extend')}
+              disabled={busy}
+            >
               Extend the date
             </ResolveButton>
-            <ResolveButton tone="plain" onClick={() => setMode('reassign')} disabled={busy}>
+            <ResolveButton
+              actionKey="open-waiting-court-change"
+              tone="plain"
+              onClick={() => setMode('reassign')}
+              disabled={busy}
+            >
               Change whose court
             </ResolveButton>
           </ButtonRow>
@@ -138,10 +165,21 @@ export function ResolveWaiting({
             />
           </Field>
           <ButtonRow>
-            <ResolveButton tone="gold" onClick={sendExtend} disabled={busy}>
+            <ResolveButton
+              actionKey="extend-waiting-date"
+              tone="gold"
+              onClick={sendExtend}
+              disabled={busy}
+            >
               {extend.isPending ? 'Saving…' : 'Extend →'}
             </ResolveButton>
-            <ResolveButton tone="plain" onClick={() => setMode('idle')} disabled={busy}>
+            <ResolveButton
+              actionKey="cancel-waiting-date-extension"
+              tone="plain"
+              variant="tertiary"
+              onClick={() => setMode('idle')}
+              disabled={busy}
+            >
               Cancel
             </ResolveButton>
           </ButtonRow>
@@ -155,6 +193,7 @@ export function ResolveWaiting({
             {[...courtTargets, ...partyTargets].map((t) => (
               <ResolveButton
                 key={`${t.court}:${t.partyId ?? 'court'}`}
+                actionKey="reassign-waiting-item"
                 tone="plain"
                 onClick={() => doReassign(t.court, t.partyId)}
                 disabled={busy}
@@ -162,7 +201,13 @@ export function ResolveWaiting({
                 {t.label}
               </ResolveButton>
             ))}
-            <ResolveButton tone="plain" onClick={() => setMode('idle')} disabled={busy}>
+            <ResolveButton
+              actionKey="cancel-waiting-court-change"
+              tone="plain"
+              variant="tertiary"
+              onClick={() => setMode('idle')}
+              disabled={busy}
+            >
               Cancel
             </ResolveButton>
           </ButtonRow>

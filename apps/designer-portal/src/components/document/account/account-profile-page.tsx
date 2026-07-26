@@ -16,6 +16,7 @@ import {
   useUpdatePassword,
 } from '@patina/supabase';
 import { useAuth } from '@/hooks/use-auth';
+import { DocumentAction, DocumentActionGroup } from '../document-action';
 import { StrataMark } from '../strata-mark';
 import { monogramOf } from '@/lib/document/account-identity';
 
@@ -24,8 +25,6 @@ const FIELD =
 const LABEL =
   'mb-1 block font-mono text-[9px] font-semibold uppercase tracking-[0.1em] text-[var(--color-aged-oak)]';
 const HELP = 'mt-1 text-[11px] leading-relaxed text-[var(--color-aged-oak)]';
-const PRIMARY =
-  'rounded-[5px] border border-[var(--color-clay)] bg-[var(--color-clay)] px-3.5 py-1.5 text-[12px] font-medium text-[var(--color-charcoal)] transition-colors hover:bg-[var(--color-aged-oak)] hover:border-[var(--color-aged-oak)] disabled:opacity-50';
 
 export function AccountProfilePage() {
   const { user } = useAuth();
@@ -42,7 +41,9 @@ export function AccountProfilePage() {
 
   useEffect(() => {
     if (profile) {
-      setDisplayName(profile.display_name || profile.full_name || user?.name || '');
+      setDisplayName(
+        profile.display_name || profile.full_name || user?.name || '',
+      );
       setBio(profile.bio || '');
     }
   }, [profile, user?.name]);
@@ -76,20 +77,28 @@ export function AccountProfilePage() {
         <span className="relative inline-flex h-14 w-14 shrink-0 items-center justify-center overflow-hidden rounded-full bg-[var(--color-pearl)] font-mono text-[15px] uppercase tracking-wider text-[var(--color-mocha)]">
           {avatarUrl ? (
             // eslint-disable-next-line @next/next/no-img-element
-            <img src={avatarUrl} alt="" className="h-full w-full object-cover" />
+            <img
+              src={avatarUrl}
+              alt=""
+              className="h-full w-full object-cover"
+            />
           ) : (
             monogramOf(displayName, user?.email ?? '')
           )}
         </span>
         <div>
-          <button
-            type="button"
+          <DocumentAction
+            actionKey="change-profile-photo"
+            surfaceKey="account"
+            regionKey="profile-photo"
+            variant="secondary"
             onClick={() => fileRef.current?.click()}
             disabled={uploadAvatar.isPending}
-            className="font-mono text-[10px] uppercase tracking-[0.1em] text-[var(--color-clay)] hover:text-[var(--color-charcoal)] disabled:opacity-50"
+            loading={uploadAvatar.isPending}
+            loadingLabel="Uploading…"
           >
-            {uploadAvatar.isPending ? 'Uploading…' : 'Change photo'}
-          </button>
+            Change photo
+          </DocumentAction>
           <input
             ref={fileRef}
             type="file"
@@ -116,7 +125,9 @@ export function AccountProfilePage() {
             onChange={(e) => setDisplayName(e.target.value)}
             className={FIELD}
           />
-          <p className={HELP}>The name clients see on proposals, project pages, and emails.</p>
+          <p className={HELP}>
+            The name clients see on proposals, project pages, and emails.
+          </p>
         </div>
 
         <div>
@@ -130,17 +141,23 @@ export function AccountProfilePage() {
             onChange={(e) => setBio(e.target.value)}
             className={`${FIELD} resize-none`}
           />
-          <p className={HELP}>A short intro shown to homeowners reviewing your work.</p>
+          <p className={HELP}>
+            A short intro shown to homeowners reviewing your work.
+          </p>
         </div>
 
-        <button
-          type="button"
+        <DocumentAction
+          actionKey="save-profile"
+          surfaceKey="account"
+          regionKey="profile-details"
+          variant="primary"
           onClick={handleSaveProfile}
           disabled={updateProfile.isPending}
-          className={PRIMARY}
+          loading={updateProfile.isPending}
+          loadingLabel="Saving…"
         >
-          {updateProfile.isPending ? 'Saving…' : 'Save profile'}
-        </button>
+          Save profile
+        </DocumentAction>
       </div>
 
       <div className="my-6">
@@ -149,7 +166,9 @@ export function AccountProfilePage() {
 
       {/* Password */}
       <div>
-        <h3 className="mb-1 font-heading text-[15px] text-[var(--color-charcoal)]">Password</h3>
+        <h3 className="mb-1 font-heading text-[15px] text-[var(--color-charcoal)]">
+          Password
+        </h3>
         <p className="mb-3 text-[11.5px] text-[var(--color-aged-oak)]">
           Your sign-in credential. Changing it signs you out of other devices.
         </p>
@@ -167,20 +186,31 @@ export function AccountProfilePage() {
           }}
           className={FIELD}
         />
-        <p className={HELP}>At least 12 characters — a passphrase you&apos;ve never used works well.</p>
-        <button
-          type="button"
-          onClick={handleUpdatePassword}
-          disabled={updatePassword.isPending || !newPassword.trim()}
-          className={`${PRIMARY} mt-3`}
+        <p className={HELP}>
+          At least 12 characters — a passphrase you&apos;ve never used works
+          well.
+        </p>
+        <DocumentActionGroup
+          surfaceKey="account"
+          regionKey="password"
+          className="mt-3 items-center"
         >
-          {updatePassword.isPending ? 'Updating…' : 'Update password'}
-        </button>
-        {pwDone && (
-          <span className="ml-3 font-mono text-[10px] uppercase tracking-[0.08em] text-[var(--color-sage)]">
-            ✓ Saved
-          </span>
-        )}
+          <DocumentAction
+            actionKey="update-password"
+            variant="primary"
+            onClick={handleUpdatePassword}
+            disabled={updatePassword.isPending || !newPassword.trim()}
+            loading={updatePassword.isPending}
+            loadingLabel="Updating…"
+          >
+            Update password
+          </DocumentAction>
+          {pwDone && (
+            <span className="font-mono text-[10px] uppercase tracking-[0.08em] text-[var(--color-sage)]">
+              ✓ Saved
+            </span>
+          )}
+        </DocumentActionGroup>
       </div>
     </div>
   );

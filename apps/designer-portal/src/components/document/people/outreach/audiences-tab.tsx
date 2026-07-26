@@ -20,7 +20,12 @@ import {
   useEstimateAudienceSize,
   usePeopleDirectory,
 } from '@patina/supabase';
-import { CampRow, OutreachButton, ListHeader, QuietNote } from './outreach-bits';
+import {
+  CampRow,
+  OutreachButton,
+  ListHeader,
+  QuietNote,
+} from './outreach-bits';
 import {
   AUDIENCE_PRESETS,
   countAudience,
@@ -46,7 +51,8 @@ export function AudiencesTab({ notify }: { notify: (m: string) => void }) {
   const [presetKey, setPresetKey] = useState<string>(AUDIENCE_PRESETS[0]!.key);
   const [name, setName] = useState('');
 
-  const preset = AUDIENCE_PRESETS.find((p) => p.key === presetKey) ?? AUDIENCE_PRESETS[0]!;
+  const preset =
+    AUDIENCE_PRESETS.find((p) => p.key === presetKey) ?? AUDIENCE_PRESETS[0]!;
   const rules = useMemo(() => presetToSegmentRules(preset.rule), [preset]);
 
   // The LIVE count over the directory — the source of truth for "who is in it".
@@ -71,7 +77,10 @@ export function AudiencesTab({ notify }: { notify: (m: string) => void }) {
           setComposing(false);
           setName('');
         },
-        onError: (e) => notify(e instanceof Error ? e.message : 'Could not save the segment.'),
+        onError: (e) =>
+          notify(
+            e instanceof Error ? e.message : 'Could not save the segment.',
+          ),
       },
     );
   };
@@ -81,15 +90,23 @@ export function AudiencesTab({ notify }: { notify: (m: string) => void }) {
       <p className="mb-3 text-[0.72rem] leading-relaxed text-[var(--color-aged-oak)]">
         Every audience is a slice of your directory — segment by{' '}
         <span className="font-medium text-[var(--color-charcoal)]">role</span>,{' '}
-        <span className="font-medium text-[var(--color-charcoal)]">status</span>,{' '}
-        <span className="font-medium text-[var(--color-charcoal)]">history</span>, or{' '}
+        <span className="font-medium text-[var(--color-charcoal)]">status</span>
+        ,{' '}
+        <span className="font-medium text-[var(--color-charcoal)]">
+          history
+        </span>
+        , or{' '}
         <span className="font-medium text-[var(--color-charcoal)]">trust</span>.
       </p>
 
       <ListHeader
         label="Segments"
         action={
-          <OutreachButton tone="primary" onClick={() => setComposing((v) => !v)}>
+          <OutreachButton
+            actionKey="new-audience"
+            tone="primary"
+            onClick={() => setComposing((v) => !v)}
+          >
             {composing ? 'Close' : '+ New segment'}
           </OutreachButton>
         }
@@ -144,16 +161,22 @@ export function AudiencesTab({ notify }: { notify: (m: string) => void }) {
               <span className="ml-1 font-mono text-[0.44rem] uppercase tracking-[0.05em] text-[var(--color-aged-oak)]">
                 {liveCount === 1 ? 'person' : 'people'} now
               </span>
-              {typeof serverEstimate === 'number' && serverEstimate !== liveCount && (
-                <div className="mt-0.5 font-mono text-[0.4rem] uppercase tracking-[0.04em] text-[var(--color-aged-oak)]">
-                  est. {serverEstimate} server-side
-                </div>
-              )}
+              {typeof serverEstimate === 'number' &&
+                serverEstimate !== liveCount && (
+                  <div className="mt-0.5 font-mono text-[0.4rem] uppercase tracking-[0.04em] text-[var(--color-aged-oak)]">
+                    est. {serverEstimate} server-side
+                  </div>
+                )}
             </div>
           </div>
 
           <div className="mt-3 flex justify-end">
-            <OutreachButton tone="primary" onClick={submit} disabled={!canSubmit}>
+            <OutreachButton
+              actionKey="save-audience"
+              tone="primary"
+              onClick={submit}
+              disabled={!canSubmit}
+            >
               {createSegment.isPending ? 'Saving…' : 'Save segment'}
             </OutreachButton>
           </div>
@@ -161,11 +184,14 @@ export function AudiencesTab({ notify }: { notify: (m: string) => void }) {
       )}
 
       {isLoading ? (
-        <p className="px-1 py-5 text-[0.74rem] text-[var(--color-aged-oak)]">Reading your segments…</p>
+        <p className="px-1 py-5 text-[0.74rem] text-[var(--color-aged-oak)]">
+          Reading your segments…
+        </p>
       ) : !segments || segments.length === 0 ? (
         <QuietNote>
-          No saved segments yet. Build one above — “Past clients”, “Founding Circle makers”,
-          “High-trust referrers” — each a live slice of your directory.
+          No saved segments yet. Build one above — “Past clients”, “Founding
+          Circle makers”, “High-trust referrers” — each a live slice of your
+          directory.
         </QuietNote>
       ) : (
         segments.map((s) => (
@@ -176,12 +202,17 @@ export function AudiencesTab({ notify }: { notify: (m: string) => void }) {
             right={
               !s.is_preset ? (
                 <OutreachButton
+                  actionKey="delete-audience"
                   tone="quiet"
                   onClick={() =>
                     deleteSegment.mutate(s.id, {
                       onSuccess: () => notify(`Segment “${s.name}” removed.`),
                       onError: (e) =>
-                        notify(e instanceof Error ? e.message : 'Could not remove the segment.'),
+                        notify(
+                          e instanceof Error
+                            ? e.message
+                            : 'Could not remove the segment.',
+                        ),
                     })
                   }
                   disabled={deleteSegment.isPending}

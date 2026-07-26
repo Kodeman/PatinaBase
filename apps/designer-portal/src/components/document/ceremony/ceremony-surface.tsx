@@ -38,10 +38,15 @@ import { useAuth } from '@/hooks/use-auth';
 import { useHydrated } from '@/hooks/use-hydrated';
 import { useFeatureFlag } from '@/hooks/use-feature-flag';
 import { documentEvents } from '@/lib/analytics/document-events';
-import { assembleContextLine, isCeremonySendable, formatBudgetBand } from '@/lib/document/ceremony-context';
+import {
+  assembleContextLine,
+  isCeremonySendable,
+  formatBudgetBand,
+} from '@/lib/document/ceremony-context';
 import { SectionEyebrow } from '@/components/document/section-eyebrow';
 import { CeremonyArrival } from './ceremony-arrival';
 import { CeremonySlots } from './ceremony-slots';
+import { DocumentAction, DocumentActionGroup } from '../document-action';
 
 const AUTOSAVE_MS = 800;
 
@@ -54,13 +59,16 @@ export function CeremonySurface({ leadId }: { leadId: string }) {
   const { user } = useAuth();
 
   // Fail-closed flag gate — flag-off resolves to a quiet redirect below.
-  const { value: arcEnabled, isLoading: flagLoading } = useFeatureFlag('arrival-arc');
+  const { value: arcEnabled, isLoading: flagLoading } =
+    useFeatureFlag('arrival-arc');
 
   const { data: ceremony, isLoading: ceremonyLoading } = useCeremony(leadId);
   const { data: lead, isLoading: leadLoading } = useLead(leadId);
   const { data: scanRows } = useLeadScans(leadId);
   // Portfolio prefill — the studio resolver's website, when trivially there.
-  const { data: identity } = useStudioIdentity({ designerId: user?.id ?? null });
+  const { data: identity } = useStudioIdentity({
+    designerId: user?.id ?? null,
+  });
 
   // ── The draft (local truth while the composer is open) ────────────────────
   const [intro, setIntro] = useState('');
@@ -74,7 +82,10 @@ export function CeremonySurface({ leadId }: { leadId: string }) {
   const saveDraft = useSaveCeremonyDraft();
   const complete = useCeremonyComplete();
 
-  const timezone = useMemo(() => Intl.DateTimeFormat().resolvedOptions().timeZone, []);
+  const timezone = useMemo(
+    () => Intl.DateTimeFormat().resolvedOptions().timeZone,
+    [],
+  );
 
   // Seed the draft from the held row exactly once (re-entry keeps the draft).
   useEffect(() => {
@@ -91,7 +102,11 @@ export function CeremonySurface({ leadId }: { leadId: string }) {
   const portfolioTouched = useRef(false);
   useEffect(() => {
     if (!seeded || portfolioTouched.current) return;
-    if (ceremony?.portfolio_url == null && portfolio === '' && identity?.website) {
+    if (
+      ceremony?.portfolio_url == null &&
+      portfolio === '' &&
+      identity?.website
+    ) {
       setPortfolio(identity.website);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -129,37 +144,59 @@ export function CeremonySurface({ leadId }: { leadId: string }) {
     if (saveTimer.current) clearTimeout(saveTimer.current);
     saveTimer.current = setTimeout(flushDraft, AUTOSAVE_MS);
   };
-  useEffect(() => () => {
-    if (saveTimer.current) clearTimeout(saveTimer.current);
-  }, []);
+  useEffect(
+    () => () => {
+      if (saveTimer.current) clearTimeout(saveTimer.current);
+    },
+    [],
+  );
 
-  const edit = <T,>(setter: (v: T) => void) => (v: T) => {
-    setter(v);
-    scheduleSave();
-  };
+  const edit =
+    <T,>(setter: (v: T) => void) =>
+    (v: T) => {
+      setter(v);
+      scheduleSave();
+    };
 
   // ── Telemetry ──────────────────────────────────────────────────────────────
   const openedRef = useRef(false);
   useEffect(() => {
-    if (openedRef.current || !ceremony || ceremony.state !== 'draft' || scanRows === undefined)
+    if (
+      openedRef.current ||
+      !ceremony ||
+      ceremony.state !== 'draft' ||
+      scanRows === undefined
+    )
       return;
     openedRef.current = true;
     documentEvents.ceremonyOpened({
       lead_id: leadId,
       has_scan: (scanRows ?? []).some((r) => r.scan),
-      has_draft: Boolean(ceremony.intro_text?.trim() || ceremony.draft_slots?.length),
+      has_draft: Boolean(
+        ceremony.intro_text?.trim() || ceremony.draft_slots?.length,
+      ),
     });
   }, [ceremony, scanRows, leadId]);
 
   // Route-leave with a draft in hand counts as a put-down (R106 §3) — unless
   // the send or the explicit put-down already accounted for this visit.
-  const leaveRef = useRef({ completed: false, putDown: false, introLen: 0, slotCount: 0 });
+  const leaveRef = useRef({
+    completed: false,
+    putDown: false,
+    introLen: 0,
+    slotCount: 0,
+  });
   leaveRef.current.introLen = intro.trim().length;
   leaveRef.current.slotCount = slots.length;
   useEffect(
     () => () => {
       const s = leaveRef.current;
-      if (openedRef.current && !s.completed && !s.putDown && (s.introLen > 0 || s.slotCount > 0)) {
+      if (
+        openedRef.current &&
+        !s.completed &&
+        !s.putDown &&
+        (s.introLen > 0 || s.slotCount > 0)
+      ) {
         documentEvents.ceremonyPutDown({
           lead_id: leadId,
           via: 'route_leave',
@@ -182,7 +219,14 @@ export function CeremonySurface({ leadId }: { leadId: string }) {
     } else if (alreadySent) {
       router.replace(`/doc/${ceremony?.designer_client_id ?? leadId}`);
     }
-  }, [flagOff, notYours, alreadySent, ceremony?.designer_client_id, leadId, router]);
+  }, [
+    flagOff,
+    notYours,
+    alreadySent,
+    ceremony?.designer_client_id,
+    leadId,
+    router,
+  ]);
 
   // ── The acts ───────────────────────────────────────────────────────────────
   const sendable = isCeremonySendable(intro, slots.length);
@@ -215,7 +259,9 @@ export function CeremonySurface({ leadId }: { leadId: string }) {
       {
         onSuccess: (result) => {
           leaveRef.current.completed = true;
-          const openedAt = ceremony.created_at ? new Date(ceremony.created_at).getTime() : NaN;
+          const openedAt = ceremony.created_at
+            ? new Date(ceremony.created_at).getTime()
+            : NaN;
           documentEvents.ceremonyCompleted({
             lead_id: leadId,
             ceremony_id: result.ceremony_id,
@@ -239,7 +285,13 @@ export function CeremonySurface({ leadId }: { leadId: string }) {
 
   // ── Render ─────────────────────────────────────────────────────────────────
   const loading =
-    !hydrated || flagLoading || ceremonyLoading || leadLoading || !seeded || !lead || !ceremony;
+    !hydrated ||
+    flagLoading ||
+    ceremonyLoading ||
+    leadLoading ||
+    !seeded ||
+    !lead ||
+    !ceremony;
 
   if (loading || flagOff || notYours || alreadySent) {
     return (
@@ -257,10 +309,16 @@ export function CeremonySurface({ leadId }: { leadId: string }) {
 
   const scans = (scanRows ?? []).filter((r) => r.scan);
   const primaryScan = scans[0]?.scan ?? null;
-  const tags = scans.find((r) => r.scan?.suggested_styles?.length)?.scan?.suggested_styles ?? [];
+  const tags =
+    scans.find((r) => r.scan?.suggested_styles?.length)?.scan
+      ?.suggested_styles ?? [];
 
   const contextLine = assembleContextLine(
-    { firstName, roomType: lead.project_type ?? null, budgetRange: lead.budget_range },
+    {
+      firstName,
+      roomType: lead.project_type ?? null,
+      budgetRange: lead.budget_range,
+    },
     primaryScan ? { roomType: primaryScan.room_type } : null,
     tags,
   );
@@ -283,10 +341,14 @@ export function CeremonySurface({ leadId }: { leadId: string }) {
       <div className="mx-auto max-w-[1120px] px-6 pb-24 pt-10 sm:px-9 sm:pt-14">
         {/* Claimed — the truth the client was already told (R106 §1). */}
         <p className="mb-9 inline-flex items-center gap-2.5 rounded-[3px] border border-[var(--color-pearl)] px-4 py-2.5 font-mono text-[10.5px] tracking-[0.04em] text-[var(--color-mocha)]">
-          <span aria-hidden className="h-[7px] w-[7px] shrink-0 rounded-full bg-[var(--color-sage)]" />
+          <span
+            aria-hidden
+            className="h-[7px] w-[7px] shrink-0 rounded-full bg-[var(--color-sage)]"
+          />
           <span>
-            Claimed · {firstName ? `${firstName} sees` : 'they see'}: “{studioName} has taken your
-            request in hand — introduction on its way.”
+            Claimed · {firstName ? `${firstName} sees` : 'they see'}: “
+            {studioName} has taken your request in hand — introduction on its
+            way.”
           </span>
         </p>
 
@@ -298,7 +360,8 @@ export function CeremonySurface({ leadId }: { leadId: string }) {
             {firstName ? `Meet ${firstName}.` : 'A new arrival.'}
           </h1>
           <p className="mt-2.5 font-heading text-[17px] italic text-[var(--color-mocha)]">
-            One send: your introduction and two or three times. Then the Document begins.
+            One send: your introduction and two or three times. Then the
+            Document begins.
           </p>
         </header>
 
@@ -329,7 +392,11 @@ export function CeremonySurface({ leadId }: { leadId: string }) {
                 aria-live="polite"
                 className="shrink-0 font-mono text-[9.5px] uppercase tracking-[0.1em] text-[var(--text-muted)]"
               >
-                {held === 'held' ? 'Draft held' : held === 'holding' ? 'Holding…' : ''}
+                {held === 'held'
+                  ? 'Draft held'
+                  : held === 'holding'
+                    ? 'Holding…'
+                    : ''}
               </p>
             </div>
 
@@ -367,30 +434,36 @@ export function CeremonySurface({ leadId }: { leadId: string }) {
             {/* The offered times. */}
             <div className="mt-10">
               <SectionEyebrow>
-                Offer times · {firstName ? `${firstName} taps` : 'they tap'} one on their phone
+                Offer times · {firstName ? `${firstName} taps` : 'they tap'} one
+                on their phone
               </SectionEyebrow>
               <CeremonySlots slots={slots} onChange={edit(setSlots)} />
             </div>
 
             {/* The threshold. */}
             <div className="mt-10 border-t border-[var(--color-pearl)] pt-6">
-              <div className="flex flex-wrap items-center gap-4">
-                <button
-                  type="button"
+              <DocumentActionGroup
+                surfaceKey="ceremony"
+                regionKey="introduction"
+              >
+                <DocumentAction
+                  actionKey="send-ceremony-introduction"
+                  variant="primary"
                   onClick={onSend}
                   disabled={!sendable || complete.isPending}
-                  className="rounded-[3px] bg-[var(--color-charcoal)] px-6 py-3 font-mono text-[11px] font-semibold uppercase tracking-[0.14em] text-[var(--color-off-white)] transition-colors hover:bg-[#403B36] disabled:cursor-not-allowed disabled:bg-[rgba(44,41,38,0.25)] disabled:hover:bg-[rgba(44,41,38,0.25)]"
+                  loading={complete.isPending}
+                  loadingLabel="Sending…"
                 >
-                  {complete.isPending ? 'Sending…' : 'Send — and begin the Document →'}
-                </button>
-                <button
-                  type="button"
+                  Send — and begin the Document
+                </DocumentAction>
+                <DocumentAction
+                  actionKey="put-down-ceremony"
+                  variant="tertiary"
                   onClick={onPutDown}
-                  className="font-mono text-[10px] uppercase tracking-[0.12em] text-[var(--text-muted)] hover:text-[var(--text-primary)]"
                 >
                   Put down for now
-                </button>
-              </div>
+                </DocumentAction>
+              </DocumentActionGroup>
               {sendError && (
                 <p className="mt-3 text-[12px] text-[var(--color-terracotta)]">
                   The send didn’t go through — your draft is held. Try again.

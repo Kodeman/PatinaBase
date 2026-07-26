@@ -21,7 +21,12 @@
 
 import type { ReactNode } from 'react';
 import Link from 'next/link';
-import { areaOf, ftIn, overallDims, type RoomGeometry } from '@/lib/room-view/geometry';
+import {
+  areaOf,
+  ftIn,
+  overallDims,
+  type RoomGeometry,
+} from '@/lib/room-view/geometry';
 import { fmtDay } from '@/lib/document/format';
 import { cn } from '@/lib/utils';
 
@@ -113,11 +118,14 @@ export function FactsRail({
       </Fact>
 
       <Fact k="Openings">
-        {plural(geometry.windows.length, 'window')} · {plural(geometry.doors.length, 'door')} ·{' '}
+        {plural(geometry.windows.length, 'window')} ·{' '}
+        {plural(geometry.doors.length, 'door')} ·{' '}
         {plural(geometry.openings.length, 'opening')}
       </Fact>
 
-      <Fact k="Detected">{detected.length > 0 ? detected.join(' · ') : 'nothing detected'}</Fact>
+      <Fact k="Detected">
+        {detected.length > 0 ? detected.join(' · ') : 'nothing detected'}
+      </Fact>
 
       {photos && photos.count > 0 && (
         <Fact k="Photos">
@@ -127,7 +135,7 @@ export function FactsRail({
           <button
             type="button"
             onClick={photos.onOpen}
-            className="group inline-flex items-baseline gap-1.5 text-left text-[14px] text-[var(--color-charcoal)] outline-none transition-colors hover:text-[var(--color-clay)] focus-visible:text-[var(--color-clay)]"
+            className="group inline-flex min-h-11 items-center gap-1.5 rounded-[3px] text-left text-[14px] text-[var(--color-charcoal)] outline-none transition-colors hover:text-[var(--color-clay)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-clay)]"
           >
             {plural(photos.count, 'photo')}
             <span className="font-mono text-[9px] uppercase tracking-[0.12em] text-[var(--color-aged-oak)] opacity-0 transition-opacity group-hover:opacity-100 group-focus-visible:opacity-100">
@@ -140,7 +148,9 @@ export function FactsRail({
       <Fact k="Scan">
         {scanDate ? fmtDay(scanDate) : '—'}
         {qualityGrade ? ` · quality ${qualityGrade}` : ''}
-        {coveragePercentage != null ? ` · ${coveragePercentage.toFixed(2)}` : ''}
+        {coveragePercentage != null
+          ? ` · ${coveragePercentage.toFixed(2)}`
+          : ''}
       </Fact>
 
       {roomFile && (
@@ -150,7 +160,7 @@ export function FactsRail({
               hover/focus. Links into /portal/projects/[id]/room-file/[scanId]. */}
           <Link
             href={roomFile.href}
-            className="group inline-flex items-baseline gap-1.5 text-[14px] text-[var(--color-charcoal)] outline-none transition-colors hover:text-[var(--color-clay)] focus-visible:text-[var(--color-clay)]"
+            className="group inline-flex min-h-11 items-center gap-1.5 rounded-[3px] text-[14px] text-[var(--color-charcoal)] outline-none transition-colors hover:text-[var(--color-clay)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-clay)]"
           >
             drawing set
             <span className="font-mono text-[9px] uppercase tracking-[0.12em] text-[var(--color-aged-oak)] opacity-0 transition-opacity group-hover:opacity-100 group-focus-visible:opacity-100">
@@ -162,7 +172,10 @@ export function FactsRail({
 
       {lowConfWalls.length > 0 && (
         <Fact k="Verify">
-          <Sub>{lowConfWalls.map((wall) => wall.name).join(' · ')} — drawn dashed; confirm on site</Sub>
+          <Sub>
+            {lowConfWalls.map((wall) => wall.name).join(' · ')} — drawn dashed;
+            confirm on site
+          </Sub>
         </Fact>
       )}
 
@@ -173,7 +186,7 @@ export function FactsRail({
             onClick={measure.onArm}
             aria-pressed={measure.armed}
             className={cn(
-              'rounded-[3px] border px-3.5 py-2 font-mono text-[10px] uppercase tracking-[0.12em] transition-colors',
+              'min-h-11 rounded-[3px] border px-3.5 py-2 font-mono text-[10px] uppercase tracking-[0.12em] transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-clay)]',
               measure.armed
                 ? 'border-[var(--color-charcoal)] bg-[var(--color-charcoal)] text-[var(--color-off-white)]'
                 : 'border-[var(--doc-ink-border)] bg-transparent text-[var(--color-mocha)]',
@@ -185,7 +198,7 @@ export function FactsRail({
             <button
               type="button"
               onClick={measure.onClear}
-              className="rounded-[3px] border border-[var(--doc-ink-border)] bg-transparent px-3.5 py-2 font-mono text-[10px] uppercase tracking-[0.12em] text-[var(--color-mocha)] transition-colors"
+              className="min-h-11 rounded-[3px] border border-[var(--doc-ink-border)] bg-transparent px-3.5 py-2 font-mono text-[10px] uppercase tracking-[0.12em] text-[var(--color-mocha)] transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-clay)]"
             >
               Clear
             </button>
@@ -199,12 +212,20 @@ export function FactsRail({
 function Fact({ k, children }: { k: string; children: ReactNode }) {
   return (
     <div className="border-b border-[var(--doc-ink-border)] py-[11px]">
-      <div className="font-mono text-[9.5px] uppercase tracking-[0.14em] text-[var(--color-aged-oak)]">{k}</div>
-      <div className="mt-0.5 text-[14px] text-[var(--color-charcoal)]">{children}</div>
+      <div className="font-mono text-[9.5px] uppercase tracking-[0.14em] text-[var(--color-aged-oak)]">
+        {k}
+      </div>
+      <div className="mt-0.5 text-[14px] text-[var(--color-charcoal)]">
+        {children}
+      </div>
     </div>
   );
 }
 
 function Sub({ children }: { children: ReactNode }) {
-  return <span className="mt-1 block font-heading text-[12px] italic text-[var(--color-mocha)]">{children}</span>;
+  return (
+    <span className="mt-1 block font-heading text-[12px] italic text-[var(--color-mocha)]">
+      {children}
+    </span>
+  );
 }

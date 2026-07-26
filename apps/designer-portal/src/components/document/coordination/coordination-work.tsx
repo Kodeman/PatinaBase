@@ -31,6 +31,7 @@ import { isBlocked } from '@/lib/document/coordination-derivation';
 import type { CoordinationItem } from '@patina/supabase';
 import type { SectionTask } from '@/hooks/use-section-work';
 import { OwnerChip, TaskDepLine } from './task-dep-line';
+import { DocumentAction } from '../document-action';
 
 const todayYmd = () => new Date().toISOString().slice(0, 10);
 
@@ -42,7 +43,11 @@ export interface CoordinationWorkProps {
   onOpenItem?: (id: string) => void;
 }
 
-export function CoordinationWork({ projectId, items, onOpenItem }: CoordinationWorkProps) {
+export function CoordinationWork({
+  projectId,
+  items,
+  onOpenItem,
+}: CoordinationWorkProps) {
   const { data: tasks } = useSectionTasks(projectId);
   const { data: parties } = useProjectParties(projectId);
   const toggleTask = useToggleSectionTask(projectId);
@@ -67,7 +72,12 @@ export function CoordinationWork({ projectId, items, onOpenItem }: CoordinationW
   const save = () => {
     const trimmed = title.trim();
     if (!trimmed) return;
-    createTask.mutate({ title: trimmed, sectionKey: 'project', dueDate: null, estimateMinutes: null });
+    createTask.mutate({
+      title: trimmed,
+      sectionKey: 'project',
+      dueDate: null,
+      estimateMinutes: null,
+    });
     setTitle('');
     setCapturing(false);
   };
@@ -82,13 +92,15 @@ export function CoordinationWork({ projectId, items, onOpenItem }: CoordinationW
         <span className="font-mono text-[9px] uppercase tracking-[0.05em] text-[var(--color-aged-oak)]">
           the dependency web
         </span>
-        <button
-          type="button"
+        <DocumentAction
+          actionKey="open-task-capture"
+          surfaceKey="coordination"
+          regionKey="work-block"
+          variant="secondary"
           onClick={() => setCapturing(true)}
-          className="font-mono text-[9px] uppercase tracking-[0.05em] text-[var(--color-clay)] hover:opacity-80"
         >
-          + Task
-        </button>
+          Add task
+        </DocumentAction>
       </div>
     );
   }
@@ -131,7 +143,10 @@ export function CoordinationWork({ projectId, items, onOpenItem }: CoordinationW
           };
 
           return (
-            <li key={t.id} className="border-b border-dashed border-[var(--color-pearl)] last:border-b-0">
+            <li
+              key={t.id}
+              className="border-b border-dashed border-[var(--color-pearl)] last:border-b-0"
+            >
               <div className="grid w-full grid-cols-[auto_1fr_auto] items-start gap-2.5 px-1 py-1.5">
                 {/* The tick is a stamp, not a SaaS checkbox (work-block.tsx):
                     sage-wash + ✓ when done; a terracotta ⊘ (not-allowed) when
@@ -160,7 +175,9 @@ export function CoordinationWork({ projectId, items, onOpenItem }: CoordinationW
                       : isBlockedTick
                         ? 'rgba(212,160,144,0.08)'
                         : 'transparent',
-                    color: done ? 'var(--color-sage)' : 'var(--color-terracotta)',
+                    color: done
+                      ? 'var(--color-sage)'
+                      : 'var(--color-terracotta)',
                   }}
                 >
                   {done ? '✓' : isBlockedTick ? '⊘' : ''}
@@ -191,7 +208,9 @@ export function CoordinationWork({ projectId, items, onOpenItem }: CoordinationW
                   {(done || t.due_date) && (
                     <span
                       className="whitespace-nowrap font-mono text-[9px] uppercase tracking-[0.05em]"
-                      style={{ color: overdue ? '#C4836F' : 'var(--text-muted)' }}
+                      style={{
+                        color: overdue ? '#C4836F' : 'var(--text-muted)',
+                      }}
                     >
                       {done
                         ? t.completed_at
@@ -232,24 +251,28 @@ export function CoordinationWork({ projectId, items, onOpenItem }: CoordinationW
             placeholder="What needs doing"
             className="min-w-0 flex-1 bg-transparent text-[12px] text-[var(--color-charcoal)] outline-none placeholder:italic placeholder:text-[var(--text-muted)]"
           />
-          <button
-            type="button"
+          <DocumentAction
+            actionKey="add-task"
+            surfaceKey="coordination"
+            regionKey="task-capture"
+            variant="primary"
             onClick={save}
             disabled={!title.trim()}
-            className="font-mono text-[9px] uppercase tracking-[0.05em] text-[var(--color-clay)] disabled:opacity-40"
           >
             Add
-          </button>
+          </DocumentAction>
         </div>
       ) : (
         <div className="flex items-baseline px-1 py-1.5">
-          <button
-            type="button"
+          <DocumentAction
+            actionKey="open-task-capture"
+            surfaceKey="coordination"
+            regionKey="work-block"
+            variant="secondary"
             onClick={() => setCapturing(true)}
-            className="font-mono text-[9px] uppercase tracking-[0.05em] text-[var(--color-clay)] hover:opacity-80"
           >
-            + Task
-          </button>
+            Add task
+          </DocumentAction>
         </div>
       )}
     </div>

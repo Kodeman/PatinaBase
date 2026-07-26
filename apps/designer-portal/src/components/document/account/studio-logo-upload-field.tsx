@@ -14,14 +14,15 @@
 import { useId, useRef, useState } from 'react';
 import { createBrowserClient, useUpdateOrganization } from '@patina/supabase';
 import { monogramOf } from '@/lib/document/account-identity';
+import { DocumentAction, DocumentActionGroup } from '../document-action';
 
 const MAX_BYTES = 2 * 1024 * 1024;
-const ACCEPTED = new Set(['image/png', 'image/jpeg', 'image/webp', 'image/svg+xml']);
-
-const PRIMARY =
-  'rounded-[5px] border border-[var(--color-clay)] bg-[var(--color-clay)] px-3.5 py-1.5 text-[12px] font-medium text-[var(--color-charcoal)] transition-colors hover:bg-[var(--color-aged-oak)] hover:border-[var(--color-aged-oak)] disabled:opacity-50';
-const GHOST =
-  'rounded-[5px] border border-[var(--color-pearl)] px-3.5 py-1.5 text-[12px] font-medium text-[var(--color-mocha)] transition-colors hover:border-[var(--color-clay)] disabled:opacity-50';
+const ACCEPTED = new Set([
+  'image/png',
+  'image/jpeg',
+  'image/webp',
+  'image/svg+xml',
+]);
 
 interface StudioLogoUploadFieldProps {
   studioId: string;
@@ -67,7 +68,9 @@ export function StudioLogoUploadField({
         .upload(path, file, { upsert: true, contentType: file.type });
       if (uploadError) throw uploadError;
 
-      const { data: urlData } = supabase.storage.from('studio-logos').getPublicUrl(path);
+      const { data: urlData } = supabase.storage
+        .from('studio-logos')
+        .getPublicUrl(path);
       const publicUrl = `${urlData.publicUrl}?v=${Date.now()}`;
 
       await updateOrg.mutateAsync({ id: studioId, logo_url: publicUrl });
@@ -126,33 +129,39 @@ export function StudioLogoUploadField({
           }}
           data-testid="studio-logo-input"
         />
-        <div className="flex gap-2">
-          <button
-            type="button"
+        <DocumentActionGroup surfaceKey="account" regionKey="studio-logo">
+          <DocumentAction
+            actionKey="upload-studio-logo"
+            variant="primary"
             disabled={busy}
+            loading={busy}
+            loadingLabel="Uploading…"
             onClick={() => inputRef.current?.click()}
-            className={PRIMARY}
             data-testid="studio-logo-upload"
           >
-            {busy ? 'Uploading…' : previewUrl ? 'Change logo' : 'Upload logo'}
-          </button>
+            {previewUrl ? 'Change logo' : 'Upload logo'}
+          </DocumentAction>
           {previewUrl && !busy && (
-            <button
-              type="button"
+            <DocumentAction
+              actionKey="remove-studio-logo"
+              variant="tertiary"
               onClick={handleRemove}
-              className={GHOST}
+              className="text-[var(--color-terracotta)]"
               data-testid="studio-logo-remove"
             >
               Remove
-            </button>
+            </DocumentAction>
           )}
-        </div>
+        </DocumentActionGroup>
         <p className="text-[11px] leading-relaxed text-[var(--color-aged-oak)]">
           PNG, JPEG, WebP, or SVG — up to 2MB. Shown on invoices, client emails,
           and the client app.
         </p>
         {error && (
-          <p className="text-[11px] text-[var(--color-terracotta)]" role="alert">
+          <p
+            className="text-[11px] text-[var(--color-terracotta)]"
+            role="alert"
+          >
             {error}
           </p>
         )}

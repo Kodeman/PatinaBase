@@ -29,12 +29,16 @@ import { openLedger } from '../../command-bar';
 import { RoomSheet } from '../../rooms/room-sheet';
 import { Card, TrustCard } from './profile-cards';
 import { ActionButton, BackLink, ProfileHead } from './profile-shell';
+import { DocumentAction, DocumentActionRow } from '../../document-action';
 
 // The vendor hooks predate generated types for these tables (see use-vendors.ts).
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type Any = any;
 
-const humanize = (raw: unknown): string => String(raw ?? '').replace(/[_-]/g, ' ').trim();
+const humanize = (raw: unknown): string =>
+  String(raw ?? '')
+    .replace(/[_-]/g, ' ')
+    .trim();
 
 /** Dollars from the products table's numeric price columns. */
 function fmtPrice(p: Any): string | null {
@@ -52,17 +56,26 @@ function fmtPrice(p: Any): string | null {
 /** The maker's fact lines — honest to what's on file, silent otherwise. */
 function makerFacts(vendor: Any): string[] {
   const out: string[] = [];
-  if (vendor.primary_category) out.push(`Primary category — ${humanize(vendor.primary_category)}`);
-  if (vendor.market_position) out.push(`Market — ${humanize(vendor.market_position)}`);
-  const loc = [vendor.location_city, vendor.location_state].filter(Boolean).join(', ');
+  if (vendor.primary_category)
+    out.push(`Primary category — ${humanize(vendor.primary_category)}`);
+  if (vendor.market_position)
+    out.push(`Market — ${humanize(vendor.market_position)}`);
+  const loc = [vendor.location_city, vendor.location_state]
+    .filter(Boolean)
+    .join(', ');
   if (loc) out.push(`Located in ${loc}`);
   if (vendor.made_in) out.push(`Made in ${vendor.made_in}`);
   const lead = (vendor.lead_times ?? null) as Record<string, unknown> | null;
-  if (lead && typeof lead['standard'] === 'number') out.push(`${lead['standard']}-day standard lead`);
-  if (vendor.default_payment_terms) out.push(`Terms — ${humanize(vendor.default_payment_terms)}`);
+  if (lead && typeof lead['standard'] === 'number')
+    out.push(`${lead['standard']}-day standard lead`);
+  if (vendor.default_payment_terms)
+    out.push(`Terms — ${humanize(vendor.default_payment_terms)}`);
   if (vendor.founding_circle) out.push('Founding Circle maker');
   if (vendor.trade_terms) out.push('Honors trade pricing');
-  if (out.length === 0) out.push('A maker in your network — teach Patina more as you work together.');
+  if (out.length === 0)
+    out.push(
+      'A maker in your network — teach Patina more as you work together.',
+    );
   return out;
 }
 
@@ -74,7 +87,11 @@ function useRequestQuote(vendorId: string) {
   return useMutation({
     // R83: the sheet renders its own inline failure band.
     meta: { errorSurface: 'inline' as const },
-    mutationFn: async (input: { scope?: string; timeline?: string; message: string }) => {
+    mutationFn: async (input: {
+      scope?: string;
+      timeline?: string;
+      message: string;
+    }) => {
       const res = await fetch(`/api/vendors/${vendorId}/quote-request`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -84,7 +101,9 @@ function useRequestQuote(vendorId: string) {
         const err = (await res.json().catch(() => ({}))) as { error?: string };
         throw new Error(err.error || 'Could not send the quote request');
       }
-      return (await res.json()) as { data: { id: string; status: string; created_at: string } };
+      return (await res.json()) as {
+        data: { id: string; status: string; created_at: string };
+      };
     },
   });
 }
@@ -134,12 +153,18 @@ function QuoteSheet({
       });
       setSent(true);
     } catch (e) {
-      setError(e instanceof Error ? e.message : 'Could not send the quote request');
+      setError(
+        e instanceof Error ? e.message : 'Could not send the quote request',
+      );
     }
   };
 
   return (
-    <RoomSheet open={open} onClose={close} title={`Request a quote from ${vendorName}`}>
+    <RoomSheet
+      open={open}
+      onClose={close}
+      title={`Request a quote from ${vendorName}`}
+    >
       <div className="font-mono text-[9px] font-semibold uppercase tracking-[0.16em] text-[var(--color-clay)]">
         Quote · {vendorName}
       </div>
@@ -156,20 +181,26 @@ function QuoteSheet({
           >
             Quote request sent — it&apos;s in {vendorName}&apos;s hands.
           </p>
-          <div className="mt-5 border-t border-[var(--color-pearl)] pt-4">
-            <button
-              type="button"
+          <DocumentActionRow
+            surfaceKey="people"
+            regionKey="quote-request-complete"
+            className="mt-5 border-t border-[var(--color-pearl)] pt-4"
+            aria-label="Quote request complete"
+          >
+            <DocumentAction
+              actionKey="close-quote-request"
+              variant="tertiary"
               onClick={close}
-              className="rounded-[5px] border border-[var(--color-pearl)] px-4 py-2 font-mono text-[10px] font-semibold uppercase tracking-[0.06em] text-[var(--color-charcoal)]"
             >
               Done
-            </button>
-          </div>
+            </DocumentAction>
+          </DocumentActionRow>
         </>
       ) : (
         <>
           <p className="mb-5 mt-1 text-[0.74rem] text-[var(--color-aged-oak)]">
-            Scope, timing, and what you need priced — {vendorName} answers on their side.
+            Scope, timing, and what you need priced — {vendorName} answers on
+            their side.
           </p>
 
           <label className={FIELD_LABEL}>
@@ -212,23 +243,30 @@ function QuoteSheet({
             </p>
           )}
 
-          <div className="mt-5 flex items-center gap-2.5 border-t border-[var(--color-pearl)] pt-4">
-            <button
-              type="button"
+          <DocumentActionRow
+            surfaceKey="people"
+            regionKey="quote-request"
+            className="mt-5 border-t border-[var(--color-pearl)] pt-4"
+            aria-label="Quote request actions"
+          >
+            <DocumentAction
+              actionKey="send-quote-request"
+              variant="primary"
               disabled={!canSend}
+              loading={request.isPending}
+              loadingLabel="Sending…"
               onClick={() => void submit()}
-              className="rounded-[5px] bg-[var(--color-charcoal)] px-4 py-2 font-mono text-[10px] font-semibold uppercase tracking-[0.06em] text-[var(--color-off-white)] disabled:opacity-50"
             >
-              {request.isPending ? 'Sending…' : 'Send request'}
-            </button>
-            <button
-              type="button"
+              Send request
+            </DocumentAction>
+            <DocumentAction
+              actionKey="cancel-quote-request"
+              variant="tertiary"
               onClick={close}
-              className="rounded-[5px] border border-[var(--color-pearl)] px-4 py-2 font-mono text-[10px] font-semibold uppercase tracking-[0.06em] text-[var(--color-charcoal)]"
             >
               Cancel
-            </button>
-          </div>
+            </DocumentAction>
+          </DocumentActionRow>
         </>
       )}
     </RoomSheet>
@@ -247,11 +285,21 @@ export function MakerProfile({
   /** Kept for the shared profile contract; the maker view speaks inline (R83). */
   notify: (m: string) => void;
 }) {
-  const { data: vendor, isLoading } = useVendor(vendorId) as { data: Any; isLoading: boolean };
-  const { data: productsPage } = useVendorProducts(vendorId, {}, { page: 1, pageSize: 8 }) as {
+  const { data: vendor, isLoading } = useVendor(vendorId) as {
+    data: Any;
+    isLoading: boolean;
+  };
+  const { data: productsPage } = useVendorProducts(
+    vendorId,
+    {},
+    { page: 1, pageSize: 8 },
+  ) as {
     data: { data: Any[]; pagination: { total: number } } | undefined;
   };
-  const { data: reviewsPage } = useVendorReviews(vendorId, { page: 1, pageSize: 5 }) as {
+  const { data: reviewsPage } = useVendorReviews(vendorId, {
+    page: 1,
+    pageSize: 5,
+  }) as {
     data: { data: Any[]; pagination: { total: number } } | undefined;
   };
 
@@ -266,11 +314,16 @@ export function MakerProfile({
   const reviewTotal = reviewsPage?.pagination.total ?? reviews.length;
 
   const avgRating = useMemo(() => {
-    if (typeof vendor?.designer_rating_avg === 'number' && vendor.designer_rating_avg > 0)
+    if (
+      typeof vendor?.designer_rating_avg === 'number' &&
+      vendor.designer_rating_avg > 0
+    )
       return vendor.designer_rating_avg as number;
     const rated = reviews.filter((r) => typeof r.overall_rating === 'number');
     if (rated.length === 0) return null;
-    return rated.reduce((s, r) => s + Number(r.overall_rating), 0) / rated.length;
+    return (
+      rated.reduce((s, r) => s + Number(r.overall_rating), 0) / rated.length
+    );
   }, [vendor, reviews]);
 
   if (isLoading) {
@@ -297,7 +350,10 @@ export function MakerProfile({
 
   const name: string = vendor.trade_name || vendor.name || 'Maker';
   const email: string | null =
-    vendor.orders_email ?? vendor.trade_account_email ?? vendor.contact_email ?? null;
+    vendor.orders_email ??
+    vendor.trade_account_email ??
+    vendor.contact_email ??
+    null;
   const isSaved: boolean = Boolean(vendor.designerRelationship?.isSaved);
 
   const toggleRoster = async () => {
@@ -306,11 +362,15 @@ export function MakerProfile({
     try {
       const result = await toggleSave.mutateAsync({ vendorId });
       setRosterNote(
-        result.saved ? `${name} joined your roster.` : `${name} left your roster — still in the marketplace.`,
+        result.saved
+          ? `${name} joined your roster.`
+          : `${name} left your roster — still in the marketplace.`,
       );
     } catch (e) {
       setRosterError(
-        e instanceof Error ? e.message : 'Could not change the roster just now — try again.',
+        e instanceof Error
+          ? e.message
+          : 'Could not change the roster just now — try again.',
       );
     }
   };
@@ -325,11 +385,19 @@ export function MakerProfile({
         phone={null}
         actions={
           <>
-            <ActionButton label="Request a quote" tone="dark" onClick={() => setQuoteOpen(true)} />
+            <ActionButton
+              actionKey="request-maker-quote"
+              label="Request a quote"
+              tone="dark"
+              onClick={() => setQuoteOpen(true)}
+            />
             {/* R60: trade lives in Orders — the doorway, never a rebuild. */}
             <ActionButton
+              actionKey="open-maker-orders"
               label="Terms & orders →"
-              onClick={() => openLedger('orders', { page: 'vendors', vendorId })}
+              onClick={() =>
+                openLedger('orders', { page: 'vendors', vendorId })
+              }
             />
             {isSaved ? (
               <span className="border border-[var(--color-sage)] px-2 py-[3px] font-mono text-[0.46rem] font-semibold uppercase tracking-[0.08em] text-[#6f8268]">
@@ -337,6 +405,7 @@ export function MakerProfile({
               </span>
             ) : (
               <ActionButton
+                actionKey="save-maker-to-roster"
                 label={toggleSave.isPending ? 'Saving…' : 'Save to roster'}
                 onClick={() => void toggleRoster()}
               />
@@ -397,7 +466,8 @@ export function MakerProfile({
           </div>
           {products.length === 0 ? (
             <p className="mb-6 text-[0.72rem] italic leading-relaxed text-[var(--color-aged-oak)]">
-              Nothing catalogued yet — pieces land here as they&apos;re captured and taught.
+              Nothing catalogued yet — pieces land here as they&apos;re captured
+              and taught.
             </p>
           ) : (
             <ul className="mb-6">
@@ -465,12 +535,15 @@ export function MakerProfile({
           {/* ── Trade & orders — the Orders-book doorway (R60) ── */}
           <Card title="Trade & orders">
             <p className="text-[0.7rem] leading-relaxed text-[var(--color-mocha)]">
-              Terms, purchase orders, and the running thread with {name} live in the Orders book.
+              Terms, purchase orders, and the running thread with {name} live in
+              the Orders book.
             </p>
             <button
               type="button"
-              onClick={() => openLedger('orders', { page: 'vendors', vendorId })}
-              className="mt-[0.6rem] font-mono text-[0.56rem] font-semibold uppercase tracking-[0.08em] text-[var(--color-clay)] hover:text-[var(--color-aged-oak)]"
+              onClick={() =>
+                openLedger('orders', { page: 'vendors', vendorId })
+              }
+              className="mt-[0.6rem] inline-flex min-h-11 min-w-11 items-center font-mono text-[0.56rem] font-semibold uppercase tracking-[0.08em] text-[var(--color-clay)] hover:text-[var(--color-aged-oak)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-clay)]"
             >
               terms & orders →
             </button>
@@ -483,18 +556,24 @@ export function MakerProfile({
                 ? 'On your roster — they read as one of your makers across the studio.'
                 : 'Not on your roster yet. Saving admits them to your directory.'}
             </p>
-            <button
-              type="button"
-              disabled={toggleSave.isPending}
+            <DocumentAction
+              actionKey={
+                isSaved ? 'remove-maker-from-roster' : 'save-maker-to-roster'
+              }
+              surfaceKey="people"
+              regionKey="maker-roster"
+              variant={isSaved ? 'tertiary' : 'primary'}
+              loading={toggleSave.isPending}
+              loadingLabel="Working…"
               onClick={() => void toggleRoster()}
-              className="mt-[0.6rem] font-mono text-[0.56rem] font-semibold uppercase tracking-[0.08em] text-[var(--color-clay)] transition-colors hover:text-[var(--color-aged-oak)] disabled:opacity-40"
+              className={
+                isSaved
+                  ? 'mt-[0.6rem] text-[var(--color-terracotta)] decoration-[var(--color-terracotta)]'
+                  : 'mt-[0.6rem]'
+              }
             >
-              {toggleSave.isPending
-                ? 'working…'
-                : isSaved
-                  ? 'remove from roster'
-                  : 'save to roster →'}
-            </button>
+              {isSaved ? 'Remove from roster' : 'Save to roster'}
+            </DocumentAction>
           </Card>
 
           {/* ── Track record ── */}

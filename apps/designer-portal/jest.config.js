@@ -21,7 +21,8 @@ const customJestConfig = {
   moduleNameMapper: {
     '^canvas$': '<rootDir>/__mocks__/canvas.js',
     '^@/(.*)$': '<rootDir>/src/$1',
-    '^@patina/design-system$': '<rootDir>/../../packages/patina-design-system/src',
+    '^@patina/design-system$':
+      '<rootDir>/../../packages/patina-design-system/src',
     '^@patina/types$': '<rootDir>/../../packages/types/src',
     '^@patina/api-client$': '<rootDir>/../../packages/api-client/src',
     '^@patina/utils$': '<rootDir>/../../packages/utils/src',
@@ -46,8 +47,14 @@ const customJestConfig = {
   testPathIgnorePatterns: [
     '<rootDir>/node_modules/',
     '<rootDir>/.next/',
+    '<rootDir>/.open-next/',
     '<rootDir>/e2e/', // Ignore e2e tests (use Playwright)
   ],
+
+  // Next/OpenNext production bundles contain copied workspace package.json
+  // files. Exclude both trees from the Haste map so a local production build
+  // cannot create duplicate @patina/* module names in the unit suite.
+  modulePathIgnorePatterns: ['<rootDir>/.next/', '<rootDir>/.open-next/'],
 
   // Transform ignore patterns - allow ESM packages to be transformed
   transformIgnorePatterns: [

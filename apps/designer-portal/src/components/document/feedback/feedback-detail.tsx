@@ -23,13 +23,28 @@ import {
   type FeedbackStatus,
 } from '@patina/supabase';
 import { useAuth } from '@/hooks/use-auth';
-import { bucketMeta, statusMeta, weightDots, buildTimeline } from '@/lib/document/feedback';
+import {
+  bucketMeta,
+  statusMeta,
+  weightDots,
+  buildTimeline,
+} from '@/lib/document/feedback';
+import { DocumentAction, DocumentActionGroup } from '../document-action';
 
 function fmtWhen(iso: string): string {
-  return new Date(iso).toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
+  return new Date(iso).toLocaleDateString(undefined, {
+    month: 'short',
+    day: 'numeric',
+  });
 }
 
-export function FeedbackDetail({ id, onBack }: { id: string; onBack: () => void }) {
+export function FeedbackDetail({
+  id,
+  onBack,
+}: {
+  id: string;
+  onBack: () => void;
+}) {
   const { data, isLoading } = useFeedbackNote(id);
   const { user } = useAuth();
   const { isSuperAdmin } = useIsSuperAdmin();
@@ -53,7 +68,9 @@ export function FeedbackDetail({ id, onBack }: { id: string; onBack: () => void 
     return (
       <div className="mx-auto max-w-2xl">
         <BackBar onBack={onBack} />
-        <p className="py-8 text-center text-[13px] text-[var(--color-aged-oak)]">Loading…</p>
+        <p className="py-8 text-center text-[13px] text-[var(--color-aged-oak)]">
+          Loading…
+        </p>
       </div>
     );
   }
@@ -67,25 +84,55 @@ export function FeedbackDetail({ id, onBack }: { id: string; onBack: () => void 
       <BackBar onBack={onBack} />
 
       <div className="mt-2 flex items-center gap-2">
-        <span aria-hidden className="inline-block h-2 w-2 rounded-full" style={{ background: bm.colorVar }} />
-        <span className="font-mono text-[10px] font-semibold uppercase tracking-[0.1em]" style={{ color: bm.colorVar }}>
+        <span
+          aria-hidden
+          className="inline-block h-2 w-2 rounded-full"
+          style={{ background: bm.colorVar }}
+        />
+        <span
+          className="font-mono text-[10px] font-semibold uppercase tracking-[0.1em]"
+          style={{ color: bm.colorVar }}
+        >
           {bm.label}
         </span>
-        <span className="font-mono text-[10px] uppercase tracking-[0.1em] text-[var(--color-aged-oak)]">·</span>
-        <span className="font-mono text-[10px] font-semibold uppercase tracking-[0.1em]" style={{ color: sm.colorVar }}>
+        <span className="font-mono text-[10px] uppercase tracking-[0.1em] text-[var(--color-aged-oak)]">
+          ·
+        </span>
+        <span
+          className="font-mono text-[10px] font-semibold uppercase tracking-[0.1em]"
+          style={{ color: sm.colorVar }}
+        >
           {sm.label}
         </span>
         {dots > 0 && (
-          <span className="ml-auto flex items-center gap-1" aria-label={`weight ${note.weight}`}>
+          <span
+            className="ml-auto flex items-center gap-1"
+            aria-label={`weight ${note.weight}`}
+          >
             {[0, 1, 2].map((i) => (
-              <span key={i} className="h-1.5 w-1.5 rounded-full" style={{ background: i < dots ? 'var(--color-golden-hour)' : 'var(--color-pearl)' }} />
+              <span
+                key={i}
+                className="h-1.5 w-1.5 rounded-full"
+                style={{
+                  background:
+                    i < dots
+                      ? 'var(--color-golden-hour)'
+                      : 'var(--color-pearl)',
+                }}
+              />
             ))}
           </span>
         )}
       </div>
 
       <p className="mt-3 text-[15px] leading-relaxed text-[var(--color-charcoal)]">
-        {note.note ? `“${note.note}”` : <span className="text-[var(--color-aged-oak)]">(bucket only — no note)</span>}
+        {note.note ? (
+          `“${note.note}”`
+        ) : (
+          <span className="text-[var(--color-aged-oak)]">
+            (bucket only — no note)
+          </span>
+        )}
       </p>
 
       {/* Captured context (R7.5.2). */}
@@ -97,26 +144,46 @@ export function FeedbackDetail({ id, onBack }: { id: string; onBack: () => void 
       </dl>
 
       {shotUrl && (
-        <a href={shotUrl} target="_blank" rel="noopener noreferrer" className="mt-3 block">
+        <a
+          href={shotUrl}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="mt-3 block"
+        >
           {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img src={shotUrl} alt="Screen at capture" className="max-h-40 w-auto rounded-md border border-[var(--color-pearl)]" />
+          <img
+            src={shotUrl}
+            alt="Screen at capture"
+            className="max-h-40 w-auto rounded-md border border-[var(--color-pearl)]"
+          />
         </a>
       )}
 
       {/* Timeline (R7.5.3). */}
       <div className="mt-4 flex flex-col gap-2">
         {timeline.map((t, i) => (
-          <div key={i} className="flex items-center gap-2 text-[13px] text-[var(--color-mocha)]">
+          <div
+            key={i}
+            className="flex items-center gap-2 text-[13px] text-[var(--color-mocha)]"
+          >
             {/* "now" reads via color + a hairline ring (no shadow — D4). */}
             <span
-              className={t.now ? 'h-2.5 w-2.5 rounded-full border' : 'h-2 w-2 rounded-full'}
+              className={
+                t.now
+                  ? 'h-2.5 w-2.5 rounded-full border'
+                  : 'h-2 w-2 rounded-full'
+              }
               style={{
-                background: t.now ? 'var(--color-golden-hour)' : 'var(--color-sage)',
+                background: t.now
+                  ? 'var(--color-golden-hour)'
+                  : 'var(--color-sage)',
                 borderColor: t.now ? 'var(--color-charcoal)' : undefined,
               }}
             />
             {t.label}
-            <span className="ml-auto font-mono text-[10px] text-[var(--color-aged-oak)]">{fmtWhen(t.when)}</span>
+            <span className="ml-auto font-mono text-[10px] text-[var(--color-aged-oak)]">
+              {fmtWhen(t.when)}
+            </span>
           </div>
         ))}
       </div>
@@ -128,7 +195,9 @@ export function FeedbackDetail({ id, onBack }: { id: string; onBack: () => void 
         isAdmin={isSuperAdmin}
         isAuthor={isAuthor}
         pending={setStatus.isPending}
-        onSetStatus={(status, text) => setStatus.mutate({ id: note.id, status, note: text })}
+        onSetStatus={(status, text) =>
+          setStatus.mutate({ id: note.id, status, note: text })
+        }
         onReact={(emoji) => react.mutate({ id: note.id, emoji })}
       />
 
@@ -140,14 +209,21 @@ export function FeedbackDetail({ id, onBack }: { id: string; onBack: () => void 
           placeholder="Reply…"
           className="flex-1 rounded-md border border-[var(--color-pearl)] bg-white px-2.5 py-1.5 text-[13px] text-[var(--color-charcoal)] placeholder:text-[var(--text-faint)] focus:border-[var(--color-clay)] focus:outline-none"
         />
-        <button
-          type="button"
+        <DocumentAction
+          actionKey="send-feedback-reply"
+          surfaceKey="feedback"
+          regionKey="note-reply"
+          variant="primary"
           disabled={!replyText.trim() || reply.isPending}
-          onClick={() => { reply.mutate({ id: note.id, text: replyText.trim() }); setReplyText(''); }}
-          className="rounded-md border border-[var(--color-pearl)] px-3 py-1.5 font-mono text-[10px] uppercase tracking-[0.08em] text-[var(--color-mocha)] disabled:opacity-40"
+          loading={reply.isPending}
+          loadingLabel="Sending…"
+          onClick={() => {
+            reply.mutate({ id: note.id, text: replyText.trim() });
+            setReplyText('');
+          }}
         >
           Send
-        </button>
+        </DocumentAction>
       </div>
     </div>
   );
@@ -174,26 +250,29 @@ function TriageActions({
   const [shipNote, setShipNote] = useState('');
 
   if (isAdmin) {
-    const next: FeedbackStatus[] = (['noted', 'building', 'shipped', 'archived'] as FeedbackStatus[]).filter(
-      (s) => s !== note.status,
-    );
+    const next: FeedbackStatus[] = (
+      ['noted', 'building', 'shipped', 'archived'] as FeedbackStatus[]
+    ).filter((s) => s !== note.status);
     return (
       <div className="mt-4 border-t border-[var(--color-pearl)] pt-3">
-        <p className="mb-2 font-mono text-[9px] uppercase tracking-[0.1em] text-[var(--color-aged-oak)]">Set status</p>
-        <div className="flex flex-wrap items-center gap-2">
+        <p className="mb-2 font-mono text-[9px] uppercase tracking-[0.1em] text-[var(--color-aged-oak)]">
+          Set status
+        </p>
+        <DocumentActionGroup surfaceKey="feedback" regionKey="status-triage">
           {next.map((s) => (
-            <button
+            <DocumentAction
               key={s}
-              type="button"
+              actionKey={`set-feedback-status-${s}`}
+              variant="secondary"
               disabled={pending}
-              onClick={() => (s === 'shipped' ? setShipOpen(true) : onSetStatus(s))}
-              className="rounded-md border px-3 py-1.5 font-mono text-[10px] uppercase tracking-[0.08em] disabled:opacity-40"
-              style={{ borderColor: statusMeta(s).colorVar, color: statusMeta(s).colorVar }}
+              onClick={() =>
+                s === 'shipped' ? setShipOpen(true) : onSetStatus(s)
+              }
             >
               {statusMeta(s).label}
-            </button>
+            </DocumentAction>
           ))}
-        </div>
+        </DocumentActionGroup>
         {shipOpen && (
           <div className="mt-2 flex flex-col gap-2">
             <input
@@ -202,19 +281,29 @@ function TriageActions({
               placeholder="What changed? (shown on her shipped card)"
               className="w-full rounded-md border border-[var(--color-pearl)] bg-white px-2.5 py-1.5 text-[13px] text-[var(--color-charcoal)] placeholder:text-[var(--text-faint)] focus:border-[var(--color-clay)] focus:outline-none"
             />
-            <div className="flex items-center gap-2">
-              <button
-                type="button"
+            <DocumentActionGroup
+              surfaceKey="feedback"
+              regionKey="ship-confirmation"
+            >
+              <DocumentAction
+                actionKey="mark-feedback-shipped"
+                variant="primary"
                 disabled={pending}
-                onClick={() => { onSetStatus('shipped', shipNote.trim() || undefined); setShipOpen(false); }}
-                className="rounded-md bg-[var(--color-sage)] px-3 py-1 font-mono text-[10px] font-semibold uppercase tracking-[0.08em] text-[var(--color-charcoal)] disabled:opacity-50"
+                onClick={() => {
+                  onSetStatus('shipped', shipNote.trim() || undefined);
+                  setShipOpen(false);
+                }}
               >
                 Mark shipped
-              </button>
-              <button type="button" onClick={() => setShipOpen(false)} className="font-mono text-[10px] uppercase tracking-[0.08em] text-[var(--color-aged-oak)]">
+              </DocumentAction>
+              <DocumentAction
+                actionKey="cancel-mark-feedback-shipped"
+                variant="tertiary"
+                onClick={() => setShipOpen(false)}
+              >
                 Cancel
-              </button>
-            </div>
+              </DocumentAction>
+            </DocumentActionGroup>
           </div>
         )}
       </div>
@@ -225,16 +314,26 @@ function TriageActions({
   if (isAuthor && note.status === 'shipped') {
     return (
       <div className="mt-4 flex items-center gap-2 border-t border-[var(--color-pearl)] pt-3">
-        <button type="button" onClick={() => onReact('👍')} className="rounded-full border border-[color-mix(in_srgb,var(--color-sage)_40%,transparent)] px-2.5 py-1 font-mono text-[11px] text-[var(--color-sage)]">
+        <button
+          type="button"
+          onClick={() => onReact('👍')}
+          className="rounded-full border border-[color-mix(in_srgb,var(--color-sage)_40%,transparent)] px-2.5 py-1 font-mono text-[11px] text-[var(--color-sage)]"
+        >
           👍 Nailed it
         </button>
-        <button type="button" onClick={() => onReact('🎉')} className="rounded-full border border-[var(--color-pearl)] px-2.5 py-1 font-mono text-[11px] text-[var(--color-mocha)]">
+        <button
+          type="button"
+          onClick={() => onReact('🎉')}
+          className="rounded-full border border-[var(--color-pearl)] px-2.5 py-1 font-mono text-[11px] text-[var(--color-mocha)]"
+        >
           🎉
         </button>
         <button
           type="button"
           disabled={pending}
-          onClick={() => onSetStatus('building', 'Reopened from the note detail.')}
+          onClick={() =>
+            onSetStatus('building', 'Reopened from the note detail.')
+          }
           className="ml-auto font-mono text-[11px] text-[var(--color-aged-oak)] hover:text-[var(--color-charcoal)] disabled:opacity-40"
         >
           Not quite →
@@ -258,25 +357,44 @@ function BackBar({ onBack }: { onBack: () => void }) {
   );
 }
 
-function ContextCell({ label, value }: { label: string; value: string | null }) {
+function ContextCell({
+  label,
+  value,
+}: {
+  label: string;
+  value: string | null;
+}) {
   return (
     <div>
-      <dt className="text-[9px] uppercase tracking-[0.08em] text-[var(--color-aged-oak)]">{label}</dt>
-      <dd className="mt-0.5 truncate text-[var(--color-charcoal)]">{value ?? '—'}</dd>
+      <dt className="text-[9px] uppercase tracking-[0.08em] text-[var(--color-aged-oak)]">
+        {label}
+      </dt>
+      <dd className="mt-0.5 truncate text-[var(--color-charcoal)]">
+        {value ?? '—'}
+      </dd>
     </div>
   );
 }
 
 function Thread({ events }: { events: FeedbackEvent[] }) {
-  const thread = events.filter((e) => e.kind === 'reply' || e.kind === 'reaction');
+  const thread = events.filter(
+    (e) => e.kind === 'reply' || e.kind === 'reaction',
+  );
   if (!thread.length) return null;
   return (
     <div className="mt-4 flex flex-col gap-2">
       {thread.map((e) => (
-        <div key={e.id} className="rounded-lg bg-[rgba(196,165,123,0.06)] px-3 py-2 text-[13px] text-[var(--color-mocha)]">
-          {e.kind === 'reaction'
-            ? <span className="text-[16px]">{String(e.payload?.emoji ?? '👍')}</span>
-            : String(e.payload?.text ?? '')}
+        <div
+          key={e.id}
+          className="rounded-lg bg-[rgba(196,165,123,0.06)] px-3 py-2 text-[13px] text-[var(--color-mocha)]"
+        >
+          {e.kind === 'reaction' ? (
+            <span className="text-[16px]">
+              {String(e.payload?.emoji ?? '👍')}
+            </span>
+          ) : (
+            String(e.payload?.text ?? '')
+          )}
         </div>
       ))}
     </div>

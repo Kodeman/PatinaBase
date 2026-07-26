@@ -9,29 +9,44 @@
 
 import { useEffect, useState } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
-import { useUpdateDamageClaim, useUpdatePurchaseOrderETA, useVendor } from '@patina/supabase';
+import {
+  useUpdateDamageClaim,
+  useUpdatePurchaseOrderETA,
+  useVendor,
+} from '@patina/supabase';
 import { OrderAssistant } from '@/components/portal/procurement/order-assistant';
 import { LogInspectionDrawer } from '@/components/portal/procurement/log-inspection-drawer';
 import { clientVendorEmailHint } from '@/components/portal/procurement/po-send-actions';
 import { PoPreview } from './po-preview';
 import { openInvoiceComposer } from './accounts/invoice-overlays';
 import { FolioStrip } from './folio-strip';
-import { useAssignLineRoom, useDocumentRooms } from '@/hooks/use-document-rooms';
+import {
+  useAssignLineRoom,
+  useDocumentRooms,
+} from '@/hooks/use-document-rooms';
 import { deriveLineStamp } from '@/lib/document/stamp-derivation';
 import { fmtDay } from '@/lib/document/format';
+import { DocumentAction, DocumentActionGroup } from './document-action';
 
 type FFERow = any;
 
-const ACTION_BTN =
-  'rounded-[4px] border border-[var(--color-pearl)] px-2.5 py-1.5 text-[10.5px] font-medium text-[var(--color-charcoal)] hover:border-[var(--color-clay)] disabled:opacity-50';
-
-function Cell({ label, value, sub }: { label: string; value: string; sub?: string }) {
+function Cell({
+  label,
+  value,
+  sub,
+}: {
+  label: string;
+  value: string;
+  sub?: string;
+}) {
   return (
     <div>
       <p className="mb-0.5 font-mono text-[8px] uppercase tracking-[0.06em] text-[var(--text-muted)]">
         {label}
       </p>
-      <p className="text-[11.5px] font-medium text-[var(--color-charcoal)]">{value}</p>
+      <p className="text-[11.5px] font-medium text-[var(--color-charcoal)]">
+        {value}
+      </p>
       {sub && <p className="text-[10px] text-[var(--text-muted)]">{sub}</p>}
     </div>
   );
@@ -48,7 +63,9 @@ const ORDERABLE = new Set(['specified', 'quoted', 'approved']);
 function MovementCell({ item, po }: { item: FFERow; po: FFERow | null }) {
   const qc = useQueryClient();
   const updateEta = useUpdatePurchaseOrderETA({ errorSurface: 'inline' });
-  const [eta, setEta] = useState<string>(po?.confirmed_eta ? po.confirmed_eta.slice(0, 10) : '');
+  const [eta, setEta] = useState<string>(
+    po?.confirmed_eta ? po.confirmed_eta.slice(0, 10) : '',
+  );
   const [saved, setSaved] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
@@ -60,7 +77,8 @@ function MovementCell({ item, po }: { item: FFERow; po: FFERow | null }) {
   const save = (value: string) => {
     // <input type="date"> yields '' until a complete date exists — the same
     // canSave guard the drawer used.
-    if (!po || !/^\d{4}-\d{2}-\d{2}$/.test(value) || updateEta.isPending) return;
+    if (!po || !/^\d{4}-\d{2}-\d{2}$/.test(value) || updateEta.isPending)
+      return;
     setError(null);
     setSaved(null);
     updateEta
@@ -71,7 +89,9 @@ function MovementCell({ item, po }: { item: FFERow; po: FFERow | null }) {
         void qc.invalidateQueries({ queryKey: ['project-ffe-items'] });
         void qc.invalidateQueries({ queryKey: ['document-state'] });
       })
-      .catch((e: Error) => setError(e.message || 'The ETA could not be saved.'));
+      .catch((e: Error) =>
+        setError(e.message || 'The ETA could not be saved.'),
+      );
   };
 
   return (
@@ -101,7 +121,9 @@ function MovementCell({ item, po }: { item: FFERow; po: FFERow | null }) {
             />
           </label>
           {!eta && po.status === 'shipped' && !error && (
-            <p className="text-[10px] text-[var(--text-muted)]">shipped — no scheduled arrival</p>
+            <p className="text-[10px] text-[var(--text-muted)]">
+              shipped — no scheduled arrival
+            </p>
           )}
           {saved && !error && (
             // R51: the quiet confirmation.
@@ -111,20 +133,27 @@ function MovementCell({ item, po }: { item: FFERow; po: FFERow | null }) {
           )}
           {error && (
             // R83: inline at the act — the reason and a retry.
-            <p role="alert" className="text-[10px] text-[#C4836F]">
-              {error}{' '}
-              <button
-                type="button"
+            <div role="alert" className="text-[10px] text-[#C4836F]">
+              <p>{error}</p>
+              <DocumentAction
+                actionKey="retry-save-ffe-eta"
+                surfaceKey="project"
+                regionKey="ffe-eta-error"
+                variant="primary"
                 onClick={() => save(eta)}
-                className="underline hover:opacity-80"
+                className="mt-2"
               >
-                try again
-              </button>
-            </p>
+                Try again
+              </DocumentAction>
+            </div>
           )}
         </>
       ) : (
-        item.eta && <p className="text-[10px] text-[var(--text-muted)]">eta ~{fmtDay(item.eta)}</p>
+        item.eta && (
+          <p className="text-[10px] text-[var(--text-muted)]">
+            eta ~{fmtDay(item.eta)}
+          </p>
+        )
       )}
     </div>
   );
@@ -152,7 +181,9 @@ function ClaimActs({ claims }: { claims: { id: string; state: string }[] }) {
       await updateClaim.mutateAsync({
         id,
         state,
-        ...(state === 'resolved' && note.trim() ? { resolution_notes: note.trim() } : {}),
+        ...(state === 'resolved' && note.trim()
+          ? { resolution_notes: note.trim() }
+          : {}),
       });
       // One act, many surfaces (§5): line stamp, Receiving book, Desk need.
       void qc.invalidateQueries({ queryKey: ['project-ffe-items'] });
@@ -175,27 +206,36 @@ function ClaimActs({ claims }: { claims: { id: string; state: string }[] }) {
         <div key={c.id} className="py-0.5">
           <div className="flex flex-wrap items-baseline gap-2">
             <span className="font-mono text-[8.5px] uppercase tracking-[0.06em] text-[var(--color-terracotta)]">
-              Claim · {c.state === 'vendor_notified' ? 'vendor notified' : 'drafted'}
+              Claim ·{' '}
+              {c.state === 'vendor_notified' ? 'vendor notified' : 'drafted'}
             </span>
             {c.state === 'drafted' && (
-              <button
-                type="button"
+              <DocumentAction
+                actionKey="notify-vendor-of-ffe-claim"
+                surfaceKey="project"
+                regionKey="ffe-claim"
+                variant="primary"
                 disabled={updateClaim.isPending}
+                loading={updateClaim.isPending}
+                loadingLabel="Notifying…"
                 onClick={() => void run(c.id, 'vendor_notified')}
-                className="text-[10.5px] text-[var(--color-clay)] hover:underline disabled:opacity-50"
               >
-                notify vendor →
-              </button>
+                Notify vendor
+              </DocumentAction>
             )}
             {c.state === 'vendor_notified' && (
-              <button
-                type="button"
-                onClick={() => setResolvingId((cur) => (cur === c.id ? null : c.id))}
+              <DocumentAction
+                actionKey="open-resolve-ffe-claim"
+                surfaceKey="project"
+                regionKey="ffe-claim"
+                variant="secondary"
+                onClick={() =>
+                  setResolvingId((cur) => (cur === c.id ? null : c.id))
+                }
                 aria-expanded={resolvingId === c.id}
-                className="text-[10.5px] text-[var(--color-clay)] hover:underline"
               >
-                mark resolved {resolvingId === c.id ? '↑' : '↓'}
-              </button>
+                Mark resolved {resolvingId === c.id ? '↑' : '↓'}
+              </DocumentAction>
             )}
           </div>
           {resolvingId === c.id && (
@@ -208,14 +248,18 @@ function ClaimActs({ claims }: { claims: { id: string; state: string }[] }) {
                 aria-label="Resolution notes"
                 className="flex-1 resize-none rounded-[3px] border border-[var(--color-pearl)] bg-transparent px-2 py-1.5 text-[11px] text-[var(--color-charcoal)] outline-none placeholder:text-[var(--text-muted)]"
               />
-              <button
-                type="button"
+              <DocumentAction
+                actionKey="resolve-ffe-claim"
+                surfaceKey="project"
+                regionKey="ffe-claim-resolution"
+                variant="primary"
                 disabled={updateClaim.isPending}
+                loading={updateClaim.isPending}
+                loadingLabel="Resolving…"
                 onClick={() => void run(c.id, 'resolved')}
-                className="whitespace-nowrap rounded-[4px] border border-[var(--color-clay)] px-2.5 py-1 text-[10.5px] font-medium text-[var(--color-clay)] hover:bg-[rgba(196,165,123,0.1)] disabled:opacity-50"
               >
-                {updateClaim.isPending ? 'Resolving…' : 'Mark resolved'}
-              </button>
+                Mark resolved
+              </DocumentAction>
             </div>
           )}
         </div>
@@ -261,13 +305,15 @@ export function LineUnfold({
   const assignRoom = useAssignLineRoom(projectId);
 
   const orderable = ORDERABLE.has(item.status) && !item.blocked;
-  const inspectable = Boolean(po) && (item.status === 'shipped' || item.status === 'delivered');
+  const inspectable =
+    Boolean(po) && (item.status === 'shipped' || item.status === 'delivered');
   // R18: sending one PO while working its line is engagement work — the
   // unfold offers Send for drafted, never-sent POs only.
   const sendable = Boolean(po) && po.status === 'draft' && !po.sent_at;
 
   const openClaims = (item.item_claims ?? []).filter(
-    (c: { state: string }) => c.state === 'drafted' || c.state === 'vendor_notified',
+    (c: { state: string }) =>
+      c.state === 'drafted' || c.state === 'vendor_notified',
   );
   const receivingValue =
     stamp.kind === 'damaged'
@@ -284,23 +330,32 @@ export function LineUnfold({
         <Cell
           label="Purchase order"
           value={
-            po ? (po.po_number ?? po.vendor_po_number ?? po.sidemark ?? 'PO drafted') : 'Not yet ordered'
+            po
+              ? (po.po_number ??
+                po.vendor_po_number ??
+                po.sidemark ??
+                'PO drafted')
+              : 'Not yet ordered'
           }
           sub={
             po
               ? [
                   // R18: the cell narrates the send lifecycle.
-                  po.sent_at ? `sent to vendor ${fmtDay(po.sent_at)}` : 'not yet sent',
+                  po.sent_at
+                    ? `sent to vendor ${fmtDay(po.sent_at)}`
+                    : 'not yet sent',
                   po.sent_at
                     ? po.acknowledged_at
                       ? 'acknowledged'
                       : 'awaiting acknowledgment'
                     : null,
-                  po.payment_pattern ? po.payment_pattern.replace(/_/g, ' ') : null,
+                  po.payment_pattern
+                    ? po.payment_pattern.replace(/_/g, ' ')
+                    : null,
                 ]
                   .filter(Boolean)
                   .join(' · ')
-              : item.vendor_name ?? undefined
+              : (item.vendor_name ?? undefined)
           }
         />
         {/* PRC-12: the Movement cell carries the confirmed-ETA quick-edit. */}
@@ -322,7 +377,10 @@ export function LineUnfold({
           <select
             value={item.project_room_id ?? ''}
             onChange={(e) =>
-              assignRoom.mutate({ itemId: item.id, roomId: e.target.value || null })
+              assignRoom.mutate({
+                itemId: item.id,
+                roomId: e.target.value || null,
+              })
             }
             aria-label="Assign to room"
             className="bg-transparent text-[10.5px] text-[var(--color-charcoal)] outline-none"
@@ -338,47 +396,68 @@ export function LineUnfold({
       )}
 
       {/* R24: cut sheets and spec PDFs clip to the line. */}
-      <FolioStrip projectId={projectId} anchor={{ kind: 'line', anchorId: item.id }} />
+      <FolioStrip
+        projectId={projectId}
+        anchor={{ kind: 'line', anchorId: item.id }}
+      />
 
-      <div className="flex flex-wrap gap-1.5">
+      <DocumentActionGroup surfaceKey="project" regionKey="ffe-line-actions">
         {orderable && (
-          <button
-            type="button"
-            className={ACTION_BTN}
+          <DocumentAction
+            actionKey="order-ffe-line"
+            variant={sendable || inspectable ? 'secondary' : 'primary'}
             disabled={!vendor}
             title={vendor ? undefined : 'No vendor on this line yet'}
             onClick={() => setAssistantOpen(true)}
           >
             Order with Assistant
-          </button>
+          </DocumentAction>
         )}
         {sendable && (
-          <button type="button" className={ACTION_BTN} onClick={() => setPreviewOpen(true)}>
+          <DocumentAction
+            actionKey="send-ffe-line-to-vendor"
+            variant="primary"
+            onClick={() => setPreviewOpen(true)}
+          >
             Send to vendor
-          </button>
+          </DocumentAction>
         )}
         {inspectable && (
-          <button type="button" className={ACTION_BTN} onClick={() => setInspectionOpen(true)}>
+          <DocumentAction
+            actionKey="inspect-ffe-delivery"
+            variant={sendable ? 'secondary' : 'primary'}
+            onClick={() => setInspectionOpen(true)}
+          >
             Log inspection
-          </button>
+          </DocumentAction>
         )}
         {/* R76 — bill this line: the composer opens FF&E-prefilled and
             intersects against what's still billable (covered lines fall out
             with a quiet notice), so the act needs no coverage gate here. */}
-        <button
-          type="button"
-          className={ACTION_BTN}
-          onClick={() => openInvoiceComposer({ projectId, initialFfeItemIds: [item.id] })}
+        <DocumentAction
+          actionKey="bill-ffe-line"
+          variant="secondary"
+          onClick={() =>
+            openInvoiceComposer({ projectId, initialFfeItemIds: [item.id] })
+          }
         >
-          Bill →
-        </button>
-        <button type="button" className={ACTION_BTN} onClick={() => onAddNote(item.id)}>
-          + Note
-        </button>
-        <button type="button" className={ACTION_BTN} onClick={onFold}>
-          Fold ↑
-        </button>
-      </div>
+          Bill
+        </DocumentAction>
+        <DocumentAction
+          actionKey="add-ffe-line-note"
+          variant="secondary"
+          onClick={() => onAddNote(item.id)}
+        >
+          Add note
+        </DocumentAction>
+        <DocumentAction
+          actionKey="fold-ffe-line"
+          variant="tertiary"
+          onClick={onFold}
+        >
+          Fold
+        </DocumentAction>
+      </DocumentActionGroup>
 
       {/* D4 inside the paper: the shared procurement panels carry shadow-xl
           in the old zones — strip it here without touching them (R3). */}

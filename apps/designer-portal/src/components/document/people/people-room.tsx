@@ -14,10 +14,21 @@
 
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { usePeopleDirectory, isFieldRosterRole, type PartyRole } from '@patina/supabase';
-import { deriveNurtureQueue, humanizeSince } from '@/lib/document/people-derivation';
+import {
+  usePeopleDirectory,
+  isFieldRosterRole,
+  type PartyRole,
+} from '@patina/supabase';
+import {
+  deriveNurtureQueue,
+  humanizeSince,
+} from '@/lib/document/people-derivation';
 import { RoomShell } from '../rooms/room-shell';
-import { DirectoryView, type DirectoryRole, type MakerLens } from './views/directory-view';
+import {
+  DirectoryView,
+  type DirectoryRole,
+  type MakerLens,
+} from './views/directory-view';
 import { PersonProfile } from './views/person-profile';
 import { PartyProfileSheet } from './party-profile-sheet';
 import { ThreadsView } from './views/threads-view';
@@ -30,6 +41,8 @@ import { AddPersonSheet } from './directory/add-person-sheet';
 import type { PeopleView, PeopleViewProps } from './types';
 import { useDocumentSurface } from '@/lib/help-system/use-document-surface';
 import { DOCUMENT_SURFACE_KEYS } from '@/lib/help-system/document-surface-keys';
+import { DocumentAction, DocumentActionGroup } from '../document-action';
+import { useMobilePrimaryAction } from '../mobile/mobile-shell';
 
 const VIEWS: Array<{ key: PeopleView; name: string }> = [
   { key: 'directory', name: 'Directory' },
@@ -43,7 +56,10 @@ const VIEWS: Array<{ key: PeopleView; name: string }> = [
 /** The quiet descending mark beside a view row (prototype .vr-mark). */
 function RailMark() {
   return (
-    <span aria-hidden className="flex w-[11px] shrink-0 flex-col items-start gap-[1.5px]">
+    <span
+      aria-hidden
+      className="flex w-[11px] shrink-0 flex-col items-start gap-[1.5px]"
+    >
       <i className="block h-[2px] w-[11px] rounded-[1px] bg-[var(--color-clay)]" />
       <i className="block h-[2px] w-[8px] rounded-[1px] bg-[var(--color-clay)] opacity-60" />
       <i className="block h-[2px] w-[5px] rounded-[1px] bg-[var(--color-clay)] opacity-30" />
@@ -55,11 +71,17 @@ export function PeopleRoom() {
   useDocumentSurface(DOCUMENT_SURFACE_KEYS.people); // R89 — scope help to the People room
   const router = useRouter();
   const [view, setView] = useState<PeopleView>('directory');
-  const [openPerson, setOpenPerson] = useState<{ id: string; role: PartyRole } | null>(null);
+  const [openPerson, setOpenPerson] = useState<{
+    id: string;
+    role: PartyRole;
+  } | null>(null);
   // Field parties (gc/sub/installer/receiver) open the field-coordination party
   // sheet (SMS thread + field link) rather than the relationship profile (D1:
   // an overlay over the Room, which never unmounts).
-  const [openParty, setOpenParty] = useState<{ id: string; role: PartyRole } | null>(null);
+  const [openParty, setOpenParty] = useState<{
+    id: string;
+    role: PartyRole;
+  } | null>(null);
   const [pendingThreadId, setPendingThreadId] = useState<string | null>(null);
   const [ask, setAsk] = useState('');
   const [toast, setToast] = useState<string | null>(null);
@@ -76,7 +98,17 @@ export function PeopleRoom() {
   // F4 — a person to scroll into view + quietly highlight in the Directory
   // once their row is on screen (set by the ?person= deep-link, or by a
   // return from that person's profile). Self-clears on a short timer.
-  const [highlightPersonId, setHighlightPersonId] = useState<string | null>(null);
+  const [highlightPersonId, setHighlightPersonId] = useState<string | null>(
+    null,
+  );
+
+  useMobilePrimaryAction({
+    actionKey: 'add-person',
+    surfaceKey: 'people',
+    regionKey: 'room-head',
+    label: 'Add person',
+    target: { kind: 'press', onPress: () => setAddOpen(true) },
+  });
 
   const { data: all } = usePeopleDirectory({ role: 'all' });
   const now = useMemo(() => new Date(), []);
@@ -113,8 +145,11 @@ export function PeopleRoom() {
 
     if (person) {
       const urlRole =
-        roleParam && (roles as string[]).includes(roleParam) ? (roleParam as PartyRole) : null;
-      const resolved = urlRole ?? all?.find((p) => p.person_id === person)?.role ?? null;
+        roleParam && (roles as string[]).includes(roleParam)
+          ? (roleParam as PartyRole)
+          : null;
+      const resolved =
+        urlRole ?? all?.find((p) => p.person_id === person)?.role ?? null;
       if (!resolved) {
         // No role in the URL, and the roster hasn't resolved this person yet
         // — wait for `all` rather than dropping the deep-link. Once it has
@@ -129,7 +164,12 @@ export function PeopleRoom() {
       } else {
         // Land the tab a click from that row would have left active, so
         // backing out of the profile shows it in context, not under "All".
-        if (resolved === 'maker' || resolved === 'client' || resolved === 'lead' || resolved === 'team') {
+        if (
+          resolved === 'maker' ||
+          resolved === 'client' ||
+          resolved === 'lead' ||
+          resolved === 'team'
+        ) {
           setRoleFilter(resolved);
         }
         setHighlightPersonId(person);
@@ -205,7 +245,9 @@ export function PeopleRoom() {
     switch (route.kind) {
       case 'nurture':
         nav.goView('nurture');
-        notify('The Engine surfaced who is drifting out of touch — see the Nurture queue.');
+        notify(
+          'The Engine surfaced who is drifting out of touch — see the Nurture queue.',
+        );
         break;
       case 'directory': {
         filterDirectory(route.role);
@@ -270,13 +312,20 @@ export function PeopleRoom() {
       title="The People Room"
       count={all ? `${all.length} people` : undefined}
       action={
-        <button
-          type="button"
-          onClick={() => setAddOpen(true)}
-          className="inline-flex items-center gap-1.5 rounded-[5px] border border-[var(--doc-ink-border)] bg-white px-3 py-2 font-mono text-[9px] font-semibold uppercase tracking-[0.08em] text-[var(--color-charcoal)] transition-colors hover:border-[var(--color-clay)]"
+        <DocumentActionGroup
+          surfaceKey="people"
+          regionKey="room-head"
+          aria-label="People actions"
         >
-          <span aria-hidden>+</span> Add
-        </button>
+          <DocumentAction
+            actionKey="add-person"
+            variant="primary"
+            leading="+"
+            onClick={() => setAddOpen(true)}
+          >
+            Add person
+          </DocumentAction>
+        </DocumentActionGroup>
       }
     >
       {/* Ask bar — over people + history (derivation-backed v1). */}
@@ -296,7 +345,9 @@ export function PeopleRoom() {
                 type="button"
                 onClick={() => nav.goView(v.key)}
                 className={`relative flex w-full items-center gap-2.5 px-4 py-2 text-left transition-colors ${
-                  on ? 'bg-[rgba(196,165,123,0.11)]' : 'hover:bg-[rgba(196,165,123,0.06)]'
+                  on
+                    ? 'bg-[rgba(196,165,123,0.11)]'
+                    : 'hover:bg-[rgba(196,165,123,0.06)]'
                 }`}
               >
                 {on && (
@@ -331,7 +382,8 @@ export function PeopleRoom() {
                 <b className="font-semibold text-[var(--color-charcoal)]">
                   {nudge.count} {nudge.count === 1 ? 'person' : 'people'}
                 </b>{' '}
-                drifting out of touch. {nudge.name} is your strongest dormant tie ({nudge.since}).
+                drifting out of touch. {nudge.name} is your strongest dormant
+                tie ({nudge.since}).
               </span>
             </button>
           )}

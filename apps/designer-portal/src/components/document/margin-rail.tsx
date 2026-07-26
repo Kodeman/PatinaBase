@@ -19,7 +19,10 @@ import {
 import { useSectionTasks } from '@/hooks/use-section-work';
 import { useMarginItems } from '@/hooks/use-margin-items';
 import { useCreateMarginNote } from '@/hooks/use-margin-notes';
-import { partitionMargin, type MarginItemRow } from '@/lib/document/margin-derivation';
+import {
+  partitionMargin,
+  type MarginItemRow,
+} from '@/lib/document/margin-derivation';
 import { todayYmd } from '@/lib/document/format';
 import { MarginItem } from './margin-item';
 import { MarginItemBody } from './margin-bodies';
@@ -31,6 +34,11 @@ import {
   toComposerPhases,
 } from './coordination/item-composer';
 import { itemTypeToken } from './coordination/item-type';
+import {
+  DocumentAction,
+  DocumentActionGroup,
+  DocumentActionRow,
+} from './document-action';
 
 export function MarginRail({
   projectId,
@@ -63,14 +71,18 @@ export function MarginRail({
   const { data: ffeItems } = useProjectFFEItems(projectId ?? '');
   const { raised, settled } = useMemo(() => {
     const lineRank = new Map<string, number>();
-    ((ffeItems ?? []) as Array<{ id: string }>).forEach((it, i) => lineRank.set(it.id, i));
+    ((ffeItems ?? []) as Array<{ id: string }>).forEach((it, i) =>
+      lineRank.set(it.id, i),
+    );
     return partitionMargin(items ?? [], new Date(), { lineRank });
   }, [items, ffeItems]);
 
   // ── R55: the decision composer, opened from the margin "+ New" ──
   // designer_clients.id resolution (the band's pattern) — the composer INSERT
   // needs the FK, not the raw client auth uid. null until the resolver lands.
-  const { data: designerClient } = useDesignerClientForClientUser(clientUserId ?? '');
+  const { data: designerClient } = useDesignerClientForClientUser(
+    clientUserId ?? '',
+  );
   const designerClientId = designerClient?.id ?? null;
   const canCompose = Boolean(projectId && designerClientId);
 
@@ -80,7 +92,10 @@ export function MarginRail({
   const { data: coordItems } = useCoordinationItems(projectId);
 
   const composerFfe = useMemo(() => toComposerFfeItems(ffeItems), [ffeItems]);
-  const composerPhases = useMemo(() => toComposerPhases(phaseRows), [phaseRows]);
+  const composerPhases = useMemo(
+    () => toComposerPhases(phaseRows),
+    [phaseRows],
+  );
   const draftItems = useMemo(
     () => (coordItems ?? []).filter((i) => i.status === 'draft'),
     [coordItems],
@@ -149,7 +164,9 @@ export function MarginRail({
         row={row}
         open={openId === row.item_id}
         onToggle={
-          expandable ? () => setOpenId((v) => (v === row.item_id ? null : row.item_id)) : undefined
+          expandable
+            ? () => setOpenId((v) => (v === row.item_id ? null : row.item_id))
+            : undefined
         }
         onHoverAnchor={onHoverLine}
       >
@@ -166,32 +183,37 @@ export function MarginRail({
           owns once-only + recede. */}
       {projectId && (
         <MarginNote noteKey="doc-first-touch" className="mb-5">
-          The margin on the right is where decisions and money gather. Esc puts the document
-          down — and the hours log themselves while it&apos;s in your hand.
+          The margin on the right is where decisions and money gather. Esc puts
+          the document down — and the hours log themselves while it&apos;s in
+          your hand.
         </MarginNote>
       )}
       <div className="mb-3 flex items-baseline justify-between">
         <p className="font-mono text-[9px] font-semibold uppercase tracking-[0.08em] text-[var(--text-muted)]">
           In the margin
         </p>
-        <div className="flex items-baseline gap-1">
+        <DocumentActionGroup
+          surfaceKey="open-document"
+          regionKey="margin-capture"
+          aria-label="Margin capture actions"
+        >
           {canCompose && (
-            <button
-              type="button"
+            <DocumentAction
+              actionKey="new-margin-decision"
+              variant="secondary"
               onClick={() => setComposer({ mode: 'new' })}
-              className="rounded-[3px] border border-transparent px-1.5 py-0.5 font-mono text-[9px] uppercase tracking-[0.06em] text-[var(--text-muted)] hover:border-[rgba(196,165,123,0.35)] hover:text-[var(--color-clay)]"
             >
               + Decision
-            </button>
+            </DocumentAction>
           )}
-          <button
-            type="button"
+          <DocumentAction
+            actionKey="new-margin-note"
+            variant="secondary"
             onClick={() => setComposing((v) => !v)}
-            className="rounded-[3px] border border-transparent px-1.5 py-0.5 font-mono text-[9px] uppercase tracking-[0.06em] text-[var(--text-muted)] hover:border-[rgba(196,165,123,0.35)] hover:text-[var(--color-clay)]"
           >
             + Note
-          </button>
-        </div>
+          </DocumentAction>
+        </DocumentActionGroup>
       </div>
 
       {/* R55: unsent drafts live here — editable in the margin until published. */}
@@ -201,7 +223,7 @@ export function MarginRail({
             type="button"
             aria-expanded={draftsOpen}
             onClick={() => setDraftsOpen((v) => !v)}
-            className="mb-1 font-mono text-[9px] font-semibold uppercase tracking-[0.08em] text-[var(--text-muted)] hover:text-[var(--color-clay)]"
+            className="mb-1 min-h-11 min-w-11 font-mono text-[9px] font-semibold uppercase tracking-[0.08em] text-[var(--text-muted)] hover:text-[var(--color-clay)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-clay)]"
           >
             Drafts · {draftItems.length} {draftsOpen ? '↑' : '↓'}
           </button>
@@ -212,7 +234,7 @@ export function MarginRail({
                   key={d.id}
                   type="button"
                   onClick={() => setComposer({ mode: 'edit', item: d })}
-                  className="flex items-center gap-2 rounded-[5px] border border-dashed border-[var(--color-pearl)] bg-[var(--doc-paper)] px-2 py-1.5 text-left text-[11px] text-[var(--color-charcoal)] hover:border-[var(--color-clay)]"
+                  className="flex min-h-11 min-w-11 items-center gap-2 rounded-[5px] border border-dashed border-[var(--color-pearl)] bg-[var(--doc-paper)] px-2 py-1.5 text-left text-[11px] text-[var(--color-charcoal)] hover:border-[var(--color-clay)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-clay)]"
                 >
                   <span
                     className="inline-block rounded-[2px] border px-1 py-px font-mono text-[7.5px] font-semibold uppercase tracking-[0.04em] text-[var(--color-aged-oak)]"
@@ -220,7 +242,9 @@ export function MarginRail({
                   >
                     {itemTypeToken(d.coordination_kind).label}
                   </span>
-                  <span className="flex-1 truncate">{d.title || 'Untitled draft'}</span>
+                  <span className="flex-1 truncate">
+                    {d.title || 'Untitled draft'}
+                  </span>
                   <span className="font-mono text-[8px] uppercase tracking-[0.05em] text-[var(--text-muted)]">
                     edit
                   </span>
@@ -239,7 +263,9 @@ export function MarginRail({
           <textarea
             rows={2}
             autoFocus
-            placeholder={noteAnchorLine ? 'Note on this line…' : 'Note to the margin…'}
+            placeholder={
+              noteAnchorLine ? 'Note on this line…' : 'Note to the margin…'
+            }
             aria-label="Note body"
             className="w-full resize-none rounded-[4px] border border-[var(--color-pearl)] bg-[var(--doc-paper)] px-2 py-1.5 text-[11px] text-[var(--color-charcoal)] focus:border-[var(--color-clay)] focus:outline-none"
             value={noteBody}
@@ -248,7 +274,12 @@ export function MarginRail({
               if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) saveNote();
             }}
           />
-          <div className="mt-1.5 flex items-center gap-1.5">
+          <DocumentActionRow
+            surfaceKey="open-document"
+            regionKey="margin-note"
+            className="mt-1.5"
+            aria-label="Margin note actions"
+          >
             <input
               type="date"
               aria-label="Note due date (optional)"
@@ -256,25 +287,27 @@ export function MarginRail({
               value={noteDue}
               onChange={(e) => setNoteDue(e.target.value)}
             />
-            <button
-              type="button"
+            <DocumentAction
+              actionKey="save-margin-note"
+              variant="primary"
               disabled={!noteBody.trim() || createNote.isPending}
+              loading={createNote.isPending}
+              loadingLabel="Saving…"
               onClick={saveNote}
-              className="rounded-[4px] border border-[var(--color-clay)] bg-[var(--color-clay)] px-2.5 py-1 text-[10.5px] font-medium text-white hover:opacity-90 disabled:opacity-50"
             >
               Save
-            </button>
-            <button
-              type="button"
+            </DocumentAction>
+            <DocumentAction
+              actionKey="discard-margin-note"
+              variant="tertiary"
               onClick={() => {
                 setComposing(false);
                 setNoteAnchorLine(null);
               }}
-              className="rounded-[4px] border border-[var(--color-pearl)] px-2.5 py-1 text-[10.5px] text-[var(--color-charcoal)] hover:border-[var(--color-clay)]"
             >
               Discard
-            </button>
-          </div>
+            </DocumentAction>
+          </DocumentActionRow>
         </div>
       )}
 
@@ -294,7 +327,7 @@ export function MarginRail({
             type="button"
             aria-expanded={settledOpen}
             onClick={() => setSettledOpen((v) => !v)}
-            className="mb-1.5 font-mono text-[9px] font-semibold uppercase tracking-[0.08em] text-[var(--text-muted)] hover:text-[var(--color-clay)]"
+            className="mb-1.5 min-h-11 min-w-11 font-mono text-[9px] font-semibold uppercase tracking-[0.08em] text-[var(--text-muted)] hover:text-[var(--color-clay)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-clay)]"
           >
             Settled · {settled.length} {settledOpen ? '↑' : '↓'}
           </button>

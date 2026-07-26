@@ -15,6 +15,11 @@ import { useRouter } from 'next/navigation';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { createBrowserClient } from '@patina/supabase';
 import { openLedger } from './command-bar';
+import {
+  DocumentAction,
+  DocumentActionGroup,
+  DocumentActionRow,
+} from './document-action';
 
 const getSupabase = () => createBrowserClient() as any;
 
@@ -29,7 +34,9 @@ function useStudioName(designerId: string | null) {
         .eq('user_id', designerId)
         .eq('status', 'active')
         .limit(3);
-      const studio = (data ?? []).find((m: any) => m.organization?.type === 'design_studio');
+      const studio = (data ?? []).find(
+        (m: any) => m.organization?.type === 'design_studio',
+      );
       return studio?.organization?.name ?? null;
     },
   });
@@ -39,7 +46,10 @@ function useSetProjectStatus(projectId: string | null) {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: async (status: 'active' | 'on_hold' | 'archived') => {
-      const { error } = await getSupabase().from('projects').update({ status }).eq('id', projectId);
+      const { error } = await getSupabase()
+        .from('projects')
+        .update({ status })
+        .eq('id', projectId);
       if (error) throw error;
     },
     onSuccess: () => {
@@ -77,9 +87,6 @@ function useAddTeamMemberByEmail(projectId: string | null) {
   });
 }
 
-const ROW_BTN =
-  'font-mono text-[8.5px] uppercase tracking-[0.08em] text-[var(--text-muted)] hover:text-[var(--color-clay)]';
-
 export function DocColophon({
   projectId,
   designerId,
@@ -102,7 +109,8 @@ export function DocColophon({
   const [role, setRole] = useState('support_designer');
   const [teamNote, setTeamNote] = useState<string | null>(null);
 
-  const hands = handsOnTheWork.length > 0 ? `you · ${handsOnTheWork.join(' · ')}` : 'you';
+  const hands =
+    handsOnTheWork.length > 0 ? `you · ${handsOnTheWork.join(' · ')}` : 'you';
 
   return (
     <footer className="mt-14 border-t border-[var(--color-pearl)] pb-6 pt-3">
@@ -116,35 +124,47 @@ export function DocColophon({
         <span className="flex-1" />
         {/* R29: deep-links the R28 vendor pane, pre-addressed with this
             project's context. */}
-        <button
-          type="button"
-          className={ROW_BTN}
-          onClick={() => openLedger('orders', { page: 'vendors', projectId })}
+        <DocumentActionGroup
+          surfaceKey="open-document"
+          regionKey="colophon"
+          aria-label="Document colophon actions"
         >
-          Brief a vendor
-        </button>
-        <button
-          type="button"
-          className={ROW_BTN}
-          disabled={setStatus.isPending}
-          onClick={() => setStatus.mutate(isPaused ? 'active' : 'on_hold')}
-        >
-          {isPaused ? 'Resume' : 'Hold'}
-        </button>
-        <button
-          type="button"
-          className={ROW_BTN}
-          onClick={() => setPane(pane === 'archive' ? null : 'archive')}
-        >
-          Archive
-        </button>
-        <button
-          type="button"
-          className={ROW_BTN}
-          onClick={() => setPane(pane === 'team' ? null : 'team')}
-        >
-          Team…
-        </button>
+          <DocumentAction
+            actionKey="brief-vendor"
+            variant="secondary"
+            onClick={() => openLedger('orders', { page: 'vendors', projectId })}
+          >
+            Brief a vendor
+          </DocumentAction>
+          <DocumentAction
+            actionKey={isPaused ? 'resume-project' : 'hold-project'}
+            variant="secondary"
+            disabled={setStatus.isPending}
+            loading={
+              setStatus.isPending &&
+              setStatus.variables === (isPaused ? 'active' : 'on_hold')
+            }
+            loadingLabel={isPaused ? 'Resuming…' : 'Holding…'}
+            onClick={() => setStatus.mutate(isPaused ? 'active' : 'on_hold')}
+          >
+            {isPaused ? 'Resume' : 'Hold'}
+          </DocumentAction>
+          <DocumentAction
+            actionKey="open-archive-confirmation"
+            variant="tertiary"
+            onClick={() => setPane(pane === 'archive' ? null : 'archive')}
+            className="text-[var(--color-terracotta)] decoration-[var(--color-terracotta)]"
+          >
+            Archive
+          </DocumentAction>
+          <DocumentAction
+            actionKey="open-project-team"
+            variant="secondary"
+            onClick={() => setPane(pane === 'team' ? null : 'team')}
+          >
+            Team…
+          </DocumentAction>
+        </DocumentActionGroup>
       </div>
 
       {pane === 'archive' && (
@@ -152,21 +172,35 @@ export function DocColophon({
           <p className="text-[11px] italic text-[var(--color-charcoal)]">
             The document goes to the cabinet — find it any time in ⌘K.
           </p>
-          <div className="mt-2 flex items-baseline gap-3">
-            <button
-              type="button"
-              disabled={setStatus.isPending}
+          <DocumentActionRow
+            surfaceKey="open-document"
+            regionKey="archive-confirmation"
+            className="mt-2"
+            aria-label="Archive confirmation"
+          >
+            <DocumentAction
+              actionKey="archive-project"
+              variant="danger"
+              loading={
+                setStatus.isPending && setStatus.variables === 'archived'
+              }
+              loadingLabel="Archiving…"
               onClick={() => {
-                setStatus.mutate('archived', { onSuccess: () => router.push('/desk') });
+                setStatus.mutate('archived', {
+                  onSuccess: () => router.push('/desk'),
+                });
               }}
-              className="font-mono text-[9px] uppercase tracking-[0.05em] text-[var(--color-clay)] disabled:opacity-40"
             >
               Archive it
-            </button>
-            <button type="button" onClick={() => setPane(null)} className={ROW_BTN}>
+            </DocumentAction>
+            <DocumentAction
+              actionKey="cancel-archive"
+              variant="tertiary"
+              onClick={() => setPane(null)}
+            >
               Keep it out
-            </button>
-          </div>
+            </DocumentAction>
+          </DocumentActionRow>
         </div>
       )}
 
@@ -175,7 +209,11 @@ export function DocColophon({
           <p className="mb-1.5 text-[11px] italic text-[var(--text-muted)]">
             Add a hand to this work — their margin notes join yours (D6).
           </p>
-          <div className="flex items-baseline gap-2">
+          <DocumentActionRow
+            surfaceKey="open-document"
+            regionKey="project-team"
+            aria-label="Project team actions"
+          >
             <input
               value={email}
               onChange={(e) => setEmail(e.target.value)}
@@ -193,9 +231,12 @@ export function DocColophon({
               <option value="bookkeeper">bookkeeper</option>
               <option value="lead_designer">lead</option>
             </select>
-            <button
-              type="button"
+            <DocumentAction
+              actionKey="add-project-team-member"
+              variant="primary"
               disabled={!email.trim() || addMember.isPending}
+              loading={addMember.isPending}
+              loadingLabel="Adding…"
               onClick={() =>
                 addMember.mutate(
                   { email, role },
@@ -204,17 +245,21 @@ export function DocColophon({
                       setTeamNote(`${p.full_name ?? email} added`);
                       setEmail('');
                     },
-                    onError: (e) => setTeamNote(e instanceof Error ? e.message : 'Could not add'),
+                    onError: (e) =>
+                      setTeamNote(
+                        e instanceof Error ? e.message : 'Could not add',
+                      ),
                   },
                 )
               }
-              className="font-mono text-[9px] uppercase tracking-[0.05em] text-[var(--color-clay)] disabled:opacity-40"
             >
               Add
-            </button>
-          </div>
+            </DocumentAction>
+          </DocumentActionRow>
           {teamNote && (
-            <p className="mt-1.5 font-mono text-[8.5px] text-[var(--text-muted)]">{teamNote}</p>
+            <p className="mt-1.5 font-mono text-[8.5px] text-[var(--text-muted)]">
+              {teamNote}
+            </p>
           )}
         </div>
       )}

@@ -32,18 +32,28 @@ import {
 } from '@patina/supabase';
 import { ALL_FIELD_TRADES, FIELD_TRADE_LABELS } from '@patina/types';
 import { useProjects } from '@/hooks/use-projects';
+import { DocumentAction, DocumentActionGroup } from '../../document-action';
 import { RoomSheet } from '../../rooms/room-sheet';
 import type { DirectoryRole } from '../views/directory-view';
 
-export type AddedPersonKind = 'client' | 'maker' | 'gc' | 'sub' | 'installer' | 'receiver';
+export type AddedPersonKind =
+  | 'client'
+  | 'maker'
+  | 'gc'
+  | 'sub'
+  | 'installer'
+  | 'receiver';
 
 const FIELD_KINDS: AddedPersonKind[] = ['gc', 'sub', 'installer', 'receiver'];
-const isFieldKind = (k: AddedPersonKind): k is Extract<AddedPersonKind, PartyKind> =>
+const isFieldKind = (
+  k: AddedPersonKind,
+): k is Extract<AddedPersonKind, PartyKind> =>
   (FIELD_KINDS as string[]).includes(k);
 /** Trade is a meaningful field only for the trade kinds (sub / installer). */
 const showsTrade = (k: AddedPersonKind) => k === 'sub' || k === 'installer';
 
-const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+const UUID_RE =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 const FIELD_LABEL =
   'mb-1 block font-mono text-[9px] uppercase tracking-[0.08em] text-[var(--color-aged-oak)]';
@@ -75,7 +85,7 @@ function KindChoice({
           type="button"
           onClick={() => onKind(k)}
           aria-current={kind === k ? 'true' : undefined}
-          className={`font-mono text-[9.5px] uppercase tracking-[0.1em] transition-colors ${
+          className={`min-h-11 rounded-[3px] font-mono text-[9.5px] uppercase tracking-[0.1em] transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-clay)] ${
             kind === k
               ? 'text-[var(--color-clay)]'
               : 'text-[var(--color-aged-oak)] hover:text-[var(--color-mocha)]'
@@ -186,7 +196,9 @@ export function AddPersonSheet({
     setError(null);
     const trimmedEmail = email.trim();
     if (!trimmedEmail) {
-      setError('An email brings them onto the roster — and lets you reach them.');
+      setError(
+        'An email brings them onto the roster — and lets you reach them.',
+      );
       return;
     }
     try {
@@ -208,7 +220,11 @@ export function AddPersonSheet({
       reset();
       onClose();
     } catch (e) {
-      setError(e instanceof Error ? e.message : 'Could not add them just now. Try again.');
+      setError(
+        e instanceof Error
+          ? e.message
+          : 'Could not add them just now. Try again.',
+      );
     }
   };
 
@@ -236,7 +252,11 @@ export function AddPersonSheet({
       reset();
       onClose();
     } catch (e) {
-      setError(e instanceof Error ? e.message : 'Could not add the maker just now. Try again.');
+      setError(
+        e instanceof Error
+          ? e.message
+          : 'Could not add the maker just now. Try again.',
+      );
     }
   };
 
@@ -253,7 +273,9 @@ export function AddPersonSheet({
       return;
     }
     if (textUpdates && !phone.trim()) {
-      setError('Texting updates needs a phone number — or turn the toggle off.');
+      setError(
+        'Texting updates needs a phone number — or turn the toggle off.',
+      );
       return;
     }
     try {
@@ -269,7 +291,8 @@ export function AddPersonSheet({
       });
       void queryClient.invalidateQueries({ queryKey: peopleKeys.all });
 
-      const proj = projects.find((p) => p.id === projectId)?.name ?? 'the project';
+      const proj =
+        projects.find((p) => p.id === projectId)?.name ?? 'the project';
       const message =
         textUpdates && phone.trim()
           ? `${trimmedName} added to ${proj} — a text invite to opt in is on its way.`
@@ -278,7 +301,11 @@ export function AddPersonSheet({
       reset();
       onClose();
     } catch (e) {
-      setError(e instanceof Error ? e.message : 'Could not add them just now. Try again.');
+      setError(
+        e instanceof Error
+          ? e.message
+          : 'Could not add them just now. Try again.',
+      );
     }
   };
 
@@ -288,7 +315,11 @@ export function AddPersonSheet({
     saveVendor.isPending ||
     addParty.isPending;
 
-  const submit = isFieldKind(kind) ? submitParty : kind === 'client' ? submitClient : submitMaker;
+  const submit = isFieldKind(kind)
+    ? submitParty
+    : kind === 'client'
+      ? submitClient
+      : submitMaker;
 
   const intro =
     kind === 'client'
@@ -305,7 +336,9 @@ export function AddPersonSheet({
       <h2 className="mt-1 font-heading text-[1.6rem] font-medium text-[var(--color-charcoal)]">
         Bring someone in
       </h2>
-      <p className="mb-4 mt-1 text-[0.74rem] text-[var(--color-aged-oak)]">{intro}</p>
+      <p className="mb-4 mt-1 text-[0.74rem] text-[var(--color-aged-oak)]">
+        {intro}
+      </p>
 
       <KindChoice
         kind={kind}
@@ -353,16 +386,19 @@ export function AddPersonSheet({
           {onGoToLeads && (
             <p className="mt-3 text-[0.66rem] text-[var(--color-aged-oak)]">
               Not a client yet?{' '}
-              <button
-                type="button"
+              <DocumentAction
+                actionKey="add-lead-in-pipeline"
+                surfaceKey="people"
+                regionKey="add-person-sheet"
+                variant="tertiary"
                 onClick={() => {
                   close();
                   onGoToLeads();
                 }}
-                className="font-medium text-[var(--color-clay)] underline-offset-2 hover:underline"
+                className="inline-flex min-h-11 px-0 font-sans normal-case tracking-normal"
               >
                 Add a lead in the pipeline
-              </button>
+              </DocumentAction>
               .
             </p>
           )}
@@ -390,7 +426,8 @@ export function AddPersonSheet({
           />
 
           <label className={FIELD_LABEL}>
-            Orders email <span className="opacity-60">(where POs go · optional)</span>
+            Orders email{' '}
+            <span className="opacity-60">(where POs go · optional)</span>
           </label>
           <input
             type="email"
@@ -512,33 +549,42 @@ export function AddPersonSheet({
             <span>
               Text updates
               <span className="mt-0.5 block text-[0.64rem] text-[var(--color-aged-oak)]">
-                Send an opt-in invite by text (~1 msg/day, reply STOP to quit). They confirm before
-                any updates go out.
+                Send an opt-in invite by text (~1 msg/day, reply STOP to quit).
+                They confirm before any updates go out.
               </span>
             </span>
           </label>
         </>
       )}
 
-      {error && <p className="mt-3 text-[0.72rem] text-[var(--color-terracotta)]">{error}</p>}
+      {error && (
+        <p className="mt-3 text-[0.72rem] text-[var(--color-terracotta)]">
+          {error}
+        </p>
+      )}
 
-      <div className="mt-5 flex items-center gap-2.5 border-t border-[var(--color-pearl)] pt-4">
-        <button
-          type="button"
-          disabled={pending}
+      <DocumentActionGroup
+        surfaceKey="people"
+        regionKey="add-person-sheet"
+        className="mt-5 border-t border-[var(--color-pearl)] pt-4"
+      >
+        <DocumentAction
+          actionKey="add-person"
+          variant="primary"
+          loading={pending}
+          loadingLabel="Adding…"
           onClick={() => void submit()}
-          className="rounded-[5px] bg-[var(--color-charcoal)] px-4 py-2 font-mono text-[10px] font-semibold uppercase tracking-[0.06em] text-[var(--color-off-white)] disabled:opacity-50"
         >
-          {pending ? 'Adding…' : 'Add to roster'}
-        </button>
-        <button
-          type="button"
+          Add to roster
+        </DocumentAction>
+        <DocumentAction
+          actionKey="cancel-add-person"
+          variant="tertiary"
           onClick={close}
-          className="rounded-[5px] border border-[var(--color-pearl)] px-4 py-2 font-mono text-[10px] font-semibold uppercase tracking-[0.06em] text-[var(--color-charcoal)]"
         >
           Cancel
-        </button>
-      </div>
+        </DocumentAction>
+      </DocumentActionGroup>
 
       {/* Clearance for the fixed Studio drawer (D8, ≥980px, ~60px tall at the
           viewport bottom): keep the action row above it so the tall field-party

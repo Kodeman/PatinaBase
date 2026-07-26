@@ -18,6 +18,7 @@ import { useLogPOAcknowledgment, useSendPurchaseOrder } from '@patina/supabase';
 import { poSendErrorMessage } from '@/components/portal/procurement/po-send-actions';
 import { procurementEvents } from '@/lib/analytics/procurement-events';
 import { fmtDay } from '@/lib/document/format';
+import { DocumentAction, DocumentActionGroup } from './document-action';
 
 export interface PoPreviewProps {
   open: boolean;
@@ -75,7 +76,8 @@ export function LogAckInline({
   const [done, setDone] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const label = 'font-mono text-[8px] uppercase tracking-[0.06em] text-[var(--text-muted)]';
+  const label =
+    'font-mono text-[8px] uppercase tracking-[0.06em] text-[var(--text-muted)]';
   const input =
     'rounded-[3px] border border-[var(--color-pearl)] bg-transparent px-2 py-1 font-mono text-[10.5px] text-[var(--color-charcoal)] outline-none';
 
@@ -91,7 +93,12 @@ export function LogAckInline({
       });
       procurementEvents.poAcknowledgmentLogged({
         days_since_sent: sentAt
-          ? Math.max(0, Math.floor((Date.now() - new Date(sentAt).getTime()) / 86_400_000))
+          ? Math.max(
+              0,
+              Math.floor(
+                (Date.now() - new Date(sentAt).getTime()) / 86_400_000,
+              ),
+            )
           : null,
       });
       // One act, many surfaces (§5): unfold PO cell, ledger row, Desk need.
@@ -100,7 +107,9 @@ export function LogAckInline({
       setDone(true);
       onLogged?.();
     } catch (e) {
-      setError((e as Error).message || 'The acknowledgment could not be logged.');
+      setError(
+        (e as Error).message || 'The acknowledgment could not be logged.',
+      );
     }
   };
 
@@ -116,7 +125,8 @@ export function LogAckInline({
   return (
     <div>
       <p className="mb-1.5 text-[10px] text-[var(--text-muted)]">
-        Stamped as of today — PO # and ETA are optional, blank keeps what&rsquo;s on file.
+        Stamped as of today — PO # and ETA are optional, blank keeps
+        what&rsquo;s on file.
       </p>
       <div className="flex flex-wrap items-end gap-2">
         <label className="flex flex-col gap-0.5">
@@ -139,23 +149,37 @@ export function LogAckInline({
             className={input}
           />
         </label>
-        <button
-          type="button"
+        <DocumentAction
+          actionKey="log-po-acknowledgment"
+          surfaceKey="orders"
+          regionKey="po-acknowledgment"
+          variant="primary"
           disabled={logAck.isPending}
+          loading={logAck.isPending}
+          loadingLabel="Logging…"
           onClick={() => void confirm()}
-          className="rounded-[4px] border border-[var(--color-clay)] px-2.5 py-1 text-[10.5px] font-medium text-[var(--color-clay)] hover:bg-[rgba(196,165,123,0.1)] disabled:opacity-50"
         >
-          {logAck.isPending ? 'Logging…' : 'Log acknowledgment'}
-        </button>
+          Log acknowledgment
+        </DocumentAction>
       </div>
       {error && (
         // R83: the failure renders as a quiet inline band at the act site.
-        <p role="alert" className="mt-1.5 text-[10.5px] text-[#C4836F]">
-          {error}{' '}
-          <button type="button" onClick={() => void confirm()} className="underline hover:opacity-80">
-            try again
-          </button>
-        </p>
+        <div role="alert" className="mt-1.5 text-[10.5px] text-[#C4836F]">
+          <p>{error}</p>
+          <DocumentActionGroup
+            surfaceKey="orders"
+            regionKey="po-acknowledgment-error"
+            className="mt-2"
+          >
+            <DocumentAction
+              actionKey="retry-po-acknowledgment"
+              variant="primary"
+              onClick={() => void confirm()}
+            >
+              Try again
+            </DocumentAction>
+          </DocumentActionGroup>
+        </div>
       )}
     </div>
   );
@@ -200,7 +224,10 @@ export function PoPreview({
         setSignedUrl(r.signedUrl ?? null);
         setPoNumber(r.poNumber ?? null);
         if (r.warnings?.length) setWarning(poSendErrorMessage(r.warnings[0]));
-        if (!r.signedUrl) setError('The PDF rendered but the preview link could not be created.');
+        if (!r.signedUrl)
+          setError(
+            'The PDF rendered but the preview link could not be created.',
+          );
       })
       .catch((e: Error) => setError(poSendErrorMessage(e.message)));
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -224,7 +251,8 @@ export function PoPreview({
       const r = await sendPo.mutateAsync({
         purchaseOrderId,
         mode: sendMode,
-        recipientEmail: sendMode === 'send' ? (vendorEmailHint ?? undefined) : undefined,
+        recipientEmail:
+          sendMode === 'send' ? (vendorEmailHint ?? undefined) : undefined,
       });
       const stamped = new Date().toISOString();
       // One act, many surfaces (§5): PO cell, Orders row, Desk, margin.
@@ -244,7 +272,11 @@ export function PoPreview({
   const send = () => stamp('send');
 
   return (
-    <div role="dialog" aria-label="Purchase order preview" className="fixed inset-0 z-[60]">
+    <div
+      role="dialog"
+      aria-label="Purchase order preview"
+      className="fixed inset-0 z-[60]"
+    >
       {/* The desk shows through around the lifted paper — no scrim-as-dialog,
           just the document receding behind its own artifact. */}
       <button
@@ -275,7 +307,11 @@ export function PoPreview({
 
         <div className="min-h-0 flex-1 bg-[#3a3631]">
           {signedUrl ? (
-            <iframe title="Purchase order PDF" src={signedUrl} className="h-full w-full border-0" />
+            <iframe
+              title="Purchase order PDF"
+              src={signedUrl}
+              className="h-full w-full border-0"
+            />
           ) : (
             <p className="px-5 py-6 text-[12px] italic text-[rgba(250,247,242,0.6)]">
               {error ?? 'Rendering the purchase order…'}
@@ -300,7 +336,11 @@ export function PoPreview({
           </div>
         )}
 
-        <div className="flex flex-wrap items-center gap-2.5 border-t border-[var(--color-pearl)] px-5 py-3">
+        <DocumentActionGroup
+          surfaceKey="orders"
+          regionKey="po-preview"
+          className="border-t border-[var(--color-pearl)] px-5 py-3"
+        >
           {error && signedUrl && (
             <p className="text-[11px] text-[#C4836F]">{error}</p>
           )}
@@ -311,28 +351,36 @@ export function PoPreview({
               (deliberately not gated on the PDF or a vendor email: an
               out-of-sync PO's fix is exactly "mark it sent manually"). */}
           {mode === 'send' && (
-            <button
-              type="button"
+            <DocumentAction
+              actionKey="mark-po-sent-manually"
+              variant="secondary"
               disabled={sending || marking}
+              loading={marking}
+              loadingLabel="Marking…"
               onClick={() => void stamp('mark_sent')}
               title="For orders placed through a vendor portal, phone, or showroom — stamps the sent date without emailing."
-              className="font-mono text-[9px] uppercase tracking-[0.06em] text-[var(--text-muted)] hover:text-[var(--color-clay)] disabled:opacity-50"
             >
-              {marking ? 'Marking…' : 'ordered by phone / portal — mark as sent'}
-            </button>
+              Ordered by phone / portal — mark as sent
+            </DocumentAction>
           )}
           <span className="ml-auto text-[11px] text-[var(--text-muted)]">
-            {vendorEmailHint ? `to ${vendorEmailHint}` : 'no vendor email on file'}
+            {vendorEmailHint
+              ? `to ${vendorEmailHint}`
+              : 'no vendor email on file'}
           </span>
-          <button
-            type="button"
+          <DocumentAction
+            actionKey={
+              mode === 'resend' ? 'resend-po-to-vendor' : 'send-po-to-vendor'
+            }
+            variant="primary"
             disabled={!signedUrl || !vendorEmailHint || sending || marking}
+            loading={sending}
+            loadingLabel="Sending…"
             onClick={() => void send()}
-            className="rounded-[4px] border border-[var(--color-clay)] bg-[var(--color-clay)] px-3.5 py-1.5 text-[12px] font-medium text-white hover:opacity-90 disabled:opacity-50"
           >
-            {sending ? 'Sending…' : mode === 'resend' ? 'Resend to vendor' : 'Send to vendor'}
-          </button>
-        </div>
+            {mode === 'resend' ? 'Resend to vendor' : 'Send to vendor'}
+          </DocumentAction>
+        </DocumentActionGroup>
       </div>
     </div>
   );

@@ -3,13 +3,13 @@
 /**
  * ProposalShareInstrument (Schedule & Boards Wave 2 · C2) — the quiet doorway
  * into the share-link sheet. Follows ProposalVersionHistory: owns its own
- * open-state, renders one in-line mono Instrument, and mounts the ShareSheet as
+ * open-state, renders one tertiary DocumentAction, and mounts the ShareSheet as
  * a local-state overlay so the document beneath never unmounts (D1).
  */
 
 import { useState } from 'react';
 import type { ClientVisibilityTier } from '@patina/utils';
-import { Instrument } from './instrument';
+import { DocumentAction } from './document-action';
 import { ShareSheet } from './overlays/share-sheet';
 
 export function ProposalShareInstrument({
@@ -22,10 +22,19 @@ export function ProposalShareInstrument({
   const [open, setOpen] = useState(false);
   return (
     <>
-      <Instrument variant="secondary" onClick={() => setOpen(true)}>
+      <DocumentAction
+        actionKey="share-proposal"
+        variant="tertiary"
+        onClick={() => setOpen(true)}
+      >
         Share…
-      </Instrument>
-      <ShareSheet proposalId={proposalId} tier={tier} open={open} onClose={() => setOpen(false)} />
+      </DocumentAction>
+      <ShareSheet
+        proposalId={proposalId}
+        tier={tier}
+        open={open}
+        onClose={() => setOpen(false)}
+      />
     </>
   );
 }

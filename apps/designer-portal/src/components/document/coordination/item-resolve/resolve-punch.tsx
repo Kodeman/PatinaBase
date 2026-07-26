@@ -30,7 +30,11 @@ import {
   type ResolvePanelProps,
 } from '../open-item-sheet';
 
-export function ResolvePunch({ item, projectId, onResolved }: ResolvePanelProps) {
+export function ResolvePunch({
+  item,
+  projectId,
+  onResolved,
+}: ResolvePanelProps) {
   const resolve = useResolveCoordinationItem(projectId);
   const [note, setNote] = useState('');
   const [done, setDone] = useState(false);
@@ -54,7 +58,9 @@ export function ResolvePunch({ item, projectId, onResolved }: ResolvePanelProps)
 
   return (
     <ResolveShell>
-      <ResolveQuestion>Verify the fix — confirm the punch item is corrected and close it.</ResolveQuestion>
+      <ResolveQuestion>
+        Verify the fix — confirm the punch item is corrected and close it.
+      </ResolveQuestion>
       <Field label="Verification note (optional)">
         <ResolveTextarea
           rows={2}
@@ -65,14 +71,29 @@ export function ResolvePunch({ item, projectId, onResolved }: ResolvePanelProps)
         />
       </Field>
       <ButtonRow>
-        <ResolveButton tone="sage" onClick={verify} disabled={resolve.isPending || done}>
+        <ResolveButton
+          actionKey="verify-and-close-punch"
+          tone="sage"
+          onClick={verify}
+          disabled={resolve.isPending || done}
+        >
           {resolve.isPending ? 'Verifying…' : 'Verify & close →'}
         </ResolveButton>
-        <ResolveButton tone="plain" onClick={onResolved} disabled={resolve.isPending}>
+        <ResolveButton
+          actionKey="close-punch-for-later"
+          tone="plain"
+          variant="tertiary"
+          onClick={onResolved}
+          disabled={resolve.isPending}
+        >
           Later
         </ResolveButton>
       </ButtonRow>
-      {done && <QuietConfirm>Verified — the punch item is closed. Closeout re-reads.</QuietConfirm>}
+      {done && (
+        <QuietConfirm>
+          Verified — the punch item is closed. Closeout re-reads.
+        </QuietConfirm>
+      )}
     </ResolveShell>
   );
 }
