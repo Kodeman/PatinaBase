@@ -1086,6 +1086,9 @@ def test_a_purge_failure_after_a_successful_run_closes_the_caller_owned_sink(
     assert sink.is_closed is True
     with pytest.raises(AdapterError):
         sink.received
+    # ``is_populated`` records that outputs were once adopted, so it is NOT the
+    # predicate a caller should use to decide whether it still owns anything.
+    assert sink.is_populated is True
     if before is not None:
         assert len(os.listdir("/proc/self/fd")) <= before
 

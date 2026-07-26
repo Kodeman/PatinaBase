@@ -564,6 +564,14 @@ class NativeEngineOutputs:
 
     @property
     def is_populated(self) -> bool:
+        """Record that outputs were once adopted -- NOT an ownership predicate.
+
+        This stays true after :meth:`close`, including when the boundary itself
+        closed the sink because its cleanup failed after a successful receipt.
+        A caller asking "do I still hold descriptors?" must read
+        :attr:`is_closed`, or let :attr:`received` raise.
+        """
+
         return self._populated
 
     @property
