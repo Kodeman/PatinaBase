@@ -519,6 +519,11 @@ class NativeEngineOutput:
     The descriptor is owned by the :class:`NativeEngineOutputs` bundle that holds
     it.  Borrowers must not close it, and it stays readable after the workspace
     lease is purged because an unlinked inode outlives its last name.
+
+    ``verified_snapshot`` is the exact ``os.fstat`` tuple this descriptor carried
+    at the instant the parent finished hashing it.  It is kept so the boundary
+    can prove, AFTER the lease purge, that the object still has no name and still
+    has the bytes that were measured -- see :func:`_unfrozen_output_errors`.
     """
 
     token: str
@@ -526,6 +531,7 @@ class NativeEngineOutput:
     sha256: str
     size_bytes: int
     identity: tuple[int, int]
+    verified_snapshot: tuple[int, ...] = ()
 
 
 class NativeEngineOutputs:
@@ -1143,6 +1149,13 @@ def _receive_exact_child_ack(
                 " acknowledgement is invalid",
             )
         )
+
+
+#: Index of ``st_ctime_ns`` inside a :func:`_descriptor_snapshot` tuple.  Named
+#: because :func:`_frozen_snapshot_fields` must drop exactly that field and
+#: nothing else; a silent reshuffle here would weaken the freeze proof.
+_DESCRIPTOR_SNAPSHOT_CTIME_INDEX = 5
+_DESCRIPTOR_SNAPSHOT_FIELDS = 7
 
 
 def _descriptor_snapshot(
@@ -2023,12 +2036,25 @@ def _receive_native_outputs(
             seen_identities.add(transported_identity)
             # The parent's own bytes decide.  A declaration that this does not
             # reproduce fails the run; nothing downstream sees a child number.
-            _validate_pinned_descriptor(
+            #
+            # The returned snapshot is KEPT, not discarded: hashing here proves
+            # only what the bytes were before the lease was purged, and the child
+            # may still hold -- or have handed out -- a name for this inode.  The
+            # snapshot is what makes the post-purge freeze proof possible.
+            verified_snapshot = _validate_pinned_descriptor(
                 parent_descriptor,
                 token=token,
                 expected_sha256=declared_sha256,
                 expected_size=declared_size,
                 remaining_seconds=deadline.remaining_seconds,
+            )
+            received[-1] = NativeEngineOutput(
+                token=token,
+                descriptor=parent_descriptor,
+                sha256=declared_sha256,
+                size_bytes=declared_size,
+                identity=transported_identity,
+                verified_snapshot=verified_snapshot,
             )
         deadline.remaining_seconds()
     except BaseException as exc:
@@ -2058,6 +2084,148 @@ def _receive_native_outputs(
             ),
         )
     return tuple(received)
+
+
+def _frozen_snapshot_fields(snapshot: tuple[int, ...]) -> tuple[int, ...]:
+    """Return the snapshot fields a lease purge is not allowed to move.
+
+    ``st_ctime_ns`` is dropped, and that is a measurement rather than a guess:
+    removing the last name of an open file bumps ``st_ctime_ns`` and leaves
+    ``st_mode``, ``st_size`` and ``st_mtime_ns`` untouched on both platforms this
+    repository is built on (Linux 6.x/overlayfs and macOS/APFS were both
+    measured).  Since the purge IS that removal, comparing ``st_ctime_ns``
+    across it would fail every honest run -- and on Linux only once enough wall
+    time separated the hash from the purge for the coarse inode clock to tick,
+    which is the worst kind of guard: green on a fast container, red on the
+    qualified host.
+
+    Nothing is given up.  A write moves ``st_size``/``st_mtime_ns``, an
+    ``fchmod`` through a surviving descriptor moves ``st_mode``, a seek moves the
+    offset, and a surviving NAME -- the actual finding -- is caught by
+    ``st_nlink`` instead, which needs no timestamp at all.
+    """
+
+    if len(snapshot) != _DESCRIPTOR_SNAPSHOT_FIELDS:
+        raise AdapterError(
+            "native engine output fingerprint has an unexpected shape",
+            _FAILED_CODE,
+        )
+    return (
+        *snapshot[:_DESCRIPTOR_SNAPSHOT_CTIME_INDEX],
+        *snapshot[_DESCRIPTOR_SNAPSHOT_CTIME_INDEX + 1 :],
+    )
+
+
+def _unfrozen_output_errors(
+    outputs: tuple[NativeEngineOutput, ...],
+) -> tuple[str, ...]:
+    """Prove every adopted output lost its last name and none of its bytes.
+
+    This runs AFTER the lease purge, and that ordering is the whole point.  At
+    receipt time the child is still alive and the object still has a name, so a
+    child that ``link``s ``work/<token>`` to any path outside the lease keeps a
+    writable route to the exact inode the parent hashed.  Nothing in the receipt
+    path can see that: the transported descriptor, the identity match and the
+    parent's own digest are all satisfied by the honest bytes.  The escape only
+    becomes visible once the parent has removed every name it owns.
+
+    Two independent facts are required of each descriptor:
+
+    ``st_nlink == 0``
+        No name anywhere reaches these bytes, so no ``open`` can rewrite them.
+        This is the module's established shape for the hazard -- the packet
+        extractor, the toolchain and the raster materializer all refuse
+        ``st_nlink != 1`` at their own opens -- moved to the only instant at
+        which it is decisive for a channel whose files are meant to be nameless.
+
+    an unchanged ``fstat`` snapshot
+        ``st_nlink`` alone would still accept bytes rewritten through a
+        descriptor that survived the purge (a grandchild that escaped its
+        session, say).  Every field a purge may not move -- see
+        :func:`_frozen_snapshot_fields` -- is compared against the snapshot taken
+        at the instant the parent's own hash completed.
+
+    Errors are collected rather than raised so one bad token cannot hide the
+    state of the other six in the report the caller receives.
+    """
+
+    errors: list[str] = []
+    for output in outputs:
+        if not output.verified_snapshot:
+            errors.append(
+                _bounded_diagnostic(
+                    "native engine output ",
+                    output.token,
+                    " was never fingerprinted by the parent",
+                    maximum_bytes=_MAX_CLEANUP_ERROR_BYTES,
+                )
+            )
+            continue
+        try:
+            metadata = os.fstat(output.descriptor)
+        except BaseException as exc:
+            errors.append(
+                _bounded_diagnostic(
+                    "native engine output ",
+                    output.token,
+                    " could not be re-inspected after the purge: ",
+                    _exception_summary(exc),
+                    maximum_bytes=_MAX_CLEANUP_ERROR_BYTES,
+                )
+            )
+            continue
+        if metadata.st_nlink != 0:
+            errors.append(
+                _bounded_diagnostic(
+                    "native engine output ",
+                    output.token,
+                    " is still reachable by name after the lease purge (",
+                    _bounded_int_repr(metadata.st_nlink, maximum_bytes=32),
+                    " links)",
+                    maximum_bytes=_MAX_CLEANUP_ERROR_BYTES,
+                )
+            )
+        try:
+            current_snapshot = _descriptor_snapshot(
+                metadata,
+                output.descriptor,
+                token=output.token,
+            )
+        except BaseException as exc:
+            errors.append(
+                _bounded_diagnostic(
+                    "native engine output ",
+                    output.token,
+                    " could not be re-fingerprinted after the purge: ",
+                    _exception_summary(exc),
+                    maximum_bytes=_MAX_CLEANUP_ERROR_BYTES,
+                )
+            )
+            continue
+        try:
+            frozen_now = _frozen_snapshot_fields(current_snapshot)
+            frozen_then = _frozen_snapshot_fields(output.verified_snapshot)
+        except BaseException as exc:
+            errors.append(
+                _bounded_diagnostic(
+                    "native engine output ",
+                    output.token,
+                    " fingerprint could not be compared: ",
+                    _exception_summary(exc),
+                    maximum_bytes=_MAX_CLEANUP_ERROR_BYTES,
+                )
+            )
+            continue
+        if frozen_now != frozen_then:
+            errors.append(
+                _bounded_diagnostic(
+                    "native engine output ",
+                    output.token,
+                    " changed after the parent verified it",
+                    maximum_bytes=_MAX_CLEANUP_ERROR_BYTES,
+                )
+            )
+    return tuple(errors)
 
 
 def _child_entry(
@@ -2223,19 +2391,6 @@ def _child_entry(
         terminal = _error_envelope(
             AdapterError("native child produced no terminal result", _FAILED_CODE)
         )
-    # Descriptors only ever follow a "result".  Anything that turned the envelope
-    # into an error -- including a cleanup failure recorded above -- must not put
-    # a single output descriptor on the wire.
-    #
-    # Honest note for reviewers: this branch is defence in depth with no
-    # independently observable effect from outside the boundary.  Deleting it
-    # leaves the run failing on the same error and the same descriptors closed
-    # moments later by the block below; the only difference is that descriptors
-    # the parent will never read would first be written into a pipe.  A guard
-    # sweep therefore cannot turn it red, and it is not claimed to be provable.
-    if terminal.get("kind") != "result":
-        _close_output_transfers(output_transfers)
-        output_transfers = ()
     try:
         _send_envelope(connection, terminal)
     except BaseException:
@@ -2252,13 +2407,21 @@ def _child_entry(
 
     protocol_rejected = False
     try:
-        context = NativeChildContext(expires_at_monotonic_s)
-        _send_native_outputs(
-            output_connection,
-            output_transfers,
-            destination_pid=os.getppid(),
-            context=context,
-        )
+        # Descriptors only ever follow a "result".  That used to be a defensive
+        # ``if`` that closed the transfers early -- unkillable by any external
+        # test, because an error run fails identically either way.  It is now a
+        # property of this control flow instead: the ONLY statement in this
+        # module that puts an output descriptor on a wire is inside this branch,
+        # so an envelope that is not a result cannot reach it at all.  The
+        # ``finally`` below closes the transfers on both paths regardless.
+        if terminal.get("kind") == "result":
+            context = NativeChildContext(expires_at_monotonic_s)
+            _send_native_outputs(
+                output_connection,
+                output_transfers,
+                destination_pid=os.getppid(),
+                context=context,
+            )
     except BaseException:
         protocol_rejected = True
     finally:
@@ -4277,8 +4440,10 @@ def run_native_engine_child(
     a workspace lease.  The caller owns the sink and must close it; on success it
     holds one parent-opened, parent-hashed descriptor per requested token, and
     those descriptors stay readable after this call purges the lease because the
-    inodes simply lose their last name.  This function closes the sink itself on
-    every failing path, so an exception never leaves a populated sink behind.
+    inodes simply lose their last name -- which this call proves, per token,
+    after the purge.  This function closes the sink itself on every path that
+    raises, INCLUDING a cleanup failure discovered after the return value was
+    computed, so an exception never leaves a populated sink behind.
 
     What ``outputs`` does NOT give the caller is a verified alignment.  See
     ``NATIVE_ENGINE_OUTPUT_ALIGNMENT_VERIFIED_BY_PARENT``.
@@ -4400,7 +4565,15 @@ def run_native_engine_child(
     def _release_outputs_for_failure() -> tuple[str, ...]:
         if outputs is None:
             return ()
-        return outputs.close()
+        # If ``_adopt`` refused the receipt, the sink never took ownership and
+        # closing it would close nothing.  The descriptors are still open here.
+        orphaned = () if outputs.is_populated else adopted_outputs
+        return (
+            *outputs.close(),
+            *_close_descriptors_safely(
+                (output.token, output.descriptor) for output in orphaned
+            ),
+        )
 
     def _release_lease_for_setup_failure() -> tuple[str, ...]:
         if workspace_lease is None:
@@ -4496,6 +4669,7 @@ def run_native_engine_child(
     group_leader_pid: int | None = None
     reaped = False
     cleanup_handled = False
+    adopted_outputs: tuple[NativeEngineOutput, ...] = ()
     # Explicit, not ``sys.exc_info()``: this function can legitimately be called
     # from inside an ``except`` block, where the ambient exception would make a
     # successful run look like a failing one and close the caller's descriptors.
@@ -4608,17 +4782,16 @@ def run_native_engine_child(
                 _FAILED_CODE,
             )
         if outputs is not None:
-            outputs._adopt(
-                _receive_native_outputs(
-                    parent_output_connection,
-                    _validated_output_ledger(
-                        terminal.get("outputLedger"),
-                        output_tokens,
-                    ),
-                    workspace_lease=workspace_lease,
-                    deadline=deadline,
-                )
+            adopted_outputs = _receive_native_outputs(
+                parent_output_connection,
+                _validated_output_ledger(
+                    terminal.get("outputLedger"),
+                    output_tokens,
+                ),
+                workspace_lease=workspace_lease,
+                deadline=deadline,
             )
+            outputs._adopt(adopted_outputs)
 
         try:
             parent_connection.send_bytes(_ACK_ACCEPT)
@@ -4858,19 +5031,48 @@ def run_native_engine_child(
                 leader_quiescent=leader_quiescent,
             )
 
-        all_final_errors = (
-            *final_cleanup_errors,
-            *offset_restore_errors,
-            *output_cleanup_errors,
-            *workspace_cleanup_errors,
-            *resource_errors,
-        )
-        if (
+        # ONLY here, with every parent-owned name gone, can "these bytes are
+        # frozen" be checked instead of assumed.  A child that hardlinked an
+        # output out of the lease is indistinguishable from an honest one until
+        # this point, and item 6 decides on these exact descriptors.
+        unfrozen_output_errors: tuple[str, ...] = ()
+        if returned_successfully:
+            unfrozen_output_errors = _unfrozen_output_errors(adopted_outputs)
+
+        cleanup_must_raise = bool(
             final_cleanup_errors
             or offset_restore_errors
             or output_cleanup_errors
             or workspace_cleanup_errors
-        ):
+            or unfrozen_output_errors
+        )
+        if cleanup_must_raise:
+            # The caller is about to receive an exception instead of the sink,
+            # so the sink is this function's to close -- even though the return
+            # value was already computed.  ``close`` is idempotent, so the
+            # already-failed path above cannot be double-charged here.
+            output_cleanup_errors = (
+                *output_cleanup_errors,
+                *_release_outputs_for_failure(),
+            )
+
+        all_final_errors = (
+            *final_cleanup_errors,
+            *offset_restore_errors,
+            *unfrozen_output_errors,
+            *output_cleanup_errors,
+            *workspace_cleanup_errors,
+            *resource_errors,
+        )
+        if unfrozen_output_errors:
+            raise AdapterError(
+                _bounded_cleanup_report(
+                    "native engine outputs were not frozen by the workspace purge",
+                    all_final_errors,
+                ),
+                _INVALID_INPUT_CODE,
+            ) from active_exception
+        if cleanup_must_raise:
             raise _cleanup_failed_error(
                 "refine native child cleanup failed",
                 all_final_errors,

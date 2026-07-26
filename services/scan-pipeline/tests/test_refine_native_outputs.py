@@ -8,6 +8,7 @@ declares is authoritative.
 
 from __future__ import annotations
 
+import ast
 import hashlib
 import inspect
 import os
@@ -119,6 +120,29 @@ def _write_outputs_then_hardlink(request, context: NativeChildContext):
     finally:
         os.close(work)
     return {"linked": True}
+
+
+@native_engine_entrypoint
+def _write_outputs_then_escape_by_hardlink(request, context: NativeChildContext):
+    """Write the honest outputs, then keep a name for one OUTSIDE the lease.
+
+    This is the whole exploit.  The parent's receipt checks all pass -- the
+    transported descriptor, the identity match and the parent's own digest are
+    all satisfied by honest bytes -- and the escaped name only becomes usable
+    once the parent has removed every name it owns.
+    """
+
+    _write_engine_outputs(request, context)
+    work = _open_leased_work_directory(context)
+    try:
+        os.link(
+            request["escape"]["token"],
+            request["escape"]["path"],
+            src_dir_fd=work,
+        )
+    finally:
+        os.close(work)
+    return {"escaped": request["escape"]["path"]}
 
 
 @native_engine_entrypoint
@@ -762,8 +786,375 @@ def test_output_descriptors_outlive_the_purged_lease_and_have_no_path(tmp_path):
         metadata = os.fstat(sink.descriptor(token))
         assert stat.S_ISREG(metadata.st_mode)
         # Unlinked, so no name anywhere can be reopened to reach these bytes.
+        # This assertion used to hold only because the honest fixture child does
+        # not hardlink; the boundary now refuses the run when it does not hold.
         assert metadata.st_nlink == 0
         assert os.pread(sink.descriptor(token), len(payload), 0) == payload
+        # The fingerprint the post-purge freeze proof compares against is the
+        # parent's own measurement, kept rather than discarded.
+        verified = sink.received[token].verified_snapshot
+        assert len(verified) == native_process._DESCRIPTOR_SNAPSHOT_FIELDS
+        assert verified[3] == len(payload)
+
+
+# ---------------------------------------------------------------------------
+# The post-purge freeze proof
+# ---------------------------------------------------------------------------
+
+
+def test_an_output_hardlinked_out_of_the_lease_fails_the_run(tmp_path):
+    """The reviewer's exploit, end to end, with a real spawned child.
+
+    Every receipt-time check passes: the child transports the descriptor for the
+    inode it really wrote, the parent's own open lands on the same
+    ``(st_dev, st_ino)``, and the parent's own digest reproduces the declared
+    one.  What none of that can see is the second NAME the child created outside
+    the lease, through which the bytes the parent just froze can be rewritten
+    afterwards.  Only a check made after the purge can tell the two runs apart.
+    """
+
+    token = "adapter-v2.json"
+    payload = _payload(token)
+    container = tmp_path / "boundary"
+    container.mkdir(mode=0o700)
+    escape = tmp_path / "escaped-adapter-v2.json"
+    sink = NativeEngineOutputs((token,))
+
+    with pytest.raises(AdapterError) as raised:
+        run_native_engine_child(
+            _entrypoint("_write_outputs_then_escape_by_hardlink"),
+            {
+                "outputs": {token: payload.hex()},
+                "escape": {"token": token, "path": str(escape)},
+            },
+            deadline=_deadline(30.0),
+            workspace_parent_directory=str(container),
+            outputs=sink,
+        )
+
+    assert "were not frozen by the workspace purge" in str(raised.value)
+    assert "still reachable by name after the lease purge" in str(raised.value)
+    assert raised.value.code == "REFINE_INPUT_INVALID"
+    # The escaped name is exactly the capability the run was refused for.
+    assert escape.exists()
+    assert escape.read_bytes() == payload
+    # A refused run hands the caller nothing to close and nothing to read.
+    assert sink.is_closed is True
+    with pytest.raises(AdapterError):
+        sink.received
+    assert os.listdir(container) == []
+
+
+def _frozen_output(descriptor: int, snapshot, *, token="adapter-v2.json"):
+    return native_process.NativeEngineOutput(
+        token=token,
+        descriptor=descriptor,
+        sha256="0" * 64,
+        size_bytes=1,
+        identity=(1, 2),
+        verified_snapshot=snapshot,
+    )
+
+
+def _snapshot_of(descriptor: int, *, token="adapter-v2.json"):
+    return native_process._descriptor_snapshot(
+        os.fstat(descriptor),
+        descriptor,
+        token=token,
+    )
+
+
+def test_the_freeze_proof_accepts_an_output_the_purge_left_nameless(tmp_path):
+    source = tmp_path / "output"
+    source.write_bytes(b"honest\n")
+    descriptor = os.open(source, os.O_RDONLY)
+    try:
+        snapshot = _snapshot_of(descriptor)
+        source.unlink()
+
+        assert os.fstat(descriptor).st_nlink == 0
+        errors = native_process._unfrozen_output_errors(
+            (_frozen_output(descriptor, snapshot),)
+        )
+
+        assert errors == ()
+    finally:
+        os.close(descriptor)
+
+
+def test_the_freeze_proof_refuses_a_name_that_survived_the_purge(tmp_path):
+    """Only the ``st_nlink`` clause may fire here: nothing else moved."""
+
+    source = tmp_path / "output"
+    source.write_bytes(b"honest\n")
+    escape = tmp_path / "escaped"
+    os.link(source, escape)
+    descriptor = os.open(source, os.O_RDONLY)
+    try:
+        snapshot = _snapshot_of(descriptor)
+        source.unlink()
+
+        errors = native_process._unfrozen_output_errors(
+            (_frozen_output(descriptor, snapshot),)
+        )
+
+        assert len(errors) == 1
+        assert "still reachable by name after the lease purge (1 links)" in errors[0]
+    finally:
+        os.close(descriptor)
+
+
+def test_the_freeze_proof_refuses_bytes_rewritten_after_verification(tmp_path):
+    """Only the fingerprint clause may fire here: the name is already gone.
+
+    A nameless inode is still writable through any descriptor that outlived the
+    purge, so ``st_nlink == 0`` on its own is not a freeze.
+    """
+
+    source = tmp_path / "output"
+    source.write_bytes(b"honest\n")
+    readable = os.open(source, os.O_RDONLY)
+    writable = os.open(source, os.O_WRONLY)
+    try:
+        snapshot = _snapshot_of(readable)
+        source.unlink()
+        os.pwrite(writable, b"TAMPERED-AFTER-THE-PARENT-HASHED-IT\n", 0)
+
+        assert os.fstat(readable).st_nlink == 0
+        errors = native_process._unfrozen_output_errors(
+            (_frozen_output(readable, snapshot),)
+        )
+
+        assert errors == (
+            "native engine output adapter-v2.json changed after the parent "
+            "verified it",
+        )
+    finally:
+        os.close(readable)
+        os.close(writable)
+
+
+def test_the_freeze_proof_refuses_an_output_the_parent_never_fingerprinted(tmp_path):
+    source = tmp_path / "output"
+    source.write_bytes(b"honest\n")
+    descriptor = os.open(source, os.O_RDONLY)
+    try:
+        source.unlink()
+
+        errors = native_process._unfrozen_output_errors(
+            (_frozen_output(descriptor, ()),)
+        )
+
+        assert errors == (
+            "native engine output adapter-v2.json was never fingerprinted by "
+            "the parent",
+        )
+    finally:
+        os.close(descriptor)
+
+
+def test_the_freeze_proof_reports_an_uninspectable_descriptor(tmp_path):
+    source = tmp_path / "output"
+    source.write_bytes(b"honest\n")
+    descriptor = os.open(source, os.O_RDONLY)
+    snapshot = _snapshot_of(descriptor)
+    os.close(descriptor)
+
+    errors = native_process._unfrozen_output_errors(
+        (_frozen_output(descriptor, snapshot),)
+    )
+
+    assert len(errors) == 1
+    assert "could not be re-inspected after the purge" in errors[0]
+
+
+def test_the_freeze_proof_ignores_the_ctime_a_purge_legitimately_moves(tmp_path):
+    """``st_ctime_ns`` is excluded on purpose, and the exclusion is pinned here.
+
+    Removing an open file's last name bumps ``st_ctime_ns`` on both platforms
+    this repository builds on -- and on Linux only once the coarse inode clock
+    has ticked since the hash, so comparing it would be green in a fast
+    container and red on the qualified host.
+    """
+
+    source = tmp_path / "output"
+    source.write_bytes(b"honest\n")
+    descriptor = os.open(source, os.O_RDONLY)
+    try:
+        snapshot = list(_snapshot_of(descriptor))
+        source.unlink()
+        snapshot[native_process._DESCRIPTOR_SNAPSHOT_CTIME_INDEX] += 1
+
+        errors = native_process._unfrozen_output_errors(
+            (_frozen_output(descriptor, tuple(snapshot)),)
+        )
+
+        assert errors == ()
+    finally:
+        os.close(descriptor)
+
+
+def test_the_freeze_proof_refuses_a_fingerprint_of_the_wrong_shape(tmp_path):
+    source = tmp_path / "output"
+    source.write_bytes(b"honest\n")
+    descriptor = os.open(source, os.O_RDONLY)
+    try:
+        snapshot = _snapshot_of(descriptor)
+        source.unlink()
+
+        errors = native_process._unfrozen_output_errors(
+            (_frozen_output(descriptor, (*snapshot, 0)),)
+        )
+
+        assert len(errors) == 1
+        assert "fingerprint could not be compared" in errors[0]
+    finally:
+        os.close(descriptor)
+
+
+def test_the_descriptor_snapshot_has_the_shape_the_freeze_proof_assumes(tmp_path):
+    """The exclusion is by index, so the index is asserted rather than trusted."""
+
+    source = tmp_path / "output"
+    source.write_bytes(b"honest\n")
+    descriptor = os.open(source, os.O_RDONLY)
+    try:
+        metadata = os.fstat(descriptor)
+        snapshot = _snapshot_of(descriptor)
+
+        assert len(snapshot) == native_process._DESCRIPTOR_SNAPSHOT_FIELDS
+        assert (
+            snapshot[native_process._DESCRIPTOR_SNAPSHOT_CTIME_INDEX]
+            == metadata.st_ctime_ns
+        )
+        assert native_process._frozen_snapshot_fields(snapshot) == (
+            metadata.st_dev,
+            metadata.st_ino,
+            metadata.st_mode,
+            metadata.st_size,
+            metadata.st_mtime_ns,
+            0,
+        )
+    finally:
+        os.close(descriptor)
+
+
+def test_a_purge_failure_after_a_successful_run_closes_the_caller_owned_sink(
+    monkeypatch,
+    tmp_path,
+):
+    """A cleanup failure discovered after the return value is still a failure.
+
+    The boundary docstring tells callers an exception never leaves a populated
+    sink behind, which licenses ``try``/``except`` instead of ``with``.  Before
+    this was fixed, a lease-purge failure raised with all seven descriptors
+    still open and unowned by anyone who could close them.
+    """
+
+    tokens = ("adapter-v2.json", "pairs-v2.txt")
+    payloads = {token: _payload(token) for token in tokens}
+    container = tmp_path / "boundary"
+    container.mkdir(mode=0o700)
+    real_release = native_process._release_workspace_lease
+
+    def failing_release(lease, *, leader_quiescent):
+        # Purge for real, then report the uncertainty the parent must honour.
+        return (
+            *real_release(lease, leader_quiescent=leader_quiescent),
+            "synthetic purge failure",
+        )
+
+    monkeypatch.setattr(native_process, "_release_workspace_lease", failing_release)
+    sink = NativeEngineOutputs(tokens)
+    before = len(os.listdir("/proc/self/fd")) if os.path.isdir("/proc/self/fd") else None
+
+    with pytest.raises(AdapterError) as raised:
+        run_native_engine_child(
+            _entrypoint("_write_engine_outputs"),
+            {"outputs": {name: payload.hex() for name, payload in payloads.items()}},
+            deadline=_deadline(30.0),
+            workspace_parent_directory=str(container),
+            outputs=sink,
+        )
+
+    assert raised.value.code == "REFINE_ENGINE_CLEANUP_FAILED"
+    assert "synthetic purge failure" in str(raised.value)
+    assert sink.is_closed is True
+    with pytest.raises(AdapterError):
+        sink.received
+    if before is not None:
+        assert len(os.listdir("/proc/self/fd")) <= before
+
+
+def test_a_sink_that_refuses_adoption_leaves_no_open_descriptor(monkeypatch, tmp_path):
+    """The receipt succeeded, so the boundary owns those descriptors either way.
+
+    Closing the sink is the normal release, but the sink only holds the
+    descriptors once ``_adopt`` accepted them.  If adoption refuses, closing it
+    closes nothing, and the parent-opened descriptors have no other owner.
+    """
+
+    tokens = ("adapter-v2.json", "pairs-v2.txt")
+    payloads = {token: _payload(token) for token in tokens}
+    container = tmp_path / "boundary"
+    container.mkdir(mode=0o700)
+
+    def refusing_adopt(self, outputs):
+        raise AdapterError("synthetic adoption refusal", "REFINE_INPUT_INVALID")
+
+    monkeypatch.setattr(NativeEngineOutputs, "_adopt", refusing_adopt)
+    sink = NativeEngineOutputs(tokens)
+    before = len(os.listdir("/proc/self/fd")) if os.path.isdir("/proc/self/fd") else None
+
+    with pytest.raises(AdapterError) as raised:
+        run_native_engine_child(
+            _entrypoint("_write_engine_outputs"),
+            {"outputs": {name: payload.hex() for name, payload in payloads.items()}},
+            deadline=_deadline(30.0),
+            workspace_parent_directory=str(container),
+            outputs=sink,
+        )
+
+    assert "synthetic adoption refusal" in str(raised.value)
+    assert sink.is_populated is False
+    assert sink.is_closed is True
+    if before is not None:
+        assert len(os.listdir("/proc/self/fd")) <= before
+
+
+def test_the_child_sends_descriptors_only_inside_the_result_branch():
+    """The property is control flow now, so it is asserted as control flow.
+
+    No external test can turn a defensive ``if kind != "result"`` red: an error
+    run fails identically whether or not descriptors were first written into a
+    pipe, and proving otherwise would mean spying inside a ``spawn``ed child --
+    which means driving ``_child_entry`` in-process, which calls ``os.setsid``
+    and would detach the test runner's session.  Asserting the shape of the code
+    is a real check that does go red if the call is ever hoisted back out.
+    """
+
+    tree = ast.parse(inspect.getsource(native_process))
+
+    def sender_positions(node):
+        return {
+            (inner.lineno, inner.col_offset)
+            for inner in ast.walk(node)
+            if isinstance(inner, ast.Call)
+            and isinstance(inner.func, ast.Name)
+            and inner.func.id == "_send_native_outputs"
+        }
+
+    guarded = set()
+    for node in ast.walk(tree):
+        if (
+            isinstance(node, ast.If)
+            and ast.unparse(node.test) == "terminal.get('kind') == 'result'"
+        ):
+            guarded |= sender_positions(node)
+
+    calls = sender_positions(tree)
+    assert calls, "the child must still hand its outputs up"
+    assert calls == guarded
 
 
 def test_a_subset_of_the_universe_is_a_legal_request(tmp_path):
