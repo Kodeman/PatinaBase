@@ -511,6 +511,65 @@ def test_linux_group_scan_refuses_a_non_positive_group_leader(fake_proc):
         assert caught.value.code == "REFINE_ENGINE_CLEANUP_FAILED"
 
 
+@pytest.mark.parametrize(
+    "leader",
+    ("4242", 4242.0, None, True),
+    ids=("str", "float", "none", "bool"),
+)
+def test_linux_group_scan_refuses_a_group_leader_that_is_not_an_int(fake_proc, leader):
+    """The other half of the same precondition, which had no input at all.
+
+    ``group_leader_pid <= 0`` above pins the sign; nothing pinned the type, so
+    ``type(group_leader_pid) is not int`` could be deleted with the suite
+    green.  It is not decoration: the membership test is ``process_group_id ==
+    group_leader_pid`` against a value parsed out of procfs as an ``int``, so a
+    string leader compares unequal to *every* row and the scan would report
+    quiescence for a group that still has live members.  ``True`` is included
+    because ``isinstance(True, int)`` is true -- only the exact ``type(...) is
+    int`` form refuses it, and ``killpg(True, ...)`` is ``killpg(1, ...)``.
+    """
+
+    with pytest.raises(AdapterError) as caught:
+        native_process._linux_process_group_members(leader, deadline=_deadline(5.0))
+
+    assert caught.value.code == "REFINE_ENGINE_CLEANUP_FAILED"
+    assert str(caught.value) == (
+        "Linux process group inspection requires a positive group leader"
+    )
+
+
+def test_linux_group_scan_refuses_a_row_whose_pid_is_not_its_own_directory(fake_proc):
+    """PID reuse between ``scandir`` and ``open`` must be fatal, not silent.
+
+    The scan reads ``/proc/<name>/stat`` some time after ``scandir`` named it.
+    If the original process exited and the kernel recycled that PID, the row
+    that comes back describes a *different* process -- and its ``pgrp`` is then
+    being compared against our leader on the strength of a directory name that
+    no longer means anything.  ``FileNotFoundError`` is the benign case and is
+    already skipped; this is the malignant one, and until now no input reached
+    the ``reported_pid != pid`` check that distinguishes them.
+    """
+
+    leader = 4242
+    _write_fake_proc(
+        fake_proc,
+        {
+            str(leader): _stat_row(leader, ppid=900, pgrp=leader, state="Z"),
+            # Directory "4243", but the row inside it belongs to PID 5150 --
+            # exactly what a recycled PID looks like to this scan.
+            "4243": _stat_row(5150, ppid=1, pgrp=leader),
+        },
+    )
+
+    with pytest.raises(AdapterError) as caught:
+        native_process._linux_process_group_members(leader, deadline=_deadline(5.0))
+
+    assert caught.value.code == "REFINE_ENGINE_CLEANUP_FAILED"
+    assert str(caught.value) == (
+        "Linux process stat changed identity during group inspection"
+    )
+
+
 @pytest.mark.skipif(os.name != "posix", reason="Refine requires SCM_RIGHTS")
 def test_native_child_reads_unlinked_path_swapped_pinned_bytes(tmp_path):
     original = b"qualified-pinned-bytes"

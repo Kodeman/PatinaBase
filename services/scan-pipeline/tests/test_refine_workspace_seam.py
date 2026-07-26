@@ -885,3 +885,217 @@ def test_every_lease_the_parent_provisions_can_host_the_real_command(
         assert execution.workspace == lease.path
     finally:
         _release_workspace_lease(lease, leader_quiescent=True)
+
+
+# ---------------------------------------------------------------------------
+# _validate_private_command_workspace: one input per refusing disjunct
+#
+# Before this section the only calls to this function anywhere in the suite
+# were the two happy-path ones above, so every rejecting clause could be
+# deleted with the whole suite still green.  Each test below is red without
+# its clause and green with it.  Two disjuncts are deliberately absent:
+#
+# * ``stat.S_ISLNK(cwd_metadata.st_mode)`` can never be the sole reason -- no
+#   st_mode is both S_IFDIR and S_IFLNK, so ``not S_ISDIR`` always fires first
+#   on a symlink.  It is a redundant restatement, not a reachable clause.
+# * the ``S_ISLNK`` case a reader expects (a symlinked *workspace*) is covered
+#   by the ``resolved_cwd != cwd`` test, which is the clause that actually
+#   catches it.
+# ---------------------------------------------------------------------------
+
+
+def _owned_private_dir(parent: Path, name: str) -> Path:
+    """A 0700 directory whose mode does not depend on the runner's umask.
+
+    ``mkdir(mode=0o700)`` is umask-proof because 0o700 carries no group or
+    other bits for a umask to clear; this mirrors the explicit-mode fixture
+    discipline the refine harness adopted after a stock ``umask 0002`` login
+    shell collapsed the suite.
+    """
+
+    path = parent / name
+    path.mkdir(mode=0o700)
+    return path
+
+
+def test_a_relative_command_workspace_is_refused(tmp_path):
+    with pytest.raises(AdapterError) as raised:
+        _validate_private_command_workspace(
+            Path("relative/work"), Path("relative/work/phase.log")
+        )
+
+    assert str(raised.value) == (
+        "COLMAP command workspace and log path must be absolute"
+    )
+
+
+def test_a_relative_command_log_path_is_refused(tmp_path):
+    work = _owned_private_dir(Path(tmp_path).resolve(), "work")
+
+    with pytest.raises(AdapterError) as raised:
+        _validate_private_command_workspace(work, Path("phase.log"))
+
+    assert str(raised.value) == (
+        "COLMAP command workspace and log path must be absolute"
+    )
+
+
+def test_a_command_workspace_that_is_not_a_directory_is_refused(tmp_path):
+    """Owned and 0700, but not a directory -- so only ``S_ISDIR`` refuses it.
+
+    The mode matters: a file left at the default 0o644 is also refused by the
+    ``S_IMODE != 0o700`` clause with the *same* message, and the test would
+    then stay green with ``S_ISDIR`` deleted.
+    """
+
+    root = Path(tmp_path).resolve()
+    regular_file = root / "work"
+    regular_file.write_bytes(b"not a directory")
+    os.chmod(regular_file, 0o700)
+
+    metadata = os.lstat(regular_file)
+    assert metadata.st_mode & 0o777 == 0o700
+    assert metadata.st_uid == os.geteuid()
+
+    with pytest.raises(AdapterError) as raised:
+        _validate_private_command_workspace(regular_file, root / "phase.log")
+
+    assert str(raised.value) == (
+        "COLMAP command workspace must be an owned private 0700 directory"
+    )
+
+
+def test_a_command_workspace_owned_by_another_uid_is_refused(tmp_path, monkeypatch):
+    """The uid clause, reached without needing a second real uid.
+
+    An unprivileged test cannot create a directory it does not own, so the
+    comparison is moved instead of the directory: the guard reads the effective
+    uid through ``os.geteuid`` at call time.
+    """
+
+    work = _owned_private_dir(Path(tmp_path).resolve(), "work")
+    monkeypatch.setattr(os, "geteuid", lambda: os.stat(work).st_uid + 1)
+
+    with pytest.raises(AdapterError) as raised:
+        _validate_private_command_workspace(work, work / "phase.log")
+
+    assert str(raised.value) == (
+        "COLMAP command workspace must be an owned private 0700 directory"
+    )
+
+
+def test_a_group_or_world_readable_command_workspace_is_refused(tmp_path):
+    work = _owned_private_dir(Path(tmp_path).resolve(), "work")
+    # chmod, not mkdir(mode=...): chmod ignores the umask, so this stays 0o755
+    # under every umask the runner might carry.
+    os.chmod(work, 0o755)
+
+    with pytest.raises(AdapterError) as raised:
+        _validate_private_command_workspace(work, work / "phase.log")
+
+    assert str(raised.value) == (
+        "COLMAP command workspace must be an owned private 0700 directory"
+    )
+    assert os.stat(work).st_mode & 0o777 == 0o755
+
+
+def test_a_command_workspace_reached_through_a_symlink_is_refused(tmp_path):
+    """``lstat`` does not follow *interior* components; ``resolve`` does.
+
+    The final component here is a genuine owned 0700 directory, so every
+    metadata clause is satisfied and only ``resolved_cwd != cwd`` refuses it.
+    """
+
+    root = Path(tmp_path).resolve()
+    real = _owned_private_dir(root, "real")
+    work = _owned_private_dir(real, "work")
+    link = root / "link"
+    link.symlink_to(real)
+    reached = link / "work"
+
+    assert reached.resolve(strict=True) == work
+    assert reached != work
+
+    with pytest.raises(AdapterError) as raised:
+        _validate_private_command_workspace(reached, reached / "phase.log")
+
+    assert str(raised.value) == (
+        "COLMAP command workspace may not traverse a symlink"
+    )
+
+
+def test_a_command_log_outside_the_workspace_is_refused(tmp_path):
+    work = _owned_private_dir(Path(tmp_path).resolve(), "work")
+    nested = _owned_private_dir(work, "nested")
+
+    with pytest.raises(AdapterError) as raised:
+        _validate_private_command_workspace(work, nested / "phase.log")
+
+    assert str(raised.value) == (
+        "COLMAP command log must be a new direct workspace child"
+    )
+
+
+def test_an_existing_command_log_is_refused(tmp_path):
+    """A phase may reuse ``work/``, but never an existing log path.
+
+    ``test_the_private_workspace_check_has_no_emptiness_precondition`` proves
+    the directory may carry a previous phase's artifacts; this proves the log
+    itself is still required to be new, which is the other half of that clause.
+    """
+
+    work = _owned_private_dir(Path(tmp_path).resolve(), "work")
+    log_path = work / "phase.log"
+    log_path.write_bytes(b"an earlier phase already wrote here")
+
+    with pytest.raises(AdapterError) as raised:
+        _validate_private_command_workspace(work, log_path)
+
+    assert str(raised.value) == (
+        "COLMAP command log must be a new direct workspace child"
+    )
+
+
+# ---------------------------------------------------------------------------
+# _validate_pinned_execution: the alias shape clauses
+#
+# The environ/descriptor halves of the same guard are not reachable through a
+# real ``PinnedColmapCommand``: ``environment()`` is a dict comprehension and
+# ``passed_descriptors()`` returns a tuple literal, and the preceding
+# ``type(execution) is not PinnedColmapCommand`` check rules out an override.
+# The alias is a plain carried field, so these two are reachable and are the
+# ones worth pinning.
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.parametrize(
+    ("alias", "label"),
+    (
+        pytest.param(123, "a non-string", id="not-a-string"),
+        pytest.param("", "empty", id="empty"),
+    ),
+)
+def test_a_sealed_execution_with_an_unusable_alias_is_refused(tmp_path, alias, label):
+    with _leased_context(_container(tmp_path)) as (lease, context):
+        work = Path(
+            context.workspace_subdirectory_path(NATIVE_WORKSPACE_COMMAND_SUBDIRECTORY)
+        )
+        with _toolchain(tmp_path) as toolchain:
+            execution = plan_leased_supervised_command(
+                toolchain,
+                context,
+                command=_lease_argv(toolchain.identity.path, lease.path),
+            )
+            # The plan is otherwise genuine and still authenticates: it keeps
+            # its seal, its qualification and its working directory, so the
+            # only clause left to refuse it is the alias shape.
+            assert _validate_pinned_execution(execution, work) == execution.argv
+            object.__setattr__(execution, "executable_alias", alias)
+            assert execution.is_verified_pinned_command is True
+
+            with pytest.raises(AdapterError) as raised:
+                _validate_pinned_execution(execution, work)
+
+    assert str(raised.value) == (
+        "pinned COLMAP execution has an invalid environment or alias"
+    )

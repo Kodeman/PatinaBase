@@ -717,6 +717,17 @@ _CONFINEMENT_MESSAGE = "pinned COLMAP path option must stay inside its workspace
             "pinned COLMAP path option contains control characters",
             id="control-characters",
         ),
+        # DEL is the *other* half of the control-character disjunct.  With only
+        # the C0 row above, ``ord(character) == 0x7F`` could be deleted with the
+        # whole suite still green: 0x7F is not < 0x20, it is a legal path byte,
+        # it survives ``as_posix()`` unchanged, and it traverses nothing -- so
+        # no other clause refuses it and the guard would silently start
+        # admitting it.
+        pytest.param(
+            "{surface}/data\x7fbase.db",
+            "pinned COLMAP path option contains control characters",
+            id="delete-character",
+        ),
         pytest.param(
             "{surface}//database.db",
             _CONFINEMENT_MESSAGE,
