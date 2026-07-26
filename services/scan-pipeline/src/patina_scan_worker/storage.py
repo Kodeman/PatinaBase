@@ -141,6 +141,13 @@ def _stage_verified_descriptor(
             copied,
         )
         if not chunk:
+            # This guard is the ONLY bound on this loop.  ``deadline`` is
+            # optional on the legacy publication path, and
+            # ``_deadline_remaining(None, ...)`` enforces nothing, so a source
+            # truncated after the size check above would leave ``copied`` frozen
+            # and spin here forever rather than failing.  The size check cannot
+            # cover it: it runs before the first read, and the object can shrink
+            # afterwards.  Deleting this raise is a hang, not a wrong answer.
             raise TransientError(
                 "immutable publication source ended before its manifest size",
                 token="REFINE_ARTIFACT_IO",
@@ -676,6 +683,7 @@ class StorageClient:
         expected_size: int,
         user_id: str,
         scan_id: str,
+        expected_identity: tuple[int, int] | None = None,
         deadline: RefineDeadline | None = None,
         reserve_seconds: float = 0,
     ) -> bool:
@@ -698,6 +706,13 @@ class StorageClient:
         descriptor, verified there, and only that descriptor is uploaded in
         bounded chunks. The required owner/scan arguments enforce the
         service-role RLS-equivalent guard before any network call.
+
+        ``expected_identity`` is the ``(st_dev, st_ino)`` whoever measured this
+        artifact saw. A descriptor number is a slot in a table: if the borrowed
+        descriptor were closed anywhere between the measurement and this call,
+        the same integer could be handed to a different object and every check
+        below would pass on the wrong bytes. Supplying it makes that a positive
+        ``fstat`` check rather than an argument that a digest cannot collide.
         """
 
         try:
@@ -725,6 +740,27 @@ class StorageClient:
                 "immutable storage publication requires a borrowed descriptor",
                 token="REFINE_ARTIFACT_SOURCE",
             )
+
+        if expected_identity is not None:
+            if (
+                type(expected_identity) is not tuple
+                or len(expected_identity) != 2
+                or any(
+                    isinstance(value, bool) or not isinstance(value, int)
+                    for value in expected_identity
+                )
+            ):
+                raise PermanentError(
+                    "immutable storage publication identity must be a "
+                    "(st_dev, st_ino) pair",
+                    token="REFINE_ARTIFACT_SOURCE",
+                )
+            snapshot = _descriptor_snapshot(source_descriptor)
+            if (snapshot[0], snapshot[1]) != expected_identity:
+                raise PermanentError(
+                    "immutable publication source is not the inode it was measured on",
+                    token="REFINE_ARTIFACT_SOURCE",
+                )
 
         _deadline_remaining(deadline, reserve_seconds=reserve_seconds)
         url = f"/storage/v1/object/{self._bucket}/{object_key}"

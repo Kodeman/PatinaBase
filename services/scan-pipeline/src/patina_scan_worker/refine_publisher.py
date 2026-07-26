@@ -272,6 +272,21 @@ def _validate_result(
                 "refine artifact metadata is invalid",
                 token="REFINE_ARTIFACT_VERIFY",
             )
+        if type(artifact) is RefineFileArtifact and (
+            type(artifact.identity) is not tuple
+            or len(artifact.identity) != 2
+            or any(
+                type(value) is not int or type(value) is bool
+                for value in artifact.identity
+            )
+        ):
+            # Publishing a borrowed descriptor without the identity it was
+            # measured on would mean uploading whatever that fd number happens
+            # to point at now.  The runner always attaches it.
+            raise PermanentError(
+                "refine file artifact is missing its measured file identity",
+                token="REFINE_ARTIFACT_VERIFY",
+            )
         names.append(artifact.name)
     if len(names) != len(set(names)) or names != sorted(names):
         raise PermanentError(
@@ -447,6 +462,9 @@ class RefinePublisher:
                         expected_size=artifact.size_bytes,
                         user_id=user_id,
                         scan_id=scan_id,
+                        # The runner measured this inode; storage re-proves the
+                        # borrowed descriptor still points at it before staging.
+                        expected_identity=artifact.identity,
                         deadline=deadline,
                         reserve_seconds=self._completion_reserve_seconds,
                     )

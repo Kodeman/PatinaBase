@@ -716,7 +716,9 @@ def test_a_failed_receipt_leaves_no_open_output_descriptor(leased):
         os.open(first, os.O_RDONLY),
         os.open(leased.work / "pairs-v2.txt", os.O_RDONLY),
     ]
-    before = len(os.listdir("/proc/self/fd")) if os.path.isdir("/proc/self/fd") else None
+    before = (
+        len(os.listdir("/proc/self/fd")) if os.path.isdir("/proc/self/fd") else None
+    )
     try:
         with pytest.raises(AdapterError):
             _receive_with_sent_descriptors(
@@ -1066,7 +1068,9 @@ def test_a_purge_failure_after_a_successful_run_closes_the_caller_owned_sink(
 
     monkeypatch.setattr(native_process, "_release_workspace_lease", failing_release)
     sink = NativeEngineOutputs(tokens)
-    before = len(os.listdir("/proc/self/fd")) if os.path.isdir("/proc/self/fd") else None
+    before = (
+        len(os.listdir("/proc/self/fd")) if os.path.isdir("/proc/self/fd") else None
+    )
 
     with pytest.raises(AdapterError) as raised:
         run_native_engine_child(
@@ -1104,7 +1108,9 @@ def test_a_sink_that_refuses_adoption_leaves_no_open_descriptor(monkeypatch, tmp
 
     monkeypatch.setattr(NativeEngineOutputs, "_adopt", refusing_adopt)
     sink = NativeEngineOutputs(tokens)
-    before = len(os.listdir("/proc/self/fd")) if os.path.isdir("/proc/self/fd") else None
+    before = (
+        len(os.listdir("/proc/self/fd")) if os.path.isdir("/proc/self/fd") else None
+    )
 
     with pytest.raises(AdapterError) as raised:
         run_native_engine_child(

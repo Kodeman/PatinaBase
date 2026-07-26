@@ -17,6 +17,7 @@ from patina_scan_worker.refine_adapter import RefineDeadline
 from patina_scan_worker.refine_publisher import RefinePublisher
 from patina_scan_worker.refine_runner import (
     REFINE_MANIFEST_NAME,
+    RefineFileArtifact,
     RefineInlineArtifact,
     RefineRunner,
 )
@@ -51,6 +52,7 @@ class _RecordingStorage(StorageClient):
         expected_size,
         user_id,
         scan_id,
+        expected_identity=None,
         deadline=None,
         reserve_seconds=0,
     ):
@@ -63,6 +65,7 @@ class _RecordingStorage(StorageClient):
                 "key": object_key,
                 "descriptor": source_descriptor,
                 "identity": (metadata.st_dev, metadata.st_ino),
+                "expectedIdentity": expected_identity,
                 "nlink": metadata.st_nlink,
                 "offset": os.lseek(source_descriptor, 0, os.SEEK_CUR),
                 "contentType": content_type,
@@ -275,6 +278,39 @@ def test_file_artifacts_publish_the_runner_verified_descriptor_itself(tmp_path):
         assert call["descriptor"] == artifact.descriptor
         metadata = os.fstat(artifact.descriptor)
         assert call["identity"] == (metadata.st_dev, metadata.st_ino)
+        # Storage is told which inode the runner measured, so it can re-prove
+        # the borrowed fd number still points at it rather than assume so.
+        assert call["expectedIdentity"] == artifact.identity
+        assert call["expectedIdentity"] == (metadata.st_dev, metadata.st_ino)
+
+
+def test_a_file_artifact_without_its_measured_identity_is_refused(tmp_path):
+    """The runner always attaches it; publication refuses to guess if it did not."""
+
+    result = _result(tmp_path)
+    target = next(
+        artifact for artifact in result.files if type(artifact) is RefineFileArtifact
+    )
+    stripped = replace(target, identity=None)
+    result = replace(
+        result,
+        files=tuple(
+            stripped if artifact is target else artifact for artifact in result.files
+        ),
+    )
+    storage = _RecordingStorage()
+
+    with pytest.raises(PermanentError) as caught:
+        _publisher(storage, tmp_path).publish(
+            result,
+            user_id="user-1",
+            scan_id="scan-1",
+            deadline=_deadline(),
+        )
+
+    assert caught.value.token == "REFINE_ARTIFACT_VERIFY"
+    assert "missing its measured file identity" in str(caught.value)
+    assert storage.calls == []
 
 
 def test_publication_never_opens_a_file_artifact_by_its_display_path(

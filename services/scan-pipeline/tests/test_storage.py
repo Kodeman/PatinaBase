@@ -581,6 +581,98 @@ def test_duplicate_verification_stream_failure_is_transient(tmp_path):
     assert caught.value.token == "REFINE_ARTIFACT_IO"
 
 
+def test_a_matching_measured_identity_is_accepted(tmp_path):
+    source = tmp_path / "artifact.bin"
+    source.write_bytes(b"payload")
+    session = _Session(_Response(200))
+    descriptor = _descriptor(source)
+    metadata = os.fstat(descriptor)
+
+    created = _client(session).publish_immutable_descriptor(
+        f"{_PREFIX}/artifact.bin",
+        descriptor,
+        "application/octet-stream",
+        expected_sha256=hashlib.sha256(b"payload").hexdigest(),
+        expected_size=7,
+        user_id=_USER_ID,
+        scan_id=_SCAN_ID,
+        expected_identity=(metadata.st_dev, metadata.st_ino),
+    )
+
+    assert created is True
+    assert len(session.posts) == 1
+
+
+def test_a_descriptor_that_is_not_the_measured_inode_is_refused(tmp_path):
+    """An fd number is a slot in a table; a reused slot is a different object.
+
+    The bytes here are byte-identical to what the caller measured, so the
+    digest, the size and every staging check would pass.  Only the inode says
+    this is not the object that was measured.
+    """
+
+    measured = tmp_path / "measured.bin"
+    measured.write_bytes(b"payload")
+    substitute = tmp_path / "substitute.bin"
+    substitute.write_bytes(b"payload")
+    session = _Session(_Response(200))
+    measured_metadata = os.stat(measured)
+
+    with pytest.raises(PermanentError) as caught:
+        _client(session).publish_immutable_descriptor(
+            f"{_PREFIX}/artifact.bin",
+            _descriptor(substitute),
+            "application/octet-stream",
+            expected_sha256=hashlib.sha256(b"payload").hexdigest(),
+            expected_size=7,
+            user_id=_USER_ID,
+            scan_id=_SCAN_ID,
+            expected_identity=(
+                measured_metadata.st_dev,
+                measured_metadata.st_ino,
+            ),
+        )
+
+    assert caught.value.token == "REFINE_ARTIFACT_SOURCE"
+    assert "not the inode it was measured on" in str(caught.value)
+    assert session.posts == []
+    assert session.gets == []
+
+
+@pytest.mark.parametrize(
+    "expected_identity",
+    [
+        (),
+        (1,),
+        (1, 2, 3),
+        [1, 2],
+        ("1", 2),
+        (True, 2),
+        (1, None),
+    ],
+)
+def test_a_malformed_measured_identity_is_refused(tmp_path, expected_identity):
+    source = tmp_path / "artifact.bin"
+    source.write_bytes(b"payload")
+    session = _Session(_Response(200))
+
+    with pytest.raises(PermanentError) as caught:
+        _client(session).publish_immutable_descriptor(
+            f"{_PREFIX}/artifact.bin",
+            _descriptor(source),
+            "application/octet-stream",
+            expected_sha256=hashlib.sha256(b"payload").hexdigest(),
+            expected_size=7,
+            user_id=_USER_ID,
+            scan_id=_SCAN_ID,
+            expected_identity=expected_identity,
+        )
+
+    assert caught.value.token == "REFINE_ARTIFACT_SOURCE"
+    assert "(st_dev, st_ino) pair" in str(caught.value)
+    assert session.posts == []
+
+
 def test_owner_prefix_is_required_before_any_service_role_write(tmp_path):
     source = tmp_path / "artifact.bin"
     source.write_bytes(b"payload")

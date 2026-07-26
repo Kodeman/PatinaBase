@@ -334,6 +334,13 @@ class PreparedRefineFrame:
 
     The descriptors are borrowed.  Their owner is the composed caller, which must
     keep them open for the whole run and close them afterwards.
+
+    Each descriptor's ``(st_dev, st_ino)`` is carried alongside it.  A descriptor
+    NUMBER is only a slot in a table: if the borrowed descriptor were ever closed
+    and the number reused, everything downstream would keep reading through the
+    same integer and see a different object.  Carrying the identity the runner
+    already proved lets any later consumer make that a positive ``fstat`` check
+    instead of an argument about digest collisions.
     """
 
     frame: NormalizedFrame
@@ -343,11 +350,13 @@ class PreparedRefineFrame:
     source_member: str
     source_sha256: str
     source_size_bytes: int
+    source_identity: tuple[int, int]
     engine_name: str
     engine_descriptor: int
     engine_relative_path: str
     engine_sha256: str
     engine_size_bytes: int
+    engine_identity: tuple[int, int]
     materializer_id: str
 
 
@@ -378,6 +387,12 @@ class RefineFileArtifact:
     the manifest.  Nothing may open it.  It was previously a ``source_path`` that
     the runner resolved and hashed and the publisher then opened a SECOND time,
     which is the reopen this contract exists to remove.
+
+    ``identity`` is the ``(st_dev, st_ino)`` the runner measured while it hashed
+    ``descriptor``.  The runner always sets it on what it emits; a builder need
+    not supply it.  The publisher requires it and re-``fstat``s the descriptor
+    against it before staging a byte, which turns "an fd number cannot have been
+    reused" from an argument about digest collisions into a check.
     """
 
     name: str
@@ -390,6 +405,9 @@ class RefineFileArtifact:
     transport_content_type: str
     semantic_media_type: str
     display_path: str | None = None
+    # Incidental for the same reason ``descriptor`` is: the inode number of two
+    # byte-identical artifacts differs, and equality here is about bytes.
+    identity: tuple[int, int] | None = field(default=None, compare=False)
 
 
 @dataclass(frozen=True)
@@ -967,6 +985,16 @@ def _validate_request(
     except Exception as exc:  # noqa: BLE001 - normalize the request boundary
         _fail(RefineFailureCode.INPUT_INVALID, str(exc))
 
+    # These checks are a NAME allow-list, not containment.  Nothing in this
+    # module derives file access from ``workspace_root`` any more: frames and
+    # engine artifacts are pinned to the descriptors their producers already
+    # hold, and ``_validate_engine_artifacts`` no longer binds an artifact to
+    # ``reference.relative_path``.  What survives here is only "the scratch root
+    # the caller named exists, is absolute, is not a symlink, and is a
+    # directory", which the backend needs before it can be handed a workspace.
+    # A future reader must not read these lines as proof that anything read or
+    # written during a run lives inside this tree -- they do not establish that,
+    # and a containment check followed by an ``open`` never could.
     if (
         not isinstance(request.workspace_root, Path)
         or not request.workspace_root.is_absolute()
@@ -1125,11 +1153,13 @@ def _validate_request(
                 source_member=str(source_member),
                 source_sha256=frame_input.source_sha256,
                 source_size_bytes=frame_input.source_size_bytes,
+                source_identity=source_identity,
                 engine_name=frame_input.engine_name,
                 engine_descriptor=frame_input.engine_descriptor,
                 engine_relative_path=frame_input.engine_relative_path,
                 engine_sha256=frame_input.engine_sha256,
                 engine_size_bytes=frame_input.engine_size_bytes,
+                engine_identity=engine_identity,
                 materializer_id=frame_input.materializer_id,
             )
         )
@@ -2196,6 +2226,9 @@ def _validate_engine_artifacts(
                 transport_content_type=artifact.transport_content_type,
                 semantic_media_type=artifact.semantic_media_type,
                 display_path=artifact.display_path,
+                # Carried, not discarded after the uniqueness check: the
+                # publisher re-proves this descriptor is still that inode.
+                identity=identity,
             )
         )
     missing = _REQUIRED_ENGINE_ARTIFACT_NAMES - seen

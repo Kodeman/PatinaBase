@@ -1264,25 +1264,34 @@ def test_a_successful_run_never_opens_any_path(tmp_path, monkeypatch):
 
     request = _request(tmp_path)
     builder = _FakeArtifactBuilder()
+    # The fake builder legitimately opens the artifacts it is handing over,
+    # exactly as a real materializer or native output sink would before the
+    # runner is entered.  Everything it opens lives under this one directory, so
+    # the exemption is a path allow-list.  It used to be "stop enforcing once
+    # the builder has been called at all", which silently left the whole
+    # post-builder half of a successful run unchecked.
+    builder_fixtures = f"{request.workspace_root / 'engine-artifacts'}{os.sep}"
     opened: list[str] = []
     real_open = refine_runner.os.open
 
-    def guarded_open(path, *args, **kwargs):
-        # The fake builder opens the artifacts it is handing over, exactly as a
-        # real materializer/native sink would before the runner is entered.
-        if not builder.calls:
+    def recording_open(path, *args, **kwargs):
+        try:
             opened.append(os.fspath(path))
-            raise AssertionError(f"the runner must not open {path!r}")
+        except TypeError:
+            opened.append(repr(path))
         return real_open(path, *args, **kwargs)
 
-    monkeypatch.setattr(refine_runner.os, "open", guarded_open)
+    monkeypatch.setattr(refine_runner.os, "open", recording_open)
 
     result = RefineRunner(
         backend=_FakeBackend(primary=_candidate()),
         artifact_builder=builder,
     ).run(request, deadline=_deadline())
 
-    assert opened == []
+    assert [name for name in opened if not name.startswith(builder_fixtures)] == []
+    # If the builder ever stops opening its own fixtures the allow-list would
+    # be vacuous, and this assertion is what would say so.
+    assert opened
     assert result.files[-1].name == REFINE_MANIFEST_NAME
 
 
@@ -1321,6 +1330,75 @@ def test_a_frame_descriptor_that_disagrees_with_its_ledger_is_refused(tmp_path):
 
     assert raised.value.code is RefineFailureCode.INPUT_INVALID
     assert "frame engine PPM sha256 does not match its ledger" in str(raised.value)
+
+
+def test_prepared_frames_carry_the_identity_the_runner_proved(tmp_path):
+    """The uniqueness check computed these and threw them away.
+
+    A descriptor NUMBER is a slot in a table.  Carrying the ``(st_dev, st_ino)``
+    the runner already proved is what lets the backend seam re-``fstat`` its
+    borrowed frames instead of arguing that an fd number cannot have been
+    recycled -- the same move the publisher now makes for engine artifacts.
+    """
+
+    request = _request(tmp_path)
+
+    result = RefineRunner(
+        backend=_FakeBackend(primary=_candidate()),
+        artifact_builder=_FakeArtifactBuilder(),
+    ).run(request, deadline=_deadline())
+
+    identities = set()
+    for prepared in result.frame_inputs:
+        source = os.fstat(prepared.source_descriptor)
+        engine = os.fstat(prepared.engine_descriptor)
+        assert prepared.source_identity == (source.st_dev, source.st_ino)
+        assert prepared.engine_identity == (engine.st_dev, engine.st_ino)
+        identities.add(prepared.source_identity)
+        identities.add(prepared.engine_identity)
+    # The source HEIC and its materialized PPM are distinct objects by contract,
+    # so every frame contributes exactly two identities and none repeat.
+    assert len(identities) == 2 * len(result.frame_inputs)
+
+
+def test_a_frame_source_that_shrinks_while_it_is_hashed_is_refused(
+    tmp_path,
+    monkeypatch,
+):
+    """The short-read guard is unreachable through the normal door, not dead.
+
+    ``_stable_descriptor_sha256`` refuses ``st_size != expected_size`` before it
+    reads a byte, so an ordinary file can never end early inside the hash loop
+    and deleting ``if not chunk: raise`` leaves the whole suite green.  A source
+    that shrinks AFTER that check is exactly what the guard is for -- and it is
+    the only bound on the loop, which would otherwise spin forever on a
+    zero-length read, so a missing guard here is a hang and not a wrong answer.
+    """
+
+    request = _request(tmp_path)
+    target = request.frames[0].source_descriptor
+    real_pread = os.pread
+    served: list[int] = []
+
+    def shrinking_pread(descriptor, size, offset):
+        if descriptor != target:
+            return real_pread(descriptor, size, offset)
+        if served:
+            # The source was truncated after the parent measured it.
+            return b""
+        served.append(offset)
+        return real_pread(descriptor, 1, offset)
+
+    monkeypatch.setattr(refine_runner.os, "pread", shrinking_pread)
+
+    with pytest.raises(RefineRunError) as raised:
+        RefineRunner(
+            backend=_FakeBackend(primary=_candidate()),
+            artifact_builder=_FakeArtifactBuilder(),
+        ).run(request, deadline=_deadline())
+
+    assert raised.value.code is RefineFailureCode.INPUT_INVALID
+    assert "source ended before its declared size" in str(raised.value)
 
 
 def test_a_frame_may_not_reuse_another_frames_inode(tmp_path):
