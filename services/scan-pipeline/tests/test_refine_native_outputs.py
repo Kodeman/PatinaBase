@@ -956,6 +956,7 @@ def test_the_channel_refuses_a_platform_without_anonymous_files(monkeypatch):
     assert "Linux-only" in str(raised.value)
 
 
+@requires_output_freeze
 def test_the_channel_refuses_a_platform_without_a_descriptor_table(
     monkeypatch,
     tmp_path,
@@ -1906,6 +1907,7 @@ def test_a_sink_that_refuses_adoption_leaves_no_open_descriptor(monkeypatch, tmp
         assert len(os.listdir("/proc/self/fd")) <= before
 
 
+@requires_output_freeze
 def test_a_double_release_after_a_refused_adoption_closes_nothing_twice(
     monkeypatch,
     tmp_path,
