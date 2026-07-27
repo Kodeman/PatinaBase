@@ -2166,7 +2166,7 @@ def test_false_clean_primary_cleanup_is_verified_before_return_and_kills_group(
     failure = None
     leader_pid = None
     descendant_pid = None
-    gone_at_return = False
+    gone_before_manual_cleanup = False
 
     def false_clean(_process, *, group_leader_pid):
         assert isinstance(group_leader_pid, int)
@@ -2219,7 +2219,22 @@ def test_false_clean_primary_cleanup_is_verified_before_return_and_kills_group(
         if leader_pid_path.is_file() and descendant_pid_path.is_file():
             leader_pid = int(leader_pid_path.read_text(encoding="utf-8"))
             descendant_pid = int(descendant_pid_path.read_text(encoding="utf-8"))
-            gone_at_return = _pid_is_gone(leader_pid) and _pid_is_gone(descendant_pid)
+            # The emergency path SIGKILLs the group and reaps its own child,
+            # but the adopted descendant is reaped by PID 1, not by us, so it
+            # can linger as a zombie for a scheduling beat after the call
+            # returns -- and ``os.kill(pid, 0)`` still sees a zombie.  Sampling
+            # once here flaked (leader <gone>, descendant Z).  Poll with the
+            # same bounded window the false-crash sibling above uses: if the
+            # kill never happened, both PIDs stay alive past the window and
+            # this still goes red.
+            stop = time.monotonic() + 1.0
+            while time.monotonic() < stop and not (
+                _pid_is_gone(leader_pid) and _pid_is_gone(descendant_pid)
+            ):
+                time.sleep(0.01)
+            gone_before_manual_cleanup = _pid_is_gone(leader_pid) and _pid_is_gone(
+                descendant_pid
+            )
     finally:
         if leader_pid is not None and not _pid_is_gone(leader_pid):
             try:
@@ -2238,7 +2253,7 @@ def test_false_clean_primary_cleanup_is_verified_before_return_and_kills_group(
     assert len(str(failure).encode("utf-8")) <= NATIVE_CHILD_MAX_ERROR_BYTES
     assert emergency_calls == [leader_pid]
     assert verification_reports == [()]
-    assert gone_at_return
+    assert gone_before_manual_cleanup
     time.sleep(0.80)
     assert activity_log.read_text(encoding="utf-8") == "leader-ready\n"
     assert not late_artifact.exists()
