@@ -96,15 +96,19 @@ which the copy already settles, but to catch a child that hardlinked an
 artifact out of its sandbox. That is a statement about the child's behaviour,
 not about the caller's bytes.
 
-WHAT THE PARENT DOES NOT YET VERIFY: nothing here checks that
+WHAT THIS MODULE DOES NOT VERIFY: nothing here checks that
 ``aligned-sparse-model-v1.tar`` is a correct Sim(3) alignment of the seed and
 raw pre-BA models, and nothing here computes or compares a pose digest. Those
 bytes remain a child PROPOSAL that this module transports intact and proves
-identical to the file the parent can see; deciding whether the proposal is
-*true* is item 6, which recomputes the alignment and the pose digest from the
-descriptors this channel returns. Until item 6 lands,
-``NATIVE_ENGINE_OUTPUT_ALIGNMENT_VERIFIED_BY_PARENT`` is False and no caller may
-treat an aligned model as verified.
+identical to the file the parent can see. Deciding whether the proposal is
+*true* is item 6, which now exists as a capability in
+``refine_model_alignment``: it parses the COLMAP sparse-model format itself from
+the descriptors this channel returns, re-solves the similarity with a
+dependency-free Horn solve, and recomputes both pose digests. NOTHING IN THIS
+MODULE CALLS IT, and no composed lifecycle exists to call it either -- that is
+item 7. ``NATIVE_ENGINE_OUTPUT_ALIGNMENT_VERIFIED_BY_PARENT`` therefore stays
+False, because that flag means QUALIFIED rather than implemented, and no caller
+may treat an aligned model as verified.
 """
 
 from __future__ import annotations
@@ -185,8 +189,15 @@ NATIVE_CHILD_MAX_OUTPUT_TOTAL_BYTES = 8 * 1024 * 1024 * 1024
 #: exactly here: it consumes the parent-owned descriptors this channel returns
 #: (``seed-model-v1.tar``, ``raw-triangulated-model-snapshot-v1.tar`` and
 #: ``aligned-sparse-model-v1.tar``), recomputes the alignment from the first two,
-#: and refuses the third unless its own transform and pose digest agree.  Nothing
-#: in this module may be read as that verification having happened.
+#: and refuses the third unless its own transform and pose digest agree.
+#:
+#: THAT CAPABILITY NOW EXISTS, in ``refine_model_alignment``
+#: (:func:`~patina_scan_worker.refine_model_alignment
+#: .verify_child_alignment_proposal`).  This flag stays False anyway, and the
+#: distinction is the whole point: the flag means QUALIFIED, and nothing in this
+#: repository composes the verifier onto a real engine run or has host evidence
+#: that it agrees with a real COLMAP writer.  That is item 7.  Nothing in this
+#: module may be read as that verification having happened.
 NATIVE_ENGINE_OUTPUT_ALIGNMENT_VERIFIED_BY_PARENT = False
 #: What "frozen" means for the descriptors this channel returns, stated as a
 #: fact rather than a hope.  It is True because the returned descriptor is a
