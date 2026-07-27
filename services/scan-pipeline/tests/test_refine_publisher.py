@@ -17,6 +17,7 @@ from patina_scan_worker.refine_adapter import RefineDeadline
 from patina_scan_worker.refine_publisher import RefinePublisher
 from patina_scan_worker.refine_runner import (
     REFINE_MANIFEST_NAME,
+    RefineFileArtifact,
     RefineInlineArtifact,
     RefineRunner,
 )
@@ -25,6 +26,7 @@ from test_refine_runner import (
     _FakeArtifactBuilder,
     _FakeBackend,
     _candidate,
+    _release_artifact_descriptors,  # noqa: F401 - autouse fd cleanup fixture
     _request,
 )
 
@@ -40,24 +42,32 @@ class _RecordingStorage(StorageClient):
         self.fail_at = fail_at
         self.calls: list[dict[str, object]] = []
 
-    def publish_immutable_file(
+    def publish_immutable_descriptor(
         self,
         object_key,
-        source_path,
+        source_descriptor,
         content_type,
         *,
         expected_sha256,
         expected_size,
         user_id,
         scan_id,
+        expected_identity=None,
         deadline=None,
         reserve_seconds=0,
     ):
-        payload = Path(source_path).read_bytes()
+        # Positional read: the publisher borrows this descriptor, so a fake
+        # that consumed its offset would not model the real storage client.
+        metadata = os.fstat(source_descriptor)
+        payload = os.pread(source_descriptor, metadata.st_size, 0)
         self.calls.append(
             {
                 "key": object_key,
-                "path": Path(source_path),
+                "descriptor": source_descriptor,
+                "identity": (metadata.st_dev, metadata.st_ino),
+                "expectedIdentity": expected_identity,
+                "nlink": metadata.st_nlink,
+                "offset": os.lseek(source_descriptor, 0, os.SEEK_CUR),
                 "contentType": content_type,
                 "sha256": expected_sha256,
                 "sizeBytes": expected_size,
@@ -232,8 +242,229 @@ def test_inline_spools_are_private_ephemeral_regular_files(tmp_path):
         if str(call["key"]).rsplit("/", 1)[-1] in inline_names
     ]
     assert inline_calls
-    assert all(not Path(call["path"]).exists() for call in inline_calls)
+    # Unlinked before publication: the spool has no name to substitute at.
+    assert all(call["nlink"] == 0 for call in inline_calls)
     assert list((tmp_path / "spool").iterdir()) == []
+
+
+def test_file_artifacts_publish_the_runner_verified_descriptor_itself(tmp_path):
+    """No reopen anywhere on the runner->publisher seam.
+
+    The identity the publisher hands to storage must be the identity the runner
+    measured, and the publisher must not open the artifact's name to get there.
+    """
+
+    result = _result(tmp_path)
+    storage = _RecordingStorage()
+    file_artifacts = {
+        artifact.name: artifact
+        for artifact in result.files
+        if type(artifact) is not RefineInlineArtifact
+    }
+    assert file_artifacts
+
+    _publisher(storage, tmp_path).publish(
+        result,
+        user_id="user-1",
+        scan_id="scan-1",
+        deadline=_deadline(),
+    )
+
+    for call in storage.calls:
+        name = str(call["key"]).rsplit("/", 1)[-1]
+        artifact = file_artifacts.get(name)
+        if artifact is None:
+            continue
+        assert call["descriptor"] == artifact.descriptor
+        metadata = os.fstat(artifact.descriptor)
+        assert call["identity"] == (metadata.st_dev, metadata.st_ino)
+        # Storage is told which inode the runner measured, so it can re-prove
+        # the borrowed fd number still points at it rather than assume so.
+        assert call["expectedIdentity"] == artifact.identity
+        assert call["expectedIdentity"] == (metadata.st_dev, metadata.st_ino)
+
+
+@pytest.mark.parametrize(
+    "identity",
+    (
+        ("12", 34),
+        (12, "34"),
+        (True, 34),
+        (12, False),
+        (12,),
+        (12, 34, 56),
+        [12, 34],
+    ),
+    ids=(
+        "dev-is-a-string",
+        "ino-is-a-string",
+        "dev-is-a-bool",
+        "ino-is-a-bool",
+        "one-element",
+        "three-elements",
+        "list-not-tuple",
+    ),
+)
+def test_a_file_artifact_identity_must_be_an_exact_pair_of_ints(tmp_path, identity):
+    """Every clause of the identity shape check, one parameter each.
+
+    ``bool`` is refused by ``type(value) is not int`` on its own -- ``type(True)``
+    is ``bool`` -- which is why the ``or type(value) is bool`` this check used to
+    carry could be deleted without turning anything red.  It is gone; these cases
+    are what keep the remaining clause honest.
+    """
+
+    result = _result(tmp_path)
+    target = next(
+        artifact for artifact in result.files if type(artifact) is RefineFileArtifact
+    )
+    result = replace(
+        result,
+        files=tuple(
+            replace(target, identity=identity) if artifact is target else artifact
+            for artifact in result.files
+        ),
+    )
+    storage = _RecordingStorage()
+
+    with pytest.raises(PermanentError) as caught:
+        _publisher(storage, tmp_path).publish(
+            result,
+            user_id="user-1",
+            scan_id="scan-1",
+            deadline=_deadline(),
+        )
+
+    assert caught.value.token == "REFINE_ARTIFACT_VERIFY"
+    assert "missing its measured file identity" in str(caught.value)
+    assert storage.calls == []
+
+
+def test_a_file_artifact_without_its_measured_identity_is_refused(tmp_path):
+    """The runner always attaches it; publication refuses to guess if it did not."""
+
+    result = _result(tmp_path)
+    target = next(
+        artifact for artifact in result.files if type(artifact) is RefineFileArtifact
+    )
+    stripped = replace(target, identity=None)
+    result = replace(
+        result,
+        files=tuple(
+            stripped if artifact is target else artifact for artifact in result.files
+        ),
+    )
+    storage = _RecordingStorage()
+
+    with pytest.raises(PermanentError) as caught:
+        _publisher(storage, tmp_path).publish(
+            result,
+            user_id="user-1",
+            scan_id="scan-1",
+            deadline=_deadline(),
+        )
+
+    assert caught.value.token == "REFINE_ARTIFACT_VERIFY"
+    assert "missing its measured file identity" in str(caught.value)
+    assert storage.calls == []
+
+
+def test_publication_never_opens_a_file_artifact_by_its_display_path(
+    tmp_path,
+    monkeypatch,
+):
+    result = _result(tmp_path)
+    display_paths = {
+        artifact.display_path
+        for artifact in result.files
+        if type(artifact) is not RefineInlineArtifact
+    }
+    assert display_paths and None not in display_paths
+    real_open = publisher_module.os.open
+
+    def guarded_open(path, *args, **kwargs):
+        if os.fspath(path) in display_paths:
+            raise AssertionError("the publisher must not reopen an artifact by path")
+        return real_open(path, *args, **kwargs)
+
+    monkeypatch.setattr(publisher_module.os, "open", guarded_open)
+    storage = _RecordingStorage()
+
+    _publisher(storage, tmp_path).publish(
+        result,
+        user_id="user-1",
+        scan_id="scan-1",
+        deadline=_deadline(),
+    )
+
+    assert len(storage.calls) == len(result.files)
+
+
+def test_a_spool_substituted_between_write_and_reopen_is_refused(
+    tmp_path,
+    monkeypatch,
+):
+    """The inline spool is verified by identity, not by name.
+
+    ``_spool_inline`` writes the document, then reopens the name read-only. A
+    same-UID actor that swaps the file in that window would otherwise get an
+    arbitrary inode published under a manifest-bound digest.
+    """
+
+    result = _result(tmp_path)
+    storage = _RecordingStorage()
+    decoy = tmp_path / "decoy.json"
+    real_open = publisher_module.os.open
+    swapped = False
+
+    def swap_before_reopen(path, flags, *args, **kwargs):
+        nonlocal swapped
+        if not swapped and flags & os.O_RDONLY == os.O_RDONLY and not flags & os.O_CREAT:
+            try:
+                original = Path(path).read_bytes()
+            except OSError:
+                original = None
+            if original is not None:
+                swapped = True
+                decoy.write_bytes(original)
+                os.replace(decoy, path)
+        return real_open(path, flags, *args, **kwargs)
+
+    monkeypatch.setattr(publisher_module.os, "open", swap_before_reopen)
+
+    with pytest.raises(PermanentError) as caught:
+        _publisher(storage, tmp_path).publish(
+            result,
+            user_id="user-1",
+            scan_id="scan-1",
+            deadline=_deadline(),
+        )
+
+    assert swapped is True
+    assert caught.value.token == "REFINE_ARTIFACT_VERIFY"
+    assert "spool could not be verified" in str(caught.value)
+
+
+def test_publication_leaves_every_borrowed_offset_untouched(tmp_path):
+    result = _result(tmp_path)
+    borrowed = [
+        artifact
+        for artifact in result.files
+        if type(artifact) is not RefineInlineArtifact
+    ]
+    for index, artifact in enumerate(borrowed):
+        os.lseek(artifact.descriptor, index + 1, os.SEEK_SET)
+    storage = _RecordingStorage()
+
+    _publisher(storage, tmp_path).publish(
+        result,
+        user_id="user-1",
+        scan_id="scan-1",
+        deadline=_deadline(),
+    )
+
+    for index, artifact in enumerate(borrowed):
+        assert os.lseek(artifact.descriptor, 0, os.SEEK_CUR) == index + 1
 
 
 def test_boolean_manifest_schema_is_rejected_before_storage(tmp_path):

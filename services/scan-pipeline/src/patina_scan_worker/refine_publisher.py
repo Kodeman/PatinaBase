@@ -272,6 +272,25 @@ def _validate_result(
                 "refine artifact metadata is invalid",
                 token="REFINE_ARTIFACT_VERIFY",
             )
+        if type(artifact) is RefineFileArtifact and (
+            type(artifact.identity) is not tuple
+            or len(artifact.identity) != 2
+            # ``type(value) is not int`` already rejects ``bool``: ``type(True)``
+            # is ``bool``, not ``int``.  The ``or type(value) is bool`` this used
+            # to carry could be deleted without turning a single test red, which
+            # is the definition of a clause that is not doing anything.  The
+            # exact-type form is kept rather than ``storage.py``'s
+            # ``isinstance``-based spelling because widening to int subclasses
+            # here would be a behaviour change, not a cleanup.
+            or any(type(value) is not int for value in artifact.identity)
+        ):
+            # Publishing a borrowed descriptor without the identity it was
+            # measured on would mean uploading whatever that fd number happens
+            # to point at now.  The runner always attaches it.
+            raise PermanentError(
+                "refine file artifact is missing its measured file identity",
+                token="REFINE_ARTIFACT_VERIFY",
+            )
         names.append(artifact.name)
     if len(names) != len(set(names)) or names != sorted(names):
         raise PermanentError(
@@ -296,12 +315,21 @@ def _spool_inline(
     *,
     deadline: RefineDeadline,
     reserve_seconds: float,
-) -> Path:
+) -> int:
+    """Spool one inline document and return a read-only descriptor for it.
+
+    The write handle is closed and a fresh read-only descriptor is opened with
+    ``O_NOFOLLOW`` before the file is unlinked, so the object published is the
+    inode this function wrote and nothing can be substituted at the name after
+    the fact.  Callers own the returned descriptor.
+    """
+
     _require_budget(deadline, reserve_seconds)
     target = directory / artifact.name
     flags = os.O_WRONLY | os.O_CREAT | os.O_EXCL
     flags |= getattr(os, "O_CLOEXEC", 0)
     flags |= getattr(os, "O_NOFOLLOW", 0)
+    read_descriptor: int | None = None
     try:
         descriptor = os.open(target, flags, 0o600)
         try:
@@ -323,8 +351,19 @@ def _spool_inline(
                 offset += written
             handle.flush()
             os.fsync(handle.fileno())
-            metadata = os.fstat(handle.fileno())
+            written_stat = os.fstat(handle.fileno())
+            written_identity = (written_stat.st_dev, written_stat.st_ino)
+        read_flags = os.O_RDONLY | getattr(os, "O_CLOEXEC", 0)
+        read_flags |= getattr(os, "O_NOFOLLOW", 0)
+        read_descriptor = os.open(target, read_flags)
+        metadata = os.fstat(read_descriptor)
+        os.unlink(target)
     except OSError as exc:
+        if read_descriptor is not None:
+            try:
+                os.close(read_descriptor)
+            except OSError:
+                pass
         raise TransientError(
             "refine inline artifact could not be spooled",
             token="REFINE_ARTIFACT_IO",
@@ -332,14 +371,19 @@ def _spool_inline(
     _require_budget(deadline, reserve_seconds)
     if (
         not stat.S_ISREG(metadata.st_mode)
+        or (metadata.st_dev, metadata.st_ino) != written_identity
         or metadata.st_size != artifact.size_bytes
         or hashlib.sha256(artifact.payload).hexdigest() != artifact.sha256
     ):
+        try:
+            os.close(read_descriptor)
+        except OSError:
+            pass
         raise PermanentError(
             "refine inline artifact spool could not be verified",
             token="REFINE_ARTIFACT_VERIFY",
         )
-    return target
+    return read_descriptor
 
 
 class RefinePublisher:
@@ -410,27 +454,50 @@ class RefinePublisher:
                 object_key: str,
             ) -> bool:
                 _require_budget(deadline, self._completion_reserve_seconds)
-                source_path = (
-                    artifact.source_path
-                    if type(artifact) is RefineFileArtifact
-                    else _spool_inline(
-                        spool_dir,
-                        artifact,
+                # A file artifact's descriptor is BORROWED from the runner's
+                # caller, so it must not be closed here.  A spooled inline
+                # document's descriptor is owned by this call and always is.
+                if type(artifact) is RefineFileArtifact:
+                    return self._storage.publish_immutable_descriptor(
+                        object_key,
+                        artifact.descriptor,
+                        artifact.transport_content_type,
+                        expected_sha256=artifact.sha256,
+                        expected_size=artifact.size_bytes,
+                        user_id=user_id,
+                        scan_id=scan_id,
+                        # The runner measured this inode; storage re-proves the
+                        # borrowed descriptor still points at it before staging.
+                        expected_identity=artifact.identity,
                         deadline=deadline,
                         reserve_seconds=self._completion_reserve_seconds,
                     )
-                )
-                return self._storage.publish_immutable_file(
-                    object_key,
-                    source_path,
-                    artifact.transport_content_type,
-                    expected_sha256=artifact.sha256,
-                    expected_size=artifact.size_bytes,
-                    user_id=user_id,
-                    scan_id=scan_id,
+                spooled = _spool_inline(
+                    spool_dir,
+                    artifact,
                     deadline=deadline,
                     reserve_seconds=self._completion_reserve_seconds,
                 )
+                try:
+                    return self._storage.publish_immutable_descriptor(
+                        object_key,
+                        spooled,
+                        artifact.transport_content_type,
+                        expected_sha256=artifact.sha256,
+                        expected_size=artifact.size_bytes,
+                        user_id=user_id,
+                        scan_id=scan_id,
+                        deadline=deadline,
+                        reserve_seconds=self._completion_reserve_seconds,
+                    )
+                finally:
+                    try:
+                        os.close(spooled)
+                    except OSError as exc:
+                        raise TransientError(
+                            "refine inline artifact spool could not be released",
+                            token="REFINE_ARTIFACT_IO",
+                        ) from exc
 
             for artifact in validated.artifacts:
                 key = f"{validated.prefix}/{artifact.name}"
