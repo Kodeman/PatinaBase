@@ -24,12 +24,31 @@ interface ServiceTarget {
   name: string;
   url: string | undefined;
   defaultUrl: string;
+  // Orders/Projects run behind NestJS's default global prefix (`/v1`) in
+  // every environment, dev included — hitting bare `/health` 404s. Media has
+  // no global prefix, so its health route stays at the root.
+  healthPath: string;
 }
 
 const SERVICE_TARGETS: ServiceTarget[] = [
-  { name: 'Orders', url: process.env.ORDERS_SERVICE_URL, defaultUrl: 'http://localhost:3015' },
-  { name: 'Media', url: process.env.MEDIA_SERVICE_URL, defaultUrl: 'http://localhost:3014' },
-  { name: 'Projects', url: process.env.PROJECTS_SERVICE_URL, defaultUrl: 'http://localhost:3016' },
+  {
+    name: 'Orders',
+    url: process.env.ORDERS_SERVICE_URL,
+    defaultUrl: 'http://localhost:3015',
+    healthPath: '/v1/health',
+  },
+  {
+    name: 'Media',
+    url: process.env.MEDIA_SERVICE_URL,
+    defaultUrl: 'http://localhost:3014',
+    healthPath: '/health',
+  },
+  {
+    name: 'Projects',
+    url: process.env.PROJECTS_SERVICE_URL,
+    defaultUrl: 'http://localhost:3016',
+    healthPath: '/v1/health',
+  },
 ];
 
 async function pingService(target: ServiceTarget): Promise<ServiceHealth> {
@@ -37,7 +56,7 @@ async function pingService(target: ServiceTarget): Promise<ServiceHealth> {
   const start = Date.now();
 
   try {
-    const res = await fetch(`${baseUrl}/health`, {
+    const res = await fetch(`${baseUrl}${target.healthPath}`, {
       signal: AbortSignal.timeout(PING_TIMEOUT_MS),
       cache: 'no-store',
     });

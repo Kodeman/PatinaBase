@@ -36,7 +36,7 @@ function formatChecked(iso: string | undefined): string {
 }
 
 export default function HealthPage() {
-  const { data, isLoading, isError, error, dataUpdatedAt } = useSystemHealth();
+  const { data, isLoading, isError, error, dataUpdatedAt } = useSystemHealth({ poll: true });
   const services: ServiceHealth[] = data?.services ?? [];
   const overall = data?.overall ?? 'healthy';
 
