@@ -3124,6 +3124,36 @@ def test_restrictive_legacy_rollback_uses_fresh_alias_isolated_release(tmp_path)
 
 
 def test_crash_before_legacy_quarantine_discards_and_recopies_fresh_release(tmp_path):
+    """The stale half-materialized release must be DISCARDED, not adopted.
+
+    HOW THAT IS PROVED, and why it is no longer proved by an inode number.  This
+    test used to assert ``marker.st_ino != first_inode`` as a proxy for "a
+    different file".  A qualified-host probe showed the installer is correct --
+    tainting the stale release and dropping a sentinel found the taint erased,
+    the sentinel absent, and ``statx`` btime about a second later, i.e. a
+    genuinely different file -- and that the assertion still FAILED, as
+    ``assert 7903675 != 7903675``.  The release directory is content-addressed,
+    so the allocation sequence repeats exactly, and **ext4 hands the just-freed
+    inode number straight back**.  The test was green in CI only because
+    overlayfs and tmpfs allocate inode numbers differently.
+
+    THAT IS REPRODUCIBLE FROM THIS REPOSITORY, so it is not carried on the
+    qualified host's word: running the pre-fix revision of this file in a
+    container whose ``/tmp`` is ext4 fails as ``assert 6945173 != 6945173``, and
+    the fixed revision passes there, on macOS/APFS, and on overlayfs alike.
+
+    This is the same ext4 property that forced an earlier increment to pin
+    directory identity with an ``O_PATH`` descriptor instead of a name-plus-stat
+    re-check (``NATIVE_WORKSPACE_ENTRY_PIN_IS_UNIVERSAL`` in
+    ``refine_native_process``): on ext4, ``st_ino`` is a REUSED handle, not an
+    identity, and nothing may treat it as one.
+
+    What replaces it is the evidence the probe actually collected: a taint
+    written into the stale release's payload and a sentinel file that only the
+    stale copy has.  If recovery adopted the stale release, the taint survives
+    and the sentinel is present.  Both must be gone.
+    """
+
     result, env, app, _units, staged, targets, _candidates = _run_transaction(
         tmp_path,
         active=True,
@@ -3136,7 +3166,11 @@ def test_crash_before_legacy_quarantine_discards_and_recopies_fresh_release(tmp_
     materialized = Path(
         (transaction / "legacy_materialized_release").read_text().strip()
     )
-    first_inode = (materialized / "marker").stat().st_ino
+    # Taint the stale release in two independent ways: rewrite the payload the
+    # final assertion reads, and add a file the true source does not have.
+    assert (materialized / "marker").read_text() == "old"
+    (materialized / "marker").write_text("stale-materialized-release")
+    (materialized / "discarded-release-sentinel").write_text("stale\n")
     assert (app / ".venv").is_dir() and not (app / ".venv").is_symlink()
     assert not list(app.glob(".venv.quarantine.*"))
     assert not (transaction / "legacy_materialized_ready").exists()
@@ -3146,8 +3180,11 @@ def test_crash_before_legacy_quarantine_discards_and_recopies_fresh_release(tmp_
 
     assert recovered.returncode == 0, recovered.stderr
     assert (app / ".venv").is_symlink()
+    # The taint is erased and the sentinel never arrives, so what is live is a
+    # fresh copy of the true source rather than the stale materialization --
+    # regardless of what inode number the filesystem chose to reuse for it.
     assert (app / ".venv" / "marker").read_text() == "old"
-    assert (app / ".venv" / "marker").stat().st_ino != first_inode
+    assert not (app / ".venv" / "discarded-release-sentinel").exists()
     assert not list(app.glob(".venv.quarantine.*"))
     assert not staged.exists()
 

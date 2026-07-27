@@ -19,8 +19,14 @@ import patina_scan_worker.refine_colmap_backend as backend_module
 import patina_scan_worker.refine_native_process as native_process
 import patina_scan_worker.refine_packet_extractor as extractor_module
 import pytest
+from _json_recursion import (
+    DECODE_DEPTHS,
+    deeply_nested_json_payload,
+    no_recursion_limit_reason,
+)
 from patina_scan_worker.refine_adapter import AdapterError, RefineDeadline
 from patina_scan_worker.refine_colmap_backend import (
+    COLMAP_PACKET_MANIFEST_MAX_BYTES,
     COLMAP_PACKET_MAX_ENGINE_IMAGES,
     COLMAP_PACKET_MIN_ENGINE_IMAGES,
     ENGINE_REQUEST_CONTRACT,
@@ -1013,7 +1019,12 @@ def test_parent_lease_provisioning_failure_removes_its_own_directory(
         provision_native_workspace_lease(str(container), deadline=_deadline(30.0))
     monkeypatch.undo()
 
-    assert raised.value.code == "REFINE_ENGINE_FAILED"
+    # OPERATIONAL: a raw OSError from inspecting scratch this process just
+    # created is the host refusing a resource, not a statement about the task,
+    # so it is retryable rather than the FATAL default the old
+    # REFINE_ENGINE_FAILED fell through to.  Fatality is pinned in
+    # test_refine_runner.py; only the code can be seen from here.
+    assert raised.value.code == "REFINE_ENGINE_SCRATCH_UNAVAILABLE"
     # The parent removes the half-provisioned workspace it created itself.
     assert list(container.iterdir()) == []
 
@@ -2974,8 +2985,20 @@ def test_deeply_nested_ledger_json_recursion_error_is_normalized(
     tmp_path,
     ledger_kind,
 ):
-    depth = 10_000
-    nested_payload = b"[" * depth + b"0" + b"]" * depth
+    """A REAL ``RecursionError`` out of ``json.loads``, on any interpreter.
+
+    The depth is measured rather than hardcoded: 10 000 raises on CPython 3.12
+    and parses cleanly on 3.14, which broke this test on 3.14 while the
+    normalization it pins was unchanged.  See ``tests/_json_recursion.py``.
+
+    The ledger parsers apply no size ceiling of their own before ``json.loads``,
+    so the packet manifest's ceiling is used as the bound -- it is the smallest
+    one any payload on this path has to satisfy.
+    """
+
+    nested_payload = deeply_nested_json_payload(COLMAP_PACKET_MANIFEST_MAX_BYTES)
+    if nested_payload is None:
+        pytest.skip(no_recursion_limit_reason("decoder", DECODE_DEPTHS))
     parse = _parse_source if ledger_kind == "source" else _parse_adapter
     with pytest.raises(AdapterError, match="not valid UTF-8 JSON") as raised:
         parse(tmp_path, nested_payload)

@@ -402,6 +402,36 @@ _CLEANUP_FAILED_CODE = "REFINE_ENGINE_CLEANUP_FAILED"
 #: ``ARTIFACT_INVALID``, so an unrecognised code silently converts a disk that
 #: filled for ten minutes into a task that is dead forever.
 _NO_SPACE_CODE = "REFINE_ENGINE_NO_SPACE"
+#: The SAME defect shape as ``_NO_SPACE_CODE``, found by auditing every other
+#: raise site in this module rather than by another outage.
+#:
+#: ``_FAILED_CODE`` is retryable in the runner's taxonomy but the runner's
+#: ``AdapterError`` handler does not name it, so it falls through to the FATAL
+#: ``ARTIFACT_INVALID``.  That fallthrough is CORRECT for the overwhelming
+#: majority of this module's ``_FAILED_CODE`` sites, which report DETERMINISTIC
+#: facts -- an absent platform primitive, a malformed ledger, a token set that
+#: does not match its request, a child that answered with the wrong protocol.
+#: Re-running those produces the identical refusal, so failing them fast is the
+#: right behaviour and blanket-routing them to retryable would be worse than the
+#: bug it fixed.
+#:
+#: A small minority are not deterministic at all.  Provisioning this module's
+#: OWN private scratch -- the workspace lease and the engine-output freeze vault
+#: -- can be refused by the HOST rather than by anything about the task: no free
+#: inodes or blocks, an exhausted descriptor table, a scratch root the operator
+#: has not created yet, or a run of colliding random names.  Nothing about the
+#: task or its inputs is wrong in any of those, and every one of them has an
+#: operator fix after which the SAME task succeeds.  Those sites raise this code
+#: instead, and ``refine_runner`` classifies it RETRYABLE, exactly as it does
+#: for ``_NO_SPACE_CODE``.
+#:
+#: The split rule, so a future raise site lands on the right side of it: use
+#: this code only when the refusal is about a resource the HOST failed to
+#: supply.  Use ``_FAILED_CODE`` when the refusal is a statement about the task,
+#: the platform's capabilities, or an actor that tampered with our scratch --
+#: including every "not a fresh private directory" check, which reports a
+#: same-UID actor rather than a shortage and must stay fatal.
+_SCRATCH_UNAVAILABLE_CODE = "REFINE_ENGINE_SCRATCH_UNAVAILABLE"
 _CHILD_PROTOCOL_REJECT_EXIT_CODE = 74
 _IN_PROCESS_ENTRYPOINT_MARKER = "__patina_refine_in_process_only__"
 _JSON_STRING_CHUNK_CHARS = 1024
@@ -2258,7 +2288,15 @@ def _seal_process_against_procfs_descriptor_theft() -> None:
 
       ``gdb -p``, ``py-spy dump``, ``eu-stack``, ``gcore`` and every other
       attach-based tool go through exactly those calls, so all of them are
-      refused.  The production unit runs ``User=patina`` with
+      refused.  That sentence sits directly under a MEASURED table and used to
+      carry no marker of its own, which made an inference read as a
+      measurement.  It has since been CORROBORATED for ``py-spy`` specifically,
+      on the same qualified Linux host as the table and not in this
+      repository's containers: both primitives ``py-spy`` uses --
+      ``process_vm_readv`` and reading ``/proc/<pid>/maps`` -- are refused
+      post-seal.  The generalisation to "every other attach-based tool" is
+      REASONED from the shared ``ptrace_may_access`` gate, not measured.  The
+      production unit runs ``User=patina`` with
       ``NoNewPrivileges=true`` and grants no ``CAP_SYS_PTRACE``, so nothing there
       can bypass it -- not even the operator's own shell as ``patina``.
 
@@ -2267,14 +2305,23 @@ def _seal_process_against_procfs_descriptor_theft() -> None:
         1. Read the journal.  Every refusal on this path is a typed
            ``AdapterError`` with a ``REFINE_*`` code and a bounded diagnostic;
            that is the designed post-mortem surface and it is unaffected.
-        2. Attach BEFORE the first engine output handoff.  The seal is dropped by
-           the first call to :func:`_open_output_freeze_vault` -- the only caller
-           of this function -- and that is reached only from
+        2. Attach BEFORE the first engine output handoff -- PARTIALLY EFFECTIVE,
+           and the partiality is the point.  The seal is dropped by the first
+           call to :func:`_open_output_freeze_vault` -- the only caller of this
+           function -- and that is reached only from
            :func:`_receive_native_outputs` with a non-empty ledger, so a run with
            ``outputs=None`` never seals at all.  Whether an ALREADY-ATTACHED
-           tracer survives the flag drop is REASONED, NOT MEASURED here:
-           ``__ptrace_may_access`` is consulted at attach, and nothing in this
-           module detaches anything.
+           tracer survives the flag drop was previously REASONED here; it has
+           since been MEASURED on a qualified Linux host (NOT in this
+           repository's containers, which is why no test here re-checks it), and
+           the reasoning was only half right.  The ptrace RELATIONSHIP does
+           survive -- a tracer attached before the seal issued
+           ``PTRACE_INTERRUPT`` afterwards with rc=0 -- but that same tracer's
+           ``open("/proc/<pid>/mem")`` is then refused ``EACCES``.  So
+           an operator who attaches early keeps process control (stop, continue,
+           signal, wait) and LOSES the primary memory-read path, which is what
+           most post-mortems actually want.  Attaching early is worth doing and
+           is not a full substitute for a debuggable process.
         3. Reproduce off the production unit.  Running the same operation in a
            process that is allowed to hold ``CAP_SYS_PTRACE`` (or as root) leaves
            the route open by design -- the documented residual below -- so a
@@ -2376,16 +2423,21 @@ def _open_output_freeze_vault(lease: NativeWorkspaceLease) -> tuple[str, int]:
         except FileExistsError:
             continue
         except OSError as exc:
+            # OPERATIONAL, not deterministic: the reachable errnos here are all
+            # host state (no free inodes or blocks, a container the operator
+            # has since made unwritable, ENOMEM), never a fact about the task.
             raise AdapterError(
                 "cannot create the native engine output freeze vault",
-                _FAILED_CODE,
+                _SCRATCH_UNAVAILABLE_CODE,
             ) from exc
         name = candidate
         break
     if name is None:
+        # OPERATIONAL: every attempt collided with an existing name, which is a
+        # transient condition of the container, not a property of this run.
         raise AdapterError(
             "cannot create a unique native engine output freeze vault",
-            _FAILED_CODE,
+            _SCRATCH_UNAVAILABLE_CODE,
         )
     try:
         descriptor = os.open(
@@ -2400,9 +2452,12 @@ def _open_output_freeze_vault(lease: NativeWorkspaceLease) -> tuple[str, int]:
                 "native engine output freeze vault setup failed",
                 cleanup_errors,
             ) from exc
+        # OPERATIONAL: the directory was created a moment ago and still exists;
+        # what can refuse to OPEN it is an exhausted descriptor table (EMFILE,
+        # ENFILE), ENOMEM, or a container an operator has just re-permissioned.
         raise AdapterError(
             "native engine output freeze vault is unreadable",
-            _FAILED_CODE,
+            _SCRATCH_UNAVAILABLE_CODE,
         ) from exc
     try:
         os.set_inheritable(descriptor, False)
@@ -2593,8 +2648,23 @@ def _frozen_output_copy(
     kernel to write each back.  Extrapolated to the 8 GiB aggregate ceiling that
     is single-digit seconds against a 400-frame solve measured in minutes.  The
     number that can actually stop a run is the disk headroom above, not this one.
-    Both are container figures on overlayfs, NOT measurements of the ext4 GPU
-    box, and item 7's real run is what replaces them.
+
+    THE THROUGHPUT NUMBERS ABOVE ARE CONTAINER FIGURES ON OVERLAYFS and item 7's
+    real run on the GPU box is what replaces them; that hedge is still accurate
+    and stays.
+
+    A DIFFERENT ext4 PROPERTY HAS since been measured and is recorded here
+    because it bit a test rather than a copy: when an allocation sequence
+    repeats, ext4 hands the just-freed inode NUMBER straight back, so ``st_ino``
+    inequality is NOT evidence that a file is a different file.  Reproduced in
+    this repository, not argued: ``test_install_script`` failed as
+    ``assert 7903675 != 7903675`` on a qualified host and as
+    ``assert 6945173 != 6945173`` in a container whose ``/tmp`` is ext4, while
+    content and sentinel evidence showed the file genuinely had been discarded
+    and re-copied.  This module already had to pin directory identity with an
+    ``O_PATH`` descriptor for the same reason (see
+    ``NATIVE_WORKSPACE_ENTRY_PIN_IS_UNIVERSAL``), and nothing added here may
+    treat an inode number as an identity.
     """
 
     remaining_seconds()
@@ -3356,7 +3426,33 @@ def _receive_envelope(
 
 
 def _parse_linux_process_stat(payload: bytes) -> tuple[int, int]:
-    """Parse the PID and process-group fields from one bounded procfs stat row."""
+    """Parse the PID and process-group fields from one bounded procfs stat row.
+
+    EVERY CLAUSE BELOW IS LOAD-BEARING, and that is a sweep result rather than
+    an assertion: a mutation sweep against the full gate selection found SIX of
+    the nine clauses deletable with ZERO red, which is a hole per clause, not a
+    style complaint.  The rows in
+    ``test_linux_process_stat_parser_refuses_one_row_per_clause`` were written
+    to close them and each names the clause it exists for.  Two of the holes
+    were real defects rather than redundancy:
+
+    * ``len(payload) > 8192`` pairs with :func:`_read_linux_process_stat`, which
+      reads exactly 8193 bytes.  An over-long row therefore arrives TRUNCATED,
+      and a truncated row still parses -- pid and the first three post-``comm``
+      fields are at the FRONT -- so deleting this clause does not raise, it
+      returns a confident wrong answer for a row the reader never saw the end
+      of.  Nothing downstream re-checks the length.
+    * ``not prefix.isdigit()`` is not covered by ``int(prefix)``.  ``int`` accepts
+      a leading sign and surrounding whitespace where ``bytes.isdigit`` does not,
+      so a ``comm`` containing " (" can push a signed or padded token into the
+      pid position and be silently accepted as a pid.
+
+    The remaining four (``type(payload) is not bytes``, ``len(payload) == 0``,
+    ``opening <= 0``, ``closing <= opening``) were each masked by a NEIGHBOUR
+    that raised ``ValueError`` too, so the class of the exception could not tell
+    them apart.  They are pinned on the DIAGNOSTIC, which is the thing an
+    operator reads and the thing that actually differs.
+    """
 
     if type(payload) is not bytes or len(payload) == 0 or len(payload) > 8192:
         raise ValueError("Linux process stat payload is invalid")
@@ -4411,9 +4507,11 @@ def provision_native_workspace_lease(
             name = candidate
             break
         if name is None:
+            # OPERATIONAL, same shape as the freeze vault's: a name-collision
+            # run in the operator's container, not a defect in this task.
             raise AdapterError(
                 "cannot create a unique native workspace lease",
-                _FAILED_CODE,
+                _SCRATCH_UNAVAILABLE_CODE,
             )
         workspace_descriptor = os.open(name, flags, dir_fd=parent_descriptor)
         os.set_inheritable(workspace_descriptor, False)
@@ -4505,12 +4603,19 @@ def provision_native_workspace_lease(
         if type(exc) is AdapterError:
             raise
         if isinstance(exc, OSError):
+            # OPERATIONAL.  Every structural refusal on this path has already
+            # raised its own typed ``AdapterError`` above and re-raised
+            # unchanged; what reaches here is a raw ``OSError`` from opening the
+            # operator's scratch root or from creating our own directories
+            # inside it -- ENOENT on an unconfigured root, ENOSPC, EMFILE,
+            # ENOMEM.  All of those are host state with an operator fix, so the
+            # task must survive to run again rather than die permanently.
             raise AdapterError(
                 _bounded_diagnostic(
                     "cannot provision a private native workspace lease: ",
                     _exception_summary(exc),
                 ),
-                _FAILED_CODE,
+                _SCRATCH_UNAVAILABLE_CODE,
             ) from exc
         raise
     return NativeWorkspaceLease(

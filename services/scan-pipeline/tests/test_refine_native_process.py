@@ -398,6 +398,59 @@ def test_linux_process_stat_parser_still_refuses_a_malformed_row(payload):
         native_process._parse_linux_process_stat(payload)
 
 
+#: One row per clause of ``_parse_linux_process_stat``, because a mutation sweep
+#: against the FULL gate selection found six of its nine clauses deletable with
+#: ZERO red.  The rows above could not distinguish them: every clause raises
+#: ``ValueError``, and neighbours mask each other, so ``pytest.raises(ValueError)``
+#: stayed green with the clause gone.  Each row here is paired with the
+#: DIAGNOSTIC its clause produces, which is what actually differs -- and two of
+#: them (``bytearray`` and the over-long row) do not raise at all once their
+#: clause is deleted, which is the worse failure: a confident wrong answer.
+_STAT_CLAUSE_ROWS = (
+    # ``type(payload) is not bytes``.  A bytearray parses identically to bytes
+    # all the way through -- find, rfind, slice, isdigit, int -- so without the
+    # type clause this returns (123, 77) from a MUTABLE buffer whose contents a
+    # holder can change after the parse.
+    ("type", bytearray(b"123 (colmap) S 1 77 77 0 -1"), "payload is invalid"),
+    # ``len(payload) == 0``.  A /proc entry that vanished between opendir and
+    # read reads as b"", which the malformed clause below would also refuse --
+    # but as "malformed", pointing an operator at the row's shape rather than at
+    # a task that exited.
+    ("empty", b"", "payload is invalid"),
+    # ``len(payload) > 8192``.  ``_read_linux_process_stat`` reads 8193 bytes, so
+    # an over-long row arrives TRUNCATED with its pid and first three fields
+    # intact.  Delete this clause and the row below returns (123, 77) from bytes
+    # whose end was never seen; nothing downstream re-checks the length.
+    (
+        "over-long",
+        b"123 (colmap) S 1 77 77 0 -1 " + b"9 " * 4200,
+        "payload is invalid",
+    ),
+    # ``opening <= 0``.  A row whose first two bytes are " (" leaves an empty pid
+    # prefix; without this clause the isdigit clause catches it instead and
+    # reports "fields", which is a lie about where the row is broken.
+    ("no-pid", b" (colmap) S 1 77 77 0 -1", "payload is malformed"),
+    # ``closing <= opening``.  A row with no closing ") " at all; without this
+    # clause the slice runs from -1+2 and the row is misreported as short.
+    ("unterminated-comm", b"123 (colmap", "payload is malformed"),
+    # ``not prefix.isdigit()``.  ``int`` accepts a leading sign, ``bytes.isdigit``
+    # does not.  Delete the clause and this row is accepted as pid 12: a signed
+    # token in the pid position becomes a pid the quiescence scan will compare
+    # leaders against.
+    ("signed-pid", b"+12 (colmap) S 1 0 0 0 -1", "fields are malformed"),
+)
+
+
+@pytest.mark.parametrize(
+    ("payload", "detail"),
+    tuple((payload, detail) for _label, payload, detail in _STAT_CLAUSE_ROWS),
+    ids=tuple(label for label, _payload, _detail in _STAT_CLAUSE_ROWS),
+)
+def test_linux_process_stat_parser_refuses_one_row_per_clause(payload, detail):
+    with pytest.raises(ValueError, match=detail):
+        native_process._parse_linux_process_stat(payload)
+
+
 def _write_fake_proc(root: Path, rows: Mapping[str, bytes]) -> None:
     for name, payload in rows.items():
         entry = root / name
@@ -3224,7 +3277,17 @@ def test_workspace_lease_rejects_a_missing_or_public_container(tmp_path):
             str(missing),
             deadline=_deadline(10.0),
         )
-    assert raised.value.code == "REFINE_ENGINE_FAILED"
+    # OPERATIONAL, not a dead task: a scratch root nobody has created yet is the
+    # host failing to supply a resource, with an operator fix after which the
+    # SAME task runs.  This lands on the raw-OSError normalization at the bottom
+    # of provision_native_workspace_lease, which covers ENOENT here and equally
+    # ENOSPC/EMFILE/ENOMEM; every STRUCTURAL refusal above it raises its own
+    # typed code first and re-raises unchanged.  It used to be
+    # REFINE_ENGINE_FAILED, which the runner's AdapterError handler does not
+    # name, so it fell through to the FATAL ARTIFACT_INVALID and a mistyped
+    # scratch root killed a scan permanently.  The retryability itself is pinned
+    # in test_refine_runner.py, since a code alone does not carry it.
+    assert raised.value.code == "REFINE_ENGINE_SCRATCH_UNAVAILABLE"
     # A relative container would make the transported lease path mean something
     # different inside the child's working directory.
     for value in ("", None, 7, "relative/container"):

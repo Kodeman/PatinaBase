@@ -1827,6 +1827,40 @@ def test_one_shot_artifact_builder_output_is_deterministically_invalid(tmp_path)
             RefineFailureCode.ENGINE_NO_SPACE,
             False,
         ),
+        # The same defect shape, one audit later.  ``refine_native_process``
+        # raises this when it cannot provision its own private scratch -- the
+        # workspace lease or the engine-output freeze vault -- because the HOST
+        # refused a resource (no inodes, no descriptors, no configured scratch
+        # root, a run of colliding names).  Before it was named here it fell
+        # through to ARTIFACT_INVALID and a host that ran out of file
+        # descriptors for a minute killed the scan forever.  As with
+        # ENGINE_NO_SPACE, ``expected_fatal is False`` is the half of this row
+        # that would have caught it.
+        (
+            AdapterError(
+                "cannot create a unique native engine output freeze vault",
+                "REFINE_ENGINE_SCRATCH_UNAVAILABLE",
+            ),
+            RefineFailureCode.ENGINE_SCRATCH_UNAVAILABLE,
+            False,
+        ),
+        # The DETERMINISTIC half of the same audit, pinned as fatal on purpose.
+        # ``REFINE_ENGINE_FAILED`` is retryable in the taxonomy and still is not
+        # named by the handler, so it lands on the fatal default -- and that is
+        # the ruling, not an oversight: the overwhelming majority of the sites
+        # that mint it report facts that reproduce exactly ("this platform does
+        # not provide O_TMPFILE", "ledger is invalid", "does not match its
+        # requested tokens"), and retrying those burns a queue slot to reach the
+        # identical refusal.  Only the operational minority was reclassified,
+        # and it was given its own code rather than blanket-routing this one.
+        (
+            AdapterError(
+                "native engine outputs require O_TMPFILE anonymous files",
+                "REFINE_ENGINE_FAILED",
+            ),
+            RefineFailureCode.ARTIFACT_INVALID,
+            True,
+        ),
         # The handler's FALLTHROUGH, which nothing exercised before.  Every
         # ``ValueError`` case here is caught by the generic ``except Exception``
         # arm instead, so changing the AdapterError default from
@@ -2448,15 +2482,24 @@ def test_the_no_space_token_is_literally_the_one_the_native_boundary_raises():
     rename on either side fails here instead of in production.
 
     NOTE what this does NOT claim: it is not an exhaustiveness check over every
-    code the native boundary can raise.  The one such code whose fatality still
-    changes across this handler (``REFINE_ENGINE_FAILED``, retryable in the
-    taxonomy, fatal once it falls through) is left exactly as this branch found
-    it and is reported as a residual rather than pinned here as correct.
+    code the native boundary can raise.  ``REFINE_ENGINE_FAILED`` is still
+    retryable in the taxonomy and still fatal once it falls through this
+    handler, and that is now a RULING rather than a residual: all 71
+    ``_FAILED_CODE`` sites in ``refine_native_process`` were audited, the
+    operational minority was moved to ``_SCRATCH_UNAVAILABLE_CODE`` (asserted
+    below), and everything left reports a deterministic fact that reproduces on
+    a retry.  The fallthrough is pinned as fatal by
+    ``test_artifact_builder_failures_have_stable_retryability`` so that changing
+    it stays a deliberate, visible act.
     """
 
     import patina_scan_worker.refine_native_process as native_process
 
     assert native_process._NO_SPACE_CODE == RefineFailureCode.ENGINE_NO_SPACE.value
+    assert (
+        native_process._SCRATCH_UNAVAILABLE_CODE
+        == RefineFailureCode.ENGINE_SCRATCH_UNAVAILABLE.value
+    )
 
 
 def test_a_full_workspace_filesystem_is_retryable_not_a_dead_task():
@@ -2476,6 +2519,30 @@ def test_a_full_workspace_filesystem_is_retryable_not_a_dead_task():
     assert REFINE_FAILURE_FATALITY[RefineFailureCode.ARTIFACT_INVALID] is True
 
 
+def test_an_unprovisionable_scratch_directory_is_retryable_not_a_dead_task():
+    """The fatality of the second reclassification, stated on its own.
+
+    Same argument as ``ENGINE_NO_SPACE``: the queue reads ``fatal``, so a code
+    that classifies correctly and is marked fatal is the same outage as no
+    classification at all.  Asserting only the code would leave a mutation that
+    flips this row to ``True`` completely green.
+    """
+
+    assert REFINE_FAILURE_FATALITY[RefineFailureCode.ENGINE_SCRATCH_UNAVAILABLE] is False
+    assert (
+        RefineRunError(
+            RefineFailureCode.ENGINE_SCRATCH_UNAVAILABLE,
+            "cannot create a unique native workspace lease",
+        ).fatal
+        is False
+    )
+    # The contrast, so flipping the whole map to False does not leave this
+    # green, and so the deliberate fatality of the DETERMINISTIC half of the
+    # audit is pinned next to the retryable half it was separated from.
+    assert REFINE_FAILURE_FATALITY[RefineFailureCode.ARTIFACT_INVALID] is True
+    assert REFINE_FAILURE_FATALITY[RefineFailureCode.ENGINE_CLEANUP_FAILED] is True
+
+
 def test_failure_taxonomy_is_closed_and_covers_every_public_failure_code():
     assert set(REFINE_FAILURE_FATALITY) == set(RefineFailureCode)
     assert REFINE_FAILURE_FATALITY == {
@@ -2483,6 +2550,7 @@ def test_failure_taxonomy_is_closed_and_covers_every_public_failure_code():
         RefineFailureCode.ENGINE_FAILED: False,
         RefineFailureCode.INPUT_IO: False,
         RefineFailureCode.ENGINE_NO_SPACE: False,
+        RefineFailureCode.ENGINE_SCRATCH_UNAVAILABLE: False,
         RefineFailureCode.GPU_DRIVER: False,
         RefineFailureCode.GPU_OOM: False,
         RefineFailureCode.ENGINE_VERSION_MISMATCH: True,

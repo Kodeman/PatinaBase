@@ -16,6 +16,13 @@ from _colmap_toolchain import (
     plan_supervised_command,
     write_toolchain,
 )
+from _json_recursion import (
+    DECODE_DEPTHS,
+    ENCODE_DEPTHS,
+    deeply_nested_json_document,
+    deeply_nested_json_payload,
+    no_recursion_limit_reason,
+)
 
 from patina_scan_worker import refine_colmap_backend as backend_module
 from patina_scan_worker import refine_colmap_command as command_module
@@ -23,6 +30,8 @@ from patina_scan_worker import refine_native_process as native_process
 from patina_scan_worker.refine_adapter import AdapterError, RefineDeadline
 from patina_scan_worker.refine_colmap_backend import (
     ALIGNED_MODEL_BUILD_QUALIFIED,
+    COLMAP_ENGINE_REQUEST_MAX_BYTES,
+    COLMAP_PACKET_MANIFEST_MAX_BYTES,
     COMMAND_EXCEPTION_NORMALIZATION_QUALIFIED,
     ENGINE_REQUEST_CONTRACT,
     ENGINE_REQUEST_SCHEMA_VERSION,
@@ -306,9 +315,18 @@ def test_json_integer_digit_limit_value_error_is_normalized(tmp_path, payload_ki
 
 @pytest.mark.parametrize("payload_kind", ("manifest", "engine-request"))
 def test_deeply_nested_json_recursion_error_is_normalized(tmp_path, payload_kind):
-    depth = 10_000
-    nested_payload = b"[" * depth + b"0" + b"]" * depth
-    assert len(nested_payload) < 64 * 1024
+    """A REAL ``RecursionError`` out of ``json.loads``, on any interpreter.
+
+    The depth is measured here rather than hardcoded: 10 000 raises on CPython
+    3.12 and parses cleanly on 3.14, which broke this test on 3.14 while the
+    normalization it pins was unchanged.  See ``tests/_json_recursion.py``.
+    """
+
+    nested_payload = deeply_nested_json_payload(COLMAP_PACKET_MANIFEST_MAX_BYTES)
+    if nested_payload is None:
+        pytest.skip(no_recursion_limit_reason("decoder", DECODE_DEPTHS))
+    assert len(nested_payload) <= COLMAP_PACKET_MANIFEST_MAX_BYTES
+    assert len(nested_payload) <= COLMAP_ENGINE_REQUEST_MAX_BYTES
     fixture = _packet_fixture(tmp_path)
     try:
         if payload_kind == "manifest":
@@ -337,12 +355,17 @@ def test_deeply_nested_json_recursion_error_is_normalized(tmp_path, payload_kind
 
 
 def test_deeply_nested_json_canonicalization_error_is_normalized():
-    document: list[object] = []
-    cursor = document
-    for _ in range(10_000):
-        child: list[object] = []
-        cursor.append(child)
-        cursor = child
+    """The encoder half, with the same version-robustness.
+
+    ``json.dumps`` and ``json.loads`` do not run out of stack at the same depth
+    on the same interpreter -- 3.14 refuses an encode at 50 000 and a decode at
+    100 000 -- so the encode ladder is separate and probes with the exact
+    keyword arguments ``_canonical_json_bytes`` uses.
+    """
+
+    document = deeply_nested_json_document()
+    if document is None:
+        pytest.skip(no_recursion_limit_reason("encoder", ENCODE_DEPTHS))
 
     with pytest.raises(
         AdapterError,

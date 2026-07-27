@@ -67,18 +67,35 @@ requires_output_freeze = pytest.mark.skipif(
 #: ``proc_fd_access_allowed`` -> ``ptrace_may_access(task,
 #: PTRACE_MODE_READ_FSCREDS)``.  ``yama.ptrace_scope`` does NOT gate it at ANY
 #: scope: ``yama_ptrace_access_check`` returns 0 immediately unless the mode
-#: carries ``PTRACE_MODE_ATTACH``, and this route never does.  That is read off
-#: the kernel source and is NOT measured here -- no environment these tests can
-#: run in ships Yama at all.  An earlier revision skipped F-3 whenever
-#: ``ptrace_scope != 0``, on the opposite premise, which meant it skipped on
-#: precisely the hosts where the exploit works; the skip is now decided by
-#: whether the exploit actually ran, which is the only honest control.
+#: carries ``PTRACE_MODE_ATTACH``, and this route never does.  That is READ OFF
+#: THE KERNEL SOURCE, not measured here.  An earlier revision of this comment
+#: went further and asserted "no environment these tests can run in ships Yama
+#: at all"; that sentence is DELETED rather than softened.  It was a claim about
+#: hosts this file cannot inspect, the reasoning above never depended on it, and
+#: it was wrong: ordinary Linux workstations ship Yama enabled.  Nothing here
+#: assumes a scope any more -- :func:`_yama_ptrace_scope` reads the live value at
+#: the moment a skip is written, so the diagnostic reports what this host
+#: actually has instead of what some other host was believed to have.  An
+#: earlier revision also skipped F-3 whenever ``ptrace_scope != 0``, on the
+#: opposite premise, which meant it skipped on precisely the hosts where the
+#: exploit works; the skip is now decided by whether the exploit actually ran,
+#: which is the only honest control.
+#:
+#: The pidfd route DOES carry ``PTRACE_MODE_ATTACH`` and Yama DOES gate it, so
+#: the test for that route grants ``PR_SET_PTRACER_ANY`` around both halves of
+#: its probe -- see :func:`_ptraceable_by_any_process`.
 #:
 #: What DOES gate it is the target's ``dumpable`` flag, which
 #: ``_seal_process_against_procfs_descriptor_theft`` drops -- see
 #: ``test_the_sealed_boundary_refuses_a_same_uid_procfs_reopen``.
 _PR_GET_DUMPABLE = 3
 _PR_SET_DUMPABLE = 4
+#: ``PR_SET_PTRACER``: the literal bytes of "Yama" as a little-endian int, which
+#: is how Yama spells its own prctl.  ``PR_SET_PTRACER_ANY`` is ``(unsigned
+#: long) -1`` and MUST be passed as an unsigned long -- a plain C ``int`` -1
+#: through a varargs prctl is not portably the same value.
+_PR_SET_PTRACER = 0x59616D61
+_YAMA_PTRACE_SCOPE_PATH = "/proc/sys/kernel/yama/ptrace_scope"
 #: Bit 19 of ``CapEff``.  The documented residual explicitly excludes an actor
 #: holding it, so a test that needs the seal to bite has to say so rather than
 #: fail on a host where the exclusion applies.
@@ -233,6 +250,61 @@ def _temporarily_dumpable():
         yield
     finally:
         _prctl(_PR_SET_DUMPABLE, previous)
+
+
+def _yama_ptrace_scope() -> str:
+    """Report the host's Yama scope, or why it could not be read."""
+
+    try:
+        with open(_YAMA_PTRACE_SCOPE_PATH, "r", encoding="utf-8") as handle:
+            return handle.read().strip()
+    except OSError as exc:
+        return f"unreadable ({exc.__class__.__name__})"
+
+
+@contextlib.contextmanager
+def _ptraceable_by_any_process():
+    """Take Yama out of the picture for BOTH halves of a ptrace-gated probe.
+
+    ``pidfd_getfd(2)`` asks ``ptrace_may_access(..., PTRACE_MODE_ATTACH_REALCREDS)``,
+    and ATTACH is exactly the mode Yama inspects.  READ OFF YAMA'S DOCUMENTED
+    SEMANTICS, not measured here: at ``ptrace_scope=1`` -- the default on a stock
+    Ubuntu -- a same-UID NON-DESCENDANT tracer is refused unconditionally, and
+    that is exactly what the theft probe is.  So on such a host the positive
+    control could never succeed and the test skipped on precisely the machines
+    it was written for.  ``PR_SET_PTRACER_ANY`` is the documented, unprivileged
+    way for a process to declare that anyone may attach to it.
+
+    IT IS HELD ACROSS THE CONTROL **AND** THE REAL ATTEMPT ON PURPOSE.  Granting
+    it only for the control would leave Yama refusing the real attempt, and a
+    refusal by Yama is indistinguishable from a refusal by the seal -- the test
+    would report a proof it had not made.  With the grant held for both, the
+    only thing that differs between the two attempts is ``dumpable``, which is
+    the whole claim.
+
+    Yama offers no ``PR_GET_PTRACER``, so the restore is to the documented
+    default (0, "only descendants"); a host that had configured something else
+    for this process cannot be put back, and nothing in this suite does.  On a
+    kernel with no Yama the prctl answers ``EINVAL`` and this is a no-op, which
+    is correct: there is nothing to take out of the picture.
+    """
+
+    import ctypes
+
+    library = ctypes.CDLL(None, use_errno=True)
+    library.prctl.restype = ctypes.c_int
+    library.prctl.argtypes = (
+        ctypes.c_int,
+        ctypes.c_ulong,
+        ctypes.c_ulong,
+        ctypes.c_ulong,
+        ctypes.c_ulong,
+    )
+    library.prctl(_PR_SET_PTRACER, ctypes.c_ulong(-1), 0, 0, 0)
+    try:
+        yield
+    finally:
+        library.prctl(_PR_SET_PTRACER, 0, 0, 0, 0)
 
 
 def _has_cap_sys_ptrace() -> bool:
@@ -1197,6 +1269,18 @@ def test_an_unsupported_platform_is_refused_before_anything_is_provisioned(
 
 @requires_output_freeze
 def test_a_vault_name_that_never_becomes_unique_is_refused(leased, monkeypatch):
+    """And is refused as an OPERATIONAL condition, not a dead task.
+
+    A run of colliding random names is a property of the container at this
+    instant, not of the run, so this raises ``REFINE_ENGINE_SCRATCH_UNAVAILABLE``
+    rather than ``REFINE_ENGINE_FAILED``.  The code is asserted here and its
+    RETRYABLE fatality is asserted in
+    ``test_an_unprovisionable_scratch_directory_is_retryable_not_a_dead_task``:
+    ``REFINE_ENGINE_FAILED`` reaches the runner's fatal ARTIFACT_INVALID
+    default, so keeping the old code would have made a name collision
+    permanently kill a scan.
+    """
+
     def always_taken(*_args, **_kwargs):
         raise FileExistsError("synthetic collision")
 
@@ -1206,6 +1290,114 @@ def test_a_vault_name_that_never_becomes_unique_is_refused(leased, monkeypatch):
         native_process._open_output_freeze_vault(leased.lease)
 
     assert "unique native engine output freeze vault" in str(raised.value)
+    assert raised.value.code == "REFINE_ENGINE_SCRATCH_UNAVAILABLE"
+
+
+@requires_output_freeze
+def test_a_vault_the_host_will_not_create_is_an_operational_refusal(
+    leased,
+    monkeypatch,
+):
+    """``mkdir`` refused by the host is a shortage, not a statement about us."""
+
+    def out_of_inodes(*_args, **_kwargs):
+        raise OSError(errno.ENOSPC, "No space left on device")
+
+    monkeypatch.setattr(native_process.os, "mkdir", out_of_inodes)
+
+    with pytest.raises(AdapterError) as raised:
+        native_process._open_output_freeze_vault(leased.lease)
+
+    assert "cannot create the native engine output freeze vault" in str(raised.value)
+    assert raised.value.code == "REFINE_ENGINE_SCRATCH_UNAVAILABLE"
+
+
+@requires_output_freeze
+def test_a_vault_that_cannot_be_opened_is_an_operational_refusal(leased, monkeypatch):
+    """An exhausted descriptor table refuses the open of a directory we just made.
+
+    ``EMFILE`` is the realistic shape: the directory demonstrably exists -- this
+    test lets the real ``mkdir`` run -- so the only thing that failed is the
+    host's ability to hand out one more descriptor, which is exactly the
+    condition an operator fixes and a retry then survives.
+    """
+
+    real_open = os.open
+
+    def refuse_the_vault(path, flags, *args, **kwargs):
+        if isinstance(path, str) and path.startswith(
+            native_process.NATIVE_OUTPUT_FREEZE_VAULT_PREFIX
+        ):
+            raise OSError(errno.EMFILE, "Too many open files")
+        return real_open(path, flags, *args, **kwargs)
+
+    monkeypatch.setattr(native_process.os, "open", refuse_the_vault)
+
+    with pytest.raises(AdapterError) as raised:
+        native_process._open_output_freeze_vault(leased.lease)
+
+    assert "native engine output freeze vault is unreadable" in str(raised.value)
+    assert raised.value.code == "REFINE_ENGINE_SCRATCH_UNAVAILABLE"
+
+
+def test_a_lease_name_that_never_becomes_unique_is_an_operational_refusal(
+    tmp_path,
+    monkeypatch,
+):
+    """The lease's half of the same reclassification, with the same reasoning."""
+
+    container = tmp_path / "boundary"
+    container.mkdir(mode=0o700)
+
+    def always_taken(*_args, **_kwargs):
+        raise FileExistsError("synthetic collision")
+
+    monkeypatch.setattr(native_process.os, "mkdir", always_taken)
+
+    with pytest.raises(AdapterError) as raised:
+        native_process.provision_native_workspace_lease(
+            str(container),
+            deadline=_deadline(30.0),
+        )
+
+    assert "cannot create a unique native workspace lease" in str(raised.value)
+    assert raised.value.code == "REFINE_ENGINE_SCRATCH_UNAVAILABLE"
+
+
+def test_a_tampered_scratch_directory_stays_fatal_and_is_not_reclassified(
+    tmp_path,
+    monkeypatch,
+):
+    """The other side of the split, pinned so the reclassification cannot spread.
+
+    "Not a fresh private directory" reports a same-UID actor that reached into a
+    directory only this process should be able to enter.  That is a statement
+    about the host's security state, not about a shortage of it: retrying hands
+    the same actor another window.  It keeps ``REFINE_ENGINE_FAILED`` and so
+    keeps landing on the runner's FATAL default, deliberately.
+    """
+
+    container = tmp_path / "boundary"
+    container.mkdir(mode=0o700)
+    real_mkdir = os.mkdir
+
+    def widen(path, mode=0o777, *, dir_fd=None):
+        real_mkdir(path, mode, dir_fd=dir_fd)
+        if isinstance(path, str) and path.startswith(
+            native_process.NATIVE_WORKSPACE_NAME_PREFIX
+        ):
+            os.chmod(path, 0o755, dir_fd=dir_fd)
+
+    monkeypatch.setattr(native_process.os, "mkdir", widen)
+
+    with pytest.raises(AdapterError) as raised:
+        native_process.provision_native_workspace_lease(
+            str(container),
+            deadline=_deadline(30.0),
+        )
+
+    assert "native workspace lease is not a fresh private directory" in str(raised.value)
+    assert raised.value.code == "REFINE_ENGINE_FAILED"
 
 
 def _vault_with_doctored_mkdir(monkeypatch, doctor):
@@ -2606,6 +2798,25 @@ def test_the_sealed_boundary_refuses_a_pidfd_getfd_theft(tmp_path):
     would pass for the wrong reason in exactly the container the gate runs in.
     Where the control cannot be built this SKIPS, naming what stopped it, rather
     than reporting a proof it did not make.
+
+    YAMA IS TAKEN OUT OF THE PICTURE FIRST, and without that this test could not
+    bite on an ordinary Linux workstation.  ``pidfd_getfd`` asks
+    ``ptrace_may_access`` in ATTACH mode, which is the one mode Yama inspects,
+    and a stock ``yama.ptrace_scope=1`` refuses a same-UID NON-DESCENDANT --
+    exactly the shape of this probe.
+
+    PROVENANCE OF THAT CHANGE, stated because this file cannot re-verify it.
+    The grant was added on the strength of a measurement made on a qualified
+    Linux host, NOT in any environment this repository's gate runs in: with the
+    seal lifted and no grant the control was refused and this test skipped, and
+    with ``PR_SET_PTRACER_ANY`` granted the control SUCCEEDED while the sealed
+    attempt still returned ``EPERM``.  In this repository's default container
+    the same run still SKIPS -- Docker's seccomp profile refuses the syscall
+    before any of this matters -- and with ``--security-opt seccomp=unconfined``
+    it RUNS AND PASSES but proves nothing about Yama, because that kernel has
+    none.  So: the grant is what lets this test bite on a Yama host, and the
+    only honest thing that can be checked from here is that it is harmless
+    where Yama is absent.
     """
 
     if sys.platform != "linux":
@@ -2634,23 +2845,32 @@ def test_the_sealed_boundary_refuses_a_pidfd_getfd_theft(tmp_path):
     with sink:
         frozen = sink.descriptor(token)
 
-        # Control: the very same theft, against the very same descriptor, with
-        # the seal lifted for exactly the length of the attempt.
-        with _temporarily_dumpable():
-            rehearsal = _steal_through_pidfd(os.getpid(), frozen, b"")
-        if b"GOT" not in rehearsal.stdout:
-            pytest.skip(
-                "this host refuses pidfd_getfd even against a dumpable "
-                "same-UID target -- Docker's default seccomp profile does "
-                "exactly this -- so nothing here could show the seal is what "
-                "blocks it: "
-                + rehearsal.stdout.decode("utf-8", "replace").strip()[-200:]
-                + rehearsal.stderr.decode("utf-8", "replace")[-200:]
-            )
+        # The grant spans BOTH attempts, so Yama cannot be the thing that
+        # refuses either one and ``dumpable`` is the only difference left.
+        with _ptraceable_by_any_process():
+            # Control: the very same theft, against the very same descriptor,
+            # with the seal lifted for exactly the length of the attempt.
+            with _temporarily_dumpable():
+                rehearsal = _steal_through_pidfd(os.getpid(), frozen, b"")
+            if b"GOT" not in rehearsal.stdout:
+                pytest.skip(
+                    "the positive control could not be built: with "
+                    "PR_SET_PTRACER_ANY granted and the target dumpable, this "
+                    "host still refused pidfd_getfd, so Yama is not what "
+                    "stopped it and nothing here could show the seal is. "
+                    "Measured refusal: "
+                    + rehearsal.stdout.decode("utf-8", "replace").strip()[-200:]
+                    + rehearsal.stderr.decode("utf-8", "replace")[-200:]
+                    + f" (yama.ptrace_scope={_yama_ptrace_scope()}); a seccomp "
+                    "filter refusing the syscall outright -- which is what "
+                    "Docker's default profile does -- or an LSM is the "
+                    "remaining candidate"
+                )
 
-        # The real attempt, against the process exactly as the boundary left it.
-        tampered = b"T" * len(payload)
-        attacker = _steal_through_pidfd(os.getpid(), frozen, tampered)
+            # The real attempt, against the process exactly as the boundary
+            # left it.
+            tampered = b"T" * len(payload)
+            attacker = _steal_through_pidfd(os.getpid(), frozen, tampered)
 
         assert b"GOT" not in attacker.stdout, attacker.stdout
         assert b"STOLEN" not in attacker.stdout

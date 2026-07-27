@@ -155,6 +155,22 @@ class RefineFailureCode(str, Enum):
     #: registered), and ``REFINE_FAILURE_FATALITY`` below is guarded exhaustive,
     #: so a member cannot be added without a deliberate fatality decision.
     ENGINE_NO_SPACE = "REFINE_ENGINE_NO_SPACE"
+    #: The boundary could not provision its OWN private scratch -- the workspace
+    #: lease or the engine-output freeze vault -- because the HOST refused a
+    #: resource: no free inodes, an exhausted descriptor table, a scratch root
+    #: that does not exist yet, or a run of colliding random names.  Same
+    #: reasoning as ``ENGINE_NO_SPACE`` and reached by the same audit: these are
+    #: operational conditions with an operator fix and no defect in the task,
+    #: and ``refine_native_process`` raises them under
+    #: ``_SCRATCH_UNAVAILABLE_CODE`` precisely so this runner can keep them
+    #: retryable instead of letting them fall through to a FATAL default.
+    #:
+    #: DELIBERATELY NOT this code: ``REFINE_ENGINE_FAILED``'s other sites, which
+    #: report deterministic facts (an absent platform primitive, a malformed
+    #: ledger, a mismatched token set) and must stay fatal, and every "not a
+    #: fresh private directory" check, which reports a same-UID actor in our
+    #: scratch rather than a shortage of it.
+    ENGINE_SCRATCH_UNAVAILABLE = "REFINE_ENGINE_SCRATCH_UNAVAILABLE"
     GPU_DRIVER = "REFINE_GPU_DRIVER"
     GPU_OOM = "REFINE_GPU_OOM"
     ENGINE_VERSION_MISMATCH = "REFINE_ENGINE_VERSION_MISMATCH"
@@ -178,6 +194,13 @@ REFINE_FAILURE_FATALITY: Mapping[RefineFailureCode, bool] = MappingProxyType(
         # must survive to be retried once the disk has headroom.  Marking it
         # fatal would permanently kill a scan for a transient disk state.
         RefineFailureCode.ENGINE_NO_SPACE: False,
+        # RETRYABLE ON PURPOSE, for the same reason and by the same argument as
+        # ENGINE_NO_SPACE: the host could not hand this boundary a private
+        # scratch directory right now.  An operator frees inodes, raises the
+        # descriptor limit or creates the configured scratch root, and the same
+        # task then runs.  Marking it fatal would kill a scan permanently for a
+        # condition that has nothing to do with the scan.
+        RefineFailureCode.ENGINE_SCRATCH_UNAVAILABLE: False,
         RefineFailureCode.GPU_DRIVER: False,
         RefineFailureCode.GPU_OOM: False,
         RefineFailureCode.ENGINE_VERSION_MISMATCH: True,
@@ -3024,6 +3047,16 @@ class RefineRunner:
             # fills, an operator frees disk, and the same task then runs.
             if exc.code == RefineFailureCode.ENGINE_NO_SPACE.value:
                 _fail(RefineFailureCode.ENGINE_NO_SPACE, str(exc))
+            # The SECOND instance of that same defect shape, found by auditing
+            # the rest of the boundary rather than by a second outage: the
+            # boundary could not provision its own private scratch because the
+            # HOST refused a resource.  Deterministic ``REFINE_ENGINE_FAILED``
+            # sites are deliberately NOT named here -- re-running those produces
+            # the identical refusal, so the fatal default below is what they
+            # should get, and the default is pinned by
+            # ``test_artifact_builder_failures_have_stable_retryability``.
+            if exc.code == RefineFailureCode.ENGINE_SCRATCH_UNAVAILABLE.value:
+                _fail(RefineFailureCode.ENGINE_SCRATCH_UNAVAILABLE, str(exc))
             _fail(RefineFailureCode.ARTIFACT_INVALID, str(exc))
         except OSError as exc:
             _require_engine_budget(deadline)
