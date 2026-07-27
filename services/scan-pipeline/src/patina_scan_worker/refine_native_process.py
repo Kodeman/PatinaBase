@@ -439,6 +439,13 @@ _NO_SPACE_CODE = "REFINE_ENGINE_NO_SPACE"
 #: the platform's capabilities, or an actor that tampered with our scratch --
 #: including every "not a fresh private directory" check, which reports a
 #: same-UID actor rather than a shortage and must stay fatal.
+#:
+#: One arm is deliberately outside that rule and says so:
+#: :func:`_workspace_provisioning_refusal` classifies a RAW ``OSError`` by errno
+#: and DEFAULTS to this code for an errno nobody has reasoned about.  It is not
+#: claiming the shortage contract for those; it is choosing the recoverable side
+#: of an asymmetric bet, because the retry budget is bounded and a wrong FATAL
+#: is not.  The argument is at that function, not here.
 _SCRATCH_UNAVAILABLE_CODE = "REFINE_ENGINE_SCRATCH_UNAVAILABLE"
 _CHILD_PROTOCOL_REJECT_EXIT_CODE = 74
 _IN_PROCESS_ENTRYPOINT_MARKER = "__patina_refine_in_process_only__"
@@ -472,28 +479,28 @@ _OUTPUT_FREEZE_NO_SPACE_ERRNOS = frozenset({errno.ENOSPC, errno.EDQUOT})
 #: operational, on an enumeration ("ENOENT, ENOSPC, EMFILE, ENOMEM") that was
 #: not the whole set the call can produce: ``os.open`` with
 #: ``_workspace_directory_flags()`` also yields ENOTDIR for a scratch root that
-#: is a symlink, a regular file or a FIFO, ELOOP for a looping intermediate
-#: component, and EACCES/EPERM for a root the service uid cannot enter.  None of
-#: those is a shortage and every one reproduces identically on the next attempt.
+#: is a regular file or a FIFO, ELOOP for a looping intermediate component,
+#: ENAMETOOLONG for a component past the filesystem's limit, and EACCES/EPERM
+#: for a root the service uid cannot enter.  None of those is a shortage and
+#: every one reproduces identically on the next attempt.
 #:
 #: Each row is ``(errno name, errno number, code)``.  The name is carried so
 #: the journal line can NAME the condition: ``NotADirectoryError`` is not in
 #: ``_SAFE_EXCEPTION_LABELS``, so an ENOTDIR root used to journal only
 #: "external exception" and told the operator nothing to act on.
 #:
-#: ``ENOENT`` is the one arguable member and it sits on the retryable side
-#: DELIBERATELY.  It covers both a scratch root the operator never created -- a
-#: deterministic misconfiguration -- and a root whose mount is not up yet, which
-#: is transient and self-heals.  The two mistakes cost asymmetrically.  Retrying
-#: the misconfiguration costs a BOUNDED delay: ``complete_agent_task``
-#: (``supabase/migrations/00297_agent_tasks_queue.sql:414``) fails the task for
-#: good once ``attempts >= max_attempts``, with 1min then 5min backoff, so the
-#: operator sees the same refusal a few minutes later.  Failing the not-yet-
-#: mounted root outright kills a scan the very next attempt would have
-#: completed, and there is nothing left to re-run.  The bounded cost is taken.
+#: The load-bearing decision is which side an UNLISTED errno falls to, and it is
+#: the RETRYABLE side; :func:`_workspace_provisioning_refusal` carries the
+#: measurement and the argument.  Every retryable row below is therefore
+#: redundant with that default IN THE CODE IT PRODUCES, and is written out
+#: anyway for two reasons: each has been reasoned about individually and a
+#: reader who found them absent could not tell a decision from an oversight, and
+#: the row is what puts the errno's NAME in the journal line instead of
+#: "unclassified errno".  The FATAL rows are the ones the default does not
+#: produce at all, so those are the ones that have to be complete.
 _WORKSPACE_PROVISIONING_ERRNOS: tuple[tuple[str, int, str], ...] = (
-    # SHORTAGE: the host could not supply a resource right now.  ``EDQUOT``
-    # rides with ``ENOSPC`` for the reason it does in
+    # RETRYABLE -- SHORTAGE: the host could not supply a resource right now.
+    # ``EDQUOT`` rides with ``ENOSPC`` for the reason it does in
     # ``_OUTPUT_FREEZE_NO_SPACE_ERRNOS``: to the operator it is the same
     # problem with the same fix.
     ("ENOSPC", errno.ENOSPC, _SCRATCH_UNAVAILABLE_CODE),
@@ -501,17 +508,74 @@ _WORKSPACE_PROVISIONING_ERRNOS: tuple[tuple[str, int, str], ...] = (
     ("EMFILE", errno.EMFILE, _SCRATCH_UNAVAILABLE_CODE),
     ("ENFILE", errno.ENFILE, _SCRATCH_UNAVAILABLE_CODE),
     ("ENOMEM", errno.ENOMEM, _SCRATCH_UNAVAILABLE_CODE),
+    # RETRYABLE -- NOT REACHABLE RIGHT NOW: the configured root is a real
+    # configuration that the host cannot currently present.
+    #
+    # ``ENOENT`` is the arguable one and it sits here DELIBERATELY.  It covers
+    # both a scratch root the operator never created -- a deterministic
+    # misconfiguration -- and a root whose mount is not up yet, which is
+    # transient and self-heals.  The two mistakes cost asymmetrically: retrying
+    # the misconfiguration costs a BOUNDED delay (``complete_agent_task``,
+    # ``supabase/migrations/00297_agent_tasks_queue.sql:414``, fails the task for
+    # good once ``attempts >= max_attempts``, with 1min then 5min backoff), while
+    # failing the not-yet-mounted root outright kills a scan the very next
+    # attempt would have completed.  The bounded cost is taken.
     ("ENOENT", errno.ENOENT, _SCRATCH_UNAVAILABLE_CODE),
-    # STATEMENT ABOUT THE CONFIGURED ROOT: no shortage to wait out, identical on
-    # every attempt.  ELOOP and ENOTDIR are additionally translated at the
-    # container open itself (see ``provision_native_workspace_lease``), which is
-    # where they can actually arise; they are kept here so a later syscall that
-    # produces one cannot fall through to the retryable side by omission.
+    # ``ESTALE`` and ``ETIMEDOUT`` are the canonical "come back" errnos for a
+    # scratch root on NFS or any network-backed store: a handle invalidated by
+    # the server, and a server that did not answer inside its timeout.
+    ("ESTALE", errno.ESTALE, _SCRATCH_UNAVAILABLE_CODE),
+    ("ETIMEDOUT", errno.ETIMEDOUT, _SCRATCH_UNAVAILABLE_CODE),
+    # ``EAGAIN`` is the kernel asking to be called again, which is the literal
+    # definition of this side.
+    ("EAGAIN", errno.EAGAIN, _SCRATCH_UNAVAILABLE_CODE),
+    # ``EIO`` is a media or transport error.  It can mean a dying disk, which no
+    # retry fixes -- but a dying disk is exactly the case where a bounded retry
+    # costs minutes and a wrong FATAL costs the scan outright.
+    ("EIO", errno.EIO, _SCRATCH_UNAVAILABLE_CODE),
+    # ``EBUSY`` means the object is in use AT THIS MOMENT -- a mount in
+    # progress, a device another holder has open.
+    ("EBUSY", errno.EBUSY, _SCRATCH_UNAVAILABLE_CODE),
+    # ``ENETDOWN``: the network the scratch root lives behind is down.
+    ("ENETDOWN", errno.ENETDOWN, _SCRATCH_UNAVAILABLE_CODE),
+    # FATAL -- A STATEMENT ABOUT THE OPERATOR'S CONFIGURATION rather than about
+    # the host's momentary state.  These are the rows that must be complete,
+    # because nothing else produces this side.
+    #
+    # ``ELOOP``: a symlink loop inside the configured path.  No mount coming up
+    # unwinds a loop; the operator built it.
+    #
+    # ELOOP and ENOTDIR are BOTH translated earlier than this table -- by
+    # ``_refuse_a_symlinked_workspace_container`` before the open for the shapes
+    # a by-name probe can see, and by the container open's own arm otherwise.
+    # NOT every symlink shape is visible to the pre-open probes, measured: a
+    # self-looping INTERMEDIATE component leaves ``lstat`` failing ELOOP and
+    # non-strict ``realpath`` returning the path unchanged, so that one is
+    # settled at the open instead.  These two rows are therefore for a LATER
+    # syscall under the scratch root producing one of them; they are kept so
+    # that case cannot fall through to the retryable default by omission.
     ("ELOOP", errno.ELOOP, _FAILED_CODE),
+    # ``ENOTDIR``: a component of the configured path is not a directory -- a
+    # regular file, a FIFO or a device sitting where a directory was configured.
     ("ENOTDIR", errno.ENOTDIR, _FAILED_CODE),
+    # ``EACCES``/``EPERM``: the service uid cannot enter the configured root.
+    # Permission bits, ownership, capabilities and immutable attributes are all
+    # deployment configuration; none of them changes while nobody is looking.
     ("EACCES", errno.EACCES, _FAILED_CODE),
     ("EPERM", errno.EPERM, _FAILED_CODE),
+    # ``EROFS``: the root is on a read-only mount.  Honest caveat -- this is not
+    # always a mount-option CHOICE, because the kernel forces a read-only
+    # remount after some I/O errors.  What puts it on this side either way is
+    # that recovery is an operator action (remount, fsck, repoint the root) and
+    # not a wait.
     ("EROFS", errno.EROFS, _FAILED_CODE),
+    # ``ENAMETOOLONG``: a component of the configured root, or the whole path,
+    # is past the filesystem's limit.  A length does not change while nobody is
+    # looking.  MEASURED reachable on Linux and macOS for a single component
+    # over 255 bytes in a path well inside this module's own
+    # ``NATIVE_WORKSPACE_MAX_PATH_BYTES`` ceiling, so the ceiling does not
+    # pre-empt it.
+    ("ENAMETOOLONG", errno.ENAMETOOLONG, _FAILED_CODE),
 )
 _WORKSPACE_PROVISIONING_CLASSIFICATION = MappingProxyType(
     {number: (name, code) for name, number, code in _WORKSPACE_PROVISIONING_ERRNOS}
@@ -4383,38 +4447,135 @@ def _workspace_directory_flags() -> int:
 def _workspace_provisioning_refusal(exc: OSError) -> tuple[str, str]:
     """Name the condition and pick the code for a raw provisioning ``OSError``.
 
-    An errno this module has NOT reasoned about defaults to ``_FAILED_CODE``,
-    deliberately, and the diagnostic says so rather than hiding it.  Three
-    reasons, in the order they matter.  ``_SCRATCH_UNAVAILABLE_CODE``'s own
-    contract says to use it "only when the refusal is about a resource the HOST
-    failed to supply"; an unlisted errno carries no evidence that it is, and
-    defaulting to retryable would assert that contract without measuring it.
-    ``_FAILED_CODE`` is also what this arm did before the split existed, so an
-    unlisted errno cannot be a regression against the pre-split behaviour.  And
-    the mistake is self-announcing: the journal line names the errno as
-    unclassified, so an errno that SHOULD be retryable shows up as a one-line
-    addition to ``_WORKSPACE_PROVISIONING_ERRNOS`` instead of hiding behind a
-    quiet retry that ends in the same failure.
+    An errno this module has NOT reasoned about defaults to
+    ``_SCRATCH_UNAVAILABLE_CODE`` -- the RETRYABLE side -- and the diagnostic
+    still says the errno was unclassified rather than hiding it.
+
+    An earlier revision of this docstring defended the opposite default, partly
+    on the claim that "``_FAILED_CODE`` is also what this arm did before the
+    split existed, so an unlisted errno cannot be a regression against the
+    pre-split behaviour".  That was traced.  The arm WAS ``_FAILED_CODE`` from
+    ``beb34abd`` through ``7539c5e5``; it was NOT at ``f10eee2b``, the immediate
+    parent of the commit that introduced the split and the actual diff base,
+    where every ``OSError`` on this path already raised
+    ``_SCRATCH_UNAVAILABLE_CODE``.  Measured against that baseline through this
+    module's own helper, a fatal default moved ESTALE, ETIMEDOUT, EAGAIN, EIO,
+    EBUSY and ENETDOWN from retryable to ``REFINE_ENGINE_FAILED``, which
+    ``refine_runner``'s ``AdapterError`` handler does not name and therefore
+    routes to the FATAL ``ARTIFACT_INVALID``.  So the sentence was right about
+    ancient history and wrong about the baseline it was defending.
+
+    What the default rests on now is the asymmetry of the two mistakes, not a
+    claim about history.  Retries are BOUNDED: ``complete_agent_task``
+    (``supabase/migrations/00297_agent_tasks_queue.sql:414``) fails the task for
+    good once ``attempts >= max_attempts``, with 1min then 5min backoff.  A
+    permanent condition wrongly called retryable therefore spends an attempt
+    budget and then fails anyway; a transient condition wrongly called fatal is
+    unrecoverable, with nothing left to re-run.  The default belongs on the
+    recoverable side and the fatal side is enumerated instead.
+
+    What this does NOT claim: that every unlisted errno is transient.  ``EBADF``
+    would be a defect in this module and no wait repairs it; under this default
+    it spends the budget first.  That cost is accepted because it is bounded.
+    An ``OSError`` carrying no errno at all lands here too, on the same terms.
     """
 
     classified = _WORKSPACE_PROVISIONING_CLASSIFICATION.get(exc.errno)
     if classified is None:
-        return "unclassified errno", _FAILED_CODE
+        return "unclassified errno", _SCRATCH_UNAVAILABLE_CODE
     return classified
 
 
 def _final_component_is_a_symlink(path: str) -> bool:
-    """Advisory: is the FINAL component of ``path`` itself a symlink?
+    """Is the FINAL component of ``path`` itself a symlink?
 
-    Used ONLY to choose between two diagnostics for one errno, never to make a
-    security decision -- it is a second, racy lookup by name, and every refusal
-    it helps word is fatal either way.
+    ``lstat`` answers this WITHOUT resolving the target, which is why it can run
+    before the open: a root symlinked at a mount that is not up yet is still a
+    symlinked root, and this module refuses one either way.
+
+    Positive-only by construction.  Every ``OSError`` the lookup can raise --
+    its own ENOENT, ENOTDIR, ELOOP, ENAMETOOLONG -- is swallowed to ``False``,
+    so this call can only ever ADD a refusal.  It introduces no errno path of
+    its own and it authorises nothing.
     """
 
     try:
         return stat.S_ISLNK(os.lstat(path).st_mode)
     except OSError:
         return False
+
+
+def _canonical_form_differs(path: str) -> bool:
+    """Does ``path`` resolve to something other than itself?
+
+    The same question :func:`provision_native_workspace_lease` asks after its
+    open, asked before it.  Non-strict ``realpath`` resolves what it can and
+    normalises the rest, so an INTERMEDIATE symlink is visible here even when
+    its target does not exist -- the shape :func:`_final_component_is_a_symlink`
+    cannot see, because ``lstat`` follows intermediate components and then
+    simply fails.
+
+    Positive-only on the same terms, and for the same reason.
+    """
+
+    try:
+        return os.path.realpath(path) != path
+    except OSError:
+        return False
+
+
+def _refuse_a_symlinked_workspace_container(parent_directory: str) -> None:
+    """Settle the symlink question BEFORE any ``os.open``, not from its errno.
+
+    A symlinked scratch root is fatal in this module however the mount is
+    doing: the canonical-form check after the open refuses it, and so does the
+    consumer of the transported lease path.  What used to decide WHEN it was
+    fatal was the errno the open happened to produce, and that made one operator
+    mistake answer two ways.  MEASURED, in the gate container and on host ext4,
+    for a root symlinked at a mount that is not up yet:
+
+    * the FINAL component is the symlink -- ``os.open`` gives ENOTDIR, not ELOOP
+      (``O_NOFOLLOW`` stops on the link and ``O_DIRECTORY`` then sees a
+      non-directory), and that reached a fatal refusal;
+    * an INTERMEDIATE component is the symlink -- ``os.open`` follows it, the
+      absent target gives ENOENT, and ENOENT is on the retryable side of the
+      errno table precisely to protect a root whose mount is not up.
+
+    Same mistake, same operator fix, two verdicts, and the retryable one is the
+    wrong terminal answer: once the mount IS up both shapes are refused fatally
+    anyway, so the disagreement was only ever about when.
+
+    Neither disjunct below subsumes the other, also measured: a self-looping
+    symlink used AS the root has ``S_ISLNK`` true while non-strict ``realpath``
+    returns it unchanged, and an intermediate symlink over an absent target has
+    ``S_ISLNK`` unanswerable while ``realpath`` sees it.
+
+    Nor do the two together see EVERY symlink shape, and that is stated rather
+    than papered over.  A self-looping INTERMEDIATE component defeats both --
+    measured, ``lstat`` fails ELOOP and non-strict ``realpath`` returns the path
+    unchanged -- so it is settled at the open instead, by the ELOOP arm in
+    :func:`provision_native_workspace_lease`, to the same fatal refusal.  What
+    holds across the two mechanisms is that no symlink shape reaches the errno
+    table; what this function adds is that the shapes an operator actually
+    builds are decided without the errno being consulted at all.
+
+    This is a PRE-EMPTION and not a guarantee.  Both probes are by name, and a
+    root replaced between them and the open is not prevented here -- that would
+    need a descriptor, and there is nothing to pin one to before the open.  What
+    holds in that race is that the checks AFTER the open still refuse, fatally:
+    the canonical-form check, which is bound to the pinned descriptor's
+    ``(st_dev, st_ino)``, and the open arm's own ENOTDIR refusal.  Both are
+    exercised for exactly that race by
+    ``test_the_post_open_checks_still_refuse_a_symlink_the_pre_check_missed``.
+    """
+
+    if _final_component_is_a_symlink(parent_directory) or _canonical_form_differs(
+        parent_directory
+    ):
+        raise AdapterError(
+            "native workspace parent directory must not traverse a symlink",
+            _INVALID_INPUT_CODE,
+        )
 
 
 def _workspace_entry_pin_flags() -> int:
@@ -4504,6 +4665,10 @@ def provision_native_workspace_lease(
     satisfy.  Requiring the canonical form closes that disagreement at the one
     boundary an operator can act on, and additionally rejects ``.``/``..``
     segments and trailing slashes, so the transported string is unambiguous.
+    That requirement is asked twice: once BEFORE the open, where it settles the
+    symlink question without depending on whether the mount behind a link is up
+    (:func:`_refuse_a_symlinked_workspace_container`), and once after, bound to
+    the pinned descriptor.
 
     ``parent_directory`` must also be **short enough**.  The leased root is the
     prefix of every COLMAP path option, and the command layer caps each argv item
@@ -4549,6 +4714,12 @@ def provision_native_workspace_lease(
             f"{lease_bytes - NATIVE_WORKSPACE_MAX_PATH_BYTES} bytes",
             _INVALID_INPUT_CODE,
         )
+    # Settle the symlink question before anything is opened, so the two
+    # component shapes of ONE operator mistake cannot answer differently
+    # depending on whether the mount behind the link happens to be up.  The
+    # shapes this cannot see by name are caught by the open's own arm below, so
+    # between the two no symlink shape reaches the errno table at the bottom.
+    _refuse_a_symlinked_workspace_container(parent_directory)
     flags = _workspace_directory_flags()
     parent_descriptor: int | None = None
     workspace_descriptor: int | None = None
@@ -4560,17 +4731,17 @@ def provision_native_workspace_lease(
         except OSError as open_exc:
             # ``O_DIRECTORY`` and ``O_NOFOLLOW`` PRE-EMPT two of the structural
             # checks below, so their errnos are translated back into those
-            # checks' own refusals.  Without this the module disagreed with
-            # itself about ONE operator mistake: a symlink as an INTERMEDIATE
-            # component reached the ``realpath`` check below and was refused
-            # fatally, while a symlink as the FINAL component never got there --
-            # the open fails first, MEASURED as ENOTDIR rather than ELOOP on
-            # both Linux and macOS, because ``O_DIRECTORY`` sees the unfollowed
-            # link and not a directory -- and fell through to the operational
-            # normalization at the bottom, so which component the operator
-            # symlinked decided whether the task retried or died.  ENOTDIR on a
-            # regular file or a FIFO is the same story against the ``S_ISDIR``
-            # check, and gets that check's own wording.
+            # checks' own refusals.  ENOTDIR on a regular file or a FIFO is the
+            # ``S_ISDIR`` check arriving early, and gets that check's own
+            # wording.
+            #
+            # The symlink disjunct is now the RACE RESIDUAL, not the primary
+            # answer: ``_refuse_a_symlinked_workspace_container`` above settles
+            # every symlink shape before this open runs, so reaching here with a
+            # symlinked final component means the root was replaced between that
+            # by-name probe and this open.  The verdict is deliberately the same
+            # one the pre-open gate gives, so the race cannot change the answer
+            # -- only which line reports it.
             if open_exc.errno == errno.ELOOP or (
                 open_exc.errno == errno.ENOTDIR
                 and _final_component_is_a_symlink(parent_directory)
@@ -4592,6 +4763,12 @@ def provision_native_workspace_lease(
         # child's cwd/TMPDIR.  If any component is a symlink the transported
         # path fails the consumer's `resolve(strict=True) == path` check, so
         # refuse the container rather than mint a lease nobody can use.
+        #
+        # This repeats the pre-open gate's second probe ON PURPOSE, and it is
+        # not dead: the pre-open probe is by name, this one runs against the
+        # descriptor actually pinned and is followed immediately by the
+        # ``(st_dev, st_ino)`` binding below.  A root swapped for a symlinked
+        # path after the pre-open probe is caught here and nowhere else.
         canonical_parent = os.path.realpath(parent_directory)
         if canonical_parent != parent_directory:
             raise AdapterError(

@@ -276,11 +276,27 @@ def _unenterable_root(tmp_path: Path) -> str:
     return str(closed)
 
 
+def _over_long_component_root(tmp_path: Path) -> str:
+    """A single component past NAME_MAX, inside the module's own byte ceiling.
+
+    This is the ONE fatal-side condition that constructs under a root euid, and
+    it is here for that reason: every other fatal row needs a non-root uid, a
+    read-only mount or a capability, so under the gate containers' root euid an
+    arm that called every ``OSError`` a shortage could otherwise reach the errno
+    table without a single fatal row proving it obeys the table.
+    """
+
+    root = str(tmp_path / ("n" * 300))
+    assert len(os.fsencode(root)) < NATIVE_WORKSPACE_MAX_PATH_BYTES
+    return root
+
+
 #: ``(id, builder, errno, code, wording)``.  Every row builds its condition FOR
 #: REAL -- a symlinked root, a self-looping root, a regular file, a FIFO, a
-#: mode-000 directory, a path nobody created -- and asserts the errno the real
-#: open actually produces BEFORE asserting the verdict, so no row can drift into
-#: pinning an exception name instead of a condition.
+#: mode-000 directory, an over-long component, a path nobody created -- and
+#: asserts the errno the real open actually produces BEFORE asserting the
+#: verdict, so no row can drift into pinning an exception name instead of a
+#: condition.
 _REAL_PROVISIONING_CONDITIONS = (
     (
         "nonexistent-root",
@@ -323,6 +339,13 @@ _REAL_PROVISIONING_CONDITIONS = (
         errno.EACCES,
         "REFINE_ENGINE_FAILED",
         "(EACCES)",
+    ),
+    (
+        "over-long-component-root",
+        _over_long_component_root,
+        errno.ENAMETOOLONG,
+        "REFINE_ENGINE_FAILED",
+        "(ENAMETOOLONG)",
     ),
 )
 
@@ -428,9 +451,192 @@ def test_a_symlinked_scratch_root_classifies_the_same_at_every_component(tmp_pat
     )
 
 
+def _refusal(path) -> tuple[str, str]:
+    with pytest.raises(AdapterError) as raised:
+        provision_native_workspace_lease(
+            str(path),
+            deadline=RefineDeadline(time.monotonic() + 60.0),
+        )
+    return raised.value.code, str(raised.value)
+
+
+def test_a_symlinked_root_over_a_mount_that_is_not_up_is_fatal_at_every_component(
+    tmp_path,
+):
+    """The reopened half of the same asymmetry: the link's TARGET is absent.
+
+    The test above builds both shapes over targets that exist.  With the target
+    absent -- an operator who symlinked the scratch root at a mount that has not
+    come up -- the two shapes produced different errnos and the errno decided
+    the verdict:
+
+    * final component is the link -> ``os.open`` gives ENOTDIR, refused fatally;
+    * an intermediate component is the link -> ``os.open`` follows it, the
+      absent target gives ENOENT, and ENOENT is retryable ON PURPOSE, to protect
+      exactly the "mount is not up yet" case.
+
+    So ONE operator mistake retried on one shape and died on the other, and the
+    retryable one was the wrong terminal answer: once the mount comes up, both
+    shapes are refused fatally anyway (the test above), so the disagreement was
+    only ever about WHEN.  Deciding it before the open removes the errno from
+    the question entirely.
+    """
+
+    absent = tmp_path / "mount-not-up"
+    assert not absent.exists()
+
+    final_link = tmp_path / "final-scratch-link"
+    final_link.symlink_to(absent / "scratch", target_is_directory=True)
+
+    middle_link = tmp_path / "middle-scratch-link"
+    middle_link.symlink_to(absent, target_is_directory=True)
+
+    # Not vacuous: the two shapes really do produce different errnos from the
+    # module's own flags, which is what used to split the verdict.
+    with pytest.raises(OSError) as final_open:
+        os.open(str(final_link), native_process._workspace_directory_flags())
+    assert final_open.value.errno == errno.ENOTDIR
+    with pytest.raises(OSError) as middle_open:
+        os.open(
+            str(middle_link / "leases"), native_process._workspace_directory_flags()
+        )
+    assert middle_open.value.errno == errno.ENOENT
+
+    fatal = (
+        "REFINE_INPUT_INVALID",
+        "native workspace parent directory must not traverse a symlink",
+    )
+    assert _refusal(final_link) == fatal
+    assert _refusal(middle_link / "leases") == fatal
+
+
+def test_a_plain_root_whose_mount_is_not_up_is_still_retryable(tmp_path):
+    """The control for the test above, and the thing it must not have swept up.
+
+    ENOENT sits on the retryable side to protect a root whose mount is not up.
+    Deciding the SYMLINK question before the open must not turn that protection
+    off for a root with no symlink anywhere in it.
+    """
+
+    absent = tmp_path / "mount-not-up" / "scratch"
+    assert not absent.exists()
+    assert os.path.realpath(str(absent)) == str(absent)
+
+    code, message = _refusal(absent)
+    assert code == "REFINE_ENGINE_SCRATCH_UNAVAILABLE"
+    assert "(ENOENT)" in message
+
+
+@pytest.mark.parametrize(
+    "shape",
+    ("final-symlink", "intermediate-symlink", "self-looping-root", "dotdot"),
+)
+def test_no_symlinked_root_shape_reaches_the_container_open_at_all(
+    tmp_path, monkeypatch, shape
+):
+    """The ordering itself, because for one shape nothing else can prove it.
+
+    A self-looping symlink used AS the root is the case where the two pre-open
+    probes genuinely differ: MEASURED, ``S_ISLNK`` is true on it while non-strict
+    ``realpath`` returns it unchanged, so only the ``S_ISLNK`` probe sees it --
+    and the post-open ENOTDIR arm would reach the SAME verdict, so no assertion
+    about the verdict can tell whether the decision was made before the open or
+    after it.  This asserts the ordering directly: for every symlinked shape the
+    container is never opened, which is what stops the errno from being part of
+    the answer.
+    """
+
+    real = tmp_path / "real-scratch"
+    (real / "leases").mkdir(mode=0o700, parents=True)
+    if shape == "final-symlink":
+        link = tmp_path / "final-link"
+        link.symlink_to(real, target_is_directory=True)
+        root = str(link)
+    elif shape == "intermediate-symlink":
+        link = tmp_path / "middle-link"
+        link.symlink_to(real, target_is_directory=True)
+        root = str(link / "leases")
+    elif shape == "self-looping-root":
+        loop = tmp_path / "loop"
+        loop.symlink_to(loop)
+        root = str(loop)
+        # The measurement this shape exists for, stated where it is relied on.
+        assert os.path.realpath(root) == root
+    else:
+        root = f"{real}/../{real.name}"
+
+    real_open = os.open
+    opened: list[str] = []
+
+    def record_the_container_open(path, *args, **kwargs):
+        if path == root:
+            opened.append(path)
+        return real_open(path, *args, **kwargs)
+
+    monkeypatch.setattr(native_process.os, "open", record_the_container_open)
+    code, message = _refusal(root)
+    monkeypatch.undo()
+
+    assert opened == []
+    assert code == "REFINE_INPUT_INVALID"
+    assert message == "native workspace parent directory must not traverse a symlink"
+    assert sorted(os.listdir(real)) == ["leases"]
+
+
+def test_the_post_open_checks_still_refuse_a_symlink_the_pre_check_missed(
+    tmp_path, monkeypatch
+):
+    """The pre-open gate is a PRE-EMPTION, not a guarantee -- so prove the rest.
+
+    Both pre-open probes are by name, so a root replaced between them and the
+    open is not prevented there; nothing can be pinned by descriptor before the
+    open, because the open is what produces the descriptor.  Blinding the gate
+    is how that race is made deterministic, and what it has to show is that the
+    answer does not change -- only which line reports it.
+
+    Each shape below is refused by a DIFFERENT post-open guard: the final
+    component by the open arm's own ENOTDIR translation, the intermediate one by
+    the canonical-form check bound to the pinned descriptor.  Both messages are
+    asserted exactly, because both guards raise the same exception class and
+    ``REFINE_INPUT_INVALID`` alone cannot tell them apart.
+    """
+
+    monkeypatch.setattr(
+        native_process,
+        "_refuse_a_symlinked_workspace_container",
+        lambda _parent_directory: None,
+    )
+
+    real = tmp_path / "real-scratch"
+    (real / "leases").mkdir(mode=0o700, parents=True)
+    final_link = tmp_path / "final-link"
+    final_link.symlink_to(real, target_is_directory=True)
+    middle_link = tmp_path / "middle-link"
+    middle_link.symlink_to(real, target_is_directory=True)
+
+    fatal = (
+        "REFINE_INPUT_INVALID",
+        "native workspace parent directory must not traverse a symlink",
+    )
+    assert _refusal(final_link) == fatal
+    assert _refusal(middle_link / "leases") == fatal
+    # Nothing was minted inside the container either link pointed at.
+    assert sorted(os.listdir(real)) == ["leases"]
+    assert sorted(os.listdir(real / "leases")) == []
+
+
 #: Written out LITERALLY rather than read back off the module, so that deleting
 #: a row from ``_WORKSPACE_PROVISIONING_ERRNOS`` turns this red instead of
 #: silently shrinking the parametrization to match itself.
+#:
+#: The retryable rows are redundant with the module's default IN THE CODE THEY
+#: PRODUCE, and are listed anyway so a reader cannot mistake a decision for an
+#: oversight.  They are not redundant in the journal line: the default names the
+#: condition "unclassified errno", so a dropped retryable row still costs the
+#: operator the errno's name.  MEASURED by deleting rows against this whole gate
+#: selection: dropping ``ESTALE`` reddens both this parametrization (the name
+#: changes) and the table test, and dropping ``EACCES`` reddens those plus the
+#: arm test, because for a fatal row the default changes the code as well.
 _EXPECTED_ERRNO_VERDICTS = (
     ("ENOSPC", "REFINE_ENGINE_SCRATCH_UNAVAILABLE"),
     ("EDQUOT", "REFINE_ENGINE_SCRATCH_UNAVAILABLE"),
@@ -438,12 +644,25 @@ _EXPECTED_ERRNO_VERDICTS = (
     ("ENFILE", "REFINE_ENGINE_SCRATCH_UNAVAILABLE"),
     ("ENOMEM", "REFINE_ENGINE_SCRATCH_UNAVAILABLE"),
     ("ENOENT", "REFINE_ENGINE_SCRATCH_UNAVAILABLE"),
+    ("ESTALE", "REFINE_ENGINE_SCRATCH_UNAVAILABLE"),
+    ("ETIMEDOUT", "REFINE_ENGINE_SCRATCH_UNAVAILABLE"),
+    ("EAGAIN", "REFINE_ENGINE_SCRATCH_UNAVAILABLE"),
+    ("EIO", "REFINE_ENGINE_SCRATCH_UNAVAILABLE"),
+    ("EBUSY", "REFINE_ENGINE_SCRATCH_UNAVAILABLE"),
+    ("ENETDOWN", "REFINE_ENGINE_SCRATCH_UNAVAILABLE"),
     ("ELOOP", "REFINE_ENGINE_FAILED"),
     ("ENOTDIR", "REFINE_ENGINE_FAILED"),
     ("EACCES", "REFINE_ENGINE_FAILED"),
     ("EPERM", "REFINE_ENGINE_FAILED"),
     ("EROFS", "REFINE_ENGINE_FAILED"),
+    ("ENAMETOOLONG", "REFINE_ENGINE_FAILED"),
 )
+
+#: Errnos on NEITHER list, so they can only be answered by the default.  None of
+#: them is reachable from this module's own syscalls in any way anybody has
+#: constructed; that is the point -- the default is what an errno nobody
+#: anticipated gets, and it has to be pinned by something nobody anticipated.
+_UNLISTED_ERRNOS = ("EBADF", "EXDEV", "ENOTTY", "EPIPE", "ENOSYS")
 
 
 @pytest.mark.parametrize(
@@ -458,10 +677,12 @@ def test_every_classified_provisioning_errno_keeps_its_side_of_the_split(
     """One row per enumerated errno, including the ones no test can construct.
 
     ENOSPC/EDQUOT/EMFILE/ENFILE/ENOMEM cannot be built without exhausting the
-    gate's own host, EROFS needs a read-only mount, and EACCES/EPERM cannot be
-    built under the root euid the gate containers run as.  Those are pinned
-    against the classifier directly; every condition that CAN be built is
-    additionally driven through the real function by
+    gate's own host, EROFS needs a read-only mount, EACCES/EPERM cannot be built
+    under the root euid the gate containers run as, and the network-storage rows
+    need network storage.  Those are pinned against the classifier directly;
+    every condition that CAN be built -- including ENAMETOOLONG, which is the
+    one fatal-side row that constructs under a root euid -- is additionally
+    driven through the real function by
     ``test_each_real_provisioning_condition_keeps_its_own_verdict``.
     """
 
@@ -480,13 +701,36 @@ def test_the_provisioning_errno_table_enumerates_exactly_what_was_decided():
     ) == _EXPECTED_ERRNO_VERDICTS
 
 
+def test_the_two_sides_of_the_split_do_not_overlap():
+    """No errno may be listed twice, and the fatal side is the enumerated one.
+
+    The default answers the retryable side, so a fatal row that got dropped
+    silently becomes retryable rather than becoming an error.  Stating the fatal
+    set as its own literal is what makes that droppable-by-accident set explicit.
+    """
+
+    listed = [name for name, _code in _EXPECTED_ERRNO_VERDICTS]
+    fatal = [
+        name
+        for name, code in _EXPECTED_ERRNO_VERDICTS
+        if code == "REFINE_ENGINE_FAILED"
+    ]
+
+    assert len(listed) == len(set(listed))
+    assert fatal == ["ELOOP", "ENOTDIR", "EACCES", "EPERM", "EROFS", "ENAMETOOLONG"]
+    assert not set(listed) & set(_UNLISTED_ERRNOS)
+
+
 @pytest.mark.parametrize(
     ("name", "expected_code", "expected_text"),
     (
         ("ENOMEM", "REFINE_ENGINE_SCRATCH_UNAVAILABLE", "(ENOMEM)"),
+        ("ESTALE", "REFINE_ENGINE_SCRATCH_UNAVAILABLE", "(ESTALE)"),
+        ("EIO", "REFINE_ENGINE_SCRATCH_UNAVAILABLE", "(EIO)"),
         ("EACCES", "REFINE_ENGINE_FAILED", "(EACCES)"),
         ("EROFS", "REFINE_ENGINE_FAILED", "(EROFS)"),
-        ("EIO", "REFINE_ENGINE_FAILED", "(unclassified errno)"),
+        ("ENAMETOOLONG", "REFINE_ENGINE_FAILED", "(ENAMETOOLONG)"),
+        ("EBADF", "REFINE_ENGINE_SCRATCH_UNAVAILABLE", "(unclassified errno)"),
     ),
 )
 def test_the_provisioning_arm_uses_the_errno_verdict_it_was_given(
@@ -536,28 +780,40 @@ def test_the_provisioning_arm_uses_the_errno_verdict_it_was_given(
     assert list(container.iterdir()) == []
 
 
-def test_an_unenumerated_provisioning_errno_fails_closed():
-    """The default is FATAL, and it is a DECISION rather than an oversight.
+def test_an_errno_on_neither_list_defaults_to_the_recoverable_side():
+    """The DEFAULT itself, pinned with errnos on neither list.
 
-    ``_SCRATCH_UNAVAILABLE_CODE``'s own contract restricts it to "a resource the
-    HOST failed to supply".  An errno nobody has reasoned about carries no
-    evidence that it is one, so claiming it would be asserting the contract
-    without measuring it -- and ``_FAILED_CODE`` is what this arm did before the
-    split existed, so an unlisted errno cannot regress against that.  The
-    mistake is self-announcing: the line says "unclassified errno", which is a
-    one-line addition to the table rather than a quiet retry that ends in the
-    same failure anyway.
+    This is the load-bearing decision in the arm, so it is asserted directly
+    rather than inferred from a row that happens to be absent.  The default was
+    FATAL for one revision, defended partly by "``_FAILED_CODE`` is what this
+    arm did before the split existed".  Traced across the arm's history, that
+    was true from ``beb34abd`` through ``7539c5e5`` and NOT true at
+    ``f10eee2b``, the immediate parent and the actual diff base, where every
+    ``OSError`` here raised ``REFINE_ENGINE_SCRATCH_UNAVAILABLE``.
+
+    What the default rests on now is the asymmetry, which is measurable rather
+    than historical: ``complete_agent_task`` fails a task once ``attempts >=
+    max_attempts``, so calling a permanent condition retryable costs a bounded
+    budget and then fails anyway, while calling a transient one fatal leaves
+    nothing to re-run.  The line still says "unclassified errno", so the errno
+    that should have had a row is still a one-line addition and not a silent
+    retry.
+
+    Not claimed: that these errnos are transient.  ``EBADF`` would be a defect
+    in this module.  The claim is only that the recoverable side is where an
+    unanticipated condition belongs.
     """
 
-    for exc in (
-        OSError(errno.EIO, "a genuinely unclassified condition"),
-        OSError(errno.EBADF, "a defect in this module, not a shortage"),
-        OSError("an OSError carrying no errno at all"),
-    ):
+    unlisted = [
+        OSError(getattr(errno, name), f"a condition with no row: {name}")
+        for name in _UNLISTED_ERRNOS
+    ]
+    unlisted.append(OSError("an OSError carrying no errno at all"))
+    for exc in unlisted:
         assert native_process._workspace_provisioning_refusal(exc) == (
             "unclassified errno",
-            "REFINE_ENGINE_FAILED",
-        )
+            "REFINE_ENGINE_SCRATCH_UNAVAILABLE",
+        ), exc
 
 
 def test_every_transported_lease_path_resolves_to_itself(tmp_path):
