@@ -2,6 +2,13 @@
 // inference conversion rail to create 512px/1600px JPEG variants and enforces
 // the 90-day retention deadline for unapproved evidence. No guest or browser
 // calls this function; pg_cron invokes it with the service-role Bearer.
+//
+// Billing guard (SWEEP MODE ONLY — no body.mediaId; the retention purge below
+// always runs unconditionally): a cheap existence check on the derive
+// candidates predicate runs BEFORE the /healthz probe. No eligible row means
+// zero outbound HTTP to the inference container — Cloudflare Containers bill
+// wall-clock while awake. A targeted { mediaId } call keeps the old
+// probe-first flow untouched.
 
 import {
   createClient,
@@ -296,7 +303,31 @@ Deno.serve(async (req) => {
     );
     const inferenceUrl = Deno.env.get("INFERENCE_URL");
     const inferenceToken = Deno.env.get("INFERENCE_TOKEN");
-    const ready = !!inferenceUrl && !!inferenceToken &&
+
+    // Billing guard — SWEEP MODE ONLY (no body.mediaId): a cheap existence
+    // check on the full candidates predicate runs BEFORE the /healthz probe.
+    // No eligible row means zero outbound HTTP — Cloudflare Containers bill
+    // wall-clock while awake, and this worker is cron-invoked regardless of
+    // whether there's anything to derive. A targeted { mediaId } call keeps
+    // the old probe-first flow untouched.
+    let hasCandidates = true;
+    if (!body.mediaId) {
+      const existence = await admin.from("site_deliverable_media")
+        .select("id")
+        .in("upload_state", ["uploaded", "failed"])
+        .in("mime_type", [...PROCESSABLE_IMAGE_MIME_TYPES])
+        .lt("derive_attempts", MAX_DERIVE_ATTEMPTS)
+        .is("purged_at", null)
+        .limit(1);
+      if (existence.error) {
+        throw new Error(
+          `derive existence check failed: ${existence.error.message}`,
+        );
+      }
+      hasCandidates = (existence.data ?? []).length > 0;
+    }
+
+    const ready = hasCandidates && !!inferenceUrl && !!inferenceToken &&
       await inferenceReady(inferenceUrl);
 
     let derived = 0;
@@ -326,11 +357,11 @@ Deno.serve(async (req) => {
 
     const result = {
       ok: true,
-      derivatives: ready ? { derived, failed: deriveFailed } : {
-        skipped: "inference_unavailable",
-        derived: 0,
-        failed: 0,
-      },
+      derivatives: ready
+        ? { derived, failed: deriveFailed }
+        : hasCandidates
+        ? { skipped: "inference_unavailable", derived: 0, failed: 0 }
+        : { derived: 0, failed: 0 },
       retention,
     };
     if (run?.id) {
