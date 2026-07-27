@@ -62,11 +62,31 @@ the run is refused unless it reproduces the child's declaration. Freezing is
 therefore a property of how the object was constructed rather than a claim
 about what was observed.
 
-Construction alone leaves exactly one route: ``/proc/<pid>/fd`` IS a name, and a
-same-UID process can reopen any descriptor this parent holds through it. Before
-the first copy exists the parent therefore drops its own ``dumpable`` flag,
-which makes that directory unopenable to everyone without ``CAP_SYS_PTRACE``.
-The price is that this process can no longer produce a core dump. See
+What construction alone cannot close is not a name at all: it is
+``ptrace_may_access``. Any same-UID process that passes that check against this
+parent can take a descriptor out of its table, and there is more than one call
+that asks. ``/proc/<pid>/fd`` is the familiar one -- procfs IS a name, and
+``proc_fd_access_allowed`` gates the reopen with ``PTRACE_MODE_READ_FSCREDS``.
+``pidfd_open(2)`` plus ``pidfd_getfd(2)`` is the other, and it uses no name and
+no procfs whatsoever; it gates on ``PTRACE_MODE_ATTACH_REALCREDS``. An earlier
+revision of this docstring named only the procfs route and called it "exactly
+one route", which under-enumerated: MEASURED at euid 1000 with seccomp
+unconfined, a same-UID non-descendant took a held descriptor straight out of the
+holder's table with ``pidfd_getfd``, and where the holder had that object open
+``O_RDWR`` it wrote through the stolen handle. The two routes are not equally
+dangerous to THIS channel -- ``pidfd_getfd`` returns the holder's own open file
+description, which here is read-only, while the procfs route can reopen the
+inode ``O_RDWR`` -- but both are unauthorised access to a parent-private
+descriptor and both are closed by the same act. Docker's default seccomp profile
+answers ``EPERM`` for ``pidfd_getfd``, which is why that route stays invisible in
+an ordinary container.
+
+Before the first copy exists the parent therefore drops its own ``dumpable``
+flag, which makes ``__ptrace_may_access`` refuse EVERY mode -- so both routes
+close at once -- to everyone without ``CAP_SYS_PTRACE``. The price is paid in
+debuggability, not only in core files: see
+``_seal_process_against_procfs_descriptor_theft`` for what an operator can and
+cannot still do afterwards, and
 ``NATIVE_ENGINE_OUTPUT_BYTES_FROZEN_AGAINST_SURVIVING_DESCRIPTORS`` for the
 exact scope and for what is still excluded.
 
@@ -175,30 +195,59 @@ NATIVE_ENGINE_OUTPUT_ALIGNMENT_VERIFIED_BY_PARENT = False
 #:
 #:   * no directory entry ever pointed at it, so no ``open`` by path reaches it;
 #:   * ``O_EXCL`` makes ``linkat`` on it fail, so no name can be created later;
-#:   * it was never transported over SCM_RIGHTS and never inherited, so no
-#:     child, grandchild, or escaped descendant ever held a descriptor to it.
+#:   * it was never transported over SCM_RIGHTS and never inherited across an
+#:     ``execve``, so no child, grandchild, or escaped descendant ever held a
+#:     descriptor to it.  The non-inheritance half is MEASURED across a real
+#:     fork+exec with ``close_fds`` disabled, not read off the flags -- see the
+#:     note on :func:`_frozen_output_copy` for which guard actually delivers it
+#:     and which are restatements that no test can individually kill.
 #:
-#: THE ROUTE THAT IS LEFT, and what closes it.  A same-UID process that can
-#: ``ptrace_may_access`` this parent can reopen ANY descriptor in this process's
-#: table through ``/proc/<pid>/fd`` -- including this one -- and rewrite it.
+#: THE ROUTES THAT ARE LEFT, and what closes them.  The gate is
+#: ``ptrace_may_access`` on this process, NOT procfs; procfs is only the most
+#: familiar way to reach it.  A same-UID process that passes that check can:
 #:
-#: ``yama.ptrace_scope`` does NOT gate that route at any setting, and an earlier
-#: revision of this comment claiming it did was wrong.  That correction is READ
-#: OFF THE KERNEL SOURCE, not measured: ``yama_ptrace_access_check`` returns 0
-#: immediately unless the request carries ``PTRACE_MODE_ATTACH``, while
+#:   * reopen ANY descriptor in this process's table through ``/proc/<pid>/fd``
+#:     (``proc_fd_access_allowed`` -> ``PTRACE_MODE_READ_FSCREDS``), and
+#:   * take a descriptor outright with ``pidfd_open(2)`` + ``pidfd_getfd(2)``
+#:     (``PTRACE_MODE_ATTACH_REALCREDS``), which involves NO name and NO procfs
+#:     at all -- an earlier revision of this comment enumerated only the first
+#:     route and called ``/proc/<pid>/fd`` "exactly one route", which was wrong.
+#:
+#: Both are closed by the same act, because both funnel through
+#: ``__ptrace_may_access``.  MEASURED, euid 1000, this repository's Linux test
+#: container (``6.12.76`` aarch64, overlayfs, no Yama), seccomp UNCONFINED:
+#: against an unsealed target ``pidfd_getfd`` returned a descriptor (rc=4,
+#: errno=0), and where the holder had that object open ``O_RDWR`` the attacker
+#: wrote through it; sealed, the same attempt returned ``EPERM``.  The
+#: descriptors THIS channel hands out are read-only, so a pidfd theft of one is a
+#: read rather than a rewrite -- which is exactly why
+#: ``test_the_sealed_boundary_refuses_a_pidfd_getfd_theft`` asserts that the
+#: syscall was REFUSED and not merely that the bytes are unchanged; the latter is
+#: green against a process with no seal at all.  Under Docker's DEFAULT seccomp
+#: profile ``pidfd_getfd`` returns ``EPERM`` whether or not the target is sealed,
+#: which is why this route is invisible in an ordinary container and why that
+#: test skips there rather than reporting a proof it did not make.
+#:
+#: ``yama.ptrace_scope`` does NOT gate the PROCFS route at any setting, and an
+#: earlier revision of this comment claiming it did was wrong.  That correction is
+#: READ OFF THE KERNEL SOURCE, not measured: ``yama_ptrace_access_check`` returns
+#: 0 immediately unless the request carries ``PTRACE_MODE_ATTACH``, while
 #: ``/proc/<pid>/fd`` reaches ``ptrace_may_access`` through
 #: ``proc_fd_access_allowed`` with ``PTRACE_MODE_READ_FSCREDS``, which Yama never
-#: inspects.  No environment this repository can run ships Yama at all, so
-#: nothing here has confirmed the claim on a host where ``ptrace_scope`` is set,
-#: and no reader should treat it as confirmed.
+#: inspects.  ALSO READ OFF THE SOURCE, and pointing the other way: the
+#: ``pidfd_getfd`` route DOES carry ``PTRACE_MODE_ATTACH_REALCREDS``, so a Yama
+#: host at ``ptrace_scope >= 1`` would additionally restrict that one for a
+#: non-descendant.  Neither statement is confirmed here -- no environment this
+#: repository can run ships Yama at all -- and no reader should treat either as
+#: confirmed.  Nothing in this module's posture depends on Yama either way.
 #:
-#: THE ROUTE ITSELF IS MEASURED, and the measurement is a gate rather than a
-#: transcript: in this repository's Linux test container (``6.12.76`` aarch64,
+#: THE PROCFS ROUTE ITSELF IS MEASURED, and the measurement is a gate rather than
+#: a transcript: in this repository's Linux test container (``6.12.76`` aarch64,
 #: overlayfs, no Yama) a same-UID non-descendant holding no ``CAP_SYS_PTRACE``
 #: reopened a held descriptor ``O_RDWR`` through ``/proc/<pid>/fd`` and rewrote
 #: it, at both ``euid 0`` and ``euid 1000``.
 #:
-#: What closes it is :func:`_seal_process_against_procfs_descriptor_theft`,
+#: What closes both is :func:`_seal_process_against_procfs_descriptor_theft`,
 #: which drops this process's ``dumpable`` flag before any frozen copy exists.
 #: ``__ptrace_may_access`` refuses every mode -- including
 #: ``PTRACE_MODE_READ_FSCREDS`` -- once ``get_dumpable(mm) != SUID_DUMP_USER``,
@@ -208,7 +257,10 @@ NATIVE_ENGINE_OUTPUT_ALIGNMENT_VERIFIED_BY_PARENT = False
 #: ran -- the access check is on each ``openat``, not on the directory open, so
 #: the seal is not a race an attacker wins by starting early.  Both are pinned:
 #: ``test_the_sealed_boundary_refuses_a_same_uid_procfs_reopen`` and
-#: ``test_a_procfs_directory_opened_before_the_seal_still_cannot_be_used``.
+#: ``test_a_procfs_directory_opened_before_the_seal_still_cannot_be_used``.  The
+#: nameless route is pinned separately by
+#: ``test_the_sealed_boundary_refuses_a_pidfd_getfd_theft``, which SKIPS wherever
+#: its own positive control cannot be built.
 #:
 #: WHAT IS STILL EXCLUDED, and is not claimed: root, and any process holding
 #: ``CAP_SYS_PTRACE`` in this process's user namespace.  Such an actor can
@@ -341,6 +393,14 @@ _CLEANUP_FAILED_CODE = "REFINE_ENGINE_CLEANUP_FAILED"
 #: not a defect, so it gets its own code instead of arriving as an unexplained
 #: ``OSError``.  The operator-facing fix is disk headroom; see the transient
 #: headroom contract on :func:`_frozen_output_copy`.
+#:
+#: This string is also a ``RefineFailureCode`` member in ``refine_runner``, and
+#: it is RETRYABLE there.  The two constants are compared by
+#: ``test_the_no_space_token_is_literally_the_one_the_native_boundary_raises``,
+#: because a code minted here and unknown up there does not simply lose its
+#: label: the runner's ``AdapterError`` handler falls through to the FATAL
+#: ``ARTIFACT_INVALID``, so an unrecognised code silently converts a disk that
+#: filled for ten minutes into a task that is dead forever.
 _NO_SPACE_CODE = "REFINE_ENGINE_NO_SPACE"
 _CHILD_PROTOCOL_REJECT_EXIT_CODE = 74
 _IN_PROCESS_ENTRYPOINT_MARKER = "__patina_refine_in_process_only__"
@@ -2179,12 +2239,51 @@ def _seal_process_against_procfs_descriptor_theft() -> None:
       ``test_the_seal_leaves_the_process_group_scan_able_to_read_other_processes``,
       whose own-group half is what keeps a scan that silently skipped every row
       from passing it.
-    * **CORE DUMPS FOR THIS PROCESS ARE DISABLED FROM HERE ON.**  That is the
-      price, it is permanent for the life of the worker process, and it is not
-      reversed on the way out -- reversing it would hand the route back while the
-      caller still holds the descriptors.  A worker that segfaults after its
-      first engine output handoff will produce no core file; use the journal and
-      a live debugger instead of looking for one.
+    * **THIS PROCESS BECOMES UNDEBUGGABLE FROM HERE ON, NOT MERELY UNDUMPABLE.**
+      That is the price, it is permanent for the life of the worker process, and
+      it is not reversed on the way out -- reversing it would hand the route back
+      while the caller still holds the descriptors.
+
+      An earlier revision of this docstring said only that core dumps stop and
+      told the operator to "use the journal and a live debugger instead".  The
+      second half of that was WRONG and is the reason this paragraph is now
+      specific: the seal is a ``ptrace_may_access`` refusal, so it takes the live
+      debugger with it.  MEASURED at euid 1000 in this repository's Linux test
+      container (``6.12.76`` aarch64), same process, unsealed then sealed, from a
+      same-UID sibling holding no ``CAP_SYS_PTRACE``:
+
+          PTRACE_SEIZE          rc=0        ->  rc=-1 EPERM
+          open /proc/<pid>/mem  OK          ->  EACCES
+          open /proc/<pid>/fd/N OK          ->  EACCES
+
+      ``gdb -p``, ``py-spy dump``, ``eu-stack``, ``gcore`` and every other
+      attach-based tool go through exactly those calls, so all of them are
+      refused.  The production unit runs ``User=patina`` with
+      ``NoNewPrivileges=true`` and grants no ``CAP_SYS_PTRACE``, so nothing there
+      can bypass it -- not even the operator's own shell as ``patina``.
+
+      WHAT AN OPERATOR CAN ACTUALLY DO, in order of cost:
+
+        1. Read the journal.  Every refusal on this path is a typed
+           ``AdapterError`` with a ``REFINE_*`` code and a bounded diagnostic;
+           that is the designed post-mortem surface and it is unaffected.
+        2. Attach BEFORE the first engine output handoff.  The seal is dropped by
+           the first call to :func:`_open_output_freeze_vault` -- the only caller
+           of this function -- and that is reached only from
+           :func:`_receive_native_outputs` with a non-empty ledger, so a run with
+           ``outputs=None`` never seals at all.  Whether an ALREADY-ATTACHED
+           tracer survives the flag drop is REASONED, NOT MEASURED here:
+           ``__ptrace_may_access`` is consulted at attach, and nothing in this
+           module detaches anything.
+        3. Reproduce off the production unit.  Running the same operation in a
+           process that is allowed to hold ``CAP_SYS_PTRACE`` (or as root) leaves
+           the route open by design -- the documented residual below -- so a
+           deliberate debugging host can still be dumped and attached.
+
+      There is no fourth option, and in particular there is no "raise dumpable
+      again for a moment": doing so re-opens the descriptor-theft route while the
+      caller still holds the frozen copies, which is the whole thing this
+      function exists to prevent.
 
     Failure is fatal.  A process that could not be sealed is one where
     ``NATIVE_ENGINE_OUTPUT_BYTES_FROZEN_AGAINST_SURVIVING_DESCRIPTORS`` would be
@@ -2443,9 +2542,28 @@ def _frozen_output_copy(
 
     ``O_TMPFILE`` creates an inode with no directory entry; ``O_EXCL`` makes it
     permanently un-linkable, so not even this process can give it a name later.
-    Nothing is transported, nothing is inherited (``O_CLOEXEC`` plus an explicit
-    ``set_inheritable``), and the file is created after the child is already
-    running, so no descendant can ever have held a descriptor to it.
+    Nothing is transported over SCM_RIGHTS, nothing is inherited across an
+    ``execve``, and the file is created after the child is already running, so no
+    descendant can ever have held a descriptor to it.
+
+    HOW "not inherited" IS ACTUALLY DELIVERED, stated exactly because an earlier
+    revision of this docstring credited it to the wrong thing.  The guarantee is
+    CPython's: ``os.open`` sets ``FD_CLOEXEC`` on every descriptor it returns
+    regardless of the flags it was passed (PEP 446).  The ``O_CLOEXEC`` below and
+    the ``set_inheritable(..., False)`` that follows it are RESTATEMENTS of that
+    -- deliberate, because the property must not silently depend on an
+    interpreter detail, but behaviour-preserving on CPython and therefore not
+    individually deletable-detectable: deleting either one, on either descriptor,
+    changes nothing a test can see, and this docstring does not pretend
+    otherwise.  What IS observed, across a real fork+exec with ``close_fds``
+    disabled, is the property itself, by
+    ``test_every_freeze_descriptor_is_non_inheritable_from_the_instant_it_is_opened``,
+    ``test_the_writable_copy_is_not_inherited_while_the_engine_bytes_are_in_it``
+    and
+    ``test_the_descriptor_the_caller_receives_is_not_inherited_across_an_exec``.
+    Flipping either ``set_inheritable`` to ``True`` -- which CLEARS the bit --
+    turns one of those red; so would a creation path that yielded an inheritable
+    descriptor.
 
     Bytes are moved with positional reads and writes: the source's file offset is
     never observed or disturbed, so the lease-side descriptor stays usable for
@@ -5167,10 +5285,15 @@ def run_native_engine_child(
     a workspace lease.  The caller owns the sink and must close it; on success it
     holds one descriptor per requested token, each one a read-only handle on a
     never-named private copy this call took of the engine's output and hashed
-    itself.  Those descriptors are unaffected by the lease purge and unreachable
-    from any name, descriptor, or process outside this one -- see
+    itself.  Those descriptors are unaffected by the lease purge, carry no name
+    anywhere in the filesystem, were never transported or inherited, and cannot
+    be taken out of this process's table by any same-UID actor -- neither through
+    ``/proc/<pid>/fd`` nor through ``pidfd_getfd``, both of which the seal below
+    refuses at their shared ``ptrace_may_access`` gate.  "Unreachable from any
+    process" is therefore a claim about same-UID actors WITHOUT
+    ``CAP_SYS_PTRACE`` and about nothing else; see
     ``NATIVE_ENGINE_OUTPUT_BYTES_FROZEN_AGAINST_SURVIVING_DESCRIPTORS`` for the
-    exact scope and its one residual.  This function closes the sink itself on
+    exact scope and its residual.  This function closes the sink itself on
     every path that raises, INCLUDING a cleanup failure discovered after the
     return value was computed, so an exception never leaves a populated sink
     behind.
@@ -5180,12 +5303,17 @@ def run_native_engine_child(
 
     TWO SIDE EFFECTS OF ``outputs`` A CALLER MUST KNOW ABOUT.  First, the first
     receipt drops this process's ``dumpable`` flag permanently
-    (:func:`_seal_process_against_procfs_descriptor_theft`), which is what makes
-    the returned descriptors unreachable through ``/proc/<pid>/fd`` and which
-    **disables core dumps for the worker from that point on**.  Second, minting
-    the copies needs the whole output payload free on the workspace filesystem in
+    (:func:`_seal_process_against_procfs_descriptor_theft`), which is what closes
+    both descriptor-theft routes and which **makes the worker undebuggable from
+    that point on**: no core dump, and -- because the same flag gates
+    ``ptrace_may_access`` -- no ``gdb -p``, no ``py-spy``, no
+    ``/proc/<pid>/mem``, for anyone without ``CAP_SYS_PTRACE``.  That function's
+    docstring lists what an operator can still do instead.  Second, minting the
+    copies needs the whole output payload free on the workspace filesystem in
     addition to the lease -- 8 GiB at the aggregate ceiling; a filesystem that
-    cannot supply it fails with ``REFINE_ENGINE_NO_SPACE``.
+    cannot supply it fails with ``REFINE_ENGINE_NO_SPACE``, which
+    ``refine_runner`` classifies as RETRYABLE (``RefineFailureCode
+    .ENGINE_NO_SPACE``): the operator frees disk and the same task runs again.
 
     What ``outputs`` does NOT give the caller is a verified alignment.  See
     ``NATIVE_ENGINE_OUTPUT_ALIGNMENT_VERIFIED_BY_PARENT``.

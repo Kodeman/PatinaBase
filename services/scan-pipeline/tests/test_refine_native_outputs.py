@@ -134,6 +134,65 @@ _PROCFS_FD_PRE_OPENER = (
 )
 
 
+#: ``SYS_pidfd_getfd``.  Linux allocated it in the unified range, so it is 438 on
+#: every architecture and CPython exposes no binding for it.
+_SYS_PIDFD_GETFD = 438
+
+#: The SAME theft with NO NAME AND NO PROCFS.  ``pidfd_open(2)`` names a process
+#: by pid, ``pidfd_getfd(2)`` lifts one of its descriptors straight out of its
+#: table, and the only gate is ``ptrace_may_access(..., ATTACH_REALCREDS)``.
+#: This is the route the module docstring used to leave out when it called
+#: ``/proc/<pid>/fd`` "exactly one route".  Docker's DEFAULT seccomp profile
+#: answers ``EPERM`` for ``pidfd_getfd`` regardless of the target, which is why
+#: it stays invisible in an ordinary container -- and why the test that uses this
+#: refuses to conclude anything unless its own positive control succeeds first.
+#:
+#: It reports the THEFT and the write separately, on purpose.  This channel hands
+#: its caller a READ-ONLY descriptor, so ``pidfd_getfd`` yields a read-only open
+#: file description and the rewrite fails with ``EBADF`` even when the theft
+#: succeeded.  An assertion on "the attacker could not write" would therefore be
+#: green against a completely unsealed process -- measured: with the seal removed
+#: this test still passed until the probe was split.  What has to be asserted is
+#: that the descriptor cannot be TAKEN.
+_PIDFD_GETFD_THIEF = (
+    "import ctypes,os,sys\n"
+    "pid=int(sys.argv[1]); target=int(sys.argv[2])\n"
+    "try:\n"
+    "    pidfd=os.pidfd_open(pid, 0)\n"
+    "except Exception as exc:\n"
+    "    print('NOPIDFD', repr(exc)); sys.exit(3)\n"
+    "libc=ctypes.CDLL(None, use_errno=True)\n"
+    "libc.syscall.restype=ctypes.c_long\n"
+    "ctypes.set_errno(0)\n"
+    "stolen=libc.syscall(ctypes.c_long(%d), ctypes.c_int(pidfd),"
+    " ctypes.c_int(target), ctypes.c_uint(0))\n"
+    "if stolen < 0:\n"
+    "    print('REFUSED', ctypes.get_errno()); sys.exit(4)\n"
+    "print('GOT')\n"
+    "try:\n"
+    "    os.pwrite(int(stolen), bytes.fromhex(sys.argv[3]), 0)\n"
+    "except OSError as exc:\n"
+    "    print('NOWRITE', exc.errno); sys.exit(0)\n"
+    "print('STOLEN')\n"
+) % _SYS_PIDFD_GETFD
+
+
+def _steal_through_pidfd(pid: int, descriptor: int, payload: bytes):
+    """Try to lift one descriptor out of ``pid`` with pidfd_open + pidfd_getfd."""
+
+    return subprocess.run(
+        [
+            sys.executable,
+            "-c",
+            _PIDFD_GETFD_THIEF,
+            str(pid),
+            str(descriptor),
+            payload.hex(),
+        ],
+        capture_output=True,
+    )
+
+
 def _steal_through_procfs(pid: int, descriptor: int, payload: bytes):
     """Run the thief against one descriptor of ``pid`` and report the outcome."""
 
@@ -1572,6 +1631,543 @@ def test_a_creation_failure_that_is_not_a_full_filesystem_still_names_o_tmpfile(
         native_process._release_output_freeze_vault(leased.lease, vault, name)
 
 
+# ---------------------------------------------------------------------------
+# The deadline discipline of the freeze copy
+# ---------------------------------------------------------------------------
+
+
+class _DeadlineLedger:
+    """A ``remaining_seconds`` that records how far the copy had got at each call.
+
+    ``_frozen_output_copy`` promises "Every chunk re-checks the one carried
+    deadline, so a copy that cannot finish in the stage's remaining time fails on
+    time instead of stalling."  That promise has four call sites -- on entry,
+    once per chunk, once per ``pwrite``, and once after the loop -- and before
+    these tests existed, deleting any one of them, or all four together, left the
+    whole suite green.
+
+    A bare call COUNT cannot tell the sites apart, because deleting the per-chunk
+    site and deleting the per-``pwrite`` site remove the same number of calls from
+    a copy whose writes are never short.  Recording ``(preads, pwrites)`` at each
+    check identifies each site individually: the per-chunk check is the one that
+    happens with equal counts, the per-``pwrite`` check the one with one more
+    read than write.
+    """
+
+    def __init__(self, *, raise_on: int | None = None) -> None:
+        self._raise_on = raise_on
+        self.calls: list[tuple[int, int]] = []
+        self.reads = 0
+        self.writes = 0
+
+    def remaining_seconds(self) -> float:
+        self.calls.append((self.reads, self.writes))
+        if self._raise_on is not None and len(self.calls) == self._raise_on:
+            raise AdapterError(
+                "refine stage engine deadline is exhausted",
+                "REFINE_ENGINE_TIMEOUT",
+            )
+        return 30.0
+
+
+def _instrumented_copy(monkeypatch, *, chunk_bytes: int, write_bytes: int | None = None):
+    """Shrink the copy chunk and count the syscalls, returning the ledger factory.
+
+    ``write_bytes`` caps what one ``pwrite`` accepts, which is how a chunk is made
+    to need more than one write without any error being involved -- a short write
+    is ordinary POSIX, not a fault.
+    """
+
+    monkeypatch.setattr(native_process, "_OUTPUT_FREEZE_COPY_BYTES", chunk_bytes)
+    real_pread = native_process.os.pread
+    real_pwrite = native_process.os.pwrite
+    ledgers: list[_DeadlineLedger] = []
+
+    def make(*, raise_on: int | None = None) -> _DeadlineLedger:
+        ledger = _DeadlineLedger(raise_on=raise_on)
+        ledgers.append(ledger)
+        return ledger
+
+    def counted_pread(fd, length, offset):
+        data = real_pread(fd, length, offset)
+        for ledger in ledgers:
+            ledger.reads += 1
+        return data
+
+    def counted_pwrite(fd, data, offset):
+        capped = data if write_bytes is None else data[:write_bytes]
+        written = real_pwrite(fd, capped, offset)
+        for ledger in ledgers:
+            ledger.writes += 1
+        return written
+
+    monkeypatch.setattr(native_process.os, "pread", counted_pread)
+    monkeypatch.setattr(native_process.os, "pwrite", counted_pwrite)
+    return make
+
+
+@requires_output_freeze
+def test_the_freeze_copy_checks_the_deadline_at_every_promised_site(
+    leased,
+    tmp_path,
+    monkeypatch,
+):
+    """The four call sites, each identified by where the copy had got to.
+
+    Deleting the entry check drops the leading ``(0, 0)``.  Deleting the
+    per-chunk check drops every later ``(n, n)``.  Deleting the per-``pwrite``
+    check drops every ``(n + 1, n)``.  Deleting the post-loop check drops the
+    trailing ``(4, 4)``.  Deleting all four leaves an empty list.  No mutation of
+    any one of them leaves this assertion intact.
+    """
+
+    payload = b"0123456789abcdef"  # four 4-byte chunks, one pwrite each
+    whole = tmp_path / "whole"
+    whole.write_bytes(payload)
+    source = os.open(whole, os.O_RDONLY)
+    make = _instrumented_copy(monkeypatch, chunk_bytes=4)
+    ledger = make()
+    name, vault = native_process._open_output_freeze_vault(leased.lease)
+    frozen = None
+    try:
+        frozen, _identity = native_process._frozen_output_copy(
+            source,
+            token="adapter-v2.json",
+            vault_descriptor=vault,
+            expected_size=len(payload),
+            remaining_seconds=ledger.remaining_seconds,
+        )
+
+        assert os.pread(frozen, len(payload), 0) == payload
+        assert ledger.calls == [
+            (0, 0),  # entry, before the anonymous file exists
+            (0, 0),  # chunk 1
+            (1, 0),  # its pwrite
+            (1, 1),  # chunk 2
+            (2, 1),
+            (2, 2),  # chunk 3
+            (3, 2),
+            (3, 3),  # chunk 4
+            (4, 3),
+            (4, 4),  # after the loop
+        ]
+    finally:
+        if frozen is not None:
+            os.close(frozen)
+        os.close(source)
+        native_process._release_output_freeze_vault(leased.lease, vault, name)
+
+
+@requires_output_freeze
+def test_an_expired_deadline_refuses_before_the_copy_is_even_created(
+    leased,
+    tmp_path,
+    monkeypatch,
+):
+    """The entry check, isolated by an effect rather than by a call count.
+
+    A stage with no time left must not allocate an anonymous inode it will never
+    fill.  Deleting the entry check makes the ``O_TMPFILE`` open happen first,
+    which this observes directly.
+    """
+
+    payload = b"x" * 64
+    whole = tmp_path / "whole"
+    whole.write_bytes(payload)
+    source = os.open(whole, os.O_RDONLY)
+    name, vault = native_process._open_output_freeze_vault(leased.lease)
+    anonymous_opens: list[int] = []
+    real_open = native_process.os.open
+
+    def spy(path, flags, *args, **kwargs):
+        if flags & getattr(os, "O_TMPFILE", 0) == getattr(os, "O_TMPFILE", 0):
+            anonymous_opens.append(flags)
+        return real_open(path, flags, *args, **kwargs)
+
+    monkeypatch.setattr(native_process.os, "open", spy)
+    ledger = _DeadlineLedger(raise_on=1)
+    try:
+        with pytest.raises(AdapterError) as raised:
+            native_process._frozen_output_copy(
+                source,
+                token="adapter-v2.json",
+                vault_descriptor=vault,
+                expected_size=len(payload),
+                remaining_seconds=ledger.remaining_seconds,
+            )
+
+        assert raised.value.code == "REFINE_ENGINE_TIMEOUT"
+        assert anonymous_opens == []
+    finally:
+        monkeypatch.undo()
+        os.close(source)
+        native_process._release_output_freeze_vault(leased.lease, vault, name)
+
+
+@requires_output_freeze
+def test_a_deadline_that_expires_mid_copy_stops_between_chunks(
+    leased,
+    tmp_path,
+    monkeypatch,
+):
+    """The per-chunk check, isolated by how much had been written when it fired.
+
+    The ledger raises on call 4, which with 4-byte chunks and full writes is the
+    start of chunk 2 -- exactly one chunk written.  Delete the per-chunk check and
+    call 4 becomes the third ``pwrite``'s check, so two chunks are already
+    written when it fires and the count below is wrong.
+    """
+
+    payload = b"0123456789abcdef"
+    whole = tmp_path / "whole"
+    whole.write_bytes(payload)
+    source = os.open(whole, os.O_RDONLY)
+    make = _instrumented_copy(monkeypatch, chunk_bytes=4)
+    ledger = make(raise_on=4)
+    name, vault = native_process._open_output_freeze_vault(leased.lease)
+    try:
+        with pytest.raises(AdapterError) as raised:
+            native_process._frozen_output_copy(
+                source,
+                token="adapter-v2.json",
+                vault_descriptor=vault,
+                expected_size=len(payload),
+                remaining_seconds=ledger.remaining_seconds,
+            )
+
+        assert raised.value.code == "REFINE_ENGINE_TIMEOUT"
+        assert (ledger.reads, ledger.writes) == (1, 1)
+        assert ledger.calls[-1] == (1, 1)
+    finally:
+        os.close(source)
+        native_process._release_output_freeze_vault(leased.lease, vault, name)
+
+
+@requires_output_freeze
+def test_a_deadline_that_expires_between_short_writes_of_one_chunk_stops_there(
+    leased,
+    tmp_path,
+    monkeypatch,
+):
+    """The per-``pwrite`` check, on the only shape where it can be the sole killer.
+
+    A short ``pwrite`` is ordinary POSIX, not a fault, and a chunk that needs four
+    of them spends the whole time inside ONE iteration of the outer loop.  With
+    only a per-chunk check the copy would run that inner loop to completion with
+    no deadline consulted at all.  One 4-byte chunk written one byte at a time
+    gives call sites: entry, chunk 1, then one per write.  Raising on call 4 is
+    the third write's check -- two bytes in.  Delete the per-``pwrite`` check and
+    there are only three calls in the whole copy, so nothing raises and this goes
+    red on the missing exception rather than on a count.
+    """
+
+    payload = b"abcd"
+    whole = tmp_path / "whole"
+    whole.write_bytes(payload)
+    source = os.open(whole, os.O_RDONLY)
+    make = _instrumented_copy(monkeypatch, chunk_bytes=4, write_bytes=1)
+    ledger = make(raise_on=4)
+    name, vault = native_process._open_output_freeze_vault(leased.lease)
+    try:
+        with pytest.raises(AdapterError) as raised:
+            native_process._frozen_output_copy(
+                source,
+                token="adapter-v2.json",
+                vault_descriptor=vault,
+                expected_size=len(payload),
+                remaining_seconds=ledger.remaining_seconds,
+            )
+
+        assert raised.value.code == "REFINE_ENGINE_TIMEOUT"
+        assert ledger.calls == [(0, 0), (0, 0), (1, 0), (1, 1)]
+    finally:
+        os.close(source)
+        native_process._release_output_freeze_vault(leased.lease, vault, name)
+
+
+@requires_output_freeze
+def test_a_deadline_that_expires_after_the_last_byte_still_refuses_the_copy(
+    leased,
+    tmp_path,
+    monkeypatch,
+):
+    """The post-loop check: a copy finished out of time is not a copy in time.
+
+    The bytes are all there, but the stage's budget is gone, and handing the
+    caller a descriptor at that point invites publication after the deadline.
+    Deleting the post-loop check returns a descriptor instead of raising.
+    """
+
+    payload = b"0123456789abcdef"
+    whole = tmp_path / "whole"
+    whole.write_bytes(payload)
+    source = os.open(whole, os.O_RDONLY)
+    make = _instrumented_copy(monkeypatch, chunk_bytes=4)
+    ledger = make(raise_on=10)
+    name, vault = native_process._open_output_freeze_vault(leased.lease)
+    try:
+        with pytest.raises(AdapterError) as raised:
+            native_process._frozen_output_copy(
+                source,
+                token="adapter-v2.json",
+                vault_descriptor=vault,
+                expected_size=len(payload),
+                remaining_seconds=ledger.remaining_seconds,
+            )
+
+        assert raised.value.code == "REFINE_ENGINE_TIMEOUT"
+        assert (ledger.reads, ledger.writes) == (4, 4)
+    finally:
+        os.close(source)
+        native_process._release_output_freeze_vault(leased.lease, vault, name)
+
+
+# ---------------------------------------------------------------------------
+# "never inherited", observed across a real exec
+# ---------------------------------------------------------------------------
+
+#: Reports whether one descriptor SURVIVED an ``execve``.  Identity is checked,
+#: not mere openness: the number could have been closed at exec and then handed
+#: to something the interpreter opened on its way up, which would read as a
+#: false ``INHERITED``.
+_FD_INHERITANCE_PROBE = (
+    "import os,sys\n"
+    "fd=int(sys.argv[1]); want=(int(sys.argv[2]), int(sys.argv[3]))\n"
+    "try:\n"
+    "    info=os.fstat(fd)\n"
+    "except OSError:\n"
+    "    print('CLOSED')\n"
+    "else:\n"
+    "    print('INHERITED' if (info.st_dev, info.st_ino) == want else 'OTHER')\n"
+)
+
+
+def _survives_exec(descriptor: int) -> bool:
+    """Did ``descriptor`` cross a fork+exec that deliberately closed nothing?
+
+    ``close_fds=False`` is the whole point: with it, the ONLY thing that stops a
+    descriptor reaching the exec'd image is its own ``FD_CLOEXEC`` bit -- which
+    is exactly what ``O_CLOEXEC`` and ``set_inheritable(..., False)`` set and
+    what ``set_inheritable(..., True)`` clears.  ``os.get_inheritable`` would
+    read the same bit without proving it has the effect claimed for it.
+    """
+
+    info = os.fstat(descriptor)
+    completed = subprocess.run(
+        [
+            sys.executable,
+            "-c",
+            _FD_INHERITANCE_PROBE,
+            str(descriptor),
+            str(info.st_dev),
+            str(info.st_ino),
+        ],
+        capture_output=True,
+        close_fds=False,
+    )
+    assert completed.returncode == 0, completed.stderr.decode("utf-8", "replace")
+    verdict = completed.stdout.decode("utf-8").strip()
+    assert verdict in ("CLOSED", "INHERITED", "OTHER"), verdict
+    return verdict == "INHERITED"
+
+
+def _require_observable_inheritance(tmp_path) -> None:
+    """Positive control: on this host an inheritable descriptor really does cross.
+
+    Without it every assertion below would pass on a host where nothing is ever
+    inherited, which is a green that means nothing.
+    """
+
+    witness = tmp_path / "inheritance-control"
+    witness.write_bytes(b"control\n")
+    control = os.open(witness, os.O_RDONLY)
+    try:
+        os.set_inheritable(control, True)
+        if not _survives_exec(control):
+            pytest.skip(
+                "this host does not let an explicitly inheritable descriptor "
+                "cross fork+exec, so nothing here could show that the freeze "
+                "guards are what stop one"
+            )
+    finally:
+        os.close(control)
+
+
+@requires_output_freeze
+def test_every_freeze_descriptor_is_non_inheritable_from_the_instant_it_is_opened(
+    leased,
+    tmp_path,
+    monkeypatch,
+):
+    """No window: each descriptor is un-inheritable before the next statement runs.
+
+    The probe is hooked onto ``os.open`` itself and fires on the returned
+    descriptor before ``_frozen_output_copy`` or ``_read_only_freeze_alias`` has
+    executed another line, so what it reads is what the ``open`` alone produced.
+
+    WHAT THIS DOES NOT DO, stated because the opposite was assumed once already:
+    it does not give the two ``O_CLOEXEC`` flags a killer, and nothing can.
+    CPython's ``os.open`` sets ``FD_CLOEXEC`` on every descriptor it returns
+    whatever flags it was given (PEP 446) -- measured, not argued: on this
+    interpreter ``os.open(path, os.O_RDWR)`` reports ``get_inheritable() ==
+    False``.  Deleting either ``O_CLOEXEC``, or either
+    ``set_inheritable(..., False)``, is therefore behaviour-preserving here, and
+    a test that went red on one of those would be reporting its own hook rather
+    than the descriptor.  What this pins is the PROPERTY: a future creation path
+    that yielded an inheritable descriptor -- ``os.dup``, ``os.pipe``, a raw
+    ``ctypes`` ``open(2)``, an interpreter without PEP 446 -- fails here.
+    """
+
+    _require_observable_inheritance(tmp_path)
+    payload = b"freeze me\n"
+    whole = tmp_path / "whole"
+    whole.write_bytes(payload)
+    source = os.open(whole, os.O_RDONLY)
+    name, vault = native_process._open_output_freeze_vault(leased.lease)
+    real_open = native_process.os.open
+    observed: list[bool] = []
+    probing_depth = [0]
+
+    def probing(*args, **kwargs):
+        descriptor = real_open(*args, **kwargs)
+        # ``_survives_exec`` spawns, and a spawn is entitled to open things; a
+        # re-entrant probe would measure the probe.
+        if probing_depth[0] == 0:
+            probing_depth[0] += 1
+            try:
+                observed.append(_survives_exec(descriptor))
+            finally:
+                probing_depth[0] -= 1
+        return descriptor
+
+    frozen = None
+    try:
+        monkeypatch.setattr(native_process.os, "open", probing)
+        frozen, _identity = native_process._frozen_output_copy(
+            source,
+            token="adapter-v2.json",
+            vault_descriptor=vault,
+            expected_size=len(payload),
+            remaining_seconds=_deadline(30.0).remaining_seconds,
+        )
+        monkeypatch.undo()
+
+        # The anonymous copy, then its read-only alias.  Neither may be
+        # inheritable at the instant it exists.
+        assert len(observed) == 2
+        assert observed == [False, False]
+    finally:
+        monkeypatch.undo()
+        if frozen is not None:
+            os.close(frozen)
+        os.close(source)
+        native_process._release_output_freeze_vault(leased.lease, vault, name)
+
+
+@requires_output_freeze
+def test_the_writable_copy_is_not_inherited_while_the_engine_bytes_are_in_it(
+    leased,
+    tmp_path,
+    monkeypatch,
+):
+    """The writable descriptor is the dangerous one, and it is never handed out.
+
+    It exists only between the ``O_TMPFILE`` open and the alias, and it is the
+    one handle that could REWRITE a frozen copy.  A process that inherited it
+    would defeat the whole channel.  This probes it at the last moment it is
+    alive -- when ``_read_only_freeze_alias`` is called with it -- so flipping
+    ``set_inheritable(writable, False)`` to ``True`` turns this red.
+    """
+
+    _require_observable_inheritance(tmp_path)
+    payload = b"freeze me\n"
+    whole = tmp_path / "whole"
+    whole.write_bytes(payload)
+    source = os.open(whole, os.O_RDONLY)
+    name, vault = native_process._open_output_freeze_vault(leased.lease)
+    real_alias = native_process._read_only_freeze_alias
+    observed: list[bool] = []
+
+    def probing(writable_descriptor, *, token):
+        observed.append(_survives_exec(writable_descriptor))
+        return real_alias(writable_descriptor, token=token)
+
+    frozen = None
+    try:
+        monkeypatch.setattr(native_process, "_read_only_freeze_alias", probing)
+        frozen, _identity = native_process._frozen_output_copy(
+            source,
+            token="adapter-v2.json",
+            vault_descriptor=vault,
+            expected_size=len(payload),
+            remaining_seconds=_deadline(30.0).remaining_seconds,
+        )
+
+        assert observed == [False]
+    finally:
+        monkeypatch.undo()
+        if frozen is not None:
+            os.close(frozen)
+        os.close(source)
+        native_process._release_output_freeze_vault(leased.lease, vault, name)
+
+
+@requires_output_freeze
+def test_the_descriptor_the_caller_receives_is_not_inherited_across_an_exec(
+    tmp_path,
+):
+    """The end-to-end statement, on the object the caller is actually handed.
+
+    ``run_native_engine_child``'s docstring says the returned descriptors are
+    "unreachable from any name, descriptor, or process outside this one"; the
+    freeze posture comment says they were "never transported over SCM_RIGHTS and
+    never inherited".  This is the "never inherited" half, measured on the sink's
+    own descriptor after a real boundary crossing.  Flip
+    ``set_inheritable(readable, False)`` to ``True`` -- which CLEARS the
+    ``O_CLOEXEC`` the alias open set -- and it goes red.
+    """
+
+    _require_observable_inheritance(tmp_path)
+    token = "adapter-v2.json"
+    payload = _payload(token)
+    container = tmp_path / "boundary"
+    container.mkdir(mode=0o700)
+    sink = NativeEngineOutputs((token,))
+    run_native_engine_child(
+        _entrypoint("_write_engine_outputs"),
+        {"outputs": {token: payload.hex()}},
+        deadline=_deadline(30.0),
+        workspace_parent_directory=str(container),
+        outputs=sink,
+    )
+    with sink:
+        frozen = sink.descriptor(token)
+
+        assert _survives_exec(frozen) is False
+        assert os.pread(frozen, len(payload), 0) == payload
+
+
+def test_the_interpreter_is_what_makes_a_fresh_descriptor_non_inheritable():
+    """The premise the three tests above rest on, pinned so it cannot rot silently.
+
+    ``_frozen_output_copy``'s docstring states that its ``O_CLOEXEC`` flags and
+    its ``set_inheritable(..., False)`` calls are RESTATEMENTS of CPython's own
+    behaviour rather than the thing delivering it, and that no test can therefore
+    make deleting one of them red.  That is only honest while the premise holds.
+    If an interpreter ever returns an inheritable descriptor from ``os.open``,
+    those guards stop being redundant, this goes red, and the docstring above has
+    to be rewritten rather than quietly becoming false.
+    """
+
+    probe = None
+    try:
+        probe = os.open(__file__, os.O_RDONLY)  # deliberately no O_CLOEXEC
+        assert os.get_inheritable(probe) is False
+    finally:
+        if probe is not None:
+            os.close(probe)
+
+
 def test_the_headroom_contract_is_written_down_where_the_copies_are_minted():
     """The transient disk cost is a precondition no reader could infer.
 
@@ -1981,6 +2577,91 @@ def test_the_sealed_boundary_refuses_a_same_uid_procfs_reopen(tmp_path):
 
 
 @requires_output_freeze
+def test_the_sealed_boundary_refuses_a_pidfd_getfd_theft(tmp_path):
+    """The route that has no name and never touches procfs.
+
+    ``pidfd_open(2)`` + ``pidfd_getfd(2)`` lifts a descriptor straight out of
+    another process's table.  There is no path to open, no ``/proc`` entry
+    involved, and the module docstring used to enumerate the procfs reopen as
+    "exactly one route", which under-counted.  The property still holds, because
+    the real gate is ``ptrace_may_access`` and BOTH routes ask it -- but a reader
+    reasoning from the old enumeration would have concluded that hiding procfs
+    was sufficient, which it is not.
+
+    MEASURED, euid 1000, kernel ``6.12.76`` aarch64, seccomp UNCONFINED: against
+    an unsealed holder ``pidfd_getfd`` returned a descriptor (rc >= 0), and
+    against a descriptor the holder had open ``O_RDWR`` the attacker wrote
+    through it; sealed, the syscall itself returns ``EPERM``.
+
+    WHAT IS ASSERTED IS THE THEFT, NOT THE WRITE, and that distinction is not
+    cosmetic.  This channel hands out read-only descriptors, so a successful
+    ``pidfd_getfd`` on one still cannot rewrite it -- an assertion on "the bytes
+    did not change" is green against a process with no seal at all.  It was:
+    removing :func:`_seal_process_against_procfs_descriptor_theft` entirely left
+    an earlier draft of this test passing.  Only ``REFUSED`` distinguishes.
+
+    The POSITIVE CONTROL is what makes a green here mean anything.  Under
+    Docker's DEFAULT seccomp profile ``pidfd_getfd`` is refused with ``EPERM``
+    whatever the target's ``dumpable`` flag says, so without a control this test
+    would pass for the wrong reason in exactly the container the gate runs in.
+    Where the control cannot be built this SKIPS, naming what stopped it, rather
+    than reporting a proof it did not make.
+    """
+
+    if sys.platform != "linux":
+        pytest.skip("pidfd_open/pidfd_getfd exist only on Linux")
+    if not hasattr(os, "pidfd_open"):
+        pytest.skip("this interpreter has no os.pidfd_open")
+    if _has_cap_sys_ptrace():
+        pytest.skip(
+            "this process's children would inherit CAP_SYS_PTRACE, which the "
+            "documented residual explicitly excludes, so the seal is not "
+            "claimed to bite here"
+        )
+
+    token = "adapter-v2.json"
+    payload = _payload(token)
+    container = tmp_path / "boundary"
+    container.mkdir(mode=0o700)
+    sink = NativeEngineOutputs((token,))
+    run_native_engine_child(
+        _entrypoint("_write_engine_outputs"),
+        {"outputs": {token: payload.hex()}},
+        deadline=_deadline(30.0),
+        workspace_parent_directory=str(container),
+        outputs=sink,
+    )
+    with sink:
+        frozen = sink.descriptor(token)
+
+        # Control: the very same theft, against the very same descriptor, with
+        # the seal lifted for exactly the length of the attempt.
+        with _temporarily_dumpable():
+            rehearsal = _steal_through_pidfd(os.getpid(), frozen, b"")
+        if b"GOT" not in rehearsal.stdout:
+            pytest.skip(
+                "this host refuses pidfd_getfd even against a dumpable "
+                "same-UID target -- Docker's default seccomp profile does "
+                "exactly this -- so nothing here could show the seal is what "
+                "blocks it: "
+                + rehearsal.stdout.decode("utf-8", "replace").strip()[-200:]
+                + rehearsal.stderr.decode("utf-8", "replace")[-200:]
+            )
+
+        # The real attempt, against the process exactly as the boundary left it.
+        tampered = b"T" * len(payload)
+        attacker = _steal_through_pidfd(os.getpid(), frozen, tampered)
+
+        assert b"GOT" not in attacker.stdout, attacker.stdout
+        assert b"STOLEN" not in attacker.stdout
+        assert attacker.stdout.startswith(b"REFUSED"), attacker.stdout
+        assert attacker.returncode == 4
+        frozen_bytes = os.pread(frozen, len(payload), 0)
+        assert frozen_bytes == payload
+        assert hashlib.sha256(frozen_bytes).hexdigest() == sink.received[token].sha256
+
+
+@requires_output_freeze
 def test_a_procfs_directory_opened_before_the_seal_still_cannot_be_used(tmp_path):
     """The seal must not be a race an attacker wins by starting early.
 
@@ -2059,6 +2740,31 @@ def test_a_procfs_directory_opened_before_the_seal_still_cannot_be_used(tmp_path
         assert os.pread(holder, len(payload), 0) == payload
     finally:
         os.close(holder)
+
+
+def test_the_module_names_the_gate_rather_than_only_one_route_to_it():
+    """Docstring honesty: the enumeration that was wrong, pinned so it stays right.
+
+    ``/proc/<pid>/fd`` was named as "exactly one route".  ``pidfd_getfd`` is a
+    second, with no name and no procfs, and the thing that actually closes both
+    is ``ptrace_may_access``.  A reader who took the old enumeration at face
+    value would have concluded that a procfs-free environment needed no seal.
+    """
+
+    module_doc = native_process.__doc__
+    assert "pidfd_getfd" in module_doc
+    assert "ptrace_may_access" in module_doc
+    assert "exactly one route" not in module_doc
+
+    seal_doc = native_process._seal_process_against_procfs_descriptor_theft.__doc__
+    # The advice that was impossible: a live debugger is exactly what the seal
+    # removes, so the docstring has to say so and say what is left instead.
+    assert "gdb" in seal_doc
+    assert "PTRACE_SEIZE" in seal_doc
+    assert "/proc/<pid>/mem" in seal_doc
+    assert "WHAT AN OPERATOR CAN ACTUALLY DO" in seal_doc
+    # The tail of the old sentence, which appears nowhere in the correction.
+    assert "instead of looking for one" not in seal_doc
 
 
 @requires_output_freeze
@@ -2635,6 +3341,8 @@ def test_the_freeze_posture_flag_says_what_is_and_is_not_closed():
     # The residual has to be stated where the flag is, not somewhere else.
     assert "ptrace_may_access" in preamble
     assert "/proc/<pid>/fd" in preamble
+    # And BOTH routes to that gate, not only the one with a name in it.
+    assert "pidfd_getfd" in preamble
     # And the alignment claim stays exactly where it was.
     assert NATIVE_ENGINE_OUTPUT_ALIGNMENT_VERIFIED_BY_PARENT is False
 
