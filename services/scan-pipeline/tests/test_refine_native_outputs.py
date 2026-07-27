@@ -2759,12 +2759,24 @@ def test_the_module_names_the_gate_rather_than_only_one_route_to_it():
     seal_doc = native_process._seal_process_against_procfs_descriptor_theft.__doc__
     # The advice that was impossible: a live debugger is exactly what the seal
     # removes, so the docstring has to say so and say what is left instead.
+    # MEASURED at euid 1000, this repository's Linux container (6.12.76
+    # aarch64), same process, unsealed -> sealed, same-UID sibling with no
+    # CAP_SYS_PTRACE: PTRACE_SEIZE rc=0 -> EPERM; /proc/<pid>/mem OK -> EACCES.
     assert "gdb" in seal_doc
     assert "PTRACE_SEIZE" in seal_doc
     assert "/proc/<pid>/mem" in seal_doc
     assert "WHAT AN OPERATOR CAN ACTUALLY DO" in seal_doc
     # The tail of the old sentence, which appears nowhere in the correction.
     assert "instead of looking for one" not in seal_doc
+
+    # The caller-facing claim, which is the one an integrator reads.  "Core
+    # dumps are disabled" understates it and "unreachable from any process"
+    # overstates it; both are corrected and both have to stay corrected.
+    entry_doc = native_process.run_native_engine_child.__doc__
+    assert "undebuggable" in entry_doc
+    assert "pidfd_getfd" in entry_doc
+    assert "CAP_SYS_PTRACE" in entry_doc
+    assert "RETRYABLE" in entry_doc
 
 
 @requires_output_freeze
