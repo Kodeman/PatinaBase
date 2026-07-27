@@ -10,9 +10,9 @@ Read it with, not instead of, the canonical sources below.
    runs (rulings → numbered plan → hard gates). P1 is COMPLETE.
 2. `docs/design/field-capture/field-capture-p2-package.md` — the ACTIVE plan.
    Part B carries Kody's R114 rulings inline; Part E is the numbered plan.
-3. `docs/design/the-document/DECISIONS.md` — entries **R108–R115 and I84–I97**
-   are this program's full decision history. R115 is the latest gate; I97 is
-   the latest implementation record.
+3. `docs/design/the-document/DECISIONS.md` — entries **R108–R116 and I84–I97**
+   are this program's full decision history. R115 is the latest owner gate;
+   **R116 closes ordered item 4**; I97 is the latest implementation record.
 4. `docs/design/field-capture/p2-item3-gpu-box-acceptance-2026-07-19.md` — the
    completed real-DeskDev dependency/sandbox receipt (I88).
 5. `docs/design/field-capture/p2-item4-colmap-adapter-spike-2026-07-18.md` —
@@ -241,8 +241,11 @@ Read it with, not instead of, the canonical sources below.
   now fail: a `futimens` mtime forge, a same-UID `/proc/<pid>/fd` reopen, and
   `pidfd_open` + `pidfd_getfd` descriptor theft. Full receipt: **I97**.
 - **Item 4's remaining hard gates begin at the composition, not at the
-  foundations.** Items 1, 2, 3 and 5 are landed and reviewed; item 4's
-  qualified-host evidence exists. What is still open is item 6 — raw pre-BA and
+  foundations.** Items 1, 2, 3 and 5 are landed and reviewed; **item 4 is
+  closed by R116** on its qualified-host evidence, with two scoped exceptions
+  carried forward (escaped-`setsid` containment → item 7; `drain_errors`
+  precedence in isolation → in-repo coverage only).
+  What is still open is item 6 — raw pre-BA and
   refined model snapshot construction, a child-proposed alignment, and
   parent-recomputed Sim3 and pose digests — and then item 7's composition. Only
   after item 6 may a descriptor-safe
@@ -571,34 +574,46 @@ tests, and an independent adversarial review. **Item 6 is where you resume.**
    `execve`, a 13-key closed command environment, per-option argv confinement,
    and a pinned toolchain identity that rejects drift. The single lease-aware
    deadline is carried through every command, helper, and drain thread.
-4. ◐ **EVIDENCE PRODUCED (I97).** The qualified-host run happened and paid for
-   itself immediately: `_parse_linux_process_stat` rejected `pgrp == 0`, which
-   every Linux kernel thread reports (283 of 547 live PIDs on that box), so
-   **every successful native Refine call failed
-   `REFINE_ENGINE_CLEANUP_FAILED`**. Fixed and re-proven on the host — zero parse
-   failures across every live `/proc` row, every `pgrp 0` row confirmed a kernel
-   thread by absent `VmSize` and absent `cmdline`, zero userland. Skips still
-   cannot be converted into acceptance by changing tests.
-
-   **Item 4's other acceptance clauses are now receipted** in
+4. ✅ **CLOSED (R116).** Evidence: I97 plus
    `docs/design/field-capture/p2-item4-qualified-host-acceptance-2026-07-27.md`
-   — a second DeskDev run at commit `77b4ff19` that re-measured all four:
-   subreaper state transition and adopted-grandchild reaping through the shipped
-   helpers; adopted-child reaping and quiescence scoped to a real child group
-   leader (member named when live, quiescent when the leader is dead and alone);
-   the escaped-`setsid` descendant, recorded as a **measured blind spot** (the
-   group scan reports quiescent while a live descendant exists — containment is
-   the frozen private copy, not the scan) rather than as a pass; and cleanup
-   precedence, driven through the real `run_inherited_colmap_command` in a real
-   `setsid` leader with no monkeypatching and with paired controls, showing
+   — a DeskDev run at commit `77b4ff19` re-measuring all four named acceptance
+   clauses on the qualified x86_64/ext4 host.
+
+   The qualified-host run paid for itself immediately:
+   `_parse_linux_process_stat` rejected `pgrp == 0`, which every Linux kernel
+   thread reports (283 of 547 live PIDs on that box), so **every successful
+   native Refine call failed `REFINE_ENGINE_CLEANUP_FAILED`**. Fixed and
+   re-proven on the host — zero parse failures across every live `/proc` row,
+   every `pgrp 0` row confirmed a kernel thread by absent `VmSize` and absent
+   `cmdline`, zero userland. The other clauses: subreaper state transition and
+   adopted-grandchild reaping through the shipped helpers; adopted-child
+   reaping and quiescence scoped to a real child group leader (member named
+   when live, quiescent when the leader is dead and alone); the
+   escaped-`setsid` descendant, accepted **as scoped** — the group scan cannot
+   see an escapee (a blind spot by construction, since a `setsid` child has its
+   own pgrp) while the shipped adoption/`waitpid` scan does see it and the call
+   fails closed; and cleanup precedence, driven through the real
+   `run_inherited_colmap_command` in a real `setsid` leader with no
+   monkeypatching and with paired controls, showing
    `REFINE_ENGINE_CLEANUP_FAILED` replacing `REFINE_ENGINE_FAILED` and
    `REFINE_ENGINE_TIMEOUT`. The gate ran 1139 passed / 0 skipped four times
-   (three under `umask 022`, one under the ambient `0002`). One sub-clause is
-   explicitly *not* host-measured and is labelled as such in that receipt:
-   precedence over the `drain_errors` branch in isolation, which remains
-   in-repo coverage only. That receipt is evidence, not a ruling — whether
-   item 4 closes as a program gate is still Kody's call, and every downstream
-   hard gate is untouched.
+   (three under `umask 022`, one under the ambient `0002`), so the five
+   Linux-only lifecycle tests that skip on macOS all executed.
+
+   **Two scoped exceptions are carried forward by R116 — do not drop them:**
+   (a) **escaped-`setsid` containment is still open** and belongs to item 7's
+   composition; only *detection* was in item 4's scope, and the receipt records
+   the group-scan blind spot as a measured fact rather than a pass.
+   (b) **Precedence over the `drain_errors` branch in isolation is in-repo
+   coverage only**, not a host measurement — on that host the drain fault
+   surfaced as a *cleanup* error, so no case produced `drain_errors` non-empty
+   with `cleanup_errors` empty to compare against.
+
+   R116 is a pipeline/acceptance judgement, blessed and logged. It closes item 4
+   and nothing else: skips still cannot be converted into acceptance by changing
+   tests, every downstream hard gate is untouched, and Kody's P2 milestone gates
+   (M2 dense mesh, M3 walkthrough/click-to-measure, M4 maker quote) remain his
+   to call.
 5. ✅ **DONE (I97).** Seven-descriptor native output handoff, frozen by
    construction (`O_TMPFILE` copy at receipt, hashed from the copy) behind a
    `PR_SET_DUMPABLE` seal. Runner display-path reopening is removed: engine

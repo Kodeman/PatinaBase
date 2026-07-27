@@ -4977,3 +4977,60 @@ reprojection/registration/verified-loop evidence on local-scratch scan
 and every GPU queue stage remain hard gates.
 
 *Entries add: I97 · last id = I97*
+
+### R116 · Field Capture P2 item 4 CLOSED — qualified-host acceptance; two scoped exceptions carried — 2026-07-27
+
+Ordered next-work item 4 is **closed**. Its evidence is
+`docs/design/field-capture/p2-item4-qualified-host-acceptance-2026-07-27.md`
+— measured on the qualified x86_64/ext4 host at code commit `77b4ff19` —
+together with I97.
+
+**Basis.** Linux child-subreaper behaviour and adopted-child reaping are
+established on the host through the shipped helpers, not a local `prctl`:
+the subreaper transition is complete and reversible, an adopted grandchild
+reparents to the subreaper and is consumed by the helper rather than the
+probe, a live same-group descendant is correctly reported non-quiescent,
+and a dead solo leader is correctly reported quiescent. Cleanup precedence
+is established across three paired controls — non-zero exit, deadline
+overrun, and success, each with and without residue — driven through the
+real `run_inherited_colmap_command` inside a real `setsid` leader with
+nothing monkeypatched: `REFINE_ENGINE_CLEANUP_FAILED` replaces both
+`REFINE_ENGINE_FAILED` and `REFINE_ENGINE_TIMEOUT`, and a command that
+exits 0 with residue still refuses to return a result. The five Linux-only
+lifecycle tests that skipped on macOS at I96 — the skips that made this
+item necessary — all execute on the host: the gate ran 1139 passed with an
+**empty** skip list, four times.
+
+**Escaped-`setsid` handling is accepted as scoped.** This program has held
+throughout that detection is in scope and containment is later work, and
+the receipt measures both halves rather than blurring them. The
+process-group scan cannot see an escapee — a `setsid` child has its own
+pgrp by construction, so that is a blind spot by design, not a defect —
+while the shipped adoption/`waitpid` scan does see it and the call fails
+closed. The clause is satisfied as written. Containment stays open and is
+carried to item 7's composition.
+
+**Two exceptions are carried, not closed.** (1) Escaped-descendant
+containment, above. (2) Precedence over the `drain_errors` branch *in
+isolation* is in-repo coverage, not a host measurement: on that host the
+drain fault surfaced as a cleanup error, so no case produced `drain_errors`
+non-empty with `cleanup_errors` empty to compare against. Neither exception
+may be quietly dropped from the packet.
+
+**What closing item 4 does not mean.** No composition exists. No COLMAP and
+no GPU ran, no real scan ran, and no production DB or Storage was touched.
+All fourteen `*_QUALIFIED` flags remain `False`,
+`NATIVE_ENGINE_OUTPUT_ALIGNMENT_VERIFIED_BY_PARENT` remains `False`,
+`DEFAULT_STAGES` remains `ingest,solve,drawings`, and
+`scan_pipeline.refine` remains unregistered. Nothing here moves activation
+closer. This is a technical acceptance on evidence and nothing more.
+
+**Authority.** Under the package's escalate-vs-bless rule this is a
+pipeline/acceptance judgement — blessed and logged, not an owner-facing
+gate. Kody's P2 milestone gates are untouched: M2 (first dense mesh from
+`95266be1` judged against the P1 certificate), M3 (walkthrough and
+click-to-measure), and M4 (a maker quotes without a site visit) remain his
+to call, and every downstream hard gate named in I97 remains open. Item 6
+is next.
+
+*Entries add: R116 · last id = R116*
