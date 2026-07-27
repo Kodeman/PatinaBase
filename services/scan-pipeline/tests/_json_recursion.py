@@ -3,19 +3,27 @@
 WHY THIS EXISTS.  Three tests pinned the normalization of a ``RecursionError``
 out of ``json`` into a typed ``AdapterError``, and each did it with a hardcoded
 nesting depth of 10 000.  MEASURED, in this repository's own gate containers
-(``python:3.12-slim`` and ``python:3.14-slim``, aarch64) and again on macOS
-CPython 3.14.2: 3.12.13 raises ``RecursionError`` from the C scanner at that
-depth, and 3.14.6 does not -- it parses 10 000, 20 000 and 30 000 without
-complaint and first raises at 100 000, because 3.14 replaced the fixed
-C-recursion counter with a real stack-headroom check.  ``json.dumps`` moved the
-same way: 3.12 raises at 10 000, 3.14 first raises at 50 000.
+(``python:3.12-slim`` and ``python:3.14-slim``, aarch64): 3.12.13 raises
+``RecursionError`` from the C scanner at that depth, and 3.14.6 does not -- it
+parses 10 000 and 30 000 without complaint -- because 3.14 replaced the fixed
+C-recursion counter with a real STACK-HEADROOM check.
 ``sys.setrecursionlimit`` does not move either one on 3.14 -- MEASURED: with the
 limit set to 200, ``json.loads`` still parsed a 10 000-deep payload -- because
 the C scanner does not consult it.
 
-Those numbers are the reason the ladders below start where they do.  They are
-NOT what the helpers trust: every rung is probed at run time, so an interpreter
-that moves again is handled without editing this file.
+NO FIRST-REFUSAL DEPTH IS WRITTEN DOWN FOR 3.14, and none may be.  Once the
+check is stack headroom, the depth is a property of the thread's stack rather
+than of the interpreter, and it moves on the same host and the same build.
+MEASURED on ``python:3.14-slim`` aarch64, driving the identical ladder from
+threads that differ only in ``threading.stack_size``: 1 MiB first refused at
+10 000, 8 MiB first refused at 50 000, 64 MiB refused nothing up to 100 000.
+An earlier revision of this file recorded "first raises at 100 000" as a fact
+about 3.14; on the main thread of that same image it is 50 000, and the figure
+was never the interpreter's to state.
+
+The 3.12 figure is what the ladders below start from.  Neither figure is what
+the helpers TRUST: every rung is probed at run time, so an interpreter or a
+stack that moves again is handled without editing this file.
 
 So a hardcoded depth pins ONE interpreter rather than the normalization the
 tests are about.  These helpers walk a ladder and return the first input this
@@ -34,14 +42,19 @@ from __future__ import annotations
 
 import json
 
-#: Decode ladder.  10 000 is where 3.12 refuses; 100 000 is where 3.14 does.
-#: The tail is headroom for a future interpreter with a deeper stack, bounded by
-#: the caller's payload ceiling rather than by anything here.
+#: Decode ladder.  10 000 is where 3.12 refuses.  The rest is coverage for an
+#: interpreter that checks stack headroom instead, where the refusal depth is a
+#: property of the running thread and not a constant this file may name; the
+#: tail is bounded by the caller's payload ceiling rather than by anything here.
+#: The rungs are NOT dense -- on the gate's 3.14 the true first refusal sits
+#: between two of them -- which is why the helper below promises the smallest
+#: refused rung ON THIS LADDER and not the smallest refused depth.
 _DECODE_DEPTHS = (10_000, 30_000, 100_000, 300_000)
 
-#: Encode ladder.  ``json.dumps`` refuses shallower than ``json.loads`` on 3.14
-#: (50 000 vs 100 000), and deeper than nothing on 3.12 (10 000).  Building the
-#: document is iterative, so only the encoder's recursion is under test.
+#: Encode ladder.  ``json.dumps`` refuses shallower than ``json.loads`` on the
+#: gate's 3.14 and deeper than nothing on 3.12 (10 000).  Building the document
+#: is iterative, so only the encoder's recursion is under test.  Same caveat as
+#: above: these are rungs, not measured thresholds.
 _ENCODE_DEPTHS = (10_000, 50_000, 200_000)
 
 #: The exact keyword arguments ``_canonical_json_bytes`` passes, so a depth this
@@ -55,7 +68,14 @@ _CANONICAL_KWARGS = {
 
 
 def deeply_nested_json_payload(maximum_bytes: int) -> bytes | None:
-    """Smallest nested payload ``json.loads`` refuses here, or ``None``.
+    """Smallest LADDER RUNG ``json.loads`` refuses here, or ``None``.
+
+    Not the smallest refusing depth: ``_DECODE_DEPTHS`` is a sparse ladder, and
+    on the gate's 3.14 the true first refusal (50 000 on the main thread) falls
+    between two rungs, so this returns the 100 000 one.  That is fine for what
+    the callers need -- a payload that drives a REAL ``RecursionError`` through
+    the production path -- and it is stated because "smallest" was claimed here
+    once and was not true.
 
     ``maximum_bytes`` is the production ceiling the payload has to stay under so
     that it reaches ``json.loads`` at all rather than being refused earlier for
@@ -74,7 +94,11 @@ def deeply_nested_json_payload(maximum_bytes: int) -> bytes | None:
 
 
 def deeply_nested_json_document() -> list[object] | None:
-    """Shallowest document ``json.dumps`` refuses to canonicalize here, or ``None``."""
+    """Shallowest LADDER RUNG ``json.dumps`` refuses to canonicalize, or ``None``.
+
+    Same sparseness caveat as :func:`deeply_nested_json_payload`: a rung, not a
+    measured threshold.
+    """
 
     for depth in _ENCODE_DEPTHS:
         document: list[object] = []

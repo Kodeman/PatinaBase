@@ -3133,20 +3133,32 @@ def test_crash_before_legacy_quarantine_discards_and_recopies_fresh_release(tmp_
     the sentinel absent, and ``statx`` btime about a second later, i.e. a
     genuinely different file -- and that the assertion still FAILED, as
     ``assert 7903675 != 7903675``.  The release directory is content-addressed,
-    so the allocation sequence repeats exactly, and **ext4 hands the just-freed
-    inode number straight back**.  The test was green in CI only because
-    overlayfs and tmpfs allocate inode numbers differently.
+    so the allocation sequence repeats exactly, and **the filesystem hands the
+    just-freed inode number straight back**.
 
-    THAT IS REPRODUCIBLE FROM THIS REPOSITORY, so it is not carried on the
-    qualified host's word: running the pre-fix revision of this file in a
-    container whose ``/tmp`` is ext4 fails as ``assert 6945173 != 6945173``, and
-    the fixed revision passes there, on macOS/APFS, and on overlayfs alike.
+    WHAT WAS MEASURED, and nothing beyond it.  Running the pre-fix revision of
+    this file in this repository's own gate container fails the same way, as
+    ``assert 6945173 != 6945173``; probing that container directly, an
+    unlink-and-recreate of the same allocation sequence recycled the inode
+    number 20/20 times.  The fixed revision passes there and on macOS/APFS.
 
-    This is the same ext4 property that forced an earlier increment to pin
-    directory identity with an ``O_PATH`` descriptor instead of a name-plus-stat
-    re-check (``NATIVE_WORKSPACE_ENTRY_PIN_IS_UNIVERSAL`` in
-    ``refine_native_process``): on ext4, ``st_ino`` is a REUSED handle, not an
-    identity, and nothing may treat it as one.
+    An earlier revision of this docstring named ext4 as the mechanism and said
+    the test "was green in CI only because overlayfs and tmpfs allocate inode
+    numbers differently".  BOTH HALVES ARE WITHDRAWN, because the gate container
+    where the failure reproduces has no separate ``/tmp`` mount and reports
+    ``overlayfs`` -- Docker's overlay upper layer passes the backing
+    filesystem's inode numbers straight through, so overlayfs is not the
+    discriminator it was claimed to be.  What discriminates a host that recycles
+    from one that does not has NOT been isolated here and is therefore not
+    stated.  What holds without it: recycling is real, it is reproducible on
+    both hosts this repository is tested on, and an inode number is consequently
+    not an identity.
+
+    That is the same property that forced an earlier increment to pin directory
+    identity with an ``O_PATH`` descriptor instead of a name-plus-stat re-check
+    (``NATIVE_WORKSPACE_ENTRY_PIN_IS_UNIVERSAL`` in ``refine_native_process``):
+    ``st_ino`` is a REUSED handle, not an identity, and nothing may treat it as
+    one.
 
     What replaces it is the evidence the probe actually collected: a taint
     written into the stale release's payload and a sentinel file that only the

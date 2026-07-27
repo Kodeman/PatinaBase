@@ -22,6 +22,7 @@ Nothing here enables, registers, or composes a Refine stage.
 from __future__ import annotations
 
 import contextlib
+import errno
 import os
 import time
 from pathlib import Path
@@ -29,6 +30,7 @@ from types import MappingProxyType
 
 import pytest
 
+import patina_scan_worker.refine_native_process as native_process
 from patina_scan_worker.refine_adapter import AdapterError, RefineDeadline
 from patina_scan_worker.refine_colmap_command import (
     _validate_pinned_execution,
@@ -151,11 +153,20 @@ def _toolchain(tmp_path: Path, *, qualified: bool = True):
 
 
 def test_a_symlinked_final_container_component_is_refused_at_provisioning(tmp_path):
-    """``O_NOFOLLOW`` already covered this shape -- and only this shape.
+    """The open flags already covered this shape -- and only this shape.
 
-    A symlink as the *final* component of the container path fails the open with
-    ``ELOOP``, which is why the gap below went unnoticed: the obvious test case
-    was already green.
+    A symlink as the *final* component of the container path fails the open
+    before any check below can look at it, which is why the gap in the next test
+    went unnoticed: the obvious test case was already green.  MEASURED, on both
+    Linux and macOS, the errno is ``ENOTDIR`` and not ``ELOOP``: ``O_NOFOLLOW``
+    stops the resolution ON the link and ``O_DIRECTORY`` then sees something
+    that is not a directory.  That distinction is not cosmetic -- it is which
+    row of ``_WORKSPACE_PROVISIONING_ERRNOS`` the condition would otherwise
+    land on.
+
+    What is asserted here is the REFUSAL ITSELF, not merely that something was
+    raised.  An assertion this weak is how the split below went unnoticed once
+    already.
     """
 
     real = tmp_path / "real-scratch"
@@ -163,12 +174,20 @@ def test_a_symlinked_final_container_component_is_refused_at_provisioning(tmp_pa
     link = tmp_path / "scratch-link"
     link.symlink_to(real, target_is_directory=True)
 
-    with pytest.raises(AdapterError):
+    with pytest.raises(OSError) as opened:
+        os.close(os.open(str(link), native_process._workspace_directory_flags()))
+    assert opened.value.errno == errno.ENOTDIR
+
+    with pytest.raises(AdapterError) as raised:
         provision_native_workspace_lease(
             str(link),
             deadline=RefineDeadline(time.monotonic() + 60.0),
         )
 
+    assert str(raised.value) == (
+        "native workspace parent directory must not traverse a symlink"
+    )
+    assert raised.value.code == "REFINE_INPUT_INVALID"
     # Nothing was created inside the container the symlink pointed at.
     assert sorted(os.listdir(real)) == []
 
@@ -213,6 +232,332 @@ def test_a_non_canonical_container_path_is_refused_at_provisioning(tmp_path):
     assert str(raised.value) == (
         "native workspace parent directory must not traverse a symlink"
     )
+
+
+# ---------------------------------------------------------------------------
+# Provisioning refusals are classified by ERRNO, one row per real condition
+# ---------------------------------------------------------------------------
+
+
+def _nonexistent_root(tmp_path: Path) -> str:
+    return str(tmp_path / "never-created")
+
+
+def _symlinked_root(tmp_path: Path) -> str:
+    real = tmp_path / "real-scratch"
+    real.mkdir(mode=0o700)
+    link = tmp_path / "scratch-link"
+    link.symlink_to(real, target_is_directory=True)
+    return str(link)
+
+
+def _looping_root(tmp_path: Path) -> str:
+    loop = tmp_path / "loop"
+    loop.symlink_to(loop)
+    return str(loop / "leases")
+
+
+def _regular_file_root(tmp_path: Path) -> str:
+    ordinary = tmp_path / "not-a-directory"
+    ordinary.write_bytes(b"an operator pointed the scratch root at a file\n")
+    return str(ordinary)
+
+
+def _fifo_root(tmp_path: Path) -> str:
+    fifo = tmp_path / "scratch-fifo"
+    os.mkfifo(fifo, 0o600)
+    return str(fifo)
+
+
+def _unenterable_root(tmp_path: Path) -> str:
+    closed = tmp_path / "unenterable"
+    closed.mkdir(mode=0o700)
+    os.chmod(closed, 0o000)
+    return str(closed)
+
+
+#: ``(id, builder, errno, code, wording)``.  Every row builds its condition FOR
+#: REAL -- a symlinked root, a self-looping root, a regular file, a FIFO, a
+#: mode-000 directory, a path nobody created -- and asserts the errno the real
+#: open actually produces BEFORE asserting the verdict, so no row can drift into
+#: pinning an exception name instead of a condition.
+_REAL_PROVISIONING_CONDITIONS = (
+    (
+        "nonexistent-root",
+        _nonexistent_root,
+        errno.ENOENT,
+        "REFINE_ENGINE_SCRATCH_UNAVAILABLE",
+        "(ENOENT)",
+    ),
+    (
+        "symlinked-root",
+        _symlinked_root,
+        errno.ENOTDIR,
+        "REFINE_INPUT_INVALID",
+        "must not traverse a symlink",
+    ),
+    (
+        "self-looping-root",
+        _looping_root,
+        errno.ELOOP,
+        "REFINE_INPUT_INVALID",
+        "must not traverse a symlink",
+    ),
+    (
+        "regular-file-root",
+        _regular_file_root,
+        errno.ENOTDIR,
+        "REFINE_INPUT_INVALID",
+        "must be an owned directory",
+    ),
+    (
+        "fifo-root",
+        _fifo_root,
+        errno.ENOTDIR,
+        "REFINE_INPUT_INVALID",
+        "must be an owned directory",
+    ),
+    (
+        "unenterable-root",
+        _unenterable_root,
+        errno.EACCES,
+        "REFINE_ENGINE_FAILED",
+        "(EACCES)",
+    ),
+)
+
+
+@pytest.mark.parametrize(
+    ("build", "expected_errno", "expected_code", "expected_text"),
+    [row[1:] for row in _REAL_PROVISIONING_CONDITIONS],
+    ids=[row[0] for row in _REAL_PROVISIONING_CONDITIONS],
+)
+def test_each_real_provisioning_condition_keeps_its_own_verdict(
+    tmp_path,
+    build,
+    expected_errno,
+    expected_code,
+    expected_text,
+):
+    """One operator mistake per row, and each keeps the verdict it earns.
+
+    The arm at the bottom of ``provision_native_workspace_lease`` used to bucket
+    the whole ``OSError`` TYPE as operational.  Its justification enumerated
+    "ENOENT on an unconfigured root, ENOSPC, EMFILE, ENOMEM" -- but the flags it
+    opens with, ``O_RDONLY|O_DIRECTORY|O_NOFOLLOW|O_CLOEXEC``, produce ENOTDIR,
+    ELOOP and EACCES just as readily, and none of those is a shortage: every one
+    reproduces identically on every attempt, so retrying only spends the queue's
+    attempts to reach the same refusal later.
+
+    Each row asserts the errno FIRST, from the real open with the module's real
+    flags, so what is pinned is the condition and not a name that happens to
+    reach it today.  The wording is asserted too: for the rows that reach the
+    errno classifier the line has to NAME the errno, because
+    ``_exception_summary`` degrades ``NotADirectoryError`` and its siblings to
+    "external exception" and an operator handed a slowly-retrying task plus
+    "external exception" has been told nothing at all.
+    """
+
+    if expected_errno == errno.EACCES and os.geteuid() == 0:
+        pytest.skip(
+            "a mode-000 directory cannot refuse a root euid, so this condition "
+            "cannot be constructed under the root euid the gate containers run "
+            "as; EACCES keeps its verdict pinned without a euid dependency in "
+            "test_every_classified_provisioning_errno_keeps_its_side_of_the_split"
+        )
+
+    root = build(tmp_path)
+    try:
+        with pytest.raises(OSError) as opened:
+            os.close(os.open(root, native_process._workspace_directory_flags()))
+        assert opened.value.errno == expected_errno
+
+        with pytest.raises(AdapterError) as raised:
+            provision_native_workspace_lease(
+                root,
+                deadline=RefineDeadline(time.monotonic() + 60.0),
+            )
+        assert raised.value.code == expected_code
+        assert expected_text in str(raised.value)
+    finally:
+        # A mode-000 directory would otherwise defeat tmp_path's own cleanup.
+        with contextlib.suppress(OSError):
+            if os.path.isdir(root) and not os.path.islink(root):
+                os.chmod(root, 0o700)
+
+
+def test_a_symlinked_scratch_root_classifies_the_same_at_every_component(tmp_path):
+    """ONE operator mistake, ONE verdict -- whichever component is the link.
+
+    This is the self-inconsistency the errno split closed, pinned so it cannot
+    re-open on one side only.  The module deliberately refuses a symlinked
+    scratch root as fatal input ("must not traverse a symlink"), but the open
+    flags beat that check to the punch for the FINAL path component, so the
+    final-component shape used to fall through to the operational normalization
+    and RETRY while the intermediate-component shape died fatally.  Same
+    mistake, same operator fix, two verdicts.
+    """
+
+    final_real = tmp_path / "final" / "real-scratch"
+    final_real.mkdir(mode=0o700, parents=True)
+    final_link = tmp_path / "final" / "scratch-link"
+    final_link.symlink_to(final_real, target_is_directory=True)
+
+    middle_real = tmp_path / "middle" / "real-scratch"
+    (middle_real / "leases").mkdir(mode=0o700, parents=True)
+    middle_link = tmp_path / "middle" / "scratch-link"
+    middle_link.symlink_to(middle_real, target_is_directory=True)
+
+    def refusal(path) -> tuple[str, str]:
+        with pytest.raises(AdapterError) as raised:
+            provision_native_workspace_lease(
+                str(path),
+                deadline=RefineDeadline(time.monotonic() + 60.0),
+            )
+        return raised.value.code, str(raised.value)
+
+    final_component = refusal(final_link)
+    intermediate_component = refusal(middle_link / "leases")
+
+    assert final_component == intermediate_component
+    # And the shared verdict is the fatal, structural one rather than the
+    # retryable one: a symlinked root is a configuration error, not a shortage.
+    assert final_component == (
+        "REFINE_INPUT_INVALID",
+        "native workspace parent directory must not traverse a symlink",
+    )
+
+
+#: Written out LITERALLY rather than read back off the module, so that deleting
+#: a row from ``_WORKSPACE_PROVISIONING_ERRNOS`` turns this red instead of
+#: silently shrinking the parametrization to match itself.
+_EXPECTED_ERRNO_VERDICTS = (
+    ("ENOSPC", "REFINE_ENGINE_SCRATCH_UNAVAILABLE"),
+    ("EDQUOT", "REFINE_ENGINE_SCRATCH_UNAVAILABLE"),
+    ("EMFILE", "REFINE_ENGINE_SCRATCH_UNAVAILABLE"),
+    ("ENFILE", "REFINE_ENGINE_SCRATCH_UNAVAILABLE"),
+    ("ENOMEM", "REFINE_ENGINE_SCRATCH_UNAVAILABLE"),
+    ("ENOENT", "REFINE_ENGINE_SCRATCH_UNAVAILABLE"),
+    ("ELOOP", "REFINE_ENGINE_FAILED"),
+    ("ENOTDIR", "REFINE_ENGINE_FAILED"),
+    ("EACCES", "REFINE_ENGINE_FAILED"),
+    ("EPERM", "REFINE_ENGINE_FAILED"),
+    ("EROFS", "REFINE_ENGINE_FAILED"),
+)
+
+
+@pytest.mark.parametrize(
+    ("name", "expected_code"),
+    _EXPECTED_ERRNO_VERDICTS,
+    ids=[name for name, _code in _EXPECTED_ERRNO_VERDICTS],
+)
+def test_every_classified_provisioning_errno_keeps_its_side_of_the_split(
+    name,
+    expected_code,
+):
+    """One row per enumerated errno, including the ones no test can construct.
+
+    ENOSPC/EDQUOT/EMFILE/ENFILE/ENOMEM cannot be built without exhausting the
+    gate's own host, EROFS needs a read-only mount, and EACCES/EPERM cannot be
+    built under the root euid the gate containers run as.  Those are pinned
+    against the classifier directly; every condition that CAN be built is
+    additionally driven through the real function by
+    ``test_each_real_provisioning_condition_keeps_its_own_verdict``.
+    """
+
+    number = getattr(errno, name)
+    assert native_process._workspace_provisioning_refusal(
+        OSError(number, "synthetic condition")
+    ) == (name, expected_code)
+
+
+def test_the_provisioning_errno_table_enumerates_exactly_what_was_decided():
+    """A new row cannot be added without a verdict being chosen for it here."""
+
+    assert tuple(
+        (name, code)
+        for name, _number, code in native_process._WORKSPACE_PROVISIONING_ERRNOS
+    ) == _EXPECTED_ERRNO_VERDICTS
+
+
+@pytest.mark.parametrize(
+    ("name", "expected_code", "expected_text"),
+    (
+        ("ENOMEM", "REFINE_ENGINE_SCRATCH_UNAVAILABLE", "(ENOMEM)"),
+        ("EACCES", "REFINE_ENGINE_FAILED", "(EACCES)"),
+        ("EROFS", "REFINE_ENGINE_FAILED", "(EROFS)"),
+        ("EIO", "REFINE_ENGINE_FAILED", "(unclassified errno)"),
+    ),
+)
+def test_the_provisioning_arm_uses_the_errno_verdict_it_was_given(
+    tmp_path,
+    monkeypatch,
+    name,
+    expected_code,
+    expected_text,
+):
+    """The classifier being right is not enough: the ARM has to obey it.
+
+    Under the root euid the gate containers run as, NO fatal-side condition can
+    be constructed for real -- a mode-000 directory does not refuse root, EROFS
+    needs a read-only mount and EPERM needs a capability -- so an arm that
+    ignored the table and called every ``OSError`` a shortage would still pass
+    every row that IS constructible there.  That is the exact defect being
+    fixed, so it may not be invisible to the gate.
+
+    The errno is injected at the second ``fstat``, the module's inspection of
+    scratch it has ALREADY created: a real syscall that really can report each
+    of these, on the far side of the open the real-condition rows above drive.
+    What is asserted is the arm's verdict and wording, not the classifier's.
+    """
+
+    container = _container(tmp_path)
+    real_fstat = os.fstat
+    inspections = 0
+
+    def refuse_the_second_inspection(descriptor):
+        nonlocal inspections
+        inspections += 1
+        if inspections == 2:
+            raise OSError(getattr(errno, name), f"synthetic {name}")
+        return real_fstat(descriptor)
+
+    monkeypatch.setattr(native_process.os, "fstat", refuse_the_second_inspection)
+    with pytest.raises(AdapterError) as raised:
+        provision_native_workspace_lease(
+            str(container),
+            deadline=RefineDeadline(time.monotonic() + 60.0),
+        )
+    monkeypatch.undo()
+
+    assert raised.value.code == expected_code
+    assert expected_text in str(raised.value)
+    # The half-provisioned lease is still removed on every one of these paths.
+    assert list(container.iterdir()) == []
+
+
+def test_an_unenumerated_provisioning_errno_fails_closed():
+    """The default is FATAL, and it is a DECISION rather than an oversight.
+
+    ``_SCRATCH_UNAVAILABLE_CODE``'s own contract restricts it to "a resource the
+    HOST failed to supply".  An errno nobody has reasoned about carries no
+    evidence that it is one, so claiming it would be asserting the contract
+    without measuring it -- and ``_FAILED_CODE`` is what this arm did before the
+    split existed, so an unlisted errno cannot regress against that.  The
+    mistake is self-announcing: the line says "unclassified errno", which is a
+    one-line addition to the table rather than a quiet retry that ends in the
+    same failure anyway.
+    """
+
+    for exc in (
+        OSError(errno.EIO, "a genuinely unclassified condition"),
+        OSError(errno.EBADF, "a defect in this module, not a shortage"),
+        OSError("an OSError carrying no errno at all"),
+    ):
+        assert native_process._workspace_provisioning_refusal(exc) == (
+            "unclassified errno",
+            "REFINE_ENGINE_FAILED",
+        )
 
 
 def test_every_transported_lease_path_resolves_to_itself(tmp_path):

@@ -388,6 +388,14 @@ _ACK_ACCEPT = b"accept-v1"
 _TIMEOUT_CODE = "REFINE_ENGINE_TIMEOUT"
 _FAILED_CODE = "REFINE_ENGINE_FAILED"
 _INVALID_INPUT_CODE = "REFINE_INPUT_INVALID"
+#: Every site raising this stays FATAL, re-examined against the errno split
+#: below and deliberately left alone.  A cleanup failure is not a statement
+#: about capacity, it is a statement that this boundary could not PROVE it
+#: released what it took -- a descriptor, a process group, a scratch tree.  The
+#: retryable codes all mean "the same task will succeed once the host has the
+#: resource again"; that is precisely what an unproven release does not support,
+#: because the next attempt takes a second set of the same resources on top of
+#: a first set nobody accounted for.  Containment, not capacity.
 _CLEANUP_FAILED_CODE = "REFINE_ENGINE_CLEANUP_FAILED"
 #: A full lease filesystem is an EXPECTED operational condition for this channel,
 #: not a defect, so it gets its own code instead of arriving as an unexplained
@@ -458,6 +466,56 @@ _OUTPUT_FREEZE_REQUIRED_OS_NAMES = ("O_TMPFILE", "O_EXCL", "O_CLOEXEC", "pread",
 #: is included because a per-user quota on a filesystem with free blocks
 #: presents to the operator as the same problem with the same fix.
 _OUTPUT_FREEZE_NO_SPACE_ERRNOS = frozenset({errno.ENOSPC, errno.EDQUOT})
+#: How a RAW ``OSError`` out of workspace-lease provisioning is classified: BY
+#: ERRNO, because what makes a refusal retryable is the CONDITION and not the
+#: exception type.  An earlier revision bucketed the whole ``OSError`` TYPE as
+#: operational, on an enumeration ("ENOENT, ENOSPC, EMFILE, ENOMEM") that was
+#: not the whole set the call can produce: ``os.open`` with
+#: ``_workspace_directory_flags()`` also yields ENOTDIR for a scratch root that
+#: is a symlink, a regular file or a FIFO, ELOOP for a looping intermediate
+#: component, and EACCES/EPERM for a root the service uid cannot enter.  None of
+#: those is a shortage and every one reproduces identically on the next attempt.
+#:
+#: Each row is ``(errno name, errno number, code)``.  The name is carried so
+#: the journal line can NAME the condition: ``NotADirectoryError`` is not in
+#: ``_SAFE_EXCEPTION_LABELS``, so an ENOTDIR root used to journal only
+#: "external exception" and told the operator nothing to act on.
+#:
+#: ``ENOENT`` is the one arguable member and it sits on the retryable side
+#: DELIBERATELY.  It covers both a scratch root the operator never created -- a
+#: deterministic misconfiguration -- and a root whose mount is not up yet, which
+#: is transient and self-heals.  The two mistakes cost asymmetrically.  Retrying
+#: the misconfiguration costs a BOUNDED delay: ``complete_agent_task``
+#: (``supabase/migrations/00297_agent_tasks_queue.sql:414``) fails the task for
+#: good once ``attempts >= max_attempts``, with 1min then 5min backoff, so the
+#: operator sees the same refusal a few minutes later.  Failing the not-yet-
+#: mounted root outright kills a scan the very next attempt would have
+#: completed, and there is nothing left to re-run.  The bounded cost is taken.
+_WORKSPACE_PROVISIONING_ERRNOS: tuple[tuple[str, int, str], ...] = (
+    # SHORTAGE: the host could not supply a resource right now.  ``EDQUOT``
+    # rides with ``ENOSPC`` for the reason it does in
+    # ``_OUTPUT_FREEZE_NO_SPACE_ERRNOS``: to the operator it is the same
+    # problem with the same fix.
+    ("ENOSPC", errno.ENOSPC, _SCRATCH_UNAVAILABLE_CODE),
+    ("EDQUOT", errno.EDQUOT, _SCRATCH_UNAVAILABLE_CODE),
+    ("EMFILE", errno.EMFILE, _SCRATCH_UNAVAILABLE_CODE),
+    ("ENFILE", errno.ENFILE, _SCRATCH_UNAVAILABLE_CODE),
+    ("ENOMEM", errno.ENOMEM, _SCRATCH_UNAVAILABLE_CODE),
+    ("ENOENT", errno.ENOENT, _SCRATCH_UNAVAILABLE_CODE),
+    # STATEMENT ABOUT THE CONFIGURED ROOT: no shortage to wait out, identical on
+    # every attempt.  ELOOP and ENOTDIR are additionally translated at the
+    # container open itself (see ``provision_native_workspace_lease``), which is
+    # where they can actually arise; they are kept here so a later syscall that
+    # produces one cannot fall through to the retryable side by omission.
+    ("ELOOP", errno.ELOOP, _FAILED_CODE),
+    ("ENOTDIR", errno.ENOTDIR, _FAILED_CODE),
+    ("EACCES", errno.EACCES, _FAILED_CODE),
+    ("EPERM", errno.EPERM, _FAILED_CODE),
+    ("EROFS", errno.EROFS, _FAILED_CODE),
+)
+_WORKSPACE_PROVISIONING_CLASSIFICATION = MappingProxyType(
+    {number: (name, code) for name, number, code in _WORKSPACE_PROVISIONING_ERRNOS}
+)
 _NATIVE_CHILD_CONTEXT_SEAL = object()
 
 
@@ -2653,16 +2711,23 @@ def _frozen_output_copy(
     real run on the GPU box is what replaces them; that hedge is still accurate
     and stays.
 
-    A DIFFERENT ext4 PROPERTY HAS since been measured and is recorded here
+    A DIFFERENT FILESYSTEM PROPERTY HAS since been measured and is recorded here
     because it bit a test rather than a copy: when an allocation sequence
-    repeats, ext4 hands the just-freed inode NUMBER straight back, so ``st_ino``
-    inequality is NOT evidence that a file is a different file.  Reproduced in
-    this repository, not argued: ``test_install_script`` failed as
-    ``assert 7903675 != 7903675`` on a qualified host and as
-    ``assert 6945173 != 6945173`` in a container whose ``/tmp`` is ext4, while
-    content and sentinel evidence showed the file genuinely had been discarded
-    and re-copied.  This module already had to pin directory identity with an
-    ``O_PATH`` descriptor for the same reason (see
+    repeats, the just-freed inode NUMBER comes straight back, so ``st_ino``
+    inequality is NOT evidence that a file is a different file.  Reproduced, not
+    argued: ``test_install_script`` failed as ``assert 7903675 != 7903675`` on a
+    qualified host and as ``assert 6945173 != 6945173`` in this repository's own
+    gate container, while content and sentinel evidence showed the file
+    genuinely had been discarded and re-copied.
+
+    THE MECHANISM IS DELIBERATELY NOT NAMED.  An earlier revision of this
+    paragraph credited it to ext4 and to that container's ``/tmp`` being ext4;
+    the container reports ``overlayfs`` and has no separate ``/tmp`` mount, so
+    that provenance was wrong and the ext4-versus-overlayfs discriminator it
+    implied is falsified by the very host it was claimed from.  Recycling is
+    what was observed -- 20/20 in a direct probe of that container -- and
+    recycling is all that is claimed.  This module already had to pin directory
+    identity with an ``O_PATH`` descriptor for the same reason (see
     ``NATIVE_WORKSPACE_ENTRY_PIN_IS_UNIVERSAL``), and nothing added here may
     treat an inode number as an identity.
     """
@@ -4315,6 +4380,43 @@ def _workspace_directory_flags() -> int:
     return os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW | os.O_CLOEXEC
 
 
+def _workspace_provisioning_refusal(exc: OSError) -> tuple[str, str]:
+    """Name the condition and pick the code for a raw provisioning ``OSError``.
+
+    An errno this module has NOT reasoned about defaults to ``_FAILED_CODE``,
+    deliberately, and the diagnostic says so rather than hiding it.  Three
+    reasons, in the order they matter.  ``_SCRATCH_UNAVAILABLE_CODE``'s own
+    contract says to use it "only when the refusal is about a resource the HOST
+    failed to supply"; an unlisted errno carries no evidence that it is, and
+    defaulting to retryable would assert that contract without measuring it.
+    ``_FAILED_CODE`` is also what this arm did before the split existed, so an
+    unlisted errno cannot be a regression against the pre-split behaviour.  And
+    the mistake is self-announcing: the journal line names the errno as
+    unclassified, so an errno that SHOULD be retryable shows up as a one-line
+    addition to ``_WORKSPACE_PROVISIONING_ERRNOS`` instead of hiding behind a
+    quiet retry that ends in the same failure.
+    """
+
+    classified = _WORKSPACE_PROVISIONING_CLASSIFICATION.get(exc.errno)
+    if classified is None:
+        return "unclassified errno", _FAILED_CODE
+    return classified
+
+
+def _final_component_is_a_symlink(path: str) -> bool:
+    """Advisory: is the FINAL component of ``path`` itself a symlink?
+
+    Used ONLY to choose between two diagnostics for one errno, never to make a
+    security decision -- it is a second, racy lookup by name, and every refusal
+    it helps word is fatal either way.
+    """
+
+    try:
+        return stat.S_ISLNK(os.lstat(path).st_mode)
+    except OSError:
+        return False
+
+
 def _workspace_entry_pin_flags() -> int:
     """Reference an entry itself: no symlink traversal, no read, no blocking."""
 
@@ -4453,7 +4555,36 @@ def provision_native_workspace_lease(
     name: str | None = None
     created_subdirectories: list[str] = []
     try:
-        parent_descriptor = os.open(parent_directory, flags)
+        try:
+            parent_descriptor = os.open(parent_directory, flags)
+        except OSError as open_exc:
+            # ``O_DIRECTORY`` and ``O_NOFOLLOW`` PRE-EMPT two of the structural
+            # checks below, so their errnos are translated back into those
+            # checks' own refusals.  Without this the module disagreed with
+            # itself about ONE operator mistake: a symlink as an INTERMEDIATE
+            # component reached the ``realpath`` check below and was refused
+            # fatally, while a symlink as the FINAL component never got there --
+            # the open fails first, MEASURED as ENOTDIR rather than ELOOP on
+            # both Linux and macOS, because ``O_DIRECTORY`` sees the unfollowed
+            # link and not a directory -- and fell through to the operational
+            # normalization at the bottom, so which component the operator
+            # symlinked decided whether the task retried or died.  ENOTDIR on a
+            # regular file or a FIFO is the same story against the ``S_ISDIR``
+            # check, and gets that check's own wording.
+            if open_exc.errno == errno.ELOOP or (
+                open_exc.errno == errno.ENOTDIR
+                and _final_component_is_a_symlink(parent_directory)
+            ):
+                raise AdapterError(
+                    "native workspace parent directory must not traverse a symlink",
+                    _INVALID_INPUT_CODE,
+                ) from open_exc
+            if open_exc.errno == errno.ENOTDIR:
+                raise AdapterError(
+                    "native workspace parent directory must be an owned directory",
+                    _INVALID_INPUT_CODE,
+                ) from open_exc
+            raise
         os.set_inheritable(parent_descriptor, False)
         parent_metadata = os.fstat(parent_descriptor)
         parent_mode = stat.S_IMODE(parent_metadata.st_mode)
@@ -4603,19 +4734,25 @@ def provision_native_workspace_lease(
         if type(exc) is AdapterError:
             raise
         if isinstance(exc, OSError):
-            # OPERATIONAL.  Every structural refusal on this path has already
-            # raised its own typed ``AdapterError`` above and re-raised
-            # unchanged; what reaches here is a raw ``OSError`` from opening the
-            # operator's scratch root or from creating our own directories
-            # inside it -- ENOENT on an unconfigured root, ENOSPC, EMFILE,
-            # ENOMEM.  All of those are host state with an operator fix, so the
-            # task must survive to run again rather than die permanently.
+            # Every structural refusal on this path has already raised its own
+            # typed ``AdapterError`` above and is re-raised unchanged; what
+            # reaches here is a raw ``OSError`` from the operator's scratch root
+            # or from creating our own directories inside it.  Which of those it
+            # is decides retryability, and the ERRNO is what says so -- the
+            # exception TYPE does not, which is how a symlinked, non-directory
+            # or unenterable root came to be treated as a shortage.  The
+            # condition is named in the line as well as classified, because
+            # ``_exception_summary`` degrades to "external exception" for every
+            # ``OSError`` subclass outside ``_SAFE_EXCEPTION_LABELS``.
+            condition, code = _workspace_provisioning_refusal(exc)
             raise AdapterError(
                 _bounded_diagnostic(
-                    "cannot provision a private native workspace lease: ",
+                    "cannot provision a private native workspace lease (",
+                    condition,
+                    "): ",
                     _exception_summary(exc),
                 ),
-                _SCRATCH_UNAVAILABLE_CODE,
+                code,
             ) from exc
         raise
     return NativeWorkspaceLease(
@@ -4638,15 +4775,19 @@ def _purge_leased_entry(
 ) -> None:
     """Remove one entry, refusing any object whose identity changed.
 
-    ``(st_dev, st_ino)`` is not by itself an identity on Linux: ext4 hands a
-    just-freed inode number straight back to the next creator, so an attacker
-    who unlinks and recreates an entry inside the inspect/rename window presents
-    a *different* object carrying the *same* number.  Measured on this
-    repository's own gate, unlink+recreate recycled the inode number 20/20 times
-    on Linux and 0/20 times on APFS.  The entry is therefore first pinned by
-    descriptor: a held reference keeps the inode from being freed, so its number
-    cannot be re-issued while cleanup runs, and only then does equality actually
-    mean sameness.  The pin also removes the older inspect/rename gap, because
+    ``(st_dev, st_ino)`` is not by itself an identity on Linux: a just-freed
+    inode number comes straight back to the next creator, so an attacker who
+    unlinks and recreates an entry inside the inspect/rename window presents a
+    *different* object carrying the *same* number.  Measured on this
+    repository's own gate container -- whose ``/tmp`` reports ``overlayfs``, not
+    ext4, so the mechanism is NOT the ext4 allocator an earlier revision of this
+    paragraph named -- unlink+recreate recycled the inode number 20/20 times,
+    against 0/20 on macOS/APFS.  Which hosts recycle has not been isolated and
+    is not claimed; that one this code runs on does is enough.  The entry is
+    therefore first pinned by descriptor: a held reference keeps the inode from
+    being freed, so its number cannot be re-issued while cleanup runs, and only
+    then does equality actually mean sameness.  The pin also removes the older
+    inspect/rename gap, because
     the recorded identity comes from ``fstat`` on that descriptor rather than
     from a second lookup of the name.
 
@@ -5674,6 +5815,20 @@ def run_native_engine_child(
             deadline.remaining_seconds()
             process.start()
         except OSError as exc:
+            # LEFT FATAL, re-examined and decided rather than inherited.  A fork
+            # or pipe refused for EAGAIN/ENOMEM/EMFILE really is a host shortage
+            # and would classify cleanly against
+            # ``_WORKSPACE_PROVISIONING_CLASSIFICATION`` -- but that table was
+            # derived from, and is pinned against, ONE syscall surface: opening
+            # and creating directories under the operator's scratch root.  Its
+            # fatal side (ELOOP, ENOTDIR, EROFS) says nothing at all about
+            # ``fork``, so reusing it here would be transplanting a proof
+            # instead of making one.  Nothing on this branch can construct a
+            # real fork-or-pipe shortage to pin the reclassification with, and
+            # the standard the lease arm was held to was "construct the
+            # condition for real".  A reclassification that cannot be
+            # constructed is one that cannot be claimed, so this keeps the
+            # pre-existing fatal behaviour until a real one can be built.
             raise AdapterError(
                 _bounded_diagnostic(
                     "cannot start refine native child: ",

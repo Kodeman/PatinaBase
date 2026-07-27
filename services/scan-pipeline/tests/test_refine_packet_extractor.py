@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import ast
+import errno
 import hashlib
 import inspect
 import json
@@ -1011,7 +1012,14 @@ def test_parent_lease_provisioning_failure_removes_its_own_directory(
         nonlocal inspections
         inspections += 1
         if inspections == 2:
-            raise OSError("synthetic workspace lease inspection failure")
+            # Carries an ERRNO, because that is what the classification reads
+            # and what a real ``fstat`` failure would have.  This used to be a
+            # bare ``OSError("...")`` with ``errno is None``, which no syscall
+            # produces; it passed only while the whole ``OSError`` TYPE was
+            # bucketed as operational, and that type-bucketing is the defect
+            # the errno split fixed.  ENOMEM is a condition ``fstat`` really can
+            # report and really is a shortage.
+            raise OSError(errno.ENOMEM, "synthetic workspace lease inspection failure")
         return real_fstat(descriptor)
 
     monkeypatch.setattr(native_process.os, "fstat", fail_workspace_inspection)
@@ -1019,12 +1027,14 @@ def test_parent_lease_provisioning_failure_removes_its_own_directory(
         provision_native_workspace_lease(str(container), deadline=_deadline(30.0))
     monkeypatch.undo()
 
-    # OPERATIONAL: a raw OSError from inspecting scratch this process just
+    # OPERATIONAL: a shortage errno from inspecting scratch this process just
     # created is the host refusing a resource, not a statement about the task,
     # so it is retryable rather than the FATAL default the old
     # REFINE_ENGINE_FAILED fell through to.  Fatality is pinned in
-    # test_refine_runner.py; only the code can be seen from here.
+    # test_refine_runner.py; only the code can be seen from here.  The line
+    # names the condition as well as classifying it.
     assert raised.value.code == "REFINE_ENGINE_SCRATCH_UNAVAILABLE"
+    assert "(ENOMEM)" in str(raised.value)
     # The parent removes the half-provisioned workspace it created itself.
     assert list(container.iterdir()) == []
 

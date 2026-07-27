@@ -2998,8 +2998,10 @@ def test_workspace_cleanup_refuses_a_swap_that_recycles_the_inode_number(
 ):
     """The swap must be refused even when the replacement reuses the number.
 
-    On ext4 an unlink+recreate hands the freed inode number straight back, so
-    ``(st_dev, st_ino)`` equality is not identity.  This test records the
+    On the gate container an unlink+recreate hands the freed inode number
+    straight back (20/20 in a direct probe; its ``/tmp`` reports ``overlayfs``,
+    so this is not the ext4 allocator an earlier revision of this docstring
+    named), so ``(st_dev, st_ino)`` equality is not identity.  This test records the
     replacement's inode number and asserts cleanup refused regardless of whether
     the filesystem recycled it, so the guard cannot be satisfied by a platform
     that merely happens not to reuse numbers.
@@ -3033,8 +3035,8 @@ def test_workspace_cleanup_refuses_a_swap_that_recycles_the_inode_number(
 
     assert swapped is True
     assert replacement_inode is not None
-    # Recorded, not asserted: ext4 recycles here, APFS does not.  Either way the
-    # swap must be refused.
+    # Recorded, not asserted: the Linux gate recycles, macOS/APFS does not.
+    # Either way the swap must be refused.
     recycled = replacement_inode == original_inode
     assert any("identity changed before removal" in error for error in errors), (
         f"cleanup accepted a swapped entry (inode recycled: {recycled})"
@@ -3277,17 +3279,20 @@ def test_workspace_lease_rejects_a_missing_or_public_container(tmp_path):
             str(missing),
             deadline=_deadline(10.0),
         )
-    # OPERATIONAL, not a dead task: a scratch root nobody has created yet is the
-    # host failing to supply a resource, with an operator fix after which the
-    # SAME task runs.  This lands on the raw-OSError normalization at the bottom
-    # of provision_native_workspace_lease, which covers ENOENT here and equally
-    # ENOSPC/EMFILE/ENOMEM; every STRUCTURAL refusal above it raises its own
-    # typed code first and re-raises unchanged.  It used to be
-    # REFINE_ENGINE_FAILED, which the runner's AdapterError handler does not
-    # name, so it fell through to the FATAL ARTIFACT_INVALID and a mistyped
-    # scratch root killed a scan permanently.  The retryability itself is pinned
-    # in test_refine_runner.py, since a code alone does not carry it.
+    # OPERATIONAL, not a dead task: ENOENT covers a root whose mount is not up
+    # yet as well as one nobody created, and the first of those self-heals on
+    # the next attempt.  This lands on the raw-OSError normalization at the
+    # bottom of provision_native_workspace_lease, which buckets by ERRNO --
+    # ENOENT and the shortages retry, a symlinked/non-directory/unenterable root
+    # stays fatal.  The full split is one row per errno in
+    # test_refine_workspace_seam.py; the ENOENT choice is argued at
+    # _WORKSPACE_PROVISIONING_ERRNOS.  It used to be REFINE_ENGINE_FAILED, which
+    # the runner's AdapterError handler does not name, so it fell through to the
+    # FATAL ARTIFACT_INVALID and a scratch root that was merely late killed a
+    # scan permanently.  The retryability itself is pinned in
+    # test_refine_runner.py, since a code alone does not carry it.
     assert raised.value.code == "REFINE_ENGINE_SCRATCH_UNAVAILABLE"
+    assert "(ENOENT)" in str(raised.value)
     # A relative container would make the transported lease path mean something
     # different inside the child's working directory.
     for value in ("", None, 7, "relative/container"):
