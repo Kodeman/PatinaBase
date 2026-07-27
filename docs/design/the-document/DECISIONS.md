@@ -4828,3 +4828,152 @@ queue replay/fork, downstream four-manifest join, registration, and every GPU
 queue stage remain hard gates.
 
 *Entries add: I96 · last id = I96*
+
+### I97 · Field Capture P2 item 4 · parent-owned lease, pinned toolchain, packet ledgers, and the frozen output handoff — 2026-07-27
+
+The ordered next-work packet's items 1, 2, 3, and 5 are integrated on
+`field-capture/refine-i97-final` through code tip `2887dd0e`, and item 4's
+qualified-host evidence exists. Every piece lands disabled and uncomposed.
+
+Item 1 replaces child-owned extraction scratch with a parent-provisioned
+descriptor-rooted 0700 workspace beneath a caller-named container. The parent
+pins container and workspace by descriptor, verifies identity, mode, ownership
+and emptiness, leases a duplicate descriptor to the child over SCM_RIGHTS on its
+own transport with the reverse direction declared in the ready envelope and
+independently re-verified by the child, and purges the tree from the same
+`finally` that reaps the leader — after normal return, timeout, SIGTERM, and
+SIGKILL — bounded by depth and entry budget rather than by the shared deadline,
+so an exhausted deadline can never strand scratch. Cleanup's identity guard is
+now an `O_PATH` pin taken before an entry is touched, because `(st_dev, st_ino)`
+alone is not an identity on Linux: a just-freed inode number comes straight back
+to the next creator, measured in this repository's own gate container 20/20
+times against 0/20 on macOS/APFS. Which hosts recycle is deliberately not
+isolated and not claimed — an earlier revision named the ext4 allocator as the
+mechanism and that provenance is withdrawn, since the container's `/tmp` reports
+`overlayfs`. Holding the reference keeps the number from being re-issued, which
+is what makes the later comparison mean sameness. Provisioning also refuses a
+symlinked or non-canonical container before any `os.open`, and refuses a lease
+root that cannot host a COLMAP path option: the argv ceiling and the lease path
+are one budget, so the root is capped at 960 bytes with 64 reserved for the
+longest reviewed argv tail.
+
+Item 3 pins what may execute and in what environment. Executable identity is
+hashed under the carried deadline against a canonical installed manifest and
+re-proven in the instant before `execve`, with `st_ctime_ns`/`st_mtime_ns`
+recorded so a same-length in-place rewrite of an already-verified inode cannot
+execute; `qualified` is derived from a manifest the loader proves rather than
+accepted as a caller bool. The child receives exactly the 13-key
+`COMMAND_ENVIRONMENT_ALLOWLIST` — never the ambient environment — with every
+writable value confined to `APP_DIR` or the private workspace so
+`ProtectSystem=strict` stays intact. Argv is an allowlist confined **per
+option** to its own leased surface rather than to one shared root:
+`--image_path` reads `packet/`, `--input_path`, `--database_path` and
+`--output_path` are rooted at writable `work/`, and `tmp/` is nobody's surface.
+A single shared root had made `--output_path <lease>/packet/images` a plannable
+command that would write the reconstruction over the hash-validated extracted
+source images the evidence builder later binds to. The toolchain identity
+(COLMAP 4.0.2, source commit `d927f7e`, CUDA 11.8, nvcc 11.8.89, gcc-11,
+`sm_75`, driver 580.159.03) is pinned from values this repository already
+receipts and rejects drift rather than adapting to it; values knowable only from
+the box remain declared manifest inputs in `OWED_BOX_VALUES` and are not guessed.
+
+Item 2 parses the optional source and adapter ledgers. `COLMAP_PACKET_MEMBER_ROLES`
+closes the member role universe, at most one ledger per role is permitted,
+exactly one engine request is required and must be declared and correctly
+routed, each ledger is pinned to its exact packet-root path and capped at 4 MiB,
+and validation runs before the workspace lease so a bad packet never creates a
+file. Ledger bytes are captured during the copy and re-read descriptor-relatively
+with positional I/O against exact mode, owner, size, link count, byte equality
+and the manifest digest; source rows are bound one-to-one to engine-request
+frames. A role-universe drift guard AST-parses the loader's own `allowed_roles`
+literal and asserts set equality with the backend constant, so adding a role on
+either side reddens. The adapter ledger is trimmed to the envelope
+`{schemaVersion, contract, runId, materializerId}` after every per-row assertion
+proved re-derivable from the engine request and manifest alone; a `frames` key
+is now refused as an unknown field, and the trim's premise is executable rather
+than asserted. Declared source HEIC digests, `materializerId` authentication,
+and the ledger schemas themselves are recorded as residuals, not claims.
+
+Item 5 implements the reviewed seven-descriptor native output handoff: the six
+persistent engine artifacts plus one scratch raw pre-BA model snapshot, named as
+a closed token universe before the child exists. The child may fill only those
+names under leased `work/` and hands the descriptors up over SCM_RIGHTS; the
+parent does not trust the child's size/digest ledger — it opens the same names
+relative to its own pinned lease descriptor, requires the transported descriptor
+to be the same `(st_dev, st_ino)`, hashes its own descriptor, and refuses the
+run unless its own computation reproduces the declaration. The bytes are frozen
+**by construction** rather than by `fstat`: each output is copied at receipt into
+an `O_TMPFILE | O_EXCL` anonymous file the parent creates in a private 0700 vault
+on the lease's own filesystem and is hashed from that copy's own descriptor, so
+the returned object never had a name, can never be given one, and no other
+process ever held a descriptor to it. `_open_output_freeze_vault` drops this
+process's dumpable flag with `prctl(PR_SET_DUMPABLE, 0)` before any copy exists,
+which closes the descriptor-theft routes at their common gate; the price — no
+core dump, permanently, and no live debugger — is written where a caller reads
+it. Three exploits demonstrated against earlier revisions all now fail: a
+same-length rewrite plus `futimens` that leaves every remaining `fstat` field
+identical, a same-UID `/proc/<pid>/fd` reopen of a held descriptor, and a
+`pidfd_open` + `pidfd_getfd` descriptor theft. The theft is measured at euid 1000
+under an unconfined seccomp profile and skips under Docker's default profile,
+which refuses the syscall regardless of target; the skip reports the measured
+refusal rather than claiming a proof.
+
+Item 4's qualified-host run produced the evidence and found a production blocker
+that two green local gate environments and every review round to that point had
+missed. `_parse_linux_process_stat` rejected `pgrp == 0`, which every Linux
+kernel thread legitimately reports — no session, no process group — and on the
+qualified host 283 of 547 live PIDs read that way, so the native quiescence scan
+raised on the first kernel thread it walked past and every *successful* native
+Refine call failed `REFINE_ENGINE_CLEANUP_FAILED`. macOS has no `/proc` and a
+container has its own PID namespace with no kernel threads in it, which is why
+neither gate could see it. Zero is now read as the legitimate value it is rather
+than tolerated as a parse failure: a member is recorded only when its group
+equals the leader PID and the scan refuses outright any leader that is not
+strictly positive, so a zero can never compare equal to one, while genuinely
+malformed rows still raise and still fail the scan closed. The fix was re-proven
+on the host — zero parse failures across every live `/proc` row, with every
+`pgrp 0` row confirmed a kernel thread by absent `VmSize` and absent `cmdline`
+and no userland row among them (host measurement; not reproducible from this
+repository). In-repo coverage feeds verbatim captured rows through the parser
+and drives the real scandir/open/parse/membership path against a synthetic
+procfs, so it runs on macOS too.
+
+Workspace-lease provisioning refusals classify by errno rather than by exception
+type, and default **retryable** with the fatal side enumerated: `ELOOP`,
+`ENOTDIR`, `EACCES`, `EPERM`, `EROFS`, and `ENAMETOOLONG`, each justified at its
+row as a statement about the operator's configuration rather than the host's
+momentary state. The rationale is the bounded retry budget in
+`complete_agent_task`: retries are capped with backoff, so a wrongly retryable
+permanent error costs a bounded attempt budget while a wrongly fatal transient
+error is unrecoverable. Known-transient errnos keep their rows even though they
+now fall to the default, because the row is what puts the errno's name in the
+journal line instead of "unclassified errno".
+
+Final state is 1139 passed / 0 skipped on the qualified host (host measurement)
+and 1136 passed / 3 skipped in the container gate. All 14 `*_QUALIFIED` flags
+remain `False`, `NATIVE_ENGINE_OUTPUT_ALIGNMENT_VERIFIED_BY_PARENT` remains
+`False`, `DEFAULT_STAGES` remains `"ingest,solve,drawings"`, nothing registers or
+dispatches `scan_pipeline.refine`, and `refine_colmap_backend.py` is
+byte-identical to `0b7b47fa` (blob `6743e66eb06369d18e34b0054d10734e03a109ec`).
+No install, deployment, queue, Strata, Storage, DeskDev, or real-scan mutation
+occurred.
+
+**Boundary:** I97 proves no composition. Item 6 — raw pre-BA and refined model
+snapshots, a child-proposed alignment, and parent-recomputed Sim3 and pose
+digests before the six persistent artifacts are produced — is next, then item 7's
+materializer → raster → backend → runner → publisher composition on local
+scratch, then Kody's gates. No real scan has run, no COLMAP or GPU execution
+occurred anywhere in this line, and nothing here moves activation closer. Item 3's
+toolchain pin is inert until an operator produces `OWED_BOX_VALUES`; the
+installer does not yet emit
+`/opt/colmap/4.0.2/share/patina/refine-colmap-toolchain-v1.manifest.json`.
+`_validate_workspace_path` remains lexical, so a symlink planted inside `work/`
+still escapes it; the final `unlinkat`/`rmdir` in cleanup is still name-based;
+`materializerId` authenticates no adapter build; and the 200–400-frame pilot
+band is exposed as constants but deliberately unenforced with
+`PILOT_200_400_FRAME_RANGE_QUALIFIED` still `False`. Comparable
+reprojection/registration/verified-loop evidence on local-scratch scan
+`95266be1`, queue replay/fork, the downstream four-manifest join, registration,
+and every GPU queue stage remain hard gates.
+
+*Entries add: I97 · last id = I97*
