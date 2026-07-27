@@ -20,9 +20,16 @@
 // service-role bearer; like the other cron drains (decision-reminders idiom)
 // the function itself runs service-role.
 //
-// Degradation (§12.1 rung 3): the inference worker's /healthz is probed
-// FIRST — if it's down/unwarmed we return without claiming, so pending jobs
-// never burn 00241 attempts against a dead worker. Per-item failures go
+// Degradation + billing guard: order is (1) a cheap existence check against
+// the aesthete_jobs outbox — the same claim-eligibility predicate as the
+// 00241/00250 claim_aesthete_jobs RPC (status='pending' AND run_after <=
+// now()), restricted to the three kinds this worker drains — then (2) the
+// inference worker's /healthz probe, then (3) the real claim/run. No
+// eligible row ⇒ return before ever touching the container: Cloudflare
+// Containers bill wall-clock while awake, and the every-minute cron tick was
+// keeping it warm 24/7 even when the outbox was empty. If jobs ARE eligible
+// but /healthz is down/unwarmed we still return without claiming, so pending
+// jobs never burn 00241 attempts against a dead worker. Per-item failures go
 // through complete_aesthete_job('failed', reason) — backoff 1 m/5 m/25 m,
 // terminal park at attempts ≥ 5 (all owned by the RPC, never re-implemented
 // here).
@@ -33,7 +40,7 @@
 //      INFERENCE_TOKEN.
 //
 // Response: { claimed, done, failed, ms, kinds } — or
-//           { skipped: 'inference_unconfigured' | 'inference_unavailable', … }.
+//           { skipped: 'no_work' | 'inference_unconfigured' | 'inference_unavailable', … }.
 
 import { adminClient, createInferenceClient, logLine } from '../_shared/aesthete.ts';
 import { captureServerEvent } from '../_shared/aesthete-events.ts';
@@ -67,6 +74,31 @@ Deno.serve(async (req: Request) => {
     return json({ skipped: 'inference_unconfigured', claimed: 0, done: 0, failed: 0 }, 503);
   }
 
+  const admin = adminClient();
+
+  // Work check FIRST (see header) — same claim-eligibility predicate as
+  // claim_aesthete_jobs (00241, re-asserted unchanged in 00250):
+  // status='pending' AND run_after <= now(), restricted to the three kinds
+  // this worker drains. Zero eligible rows ⇒ zero outbound HTTP, so the
+  // every-minute cron tick never keeps the inference container awake for
+  // nothing (Cloudflare Containers bill wall-clock).
+  const { data: pendingJobs, error: pendingErr } = await admin
+    .from('aesthete_jobs')
+    .select('id')
+    .in('kind', ['embed_text', 'embed_fused', 'portfolio_embed'])
+    .eq('status', 'pending')
+    .lte('run_after', new Date().toISOString())
+    .limit(1);
+  if (pendingErr) {
+    // Fail OPEN on the check itself — an unreadable outbox is not proof it's
+    // empty; fall through to the normal probe/claim path rather than mask a
+    // DB problem as "no work".
+    logLine(FN, 'work_check_failed', { error: pendingErr.message });
+  } else if (!pendingJobs || pendingJobs.length === 0) {
+    logLine(FN, 'no_work', {});
+    return json({ skipped: 'no_work', claimed: 0, done: 0, failed: 0 }, 200);
+  }
+
   const inference = createInferenceClient({ url: inferenceUrl, token: inferenceToken });
 
   // Probe before claiming (see header). 2 s budget inside the 60 s window.
@@ -77,7 +109,6 @@ Deno.serve(async (req: Request) => {
   }
 
   try {
-    const admin = adminClient();
     const result = await runEmbedBatch({
       // Structural narrowing: supabase-js's builder generics blow TS2589 when
       // checked against the narrow DbLike seam; runtime shape is identical.
