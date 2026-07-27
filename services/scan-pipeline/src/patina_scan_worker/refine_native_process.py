@@ -4559,6 +4559,28 @@ def _refuse_a_symlinked_workspace_container(parent_directory: str) -> None:
     table; what this function adds is that the shapes an operator actually
     builds are decided without the errno being consulted at all.
 
+    A residual in the OTHER direction, named here rather than left implicit: the
+    second disjunct is a CANONICAL-FORM check, not a symlink check.
+    ``realpath(path) != path`` is equally true of shapes with no symlink in them
+    -- a ``.`` or a ``..`` segment, a doubled separator, a trailing slash -- so
+    this gate refuses those as well, and refuses them EARLIER than anything else
+    does.  On a root that does not exist yet that is a change of verdict and not
+    only of timing: the open would have given ENOENT, which
+    ``_WORKSPACE_PROVISIONING_ERRNOS`` puts on the retryable side deliberately.
+    Four such non-symlink shapes were measured moving RETRYABLE -> FATAL on an
+    absent root; the normalisation itself reproduces from this repository, while
+    the A/B against the pre-gate build is a separate reviewer's, on Linux and
+    macOS.
+
+    That is wider than the two findings this gate was built for.  It is not a
+    regression, because it is terminal-correct:
+    :func:`provision_native_workspace_lease` requires the canonical form after
+    the open regardless, with the same message and the same fatal code, so a
+    non-canonical root that DOES resolve is refused either way -- see
+    ``test_a_non_canonical_container_path_is_refused_at_provisioning``.  What
+    this gate changes for those shapes is when the refusal lands, and that an
+    absent root gets it too.
+
     This is a PRE-EMPTION and not a guarantee.  Both probes are by name, and a
     root replaced between them and the open is not prevented here -- that would
     need a descriptor, and there is nothing to pin one to before the open.  What
@@ -4735,13 +4757,33 @@ def provision_native_workspace_lease(
             # ``S_ISDIR`` check arriving early, and gets that check's own
             # wording.
             #
-            # The symlink disjunct is now the RACE RESIDUAL, not the primary
-            # answer: ``_refuse_a_symlinked_workspace_container`` above settles
-            # every symlink shape before this open runs, so reaching here with a
-            # symlinked final component means the root was replaced between that
-            # by-name probe and this open.  The verdict is deliberately the same
-            # one the pre-open gate gives, so the race cannot change the answer
-            # -- only which line reports it.
+            # The symlink condition below is TWO cases, and they are not the
+            # same case.
+            #
+            # The ELOOP disjunct is LIVE, not a residual.  A self-looping
+            # INTERMEDIATE component defeats both pre-open probes -- measured,
+            # ``lstat`` fails ELOOP and non-strict ``realpath`` returns the path
+            # unchanged; the measurement is carried by
+            # :func:`_refuse_a_symlinked_workspace_container` -- so that shape
+            # arrives here with the gate above having said nothing about it, and
+            # it is settled HERE.  Do not read that gate as making this branch
+            # dead.  Deleting it would not flip that shape to retryable -- the
+            # table's own ELOOP row is fatal -- but it would send the shape back
+            # to being decided BY the errno, which is the one thing this whole
+            # arrangement exists to stop.
+            #
+            # The ENOTDIR disjunct IS the race residual.  A symlinked FINAL
+            # component is the shape the gate's ``lstat`` probe answers by name,
+            # so it should already have been refused; reaching it here is what a
+            # root replaced between that by-name probe and this open looks like.
+            #
+            # Both verdicts are deliberately the one the pre-open gate gives, so
+            # neither the race nor the shape changes the answer -- only which
+            # line reports it.  What the gate buys is therefore NOT that every
+            # symlink shape is settled before this open.  It is that no symlink
+            # shape reaches the errno table at the bottom, and that the shapes an
+            # operator actually builds are decided without the errno being
+            # consulted at all.
             if open_exc.errno == errno.ELOOP or (
                 open_exc.errno == errno.ENOTDIR
                 and _final_component_is_a_symlink(parent_directory)
