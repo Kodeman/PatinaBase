@@ -19,13 +19,20 @@ Read it with, not instead of, the canonical sources below.
    item 4's exact engine/API/fixture decision and remaining proof boundary.
 6. `docs/design/field-capture/p2-item4a-field-raster-qualification-2026-07-24.md`
    — the completed physical iPhone/Core Image raster receipt (I92).
-7. `docs/design/field-capture/scan-pipeline-worker-design.md` — §10 is the
+7. `docs/design/field-capture/p2-item4-qualified-host-acceptance-2026-07-27.md`
+   — item 4's DeskDev receipt: the gate (1139/0 skipped, four runs), the four
+   named acceptance clauses (subreaper, adopted-child reaping/quiescence,
+   escaped-`setsid` handling, cleanup precedence), the kernel-thread parser on
+   real `/proc`, the `PR_SET_DUMPABLE` seal, both descriptor-theft routes, and
+   the `O_TMPFILE` freeze on real ext4. Read its boundary section before
+   treating any of it as a gate.
+8. `docs/design/field-capture/scan-pipeline-worker-design.md` — §10 is the
    P2 stage contract (the fork-join in §10.1.1 and budgets in §10.9 are
    implementation law).
-8. Auto-memory `project_field_capture_p1.md` — the compressed ledger with
+9. Auto-memory `project_field_capture_p1.md` — the compressed ledger with
    every warning flag.
-9. `docs/design/field-capture/m4-pilot-checklist.md` — the still-owed Leah
-   pilot runbook.
+10. `docs/design/field-capture/m4-pilot-checklist.md` — the still-owed Leah
+    pilot runbook.
 
 ## Exact position (as of this handoff)
 
@@ -570,12 +577,28 @@ tests, and an independent adversarial review. **Item 6 is where you resume.**
    **every successful native Refine call failed
    `REFINE_ENGINE_CLEANUP_FAILED`**. Fixed and re-proven on the host — zero parse
    failures across every live `/proc` row, every `pgrp 0` row confirmed a kernel
-   thread by absent `VmSize` and absent `cmdline`, zero userland. Before
-   declaring item 4 closed, confirm against the host receipt which of its other
-   AC clauses (subreaper behaviour, adopted-child reaping, escaped-descendant
-   handling, cleanup precedence) were actually walked — this document records the
-   blocker, not a sign-off. Skips still cannot be converted into acceptance by
-   changing tests.
+   thread by absent `VmSize` and absent `cmdline`, zero userland. Skips still
+   cannot be converted into acceptance by changing tests.
+
+   **Item 4's other acceptance clauses are now receipted** in
+   `docs/design/field-capture/p2-item4-qualified-host-acceptance-2026-07-27.md`
+   — a second DeskDev run at commit `77b4ff19` that re-measured all four:
+   subreaper state transition and adopted-grandchild reaping through the shipped
+   helpers; adopted-child reaping and quiescence scoped to a real child group
+   leader (member named when live, quiescent when the leader is dead and alone);
+   the escaped-`setsid` descendant, recorded as a **measured blind spot** (the
+   group scan reports quiescent while a live descendant exists — containment is
+   the frozen private copy, not the scan) rather than as a pass; and cleanup
+   precedence, driven through the real `run_inherited_colmap_command` in a real
+   `setsid` leader with no monkeypatching and with paired controls, showing
+   `REFINE_ENGINE_CLEANUP_FAILED` replacing `REFINE_ENGINE_FAILED` and
+   `REFINE_ENGINE_TIMEOUT`. The gate ran 1139 passed / 0 skipped four times
+   (three under `umask 022`, one under the ambient `0002`). One sub-clause is
+   explicitly *not* host-measured and is labelled as such in that receipt:
+   precedence over the `drain_errors` branch in isolation, which remains
+   in-repo coverage only. That receipt is evidence, not a ruling — whether
+   item 4 closes as a program gate is still Kody's call, and every downstream
+   hard gate is untouched.
 5. ✅ **DONE (I97).** Seven-descriptor native output handoff, frozen by
    construction (`O_TMPFILE` copy at receipt, hashed from the copy) behind a
    `PR_SET_DUMPABLE` seal. Runner display-path reopening is removed: engine
