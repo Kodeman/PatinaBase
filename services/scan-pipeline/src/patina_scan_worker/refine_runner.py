@@ -141,6 +141,20 @@ class RefineFailureCode(str, Enum):
     ENGINE_TIMEOUT = "REFINE_ENGINE_TIMEOUT"
     ENGINE_FAILED = "REFINE_ENGINE_FAILED"
     INPUT_IO = "REFINE_INPUT_IO"
+    #: A full workspace filesystem, kept as its own token rather than folded
+    #: into a neighbour.  ``refine_native_process`` already raises
+    #: ``REFINE_ENGINE_NO_SPACE`` when the engine-output freeze cannot mint or
+    #: fill its private copy, precisely because "free disk space on the
+    #: workspace container" is a different operator instruction from every
+    #: other failure this runner reports.  Translating it to ``INPUT_IO`` here
+    #: would send the operator to look at the refine INPUT packet, which is not
+    #: what is wrong; translating it to ``ENGINE_FAILED`` would say only that
+    #: something went wrong.  Carrying the same token end to end costs nothing:
+    #: this enum has no persisted or cross-language consumer (it is referenced
+    #: only by this module and its tests, and ``scan_pipeline.refine`` is not
+    #: registered), and ``REFINE_FAILURE_FATALITY`` below is guarded exhaustive,
+    #: so a member cannot be added without a deliberate fatality decision.
+    ENGINE_NO_SPACE = "REFINE_ENGINE_NO_SPACE"
     GPU_DRIVER = "REFINE_GPU_DRIVER"
     GPU_OOM = "REFINE_GPU_OOM"
     ENGINE_VERSION_MISMATCH = "REFINE_ENGINE_VERSION_MISMATCH"
@@ -159,6 +173,11 @@ REFINE_FAILURE_FATALITY: Mapping[RefineFailureCode, bool] = MappingProxyType(
         RefineFailureCode.ENGINE_TIMEOUT: False,
         RefineFailureCode.ENGINE_FAILED: False,
         RefineFailureCode.INPUT_IO: False,
+        # RETRYABLE ON PURPOSE.  A full workspace filesystem is an operational
+        # condition with an operator fix and no defect in the task, so the task
+        # must survive to be retried once the disk has headroom.  Marking it
+        # fatal would permanently kill a scan for a transient disk state.
+        RefineFailureCode.ENGINE_NO_SPACE: False,
         RefineFailureCode.GPU_DRIVER: False,
         RefineFailureCode.GPU_OOM: False,
         RefineFailureCode.ENGINE_VERSION_MISMATCH: True,
@@ -2997,6 +3016,14 @@ class RefineRunner:
                 _fail(RefineFailureCode.ENGINE_TIMEOUT, str(exc))
             if exc.code == RefineFailureCode.INPUT_IO.value:
                 _fail(RefineFailureCode.INPUT_IO, str(exc))
+            # The default below is ARTIFACT_INVALID, which is FATAL.  Every
+            # typed adapter code that means "this could succeed on a retry"
+            # therefore has to be named here or it is silently converted into a
+            # permanent failure.  ENGINE_NO_SPACE is exactly that case: the
+            # engine-output freeze raises it when the workspace filesystem
+            # fills, an operator frees disk, and the same task then runs.
+            if exc.code == RefineFailureCode.ENGINE_NO_SPACE.value:
+                _fail(RefineFailureCode.ENGINE_NO_SPACE, str(exc))
             _fail(RefineFailureCode.ARTIFACT_INVALID, str(exc))
         except OSError as exc:
             _require_engine_budget(deadline)

@@ -1813,6 +1813,33 @@ def test_one_shot_artifact_builder_output_is_deterministically_invalid(tmp_path)
             RefineFailureCode.ENGINE_TIMEOUT,
             False,
         ),
+        # A full workspace filesystem.  Before this case existed the code fell
+        # through the AdapterError handler to ARTIFACT_INVALID, whose fatality
+        # is True, so a disk that filled during the engine-output freeze killed
+        # the task permanently instead of leaving it to run again once an
+        # operator freed space.  ``expected_fatal is False`` is the half of this
+        # assertion that would have caught that; the code alone would not.
+        (
+            AdapterError(
+                "the freeze vault filesystem ran out of space mid-copy",
+                "REFINE_ENGINE_NO_SPACE",
+            ),
+            RefineFailureCode.ENGINE_NO_SPACE,
+            False,
+        ),
+        # The handler's FALLTHROUGH, which nothing exercised before.  Every
+        # ``ValueError`` case here is caught by the generic ``except Exception``
+        # arm instead, so changing the AdapterError default from
+        # ARTIFACT_INVALID to anything else was a mutation with zero red -- the
+        # exact blind spot that let REFINE_ENGINE_NO_SPACE land on a FATAL
+        # default unnoticed.  An unrecognised typed code must land here, and
+        # must land FATAL: the runner cannot know a code it has never been
+        # taught is safe to retry.
+        (
+            AdapterError("an adapter code this runner has never seen", "REFINE_WIDGET"),
+            RefineFailureCode.ARTIFACT_INVALID,
+            True,
+        ),
         (
             ValueError("deterministic malformed model"),
             RefineFailureCode.ARTIFACT_INVALID,
@@ -2409,12 +2436,53 @@ def test_backend_failure_taxonomy_is_stable_and_non_fallback(
     assert [name for name, _ in backend.calls] == [PRIMARY_ENGINE]
 
 
+def test_the_no_space_token_is_literally_the_one_the_native_boundary_raises():
+    """The seam the original defect lived in, pinned from both sides.
+
+    ``refine_native_process`` mints ``REFINE_ENGINE_NO_SPACE`` itself and hands
+    it up as an ``AdapterError``.  The runner's ``AdapterError`` handler names a
+    few codes and falls through to ``ARTIFACT_INVALID`` -- which is FATAL -- for
+    everything else, so a code that exists in one module and not the other is
+    silently converted from "retry once the disk has room" into "this task is
+    dead".  Comparing the two constants rather than restating the string means a
+    rename on either side fails here instead of in production.
+
+    NOTE what this does NOT claim: it is not an exhaustiveness check over every
+    code the native boundary can raise.  The one such code whose fatality still
+    changes across this handler (``REFINE_ENGINE_FAILED``, retryable in the
+    taxonomy, fatal once it falls through) is left exactly as this branch found
+    it and is reported as a residual rather than pinned here as correct.
+    """
+
+    import patina_scan_worker.refine_native_process as native_process
+
+    assert native_process._NO_SPACE_CODE == RefineFailureCode.ENGINE_NO_SPACE.value
+
+
+def test_a_full_workspace_filesystem_is_retryable_not_a_dead_task():
+    """The fatality, stated on its own so a code-only assertion cannot cover it.
+
+    A retryable classification that is marked fatal is the same outage as no
+    classification at all.  ``fatal`` is what the queue reads.
+    """
+
+    assert REFINE_FAILURE_FATALITY[RefineFailureCode.ENGINE_NO_SPACE] is False
+    assert (
+        RefineRunError(RefineFailureCode.ENGINE_NO_SPACE, "vault filesystem full").fatal
+        is False
+    )
+    # And the fatal default it used to land on, for contrast -- so a mutation
+    # that flips the whole map to False does not leave this green.
+    assert REFINE_FAILURE_FATALITY[RefineFailureCode.ARTIFACT_INVALID] is True
+
+
 def test_failure_taxonomy_is_closed_and_covers_every_public_failure_code():
     assert set(REFINE_FAILURE_FATALITY) == set(RefineFailureCode)
     assert REFINE_FAILURE_FATALITY == {
         RefineFailureCode.ENGINE_TIMEOUT: False,
         RefineFailureCode.ENGINE_FAILED: False,
         RefineFailureCode.INPUT_IO: False,
+        RefineFailureCode.ENGINE_NO_SPACE: False,
         RefineFailureCode.GPU_DRIVER: False,
         RefineFailureCode.GPU_OOM: False,
         RefineFailureCode.ENGINE_VERSION_MISMATCH: True,
