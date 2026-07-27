@@ -9,6 +9,8 @@ declares is authoritative.
 from __future__ import annotations
 
 import ast
+import contextlib
+import errno
 import hashlib
 import inspect
 import os
@@ -61,12 +63,26 @@ requires_output_freeze = pytest.mark.skipif(
     ),
 )
 
-#: Reopening ANOTHER process's descriptor through ``/proc/<pid>/fd`` is gated by
-#: ``ptrace_may_access``.  Ubuntu ships ``yama.ptrace_scope=1``, which forbids it
-#: between unrelated same-UID processes; a container without Yama permits it.
-#: Where it is forbidden the F-3 exploit cannot be built at all, which is a
-#: property of the host, not evidence that the code is safe.
-_YAMA_PTRACE_SCOPE_PATH = "/proc/sys/kernel/yama/ptrace_scope"
+#: Reopening ANOTHER process's descriptor through ``/proc/<pid>/fd`` goes through
+#: ``proc_fd_access_allowed`` -> ``ptrace_may_access(task,
+#: PTRACE_MODE_READ_FSCREDS)``.  ``yama.ptrace_scope`` does NOT gate it at ANY
+#: scope: ``yama_ptrace_access_check`` returns 0 immediately unless the mode
+#: carries ``PTRACE_MODE_ATTACH``, and this route never does.  That is read off
+#: the kernel source and is NOT measured here -- no environment these tests can
+#: run in ships Yama at all.  An earlier revision skipped F-3 whenever
+#: ``ptrace_scope != 0``, on the opposite premise, which meant it skipped on
+#: precisely the hosts where the exploit works; the skip is now decided by
+#: whether the exploit actually ran, which is the only honest control.
+#:
+#: What DOES gate it is the target's ``dumpable`` flag, which
+#: ``_seal_process_against_procfs_descriptor_theft`` drops -- see
+#: ``test_the_sealed_boundary_refuses_a_same_uid_procfs_reopen``.
+_PR_GET_DUMPABLE = 3
+_PR_SET_DUMPABLE = 4
+#: Bit 19 of ``CapEff``.  The documented residual explicitly excludes an actor
+#: holding it, so a test that needs the seal to bite has to say so rather than
+#: fail on a host where the exclusion applies.
+_CAP_SYS_PTRACE_BIT = 19
 
 
 def _entrypoint(name: str) -> str:
@@ -87,6 +103,119 @@ def _payload(token: str) -> bytes:
 
 def _sha256(payload: bytes) -> str:
     return hashlib.sha256(payload).hexdigest()
+
+
+# ---------------------------------------------------------------------------
+# The procfs descriptor-theft route, and the seal that closes it
+# ---------------------------------------------------------------------------
+
+#: A same-UID process with no inherited descriptor, reopening one of ours
+#: through ``/proc/<pid>/fd`` and rewriting it.  This is the whole exploit; there
+#: is nothing privileged in it.
+_PROCFS_FD_THIEF = (
+    "import os,sys\n"
+    "fd=os.open('/proc/'+sys.argv[1]+'/fd/'+sys.argv[2], os.O_RDWR)\n"
+    "os.pwrite(fd, bytes.fromhex(sys.argv[3]), 0)\n"
+    "os.close(fd)\n"
+)
+
+#: The same thief, except it opens the ``/proc/<pid>/fd`` DIRECTORY first and
+#: only reaches for the entry once the victim says it has sealed itself.  If the
+#: check that matters lived on the directory open, this would win.
+_PROCFS_FD_PRE_OPENER = (
+    "import os,sys\n"
+    "directory=os.open('/proc/'+sys.argv[1]+'/fd', os.O_RDONLY|os.O_DIRECTORY)\n"
+    "print('READY', flush=True)\n"
+    "sys.stdin.readline()\n"
+    "fd=os.open(sys.argv[2], os.O_RDWR, dir_fd=directory)\n"
+    "os.pwrite(fd, bytes.fromhex(sys.argv[3]), 0)\n"
+    "os.close(fd)\n"
+    "print('STOLEN', flush=True)\n"
+)
+
+
+def _steal_through_procfs(pid: int, descriptor: int, payload: bytes):
+    """Run the thief against one descriptor of ``pid`` and report the outcome."""
+
+    return subprocess.run(
+        [
+            sys.executable,
+            "-c",
+            _PROCFS_FD_THIEF,
+            str(pid),
+            str(descriptor),
+            payload.hex(),
+        ],
+        capture_output=True,
+    )
+
+
+def _prctl(option: int, value: int = 0) -> int:
+    import ctypes
+
+    return ctypes.CDLL(None, use_errno=True).prctl(option, value, 0, 0, 0)
+
+
+@contextlib.contextmanager
+def _temporarily_dumpable():
+    """Undo the boundary's process-wide seal for the length of one exploit.
+
+    ``_open_output_freeze_vault`` drops ``dumpable`` for the WHOLE pytest process
+    the first time any test reaches the receipt path, and production never
+    restores it -- restoring it would hand the route back while the caller still
+    holds the descriptors.  A test that needs the exploit to be constructible
+    against its own process therefore has to raise the flag itself and put it
+    back.  Only a test may do this, and only around the exploit.
+    """
+
+    previous = _prctl(_PR_GET_DUMPABLE)
+    _prctl(_PR_SET_DUMPABLE, 1)
+    try:
+        yield
+    finally:
+        _prctl(_PR_SET_DUMPABLE, previous)
+
+
+def _has_cap_sys_ptrace() -> bool:
+    """Would a child of this process bypass the seal by capability?
+
+    ``NATIVE_ENGINE_OUTPUT_BYTES_FROZEN_AGAINST_SURVIVING_DESCRIPTORS``
+    explicitly excludes ``CAP_SYS_PTRACE``, so a host where the attacker holds it
+    is a host where the seal is not claimed to bite.
+    """
+
+    try:
+        with open("/proc/self/status", "r", encoding="utf-8") as handle:
+            for line in handle:
+                if line.startswith("CapEff:"):
+                    return bool(int(line.split()[1], 16) & (1 << _CAP_SYS_PTRACE_BIT))
+    except OSError:
+        return False
+    return False
+
+
+def _linkat_through_procfs(descriptor: int, *, directory_fd: int, name: str):
+    """Try to give an anonymous file a name; return the errno name, or None.
+
+    ``os.link(src, dst)`` with both dir_fd arguments defaulted calls plain
+    ``link(2)`` in CPython, which does NOT follow the procfs magic symlink and so
+    always reports ``EXDEV`` (procfs mount != target mount).  That is the trap
+    that made an earlier revision of this file conclude the ``O_EXCL``
+    differential was unobservable and pin the flag by source text instead.
+    Passing a dir_fd forces CPython onto ``linkat(..., AT_SYMLINK_FOLLOW)``,
+    which is the call the differential is actually about.
+    """
+
+    try:
+        os.link(
+            f"{native_process.NATIVE_OUTPUT_FREEZE_ALIAS_DIRECTORY}/{descriptor}",
+            name,
+            dst_dir_fd=directory_fd,
+            follow_symlinks=True,
+        )
+    except OSError as exc:
+        return errno.errorcode.get(exc.errno, str(exc.errno))
+    return None
 
 
 # ---------------------------------------------------------------------------
@@ -1273,21 +1402,267 @@ def test_the_copy_refuses_a_destination_that_stops_accepting_bytes(
         native_process._release_output_freeze_vault(leased.lease, vault, name)
 
 
-def test_the_private_copy_is_opened_permanently_unlinkable():
-    """``O_EXCL`` is pinned by shape because no test here can pin it by effect.
+@requires_output_freeze
+@pytest.mark.parametrize("code", [errno.ENOSPC, errno.EDQUOT])
+def test_a_full_freeze_filesystem_is_named_rather_than_unexpected(
+    leased,
+    tmp_path,
+    monkeypatch,
+    code,
+):
+    """A full lease filesystem is an operational condition, not a mystery.
+
+    It already failed closed -- no short copy, no partial file, space fully
+    reclaimed -- but it arrived as "unexpected refine native boundary failure:
+    OSError: No space left on device", which tells an operator nothing about the
+    fix being disk headroom.  Every other refusal in this module is named; this
+    one now is too.
+    """
+
+    payload = b"x" * 64
+    whole = tmp_path / "whole"
+    whole.write_bytes(payload)
+    source = os.open(whole, os.O_RDONLY)
+
+    def full(*_args):
+        raise OSError(code, os.strerror(code))
+
+    monkeypatch.setattr(native_process.os, "pwrite", full)
+    name, vault = native_process._open_output_freeze_vault(leased.lease)
+    try:
+        with pytest.raises(AdapterError) as raised:
+            native_process._frozen_output_copy(
+                source,
+                token="adapter-v2.json",
+                vault_descriptor=vault,
+                expected_size=len(payload),
+                remaining_seconds=_deadline(30.0).remaining_seconds,
+            )
+
+        assert raised.value.code == "REFINE_ENGINE_NO_SPACE"
+        assert "ran out of space mid-copy" in str(raised.value)
+        assert "free disk space" in str(raised.value)
+    finally:
+        os.close(source)
+        native_process._release_output_freeze_vault(leased.lease, vault, name)
+
+
+@requires_output_freeze
+def test_a_write_fault_that_is_not_a_full_filesystem_is_not_called_one(
+    leased,
+    tmp_path,
+    monkeypatch,
+):
+    """The errno clause, isolated.
+
+    Telling an operator to free disk space when the disk is fine is a WRONG
+    instruction rather than a vague one, so the no-space refusal is reached only
+    by the no-space errnos.  ``EIO`` is the counter-example that makes the clause
+    deletable-detectable.
+    """
+
+    payload = b"x" * 64
+    whole = tmp_path / "whole"
+    whole.write_bytes(payload)
+    source = os.open(whole, os.O_RDONLY)
+
+    def faulty(*_args):
+        raise OSError(errno.EIO, os.strerror(errno.EIO))
+
+    monkeypatch.setattr(native_process.os, "pwrite", faulty)
+    name, vault = native_process._open_output_freeze_vault(leased.lease)
+    try:
+        with pytest.raises(OSError) as raised:
+            native_process._frozen_output_copy(
+                source,
+                token="adapter-v2.json",
+                vault_descriptor=vault,
+                expected_size=len(payload),
+                remaining_seconds=_deadline(30.0).remaining_seconds,
+            )
+
+        assert not isinstance(raised.value, AdapterError)
+        assert raised.value.errno == errno.EIO
+    finally:
+        os.close(source)
+        native_process._release_output_freeze_vault(leased.lease, vault, name)
+
+
+@requires_output_freeze
+def test_a_full_freeze_filesystem_at_creation_is_not_reported_as_no_o_tmpfile(
+    leased,
+    tmp_path,
+    monkeypatch,
+):
+    """ENOSPC on the anonymous-file creation is out of space, not a missing flag.
+
+    The creation refusal names ``O_TMPFILE`` support, which is right for
+    ``EOPNOTSUPP`` and actively misleading for a full filesystem -- it sends the
+    operator to look for a kernel feature instead of for free blocks.
+    """
+
+    payload = b"x" * 8
+    whole = tmp_path / "whole"
+    whole.write_bytes(payload)
+    source = os.open(whole, os.O_RDONLY)
+    real_open = native_process.os.open
+
+    def full(path, flags, *args, **kwargs):
+        if flags & os.O_TMPFILE == os.O_TMPFILE:
+            raise OSError(errno.ENOSPC, os.strerror(errno.ENOSPC))
+        return real_open(path, flags, *args, **kwargs)
+
+    name, vault = native_process._open_output_freeze_vault(leased.lease)
+    monkeypatch.setattr(native_process.os, "open", full)
+    try:
+        with pytest.raises(AdapterError) as raised:
+            native_process._frozen_output_copy(
+                source,
+                token="adapter-v2.json",
+                vault_descriptor=vault,
+                expected_size=len(payload),
+                remaining_seconds=_deadline(30.0).remaining_seconds,
+            )
+
+        assert raised.value.code == "REFINE_ENGINE_NO_SPACE"
+        assert "out of space" in str(raised.value)
+        assert "O_TMPFILE" not in str(raised.value)
+    finally:
+        monkeypatch.undo()
+        os.close(source)
+        native_process._release_output_freeze_vault(leased.lease, vault, name)
+
+
+@requires_output_freeze
+def test_a_creation_failure_that_is_not_a_full_filesystem_still_names_o_tmpfile(
+    leased,
+    tmp_path,
+    monkeypatch,
+):
+    """The errno clause on the creation path, isolated the same way."""
+
+    payload = b"x" * 8
+    whole = tmp_path / "whole"
+    whole.write_bytes(payload)
+    source = os.open(whole, os.O_RDONLY)
+    real_open = native_process.os.open
+
+    def unsupported(path, flags, *args, **kwargs):
+        if flags & os.O_TMPFILE == os.O_TMPFILE:
+            raise OSError(errno.EOPNOTSUPP, os.strerror(errno.EOPNOTSUPP))
+        return real_open(path, flags, *args, **kwargs)
+
+    name, vault = native_process._open_output_freeze_vault(leased.lease)
+    monkeypatch.setattr(native_process.os, "open", unsupported)
+    try:
+        with pytest.raises(AdapterError) as raised:
+            native_process._frozen_output_copy(
+                source,
+                token="adapter-v2.json",
+                vault_descriptor=vault,
+                expected_size=len(payload),
+                remaining_seconds=_deadline(30.0).remaining_seconds,
+            )
+
+        assert raised.value.code == "REFINE_ENGINE_FAILED"
+        assert "does not support O_TMPFILE anonymous files" in str(raised.value)
+    finally:
+        monkeypatch.undo()
+        os.close(source)
+        native_process._release_output_freeze_vault(leased.lease, vault, name)
+
+
+def test_the_headroom_contract_is_written_down_where_the_copies_are_minted():
+    """The transient disk cost is a precondition no reader could infer.
+
+    It is 1.00x the payload IN ADDITION to the lease, held at the same time as
+    the lease -- 2x at the peak, never 3x, because the lease is purged before
+    staging.  A number that lives only in a review transcript is a number the
+    next operator does not have.
+    """
+
+    for documented in (
+        native_process._frozen_output_copy.__doc__,
+        native_process._open_output_freeze_vault.__doc__,
+    ):
+        assert "2x" in documented
+        assert "8 GiB" in documented
+        assert "REFINE_ENGINE_NO_SPACE" in documented
+
+
+@requires_output_freeze
+def test_the_private_copy_is_opened_permanently_unlinkable(leased, tmp_path):
+    """``O_EXCL`` pinned by EFFECT: no ``linkat`` can ever name the copy.
 
     With ``O_TMPFILE``, ``O_EXCL`` means "this file can never be linked into the
     filesystem" -- the one flag that turns "has no name" into "can never be given
-    one".  The runtime differential is not observable in this repository's test
-    environments: a ``linkat`` through ``/proc/self/fd`` is refused with
-    ``EXDEV`` whether or not ``O_EXCL`` was used, so an effect-based assertion
-    would be green either way.  Asserting the call shape does go red if the flag
-    is dropped, which is the property that matters.
+    one".  An earlier revision asserted the call's SOURCE TEXT on the belief that
+    the differential was unobservable, because a link through ``/proc/self/fd``
+    is refused with ``EXDEV`` either way.  The ``EXDEV`` was never a property of
+    the filesystem: it was the wrong call.  CPython's ``os.link`` with both
+    ``dir_fd`` arguments defaulted issues plain ``link(2)``, which does not
+    follow the procfs magic symlink, so it reports ``EXDEV`` (procfs mount !=
+    target mount) whatever the flags were.  ``_linkat_through_procfs`` passes a
+    ``dst_dir_fd``, which forces ``linkat(..., AT_SYMLINK_FOLLOW)`` -- the call
+    the differential is about -- and then it is plainly visible.  Measured in
+    this repository's Linux test container on BOTH overlayfs and tmpfs, at
+    ``euid 0`` and ``euid 1000``:
+
+        O_EXCL=False  linkat -> OK (A NAME WAS CREATED)
+        O_EXCL=True   linkat -> ENOENT
+
+    (``vfs_link`` refuses an inode with ``i_nlink == 0`` unless it carries
+    ``I_LINKABLE``, which is exactly what ``O_EXCL`` withholds.)  The control
+    below still runs, because a filesystem that refuses the link for its own
+    reasons would make the assertion vacuous; where that happens this skips
+    rather than reporting a proof it did not make.
     """
 
-    source = inspect.getsource(native_process._frozen_output_copy)
+    naming = os.open(str(tmp_path), os.O_RDONLY | os.O_DIRECTORY)
+    name, vault = native_process._open_output_freeze_vault(leased.lease)
+    control = os.open(
+        ".", os.O_TMPFILE | os.O_RDWR | os.O_CLOEXEC, 0o600, dir_fd=vault
+    )
+    try:
+        os.pwrite(control, b"linkable\n", 0)
+        rehearsal = _linkat_through_procfs(
+            control, directory_fd=naming, name="control-link"
+        )
+        if rehearsal is not None:
+            pytest.skip(
+                "linkat through /proc/self/fd is refused with "
+                + rehearsal
+                + " on this filesystem WITHOUT O_EXCL, so nothing here could "
+                "show that O_EXCL is what refuses it"
+            )
+        assert os.fstat(control).st_nlink == 1
+        os.unlink("control-link", dir_fd=naming)
 
-    assert "os.O_TMPFILE | os.O_RDWR | os.O_EXCL | os.O_CLOEXEC" in source
+        source = tmp_path / "engine-output"
+        source.write_bytes(b"linkable\n")
+        opened = os.open(source, os.O_RDONLY)
+        try:
+            frozen, _identity = native_process._frozen_output_copy(
+                opened,
+                token="adapter-v2.json",
+                vault_descriptor=vault,
+                expected_size=9,
+                remaining_seconds=_deadline(30.0).remaining_seconds,
+            )
+        finally:
+            os.close(opened)
+        try:
+            assert (
+                _linkat_through_procfs(frozen, directory_fd=naming, name="frozen-link")
+                == "ENOENT"
+            )
+            assert os.fstat(frozen).st_nlink == 0
+        finally:
+            os.close(frozen)
+    finally:
+        os.close(control)
+        native_process._release_output_freeze_vault(leased.lease, vault, name)
+        os.close(naming)
 
 
 @requires_output_freeze
@@ -1492,25 +1867,23 @@ def test_f3_a_same_uid_process_reopening_the_nameless_inode_cannot_reach_it(
     """F-3: ``st_nlink == 0`` never closed the name route -- procfs is a name.
 
     A separate same-UID process with no inherited descriptor can reopen an
-    unlinked inode through ``/proc/<pid>/fd/<n>`` and rewrite it, where the host
-    permits that. This test builds exactly that process. Where the host forbids
-    it (Yama ``ptrace_scope`` other than 0, or no procfs) the exploit cannot be
-    constructed and the test skips -- which is a fact about the host, not
-    evidence that the code is safe.
+    unlinked inode through ``/proc/<pid>/fd/<n>`` and rewrite it.  This test
+    builds exactly that process and points it at the LEASE-SIDE object, which the
+    freeze deliberately does not protect, to show that what the caller holds is a
+    different inode the exploit cannot address.
+
+    ``yama.ptrace_scope`` is NOT what decides whether this can be built -- see the
+    module-level note on ``_PR_GET_DUMPABLE``.  What decides it is the target's
+    ``dumpable`` flag, which the boundary has by now dropped for this whole
+    process; that seal is pinned on its own by
+    ``test_the_sealed_boundary_refuses_a_same_uid_procfs_reopen``, so this test
+    lifts it for the length of its exploit and puts it back.  On a host that
+    genuinely refuses the reopen anyway the test still skips -- a fact about the
+    host, not evidence that the code is safe.
     """
 
     if sys.platform != "linux":
         pytest.skip("/proc/<pid>/fd exists only on Linux")
-    if os.path.exists(_YAMA_PTRACE_SCOPE_PATH):
-        scope = Path(_YAMA_PTRACE_SCOPE_PATH).read_text().strip()
-        if scope != "0":
-            pytest.skip(
-                "Yama ptrace_scope is "
-                + scope
-                + "; a non-ancestor same-UID process may not read this "
-                "process's /proc/<pid>/fd, so the F-3 exploit cannot be built "
-                "on this host"
-            )
 
     token = "seed-model-v1.tar"
     payload = _payload(token)
@@ -1521,23 +1894,8 @@ def test_f3_a_same_uid_process_reopening_the_nameless_inode_cannot_reach_it(
         with sink:
             assert os.fstat(surviving).st_nlink == 0
             tampered = b"T" * len(payload)
-            attacker = subprocess.run(
-                [
-                    sys.executable,
-                    "-c",
-                    (
-                        "import os,sys\n"
-                        "fd=os.open('/proc/'+sys.argv[1]+'/fd/'+sys.argv[2],"
-                        " os.O_RDWR)\n"
-                        "os.pwrite(fd, bytes.fromhex(sys.argv[3]), 0)\n"
-                        "os.close(fd)\n"
-                    ),
-                    str(os.getpid()),
-                    str(surviving),
-                    tampered.hex(),
-                ],
-                capture_output=True,
-            )
+            with _temporarily_dumpable():
+                attacker = _steal_through_procfs(os.getpid(), surviving, tampered)
             if attacker.returncode != 0:
                 pytest.skip(
                     "this host refuses a cross-process /proc/<pid>/fd reopen: "
@@ -1551,6 +1909,313 @@ def test_f3_a_same_uid_process_reopening_the_nameless_inode_cannot_reach_it(
             assert os.pread(sink.descriptor(token), len(payload), 0) == payload
     finally:
         os.close(surviving)
+
+
+@requires_output_freeze
+def test_the_sealed_boundary_refuses_a_same_uid_procfs_reopen(tmp_path):
+    """F-4: the residual F-3 documented, closed rather than written down.
+
+    F-3 shows the caller's copy is a different inode from the one the exploit can
+    address.  It does not close the exploit's other target: the copy's OWN entry
+    in ``/proc/<pid>/fd``, which is a name a same-UID process can open ``O_RDWR``
+    even though this process holds it read-only.
+
+    The boundary now drops ``dumpable`` before the first copy exists, so the same
+    attacker gets ``EACCES``.  The POSITIVE CONTROL below is what keeps a green
+    here from meaning "this host has no procfs route at all", and it is also the
+    whole evidence that the route was ever open: with the seal lifted, the very
+    same attacker against the very same process succeeds and the bytes change.
+    No claim here rests on a measurement made somewhere a reader cannot re-run --
+    the control runs in the same process, on the same line, every time.
+    """
+
+    if sys.platform != "linux":
+        pytest.skip("/proc/<pid>/fd exists only on Linux")
+    if _has_cap_sys_ptrace():
+        pytest.skip(
+            "this process's children would inherit CAP_SYS_PTRACE, which the "
+            "documented residual explicitly excludes, so the seal is not "
+            "claimed to bite here"
+        )
+
+    token = "adapter-v2.json"
+    payload = _payload(token)
+    container = tmp_path / "boundary"
+    container.mkdir(mode=0o700)
+    sink = NativeEngineOutputs((token,))
+    run_native_engine_child(
+        _entrypoint("_write_engine_outputs"),
+        {"outputs": {token: payload.hex()}},
+        deadline=_deadline(30.0),
+        workspace_parent_directory=str(container),
+        outputs=sink,
+    )
+    with sink:
+        frozen = sink.descriptor(token)
+        rehearsed = b"C" * len(payload)
+        control = os.open(str(tmp_path), os.O_TMPFILE | os.O_RDWR, 0o600)
+        try:
+            os.pwrite(control, payload, 0)
+            with _temporarily_dumpable():
+                rehearsal = _steal_through_procfs(os.getpid(), control, rehearsed)
+            stolen = os.pread(control, len(payload), 0)
+        finally:
+            os.close(control)
+        if rehearsal.returncode != 0 or stolen != rehearsed:
+            pytest.skip(
+                "this host refuses a cross-process /proc/<pid>/fd reopen even "
+                "against a dumpable target, so nothing here could show the seal "
+                "is what blocks it: "
+                + rehearsal.stderr.decode("utf-8", "replace")[-200:]
+            )
+
+        # The real attempt, against the process exactly as the boundary left it.
+        tampered = b"T" * len(payload)
+        attacker = _steal_through_procfs(os.getpid(), frozen, tampered)
+
+        assert attacker.returncode != 0
+        assert "Permission denied" in attacker.stderr.decode("utf-8", "replace")
+        frozen_bytes = os.pread(frozen, len(payload), 0)
+        assert frozen_bytes == payload
+        assert hashlib.sha256(frozen_bytes).hexdigest() == sink.received[token].sha256
+
+
+@requires_output_freeze
+def test_a_procfs_directory_opened_before_the_seal_still_cannot_be_used(tmp_path):
+    """The seal must not be a race an attacker wins by starting early.
+
+    ``/proc/<pid>/fd`` is a directory, and nothing stops a same-UID process from
+    holding an ``O_DIRECTORY`` descriptor to it from before this process seals
+    itself.  Sealing would be theatre if the permission that matters were checked
+    only when that directory was opened -- an attacker would simply open it
+    first and reach for the entries afterwards.  It is not: the
+    ``ptrace_may_access`` call is on the ``openat`` of each entry.  That is the
+    kind of statement this increment stopped accepting as an argument, so it is
+    written here as the exploit instead, with the descriptor demonstrably opened
+    while the process was still dumpable.
+    """
+
+    if sys.platform != "linux":
+        pytest.skip("/proc/<pid>/fd exists only on Linux")
+    if _has_cap_sys_ptrace():
+        pytest.skip(
+            "this process's children would inherit CAP_SYS_PTRACE, which the "
+            "documented residual explicitly excludes, so the seal is not "
+            "claimed to bite here"
+        )
+
+    payload = b"honest bytes\n"
+    holder = os.open(str(tmp_path), os.O_TMPFILE | os.O_RDWR, 0o600)
+    try:
+        os.pwrite(holder, payload, 0)
+
+        # The control: the very same attack, run to completion while dumpable.
+        # Without it a refusal below would be indistinguishable from a host that
+        # has no procfs route at all.
+        with _temporarily_dumpable():
+            rehearsal = _steal_through_procfs(
+                os.getpid(), holder, b"C" * len(payload)
+            )
+        if rehearsal.returncode != 0 or os.pread(holder, len(payload), 0) == payload:
+            pytest.skip(
+                "this host refuses a cross-process /proc/<pid>/fd reopen even "
+                "against a dumpable target, so nothing here could show that "
+                "ordering is what fails to defeat the seal: "
+                + rehearsal.stderr.decode("utf-8", "replace")[-200:]
+            )
+        os.pwrite(holder, payload, 0)
+
+        with _temporarily_dumpable():
+            attacker = subprocess.Popen(
+                [
+                    sys.executable,
+                    "-c",
+                    _PROCFS_FD_PRE_OPENER,
+                    str(os.getpid()),
+                    str(holder),
+                    (b"T" * len(payload)).hex(),
+                ],
+                stdin=subprocess.PIPE,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+            )
+            try:
+                # The attacker now holds /proc/<our pid>/fd, opened while this
+                # process was dumpable.
+                assert attacker.stdout.readline().strip() == b"READY"
+            except BaseException:
+                attacker.kill()
+                attacker.wait()
+                raise
+
+        # Seal AFTER the directory descriptor is already in the attacker's hand.
+        native_process._seal_process_against_procfs_descriptor_theft()
+        assert _prctl(_PR_GET_DUMPABLE) == 0
+        stdout, stderr = attacker.communicate(b"go\n", timeout=60)
+
+        assert attacker.returncode != 0
+        assert b"STOLEN" not in stdout
+        assert b"Permission denied" in stderr
+        assert os.pread(holder, len(payload), 0) == payload
+    finally:
+        os.close(holder)
+
+
+@requires_output_freeze
+def test_the_seal_leaves_the_parent_able_to_reopen_its_own_descriptors(leased):
+    """The seal is process-wide, and this channel depends on reading itself.
+
+    ``_read_only_freeze_alias`` reopens a descriptor through ``/proc/self/fd``.
+    ``proc_fd_permission`` short-circuits for the owning thread group, so that
+    survives a non-dumpable process -- but the whole point of this increment is
+    that such reasoning is not evidence, so the reopen is performed after the
+    seal and the result compared.
+    """
+
+    native_process._seal_process_against_procfs_descriptor_theft()
+    assert _prctl(_PR_GET_DUMPABLE) == 0
+
+    name, vault = native_process._open_output_freeze_vault(leased.lease)
+    writable = os.open(
+        ".", os.O_TMPFILE | os.O_RDWR | os.O_EXCL | os.O_CLOEXEC, 0o600, dir_fd=vault
+    )
+    try:
+        os.pwrite(writable, b"honest\n", 0)
+        readable = native_process._read_only_freeze_alias(writable, token="adapter-v2.json")
+        try:
+            assert os.fstat(readable)[:2] == os.fstat(writable)[:2]
+            assert os.pread(readable, 7, 0) == b"honest\n"
+        finally:
+            os.close(readable)
+    finally:
+        os.close(writable)
+        native_process._release_output_freeze_vault(leased.lease, vault, name)
+
+
+@requires_output_freeze
+def test_the_seal_leaves_the_process_group_scan_able_to_read_other_processes(leased):
+    """Quiescence reads ``/proc/<pid>/stat`` of processes this one does not own.
+
+    ``/proc/<pid>/stat`` is world-readable whatever the READER's own dumpable
+    flag is, but that is exactly the kind of claim this increment stopped
+    accepting without a measurement, so the scan is run while sealed.
+
+    THE SECOND HALF IS NOT DECORATION.  ``_linux_process_group_members``
+    ``continue``s past a row that has gone away, so a walk that could read
+    NOTHING would return ``()`` too, and the empty-result assertion alone would
+    stay green while the thing it claims to prove had stopped happening.  The
+    own-group scan is the positive control: a child sharing this process's group
+    is alive, so an empty answer there means rows are not being read.
+    """
+
+    if sys.platform != "linux":
+        pytest.skip("the procfs group scan exists only on Linux")
+
+    native_process._seal_process_against_procfs_descriptor_theft()
+    assert _prctl(_PR_GET_DUMPABLE) == 0
+
+    # A leader PID no live process can be a member of, so the scan must walk the
+    # WHOLE of /proc and read every row rather than stopping at a match.
+    members = native_process._linux_process_group_members(
+        2**22 - 1,
+        deadline=_deadline(60.0),
+    )
+
+    assert members == ()
+    assert native_process._read_linux_process_stat("/proc/self/stat")[0] == os.getpid()
+
+    # Popen without start_new_session inherits our process group, so this child
+    # is a member the sealed scan has to find by reading somebody else's row.
+    member = subprocess.Popen([sys.executable, "-c", "import time; time.sleep(30)"])
+    try:
+        found = native_process._linux_process_group_members(
+            os.getpgid(0),
+            deadline=_deadline(60.0),
+        )
+    finally:
+        member.kill()
+        member.wait()
+
+    assert found, (
+        "the sealed scan found no member of this process's own group while a "
+        "child of it was alive, so the empty walk above proves nothing: a scan "
+        "that failed to read every row would also have returned ()"
+    )
+
+
+@requires_output_freeze
+def test_the_freeze_vault_seals_the_process_before_it_creates_anything(
+    leased,
+    monkeypatch,
+):
+    """The seal has to PRECEDE the vault, not merely accompany it.
+
+    The statement after the vault opens mints a copy, and a copy minted while the
+    process is still dumpable is reachable for however long the gap lasts.  The
+    reading is taken from inside ``mkdir`` -- the vault's first act -- so a seal
+    that drifted after it goes red rather than merely looking different.
+    """
+
+    observed: list[int] = []
+    real_mkdir = native_process.os.mkdir
+
+    def recording_mkdir(*args, **kwargs):
+        observed.append(_prctl(_PR_GET_DUMPABLE))
+        return real_mkdir(*args, **kwargs)
+
+    monkeypatch.setattr(native_process.os, "mkdir", recording_mkdir)
+    _prctl(_PR_SET_DUMPABLE, 1)
+    try:
+        assert _prctl(_PR_GET_DUMPABLE) == 1
+        name, vault = native_process._open_output_freeze_vault(leased.lease)
+        native_process._release_output_freeze_vault(leased.lease, vault, name)
+
+        assert observed == [0]
+        assert _prctl(_PR_GET_DUMPABLE) == 0
+    finally:
+        native_process._seal_process_against_procfs_descriptor_theft()
+
+
+def test_the_seal_refuses_a_prctl_that_fails(monkeypatch):
+    """A process that could not be sealed must not mint copies it cannot keep."""
+
+    import ctypes
+
+    class _Failing:
+        def prctl(self, _option, *_rest):
+            ctypes.set_errno(errno.EPERM)
+            return -1
+
+    monkeypatch.setattr(ctypes, "CDLL", lambda *_args, **_kwargs: _Failing())
+
+    with pytest.raises(AdapterError) as raised:
+        native_process._seal_process_against_procfs_descriptor_theft()
+
+    assert "prctl(PR_SET_DUMPABLE, 0) failed with errno" in str(raised.value)
+    assert str(errno.EPERM) in str(raised.value)
+
+
+def test_the_seal_refuses_a_prctl_that_reports_success_without_doing_anything(
+    monkeypatch,
+):
+    """The read-back, isolated.
+
+    A seccomp filter or a stubbed libc that answers 0 and changes nothing would
+    otherwise leave every frozen copy reachable under a claim that it is not.
+    """
+
+    import ctypes
+
+    class _Lying:
+        def prctl(self, option, *_rest):
+            return 0 if option == native_process._PR_SET_DUMPABLE else 1
+
+    monkeypatch.setattr(ctypes, "CDLL", lambda *_args, **_kwargs: _Lying())
+
+    with pytest.raises(AdapterError) as raised:
+        native_process._seal_process_against_procfs_descriptor_theft()
+
+    assert "still dumpable after" in str(raised.value)
 
 
 def _frozen_output(descriptor: int, snapshot, *, token="adapter-v2.json"):

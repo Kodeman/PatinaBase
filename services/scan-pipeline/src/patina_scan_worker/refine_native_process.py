@@ -60,9 +60,15 @@ held a descriptor to it. The digest the caller is given is the parent's own
 measurement OF THE COPY, read positionally from the copy's own descriptor, and
 the run is refused unless it reproduces the child's declaration. Freezing is
 therefore a property of how the object was constructed rather than a claim
-about what was observed. See
+about what was observed.
+
+Construction alone leaves exactly one route: ``/proc/<pid>/fd`` IS a name, and a
+same-UID process can reopen any descriptor this parent holds through it. Before
+the first copy exists the parent therefore drops its own ``dumpable`` flag,
+which makes that directory unopenable to everyone without ``CAP_SYS_PTRACE``.
+The price is that this process can no longer produce a core dump. See
 ``NATIVE_ENGINE_OUTPUT_BYTES_FROZEN_AGAINST_SURVIVING_DESCRIPTORS`` for the
-exact scope, including the one residual this cannot close.
+exact scope and for what is still excluded.
 
 The lease is still purged, and the parent still holds each lease-side
 descriptor across that purge -- not to prove the returned bytes are frozen,
@@ -83,6 +89,7 @@ treat an aligned model as verified.
 
 from __future__ import annotations
 
+import errno
 import hashlib
 import importlib
 import json
@@ -171,13 +178,42 @@ NATIVE_ENGINE_OUTPUT_ALIGNMENT_VERIFIED_BY_PARENT = False
 #:   * it was never transported over SCM_RIGHTS and never inherited, so no
 #:     child, grandchild, or escaped descendant ever held a descriptor to it.
 #:
-#: THE RESIDUAL, precisely: a same-UID process that can ``ptrace_may_access``
-#: this parent can reopen ANY descriptor in this process's table through
-#: ``/proc/<pid>/fd`` -- including this one -- and rewrite it.  That is not a
-#: property of this channel; such an actor can equally attach to the parent and
-#: rewrite its memory.  On Linux this is gated by ``yama.ptrace_scope`` (Ubuntu
-#: defaults to 1, which forbids it; 0 permits it).  Nothing here closes it, and
-#: no caller may read this flag as if it did.
+#: THE ROUTE THAT IS LEFT, and what closes it.  A same-UID process that can
+#: ``ptrace_may_access`` this parent can reopen ANY descriptor in this process's
+#: table through ``/proc/<pid>/fd`` -- including this one -- and rewrite it.
+#:
+#: ``yama.ptrace_scope`` does NOT gate that route at any setting, and an earlier
+#: revision of this comment claiming it did was wrong.  That correction is READ
+#: OFF THE KERNEL SOURCE, not measured: ``yama_ptrace_access_check`` returns 0
+#: immediately unless the request carries ``PTRACE_MODE_ATTACH``, while
+#: ``/proc/<pid>/fd`` reaches ``ptrace_may_access`` through
+#: ``proc_fd_access_allowed`` with ``PTRACE_MODE_READ_FSCREDS``, which Yama never
+#: inspects.  No environment this repository can run ships Yama at all, so
+#: nothing here has confirmed the claim on a host where ``ptrace_scope`` is set,
+#: and no reader should treat it as confirmed.
+#:
+#: THE ROUTE ITSELF IS MEASURED, and the measurement is a gate rather than a
+#: transcript: in this repository's Linux test container (``6.12.76`` aarch64,
+#: overlayfs, no Yama) a same-UID non-descendant holding no ``CAP_SYS_PTRACE``
+#: reopened a held descriptor ``O_RDWR`` through ``/proc/<pid>/fd`` and rewrote
+#: it, at both ``euid 0`` and ``euid 1000``.
+#:
+#: What closes it is :func:`_seal_process_against_procfs_descriptor_theft`,
+#: which drops this process's ``dumpable`` flag before any frozen copy exists.
+#: ``__ptrace_may_access`` refuses every mode -- including
+#: ``PTRACE_MODE_READ_FSCREDS`` -- once ``get_dumpable(mm) != SUID_DUMP_USER``,
+#: unless the caller holds ``CAP_SYS_PTRACE``.  In the same container the same
+#: attacker then got ``EACCES`` and the holder's bytes were unchanged, INCLUDING
+#: when it had already opened ``/proc/<pid>/fd`` as a directory before the seal
+#: ran -- the access check is on each ``openat``, not on the directory open, so
+#: the seal is not a race an attacker wins by starting early.  Both are pinned:
+#: ``test_the_sealed_boundary_refuses_a_same_uid_procfs_reopen`` and
+#: ``test_a_procfs_directory_opened_before_the_seal_still_cannot_be_used``.
+#:
+#: WHAT IS STILL EXCLUDED, and is not claimed: root, and any process holding
+#: ``CAP_SYS_PTRACE`` in this process's user namespace.  Such an actor can
+#: equally attach to the parent and rewrite its memory, so no property of this
+#: channel could survive it.
 NATIVE_ENGINE_OUTPUT_BYTES_FROZEN_AGAINST_SURVIVING_DESCRIPTORS = True
 #: Name prefix for the private 0700 directory the frozen copies are born in.
 #: It is a SIBLING of the lease inside the operator's container, never the lease
@@ -188,10 +224,23 @@ NATIVE_ENGINE_OUTPUT_BYTES_FROZEN_AGAINST_SURVIVING_DESCRIPTORS = True
 NATIVE_OUTPUT_FREEZE_VAULT_PREFIX = "patina-refine-native-freeze-"
 #: This process's own file-descriptor table.  Used for exactly one thing: to
 #: reopen a copy the parent JUST created read-only, so the descriptor handed to
-#: the caller carries no write access.  It is not a filesystem name -- nothing
-#: outside this process can redirect it, and it stops existing when the
-#: descriptor closes.
+#: the caller carries no write access.
+#:
+#: ``/proc/<pid>/fd/<n>`` IS a name, and an earlier revision of this comment
+#: denying that was wrong: any same-UID process that passes ``ptrace_may_access``
+#: can open it.  What makes it safe to use here is not that it cannot be named
+#: but that :func:`_seal_process_against_procfs_descriptor_theft` has already
+#: made this process's entry unopenable to everyone without ``CAP_SYS_PTRACE``.
+#: Nothing outside this process can redirect an entry in it, and the entry stops
+#: existing when the descriptor closes.
 NATIVE_OUTPUT_FREEZE_ALIAS_DIRECTORY = "/proc/self/fd"
+#: ``prctl`` options.  CPython exposes no binding for either, so the UAPI numbers
+#: are written out; they are fixed by ``include/uapi/linux/prctl.h`` and have not
+#: moved since 2.6.13.  ``SUID_DUMP_DISABLE`` is the value that makes
+#: ``__ptrace_may_access`` refuse every mode without ``CAP_SYS_PTRACE``.
+_PR_GET_DUMPABLE = 3
+_PR_SET_DUMPABLE = 4
+_SUID_DUMP_DISABLE = 0
 NATIVE_CHILD_TERM_GRACE_S = 0.10
 NATIVE_CHILD_KILL_REAP_S = 1.0
 NATIVE_WORKSPACE_NAME_PREFIX = "patina-refine-native-workspace-"
@@ -288,6 +337,11 @@ _TIMEOUT_CODE = "REFINE_ENGINE_TIMEOUT"
 _FAILED_CODE = "REFINE_ENGINE_FAILED"
 _INVALID_INPUT_CODE = "REFINE_INPUT_INVALID"
 _CLEANUP_FAILED_CODE = "REFINE_ENGINE_CLEANUP_FAILED"
+#: A full lease filesystem is an EXPECTED operational condition for this channel,
+#: not a defect, so it gets its own code instead of arriving as an unexplained
+#: ``OSError``.  The operator-facing fix is disk headroom; see the transient
+#: headroom contract on :func:`_frozen_output_copy`.
+_NO_SPACE_CODE = "REFINE_ENGINE_NO_SPACE"
 _CHILD_PROTOCOL_REJECT_EXIT_CODE = 74
 _IN_PROCESS_ENTRYPOINT_MARKER = "__patina_refine_in_process_only__"
 _JSON_STRING_CHUNK_CHARS = 1024
@@ -309,6 +363,11 @@ _OUTPUT_FREEZE_COPY_BYTES = _PINNED_FILE_READ_BYTES
 #: channel is Linux-only BY CONSTRUCTION.  It fails closed rather than falling
 #: back to create-then-unlink, which would open a window in which a name exists.
 _OUTPUT_FREEZE_REQUIRED_OS_NAMES = ("O_TMPFILE", "O_EXCL", "O_CLOEXEC", "pread", "pwrite")
+#: The errnos that mean "the filesystem could not take these bytes", separated
+#: from every other write failure so the refusal can name disk space.  ``EDQUOT``
+#: is included because a per-user quota on a filesystem with free blocks
+#: presents to the operator as the same problem with the same fix.
+_OUTPUT_FREEZE_NO_SPACE_ERRNOS = frozenset({errno.ENOSPC, errno.EDQUOT})
 _NATIVE_CHILD_CONTEXT_SEAL = object()
 
 
@@ -2085,6 +2144,80 @@ def _require_output_freeze_capabilities() -> None:
         )
 
 
+def _seal_process_against_procfs_descriptor_theft() -> None:
+    """Make this process's ``/proc/<pid>/fd`` unopenable without CAP_SYS_PTRACE.
+
+    This is what closes the one route the private-copy construction cannot: a
+    same-UID process with no inherited descriptor can reopen ANY descriptor in
+    this table -- the frozen copies included -- through ``/proc/<pid>/fd``, and
+    rewrite it.  ``yama.ptrace_scope`` does not stop that at any setting, because
+    Yama only inspects ``PTRACE_MODE_ATTACH`` while procfs descriptor access asks
+    for ``PTRACE_MODE_READ_FSCREDS``.  Dropping ``dumpable`` does stop it:
+    ``__ptrace_may_access`` refuses every mode once ``get_dumpable(mm) !=
+    SUID_DUMP_USER`` unless the caller holds ``CAP_SYS_PTRACE``.
+
+    FOUR CONSEQUENCES.  The first and third are the ones this channel depends on
+    and each is pinned by the test named beside it; the second is reasoning
+    nothing rests on, and is labelled as such; the fourth is a property of the
+    flag.
+
+    * **This process can still read its own table.**  ``proc_fd_permission``
+      short-circuits for the owning thread group, so the ``/proc/self/fd`` reopen
+      in :func:`_read_only_freeze_alias` keeps working: it returns the same
+      ``(st_dev, st_ino)`` with ``st_nlink == 0`` after the seal.  Pinned by
+      ``test_the_seal_leaves_the_parent_able_to_reopen_its_own_descriptors``.
+    * **The spawned child is unaffected** -- REASONED, NOT MEASURED, and nothing
+      here depends on it either way: ``dumpable`` is inherited across ``fork``
+      and reset by ``execve``, and this module's child is a ``spawn`` child.
+    * **Reading OTHER processes is unaffected.**  A reader's own ``dumpable``
+      flag does not gate ``/proc/<pid>/stat``, so
+      :func:`_linux_process_group_members` and the quiescence scan keep working.
+      This is the consequence that would re-break a production blocker if it were
+      wrong, so it is measured rather than argued: sealed, the scan read every
+      ``/proc/<pid>/stat`` row present with zero failures and still found the
+      members of this process's own group.  Pinned by
+      ``test_the_seal_leaves_the_process_group_scan_able_to_read_other_processes``,
+      whose own-group half is what keeps a scan that silently skipped every row
+      from passing it.
+    * **CORE DUMPS FOR THIS PROCESS ARE DISABLED FROM HERE ON.**  That is the
+      price, it is permanent for the life of the worker process, and it is not
+      reversed on the way out -- reversing it would hand the route back while the
+      caller still holds the descriptors.  A worker that segfaults after its
+      first engine output handoff will produce no core file; use the journal and
+      a live debugger instead of looking for one.
+
+    Failure is fatal.  A process that could not be sealed is one where
+    ``NATIVE_ENGINE_OUTPUT_BYTES_FROZEN_AGAINST_SURVIVING_DESCRIPTORS`` would be
+    a false statement, and handing the caller descriptors under a claim this
+    module could not keep is worse than refusing the run.
+    """
+
+    import ctypes
+
+    library = ctypes.CDLL(None, use_errno=True)
+    ctypes.set_errno(0)
+    if library.prctl(_PR_SET_DUMPABLE, _SUID_DUMP_DISABLE, 0, 0, 0) != 0:
+        raise AdapterError(
+            _bounded_diagnostic(
+                "cannot seal the refine native boundary against a same-UID "
+                "/proc/<pid>/fd reopen: prctl(PR_SET_DUMPABLE, 0) failed with "
+                "errno ",
+                str(ctypes.get_errno()),
+            ),
+            _FAILED_CODE,
+        )
+    # Read back rather than trust the return value.  A seccomp filter or a
+    # ptrace-stubbed libc that answers 0 without doing anything would otherwise
+    # leave every frozen copy reachable while this module reported it sealed.
+    if library.prctl(_PR_GET_DUMPABLE, 0, 0, 0, 0) != _SUID_DUMP_DISABLE:
+        raise AdapterError(
+            "the refine native boundary is still dumpable after "
+            "prctl(PR_SET_DUMPABLE, 0); a same-UID process could reopen the "
+            "frozen engine output descriptors through /proc/<pid>/fd",
+            _FAILED_CODE,
+        )
+
+
 def _open_output_freeze_vault(lease: NativeWorkspaceLease) -> tuple[str, int]:
     """Create the parent-private 0700 directory the frozen copies are born in.
 
@@ -2108,9 +2241,34 @@ def _open_output_freeze_vault(lease: NativeWorkspaceLease) -> tuple[str, int]:
     The directory is always empty (nothing is ever named inside it), so its
     removal in :func:`_release_output_freeze_vault` cannot fail for
     ``ENOTEMPTY``, and its whole lifetime is inside one receipt call.
+
+    TRANSIENT DISK HEADROOM, written down here because it is an operational
+    precondition no reader could infer from the code: minting the frozen copies
+    costs **1.00x the aggregate output payload IN ADDITION to what the lease
+    already occupies**, and the two coexist.  All seven copies are minted before
+    the vault is released, so at the instant the last one finishes the filesystem
+    carries the lease's seven artifacts plus seven identical copies -- 2x
+    payload.  It is not 3x: the lease is purged before ``storage`` stages
+    anything, so the freeze copies and the staging copy are never concurrent.
+    Peak is 2x payload at each of two separate moments and never more.  At the
+    ``NATIVE_CHILD_MAX_OUTPUT_TOTAL_BYTES`` ceiling that means **8 GiB of free
+    space beyond the lease**.  A filesystem that cannot supply it fails with
+    ``REFINE_ENGINE_NO_SPACE`` from :func:`_frozen_output_copy` -- fully
+    fail-closed, no short copy and no partial file -- not with a silent
+    truncation.
+
+    Sealing happens HERE, not at the boundary's pre-spawn capability check, and
+    that placement is the point: this is the narrowest function that dominates
+    every path to a frozen copy, including a direct call to
+    :func:`_receive_native_outputs`.  Sealing at the boundary would leave a
+    direct caller minting copies in a process a same-UID actor can still open.
     """
 
     _require_output_freeze_capabilities()
+    # Before the first copy exists, never after: the descriptors this call is
+    # about to create outlive the call, so the seal has to be in place before
+    # any of them do.
+    _seal_process_against_procfs_descriptor_theft()
     name: str | None = None
     for _attempt in range(NATIVE_WORKSPACE_NAME_ATTEMPTS):
         candidate = _workspace_scratch_name(NATIVE_OUTPUT_FREEZE_VAULT_PREFIX)
@@ -2218,12 +2376,16 @@ def _read_only_freeze_alias(writable_descriptor: int, *, token: str) -> int:
     long-lived sink is a hazard with no matching use.  Access mode cannot be
     changed on an open descriptor, so the only way to drop it is to reopen.
 
-    ``/proc/self/fd/<n>`` is this process's own descriptor table.  It is not a
-    filesystem name: no other process can substitute an entry in it, it does not
-    outlive the descriptor, and it cannot be created for an inode this process
-    does not already hold.  The reopened descriptor is nevertheless bound back
-    to the original by ``(st_dev, st_ino)``, regular-file type and link count, so
-    the claim rests on a check rather than on that argument.
+    ``/proc/self/fd/<n>`` is this process's own descriptor table.  It IS a name
+    -- ``/proc/<pid>/fd/<n>`` is exactly what a same-UID actor would open to
+    reach these bytes -- and the reason using it here is sound is that
+    :func:`_seal_process_against_procfs_descriptor_theft` has already made this
+    process's entry unopenable without ``CAP_SYS_PTRACE``.  What remains true
+    unconditionally is narrower: no other process can substitute an entry in it,
+    it does not outlive the descriptor, and it cannot be created for an inode
+    this process does not already hold.  The reopened descriptor is nevertheless
+    bound back to the original by ``(st_dev, st_ino)``, regular-file type and
+    link count, so the claim rests on a check rather than on that argument.
 
     Two checks that would look natural here are deliberately absent because no
     deletion of them could turn a test red: the reopened size cannot differ from
@@ -2295,6 +2457,26 @@ def _frozen_output_copy(
     being rewritten while it is copied simply produces a copy of something else,
     and the caller's digest check on the copy is what refuses that.  This
     function is only responsible for producing an object nothing can change.
+
+    THE TRANSIENT HEADROOM THIS COSTS: one full extra copy of the payload, held
+    at the same time as the lease-side original.  All seven copies exist before
+    the vault is released, so peak occupancy while this runs is **2x the
+    aggregate output payload** -- 8 GiB beyond the lease at the
+    ``NATIVE_CHILD_MAX_OUTPUT_TOTAL_BYTES`` ceiling.  It is never 3x, because the
+    lease is purged before ``storage`` stages anything and the freeze copies and
+    the staging copy are therefore never concurrent.  A filesystem that runs out
+    mid-copy fails closed with ``REFINE_ENGINE_NO_SPACE``: no short copy reaches
+    the caller, no partial file survives (the anonymous inode dies with its
+    descriptor) and the space is fully reclaimed.
+
+    THE TIME IT COSTS is not the reason to worry about it.  Measured in this
+    repository's Linux test container (aarch64, overlayfs, page cache warm):
+    256 MiB in 0.07 s, 1 GiB in 0.38 s, 2 GiB in 0.70 s, plus 0.4-1.4 s for the
+    kernel to write each back.  Extrapolated to the 8 GiB aggregate ceiling that
+    is single-digit seconds against a 400-frame solve measured in minutes.  The
+    number that can actually stop a run is the disk headroom above, not this one.
+    Both are container figures on overlayfs, NOT measurements of the ext4 GPU
+    box, and item 7's real run is what replaces them.
     """
 
     remaining_seconds()
@@ -2306,6 +2488,16 @@ def _frozen_output_copy(
             dir_fd=vault_descriptor,
         )
     except OSError as exc:
+        # A full filesystem cannot mint an inode either, and reporting that as
+        # "this platform has no O_TMPFILE" would send the operator to look for a
+        # kernel feature instead of for free blocks.
+        if exc.errno in _OUTPUT_FREEZE_NO_SPACE_ERRNOS:
+            raise AdapterError(
+                f"native engine output {token} cannot be frozen: the freeze "
+                "vault filesystem is out of space, so the parent cannot create "
+                "the private copy; free disk space on the workspace container",
+                _NO_SPACE_CODE,
+            ) from exc
         raise AdapterError(
             f"native engine output {token} cannot be frozen: the workspace "
             "filesystem does not support O_TMPFILE anonymous files",
@@ -2333,7 +2525,26 @@ def _frozen_output_copy(
             written = 0
             while written < len(chunk):
                 remaining_seconds()
-                progress = os.pwrite(writable, chunk[written:], copied + written)
+                try:
+                    progress = os.pwrite(writable, chunk[written:], copied + written)
+                except OSError as exc:
+                    # A full lease filesystem is an EXPECTED operational
+                    # condition at this ceiling, so it is named rather than
+                    # arriving at the caller as "unexpected refine native
+                    # boundary failure: OSError".  Every other errno stays
+                    # unexpected on purpose: EIO is a disk fault, not headroom,
+                    # and telling an operator to free space would be a wrong
+                    # instruction rather than a vague one.
+                    if exc.errno not in _OUTPUT_FREEZE_NO_SPACE_ERRNOS:
+                        raise
+                    raise AdapterError(
+                        f"native engine output {token} cannot be frozen: the "
+                        "freeze vault filesystem ran out of space mid-copy; the "
+                        "handoff needs the whole output payload free in addition "
+                        "to the lease, so free disk space on the workspace "
+                        "container",
+                        _NO_SPACE_CODE,
+                    ) from exc
                 if progress <= 0:
                     # The ONLY bound on the inner loop.  A ``pwrite`` that keeps
                     # returning zero -- a full filesystem answering short, say --
@@ -2625,7 +2836,11 @@ def _unfrozen_output_errors(
     **The outputs: is the descriptor being handed over the private copy?**
     ``st_nlink == 0`` and an unchanged :func:`_frozen_snapshot_fields` tuple are
     both construction invariants of an ``O_TMPFILE | O_EXCL`` file this process
-    created and nothing else can reach.  They are asserted, not assumed, because
+    created, and which -- with the process sealed non-dumpable by
+    :func:`_seal_process_against_procfs_descriptor_theft` -- no same-UID actor
+    can reach.  Root and anything holding ``CAP_SYS_PTRACE`` still can; that is
+    the residual the flag names and neither clause below is a defence against
+    it.  They are asserted, not assumed, because
     the alternative is trusting that a later edit did not accidentally return
     the lease-side descriptor instead.  Neither clause is a defence against a
     hostile writer: ``futimens`` forges the second, and the first is trivially
@@ -4963,6 +5178,15 @@ def run_native_engine_child(
     Because that copy is made with ``O_TMPFILE``, ``outputs`` is **Linux only**
     and fails closed elsewhere rather than degrading to a named temporary.
 
+    TWO SIDE EFFECTS OF ``outputs`` A CALLER MUST KNOW ABOUT.  First, the first
+    receipt drops this process's ``dumpable`` flag permanently
+    (:func:`_seal_process_against_procfs_descriptor_theft`), which is what makes
+    the returned descriptors unreachable through ``/proc/<pid>/fd`` and which
+    **disables core dumps for the worker from that point on**.  Second, minting
+    the copies needs the whole output payload free on the workspace filesystem in
+    addition to the lease -- 8 GiB at the aggregate ceiling; a filesystem that
+    cannot supply it fails with ``REFINE_ENGINE_NO_SPACE``.
+
     What ``outputs`` does NOT give the caller is a verified alignment.  See
     ``NATIVE_ENGINE_OUTPUT_ALIGNMENT_VERIFIED_BY_PARENT``.
     """
@@ -5559,9 +5783,13 @@ def run_native_engine_child(
 
         # The workspace is parent-owned, so it is removed after every outcome:
         # normal return, timeout, SIGTERM, and SIGKILL all arrive here with the
-        # leader already reaped by the cleanup above.  Output descriptors survive
-        # this purge on purpose: an unlinked inode outlives its last name, which
-        # is exactly what makes the handoff un-reopenable by path.
+        # leader already reaped by the cleanup above.  This purge has nothing to
+        # do with the descriptors the caller receives: those are private copies
+        # in a vault that was created and removed inside the receipt call, and
+        # they were already un-reopenable by path before this line ran.  What the
+        # purge removes is the last name the LEASE-SIDE objects had, which is the
+        # only reason the witness check below can tell an escaped hardlink from
+        # an honest run.
         workspace_cleanup_errors: tuple[str, ...] = ()
         if workspace_lease is not None:
             workspace_cleanup_errors = _release_workspace_lease(
