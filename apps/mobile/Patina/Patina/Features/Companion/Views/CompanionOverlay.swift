@@ -534,6 +534,13 @@ public struct CompanionOverlay: View {
             .background(PatinaColors.Background.dark)
             .clipShape(RoundedRectangle(cornerRadius: 24))
             .patinaShadow(PatinaShadows.companion)
+            // The panel consumes its own touches (U41): a tap on panel chrome
+            // must not reach the dimmed backdrop behind it, whose tap gesture
+            // collapses the Companion. Action rows and header buttons are
+            // hit-tested first, so they still win.
+            .contentShape(RoundedRectangle(cornerRadius: 24))
+            .onTapGesture {}
+            .accessibilityIdentifier("companion.panel")
             .overlay(alignment: .top) {
                 if showCoachmark {
                     companionCoachmark
