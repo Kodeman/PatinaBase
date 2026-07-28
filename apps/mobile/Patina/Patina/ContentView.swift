@@ -205,8 +205,8 @@ struct ContentView: View {
             ManualRoomEntryView()
                 .toolbar(.hidden, for: .navigationBar)
 
-        case .roomSavedItems:
-            CollectionsView()
+        case .roomSavedItems(let roomId):
+            CollectionsView(roomId: roomId)
                 .toolbarTitleDisplayMode(.inline)
 
         case .scanFlow:

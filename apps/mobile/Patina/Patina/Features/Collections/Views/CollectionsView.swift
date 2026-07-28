@@ -13,6 +13,11 @@ struct CollectionsView: View {
     @Environment(\.appCoordinator) private var coordinator
     @State private var viewModel = CollectionsViewModel()
 
+    /// U06: when set, the All Items tab scopes to this room's saved items
+    /// and the header names the room. The Boards tab is unaffected — a
+    /// board can span rooms, so it stays global.
+    var roomId: UUID? = nil
+
     /// Lookup table from productId → TableItemModel, built from savedItems
     /// so board tiles can render real thumbnails for their product IDs.
     private var itemsByProductId: [String: TableItemModel] {
@@ -21,27 +26,47 @@ struct CollectionsView: View {
         })
     }
 
+    /// U06: All Items filtered to `roomId` when set, else the full table.
+    private var scopedSavedItems: [TableItemModel] {
+        guard let roomId else { return viewModel.savedItems }
+        return viewModel.savedItems.filter { $0.roomId == roomId }
+    }
+
+    /// U06: resolved room name for the header scope line, when `roomId` is set.
+    private var scopedRoomName: String? {
+        guard let roomId else { return nil }
+        return RoomStore(context: modelContext).room(id: roomId)?.name
+    }
+
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
             // Header
-            HStack {
-                Text("Collections")
-                    .font(PatinaTypography.h2)
-                    .foregroundStyle(PatinaColors.Text.primary)
+            VStack(alignment: .leading, spacing: 2) {
+                HStack {
+                    Text("Collections")
+                        .font(PatinaTypography.h2)
+                        .foregroundStyle(PatinaColors.Text.primary)
 
-                Spacer()
+                    Spacer()
 
-                Button {
-                    viewModel.isCreatingBoard = true
-                } label: {
-                    Image(systemName: "plus.circle")
-                        .font(.system(size: 22))
-                        .foregroundStyle(PatinaColors.Text.interactive)
-                        .frame(minWidth: 44, minHeight: 44)
-                        .contentShape(Rectangle())
+                    Button {
+                        viewModel.isCreatingBoard = true
+                    } label: {
+                        Image(systemName: "plus.circle")
+                            .font(.system(size: 22))
+                            .foregroundStyle(PatinaColors.Text.interactive)
+                            .frame(minWidth: 44, minHeight: 44)
+                            .contentShape(Rectangle())
+                    }
+                    .accessibilityLabel("New board")
+                    .accessibilityHint("Creates a new collection board.")
                 }
-                .accessibilityLabel("New board")
-                .accessibilityHint("Creates a new collection board.")
+                // U06: names the room this Saved surface is scoped to.
+                if let scopedRoomName {
+                    Text(scopedRoomName)
+                        .font(PatinaTypography.caption)
+                        .foregroundStyle(PatinaColors.Text.muted)
+                }
             }
             .padding(.top, 56)
             .padding(.horizontal, 24)
@@ -193,7 +218,7 @@ struct CollectionsView: View {
                     .fill(PatinaColors.Background.secondary)
                     .frame(height: 80)
                     .overlay(
-                        Text("Empty board")
+                        Text("This board is empty")
                             .font(PatinaTypography.caption)
                             .foregroundStyle(PatinaColors.Text.muted)
                     )
@@ -205,7 +230,7 @@ struct CollectionsView: View {
 
     private var allItemsContent: some View {
         VStack(alignment: .leading, spacing: 12) {
-            if viewModel.savedItems.isEmpty {
+            if scopedSavedItems.isEmpty {
                 VStack(spacing: 12) {
                     Spacer().frame(height: 40)
                     Text("No saved items yet")
@@ -214,13 +239,28 @@ struct CollectionsView: View {
                     Text("Browse recommendations and save pieces you love")
                         .font(PatinaTypography.bodySmall)
                         .foregroundStyle(PatinaColors.Text.muted)
+                    // U31: a dead end otherwise — give the empty "All items"
+                    // tab a real path to pieces instead of leaving the user
+                    // with nothing to tap.
+                    Button {
+                        coordinator.navigate(to: .emergence(pieceId: nil))
+                    } label: {
+                        Text("Browse pieces")
+                            .font(PatinaTypography.uiAction)
+                            .foregroundStyle(PatinaColors.Text.inverse)
+                            .padding(.horizontal, 24)
+                            .frame(height: 44)
+                            .background(PatinaColors.Interactive.active)
+                            .clipShape(Capsule())
+                    }
+                    .padding(.top, 8)
                 }
                 .frame(maxWidth: .infinity)
             } else {
                 // R26: rows live in a VStack (not a List), so swipe actions
                 // can't apply — the card's context menu carries the
                 // remove/share/details actions instead.
-                ForEach(viewModel.savedItems) { item in
+                ForEach(scopedSavedItems) { item in
                     ProductCard(
                         data: ProductCardData(tableItem: item),
                         style: .list,
