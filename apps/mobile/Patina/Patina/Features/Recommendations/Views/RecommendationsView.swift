@@ -13,11 +13,21 @@ struct RecommendationsView: View {
     @Environment(\.modelContext) private var modelContext
     @State private var viewModel = RecommendationsViewModel()
 
-    /// U06/U07: when set, this browse is scoped to a single room (the
-    /// `get_recommendations` RPC already accepts `p_room_id`) — the header
-    /// subtitle picks up the scoping language and saves mirror into this
-    /// room rather than being dropped on the floor.
+    /// U06/U07: when set, this browse is scoped to a single room — the
+    /// header subtitle picks up the scoping language and saves mirror into
+    /// this room rather than being dropped on the floor. This is the room's
+    /// LOCAL SwiftData id (`RoomModel.id`, as threaded by `.roomEmergence`),
+    /// NOT the remote id the `get_recommendations` RPC and the
+    /// `saved_items.room_id` FK actually expect — `roomRemoteId` below
+    /// resolves that translation before either is used.
     var roomId: String? = nil
+
+    /// Resolved once at load: `roomId` translated from the local SwiftData
+    /// id to the room's synced `RoomModel.remoteId`. `nil` when `roomId` is
+    /// nil or the room hasn't synced yet — both fall back to the unscoped
+    /// marketplace rather than sending a local id that would silently no-op
+    /// the RPC's room filter and violate the `saved_items` FK on every save.
+    @State private var roomRemoteId: String? = nil
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
@@ -74,8 +84,21 @@ struct RecommendationsView: View {
         .background(PatinaColors.Background.primary)
         .toolbarTitleDisplayMode(.inline)
         .task {
-            await viewModel.loadRecommendations(roomId: roomId)
+            roomRemoteId = resolveRoomRemoteId()
+            // U29 fix: seed already-saved state (prior visit, another
+            // screen, another device) before the grid renders, so the
+            // heart/menu never offer "Save" on something already saved.
+            async let seed: Void = viewModel.seedSavedState(context: modelContext)
+            async let load: Void = viewModel.loadRecommendations(roomId: roomRemoteId)
+            _ = await (seed, load)
         }
+    }
+
+    /// U06/U07 fix: `roomId` is the local `RoomModel.id`; resolve it to the
+    /// room's synced `remoteId` before it reaches the RPC or a save.
+    private func resolveRoomRemoteId() -> String? {
+        guard let roomId, let localId = UUID(uuidString: roomId) else { return nil }
+        return RoomStore(context: modelContext).room(id: localId)?.remoteId
     }
 
     // MARK: - Content states (U39)
@@ -202,7 +225,7 @@ struct RecommendationsView: View {
                     guard abs(horizontal) > abs(vertical) else { return }
                     if horizontal > 0 {
                         // Swipe right → save
-                        viewModel.saveProduct(product, context: modelContext, roomRemoteId: roomId)
+                        viewModel.saveProduct(product, context: modelContext, roomRemoteId: roomRemoteId)
                     } else {
                         // Swipe left → skip
                         viewModel.skipProduct(product)
@@ -216,7 +239,7 @@ struct RecommendationsView: View {
         // PT-2-4: expose the swipe-to-save / swipe-to-skip gestures as
         // VoiceOver actions, since the swipe itself is inaccessible.
         .accessibilityAction(named: "Save") {
-            viewModel.saveProduct(product, context: modelContext, roomRemoteId: roomId)
+            viewModel.saveProduct(product, context: modelContext, roomRemoteId: roomRemoteId)
         }
         .accessibilityAction(named: "Skip") {
             viewModel.skipProduct(product)
@@ -235,7 +258,7 @@ struct RecommendationsView: View {
             }
         } else {
             Button {
-                viewModel.saveProduct(product, context: modelContext, roomRemoteId: roomId)
+                viewModel.saveProduct(product, context: modelContext, roomRemoteId: roomRemoteId)
             } label: {
                 Label("Save", systemImage: "heart")
             }
@@ -265,7 +288,7 @@ struct RecommendationsView: View {
             if isSaved {
                 viewModel.unsaveProduct(product, context: modelContext)
             } else {
-                viewModel.saveProduct(product, context: modelContext, roomRemoteId: roomId)
+                viewModel.saveProduct(product, context: modelContext, roomRemoteId: roomRemoteId)
             }
         } label: {
             Circle()
