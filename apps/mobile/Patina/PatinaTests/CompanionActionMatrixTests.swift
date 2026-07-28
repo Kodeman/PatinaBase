@@ -38,7 +38,7 @@ struct CompanionActionMatrixTests {
     /// Every `AppRoute` case, associated values filled with representative ids.
     /// Kept exhaustive by hand — if a route is added, the provider's exhaustive
     /// switch fails to compile first, but add it here too.
-    private static let allRoutes: [AppRoute] = [
+    fileprivate static let allRoutes: [AppRoute] = [
         .heroFrame,
         .roomList,
         .yourSpaces,
@@ -80,25 +80,35 @@ struct CompanionActionMatrixTests {
         statusLabel: "In review"
     )
 
-    private static func context(
+    fileprivate static func context(
         for screen: AppRoute,
         roomCount: Int,
-        active: Bool
+        active: Bool,
+        tier: EngagementTier? = nil,
+        hasStyleProfile: Bool = false
     ) -> CompanionContext {
         // A viewing piece is supplied so the "Try in your room" arm on discovery
         // screens is exercised (the fuller menu). tableItemCount > 0 so the
         // Collections row is present where offered.
-        CompanionContext(
+        var context = CompanionContext(
             currentScreen: screen,
             viewingPiece: ViewingPieceContext(id: "piece-1", name: "Chair", maker: "Maker"),
             activeRoom: ActiveRoomContext(id: sampleRoomId, name: "Living Room"),
             tableItemCount: 3,
             roomCount: roomCount,
+            hasStyleProfile: hasStyleProfile,
             activeDesignRequest: active ? activeRequest : nil
         )
+        // `engagementTier` is assigned rather than passed: its type is internal,
+        // so it cannot appear in the public memberwise initializer.
+        context.engagementTier = tier
+        return context
     }
 
-    /// The full combination grid the matrix must hold across.
+    /// The full combination grid the matrix must hold across. The tier is
+    /// derived from the axes already present rather than adding a fourth one —
+    /// an active request means engaged, a plain signed-in user is discovering,
+    /// and a guest has no resolved tier at all.
     private static func everyCombination(
         _ body: (_ route: AppRoute, _ signedIn: Bool, _ items: [CompanionActionItem]) -> Void
     ) {
@@ -106,7 +116,10 @@ struct CompanionActionMatrixTests {
             for signedIn in [true, false] {
                 for roomCount in [0, 2] {
                     for active in [true, false] {
-                        let ctx = context(for: route, roomCount: roomCount, active: active)
+                        let tier: EngagementTier? = active ? .engaged : (signedIn ? .discovering : nil)
+                        let ctx = context(
+                            for: route, roomCount: roomCount, active: active, tier: tier
+                        )
                         let items = CompanionActionProvider.actions(
                             for: route, context: ctx, isAuthenticated: signedIn
                         )
@@ -246,6 +259,8 @@ struct CompanionActionMatrixTests {
 
     @Test
     func heroFrameSignedInWithRoomsExemplar() {
+        // No "Your studio": signed-in is no longer enough for that door — this
+        // context has no resolved tier, which reads as `.discovering` (U20).
         let ctx = Self.context(for: .heroFrame, roomCount: 2, active: false)
         let labels = CompanionActionProvider.actions(for: .heroFrame, context: ctx, isAuthenticated: true).map(\.label)
         #expect(labels == [
@@ -253,7 +268,6 @@ struct CompanionActionMatrixTests {
             "Your spaces",
             "Add another space",
             "Collections",
-            "Your studio",
             "Your profile"
         ])
     }
@@ -301,5 +315,168 @@ struct CompanionActionMatrixTests {
             for: .roomProject(roomId: Self.sampleRoomId), context: ctx, isAuthenticated: true
         ).map(\.label)
         #expect(detail == project)
+    }
+}
+
+// A second suite rather than more tests in the one above: the matrix struct is
+// already near SwiftLint's `type_body_length` ceiling, and the gate fails a
+// touched file that gains a warning. Fixtures are shared via `Fixture`.
+//
+// `@MainActor` for the same reason as the suite above — `AppRoute`'s synthesized
+// conformances are main-actor-isolated under the app target's default isolation.
+@MainActor
+struct CompanionTierAndFreshnessTests {
+
+    private typealias Fixture = CompanionActionMatrixTests
+
+    // MARK: - Engagement tier gating (U20)
+
+    private static func homeLabels(
+        roomCount: Int,
+        tier: EngagementTier?,
+        signedIn: Bool = true
+    ) -> [String] {
+        let ctx = Fixture.context(for: .heroFrame, roomCount: roomCount, active: false, tier: tier)
+        return CompanionActionProvider.actions(
+            for: .heroFrame, context: ctx, isAuthenticated: signedIn
+        ).map(\.label)
+    }
+
+    @Test
+    func heroFrameEngagedWithRoomsExemplar() {
+        // The signed-in-with-rooms exemplar in the matrix suite, at `.engaged`:
+        // the same menu plus the Studio door.
+        let ctx = Fixture.context(for: .heroFrame, roomCount: 2, active: false, tier: .engaged)
+        let labels = CompanionActionProvider.actions(for: .heroFrame, context: ctx, isAuthenticated: true).map(\.label)
+        #expect(labels == [
+            "Your recommendations",
+            "Your spaces",
+            "Add another space",
+            "Collections",
+            "Your studio",
+            "Your profile"
+        ])
+    }
+
+    @Test
+    func homeStudioRowHiddenAtDiscovering() {
+        // Signed in, but nothing behind the door yet — in BOTH home arms.
+        for roomCount in [0, 2] {
+            #expect(!Self.homeLabels(roomCount: roomCount, tier: .discovering).contains("Your studio"))
+        }
+    }
+
+    @Test
+    func homeStudioRowShownAtEngaged() {
+        for roomCount in [0, 2] {
+            for tier in [EngagementTier.engaged, .activeProject] {
+                #expect(
+                    Self.homeLabels(roomCount: roomCount, tier: tier).contains("Your studio"),
+                    "rooms=\(roomCount) tier=\(tier) should offer the Studio door"
+                )
+            }
+        }
+    }
+
+    @Test
+    func homeStudioRowHiddenWhenTierUnknown() {
+        // An unresolved tier must fail closed — never open the door on a guess.
+        for roomCount in [0, 2] {
+            #expect(!Self.homeLabels(roomCount: roomCount, tier: nil).contains("Your studio"))
+        }
+    }
+
+    @Test
+    func rowCapHoldsAcrossTierVariants() {
+        let routes: [AppRoute] = [.heroFrame, .table, .emergence(pieceId: nil)]
+        let tiers: [EngagementTier?] = [nil, .discovering, .engaged, .activeProject]
+        for route in routes {
+            for tier in tiers {
+                for signedIn in [true, false] {
+                    for roomCount in [0, 2] {
+                        for active in [true, false] {
+                            let ctx = Fixture.context(
+                                for: route, roomCount: roomCount, active: active, tier: tier
+                            )
+                            let items = CompanionActionProvider.actions(
+                                for: route, context: ctx, isAuthenticated: signedIn
+                            )
+                            #expect(
+                                items.count <= 6,
+                                "\(route) tier=\(String(describing: tier)) produced \(items.count) rows"
+                            )
+                            #expect(
+                                items.filter(\.isSuggested).count <= 1,
+                                "\(route) tier=\(String(describing: tier)) has >1 suggested row"
+                            )
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    // MARK: - Nudges
+
+    @Test
+    func noNudgeExistsForScanFlow() {
+        // Mid-capture the Companion must not dangle an exit in front of the
+        // user; the scan surfaces own the screen.
+        for reason in [ScanReason.fresh, .rescan, .fromConversation] {
+            let route = AppRoute.scanFlow(reason: reason)
+            let ctx = Fixture.context(for: route, roomCount: 2, active: false)
+            #expect(CompanionActionProvider.nudge(for: route, context: ctx) == nil, "\(route) offered a nudge")
+        }
+        let preScan = Fixture.context(for: .preScanChecklist, roomCount: 2, active: false)
+        #expect(CompanionActionProvider.nudge(for: .preScanChecklist, context: preScan) == nil)
+    }
+
+    // MARK: - Style-profile freshness (U42)
+
+    @Test
+    func noRowTellsAFinishedQuizTakerToTakeTheQuiz() {
+        for route in Fixture.allRoutes {
+            for signedIn in [true, false] {
+                for roomCount in [0, 2] {
+                    let ctx = Fixture.context(
+                        for: route, roomCount: roomCount, active: false, hasStyleProfile: true
+                    )
+                    let items = CompanionActionProvider.actions(
+                        for: route, context: ctx, isAuthenticated: signedIn
+                    )
+                    #expect(
+                        !items.contains { $0.hint == "Take the quiz first" },
+                        "\(route) still says \"Take the quiz first\" after the quiz"
+                    )
+                    #expect(
+                        !items.contains { $0.hint == "Discover your style" },
+                        "\(route) still says \"Discover your style\" after the quiz"
+                    )
+                }
+            }
+        }
+    }
+
+    @Test
+    func quizlessHomeStillPointsAtTheQuiz() {
+        let ctx = Fixture.context(for: .heroFrame, roomCount: 0, active: false, hasStyleProfile: false)
+        let items = CompanionActionProvider.actions(for: .heroFrame, context: ctx, isAuthenticated: true)
+        #expect(items.contains { $0.label == "Style quiz" && $0.hint == "Discover your style" })
+        #expect(items.contains { $0.analyticsId == "recommendations" && $0.hint == "Take the quiz first" })
+    }
+
+    @Test
+    func finishedQuizSwapsTheHomeQuizRowAndRecommendationHint() {
+        let ctx = Fixture.context(for: .heroFrame, roomCount: 0, active: false, hasStyleProfile: true)
+        let items = CompanionActionProvider.actions(for: .heroFrame, context: ctx, isAuthenticated: true)
+        #expect(items.contains { $0.label == "Retake the quiz" && $0.hint == "Refine your style" })
+        #expect(items.contains { $0.analyticsId == "recommendations" && $0.hint == "Pieces for your style" })
+    }
+
+    @Test
+    func roomsOutrankTheStyleProfileInTheRecommendationHint() {
+        let ctx = Fixture.context(for: .heroFrame, roomCount: 2, active: false, hasStyleProfile: true)
+        let items = CompanionActionProvider.actions(for: .heroFrame, context: ctx, isAuthenticated: true)
+        #expect(items.contains { $0.analyticsId == "recommendations" && $0.hint == "Based on your rooms" })
     }
 }

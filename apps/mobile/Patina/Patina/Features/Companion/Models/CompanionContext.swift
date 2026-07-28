@@ -48,6 +48,14 @@ public struct CompanionContext: Equatable {
     /// Number of rooms scanned
     public var roomCount: Int
 
+    // MARK: - Style
+
+    /// Whether the user has completed the style quiz. Derived fresh from
+    /// `StyleProfileStore` where the actions are computed — the quiz writes
+    /// UserDefaults, not the coordinator, so nothing pushes this in. Rows that
+    /// used to infer "hasn't taken the quiz" from `roomCount` read this instead.
+    public var hasStyleProfile: Bool
+
     // MARK: - Design Request
 
     /// The homeowner's promoted (visible) design request, if any. Session-scoped
@@ -56,6 +64,19 @@ public struct CompanionContext: Equatable {
     /// `(route, context, isAuthenticated)`. When present, every "Ask a designer"
     /// row renders instead as "Your design request".
     public var activeDesignRequest: ActiveDesignRequestContext?
+
+    // MARK: - Engagement Tier
+
+    /// The client's progressive-disclosure tier, resolved at the same enrichment
+    /// seam as `activeDesignRequest` — so the action provider stays a pure
+    /// function of its inputs. `nil` means no tier was supplied and MUST be read
+    /// as not-yet-engaged; a tier-gated door may never open on a guess.
+    ///
+    /// Deliberately neither `public` nor a parameter of the memberwise
+    /// initializer below: `EngagementTier` is internal, and Swift forbids a
+    /// public declaration whose signature uses an internal type. Assign it
+    /// after construction.
+    var engagementTier: EngagementTier?
 
     // MARK: - Initialization
 
@@ -68,6 +89,7 @@ public struct CompanionContext: Equatable {
         recentMessages: [CompanionContextMessage] = [],
         tableItemCount: Int = 0,
         roomCount: Int = 0,
+        hasStyleProfile: Bool = false,
         activeDesignRequest: ActiveDesignRequestContext? = nil
     ) {
         self.currentScreen = currentScreen
@@ -78,6 +100,7 @@ public struct CompanionContext: Equatable {
         self.recentMessages = recentMessages
         self.tableItemCount = tableItemCount
         self.roomCount = roomCount
+        self.hasStyleProfile = hasStyleProfile
         self.activeDesignRequest = activeDesignRequest
     }
 
