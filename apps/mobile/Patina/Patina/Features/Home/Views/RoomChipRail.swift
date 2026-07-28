@@ -9,6 +9,10 @@ struct RoomChipRail: View {
     let rooms: [RoomSummary]
     let selectedID: RoomSummary.ID?
     let onSelect: (RoomSummary) -> Void
+    /// U23: trailing escape hatch to the full room gallery. The rail only
+    /// switches the feed's room; without this, "see all my rooms" had no
+    /// door on the home surface. Nil hides the chip (e.g. the preview).
+    var onAllRooms: (() -> Void)?
 
     var body: some View {
         // ScrollViewReader so selecting a chip (tap or programmatic, e.g.
@@ -20,6 +24,9 @@ struct RoomChipRail: View {
                     ForEach(rooms) { room in
                         chip(for: room)
                             .id(room.id)
+                    }
+                    if let onAllRooms {
+                        allRoomsChip(onAllRooms)
                     }
                 }
                 .padding(.horizontal, PatinaSpacing.mdLarge)
@@ -84,6 +91,26 @@ struct RoomChipRail: View {
         }
         .buttonStyle(.plain)
         .accessibilityAddTraits(isActive ? [.isSelected] : [])
+    }
+
+    private func allRoomsChip(_ action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            Text("All rooms →")
+                .font(PatinaTypography.caption)
+                .foregroundStyle(PatinaColors.Text.interactive)
+                .padding(.horizontal, PatinaSpacing.sm)
+                .padding(.vertical, PatinaSpacing.xs)
+                .frame(minHeight: 34)
+                .overlay(
+                    Capsule()
+                        .stroke(PatinaColors.Text.muted.opacity(0.25), lineWidth: 1.5)
+                )
+                .contentShape(Capsule())
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel("All rooms")
+        .accessibilityHint("Opens every room you've captured.")
+        .accessibilityIdentifier("RoomChipRail.AllRooms")
     }
 }
 
