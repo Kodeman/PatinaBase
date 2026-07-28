@@ -30,10 +30,8 @@ struct DecisionDetailView: View {
                 } else if let error = viewModel.error {
                     errorView(error)
                 } else {
-                    ProgressView()
-                        .tint(PatinaColors.Text.interactive)
+                    PatinaLoadingState()
                         .padding(.top, 80)
-                        .frame(maxWidth: .infinity)
                 }
             }
             .padding(.bottom, 120)
@@ -232,17 +230,10 @@ struct DecisionDetailView: View {
     }
 
     private func errorView(_ msg: String) -> some View {
-        VStack(spacing: 12) {
-            Text(msg)
-                .font(PatinaTypography.bodySmall)
-                .foregroundStyle(PatinaColors.Text.secondary)
-            Button("Try Again") {
-                Task { await viewModel.load(decisionId: decisionId) }
-            }
-            .font(PatinaTypography.bodySmallMedium)
-            .foregroundStyle(PatinaColors.Text.interactive)
-        }
-        .frame(maxWidth: .infinity)
+        PatinaErrorState(
+            message: msg,
+            action: { Task { await viewModel.load(decisionId: decisionId) } }
+        )
         .padding(.top, 80)
     }
 }
