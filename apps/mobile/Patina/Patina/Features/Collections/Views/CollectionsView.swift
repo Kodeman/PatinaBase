@@ -16,7 +16,7 @@ struct CollectionsView: View {
     /// U06: when set, the All Items tab scopes to this room's saved items
     /// and the header names the room. The Boards tab is unaffected — a
     /// board can span rooms, so it stays global.
-    var roomId: UUID? = nil
+    var roomId: UUID?
 
     /// Lookup table from productId → TableItemModel, built from savedItems
     /// so board tiles can render real thumbnails for their product IDs.
