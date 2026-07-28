@@ -414,14 +414,23 @@ def test_item_six_implements_the_capability_and_claims_nothing_more():
     assert NATIVE_ENGINE_OUTPUT_ALIGNMENT_VERIFIED_BY_PARENT is False
 
 
-def test_nothing_in_the_package_composes_this_module():
-    """The "does not compose anything" claim, made load-bearing.
+#: The COMPLETE set of files inside ``patina_scan_worker`` that may import this
+#: module, written out literally rather than derived from the tree.  Item 7's
+#: composed lifecycle is the caller this module was built for; every other
+#: importer would mean a disabled stage had quietly acquired one, which is the
+#: drift this program keeps catching.  An unexpected edge reddens because the
+#: comparison is EQUALITY against this tuple, not membership in it.
+EXPECTED_IN_PACKAGE_IMPORTERS = ("refine_lifecycle.py",)
 
-    Item 7 is what composes the verifier.  Until it does, any ``import`` of this
-    module from inside ``patina_scan_worker`` would mean a disabled stage had
-    quietly acquired a caller, which is exactly the drift this program keeps
-    catching.  Comments and docstrings may NAME the module; code may not import
-    it.
+
+def test_exactly_the_composed_lifecycle_imports_this_module():
+    """The "who composes the verifier" claim, made load-bearing.
+
+    Before item 7 this asserted an empty set.  It now asserts the exact edge set,
+    for the reason stated on :data:`EXPECTED_IN_PACKAGE_IMPORTERS`: widening the
+    assertion to "at most one importer" or to a membership test would let a
+    second, unreviewed caller appear without a failure.  Comments and docstrings
+    may NAME the module; only the listed files may import it.
     """
 
     package = pathlib.Path(alignment.__file__).resolve().parent
@@ -442,7 +451,32 @@ def test_nothing_in_the_package_composes_this_module():
                 "refine_model_alignment" in name.name for name in node.names
             ):
                 importers.append(module.name)
-    assert importers == []
+    assert tuple(sorted(set(importers))) == EXPECTED_IN_PACKAGE_IMPORTERS
+    # One edge per importing file, so a second import statement inside the same
+    # file -- a plausible way to smuggle a second call site past a set-based
+    # assertion -- is also visible here.
+    assert importers == list(EXPECTED_IN_PACKAGE_IMPORTERS)
+
+
+def test_the_one_importer_is_not_reachable_from_the_worker_dispatch_table():
+    """The edge is allowed because it lands somewhere unreachable, not because
+    it is small.  ``stages/`` must import nothing named ``refine``, and the
+    refine task type must still resolve to no handler."""
+
+    from patina_scan_worker.stages import get_handler
+
+    package = pathlib.Path(alignment.__file__).resolve().parent
+    for module in sorted((package / "stages").rglob("*.py")):
+        source = module.read_text()
+        for node in ast.walk(ast.parse(source)):
+            names: list[str] = []
+            if isinstance(node, ast.ImportFrom):
+                names.append(node.module or "")
+                names.extend(alias.name for alias in node.names)
+            elif isinstance(node, ast.Import):
+                names.extend(alias.name for alias in node.names)
+            assert not any("refine" in name for name in names), module.name
+    assert get_handler("scan_pipeline.refine") is None
 
 
 def test_the_parent_recomputation_shares_no_dependency_with_the_child():
