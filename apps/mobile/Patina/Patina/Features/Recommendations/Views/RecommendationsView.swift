@@ -82,7 +82,9 @@ struct RecommendationsView: View {
             content
         }
         .background(PatinaColors.Background.primary)
-        .toolbarTitleDisplayMode(.inline)
+        // U18: standard pushed-screen chrome — the "Browse pieces" header
+        // above carries the title, so the chrome adds only the back chevron.
+        .patinaScreen(title: nil)
         .task {
             roomRemoteId = resolveRoomRemoteId()
             // U29 fix: seed already-saved state (prior visit, another

@@ -63,7 +63,11 @@ struct ThreadDetailView: View {
             viewModel.startLiveUpdates()
         }
         .onDisappear { viewModel.stopLiveUpdates() }
-        .toolbarTitleDisplayMode(.inline)
+        // U18: standard pushed-screen chrome. This screen has no in-body
+        // header to source a title from (Group B before this change: system
+        // bar, no navigationTitle) — chrome title left nil rather than
+        // inventing unsanctioned copy; a per-thread title is a follow-up.
+        .patinaScreen(title: nil)
     }
 
     // MARK: - Transcript rows
