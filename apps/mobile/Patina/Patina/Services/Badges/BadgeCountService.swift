@@ -53,6 +53,12 @@ final class BadgeCountService {
     /// Guests never load — the rail renders invitations, not counts.
     private(set) var hasLoaded: Bool = false
 
+    /// True when the last authenticated refresh came back with nothing at
+    /// all — every one of the five fetches failed. Distinguishes "still
+    /// waiting" from "we couldn't reach your studio", which the home needs
+    /// to decide between a skeleton and a retry (U45).
+    private(set) var lastRefreshFailed: Bool = false
+
     private var pendingRefresh: Task<Void, Never>?
 
     private init() {}
@@ -68,6 +74,7 @@ final class BadgeCountService {
             payableInvoiceCount = 0
             projectCount = 0
             hasLoaded = false
+            lastRefreshFailed = false
             return
         }
 
@@ -101,6 +108,9 @@ final class BadgeCountService {
         if decisions != nil || summaries != nil || proposals != nil
             || invoices != nil || projects != nil {
             hasLoaded = true
+            lastRefreshFailed = false
+        } else {
+            lastRefreshFailed = true
         }
     }
 

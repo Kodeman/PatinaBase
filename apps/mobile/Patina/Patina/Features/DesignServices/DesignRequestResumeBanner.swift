@@ -18,26 +18,51 @@ struct DesignRequestResumeBanner: View {
     let onDismiss: () -> Void
 
     var body: some View {
+        // U12: real Button + visible "Review ›" affordance instead of a
+        // silent whole-card tap gesture. The dismiss ✕ stays a SIBLING —
+        // nested inside the primary Button's label it would never fire.
         HStack(spacing: PatinaSpacing.xsm) {
-            ZStack {
-                RoundedRectangle(cornerRadius: PatinaRadius.lg, style: .continuous)
-                    .fill(PatinaGradients.earth)
-                    .frame(width: 44, height: 44)
-                Image(systemName: "paperplane")
-                    .font(.system(size: 18))
-                    .foregroundStyle(PatinaColors.offWhite)
-            }
+            Button(action: onReview) {
+                HStack(spacing: PatinaSpacing.xsm) {
+                    ZStack {
+                        RoundedRectangle(cornerRadius: PatinaRadius.lg, style: .continuous)
+                            .fill(PatinaGradients.earth)
+                            .frame(width: 44, height: 44)
+                        Image(systemName: "paperplane")
+                            .font(.system(size: 18))
+                            .foregroundStyle(PatinaColors.offWhite)
+                    }
 
-            VStack(alignment: .leading, spacing: PatinaSpacing.xxxs) {
-                Text("Your design request is almost ready")
-                    .font(PatinaTypography.bodySmallMedium)
-                    .foregroundStyle(PatinaColors.Text.primary)
-                Text("Review & send")
-                    .font(PatinaTypography.caption)
-                    .foregroundStyle(PatinaColors.Text.muted)
-            }
+                    VStack(alignment: .leading, spacing: PatinaSpacing.xxxs) {
+                        Text("Your design request is almost ready")
+                            .font(PatinaTypography.bodySmallMedium)
+                            .foregroundStyle(PatinaColors.Text.primary)
+                        Text("Review & send")
+                            .font(PatinaTypography.caption)
+                            .foregroundStyle(PatinaColors.Text.muted)
+                    }
 
-            Spacer(minLength: 0)
+                    Spacer(minLength: PatinaSpacing.xs)
+
+                    HStack(spacing: 2) {
+                        Text("Review")
+                            .font(PatinaTypography.monoLabel)
+                            .tracking(0.4)
+                            .textCase(.uppercase)
+                            .foregroundStyle(PatinaColors.Text.interactive)
+                        Image(systemName: "chevron.right")
+                            .font(PatinaTypography.uiSmall)
+                            .foregroundStyle(PatinaColors.Text.interactive)
+                    }
+                }
+                .frame(minHeight: 44)
+                .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .accessibilityElement(children: .combine)
+            .accessibilityLabel("Your design request is almost ready")
+            .accessibilityHint("Reopens the design request you started so you can review and send it.")
+            .accessibilityIdentifier("DailyRoomView.DesignRequestResumeBanner")
 
             Button(action: onDismiss) {
                 Image(systemName: "xmark")
@@ -56,12 +81,6 @@ struct DesignRequestResumeBanner: View {
             RoundedRectangle(cornerRadius: PatinaRadius.xl, style: .continuous)
                 .stroke(PatinaColors.clay.opacity(0.35), lineWidth: 1)
         )
-        .contentShape(RoundedRectangle(cornerRadius: PatinaRadius.xl, style: .continuous))
-        .onTapGesture(perform: onReview)
-        .accessibilityElement(children: .combine)
-        .accessibilityLabel("Your design request is almost ready")
-        .accessibilityHint("Reopens the design request you started so you can review and send it.")
-        .accessibilityIdentifier("DailyRoomView.DesignRequestResumeBanner")
     }
 }
 

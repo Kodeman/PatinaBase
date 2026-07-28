@@ -129,4 +129,80 @@ struct EngagementTierTests {
         )
         #expect(tier == .activeProject)
     }
+
+    // MARK: - Tri-state (U45)
+    //
+    // The home ASSERTS things from the tier — `.discovering` pitches "Ready to
+    // bring in a designer?". These pin that an unanswered question is never
+    // answered with that pitch.
+
+    private func state(
+        isAuthenticated: Bool = true,
+        badgesLoaded: Bool = false,
+        requestsLoaded: Bool = false,
+        requests: [DesignRequestStatus] = [],
+        projectCount: Int = 0,
+        proposalCount: Int = 0,
+        invoiceCount: Int = 0,
+        decisionCount: Int = 0
+    ) -> EngagementTierState {
+        EngagementTier.resolveState(
+            isAuthenticated: isAuthenticated,
+            badgesLoaded: badgesLoaded,
+            requestsLoaded: requestsLoaded,
+            requests: requests,
+            projectCount: projectCount,
+            proposalCount: proposalCount,
+            invoiceCount: invoiceCount,
+            decisionCount: decisionCount
+        )
+    }
+
+    @Test
+    func guestIsKnownDiscoveringImmediately() {
+        // A guest has nothing to fetch — no skeleton, no waiting.
+        #expect(state(isAuthenticated: false) == .known(.discovering))
+    }
+
+    @Test
+    func signedInUnloadedIsUnknown() {
+        #expect(state() == .unknown)
+    }
+
+    @Test
+    func signedInLoadedZeroesIsKnownDiscovering() {
+        #expect(
+            state(badgesLoaded: true, requestsLoaded: true) == .known(.discovering)
+        )
+    }
+
+    @Test
+    func partialLoadPromotesNeverDemotes() {
+        // Requests landed and carry a live one: promote on that evidence
+        // alone, even though the badge counts are still out.
+        #expect(
+            state(
+                requestsLoaded: true,
+                requests: [request(status: "new")]
+            ) == .known(.engaged)
+        )
+        // Badges landed empty while the requests are still out: absence of
+        // evidence is NOT evidence of absence — stay unknown.
+        #expect(state(badgesLoaded: true) == .unknown)
+    }
+
+    @Test
+    func partialCountPromotesToActiveProject() {
+        #expect(state(badgesLoaded: true, projectCount: 1) == .known(.activeProject))
+    }
+
+    @Test
+    func failureNeverResolvesToDiscovering() {
+        // A failed refresh leaves both services unloaded with zeroed counts —
+        // exactly the shape a brand-new client has. The signed-in client with
+        // a real studio must not be pitched the marketplace-first CTA.
+        #expect(state() != .known(.discovering))
+        #expect(state(badgesLoaded: true) != .known(.discovering))
+        #expect(state(requestsLoaded: true) != .known(.discovering))
+    }
 }

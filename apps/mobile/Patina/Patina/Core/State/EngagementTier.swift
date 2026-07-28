@@ -45,17 +45,60 @@ enum EngagementTier: Int, Comparable {
         lhs.rawValue < rhs.rawValue
     }
 
-    /// Resolve the current tier from the app-wide services. Call inside a
-    /// SwiftUI `body`/computed view so the reads register as observation
+    /// Resolve the current tri-state from the app-wide services. Call inside
+    /// a SwiftUI `body`/computed view so the reads register as observation
     /// dependencies and the home re-renders when a refresh lands.
-    static var current: EngagementTier {
-        resolve(
+    static var currentState: EngagementTierState {
+        resolveState(
+            isAuthenticated: AuthService.shared.isAuthenticated,
+            badgesLoaded: BadgeCountService.shared.hasLoaded,
+            requestsLoaded: DesignRequestStatusService.shared.hasLoaded,
             requests: DesignRequestStatusService.shared.requests,
             projectCount: BadgeCountService.shared.projectCount,
             proposalCount: BadgeCountService.shared.proposalsAwaitingSignatureCount,
             invoiceCount: BadgeCountService.shared.payableInvoiceCount,
             decisionCount: BadgeCountService.shared.pendingDecisionCount
         )
+    }
+
+    /// Pure tri-state resolver — unit-testable without touching the services.
+    ///
+    /// The tier drives what the home *asserts* about the client, so an
+    /// unanswered question must never be answered with `.discovering`: a
+    /// signed-in client whose counts haven't landed would be pitched
+    /// "Ready to bring in a designer?" while their real project sits behind
+    /// the request in flight.
+    ///
+    /// Guests are knowable without any fetch. Once both services have
+    /// loaded the answer is whatever `resolve` says. In between, evidence is
+    /// promote-only: local design-request receipts and stale counts can only
+    /// raise the tier, never lower it, so a partial load resolves to a tier
+    /// only when it clears `.discovering`.
+    ///
+    /// Every parameter is a distinct signal the resolver must weigh, so the
+    /// arity is inherent — bundling them into a struct would only move it.
+    static func resolveState( // swiftlint:disable:this function_parameter_count
+        isAuthenticated: Bool,
+        badgesLoaded: Bool,
+        requestsLoaded: Bool,
+        requests: [DesignRequestStatus],
+        projectCount: Int,
+        proposalCount: Int,
+        invoiceCount: Int,
+        decisionCount: Int
+    ) -> EngagementTierState {
+        guard isAuthenticated else { return .known(.discovering) }
+
+        let resolved = resolve(
+            requests: requests,
+            projectCount: projectCount,
+            proposalCount: proposalCount,
+            invoiceCount: invoiceCount,
+            decisionCount: decisionCount
+        )
+
+        if badgesLoaded && requestsLoaded { return .known(resolved) }
+        return resolved > .discovering ? .known(resolved) : .unknown
     }
 
     /// Pure resolver — unit-testable without touching the services.
@@ -80,4 +123,14 @@ enum EngagementTier: Int, Comparable {
         }
         return .discovering
     }
+}
+
+/// What the home actually knows about the client's tier right now.
+///
+/// `.unknown` is not a tier — it's the honest answer while the services that
+/// derive one are still in flight or have failed. The home renders a
+/// skeleton (or a retry) for it, never the discovering-tier pitch.
+enum EngagementTierState: Equatable {
+    case known(EngagementTier)
+    case unknown
 }

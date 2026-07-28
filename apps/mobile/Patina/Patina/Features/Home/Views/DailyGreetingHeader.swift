@@ -151,10 +151,10 @@ private struct UnreadBadge: View {
 
 #Preview {
     VStack {
-        DailyGreetingHeader(dateString: "WEDNESDAY · APR 7", monogram: "K")
+        DailyGreetingHeader(dateString: "WEDNESDAY · APR 7", monogram: "A")
         DailyGreetingHeader(
             dateString: "WEDNESDAY · APR 7",
-            monogram: "K",
+            monogram: "A",
             onHelpTap: {},
             onMonogramTap: {},
             onBellTap: {},

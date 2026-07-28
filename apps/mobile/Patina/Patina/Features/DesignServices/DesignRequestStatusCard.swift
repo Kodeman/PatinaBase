@@ -36,28 +36,55 @@ struct DesignRequestStatusCard: View {
     }
 
     var body: some View {
+        // U12: real Button + visible "Open ›" affordance instead of a silent
+        // whole-card tap gesture. The dismiss ✕ stays a SIBLING — nested
+        // inside the primary Button's label it would never fire.
         HStack(alignment: .top, spacing: PatinaSpacing.xsm) {
-            ZStack {
-                RoundedRectangle(cornerRadius: PatinaRadius.lg, style: .continuous)
-                    .fill(PatinaGradients.earth)
-                    .frame(width: 44, height: 44)
-                Image(systemName: "paperplane.fill")
-                    .font(.system(size: 18))
-                    .foregroundStyle(PatinaColors.offWhite)
-            }
+            Button(action: onOpen) {
+                HStack(alignment: .top, spacing: PatinaSpacing.xsm) {
+                    ZStack {
+                        RoundedRectangle(cornerRadius: PatinaRadius.lg, style: .continuous)
+                            .fill(PatinaGradients.earth)
+                            .frame(width: 44, height: 44)
+                        Image(systemName: "paperplane.fill")
+                            .font(.system(size: 18))
+                            .foregroundStyle(PatinaColors.offWhite)
+                    }
 
-            VStack(alignment: .leading, spacing: PatinaSpacing.xxs) {
-                Text(title)
-                    .font(PatinaTypography.bodySmallMedium)
-                    .foregroundStyle(PatinaColors.Text.primary)
-                    .fixedSize(horizontal: false, vertical: true)
-                PatinaStatusBadge(state: stage.badgeState, text: stage.badgeTitle)
-                Text(subtitle)
-                    .font(PatinaTypography.caption)
-                    .foregroundStyle(PatinaColors.Text.muted)
-            }
+                    VStack(alignment: .leading, spacing: PatinaSpacing.xxs) {
+                        Text(title)
+                            .font(PatinaTypography.bodySmallMedium)
+                            .foregroundStyle(PatinaColors.Text.primary)
+                            .fixedSize(horizontal: false, vertical: true)
+                        PatinaStatusBadge(state: stage.badgeState, text: stage.badgeTitle)
+                        Text(subtitle)
+                            .font(PatinaTypography.caption)
+                            .foregroundStyle(PatinaColors.Text.muted)
+                    }
 
-            Spacer(minLength: 0)
+                    Spacer(minLength: PatinaSpacing.xs)
+
+                    HStack(spacing: 2) {
+                        Text("Open")
+                            .font(PatinaTypography.monoLabel)
+                            .tracking(0.4)
+                            .textCase(.uppercase)
+                            .foregroundStyle(PatinaColors.Text.interactive)
+                        Image(systemName: "chevron.right")
+                            .font(PatinaTypography.uiSmall)
+                            .foregroundStyle(PatinaColors.Text.interactive)
+                    }
+                    .padding(.top, 2)
+                }
+                .frame(minHeight: 44)
+                .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .accessibilityElement(children: .combine)
+            .accessibilityLabel(title)
+            .accessibilityValue(stage.subtitle(studioName: request.studioName, designerName: request.designerName))
+            .accessibilityHint("Opens your design request to see its progress.")
+            .accessibilityIdentifier("DailyRoomView.DesignRequestStatusCard")
 
             Button(action: onDismiss) {
                 Image(systemName: "xmark")
@@ -76,13 +103,6 @@ struct DesignRequestStatusCard: View {
             RoundedRectangle(cornerRadius: PatinaRadius.xl, style: .continuous)
                 .stroke(PatinaColors.clay.opacity(0.35), lineWidth: 1)
         )
-        .contentShape(RoundedRectangle(cornerRadius: PatinaRadius.xl, style: .continuous))
-        .onTapGesture(perform: onOpen)
-        .accessibilityElement(children: .combine)
-        .accessibilityLabel(title)
-        .accessibilityValue(stage.subtitle(studioName: request.studioName, designerName: request.designerName))
-        .accessibilityHint("Opens your design request to see its progress.")
-        .accessibilityIdentifier("DailyRoomView.DesignRequestStatusCard")
     }
 }
 
