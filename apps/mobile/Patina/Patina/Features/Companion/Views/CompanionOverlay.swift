@@ -134,8 +134,12 @@ public struct CompanionOverlay: View {
     /// lands — keeping `CompanionActionProvider` a pure function of its inputs
     /// (no polling, no coordinator-write side channel).
     ///
-    /// An unresolved tier is left `nil` rather than defaulted: the row builders
-    /// read `nil` as not-yet-engaged, so a Studio door never opens on a guess.
+    /// The tier is read through the pure `EngagementTier.resolve` rather than a
+    /// convenience accessor on the type: the Companion only ever *gates* on the
+    /// tier (`>= .engaged`), it never asserts from it, and the resolver is
+    /// promote-only — it answers `.discovering` until real evidence lands. For a
+    /// door that opens on evidence, "still loading" and "discovering" are the
+    /// same answer, so the Studio door never opens on a guess.
     ///
     /// The style profile and the room / saved-item counts are read from their
     /// live stores here for the same reason (U42): nothing writes them into the
@@ -155,9 +159,13 @@ public struct CompanionOverlay: View {
                 statusLabel: promoted.stage.badgeTitle
             )
         }
-        if case .known(let tier) = EngagementTier.currentState {
-            context.engagementTier = tier
-        }
+        context.engagementTier = EngagementTier.resolve(
+            requests: DesignRequestStatusService.shared.requests,
+            projectCount: BadgeCountService.shared.projectCount,
+            proposalCount: BadgeCountService.shared.proposalsAwaitingSignatureCount,
+            invoiceCount: BadgeCountService.shared.payableInvoiceCount,
+            decisionCount: BadgeCountService.shared.pendingDecisionCount
+        )
         context.hasStyleProfile = StyleProfileStore.shared.hasCompletedProfile
 
         let store = PersistenceController.shared.container.mainContext
