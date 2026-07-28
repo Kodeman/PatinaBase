@@ -45,7 +45,10 @@ struct RoomSettingsView: View {
             .padding(20)
         }
         .background(PatinaColors.Background.primary.ignoresSafeArea())
-        .toolbar(.hidden, for: .navigationBar)
+        // U18: standard pushed-screen chrome — resolves the prior conflict
+        // where ContentView styled this destination as a system bar while
+        // this view separately hid it. The header below carries the title.
+        .patinaScreen(title: nil)
         .onAppear {
             if let room {
                 name = room.name
@@ -69,15 +72,10 @@ struct RoomSettingsView: View {
 
     private var header: some View {
         VStack(alignment: .leading, spacing: 2) {
-            HStack {
-                BackChevronButton(style: .light) { coordinator.goBack() }
-                Spacer()
-            }
-            .padding(.top, 20)
             Text("Room Settings")
                 .font(PatinaTypography.h4)
                 .foregroundStyle(PatinaColors.Text.primary)
-                .padding(.top, 12)
+                .padding(.top, 56)
             Text(room?.name ?? "")
                 .font(PatinaTypography.monoSmall)
                 .tracking(0.4)

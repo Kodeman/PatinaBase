@@ -189,27 +189,21 @@ struct ContentView: View {
 
         case .roomList, .yourSpaces:
             YourSpacesView()
-                .toolbar(.hidden, for: .navigationBar)
 
         case .roomDetail(let roomId), .roomProject(let roomId):
             RoomProjectView(roomId: roomId)
-                .toolbar(.hidden, for: .navigationBar)
 
         case .roomSettings(let roomId):
             RoomSettingsView(roomId: roomId)
-                .toolbarTitleDisplayMode(.inline)
 
         case .crossRoom:
             CrossRoomView()
-                .toolbar(.hidden, for: .navigationBar)
 
         case .manualRoomEntry:
             ManualRoomEntryView()
-                .toolbar(.hidden, for: .navigationBar)
 
         case .roomSavedItems(let roomId):
             CollectionsView(roomId: roomId)
-                .toolbarTitleDisplayMode(.inline)
 
         case .scanFlow:
             // The single Quiet Conversation entry. The host owns the entire
@@ -225,7 +219,6 @@ struct ContentView: View {
                     .toolbar(.hidden, for: .navigationBar)
             } else {
                 RecommendationsView()
-                    .toolbarTitleDisplayMode(.inline)
             }
 
         case .roomEmergence(let roomId):
@@ -237,11 +230,9 @@ struct ContentView: View {
             // falling back to the unscoped marketplace if the room hasn't
             // synced yet.
             RecommendationsView(roomId: roomId.uuidString)
-                .toolbarTitleDisplayMode(.inline)
 
         case .table:
             CollectionsView()
-                .toolbarTitleDisplayMode(.inline)
 
         case .pieceDetail(let pieceId):
             ProductDetailView(productId: pieceId)
@@ -252,8 +243,7 @@ struct ContentView: View {
                 .toolbar(.hidden, for: .navigationBar)
 
         case .styleResult(let result):
-            StyleResultView(result: result)
-                .toolbar(.hidden, for: .navigationBar)
+            StyleResultView(result: result, showsChrome: true)
 
         case .arPlacement(let productId, let roomRemoteId):
             ARPlacementView(productId: productId, roomRemoteId: roomRemoteId)
@@ -267,67 +257,51 @@ struct ContentView: View {
 
         case .profile:
             ProfileView()
-                .toolbarTitleDisplayMode(.inline)
 
         case .notifications:
             NotificationFeedView()
-                .toolbarTitleDisplayMode(.inline)
 
         case .designerConsultation:
             DesignerConsultationView()
-                .toolbar(.hidden, for: .navigationBar)
 
         case .designRequests(let focusLeadId):
             DesignRequestStatusView(focusLeadId: focusLeadId)
-                .toolbar(.hidden, for: .navigationBar)
 
         case .projectList:
             ProjectListView()
-                .toolbar(.hidden, for: .navigationBar)
 
         case .projectDetail(let projectId):
             ProjectDetailView(projectId: projectId)
-                .toolbar(.hidden, for: .navigationBar)
 
         case .decisionList:
             DecisionListView()
-                .toolbar(.hidden, for: .navigationBar)
 
         case .decisionDetail(let decisionId):
             DecisionDetailView(decisionId: decisionId)
-                .toolbar(.hidden, for: .navigationBar)
 
         case .threadList:
             ThreadListView()
-                .toolbar(.hidden, for: .navigationBar)
 
         case .threadDetail(let threadId):
             ThreadDetailView(threadId: threadId)
-                .toolbarTitleDisplayMode(.inline)
 
         case .proposalList:
             ProposalListView()
-                .toolbar(.hidden, for: .navigationBar)
 
         case .proposalDetail(let proposalId):
             ProposalDetailView(proposalId: proposalId)
-                .toolbar(.hidden, for: .navigationBar)
 
         case .invoiceList:
             InvoiceListView()
-                .toolbar(.hidden, for: .navigationBar)
 
         case .invoiceDetail(let invoiceId):
             InvoiceDetailView(invoiceId: invoiceId)
-                .toolbar(.hidden, for: .navigationBar)
 
         case .budget:
             BudgetView()
-                .toolbar(.hidden, for: .navigationBar)
 
         case .documentList:
             DocumentListView()
-                .toolbar(.hidden, for: .navigationBar)
         }
     }
 }

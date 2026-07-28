@@ -14,7 +14,6 @@ import SwiftUI
 struct ProposalDetailView: View {
     let proposalId: String
     @State private var viewModel = ProposalDetailViewModel()
-    @Environment(\.appCoordinator) private var coordinator
 
     var body: some View {
         ScrollView(showsIndicators: false) {
@@ -34,11 +33,9 @@ struct ProposalDetailView: View {
             .padding(.bottom, 140)
         }
         .background(PatinaColors.Background.primary)
-        .overlay(alignment: .topLeading) {
-            BackChevronButton(style: .light) { coordinator.goBack() }
-                .padding(.top, 8)
-                .padding(.leading, 18)
-        }
+        // U18: standard pushed-screen chrome — the header above carries
+        // the title, so the chrome adds only the back chevron.
+        .patinaScreen(title: nil)
         .task { await viewModel.load(proposalId: proposalId) }
         .sheet(isPresented: $viewModel.showSignSheet) {
             ProposalSignSheet(

@@ -115,7 +115,9 @@ struct CollectionsView: View {
             }
         }
         .background(PatinaColors.Background.primary)
-        .toolbarTitleDisplayMode(.inline)
+        // U18: standard pushed-screen chrome — the "Saved" header above
+        // carries the title, so the chrome adds only the back chevron.
+        .patinaScreen(title: nil)
         .onAppear {
             viewModel.loadData(context: modelContext)
         }

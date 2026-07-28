@@ -198,7 +198,9 @@ struct ProfileView: View {
             }
         }
         .background(PatinaColors.Background.primary)
-        .toolbarTitleDisplayMode(.inline)
+        // U18: standard pushed-screen chrome — the avatar/name block above
+        // is this screen's header, so the chrome adds only the back chevron.
+        .patinaScreen(title: nil)
         .onAppear {
             viewModel.loadData(context: modelContext)
         }

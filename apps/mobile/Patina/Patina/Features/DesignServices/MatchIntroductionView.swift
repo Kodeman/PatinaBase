@@ -71,12 +71,11 @@ struct MatchIntroductionView: View {
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .background(PatinaColors.Background.primary)
-        // R04: nav bar is hidden for this destination — pin a back affordance.
-        .overlay(alignment: .topLeading) {
-            BackChevronButton(style: .light) { coordinator.goBack() }
-                .padding(.top, 8)
-                .padding(.leading, 18)
-        }
+        // U18: standard pushed-screen chrome — same route as
+        // DesignRequestStatusView (this is its "You're matched" body-swap,
+        // not a separate destination), so it carries the identical chrome.
+        // The header above carries the title.
+        .patinaScreen(title: nil)
         .task(id: request.designerId) {
             guard let designerId = request.designerId else { return }
             studioIdentity = await StudioIdentityService.shared.identity(forDesigner: designerId)

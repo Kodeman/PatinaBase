@@ -47,15 +47,9 @@ struct DesignerConsultationView: View {
             }
         }
         .background(PatinaColors.Background.primary)
-        .toolbarTitleDisplayMode(.inline)
-        // R04: nav bar is hidden for this destination (ContentView) — pin a
-        // back affordance over the dark hero band. `.dark` style: light
-        // chevron on a translucent dark pill, matching the hero background.
-        .overlay(alignment: .topLeading) {
-            BackChevronButton(style: .dark) { coordinator.goBack() }
-                .padding(.top, 8)
-                .padding(.leading, 18)
-        }
+        // U18: standard pushed-screen chrome. `.dark` style: light chevron
+        // on a translucent dark pill, matching the hero band this overlays.
+        .patinaScreen(title: nil, style: .dark)
     }
 
     private var designerCard: some View {

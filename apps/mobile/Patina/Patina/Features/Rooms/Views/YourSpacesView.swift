@@ -74,13 +74,9 @@ struct YourSpacesView: View {
                 }
             }
         }
-        // R04: nav bar is hidden for this destination (ContentView) — pin a
-        // back affordance over the content (matches ProjectListView).
-        .overlay(alignment: .topLeading) {
-            BackChevronButton(style: .light) { coordinator.goBack() }
-                .padding(.top, 8)
-                .padding(.leading, 18)
-        }
+        // U18: standard pushed-screen chrome — this screen's own "Your
+        // Spaces" header stands in for the chrome title.
+        .patinaScreen(title: nil)
         // Contextual help panel — surfaces every Sanity article whose
         // surfaceKey is `ios-app/rooms` or a child of it.
         .helpPanel(

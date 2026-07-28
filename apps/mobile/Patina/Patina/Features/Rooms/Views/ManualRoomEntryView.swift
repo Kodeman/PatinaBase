@@ -97,22 +97,19 @@ struct ManualRoomEntryView: View {
             .padding(20)
         }
         .background(PatinaColors.Background.primary.ignoresSafeArea())
-        .toolbar(.hidden, for: .navigationBar)
+        // U18: standard pushed-screen chrome — the header below carries
+        // the title, so the chrome adds only the back chevron.
+        .patinaScreen(title: nil)
     }
 
     // MARK: - Pieces
 
     private var header: some View {
         VStack(alignment: .leading, spacing: 2) {
-            HStack {
-                BackChevronButton(style: .light) { coordinator.goBack() }
-                Spacer()
-            }
-            .padding(.top, 20)
             Text("Room details")
                 .font(PatinaTypography.h4)
                 .foregroundStyle(PatinaColors.Text.primary)
-                .padding(.top, 12)
+                .padding(.top, 56)
             Text("Help us understand your space")
                 .font(PatinaTypography.monoSmall)
                 .tracking(0.4)
