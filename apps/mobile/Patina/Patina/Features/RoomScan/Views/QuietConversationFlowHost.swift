@@ -43,6 +43,10 @@ struct QuietConversationFlowHost: View {
     /// Scan id held after the review finishes so the saved-confirmation step
     /// can observe the matching RoomScanPackage while the upload runs.
     @State private var savedScanId: UUID?
+    /// U40: in-flight guard on the fallback room write so a double-tap of
+    /// "Accept" on the floor plan can't start two creates before the first
+    /// one stamps `session.localRoomId`.
+    @State private var isSavingFallbackRoom = false
 
     /// Identifiable wrapper so `.fullScreenCover(item:)` can present the
     /// review on any distinct scan completion.
@@ -288,8 +292,15 @@ struct QuietConversationFlowHost: View {
                     session: session,
                     onAccept: {
                         ScanAnalytics.shared.track(.floorplanAccepted)
-                        dismiss()
-                        coordinator.navigate(to: .emergence(pieceId: nil))
+                        if session.scanMethod == .manual {
+                            acceptFallbackFloorPlan()
+                        } else {
+                            // LiDAR sessions already wrote their RoomModel in
+                            // `holdScanLocally` after the review step — saving
+                            // again here would create a second room.
+                            dismiss()
+                            coordinator.navigate(to: .emergence(pieceId: nil))
+                        }
                     },
                     onRescan: {
                         ScanAnalytics.shared.track(.floorplanRescan)
@@ -339,6 +350,86 @@ struct QuietConversationFlowHost: View {
             bundlePath: bundlePath,
             modelContext: modelContext
         )
+    }
+}
+
+// MARK: - Fallback room persistence (U40)
+
+extension QuietConversationFlowHost {
+
+    /// Accept handler for the manual (non-LiDAR) path. Before U40 this branch
+    /// shared the LiDAR `dismiss(); navigate(.emergence)` exit, which meant
+    /// everything the user typed on the fallback entry screen — room type,
+    /// dimensions, windows, doors — evaporated the moment the flow closed: no
+    /// `RoomModel` was ever written. Now the room is created first and the
+    /// user lands in it.
+    fileprivate func acceptFallbackFloorPlan() {
+        guard !isSavingFallbackRoom else { return }
+        isSavingFallbackRoom = true
+        Task { @MainActor in
+            let roomId = await persistFallbackRoom()
+            isSavingFallbackRoom = false
+            dismiss()
+            if let roomId {
+                coordinator.navigate(to: .roomProject(roomId: roomId))
+            } else {
+                // Defensive: the session vanished under us. Home is still a
+                // coherent landing spot; a nil route is not.
+                coordinator.navigate(to: .heroFrame)
+            }
+        }
+    }
+
+    /// Persist the manually-entered room and return its local id.
+    ///
+    /// Idempotent through `session.localRoomId`, so an accept that follows a
+    /// rescan-then-accept can't produce a duplicate room.
+    @MainActor
+    fileprivate func persistFallbackRoom() async -> UUID? {
+        guard var current = session, current.scanMethod == .manual else { return nil }
+        if let existing = current.localRoomId { return existing }
+
+        let draft = FallbackRoomDraft(session: current)
+        let store = RoomStore(context: modelContext)
+        let creation = RoomCreationCoordinator(store: store)
+
+        let roomId: UUID
+        do {
+            let result = try await creation.createManualRoom(
+                name: draft.name,
+                roomType: draft.roomType,
+                widthFeet: draft.widthFeet,
+                lengthFeet: draft.lengthFeet,
+                ceilingHeightFeet: draft.ceilingHeightFeet,
+                orientationRaw: "",
+                windowCount: draft.windowCount,
+                doorCount: draft.doorCount
+            )
+            roomId = result.room.id
+        } catch {
+            // Mirrors ManualRoomEntryView's offline fallback: guests and
+            // offline users get a local-only room rather than nothing.
+            let local = store.createRoom(
+                name: draft.name,
+                roomType: draft.roomType,
+                widthFeet: draft.widthFeet,
+                lengthFeet: draft.lengthFeet,
+                ceilingHeightFeet: draft.ceilingHeightFeet,
+                orientationRaw: "",
+                windowCount: draft.windowCount,
+                doorCount: draft.doorCount,
+                manualEntry: true
+            )
+            RoomSelectionStore.shared.select(localId: local.id, remoteId: nil)
+            roomId = local.id
+            #if DEBUG
+            PatinaLog.scan.error("[QuietConversationFlowHost] fallback room remote sync failed, created locally only: \(error)")
+            #endif
+        }
+
+        current.localRoomId = roomId
+        session = current
+        return roomId
     }
 }
 
