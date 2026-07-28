@@ -153,6 +153,12 @@ struct ContentView: View {
                     // for the whole stack (guarded to never fire at root).
                     .interactivePopGestureEnabled()
             }
+            // The expanded Companion is a modal panel drawn over this stack,
+            // but nothing told the accessibility tree that: VoiceOver walked
+            // straight past the open panel into the content behind it (device-
+            // confirmed on the manual-room form). `isCompanionExpanded` is the
+            // coordinator flag CompanionOverlay already sets on expand/collapse.
+            .accessibilityHidden(coordinator.isCompanionExpanded)
 
             // Companion is always present in the `.main` phase. The
             // `.auth` and `.onboarding` phases live in their own root
