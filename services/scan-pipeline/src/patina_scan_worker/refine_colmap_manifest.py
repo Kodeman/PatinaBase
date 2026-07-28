@@ -55,12 +55,70 @@ mid-run substitution is caught) and, once the file is in place, loads the whole
 prefix back through :func:`load_colmap_toolchain` itself.  If that load-back
 fails, the write is rolled back rather than left for the worker to trip over.
 
+What the command line may say
+-----------------------------
+
+Which mode to run, and nothing else: ``--print``, ``--install``, ``--force``.
+It cannot name the prefix, the APP_DIR, the CUDA root, the compilers, the
+PyCOLMAP receipt, or the driver node.
+
+That is a correctness rule, not an ergonomics preference.  Self-verification is
+what makes this emitter worth trusting, and three of the five
+:data:`DECLARED_LOCATION_FIELDS` -- ``colmapPrefix``, ``appDir``, ``cudaRoot``
+-- are judged by :func:`assert_qualified_box_identity` against the
+:class:`~.refine_colmap_toolchain.QualifiedBoxLocation` *it is handed*, not
+against a constant.  An operator-supplied location therefore lands on both
+sides of the comparison at once: a typo'd ``--prefix`` would derive a manifest
+naming the typo, verify the typo against the typo, print success, and install a
+file that :func:`~.refine_colmap_toolchain.load_qualified_colmap_toolchain` --
+which reads :data:`~.refine_colmap_toolchain.QUALIFIED_BOX_LOCATION` and
+nothing else -- refuses at runtime.  Green, and worthless.  A flag whose only
+non-refusing value is its default is not a capability; it is a way to spend a
+root shell producing a file the loader will reject.
+
+``--artifact-dir`` carried a quieter version of the same hole.  Five of the six
+values it supplies are compared against pinned constants, but
+``pycolmapWheelSha256`` is compared against nothing, so a receipt read from
+somewhere else could put an unchecked digest into an otherwise-valid manifest.
+
+Substitution is still available -- in Python, through :class:`ManifestSources`
+and ``main(..., sources=...)``.  That is the treatment ``owner_uid`` already
+gets and for the same reason: a test harness moves the *whole* fake box at
+once, so emitter and validator cannot end up describing different installs,
+whereas an operator with a root shell moves one path and keeps the rest.
+
+Run it with ``-B``
+------------------
+
+``python -B -m patina_scan_worker.refine_colmap_manifest`` -- both modes,
+including ``--print``.  This tool is run as root, and without ``-B`` every
+module the interpreter compiles is cached as a **root-owned** ``.pyc`` inside
+the operator's own checkout, which he then cannot rewrite as himself.
+
+The module disarms what it can still reach: on the ``python -m`` path it sets
+:data:`sys.dont_write_bytecode` before importing anything of its own, which
+covers every sibling and transitive import below.  It cannot cover everything.
+By the time any statement in this file runs, the interpreter has already cached
+``patina_scan_worker/__init__`` and this module itself -- two files no code
+inside the module can get in front of.  ``-B`` therefore remains the documented
+invocation; the in-module setting is belt to that braces, not a replacement for
+it.
+
 This module does not enable, register, compose, or dispatch any Refine stage.
 It writes one file that a disabled prerequisite will read if it is ever turned
 on.
 """
 
 from __future__ import annotations
+
+import sys
+
+if __name__ == "__main__":  # pragma: no cover - only on the ``python -m`` path
+    # Set before the imports below, not after: the interpreter caches a
+    # module's bytecode when it compiles it, so anything imported above this
+    # line is already written.  See "Run it with ``-B``" above for what this
+    # does and does not cover.
+    sys.dont_write_bytecode = True
 
 import argparse
 import hashlib
@@ -69,7 +127,6 @@ import os
 import re
 import stat
 import subprocess
-import sys
 from pathlib import Path, PurePosixPath
 
 from . import refine_colmap_toolchain as _toolchain
@@ -91,6 +148,10 @@ from .refine_colmap_toolchain import (
 # judges them can never disagree -- and a test that substitutes a fake box
 # substitutes both at once, which is what lets the whole install path be proved
 # on a developer machine instead of only as root on the qualified host.
+#
+# Nothing on the command line reaches them.  Substituting one side of a
+# comparison that judges the other is the whole footgun; see "What the command
+# line may say" in the module docstring.
 
 #: The PyCOLMAP build receipt ``install-colmap-4.0.2.sh`` publishes.  Its
 #: ``wheelSha256`` is the only place the qualified wheel digest exists on the
@@ -491,6 +552,14 @@ class ManifestSources:
     is: ``/opt/colmap/4.0.2`` cannot be created ``root:root`` on a developer
     macOS box, and a mechanism provable only on the real host is the shape this
     program has repeatedly found hides regressions from the gate.
+
+    Every one of them is Python-level only, with no command-line spelling --
+    the treatment ``owner_uid`` has always had, now applied to the paths for
+    the same reason.  A caller here substitutes a *whole* fake box in one
+    expression, so the emitter and the validator that judges it move together;
+    an operator on a root shell would substitute one path against a real
+    install, which is a manifest verified against its own typo.  See "What the
+    command line may say" in the module docstring.
     """
 
     __slots__ = (
@@ -908,13 +977,27 @@ def _roll_back(
 # --------------------------------------------------------------------------
 
 
+#: Every ``dest`` the command line is allowed to produce.  Nothing that names a
+#: path, a location, or the declared owner appears here, and
+#: :func:`_assert_command_line_selects_only_a_mode` makes that a runtime
+#: refusal rather than a convention a later edit can quietly break.
+CLI_SELECTIONS = frozenset({"force", "install", "print_only"})
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
-        prog="python -m patina_scan_worker.refine_colmap_manifest",
+        prog="python -B -m patina_scan_worker.refine_colmap_manifest",
         description=(
             "Derive the pinned COLMAP toolchain manifest from the live install. "
             "--print writes nothing and needs no privileges; --install writes "
             "the manifest root-owned 0644 and refuses to overwrite one."
+        ),
+        epilog=(
+            "Run both modes under `python -B`: this runs as root, and without "
+            "-B the interpreter leaves root-owned .pyc files in your checkout. "
+            "The install locations are deliberately not options -- they are "
+            "the constants the loader itself pins, and a manifest naming any "
+            "other path is one the loader refuses."
         ),
     )
     mode = parser.add_mutually_exclusive_group(required=True)
@@ -934,31 +1017,51 @@ def build_parser() -> argparse.ArgumentParser:
         action="store_true",
         help="with --install, replace an existing manifest",
     )
-    parser.add_argument("--prefix", default=_toolchain.QUALIFIED_COLMAP_PREFIX)
-    parser.add_argument("--app-dir", default=_toolchain.QUALIFIED_APP_DIR)
-    parser.add_argument("--cuda-root", default=_toolchain.QUALIFIED_CUDA_ROOT)
-    parser.add_argument("--host-cc", default=_toolchain.QUALIFIED_HOST_C_COMPILER)
-    parser.add_argument("--host-cxx", default=_toolchain.QUALIFIED_HOST_CXX_COMPILER)
-    parser.add_argument("--artifact-dir", default=QUALIFIED_PYCOLMAP_ARTIFACT_DIR)
-    parser.add_argument("--driver-version-file", default=NVIDIA_DRIVER_VERSION_PATH)
     return parser
 
 
-def main(argv: list[str] | None = None) -> int:
+def _assert_command_line_selects_only_a_mode(args: argparse.Namespace) -> None:
+    """Refuse a command line that carries anything but a mode.
+
+    The flags this emitter must never grow are the ones that would feed
+    :class:`ManifestSources`: they land on both sides of the self-verification
+    at once, so the tool would report success while installing a manifest the
+    loader refuses.  Deleting a flag is not a durable fix on its own -- the next
+    edit adds it back -- so the allowed surface is asserted here, on the
+    operator's box, at the moment the tool runs.
+    """
+
+    selected = frozenset(vars(args))
+    if selected != CLI_SELECTIONS:
+        raise _fail(
+            "the command line may select a mode and nothing else; this one "
+            f"differs at: {', '.join(sorted(selected ^ CLI_SELECTIONS))}"
+        )
+
+
+def main(
+    argv: list[str] | None = None,
+    *,
+    sources: ManifestSources | None = None,
+) -> int:
+    """Run one mode against one install.
+
+    ``sources`` has no command-line spelling and never will; it is the same
+    Python-level seam ``owner_uid`` uses, and it exists so the whole
+    ``--install`` path -- re-hash, verify, publish, load back -- can be proved
+    against a fake box on a developer machine rather than only as root on the
+    qualified host.  Production passes nothing and gets
+    :class:`ManifestSources` defaults, which are the constants the loader pins.
+    """
+
     parser = build_parser()
     args = parser.parse_args(argv)
     if args.force and not args.install:
         parser.error("--force is only meaningful with --install")
-    sources = ManifestSources(
-        colmap_prefix=args.prefix,
-        app_dir=args.app_dir,
-        cuda_root=args.cuda_root,
-        host_c_compiler=args.host_cc,
-        host_cxx_compiler=args.host_cxx,
-        artifact_directory=args.artifact_dir,
-        driver_version_path=args.driver_version_file,
-    )
     try:
+        _assert_command_line_selects_only_a_mode(args)
+        if sources is None:
+            sources = ManifestSources()
         fields = derive_manifest_fields(sources)
         payload = render_manifest_bytes(fields)
         verify_manifest_payload(payload, sources=sources)

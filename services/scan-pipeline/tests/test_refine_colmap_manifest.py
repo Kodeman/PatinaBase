@@ -22,6 +22,9 @@ import hashlib
 import json
 import os
 import stat
+import subprocess
+import sys
+from pathlib import Path
 
 import pytest
 
@@ -507,26 +510,10 @@ def test_install_refuses_a_manifest_the_loader_would_reject(box):
 # --------------------------------------------------------------------------
 
 
-def _cli(box, *extra):
-    return [
-        "--prefix",
-        str(box.prefix),
-        "--app-dir",
-        str(box.app_dir),
-        "--cuda-root",
-        str(box.cuda_root),
-        "--artifact-dir",
-        str(box.artifact_dir),
-        "--driver-version-file",
-        str(box.driver_file),
-        *extra,
-    ]
-
-
 def test_print_emits_the_manifest_and_writes_nothing(box, capsys):
     before = sorted(str(p) for p in box.prefix.rglob("*"))
 
-    assert emitter.main(_cli(box, "--print")) == 0
+    assert emitter.main(["--print"], sources=box.sources()) == 0
 
     printed = capsys.readouterr().out.encode("ascii")
     assert printed == emitter.render_manifest_bytes(
@@ -540,7 +527,7 @@ def test_print_emits_the_manifest_and_writes_nothing(box, capsys):
 def test_print_reports_a_refusal_on_stderr_and_exits_nonzero(box, capsys):
     box.driver_file.write_text("no nvrm here\n", encoding="ascii")
 
-    assert emitter.main(_cli(box, "--print")) == 2
+    assert emitter.main(["--print"], sources=box.sources()) == 2
 
     captured = capsys.readouterr()
     assert captured.out == ""
@@ -549,17 +536,202 @@ def test_print_reports_a_refusal_on_stderr_and_exits_nonzero(box, capsys):
 
 def test_a_mode_is_required(box):
     with pytest.raises(SystemExit):
-        emitter.main(_cli(box))
+        emitter.main([], sources=box.sources())
 
 
 def test_print_and_install_are_mutually_exclusive(box):
     with pytest.raises(SystemExit):
-        emitter.main(_cli(box, "--print", "--install"))
+        emitter.main(["--print", "--install"], sources=box.sources())
 
 
 def test_force_without_install_is_rejected(box):
     with pytest.raises(SystemExit):
-        emitter.main(_cli(box, "--print", "--force"))
+        emitter.main(["--print", "--force"], sources=box.sources())
+
+
+def test_install_through_the_cli_writes_the_manifest_and_reports_it(box, capsys):
+    """The mode the operator will run as root, end to end on a fake box.
+
+    Only reachable because the substituted install lives in a Python-level
+    parameter rather than on the command line; the alternative was leaving the
+    ``--install`` branch -- the re-hash, the publish, the load-back -- proved
+    nowhere but on the qualified host itself.
+    """
+
+    assert emitter.main(["--install"], sources=box.sources()) == 0
+
+    assert capsys.readouterr().out == f"installed {box.manifest_path()}\n"
+    assert box.manifest_path().read_bytes() == emitter.render_manifest_bytes(
+        emitter.derive_manifest_fields(box.sources())
+    )
+    assert stat.S_IMODE(box.manifest_path().stat().st_mode) == 0o644
+
+
+def test_install_re_hashes_the_binary_immediately_before_publishing(
+    box, capsys, monkeypatch
+):
+    """A binary swapped after derivation must refuse, not be described."""
+
+    real = emitter.hash_executable
+    seen: list[str] = []
+
+    def counting(path: str):
+        seen.append(path)
+        digest, size = real(path)
+        return (digest, size) if len(seen) == 1 else ("0" * 64, size)
+
+    monkeypatch.setattr(emitter, "hash_executable", counting)
+
+    assert emitter.main(["--install"], sources=box.sources()) == 2
+
+    assert "executable changed after" in capsys.readouterr().err
+    assert not box.manifest_path().exists()
+
+
+@pytest.mark.parametrize(
+    "flag",
+    [
+        "--prefix",
+        "--app-dir",
+        "--cuda-root",
+        "--host-cc",
+        "--host-cxx",
+        "--artifact-dir",
+        "--driver-version-file",
+    ],
+)
+def test_no_source_path_is_reachable_from_the_command_line(box, flag):
+    """P2 finding F3: these flags used to verify themselves against themselves.
+
+    ``colmapPrefix``, ``appDir`` and ``cudaRoot`` are judged by
+    ``assert_qualified_box_identity`` against the location it is *handed*, so a
+    value supplied on the command line was both the manifest's claim and the
+    standard it was checked against: a typo derived a manifest naming the typo,
+    verified the typo against the typo, printed success, and installed a file
+    ``load_qualified_colmap_toolchain`` refuses.  ``--artifact-dir`` carried the
+    same hole for ``pycolmapWheelSha256``, the one receipted value no constant
+    is compared against.  None of them may be spellable again.
+    """
+
+    with pytest.raises(SystemExit) as refusal:
+        emitter.main(["--print", flag, str(box.prefix)], sources=box.sources())
+
+    assert refusal.value.code == 2
+
+
+def test_the_command_line_selects_a_mode_and_nothing_else():
+    """Root-only ownership -- and now every source path -- stays Python-level.
+
+    ``owner_uid`` was always kept off the command line because an operator must
+    not be able to relax the guarantee every hash rests on.  The install
+    locations earn the same treatment for a stronger reason: they are half of
+    the comparison that judges them.
+    """
+
+    parser = emitter.build_parser()
+
+    assert emitter.CLI_SELECTIONS == frozenset({"force", "install", "print_only"})
+    assert frozenset(vars(parser.parse_args(["--print"]))) == emitter.CLI_SELECTIONS
+
+    flags = {action.dest for action in parser._actions}
+    for substitutable in emitter.ManifestSources.__slots__:
+        assert substitutable not in flags, f"{substitutable} must not be an option"
+    for spelling in ("prefix", "host_cc", "host_cxx", "artifact_dir",
+                     "driver_version_file"):
+        assert spelling not in flags, f"{spelling} must not be an option"
+
+
+def test_a_command_line_alone_derives_the_pinned_production_install(capsys, monkeypatch):
+    """What the operator's own invocation resolves to, with nothing injected.
+
+    Removing the flags is only half the claim; the other half is that what is
+    left reads the constants the loader pins.  Derivation is stubbed out, so
+    this asserts the resolved sources without stat'ing ``/opt`` on any machine.
+    """
+
+    seen: list[emitter.ManifestSources] = []
+
+    def capture(sources):
+        seen.append(sources)
+        raise AdapterError("derivation stopped here", "REFINE_TOOLCHAIN_UNQUALIFIED")
+
+    monkeypatch.setattr(emitter, "derive_manifest_fields", capture)
+
+    assert emitter.main(["--print"]) == 2
+
+    (resolved,) = seen
+    assert resolved.box_location() == toolchain_module.QUALIFIED_BOX_LOCATION
+    assert resolved.host_c_compiler == toolchain_module.QUALIFIED_HOST_C_COMPILER
+    assert resolved.host_cxx_compiler == toolchain_module.QUALIFIED_HOST_CXX_COMPILER
+    assert resolved.artifact_directory == emitter.QUALIFIED_PYCOLMAP_ARTIFACT_DIR
+    assert resolved.driver_version_path == emitter.NVIDIA_DRIVER_VERSION_PATH
+    assert resolved.owner_uid == 0 and resolved.owner_gid == 0
+    assert resolved.require_elf is True
+    assert "refusing to emit" in capsys.readouterr().err
+
+
+def test_a_command_line_that_grew_a_source_flag_is_refused_at_runtime(
+    box, capsys, monkeypatch
+):
+    """Deleting the flags is not durable on its own; growing one back refuses.
+
+    Without this the regression is silent: a re-added option is ignored on the
+    day it lands and honoured on the day someone wires it into
+    :class:`ManifestSources`, which is precisely how the emitter would come to
+    report success over a manifest the loader rejects.
+    """
+
+    pinned_parser = emitter.build_parser
+
+    def parser_with_a_location_flag():
+        parser = pinned_parser()
+        parser.add_argument("--prefix", default=str(box.prefix))
+        return parser
+
+    monkeypatch.setattr(emitter, "build_parser", parser_with_a_location_flag)
+
+    assert emitter.main(["--print", "--prefix", "/typo"], sources=box.sources()) == 2
+
+    captured = capsys.readouterr()
+    assert captured.out == ""
+    assert "may select a mode and nothing else" in captured.err
+    assert "prefix" in captured.err
+
+
+def test_running_as_a_script_caches_no_bytecode_for_its_own_imports(tmp_path):
+    """``-B`` is documented, but the module must not depend on remembering it.
+
+    Run as root without ``-B``, every module the interpreter compiles is cached
+    as a root-owned ``.pyc`` in the operator's checkout.  ``PYTHONPYCACHEPREFIX``
+    redirects those writes into ``tmp_path``, so this observes exactly what the
+    interpreter *would* have left behind -- while touching neither the checkout
+    nor ``/opt``: the child is given no mode, so it refuses at argument parsing,
+    after every import and before any path is read.
+    """
+
+    source_root = Path(emitter.__file__).resolve().parents[1]
+    cache = tmp_path / "pycache"
+    environ = dict(os.environ)
+    environ["PYTHONPYCACHEPREFIX"] = str(cache)
+    environ["PYTHONPATH"] = str(source_root)
+    environ.pop("PYTHONDONTWRITEBYTECODE", None)
+
+    completed = subprocess.run(
+        [sys.executable, "-m", "patina_scan_worker.refine_colmap_manifest"],
+        capture_output=True,
+        cwd=str(tmp_path),
+        env=environ,
+        timeout=120.0,
+    )
+
+    assert completed.returncode == 2
+    cached = {path.name.split(".")[0] for path in cache.rglob("*.pyc")}
+    # Positive control: bytecode caching really was on for this child, so the
+    # absences below are the module's doing and not the environment's.
+    assert "refine_colmap_manifest" in cached
+    assert "refine_colmap_toolchain" not in cached
+    assert "refine_adapter" not in cached
+    assert "refine_native_process" not in cached
 
 
 def test_production_defaults_are_the_pinned_qualified_box():
@@ -576,17 +748,6 @@ def test_production_defaults_are_the_pinned_qualified_box():
     assert sources.manifest_path() == (
         "/opt/colmap/4.0.2/share/patina/refine-colmap-toolchain-v1.manifest.json"
     )
-
-
-def test_the_owner_uid_is_not_reachable_from_the_command_line():
-    """Root-only ownership is what makes every hash guarantee mean anything."""
-
-    parser = emitter.build_parser()
-    flags = {action.dest for action in parser._actions}
-
-    assert "owner_uid" not in flags
-    assert "owner_gid" not in flags
-    assert "require_elf" not in flags
 
 
 def test_the_emitter_neither_enables_nor_composes_refine():
