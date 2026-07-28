@@ -5374,3 +5374,64 @@ flipped by this entry, Refine remains disabled and uncomposed, and the
 200-400 frame band stays unqualified per R117.
 
 *Entries add: I99 · last id = I99*
+
+### R119 · Field Capture P2 · four rulings after the capture-resolution qualification — 2026-07-28
+
+The program owner ruled on four open questions on 2026-07-28, after I99
+qualified the raster convention at capture resolution. Recorded together
+because they set the order of the remaining P2 work.
+
+**1. The gauge-invariant shape floor is closed BEFORE anything else.** The
+movement floor added at `4d983c9d` refuses a child that republishes the poses
+the parent submitted, but it does not refuse a child that returns the seed
+under a rigid motion or a similarity: the cameras do not move relative to one
+another, so the reconstruction is unchanged in the only sense that matters
+while every published pose differs. The right quantity is item 6's
+`ParentAlignmentVerification.fit_rmse_m`, which today is bounded above and has
+no floor. Closing it requires a recorded engine that models bundle adjustment
+rather than a pure similarity — the currently recorded engine produces shape
+change at **4.12e-16 m / 2.38e-16 rad** on a 1.93 m-radius trajectory, machine
+epsilon, so any floor above roughly 1e-15 would redden every happy-path test.
+That is the work, and it precedes composition, pinning, and any run on the
+qualified host. **A run whose degenerate outcome cannot be distinguished from
+success is not worth scheduling**, which is the whole reason this ordering was
+chosen over the faster alternatives.
+
+**2. The engine lease is one hour; the 3600 s default stands.** The
+`--lease-seconds` flag now denotes the lease itself and the engine receives
+`lease - LEASE_COMPLETION_RESERVE_S`, so an hour yields 3540 s. The
+justification is explicitly that **nothing in this repository has ever measured
+how long a 100-frame reconstruction takes** — the previous 240 s stage cap
+bound first and made every configured value unreachable, so no run ever
+produced the number. The first real run is therefore given enough room to
+finish and thereby produce that measurement. This is a starting value chosen to
+be informative, not a claim that an hour is correct; it is expected to be
+revised from the first run's data.
+
+**3. The raster pin admits exactly 1440x1920 and nothing else.** Only the
+profile carrying a physical-device receipt is admissible on the composed path;
+any other resolution fails closed until it earns its own receipt. A
+receipt-lookup design admitting a set of profiles was considered and rejected,
+because it would make the code trust a lookup where it now trusts a measured
+constant. Pinning a single qualified profile is what made the original defect
+catchable — R118 exists because a fixture size was shipped as the production
+one — and the pin keeps "qualified" meaning "measured on this hardware". An
+operator override was likewise rejected: an escape hatch that skips
+re-qualification reintroduces exactly the gap this program closed.
+
+**4. Qualification evidence is retained under the I92 convention.** The I99
+output moves to `/mnt/ada-data/Patina/.patina-builds/` under the same
+no-replace rule as I92, so all qualification evidence sits in one place with
+one immutability discipline. The move is an operator step: writing outside
+`~/` on the qualified host is outside the constraints agents work under here,
+and that boundary is not relaxed for convenience.
+
+**What these rulings do not change.** Refine stays disabled and uncomposed
+until the floor is closed: `DEFAULT_STAGES` remains `ingest,solve,drawings`,
+`scan_pipeline.refine` stays unregistered, and no `*_QUALIFIED` flag flips as a
+consequence of this entry. The 200-400 frame band remains unqualified per R117.
+`refine_lifecycle.main()`'s latent `TypeError` remains open by design — ruling
+3 now supplies the profile it may name, but the repair belongs with the
+composition that follows the floor, not before it.
+
+*Entries add: R119 · last id = R119*
