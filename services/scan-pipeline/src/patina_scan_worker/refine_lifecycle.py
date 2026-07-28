@@ -44,7 +44,7 @@ WHAT REMAINS UNANCHORED even so, stated here rather than in a report:
   * Trajectory shape change stays ``certification_role='diagnostic-only'``.  It
     is carried into the report and is never an accuracy claim.
 
-UNCHANGED EVIDENCE IS A FAILURE.  Three separate clauses now carry that rule,
+UNCHANGED EVIDENCE IS A FAILURE.  Four separate clauses now carry that rule,
 because the first two are about the child's NUMBERS and neither of them looks at
 the poses actually published:
 
@@ -62,6 +62,15 @@ the poses actually published:
     published against ``request.frames``, both of them parent-held, at the same
     tolerance :func:`anchor_seed_snapshot_to_request` uses to call two poses
     identical.
+  * :func:`require_refined_shape_changed` refuses the SHAPE.  The three clauses
+    above are all defeated at once by a child that returns the submitted poses
+    carried by a rigid motion or a similarity: every published pose then differs
+    from every submitted one while the cameras have not moved relative to each
+    other, so the reconstruction is unchanged in the only sense that matters.
+    The quantity that sees it is the alignment fit residual item 6 already
+    computes, ``ParentAlignmentVerification.fit_rmse_m`` -- a residual after the
+    best similarity, and therefore invariant under every similarity.  It was
+    bounded above and had no floor; it has one now.
 
 WHICH ARCHIVE GETS PUBLISHED is now proved rather than intended.
 :class:`NativeEngineInvocation` refuses at construction unless the snapshot it
@@ -71,11 +80,13 @@ drift apart.  That check belongs HERE and not in ``refine_model_alignment``:
 item 6 is handed three archives and returns before anything is published, so it
 can neither see the substitution nor measure against ``request.frames``, which
 it has never been given.  What it CAN see -- that a model refined nothing in the
-gauge-invariant sense -- it does not refuse: three identical models and an
-identity proposal satisfy all seventeen of its clauses.  Its ``fit_rmse_m`` is
-bounded above and has no floor, and giving it one needs a fixture whose engine
-models bundle adjustment rather than a pure similarity.  Recorded in
-:func:`require_refined_poses_moved`, not fixed here.
+gauge-invariant sense -- it still does not REFUSE: three identical models and an
+identity proposal satisfy all seventeen of its clauses, and it returns a
+verification whose ``fit_rmse_m`` is exactly zero.  The floor on that number is
+:func:`require_refined_shape_changed` and it lives HERE for the same reason the
+movement floor does: item 6's documented scope is whether the child's proposal is
+self-consistent, and "this run refined nothing" is a decision about publishing.
+The judgement moved; the measurement did not.
 
 THE PACKET IS CHUNKED, and it has to be.  The subject scan's 100 keyframes are
 uniformly 1440x1920, so one archive of them is 0.77 GiB against a 128 MiB
@@ -287,6 +298,114 @@ REFINED_POSE_MIN_CENTER_MOVEMENT_M = SEED_ANCHOR_MAX_CENTER_DRIFT_M
 #: :data:`SEED_ANCHOR_MAX_ROTATION_DRIFT_RAD`, the angle within which this module
 #: already declares two orientations to be the same orientation.
 REFINED_POSE_MIN_ROTATION_MOVEMENT_RAD = SEED_ANCHOR_MAX_ROTATION_DRIFT_RAD
+
+# ---------------------------------------------------------------------------
+# The gauge-invariant shape floor
+# ---------------------------------------------------------------------------
+#: How much the PUBLISHED camera configuration must differ IN SHAPE from the
+#: SUBMITTED one before the run counts as having refined anything, in metres of
+#: RMS residual after the best similarity.
+#:
+#: WHAT GAP THIS CLOSES, and why the movement floor above could not.
+#: :data:`REFINED_POSE_MIN_CENTER_MOVEMENT_M` refuses a child that republishes
+#: the submitted poses.  It does not refuse a child that returns those same poses
+#: carried by a RIGID MOTION or a SIMILARITY: every published pose then differs
+#: from the submitted one, so the movement floor is satisfied, while the cameras
+#: have not moved RELATIVE TO ONE ANOTHER at all.  Refinement is a change in the
+#: SHAPE of the camera configuration, not in its pose in some arbitrary gauge.
+#:
+#: WHY ``fit_rmse_m`` IS THAT SHAPE, and why it is anchored rather than merely
+#: self-consistent.  :func:`~patina_scan_worker.refine_model_alignment.
+#: verify_child_alignment_proposal` solves the best similarity carrying the RAW
+#: PRE-BA camera centres onto the ALIGNED ones and returns the RMS residual it
+#: leaves.  A residual after the best similarity is by construction invariant
+#: under every similarity, so it is exactly zero for a seed returned under any
+#: rigid motion or scaling and non-zero only when cameras moved with respect to
+#: each other.  The two ends of that measurement are pinned to the parent's own
+#: inputs: clauses 6 and 7 of item 6 refuse a raw pre-BA snapshot that moved a
+#: seed camera, and :func:`anchor_seed_snapshot_to_request` refuses a seed that
+#: is not ``request.frames``.  So the quantity floored here is the gauge-
+#: invariant distance from the poses the PARENT submitted to the model the
+#: PARENT is about to publish.
+#:
+#: THE THRESHOLD IS NOT A NEW NUMBER, on the same argument the movement floor
+#: makes.  It is :data:`SEED_ANCHOR_MAX_CENTER_DRIFT_M` for the third time: the
+#: distance within which this module already declares two camera positions to be
+#: the same position.  The anchor says it of a seed pose against a submitted
+#: pose, the movement floor says it of a published pose against a submitted pose,
+#: and this says it of a published CONFIGURATION against the submitted one.
+#: ``test_the_shape_floor_is_the_anchor_tolerance_itself`` makes an edit to
+#: either constant contradict this note rather than silently outdate it.
+#:
+#: THE NOISE SIDE OF THE DERIVATION IS MEASURED, over the whole domain the parser
+#: admits and not only on the fixture.  The parent's own recomputation is a
+#: plain-``math`` Horn solve, so its residual on a model that really is a
+#: similarity of its seed is float64 reassociation noise proportional to the
+#: trajectory's own extent.  Two points measure that constant of
+#: proportionality: this suite's 1.926 m-radius fixture under a pure similarity
+#: leaves ``fit_rmse_m`` = 4.12e-16 m (2.1e-16 per metre of radius), and
+#: ``refine_model_alignment``'s recorded 403.97 m "room" leaves 1.6e-13 m
+#: (4.0e-16 per metre).  ``POSE_DIGEST_MAX_TRANSLATION_M`` (1e6 m) bounds the
+#: radius above for any model that module will parse, so the worst-case noise
+#: anywhere in the admissible domain is about 4e-10 m.  This floor is 3.4 decades
+#: above THAT, and ten decades above it at room scale.
+#: ``test_the_shape_floor_clears_the_measured_similarity_noise`` pins the
+#: fixture measurement so the lower end stops being an assertion.
+#:
+#: THE REFINEMENT SIDE IS REASONING, not a measurement -- no archive this
+#: repository has parsed came out of COLMAP.  It is the argument
+#: :data:`REFINED_POSE_MIN_CENTER_MOVEMENT_M` already makes, applied to relative
+#: rather than absolute displacement: the keyframes are 1440x1920 and a camera a
+#: metre from structure resolves roughly 0.7 mm per pixel, so moving one camera
+#: 1e-6 m with respect to the others changes its parallax by about 1.4e-3 pixels.
+#: No feature correspondence carries information at that scale, bundle adjustment
+#: does not converge to it, and ``MIN_REFINEMENT_RELATIVE_IMPROVEMENT`` could not
+#: be met by a change that produced it.  For an illustrative magnitude at the
+#: other end, this suite's bundle-adjustment-modelling engine applies 2e-2 m of
+#: RMS shape change -- four decades above this floor.
+#:
+#: WHY ABSOLUTE AND NOT A FRACTION OF THE TRAJECTORY, unlike the CEILING
+#: :data:`~patina_scan_worker.refine_model_alignment.
+#: ALIGNMENT_MAX_SHAPE_CHANGE_FRACTION` directly above it.  That ceiling's own
+#: note records the weakness: a fraction of the seed radius has an absolute size
+#: the CHILD chose, so a child that shrinks its trajectory shrinks its own
+#: budget.  A floor with that property would be worse -- a child could make any
+#: shape change clear it by claiming a smaller room.  The two must not cross,
+#: and cannot: item 6's conditioning gate bounds the seed radius below by
+#: ``sqrt(3) * ALIGNMENT_MIN_PRINCIPAL_EXTENT_M`` = 1.73e-3 m, so the smallest
+#: ceiling any admissible model can present is 8.66e-4 m, which leaves an
+#: acceptance band at least 2.9 decades wide everywhere.
+#: ``test_the_shape_floor_can_never_cross_the_shape_ceiling`` is what makes an
+#: edit to any of those three constants fail rather than quietly empty the band.
+#:
+#: THE ONE ASYMMETRY WORTH STATING.  ``fit_rmse_m`` is an RMS over cameras while
+#: the movement floor takes a MAX over cameras, so on the identical tolerance
+#: this floor is the stricter reading: a run that moved exactly one camera of a
+#: hundred by 1e-6 m in shape and left the rest alone is refused.  That is
+#: intended.  A refinement that changed one camera's relation to the others by a
+#: micrometre and changed nothing else did not refine the reconstruction.
+#:
+#: WHAT AN ADVERSARIAL CHILD CAN STILL MANUFACTURE, stated because the anchoring
+#: chain is a chain of TOLERANCES and not an identity.  The residual is measured
+#: raw-to-aligned; raw is tied to the seed only within
+#: ``RAW_SNAPSHOT_POSE_DRIFT_TOLERANCE_M`` (1e-6 m) and the seed to
+#: ``request.frames`` only within :data:`SEED_ANCHOR_MAX_CENTER_DRIFT_M` (1e-6 m).
+#: A child with full control of all three archives can therefore spend that slack
+#: as apparent shape change: it can publish a model whose true gauge-invariant
+#: distance from the submitted poses is zero and still show a residual of order
+#: 2e-6 m.  So the floor's guarantee against a maximally adversarial child is
+#: "more than about 3e-6 m of shape change", not "more than 1e-6 m".  Tightening
+#: it would mean tightening the two upstream tolerances, which are float
+#: round-trip budgets and cannot go much lower.  It does not matter at the scale
+#: that does: 3e-6 m is still four decades below any refinement worth the name.
+#:
+#: WHAT THIS FLOOR IS NOT.  It is a non-vacuity floor, not a quality gate.  It
+#: says a reconstruction happened; it says nothing about whether the
+#: reconstruction is better, and it cannot -- a child that scatters its cameras
+#: by 2 cm at random clears it exactly as a converged bundle adjustment does.
+#: Quality is ``evaluate_refinement_evidence``'s decision, on reprojection and
+#: loop residuals, and that division is deliberate.
+REFINED_MODEL_MIN_SHAPE_CHANGE_M = SEED_ANCHOR_MAX_CENTER_DRIFT_M
 
 #: Re-check the carried deadline every this many items in the parent's own
 #: per-frame loops.  Extracted rather than inlined so the STRIDE is falsifiable.
@@ -848,17 +967,22 @@ def require_refined_poses_moved(
     :func:`anchor_seed_snapshot_to_request` compares, measured by the same
     helper, which is what makes the threshold argument below hold.
 
-    WHAT THIS DOES NOT BUY, stated plainly because the gap is real.  A child that
-    returns the seed poses transported by a rigid motion or a similarity moves
-    every camera and therefore PASSES here, while having refined nothing: the
-    cameras did not move RELATIVE TO EACH OTHER.  The gauge-invariant quantity
-    that would catch it is the alignment fit residual item 6 already computes
-    (``ParentAlignmentVerification.fit_rmse_m``), which today is bounded above
-    and has no floor.  A floor cannot be added against this suite's evidence,
-    because the recorded engine's aligned model is the seed under a PURE
-    similarity and so carries exactly zero shape change; giving it a real one
-    means modelling bundle adjustment in the child, which is the child-side
-    engine body and is not this change.  Recorded rather than fixed.
+    WHAT THIS DOES NOT BUY ON ITS OWN, stated plainly because the two clauses
+    are independent.  A child that returns the seed poses transported by a rigid
+    motion or a similarity moves every camera and therefore PASSES here, while
+    having refined nothing: the cameras did not move RELATIVE TO EACH OTHER.
+    That case is refused by :func:`require_refined_shape_changed`, which floors
+    the gauge-invariant quantity item 6 computes
+    (``ParentAlignmentVerification.fit_rmse_m``).
+
+    WHY BOTH, since a child that republishes ``request.frames`` untouched trips
+    each of them.  They are blind in opposite directions and they are anchored by
+    different chains.  This one is blind to relative motion and sees the gauge: it
+    compares the archive about to be published against ``request.frames``, with
+    nothing in between.  The shape floor is blind to the gauge and sees relative
+    motion: it reads a residual between two CHILD archives, tied to the parent's
+    own poses only through the anchor and item 6's known-pose clauses, each with
+    its own tolerance.  Deleting either leaves a real child unrefused.
     """
 
     if type(published) is not SparseModelSnapshot:
@@ -900,6 +1024,97 @@ def require_refined_poses_moved(
         correspondences=separation.correspondences,
         max_center_movement_m=separation.max_center_m,
         max_rotation_movement_rad=separation.max_rotation_rad,
+    )
+
+
+@dataclass(frozen=True)
+class RefinedShapeChange:
+    """How much the published camera configuration differs IN SHAPE."""
+
+    #: RMS residual, in metres, left by the best similarity carrying the
+    #: submitted configuration onto the published one.  Gauge-invariant.
+    fit_rmse_m: float
+    #: The trajectory the residual is a residual OF, so an operator reading a
+    #: refusal can see whether it is a small change or a small room.
+    seed_rms_radius_m: float
+    #: The floor this run cleared.  Carried rather than looked up, so the report
+    #: records the threshold that was actually applied.
+    floor_m: float
+
+
+def require_refined_shape_changed(
+    verification: ParentAlignmentVerification,
+    *,
+    deadline: RefineDeadline,
+    min_shape_change_m: float = REFINED_MODEL_MIN_SHAPE_CHANGE_M,
+) -> RefinedShapeChange:
+    """Refuse a publication whose camera configuration was never re-shaped.
+
+    THE CHILD THIS REFUSES, and it is not a hypothetical one.  Take the seed
+    model the parent submitted, apply one rigid motion -- or one similarity --
+    to the whole trajectory, and hand it back as the aligned result with the
+    matching proposal.  Every published pose differs from every submitted pose,
+    so :func:`require_refined_poses_moved` is satisfied.  The evidence scalars
+    can be anything the child likes, so ``evaluate_refinement_evidence`` and
+    :func:`_require_evidence_moved` are satisfied.  All seventeen clauses of
+    item 6 are satisfied, because a similarity of a model IS a self-consistent
+    alignment of that model.  Nothing before this refused it, and it refined
+    nothing: the cameras did not move relative to one another.
+
+    WHAT IS COMPARED.  Only ``verification.fit_rmse_m``, the residual the PARENT
+    computed with its own plain-``math`` Horn solve while verifying the child's
+    proposal, over centres the parent parsed out of archives it hashed itself.
+    No number the child declared reaches this decision -- item 6 returns the
+    parent's numbers and never the claim.  See
+    :data:`REFINED_MODEL_MIN_SHAPE_CHANGE_M` for why that residual is the
+    gauge-invariant shape change and where its floor comes from.
+
+    WHY THE RESIDUAL IS RE-VALIDATED HERE rather than trusted as a float.
+    :class:`~patina_scan_worker.refine_model_alignment.ParentAlignmentVerification`
+    is a public frozen dataclass with no ``__post_init__``, so a caller really
+    can construct one carrying ``nan`` -- and ``nan <= floor`` is ``False``,
+    which would make a NaN residual PASS the floor silently.  A non-finite or
+    negative residual is not a small shape change; it is a broken verification,
+    and it is refused as one.
+    """
+
+    if type(verification) is not ParentAlignmentVerification:
+        raise _fail(
+            "refinement shape change requires the parent's own alignment "
+            "verification"
+        )
+    if type(deadline) is not RefineDeadline:
+        raise _fail("refinement shape change requires the carried refine deadline")
+    if (
+        isinstance(min_shape_change_m, bool)
+        or not isinstance(min_shape_change_m, (int, float))
+        or not math.isfinite(float(min_shape_change_m))
+        or float(min_shape_change_m) <= 0
+    ):
+        raise _fail("refinement shape change floor must be finite positive")
+    residual = verification.fit_rmse_m
+    if (
+        isinstance(residual, bool)
+        or not isinstance(residual, (int, float))
+        or not math.isfinite(float(residual))
+        or float(residual) < 0
+    ):
+        raise _fail(
+            "alignment fit residual is not a finite non-negative distance",
+            LIFECYCLE_UNCHANGED_CODE,
+        )
+    deadline.remaining_seconds()
+
+    if float(residual) <= float(min_shape_change_m):
+        raise _fail(
+            "the published model is the submitted model under a similarity; the "
+            "run refined nothing in the gauge-invariant sense",
+            LIFECYCLE_UNCHANGED_CODE,
+        )
+    return RefinedShapeChange(
+        fit_rmse_m=float(residual),
+        seed_rms_radius_m=float(verification.seed_rms_radius_m),
+        floor_m=float(min_shape_change_m),
     )
 
 
@@ -2011,6 +2226,7 @@ class RefineLifecycleReport:
     toolchain: ToolchainPreflight
     seed_anchor: SeedAnchorVerification
     refined_pose_movement: RefinedPoseMovement
+    refined_shape_change: RefinedShapeChange
     alignment_verification: Any
     result: RefineRunResult
     publication: RefinePublicationReceipt
@@ -2041,6 +2257,11 @@ class RefineLifecycleReport:
                 "maxRotationMovementRadians": (
                     self.refined_pose_movement.max_rotation_movement_rad
                 ),
+            },
+            "refinedShapeChange": {
+                "fitRmseMeters": self.refined_shape_change.fit_rmse_m,
+                "seedRmsRadiusMeters": self.refined_shape_change.seed_rms_radius_m,
+                "floorMeters": self.refined_shape_change.floor_m,
             },
             "alignment": {
                 "scale": self.alignment_verification.transform.scale,
@@ -2203,16 +2424,24 @@ def run_refine_lifecycle(
                     proposal=report.proposal,
                     deadline=deadline,
                 )
-                # THE PUBLISH SEAM.  Both clauses guard this one line, and they
-                # are independent: the first proves the snapshot below IS the
-                # aligned model just verified, the second proves that model is
-                # not simply the poses the parent submitted.  Neither implies
-                # the other -- a third snapshot far from the frames defeats only
-                # the first, and a genuinely identity-refining child defeats
-                # only the second.
+                # THE PUBLISH SEAM.  Three clauses guard this one line and no
+                # two of them are the same statement.  The digest binding on
+                # ``NativeEngineInvocation`` proves the snapshot below IS the
+                # aligned model just verified.  The movement floor proves that
+                # model is not simply the poses the parent submitted.  The shape
+                # floor proves it is not those poses under a rigid motion or a
+                # similarity either -- the case the movement floor cannot see,
+                # because every pose in it has moved.  A third snapshot far from
+                # the frames defeats only the first, a republished input defeats
+                # the second, and a gauge-only "refinement" defeats only the
+                # third.
                 movement = require_refined_poses_moved(
                     aligned,
                     materialization.frames,
+                    deadline=deadline,
+                )
+                shape_change = require_refined_shape_changed(
+                    alignment_verification,
                     deadline=deadline,
                 )
                 invocation = NativeEngineInvocation(
@@ -2270,6 +2499,7 @@ def run_refine_lifecycle(
         toolchain=toolchain,
         seed_anchor=seed_anchor,
         refined_pose_movement=movement,
+        refined_shape_change=shape_change,
         alignment_verification=alignment_verification,
         result=result,
         publication=publication,

@@ -544,12 +544,20 @@ def _seed_rows(frames) -> list[dict[str, object]]:
     return rows
 
 
-def _apply_similarity(rows: list[dict[str, object]]) -> list[dict[str, object]]:
+def _apply_similarity(
+    rows: list[dict[str, object]], *, scale: float = _ALIGNED_SCALE
+) -> list[dict[str, object]]:
     """Carry a Sim(3) through world-to-camera poses, by hand.
 
     If ``world' = s R world + t`` then ``R_cam' = R_cam R^T`` and
     ``t_cam' = s t_cam - R_cam R^T t``.  Written out here so the alignment the
     parent has to RECOVER was never produced by the parent's own solver.
+
+    ``scale`` is a parameter so that a RIGID motion -- ``s`` exactly 1.0 -- can be
+    built with the same code path as a scaled one.  It matters that they are the
+    same code path: the point of testing both is that the shape floor is blind to
+    which similarity was applied, and a second implementation would let one of
+    them differ for a reason unrelated to shape.
     """
 
     transformed = []
@@ -559,7 +567,7 @@ def _apply_similarity(rows: list[dict[str, object]]) -> list[dict[str, object]]:
         old_translation = row["tvec"]
         shifted = _matvec(new_rotation, _ALIGNED_TRANSLATION)
         new_translation = tuple(
-            _ALIGNED_SCALE * old_translation[axis] - shifted[axis]  # type: ignore[index]
+            scale * old_translation[axis] - shifted[axis]  # type: ignore[index]
             for axis in range(3)
         )
         transformed.append(
@@ -570,6 +578,215 @@ def _apply_similarity(rows: list[dict[str, object]]) -> list[dict[str, object]]:
             }
         )
     return transformed
+
+
+# ---------------------------------------------------------------------------
+# The bundle adjustment the recorded engine models
+#
+# WHY THIS EXISTS.  The engine used to produce its aligned model by applying ONE
+# similarity to the seed, so the cameras never moved relative to one another and
+# the gauge-invariant shape change was float64 noise -- 4.12e-16 m on this
+# fixture's 1.926 m-radius trajectory.  Against that fixture no floor on
+# ``fit_rmse_m`` above machine epsilon could be added without reddening every
+# happy path, which is exactly why the gap stayed open.  So the engine now models
+# what bundle adjustment DOES: it moves each camera with respect to the others,
+# and only then applies the alignment similarity.
+# ---------------------------------------------------------------------------
+#: RMS gauge-invariant displacement, in metres, the modelled adjustment applies
+#: to the seed camera centres.  An ILLUSTRATIVE magnitude, not a measurement: no
+#: archive in this repository came out of COLMAP.  2 cm is the scale at which a
+#: bundle adjustment corrects visual-inertial drift over a room walk, it is four
+#: decades above ``REFINED_MODEL_MIN_SHAPE_CHANGE_M`` (1e-6 m) and 48x below the
+#: ceiling ``ALIGNMENT_MAX_SHAPE_CHANGE_FRACTION`` puts on this trajectory
+#: (0.5 x 1.926 = 0.963 m), so the happy path sits far from BOTH bounds.
+_BA_SHAPE_CHANGE_RMS_M = 2.0e-2
+
+#: Per-camera attitude correction, in radians, at the widest camera.  0.1 degree
+#: is a plausible correction to a gravity-anchored device attitude and stays two
+#: and a half decades below ``ALIGNED_MAX_ORIENTATION_CHANGE_RAD`` (0.5 rad), so
+#: clause 15 is exercised with a real number rather than with zero.
+_BA_MAX_ATTITUDE_CHANGE_RAD = 2.0e-3
+
+
+def _pseudo_random_field(count: int, *, seed: int) -> list[tuple[float, float, float]]:
+    """A fixed displacement field, generated in INTEGER arithmetic.
+
+    Deterministic on every platform and every Python build: no ``random``, no
+    ``math`` transcendental, nothing whose last bits are a libm decision.  The
+    recurrence is the standard 64-bit LCG; only its determinism matters here.
+    """
+
+    state = seed & ((1 << 64) - 1)
+    field = []
+    for _ in range(count):
+        components = []
+        for _ in range(3):
+            state = (state * 6364136223846793005 + 1442695040888963407) % (1 << 64)
+            components.append((state >> 11) / float(1 << 53) * 2.0 - 1.0)
+        field.append((components[0], components[1], components[2]))
+    return field
+
+
+def _similarity_generators(
+    centres: list[tuple[float, float, float]],
+) -> list[list[tuple[float, float, float]]]:
+    """The seven directions in R^(3N) along which a similarity moves the centres.
+
+    Three translations, three rotations and one uniform scale -- the tangent
+    space of the similarity group's action on this point set.  A displacement
+    field with NO component along any of them is a change the best similarity
+    cannot absorb, which is precisely what "shape change" means.
+
+    Written here rather than derived from ``estimate_sim3``: the parent's solver
+    is the thing under test, so the fixture must not be built out of it.
+    """
+
+    count = len(centres)
+    centroid = tuple(
+        sum(centre[axis] for centre in centres) / count for axis in range(3)
+    )
+    centered = [
+        tuple(centre[axis] - centroid[axis] for axis in range(3)) for centre in centres
+    ]
+    generators: list[list[tuple[float, float, float]]] = []
+    for axis in range(3):
+        unit = tuple(1.0 if index == axis else 0.0 for index in range(3))
+        generators.append([unit for _ in centres])  # type: ignore[misc]
+    for axis in range(3):
+        unit = tuple(1.0 if index == axis else 0.0 for index in range(3))
+        generators.append(
+            [
+                (
+                    unit[1] * point[2] - unit[2] * point[1],
+                    unit[2] * point[0] - unit[0] * point[2],
+                    unit[0] * point[1] - unit[1] * point[0],
+                )
+                for point in centered
+            ]
+        )
+    generators.append([tuple(point) for point in centered])  # type: ignore[misc]
+    return generators
+
+
+def _flat_dot(left, right) -> float:
+    return sum(
+        left[index][axis] * right[index][axis]
+        for index in range(len(left))
+        for axis in range(3)
+    )
+
+
+def _gauge_free_displacements(
+    centres: list[tuple[float, float, float]],
+) -> list[tuple[float, float, float]]:
+    """A displacement field orthogonal to every similarity of ``centres``.
+
+    THE POINT, and it is exact rather than approximate.  Horn's solve returns the
+    IDENTITY for source ``c`` and target ``c + d`` exactly when three linear
+    conditions hold on ``d``: ``sum(d) = 0`` (else the centroids differ and the
+    translation is non-zero), ``sum(c' x d) = 0`` (else the cross-dispersion is
+    asymmetric and the rotation is not identity), and ``sum(c' . d) = 0`` (else
+    the scale is not one), where ``c'`` are the centred sources.  Those are
+    exactly orthogonality to the seven generators above.  So a field projected
+    off them leaves the recovered alignment EQUAL to the similarity the engine
+    declares -- the child's proposal stays the closed-form transform written at
+    the top of this section, and the parent's agreement clauses still have to
+    recover it from bytes.
+
+    The residual the parent then reports is the RMS of this field, which is what
+    makes the shape-floor tests measurements rather than assertions.
+
+    Gram-Schmidt runs twice: one pass leaves a component of order eps against the
+    conditioning of the generator set, and the alignment agreement tolerances are
+    1e-6 rather than 1e-12, so the margin is cheap to buy and worth buying.
+    """
+
+    generators = _similarity_generators(centres)
+    orthonormal: list[list[tuple[float, float, float]]] = []
+    for generator in generators:
+        vector = [tuple(point) for point in generator]
+        for _pass in range(2):
+            for basis in orthonormal:
+                projection = _flat_dot(vector, basis)
+                vector = [
+                    tuple(
+                        vector[index][axis] - projection * basis[index][axis]
+                        for axis in range(3)
+                    )
+                    for index in range(len(vector))
+                ]
+        norm = math.sqrt(_flat_dot(vector, vector))
+        assert norm > 1e-9, "the fixture trajectory degenerated; a generator vanished"
+        orthonormal.append(
+            [
+                tuple(component / norm for component in point)  # type: ignore[misc]
+                for point in vector
+            ]
+        )
+
+    field = _pseudo_random_field(len(centres), seed=0x5EED_C0DE_1119_2026)
+    for _pass in range(2):
+        for basis in orthonormal:
+            projection = _flat_dot(field, basis)
+            field = [
+                tuple(
+                    field[index][axis] - projection * basis[index][axis]
+                    for axis in range(3)
+                )
+                for index in range(len(field))
+            ]
+    magnitude = math.sqrt(_flat_dot(field, field) / len(field))
+    assert magnitude > 0.0, "the projected displacement field collapsed to zero"
+    factor = _BA_SHAPE_CHANGE_RMS_M / magnitude
+    return [
+        tuple(component * factor for component in point)  # type: ignore[misc]
+        for point in field
+    ]
+
+
+def _bundle_adjusted_rows(rows: list[dict[str, object]]) -> list[dict[str, object]]:
+    """Move every camera with respect to every other one, as an adjustment does.
+
+    Centres move by the gauge-free field above; attitudes move by a small
+    per-camera rotation so that the aligned orientations are not merely the seed
+    orientations carried by the alignment.  Neither is a model of COLMAP's
+    arithmetic -- it is a model of the one PROPERTY that distinguishes a
+    refinement from a re-gauging.
+    """
+
+    centres = []
+    rotations = []
+    for row in rows:
+        rotation = _quat_to_rot(row["qvec"])  # type: ignore[arg-type]
+        rotations.append(rotation)
+        translation = tuple(float(value) for value in row["tvec"])  # type: ignore[arg-type]
+        centres.append(
+            tuple(-value for value in _matvec(_transpose(rotation), translation))
+        )
+
+    displacements = _gauge_free_displacements(centres)
+    attitudes = _pseudo_random_field(len(rows), seed=0xA771_7DE5_1119_2026)
+    adjusted = []
+    for index, row in enumerate(rows):
+        axis = attitudes[index]
+        if axis == (0.0, 0.0, 0.0):  # pragma: no cover - the LCG never emits it
+            axis = (1.0, 0.0, 0.0)
+        # The third component sets the angle, so different cameras turn by
+        # different amounts about different axes.
+        angle = _BA_MAX_ATTITUDE_CHANGE_RAD * axis[2]
+        rotation = _matmul(_axis_rotation(axis, angle), rotations[index])
+        centre = tuple(
+            centres[index][component] + displacements[index][component]
+            for component in range(3)
+        )
+        adjusted.append(
+            {
+                **row,
+                "qvec": _rot_to_quat(rotation),
+                "tvec": tuple(-value for value in _matvec(rotation, centre)),
+            }
+        )
+    return adjusted
 
 
 def _snapshot_from_rows(rows: list[dict[str, object]], label: str) -> SparseModelSnapshot:
@@ -614,6 +831,25 @@ class _RecordedEngine:
     property the Linux-only suite exists to prove and this suite does not claim.
     """
 
+    #: THE FOUR CHILDREN THIS RECORDING CAN BE, as an explicit closed set rather
+    #: than as a pile of booleans, because three of them are DEGENERATE and the
+    #: whole point of the publish seam is telling them apart.
+    #:
+    #:   ``bundle-adjusted`` -- the default and the only honest one.  Cameras move
+    #:       with respect to each other, THEN the alignment similarity is applied.
+    #:       This is the shape the composition must accept.
+    #:   ``similarity``      -- the seed under a scaled rotation+translation.  The
+    #:       previous default.  Every pose moves; no camera moves relative to any
+    #:       other.  Must be refused.
+    #:   ``rigid``           -- the seed under a rotation+translation at scale
+    #:       exactly 1.0.  Carried separately from ``similarity`` because a reader
+    #:       may believe the scale gauge clause catches the similarity case, and a
+    #:       rigid motion has no scale to catch.  Must be refused.
+    #:   ``identity``        -- the seed, unchanged, with the identity proposal.
+    #:       Must be refused, and is, by the movement floor before the shape floor
+    #:       is even reached.
+    ALIGNMENT_MODES = ("bundle-adjusted", "similarity", "rigid", "identity")
+
     def __init__(
         self,
         artifact_root: Path,
@@ -621,7 +857,7 @@ class _RecordedEngine:
         *,
         seed_rows=None,
         aligned_rows=None,
-        identity_alignment: bool = False,
+        alignment_mode: str = "bundle-adjusted",
         evidence: dict[str, float] | None = None,
         report_mutation=None,
         digest_mutation=None,
@@ -629,23 +865,29 @@ class _RecordedEngine:
         self.artifact_root = artifact_root
         self.frames = frames
         self._seed_rows = seed_rows if seed_rows is not None else _seed_rows(frames)
-        # ``identity_alignment`` makes the child hand back the SEED as its
-        # aligned model, with the identity similarity to match.  That is a real
-        # engine output, not a patched one: item 6 accepts it (its clauses are
-        # all satisfied by three identical models and an identity proposal), and
-        # it is exactly the "refined nothing" case the composition must refuse.
-        if identity_alignment:
+        assert alignment_mode in self.ALIGNMENT_MODES, alignment_mode
+        # Every branch below is a REAL engine output, not a patched one: item 6
+        # accepts all four, because each is a self-consistent alignment of the
+        # model it ships.  Which of them the COMPOSITION accepts is the question
+        # the publish seam exists to answer.
+        if alignment_mode == "identity":
             self._aligned_rows = list(self._seed_rows)
             self._alignment = (
                 1.0,
                 ((1.0, 0.0, 0.0), (0.0, 1.0, 0.0), (0.0, 0.0, 1.0)),
                 (0.0, 0.0, 0.0),
             )
+        elif alignment_mode == "rigid":
+            self._aligned_rows = _apply_similarity(self._seed_rows, scale=1.0)
+            self._alignment = (1.0, _ALIGNED_ROTATION, _ALIGNED_TRANSLATION)
         else:
+            refined = (
+                self._seed_rows
+                if alignment_mode == "similarity"
+                else _bundle_adjusted_rows(self._seed_rows)
+            )
             self._aligned_rows = (
-                aligned_rows
-                if aligned_rows is not None
-                else _apply_similarity(self._seed_rows)
+                aligned_rows if aligned_rows is not None else _apply_similarity(refined)
             )
             self._alignment = (
                 _ALIGNED_SCALE,
@@ -2345,7 +2587,7 @@ def test_a_child_that_returns_the_seed_as_its_aligned_model_is_refused(tmp_path)
     """
 
     with pytest.raises(AdapterError) as raised:
-        _run(tmp_path, engine_kwargs={"identity_alignment": True})
+        _run(tmp_path, engine_kwargs={"alignment_mode": "identity"})
     assert raised.value.code == "REFINE_UNCHANGED_EVIDENCE"
     assert "identity refinement rather than a refinement" in str(raised.value)
 
@@ -3286,40 +3528,414 @@ def test_no_loop_in_the_lifecycle_waits_without_consulting_the_deadline():
         )
 
 
-def test_the_recorded_engine_refines_nothing_in_the_gauge_invariant_sense(tmp_path):
-    """WHY the shape-change floor is absent, pinned rather than only argued.
+# ===========================================================================
+# The gauge-invariant shape floor (R119 ruling 1)
+#
+# The movement floor above refuses a child that republishes ``request.frames``.
+# It cannot refuse a child that returns those frames carried by a rigid motion
+# or a similarity: every pose then differs from the submitted one while no
+# camera has moved relative to any other.  The tests below CONSTRUCT both of
+# those children and show they are refused -- and, first, show that the fixture
+# engine models an adjustment rather than a re-gauging, because against an
+# engine that applies a pure similarity no floor above machine epsilon could
+# exist at all.
+# ===========================================================================
+def test_the_recorded_engine_models_an_adjustment_and_not_a_re_gauging(tmp_path):
+    """The measurement the whole floor rests on, taken rather than asserted.
 
-    The movement floor above compares the published poses against the submitted
-    ones, and the recorded engine passes it easily: it moves every camera by
-    centimetres.  But it moves them by applying ONE similarity to the whole
-    trajectory, so the cameras do not move relative to each other at all -- the
-    gauge-invariant shape change is at float64 noise, not merely small.
+    The engine perturbs each camera along a field with NO component in the
+    similarity group's tangent space, then applies the alignment similarity.  Two
+    consequences are both checked here because either failing alone would make
+    every test below vacuous:
 
-    That is the residual.  Item 6's ``fit_rmse_m`` is the right quantity to put
-    a floor under, and it is bounded above and not below; a floor anywhere above
-    machine epsilon would redden every happy-path test in this file, because
-    this fixture's engine does not model bundle adjustment.  Closing it needs a
-    recorded engine that moves cameras relative to one another, which is the
-    child-side engine body.
+      1. the parent's own Horn solve still recovers the DECLARED transform to
+         float noise -- so the fixture did not buy its shape change by making
+         the alignment disagree, and item 6's three agreement clauses are still
+         being cleared with margin; and
+      2. the residual it leaves is the RMS of that field, four decades above the
+         floor and nearly two below the ceiling.
 
-    The bound below is a NOISE BAND, not a measurement of a fixed value: the
-    exact residual depends on the platform's libm and is only meaningful as
-    "indistinguishable from zero".
+    The numbers are written out literally.  Reading them off the fixture's own
+    constants would make this a tautology.
     """
 
     report, _engine, _sink, _scratch = _run(tmp_path)
     verification = report.alignment_verification
 
-    assert verification.fit_rmse_m < 1.0e-12
-    assert verification.max_aligned_orientation_change_rad < 1.0e-12
-    # ... while the trajectory it is a residual OF is metres across, so this is
-    # a ratio of order 1e-16 and not a small absolute number on a small model.
-    assert verification.seed_rms_radius_m > 1.0
+    # (1) The declared similarity is still recovered exactly.
+    assert verification.scale_relative_difference < 1.0e-14
+    assert verification.rotation_angle_difference_rad < 1.0e-14
+    assert verification.translation_difference_m < 1.0e-14
 
-    # Meanwhile the poses really did move away from the submitted ones, which is
-    # exactly what the movement floor measures and why it passes here.
+    # (2) ... and the shape really changed.  2.0e-2 m of field, carried through a
+    # 1.004 scale, is 2.008e-2 m of residual; the band is wide enough to survive
+    # a different libm and narrow enough that a collapsed field fails it.
+    assert 2.0e-2 < verification.fit_rmse_m < 2.1e-2
+    assert verification.seed_rms_radius_m > 1.9
+
+    # The aligned orientations moved too, so clause 15 is exercised against a
+    # real number instead of against zero.
+    assert 1.0e-3 < verification.max_aligned_orientation_change_rad < 2.0e-3
+
+    # And the poses moved away from the submitted ones, which is what the
+    # movement floor measures and why BOTH clauses pass on the happy path.
     assert report.refined_pose_movement.max_center_movement_m > 1.0e-3
     assert report.refined_pose_movement.max_rotation_movement_rad > 1.0e-3
+
+
+def _degenerate_child_snapshots(mode: str):
+    """Build the aligned model a degenerate child would ship, without running.
+
+    Returns ``(aligned_snapshot, stand_in_frames)`` so a test can ask what the
+    MOVEMENT floor alone makes of it.  The rows come from the same
+    ``_RecordedEngine`` construction the composed run uses, so this cannot
+    describe a child the composed test does not actually produce.
+    """
+
+    rows = _anchor_rows()
+    engine = _RecordedEngine(
+        pathlib.Path("/nonexistent-never-written"),
+        (),
+        seed_rows=rows,
+        alignment_mode=mode,
+    )
+    return (
+        _snapshot_from_rows(engine._aligned_rows, "aligned"),
+        _stand_in_frames(rows),
+    )
+
+
+@pytest.mark.parametrize("mode", ["similarity", "rigid"])
+def test_the_movement_floor_alone_accepts_the_seed_under_a_similarity(mode):
+    """The gap, demonstrated before it is closed.
+
+    This is the anti-vacuity control for the two tests below: if the movement
+    floor already refused these children, refusing them again would prove
+    nothing about the shape floor.  It does not refuse them -- it RETURNS, with
+    centimetres of movement on every camera.
+    """
+
+    from patina_scan_worker.refine_lifecycle import require_refined_poses_moved
+
+    aligned, frames = _degenerate_child_snapshots(mode)
+    movement = require_refined_poses_moved(aligned, frames, deadline=_deadline())
+    assert movement.max_center_movement_m > 1.0e-2
+    assert movement.max_rotation_movement_rad > 1.0e-2
+
+
+def test_a_child_that_returns_the_seed_under_a_similarity_is_refused(tmp_path):
+    """Defeats every clause that existed before the shape floor.
+
+    The child takes the seed the parent submitted, scales it by 1.004, rotates
+    it by 0.012 rad and translates it by 4.3 cm, and ships that as the aligned
+    result with the matching proposal.  The digest binding is satisfied, the
+    anchor is satisfied, the movement floor is satisfied (proved directly
+    above), all seventeen of item 6's clauses are satisfied -- and the cameras
+    never moved with respect to each other.
+    """
+
+    with pytest.raises(AdapterError) as raised:
+        _run(tmp_path, engine_kwargs={"alignment_mode": "similarity"})
+    assert raised.value.code == "REFINE_UNCHANGED_EVIDENCE"
+    assert "refined nothing in the gauge-invariant sense" in str(raised.value)
+
+
+def test_a_child_that_returns_the_seed_under_a_rigid_motion_is_refused(tmp_path):
+    """The same defect with the scale removed, so no scale clause can catch it.
+
+    Carried separately because a reader may assume ``ALIGNED_GAUGE_MAX_SCALE_
+    DEVIATION`` is what refuses the similarity case.  It is not: at scale exactly
+    1.0 that clause reads zero, every other gauge margin shrinks, and the run is
+    still refused -- by the residual, which is the only quantity that was ever
+    looking at shape.
+    """
+
+    with pytest.raises(AdapterError) as raised:
+        _run(tmp_path, engine_kwargs={"alignment_mode": "rigid"})
+    assert raised.value.code == "REFINE_UNCHANGED_EVIDENCE"
+    assert "refined nothing in the gauge-invariant sense" in str(raised.value)
+
+
+@pytest.mark.parametrize("mode", ["similarity", "rigid"])
+def test_item_six_accepts_the_re_gauged_model_this_composition_refuses(mode):
+    """WHY the floor lives at the publish seam and not in item 6, again.
+
+    A similarity of a model IS a self-consistent alignment of that model, so
+    item 6 returns a verification rather than refusing -- and the residual it
+    returns is float64 noise, which is the measurement the floor's lower bound
+    is derived from.  Item 6's own scope is whether the child agreed with
+    itself; whether the run refined anything is a decision about publishing.
+    """
+
+    from patina_scan_worker.refine_model_alignment import (
+        ProposedAlignment,
+        verify_child_alignment_proposal,
+    )
+
+    scale = 1.0 if mode == "rigid" else _ALIGNED_SCALE
+    rows = _anchor_rows()
+    seed = _snapshot_from_rows(rows, "seed")
+    aligned = _snapshot_from_rows(_apply_similarity(rows, scale=scale), "aligned")
+    verification = verify_child_alignment_proposal(
+        seed=seed,
+        raw_pre_ba=seed,
+        aligned=aligned,
+        proposal=ProposedAlignment(
+            scale=scale,
+            rotation=_ALIGNED_ROTATION,
+            translation=_ALIGNED_TRANSLATION,
+            raw_pose_digest_sha256=canonical_pose_digest(seed),
+            aligned_pose_digest_sha256=canonical_pose_digest(aligned),
+        ),
+        deadline=_deadline(),
+    )
+    # It accepted.  Its residual is the NOISE BAND the floor sits ten decades
+    # above -- a band, not a value: the last bits depend on the platform's libm.
+    assert verification.fit_rmse_m < 1.0e-13
+    assert verification.seed_rms_radius_m > 1.9
+
+
+def test_the_shape_floor_is_the_anchor_tolerance_itself():
+    """The threshold is not a new number; it is the anchor's own tolerance.
+
+    The anchor says a camera within this distance of the submitted one IS the
+    submitted one.  The shape floor says the same of a whole CONFIGURATION.  If
+    these diverge, the module calls one displacement 'identical' in one function
+    and 'a refinement' in another.
+    """
+
+    from patina_scan_worker.refine_lifecycle import (
+        REFINED_MODEL_MIN_SHAPE_CHANGE_M,
+        REFINED_POSE_MIN_CENTER_MOVEMENT_M,
+    )
+
+    assert REFINED_MODEL_MIN_SHAPE_CHANGE_M == SEED_ANCHOR_MAX_CENTER_DRIFT_M
+    assert REFINED_MODEL_MIN_SHAPE_CHANGE_M == REFINED_POSE_MIN_CENTER_MOVEMENT_M
+    assert REFINED_MODEL_MIN_SHAPE_CHANGE_M == 1.0e-6
+
+
+def test_the_shape_floor_clears_the_measured_similarity_noise():
+    """The lower half of the derivation, measured rather than argued.
+
+    The parent's recomputation on a model that really is a similarity of its
+    seed leaves a residual proportional to the trajectory's own extent: this
+    1.926 m fixture leaves order 1e-16 m.  ``POSE_DIGEST_MAX_TRANSLATION_M``
+    bounds any parsable trajectory at 1e6 m, so scaling that coefficient to the
+    largest admissible model still leaves the worst-case noise decades below the
+    floor.  The arithmetic is written out here so a change to either constant
+    has to be re-argued.
+    """
+
+    from patina_scan_worker.refine_lifecycle import REFINED_MODEL_MIN_SHAPE_CHANGE_M
+    from patina_scan_worker.refine_model_alignment import (
+        POSE_DIGEST_MAX_TRANSLATION_M,
+        ProposedAlignment,
+        verify_child_alignment_proposal,
+    )
+
+    rows = _anchor_rows()
+    seed = _snapshot_from_rows(rows, "seed")
+    aligned = _snapshot_from_rows(_apply_similarity(rows), "aligned")
+    verification = verify_child_alignment_proposal(
+        seed=seed,
+        raw_pre_ba=seed,
+        aligned=aligned,
+        proposal=ProposedAlignment(
+            scale=_ALIGNED_SCALE,
+            rotation=_ALIGNED_ROTATION,
+            translation=_ALIGNED_TRANSLATION,
+            raw_pose_digest_sha256=canonical_pose_digest(seed),
+            aligned_pose_digest_sha256=canonical_pose_digest(aligned),
+        ),
+        deadline=_deadline(),
+    )
+
+    noise_per_metre = verification.fit_rmse_m / verification.seed_rms_radius_m
+    assert noise_per_metre < 1.0e-14
+    worst_case_noise = noise_per_metre * POSE_DIGEST_MAX_TRANSLATION_M
+    assert worst_case_noise < REFINED_MODEL_MIN_SHAPE_CHANGE_M / 100.0
+
+
+def test_the_shape_floor_can_never_cross_the_shape_ceiling():
+    """The acceptance band is non-empty for EVERY model item 6 will parse.
+
+    The ceiling is a fraction of the seed radius, so it shrinks with the child's
+    own trajectory; the floor is absolute.  If they ever crossed, every run on a
+    small enough model would be refused twice over and no input could reach
+    either clause honestly.  The conditioning gate is what stops that: it bounds
+    the seed radius below by ``sqrt(3) * ALIGNMENT_MIN_PRINCIPAL_EXTENT_M``,
+    because the RMS radius of a point set is at least ``sqrt(3)`` times its
+    weakest principal spread.
+    """
+
+    from patina_scan_worker.refine_lifecycle import REFINED_MODEL_MIN_SHAPE_CHANGE_M
+    from patina_scan_worker.refine_model_alignment import (
+        ALIGNMENT_MAX_SHAPE_CHANGE_FRACTION,
+        ALIGNMENT_MIN_PRINCIPAL_EXTENT_M,
+    )
+
+    smallest_radius = math.sqrt(3.0) * ALIGNMENT_MIN_PRINCIPAL_EXTENT_M
+    smallest_ceiling = ALIGNMENT_MAX_SHAPE_CHANGE_FRACTION * smallest_radius
+    assert smallest_ceiling > REFINED_MODEL_MIN_SHAPE_CHANGE_M * 100.0
+
+
+def _verification_with(**overrides):
+    """A ``ParentAlignmentVerification`` carrying a chosen residual.
+
+    The class is public, frozen and has no ``__post_init__``, so this is a value
+    a caller really can hand the floor -- not a monkeypatch.
+    """
+
+    fields = {
+        "transform": Sim3.identity(),
+        "raw_pose_digest_sha256": "0" * 64,
+        "aligned_pose_digest_sha256": "1" * 64,
+        "correspondences": 12,
+        "scale_relative_difference": 0.0,
+        "rotation_angle_difference_rad": 0.0,
+        "translation_difference_m": 0.0,
+        "gauge_scale_deviation": 0.0,
+        "gauge_rotation_rad": 0.0,
+        "gauge_translation_m": 0.0,
+        "fit_rmse_m": 1.0,
+        "max_aligned_orientation_change_rad": 0.0,
+        "seed_rms_radius_m": 2.0,
+        "max_raw_pose_drift_m": 0.0,
+        "max_raw_rotation_drift_rad": 0.0,
+        "seed_min_principal_extent_m": 1.0,
+        "aligned_min_principal_extent_m": 1.0,
+    }
+    fields.update(overrides)
+    return ParentAlignmentVerification(**fields)
+
+
+@pytest.mark.parametrize("factor", [0.0, 0.5, 1.0])
+def test_shape_change_at_or_below_the_floor_is_a_re_gauging(factor):
+    """A residual of at most the floor is refused, including exactly zero."""
+
+    from patina_scan_worker.refine_lifecycle import (
+        REFINED_MODEL_MIN_SHAPE_CHANGE_M,
+        require_refined_shape_changed,
+    )
+
+    with pytest.raises(AdapterError) as raised:
+        require_refined_shape_changed(
+            _verification_with(
+                fit_rmse_m=factor * REFINED_MODEL_MIN_SHAPE_CHANGE_M
+            ),
+            deadline=_deadline(),
+        )
+    assert raised.value.code == "REFINE_UNCHANGED_EVIDENCE"
+    assert "refined nothing in the gauge-invariant sense" in str(raised.value)
+
+
+def test_shape_change_just_above_the_floor_is_accepted():
+    """The other side of the boundary, so the constant cannot be widened either."""
+
+    from patina_scan_worker.refine_lifecycle import (
+        REFINED_MODEL_MIN_SHAPE_CHANGE_M,
+        require_refined_shape_changed,
+    )
+
+    residual = math.nextafter(REFINED_MODEL_MIN_SHAPE_CHANGE_M, math.inf)
+    change = require_refined_shape_changed(
+        _verification_with(fit_rmse_m=residual),
+        deadline=_deadline(),
+    )
+    assert change.fit_rmse_m == residual
+    assert change.floor_m == REFINED_MODEL_MIN_SHAPE_CHANGE_M
+    assert change.seed_rms_radius_m == 2.0
+
+
+def test_the_shape_floor_consults_the_carried_deadline_before_it_accepts():
+    """An expired lease refuses even a residual that clears the floor.
+
+    Without this the function's one checkpoint would be a clause no deletion
+    could redden: every other test hands it a live deadline, and the accepting
+    path would return happily on an expired one.
+    """
+
+    from patina_scan_worker.refine_lifecycle import require_refined_shape_changed
+
+    with pytest.raises(AdapterError) as raised:
+        require_refined_shape_changed(
+            _verification_with(fit_rmse_m=2.0e-2),
+            deadline=RefineDeadline(time.monotonic() - 1.0),
+        )
+    assert raised.value.code == "REFINE_ENGINE_TIMEOUT"
+    assert "deadline is exhausted" in str(raised.value)
+
+
+def test_the_shape_floor_refuses_a_verification_it_did_not_get_from_item_six():
+    from patina_scan_worker.refine_lifecycle import require_refined_shape_changed
+
+    class _Lookalike:
+        fit_rmse_m = 1.0
+        seed_rms_radius_m = 2.0
+
+    with pytest.raises(AdapterError) as raised:
+        require_refined_shape_changed(_Lookalike(), deadline=_deadline())
+    assert "requires the parent's own alignment verification" in str(raised.value)
+
+
+def test_the_shape_floor_refuses_a_deadline_that_is_not_the_carried_one():
+    from patina_scan_worker.refine_lifecycle import require_refined_shape_changed
+
+    class _Lookalike:
+        def remaining_seconds(self):  # pragma: no cover - never reached
+            return 60.0
+
+    with pytest.raises(AdapterError) as raised:
+        require_refined_shape_changed(_verification_with(), deadline=_Lookalike())
+    assert "requires the carried refine deadline" in str(raised.value)
+
+
+@pytest.mark.parametrize(
+    "floor", [0.0, -1.0e-6, float("nan"), float("inf"), True, False, "1e-6", None]
+)
+def test_the_shape_floor_refuses_a_nonsense_threshold(floor):
+    from patina_scan_worker.refine_lifecycle import require_refined_shape_changed
+
+    with pytest.raises(AdapterError) as raised:
+        require_refined_shape_changed(
+            _verification_with(),
+            deadline=_deadline(),
+            min_shape_change_m=floor,
+        )
+    assert "shape change floor must be finite positive" in str(raised.value)
+
+
+@pytest.mark.parametrize(
+    "residual", [float("nan"), float("inf"), float("-inf"), -1.0e-9, True, "0.02", None]
+)
+def test_the_shape_floor_refuses_a_residual_that_is_not_a_distance(residual):
+    """``nan <= floor`` is ``False``, so an unguarded NaN would PASS the floor.
+
+    ``True`` is here for the same reason: ``bool`` is an ``int``, and
+    ``True <= 1e-6`` is ``False``, so a residual of ``True`` would also sail
+    through a bare comparison.
+    """
+
+    from patina_scan_worker.refine_lifecycle import require_refined_shape_changed
+
+    with pytest.raises(AdapterError) as raised:
+        require_refined_shape_changed(
+            _verification_with(fit_rmse_m=residual),
+            deadline=_deadline(),
+        )
+    assert raised.value.code == "REFINE_UNCHANGED_EVIDENCE"
+    assert "not a finite non-negative distance" in str(raised.value)
+
+
+def test_the_report_records_the_shape_change_and_the_floor_it_cleared(tmp_path):
+    report, _engine, _sink, _scratch = _run(tmp_path)
+    document = report.to_document()
+
+    shape = document["refinedShapeChange"]
+    assert shape["fitRmseMeters"] == report.alignment_verification.fit_rmse_m
+    assert shape["floorMeters"] == 1.0e-6
+    assert shape["fitRmseMeters"] > shape["floorMeters"]
+    assert shape["seedRmsRadiusMeters"] > 1.9
 
 
 # ---------------------------------------------------------------------------

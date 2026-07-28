@@ -118,7 +118,11 @@ WHAT THIS MODULE DOES NOT DO, stated so nothing here can be misread as more:
     every one of them an acceptance with float-noise margins: a "room" whose
     trajectory radius is 403.97 m passes (fit residual 1.6e-13 m); an aligned
     model that reproduces the seed to 2e-15 m -- refinement having done nothing
-    at all -- passes (7.3e-16 m).  No clause bounds trajectory extent above
+    at all -- passes (7.3e-16 m).  The SECOND of those is now refused one level
+    up, by ``refine_lifecycle.require_refined_shape_changed``, which floors the
+    ``fit_rmse_m`` this module computes; the acceptance here is unchanged and
+    deliberate, and the two float-noise figures above are the lower half of that
+    floor's derivation.  No clause bounds trajectory extent above
     except :data:`POSE_DIGEST_MAX_TRANSLATION_M` at 1e6 m, and below only the
     conditioning floor does, which on this fixture's aspect ratio puts the small
     end at 11.8 mm of RMS radius.  Because the shape-change budget is a FRACTION
@@ -381,6 +385,18 @@ ALIGNED_GAUGE_MAX_TRANSLATION_M = 0.25
 #: ``test_the_measured_shape_change_envelope_is_what_the_gauge_floors_leave``
 #: is what makes an edit to any of those four constants contradict this note
 #: rather than silently outdate it.
+#:
+#: THERE IS DELIBERATELY NO FLOOR ON ``fit_rmse_m`` IN THIS MODULE, and the
+#: absence is a scope decision rather than an oversight.  A residual of zero
+#: means the aligned model is the seed under a similarity -- a run that refined
+#: nothing in the gauge-invariant sense -- and this module still ACCEPTS it,
+#: because a similarity of a model really is a self-consistent alignment of that
+#: model and self-consistency is the whole of what is decided here.  Refusing it
+#: is a decision about publishing, and it is made by
+#: ``refine_lifecycle.require_refined_shape_changed`` against
+#: ``refine_lifecycle.REFINED_MODEL_MIN_SHAPE_CHANGE_M``, which reads exactly the
+#: number returned below.  The measurement is this module's; the judgement is
+#: the composition's.
 ALIGNMENT_MAX_SHAPE_CHANGE_FRACTION = 0.5
 #: Ceiling on how far the ALIGNED model's cameras may point away from where the
 #: recomputed similarity puts them, in radians, taken over the worst camera.
