@@ -63,7 +63,7 @@ public struct CompanionOverlay: View {
     /// When the presented intro became visible — the basis for `viewedMs`.
     @State private var introShownAt: Date?
     /// Trigger of the in-flight or presented intro (`"first_arrival"` /
-    /// `"second_session"` / `"stuck"`), so an interruption records it correctly.
+    /// `"second_session"`), so an interruption records it correctly.
     @State private var introTrigger: String?
     /// The staged wake-up choreography, cancellable on surface change.
     @State private var introTask: Task<Void, Never>?
@@ -251,10 +251,6 @@ public struct CompanionOverlay: View {
         .task(id: coordinator.currentScreen) {
             await maybePresentIntro()
         }
-        // Unused-companion escalation — offers help to a stuck `.new` user.
-        .task {
-            await runUnusedCompanionEscalation()
-        }
         .task {
             for await (event, _) in supabase.auth.authStateChanges {
                 await MainActor.run {
@@ -321,6 +317,13 @@ public struct CompanionOverlay: View {
     /// The intro/ack win the slot over the pill (the pill is also suppressed
     /// while the wake choreography is mid-flight). VoiceOver reads the bubble
     /// before the mark.
+    ///
+    /// Below the mark, a standing "Next steps" caption names what the mark is
+    /// for until the user has learned it (U34) — this replaces the timed
+    /// escalation that used to interrupt a "stuck" user with a pop-up offer.
+    /// It retires at `.learned`, and is hidden from VoiceOver (the mark button
+    /// itself already carries the label + hint) and from hit testing (a caption
+    /// that swallowed taps would sit right under the primary affordance).
     @ViewBuilder
     private func companionMarkStack(nudge: CompanionNudge?) -> some View {
         VStack(spacing: 0) {
@@ -335,6 +338,17 @@ public struct CompanionOverlay: View {
             }
 
             companionMarkButton
+
+            if coaching.phase != .learned {
+                Text("Next steps")
+                    .font(PatinaTypography.monoSmall)
+                    .tracking(0.4)
+                    .textCase(.uppercase)
+                    .foregroundStyle(PatinaColors.Text.muted)
+                    .padding(.top, 6)
+                    .accessibilityHidden(true)
+                    .allowsHitTesting(false)
+            }
         }
     }
 
@@ -718,17 +732,9 @@ public struct CompanionOverlay: View {
     private func expandToPanel() {
         // The wake-up intro and first-nav ack live in the mark's slot; opening
         // the panel retires them. Tapping through the intro (mark or "Show me")
-        // counts as accepting it — record "expanded", and as accepted help when
-        // it was the stuck re-offer.
+        // counts as accepting it — record "expanded".
         if introVisible {
-            let wasStuckOffer = introTrigger == "stuck"
             dismissIntro(action: "expanded")
-            if wasStuckOffer {
-                CompanionAnalytics.shared.trackHelpAccepted(
-                    screen: coordinator.currentScreen.displayName,
-                    actionTaken: "companion_expanded"
-                )
-            }
         }
         dismissNavAck()
 
@@ -926,12 +932,11 @@ public struct CompanionOverlay: View {
     }
 
     /// Retire the intro when the surface it anchors to is no longer valid. The
-    /// wake intro is heroFrame-bound; the stuck re-offer may live on any
-    /// resting/nudging surface. Resting↔nudging flips keep the intro.
+    /// wake intro is heroFrame-bound and is now the only intro there is, so the
+    /// surface test is unconditional. Resting↔nudging flips keep the intro.
     private func syncIntroToSurface() {
-        let onValidMode = displayModeAllowsIntro
-        let onValidScreen = introTrigger == "stuck" || coordinator.currentScreen == .heroFrame
-        guard !(onValidMode && onValidScreen) else { return }
+        let onValidSurface = displayModeAllowsIntro && coordinator.currentScreen == .heroFrame
+        guard !onValidSurface else { return }
 
         if introTask != nil {
             interruptWakeChoreography()
@@ -940,7 +945,7 @@ public struct CompanionOverlay: View {
         }
     }
 
-    // MARK: - Coaching: first-nav ack + unused-companion escalation
+    // MARK: - Coaching: first-nav ack
 
     /// After a companion navigation settles, acknowledge it once on the
     /// resting mark (skipped on minimal / non-resting destinations, and never
@@ -974,64 +979,6 @@ public struct CompanionOverlay: View {
         navAckScreen = nil
         guard navAckVisible else { return }
         withAnimation(reduceMotion ? nil : .patinaHero) { navAckVisible = false }
-    }
-
-    /// While the user is still `.new`, poll every 20s; if they look stuck and
-    /// still haven't spent their intro budget, offer help by re-presenting the
-    /// intro with the `"stuck"` trigger (no choreography). Structured `.task`:
-    /// exits on cancellation or as soon as the user moves past `.new`.
-    private func runUnusedCompanionEscalation() async {
-        while !Task.isCancelled {
-            guard coaching.phase == .new else { return }
-            do { try await Task.sleep(for: .seconds(20)) } catch { return }
-            guard !Task.isCancelled, coaching.phase == .new else { return }
-
-            let metrics = SessionMetricsService.shared
-            guard !introVisible,
-                  introTask == nil,
-                  coaching.canShowIntro,
-                  metrics.stuckReason != .none,
-                  displayModeAllowsIntro else { continue }
-
-            // This tick can trip while the first-launch tour popover is still
-            // open (e.g. the user parked on it, idle, for 20s+), so it must
-            // honor the same tour-sequencing gate as the wake-up path
-            // (`maybePresentIntro`) — otherwise the stuck intro would present
-            // on top of the tour, colliding with it and spending one of the
-            // two intro-budget slots the choreographed wake-up needs. On gate
-            // failure (timeout, or the tour never resolves) skip this tick
-            // rather than tearing down the whole loop — there's another
-            // chance in 20s. Cancellation still exits promptly.
-            guard await coaching.introGate() else {
-                if Task.isCancelled { return }
-                continue
-            }
-
-            // The gate can await for up to 120s — re-check every guard above,
-            // since the panel may have opened, the wake path may have spent
-            // the intro budget, or the user may no longer look stuck, while
-            // we were waiting.
-            guard coaching.phase == .new,
-                  !introVisible,
-                  introTask == nil,
-                  coaching.canShowIntro,
-                  metrics.stuckReason != .none,
-                  displayModeAllowsIntro else { continue }
-
-            let reason = metrics.stuckReason
-            let screen = coordinator.currentScreen.displayName
-            CompanionAnalytics.shared.trackUserStuck(
-                screen: screen,
-                reason: reason,
-                dwellTime: metrics.dwellTimeOnCurrentScreen,
-                interactionCount: metrics.interactionCountOnCurrentScreen
-            )
-            CompanionAnalytics.shared.trackHelpOffered(screen: screen, reason: reason)
-
-            introTrigger = "stuck"
-            HapticManager.shared.companionPulse()
-            presentIntroBubble(trigger: "stuck")
-        }
     }
 }
 
