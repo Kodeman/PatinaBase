@@ -384,7 +384,9 @@ final class SupabaseSiteScanService: SiteScanService {
             let src = bundle.appendingPathComponent(dir, isDirectory: true)
             guard let files = try? fm.contentsOfDirectory(at: src, includingPropertiesForKeys: nil)
                 .filter({ extensions.contains($0.pathExtension) }), !files.isEmpty else { return }
-            try? TarArchive.write(entries: files.map { TarArchive.Entry(name: $0.lastPathComponent, url: $0) },
+            // Members carry the bundle-relative path, NOT the bare filename — see
+            // TarArchive.bundleEntries, where the rule and the reason live (R120).
+            try? TarArchive.write(entries: TarArchive.bundleEntries(directory: dir, files: files),
                                   to: bundle.appendingPathComponent(name))
         }
         tar(dir: "depth", extensions: ["bin"], to: "depth.tar")

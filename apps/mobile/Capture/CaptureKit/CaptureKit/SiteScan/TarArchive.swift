@@ -30,6 +30,19 @@ public enum TarArchive {
     private static let blockSize = 512
     private static let chunkSize = 1 << 20
 
+    /// Entries for a transport archive of `directory`, named the way the bundle's
+    /// own indexes name those files: `<directory>/<filename>`.
+    ///
+    /// A named function rather than a closure at the call site because the
+    /// bare-filename version of it shipped. `keyframe_index.ndjson` records
+    /// `heicPath` as `keyframes/<file>` and the scan-pipeline worker resolves each
+    /// member by exactly that string, so flat members made the archive contradict
+    /// its own index and no bundle this app produced was consumable. Naming the
+    /// rule gives it somewhere to be tested (R120).
+    public static func bundleEntries(directory: String, files: [URL]) -> [Entry] {
+        files.map { Entry(name: "\(directory)/\($0.lastPathComponent)", url: $0) }
+    }
+
     /// Write a deterministic ustar of `entries` to `destination`. Skips entries whose
     /// source file is missing. Throws on IO failure. Returns the number of members.
     @discardableResult
