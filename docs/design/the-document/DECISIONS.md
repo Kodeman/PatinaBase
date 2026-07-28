@@ -5086,3 +5086,87 @@ and click-to-measure) and M4 (a maker quotes without a site visit). Item 7
 composes at 100 frames.
 
 *Entries add: R117 · last id = R117*
+
+### R118 · Field Capture P2 · Refine qualifies at capture resolution; the 360x640 raster pin is superseded — 2026-07-28
+
+The Refine raster path is to be qualified at the **physical capture
+resolution** of the Field keyframes. The program owner ruled this on
+2026-07-28 after being shown the three options and their costs. Downscaling
+production keyframes to the I92-qualified 360x640 profile is **rejected**, and
+an intermediate profile is **rejected**.
+
+**What forced the ruling.** The only concrete materializer this repository has
+implements exactly one raster profile and refuses everything else:
+`EXPECTED_WIDTH`/`EXPECTED_HEIGHT` are 360 and 640
+(`field_raster_materializer.py:48-49`), and a mismatch fails
+`RASTER_UNQUALIFIED` at `:1142-1146` before a pixel is read. The subject
+scan's keyframes are 1440x1920, so a composed run against real capture data
+refuses at its first frame. The module's own docstring states the remedy:
+"Variable-size production keyframes require a new helper protocol and a new
+physical-device qualification receipt."
+
+That 360x640 is a **fixture** size, not a production one.
+`FieldRasterFixtureExporter.swift:32-33` synthesizes at `nativeWidth = 640`,
+`nativeHeight = 360`, while production writes a full-resolution HEIC
+(`FieldKeyframeRecorder.swift:303`) through an encoder that passes
+`cgImage.width`/`cgImage.height` straight out
+(`FieldRasterEncoder.swift:41`). Nothing downscales anywhere on the capture
+path. The qualified profile and the shipped profile were never the same
+profile.
+
+**Why capture resolution and not a downscale.** Three reasons, the first
+measured and the other two read off the code.
+
+1. The packet layer is *already built* for 1440x1920 and is inside budget at
+   it. One frame is a P6 file of `17 + 1440*1920*3 = 8_294_417` bytes; 100
+   frames pack into 7 chunks and 8 pinned files at 0.77 GiB, and the 400-frame
+   contract maximum into 25 and 26 — inside the 64-file and 4 GiB ceilings
+   either way (`refine_lifecycle.py:1038-1039`,
+   `test_refine_lifecycle.py:2653-2668`). Nothing about full resolution
+   strains the transport that exists.
+2. A downscale would be geometrically wrong as the code stands. Intrinsics are
+   passed to the engine verbatim from the capture index
+   (`refine_lifecycle.py:1152-1158`) and nothing rescales them, so 360x640
+   rasters would reach COLMAP carrying a focal length four times too large for
+   the image they describe. The rescale is unwritten work, which means the
+   "cheap" option is not cheaper — it relocates the qualification burden and
+   degrades the result at the same time.
+3. 360x640 is 230k pixels against 2.76M — 8.3% of the captured detail — fed to
+   feature detection and matching whose whole job is finding structure. This
+   is reasoning about reconstruction quality, not a measurement; no archive
+   this repository has parsed came out of COLMAP.
+
+**What the ruling obligates.** Four things, in order, none of them optional.
+
+1. The helper protocol carries dimensions instead of assuming them.
+   `_PPM_HEADER` and `_PPM_SIZE` (`field_raster_materializer.py:84-85`) and
+   the eight metadata comparisons at `:890-897` are all derived from the two
+   pinned constants and must become functions of the declared profile, under a
+   bound so the size is constrained rather than merely variable.
+2. Re-qualification is mandatory **by construction**, not by choice.
+   `QUALIFIED_HELPER_SOURCE_SHA256` is the SHA-256 of
+   `field_raster_libheif.c` itself — recomputed as
+   `4840e0e6d3c98bbebecc4354349bae3963718583fb5c882f9807b0d222bee9c3`, and
+   asserted by `test_packaged_source_is_the_i92_qualified_source`. Any edit to
+   the helper source invalidates the I92 receipt automatically.
+3. A new physical-device fixture at capture resolution, a new qualification run
+   on the qualified host, and a new receipt superseding I92. The fixture
+   exporter must emit at capture resolution for the qualification to be about
+   the profile production actually ships.
+4. The new profile is pinned only once its receipt exists. Until then the
+   raster qualification flags stay `False`, Refine stays disabled and
+   uncomposed, and no `scan_pipeline.refine` registration or stage-set change
+   is made.
+
+**Operator dependencies.** Two steps in this chain cannot be performed by an
+agent under the standing constraints: emitting the physical fixture from the
+iPhone, and installing the rebuilt immutable release to `/opt` — agents do not
+run `install.sh` and do not write outside `~/`. The qualification therefore
+gates on the program owner at both points.
+
+**What this does not decide.** The 200-400 frame operational band remains
+unqualified per R117 and is untouched here. No claim is made that a
+reconstruction at capture resolution will succeed, only that it is the profile
+worth qualifying.
+
+*Entries add: R118 · last id = R118*
