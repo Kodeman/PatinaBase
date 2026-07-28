@@ -228,8 +228,15 @@ struct ContentView: View {
                     .toolbarTitleDisplayMode(.inline)
             }
 
-        case .roomEmergence:
-            RecommendationsView()
+        case .roomEmergence(let roomId):
+            // U06/U07: `roomId` here is the LOCAL SwiftData `RoomModel.id`
+            // (this case's payload type, per Coordinator.swift) — NOT the
+            // remote id the `get_recommendations` RPC and the
+            // `saved_items.room_id` FK expect. RecommendationsView resolves
+            // it to `RoomModel.remoteId` itself before either is used,
+            // falling back to the unscoped marketplace if the room hasn't
+            // synced yet.
+            RecommendationsView(roomId: roomId.uuidString)
                 .toolbarTitleDisplayMode(.inline)
 
         case .table:

@@ -64,8 +64,25 @@ actor ProductAPIClient {
             #endif
             throw ProductAPIError.http(status: http.statusCode)
         }
-        let items = try JSONDecoder().decode([Product].self, from: data)
+        let items = try ProductAPIClient.decodeProducts(from: data)
         return RecommendationsResponse(items: items, total: items.count, roomId: roomId, roomName: nil)
+    }
+
+    // MARK: - U39: release-gating decode
+
+    /// The only decode path for `get_recommendations` rows. A single
+    /// malformed row (missing a required field, wrong type, …) must never
+    /// blank the entire marketplace — it drops that row and keeps the rest.
+    nonisolated static func decodeProducts(from data: Data) throws -> [Product] {
+        let wrapped = try JSONDecoder().decode([FailableDecodable<Product>].self, from: data)
+        let products = wrapped.compactMap(\.value)
+        #if DEBUG
+        let droppedCount = wrapped.count - products.count
+        if droppedCount > 0 {
+            PatinaLog.ui.debug("[ProductAPI] Dropped \(droppedCount) malformed product row(s)")
+        }
+        #endif
+        return products
     }
 
     // MARK: - Single Product (PostgREST direct query)
@@ -176,9 +193,26 @@ private struct RawProductWithVendor: Codable {
             styleTags: style_tags ?? [],
             materialTags: materials ?? [],
             badges: tags ?? [],
-            category: ProductCategory(rawValue: category ?? "decor") ?? .decor,
+            // U39: was `ProductCategory(rawValue:)`, which silently fell
+            // back to `.decor` for anything not matching the enum's raw
+            // values verbatim — e.g. "chair" never matched `.seating`.
+            category: ProductCategory(normalizing: category),
             tier: (quality_score ?? 0) >= 80 ? .designerSelection : .styleMatch
         )
+    }
+}
+
+// MARK: - Failable element decoding (U39)
+
+/// Decodes one array element permissively: on failure the element decodes
+/// to `nil` instead of aborting the whole array decode. Used to keep one
+/// malformed `get_recommendations` row from blanking the entire response.
+struct FailableDecodable<Wrapped: Decodable>: Decodable {
+    let value: Wrapped?
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.singleValueContainer()
+        value = try? container.decode(Wrapped.self)
     }
 }
 
