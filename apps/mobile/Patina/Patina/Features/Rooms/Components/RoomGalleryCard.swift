@@ -91,7 +91,7 @@ struct RoomGalleryCard: View {
             divider
             stat(value: budgetString, label: "Budget")
             divider
-            stat(value: matchString, label: "Avg Match")
+            stat(value: matchString, label: "Match")
         }
         .padding(.vertical, 12)
         .padding(.horizontal, 14)
