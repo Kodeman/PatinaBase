@@ -57,6 +57,20 @@ public struct CompanionContext: Equatable {
     /// row renders instead as "Your design request".
     public var activeDesignRequest: ActiveDesignRequestContext?
 
+    // MARK: - Engagement Tier
+
+    /// The client's progressive-disclosure tier, mirrored from
+    /// `EngagementTier.currentState` at the same enrichment seam as
+    /// `activeDesignRequest` — so the action provider stays a pure function of
+    /// its inputs. `nil` means the tier is not resolved yet and MUST be read as
+    /// not-yet-engaged; a tier-gated door may never open on a guess.
+    ///
+    /// Deliberately neither `public` nor a parameter of the memberwise
+    /// initializer below: `EngagementTier` is internal, and Swift forbids a
+    /// public declaration whose signature uses an internal type. Assign it
+    /// after construction.
+    var engagementTier: EngagementTier?
+
     // MARK: - Initialization
 
     public init(

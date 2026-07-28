@@ -122,7 +122,7 @@ enum CompanionActionProvider {
     ) -> [CompanionActionItem] {
         switch screen {
         case .heroFrame:
-            return homeItems(context: context, isAuthenticated: isAuthenticated)
+            return homeItems(context: context)
         case .emergence, .roomEmergence, .pieceDetail, .arPlacement:
             return discoveryItems(screen, context: context)
         case .table, .roomSavedItems, .crossRoom:

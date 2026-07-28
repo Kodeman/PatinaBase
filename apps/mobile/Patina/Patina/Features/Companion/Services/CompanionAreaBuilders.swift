@@ -15,10 +15,16 @@ extension CompanionActionProvider {
 
     // MARK: - Home
 
-    static func homeItems(
-        context: CompanionContext,
-        isAuthenticated: Bool
-    ) -> [CompanionActionItem] {
+    /// The Studio door (projects · messages · decisions) is tier-gated, not
+    /// auth-gated: a signed-in homeowner who has never engaged a designer has
+    /// nothing behind it, so offering it was a promise the app couldn't keep
+    /// (U20). An unresolved tier reads as `.discovering` — never open the door
+    /// on a guess.
+    static func showsStudioRow(_ context: CompanionContext) -> Bool {
+        (context.engagementTier ?? .discovering) >= .engaged
+    }
+
+    static func homeItems(context: CompanionContext) -> [CompanionActionItem] {
         if context.roomCount == 0 {
             var rows = [
                 spacesOrScanRow(context: context, suggested: true),
@@ -27,7 +33,7 @@ extension CompanionActionProvider {
                 recommendationsRow(context: context)
             ]
             if let collections = collectionsRow(context: context) { rows.append(collections) }
-            if isAuthenticated { rows.append(studioRow()) }
+            if showsStudioRow(context) { rows.append(studioRow()) }
             return rows
         }
         var rows = [
@@ -38,7 +44,7 @@ extension CompanionActionProvider {
         if let collections = collectionsRow(context: context) { rows.append(collections) }
         if context.activeDesignRequest != nil {
             rows.append(requestRow(context: context))
-        } else if isAuthenticated {
+        } else if showsStudioRow(context) {
             rows.append(studioRow())
         }
         return rows

@@ -127,10 +127,14 @@ public struct CompanionOverlay: View {
     }
 
     /// The coordinator's companion context, enriched with the promoted design
-    /// request (if any). Read inside `body`, so SwiftUI tracks the `@Observable`
-    /// `DesignRequestStatusService` and re-renders the panel when a refresh
+    /// request and the engagement tier (if resolved). Read inside `body`, so
+    /// SwiftUI tracks the `@Observable` `DesignRequestStatusService` /
+    /// `BadgeCountService` behind them and re-renders the panel when a refresh
     /// lands — keeping `CompanionActionProvider` a pure function of its inputs
     /// (no polling, no coordinator-write side channel).
+    ///
+    /// An unresolved tier is left `nil` rather than defaulted: the row builders
+    /// read `nil` as not-yet-engaged, so a Studio door never opens on a guess.
     private var enrichedContext: CompanionContext {
         var context = coordinator.companionContext
         if let promoted = DesignRequestStatusService.shared.promotedRequest {
@@ -138,6 +142,9 @@ public struct CompanionOverlay: View {
                 leadId: promoted.leadId.uuidString,
                 statusLabel: promoted.stage.badgeTitle
             )
+        }
+        if case .known(let tier) = EngagementTier.currentState {
+            context.engagementTier = tier
         }
         return context
     }
