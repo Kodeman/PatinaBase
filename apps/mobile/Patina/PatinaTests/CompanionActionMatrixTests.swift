@@ -40,9 +40,7 @@ struct CompanionActionMatrixTests {
     /// switch fails to compile first, but add it here too.
     fileprivate static let allRoutes: [AppRoute] = [
         .heroFrame,
-        .roomList,
         .yourSpaces,
-        .roomDetail(roomId: sampleRoomId),
         .roomProject(roomId: sampleRoomId),
         .roomSettings(roomId: sampleRoomId),
         .crossRoom,
@@ -56,7 +54,6 @@ struct CompanionActionMatrixTests {
         .styleQuiz,
         .styleResult(result: sampleStyle),
         .arPlacement(productId: "piece-1"),
-        .preScanChecklist,
         .profile,
         .notifications,
         .designerConsultation,
@@ -303,19 +300,6 @@ struct CompanionActionMatrixTests {
         ])
     }
 
-    @Test
-    func roomProjectAndRoomDetailProduceTheSameMenu() {
-        // The unified builder fixes `.roomProject` falling to the old default
-        // while rendering the same view as `.roomDetail`.
-        let ctx = Self.context(for: .roomDetail(roomId: Self.sampleRoomId), roomCount: 2, active: false)
-        let detail = CompanionActionProvider.actions(
-            for: .roomDetail(roomId: Self.sampleRoomId), context: ctx, isAuthenticated: true
-        ).map(\.label)
-        let project = CompanionActionProvider.actions(
-            for: .roomProject(roomId: Self.sampleRoomId), context: ctx, isAuthenticated: true
-        ).map(\.label)
-        #expect(detail == project)
-    }
 }
 
 // A second suite rather than more tests in the one above: the matrix struct is
@@ -427,8 +411,6 @@ struct CompanionTierAndFreshnessTests {
             let ctx = Fixture.context(for: route, roomCount: 2, active: false)
             #expect(CompanionActionProvider.nudge(for: route, context: ctx) == nil, "\(route) offered a nudge")
         }
-        let preScan = Fixture.context(for: .preScanChecklist, roomCount: 2, active: false)
-        #expect(CompanionActionProvider.nudge(for: .preScanChecklist, context: preScan) == nil)
     }
 
     // MARK: - Style-profile freshness (U42)

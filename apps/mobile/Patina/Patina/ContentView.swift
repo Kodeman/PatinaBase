@@ -185,14 +185,17 @@ struct ContentView: View {
     @ViewBuilder
     private func destinationView(for route: AppRoute) -> some View {
         switch route {
-        case .heroFrame, .roomList, .yourSpaces, .roomDetail, .roomProject,
+        // `.heroFrame` is a root-reset (it clears the nav path); it is never
+        // pushed as a destination, so it falls through to the group's
+        // EmptyView. The home surface is rendered by `mainHomeView`.
+        case .heroFrame, .yourSpaces, .roomProject,
              .roomSettings, .crossRoom, .manualRoomEntry, .roomSavedItems:
             roomsDestination(for: route)
 
         case .scanFlow, .emergence, .roomEmergence, .table, .pieceDetail:
             discoveryDestination(for: route)
 
-        case .styleQuiz, .styleResult, .arPlacement, .preScanChecklist:
+        case .styleQuiz, .styleResult, .arPlacement:
             styleDestination(for: route)
 
         case .profile, .notifications, .designerConsultation, .designRequests,
@@ -208,16 +211,10 @@ struct ContentView: View {
     @ViewBuilder
     private func roomsDestination(for route: AppRoute) -> some View {
         switch route {
-        case .heroFrame:
-            // `.heroFrame` is a root-reset (it clears the nav path); it is
-            // never pushed as a destination, so this arm is unreachable.
-            // The home surface is rendered by `mainHomeView`.
-            EmptyView()
-
-        case .roomList, .yourSpaces:
+        case .yourSpaces:
             YourSpacesView()
 
-        case .roomDetail(let roomId), .roomProject(let roomId):
+        case .roomProject(let roomId):
             RoomProjectView(roomId: roomId)
 
         case .roomSettings(let roomId):
@@ -291,12 +288,6 @@ struct ContentView: View {
         case .arPlacement(let productId, let roomRemoteId):
             ARPlacementView(productId: productId, roomRemoteId: roomRemoteId)
                 .toolbar(.hidden, for: .navigationBar)
-
-        case .preScanChecklist:
-            PreScanChecklistView {
-                coordinator.navigate(to: .scanFlow(reason: .fresh))
-            }
-            .toolbar(.hidden, for: .navigationBar)
 
         default:
             EmptyView() // unreachable — dispatched only for the cases above

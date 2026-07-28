@@ -121,7 +121,7 @@ extension CompanionActionProvider {
         context: CompanionContext
     ) -> [CompanionActionItem] {
         switch screen {
-        case .roomList, .yourSpaces:
+        case .yourSpaces:
             return [
                 scanRow(label: "Add another space", hint: "Scan a new room",
                         reason: .fresh, suggested: true),
@@ -131,7 +131,7 @@ extension CompanionActionProvider {
                      route: .crossRoom, id: "cross_room"),
                 designerRow(roomId: nil, context: context)
             ]
-        case .roomDetail(let roomId), .roomProject(let roomId):
+        case .roomProject(let roomId):
             return [
                 item("sparkles", "See recommendations", "Pieces for this room",
                      route: .roomEmergence(roomId: roomId), id: "room_recommendations", suggested: true),
@@ -143,7 +143,7 @@ extension CompanionActionProvider {
         case .roomSettings(let roomId):
             return [
                 item("arrow.uturn.backward", "Back to the room", "Return to details",
-                     route: .roomDetail(roomId: roomId), id: "back_to_room", suggested: true),
+                     route: .roomProject(roomId: roomId), id: "back_to_room", suggested: true),
                 scanRow(label: "Rescan this room", hint: "Capture updates", reason: .rescan)
             ]
         default: // .manualRoomEntry
@@ -157,21 +157,15 @@ extension CompanionActionProvider {
 
     // MARK: - Scan flow
 
+    /// `.scanFlow` is the only scan route left — mid-capture the Companion
+    /// offers the universal tail and nothing else (don't tempt exits). Every
+    /// scan *entry* is a `scanRow(...)` on the surrounding surfaces, which
+    /// already routes straight to `.scanFlow`.
     static func scanItems(
         _ screen: AppRoute,
         context: CompanionContext
     ) -> [CompanionActionItem] {
-        switch screen {
-        case .preScanChecklist:
-            return [
-                scanRow(label: "Start scanning", hint: "Begin the walk",
-                        reason: .fresh, suggested: true),
-                item("square.and.pencil", "Enter details manually instead", "Skip the scan",
-                     route: .manualRoomEntry, id: "manual_room")
-            ]
-        default: // .scanFlow — mid-capture, tail only (don't tempt exits)
-            return []
-        }
+        []
     }
 
     // MARK: - Style

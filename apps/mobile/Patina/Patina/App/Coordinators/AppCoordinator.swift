@@ -17,8 +17,8 @@ public final class AppCoordinator: Coordinator {
     // MARK: - State
 
     /// Current app phase — derived from `AuthService.session`, onboarding
-    /// completion, and `guestModeOptIn`. Use `presentAuthentication()` or
-    /// `beginSplashTransition()` to nudge transitions; do not set this
+    /// completion, and `guestModeOptIn`. Use `beginSplashTransition()` or
+    /// clear `guestModeOptIn` to nudge transitions; do not set this
     /// directly from outside the recompute path.
     public private(set) var phase: AppPhase = .launching
 
@@ -254,19 +254,6 @@ public final class AppCoordinator: Coordinator {
         recomputePhase()
     }
 
-    /// Phase-level ejection to the auth root. Do not use for in-context
-    /// sign-in prompts — set `presentedSheet = .auth` instead.
-    ///
-    /// Moves a guest user to the AuthScreenView so they can sign in for
-    /// real. Clearing `guestModeOptIn` causes the phase deriver to
-    /// return `.auth` on its next tick because the user has no session.
-    /// No-op for already-authenticated users — they'd need to sign out
-    /// first.
-    public func presentAuthentication() {
-        guard !AuthService.shared.isAuthenticated else { return }
-        guestModeOptIn = false
-    }
-
     /// Check if user has existing rooms (placeholder - would query SwiftData)
     private func hasExistingRooms() -> Bool {
         // In a full implementation, this would query SwiftData for RoomModel count
@@ -290,11 +277,11 @@ public final class AppCoordinator: Coordinator {
             navigationPath = NavigationPath()
             updateContext(for: route)
 
-        case .roomList, .yourSpaces, .roomProject, .roomSettings,
-             .crossRoom, .manualRoomEntry, .roomDetail, .roomSavedItems,
+        case .yourSpaces, .roomProject, .roomSettings,
+             .crossRoom, .manualRoomEntry, .roomSavedItems,
              .table, .scanFlow, .emergence, .roomEmergence, .pieceDetail,
              .styleQuiz, .styleResult,
-             .arPlacement, .preScanChecklist,
+             .arPlacement,
              .profile, .notifications, .designerConsultation, .designRequests,
              .projectList, .projectDetail,
              .decisionList, .decisionDetail,
@@ -380,10 +367,7 @@ public final class AppCoordinator: Coordinator {
 
         // Clear context that's no longer relevant
         switch route {
-        case .heroFrame, .roomList:
-            companionContext.viewingPiece = nil
-            companionContext.walkProgress = nil
-        case .roomDetail, .roomSavedItems:
+        case .heroFrame, .roomSavedItems:
             companionContext.viewingPiece = nil
             companionContext.walkProgress = nil
         case .scanFlow:
@@ -399,8 +383,6 @@ public final class AppCoordinator: Coordinator {
             companionContext.walkProgress = nil
         case .arPlacement:
             companionContext.walkProgress = nil
-        case .preScanChecklist:
-            companionContext.viewingPiece = nil
         case .profile, .notifications, .designerConsultation, .designRequests:
             companionContext.viewingPiece = nil
             companionContext.walkProgress = nil
@@ -481,7 +463,7 @@ public final class AppCoordinator: Coordinator {
             return true
 
         case .showRooms:
-            navigate(to: .roomList)
+            navigate(to: .yourSpaces)
             return true
 
         case .goBack:

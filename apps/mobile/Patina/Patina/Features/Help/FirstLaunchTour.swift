@@ -4,7 +4,7 @@
 //
 //  iOS first-launch coachmark tour orchestrator (Sprint 3 / Stream G9).
 //
-//  Sequences three `HelpCoachmark`-style popover steps on the Home tab the
+//  Sequences three coachmark popover steps on the Home tab the
 //  first time a user opens the app. Mirrors the web `<TourController />`
 //  contract in `packages/help-system/src/proactive/TourController/` —
 //  same persistence prefix (`help-system.tour.<tourKey>`), same one-shot
@@ -93,8 +93,7 @@ public enum FirstLaunchTourAnchor: String, CaseIterable, Sendable {
 public struct FirstLaunchTourStep: Sendable {
     public let surfaceKey: SurfaceKey
     public let anchor: FirstLaunchTourAnchor
-    /// Inline fallback heading + body for CMS misses. Mirrors `HelpCoachmark`'s
-    /// fallback contract.
+    /// Inline fallback heading + body for CMS misses.
     public let fallback: (heading: String, body: String)?
 
     public init(
@@ -674,9 +673,9 @@ public extension View {
 // MARK: - Popover card
 
 /// Visual presentation of a tour step. Pulls live CMS copy from Sanity (via
-/// `SanityHelpClient`) and renders the same "Step X of Y" header + heading +
-/// body + Skip / Next layout that `HelpCoachmark` ships. Kept private to this
-/// file so the coachmark primitive remains the canonical public surface.
+/// `SanityHelpClient`) and renders the "Step X of Y" header + heading +
+/// body + Skip / Next layout. Kept private to this file — the tour is the
+/// only coachmark surface the app ships.
 private struct FirstLaunchTourPopoverCard: View {
     let step: FirstLaunchTourStep
     let stepNumber: Int

@@ -63,7 +63,6 @@ struct QuietConversationFlowHost: View {
         case initial
         case threshold
         case fallback
-        case review
         case savedConfirmation
         case softLanding
         case conversation
@@ -198,13 +197,6 @@ struct QuietConversationFlowHost: View {
                     step = .conversation
                 }
             }
-
-        case .review:
-            // No longer reached — review is now a .fullScreenCover on the
-            // host (see body). Kept in the enum for back-compat with older
-            // navigation routes; renders the threshold underneath so the
-            // cover has a non-empty base layer.
-            EmptyView()
 
         case .savedConfirmation:
             if let scanId = savedScanId {

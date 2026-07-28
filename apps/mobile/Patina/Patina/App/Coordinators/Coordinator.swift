@@ -51,9 +51,7 @@ public enum ScanReason: String, Hashable {
 /// `.scanFlow(reason:)`.
 public enum AppRoute: Hashable {
     case heroFrame                          // Home / DailyRoom root
-    case roomList
     case yourSpaces                         // Room System: gallery
-    case roomDetail(roomId: UUID)
     case roomProject(roomId: UUID)          // Room System: full project view
     case roomSettings(roomId: UUID)         // Room System: settings
     case crossRoom                          // Room System: all items
@@ -74,7 +72,6 @@ public enum AppRoute: Hashable {
 
     // AR & Scan Enhancement routes
     case arPlacement(productId: String, roomRemoteId: String? = nil)
-    case preScanChecklist
 
     // Phase 6 routes
     case profile
@@ -113,9 +110,7 @@ public enum AppRoute: Hashable {
     public var displayName: String {
         switch self {
         case .heroFrame: return "Home"
-        case .roomList: return "Your Rooms"
         case .yourSpaces: return "Your Spaces"
-        case .roomDetail: return "Room Detail"
         case .roomProject: return "Room"
         case .roomSettings: return "Room Settings"
         case .crossRoom: return "All Items"
@@ -129,7 +124,6 @@ public enum AppRoute: Hashable {
         case .styleQuiz: return "Style Quiz"
         case .styleResult: return "Your Style"
         case .arPlacement: return "AR Placement"
-        case .preScanChecklist: return "Pre-Scan"
         case .profile: return "Profile"
         case .notifications: return "Notifications"
         case .designerConsultation: return "Designer"

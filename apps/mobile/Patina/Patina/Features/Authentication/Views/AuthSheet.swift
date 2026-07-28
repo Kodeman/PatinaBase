@@ -3,7 +3,7 @@
 //  Patina
 //
 //  Modal sign-in over the current context. Dismisses itself when a session
-//  lands. For phase-level ejection use AppCoordinator.presentAuthentication().
+//  lands. For phase-level ejection clear AppCoordinator.guestModeOptIn.
 //
 
 import SwiftUI

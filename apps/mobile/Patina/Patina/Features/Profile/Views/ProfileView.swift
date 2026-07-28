@@ -148,7 +148,7 @@ struct ProfileView: View {
                             HStack(spacing: 12) {
                                 ForEach(viewModel.rooms) { room in
                                     Button {
-                                        coordinator.navigate(to: .roomDetail(roomId: room.id))
+                                        coordinator.navigate(to: .roomProject(roomId: room.id))
                                     } label: {
                                         roomCard(room)
                                     }

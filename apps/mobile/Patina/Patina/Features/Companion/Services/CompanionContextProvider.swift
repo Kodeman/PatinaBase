@@ -127,10 +127,10 @@ enum CompanionActionProvider {
             return discoveryItems(screen, context: context)
         case .table, .roomSavedItems, .crossRoom:
             return collectionsItems(screen, context: context)
-        case .roomList, .yourSpaces, .roomDetail, .roomProject,
+        case .yourSpaces, .roomProject,
              .roomSettings, .manualRoomEntry:
             return roomsItems(screen, context: context)
-        case .scanFlow, .preScanChecklist:
+        case .scanFlow:
             return scanItems(screen, context: context)
         case .styleQuiz, .styleResult:
             return styleItems(screen, context: context)
@@ -189,7 +189,7 @@ enum CompanionActionProvider {
             return "Everything, all at once"
         case .arPlacement:
             return "How does it look?"
-        case .roomList, .yourSpaces:
+        case .yourSpaces:
             return "Which room next?"
         default:
             return panelTitleDetail(for: screen)
@@ -198,7 +198,7 @@ enum CompanionActionProvider {
 
     private static func panelTitleDetail(for screen: AppRoute) -> String {
         switch screen {
-        case .roomDetail, .roomProject:
+        case .roomProject:
             return "What's next for this room?"
         case .roomSettings:
             return "All set here?"
@@ -206,8 +206,6 @@ enum CompanionActionProvider {
             return "Prefer to scan?"
         case .scanFlow:
             return "Keep scanning?"
-        case .preScanChecklist:
-            return "Ready to walk?"
         case .styleQuiz:
             return "Pause the quiz?"
         case .styleResult:
@@ -280,7 +278,7 @@ enum CompanionActionProvider {
             return CompanionNudge(label: "Try in your room →", route: .arPlacement(productId: piece.id))
         case .table:
             return CompanionNudge(label: "Find more pieces →", route: .emergence(pieceId: nil))
-        case .roomDetail(let roomId), .roomProject(let roomId):
+        case .roomProject(let roomId):
             return CompanionNudge(label: "See recommendations →", route: .roomEmergence(roomId: roomId))
         case .styleResult:
             return CompanionNudge(label: "View recommendations →", route: .emergence(pieceId: nil))

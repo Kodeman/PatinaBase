@@ -67,7 +67,6 @@ struct RouteAnalyticsParityTests {
     func nonScanRoutesHaveNoLegacyName() {
         // Only the scan flow consolidated; nothing else dual-emits.
         #expect(AppRoute.heroFrame.legacyScreenName == nil)
-        #expect(AppRoute.roomList.legacyScreenName == nil)
         #expect(AppRoute.profile.legacyScreenName == nil)
         #expect(AppRoute.notifications.legacyScreenName == nil)
     }
@@ -78,7 +77,6 @@ struct RouteAnalyticsParityTests {
     func stableRouteScreenNamesAreUnchanged() {
         let expected: [(AppRoute, String)] = [
             (.heroFrame, "Home"),
-            (.roomList, "Your Rooms"),
             (.yourSpaces, "Your Spaces"),
             (.crossRoom, "All Items"),
             (.table, "Your Table"),
