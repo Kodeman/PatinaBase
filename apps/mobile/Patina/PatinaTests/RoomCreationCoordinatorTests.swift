@@ -9,6 +9,16 @@
 //  contract that makes that impossible: exactly one insert per call, and a
 //  failed write-through comes back as a local-only Result, never an error.
 //
+//  Also pins the sync-state stamping: the store hands back a RoomModel at the
+//  `.local` default, so until the coordinator stamped the outcome a room that
+//  reached PostgREST and a room that never left the phone looked identical in
+//  local state — and `needsSync` excluded manual rooms outright.
+//
+//  `createManualRoom` awaits `AuthService.shared.waitForAuthReady()`, which
+//  resolves off the SDK's `.initialSession` event (always emitted on
+//  subscription, read from local storage, no network) — these cases do not
+//  need a signed-in session to run.
+//
 
 import Testing
 import Foundation
@@ -137,6 +147,49 @@ struct RoomCreationCoordinatorTests {
         #expect(result.remoteRoomId == "remote-room-1")
         #expect(rooms.first?.remoteId == "remote-room-1")
         #expect(RoomSelectionStore.shared.selectedRemoteId == "remote-room-1")
+    }
+
+    // MARK: - Sync-state stamping
+
+    @Test
+    func remoteFailureMarksTheRoomPendingSync() async throws {
+        let store = try makeStore()
+        let coordinator = RoomCreationCoordinator(store: store, api: UnauthenticatedRemote())
+
+        let result = await createLivingRoom(with: coordinator)
+
+        #expect(result.room.syncStatus == .pending)
+        #expect(result.room.lastSyncedAt == nil)
+    }
+
+    @Test
+    func remoteSuccessMarksTheRoomSynced() async throws {
+        let store = try makeStore()
+        let coordinator = RoomCreationCoordinator(
+            store: store,
+            api: StubRemote(remoteId: "remote-room-1")
+        )
+
+        let result = await createLivingRoom(with: coordinator)
+
+        #expect(result.room.syncStatus == .synced)
+        #expect(result.room.lastSyncedAt != nil)
+        #expect(result.room.needsSync == false)
+    }
+
+    /// The `hasBeenScanned` gate on `needsSync` excluded every manually
+    /// entered room from any future sync by construction — a room stranded
+    /// local-only could never be picked up, because manual entry is precisely
+    /// the path that never sets `hasBeenScanned`.
+    @Test
+    func aStrandedManualRoomStillReportsThatItNeedsSync() async throws {
+        let store = try makeStore()
+        let coordinator = RoomCreationCoordinator(store: store, api: UnauthenticatedRemote())
+
+        let result = await createLivingRoom(with: coordinator)
+
+        #expect(result.room.hasBeenScanned == false)
+        #expect(result.room.needsSync)
     }
 
     @Test

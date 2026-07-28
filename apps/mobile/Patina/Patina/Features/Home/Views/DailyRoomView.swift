@@ -359,6 +359,11 @@ struct DailyRoomView: View {
                         DailyFeedEmptyModule(
                             roomName: viewModel.selectedRoom?.name,
                             roomHasItems: (viewModel.selectedRoom?.itemCount ?? 0) > 0,
+                            // No remote id means the room never reached
+                            // PostgREST, so the feed RPC has nothing to run
+                            // against — no picks are on their way.
+                            roomIsLocalOnly: viewModel.selectedRoom
+                                .map { viewModel.remoteIdByLocal[$0.id] == nil } ?? false,
                             hasStyleProfile: viewModel.hasStyleProfile,
                             onTakeQuiz: { coordinator.navigate(to: .styleQuiz) },
                             onScanRoom: { coordinator.navigate(to: .scanFlow(reason: .fresh)) },

@@ -97,6 +97,12 @@ public final class RoomCreationCoordinator {
             manualEntry: true
         )
 
+        // Parity with `RoomScanSyncService.uploadRoomScan`: on a cold launch
+        // the auth-state listener has not published a session yet, so a
+        // signed-in user's first manual room would resolve as unauthenticated
+        // and land local-only for no reason other than timing.
+        await AuthService.shared.waitForAuthReady()
+
         do {
             // 2. Remote write-through
             let userId = try await api.resolveUserId()
@@ -112,6 +118,8 @@ public final class RoomCreationCoordinator {
 
             // 3. Stash the remote id on the local model (see RoomModel+Remote)
             local.remoteId = remote.id
+            local.syncStatus = .synced
+            local.lastSyncedAt = Date()
             store.touch(local)
 
             // 4. Select the new room so the Daily Room feed switches to it
@@ -120,7 +128,11 @@ public final class RoomCreationCoordinator {
             return Result(room: local, remoteRoomId: remote.id, remoteScanId: nil)
         } catch {
             // Guests and offline users keep the room they just made; it syncs
-            // when they sign in or reconnect.
+            // when they sign in or reconnect. `.pending` — not the `.local`
+            // default the store hands back — is what makes that future sync
+            // findable, and what lets the UI say "saved on this phone".
+            local.syncStatus = .pending
+            store.touch(local)
             selection.select(localId: local.id, remoteId: nil)
             #if DEBUG
             PatinaLog.sync.error("[RoomCreationCoordinator] remote room write failed, keeping the local room: \(error)")
