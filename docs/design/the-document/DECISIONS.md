@@ -5287,3 +5287,90 @@ the runbook, with an explicit instruction not to qualify if the configuration
 and a real scan's keyframe index disagree.
 
 *Entries add: I98 · last id = I98*
+
+### I99 · Field Capture P2 · capture-resolution raster qualified on the physical device; I92 superseded — 2026-07-28
+
+R118's fourth obligation is met. The Field raster convention is qualified at
+the resolution production actually captures, on the physical device, against
+the rebuilt immutable release. **This supersedes I92**, whose receipt covered
+the old helper bytes and the 360x640 fixture profile only.
+
+**Verdict: PASS.** Receipt `schemaVersion` 3, `status: passed`, qualification
+`p2-item4a-field-core-image-raster`, retained at
+`~/r118-qual/field-raster-qualification-v3-iphone17promax-00008150-20260728-51355159/`
+on the qualified host.
+
+```text
+field-raster-qualification-receipt-v3.json
+sha256=f48fa56d905a8e57dac152c6d79c797f9060fe9421c18f449536708234ff1775
+
+field-core-image-raster-v1-materialized.ppm
+sha256=50dccb8a57741c4249a1db11fa3d49cd012dddaafb37b0d3f5ccbda74d116d2f
+8_294_417 bytes, header `P6\n1440 1920\n255\n`
+```
+
+**The profile, and how it was established rather than assumed.** Native
+1920x1440, encoded 1440x1920, on iPhone 17 Pro Max (`iPhone18,2`, UDID prefix
+`00008150`) running iOS 27.0, ARKit format `1920x1440@60
+BuiltInWideAngleCamera`. Four independent links, each measured:
+
+1. The device's own Diagnostics row reported 1920x1440 off
+   `ARWorldTrackingConfiguration.videoFormat.imageResolution`, read from
+   `SharedARCaptureRig.makeConfiguration()` before any session runs. The
+   manifest records that `videoFormat` was *unassigned*, so this is ARKit's
+   default for this device and configuration — the provenance states its own
+   weakness rather than hiding it.
+2. **The RoomPlan cross-check passed**, which is the link R118 flagged as
+   documented by Apple but never verified in this repository. A real site scan
+   (`site-scan-844cf194`) was pulled off the device and every one of its **67**
+   keyframes reports `intrinsics.imageWidth/imageHeight` = 1920x1440 and
+   `width`/`height` = 1440x1920 — uniform, zero variation. RoomPlan does
+   preserve the AR session's selected video format on this device and OS.
+3. The fixture declared that profile with full provenance under manifest
+   `schemaVersion` 2, and both artifact hashes verified byte-intact after
+   transfer to the host.
+4. The rebuilt release qualified it.
+
+**The install that made re-qualification possible.** The immutable release moved
+`.venv.release.2fcccaf0feafa92fdca3fd2a` →
+`.venv.release.36629d73bd8f8299d4ec6c8c`, built from a closed 61-file source
+tree that satisfies `validate-source-tree` under trust anchor `/` at uid:gid
+0:0. The installed helper's usage string moved from `INPUT.heic OUTPUT.ppm` to
+`INPUT.heic OUTPUT.ppm WIDTH HEIGHT`, and its manifest `sourceSha256` is
+`3b184937b755dc4acca4347ea6dba43dbeb111f090a91cd340e65d214937c626` — protocol
+v3. `patina-scan-worker` returned to `active`. The operator performed the
+install; no agent ran `install.sh`, used `sudo`, or wrote outside `~/`.
+
+**What the receipt proves beyond "it decoded".**
+
+- **Geometry.** All six markers resolved at their expected encoded coordinates
+  with `maxChannelError` of **1**, through a lossy HEIC round-trip whose
+  tolerance is 64 and search radius 3 px. The discrete mapping
+  `(x,y)=(nativeHeight-1-y,x)` holds at capture resolution.
+- **Orientation is physical, not metadata.** `orientationProof` records
+  *absent* embedded EXIF/XMP orientation with zero metadata blocks, so the
+  right-rotation is a real raster transform. This is the defect class item 4A
+  existed to catch, re-proved at the new profile rather than inherited.
+- **Decode fidelity.** libheif 1.17.6 with libde265 1.0.15, exactly one
+  matching HEVC decoder descriptor, `rawDefaultRGBIdentical: true`, raw =
+  presented = default = 1440x1920.
+- **The intrinsics agree with the shipped code.** The receipt's continuous
+  mapping (`fx` 1527.75, `fy` 1537.5, `cx` 821.0, `cy` 903.75) is exactly what
+  `right_rotated_intrinsics` computes from the manifest's native intrinsics on
+  all six fields. The manifest deliberately uses two conventions — `H-1-y` for
+  discrete marker pixels, `H-cy` for the continuous principal point — and both
+  are correct for their quantity; conflating them would be a one-pixel error.
+- **Safety.** `databaseWrites: false`, `storageCalls: false`, `queueClaims:
+  false`, `inputFilesMutated: false`, `externalSystemsTouched: []`,
+  `controlledPhysicalDeviceInputOnly: true`.
+
+**What is deliberately still not claimed.** The fixture's synthetic intrinsics
+are not the device's real optics — a real keyframe measures `fx/fy` 1358.03 and
+`cx/cy` 959.09 / 721.66, near image centre, while the fixture's are off-centre
+by construction so a symmetric bug cannot hide. They test the rotation
+contract, not the lens. Separately, this receipt qualifies the raster
+convention only: no reconstruction has been run, no `*_QUALIFIED` flag is
+flipped by this entry, Refine remains disabled and uncomposed, and the
+200-400 frame band stays unqualified per R117.
+
+*Entries add: I99 · last id = I99*
