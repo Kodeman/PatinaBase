@@ -607,6 +607,13 @@ public struct CompanionOverlay: View {
             // hit-tested first, so they still win.
             .contentShape(RoundedRectangle(cornerRadius: 24))
             .onTapGesture {}
+            // `.contain` is load-bearing: a bare `accessibilityIdentifier` on
+            // a container propagates down and overwrites every descendant's
+            // own identifier. Device-verified — the panel's rows and both
+            // header buttons all reported `companion.panel`, so nothing could
+            // address `companion.close` by identifier. `.contain` makes the
+            // panel a semantic container that keeps its children addressable.
+            .accessibilityElement(children: .contain)
             .accessibilityIdentifier("companion.panel")
             .overlay(alignment: .topLeading) {
                 if showCoachmark {
