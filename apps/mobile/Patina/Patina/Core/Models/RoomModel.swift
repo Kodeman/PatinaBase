@@ -319,9 +319,12 @@ public final class RoomModel {
         self.updatedAt = Date()
     }
 
-    /// Whether this room needs to be synced
+    /// Whether this room needs to be synced. Deliberately NOT gated on
+    /// `hasBeenScanned` — that gate excluded every manually entered room from
+    /// any future sync by construction, which is exactly the room whose
+    /// write-through failed and needs picking up.
     public var needsSync: Bool {
-        hasBeenScanned && (syncStatus == .local || syncStatus == .pending || syncStatus == .failed)
+        syncStatus == .local || syncStatus == .pending || syncStatus == .failed
     }
 
     // MARK: - Hero Frame Methods

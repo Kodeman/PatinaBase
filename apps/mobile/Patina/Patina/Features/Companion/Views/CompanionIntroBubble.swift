@@ -51,6 +51,11 @@ public struct CompanionIntroBubble: View {
         .background(PatinaColors.Background.primary)
         .clipShape(RoundedRectangle(cornerRadius: 18))
         .patinaShadow(PatinaShadows.companion)
+        // The card consumes its own touches (U41): a tap anywhere on it must
+        // stop here rather than fall through to whatever it floats over. The
+        // buttons inside still win — they're hit-tested first.
+        .contentShape(RoundedRectangle(cornerRadius: 18))
+        .onTapGesture {}
     }
 
     // MARK: - Full intro mode

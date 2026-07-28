@@ -118,12 +118,9 @@ struct DesignRequestStatusView: View {
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .background(PatinaColors.Background.primary)
-        // R04: nav bar is hidden for this destination — pin a back affordance.
-        .overlay(alignment: .topLeading) {
-            BackChevronButton(style: .light) { coordinator.goBack() }
-                .padding(.top, 8)
-                .padding(.leading, 18)
-        }
+        // U18: standard pushed-screen chrome — the stage hero above carries
+        // the title, so the chrome adds only the back chevron.
+        .patinaScreen(title: nil)
     }
 
     // MARK: - Stage hero

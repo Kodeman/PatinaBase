@@ -99,6 +99,12 @@ extension DesignRequestFlowView {
                     summaryRow("Budget", budget.displayName)
                 }
                 summaryRow("Timeline", timeline.displayName)
+                if !requestDescription.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                    // U46: the user must be able to confirm their own words
+                    // before sending — render the vision text verbatim, not
+                    // paraphrased or truncated.
+                    multilineSummaryRow("Vision", requestDescription)
+                }
 
                 if isMetered && !cellularOptedIn {
                     consentCard
@@ -135,7 +141,7 @@ extension DesignRequestFlowView {
     }
 
     private var sendButtonTitle: String {
-        syncService.isNetworkAvailable ? "Send to a designer" : "Save request"
+        syncService.isNetworkAvailable ? "Send request" : "Save request"
     }
 
     // MARK: - Step: sending
@@ -180,13 +186,14 @@ extension DesignRequestFlowView {
                 // branch above; reaching here means we're idle — a fresh entry
                 // or a RESUMED draft (submit never auto-fires on resume). Always
                 // offer an explicit submit so a resumed roomless request can't
-                // strand on a dead spinner; "Try again" once an attempt failed.
-                PatinaButton(coordinator.lastError != nil ? "Try again" : "Send request",
+                // strand on a dead spinner; "Let's try that again" once an
+                // attempt failed.
+                PatinaButton(coordinator.lastError != nil ? "Let's try that again" : "Send request",
                              style: .primary) {
                     Task { await coordinator.submit() }
                 }
             } else if hasFailedUpload {
-                PatinaButton("Try again", style: .primary) {
+                PatinaButton("Let's try that again", style: .primary) {
                     Task { await coordinator.retryAllFailed(); await maybeSubmit() }
                 }
             } else if allUploaded {
@@ -195,9 +202,14 @@ extension DesignRequestFlowView {
                     Task { await coordinator.submit() }
                 }
             } else {
-                ProgressView().tint(PatinaColors.clay)
-                    .frame(maxWidth: .infinity)
-                    .frame(height: 48)
+                HStack(spacing: 10) {
+                    ProgressView().tint(PatinaColors.clay)
+                    Text("Sending your request…")
+                        .font(PatinaTypography.bodySmallMedium)
+                        .foregroundStyle(PatinaColors.Text.primary)
+                }
+                .frame(maxWidth: .infinity)
+                .frame(height: 48)
             }
         }
     }
@@ -267,6 +279,21 @@ extension DesignRequestFlowView {
                 .font(PatinaTypography.bodySmallMedium)
                 .foregroundStyle(PatinaColors.Text.muted)
             Spacer()
+            Text(value)
+                .font(PatinaTypography.bodySmallMedium)
+                .foregroundStyle(PatinaColors.Text.primary)
+        }
+        .padding(.vertical, 6)
+    }
+
+    /// Like `summaryRow`, but stacks label above value instead of forcing
+    /// both onto one line — for free-text values (e.g. Vision) that can run
+    /// to a paragraph and shouldn't be squeezed or truncated.
+    private func multilineSummaryRow(_ label: String, _ value: String) -> some View {
+        VStack(alignment: .leading, spacing: 4) {
+            Text(label)
+                .font(PatinaTypography.bodySmallMedium)
+                .foregroundStyle(PatinaColors.Text.muted)
             Text(value)
                 .font(PatinaTypography.bodySmallMedium)
                 .foregroundStyle(PatinaColors.Text.primary)
@@ -349,45 +376,5 @@ extension DesignRequestFlowView {
                 )
         }
         .buttonStyle(.plain)
-    }
-}
-
-// MARK: - In-flow auth sheet
-
-/// Wraps `AuthScreenView` for the request flow's upload gate. Guests can still
-/// browse (no-op) but the flow only advances on a real sign-in.
-struct InFlowAuthSheet: View {
-    @State private var showingEmailCode = false
-    @State private var showingPasswordSignIn = false
-
-    var body: some View {
-        AuthScreenView(
-            onSignInWithApple: { result, rawNonce in
-                Task {
-                    let viewModel = AuthViewModel()
-                    await viewModel.handleAppleSignIn(result: result, rawNonce: rawNonce)
-                }
-            },
-            onSignInWithGoogle: {
-                Task { try? await AuthService.shared.signInWithGoogle() }
-            },
-            onContinueWithEmail: {
-                AuthService.shared.clearError()
-                showingEmailCode = true
-            },
-            onUsePassword: {
-                AuthService.shared.clearError()
-                showingPasswordSignIn = true
-            },
-            // Upload requires a real account, so hide the guest affordance.
-            showGuest: false,
-            errorMessage: AuthService.shared.errorMessage
-        )
-        .sheet(isPresented: $showingEmailCode) {
-            AuthenticationView(initialMode: .magicLink)
-        }
-        .sheet(isPresented: $showingPasswordSignIn) {
-            AuthenticationView(initialMode: .signIn)
-        }
     }
 }

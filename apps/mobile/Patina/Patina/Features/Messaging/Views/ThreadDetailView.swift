@@ -31,16 +31,14 @@ struct ThreadDetailView: View {
                 ScrollView(showsIndicators: false) {
                     LazyVStack(alignment: .leading, spacing: 0) {
                         if viewModel.isLoading && viewModel.messages.isEmpty {
-                            ProgressView()
-                                .tint(PatinaColors.Text.interactive)
+                            PatinaLoadingState()
                                 .padding(.top, 60)
-                                .frame(maxWidth: .infinity)
                         } else if let error = viewModel.error, viewModel.messages.isEmpty {
-                            Text(error)
-                                .font(PatinaTypography.bodySmall)
-                                .foregroundStyle(PatinaColors.Text.secondary)
-                                .frame(maxWidth: .infinity)
-                                .padding(.top, 60)
+                            PatinaErrorState(
+                                message: error,
+                                action: { Task { await viewModel.load() } }
+                            )
+                            .padding(.top, 60)
                         } else {
                             ForEach(chatItems()) { item in
                                 row(for: item)
@@ -65,7 +63,11 @@ struct ThreadDetailView: View {
             viewModel.startLiveUpdates()
         }
         .onDisappear { viewModel.stopLiveUpdates() }
-        .toolbarTitleDisplayMode(.inline)
+        // U18: standard pushed-screen chrome. This screen has no in-body
+        // header to source a title from (Group B before this change: system
+        // bar, no navigationTitle) — chrome title left nil rather than
+        // inventing unsanctioned copy; a per-thread title is a follow-up.
+        .patinaScreen(title: nil)
     }
 
     // MARK: - Transcript rows

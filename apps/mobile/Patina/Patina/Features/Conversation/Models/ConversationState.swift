@@ -7,30 +7,6 @@
 
 import Foundation
 
-/// Current state of the conversation
-public enum ConversationState: Equatable {
-    /// Initial greeting phase
-    case greeting
-
-    /// Exploring user's style preferences
-    case exploringStyle
-
-    /// Discussing specific rooms
-    case discussingRoom(roomId: UUID?)
-
-    /// Showing a recommendation
-    case showingRecommendation(pieceId: UUID)
-
-    /// User is browsing their table
-    case browsingTable
-
-    /// Free conversation
-    case freeConversation
-
-    /// Waiting for user input after a question
-    case awaitingResponse(question: String)
-}
-
 // MARK: - Conversation Phase
 
 /// High-level conversation phases for tracking progress

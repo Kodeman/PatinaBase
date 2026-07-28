@@ -52,7 +52,7 @@ struct WorkWithDesignerCTA: View {
                 .padding(.bottom, 16)
 
             Button(action: onWorkWithDesigner) {
-                Text("Explore design services")
+                Text("Get design help")
                     .font(PatinaTypography.bodySmallMedium)
                     .foregroundStyle(PatinaColors.Text.inverse)
                     .frame(maxWidth: .infinity)
@@ -63,11 +63,15 @@ struct WorkWithDesignerCTA: View {
             }
             .buttonStyle(.plain)
 
+            // U44: at `.discovering` these two links ARE the marketplace
+            // block — there is no `MarketplaceLinksSection` below yet — so
+            // they carry body weight and primary ink rather than reading as
+            // fine print under the designer pitch.
             HStack(spacing: 24) {
                 Button(action: onBrowse) {
-                    Text("Browse all pieces →")
-                        .font(PatinaTypography.caption)
-                        .foregroundStyle(PatinaColors.Text.interactive)
+                    Text("Browse pieces →")
+                        .font(PatinaTypography.bodySmallMedium)
+                        .foregroundStyle(PatinaColors.Text.primary)
                         .contentShape(Rectangle())
                 }
                 .buttonStyle(.plain)
@@ -75,8 +79,8 @@ struct WorkWithDesignerCTA: View {
 
                 Button(action: onSaved) {
                     Text("Saved")
-                        .font(PatinaTypography.caption)
-                        .foregroundStyle(PatinaColors.Text.interactive)
+                        .font(PatinaTypography.bodySmallMedium)
+                        .foregroundStyle(PatinaColors.Text.primary)
                         .contentShape(Rectangle())
                 }
                 .buttonStyle(.plain)
@@ -84,7 +88,7 @@ struct WorkWithDesignerCTA: View {
 
                 Spacer(minLength: 0)
             }
-            .frame(minHeight: 36)
+            .frame(minHeight: 44)
             .padding(.top, 8)
         }
         .padding(18)

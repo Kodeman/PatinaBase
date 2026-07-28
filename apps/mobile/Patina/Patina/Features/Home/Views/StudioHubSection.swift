@@ -248,6 +248,12 @@ struct StudioHubSection: View {
 
     var body: some View {
         let visible = allRows.filter { tier >= $0.minimumTier }
+        // U19: at `.engaged` the hub silently withheld seven rows, so the
+        // client had no idea the Studio grows. The gated rows now render
+        // after the live ones — locked, inert, and captioned with what
+        // unlocks them. Below `.engaged` the parent shows the CTA instead,
+        // so there's nothing to preview.
+        let locked = tier >= .engaged ? allRows.filter { tier < $0.minimumTier } : []
         return Group {
             if visible.isEmpty {
                 // Discovering tier (or nothing to show) — the parent renders a
@@ -269,6 +275,10 @@ struct StudioHubSection: View {
                         ForEach(Array(visible.enumerated()), id: \.element.title) { index, model in
                             if index > 0 { hairline }
                             row(model)
+                        }
+                        ForEach(locked, id: \.title) { model in
+                            hairline
+                            lockedRow(model)
                         }
                     }
                 }
@@ -293,7 +303,9 @@ struct StudioHubSection: View {
         let resolvedMeta = inviteGuest ? model.guestMeta : model.meta
         return Button {
             if inviteGuest {
-                coordinator.presentAuthentication()
+                // U21: an in-context sign-in prompt is a sheet over the home,
+                // not a phase-level ejection that discards where you were.
+                coordinator.presentedSheet = .auth
             } else {
                 PostHogService.shared.capture("studio_hub_row_tapped", properties: [
                     "row": model.analyticsKey
@@ -340,6 +352,40 @@ struct StudioHubSection: View {
         .accessibilityValue(resolvedMeta)
         .accessibilityHint(inviteGuest ? "Opens sign in." : model.hint)
         .accessibilityIdentifier("StudioHubSection.\(model.title)")
+    }
+
+    /// A row the current tier hasn't unlocked yet: same layout as a live row
+    /// so the shape of the full Studio is legible, but inert — no button, no
+    /// badge, a padlock where the chevron goes, and a meta line that names
+    /// the trigger rather than describing content the client doesn't have.
+    private func lockedRow(_ model: StudioRow) -> some View {
+        HStack(spacing: PatinaSpacing.sm) {
+            VStack(alignment: .leading, spacing: 2) {
+                Text(model.title)
+                    .font(PatinaTypography.h5)
+                    .foregroundStyle(PatinaColors.Text.primary)
+                Text("Opens with your first project")
+                    .font(PatinaTypography.monoLabel)
+                    .tracking(0.4)
+                    .textCase(.uppercase)
+                    .foregroundStyle(PatinaColors.Text.muted)
+            }
+
+            Spacer(minLength: PatinaSpacing.sm)
+
+            Image(systemName: "lock.fill")
+                .font(PatinaTypography.uiSmall)
+                .foregroundStyle(PatinaColors.Text.muted)
+                .accessibilityHidden(true)
+        }
+        .padding(.vertical, PatinaSpacing.xsm)
+        .frame(minHeight: 44)
+        .opacity(0.45)
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel(model.title)
+        .accessibilityValue("Opens with your first project")
+        .accessibilityHint("Locked until your first project begins.")
+        .accessibilityIdentifier("StudioHubSection.Locked.\(model.title)")
     }
 
     private var hairline: some View {

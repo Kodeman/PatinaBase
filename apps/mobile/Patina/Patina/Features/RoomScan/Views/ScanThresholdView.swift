@@ -18,11 +18,11 @@ struct ScanThresholdView: View {
 
     /// Theme IV: capture starts on movement, so a perfectly still
     /// first-timer would otherwise stare at a dark camera with no
-    /// instruction. After ~5s without a motion start we fade in a
-    /// whisper-style cue with an explicit manual start.
+    /// instruction. U35: the cue is visible from the first frame rather
+    /// than gated behind a stillness delay, so it reads as an option from
+    /// the start instead of a fallback that only shows up once you've
+    /// already been standing still and unsure what to do.
     @State private var showManualStartCue: Bool = false
-
-    private static let manualStartCueDelay: UInt64 = 5_000_000_000 // 5s
 
     let onScanComplete: (RoomScanSession, ScanCompletionReason) -> Void
 
@@ -60,7 +60,7 @@ struct ScanThresholdView: View {
 
             // Theme IV: stillness cue. Floats above the Whisper Bar in both
             // the pre-motion and walk layers so it stays visible regardless
-            // of which branch is showing when the 5s timer fires.
+            // of which branch is showing.
             if showManualStartCue {
                 manualStartCue
                     .transition(reduceMotion ? .identity : .opacity)
@@ -82,16 +82,11 @@ struct ScanThresholdView: View {
                 try? await Task.sleep(nanoseconds: 500_000_000) // 0.5 seconds
                 showOverlay = true
             }
-            // Theme IV: if motion still hasn't started the scan after ~5s,
-            // fade in the manual-start cue.
-            Task { @MainActor in
-                try? await Task.sleep(nanoseconds: Self.manualStartCueDelay)
-                guard !viewModel.hasStartedFromMotion,
-                      !viewModel.captureService.isScanning,
-                      viewModel.scanProgress <= 0 else { return }
-                withAnimation(reduceMotion ? nil : .easeInOut(duration: 0.6)) {
-                    showManualStartCue = true
-                }
+            // U35: the manual-start cue shows immediately (no stillness
+            // delay) — a first-timer shouldn't have to wait to learn tapping
+            // is an option.
+            withAnimation(reduceMotion ? nil : .easeInOut(duration: 0.6)) {
+                showManualStartCue = true
             }
         }
         .onChange(of: viewModel.captureService.isScanning) { _, isScanning in
@@ -120,7 +115,7 @@ struct ScanThresholdView: View {
                 viewModel.didTapManualStart()
             } label: {
                 VStack(alignment: .leading, spacing: 6) {
-                    Text("Begin walking to start, or tap here.")
+                    Text("Begin walking to start — or tap here.")
                         .font(.custom("PlayfairDisplay-Italic", size: 17, relativeTo: .body))
                         .foregroundStyle(PatinaColors.Text.primary)
                     Text("Start scanning now")

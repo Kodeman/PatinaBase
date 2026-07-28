@@ -14,7 +14,6 @@ import SwiftUI
 struct InvoiceDetailView: View {
     let invoiceId: String
     @State private var viewModel = InvoiceDetailViewModel()
-    @Environment(\.appCoordinator) private var coordinator
 
     var body: some View {
         ScrollView(showsIndicators: false) {
@@ -30,20 +29,16 @@ struct InvoiceDetailView: View {
                 } else if let error = viewModel.error {
                     errorView(error)
                 } else {
-                    ProgressView()
-                        .tint(PatinaColors.Text.interactive)
+                    PatinaLoadingState()
                         .padding(.top, 80)
-                        .frame(maxWidth: .infinity)
                 }
             }
             .padding(.bottom, 140)
         }
         .background(PatinaColors.Background.primary)
-        .overlay(alignment: .topLeading) {
-            BackChevronButton(style: .light) { coordinator.goBack() }
-                .padding(.top, 8)
-                .padding(.leading, 18)
-        }
+        // U18: standard pushed-screen chrome — the header above carries
+        // the title, so the chrome adds only the back chevron.
+        .patinaScreen(title: nil)
         .task { await viewModel.load(invoiceId: invoiceId) }
         .refreshable { await viewModel.refresh(invoiceId: invoiceId) }
         .onDisappear { viewModel.stopPolling() }
@@ -242,17 +237,10 @@ struct InvoiceDetailView: View {
     }
 
     private func errorView(_ msg: String) -> some View {
-        VStack(spacing: 12) {
-            Text(msg)
-                .font(PatinaTypography.bodySmall)
-                .foregroundStyle(PatinaColors.Text.secondary)
-            Button("Try Again") {
-                Task { await viewModel.load(invoiceId: invoiceId) }
-            }
-            .font(PatinaTypography.bodySmallMedium)
-            .foregroundStyle(PatinaColors.Text.interactive)
-        }
-        .frame(maxWidth: .infinity)
+        PatinaErrorState(
+            message: msg,
+            action: { Task { await viewModel.load(invoiceId: invoiceId) } }
+        )
         .padding(.top, 80)
     }
 }

@@ -145,9 +145,17 @@ public struct HelpPanelSheet: View {
     @ViewBuilder
     private var content: some View {
         if isLoading {
-            ProgressView()
-                .controlSize(.regular)
+            PatinaLoadingState()
                 .accessibilityIdentifier("HelpPanelSheet.Loading")
+        } else if loadError {
+            // U29: a fetch failure used to fall through to the same
+            // "No help articles yet" copy as a genuinely empty surface,
+            // silently swallowing the error. Surface it with a retry.
+            PatinaErrorState(
+                message: "Couldn't load help for this screen.",
+                action: { Task { await loadArticles() } }
+            )
+            .accessibilityIdentifier("HelpPanelSheet.ErrorState")
         } else if articles.isEmpty {
             ContentUnavailableView(
                 "No help articles yet",
@@ -194,6 +202,7 @@ public struct HelpPanelSheet: View {
     // MARK: Loaders
 
     private func loadArticles() async {
+        await MainActor.run { self.isLoading = true }
         do {
             let results = try await client.fetchArticles(forSurfaceKey: surfaceKey)
             await MainActor.run {

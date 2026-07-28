@@ -16,7 +16,6 @@ struct AccountView: View {
     @State private var showingSignOutAlert = false
 
     private var authService: AuthService { AuthService.shared }
-    private var profileService: ProfileService { ProfileService.shared }
 
     /// Shared formatter for the "member since" date. `static let` so the
     /// formatter is allocated once rather than on every body re-render
@@ -28,12 +27,6 @@ struct AccountView: View {
         return formatter
     }()
 
-    /// Designers now work in the separate Patina Field app. Surface a quiet
-    /// pointer to it for anyone whose profile still carries the designer role.
-    private var isDesigner: Bool {
-        profileService.roles.contains("designer")
-    }
-
     var body: some View {
         ScrollView {
             VStack(spacing: PatinaSpacing.xl) {
@@ -42,10 +35,6 @@ struct AccountView: View {
 
                 // Account info
                 accountSection
-
-                if isDesigner {
-                    patinaFieldRow
-                }
 
                 // Actions
                 actionsSection
@@ -123,33 +112,18 @@ struct AccountView: View {
         }
     }
 
-    // MARK: - Patina Field Row
-
-    /// A single quiet pointer to the companion Patina Field app, shown only
-    /// to users who still carry the designer role. Non-navigating in v1 —
-    /// no App Store link yet.
-    private var patinaFieldRow: some View {
-        HStack(spacing: PatinaSpacing.md) {
-            Image(systemName: "briefcase")
-                .font(.system(size: 20))
-                .foregroundStyle(PatinaColors.Text.secondary)
-            Text("Working on Patina projects? Get Patina Field.")
-                .font(PatinaTypography.body)
-                .foregroundStyle(PatinaColors.Text.secondary)
-            Spacer(minLength: 0)
-        }
-        .padding(PatinaSpacing.md)
-        .background(PaperBackground(cornerRadius: PatinaRadius.lg))
-    }
-
     // MARK: - Actions Section
+    //
+    // No "Get Patina Field" pointer lives here: Patina Field has no App Store
+    // URL in the app or its configuration, and a row that navigates nowhere is
+    // worse than no row. Add one as a `Link` once the Field listing ships.
 
     private var actionsSection: some View {
         VStack(alignment: .leading, spacing: 0) {
             sectionHeader("Actions")
 
             VStack(spacing: PatinaSpacing.md) {
-                // Sign in to Web
+                // Sign in on the web
                 Button {
                     // Swap the active sheet from Account → QR scanner.
                     // `.sheet(item:)` animates the change; no manual delay
@@ -159,7 +133,7 @@ struct AccountView: View {
                     HStack {
                         Image(systemName: "qrcode.viewfinder")
                             .font(.system(size: 20))
-                        Text("Sign in to Web")
+                        Text("Sign in on the web")
                             .font(PatinaTypography.body)
                         Spacer()
                         Image(systemName: "chevron.right")

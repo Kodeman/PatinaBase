@@ -7,6 +7,7 @@
 //
 
 import SwiftUI
+import SwiftData
 import Supabase
 
 // MARK: - Companion Display State
@@ -41,6 +42,24 @@ public struct CompanionOverlay: View {
     /// surface. Toggled by the `?` button in the expanded panel header.
     @State private var isHelpPanelPresented: Bool = false
 
+    /// Full-screen touch shield, alive for as long as the panel occupies the
+    /// screen — including both animations, and inserted/removed WITHOUT a
+    /// transition of its own.
+    ///
+    /// The backdrop and the panel both arrive and leave on an opacity fade, and
+    /// a view mid-fade does not hit-test. For the length of each animation the
+    /// Companion was therefore painted over the screen while being completely
+    /// transparent to touch, and every tap in that window reached whatever sat
+    /// behind it. Device-verified on the scanFlow manual-room form, where the
+    /// two-row panel puts the ✕ (330,608 · 28×28) exactly on top of the form's
+    /// "Doors" stepper `+` (330,598 · 32×32): a tap aimed at ✕ left the panel
+    /// open and incremented the user's door count instead. The same window on
+    /// the collapse side is how the original walk submitted the form twice
+    /// "at identical coordinates" through a panel it could still see.
+    @State private var panelShielded = false
+    /// Retires `panelShielded` once the collapse animation has finished.
+    @State private var panelShieldTask: Task<Void, Never>?
+
     /// One-shot first-launch coachmark (PT-6-9). Shown over the panel the
     /// first time the user expands the Companion, then persisted as seen so
     /// it never reappears. Backed by UserDefaults so it survives relaunches
@@ -63,7 +82,7 @@ public struct CompanionOverlay: View {
     /// When the presented intro became visible — the basis for `viewedMs`.
     @State private var introShownAt: Date?
     /// Trigger of the in-flight or presented intro (`"first_arrival"` /
-    /// `"second_session"` / `"stuck"`), so an interruption records it correctly.
+    /// `"second_session"`), so an interruption records it correctly.
     @State private var introTrigger: String?
     /// The staged wake-up choreography, cancellable on surface change.
     @State private var introTask: Task<Void, Never>?
@@ -107,10 +126,6 @@ public struct CompanionOverlay: View {
         if case .pieceDetail = screen { return .minimal }
         if case .arPlacement = screen { return .minimal }
 
-        // Minimal during pre-scan (it has its own UI but the Companion stays
-        // reachable so the user never loses orientation — PT-6-11).
-        if case .preScanChecklist = screen { return .minimal }
-
         // Minimal during quiz (quiz manages its own flow) — keep the Companion
         // present but unobtrusive instead of disappearing entirely (PT-6-11).
         if case .styleQuiz = screen { return .minimal }
@@ -127,10 +142,29 @@ public struct CompanionOverlay: View {
     }
 
     /// The coordinator's companion context, enriched with the promoted design
-    /// request (if any). Read inside `body`, so SwiftUI tracks the `@Observable`
-    /// `DesignRequestStatusService` and re-renders the panel when a refresh
+    /// request and the engagement tier (if resolved). Read inside `body`, so
+    /// SwiftUI tracks the `@Observable` `DesignRequestStatusService` /
+    /// `BadgeCountService` behind them and re-renders the panel when a refresh
     /// lands — keeping `CompanionActionProvider` a pure function of its inputs
     /// (no polling, no coordinator-write side channel).
+    ///
+    /// The tier is read through the pure `EngagementTier.resolve` rather than a
+    /// convenience accessor on the type: the Companion only ever *gates* on the
+    /// tier (`>= .engaged`), it never asserts from it, and the resolver is
+    /// promote-only — it answers `.discovering` until real evidence lands. For a
+    /// door that opens on evidence, "still loading" and "discovering" are the
+    /// same answer, so the Studio door never opens on a guess.
+    ///
+    /// The style profile and the room / saved-item counts are read from their
+    /// live stores here for the same reason (U42): nothing writes them into the
+    /// coordinator. `AppCoordinator.updateRoomCount(_:)` and
+    /// `updateTableItemCount(_:)` have no callers anywhere in the app, so those
+    /// fields sit frozen at 0 and every panel open rendered the brand-new-user
+    /// menu — "Style quiz · Discover your style" and "Your recommendations ·
+    /// Take the quiz first" — no matter what the user had already done.
+    ///
+    /// Evaluated only while the panel is expanded (see `expandedView`, which
+    /// binds it once), so these are per-open reads, not per-frame ones.
     private var enrichedContext: CompanionContext {
         var context = coordinator.companionContext
         if let promoted = DesignRequestStatusService.shared.promotedRequest {
@@ -138,6 +172,22 @@ public struct CompanionOverlay: View {
                 leadId: promoted.leadId.uuidString,
                 statusLabel: promoted.stage.badgeTitle
             )
+        }
+        context.engagementTier = EngagementTier.resolve(
+            requests: DesignRequestStatusService.shared.requests,
+            projectCount: BadgeCountService.shared.projectCount,
+            proposalCount: BadgeCountService.shared.proposalsAwaitingSignatureCount,
+            invoiceCount: BadgeCountService.shared.payableInvoiceCount,
+            decisionCount: BadgeCountService.shared.pendingDecisionCount
+        )
+        context.hasStyleProfile = StyleProfileStore.shared.hasCompletedProfile
+
+        let store = PersistenceController.shared.container.mainContext
+        if let rooms = try? store.fetchCount(FetchDescriptor<RoomModel>()) {
+            context.roomCount = rooms
+        }
+        if let saved = try? store.fetchCount(FetchDescriptor<TableItemModel>()) {
+            context.tableItemCount = saved
         }
         return context
     }
@@ -151,13 +201,31 @@ public struct CompanionOverlay: View {
         // so the home-indicator clearance comes for free without measuring
         // the proxy.
         ZStack {
-            // Backdrop when expanded
+            // Touch shield (see `panelShielded`). Declared first so it sits
+            // under the backdrop and the panel: anything they hit-test still
+            // wins, and every other tap stops here instead of reaching the
+            // screen behind the Companion. `.identity` keeps it hit-solid from
+            // the first frame — a fade would reintroduce the hole it closes.
+            if panelShielded {
+                Color.clear
+                    .ignoresSafeArea()
+                    .contentShape(Rectangle())
+                    .onTapGesture {
+                        // Only a settled panel dismisses on an outside tap;
+                        // while the collapse finishes the shield just absorbs.
+                        if state.isExpanded { collapseToButton() }
+                    }
+                    .transition(.identity)
+            }
+
+            // Backdrop when expanded. Purely visual now — the shield above
+            // owns the taps, so the backdrop's fade can never leave a frame
+            // where the dim is on screen but the touch goes through it.
             if state.isExpanded {
                 Color.black.opacity(0.3)
                     .background(.ultraThinMaterial.opacity(0.5))
                     .ignoresSafeArea()
-                    .allowsHitTesting(true)
-                    .onTapGesture { collapseToButton() }
+                    .allowsHitTesting(false)
             }
 
             // Dock zone gradient — gives the companion visual breathing room
@@ -244,10 +312,6 @@ public struct CompanionOverlay: View {
         .task(id: coordinator.currentScreen) {
             await maybePresentIntro()
         }
-        // Unused-companion escalation — offers help to a stuck `.new` user.
-        .task {
-            await runUnusedCompanionEscalation()
-        }
         .task {
             for await (event, _) in supabase.auth.authStateChanges {
                 await MainActor.run {
@@ -314,6 +378,13 @@ public struct CompanionOverlay: View {
     /// The intro/ack win the slot over the pill (the pill is also suppressed
     /// while the wake choreography is mid-flight). VoiceOver reads the bubble
     /// before the mark.
+    ///
+    /// Below the mark, a standing "Next steps" caption names what the mark is
+    /// for until the user has learned it (U34) — this replaces the timed
+    /// escalation that used to interrupt a "stuck" user with a pop-up offer.
+    /// It retires at `.learned`, and is hidden from VoiceOver (the mark button
+    /// itself already carries the label + hint) and from hit testing (a caption
+    /// that swallowed taps would sit right under the primary affordance).
     @ViewBuilder
     private func companionMarkStack(nudge: CompanionNudge?) -> some View {
         VStack(spacing: 0) {
@@ -328,6 +399,17 @@ public struct CompanionOverlay: View {
             }
 
             companionMarkButton
+
+            if coaching.phase != .learned {
+                Text("Next steps")
+                    .font(PatinaTypography.monoSmall)
+                    .tracking(0.4)
+                    .textCase(.uppercase)
+                    .foregroundStyle(PatinaColors.Text.muted)
+                    .padding(.top, 6)
+                    .accessibilityHidden(true)
+                    .allowsHitTesting(false)
+            }
         }
     }
 
@@ -389,11 +471,15 @@ public struct CompanionOverlay: View {
         VStack(spacing: 0) {
             // Panel
             VStack(spacing: 0) {
+                // One enrichment per panel open, shared by the title and the
+                // rows — they must agree, and the enrichment hits the stores.
+                let context = enrichedContext
+
                 // Header
                 HStack(alignment: .firstTextBaseline, spacing: 8) {
                     Text(CompanionActionProvider.panelTitle(
                         for: coordinator.currentScreen,
-                        context: coordinator.companionContext
+                        context: context
                     ))
                         .font(.custom("PlayfairDisplay-Italic", size: 16, relativeTo: .callout))
                         .foregroundStyle(PatinaColors.offWhite)
@@ -430,6 +516,7 @@ public struct CompanionOverlay: View {
                                     .font(.system(size: 12, weight: .medium))
                                     .foregroundStyle(PatinaColors.pearl)
                             )
+                            .companionHeaderHitTarget()
                     }
                     .accessibilityLabel("Help")
                     .accessibilityHint("Opens the help panel for the Companion.")
@@ -445,6 +532,7 @@ public struct CompanionOverlay: View {
                                     .foregroundStyle(PatinaColors.pearl)
                             )
                             .contentShape(Rectangle())
+                            .companionHeaderHitTarget()
                     }
                     .accessibilityLabel("Close")
                     .accessibilityHint("Collapses the Companion panel.")
@@ -462,7 +550,7 @@ public struct CompanionOverlay: View {
                 VStack(spacing: 6) {
                     let actions = CompanionActionProvider.actions(
                         for: coordinator.currentScreen,
-                        context: enrichedContext,
+                        context: context,
                         isAuthenticated: AuthService.shared.isAuthenticated
                     )
                     ForEach(actions) { item in
@@ -494,7 +582,7 @@ public struct CompanionOverlay: View {
                                     case .openSettings:
                                         coordinator.presentedSheet = .settings
                                     case .openAuth:
-                                        coordinator.presentAuthentication()
+                                        coordinator.presentedSheet = .auth
                                     case .openDesignServices(let roomId):
                                         coordinator.presentedSheet = .designServices(roomId: roomId, preselectedScanIds: [])
                                     }
@@ -513,10 +601,31 @@ public struct CompanionOverlay: View {
             .background(PatinaColors.Background.dark)
             .clipShape(RoundedRectangle(cornerRadius: 24))
             .patinaShadow(PatinaShadows.companion)
-            .overlay(alignment: .top) {
+            // The panel consumes its own touches (U41): a tap on panel chrome
+            // must not reach the dimmed backdrop behind it, whose tap gesture
+            // collapses the Companion. Action rows and header buttons are
+            // hit-tested first, so they still win.
+            .contentShape(RoundedRectangle(cornerRadius: 24))
+            .onTapGesture {}
+            // `.contain` is load-bearing: a bare `accessibilityIdentifier` on
+            // a container propagates down and overwrites every descendant's
+            // own identifier. Device-verified — the panel's rows and both
+            // header buttons all reported `companion.panel`, so nothing could
+            // address `companion.close` by identifier. `.contain` makes the
+            // panel a semantic container that keeps its children addressable.
+            .accessibilityElement(children: .contain)
+            .accessibilityIdentifier("companion.panel")
+            .overlay(alignment: .topLeading) {
                 if showCoachmark {
                     companionCoachmark
                         .offset(y: -16)
+                        // Reserve the trailing column the header's help and
+                        // close buttons occupy (panel inset + two 36pt hit
+                        // targets + their spacing). Centred, this card covered
+                        // both — hiding the panel's only close affordance
+                        // behind an informational callout on the one open
+                        // where a first-time user most needs the way out.
+                        .padding(.trailing, 88)
                         .transition(reduceMotion ? .opacity : .move(edge: .top).combined(with: .opacity))
                 }
             }
@@ -527,6 +636,11 @@ public struct CompanionOverlay: View {
 
     // MARK: - First-Launch Coachmark (PT-6-9)
 
+    /// Deliberately NOT `.isModal`: the trait hid every sibling — including
+    /// `companion.close` — from the accessibility tree, so on the one panel
+    /// open that shows this card the panel had no reachable way out for
+    /// VoiceOver or for a device pass. It is an informational callout with its
+    /// own "Got it", not a modal.
     private var companionCoachmark: some View {
         VStack(alignment: .leading, spacing: 10) {
             Text("These are your next steps. They change with every room you're in — tap one and I'll take you there.")
@@ -555,7 +669,6 @@ public struct CompanionOverlay: View {
         .padding(.horizontal, 12)
         .accessibilityElement(children: .combine)
         .accessibilityLabel("These are your next steps. They change with every room you're in — tap one and I'll take you there.")
-        .accessibilityAddTraits(.isModal)
     }
 
     // MARK: - State 4: Journey Mode
@@ -711,19 +824,18 @@ public struct CompanionOverlay: View {
     private func expandToPanel() {
         // The wake-up intro and first-nav ack live in the mark's slot; opening
         // the panel retires them. Tapping through the intro (mark or "Show me")
-        // counts as accepting it — record "expanded", and as accepted help when
-        // it was the stuck re-offer.
+        // counts as accepting it — record "expanded".
         if introVisible {
-            let wasStuckOffer = introTrigger == "stuck"
             dismissIntro(action: "expanded")
-            if wasStuckOffer {
-                CompanionAnalytics.shared.trackHelpAccepted(
-                    screen: coordinator.currentScreen.displayName,
-                    actionTaken: "companion_expanded"
-                )
-            }
         }
         dismissNavAck()
+
+        // Raise the shield in its own transaction, before the animated state
+        // change below — it must be hit-solid on the very first frame of the
+        // expansion, not fade in with the panel.
+        panelShieldTask?.cancel()
+        panelShieldTask = nil
+        panelShielded = true
 
         // PT-5-10: the soft pulse is fired declaratively via
         // `.sensoryFeedback(trigger: state.isExpanded)` below.
@@ -781,6 +893,21 @@ public struct CompanionOverlay: View {
             state = .button
         }
         coordinator.isCompanionExpanded = false
+
+        // The panel is still drawn (and still fading) after `state` flips, so
+        // the shield has to outlive the collapse — otherwise the very next tap
+        // lands on the screen the user can still see the panel covering. Under
+        // reduce motion there is no exit animation to outlive.
+        panelShieldTask?.cancel()
+        guard !reduceMotion else {
+            panelShieldTask = nil
+            panelShielded = false
+            return
+        }
+        panelShieldTask = Task {
+            do { try await Task.sleep(for: .seconds(0.45)) } catch { return }
+            panelShielded = false
+        }
     }
 
     private func handleNavigate(to route: AppRoute) {
@@ -919,12 +1046,11 @@ public struct CompanionOverlay: View {
     }
 
     /// Retire the intro when the surface it anchors to is no longer valid. The
-    /// wake intro is heroFrame-bound; the stuck re-offer may live on any
-    /// resting/nudging surface. Resting↔nudging flips keep the intro.
+    /// wake intro is heroFrame-bound and is now the only intro there is, so the
+    /// surface test is unconditional. Resting↔nudging flips keep the intro.
     private func syncIntroToSurface() {
-        let onValidMode = displayModeAllowsIntro
-        let onValidScreen = introTrigger == "stuck" || coordinator.currentScreen == .heroFrame
-        guard !(onValidMode && onValidScreen) else { return }
+        let onValidSurface = displayModeAllowsIntro && coordinator.currentScreen == .heroFrame
+        guard !onValidSurface else { return }
 
         if introTask != nil {
             interruptWakeChoreography()
@@ -933,7 +1059,7 @@ public struct CompanionOverlay: View {
         }
     }
 
-    // MARK: - Coaching: first-nav ack + unused-companion escalation
+    // MARK: - Coaching: first-nav ack
 
     /// After a companion navigation settles, acknowledge it once on the
     /// resting mark (skipped on minimal / non-resting destinations, and never
@@ -968,69 +1094,28 @@ public struct CompanionOverlay: View {
         guard navAckVisible else { return }
         withAnimation(reduceMotion ? nil : .patinaHero) { navAckVisible = false }
     }
-
-    /// While the user is still `.new`, poll every 20s; if they look stuck and
-    /// still haven't spent their intro budget, offer help by re-presenting the
-    /// intro with the `"stuck"` trigger (no choreography). Structured `.task`:
-    /// exits on cancellation or as soon as the user moves past `.new`.
-    private func runUnusedCompanionEscalation() async {
-        while !Task.isCancelled {
-            guard coaching.phase == .new else { return }
-            do { try await Task.sleep(for: .seconds(20)) } catch { return }
-            guard !Task.isCancelled, coaching.phase == .new else { return }
-
-            let metrics = SessionMetricsService.shared
-            guard !introVisible,
-                  introTask == nil,
-                  coaching.canShowIntro,
-                  metrics.stuckReason != .none,
-                  displayModeAllowsIntro else { continue }
-
-            // This tick can trip while the first-launch tour popover is still
-            // open (e.g. the user parked on it, idle, for 20s+), so it must
-            // honor the same tour-sequencing gate as the wake-up path
-            // (`maybePresentIntro`) — otherwise the stuck intro would present
-            // on top of the tour, colliding with it and spending one of the
-            // two intro-budget slots the choreographed wake-up needs. On gate
-            // failure (timeout, or the tour never resolves) skip this tick
-            // rather than tearing down the whole loop — there's another
-            // chance in 20s. Cancellation still exits promptly.
-            guard await coaching.introGate() else {
-                if Task.isCancelled { return }
-                continue
-            }
-
-            // The gate can await for up to 120s — re-check every guard above,
-            // since the panel may have opened, the wake path may have spent
-            // the intro budget, or the user may no longer look stuck, while
-            // we were waiting.
-            guard coaching.phase == .new,
-                  !introVisible,
-                  introTask == nil,
-                  coaching.canShowIntro,
-                  metrics.stuckReason != .none,
-                  displayModeAllowsIntro else { continue }
-
-            let reason = metrics.stuckReason
-            let screen = coordinator.currentScreen.displayName
-            CompanionAnalytics.shared.trackUserStuck(
-                screen: screen,
-                reason: reason,
-                dwellTime: metrics.dwellTimeOnCurrentScreen,
-                interactionCount: metrics.interactionCountOnCurrentScreen
-            )
-            CompanionAnalytics.shared.trackHelpOffered(screen: screen, reason: reason)
-
-            introTrigger = "stuck"
-            HapticManager.shared.companionPulse()
-            presentIntroBubble(trigger: "stuck")
-        }
-    }
 }
 
 // MARK: - Liquid Glass helper (PT-5-7)
 
 private extension View {
+    /// Widens a 28pt Companion header glyph to a 36×44 touch region without
+    /// moving it — an overlay adds hit area, not layout, so the circles stay
+    /// where they are drawn. 36 is the widest that keeps the help and close
+    /// regions from overlapping each other at the header's 8pt spacing.
+    ///
+    /// The 28pt targets these replace were under the HIG minimum and, on the
+    /// two-row scanFlow panel, sat directly on top of the manual-room form's
+    /// "Doors" stepper — so a near-miss on ✕ did not merely fail to dismiss,
+    /// it silently edited the user's room.
+    func companionHeaderHitTarget() -> some View {
+        overlay {
+            Color.clear
+                .frame(width: 36, height: 44)
+                .contentShape(Rectangle())
+        }
+    }
+
     /// Applies the charcoal-tinted Liquid Glass circle used by the Companion
     /// minimal pill. Factored into a helper with an explicit `#available`
     /// guard because `CompanionOverlay` is a `public` View — the compiler

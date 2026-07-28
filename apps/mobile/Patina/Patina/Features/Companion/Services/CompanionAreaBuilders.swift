@@ -15,19 +15,24 @@ extension CompanionActionProvider {
 
     // MARK: - Home
 
-    static func homeItems(
-        context: CompanionContext,
-        isAuthenticated: Bool
-    ) -> [CompanionActionItem] {
+    /// The Studio door (projects · messages · decisions) is tier-gated, not
+    /// auth-gated: a signed-in homeowner who has never engaged a designer has
+    /// nothing behind it, so offering it was a promise the app couldn't keep
+    /// (U20). An unresolved tier reads as `.discovering` — never open the door
+    /// on a guess.
+    static func showsStudioRow(_ context: CompanionContext) -> Bool {
+        (context.engagementTier ?? .discovering) >= .engaged
+    }
+
+    static func homeItems(context: CompanionContext) -> [CompanionActionItem] {
         if context.roomCount == 0 {
             var rows = [
                 spacesOrScanRow(context: context, suggested: true),
-                item("paintpalette", "Style quiz", "Discover your style",
-                     route: .styleQuiz, id: "style_quiz"),
+                styleQuizRow(context: context),
                 recommendationsRow(context: context)
             ]
             if let collections = collectionsRow(context: context) { rows.append(collections) }
-            if isAuthenticated { rows.append(studioRow()) }
+            if showsStudioRow(context) { rows.append(studioRow()) }
             return rows
         }
         var rows = [
@@ -38,7 +43,7 @@ extension CompanionActionProvider {
         if let collections = collectionsRow(context: context) { rows.append(collections) }
         if context.activeDesignRequest != nil {
             rows.append(requestRow(context: context))
-        } else if isAuthenticated {
+        } else if showsStudioRow(context) {
             rows.append(studioRow())
         }
         return rows
@@ -96,13 +101,13 @@ extension CompanionActionProvider {
                 item("sparkles", "Recommendations for this room", "Pieces for this space",
                      route: .roomEmergence(roomId: roomId), id: "room_recommendations", suggested: true),
                 designerRow(roomId: roomId, context: context),
-                item("heart", "All collections", "Everything you've saved",
+                item("heart", "All saved items", "Everything you've saved",
                      route: .table, id: "collections")
             ]
         default: // .crossRoom
             return [
                 spacesOrScanRow(context: context, suggested: true),
-                item("heart", "Collections", "Everything you've saved",
+                item("heart", "Saved", "Everything you've saved",
                      route: .table, id: "collections"),
                 designerRow(roomId: nil, context: context)
             ]
@@ -116,7 +121,7 @@ extension CompanionActionProvider {
         context: CompanionContext
     ) -> [CompanionActionItem] {
         switch screen {
-        case .roomList, .yourSpaces:
+        case .yourSpaces:
             return [
                 scanRow(label: "Add another space", hint: "Scan a new room",
                         reason: .fresh, suggested: true),
@@ -126,7 +131,7 @@ extension CompanionActionProvider {
                      route: .crossRoom, id: "cross_room"),
                 designerRow(roomId: nil, context: context)
             ]
-        case .roomDetail(let roomId), .roomProject(let roomId):
+        case .roomProject(let roomId):
             return [
                 item("sparkles", "See recommendations", "Pieces for this room",
                      route: .roomEmergence(roomId: roomId), id: "room_recommendations", suggested: true),
@@ -138,7 +143,7 @@ extension CompanionActionProvider {
         case .roomSettings(let roomId):
             return [
                 item("arrow.uturn.backward", "Back to the room", "Return to details",
-                     route: .roomDetail(roomId: roomId), id: "back_to_room", suggested: true),
+                     route: .roomProject(roomId: roomId), id: "back_to_room", suggested: true),
                 scanRow(label: "Rescan this room", hint: "Capture updates", reason: .rescan)
             ]
         default: // .manualRoomEntry
@@ -152,21 +157,15 @@ extension CompanionActionProvider {
 
     // MARK: - Scan flow
 
+    /// `.scanFlow` is the only scan route left — mid-capture the Companion
+    /// offers the universal tail and nothing else (don't tempt exits). Every
+    /// scan *entry* is a `scanRow(...)` on the surrounding surfaces, which
+    /// already routes straight to `.scanFlow`.
     static func scanItems(
         _ screen: AppRoute,
         context: CompanionContext
     ) -> [CompanionActionItem] {
-        switch screen {
-        case .preScanChecklist:
-            return [
-                scanRow(label: "Start scanning", hint: "Begin the walk",
-                        reason: .fresh, suggested: true),
-                item("square.and.pencil", "Enter details manually instead", "Skip the scan",
-                     route: .manualRoomEntry, id: "manual_room")
-            ]
-        default: // .scanFlow — mid-capture, tail only (don't tempt exits)
-            return []
-        }
+        []
     }
 
     // MARK: - Style

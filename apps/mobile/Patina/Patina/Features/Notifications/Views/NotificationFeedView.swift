@@ -36,7 +36,9 @@ struct NotificationFeedView: View {
             content
         }
         .background(PatinaColors.Background.primary)
-        .toolbarTitleDisplayMode(.inline)
+        // U18: standard pushed-screen chrome — the "Notifications" header
+        // above carries the title, so the chrome adds only the back chevron.
+        .patinaScreen(title: nil)
         .task {
             await viewModel.load()
         }
@@ -64,25 +66,30 @@ struct NotificationFeedView: View {
             // the row draws its own hairline) so native `.swipeActions` work.
             // The API only supports marking opened (no unread reversal), so
             // the swipe exposes a single mark-read action on unread rows.
+            // U12: rows are real Buttons (not a bare `.onTapGesture`) so
+            // VoiceOver and Switch Control get a proper activation target;
+            // the unread dot remains the visible tappable-row affordance.
             List {
                 ForEach(viewModel.notifications) { notification in
-                    notificationRow(notification)
-                        .onTapGesture {
-                            handleTap(notification)
-                        }
-                        .listRowInsets(EdgeInsets())
-                        .listRowSeparator(.hidden)
-                        .listRowBackground(Color.clear)
-                        .swipeActions(edge: .trailing, allowsFullSwipe: true) {
-                            if !notification.isRead {
-                                Button {
-                                    viewModel.markRead(notification)
-                                } label: {
-                                    Label("Mark read", systemImage: "envelope.open")
-                                }
-                                .tint(PatinaColors.clay)
+                    Button {
+                        handleTap(notification)
+                    } label: {
+                        notificationRow(notification)
+                    }
+                    .buttonStyle(.plain)
+                    .listRowInsets(EdgeInsets())
+                    .listRowSeparator(.hidden)
+                    .listRowBackground(Color.clear)
+                    .swipeActions(edge: .trailing, allowsFullSwipe: true) {
+                        if !notification.isRead {
+                            Button {
+                                viewModel.markRead(notification)
+                            } label: {
+                                Label("Mark read", systemImage: "envelope.open")
                             }
+                            .tint(PatinaColors.clay)
                         }
+                    }
                 }
             }
             .listStyle(.plain)
@@ -95,8 +102,7 @@ struct NotificationFeedView: View {
     private var loadingView: some View {
         VStack {
             Spacer()
-            ProgressView()
-                .tint(PatinaColors.Text.interactive)
+            PatinaLoadingState()
             Spacer()
         }
         .frame(maxWidth: .infinity)
@@ -108,11 +114,28 @@ struct NotificationFeedView: View {
             PatinaEmptyState(
                 icon: "bell",
                 title: "Nothing yet",
-                message: "Updates from your designer will land here."
+                message: "Updates from your designer will land here.",
+                ctaTitle: studioCTATitle,
+                ctaAction: presentStudioCTA
             )
             Spacer()
         }
         .frame(maxWidth: .infinity)
+    }
+
+    /// U22: names the surface, names the trigger, and offers the one CTA
+    /// that actually unblocks it — track an in-flight request if one
+    /// exists, otherwise start one. Matches the other studio empties.
+    private var studioCTATitle: String {
+        DesignRequestStatusService.shared.promotedRequest != nil ? "Track your request" : "Get design help"
+    }
+
+    private func presentStudioCTA() {
+        if DesignRequestStatusService.shared.promotedRequest != nil {
+            coordinator.navigate(to: .designRequests(focusLeadId: nil))
+        } else {
+            coordinator.navigate(to: .designerConsultation)
+        }
     }
 
     /// Guest state: the feed is a signed-in surface, so guests get a quiet
@@ -125,7 +148,7 @@ struct NotificationFeedView: View {
                 title: "Nothing yet",
                 message: "Updates from your designer will land here. Sign in to stay in the loop.",
                 ctaTitle: "Sign in",
-                ctaAction: { coordinator.presentAuthentication() }
+                ctaAction: { coordinator.presentedSheet = .auth }
             )
             Spacer()
         }
@@ -134,20 +157,12 @@ struct NotificationFeedView: View {
     }
 
     private func errorView(_ message: String) -> some View {
-        VStack(spacing: 12) {
+        VStack(spacing: 0) {
             Spacer()
-            Image(systemName: "exclamationmark.triangle")
-                .font(.system(size: 28))
-                .foregroundStyle(PatinaColors.Text.muted)
-            Text(message)
-                .font(PatinaTypography.bodySmall)
-                .foregroundStyle(PatinaColors.Text.secondary)
-                .multilineTextAlignment(.center)
-            Button("Let's try that again") {
-                Task { await viewModel.load() }
-            }
-            .font(PatinaTypography.bodySmallMedium)
-            .foregroundStyle(PatinaColors.Text.interactive)
+            PatinaErrorState(
+                message: message,
+                action: { Task { await viewModel.load() } }
+            )
             Spacer()
         }
         .padding(.horizontal, 32)
@@ -211,6 +226,13 @@ struct NotificationFeedView: View {
                     .foregroundStyle(PatinaColors.Text.muted)
                     .tracking(0.3)
             }
+
+            // U12: read rows previously had zero visible tap affordance —
+            // every row gets the same chevron regardless of read state.
+            Image(systemName: "chevron.right")
+                .font(PatinaTypography.uiSmall)
+                .foregroundStyle(PatinaColors.Text.muted)
+                .accessibilityHidden(true)
         }
         .padding(.horizontal, 24)
         .padding(.vertical, 16)

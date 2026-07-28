@@ -11,7 +11,6 @@ import SwiftUI
 
 struct ProjectDetailView: View {
     let projectId: String
-    @Environment(\.appCoordinator) private var coordinator
     @State private var viewModel = ProjectDetailViewModel()
 
     var body: some View {
@@ -38,22 +37,16 @@ struct ProjectDetailView: View {
                 } else if let error = viewModel.error {
                     errorView(error)
                 } else {
-                    ProgressView()
-                        .tint(PatinaColors.Text.interactive)
+                    PatinaLoadingState()
                         .padding(.top, 80)
-                        .frame(maxWidth: .infinity)
                 }
             }
             .padding(.bottom, 120)
         }
         .background(PatinaColors.Background.primary)
-        // R04: nav bar is hidden for this destination — pin a back
-        // affordance over the scroll content (matches RoomProjectView).
-        .overlay(alignment: .topLeading) {
-            BackChevronButton(style: .light) { coordinator.goBack() }
-                .padding(.top, 8)
-                .padding(.leading, 18)
-        }
+        // U18: standard pushed-screen chrome — the header above carries
+        // the title, so the chrome adds only the back chevron.
+        .patinaScreen(title: nil)
         .task { await viewModel.load(projectId: projectId) }
     }
 
@@ -312,17 +305,10 @@ struct ProjectDetailView: View {
     }
 
     private func errorView(_ msg: String) -> some View {
-        VStack(spacing: 12) {
-            Text(msg)
-                .font(PatinaTypography.bodySmall)
-                .foregroundStyle(PatinaColors.Text.secondary)
-            Button("Try Again") {
-                Task { await viewModel.load(projectId: projectId) }
-            }
-            .font(PatinaTypography.bodySmallMedium)
-            .foregroundStyle(PatinaColors.Text.interactive)
-        }
-        .frame(maxWidth: .infinity)
+        PatinaErrorState(
+            message: msg,
+            action: { Task { await viewModel.load(projectId: projectId) } }
+        )
         .padding(.top, 80)
     }
 

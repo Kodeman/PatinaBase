@@ -72,12 +72,29 @@ struct ScanSavedConfirmationView: View {
 
                 Spacer()
 
+                // U36: three visually distinct levels — filled primary,
+                // bordered secondary, plain-text tertiary — read top to
+                // bottom in that order of prominence.
                 VStack(spacing: 12) {
                     StyleContinueButton(
                         title: "Get design help",
                         isEnabled: true,
                         action: getDesignHelp
                     )
+
+                    Button(action: onSetStyle) {
+                        Text("Set my style")
+                            .font(PatinaTypography.uiAction)
+                            .foregroundStyle(PatinaColors.Text.primary)
+                            .frame(maxWidth: .infinity)
+                            .frame(height: 52)
+                            .background(
+                                RoundedRectangle(cornerRadius: 26)
+                                    .stroke(PatinaColors.Interactive.active, lineWidth: 1.5)
+                            )
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityLabel("Continue to style conversation")
 
                     Button(action: onDone) {
                         Text("Done")
@@ -87,16 +104,6 @@ struct ScanSavedConfirmationView: View {
                             .frame(height: 44)
                     }
                     .buttonStyle(.plain)
-
-                    Button(action: onSetStyle) {
-                        Text("Set my style")
-                            .font(PatinaTypography.bodySmallMedium)
-                            .foregroundStyle(PatinaColors.Text.muted)
-                            .frame(maxWidth: .infinity)
-                            .frame(height: 44)
-                    }
-                    .buttonStyle(.plain)
-                    .accessibilityLabel("Continue to style conversation")
                 }
                 .padding(.horizontal, 24)
                 .padding(.bottom, 42)

@@ -136,17 +136,38 @@ struct AuthScreenView: View {
 
             Spacer()
 
-            // Footer
-            Text("By continuing, you agree to our Terms of Service\nand Privacy Policy")
-                .font(PatinaTypography.caption)
-                .foregroundStyle(PatinaColors.Text.muted)
-                .multilineTextAlignment(.center)
-                .lineSpacing(2)
-                .padding(.bottom, 40)
+            // Footer — U05: these read as links, so they behave as links. Both
+            // resolve to the combined Terms & Privacy page, the same URL the
+            // Settings Support group opens; the app knows no separate privacy
+            // route, and a link to a page that exists beats one that doesn't.
+            VStack(spacing: 2) {
+                Text("By continuing, you agree to our")
+                    .foregroundStyle(PatinaColors.Text.muted)
+
+                HStack(spacing: 4) {
+                    Link("Terms of Service", destination: Self.termsURL)
+                        .accessibilityIdentifier("auth.welcome.termsLink")
+                    Text("and")
+                        .foregroundStyle(PatinaColors.Text.muted)
+                    Link("Privacy Policy", destination: Self.privacyURL)
+                        .accessibilityIdentifier("auth.welcome.privacyLink")
+                }
+                .foregroundStyle(PatinaColors.Text.interactive)
+            }
+            .font(PatinaTypography.caption)
+            .multilineTextAlignment(.center)
+            .lineSpacing(2)
+            .padding(.horizontal, 28)
+            .padding(.bottom, 40)
         }
         .frame(maxWidth: .infinity)
         .background(PatinaColors.Background.primary)
     }
+
+    /// Combined Terms & Privacy page — mirrors the URL behind SettingsView's
+    /// "Terms & Privacy" Support row.
+    private static let termsURL = URL(string: "https://patina.cloud/terms")!
+    private static let privacyURL = URL(string: "https://patina.cloud/terms")!
 }
 
 #Preview {

@@ -69,13 +69,16 @@ struct ProfileView: View {
                     // "Member since…" — wrapped in HelpTooltip because the
                     // Design Journal concept (Patina's name for the profile
                     // as a record of personal taste evolution) is worth
-                    // explaining to a curious user.
-                    HelpTooltip(
-                        surfaceKey: SurfaceKeys.IOSApp.Profile.designJournal,
-                        fallback: "Your profile is a Design Journal — Patina tracks the style you've taught it, the rooms you've captured, and the pieces you've saved. Everything here informs your recommendations."
-                    ) {
-                        MonoLabel(text: viewModel.memberSince)
-                            .accessibilityLabel("Member since \(viewModel.memberSince). More information available.")
+                    // explaining to a curious user. Guests have no membership
+                    // date, so the line is absent rather than invented.
+                    if let memberSince = viewModel.memberSince {
+                        HelpTooltip(
+                            surfaceKey: SurfaceKeys.IOSApp.Profile.designJournal,
+                            fallback: "Your profile is a Design Journal — Patina tracks the style you've taught it, the rooms you've captured, and the pieces you've saved. Everything here informs your recommendations."
+                        ) {
+                            MonoLabel(text: "Member since \(memberSince)")
+                                .accessibilityLabel("Member since \(memberSince). More information available.")
+                        }
                     }
 
                     // Style badge — wrapped in HelpTooltip because the
@@ -144,10 +147,14 @@ struct ProfileView: View {
                         ScrollView(.horizontal, showsIndicators: false) {
                             HStack(spacing: 12) {
                                 ForEach(viewModel.rooms) { room in
-                                    roomCard(room)
-                                        .onTapGesture {
-                                            coordinator.navigate(to: .roomDetail(roomId: room.id))
-                                        }
+                                    Button {
+                                        coordinator.navigate(to: .roomProject(roomId: room.id))
+                                    } label: {
+                                        roomCard(room)
+                                    }
+                                    .buttonStyle(.plain)
+                                    .accessibilityLabel("Open \(room.name)")
+                                    .accessibilityHint("Opens this room.")
                                 }
                             }
                         }
@@ -177,7 +184,7 @@ struct ProfileView: View {
                     profileActionRow(icon: "paintpalette", label: "Retake Style Quiz") {
                         coordinator.navigate(to: .styleQuiz)
                     }
-                    profileActionRow(icon: "bubble.left", label: "Work with a Designer") {
+                    profileActionRow(icon: "bubble.left", label: "Get design help") {
                         coordinator.presentedSheet = .designServices(roomId: nil, preselectedScanIds: [])
                     }
                     profileActionRow(icon: "gearshape", label: "Settings") {
@@ -191,7 +198,9 @@ struct ProfileView: View {
             }
         }
         .background(PatinaColors.Background.primary)
-        .toolbarTitleDisplayMode(.inline)
+        // U18: standard pushed-screen chrome — the avatar/name block above
+        // is this screen's header, so the chrome adds only the back chevron.
+        .patinaScreen(title: nil)
         .onAppear {
             viewModel.loadData(context: modelContext)
         }
@@ -229,9 +238,16 @@ struct ProfileView: View {
             RoomCardHeroImage(room: room)
 
             VStack(alignment: .leading, spacing: 2) {
-                Text(room.name)
-                    .font(PatinaTypography.uiSmall)
-                    .foregroundStyle(PatinaColors.Text.primary)
+                HStack(spacing: 4) {
+                    Text(room.name)
+                        .font(PatinaTypography.uiSmall)
+                        .foregroundStyle(PatinaColors.Text.primary)
+                    Spacer(minLength: 0)
+                    Image(systemName: "chevron.right")
+                        .font(.system(size: 11))
+                        .foregroundStyle(PatinaColors.Text.muted)
+                        .accessibilityHidden(true)
+                }
 
                 MonoLabel(text: "Scanned \(Self.scannedDateFormatter.string(from: room.createdAt))", size: PatinaTypography.monoLabel)
             }

@@ -56,8 +56,13 @@ struct Product: Identifiable, Hashable, Codable {
         styleTags = try container.decodeIfPresent([String].self, forKey: .styleTags) ?? []
         materialTags = try container.decodeIfPresent([String].self, forKey: .materialTags) ?? []
         badges = try container.decodeIfPresent([String].self, forKey: .badges) ?? []
-        category = try container.decodeIfPresent(ProductCategory.self, forKey: .category) ?? .decor
-        tier = try container.decodeIfPresent(ProductTier.self, forKey: .tier) ?? .styleMatch
+        // U39: category/tier decode as plain strings and normalize — the DB
+        // vocabulary drifts from the Swift enum's raw values ("chair" vs
+        // "seating") and an unrecognized value must never fail the whole
+        // row, let alone the whole payload.
+        category = ProductCategory(normalizing: try container.decodeIfPresent(String.self, forKey: .category))
+        let tierRaw = try container.decodeIfPresent(String.self, forKey: .tier)
+        tier = tierRaw.flatMap(ProductTier.init(rawValue:)) ?? .styleMatch
     }
 
     // MARK: - Memberwise init (for mock data and internal use)
@@ -131,6 +136,23 @@ enum ProductCategory: String, Codable, CaseIterable {
 
     var displayName: String {
         rawValue.capitalized
+    }
+}
+
+extension ProductCategory {
+    /// U39: normalizes raw DB category vocabulary (which doesn't match this
+    /// enum's raw values 1:1 — e.g. "chair"/"sofa" both mean `.seating`)
+    /// into a case. Unknown vocabulary, nil, and decoding noise all land on
+    /// `.decor` rather than failing the row.
+    init(normalizing raw: String?) {
+        switch raw?.lowercased() {
+        case "seating", "chair", "sofa": self = .seating
+        case "tables", "table": self = .tables
+        case "lighting": self = .lighting
+        case "storage": self = .storage
+        case "textiles": self = .textiles
+        default: self = .decor
+        }
     }
 }
 

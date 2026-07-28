@@ -35,7 +35,7 @@ struct RevealView: View {
             VStack(spacing: 32) {
                 Spacer()
 
-                Text("THE AESTHETE ENGINE")
+                Text("YOUR STYLE, FOUND")
                     .font(PatinaTypography.mono)
                     .tracking(1.0)
                     .foregroundStyle(PatinaColors.Text.interactive)
@@ -57,16 +57,6 @@ struct RevealView: View {
                         action: onPrimaryAction
                     )
                     .padding(.horizontal, 24)
-
-                    Button(action: onExploreAction) {
-                        HStack(spacing: 6) {
-                            Text("or explore your style profile")
-                            Image(systemName: "arrow.right")
-                        }
-                        .font(.custom("Inter-Regular", size: 12))
-                        .foregroundStyle(PatinaColors.agedOak)
-                    }
-                    .buttonStyle(.plain)
                 }
                 .padding(.bottom, 42)
             }

@@ -79,7 +79,7 @@ enum NotificationRouter {
         case "room":
             // Rooms route off a UUID — fall back gracefully if the
             // payload is malformed rather than crashing.
-            return UUID(uuidString: entityId).map { .roomDetail(roomId: $0) }
+            return UUID(uuidString: entityId).map { .roomProject(roomId: $0) }
         case "product", "piece":
             return .pieceDetail(pieceId: entityId)
         default:

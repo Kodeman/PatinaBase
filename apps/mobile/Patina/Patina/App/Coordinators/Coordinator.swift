@@ -51,9 +51,7 @@ public enum ScanReason: String, Hashable {
 /// `.scanFlow(reason:)`.
 public enum AppRoute: Hashable {
     case heroFrame                          // Home / DailyRoom root
-    case roomList
     case yourSpaces                         // Room System: gallery
-    case roomDetail(roomId: UUID)
     case roomProject(roomId: UUID)          // Room System: full project view
     case roomSettings(roomId: UUID)         // Room System: settings
     case crossRoom                          // Room System: all items
@@ -74,7 +72,6 @@ public enum AppRoute: Hashable {
 
     // AR & Scan Enhancement routes
     case arPlacement(productId: String, roomRemoteId: String? = nil)
-    case preScanChecklist
 
     // Phase 6 routes
     case profile
@@ -113,23 +110,20 @@ public enum AppRoute: Hashable {
     public var displayName: String {
         switch self {
         case .heroFrame: return "Home"
-        case .roomList: return "Your Rooms"
         case .yourSpaces: return "Your Spaces"
-        case .roomDetail: return "Room Detail"
         case .roomProject: return "Room"
         case .roomSettings: return "Room Settings"
         case .crossRoom: return "All Items"
         case .manualRoomEntry: return "Room Details"
-        case .roomSavedItems: return "Saved Items"
+        case .roomSavedItems: return "Saved"
         case .emergence: return "Emergence"
         case .roomEmergence: return "Emergence"
-        case .table: return "Your Table"
+        case .table: return "Saved"
         case .pieceDetail: return "Piece Detail"
         case .scanFlow: return "Quiet Conversation"
         case .styleQuiz: return "Style Quiz"
         case .styleResult: return "Your Style"
         case .arPlacement: return "AR Placement"
-        case .preScanChecklist: return "Pre-Scan"
         case .profile: return "Profile"
         case .notifications: return "Notifications"
         case .designerConsultation: return "Designer"
@@ -163,12 +157,20 @@ public extension AppRoute {
     /// The PostHog screen name for this route. For `.scanFlow` this is the
     /// constant "Quiet Conversation" regardless of `reason` — the `reason`
     /// rides along as an event property instead (see
-    /// `AppCoordinator.screenProperties(for:)`). Every other route uses its
-    /// `displayName`.
+    /// `AppCoordinator.screenProperties(for:)`). `.table` / `.roomSavedItems`
+    /// pin their pre-U09 names here (RouteAnalyticsParityTests,
+    /// `stableRouteScreenNamesAreUnchanged`) — U09 renamed `displayName` to
+    /// "Saved" for the surface's UI/companion-context copy, but the PostHog
+    /// screen name stays put to avoid a silent dashboard regression. Every
+    /// other route uses its `displayName`.
     var analyticsScreenName: String {
         switch self {
         case .scanFlow:
             return ScanAnalyticsScreen.quietConversation
+        case .table:
+            return "Your Table"
+        case .roomSavedItems:
+            return "Saved Items"
         default:
             return displayName
         }

@@ -19,6 +19,10 @@ struct RoomSettingsView: View {
     @State private var name: String = ""
     @State private var roomType: String = "other"
     @State private var showDeleteConfirm = false
+    /// U27: debounces the autosave triggered by `.onChange(of: name)` so a
+    /// rename isn't written on every keystroke; cancelled + re-armed on each
+    /// change, and flushed unconditionally on `.onDisappear`.
+    @State private var renameSaveTask: Task<Void, Never>?
 
     init(roomId: UUID) {
         self.roomId = roomId
@@ -41,12 +45,22 @@ struct RoomSettingsView: View {
             .padding(20)
         }
         .background(PatinaColors.Background.primary.ignoresSafeArea())
-        .toolbar(.hidden, for: .navigationBar)
+        // U18: standard pushed-screen chrome — resolves the prior conflict
+        // where ContentView styled this destination as a system bar while
+        // this view separately hid it. The header below carries the title.
+        .patinaScreen(title: nil)
         .onAppear {
             if let room {
                 name = room.name
                 roomType = room.roomType
             }
+        }
+        // U27: a rename must never silently drop. onSubmit covers the
+        // keyboard-return path; this covers navigating away (back chevron,
+        // swipe-to-dismiss, deep link) without submitting.
+        .onDisappear {
+            renameSaveTask?.cancel()
+            saveIfChanged()
         }
         .alert("Delete this room?", isPresented: $showDeleteConfirm) {
             Button("Delete", role: .destructive, action: deleteRoom)
@@ -58,15 +72,10 @@ struct RoomSettingsView: View {
 
     private var header: some View {
         VStack(alignment: .leading, spacing: 2) {
-            HStack {
-                BackChevronButton(style: .light) { coordinator.goBack() }
-                Spacer()
-            }
-            .padding(.top, 20)
             Text("Room Settings")
                 .font(PatinaTypography.h4)
                 .foregroundStyle(PatinaColors.Text.primary)
-                .padding(.top, 12)
+                .padding(.top, 56)
             Text(room?.name ?? "")
                 .font(PatinaTypography.monoSmall)
                 .tracking(0.4)
@@ -94,6 +103,9 @@ struct RoomSettingsView: View {
                         .stroke(PatinaColors.pearl, lineWidth: 1.5)
                 )
                 .onSubmit { saveIfChanged() }
+                .onChange(of: name) { _, _ in
+                    scheduleDebouncedSave()
+                }
         }
     }
 
@@ -159,7 +171,7 @@ struct RoomSettingsView: View {
         } label: {
             HStack(spacing: 6) {
                 Text("↗")
-                Text("Share with Designer")
+                Text("Get design help with this room")
             }
             .font(PatinaTypography.uiSmall)
             .foregroundStyle(PatinaColors.offWhite)
@@ -192,6 +204,17 @@ struct RoomSettingsView: View {
         guard let room else { return }
         let store = RoomStore(context: modelContext)
         if name != room.name && !name.isEmpty { store.rename(room, to: name) }
+    }
+
+    /// U27: re-armed on every keystroke so a rename lands a beat after
+    /// typing stops, without writing on every character.
+    private func scheduleDebouncedSave() {
+        renameSaveTask?.cancel()
+        renameSaveTask = Task { @MainActor in
+            try? await Task.sleep(for: .milliseconds(600))
+            guard !Task.isCancelled else { return }
+            saveIfChanged()
+        }
     }
 
     private func deleteRoom() {

@@ -43,6 +43,20 @@ struct QuietConversationFlowHost: View {
     /// Scan id held after the review finishes so the saved-confirmation step
     /// can observe the matching RoomScanPackage while the upload runs.
     @State private var savedScanId: UUID?
+    /// U40: in-flight guard on the fallback room write so a double-tap of
+    /// "Accept" on the floor plan can't start two creates before the first
+    /// one stamps `session.localRoomId`.
+    @State private var isSavingFallbackRoom = false
+    /// Route to land on once this host's own pop has committed.
+    ///
+    /// The host is a *pushed* NavigationStack destination, so `dismiss()`
+    /// pops it by mutating the very path a follow-on `navigate(to:)` pushes
+    /// onto. Doing both in one turn leaves the stack holding an empty pushed
+    /// container — the landing destination's body never mounts, so the user
+    /// gets a black screen with the system back chevron even though the room
+    /// saved correctly. Holding the route until `onDisappear` keeps the pop
+    /// and the push in separate turns.
+    @State private var exitRoute: AppRoute?
 
     /// Identifiable wrapper so `.fullScreenCover(item:)` can present the
     /// review on any distinct scan completion.
@@ -59,7 +73,6 @@ struct QuietConversationFlowHost: View {
         case initial
         case threshold
         case fallback
-        case review
         case savedConfirmation
         case softLanding
         case conversation
@@ -81,6 +94,12 @@ struct QuietConversationFlowHost: View {
             #if DEBUG
             PatinaLog.scan.debug("[QuietConversationFlowHost] host onDisappear step=\(step)")
             #endif
+            guard let route = exitRoute else { return }
+            exitRoute = nil
+            let nav = coordinator
+            Task { @MainActor in
+                nav.navigate(to: route)
+            }
         }
         .onChange(of: step) { oldValue, newValue in
             #if DEBUG
@@ -113,8 +132,7 @@ struct QuietConversationFlowHost: View {
                             await ScanRecoveryService.shared.discard(review.id, in: ctx)
                         }
                         reviewScan = nil
-                        dismiss()
-                        coordinator.navigate(to: .heroFrame)
+                        leaveFlow(landingOn: .heroFrame)
                     }
                 )
                 .onAppear {
@@ -168,8 +186,7 @@ struct QuietConversationFlowHost: View {
                         #if DEBUG
                         PatinaLog.scan.debug("[QuietConversationFlowHost] .threshold → abandon (reason=\(reason)) — skipping review")
                         #endif
-                        dismiss()
-                        coordinator.navigate(to: .heroFrame)
+                        leaveFlow(landingOn: .heroFrame)
                         return
                     }
                     // Real scan — present the review as a full-screen cover
@@ -195,20 +212,12 @@ struct QuietConversationFlowHost: View {
                 }
             }
 
-        case .review:
-            // No longer reached — review is now a .fullScreenCover on the
-            // host (see body). Kept in the enum for back-compat with older
-            // navigation routes; renders the threshold underneath so the
-            // cover has a non-empty base layer.
-            EmptyView()
-
         case .savedConfirmation:
             if let scanId = savedScanId {
                 ScanSavedConfirmationView(
                     scanId: scanId,
                     onDone: {
-                        dismiss()
-                        coordinator.navigate(to: .heroFrame)
+                        leaveFlow(landingOn: .heroFrame)
                     },
                     onSetStyle: {
                         withAnimation(reduceMotion ? nil : .easeInOut(duration: 0.3)) {
@@ -288,8 +297,14 @@ struct QuietConversationFlowHost: View {
                     session: session,
                     onAccept: {
                         ScanAnalytics.shared.track(.floorplanAccepted)
-                        dismiss()
-                        coordinator.navigate(to: .emergence(pieceId: nil))
+                        if session.scanMethod == .manual {
+                            acceptFallbackFloorPlan()
+                        } else {
+                            // LiDAR sessions already wrote their RoomModel in
+                            // `holdScanLocally` after the review step — saving
+                            // again here would create a second room.
+                            leaveFlow(landingOn: .emergence(pieceId: nil))
+                        }
                     },
                     onRescan: {
                         ScanAnalytics.shared.track(.floorplanRescan)
@@ -309,6 +324,14 @@ struct QuietConversationFlowHost: View {
             conversationViewModel = vm
         }
         return vm
+    }
+
+    /// The single exit from the flow. Pops this host and lands the user on
+    /// `route` once the pop has settled — never both in the same turn (see
+    /// `exitRoute`).
+    private func leaveFlow(landingOn route: AppRoute) {
+        exitRoute = route
+        dismiss()
     }
 
     private func resetForRescan() {
@@ -339,6 +362,62 @@ struct QuietConversationFlowHost: View {
             bundlePath: bundlePath,
             modelContext: modelContext
         )
+    }
+}
+
+// MARK: - Fallback room persistence (U40)
+
+extension QuietConversationFlowHost {
+
+    /// Accept handler for the manual (non-LiDAR) path. Before U40 this branch
+    /// shared the LiDAR `dismiss(); navigate(.emergence)` exit, which meant
+    /// everything the user typed on the fallback entry screen — room type,
+    /// dimensions, windows, doors — evaporated the moment the flow closed: no
+    /// `RoomModel` was ever written. Now the room is created first and the
+    /// user lands in it.
+    fileprivate func acceptFallbackFloorPlan() {
+        guard !isSavingFallbackRoom else { return }
+        isSavingFallbackRoom = true
+        Task { @MainActor in
+            let roomId = await persistFallbackRoom()
+            isSavingFallbackRoom = false
+            // Defensive: a nil id means the session vanished under us. Home is
+            // still a coherent landing spot; a nil route is not.
+            let landing = roomId.map { AppRoute.roomProject(roomId: $0) } ?? .heroFrame
+            leaveFlow(landingOn: landing)
+        }
+    }
+
+    /// Persist the manually-entered room and return its local id.
+    ///
+    /// Idempotent through `session.localRoomId`, so an accept that follows a
+    /// rescan-then-accept can't produce a duplicate room.
+    @MainActor
+    fileprivate func persistFallbackRoom() async -> UUID? {
+        guard var current = session, current.scanMethod == .manual else { return nil }
+        if let existing = current.localRoomId { return existing }
+
+        let draft = FallbackRoomDraft(session: current)
+        let store = RoomStore(context: modelContext)
+        let creation = RoomCreationCoordinator(store: store)
+
+        // One insert per accept, online or not: the coordinator keeps its own
+        // local room and reports `isLocalOnly` rather than throwing, so there
+        // is no failure path here that could add a second room.
+        let result = await creation.createManualRoom(
+            name: draft.name,
+            roomType: draft.roomType,
+            widthFeet: draft.widthFeet,
+            lengthFeet: draft.lengthFeet,
+            ceilingHeightFeet: draft.ceilingHeightFeet,
+            orientationRaw: "",
+            windowCount: draft.windowCount,
+            doorCount: draft.doorCount
+        )
+
+        current.localRoomId = result.room.id
+        session = current
+        return result.room.id
     }
 }
 
