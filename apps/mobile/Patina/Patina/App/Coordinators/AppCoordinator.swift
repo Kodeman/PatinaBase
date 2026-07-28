@@ -17,8 +17,8 @@ public final class AppCoordinator: Coordinator {
     // MARK: - State
 
     /// Current app phase — derived from `AuthService.session`, onboarding
-    /// completion, and `guestModeOptIn`. Use `presentAuthentication()` or
-    /// `beginSplashTransition()` to nudge transitions; do not set this
+    /// completion, and `guestModeOptIn`. Use `beginSplashTransition()` or
+    /// clear `guestModeOptIn` to nudge transitions; do not set this
     /// directly from outside the recompute path.
     public private(set) var phase: AppPhase = .launching
 
@@ -252,19 +252,6 @@ public final class AppCoordinator: Coordinator {
         splashMinimumDeadline = Date().addingTimeInterval(duration)
         scheduleSplashDeadlineRecompute()
         recomputePhase()
-    }
-
-    /// Phase-level ejection to the auth root. Do not use for in-context
-    /// sign-in prompts — set `presentedSheet = .auth` instead.
-    ///
-    /// Moves a guest user to the AuthScreenView so they can sign in for
-    /// real. Clearing `guestModeOptIn` causes the phase deriver to
-    /// return `.auth` on its next tick because the user has no session.
-    /// No-op for already-authenticated users — they'd need to sign out
-    /// first.
-    public func presentAuthentication() {
-        guard !AuthService.shared.isAuthenticated else { return }
-        guestModeOptIn = false
     }
 
     /// Check if user has existing rooms (placeholder - would query SwiftData)

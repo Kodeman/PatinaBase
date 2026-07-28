@@ -33,9 +33,6 @@ public final class CompanionViewModel {
     /// Quick action suggestions (legacy - for backward compatibility)
     public var suggestions: [CompanionSuggestion] = []
 
-    /// Context-aware quick actions
-    public var quickActions: [QuickAction] = []
-
     /// API-sourced quick actions (from backend)
     public var apiQuickActions: [APIQuickAction] = []
 
@@ -118,23 +115,20 @@ public final class CompanionViewModel {
                 CompanionSuggestion(icon: "text.bubble", title: "Tell me about your space"),
                 CompanionSuggestion(icon: "camera.viewfinder", title: "Take a walk together")
             ]
-            quickActions = QuickActionFactory.actions(for: .heroFrame)
         } else {
             suggestions = [
                 CompanionSuggestion(icon: "rectangle.stack", title: "Show me my table"),
                 CompanionSuggestion(icon: "sparkles", title: "Find something new")
             ]
-            quickActions = QuickActionFactory.actions(for: .roomList)
         }
     }
 
     // MARK: - Context Updates
 
-    /// Update quick actions based on current context
+    /// Update companion state for the current context
     public func updateContext(_ newContext: CompanionContext) {
         let screenChanged = context.currentScreen != newContext.currentScreen
         context = newContext
-        quickActions = QuickActionFactory.actions(for: newContext.currentScreen, context: newContext)
 
         // Track screen entry for session metrics
         if screenChanged {
@@ -230,22 +224,6 @@ public final class CompanionViewModel {
         sessionMetrics.recordScroll(isScrollingDown: isScrollingDown)
     }
 
-    /// Get quick actions including stuck detection actions if applicable
-    public var effectiveQuickActions: [QuickAction] {
-        var actions = quickActions
-
-        // Prepend stuck help action if user appears stuck
-        if userAppearsStuck {
-            let stuckActions = QuickActionFactory.stuckActions(for: stuckReason)
-            if !stuckActions.isEmpty {
-                // Insert help action at the beginning
-                actions.insert(contentsOf: stuckActions.prefix(1), at: 0)
-            }
-        }
-
-        return actions
-    }
-
     /// Get session metrics for API requests
     public func getSessionMetrics() -> APISessionMetrics {
         sessionMetrics.getAPIMetrics()
@@ -283,68 +261,6 @@ public final class CompanionViewModel {
         HapticManager.shared.impact(.light)
         // In a full implementation, this would navigate or trigger actions
         PatinaLog.companion.debug("Selected suggestion: \(suggestion.title)")
-    }
-
-    /// Handle quick action tap
-    public func handleQuickAction(_ action: QuickAction) -> NavigationIntent {
-        HapticManager.shared.impact(.light)
-
-        // Record interaction
-        recordInteraction()
-
-        // Track quick action
-        let screenName = screenIdentifier(for: context.currentScreen)
-        let isFromStuck = userAppearsStuck && (action.intent == .needHelp || action.intent == .narrowDown || action.intent == .suggestOptions)
-        analytics.trackQuickActionTapped(
-            actionId: action.id.uuidString,
-            actionTitle: action.title,
-            screen: screenName,
-            isFromStuckDetection: isFromStuck
-        )
-
-        // Reset stuck detection when user takes action
-        if userAppearsStuck {
-            sessionMetrics.resetCurrentScreenMetrics()
-
-            // Track help accepted if it was a help action
-            if isFromStuck {
-                analytics.trackHelpAccepted(screen: screenName, actionTaken: action.title)
-            }
-        }
-
-        // Handle help intents specially
-        switch action.intent {
-        case .needHelp:
-            handleNeedHelp()
-        case .narrowDown:
-            handleNarrowDown()
-        case .suggestOptions:
-            handleSuggestOptions()
-        case .requestDesignServices(let roomId):
-            analytics.trackDesignerEscalationTapped(screen: screenName, roomId: roomId?.uuidString)
-        default:
-            break
-        }
-
-        // Return the intent for the coordinator to handle
-        return action.intent
-    }
-
-    /// Handle "Need help?" action
-    private func handleNeedHelp() {
-        // Add a proactive message from Patina
-        let helpMessage = stuckHelpMessage ?? "I'm here to help. What are you looking for?"
-        addPatinaMessage(helpMessage)
-    }
-
-    /// Handle "Narrow down" action
-    private func handleNarrowDown() {
-        addPatinaMessage("Let's narrow things down. What's most important to you - style, size, or price?")
-    }
-
-    /// Handle "Suggest options" action
-    private func handleSuggestOptions() {
-        addPatinaMessage("Based on what you've been looking at, here are a few pieces that might resonate with your space.")
     }
 
     // MARK: - Conversation
