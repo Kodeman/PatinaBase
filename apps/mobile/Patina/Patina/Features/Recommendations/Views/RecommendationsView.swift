@@ -20,14 +20,14 @@ struct RecommendationsView: View {
     /// NOT the remote id the `get_recommendations` RPC and the
     /// `saved_items.room_id` FK actually expect — `roomRemoteId` below
     /// resolves that translation before either is used.
-    var roomId: String? = nil
+    var roomId: String?
 
     /// Resolved once at load: `roomId` translated from the local SwiftData
     /// id to the room's synced `RoomModel.remoteId`. `nil` when `roomId` is
     /// nil or the room hasn't synced yet — both fall back to the unscoped
     /// marketplace rather than sending a local id that would silently no-op
     /// the RPC's room filter and violate the `saved_items` FK on every save.
-    @State private var roomRemoteId: String? = nil
+    @State private var roomRemoteId: String?
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
@@ -144,65 +144,7 @@ struct RecommendationsView: View {
         Button {
             coordinator.navigate(to: .pieceDetail(pieceId: product.id))
         } label: {
-            VStack(alignment: .leading, spacing: 0) {
-                // Image with overlays
-                ZStack(alignment: .topLeading) {
-                    // Product image via PatinaAsyncImage (R15) — branded strata
-                    // placeholder for loading/failure; category gradient remains
-                    // the deliberate no-URL fallback.
-                    if let imageURL = product.imageURL, let url = URL(string: imageURL) {
-                        PatinaAsyncImage(url: url)
-                            .frame(height: 160)
-                            .frame(maxWidth: .infinity)
-                            .clipped()
-                    } else {
-                        product.placeholderGradient
-                            .frame(height: 160)
-                    }
-
-                    // Match badge
-                    Text(product.matchLabel)
-                        .font(PatinaTypography.monoSmall)
-                        .foregroundStyle(PatinaColors.Text.secondary)
-                        .tracking(0.3)
-                        .padding(.horizontal, 8)
-                        .padding(.vertical, 3)
-                        .background(.ultraThinMaterial)
-                        .clipShape(RoundedRectangle(cornerRadius: 6))
-                        .padding(8)
-
-                    // Save (accelerator) + ⋯ menu (U14: every card's actions
-                    // must be visible, not just reachable via long-press).
-                    VStack {
-                        HStack(spacing: 6) {
-                            Spacer()
-                            saveButton(product)
-                            menuButton(product)
-                        }
-                        .padding(8)
-                    }
-                }
-
-                // Info
-                VStack(alignment: .leading, spacing: 2) {
-                    MonoLabel(text: product.makerName, size: PatinaTypography.monoSmall)
-
-                    Text(product.name)
-                        .font(PatinaTypography.uiSmall)
-                        .foregroundStyle(PatinaColors.Text.primary)
-                        .lineLimit(2)
-                        .padding(.top, 2)
-
-                    Text(product.fullFormattedPrice)
-                        .font(PatinaTypography.h5)
-                        .foregroundStyle(PatinaColors.Text.primary)
-                        .padding(.top, 4)
-                }
-                .padding(.horizontal, 12)
-                .padding(.vertical, 10)
-            }
-            .background(PatinaColors.Background.secondary)
-            .clipShape(RoundedRectangle(cornerRadius: 14))
+            productCardLabel(product)
         }
         .buttonStyle(.plain)
         // R26 + U14: the long-press menu is an accelerator, but every action
@@ -216,28 +158,7 @@ struct RecommendationsView: View {
         // `.simultaneousGesture` (not `.gesture`) so the drag recognizer
         // doesn't take exclusive precedence over the card's own Button —
         // both need to keep working now that the card is a real Button.
-        .simultaneousGesture(
-            DragGesture(minimumDistance: 50)
-                .onEnded { value in
-                    let horizontal = value.translation.width
-                    let vertical = value.translation.height
-
-                    guard abs(horizontal) > abs(vertical) else { return }
-                    if horizontal > 0 {
-                        // Swipe right → save, or unsave when already saved
-                        // (matches saveButton's toggle — a plain save call
-                        // here would create a duplicate saved_items row).
-                        if viewModel.isSaved(product) {
-                            viewModel.unsaveProduct(product, context: modelContext)
-                        } else {
-                            viewModel.saveProduct(product, context: modelContext, roomRemoteId: roomRemoteId)
-                        }
-                    } else {
-                        // Swipe left → skip
-                        viewModel.skipProduct(product)
-                    }
-                }
-        )
+        .simultaneousGesture(productCardSwipeGesture(product))
         // PT-2-5: collapse maker/name/price into one VoiceOver stop.
         .accessibilityElement(children: .combine)
         .accessibilityLabel("\(product.name) by \(product.makerName), \(product.fullFormattedPrice), \(product.matchLabel)")
@@ -248,14 +169,104 @@ struct RecommendationsView: View {
         // visible save button, so VoiceOver can't create a duplicate
         // saved_items row.
         .accessibilityAction(named: viewModel.isSaved(product) ? "Unsave" : "Save") {
-            if viewModel.isSaved(product) {
-                viewModel.unsaveProduct(product, context: modelContext)
-            } else {
-                viewModel.saveProduct(product, context: modelContext, roomRemoteId: roomRemoteId)
-            }
+            toggleSaved(product)
         }
         .accessibilityAction(named: "Skip") {
             viewModel.skipProduct(product)
+        }
+    }
+
+    private func productCardLabel(_ product: Product) -> some View {
+        VStack(alignment: .leading, spacing: 0) {
+            productCardImage(product)
+            productCardInfo(product)
+        }
+        .background(PatinaColors.Background.secondary)
+        .clipShape(RoundedRectangle(cornerRadius: 14))
+    }
+
+    private func productCardImage(_ product: Product) -> some View {
+        ZStack(alignment: .topLeading) {
+            // Product image via PatinaAsyncImage (R15) — branded strata
+            // placeholder for loading/failure; category gradient remains
+            // the deliberate no-URL fallback.
+            if let imageURL = product.imageURL, let url = URL(string: imageURL) {
+                PatinaAsyncImage(url: url)
+                    .frame(height: 160)
+                    .frame(maxWidth: .infinity)
+                    .clipped()
+            } else {
+                product.placeholderGradient
+                    .frame(height: 160)
+            }
+
+            // Match badge
+            Text(product.matchLabel)
+                .font(PatinaTypography.monoSmall)
+                .foregroundStyle(PatinaColors.Text.secondary)
+                .tracking(0.3)
+                .padding(.horizontal, 8)
+                .padding(.vertical, 3)
+                .background(.ultraThinMaterial)
+                .clipShape(RoundedRectangle(cornerRadius: 6))
+                .padding(8)
+
+            // Save (accelerator) + ⋯ menu (U14: every card's actions
+            // must be visible, not just reachable via long-press).
+            VStack {
+                HStack(spacing: 6) {
+                    Spacer()
+                    saveButton(product)
+                    menuButton(product)
+                }
+                .padding(8)
+            }
+        }
+    }
+
+    private func productCardInfo(_ product: Product) -> some View {
+        VStack(alignment: .leading, spacing: 2) {
+            MonoLabel(text: product.makerName, size: PatinaTypography.monoSmall)
+
+            Text(product.name)
+                .font(PatinaTypography.uiSmall)
+                .foregroundStyle(PatinaColors.Text.primary)
+                .lineLimit(2)
+                .padding(.top, 2)
+
+            Text(product.fullFormattedPrice)
+                .font(PatinaTypography.h5)
+                .foregroundStyle(PatinaColors.Text.primary)
+                .padding(.top, 4)
+        }
+        .padding(.horizontal, 12)
+        .padding(.vertical, 10)
+    }
+
+    private func productCardSwipeGesture(_ product: Product) -> some Gesture {
+        DragGesture(minimumDistance: 50)
+            .onEnded { value in
+                let horizontal = value.translation.width
+                let vertical = value.translation.height
+
+                guard abs(horizontal) > abs(vertical) else { return }
+                if horizontal > 0 {
+                    // Swipe right → save, or unsave when already saved
+                    // (matches saveButton's toggle — a plain save call
+                    // here would create a duplicate saved_items row).
+                    toggleSaved(product)
+                } else {
+                    // Swipe left → skip
+                    viewModel.skipProduct(product)
+                }
+            }
+    }
+
+    private func toggleSaved(_ product: Product) {
+        if viewModel.isSaved(product) {
+            viewModel.unsaveProduct(product, context: modelContext)
+        } else {
+            viewModel.saveProduct(product, context: modelContext, roomRemoteId: roomRemoteId)
         }
     }
 
