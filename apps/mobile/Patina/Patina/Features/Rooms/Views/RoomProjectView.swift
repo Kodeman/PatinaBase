@@ -61,29 +61,20 @@ struct RoomProjectView: View {
                                 .padding(.bottom, 16)
                             }
                             itemsSection(for: room)
-                            suggestedNextSection
-                            if let nudge = BudgetAssessment.companionNudge(for: level, roomName: room.name) {
-                                Text(nudge)
-                                    .font(.custom("PlayfairDisplay-Italic", size: 13, relativeTo: .footnote))
-                                    .foregroundStyle(PatinaColors.Text.interactive)
-                                    .padding(.horizontal, 20)
-                                    .padding(.top, 12)
-                            }
-                            cta(primary: "Work with a Designer on This Room") {
+                            budgetNudge(for: level, room: room)
+                            cta(primary: "Get design help with this room") {
                                 coordinator.presentedSheet = .designServices(
                                     roomId: room.id,
                                     preselectedScanIds: []
                                 )
                             }
-                            sendToDesignersButton(for: room)
                         }
                         Spacer().frame(height: 100)
                     }
                 }
                 .ignoresSafeArea(edges: .top)
             } else {
-                Text("Room not found")
-                    .foregroundStyle(PatinaColors.Text.muted)
+                notFoundState
             }
         }
         .sheet(item: $actionItem) { item in
@@ -94,33 +85,62 @@ struct RoomProjectView: View {
         }
     }
 
+    // MARK: - Room not found (U31)
+
+    /// U31: the local room row is gone (e.g. removed on another device, or a
+    /// stale deep link) — previously this branch had no back affordance at
+    /// all, stranding the user. Real empty-state copy + its own chevron.
+    private var notFoundState: some View {
+        ZStack(alignment: .topLeading) {
+            VStack(spacing: 6) {
+                Text("This room isn't on this phone")
+                    .font(PatinaTypography.h4)
+                    .foregroundStyle(PatinaColors.Text.primary)
+                Text("It may have been removed.")
+                    .font(PatinaTypography.caption)
+                    .foregroundStyle(PatinaColors.Text.muted)
+            }
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+
+            BackChevronButton(style: .light) { coordinator.goBack() }
+                .padding(.top, 8)
+                .padding(.leading, 18)
+        }
+    }
+
     // MARK: - Designer Lead CTA
 
-    /// Door into the design-request flow, preselecting this room's scan. The
-    /// old direct DesignerLeadService POST (legacy `/api/rooms/:id/
-    /// designer-lead` route) is retired in favour of the atomic RPC submit;
-    /// there's no `hasRemote` gate anymore — held scans upload inside the flow.
+    /// Budget-level nudge under the item list. Only the `.overRange` case is
+    /// a real invitation into the design-request flow (Companion copy
+    /// "Work with a designer on {room} →"); `.atRange` is informational only
+    /// ("You're at your budget for {room}") and must not read as a link —
+    /// rendering it in the same interactive color/Button as `.overRange`
+    /// silently looked tappable and did nothing (U05).
     @ViewBuilder
-    private func sendToDesignersButton(for room: RoomModel) -> some View {
-        Button {
-            coordinator.presentedSheet = .designServices(
-                roomId: room.id,
-                preselectedScanIds: []
-            )
-        } label: {
-            Text("Send to a designer")
-                .font(PatinaTypography.bodySmallMedium)
-                .foregroundStyle(PatinaColors.offWhite)
-                .frame(maxWidth: .infinity)
-                .frame(height: 48)
-                .background(
-                    RoundedRectangle(cornerRadius: 12, style: .continuous)
-                        .fill(PatinaColors.clay)
-                )
+    private func budgetNudge(for level: BudgetLevel, room: RoomModel) -> some View {
+        if let nudge = BudgetAssessment.companionNudge(for: level, roomName: room.name) {
+            if level == .overRange {
+                Button {
+                    coordinator.presentedSheet = .designServices(
+                        roomId: room.id,
+                        preselectedScanIds: []
+                    )
+                } label: {
+                    Text(nudge)
+                        .font(.custom("PlayfairDisplay-Italic", size: 13, relativeTo: .footnote))
+                        .foregroundStyle(PatinaColors.Text.interactive)
+                }
+                .buttonStyle(.plain)
+                .padding(.horizontal, 20)
+                .padding(.top, 12)
+            } else {
+                Text(nudge)
+                    .font(.custom("PlayfairDisplay-Italic", size: 13, relativeTo: .footnote))
+                    .foregroundStyle(PatinaColors.Text.muted)
+                    .padding(.horizontal, 20)
+                    .padding(.top, 12)
+            }
         }
-        .buttonStyle(.plain)
-        .padding(.horizontal, 20)
-        .padding(.top, 8)
     }
 
     // MARK: - Sections
@@ -205,8 +225,8 @@ struct RoomProjectView: View {
     private func statRow(for room: RoomModel) -> some View {
         HStack(spacing: 8) {
             statCell(value: "\(room.items.count)", label: "Items")
-            statCell(value: room.averageMatchScore.map { "\($0)%" } ?? "—", label: "Avg Match")
-            statCell(value: "\(room.arReadyCount)", label: "AR Ready")
+            statCell(value: room.averageMatchScore.map { "\($0)%" } ?? "—", label: "Match")
+            statCell(value: "\(room.arReadyCount)", label: "In AR")
         }
         .padding(.horizontal, 20)
         .padding(.bottom, 16)
@@ -240,9 +260,6 @@ struct RoomProjectView: View {
                     .textCase(.uppercase)
                     .foregroundStyle(PatinaColors.Text.muted)
                 Spacer()
-                Text("View in AR →")
-                    .font(PatinaTypography.caption)
-                    .foregroundStyle(PatinaColors.Text.interactive)
             }
             .padding(.horizontal, 20)
             .padding(.top, 16)
@@ -260,12 +277,6 @@ struct RoomProjectView: View {
                         actionItem = pair.element
                     }
                 )
-                .swipeActions(edge: .trailing, allowsFullSwipe: true) {
-                    Button(role: .destructive) {
-                        let store = RoomStore(context: modelContext)
-                        store.removeItem(pair.element)
-                    } label: { Label("Remove", systemImage: "trash") }
-                }
                 if pair.offset < room.items.count - 1 {
                     Rectangle()
                         .fill(PatinaColors.pearl)
@@ -274,28 +285,6 @@ struct RoomProjectView: View {
                 }
             }
         }
-    }
-
-    private var suggestedNextSection: some View {
-        VStack(alignment: .leading, spacing: 6) {
-            HStack {
-                Text("Suggested Next")
-                    .font(PatinaTypography.eyebrow)
-                    .tracking(1.0)
-                    .textCase(.uppercase)
-                    .foregroundStyle(PatinaColors.Text.muted)
-                Spacer()
-                Text("See all →")
-                    .font(PatinaTypography.caption)
-                    .foregroundStyle(PatinaColors.Text.interactive)
-            }
-            Text("\"Your seating and surfaces are set. A rug would ground the arrangement.\"")
-                .font(.custom("PlayfairDisplay-Italic", size: 13, relativeTo: .footnote))
-                .foregroundStyle(PatinaColors.Text.muted)
-        }
-        .padding(.horizontal, 20)
-        .padding(.top, 20)
-        .padding(.bottom, 12)
     }
 
     private func emptyBlock(for room: RoomModel) -> some View {
@@ -310,7 +299,15 @@ struct RoomProjectView: View {
                 .multilineTextAlignment(.center)
                 .frame(maxWidth: 240)
             cta(primary: "Browse Picks for This Room") {
-                coordinator.navigate(to: .heroFrame)
+                // U07: this used to root-reset to .heroFrame regardless of
+                // whether the room synced. Once a room has a remote id the
+                // room-scoped emergence carries real context; local-only
+                // rooms fall back to the unscoped picks feed.
+                if room.remoteId != nil {
+                    coordinator.navigate(to: .roomEmergence(roomId: room.id))
+                } else {
+                    coordinator.navigate(to: .emergence(pieceId: nil))
+                }
             }
             .padding(.top, 14)
         }
@@ -346,8 +343,6 @@ struct RoomProjectView: View {
             coordinator.navigate(to: .pieceDetail(pieceId: item.productId))
         case .move, .copy:
             coordinator.presentedSheet = .moveItem(itemId: item.id)
-        case .findSimilar:
-            coordinator.navigate(to: .pieceDetail(pieceId: item.productId))
         case .remove:
             store.removeItem(item)
         }
