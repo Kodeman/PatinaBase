@@ -254,7 +254,10 @@ public final class AppCoordinator: Coordinator {
         recomputePhase()
     }
 
-    /// Move a guest user to the AuthScreenView so they can sign in for
+    /// Phase-level ejection to the auth root. Do not use for in-context
+    /// sign-in prompts — set `presentedSheet = .auth` instead.
+    ///
+    /// Moves a guest user to the AuthScreenView so they can sign in for
     /// real. Clearing `guestModeOptIn` causes the phase deriver to
     /// return `.auth` on its next tick because the user has no session.
     /// No-op for already-authenticated users — they'd need to sign out
@@ -605,6 +608,9 @@ extension AppCoordinator {
         case settings
         /// QR code scanner for web sign-in.
         case qr
+        /// In-context sign-in prompt (`AuthSheet`) — a modal nudge to
+        /// authenticate without ejecting the user to the auth phase root.
+        case auth
         /// "Request design help" flow, optionally scoped to a room and/or
         /// preselecting specific held/synced scans (`RoomScanPackage.scanId`).
         case designServices(roomId: UUID?, preselectedScanIds: [UUID])
@@ -617,6 +623,7 @@ extension AppCoordinator {
             switch self {
             case .settings: return "settings"
             case .qr: return "qr"
+            case .auth: return "auth"
             case .designServices(let roomId, let scanIds):
                 let scans = scanIds.map { $0.uuidString }.joined(separator: ",")
                 return "designServices-\(roomId?.uuidString ?? "none")-\(scans)"
