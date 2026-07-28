@@ -111,64 +111,8 @@ struct CrossRoomView: View {
         HStack(spacing: 8) {
             // U16: row body tap is app-wide "tap = detail" convention — the
             // move/copy action lives behind the trailing ⋯ instead.
-            Button {
-                coordinator.navigate(to: .pieceDetail(pieceId: item.productId))
-            } label: {
-                HStack(spacing: 12) {
-                    item.placeholderGradient
-                        .frame(width: 56, height: 56)
-                        .clipShape(RoundedRectangle(cornerRadius: 9, style: .continuous))
-                    VStack(alignment: .leading, spacing: 3) {
-                        Text(item.productName)
-                            .font(PatinaTypography.uiSmall)
-                            .foregroundStyle(PatinaColors.Text.primary)
-                        Text(item.makerName)
-                            .font(PatinaTypography.monoLabel)
-                            .tracking(0.4)
-                            .textCase(.uppercase)
-                            .foregroundStyle(PatinaColors.Text.muted)
-                        if let roomName = item.room?.name {
-                            HStack(spacing: 4) {
-                                Circle()
-                                    .fill(roomColor(item.room))
-                                    .frame(width: 6, height: 6)
-                                Text(roomName)
-                                    .font(PatinaTypography.monoSmall)
-                                    .foregroundStyle(PatinaColors.Text.secondary)
-                            }
-                            .padding(.horizontal, 8)
-                            .padding(.vertical, 2)
-                            .background(
-                                Capsule().fill(PatinaColors.Background.secondary)
-                            )
-                        }
-                    }
-                    Spacer(minLength: 0)
-                    Text(item.fullFormattedPrice)
-                        .font(PatinaTypography.h5)
-                        .foregroundStyle(PatinaColors.Text.primary)
-                }
-                .contentShape(Rectangle())
-            }
-            .buttonStyle(.plain)
-
-            Button {
-                coordinator.presentedSheet = .moveItem(itemId: item.id)
-            } label: {
-                Text("⋯")
-                    .font(.system(size: 14, weight: .semibold))
-                    .foregroundStyle(PatinaColors.Text.primary)
-                    .frame(width: 28, height: 28)
-                    .background(
-                        RoundedRectangle(cornerRadius: 8, style: .continuous)
-                            .fill(PatinaColors.Background.secondary)
-                    )
-                    .frame(minWidth: 44, minHeight: 44)
-                    .contentShape(Rectangle())
-            }
-            .buttonStyle(.plain)
-            .accessibilityLabel("More actions")
-            .accessibilityHint("Move or copy \(item.productName) to another room.")
+            rowDetailButton(item)
+            rowMoveButton(item)
         }
         .padding(.horizontal, 20)
         .padding(.vertical, 12)
@@ -178,6 +122,69 @@ struct CrossRoomView: View {
                 .frame(height: 1),
             alignment: .bottom
         )
+    }
+
+    private func rowDetailButton(_ item: SavedItem) -> some View {
+        Button {
+            coordinator.navigate(to: .pieceDetail(pieceId: item.productId))
+        } label: {
+            HStack(spacing: 12) {
+                item.placeholderGradient
+                    .frame(width: 56, height: 56)
+                    .clipShape(RoundedRectangle(cornerRadius: 9, style: .continuous))
+                VStack(alignment: .leading, spacing: 3) {
+                    Text(item.productName)
+                        .font(PatinaTypography.uiSmall)
+                        .foregroundStyle(PatinaColors.Text.primary)
+                    Text(item.makerName)
+                        .font(PatinaTypography.monoLabel)
+                        .tracking(0.4)
+                        .textCase(.uppercase)
+                        .foregroundStyle(PatinaColors.Text.muted)
+                    if let roomName = item.room?.name {
+                        HStack(spacing: 4) {
+                            Circle()
+                                .fill(roomColor(item.room))
+                                .frame(width: 6, height: 6)
+                            Text(roomName)
+                                .font(PatinaTypography.monoSmall)
+                                .foregroundStyle(PatinaColors.Text.secondary)
+                        }
+                        .padding(.horizontal, 8)
+                        .padding(.vertical, 2)
+                        .background(
+                            Capsule().fill(PatinaColors.Background.secondary)
+                        )
+                    }
+                }
+                Spacer(minLength: 0)
+                Text(item.fullFormattedPrice)
+                    .font(PatinaTypography.h5)
+                    .foregroundStyle(PatinaColors.Text.primary)
+            }
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+    }
+
+    private func rowMoveButton(_ item: SavedItem) -> some View {
+        Button {
+            coordinator.presentedSheet = .moveItem(itemId: item.id)
+        } label: {
+            Text("⋯")
+                .font(.system(size: 14, weight: .semibold))
+                .foregroundStyle(PatinaColors.Text.primary)
+                .frame(width: 28, height: 28)
+                .background(
+                    RoundedRectangle(cornerRadius: 8, style: .continuous)
+                        .fill(PatinaColors.Background.secondary)
+                )
+                .frame(minWidth: 44, minHeight: 44)
+                .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel("More actions")
+        .accessibilityHint("Move or copy \(item.productName) to another room.")
     }
 
     // MARK: - Empty state (U31)
