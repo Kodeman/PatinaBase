@@ -15,7 +15,11 @@ import Foundation
 import SwiftData
 @testable import Patina
 
+// Serialized: the selection assertions read `RoomSelectionStore.shared`, and
+// `createManualRoom` suspends around its remote call — parallel cases would
+// overwrite each other's selection between the write and the read.
 @MainActor
+@Suite(.serialized)
 struct RoomCreationCoordinatorTests {
 
     private struct RemoteUnavailable: Error {}
@@ -54,11 +58,16 @@ struct RoomCreationCoordinatorTests {
         }
     }
 
+    /// The context must be one this store owns, not `container.mainContext`:
+    /// a container's own main context holds a *weak* back-reference to it, so
+    /// handing that context out and letting the container deallocate traps
+    /// inside SwiftData on the next `insert`. `ModelContext(container)` keeps
+    /// the container alive for as long as the store needs it.
     private func makeStore() throws -> RoomStore {
         let schema = Schema([RoomModel.self, SavedItem.self])
         let config = ModelConfiguration(schema: schema, isStoredInMemoryOnly: true)
         let container = try ModelContainer(for: schema, configurations: [config])
-        return RoomStore(context: container.mainContext)
+        return RoomStore(context: ModelContext(container))
     }
 
     private func createLivingRoom(
