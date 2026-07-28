@@ -56,7 +56,10 @@ struct ThreadListView: View {
         VStack(alignment: .leading, spacing: 4) {
             MonoLabel(text: "MESSAGES")
                 .tracking(2)
-            Text(viewModel.items.isEmpty ? "No conversations yet" : "Conversations")
+            // U22: kept static — the empty case names itself in the
+            // PatinaEmptyState below; repeating that exact line here doubled
+            // the same sentence on an empty Studio.
+            Text("Conversations")
                 .font(PatinaTypography.h3)
                 .foregroundStyle(PatinaColors.Text.primary)
         }

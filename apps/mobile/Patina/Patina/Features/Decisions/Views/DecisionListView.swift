@@ -35,7 +35,10 @@ struct DecisionListView: View {
         VStack(alignment: .leading, spacing: 4) {
             MonoLabel(text: "DECISIONS")
                 .tracking(2)
-            Text(viewModel.decisions.isEmpty ? "Nothing waiting on you" : "Awaiting your call")
+            // U22: kept static — the empty case names itself in
+            // `emptyView`'s PatinaEmptyState below; repeating that exact
+            // line here doubled the same sentence on an empty Studio.
+            Text("Awaiting your call")
                 .font(PatinaTypography.h3)
                 .foregroundStyle(PatinaColors.Text.primary)
         }

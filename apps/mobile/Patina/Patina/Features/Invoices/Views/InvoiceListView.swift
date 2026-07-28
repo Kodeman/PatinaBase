@@ -34,7 +34,10 @@ struct InvoiceListView: View {
         VStack(alignment: .leading, spacing: 4) {
             MonoLabel(text: "INVOICES")
                 .tracking(2)
-            Text(viewModel.isEmpty ? "Nothing due" : "Your invoices")
+            // U22: kept static — the empty case names itself in the
+            // PatinaEmptyState below; repeating that exact line here doubled
+            // the same sentence on an empty Studio.
+            Text("Your invoices")
                 .font(PatinaTypography.h3)
                 .foregroundStyle(PatinaColors.Text.primary)
         }
