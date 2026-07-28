@@ -19,7 +19,7 @@ final class CollectionsViewModel {
     var isCreatingBoard = false
     var newBoardName = ""
 
-    let tabs = ["Boards", "All Items"]
+    let tabs = ["Boards", "All items"]
 
     // MARK: - Loading
 
