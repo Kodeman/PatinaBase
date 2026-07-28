@@ -328,6 +328,89 @@ struct FirstLaunchTourTests {
     }
 
     @Test
+    func advance_computesMountableStepsBeforeAdvancingInZeroRoomState() async {
+        // U32 walk regression: a real launch takes several seconds for a user
+        // to read and dismiss the first coachmark — far longer than
+        // `anchorMountGracePeriod`. The old implementation only started the
+        // "will `.addToRoom` ever mount?" clock once `advance()` had already
+        // landed on it, so a fast-reading grace window vs. a slow-reading user
+        // produced the SAME `currentStep == 1` intermediate landing either way
+        // — the model-level tests above pass under both the old and the new
+        // implementation and would NOT have caught the walk's repro. What
+        // distinguishes them is what happens when the anchor's fate is ALREADY
+        // settled by the time the user taps "Next": the tour must jump
+        // straight from step 1 to step 3 in that ONE `advance()` call — never
+        // landing on (or leaving a popover slot open against) the mid-tour
+        // step whose card doesn't exist for a zero-room user. Landing there
+        // anyway, even briefly, is the blank window a competing first-run
+        // surface (e.g. the Companion intro) can step into, which is what
+        // reads to the user as the tour silently completing.
+        let stub = StubFirstLaunchTourDefaults()
+        setFirstLaunchTourDefaults(stub)
+        defer { resetFirstLaunchTourDefaults() }
+
+        let model = FirstLaunchTourModel()
+        model.anchorMountGracePeriod = .milliseconds(20)
+        // Zero-room home: greeting + profile mount immediately; `.addToRoom`
+        // never does (no product card exists to carry the anchor).
+        model.registerAnchor(.homeGreeting)
+        model.registerAnchor(.profileMonogram)
+        model.startTour(triggerSource: "test")
+
+        #expect(model.currentStepNumber == 1)
+        #expect(model.totalSteps == 3)
+
+        // Simulate the user reading step 1 for longer than the grace window
+        // BEFORE ever tapping "Next" — the realistic case.
+        try? await Task.sleep(for: .milliseconds(80))
+
+        model.advance()
+
+        #expect(model.currentStep == 2)          // straight to .profileMonogram
+        #expect(model.currentStepNumber == 2)    // "Step 2 of 2" on first landing
+        #expect(model.totalSteps == 2)
+        #expect(model.isOnFinalStep)
+        #expect(model.isActive)                  // never silently completed
+
+        // The tour still ends cleanly once the user actually finishes it —
+        // no leftover, un-shown step haunting `complete()`.
+        model.advance()
+        #expect(!model.isActive)
+        #expect(getFirstLaunchTourState(model.tourKey).completed == true)
+    }
+
+    @Test
+    func unregisterAnchor_renumbersWhenTheCurrentStepsAnchorDisappearsMidRun() {
+        // "Never silently drop a step mid-tour": a step whose anchor vanishes
+        // AFTER the tour arrived there (e.g. the feed reloads and the card
+        // disappears out from under an open popover) must renumber the
+        // remainder immediately, exactly like a step that never mounted —
+        // not leave a coachmark pointed at a view that's gone.
+        let stub = StubFirstLaunchTourDefaults()
+        setFirstLaunchTourDefaults(stub)
+        defer { resetFirstLaunchTourDefaults() }
+
+        let model = FirstLaunchTourModel()
+        model.registerAnchor(.homeGreeting)
+        model.registerAnchor(.addToRoom)
+        model.registerAnchor(.profileMonogram)
+        model.startTour(triggerSource: "test")
+
+        model.advance()
+        #expect(model.currentStep == 1)          // .addToRoom, mounted normally
+        #expect(model.currentStepNumber == 2)
+        #expect(model.totalSteps == 3)
+
+        model.unregisterAnchor(.addToRoom)
+
+        #expect(model.currentStep == 2)          // walked forward automatically
+        #expect(model.currentStepNumber == 2)    // renumbered — "Step 2 of 2"
+        #expect(model.totalSteps == 2)
+        #expect(model.isOnFinalStep)
+        #expect(model.isActive)                  // never silently completed
+    }
+
+    @Test
     func advance_keepsStepWhoseAnchorMountsLate() async {
         let stub = StubFirstLaunchTourDefaults()
         setFirstLaunchTourDefaults(stub)
