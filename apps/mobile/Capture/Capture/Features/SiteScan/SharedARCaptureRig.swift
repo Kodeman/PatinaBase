@@ -105,7 +105,15 @@ final class SharedARCaptureRig: NSObject {
     /// smoothed/scene depth, each capability-gated so a device that lacks one
     /// simply omits it (the recorders tolerate absence). Plane detection matches
     /// what RoomPlan expects when it attaches to the session.
-    private func makeConfiguration() -> ARWorldTrackingConfiguration {
+    ///
+    /// `static` and non-private (R118) so the DEBUG raster-fixture profile
+    /// resolver can read the capture resolution off the SAME configuration
+    /// production runs, instead of restating it. Note what this method does NOT
+    /// do: it never assigns `videoFormat`, so ARKit picks the device's default
+    /// format for these semantics and `frame.camera.imageResolution` is a
+    /// runtime, device-dependent value. Uses no instance state; behaviour is
+    /// unchanged from the pre-R118 instance method.
+    static func makeConfiguration() -> ARWorldTrackingConfiguration {
         let config = ARWorldTrackingConfiguration()
         config.worldAlignment = .gravity
         config.planeDetection = [.horizontal, .vertical]
@@ -163,7 +171,7 @@ final class SharedARCaptureRig: NSObject {
             #endif
         }
 
-        arSession.run(makeConfiguration())
+        arSession.run(Self.makeConfiguration())
         logger.log("Capture rig recording started; config semantics/mesh applied best-effort.")
     }
 

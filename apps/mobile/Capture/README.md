@@ -162,6 +162,17 @@ evidence files (HEIC, canonical native BGRA, and JSON dimensions/intrinsics/
 marker coordinates/hashes). It does not capture a room, call the backend, or
 exist in a Release build.
 
+Per **R118** the fixture is emitted at this device's **physical capture
+resolution** — not at a pinned size. The adjacent **Diagnostics → Capture
+profile** row shows the resolution first; it is read off the same
+`ARWorldTrackingConfiguration` the Field rig runs (`SharedARCaptureRig
+.makeConfiguration()`, which never assigns `videoFormat`, so ARKit's default for
+that device and those frame semantics is what production gets). There is no
+default profile: on the Simulator the row reads `unavailable` and Generate
+fails. Operator procedure, including the mandatory cross-check against a real
+scan's `keyframes/keyframe_index.ndjson`:
+`docs/design/field-capture/p2-r118-capture-resolution-fixture-runbook.md`.
+
 Use an explicit physical-device UDID throughout — never `booted` or a device
 name when a Simulator may also be present:
 
@@ -190,8 +201,12 @@ xcrun devicectl device process launch \
   -CaptureUseMocks -CaptureScreen T1.settings
 ```
 
-On that physical device, tap **Generate**, then **Share**, and AirDrop or Save to
-Files all three `field-core-image-raster-v1*` artifacts together. If automation
-drives those buttons, every blitz-iphone call must also pass the same explicit
-`FIELD_DEVICE_UDID`. The exported JSON hashes the BGRA and HEIC bytes; compare
-those values after copying before using the fixture as Linux decoder evidence.
+On that physical device, read the **Capture profile** row, then tap **Generate**,
+then **Share**, and AirDrop or Save to Files all three
+`field-core-image-raster-v1*` artifacts together. They land in
+`Documents/field-core-image-raster-v1-<W>x<H>/`, stamped with the profile so two
+fixture sets are never confusable. If automation drives those buttons, every
+blitz-iphone call must also pass the same explicit `FIELD_DEVICE_UDID`. The
+exported JSON hashes the BGRA and HEIC bytes; compare those values after copying
+before using the fixture as Linux decoder evidence — at capture resolution the
+BGRA file is ~11 MB, so a truncated transfer is a real failure mode.
