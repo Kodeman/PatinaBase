@@ -42,6 +42,7 @@ from patina_scan_worker.refine_model_alignment import (
     ALIGNED_GAUGE_MAX_ROTATION_RAD,
     ALIGNED_GAUGE_MAX_SCALE_DEVIATION,
     ALIGNED_GAUGE_MAX_TRANSLATION_M,
+    ALIGNED_MAX_ORIENTATION_CHANGE_RAD,
     ALIGNMENT_DEGENERATE_CODE,
     ALIGNMENT_MAX_SHAPE_CHANGE_FRACTION,
     ALIGNMENT_MIN_CORRESPONDENCES,
@@ -523,6 +524,7 @@ def test_every_tolerance_is_a_pinned_constant_with_a_stated_unit():
     assert ALIGNED_GAUGE_MAX_ROTATION_RAD == 0.05
     assert ALIGNED_GAUGE_MAX_TRANSLATION_M == 0.25
     assert ALIGNMENT_MAX_SHAPE_CHANGE_FRACTION == 0.5
+    assert ALIGNED_MAX_ORIENTATION_CHANGE_RAD == 0.5
     assert POSE_DIGEST_QUATERNION_QUANTUM == 1.0e-9
     assert POSE_DIGEST_TRANSLATION_QUANTUM_M == 1.0e-9
     assert POSE_DIGEST_VERSION == "refine-pose-digest-v1"
@@ -643,10 +645,6 @@ def test_trailing_zero_padding_after_the_end_marker_is_accepted(tmp_path):
     finally:
         os.close(descriptor)
     assert len(model.poses) == _IMAGE_COUNT
-
-
-def _corrupt_size(payload: bytes) -> bytes:
-    return payload[: len(payload) - 1]
 
 
 def _bad_checksum(payload: bytes) -> bytes:
@@ -1245,6 +1243,58 @@ def test_a_closed_descriptor_is_reported_rather_than_raised_raw(tmp_path):
     assert caught.value.code == ALIGNMENT_MODEL_INVALID_CODE
 
 
+def test_a_positional_read_longer_than_one_chunk_returns_the_bytes_in_order(tmp_path):
+    """The CONTINUATION path of ``_read_exact_at``, driven at the helper directly.
+
+    No public entry can reach it: ``_MemberCursor.read_exact`` caps every pull at
+    ``_PREAD_CHUNK_BYTES`` and the observation skip steps in the same units, so
+    through ``read_sparse_model_snapshot`` the loop always runs exactly once and
+    both its offset arithmetic and its chunk-size arithmetic are inert.  Calling
+    the helper with a longer count is therefore the only way to make that
+    arithmetic falsifiable -- and it is worth falsifying, because dropping the
+    ``+ read`` term does not raise, it silently DUPLICATES the first chunk.
+
+    The payload is a non-repeating sha256 stream rather than a pattern, so no
+    duplicated or misaligned chunk can accidentally compare equal.  The
+    ``if not chunk:`` EOF clause in the same loop stays unfalsifiable and this
+    test does not claim it: a regular file whose length ``fstat`` just reported
+    cannot end early.
+    """
+
+    size = 3 * alignment._PREAD_CHUNK_BYTES + 1237
+    payload = b"".join(
+        hashlib.sha256(b"item6-chunk-%d" % index).digest()
+        for index in range(size // 32 + 1)
+    )[:size]
+    path = tmp_path / "chunked.bin"
+    path.write_bytes(payload)
+    descriptor = os.open(str(path), os.O_RDONLY)
+    try:
+        assert (
+            alignment._read_exact_at(descriptor, 811, size - 811, label="chunked")
+            == payload[811:]
+        )
+        assert (
+            alignment._read_exact_at(
+                descriptor, 0, alignment._PREAD_CHUNK_BYTES, label="chunked"
+            )
+            == payload[: alignment._PREAD_CHUNK_BYTES]
+        )
+        # A read that stops WELL SHORT of the end, on a count that is not a whole
+        # number of chunks.  The read above cannot see a chunk-size error,
+        # because the file ends exactly where the last pull would have to stop
+        # and the kernel truncates the over-long request back to the right
+        # answer.  This one over-reads by a whole chunk if the remaining count is
+        # not what bounds the pull.
+        short = 2 * alignment._PREAD_CHUNK_BYTES + 55
+        assert (
+            alignment._read_exact_at(descriptor, 100, short, label="chunked")
+            == payload[100 : 100 + short]
+        )
+    finally:
+        os.close(descriptor)
+
+
 # ===========================================================================
 # The pose digest
 # ===========================================================================
@@ -1442,6 +1492,7 @@ def test_the_parent_recovers_a_transform_it_was_never_given(models):
     assert verification.rotation_angle_difference_rad < ALIGNMENT_ROTATION_TOLERANCE_RAD
     assert verification.translation_difference_m < ALIGNMENT_TRANSLATION_TOLERANCE_M
     assert verification.fit_rmse_m < 1e-9
+    assert verification.max_aligned_orientation_change_rad < 1e-14
     assert verification.max_raw_pose_drift_m == 0.0
     assert verification.max_raw_rotation_drift_rad < 1.0e-12
     assert verification.seed_rms_radius_m > 1.0
@@ -1797,6 +1848,164 @@ def test_a_rotation_drift_just_inside_the_tolerance_is_accepted(models, tmp_path
     )
 
 
+# --- which model each clause is actually reading -----------------------------
+#: A trajectory small enough that a centre drift INSIDE the known-pose tolerance
+#: is a large RELATIVE change.  On the 2 m fixture the two are matched by
+#: construction -- a 1e-6 m drift moves the solved scale by about 5e-7, just
+#: under the 1e-6 agreement tolerance -- so on that fixture "raw" and "seed" are
+#: interchangeable inputs and nothing can tell the two apart.  Shrink the
+#: trajectory to ~2 cm and the same 1e-6 m of permitted drift becomes 3e-5
+#: relative, thirty times the agreement tolerance, and the substitution becomes
+#: observable.  That is the only reason these numbers are what they are.
+_SMALL_RADIUS_M = 0.02
+_SMALL_HEIGHT_M = 0.012
+_SMALL_SCALE_DRIFT = 3.0e-5
+
+
+def _small_seed_rows():
+    rows = []
+    for index in range(_IMAGE_COUNT):
+        angle = 2.0 * math.pi * index / _IMAGE_COUNT
+        centre = (
+            _SMALL_RADIUS_M * math.cos(angle),
+            _SMALL_RADIUS_M * math.sin(angle),
+            _SMALL_HEIGHT_M * (2.0 * index / (_IMAGE_COUNT - 1) - 1.0),
+        )
+        quaternion = _axis_angle_quaternion((0.2, -0.3, 1.0), angle * 0.5 + 0.11)
+        rotation = _rotation_of(quaternion)
+        translation = tuple(
+            -sum(rotation[row][col] * centre[col] for col in range(3)) for row in range(3)
+        )
+        rows.append(
+            (
+                100 + index,
+                quaternion,
+                translation,
+                200 + index,
+                "small-%03d.jpg" % index,
+                2,
+            )
+        )
+    return rows
+
+
+def _small_models(tmp_path):
+    """seed, raw = seed dilated inside the drift tolerance, aligned = T(raw).
+
+    The dilation is a legal raw pre-BA snapshot: every camera centre moves less
+    than :data:`RAW_SNAPSHOT_POSE_DRIFT_TOLERANCE_M`, which clause 6 permits and
+    this fixture asserts.  But the raw point set is a different SHAPE from the
+    seed by 3e-5 relative, so a parent that solved ``seed -> aligned`` instead of
+    ``raw -> aligned`` would report a scale 30x outside the agreement tolerance
+    and refuse.  Accepting this fixture is therefore a statement about which
+    model the solve reads, which is the module's central design argument.
+    """
+
+    seed_rows = _small_seed_rows()
+    seed_centres = _centres_of(seed_rows)
+    centroid = tuple(
+        sum(centre[axis] for centre in seed_centres) / len(seed_centres)
+        for axis in range(3)
+    )
+    raw_centres = [
+        tuple(
+            centroid[axis] + (1.0 + _SMALL_SCALE_DRIFT) * (centre[axis] - centroid[axis])
+            for axis in range(3)
+        )
+        for centre in seed_centres
+    ]
+    raw_rows = _rows_with_centres(seed_rows, raw_centres)
+    quaternion = _axis_angle_quaternion((0.4, 0.2, -0.89), 0.003)
+    aligned_rows = _apply_similarity(
+        raw_rows, scale=1.002, quaternion=quaternion, translation=(0.004, -0.002, 0.001)
+    )
+    seed = _snapshot(tmp_path, seed_rows, "small-seed")
+    raw = _snapshot(tmp_path, raw_rows, "small-raw")
+    aligned = _snapshot(tmp_path, aligned_rows, "small-aligned")
+    proposal = ProposedAlignment(
+        scale=1.002,
+        rotation=_rotation_of(quaternion),
+        translation=(0.004, -0.002, 0.001),
+        raw_pose_digest_sha256=canonical_pose_digest(raw),
+        aligned_pose_digest_sha256=canonical_pose_digest(aligned),
+    )
+    return seed, raw, aligned, proposal
+
+
+def test_the_similarity_is_solved_from_the_raw_model_not_the_seed(tmp_path):
+    seed, raw, aligned, proposal = _small_models(tmp_path)
+    # The fixture is legal: the drift really is inside the clause-6 tolerance.
+    drift = max(
+        math.sqrt(
+            sum(
+                (raw.centres()[index][axis] - seed.centres()[index][axis]) ** 2
+                for axis in range(3)
+            )
+        )
+        for index in range(len(seed.poses))
+    )
+    assert 0.0 < drift < RAW_SNAPSHOT_POSE_DRIFT_TOLERANCE_M
+    # ... and solving from the SEED really would disagree, by a wide margin.
+    from_seed = _solved(seed.centres(), aligned.centres())
+    assert (
+        abs(from_seed.scale - proposal.scale) / proposal.scale
+        > ALIGNMENT_SCALE_RELATIVE_TOLERANCE * 10.0
+    )
+
+    verification = _verify((seed, raw, aligned, proposal))
+    assert verification.scale_relative_difference < ALIGNMENT_SCALE_RELATIVE_TOLERANCE
+    assert verification.fit_rmse_m < 1.0e-12
+
+
+def test_the_seed_conditioning_gate_is_judged_on_the_seed(tmp_path):
+    """``seed_min_principal_extent_m`` must be the SEED's, not the raw model's.
+
+    ``_principal_extents_m`` is borrowed rather than reimplemented on purpose:
+    what is under test is WHICH point set the module hands it, and the mutant
+    that swaps the argument leaves the function alone.  The two answers differ
+    by the fixture's 3e-5 dilation, five decades above the 1e-9 tolerance here.
+    """
+
+    seed, raw, aligned, proposal = _small_models(tmp_path)
+    verification = _verify((seed, raw, aligned, proposal))
+    expected = alignment._principal_extents_m(seed.centres())[0]
+    from_raw = alignment._principal_extents_m(raw.centres())[0]
+    assert expected != from_raw
+    assert math.isclose(
+        verification.seed_min_principal_extent_m, expected, rel_tol=1.0e-9
+    )
+
+
+def test_the_returned_transform_is_the_parents_solve_not_the_childs_claim(models):
+    """``transform`` is ``recomputed``; the docstring says so and now a test does.
+
+    The claim is made WRONG -- but inside every agreement tolerance, so the
+    verification still succeeds -- which is the only state in which the two
+    candidate return values differ and the difference is observable.
+    """
+
+    seed, raw, aligned, _ = models
+    recomputed = _solved(raw.centres(), aligned.centres())
+    claim = ProposedAlignment(
+        scale=_TRUE_SCALE * (1.0 + 5.0e-7),
+        rotation=_rotation_of(
+            _quat_mul(
+                _axis_angle_quaternion((0.0, 0.0, 1.0), 5.0e-7), _TRUE_QUATERNION
+            )
+        ),
+        translation=tuple(value + 2.5e-7 for value in _TRUE_TRANSLATION),
+        raw_pose_digest_sha256=canonical_pose_digest(raw),
+        aligned_pose_digest_sha256=canonical_pose_digest(aligned),
+    )
+    verification = _verify(models, proposal=claim)
+    assert verification.transform.scale == recomputed.scale
+    assert verification.transform.rotation == recomputed.rotation
+    assert verification.transform.translation == recomputed.translation
+    assert verification.transform.scale != claim.scale
+    assert verification.transform.rotation != claim.rotation
+    assert verification.transform.translation != claim.translation
+
+
 # --- the agreement tolerances, mutation-tested from both sides --------------
 def _scaled_proposal(proposal, factor):
     return _replace(proposal, scale=proposal.scale * (1.0 + factor))
@@ -2055,6 +2264,245 @@ def test_a_scattered_aligned_model_is_refused_on_its_fit_residual(tmp_path):
         == "alignment fit residual is too large a fraction of the trajectory"
     )
     assert caught.value.code == ALIGNMENT_UNVERIFIED_CODE
+
+
+def _jittered_aligned_models(tmp_path, amount, *, single=None, state=12345):
+    """The happy path with the ALIGNED centres displaced, claim re-solved.
+
+    The claim is re-solved rather than kept, so the agreement clauses cannot be
+    what fires: what is being measured is how much per-camera corruption the
+    module's own gauge and residual floors will admit from a child whose
+    declared numbers honestly describe the bytes it shipped.
+    """
+
+    rows = _seed_rows()
+    aligned_rows = _apply_similarity(
+        rows,
+        scale=_TRUE_SCALE,
+        quaternion=_TRUE_QUATERNION,
+        translation=_TRUE_TRANSLATION,
+    )
+    centres = list(_centres_of(aligned_rows))
+    if single is None:
+        moved = []
+        for centre in centres:
+            offsets = []
+            for _axis in range(3):
+                state = (1103515245 * state + 12345) % (1 << 31)
+                offsets.append((state / (1 << 30)) - 1.0)
+            moved.append(
+                tuple(centre[axis] + amount * offsets[axis] for axis in range(3))
+            )
+        centres = moved
+    else:
+        centres[single] = tuple(
+            centres[single][axis] + (amount if axis == 0 else 0.0) for axis in range(3)
+        )
+    seed = _snapshot(tmp_path, rows, "jit-seed")
+    raw = _snapshot(tmp_path, rows, "jit-raw")
+    aligned = _snapshot(tmp_path, _rows_with_centres(aligned_rows, centres), "jit-aligned")
+    recomputed = _solved(raw.centres(), aligned.centres())
+    proposal = ProposedAlignment(
+        scale=recomputed.scale,
+        rotation=recomputed.rotation,
+        translation=recomputed.translation,
+        raw_pose_digest_sha256=canonical_pose_digest(raw),
+        aligned_pose_digest_sha256=canonical_pose_digest(aligned),
+    )
+    return seed, raw, aligned, proposal
+
+
+def test_the_measured_shape_change_envelope_is_what_the_gauge_floors_leave(tmp_path):
+    """Pin the envelope the shape fraction's comment quotes, and WHICH clause binds.
+
+    The point is not the four numbers on their own; it is that at room scale
+    ``ALIGNMENT_MAX_SHAPE_CHANGE_FRACTION`` is NOT what refuses the next step up.
+    Both refusals below name a gauge floor, and both accepted residuals sit well
+    under the 1.0099 m this fraction would allow.  An operator reading the
+    constant needs that, and a future edit to any of the four constants involved
+    has to come here and contradict it.
+    """
+
+    inside = _verify(_jittered_aligned_models(tmp_path, 0.55))
+    assert 0.46 < inside.fit_rmse_m < 0.48
+    assert inside.fit_rmse_m < ALIGNMENT_MAX_SHAPE_CHANGE_FRACTION * inside.seed_rms_radius_m
+    with pytest.raises(AdapterError) as caught:
+        _verify(_jittered_aligned_models(tmp_path, 0.60))
+    assert str(caught.value) == "aligned model is not in the seed's metric orientation"
+
+    single_inside = _verify(_jittered_aligned_models(tmp_path, 1.10, single=0))
+    assert 0.28 < single_inside.fit_rmse_m < 0.30
+    with pytest.raises(AdapterError) as caught:
+        _verify(_jittered_aligned_models(tmp_path, 1.20, single=0))
+    assert str(caught.value) == "aligned model is not in the seed's metric scale"
+
+
+# --- the aligned orientations ----------------------------------------------
+def _rows_with_reoriented_cameras(rows, quaternion, indices=None):
+    """Re-orient cameras while leaving every camera CENTRE bit-identical.
+
+    ``tvec`` is rebuilt from the unchanged centre and the new rotation, so the
+    derived ``-R^T t`` the parent recovers is the same float it was before.  A
+    fixture that let the centre move would be caught by a clause that already
+    exists, and would prove nothing about the orientations.
+    """
+
+    rebuilt = []
+    for index, row in enumerate(rows):
+        image_id, camera_quaternion, translation, camera_id, name, observations = row
+        if indices is not None and index not in indices:
+            rebuilt.append(row)
+            continue
+        rotation = _rotation_of(camera_quaternion)
+        centre = tuple(
+            -sum(rotation[col][axis] * translation[col] for col in range(3))
+            for axis in range(3)
+        )
+        turned = _quat_mul(quaternion, camera_quaternion)
+        new_rotation = _rotation_of(turned)
+        new_translation = tuple(
+            -sum(new_rotation[axis][col] * centre[col] for col in range(3))
+            for axis in range(3)
+        )
+        rebuilt.append(
+            (image_id, turned, new_translation, camera_id, name, observations)
+        )
+    return rebuilt
+
+
+def _reoriented_models(tmp_path, *, angle, indices=None, axis=(0.31, -0.62, 0.72)):
+    """An aligned model that is a TRUE similarity of the raw one, then turned.
+
+    Everything the parent checks before the orientation clause is left exactly
+    as the happy path leaves it: the centres are untouched, so the recomputed
+    transform, all three gauge margins and the fit residual are the happy
+    path's own numbers.  The child then digests the model it really shipped,
+    which is what makes the digest clauses powerless here -- and is precisely
+    the attack the digest was mistakenly credited with catching.
+    """
+
+    rows = _seed_rows()
+    aligned_rows = _apply_similarity(
+        rows,
+        scale=_TRUE_SCALE,
+        quaternion=_TRUE_QUATERNION,
+        translation=_TRUE_TRANSLATION,
+    )
+    turned_rows = _rows_with_reoriented_cameras(
+        aligned_rows, _axis_angle_quaternion(axis, angle), indices
+    )
+    seed = _snapshot(tmp_path, rows, "turn-seed")
+    raw = _snapshot(tmp_path, rows, "turn-raw")
+    honest = _snapshot(tmp_path, aligned_rows, "turn-honest")
+    aligned = _snapshot(tmp_path, turned_rows, "turn-aligned")
+    # The centres really are untouched.  Not BIT-identical -- ``tvec`` is
+    # rebuilt as ``-R' c`` and the parser derives ``-R'^T t`` back out, and that
+    # round trip carries float64 noise -- but MEASURED below 1e-12 m, which is a
+    # million times under the tightest centre-driven tolerance in the module
+    # (1e-6 m) and 1e12 times under the fit-residual ceiling this fixture would
+    # otherwise be at risk of tripping.  Without this the test could pass for
+    # the wrong reason, on a clause that reads centres.
+    drift = max(
+        abs(moved[component] - straight[component])
+        for moved, straight in zip(aligned.centres(), honest.centres())
+        for component in range(3)
+    )
+    assert drift < 1.0e-12
+    proposal = ProposedAlignment(
+        scale=_TRUE_SCALE,
+        rotation=_rotation_of(_TRUE_QUATERNION),
+        translation=_TRUE_TRANSLATION,
+        raw_pose_digest_sha256=canonical_pose_digest(raw),
+        aligned_pose_digest_sha256=canonical_pose_digest(aligned),
+    )
+    return seed, raw, aligned, proposal
+
+
+_ORIENTATION_REFUSALS = (
+    ("every-camera-reversed", math.pi, None),
+    ("one-camera-reversed", math.pi, (0,)),
+    ("every-camera-a-radian-out", 1.0, None),
+    ("one-camera-a-radian-out", 1.0, (7,)),
+)
+
+
+@pytest.mark.parametrize(
+    "label,angle,indices",
+    _ORIENTATION_REFUSALS,
+    ids=[row[0] for row in _ORIENTATION_REFUSALS],
+)
+def test_aligned_orientations_the_transform_cannot_explain_are_refused(
+    tmp_path, label, angle, indices
+):
+    """A Sim(3) fixes the orientations too; centres alone do not pin them.
+
+    ``R'_i = R_i R^T`` holds exactly for a similarity, so an aligned model whose
+    cameras point somewhere else is not the transform of the raw one no matter
+    how perfectly its centres line up.
+    """
+
+    with pytest.raises(AdapterError) as caught:
+        _verify(_reoriented_models(tmp_path, angle=angle, indices=indices))
+    assert (
+        str(caught.value)
+        == "aligned camera orientations disagree with the recomputed alignment"
+    )
+    assert caught.value.code == ALIGNMENT_UNVERIFIED_CODE
+
+
+def test_an_orientation_change_just_outside_the_ceiling_is_refused(tmp_path):
+    """The refusing side of the ceiling, at a margin the float noise cannot reach.
+
+    The measured noise on this comparison is 8e-16 rad (the acceptance test
+    below asserts it), so 1e-6 rad of margin is nine decades of headroom -- the
+    boundary is the constant's, not the arithmetic's.
+    """
+
+    with pytest.raises(AdapterError) as caught:
+        _verify(
+            _reoriented_models(
+                tmp_path, angle=ALIGNED_MAX_ORIENTATION_CHANGE_RAD + 1.0e-6
+            )
+        )
+    assert (
+        str(caught.value)
+        == "aligned camera orientations disagree with the recomputed alignment"
+    )
+    assert caught.value.code == ALIGNMENT_UNVERIFIED_CODE
+
+
+def test_an_orientation_change_just_inside_the_ceiling_is_accepted(tmp_path):
+    """The accepting side.  Without it the constant could be narrowed to zero."""
+
+    verification = _verify(
+        _reoriented_models(tmp_path, angle=ALIGNED_MAX_ORIENTATION_CHANGE_RAD - 1.0e-6)
+    )
+    assert verification.max_aligned_orientation_change_rad <= (
+        ALIGNED_MAX_ORIENTATION_CHANGE_RAD
+    )
+    assert (
+        abs(
+            verification.max_aligned_orientation_change_rad
+            - (ALIGNED_MAX_ORIENTATION_CHANGE_RAD - 1.0e-6)
+        )
+        < 1.0e-12
+    )
+    # Every earlier clause is at its happy-path value, so the ceiling really is
+    # the only thing this pair moves.
+    assert verification.fit_rmse_m < 1.0e-9
+    assert verification.scale_relative_difference < ALIGNMENT_SCALE_RELATIVE_TOLERANCE
+
+
+def test_a_pure_similarity_leaves_the_orientation_residual_at_float_noise(tmp_path):
+    """``R'_i = R_i R^T`` is EXACT, so the honest margin is measured, not assumed.
+
+    This is what makes the ceiling a sanity floor rather than a fitted number:
+    an aligned model that really is the similarity of the raw one reports a
+    residual nine decades under it.
+    """
+
+    verification = _verify(_reoriented_models(tmp_path, angle=0.0))
+    assert verification.max_aligned_orientation_change_rad < 1.0e-14
 
 
 # --- the digests ------------------------------------------------------------

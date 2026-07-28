@@ -6,7 +6,24 @@ pre-bundle-adjustment model snapshot.  Item 5 proves those bytes are *frozen* --
 a private ``O_TMPFILE`` copy the parent made and hashed itself -- but it
 deliberately proves nothing about whether ``aligned-sparse-model-v1.tar`` is a
 correct Sim(3) alignment.  Those bytes are a child PROPOSAL.  This module is the
-parent's decision about whether the proposal is TRUE.
+parent's decision about whether the proposal is SELF-CONSISTENT.
+
+THE SCOPE OF THAT DECISION, STATED NARROWLY, because an earlier draft of that
+sentence claimed the whole of it.  All three archives this module reads are
+CHILD OUTPUTS.  ``seed-model-v1.tar`` is a persistent engine artifact, and the
+seed inside it is built by the child's own ``pycolmap.build_known_pose_seed``
+operation; the raw pre-BA and aligned snapshots are the child's too.  So the
+decision made here is whether the child's declared SCALARS -- the Sim(3) and the
+two pose digests -- agree with the child's own BYTES, and whether those bytes are
+consistent with each other as a similarity.  That is a real decision and it
+refuses a great deal, but it is NOT an anchor to anything the parent holds
+independently.  The parent DOES hold the ground truth the seed poses must equal:
+``request.frames``, which it fed the child.  This module never takes it and never
+compares.  Until something does, the "known-pose invariant" of clauses 6 and 7
+compares one child archive against another child archive -- it shows the
+triangulator agreed with the seed the child built, not that either preserved the
+device's poses.  Supplying that anchor is item 7's job, and it is what
+``NATIVE_ENGINE_OUTPUT_ALIGNMENT_VERIFIED_BY_PARENT`` would have to mean.
 
 THE ONE DESIGN CONSTRAINT THAT SHAPES EVERYTHING HERE: the parent's
 recomputation may not depend on the child's toolchain.  A parent that re-ran the
@@ -96,6 +113,22 @@ WHAT THIS MODULE DOES NOT DO, stated so nothing here can be misread as more:
     the parent has no pre-alignment refined model to compare them against, so
     there is no exact relation available.  Point integrity rests on item 5's
     byte freeze and on item 7's reprojection evidence.
+  * It does not ANCHOR any snapshot to data the parent holds independently, per
+    the scope paragraph above.  MEASURED consequences on this suite's fixture,
+    every one of them an acceptance with float-noise margins: a "room" whose
+    trajectory radius is 403.97 m passes (fit residual 1.6e-13 m); an aligned
+    model that reproduces the seed to 2e-15 m -- refinement having done nothing
+    at all -- passes (7.3e-16 m).  No clause bounds trajectory extent above
+    except :data:`POSE_DIGEST_MAX_TRANSLATION_M` at 1e6 m, and below only the
+    conditioning floor does, which on this fixture's aspect ratio puts the small
+    end at 11.8 mm of RMS radius.  Because the shape-change budget is a FRACTION
+    of the seed radius, its absolute size scales with a number the child chose.
+  * It does not pin the aligned ORIENTATIONS beyond a sanity ceiling.  Clause 15
+    refuses a camera that points more than
+    :data:`ALIGNED_MAX_ORIENTATION_CHANGE_RAD` away from where the recomputed
+    similarity puts it -- which is what stops a model whose cameras face
+    backwards from being certified -- but a uniform sub-ceiling misorientation
+    is accepted, and no clause available to this module could refuse it.
   * It does not compose anything.  Nothing in ``refine_runner``,
     ``refine_publisher`` or ``refine_native_process`` calls into this module.
     ``NATIVE_ENGINE_OUTPUT_ALIGNMENT_VERIFIED_BY_PARENT`` stays ``False``
@@ -156,6 +189,15 @@ ALIGNMENT_UNVERIFIED_CODE = "REFINE_ALIGNMENT_UNVERIFIED"
 #: statements separate is deliberate: "implemented" and "qualified" have been
 #: conflated before in this program and the conflation is how a disabled stage
 #: gets treated as a working one.
+#:
+#: WHAT COMPOSITION STILL OWES BEFORE THAT FLAG COULD MEAN "VERIFIED".  Not just
+#: a call site: an ANCHOR.  Every archive this module reads is a child output,
+#: so composing it as it stands would publish a decision that the child agreed
+#: with itself.  ``request.frames`` is the parent's own copy of the device poses
+#: the seed must carry, and item 7 has it; comparing the parsed seed centres and
+#: orientations against those frames is what turns clauses 6 and 7 from an
+#: internal-consistency check into a verification.  Composition is also what
+#: makes a false acceptance PUBLISHABLE, which is why the order matters.
 PARENT_ALIGNMENT_VERIFICATION_COMPOSED_INTO_REFINE = False
 
 # ---------------------------------------------------------------------------
@@ -283,6 +325,16 @@ ALIGNMENT_MIN_CORRESPONDENCES = 8
 #: :data:`ALIGNMENT_ROTATION_TOLERANCE_RAD` (1e-6 rad) at a serialisation noise
 #: floor of ``n`` = 1e-9 m gives ``d >= 1e-3`` m.  So this floor is what makes
 #: the rotation tolerance meaningful rather than arbitrary.
+#:
+#: THIS CLAUSE IS ONLY REACHABLE BECAUSE IT IS EVALUATED FIRST, and a future
+#: reorder would silently make it dead.  For any trajectory whose STRONGEST
+#: extent exceeds 1 m, the ratio floor below already demands a weak axis of at
+#: least ``1e-3 x strongest >= 1e-3`` m, so it dominates this one entirely; both
+#: fire only on trajectories under a metre.  MEASURED on a 2 m-radius ring whose
+#: strongest principal spread is 1.4142 m: a weak axis of 5.657e-4 m fires THIS
+#: floor, and 1.202e-3 m fires the ratio floor.  Not wrong today, but the
+#: dominated ``ALIGNMENT_MIN_SEED_RMS_RADIUS_M`` clause was deleted for exactly
+#: this shape and this one survives on evaluation order alone.
 ALIGNMENT_MIN_PRINCIPAL_EXTENT_M = 1.0e-3
 #: Minimum ratio of weakest to strongest principal spread.  Independent of the
 #: absolute floor above: a 40 m trajectory with a 2 cm weak axis clears the
@@ -307,7 +359,47 @@ ALIGNED_GAUGE_MAX_TRANSLATION_M = 0.25
 #: Ceiling on the alignment fit residual, as a fraction of the seed trajectory's
 #: own RMS radius.  A best-fit similarity that still leaves cameras scattered by
 #: half the trajectory's own extent has not aligned anything.  Loose on purpose.
+#: MEASURED on this suite's 12-pose, 2.0198 m-radius fixture, so an operator can
+#: see what "loose" admits rather than having to infer it.  Independent uniform
+#: jitter on EVERY aligned camera centre: +-0.55 m accepted (fit residual
+#: 0.4695 m), +-0.60 m refused.  A single aligned camera displaced along one
+#: axis: +1.10 m accepted (0.2888 m), +1.20 m refused.  AT THAT SCALE THIS
+#: FRACTION IS NOT THE BINDING CLAUSE and the numbers say which is: the 1.0099 m
+#: of residual it would permit is never reached, because the rotation gauge
+#: refuses the jitter case and the scale gauge refuses the single-camera case
+#: first.  This fraction binds on trajectories small enough that the absolute
+#: gauge floors go slack, which is the range it was written for.
+#: ``test_the_measured_shape_change_envelope_is_what_the_gauge_floors_leave``
+#: is what makes an edit to any of those four constants contradict this note
+#: rather than silently outdate it.
 ALIGNMENT_MAX_SHAPE_CHANGE_FRACTION = 0.5
+#: Ceiling on how far the ALIGNED model's cameras may point away from where the
+#: recomputed similarity puts them, in radians, taken over the worst camera.
+#:
+#: A Sim(3) applied to a COLMAP model determines the ORIENTATIONS exactly, not
+#: only the centres: a camera images ``R_i (X - c_i)``, and ``X' = s R X + t``
+#: forces ``R'_i = R_i R^T``.  So the quantity this bounds is not a fitted
+#: residual -- it is exactly the rotation bundle adjustment applied to camera
+#: ``i``, the orientation counterpart of the centre residual above.  Without this
+#: clause the aligned orientations would be constrained by nothing at all: the
+#: centres, the three agreement margins, the gauge floors and the fit residual
+#: are every one of them blind to a camera that points the wrong way, and so is
+#: the digest, which is only ever compared against a value the child derived from
+#: the same bytes.
+#:
+#: WHY 0.5 rad (29 degrees).  REASONING, not a measurement.  Clause 7 pins the
+#: raw orientations to the DEVICE's own attitude, whose roll and pitch are
+#: gravity-anchored to about a degree and whose yaw drifts slowly over a room
+#: walk; a refinement that re-points a camera by 29 degrees has replaced the
+#: device pose rather than refined it.  Like the gauge floors this is a sanity
+#: ceiling set far from any plausible run, NOT a quality gate.
+#:
+#: WHAT IT THEREFORE DOES NOT BUY, stated because the gap is real: an aligned
+#: model whose cameras are uniformly 0.4 rad (23 degrees) out still passes.
+#: Nothing in this module can close that, because all three archives are child
+#: outputs and no independent attitude is available to compare against -- see
+#: "WHAT THIS MODULE DOES NOT DO" in the module docstring.
+ALIGNED_MAX_ORIENTATION_CHANGE_RAD = 0.5
 #: There is deliberately NO separate floor on the seed trajectory's RMS radius.
 #: One was written and then removed: ``rms_radius >= sqrt(3) * weakest principal
 #: extent``, so :data:`ALIGNMENT_MIN_PRINCIPAL_EXTENT_M` already guarantees a
@@ -388,6 +480,7 @@ class ParentAlignmentVerification:
     gauge_rotation_rad: float
     gauge_translation_m: float
     fit_rmse_m: float
+    max_aligned_orientation_change_rad: float
     seed_rms_radius_m: float
     max_raw_pose_drift_m: float
     max_raw_rotation_drift_rad: float
@@ -570,7 +663,19 @@ def _quaternion_to_rotation(quaternion: Sequence[float]) -> Matrix3:
 # Bounded positional archive reading
 # ---------------------------------------------------------------------------
 def _read_exact_at(descriptor: int, offset: int, count: int, *, label: str) -> bytes:
-    """Positional read of exactly ``count`` bytes, or a refusal."""
+    """Positional read of exactly ``count`` bytes, or a refusal.
+
+    WHAT IS AND IS NOT COVERED, because the loop below has two separable parts
+    and an earlier revision of this note conflated them.  No caller inside this
+    module can make the loop run twice -- ``_MemberCursor.read_exact`` caps every
+    pull at ``_PREAD_CHUNK_BYTES`` and the observation skip steps in the same
+    units -- so through the public entry the continuation is inert.  The suite
+    therefore drives THIS FUNCTION directly with a multi-chunk count, which makes
+    the offset arithmetic and the chunk-size arithmetic falsifiable (dropping the
+    ``+ read`` term duplicates bytes silently rather than raising).  The
+    ``if not chunk:`` clause is a different case and stays uncovered; see its own
+    comment.
+    """
 
     chunks: list[bytes] = []
     read = 0
@@ -585,12 +690,13 @@ def _read_exact_at(descriptor: int, offset: int, count: int, *, label: str) -> b
                 ALIGNMENT_MODEL_INVALID_CODE,
             ) from exc
         if not chunk:
-            # DECLARED UNFALSIFIABLE, and kept anyway.  Every call here is
-            # bounded by a size this process just read from ``fstat``, so a
-            # regular file cannot reach EOF mid-read and no test in this suite
-            # can construct the condition.  What it guards is a CONCURRENT
-            # truncation, where the alternative to raising is an unbounded loop.
-            # Nothing claims a test covers it; see the item 6 report.
+            # DECLARED UNFALSIFIABLE, and kept anyway -- this ONE clause, not the
+            # continuation path around it, which the suite now drives directly.
+            # Every call here is bounded by a size this process just read from
+            # ``fstat``, so a regular file cannot reach EOF mid-read and no test
+            # in this suite can construct the condition.  What it guards is a
+            # CONCURRENT truncation, where the alternative to raising is an
+            # unbounded loop.  Nothing claims a test covers it.
             raise AdapterError(
                 f"{label} snapshot archive ended before a complete record",
                 ALIGNMENT_MODEL_INVALID_CODE,
@@ -1070,9 +1176,19 @@ def canonical_pose_digest(snapshot: SparseModelSnapshot) -> str:
          :data:`POSE_DIGEST_VERSION`.
 
     The camera centre is included as well as the translation even though one is
-    derived from the other: they round differently, and a digest that covered
-    only the stored translation would be blind to a rotation change that leaves
-    ``t`` alone.
+    derived from the other: they round differently, so covering both narrows the
+    set of records that can collide on the grid.
+
+    WHAT A DIGEST MATCH DOES AND DOES NOT MEAN.  This digest is only ever
+    compared against a value the CHILD declared, and the child derives its value
+    from the same bytes the parent is reading.  A match therefore says the child
+    described the archive it really shipped; it says nothing whatever about
+    whether that archive is right.  In particular it cannot see a model that is
+    wrong but self-consistent: a child that mis-orients every camera and then
+    honestly digests the result matches here, which is why the aligned
+    orientations need their own clause
+    (:data:`ALIGNED_MAX_ORIENTATION_CHANGE_RAD`) and get no coverage from this
+    function.  An earlier revision of this paragraph implied otherwise.
     """
 
     if type(snapshot) is not SparseModelSnapshot:
@@ -1268,11 +1384,16 @@ def verify_child_alignment_proposal(
           model is in the seed's metric gauge rather than the BA gauge (three
           separate margins: scale, rotation, translation);
       14. the fit residual is a sane fraction of the seed trajectory's radius;
-      15. the parent's digest of the raw snapshot matches the declared one;
-      16. ... and so does the parent's digest of the aligned snapshot.
+      15. ... and no aligned camera POINTS further from ``R_i R^T`` than
+          :data:`ALIGNED_MAX_ORIENTATION_CHANGE_RAD` -- the orientation
+          counterpart of clause 14, and the only clause that reads the aligned
+          orientations at all;
+      16. the parent's digest of the raw snapshot matches the declared one;
+      17. ... and so does the parent's digest of the aligned snapshot.
 
     Returns the parent's numbers on success.  The child's numbers are never
-    returned: a caller that wants them already has the proposal.
+    returned: a caller that wants them already has the proposal --
+    ``transform`` in particular is ``recomputed``, never ``claim``.
     """
 
     if type(deadline) is not RefineDeadline:
@@ -1401,7 +1522,9 @@ def verify_child_alignment_proposal(
     # No floor is applied to this radius; the conditioning gate above already
     # bounds it below by ``sqrt(3) * ALIGNMENT_MIN_PRINCIPAL_EXTENT_M``.
     seed_radius = _rms_radius_m(seed_model.centres())
+    inverse_rotation = _transpose(recomputed.rotation)
     residuals: list[float] = []
+    max_orientation_change = 0.0
     for index in range(len(names)):
         _deadline_checkpoint(deadline, index)
         mapped = recomputed.apply(raw_centres[index])
@@ -1413,10 +1536,26 @@ def verify_child_alignment_proposal(
                 )
             )
         )
+        # ``R'_i = R_i R^T``.  Both rotations are rebuilt from quaternions this
+        # process parsed and canonicalised itself, and ``R`` came out of the
+        # parent's own solve, so nothing the child computed enters this either.
+        change = _rotation_geodesic_angle(
+            _quaternion_to_rotation(aligned_model.poses[index].qvec),
+            _mat_mul(
+                _quaternion_to_rotation(raw_model.poses[index].qvec), inverse_rotation
+            ),
+        )
+        if change > max_orientation_change:
+            max_orientation_change = change
     fit_rmse = math.sqrt(sum(value * value for value in residuals) / len(residuals))
     if fit_rmse > ALIGNMENT_MAX_SHAPE_CHANGE_FRACTION * seed_radius:
         raise AdapterError(
             "alignment fit residual is too large a fraction of the trajectory",
+            ALIGNMENT_UNVERIFIED_CODE,
+        )
+    if max_orientation_change > ALIGNED_MAX_ORIENTATION_CHANGE_RAD:
+        raise AdapterError(
+            "aligned camera orientations disagree with the recomputed alignment",
             ALIGNMENT_UNVERIFIED_CODE,
         )
 
@@ -1445,6 +1584,7 @@ def verify_child_alignment_proposal(
         gauge_rotation_rad=gauge_rotation,
         gauge_translation_m=gauge_translation,
         fit_rmse_m=fit_rmse,
+        max_aligned_orientation_change_rad=max_orientation_change,
         seed_rms_radius_m=seed_radius,
         max_raw_pose_drift_m=max_pose_drift,
         max_raw_rotation_drift_rad=max_rotation_drift,
@@ -1457,6 +1597,7 @@ __all__ = (
     "ALIGNED_GAUGE_MAX_ROTATION_RAD",
     "ALIGNED_GAUGE_MAX_SCALE_DEVIATION",
     "ALIGNED_GAUGE_MAX_TRANSLATION_M",
+    "ALIGNED_MAX_ORIENTATION_CHANGE_RAD",
     "ALIGNMENT_DEGENERATE_CODE",
     "ALIGNMENT_MAX_SHAPE_CHANGE_FRACTION",
     "ALIGNMENT_MIN_CORRESPONDENCES",
