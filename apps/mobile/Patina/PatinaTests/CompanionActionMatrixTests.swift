@@ -240,6 +240,34 @@ struct CompanionActionMatrixTests {
         }
     }
 
+    /// The "Keep scanning?" panel is the shortest variant the provider can
+    /// build. That is a geometry fact, not a copy fact: a two-row panel floats
+    /// its header — the ✕ and `?` — roughly 180pt further down the screen than
+    /// a five-row one, and on the scanFlow fallback (the manual-room form) that
+    /// lands the ✕ directly on top of the form's "Doors" stepper. The overlay's
+    /// enlarged header hit targets are sized against that collision, so pin
+    /// both the title and the row count: adding a scanFlow row, or renaming the
+    /// panel, moves the header and must be a deliberate, visible change.
+    @Test
+    func scanFlowIsTheShortestPanelVariantAndKeepsItsTitle() {
+        let route = AppRoute.scanFlow(reason: .fresh)
+        let ctx = Self.context(for: route, roomCount: 2, active: false)
+
+        #expect(CompanionActionProvider.panelTitle(for: route, context: ctx) == "Keep scanning?")
+
+        let rows = CompanionActionProvider.actions(for: route, context: ctx, isAuthenticated: true)
+        #expect(rows.count == 2)
+
+        for other in Self.allRoutes {
+            let otherRows = CompanionActionProvider.actions(
+                for: other,
+                context: Self.context(for: other, roomCount: 2, active: false),
+                isAuthenticated: true
+            )
+            #expect(otherRows.count >= rows.count, "\(other) renders a shorter panel than scanFlow")
+        }
+    }
+
     @Test
     func guestSignInIsNotDoubleSuggestedWhenAScreenRowIsSuggested() {
         // On a screen with a suggested screen row, the guest sign-in tail must
