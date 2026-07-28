@@ -158,26 +158,40 @@ public final class FirstLaunchTourModel {
     /// strand the tour on an invisible middle step.
     @ObservationIgnored private var mountedAnchors: Set<FirstLaunchTourAnchor> = []
 
-    /// Step indexes dropped because their anchor never mounted. Tracked (not
-    /// `@ObservationIgnored`) because the visible "Step X of Y" caption is
-    /// derived from it: a skipped step is removed from BOTH the numerator and
-    /// the denominator so the caption renumbers ("Step 1 of 2") instead of
-    /// leaving a hole the user reads as a bug ("Step 1 of 3" → "Step 3 of 3").
+    /// Step indexes dropped because their anchor never mounted (or mounted and
+    /// then disappeared mid-run). Tracked (not `@ObservationIgnored`) because
+    /// the visible "Step X of Y" caption is derived from it: a dropped step is
+    /// removed from BOTH the numerator and the denominator so the caption
+    /// renumbers ("Step 1 of 2") instead of leaving a hole the user reads as a
+    /// bug ("Step 1 of 3" → "Step 3 of 3") — and, per the same rule, the tour
+    /// is never allowed to just end quietly when a step drops out from under it.
     private var skippedSteps: Set<Int> = []
 
-    /// Becomes `true` the first time any anchor registers. Skip-unmounted logic
-    /// only kicks in once the anchor system is live, so a model driven directly
-    /// (unit tests, no view tree) keeps the simple sequential advance behavior.
+    /// Becomes `true` the first time any anchor registers. Availability
+    /// tracking only kicks in once the anchor system is live, so a model
+    /// driven directly (unit tests, no view tree) keeps the simple sequential
+    /// advance behavior.
     @ObservationIgnored private var anchorTrackingActive = false
 
-    /// Pending "skip this step if its anchor never mounts" check.
-    @ObservationIgnored private var skipTask: Task<Void, Never>?
+    /// Pending "is this step's anchor ever going to mount?" checks, keyed by
+    /// step index. Populated up front for every step beyond the one currently
+    /// showing (see `scheduleUpcomingAvailabilityChecks`), NOT only when the
+    /// tour actually arrives at that step — a real user takes several seconds
+    /// to read and dismiss a coachmark, which is usually longer than
+    /// `anchorMountGracePeriod`, so by the time `advance()` would land on a
+    /// dead step its fate is already known and the transition skips straight
+    /// to the next live one in the same update. Landing on a step and only
+    /// THEN starting the clock left a window — up to the full grace period —
+    /// where the tour was active but nothing was on screen, which is exactly
+    /// the gap a competing first-run surface can step into and which reads to
+    /// the user as the tour vanishing.
+    @ObservationIgnored private var settleTasks: [Int: Task<Void, Never>] = [:]
 
     /// Grace window given to a step's anchor to mount before the step is
-    /// skipped. Covers the async case — e.g. `.addToRoom`'s product card only
+    /// dropped. Covers the async case — e.g. `.addToRoom`'s product card only
     /// mounts after the recommendations feed loads over the network — so a
     /// not-yet-mounted anchor still gets its coachmark, while a truly-absent one
-    /// (zero-room user) is skipped once the window elapses. Settable for tests.
+    /// (zero-room user) is dropped once the window elapses. Settable for tests.
     @ObservationIgnored var anchorMountGracePeriod: Duration = .seconds(1.5)
 
     public init(
@@ -302,18 +316,39 @@ public final class FirstLaunchTourModel {
         startedAt = Date()
         viewedSteps = [0]
         skippedSteps = []
+        settleTasks.values.forEach { $0.cancel() }
+        settleTasks.removeAll()
         currentStep = 0
         isActive = true
         analytics.tourStarted(tourKey: tourKey, triggerSource: triggerSource)
+        // Compute the mountable set BEFORE the user can act on it: start a
+        // settle check for every step beyond this one whose anchor isn't
+        // mounted yet, so a zero-room `.addToRoom` has already resolved as
+        // absent by the time `advance()` would otherwise land on it.
+        scheduleUpcomingAvailabilityChecks()
     }
 
-    /// Advance to the next step. If we're already on the final step, this is
-    /// treated as `complete()` instead. Fires `help.tour.step_advanced` on a
-    /// real advance.
+    /// Advance to the next MOUNTABLE step. If every remaining step is already
+    /// known-dropped, this is treated as `complete()` instead. Fires
+    /// `help.tour.step_advanced` on a real advance.
     public func advance() {
         guard isActive else { return }
         guard !steps.isEmpty else { return }
-        let nextIndex = currentStep + 1
+        advanceToNextMountableStep(from: currentStep)
+    }
+
+    /// Walks forward from `index`, skipping over any step already confirmed
+    /// dropped (`skippedSteps`) without ever landing on it — the caption for
+    /// the step we DO land on already reflects the shrunken denominator, and
+    /// no popover slot sits empty waiting on a step that's already known dead.
+    /// A step whose fate ISN'T resolved yet is still landed on (and given its
+    /// own settle check) exactly as before, so a slow-mounting anchor still
+    /// gets its coachmark.
+    private func advanceToNextMountableStep(from index: Int) {
+        var nextIndex = index + 1
+        while nextIndex < steps.count, skippedSteps.contains(nextIndex) {
+            nextIndex += 1
+        }
         guard nextIndex < steps.count else {
             complete()
             return
@@ -327,33 +362,61 @@ public final class FirstLaunchTourModel {
         )
         // If this step's anchor isn't on screen, don't skip it outright — its
         // view may still be mounting (e.g. `.addToRoom`'s product card while
-        // the feed loads). Give it a grace window; the reactive popover binding
-        // shows it the moment it mounts, and only if it's STILL absent after the
-        // window do we skip forward — which auto-clears the zero-room dead step.
-        scheduleSkipIfAnchorNeverMounts(for: nextIndex)
+        // the feed loads). Give it a grace window (idempotent — if a check for
+        // this index is already running from `scheduleUpcomingAvailabilityChecks`,
+        // this is a no-op and the ORIGINAL clock keeps counting rather than
+        // resetting). The reactive popover binding shows it the moment it
+        // mounts, and only if it's STILL absent after the window do we skip
+        // forward — which auto-clears the zero-room dead step.
+        scheduleAvailabilityCheckIfNeeded(for: nextIndex)
     }
 
-    /// After landing on `index`, wait one grace window; if that step's anchor
-    /// still hasn't mounted (and we haven't moved on), advance past it. No-op
-    /// when the anchor system isn't live (unit tests) or the anchor is already
-    /// mounted.
-    private func scheduleSkipIfAnchorNeverMounts(for index: Int) {
-        skipTask?.cancel()
+    /// Kicks off a settle check, starting NOW, for every step after `currentStep`
+    /// whose anchor isn't mounted yet. Called once at `startTour()` so the
+    /// clock for a step several hops away starts running immediately rather
+    /// than only once the tour happens to arrive there.
+    private func scheduleUpcomingAvailabilityChecks() {
+        guard anchorTrackingActive else { return }
+        for index in steps.indices where index > currentStep {
+            scheduleAvailabilityCheckIfNeeded(for: index)
+        }
+    }
+
+    /// Arms a settle check for `index` if one isn't already pending and the
+    /// step isn't already resolved one way or the other. No-op when the anchor
+    /// system isn't live (unit tests driving the model directly), the anchor
+    /// is already mounted, or the step's fate is already known.
+    private func scheduleAvailabilityCheckIfNeeded(for index: Int) {
         guard anchorTrackingActive else { return }
         guard steps.indices.contains(index) else { return }
+        guard !skippedSteps.contains(index) else { return }
         guard !mountedAnchors.contains(steps[index].anchor) else { return }
+        guard settleTasks[index] == nil else { return }
         let grace = anchorMountGracePeriod
-        skipTask = Task { @MainActor [weak self] in
+        settleTasks[index] = Task { @MainActor [weak self] in
             try? await Task.sleep(for: grace)
             guard let self, !Task.isCancelled else { return }
-            if self.isActive,
-               self.currentStep == index,
-               !self.mountedAnchors.contains(self.steps[index].anchor) {
-                // Record the drop BEFORE advancing so the next step's caption
-                // renders against the shrunken denominator in the same pass.
-                self.skippedSteps.insert(index)
-                self.advance()
-            }
+            self.settleTasks[index] = nil
+            guard self.isActive else { return }
+            guard !self.mountedAnchors.contains(self.steps[index].anchor) else { return }
+            self.markStepUnmountable(index)
+        }
+    }
+
+    /// Authoritative "this step is never going to show" call, shared by the
+    /// settle-check timeout and by `unregisterAnchor` (an anchor that vanishes
+    /// mid-run is at least as conclusive as one that never showed up). Records
+    /// the drop in `skippedSteps` so the caption renumbers, and — the "never
+    /// silently drop a step" rule — if the tour is currently SITTING on this
+    /// step, immediately walks it forward to the next mountable one (or
+    /// completes) instead of leaving an empty popover slot active.
+    private func markStepUnmountable(_ index: Int) {
+        guard steps.indices.contains(index), !skippedSteps.contains(index) else { return }
+        skippedSteps.insert(index)
+        settleTasks[index]?.cancel()
+        settleTasks[index] = nil
+        if isActive, currentStep == index {
+            advanceToNextMountableStep(from: index)
         }
     }
 
@@ -361,7 +424,8 @@ public final class FirstLaunchTourModel {
     /// `help.tour.completed`.
     public func complete() {
         guard isActive else { return }
-        skipTask?.cancel()
+        settleTasks.values.forEach { $0.cancel() }
+        settleTasks.removeAll()
         let durationMs: Int
         if let startedAt {
             durationMs = max(0, Int(Date().timeIntervalSince(startedAt) * 1000))
@@ -401,7 +465,8 @@ public final class FirstLaunchTourModel {
     /// persists `abandoned: true` so the tour never re-auto-starts.
     public func skip() {
         guard isActive else { return }
-        skipTask?.cancel()
+        settleTasks.values.forEach { $0.cancel() }
+        settleTasks.removeAll()
         // `steps.count`, not the display-facing `totalSteps` — the event
         // reports the authored tour length so the PostHog funnel denominator
         // stays comparable across users who skipped an unmountable step.
@@ -440,21 +505,39 @@ public final class FirstLaunchTourModel {
     // MARK: - Anchor helpers
 
     /// Record that `anchor`'s view is mounted (called on appear). Lets
-    /// `advance()` skip steps whose anchor never renders.
+    /// `advance()` skip steps whose anchor never renders — cancels that step's
+    /// pending settle check (wherever it is in the tour, not just the one
+    /// currently showing) so its coachmark shows via the reactive popover
+    /// binding instead of being dropped.
     public func registerAnchor(_ anchor: FirstLaunchTourAnchor) {
         anchorTrackingActive = true
         mountedAnchors.insert(anchor)
-        // The current step's anchor mounted within its grace window — cancel the
-        // pending skip so its coachmark shows (via the reactive popover binding)
-        // instead of being auto-skipped.
-        if isActive, steps.indices.contains(currentStep), steps[currentStep].anchor == anchor {
-            skipTask?.cancel()
+        if let index = steps.firstIndex(where: { $0.anchor == anchor }) {
+            settleTasks[index]?.cancel()
+            settleTasks[index] = nil
         }
     }
 
-    /// Record that `anchor`'s view left the tree (called on disappear).
+    /// Record that `anchor`'s view left the tree (called on disappear). A step
+    /// at or after the active one whose anchor disappears is treated the same
+    /// as one that never mounted — dropped from the caption and, if it's the
+    /// step currently on screen, walked forward immediately rather than left
+    /// showing a popover pointed at a view that's gone (the "never silently
+    /// drop a step mid-tour" rule applies just as much to a step vanishing
+    /// after being shown as to one that never appeared). A step already
+    /// passed is untouched — the user already saw it.
     public func unregisterAnchor(_ anchor: FirstLaunchTourAnchor) {
         mountedAnchors.remove(anchor)
+        guard isActive, anchorTrackingActive else { return }
+        guard let index = steps.firstIndex(where: { $0.anchor == anchor }) else { return }
+        guard index >= currentStep, !skippedSteps.contains(index) else { return }
+        if index == currentStep {
+            markStepUnmountable(index)
+        } else {
+            // Mounted earlier, gone before the tour arrived — re-arm the
+            // check rather than trust the stale "it's mounted" assumption.
+            scheduleAvailabilityCheckIfNeeded(for: index)
+        }
     }
 
     /// Returns `true` when the currently-active step's anchor matches
