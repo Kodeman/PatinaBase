@@ -220,9 +220,20 @@ struct CollectionsView: View {
                     .fill(PatinaColors.Background.secondary)
                     .frame(height: 80)
                     .overlay(
-                        Text("This board is empty")
-                            .font(PatinaTypography.caption)
-                            .foregroundStyle(PatinaColors.Text.muted)
+                        VStack(spacing: 4) {
+                            Text("This board is empty")
+                                .font(PatinaTypography.caption)
+                                .foregroundStyle(PatinaColors.Text.muted)
+                            // U31: give the empty tile a real path to pieces
+                            // instead of leaving it a dead end.
+                            Button {
+                                coordinator.navigate(to: .emergence(pieceId: nil))
+                            } label: {
+                                Text("Browse pieces")
+                                    .font(PatinaTypography.captionMedium)
+                                    .foregroundStyle(PatinaColors.Text.interactive)
+                            }
+                        }
                     )
             }
         }

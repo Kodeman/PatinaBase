@@ -92,8 +92,9 @@ struct RoomProjectView: View {
     // MARK: - Room not found (U31)
 
     /// U31: the local room row is gone (e.g. removed on another device, or a
-    /// stale deep link) — real empty-state copy; the back affordance now
-    /// comes from the screen-wide `.patinaScreen` chrome.
+    /// stale deep link) — real empty-state copy; the back affordance comes
+    /// from the screen-wide `.patinaScreen` chrome, and "Your rooms" gives a
+    /// forward path so this isn't a dead end.
     private var notFoundState: some View {
         VStack(spacing: 6) {
             Text("This room isn't on this phone")
@@ -102,6 +103,20 @@ struct RoomProjectView: View {
             Text("It may have been removed.")
                 .font(PatinaTypography.caption)
                 .foregroundStyle(PatinaColors.Text.muted)
+
+            Button {
+                coordinator.navigate(to: .yourSpaces)
+            } label: {
+                Text("Your rooms")
+                    .font(PatinaTypography.bodySmallMedium)
+                    .foregroundStyle(PatinaColors.Text.inverse)
+                    .frame(maxWidth: .infinity)
+                    .frame(height: 48)
+                    .background(Capsule().fill(PatinaColors.Interactive.active))
+            }
+            .buttonStyle(.plain)
+            .padding(.horizontal, 40)
+            .padding(.top, 12)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
