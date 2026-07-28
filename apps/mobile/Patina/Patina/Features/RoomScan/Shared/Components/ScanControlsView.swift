@@ -2,8 +2,11 @@
 //  ScanControlsView.swift
 //  Patina
 //
-//  Top-right pause + help controls for the active scan view.
+//  Top-right pause control for the active scan view.
 //  Per PRD §4.2.
+//
+//  U05: the `?` help control was a documented no-op — the Whisper Bar
+//  already carries in-flow coaching — so it was removed rather than wired.
 //
 
 import SwiftUI
@@ -11,13 +14,9 @@ import SwiftUI
 struct ScanControlsView: View {
 
     let onPause: () -> Void
-    let onHelp: () -> Void
 
     var body: some View {
-        HStack(spacing: 12) {
-            controlButton(system: "pause.fill", accessibility: "Pause scan", action: onPause)
-            controlButton(system: "questionmark", accessibility: "Show scan help", action: onHelp)
-        }
+        controlButton(system: "pause.fill", accessibility: "Pause scan", action: onPause)
     }
 
     private func controlButton(
@@ -46,7 +45,7 @@ struct ScanControlsView: View {
 }
 
 #Preview {
-    ScanControlsView(onPause: {}, onHelp: {})
+    ScanControlsView(onPause: {})
         .padding()
         .background(Color.black)
 }
