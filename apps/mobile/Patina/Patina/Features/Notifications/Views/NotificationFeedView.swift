@@ -114,11 +114,28 @@ struct NotificationFeedView: View {
             PatinaEmptyState(
                 icon: "bell",
                 title: "Nothing yet",
-                message: "Updates from your designer will land here."
+                message: "Updates from your designer will land here.",
+                ctaTitle: studioCTATitle,
+                ctaAction: presentStudioCTA
             )
             Spacer()
         }
         .frame(maxWidth: .infinity)
+    }
+
+    /// U22: names the surface, names the trigger, and offers the one CTA
+    /// that actually unblocks it — track an in-flight request if one
+    /// exists, otherwise start one. Matches the other studio empties.
+    private var studioCTATitle: String {
+        DesignRequestStatusService.shared.promotedRequest != nil ? "Track your request" : "Get design help"
+    }
+
+    private func presentStudioCTA() {
+        if DesignRequestStatusService.shared.promotedRequest != nil {
+            coordinator.navigate(to: .designRequests(focusLeadId: nil))
+        } else {
+            coordinator.navigate(to: .designerConsultation)
+        }
     }
 
     /// Guest state: the feed is a signed-in surface, so guests get a quiet
@@ -209,6 +226,13 @@ struct NotificationFeedView: View {
                     .foregroundStyle(PatinaColors.Text.muted)
                     .tracking(0.3)
             }
+
+            // U12: read rows previously had zero visible tap affordance —
+            // every row gets the same chevron regardless of read state.
+            Image(systemName: "chevron.right")
+                .font(PatinaTypography.uiSmall)
+                .foregroundStyle(PatinaColors.Text.muted)
+                .accessibilityHidden(true)
         }
         .padding(.horizontal, 24)
         .padding(.vertical, 16)
