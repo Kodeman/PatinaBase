@@ -5545,3 +5545,75 @@ how long 100 frames actually take; and whether the resulting evidence clears
 floors. Nothing before that run can answer any of them.
 
 *Entries add: I100 · last id = I100*
+
+### R120 · Field Capture P2 · the capture app's transport archives contradicted their own index; the app is the side that changes — 2026-07-28
+
+The first real Refine run was attempted on 2026-07-28 against the 100-frame
+subject scan and **did not reach COLMAP**. It found a shipping contract break
+between the capture app and the scan-pipeline worker. The ruling: **the capture
+app is wrong and the app changes.** Relaxing the worker was considered and
+rejected.
+
+**The defect.** `SupabaseSiteScanService.buildTransportArchives` tarred both
+heavy streams with `TarArchive.Entry(name: $0.lastPathComponent, …)` — bare
+filenames. The same app's `keyframe_index.ndjson` records `heicPath` and
+`depthPath` as `keyframes/<file>`, and the worker resolves every member by
+exactly that string (`refine_materializer.py:2566`,
+`extracted[indexed.frame.heic_path]`), with `_SAFE_ARCHIVE_MEMBER` requiring
+the `keyframes/` prefix. A flat member can never match. **Every bundle this app
+has ever produced contradicts its own index**, and none was consumable by
+Refine. The subject scan demonstrates it: the tar holds
+`keyframe_000001_001313016_128.heic` while its index calls that same file
+`keyframes/keyframe_000001_001313016_128.heic`.
+
+**Why the app and not the worker.** The index is the wire contract — it is what
+names, orders and describes the frames, and the worker, the validator and the
+archive all exist to serve it. The app is the only party that disagrees with
+itself: it writes both the index and the archive, and gives the same file two
+different names. Teaching the worker to accept flat members would bless a
+bundle that cannot describe its own contents, and would leave the app free to
+keep emitting archives that no reader can join to an index.
+
+**Why no test caught it.** The existing tar tests pass arbitrary names straight
+to `TarArchive.write`, so they exercise the *writer* and never the *naming
+rule*; the rule lived only as a closure at one call site, where nothing could
+reach it. The fix therefore extracts `TarArchive.bundleEntries(directory:files:)`
+— a named function is what gives the rule somewhere to be tested. Proven
+non-vacuous: reverting it to the shipped bare-filename form reddens the new
+test with four assertion failures. 171 tests pass restored, against 170 before.
+
+**Safe for P1.** Ingest extracts these archives into `work/_untar/<kind>/`
+purely as a containment check and **nothing reads that output**, so no live
+consumer depends on the old member names. The archives are validated as opaque
+artifacts (present + sha256 + size); the validator never inspects tar
+internals.
+
+**What the run proved before it stopped, which is not nothing.** The pinned
+toolchain preflight **passed** — the manifest installed at
+`/opt/colmap/4.0.2/share/patina/refine-colmap-toolchain-v1.manifest.json`
+(824 bytes, 19 sorted keys, executable `60db810e…`) is in force and the run
+cleared it. Owner-scoped key layout, artifact digests and sizes were all
+enforced correctly, each refusal naming its own cause: first an invented key
+layout, then the canonical Field layout accepted, then the archive members.
+
+**And one refusal worth recording on its own.** An attempt was made to repack
+the archive with correct member names so the run could proceed to COLMAP. The
+run refused it: `REFINE_INPUT_INVALID: bundle manifest does not bind the
+requested keyframesArchive artifact`. The bundle manifest binds every
+artifact's SHA-256, so a corrected archive cannot be substituted without
+**forging the manifest** — which was not done, and will not be. The integrity
+chain worked exactly as designed: it is not possible to manufacture a passing
+run from a doctored input by accident, only by deliberate forgery.
+
+**Consequence.** The first real Refine run now requires a **new capture from a
+rebuilt app**: no existing bundle can be made consumable without breaking its
+own manifest binding. The four questions I100 named — COLMAP under the pinned
+toolchain, libheif on real 1440x1920 keyframes, 100-frame runtime, and whether
+the evidence clears `evaluate_refinement_evidence` — remain open, and are now
+gated on a device walk rather than on any code.
+
+**The `depth/` lane is fixed in the same pass** though Refine does not consume
+`depth.tar`: it carried the identical defect, and leaving a known-broken
+sibling in place to be rediscovered later is not a saving.
+
+*Entries add: R120 · last id = R120*
