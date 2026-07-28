@@ -30,7 +30,7 @@ struct NewRoomSheet: View {
                 iconBackground: PatinaColors.clay,
                 iconForeground: PatinaColors.offWhite,
                 title: "Scan with camera",
-                subtitle: "Walk your room for full spatial intelligence, AR placement, and smart recommendations"
+                subtitle: "Walk your room with the camera — best picks, AR placement, and a floor plan."
             ) {
                 dismiss()
                 coordinator.navigate(to: .scanFlow(reason: .fresh))
@@ -41,7 +41,7 @@ struct NewRoomSheet: View {
                 iconBackground: PatinaColors.Background.secondary,
                 iconForeground: PatinaColors.Text.primary,
                 title: "Enter manually",
-                subtitle: "Add room type and dimensions. No AR, but you'll still get style-matched picks."
+                subtitle: "Type in room size and details. You'll still get style-matched picks."
             ) {
                 dismiss()
                 coordinator.navigate(to: .manualRoomEntry)

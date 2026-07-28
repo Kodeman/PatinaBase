@@ -3,7 +3,8 @@
 //  Patina
 //
 //  All items across every room. Tabs: All / By Category / By Maker.
-//  Long-press an item to move or copy.
+//  Tap an item to view its detail; use the row's ⋯ to move or copy it
+//  to another room (U16).
 //
 
 import SwiftUI
@@ -24,18 +25,24 @@ struct CrossRoomView: View {
             tabs
             ScrollView {
                 LazyVStack(spacing: 0) {
-                    switch tab {
-                    case .all:
-                        ForEach(items) { row($0) }
-                    case .category:
-                        ForEach(groupedByCategory.keys.sorted(), id: \.self) { key in
-                            sectionHeader(key.capitalized)
-                            ForEach(groupedByCategory[key] ?? []) { row($0) }
-                        }
-                    case .maker:
-                        ForEach(groupedByMaker.keys.sorted(), id: \.self) { key in
-                            sectionHeader(key)
-                            ForEach(groupedByMaker[key] ?? []) { row($0) }
+                    // U31: `items` empty implies every grouped dictionary is
+                    // also empty, so one check covers all three tabs.
+                    if items.isEmpty {
+                        emptyState
+                    } else {
+                        switch tab {
+                        case .all:
+                            ForEach(items) { row($0) }
+                        case .category:
+                            ForEach(groupedByCategory.keys.sorted(), id: \.self) { key in
+                                sectionHeader(key.capitalized)
+                                ForEach(groupedByCategory[key] ?? []) { row($0) }
+                            }
+                        case .maker:
+                            ForEach(groupedByMaker.keys.sorted(), id: \.self) { key in
+                                sectionHeader(key)
+                                ForEach(groupedByMaker[key] ?? []) { row($0) }
+                            }
                         }
                     }
                     Spacer().frame(height: 120)
@@ -101,53 +108,109 @@ struct CrossRoomView: View {
     // MARK: - Rows
 
     private func row(_ item: SavedItem) -> some View {
-        Button {
-            coordinator.presentedSheet = .moveItem(itemId: item.id)
-        } label: {
-            HStack(spacing: 12) {
-                item.placeholderGradient
-                    .frame(width: 56, height: 56)
-                    .clipShape(RoundedRectangle(cornerRadius: 9, style: .continuous))
-                VStack(alignment: .leading, spacing: 3) {
-                    Text(item.productName)
-                        .font(PatinaTypography.uiSmall)
-                        .foregroundStyle(PatinaColors.Text.primary)
-                    Text(item.makerName)
-                        .font(PatinaTypography.monoLabel)
-                        .tracking(0.4)
-                        .textCase(.uppercase)
-                        .foregroundStyle(PatinaColors.Text.muted)
-                    if let roomName = item.room?.name {
-                        HStack(spacing: 4) {
-                            Circle()
-                                .fill(roomColor(item.room))
-                                .frame(width: 6, height: 6)
-                            Text(roomName)
-                                .font(PatinaTypography.monoSmall)
-                                .foregroundStyle(PatinaColors.Text.secondary)
+        HStack(spacing: 8) {
+            // U16: row body tap is app-wide "tap = detail" convention — the
+            // move/copy action lives behind the trailing ⋯ instead.
+            Button {
+                coordinator.navigate(to: .pieceDetail(pieceId: item.productId))
+            } label: {
+                HStack(spacing: 12) {
+                    item.placeholderGradient
+                        .frame(width: 56, height: 56)
+                        .clipShape(RoundedRectangle(cornerRadius: 9, style: .continuous))
+                    VStack(alignment: .leading, spacing: 3) {
+                        Text(item.productName)
+                            .font(PatinaTypography.uiSmall)
+                            .foregroundStyle(PatinaColors.Text.primary)
+                        Text(item.makerName)
+                            .font(PatinaTypography.monoLabel)
+                            .tracking(0.4)
+                            .textCase(.uppercase)
+                            .foregroundStyle(PatinaColors.Text.muted)
+                        if let roomName = item.room?.name {
+                            HStack(spacing: 4) {
+                                Circle()
+                                    .fill(roomColor(item.room))
+                                    .frame(width: 6, height: 6)
+                                Text(roomName)
+                                    .font(PatinaTypography.monoSmall)
+                                    .foregroundStyle(PatinaColors.Text.secondary)
+                            }
+                            .padding(.horizontal, 8)
+                            .padding(.vertical, 2)
+                            .background(
+                                Capsule().fill(PatinaColors.Background.secondary)
+                            )
                         }
-                        .padding(.horizontal, 8)
-                        .padding(.vertical, 2)
-                        .background(
-                            Capsule().fill(PatinaColors.Background.secondary)
-                        )
                     }
+                    Spacer(minLength: 0)
+                    Text(item.fullFormattedPrice)
+                        .font(PatinaTypography.h5)
+                        .foregroundStyle(PatinaColors.Text.primary)
                 }
-                Spacer(minLength: 0)
-                Text(item.fullFormattedPrice)
-                    .font(PatinaTypography.h5)
-                    .foregroundStyle(PatinaColors.Text.primary)
+                .contentShape(Rectangle())
             }
-            .padding(.horizontal, 20)
-            .padding(.vertical, 12)
-            .overlay(
-                Rectangle()
-                    .fill(PatinaColors.pearl.opacity(0.5))
-                    .frame(height: 1),
-                alignment: .bottom
-            )
+            .buttonStyle(.plain)
+
+            Button {
+                coordinator.presentedSheet = .moveItem(itemId: item.id)
+            } label: {
+                Text("⋯")
+                    .font(.system(size: 14, weight: .semibold))
+                    .foregroundStyle(PatinaColors.Text.primary)
+                    .frame(width: 28, height: 28)
+                    .background(
+                        RoundedRectangle(cornerRadius: 8, style: .continuous)
+                            .fill(PatinaColors.Background.secondary)
+                    )
+                    .frame(minWidth: 44, minHeight: 44)
+                    .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel("More actions")
+            .accessibilityHint("Move or copy \(item.productName) to another room.")
         }
-        .buttonStyle(.plain)
+        .padding(.horizontal, 20)
+        .padding(.vertical, 12)
+        .overlay(
+            Rectangle()
+                .fill(PatinaColors.pearl.opacity(0.5))
+                .frame(height: 1),
+            alignment: .bottom
+        )
+    }
+
+    // MARK: - Empty state (U31)
+
+    private var emptyState: some View {
+        VStack(spacing: 10) {
+            Text("✦").font(.system(size: 36))
+                .foregroundStyle(PatinaColors.Text.muted)
+            Text("No items yet")
+                .font(PatinaTypography.h4)
+                .foregroundStyle(PatinaColors.Text.primary)
+            Text("Pieces you save land here, organized across your rooms.")
+                .font(PatinaTypography.caption)
+                .foregroundStyle(PatinaColors.Text.muted)
+                .multilineTextAlignment(.center)
+                .frame(maxWidth: 260)
+            Button {
+                coordinator.navigate(to: .emergence(pieceId: nil))
+            } label: {
+                Text("Browse pieces")
+                    .font(PatinaTypography.bodySmallMedium)
+                    .foregroundStyle(PatinaColors.Text.inverse)
+                    .frame(maxWidth: .infinity)
+                    .frame(height: 48)
+                    .background(Capsule().fill(PatinaColors.Interactive.active))
+            }
+            .buttonStyle(.plain)
+            .padding(.horizontal, 40)
+            .padding(.top, 6)
+        }
+        .frame(maxWidth: .infinity)
+        .padding(.top, 80)
+        .padding(.horizontal, 20)
     }
 
     private func sectionHeader(_ title: String) -> some View {

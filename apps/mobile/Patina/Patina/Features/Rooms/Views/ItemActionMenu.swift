@@ -9,7 +9,7 @@ import SwiftUI
 
 struct ItemActionMenu: View {
     enum Action: Hashable {
-        case viewAR, viewDetail, move, copy, findSimilar, remove
+        case viewAR, viewDetail, move, copy, remove
     }
 
     let item: SavedItem
@@ -27,12 +27,11 @@ struct ItemActionMenu: View {
                 .padding(.vertical, 14)
 
             VStack(spacing: 1) {
-                row("◎", "View in AR",               .viewAR)
-                row("↗", "View Product Detail",      .viewDetail)
-                row("⇄", "Move to Another Room",     .move)
-                row("⊞", "Copy to Another Room",     .copy)
-                row("✦", "Find Similar",             .findSimilar)
-                row("✕", "Remove from Room",         .remove, destructive: true)
+                row("arkit", "View in AR",                          .viewAR)
+                row("arrow.up.right", "View Product Detail",        .viewDetail)
+                row("arrow.left.arrow.right", "Move to Another Room", .move)
+                row("plus.square.on.square", "Copy to Another Room", .copy)
+                row("xmark", "Remove from Room",                    .remove, destructive: true)
             }
             .background(PatinaColors.pearl)
             .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
@@ -65,12 +64,12 @@ struct ItemActionMenu: View {
         )
     }
 
-    private func row(_ glyph: String, _ title: String, _ action: Action, destructive: Bool = false) -> some View {
+    private func row(_ systemImage: String, _ title: String, _ action: Action, destructive: Bool = false) -> some View {
         Button {
             onSelect(action)
         } label: {
             HStack(spacing: 12) {
-                Text(glyph)
+                Image(systemName: systemImage)
                     .font(.system(size: 16))
                     .frame(width: 24)
                 Text(title)
