@@ -226,8 +226,10 @@ struct ContentView: View {
                     .toolbarTitleDisplayMode(.inline)
             }
 
-        case .roomEmergence:
-            RecommendationsView()
+        case .roomEmergence(let roomId):
+            // U06/U07: thread the room through so the browse is actually
+            // scoped to it (the RPC already accepts `p_room_id`).
+            RecommendationsView(roomId: roomId.uuidString)
                 .toolbarTitleDisplayMode(.inline)
 
         case .table:
