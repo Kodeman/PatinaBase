@@ -14,7 +14,7 @@ import SwiftUI
 struct PatinaErrorState: View {
     let message: String
     var retryLabel: String = "Let's try that again"
-    var action: (() -> Void)? = nil
+    var action: (() -> Void)?
 
     var body: some View {
         VStack(spacing: 12) {
