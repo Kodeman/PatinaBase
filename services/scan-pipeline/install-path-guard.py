@@ -83,6 +83,7 @@ SOURCE_PACKAGE_FILES = frozenset(
         f"{SOURCE_PACKAGE_ROOT}/refine_adapter.py",
         f"{SOURCE_PACKAGE_ROOT}/refine_colmap_backend.py",
         f"{SOURCE_PACKAGE_ROOT}/refine_colmap_command.py",
+        f"{SOURCE_PACKAGE_ROOT}/refine_colmap_manifest.py",
         f"{SOURCE_PACKAGE_ROOT}/refine_colmap_toolchain.py",
         f"{SOURCE_PACKAGE_ROOT}/refine_evidence_builder.py",
         f"{SOURCE_PACKAGE_ROOT}/refine_engine.py",
