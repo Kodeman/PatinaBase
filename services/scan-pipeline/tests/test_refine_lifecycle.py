@@ -43,6 +43,7 @@ import math
 import os
 import pathlib
 import struct
+import sys
 import tarfile
 import time
 import tomllib
@@ -299,15 +300,17 @@ def _axis_rotation(axis, angle):
 # ===========================================================================
 # The bundle fixture
 # ===========================================================================
-def _camera_transform(index: int) -> list[float]:
+def _camera_transform(index: int, *, count: int = FRAME_COUNT) -> list[float]:
     """A helix, so the trajectory is genuinely three-dimensional.
 
     A straight line would be rejected by ``estimate_sim3``'s collinearity guard
     -- correctly -- and a fixture that could not be aligned would prove nothing
-    about the alignment.
+    about the alignment.  ``count`` spreads the same helix over however many
+    frames a fixture has, so a short bundle is still non-coplanar rather than a
+    degenerate arc the alignment would (correctly) refuse.
     """
 
-    angle = index * (2.0 * math.pi / FRAME_COUNT)
+    angle = index * (2.0 * math.pi / count)
     return [
         1.0, 0.0, 0.0, 1.5 * math.cos(angle),
         0.0, 1.0, 0.0, 1.5 * math.sin(angle),
@@ -316,25 +319,38 @@ def _camera_transform(index: int) -> list[float]:
     ]
 
 
-def _index_row(index: int) -> dict[str, object]:
+#: The fixture's NATIVE (landscape) sensor pair.  The encoded raster is its
+#: ``.right`` rotation, which is why the row below spells ``width``/``height``
+#: as the swapped pair while ``intrinsics`` stay native: that is the convention
+#: ``right_rotated_intrinsics`` asserts and the one I99 measured on device.
+_NATIVE_FIXTURE_SIZE = (3, 2)
+
+
+def _index_row(
+    index: int,
+    *,
+    count: int = FRAME_COUNT,
+    native: tuple[int, int] = _NATIVE_FIXTURE_SIZE,
+) -> dict[str, object]:
+    native_width, native_height = native
     stem = f"keyframe_{index:06d}"
     return {
         "heicPath": f"keyframes/{stem}.heic",
         "depthPath": None,
         "timestampSeconds": float(index) + 1000.0,
         "frameTimestamp": float(index),
-        "cameraTransform": _camera_transform(index),
+        "cameraTransform": _camera_transform(index, count=count),
         "intrinsics": {
-            "fx": 2.5,
-            "fy": 2.0,
-            "cx": 1.5,
-            "cy": 1.0,
-            "imageWidth": 3,
-            "imageHeight": 2,
+            "fx": native_width * 0.8333333333333334,
+            "fy": native_height * 1.0,
+            "cx": native_width * 0.5,
+            "cy": native_height * 0.5,
+            "imageWidth": native_width,
+            "imageHeight": native_height,
         },
         "sharpness": 250.0,
-        "width": 2,
-        "height": 3,
+        "width": native_height,
+        "height": native_width,
         "hasDepth": False,
         "smoothedDepth": False,
     }
@@ -372,8 +388,16 @@ class _PrematerializedRaster:
 class _Bundle:
     """One real on-disk Field bundle, laid out exactly as Storage would key it."""
 
-    def __init__(self, root: Path) -> None:
-        rows = [_index_row(index) for index in range(FRAME_COUNT)]
+    def __init__(
+        self,
+        root: Path,
+        *,
+        count: int = FRAME_COUNT,
+        native: tuple[int, int] = _NATIVE_FIXTURE_SIZE,
+    ) -> None:
+        rows = [
+            _index_row(index, count=count, native=native) for index in range(count)
+        ]
         index_payload = b"".join(_canonical_json(row) for row in rows)
         summary_payload = _canonical_json(
             {
@@ -494,10 +518,15 @@ def _verification_for(snapshot: SparseModelSnapshot) -> ParentAlignmentVerificat
     )
 
 
-def _materialize(bundle: _Bundle, scratch: Path, deadline: RefineDeadline):
+def _materialize(
+    bundle: _Bundle,
+    scratch: Path,
+    deadline: RefineDeadline,
+    raster_materializer=None,
+):
     materializer = RefineMaterializer(
         acquirer=LocalScratchArtifactAcquirer(bundle.root),
-        raster_materializer=_PrematerializedRaster(),
+        raster_materializer=raster_materializer or _PrematerializedRaster(),
     )
     return materializer.materialize(
         RefineMaterializationRequest(
@@ -1032,6 +1061,8 @@ def _run(
     engine_kwargs: dict | None = None,
     deadline: RefineDeadline | None = None,
     toolchain_manifest_path: str | None = None,
+    bundle_kwargs: dict | None = None,
+    raster_materializer=None,
 ):
     bundle_root = tmp_path / "bundle"
     bundle_root.mkdir(parents=True)
@@ -1042,7 +1073,7 @@ def _run(
     manifest = tmp_path / "toolchain.json"
     manifest.write_text("{}")
 
-    bundle = _Bundle(bundle_root)
+    bundle = _Bundle(bundle_root, **(bundle_kwargs or {}))
     carried = deadline or _deadline()
     # The probe is TEST SCAFFOLDING -- it exists only so the recording knows
     # which engine names and poses the lifecycle will produce -- so it runs on
@@ -1074,7 +1105,12 @@ def _run(
                 keyframes_archive=bundle.archive,
             ),
             acquirer=LocalScratchArtifactAcquirer(bundle_root),
-            raster_materializer=_PrematerializedRaster(),
+            # The PROBE above always rasterises through the deterministic
+            # stand-in, because all it needs from the materialization is the
+            # engine names and poses -- neither of which depends on the raster
+            # adapter.  Only the run under test uses ``raster_materializer``,
+            # so a test driving the real packaged adapter pays for it once.
+            raster_materializer=raster_materializer or _PrematerializedRaster(),
             storage=sink,
             deadline=carried,
             native_engine_call=engine,
@@ -4059,3 +4095,796 @@ def test_the_planner_predicts_the_bytes_the_writer_actually_writes(tmp_path, cei
         assert max(actual) <= ceiling
     finally:
         materialization.cleanup()
+
+
+# ===========================================================================
+# BLOCKING 3: the pinned capture raster profile (R119 ruling 3)
+#
+# I99 qualified ONE encoded raster profile on the physical device -- 1440x1920,
+# the .right rotation of a 1920x1440 ARKit format -- and R119 ruling 3 admits
+# that profile on the composed path and nothing else.  It rejected a
+# receipt-lookup admitting a set of profiles and it rejected an operator
+# override, both by name.
+#
+# The tests below do three separate things and none of them substitutes for
+# another: they pin the constant to I99's own measured artifact (so a typo
+# reddens), they CONSTRUCT the refusal for other profiles through the real
+# adapter (so the fail-closed claim is exercised rather than asserted), and they
+# read the CLI surface for any way to widen it (so "no override" is checked
+# rather than promised).
+# ===========================================================================
+_I99_RECEIPT_SHA256 = (
+    "f48fa56d905a8e57dac152c6d79c797f9060fe9421c18f449536708234ff1775"
+)
+_I99_MATERIALIZED_PPM_SHA256 = (
+    "50dccb8a57741c4249a1db11fa3d49cd012dddaafb37b0d3f5ccbda74d116d2f"
+)
+#: The byte count and header I99 recorded for the PPM its receipt materialized.
+#: Written out literally: reading them off the module would make every assertion
+#: below a tautology.
+_I99_MATERIALIZED_PPM_BYTES = 8_294_417
+_I99_MATERIALIZED_PPM_HEADER = b"P6\n1440 1920\n255\n"
+#: The helper source I99 was taken against (I98's protocol-v3 bytes).
+_I99_HELPER_SOURCE_SHA256 = (
+    "3b184937b755dc4acca4347ea6dba43dbeb111f090a91cd340e65d214937c626"
+)
+
+
+def test_the_pinned_profile_is_the_one_i99_qualified_and_only_that_one():
+    from patina_scan_worker.field_raster_materializer import FieldRasterProfile
+    from patina_scan_worker.refine_lifecycle import (
+        QUALIFIED_CAPTURE_RASTER_HELPER_SOURCE_SHA256,
+        QUALIFIED_CAPTURE_RASTER_MATERIALIZED_PPM_SHA256,
+        QUALIFIED_CAPTURE_RASTER_PROFILE,
+        QUALIFIED_CAPTURE_RASTER_RECEIPT_SHA256,
+    )
+
+    assert QUALIFIED_CAPTURE_RASTER_PROFILE == FieldRasterProfile(1440, 1920)
+    assert QUALIFIED_CAPTURE_RASTER_RECEIPT_SHA256 == _I99_RECEIPT_SHA256
+    assert (
+        QUALIFIED_CAPTURE_RASTER_MATERIALIZED_PPM_SHA256
+        == _I99_MATERIALIZED_PPM_SHA256
+    )
+    assert (
+        QUALIFIED_CAPTURE_RASTER_HELPER_SOURCE_SHA256 == _I99_HELPER_SOURCE_SHA256
+    )
+
+
+def test_the_pinned_profile_reproduces_the_receipts_own_materialized_ppm():
+    """The constant is checked against a MEASURED artifact, not against itself.
+
+    I99's receipt materialized 8_294_417 bytes under the header
+    ``P6\\n1440 1920\\n255\\n``.  Exactly one profile implies both, so a mistyped
+    constant -- 1440x1290, 1400x1920 -- cannot satisfy this.
+    """
+
+    from patina_scan_worker.refine_lifecycle import (
+        QUALIFIED_CAPTURE_RASTER_MATERIALIZED_PPM_BYTES,
+        QUALIFIED_CAPTURE_RASTER_PROFILE,
+    )
+
+    assert QUALIFIED_CAPTURE_RASTER_PROFILE.ppm_size == _I99_MATERIALIZED_PPM_BYTES
+    assert QUALIFIED_CAPTURE_RASTER_PROFILE.ppm_header == _I99_MATERIALIZED_PPM_HEADER
+    assert (
+        QUALIFIED_CAPTURE_RASTER_MATERIALIZED_PPM_BYTES == _I99_MATERIALIZED_PPM_BYTES
+    )
+    # 17 header bytes + 1440*1920*3, both halves stated so a change to either
+    # moves a number rather than cancelling out.
+    assert len(_I99_MATERIALIZED_PPM_HEADER) == 17
+    assert 1440 * 1920 * 3 == 8_294_400
+
+
+def test_a_profile_that_stops_matching_the_receipt_fails_the_composed_path_closed(
+    monkeypatch,
+):
+    """The RUNTIME half of the check above, which a mutation sweep found vacuous.
+
+    The assertion above compares two constants that agree in the shipped tree,
+    so deleting the guard that compares them at run time reddened nothing --
+    exactly the "clause no input can reach" this program keeps finding.  The
+    condition is a divergence between two source constants and no input
+    produces it, so one of them is moved directly, the same way the helper-source
+    and posture-flag clauses are exercised.  The guard is kept rather than
+    deleted because it is the thing that refuses a RUN, where the assertion only
+    refuses a commit.
+    """
+
+    from patina_scan_worker.refine_lifecycle import (
+        LIFECYCLE_RASTER_UNQUALIFIED_CODE,
+        require_qualified_raster_profile,
+    )
+
+    monkeypatch.setattr(
+        refine_lifecycle,
+        "QUALIFIED_CAPTURE_RASTER_MATERIALIZED_PPM_BYTES",
+        _I99_MATERIALIZED_PPM_BYTES + 1,
+    )
+    with pytest.raises(AdapterError) as failure:
+        require_qualified_raster_profile(_PrematerializedRaster())
+    assert failure.value.code == LIFECYCLE_RASTER_UNQUALIFIED_CODE
+    assert "the qualification receipt measured" in str(failure.value)
+    assert "8294417 PPM bytes" in str(failure.value)
+
+
+def test_the_pinned_profile_is_inside_every_bound_the_adapter_enforces():
+    """A pin the materializer would refuse is not a pin, it is a deferred outage."""
+
+    from patina_scan_worker.field_raster_materializer import (
+        _MAX_PROFILE_DIMENSION,
+        _MAX_PROFILE_PPM_BYTES,
+    )
+    from patina_scan_worker.refine_lifecycle import QUALIFIED_CAPTURE_RASTER_PROFILE
+
+    assert QUALIFIED_CAPTURE_RASTER_PROFILE.width <= _MAX_PROFILE_DIMENSION
+    assert QUALIFIED_CAPTURE_RASTER_PROFILE.height <= _MAX_PROFILE_DIMENSION
+    assert QUALIFIED_CAPTURE_RASTER_PROFILE.ppm_size <= _MAX_PROFILE_PPM_BYTES
+    # ... and inside the per-pinned-file ceiling the frozen child enforces, so a
+    # single frame can always cross the native boundary.
+    assert QUALIFIED_CAPTURE_RASTER_PROFILE.ppm_size <= _NATIVE_PINNED_FILE_CEILING
+
+
+def test_exactly_one_qualification_flag_is_true_and_it_names_the_raster_profile():
+    """The posture surface, read rather than described.
+
+    This composition moves ONE ``*_QUALIFIED`` flag, and this test is what makes
+    a second one impossible to add quietly: it AST-parses every module in the
+    package for a ``*_QUALIFIED`` assignment and asserts the true set is exactly
+    the raster profile flag.
+    """
+
+    package_root = pathlib.Path(refine_lifecycle.__file__).parent
+    true_flags: dict[str, str] = {}
+    false_flags: dict[str, str] = {}
+    for source in sorted(package_root.glob("*.py")):
+        tree = ast.parse(source.read_text())
+        for node in tree.body:
+            if not isinstance(node, ast.Assign):
+                continue
+            for target in node.targets:
+                if not isinstance(target, ast.Name):
+                    continue
+                if not target.id.endswith("_QUALIFIED"):
+                    continue
+                assert isinstance(node.value, ast.Constant), (
+                    f"{source.name}:{target.id} is not a literal posture flag"
+                )
+                bucket = true_flags if node.value.value is True else false_flags
+                bucket[f"{source.name}:{target.id}"] = target.id
+
+    assert set(true_flags.values()) == {"FIELD_RASTER_CAPTURE_PROFILE_QUALIFIED"}
+    # The flags this composition did NOT move, named individually so a flip
+    # reddens here rather than in a report nobody re-reads.
+    for expected in (
+        "REFINE_LIFECYCLE_QUALIFIED",
+        "PILOT_200_400_FRAME_RANGE_QUALIFIED",
+        "OUTPUT_DESCRIPTOR_HANDOFF_QUALIFIED",
+        "PRIMARY_EXECUTION_QUALIFIED",
+        "TOOLCHAIN_POLICY_QUALIFIED",
+        "EXECUTABLE_IDENTITY_QUALIFIED",
+        "COMMAND_ENVIRONMENT_QUALIFIED",
+        "SNAPSHOT_ARTIFACT_HANDOFF_QUALIFIED",
+    ):
+        assert expected in false_flags.values(), f"{expected} is no longer False"
+
+
+def test_withdrawing_the_receipt_admits_no_profile_rather_than_every_profile(
+    monkeypatch,
+):
+    """The posture flag GATES the pin; it is not a label on it.
+
+    With no receipt in force the honest reading is "no profile is admissible",
+    not "any profile is".  That is the state this module was in before I99, and
+    the state it must return to if the receipt is withdrawn -- so even the
+    qualified profile is refused here.
+
+    There is no INPUT that withdraws a receipt, so the flag is moved directly;
+    the value it holds in the shipped tree is asserted by
+    ``test_exactly_one_qualification_flag_is_true_and_it_names_the_raster_profile``,
+    which reads the source rather than the import.
+    """
+
+    from patina_scan_worker.refine_lifecycle import (
+        LIFECYCLE_RASTER_UNQUALIFIED_CODE,
+        QUALIFIED_CAPTURE_RASTER_PROFILE,
+        require_qualified_raster_profile,
+    )
+
+    class _Qualified:
+        profile = QUALIFIED_CAPTURE_RASTER_PROFILE
+
+    # In force: the qualified profile is admitted.
+    assert require_qualified_raster_profile(_Qualified()) is (
+        QUALIFIED_CAPTURE_RASTER_PROFILE
+    )
+
+    monkeypatch.setattr(
+        refine_lifecycle, "FIELD_RASTER_CAPTURE_PROFILE_QUALIFIED", False
+    )
+    for candidate in (_Qualified(), _PrematerializedRaster()):
+        with pytest.raises(AdapterError) as failure:
+            require_qualified_raster_profile(candidate)
+        assert failure.value.code == LIFECYCLE_RASTER_UNQUALIFIED_CODE
+        assert "admits none" in str(failure.value)
+
+
+def test_the_receipt_still_covers_the_helper_source_that_is_actually_packaged():
+    """CONSTRUCTED, not asserted: the .c file on disk is hashed here.
+
+    I98 made re-qualification mandatory by construction -- editing
+    ``field_raster_libheif.c`` moves its digest and I99's receipt stops covering
+    the shipped helper.  Hashing the real file is what turns that into a red
+    test the moment somebody edits it, rather than a note in a decision log.
+    """
+
+    from patina_scan_worker import field_raster_materializer
+    from patina_scan_worker.refine_lifecycle import (
+        QUALIFIED_CAPTURE_RASTER_HELPER_SOURCE_SHA256,
+    )
+
+    source = pathlib.Path(field_raster_materializer.__file__).with_name(
+        "field_raster_libheif.c"
+    )
+    measured = hashlib.sha256(source.read_bytes()).hexdigest()
+    assert measured == _I99_HELPER_SOURCE_SHA256
+    assert measured == field_raster_materializer.QUALIFIED_HELPER_SOURCE_SHA256
+    assert measured == QUALIFIED_CAPTURE_RASTER_HELPER_SOURCE_SHA256
+
+
+def test_a_helper_source_edit_fails_the_composed_path_closed(monkeypatch):
+    """The refusal clause for a stale receipt, exercised.
+
+    There is no INPUT that produces this condition -- it is a divergence between
+    two source constants -- so the packaged digest is moved directly.  The test
+    above is the one that proves the constants agree in the shipped tree; this
+    one proves the code does something about it when they do not.
+    """
+
+    from patina_scan_worker import field_raster_materializer
+    from patina_scan_worker.refine_lifecycle import (
+        LIFECYCLE_RASTER_UNQUALIFIED_CODE,
+        require_qualified_raster_profile,
+    )
+
+    monkeypatch.setattr(
+        field_raster_materializer, "QUALIFIED_HELPER_SOURCE_SHA256", "0" * 64
+    )
+    with pytest.raises(AdapterError) as failure:
+        require_qualified_raster_profile(_PrematerializedRaster())
+    assert failure.value.code == LIFECYCLE_RASTER_UNQUALIFIED_CODE
+    assert "no longer covers the shipped helper" in str(failure.value)
+
+
+def _packaged_adapter(scratch: Path, profile):
+    """The REAL production adapter, at whatever profile a test wants to pin.
+
+    The release prefix is a fixture because the shipped one is ``/opt``,
+    root-owned, and installed by the operator -- not because the adapter is
+    stubbed.  Every other line of it is the shipped one.
+
+    ``scratch`` need not exist yet: the constructor takes no descriptor, so a
+    caller may name the same directory ``_run`` will create.
+    """
+
+    from patina_scan_worker.field_raster_materializer import (
+        PackagedLibheifFieldRasterMaterializer,
+    )
+
+    return PackagedLibheifFieldRasterMaterializer(
+        scratch_parent=scratch,
+        profile=profile,
+    )
+
+
+@pytest.mark.parametrize(
+    "width,height,why",
+    [
+        (360, 640, "the profile I92 qualified and R118 superseded"),
+        (1920, 1440, "the NATIVE landscape pair, unrotated"),
+        (1080, 1920, "a plausible downscale R118 rejected"),
+        (1441, 1920, "one pixel wide of the receipt"),
+        (1440, 1921, "one pixel tall of the receipt"),
+    ],
+)
+def test_every_profile_except_the_qualified_one_fails_the_composed_run_closed(
+    tmp_path, width, height, why
+):
+    """CONSTRUCTED through the real adapter, one row per profile.
+
+    The 360x640 row matters most: it is the profile that WAS qualified, by I92,
+    and it is refused now.  A pin that only refused nonsense would prove nothing
+    about a superseded receipt.
+    """
+
+    from patina_scan_worker.field_raster_materializer import FieldRasterProfile
+    from patina_scan_worker.refine_lifecycle import LIFECYCLE_RASTER_UNQUALIFIED_CODE
+
+    adapter = _packaged_adapter(
+        tmp_path / "scratch", FieldRasterProfile(width, height)
+    )
+    with pytest.raises(AdapterError) as failure:
+        _run(tmp_path, raster_materializer=adapter)
+    assert failure.value.code == LIFECYCLE_RASTER_UNQUALIFIED_CODE
+    assert f"{width}x{height}" in str(failure.value), why
+    assert "1440x1920" in str(failure.value)
+
+
+def test_the_unqualified_profile_is_refused_before_a_single_byte_is_acquired(tmp_path):
+    """A run at an unqualified profile must not read the bundle first."""
+
+    from patina_scan_worker.field_raster_materializer import FieldRasterProfile
+    from patina_scan_worker.refine_lifecycle import (
+        LIFECYCLE_RASTER_UNQUALIFIED_CODE,
+        RefineLifecycleRequest,
+        run_refine_lifecycle,
+    )
+
+    bundle_root = tmp_path / "bundle"
+    bundle_root.mkdir(parents=True)
+    scratch = tmp_path / "scratch"
+    scratch.mkdir(mode=0o700, parents=True)
+    publish = tmp_path / "publish"
+    publish.mkdir(mode=0o700, parents=True)
+    manifest = tmp_path / "toolchain.json"
+    manifest.write_text("{}")
+    bundle = _Bundle(bundle_root)
+
+    class _CountingAcquirer(LocalScratchArtifactAcquirer):
+        calls = 0
+
+        def acquire(self, **kwargs):
+            type(self).calls += 1
+            return super().acquire(**kwargs)
+
+    acquirer = _CountingAcquirer(bundle_root)
+    with pytest.raises(AdapterError) as failure:
+        run_refine_lifecycle(
+            RefineLifecycleRequest(
+                user_id=USER_ID,
+                scan_id=SCAN_ID,
+                task_id=TASK_ID,
+                lease_id=LEASE_ID,
+                room_file_id=ROOM_FILE_ID,
+                room_file_version=1,
+                scratch_root=scratch,
+                manifest=bundle.manifest,
+                keyframe_index=bundle.index,
+                keyframe_summary=bundle.summary,
+                keyframes_archive=bundle.archive,
+            ),
+            acquirer=acquirer,
+            raster_materializer=_packaged_adapter(
+                scratch, FieldRasterProfile(360, 640)
+            ),
+            storage=LocalScratchStorageSink(publish),
+            deadline=_deadline(),
+            toolchain_manifest_path=str(manifest),
+        )
+    assert failure.value.code == LIFECYCLE_RASTER_UNQUALIFIED_CODE
+    assert _CountingAcquirer.calls == 0
+    assert list(scratch.iterdir()) == []
+    assert list(publish.iterdir()) == []
+
+
+def test_the_packaged_adapter_must_declare_a_profile_at_all(tmp_path):
+    """A subclass that hides the declaration is refused, not silently admitted."""
+
+    from patina_scan_worker.field_raster_materializer import (
+        PackagedLibheifFieldRasterMaterializer,
+    )
+    from patina_scan_worker.refine_lifecycle import (
+        LIFECYCLE_RASTER_UNQUALIFIED_CODE,
+        QUALIFIED_CAPTURE_RASTER_PROFILE,
+        require_qualified_raster_profile,
+    )
+
+    scratch = tmp_path / "scratch"
+    scratch.mkdir(mode=0o700)
+
+    class _Undeclared(PackagedLibheifFieldRasterMaterializer):
+        @property
+        def profile(self):
+            return None
+
+    adapter = _Undeclared(
+        scratch_parent=scratch, profile=QUALIFIED_CAPTURE_RASTER_PROFILE
+    )
+    with pytest.raises(AdapterError) as failure:
+        require_qualified_raster_profile(adapter)
+    assert failure.value.code == LIFECYCLE_RASTER_UNQUALIFIED_CODE
+    assert "without declaring a profile" in str(failure.value)
+
+
+def test_a_declaration_that_is_not_a_field_raster_profile_is_refused():
+    """A bare tuple compares unequal to nothing useful; refuse the TYPE."""
+
+    from patina_scan_worker.refine_lifecycle import (
+        LIFECYCLE_RASTER_UNQUALIFIED_CODE,
+        require_qualified_raster_profile,
+    )
+
+    class _TupleProfile:
+        profile = (1440, 1920)
+
+    with pytest.raises(AdapterError) as failure:
+        require_qualified_raster_profile(_TupleProfile())
+    assert failure.value.code == LIFECYCLE_RASTER_UNQUALIFIED_CODE
+    assert "must declare a FieldRasterProfile" in str(failure.value)
+
+
+def test_a_stand_in_that_declares_no_profile_is_recorded_as_a_stand_in(tmp_path):
+    """The report cannot be read as a qualified run when it was not one."""
+
+    report, _engine, _sink, _scratch = _run(tmp_path)
+    raster = report.to_document()["raster"]
+    assert raster["adapter"] == "_PrematerializedRaster"
+    assert raster["declaredProfile"] is None
+    assert raster["qualifiedProfile"] == "1440x1920"
+    assert raster["profileQualified"] is True
+    assert raster["receiptSha256"] == _I99_RECEIPT_SHA256
+    assert raster["helperSourceSha256"] == _I99_HELPER_SOURCE_SHA256
+
+
+# ===========================================================================
+# BLOCKING 4: the entry point that had never been executed
+#
+# ``main`` constructed ``PackagedLibheifFieldRasterMaterializer()`` with no
+# arguments from item 7's first commit (64f31021) until this one.  It is a
+# hand-typed entry point with no console script, and it had no test, so a
+# TypeError sat on the only line that names the production raster adapter
+# through two agents who found it, fixed it and reverted -- correctly, because a
+# repair had to name a profile and none was qualified.  R119 ruling 3 supplies
+# one.  These tests are what make the line executable rather than merely edited.
+# ===========================================================================
+def _cli_bundle(tmp_path: Path) -> tuple[Path, Path, Path, _Bundle]:
+    bundle_root = tmp_path / "bundle"
+    bundle_root.mkdir(parents=True)
+    scratch = tmp_path / "scratch"
+    scratch.mkdir(mode=0o700, parents=True)
+    publish = tmp_path / "publish"
+    publish.mkdir(mode=0o700, parents=True)
+    bundle = _Bundle(bundle_root)
+    (bundle_root / "sources.json").write_text(
+        json.dumps(
+            {
+                "bundleManifest": {
+                    "objectKey": bundle.manifest.object_key,
+                    "sha256": bundle.manifest.sha256,
+                    "sizeBytes": bundle.manifest.size_bytes,
+                },
+                "keyframeIndex": {
+                    "objectKey": bundle.index.object_key,
+                    "sha256": bundle.index.sha256,
+                    "sizeBytes": bundle.index.size_bytes,
+                },
+                "keyframeSummary": {
+                    "objectKey": bundle.summary.object_key,
+                    "sha256": bundle.summary.sha256,
+                    "sizeBytes": bundle.summary.size_bytes,
+                },
+                "keyframesArchive": {
+                    "objectKey": bundle.archive.object_key,
+                    "sha256": bundle.archive.sha256,
+                    "sizeBytes": bundle.archive.size_bytes,
+                },
+            }
+        )
+    )
+    return bundle_root, scratch, publish, bundle
+
+
+def _cli_argv(bundle_root: Path, scratch: Path, publish: Path) -> list[str]:
+    return [
+        "--bundle-dir", str(bundle_root),
+        "--scratch-dir", str(scratch),
+        "--publish-dir", str(publish),
+        "--user-id", USER_ID,
+        "--scan-id", SCAN_ID,
+        "--task-id", TASK_ID,
+        "--lease-id", LEASE_ID,
+        "--room-file-id", ROOM_FILE_ID,
+    ]
+
+
+def test_the_cli_really_constructs_the_production_raster_adapter(tmp_path):
+    """The regression for the latent TypeError, executed rather than read.
+
+    Before this composition the construction below raised ``TypeError:
+    __init__() missing 2 required keyword-only arguments: 'scratch_parent' and
+    'profile'``.  Nothing in the suite called it, so nothing was red.
+    """
+
+    from patina_scan_worker.field_raster_materializer import (
+        PackagedLibheifFieldRasterMaterializer,
+    )
+    from patina_scan_worker.refine_lifecycle import (
+        QUALIFIED_CAPTURE_RASTER_PROFILE,
+        build_argument_parser,
+        build_composed_invocation,
+    )
+
+    bundle_root, scratch, publish, bundle = _cli_bundle(tmp_path)
+    arguments = build_argument_parser().parse_args(
+        _cli_argv(bundle_root, scratch, publish)
+    )
+    invocation = build_composed_invocation(arguments)
+
+    adapter = invocation.raster_materializer
+    assert type(adapter) is PackagedLibheifFieldRasterMaterializer
+    assert adapter.profile == QUALIFIED_CAPTURE_RASTER_PROFILE
+    assert adapter.production_enablement == "disabled"
+    # The adapter's private scratch lives under the SAME tree the composed run
+    # cleans, not a second root nothing purges.
+    assert adapter._scratch_parent == scratch.resolve()
+    assert invocation.request.scratch_root == scratch.resolve()
+    assert invocation.request.manifest == bundle.manifest
+    assert invocation.request.keyframes_archive == bundle.archive
+    assert type(invocation.storage) is LocalScratchStorageSink
+    assert type(invocation.acquirer) is LocalScratchArtifactAcquirer
+    # ... and the pin admits what the CLI built.
+    from patina_scan_worker.refine_lifecycle import require_qualified_raster_profile
+
+    assert require_qualified_raster_profile(adapter) == QUALIFIED_CAPTURE_RASTER_PROFILE
+
+
+def test_the_cli_offers_no_way_to_name_another_profile():
+    """R119 rejected an operator override by name.  Read the parser for one."""
+
+    from patina_scan_worker.refine_lifecycle import build_argument_parser
+
+    parser = build_argument_parser()
+    options = {
+        option
+        for action in parser._actions
+        for option in action.option_strings
+    }
+    forbidden = ("profile", "width", "height", "resolution", "raster", "size")
+    for option in options:
+        assert not any(word in option.lower() for word in forbidden), option
+
+    # ... and the one construction names the module constant rather than a
+    # literal, so there is exactly one place a profile can be spelled.
+    source_root = pathlib.Path(refine_lifecycle.__file__).parent
+    tree = ast.parse((source_root / "refine_lifecycle.py").read_text())
+    constructions = [
+        node
+        for node in ast.walk(tree)
+        if isinstance(node, ast.Call)
+        and isinstance(node.func, ast.Name)
+        and node.func.id == "PackagedLibheifFieldRasterMaterializer"
+    ]
+    assert len(constructions) == 1, "more than one place constructs the adapter"
+    profile_argument = next(
+        keyword.value
+        for keyword in constructions[0].keywords
+        if keyword.arg == "profile"
+    )
+    assert isinstance(profile_argument, ast.Name)
+    assert profile_argument.id == "QUALIFIED_CAPTURE_RASTER_PROFILE"
+
+
+def test_main_fails_closed_when_the_qualified_toolchain_is_absent(tmp_path, capsys):
+    """The whole entry point, run end to end, on the path a host takes today.
+
+    The toolchain manifest generator is still owed by the operator (I97), so the
+    pinned path is absent and ``main`` must return 2 with one diagnostic --
+    having written nothing anywhere.
+    """
+
+    from patina_scan_worker.refine_lifecycle import (
+        LIFECYCLE_TOOLCHAIN_MISSING_CODE,
+        QUALIFIED_TOOLCHAIN_MANIFEST_PATH,
+        main,
+    )
+
+    if os.path.exists(QUALIFIED_TOOLCHAIN_MANIFEST_PATH):
+        pytest.skip(
+            "the owner has installed the qualified toolchain manifest at "
+            f"{QUALIFIED_TOOLCHAIN_MANIFEST_PATH}; this test measures its absence"
+        )
+
+    bundle_root, scratch, publish, _bundle = _cli_bundle(tmp_path)
+    assert main(_cli_argv(bundle_root, scratch, publish)) == 2
+
+    captured = capsys.readouterr()
+    assert captured.out == ""
+    assert "LOCAL SCRATCH ONLY" in captured.err
+    # The banner states the profile, so an operator reading a terminal sees which
+    # resolution the run would have used.
+    assert "Raster profile: 1440x1920" in captured.err
+    assert QUALIFIED_TOOLCHAIN_MANIFEST_PATH in captured.err
+    assert LIFECYCLE_TOOLCHAIN_MISSING_CODE in captured.err
+    assert list(publish.iterdir()) == []
+    assert list(scratch.iterdir()) == []
+
+
+def test_the_cli_refuses_a_scratch_directory_that_does_not_exist(tmp_path):
+    """Resolve strictly, so the failure names the path instead of an errno."""
+
+    from patina_scan_worker.refine_lifecycle import (
+        build_argument_parser,
+        build_composed_invocation,
+    )
+
+    bundle_root, scratch, publish, _bundle = _cli_bundle(tmp_path)
+    argv = _cli_argv(bundle_root, scratch, publish)
+    argv[argv.index("--scratch-dir") + 1] = str(tmp_path / "absent")
+    arguments = build_argument_parser().parse_args(argv)
+    with pytest.raises(FileNotFoundError):
+        build_composed_invocation(arguments)
+
+
+@pytest.mark.parametrize(
+    "mutate,label",
+    [
+        (lambda rows: rows.pop("keyframeSummary"), "a missing kind"),
+        (lambda rows: rows.update({"extra": rows["keyframeIndex"]}), "an extra kind"),
+    ],
+)
+def test_the_cli_refuses_a_sources_manifest_off_the_closed_kind_set(
+    tmp_path, mutate, label
+):
+    from patina_scan_worker.refine_lifecycle import (
+        build_argument_parser,
+        build_composed_invocation,
+    )
+
+    bundle_root, scratch, publish, _bundle = _cli_bundle(tmp_path)
+    sources_path = bundle_root / "sources.json"
+    rows = json.loads(sources_path.read_text())
+    mutate(rows)
+    sources_path.write_text(json.dumps(rows))
+    arguments = build_argument_parser().parse_args(
+        _cli_argv(bundle_root, scratch, publish)
+    )
+    with pytest.raises(AdapterError) as failure:
+        build_composed_invocation(arguments)
+    assert "sources.json must declare exactly" in str(failure.value), label
+
+
+def test_the_cli_refuses_a_sources_manifest_that_is_not_an_object(tmp_path):
+    """Its own clause, with its own sentence: a list of kinds is not a mapping."""
+
+    from patina_scan_worker.refine_lifecycle import (
+        build_argument_parser,
+        build_composed_invocation,
+    )
+
+    bundle_root, scratch, publish, _bundle = _cli_bundle(tmp_path)
+    sources_path = bundle_root / "sources.json"
+    rows = json.loads(sources_path.read_text())
+    sources_path.write_text(json.dumps(sorted(rows)))
+    arguments = build_argument_parser().parse_args(
+        _cli_argv(bundle_root, scratch, publish)
+    )
+    with pytest.raises(AdapterError) as failure:
+        build_composed_invocation(arguments)
+    assert "must be an object of source kinds" in str(failure.value)
+
+
+# ===========================================================================
+# BLOCKING 5: the composed path really drives the packaged raster adapter
+#
+# Everything above this point rasterises through ``_PrematerializedRaster``.
+# That stand-in never exercised the adapter this composition actually ships:
+# its descriptor-pinned private scratch, its packaged-source hash check, its
+# release-manifest check, the helper process it spawns and reaps, the
+# unlink-then-stream of the helper's output, or the canonical-PPM validation the
+# enclosing materializer applies to what comes back.
+#
+# The test below runs the WHOLE lifecycle with the real adapter at the qualified
+# 1440x1920 profile.  What it does NOT do, stated next to it: the helper it
+# executes is a stand-in that writes a canonical PPM, not libheif decoding a
+# real capture.  Decoding a real Field HEIC needs the installed release, which
+# is root-owned and an operator's step.  So this proves the composed path
+# reaches, drives and survives the real adapter -- not that libheif produced the
+# pixels.
+# ===========================================================================
+_LINUX_ONLY = pytest.mark.skipif(
+    sys.platform != "linux",
+    reason=(
+        "the packaged raster adapter spawns a helper into its own process "
+        "group and pins /proc/self/fd aliases; both are Linux boundaries"
+    ),
+)
+
+
+@_LINUX_ONLY
+def test_the_composed_path_drives_the_real_raster_adapter_at_the_pinned_profile(
+    tmp_path,
+):
+    from test_field_raster_materializer import _python_helper
+
+    from patina_scan_worker.field_raster_materializer import (
+        PackagedLibheifFieldRasterMaterializer,
+    )
+    from patina_scan_worker.refine_lifecycle import QUALIFIED_CAPTURE_RASTER_PROFILE
+
+    profile = QUALIFIED_CAPTURE_RASTER_PROFILE
+    # The helper logs the argv it was handed, so this test can show the pinned
+    # profile crossing a real process boundary rather than merely being held in
+    # the parent.  Protocol v3 carries WIDTH and HEIGHT on argv precisely so the
+    # helper cannot agree with itself about a size compiled into it.
+    argv_log = tmp_path / "helper-argv.txt"
+    release = _python_helper(
+        tmp_path / "release-root", profile=profile, argv_log=argv_log
+    )
+    # The adapter's private scratch is the SAME tree the lifecycle cleans, which
+    # is what ``build_composed_invocation`` wires in production.  ``_run``
+    # creates it; the constructor takes no descriptor, so naming it here is safe.
+    adapter = PackagedLibheifFieldRasterMaterializer._for_test(
+        scratch_parent=tmp_path / "scratch",
+        release_prefix=release,
+        profile=profile,
+    )
+
+    # Eight frames, not twelve: eight is exactly
+    # ``refine_model_alignment.ALIGNMENT_MIN_CORRESPONDENCES``, the smallest
+    # bundle the parent's own Sim3 recomputation will accept, and each 1440x1920
+    # raster is 8.29 MB.  Anything smaller is refused by the alignment rather
+    # than by the raster path this test is about.
+    from patina_scan_worker.refine_model_alignment import (
+        ALIGNMENT_MIN_CORRESPONDENCES,
+    )
+
+    assert ALIGNMENT_MIN_CORRESPONDENCES == 8
+    report, engine, sink, _scratch = _run(
+        tmp_path,
+        bundle_kwargs={"count": ALIGNMENT_MIN_CORRESPONDENCES, "native": (1920, 1440)},
+        raster_materializer=adapter,
+    )
+
+    document = report.to_document()
+    assert document["raster"]["adapter"] == "PackagedLibheifFieldRasterMaterializer"
+    assert document["raster"]["declaredProfile"] == "1440x1920"
+    assert document["seedAnchor"]["correspondences"] == 8
+    assert report.result.evidence_verdict.refinement_evidenced is True
+    assert sink.published, "the composed run published nothing"
+
+    # Every engine image the child received really is a canonical 1440x1920 P6
+    # produced by the real adapter, at the receipt's own byte count.
+    assert len(engine.pinned_snapshot) >= 1
+    assert len(report.result.frame_inputs) == 8
+    for frame in report.result.frame_inputs:
+        assert frame.engine_size_bytes == _I99_MATERIALIZED_PPM_BYTES
+        # The adapter stamps the profile it enforced into its materializer id,
+        # so the run carries evidence of WHICH profile decoded it -- and the id
+        # is the packaged adapter's, not the stand-in's.
+        assert frame.materializer_id.startswith(
+            "patina-field-raster-libheif-helper-v2-"
+        )
+        assert frame.materializer_id.endswith("-1440x1920")
+
+    # A real child process really received the declared profile on argv.
+    assert "'1440', '1920'" in argv_log.read_text()
+
+
+@_LINUX_ONLY
+def test_the_real_adapter_refuses_a_frame_outside_the_pinned_profile(tmp_path):
+    """The per-frame half of the pin, constructed against the real adapter.
+
+    ``require_qualified_raster_profile`` refuses a wrong DECLARATION.  This is
+    the other direction: the declaration is the qualified one and the BUNDLE is
+    not, which is exactly what a run against any other device would look like.
+    """
+
+    from test_field_raster_materializer import _python_helper
+
+    from patina_scan_worker.field_raster_materializer import (
+        PackagedLibheifFieldRasterMaterializer,
+    )
+    from patina_scan_worker.refine_lifecycle import QUALIFIED_CAPTURE_RASTER_PROFILE
+    from patina_scan_worker.refine_materializer import RefineMaterializerError
+
+    profile = QUALIFIED_CAPTURE_RASTER_PROFILE
+    release = _python_helper(tmp_path / "release-root", profile=profile)
+    adapter = PackagedLibheifFieldRasterMaterializer._for_test(
+        scratch_parent=tmp_path / "scratch",
+        release_prefix=release,
+        profile=profile,
+    )
+
+    with pytest.raises(RefineMaterializerError) as failure:
+        _run(tmp_path, raster_materializer=adapter)
+    assert failure.value.token == "REFINE_RASTER_UNQUALIFIED"
+    assert failure.value.fatal is True
+    assert "outside the declared 1440x1920 profile" in str(failure.value)

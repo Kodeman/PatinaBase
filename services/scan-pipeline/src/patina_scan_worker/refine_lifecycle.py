@@ -88,6 +88,19 @@ movement floor does: item 6's documented scope is whether the child's proposal i
 self-consistent, and "this run refined nothing" is a decision about publishing.
 The judgement moved; the measurement did not.
 
+THE RASTER PROFILE IS PINNED TO ONE SIZE, and that size has a receipt.  R119
+ruling 3 admits exactly 1440x1920 on this path -- the profile I99 qualified on
+the physical device -- and nothing else.  :data:`QUALIFIED_CAPTURE_RASTER_PROFILE`
+is that constant, :func:`require_qualified_raster_profile` is the refusal, and
+:func:`build_composed_invocation` is the single line that names it.  There is no
+CLI flag, no environment variable and no receipt lookup that can widen it: R119
+rejected the lookup because it would make the code trust a table where it now
+trusts a measured constant, and rejected an operator override because an escape
+hatch past re-qualification is the gap this program exists to close.  The pin
+also fails closed if ``field_raster_libheif.c`` is edited, because I99's receipt
+covers those helper bytes and the constant carrying their digest must still
+match the packaged one.
+
 THE PACKET IS CHUNKED, and it has to be.  The subject scan's 100 keyframes are
 uniformly 1440x1920, so one archive of them is 0.77 GiB against a 128 MiB
 per-pinned-file ceiling the frozen child enforces itself -- 6.2x over, refused
@@ -116,6 +129,18 @@ that exact code, and it will keep doing so until the child-side engine body
 lands.  Everything upstream and downstream of that call is real code exercised
 end to end here against a recorded engine; the call itself has never carried a
 COLMAP process.
+
+The list is longer than that one call, and is written here rather than left to a
+report.  Nothing in this repository has ever: run COLMAP or touched a GPU;
+decoded a real Field HEIC through the packaged helper on this composed path (the
+Linux composition test drives the real adapter, its real descriptor pinning and
+a real helper process, but the helper it executes is a stand-in that writes a
+canonical PPM rather than libheif decoding a capture); measured how long a
+100-frame reconstruction takes, which is why the lease is an hour by R119
+ruling 2 rather than by measurement; or produced an archive that came out of
+COLMAP -- every sparse model this suite parses was packed byte by byte by the
+tests themselves.  The escaped-``setsid`` descendant that R116 carried into this
+item is still DETECTED and not CONTAINED; that carry is unchanged here.
 """
 
 from __future__ import annotations
@@ -135,6 +160,11 @@ from dataclasses import dataclass
 from pathlib import Path, PurePosixPath
 from typing import Any, Protocol
 
+from . import field_raster_materializer
+from .field_raster_materializer import (
+    FieldRasterProfile,
+    PackagedLibheifFieldRasterMaterializer,
+)
 from .keys import OwnershipError, assert_owner_prefix
 from .refine_adapter import (
     COLMAP_TARGET_VERSION,
@@ -242,6 +272,94 @@ LIFECYCLE_TOOLCHAIN_MISSING_CODE = "REFINE_TOOLCHAIN_UNQUALIFIED"
 LIFECYCLE_UNCHANGED_CODE = "REFINE_UNCHANGED_EVIDENCE"
 #: The snapshot about to be published is not the one the parent verified.
 LIFECYCLE_UNVERIFIED_PUBLICATION_CODE = "REFINE_PUBLISHED_MODEL_UNVERIFIED"
+#: The raster profile this run would materialize at has no physical-device
+#: receipt.  See :func:`require_qualified_raster_profile`.
+LIFECYCLE_RASTER_UNQUALIFIED_CODE = "REFINE_RASTER_PROFILE_UNQUALIFIED"
+
+# ---------------------------------------------------------------------------
+# The pinned raster profile (R119 ruling 3)
+# ---------------------------------------------------------------------------
+#: The ONE encoded raster profile admissible on the composed path.
+#:
+#: WHY IT IS HERE AND NOT IN ``field_raster_materializer``.  That module was
+#: deliberately moved OFF a compiled-in size by R118 and says so in its own
+#: words: capture resolution is a property of a device and an ARKit session, not
+#: of any code in this repository, so the adapter takes a declared profile with
+#: no default.  Nothing about that changes.  What R119 ruling 3 pins is narrower
+#: and belongs exactly here: which declaration the COMPOSED path may make.  The
+#: adapter stays general; the composition admits one profile.
+#:
+#: WHY 1440x1920 AND NOTHING ELSE.  I99 qualified this profile, and only this
+#: profile, on the physical device against the rebuilt immutable release:
+#: iPhone 17 Pro Max (``iPhone18,2``) on iOS 27.0, ARKit format
+#: ``1920x1440@60 BuiltInWideAngleCamera``, native 1920x1440 encoded to
+#: 1440x1920 by the ``.right`` rotation.  The receipt hashes below are that
+#: run's, and :func:`require_qualified_raster_profile` refuses unless the helper
+#: source those hashes cover is still the packaged one.  R119 explicitly
+#: REJECTED both alternatives: a receipt-lookup admitting a set of profiles
+#: (which would make the code trust a lookup where it now trusts a measured
+#: constant) and an operator override (an escape hatch skipping the
+#: re-qualification this whole program exists to require).  There is therefore
+#: no CLI flag, no environment variable and no argument that can name a
+#: different profile -- ``test_the_cli_offers_no_way_to_name_another_profile``
+#: reads the parser and proves it.
+#:
+#: WHAT THE PIN DOES NOT COVER, stated here rather than in a report.  It is a
+#: statement about the RASTER CONVENTION -- geometry, orientation, decode
+#: fidelity, and the intrinsics rotation -- measured once on one device.  It is
+#: not a claim that a reconstruction at this profile succeeds, that this device
+#: is the only one Field ships on, or that ARKit will keep selecting this format.
+#: A second device, a second OS, or an assigned ``videoFormat`` produces a
+#: profile this constant refuses until that profile earns its own receipt, which
+#: is the intended behaviour and not a defect to route around.
+QUALIFIED_CAPTURE_RASTER_PROFILE = FieldRasterProfile(1440, 1920)
+
+#: The one ``*_QUALIFIED`` flag in the Refine packet that is ``True``, and the
+#: only posture this composition moves.  It says: the encoded raster profile
+#: named directly above carries a physical-device qualification receipt (I99).
+#:
+#: It does NOT say Refine is qualified, that the lifecycle is qualified
+#: (:data:`REFINE_LIFECYCLE_QUALIFIED` is ``False``), that the toolchain,
+#: packet, engine, output handoff or fallback are qualified (every one of those
+#: flags is still ``False`` in its own module), or that the 200-400 frame band
+#: is qualified (:data:`~patina_scan_worker.refine_colmap_backend.
+#: PILOT_200_400_FRAME_RANGE_QUALIFIED` is ``False`` per R117).  It is exactly as
+#: wide as I99's receipt and no wider.
+#:
+#: It is LOAD-BEARING, not a label.  :func:`require_qualified_raster_profile`
+#: reads it first and refuses EVERY profile when it is ``False`` -- which is the
+#: correct reading of "no receipt exists", and the state this module was in
+#: before I99.  Setting it back is therefore a way to disarm the composed path,
+#: not merely a way to relabel it.
+FIELD_RASTER_CAPTURE_PROFILE_QUALIFIED = True
+
+#: I99's canonical receipt digest, retained on the qualified host at
+#: ``field-raster-qualification-v3-iphone17promax-00008150-20260728-51355159/``.
+QUALIFIED_CAPTURE_RASTER_RECEIPT_SHA256 = (
+    "f48fa56d905a8e57dac152c6d79c797f9060fe9421c18f449536708234ff1775"
+)
+
+#: The digest and byte count of the PPM that receipt materialized.  The byte
+#: count is not decoration: it is the independent check that the profile
+#: constant above was not mistyped, because
+#: ``QUALIFIED_CAPTURE_RASTER_PROFILE.ppm_size`` must reproduce it exactly and
+#: no other profile does.  ``test_the_pinned_profile_reproduces_the_receipts_own
+#: _ppm_size`` is what makes a typo redden instead of ship.
+QUALIFIED_CAPTURE_RASTER_MATERIALIZED_PPM_SHA256 = (
+    "50dccb8a57741c4249a1db11fa3d49cd012dddaafb37b0d3f5ccbda74d116d2f"
+)
+QUALIFIED_CAPTURE_RASTER_MATERIALIZED_PPM_BYTES = 8_294_417
+
+#: The helper source I99 qualified.  I98 made re-qualification mandatory BY
+#: CONSTRUCTION -- editing ``field_raster_libheif.c`` moves
+#: ``field_raster_materializer.QUALIFIED_HELPER_SOURCE_SHA256`` and the receipt
+#: stops covering the shipped helper.  Repeating the literal here is what turns
+#: that into a refusal on the composed path rather than a silently stale
+#: receipt: :func:`require_qualified_raster_profile` compares the two, so a
+#: helper edit fails the composition closed until a new receipt exists.
+QUALIFIED_CAPTURE_RASTER_HELPER_SOURCE_SHA256 = (
+    "3b184937b755dc4acca4347ea6dba43dbeb111f090a91cd340e65d214937c626"
+)
 
 # ---------------------------------------------------------------------------
 # The anchor tolerances
@@ -706,6 +824,107 @@ def require_qualified_toolchain(
     if not preflight.present:
         raise _fail(preflight.diagnostic, LIFECYCLE_TOOLCHAIN_MISSING_CODE)
     return preflight
+
+
+def require_qualified_raster_profile(
+    raster_materializer: Any,
+) -> FieldRasterProfile | None:
+    """Refuse any raster profile on the composed path except the qualified one.
+
+    SIX CLAUSES, and no two of them say the same thing.  Each is written so
+    that exactly one input can reach it, because a guard whose disjuncts share a
+    message is a guard whose disjuncts share one test.
+
+    0. Some profile must be qualified at all.  This is what makes
+       :data:`FIELD_RASTER_CAPTURE_PROFILE_QUALIFIED` LOAD-BEARING rather than
+       decoration: with no receipt in force the composed path admits no profile,
+       not "any profile".  It is the state this module was in before I99, and
+       the state it returns to if that receipt is ever withdrawn.
+    1. The receipt must still cover the packaged helper.  I98 made
+       re-qualification mandatory by construction: an edit to
+       ``field_raster_libheif.c`` moves
+       ``field_raster_materializer.QUALIFIED_HELPER_SOURCE_SHA256``, and I99's
+       receipt covers the bytes it was taken against and no others.  Comparing
+       the two literals is what turns "the receipt quietly went stale" into a
+       refusal.  This clause fires even for a caller that supplies no adapter at
+       all, because a stale receipt invalidates the pin itself.
+    2. The pinned profile must reproduce the receipt's own materialized PPM
+       size.  A mistyped constant -- 1440x1290, say -- would otherwise pass every
+       other check in this module while naming a profile no device produced.
+    3. The production adapter must DECLARE a profile.  It always does, so this
+       clause exists for the one shape that could evade clause 5: a subclass
+       that overrides ``profile`` away.
+    4. A declaration must be a :class:`FieldRasterProfile`.  A bare ``(1440,
+       1920)`` tuple compares unequal to the pinned profile and would otherwise
+       be refused by clause 5 with the wrong sentence; worse, a type with a
+       permissive ``__eq__`` would be ACCEPTED by it.
+    5. A declaration must BE the pinned profile.  This is the ruling itself.
+
+    WHAT THIS CANNOT DO, said plainly because the alternative is a false sense
+    of closure.  ``run_refine_lifecycle`` takes its raster materializer as an
+    injected collaborator, exactly as it takes its acquirer and its storage
+    sink, and a duck-typed object that declares no profile is not refused here
+    -- it is refused by REALITY, since it cannot decode a Field HEIC.  The
+    defect class R118 and R119 name is a WRONG CONSTANT on the production path,
+    and that is what these clauses close: the only construction the composed
+    entry point can perform names :data:`QUALIFIED_CAPTURE_RASTER_PROFILE`,
+    no CLI argument can widen it, and a different profile handed to
+    :func:`run_refine_lifecycle` directly fails closed before a byte is
+    acquired.  The report records which adapter ran and at which declared
+    profile, so a run driven by a stand-in cannot present itself as a run
+    through the qualified one.
+    """
+
+    if not FIELD_RASTER_CAPTURE_PROFILE_QUALIFIED:
+        raise _fail(
+            "no capture raster profile carries a physical-device qualification "
+            "receipt, so the composed path admits none",
+            LIFECYCLE_RASTER_UNQUALIFIED_CODE,
+        )
+    packaged_helper_sha256 = field_raster_materializer.QUALIFIED_HELPER_SOURCE_SHA256
+    if packaged_helper_sha256 != QUALIFIED_CAPTURE_RASTER_HELPER_SOURCE_SHA256:
+        raise _fail(
+            "the packaged raster helper source is not the one I99 qualified "
+            f"({packaged_helper_sha256} != "
+            f"{QUALIFIED_CAPTURE_RASTER_HELPER_SOURCE_SHA256}); the capture "
+            "profile receipt no longer covers the shipped helper",
+            LIFECYCLE_RASTER_UNQUALIFIED_CODE,
+        )
+    if (
+        QUALIFIED_CAPTURE_RASTER_PROFILE.ppm_size
+        != QUALIFIED_CAPTURE_RASTER_MATERIALIZED_PPM_BYTES
+    ):
+        raise _fail(
+            f"the pinned raster profile {QUALIFIED_CAPTURE_RASTER_PROFILE.label} "
+            f"implies {QUALIFIED_CAPTURE_RASTER_PROFILE.ppm_size} PPM bytes, not "
+            f"the {QUALIFIED_CAPTURE_RASTER_MATERIALIZED_PPM_BYTES} the "
+            "qualification receipt measured",
+            LIFECYCLE_RASTER_UNQUALIFIED_CODE,
+        )
+
+    declared = getattr(raster_materializer, "profile", None)
+    if declared is None:
+        if isinstance(raster_materializer, PackagedLibheifFieldRasterMaterializer):
+            raise _fail(
+                "the packaged raster adapter reached the composed path without "
+                "declaring a profile",
+                LIFECYCLE_RASTER_UNQUALIFIED_CODE,
+            )
+        return None
+    if type(declared) is not FieldRasterProfile:
+        raise _fail(
+            "a raster materializer that declares a profile must declare a "
+            "FieldRasterProfile",
+            LIFECYCLE_RASTER_UNQUALIFIED_CODE,
+        )
+    if declared != QUALIFIED_CAPTURE_RASTER_PROFILE:
+        raise _fail(
+            f"the raster profile {declared.label} has no physical-device "
+            f"qualification receipt; the composed path admits "
+            f"{QUALIFIED_CAPTURE_RASTER_PROFILE.label} and nothing else",
+            LIFECYCLE_RASTER_UNQUALIFIED_CODE,
+        )
+    return declared
 
 
 # ---------------------------------------------------------------------------
@@ -2224,6 +2443,8 @@ class RefineLifecycleReport:
     contract: str
     production_enablement: str
     toolchain: ToolchainPreflight
+    raster_adapter: str
+    raster_profile: FieldRasterProfile | None
     seed_anchor: SeedAnchorVerification
     refined_pose_movement: RefinedPoseMovement
     refined_shape_change: RefinedShapeChange
@@ -2243,6 +2464,20 @@ class RefineLifecycleReport:
                 "manifestPath": self.toolchain.manifest_path,
                 "present": self.toolchain.present,
                 "diagnostic": self.toolchain.diagnostic,
+            },
+            # WHICH raster adapter ran, at WHICH declared profile, against the
+            # ONE profile that carries a receipt.  A run driven by a stand-in
+            # reads ``declaredProfile: null`` and an adapter name that is not
+            # the packaged one, so it cannot be mistaken for a qualified run.
+            "raster": {
+                "adapter": self.raster_adapter,
+                "declaredProfile": (
+                    None if self.raster_profile is None else self.raster_profile.label
+                ),
+                "qualifiedProfile": QUALIFIED_CAPTURE_RASTER_PROFILE.label,
+                "profileQualified": FIELD_RASTER_CAPTURE_PROFILE_QUALIFIED,
+                "receiptSha256": QUALIFIED_CAPTURE_RASTER_RECEIPT_SHA256,
+                "helperSourceSha256": QUALIFIED_CAPTURE_RASTER_HELPER_SOURCE_SHA256,
             },
             "seedAnchor": {
                 "correspondences": self.seed_anchor.correspondences,
@@ -2347,6 +2582,10 @@ def run_refine_lifecycle(
         raise _fail("lifecycle scratch root must be an absolute path")
 
     toolchain = require_qualified_toolchain(manifest_path=toolchain_manifest_path)
+    # BEFORE anything is acquired.  A run at an unqualified profile is refused
+    # while it is still only a declaration, not after it has pulled a bundle off
+    # disk and decoded a frame at a size nobody measured.
+    raster_profile = require_qualified_raster_profile(raster_materializer)
     deadline.remaining_seconds()
 
     materializer = RefineMaterializer(
@@ -2497,6 +2736,8 @@ def run_refine_lifecycle(
         contract=LIFECYCLE_CONTRACT,
         production_enablement=PRODUCTION_ENABLEMENT,
         toolchain=toolchain,
+        raster_adapter=type(raster_materializer).__qualname__,
+        raster_profile=raster_profile,
         seed_anchor=seed_anchor,
         refined_pose_movement=movement,
         refined_shape_change=shape_change,
@@ -2599,6 +2840,8 @@ _BANNER = (
     "patina refine lifecycle -- LOCAL SCRATCH ONLY.\n"
     "This is not a stage. It claims no queue task, opens no business database\n"
     "connection, and publishes to a local directory, never to Supabase Storage.\n"
+    f"Raster profile: {QUALIFIED_CAPTURE_RASTER_PROFILE.label} (the only one with\n"
+    "a physical-device receipt). Any other capture resolution fails closed.\n"
 )
 
 
@@ -2632,7 +2875,108 @@ def build_argument_parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "--lease-seconds", type=float, default=DEFAULT_LEASE_SECONDS
     )
+    # There is deliberately NO raster-profile argument.  R119 ruling 3 rejected
+    # an operator override by name: an escape hatch that skips re-qualification
+    # reintroduces exactly the gap this program closed.  The profile is
+    # :data:`QUALIFIED_CAPTURE_RASTER_PROFILE` and nothing on this parser can
+    # move it.
     return parser
+
+
+#: The bundle-manifest kinds the CLI expects in ``sources.json``, as a closed
+#: set.  Written out rather than derived from whatever the file happens to
+#: carry, so an extra or missing kind is a legible error instead of a KeyError
+#: three frames deeper.
+_CLI_SOURCE_KINDS = (
+    "bundleManifest",
+    "keyframeIndex",
+    "keyframeSummary",
+    "keyframesArchive",
+)
+
+
+@dataclass(frozen=True)
+class ComposedLifecycleInvocation:
+    """Everything one CLI run hands :func:`run_refine_lifecycle`, built once.
+
+    Extracted from :func:`main` so the CONSTRUCTION is reachable from a test.
+    It had to be: ``main`` built
+    :class:`~patina_scan_worker.field_raster_materializer.
+    PackagedLibheifFieldRasterMaterializer` with no arguments from item 7's
+    first commit until this one -- a ``TypeError`` on the only line that names
+    the production raster adapter, in the only entry point that can reach it,
+    which no test executed because the entry point had none.
+    """
+
+    request: RefineLifecycleRequest
+    acquirer: LocalScratchArtifactAcquirer
+    raster_materializer: PackagedLibheifFieldRasterMaterializer
+    storage: LocalScratchStorageSink
+
+
+def build_composed_invocation(
+    arguments: argparse.Namespace,
+) -> ComposedLifecycleInvocation:
+    """Turn parsed CLI arguments into the exact collaborators one run needs.
+
+    Every directory is resolved STRICTLY: the raster adapter opens its scratch
+    parent by descriptor and requires a service-owned, non-group-writable
+    directory, so a path that does not exist yet must fail here, with the path
+    in the message, rather than inside a spawned helper.
+
+    The raster adapter's scratch parent is the SAME directory the
+    materialization workspace and the packet scratch live under, because the
+    lifecycle's cleanup contract is written about one caller-named tree: the
+    adapter creates a private 0700 ``field-raster-<hex>`` beneath it and removes
+    it on every path, and giving it a second root would put scratch somewhere
+    the composed run does not clean.
+    """
+
+    bundle = Path(arguments.bundle_dir).resolve(strict=True)
+    scratch_root = Path(arguments.scratch_dir).resolve(strict=True)
+    publish_root = Path(arguments.publish_dir).resolve(strict=True)
+
+    manifest_document = json.loads((bundle / "sources.json").read_text())
+    if not isinstance(manifest_document, dict):
+        raise _fail("sources.json must be an object of source kinds")
+    if tuple(sorted(manifest_document)) != tuple(sorted(_CLI_SOURCE_KINDS)):
+        raise _fail(
+            "sources.json must declare exactly "
+            f"{', '.join(sorted(_CLI_SOURCE_KINDS))}"
+        )
+    sources = {
+        kind: RefineSourceArtifact(
+            object_key=row["objectKey"],
+            sha256=row["sha256"],
+            size_bytes=int(row["sizeBytes"]),
+        )
+        for kind, row in manifest_document.items()
+    }
+
+    return ComposedLifecycleInvocation(
+        request=RefineLifecycleRequest(
+            user_id=arguments.user_id,
+            scan_id=arguments.scan_id,
+            task_id=arguments.task_id,
+            lease_id=arguments.lease_id,
+            room_file_id=arguments.room_file_id,
+            room_file_version=int(arguments.room_file_version),
+            scratch_root=scratch_root,
+            manifest=sources["bundleManifest"],
+            keyframe_index=sources["keyframeIndex"],
+            keyframe_summary=sources["keyframeSummary"],
+            keyframes_archive=sources["keyframesArchive"],
+            gpu_index=arguments.gpu_index,
+        ),
+        acquirer=LocalScratchArtifactAcquirer(bundle),
+        # THE ONE CONSTRUCTION.  R119 ruling 3 supplies the profile this line
+        # may name, and it is the only profile it may name.
+        raster_materializer=PackagedLibheifFieldRasterMaterializer(
+            scratch_parent=scratch_root,
+            profile=QUALIFIED_CAPTURE_RASTER_PROFILE,
+        ),
+        storage=LocalScratchStorageSink(publish_root),
+    )
 
 
 def main(argv: Sequence[str] | None = None) -> int:
@@ -2652,38 +2996,13 @@ def main(argv: Sequence[str] | None = None) -> int:
         sys.stderr.write(preflight.diagnostic + "\n")
         return 2
 
-    bundle = Path(arguments.bundle_dir).resolve()
-    manifest_document = json.loads((bundle / "sources.json").read_text())
-    sources = {
-        kind: RefineSourceArtifact(
-            object_key=row["objectKey"],
-            sha256=row["sha256"],
-            size_bytes=int(row["sizeBytes"]),
-        )
-        for kind, row in manifest_document.items()
-    }
-
-    from .field_raster_materializer import PackagedLibheifFieldRasterMaterializer
-
+    invocation = build_composed_invocation(arguments)
     deadline = lease_deadline(float(arguments.lease_seconds))
     report = run_refine_lifecycle(
-        RefineLifecycleRequest(
-            user_id=arguments.user_id,
-            scan_id=arguments.scan_id,
-            task_id=arguments.task_id,
-            lease_id=arguments.lease_id,
-            room_file_id=arguments.room_file_id,
-            room_file_version=int(arguments.room_file_version),
-            scratch_root=Path(arguments.scratch_dir).resolve(),
-            manifest=sources["bundleManifest"],
-            keyframe_index=sources["keyframeIndex"],
-            keyframe_summary=sources["keyframeSummary"],
-            keyframes_archive=sources["keyframesArchive"],
-            gpu_index=arguments.gpu_index,
-        ),
-        acquirer=LocalScratchArtifactAcquirer(bundle),
-        raster_materializer=PackagedLibheifFieldRasterMaterializer(),
-        storage=LocalScratchStorageSink(Path(arguments.publish_dir).resolve()),
+        invocation.request,
+        acquirer=invocation.acquirer,
+        raster_materializer=invocation.raster_materializer,
+        storage=invocation.storage,
         deadline=deadline,
     )
     json.dump(report.to_document(), sys.stdout, indent=2, sort_keys=True)
