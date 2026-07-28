@@ -14,7 +14,6 @@ import SwiftUI
 struct InvoiceDetailView: View {
     let invoiceId: String
     @State private var viewModel = InvoiceDetailViewModel()
-    @Environment(\.appCoordinator) private var coordinator
 
     var body: some View {
         ScrollView(showsIndicators: false) {
@@ -37,11 +36,9 @@ struct InvoiceDetailView: View {
             .padding(.bottom, 140)
         }
         .background(PatinaColors.Background.primary)
-        .overlay(alignment: .topLeading) {
-            BackChevronButton(style: .light) { coordinator.goBack() }
-                .padding(.top, 8)
-                .padding(.leading, 18)
-        }
+        // U18: standard pushed-screen chrome — the header above carries
+        // the title, so the chrome adds only the back chevron.
+        .patinaScreen(title: nil)
         .task { await viewModel.load(invoiceId: invoiceId) }
         .refreshable { await viewModel.refresh(invoiceId: invoiceId) }
         .onDisappear { viewModel.stopPolling() }

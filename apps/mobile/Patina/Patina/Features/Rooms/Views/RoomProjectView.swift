@@ -83,29 +83,27 @@ struct RoomProjectView: View {
             }
             .presentationDetents([.medium])
         }
+        // U18: standard pushed-screen chrome — covers both the populated
+        // room (its own header carries the title) and `notFoundState`
+        // below (U31), which previously had no back affordance at all.
+        .patinaScreen(title: nil)
     }
 
     // MARK: - Room not found (U31)
 
     /// U31: the local room row is gone (e.g. removed on another device, or a
-    /// stale deep link) — previously this branch had no back affordance at
-    /// all, stranding the user. Real empty-state copy + its own chevron.
+    /// stale deep link) — real empty-state copy; the back affordance now
+    /// comes from the screen-wide `.patinaScreen` chrome.
     private var notFoundState: some View {
-        ZStack(alignment: .topLeading) {
-            VStack(spacing: 6) {
-                Text("This room isn't on this phone")
-                    .font(PatinaTypography.h4)
-                    .foregroundStyle(PatinaColors.Text.primary)
-                Text("It may have been removed.")
-                    .font(PatinaTypography.caption)
-                    .foregroundStyle(PatinaColors.Text.muted)
-            }
-            .frame(maxWidth: .infinity, maxHeight: .infinity)
-
-            BackChevronButton(style: .light) { coordinator.goBack() }
-                .padding(.top, 8)
-                .padding(.leading, 18)
+        VStack(spacing: 6) {
+            Text("This room isn't on this phone")
+                .font(PatinaTypography.h4)
+                .foregroundStyle(PatinaColors.Text.primary)
+            Text("It may have been removed.")
+                .font(PatinaTypography.caption)
+                .foregroundStyle(PatinaColors.Text.muted)
         }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
 
     // MARK: - Designer Lead CTA
@@ -158,7 +156,6 @@ struct RoomProjectView: View {
             .frame(maxHeight: .infinity, alignment: .bottom)
 
             HStack {
-                BackChevronButton(style: .light) { coordinator.goBack() }
                 Spacer()
                 Button {
                     coordinator.navigate(to: .roomSettings(roomId: room.id))

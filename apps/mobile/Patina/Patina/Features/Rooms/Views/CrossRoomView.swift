@@ -50,14 +50,15 @@ struct CrossRoomView: View {
             }
         }
         .background(PatinaColors.Background.primary.ignoresSafeArea())
-        .toolbar(.hidden, for: .navigationBar)
+        // U18: standard pushed-screen chrome — the header below carries
+        // the title, so the chrome adds only the back chevron.
+        .patinaScreen(title: nil)
     }
 
     // MARK: - Header / Tabs
 
     private var header: some View {
         HStack(alignment: .bottom) {
-            BackChevronButton(style: .light) { coordinator.goBack() }
             Spacer()
             VStack(alignment: .trailing, spacing: 2) {
                 Text("All Items")
