@@ -5435,3 +5435,113 @@ consequence of this entry. The 200-400 frame band remains unqualified per R117.
 composition that follows the floor, not before it.
 
 *Entries add: R119 · last id = R119*
+
+### I100 · Field Capture P2 · the Refine lifecycle is composed and the qualified profile pinned; build work closed — 2026-07-28
+
+R119's remaining rulings are built. The P2 Refine **build** work is closed; what
+remains is operational and belongs to the program owner. Integration line
+`field-capture/r118-integration` at merge `3d51cc6e`, carrying composition
+`b86f29c9`, shape floor `434988ea`, and the toolchain manifest emitter
+`84bae45f`.
+
+**The profile is pinned where the pin belongs.**
+`QUALIFIED_CAPTURE_RASTER_PROFILE = FieldRasterProfile(1440, 1920)` lives in
+`refine_lifecycle.py`, deliberately **not** in `field_raster_materializer.py` —
+R118/I98 moved that adapter off a compiled-in size on purpose, and what R119
+ruling 3 pins is narrower: *which declaration the composed path may make*.
+`require_qualified_raster_profile()` runs before anything is acquired, in six
+clauses with six distinct messages: a receipt must be in force; it must still
+cover the packaged helper source; the pinned profile must reproduce the
+receipt's own 8_294_417-byte PPM; the adapter must declare a profile; the
+declaration must be a `FieldRasterProfile`; and it must be *the* one. Neither
+design R119 rejected exists: there is no `--profile` flag, no environment
+variable, and no receipt lookup, and a test reads the argument parser to prove
+the surface is absent rather than merely unused.
+
+**Exactly one flag moved, and it is load-bearing rather than decorative.**
+`FIELD_RASTER_CAPTURE_PROFILE_QUALIFIED = True`, justified by I99 alone —
+receipt `f48fa56d…`, materialized PPM `50dccb8a…` at 8_294_417 bytes under
+header `P6\n1440 1920\n255\n`, helper source `3b184937…`. It is bound to those
+literals so it cannot drift: the guard compares the pinned helper digest
+against `field_raster_materializer.QUALIFIED_HELPER_SOURCE_SHA256`, so editing
+`field_raster_libheif.c` fails the composition **closed** rather than leaving a
+stale receipt in force. Set the flag `False` and the composed path admits no
+profile at all — verified directly on the qualified host, not inferred.
+Every other `*_QUALIFIED` flag remains `False`, **including
+`REFINE_LIFECYCLE_QUALIFIED`**: composing the lifecycle did not declare it
+qualified. A test AST-parses the whole package and asserts the true set is
+exactly `{FIELD_RASTER_CAPTURE_PROFILE_QUALIFIED}`.
+
+**`refine_lifecycle.main()` is repaired.** It had constructed
+`PackagedLibheifFieldRasterMaterializer()` with no arguments since item 7
+(`64f31021`). Two prior agents found it, fixed it, and deliberately reverted,
+because a repair must name a capture profile and none was qualified; R119
+ruling 3 supplied one. The construction moved into
+`build_composed_invocation(arguments)` so it is reachable from a test — that
+extraction *is* the fix's testability. `main()` now runs end to end under
+`python -m`, exiting 2 with one diagnostic and writing nothing, because the
+owner-installed toolchain manifest does not yet exist.
+
+**The shipped adapter is on the composed path for the first time.** A Linux
+test drives materializer → the real `PackagedLibheifFieldRasterMaterializer` →
+packet → recorded engine → runner → publisher at 1440x1920 over 8 frames (8 =
+`ALIGNMENT_MIN_CORRESPONDENCES`, the smallest bundle the parent's Sim(3)
+recomputation accepts). Every previous lifecycle test rasterized through a
+stand-in. The profile is proved to cross a real process boundary: the helper
+logs its argv and the test asserts `'1440', '1920'` reached the child, that
+every engine raster is 8_294_417 bytes, and that `materializer_id` is the
+packaged adapter's and ends `-1440x1920`.
+
+**Adversarial cases constructed, not asserted.** A real adapter at 360x640 —
+*the previously qualified I92 profile* — is refused
+`REFINE_RASTER_PROFILE_UNQUALIFIED`, as are 1920x1440 (the native pair, the
+plausible mistake), 1080x1920, and ±1 px on each axis. Refusal happens before
+acquisition: a counting acquirer records zero calls and both scratch and
+publish directories are empty. The converse is covered too — a qualified
+declaration with an unqualified *bundle* is refused per frame, which is what a
+run from any other device would look like.
+
+**One surviving mutation, reported rather than absorbed.** The clause "the
+pinned profile reproduces the receipt's PPM size" survived the first sweep
+because no input could reach it — precisely the failure mode this program keeps
+finding. The guard was kept (it refuses a *run*, where the assertion only
+refuses a commit), given a reaching test, and re-verified RED against a fresh
+control. The sweep's own log retained a stale pre-fix survivor line, and the
+author flagged that rather than letting it read as the verdict.
+
+**Verification.** Fully merged line on the qualified x86_64 host: **2149
+passed, 1 failed, 0 skipped**. The empty Linux skip list holds. The single
+failure is `test_validator_drift::test_vendored_validator_is_byte_identical`,
+absent `/home/kody/scripts/validate_capture_bundle.py`, reproduced on a
+base-commit control. The `install.sh` smoke-import list conflicted on merge —
+each side had modules the other lacked — and was resolved as the union; all
+four trust lists (`install.sh`, `install-path-guard.py`,
+`tests/test_install_script.py`, `tests/test_packaging.py`) were then
+cross-checked and agree on every module.
+
+**Posture is unchanged and was re-verified at the merge, not taken on report.**
+`DEFAULT_STAGES = "ingest,solve,drawings"`; `scan_pipeline.refine` unregistered
+(comments only); `PILOT_200_400_FRAME_RANGE_QUALIFIED` `False` per R117;
+`DEFAULT_LEASE_SECONDS = 3600.0` per R119 ruling 2; `refine_colmap_backend.py`
+byte-identical to `6743e66eb06369d18e34b0054d10734e03a109ec`.
+
+**What the composed path still does not prove — recorded in the module
+docstring, not only here.** No COLMAP, CUDA or GPU has ever run; the path fails
+closed at the toolchain preflight because the manifest is an owner-installed
+artifact. No real Field HEIC has been decoded on this path — the Linux test
+drives the real adapter, real descriptor pinning and a real helper *process*,
+but the helper is a stand-in writing canonical PPM; libheif on a real capture
+needs the root-owned installed release. No archive this repository has parsed
+came out of COLMAP; every sparse model in the suite is packed byte by byte by
+its tests. Nothing has measured how long a 100-frame reconstruction takes. The
+pin covers one device, one OS and one ARKit format by design. Escaped-`setsid`
+containment remains open as R116 exception (a) — detected, not contained.
+
+**Therefore the first real run is expected to establish exactly four things:**
+that COLMAP executes under the pinned toolchain and the one-hour lease; that
+libheif decodes real 1440x1920 Field keyframes through the installed helper;
+how long 100 frames actually take; and whether the resulting evidence clears
+`evaluate_refinement_evidence` rather than merely clearing the non-vacuity
+floors. Nothing before that run can answer any of them.
+
+*Entries add: I100 · last id = I100*
