@@ -48,6 +48,14 @@ public struct CompanionContext: Equatable {
     /// Number of rooms scanned
     public var roomCount: Int
 
+    // MARK: - Style
+
+    /// Whether the user has completed the style quiz. Derived fresh from
+    /// `StyleProfileStore` where the actions are computed — the quiz writes
+    /// UserDefaults, not the coordinator, so nothing pushes this in. Rows that
+    /// used to infer "hasn't taken the quiz" from `roomCount` read this instead.
+    public var hasStyleProfile: Bool
+
     // MARK: - Design Request
 
     /// The homeowner's promoted (visible) design request, if any. Session-scoped
@@ -82,6 +90,7 @@ public struct CompanionContext: Equatable {
         recentMessages: [CompanionContextMessage] = [],
         tableItemCount: Int = 0,
         roomCount: Int = 0,
+        hasStyleProfile: Bool = false,
         activeDesignRequest: ActiveDesignRequestContext? = nil
     ) {
         self.currentScreen = currentScreen
@@ -92,6 +101,7 @@ public struct CompanionContext: Equatable {
         self.recentMessages = recentMessages
         self.tableItemCount = tableItemCount
         self.roomCount = roomCount
+        self.hasStyleProfile = hasStyleProfile
         self.activeDesignRequest = activeDesignRequest
     }
 

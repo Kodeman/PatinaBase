@@ -7,6 +7,7 @@
 //
 
 import SwiftUI
+import SwiftData
 import Supabase
 
 // MARK: - Companion Display State
@@ -135,6 +136,17 @@ public struct CompanionOverlay: View {
     ///
     /// An unresolved tier is left `nil` rather than defaulted: the row builders
     /// read `nil` as not-yet-engaged, so a Studio door never opens on a guess.
+    ///
+    /// The style profile and the room / saved-item counts are read from their
+    /// live stores here for the same reason (U42): nothing writes them into the
+    /// coordinator. `AppCoordinator.updateRoomCount(_:)` and
+    /// `updateTableItemCount(_:)` have no callers anywhere in the app, so those
+    /// fields sit frozen at 0 and every panel open rendered the brand-new-user
+    /// menu — "Style quiz · Discover your style" and "Your recommendations ·
+    /// Take the quiz first" — no matter what the user had already done.
+    ///
+    /// Evaluated only while the panel is expanded (see `expandedView`, which
+    /// binds it once), so these are per-open reads, not per-frame ones.
     private var enrichedContext: CompanionContext {
         var context = coordinator.companionContext
         if let promoted = DesignRequestStatusService.shared.promotedRequest {
@@ -145,6 +157,15 @@ public struct CompanionOverlay: View {
         }
         if case .known(let tier) = EngagementTier.currentState {
             context.engagementTier = tier
+        }
+        context.hasStyleProfile = StyleProfileStore.shared.hasCompletedProfile
+
+        let store = PersistenceController.shared.container.mainContext
+        if let rooms = try? store.fetchCount(FetchDescriptor<RoomModel>()) {
+            context.roomCount = rooms
+        }
+        if let saved = try? store.fetchCount(FetchDescriptor<TableItemModel>()) {
+            context.tableItemCount = saved
         }
         return context
     }
@@ -410,11 +431,15 @@ public struct CompanionOverlay: View {
         VStack(spacing: 0) {
             // Panel
             VStack(spacing: 0) {
+                // One enrichment per panel open, shared by the title and the
+                // rows — they must agree, and the enrichment hits the stores.
+                let context = enrichedContext
+
                 // Header
                 HStack(alignment: .firstTextBaseline, spacing: 8) {
                     Text(CompanionActionProvider.panelTitle(
                         for: coordinator.currentScreen,
-                        context: coordinator.companionContext
+                        context: context
                     ))
                         .font(.custom("PlayfairDisplay-Italic", size: 16, relativeTo: .callout))
                         .foregroundStyle(PatinaColors.offWhite)
@@ -483,7 +508,7 @@ public struct CompanionOverlay: View {
                 VStack(spacing: 6) {
                     let actions = CompanionActionProvider.actions(
                         for: coordinator.currentScreen,
-                        context: enrichedContext,
+                        context: context,
                         isAuthenticated: AuthService.shared.isAuthenticated
                     )
                     ForEach(actions) { item in

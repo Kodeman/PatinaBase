@@ -93,12 +93,36 @@ extension CompanionActionProvider {
         context: CompanionContext,
         suggested: Bool = false
     ) -> CompanionActionItem {
-        CompanionActionItem(
-            icon: "sparkles", label: "Your recommendations",
-            hint: context.roomCount > 0 ? "Based on your rooms" : "Take the quiz first",
+        // "Take the quiz first" used to be keyed on `roomCount`, which is the
+        // wrong signal — it told a user who had just finished the quiz to go
+        // take the quiz (U42). Rooms still win the hint when there are any;
+        // otherwise the style profile decides.
+        let hint: String
+        if context.roomCount > 0 {
+            hint = "Based on your rooms"
+        } else if context.hasStyleProfile {
+            hint = "Pieces for your style"
+        } else {
+            hint = "Take the quiz first"
+        }
+        return CompanionActionItem(
+            icon: "sparkles", label: "Your recommendations", hint: hint,
             isSuggested: suggested, analyticsId: "recommendations",
             route: .emergence(pieceId: nil)
         )
+    }
+
+    // MARK: - Style
+
+    /// The style-quiz door. Once a profile exists it must stop advertising
+    /// discovery — the same copy the style-result menu already uses (U42).
+    static func styleQuizRow(context: CompanionContext) -> CompanionActionItem {
+        if context.hasStyleProfile {
+            return item("paintpalette", "Retake the quiz", "Refine your style",
+                        route: .styleQuiz, id: "style_quiz")
+        }
+        return item("paintpalette", "Style quiz", "Discover your style",
+                    route: .styleQuiz, id: "style_quiz")
     }
 
     // MARK: - Rooms

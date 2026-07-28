@@ -28,8 +28,7 @@ extension CompanionActionProvider {
         if context.roomCount == 0 {
             var rows = [
                 spacesOrScanRow(context: context, suggested: true),
-                item("paintpalette", "Style quiz", "Discover your style",
-                     route: .styleQuiz, id: "style_quiz"),
+                styleQuizRow(context: context),
                 recommendationsRow(context: context)
             ]
             if let collections = collectionsRow(context: context) { rows.append(collections) }
