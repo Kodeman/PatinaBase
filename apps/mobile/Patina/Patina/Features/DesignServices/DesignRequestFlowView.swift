@@ -90,7 +90,7 @@ struct DesignRequestFlowView: View {
             if result != nil { step = .success }
         }
         .sheet(isPresented: $showAuthSheet) {
-            InFlowAuthSheet()
+            AuthSheet()
         }
         .alert("Resume your request?", isPresented: resumeAlertBinding) {
             Button("Resume") { resumeExisting() }

@@ -101,6 +101,8 @@ struct ContentView: View {
             SettingsView()
         case .qr:
             QRScannerView()
+        case .auth:
+            AuthSheet()
         case .designServices(let roomId, let preselectedScanIds):
             DesignRequestFlowView(
                 preselectedScanIds: preselectedScanIds,
