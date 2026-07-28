@@ -279,9 +279,17 @@ Read it with, not instead of, the canonical sources below.
   one descriptor-safe workspace and the single carried deadline. Enforce I94's
   service-owned local-file contract (or move parent hashing behind a killable
   helper); the current synchronous `pread` cannot preempt a kernel-stalled
-  FUSE/network file. The archive packet must be proven for 200–400 frames
-  without exceeding the 64-file/4-GiB native boundary, and
-  `PILOT_200_400_FRAME_RANGE_QUALIFIED` is still `False`.
+  FUSE/network file. **Ruled R117 (2026-07-27):** the pilot runs at **100
+  frames**, not 200–400 — scan `95266be1` has 100 keyframes (`fired: 100`, 100
+  `keyframe_index.ndjson` rows), which is inside the enforced `[3, 400]` packet
+  bound and below the band's floor of 200. So the archive packet must be proven
+  at **100** frames without exceeding the 64-file/4-GiB native boundary.
+  The 200–400 band is recorded **unqualified, not failed**: capacity is not the
+  constraint (the arithmetic puts 100 frames at 7 chunks / 8 pinned files /
+  ≈0.77 GiB, and even 400 at ≈3.09 GiB, both well inside the boundary) — no
+  scan in the band has been captured. `PILOT_200_400_FRAME_RANGE_QUALIFIED` is
+  still `False`, R117 is the record of why, and it is not to be flipped on that
+  ruling; qualifying it needs a longer capture.
   Keep `production_enablement=disabled`, keep the composition unregistered, and
   exercise it only on reviewed local scratch. Do not claim a GPU queue task or
   run `95266be1` through production DB/Storage. Disable DeskDev suspend before
@@ -569,7 +577,8 @@ tests, and an independent adversarial review. **Item 6 is where you resume.**
    envelope-only — its per-row content was derivable from the engine request, so
    it was removed rather than validated. The 200–400-frame pilot band is exposed
    as constants and deliberately **not** enforced
-   (`PILOT_200_400_FRAME_RANGE_QUALIFIED` is `False`).
+   (`PILOT_200_400_FRAME_RANGE_QUALIFIED` is `False`; R117 rules the pilot at
+   100 frames and records the band unqualified, so that flag stays `False`).
 3. ✅ **DONE (I97).** Executable-identity pinning re-proven immediately before
    `execve`, a 13-key closed command environment, per-option argv confinement,
    and a pinned toolchain identity that rejects drift. The single lease-aware
@@ -624,10 +633,21 @@ tests, and an independent adversarial review. **Item 6 is where you resume.**
    before producing the exact six persistent engine artifacts. This is the half
    of the output contract I97 did **not** implement;
    `NATIVE_ENGINE_OUTPUT_ALIGNMENT_VERIFIED_BY_PARENT` is the flag that says so.
-7. Compose materializer → raster → backend → runner → publisher only on local
-   scratch. Require comparable reprojection, registration, verified-loop, and
-   evidence-builder results for `95266be1`; unchanged evidence is a failure and
-   trajectory shape remains diagnostic-only.
+7. ⏳ **IN PROGRESS.** Compose materializer → raster → backend → runner →
+   publisher only on local scratch. Require comparable reprojection,
+   registration, verified-loop, and evidence-builder results for `95266be1`;
+   unchanged evidence is a failure and trajectory shape remains
+   diagnostic-only.
+
+   **Scope ruled R117: 100 frames.** `95266be1` has 100 keyframes, so the
+   composition is proven at 100 — inside the enforced `[3, 400]` packet bound,
+   below the 200-frame pilot floor. The 200–400 band stays **unqualified, not
+   failed** (`PILOT_200_400_FRAME_RANGE_QUALIFIED` remains `False`); do not
+   flip it, and do not treat a passing 100-frame composition as evidence for
+   it. Carried into this item from R117: the raster materializer hard-pins its
+   qualified raster to the item-4a fixture's 360×640 while this scan's
+   keyframes are 1440×1920, so a real-capture raster size is not yet
+   qualified.
 8. Only after all of the above, Kody’s P2 gates (dense mesh, walkthrough/click-
    to-measure, and maker quote without a site visit) can be requested. Refine,
    Fuse, and Splat remain unregistered until Kody explicitly passes the gate.

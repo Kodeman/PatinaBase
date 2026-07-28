@@ -5034,3 +5034,55 @@ to call, and every downstream hard gate named in I97 remains open. Item 6
 is next.
 
 *Entries add: R116 · last id = R116*
+
+### R117 · Field Capture P2 — 100-frame pilot accepted for `95266be1`; the 200–400 band recorded UNQUALIFIED — 2026-07-27
+
+Kody accepts a **100-frame** pilot for the standing subject scan
+`95266be1-5185-4aeb-8b6a-a09dceecca21`, and the 200–400 frame band is
+recorded **unqualified** — not failed.
+
+**Basis.** The scan has 100 keyframes, not 200–400. Its bundle is staged
+read-only on the qualified host at `~/refine-i96-scan-95266be1` —
+46,435,109 bytes across 31 files — and both keyframe records agree:
+`keyframe_summary.json` reports `fired: 100` with zero blur rejections and
+zero encode drops, and `keyframe_index.ndjson` carries exactly 100 rows,
+every one of them a 1440×1920 raster. 100 sits inside the packet
+contract's enforced `[3, 400]` bound (`COLMAP_PACKET_MIN_ENGINE_IMAGES` /
+`COLMAP_PACKET_MAX_ENGINE_IMAGES`) and below the pilot band's floor of
+200, so the packet accepts it and the band does not describe it.
+
+**Capacity is not what is holding the band back.** This is arithmetic from
+the measured frame count and the shipped constants, not a measurement — no
+production packet builder exists, so no packet of any size has been built.
+On that arithmetic a 100-frame PPM packet is 7 archive chunks, 8 pinned
+files, ≈0.77 GiB: about a fifth of the 4 GiB
+`NATIVE_CHILD_MAX_PINNED_TOTAL_BYTES` aggregate ceiling and far inside the
+64-file `NATIVE_CHILD_MAX_PINNED_FILES` bound. The same arithmetic clears
+a full 400 frames at 25 chunks / 26 pinned files / ≈3.09 GiB. Host
+headroom was 22 GiB free when this was ruled. The band is unproven because
+no scan in it has been captured, not because a packet could not carry one.
+
+**`PILOT_200_400_FRAME_RANGE_QUALIFIED` therefore stays `False`,** and this
+entry is the record of *why* it stays `False`. Qualifying it requires a
+longer capture — a real Field session that fires at least 200 keyframes —
+and then the evidence that band would have to carry. Nothing shorter
+substitutes, and the flag is not to be flipped on this ruling.
+
+**Carried, not decided:** the shipped raster materializer hard-pins its
+qualified raster to the item-4a fixture's 360×640 and rejects any other
+encoded size, while this scan's keyframes are 1440×1920. A real-capture
+raster size is therefore not yet qualified. That belongs to item 7's
+composition; nothing here qualifies it.
+
+**What this does not decide.** It does not qualify the 200–400 band. It
+does not enable Refine, register `scan_pipeline.refine`, move
+`DEFAULT_STAGES` off `ingest,solve,drawings`, or flip any `*_QUALIFIED`
+flag — all of them, including
+`NATIVE_ENGINE_OUTPUT_ALIGNMENT_VERIFIED_BY_PARENT`, remain `False`. No
+COLMAP, no GPU, no queue task, no production DB or Storage touch. Kody's
+P2 milestone gates are untouched and remain his to call: M2 (first dense
+mesh from `95266be1` judged against the P1 certificate), M3 (walkthrough
+and click-to-measure) and M4 (a maker quotes without a site visit). Item 7
+composes at 100 frames.
+
+*Entries add: R117 · last id = R117*
