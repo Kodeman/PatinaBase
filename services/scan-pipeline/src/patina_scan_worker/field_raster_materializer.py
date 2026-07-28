@@ -1,16 +1,31 @@
 """Disabled concrete Field/Core Image raster materializer.
 
-This adapter deliberately implements only the exact 360x640 ImageIO/libheif
-profile qualified by I92.  It copies an already-pinned source descriptor into
-an adapter-owned private directory, runs the byte-identical qualified helper
-through descriptor-pinned ``/proc/self/fd`` aliases, validates and unlinks the
-helper output, and only then streams canonical PPM bytes through the caller's
-bounded destination.
+This adapter implements one ImageIO/libheif raster profile per instance.  The
+profile is **declared** at construction, not compiled in: it is carried down to
+the helper on argv, echoed back by the helper, and compared against every
+dimension the helper reports.  The adapter copies an already-pinned source
+descriptor into an adapter-owned private directory, runs the byte-identical
+packaged helper through descriptor-pinned ``/proc/self/fd`` aliases, validates
+and unlinks the helper output, and only then streams canonical PPM bytes
+through the caller's bounded destination.
 
-It is packaged for a later disabled composition layer.  Importing this module
-does not register ``scan_pipeline.refine`` or change the worker stage set.
-Variable-size production keyframes require a new helper protocol and a new
-physical-device qualification receipt.
+R118 moved this file off two pinned 360x640 constants.  360x640 was the debug
+fixture's size (``FieldRasterFixtureExporter.swift``), never production's:
+Field writes full-resolution HEIC at whatever format ARKit selected for that
+device, so the pinned adapter refused a real capture at its first frame.  The
+replacement is a parameter, not a different constant — the capture resolution
+is a property of the device and session, not of this code.
+The declaration is bounded — see ``_MAX_PROFILE_DIMENSION`` and
+``_MAX_PROFILE_PPM_BYTES`` — because a merely variable profile is an
+allocation hazard: a declared 60000x60000 implies a 10.8 GB PPM.
+
+**Nothing here is qualified.**  Editing ``field_raster_libheif.c`` changed its
+SHA-256, which by construction invalidated the I92 physical-device receipt that
+covered the old helper.  No capture profile has a receipt: qualifying one needs
+a physical fixture emitted at that device's capture resolution plus a run on
+the qualified host, and neither is an agent's step.  Until such a receipt
+exists this module stays packaged and unused — importing it does not register
+``scan_pipeline.refine`` or change the worker stage set.
 """
 
 from __future__ import annotations
@@ -41,15 +56,34 @@ from .refine_materializer import (
     FieldRasterMaterialization,
     MaterializerFailureCode,
     RefineBoundedWriter,
+    RefineMaterializationLimits,
     RefineMaterializerError,
     RefinePinnedSource,
 )
 
-EXPECTED_WIDTH = 360
-EXPECTED_HEIGHT = 640
+# SHA-256 of the packaged `field_raster_libheif.c`.  The name is kept because
+# R118 names it, but read it as PINNED, not as QUALIFIED: it moved from
+# 4840e0e6...ee9c3 (the source I92 physically qualified) when the helper
+# protocol started carrying dimensions on argv, and the I92 receipt covers the
+# old bytes only.  This constant, install.sh's `expected_source_sha256`, and
+# install-path-guard.py's FIELD_RASTER_HELPER_SOURCE_SHA256 must move together
+# or the installer refuses to build the helper.  Recompute with
+# `sha256sum src/patina_scan_worker/field_raster_libheif.c`.
 QUALIFIED_HELPER_SOURCE_SHA256 = (
-    "4840e0e6d3c98bbebecc4354349bae3963718583fb5c882f9807b0d222bee9c3"
+    "3b184937b755dc4acca4347ea6dba43dbeb111f090a91cd340e65d214937c626"
 )
+# The installed filename still says v2 while the protocol is v3, and that is a
+# deliberate, narrow choice rather than an oversight.  This path is a DEPLOYMENT
+# SLOT, not the protocol's identity: install-path-guard.py names it in the
+# release's required-executable list, so renaming it would make a new guard
+# refuse an already-installed older release — an operator-visible consequence
+# on a host this work package may not touch.  Nothing is lost by holding it
+# stable, because the drift it might otherwise hide is already caught: the
+# manifest binds `sourceSha256`, and `_open_helper` refuses any release whose
+# manifest does not carry exactly QUALIFIED_HELPER_SOURCE_SHA256 below.  A v2
+# binary in a v3 tree therefore fails closed before it is ever executed.
+# Renaming the slot belongs with the re-qualification that installs the next
+# release, not here.
 HELPER_RELATIVE_PATH = Path("libexec/patina/field-raster-libheif-helper-v2")
 HELPER_MANIFEST_NAME = HELPER_RELATIVE_PATH.name + ".manifest.json"
 HELPER_MANIFEST_SCHEMA = "patina-field-raster-helper-manifest-v1"
@@ -81,8 +115,86 @@ _HELPER_COMPILE_FLAGS = (
     "-x",
     "c",
 )
-_PPM_HEADER = f"P6\n{EXPECTED_WIDTH} {EXPECTED_HEIGHT}\n255\n".encode("ascii")
-_PPM_SIZE = len(_PPM_HEADER) + EXPECTED_WIDTH * EXPECTED_HEIGHT * 3
+
+# Per-axis ceiling on a declared profile.  4096 is not a new number: it is the
+# MAX_DIMENSION the packaged helper already enforces on every decoded plane and
+# the bound `_metadata_positive_int` already applies to every dimension the
+# helper reports.  Declaring inside it means a declaration can never describe a
+# raster this pipeline's own decode path would refuse.  It clears the capture
+# profile observed on scan 95266be1 on both axes with better than 2x headroom,
+# and every ARKit format that device reports.
+_MAX_PROFILE_DIMENSION = 4096
+
+# Ceiling on the canonical PPM a declared profile may imply.  Read live off the
+# enclosing materializer's per-frame limit rather than restated, so the two
+# cannot drift: `_preflight_raster_sizes` refuses any indexed frame whose P6
+# size exceeds `max_raster_bytes` before a decode is attempted, and the frozen
+# child refuses to pin a file above the identical
+# NATIVE_CHILD_MAX_PINNED_FILE_BYTES.  A profile above this bound cannot cross
+# either seam, so accepting one would only buy an allocation nothing
+# downstream can use — which is the 10.8 GB failure mode R118 names.
+_MAX_PROFILE_PPM_BYTES = RefineMaterializationLimits().max_raster_bytes
+
+
+@dataclass(frozen=True)
+class FieldRasterProfile:
+    """One declared, bounded encoded raster size for the helper protocol.
+
+    Constructed by program code, not parsed from untrusted input, so an invalid
+    profile is a programming error: it raises at construction rather than
+    deferring to a fail-closed adapter failure code at materialize time.
+    """
+
+    width: int
+    height: int
+
+    def __post_init__(self) -> None:
+        for label, value in (("width", self.width), ("height", self.height)):
+            if type(value) is not int:
+                raise TypeError(f"raster profile {label} must be an int")
+            if value < 1 or value > _MAX_PROFILE_DIMENSION:
+                raise ValueError(
+                    f"raster profile {label} {value} is outside "
+                    f"[1, {_MAX_PROFILE_DIMENSION}]"
+                )
+        # Bound the product as well as each axis.  At a 4096 axis ceiling the
+        # implied PPM peaks at 48 MiB, inside the byte ceiling, so this never
+        # fires today; it is what keeps the byte guarantee true if the axis
+        # ceiling is ever raised, and it names the real downstream limit.
+        if self.ppm_size > _MAX_PROFILE_PPM_BYTES:
+            raise ValueError(
+                f"raster profile {self.label} implies {self.ppm_size} PPM bytes, "
+                f"above the {_MAX_PROFILE_PPM_BYTES}-byte ceiling"
+            )
+
+    @property
+    def label(self) -> str:
+        return f"{self.width}x{self.height}"
+
+    @property
+    def ppm_header(self) -> bytes:
+        return f"P6\n{self.width} {self.height}\n255\n".encode("ascii")
+
+    @property
+    def ppm_size(self) -> int:
+        return len(self.ppm_header) + self.width * self.height * 3
+
+
+# The encoded size of the reference DRAWING DESIGN — the 640x360 native fixture
+# rotated — which is what I92 physically qualified.  It is named here because
+# the reference design is a fixed artefact of this repository (the exporter
+# still emits it, byte for byte, and the marker arithmetic is defined relative
+# to it), not because it describes anything a device captures.
+#
+# There is deliberately NO capture-resolution constant in this module.  Capture
+# resolution is not a property of any code here: `SharedARCaptureRig
+# .makeConfiguration()` never assigns `ARConfiguration.videoFormat`, so ARKit
+# picks a device- and semantics-dependent default and `FieldKeyframeRecorder`
+# stamps whatever `frame.camera.imageResolution` reports per keyframe.  The
+# 1440x1920 seen on scan 95266be1 is one device's observed pair, not a contract
+# — writing it down as a constant is precisely the mistake R118 exists to
+# correct.  Callers declare the profile they actually have.
+REFERENCE_DESIGN_ENCODED_PROFILE = FieldRasterProfile(360, 640)
 
 
 @dataclass(frozen=True)
@@ -746,6 +858,7 @@ def _run_helper(
     helper_fd: int,
     scratch_fd: int,
     *,
+    profile: FieldRasterProfile,
     deadline: RefineDeadline,
     proc_fd_root: Path,
 ) -> _HelperResult:
@@ -764,7 +877,13 @@ def _run_helper(
     try:
         _remaining(deadline)
         process = subprocess.Popen(
-            (helper_alias, input_alias, output_alias),
+            (
+                helper_alias,
+                input_alias,
+                output_alias,
+                str(profile.width),
+                str(profile.height),
+            ),
             executable=helper_alias,
             stdin=subprocess.DEVNULL,
             stdout=subprocess.PIPE,
@@ -864,7 +983,11 @@ def _run_helper(
             ) from primary
 
 
-def _validated_metadata(payload: bytes) -> dict[str, str]:
+def _validated_metadata(
+    payload: bytes,
+    *,
+    profile: FieldRasterProfile,
+) -> dict[str, str]:
     if len(payload) > _STDOUT_LIMIT:
         _fail(
             MaterializerFailureCode.RASTER_UNQUALIFIED,
@@ -878,6 +1001,8 @@ def _validated_metadata(payload: bytes) -> dict[str, str]:
             MaterializerFailureCode.RASTER_UNQUALIFIED,
             f"helper metadata is invalid: {exc}",
         )
+    width = str(profile.width)
+    height = str(profile.height)
     expected = {
         "schema": LIBHEIF_HELPER_SCHEMA,
         "decoder_id": "libde265",
@@ -887,21 +1012,27 @@ def _validated_metadata(payload: bytes) -> dict[str, str]:
         "transformation_properties": "1",
         "transformation_property_type": "irot",
         "transformation_rotation_ccw": "0",
-        "ispe_width": str(EXPECTED_WIDTH),
-        "ispe_height": str(EXPECTED_HEIGHT),
-        "presented_width": str(EXPECTED_WIDTH),
-        "presented_height": str(EXPECTED_HEIGHT),
-        "raw_width": str(EXPECTED_WIDTH),
-        "raw_height": str(EXPECTED_HEIGHT),
-        "default_width": str(EXPECTED_WIDTH),
-        "default_height": str(EXPECTED_HEIGHT),
+        # `declared_*` is the helper echoing back the argv it was given.  It
+        # proves the run enforced the profile this adapter asked for, rather
+        # than a size the helper still had compiled into it; the six that
+        # follow prove the file agrees with that declaration.
+        "declared_width": width,
+        "declared_height": height,
+        "ispe_width": width,
+        "ispe_height": height,
+        "presented_width": width,
+        "presented_height": height,
+        "raw_width": width,
+        "raw_height": height,
+        "default_width": width,
+        "default_height": height,
         "raw_default_rgb_identical": "1",
         "matching_decoder_descriptor_count": "1",
     }
     if any(values.get(key) != value for key, value in expected.items()):
         _fail(
             MaterializerFailureCode.RASTER_UNQUALIFIED,
-            "helper metadata does not match the qualified physical profile",
+            f"helper metadata does not match the declared {profile.label} profile",
         )
     if _SAFE_VERSION.fullmatch(values["libheif_version"]) is None:
         _fail(
@@ -915,8 +1046,11 @@ def _stream_output(
     scratch_fd: int,
     destination: RefineBoundedWriter,
     *,
+    profile: FieldRasterProfile,
     deadline: RefineDeadline,
 ) -> None:
+    ppm_header = profile.ppm_header
+    ppm_size = profile.ppm_size
     try:
         before = os.stat("output.ppm", dir_fd=scratch_fd, follow_symlinks=False)
     except OSError as exc:
@@ -940,7 +1074,7 @@ def _stream_output(
             or (opened.st_dev, opened.st_ino) != (before.st_dev, before.st_ino)
             or stat.S_IMODE(opened.st_mode) != 0o600
             or opened.st_nlink != 1
-            or opened.st_size != _PPM_SIZE
+            or opened.st_size != ppm_size
         ):
             _fail(
                 MaterializerFailureCode.RASTER_UNQUALIFIED,
@@ -948,8 +1082,8 @@ def _stream_output(
             )
         os.unlink("output.ppm", dir_fd=scratch_fd)
         sealed = os.fstat(descriptor)
-        header = os.read(descriptor, len(_PPM_HEADER))
-        if header != _PPM_HEADER:
+        header = os.read(descriptor, len(ppm_header))
+        if header != ppm_header:
             _fail(
                 MaterializerFailureCode.RASTER_UNQUALIFIED,
                 "helper PPM is not canonical P6 RGB",
@@ -962,7 +1096,7 @@ def _stream_output(
             if not chunk:
                 break
             copied += len(chunk)
-            if copied > _PPM_SIZE:
+            if copied > ppm_size:
                 _fail(
                     MaterializerFailureCode.RASTER_UNQUALIFIED,
                     "helper PPM exceeded its exact size",
@@ -982,7 +1116,7 @@ def _stream_output(
                     "bounded raster destination accepted a short write",
                 )
         after = os.fstat(descriptor)
-        if copied != _PPM_SIZE or _source_identity(sealed) != _source_identity(after):
+        if copied != ppm_size or _source_identity(sealed) != _source_identity(after):
             _fail(
                 MaterializerFailureCode.RASTER_UNQUALIFIED,
                 "helper PPM changed while it was consumed",
@@ -1005,8 +1139,19 @@ def _stream_output(
             )
 
 
-def _materializer_id(source_hash: str, version: str) -> str:
-    value = f"{MATERIALIZER_ID_PREFIX}-{source_hash[:12]}-libheif-{version}-libde265"
+def _materializer_id(
+    source_hash: str,
+    version: str,
+    profile: FieldRasterProfile,
+) -> str:
+    # The profile belongs in the identity now that it is a parameter.  Two runs
+    # of the same helper source against the same libheif at different declared
+    # sizes produce rasters that are not comparable, and the materializer id is
+    # how the evidence ledger tells materializations apart.
+    value = (
+        f"{MATERIALIZER_ID_PREFIX}-{source_hash[:12]}"
+        f"-libheif-{version}-libde265-{profile.label}"
+    )
     if len(value.encode("utf-8")) > _MAX_MATERIALIZER_ID_BYTES:
         _fail(
             MaterializerFailureCode.RASTER_UNQUALIFIED,
@@ -1079,7 +1224,13 @@ def _scratch_cleanup(
 
 
 class PackagedLibheifFieldRasterMaterializer:
-    """Concrete disabled adapter for the I92-qualified 360x640 raster profile."""
+    """Concrete disabled adapter for one declared, bounded raster profile.
+
+    ``profile`` has no default on purpose.  The size this adapter enforces is
+    the whole subject of R118, and a default would let a composition inherit a
+    profile it never stated — which is how a fixture size came to be shipped as
+    the production one in the first place.
+    """
 
     production_enablement = "disabled"
 
@@ -1087,12 +1238,20 @@ class PackagedLibheifFieldRasterMaterializer:
         self,
         *,
         scratch_parent: Path,
+        profile: FieldRasterProfile,
     ) -> None:
         if not isinstance(scratch_parent, Path) or not scratch_parent.is_absolute():
             raise TypeError("scratch_parent must be an absolute Path")
+        if not isinstance(profile, FieldRasterProfile):
+            raise TypeError("profile must be a FieldRasterProfile")
         self._scratch_parent = scratch_parent
+        self._profile = profile
         self._test_release_prefix: Path | None = None
         self._proc_fd_root = Path("/proc/self/fd")
+
+    @property
+    def profile(self) -> FieldRasterProfile:
+        return self._profile
 
     @classmethod
     def _for_test(
@@ -1100,8 +1259,9 @@ class PackagedLibheifFieldRasterMaterializer:
         *,
         scratch_parent: Path,
         release_prefix: Path,
+        profile: FieldRasterProfile,
     ) -> PackagedLibheifFieldRasterMaterializer:
-        instance = cls(scratch_parent=scratch_parent)
+        instance = cls(scratch_parent=scratch_parent, profile=profile)
         instance._test_release_prefix = release_prefix
         return instance
 
@@ -1136,14 +1296,15 @@ class PackagedLibheifFieldRasterMaterializer:
     ) -> FieldRasterMaterialization:
         _validate_string(source_name, "source_name", ".heic")
         _validate_string(engine_name, "engine_name", ".ppm")
+        profile = self._profile
         if (
             type(encoded_width) is not int
             or type(encoded_height) is not int
-            or (encoded_width, encoded_height) != (EXPECTED_WIDTH, EXPECTED_HEIGHT)
+            or (encoded_width, encoded_height) != (profile.width, profile.height)
         ):
             _fail(
                 MaterializerFailureCode.RASTER_UNQUALIFIED,
-                "raster dimensions are outside the I92-qualified 360x640 profile",
+                f"raster dimensions are outside the declared {profile.label} profile",
             )
         _remaining(deadline)
 
@@ -1214,6 +1375,7 @@ class PackagedLibheifFieldRasterMaterializer:
                 helper_result = _run_helper(
                     helper_fd,
                     scratch_fd,
+                    profile=profile,
                     deadline=deadline,
                     proc_fd_root=self._proc_fd_root,
                 )
@@ -1229,7 +1391,7 @@ class PackagedLibheifFieldRasterMaterializer:
                     MaterializerFailureCode.RASTER_UNQUALIFIED,
                     "qualified helper emitted stderr on success",
                 )
-            metadata = _validated_metadata(helper_result.stdout)
+            metadata = _validated_metadata(helper_result.stdout, profile=profile)
             if metadata["libheif_version"] != manifest_libheif_version:
                 _fail(
                     MaterializerFailureCode.RASTER_UNQUALIFIED,
@@ -1238,6 +1400,7 @@ class PackagedLibheifFieldRasterMaterializer:
             materializer_id = _materializer_id(
                 source_hash,
                 metadata["libheif_version"],
+                profile,
             )
             try:
                 os.unlink("input.heic", dir_fd=scratch_fd)
@@ -1246,13 +1409,18 @@ class PackagedLibheifFieldRasterMaterializer:
                     MaterializerFailureCode.RASTER_UNQUALIFIED,
                     f"cannot retire helper input: {exc}",
                 )
-            _stream_output(scratch_fd, destination, deadline=deadline)
+            _stream_output(
+                scratch_fd,
+                destination,
+                profile=profile,
+                deadline=deadline,
+            )
             result = FieldRasterMaterialization(
                 materializer_id=materializer_id,
-                source_width=EXPECTED_WIDTH,
-                source_height=EXPECTED_HEIGHT,
-                output_width=EXPECTED_WIDTH,
-                output_height=EXPECTED_HEIGHT,
+                source_width=profile.width,
+                source_height=profile.height,
+                output_width=profile.width,
+                output_height=profile.height,
             )
         except RefineMaterializerError as exc:
             primary = exc

@@ -1,3 +1,23 @@
+/* Field raster helper — HEIC to canonical P6, at a DECLARED raster profile.
+ *
+ * Protocol (v3):
+ *
+ *   field-raster-libheif INPUT.heic OUTPUT.ppm DECLARED_WIDTH DECLARED_HEIGHT
+ *
+ * The encoded raster size is a parameter of the protocol, not a constant of
+ * this program.  Before R118 it was two #defines pinned to the 360x640 debug
+ * fixture, which meant production Field keyframes (1440x1920) were refused at
+ * the first frame.  The dimensions now arrive on argv, are parsed with the
+ * same suspicion as any other untrusted input, are bounded per axis and in
+ * product, and are echoed back on stdout as ``declared_width``/
+ * ``declared_height`` so the parent can prove the helper was told the same
+ * profile the parent declared rather than inferring one from the file.
+ *
+ * Editing this file changes QUALIFIED_HELPER_SOURCE_SHA256 in
+ * field_raster_materializer.py, install.sh, and install-path-guard.py, and by
+ * construction invalidates the I92 physical-device receipt.
+ */
+
 #define _POSIX_C_SOURCE 200809L
 
 #include <errno.h>
@@ -18,11 +38,21 @@
 #define O_NOFOLLOW 0
 #endif
 
+/* Per-axis ceiling on any dimension this helper will accept or decode.  This
+ * is the same 4096 the Python side already applies to every dimension the
+ * helper reports (_metadata_positive_int), so a declaration can never describe
+ * a raster the parent would refuse to read back.  It clears the shipped
+ * capture profile (1440x1920) on both axes with better than 2x headroom. */
 #define MAX_DIMENSION 4096
 #define MAX_HEVC_DECODERS 32
 #define MAX_HEIC_BYTES (32U * 1024U * 1024U)
-#define EXPECTED_WIDTH 360
-#define EXPECTED_HEIGHT 640
+/* Ceiling on the P6 payload a declared profile may imply.  128 MiB is the same
+ * number twice over in this program: RefineMaterializationLimits
+ * .max_raster_bytes, which _preflight_raster_sizes enforces per frame before
+ * any decode, and NATIVE_CHILD_MAX_PINNED_FILE_BYTES, which the frozen child
+ * enforces per pinned file.  A raster above it cannot survive either seam, so
+ * decoding one would only buy an allocation nothing downstream can use. */
+#define MAX_PPM_BYTES (128U * 1024U * 1024U)
 
 struct rgb_raster {
   int width;
@@ -30,6 +60,42 @@ struct rgb_raster {
   size_t size;
   uint8_t *pixels;
 };
+
+/* Parse one declared raster dimension out of argv.
+ *
+ * The declaration is a protocol parameter supplied by the caller, so it is
+ * validated exactly: bare ASCII decimal digits, no sign, no leading zero, no
+ * whitespace, no trailing text, and inside [1, MAX_DIMENSION].  strtol is
+ * deliberately not used — it accepts leading whitespace and a sign, which
+ * would let "  +360" and "360" describe the same profile under two spellings.
+ */
+static int parse_declared_dimension(const char *text, const char *label,
+                                    int *value) {
+  if (text == NULL) {
+    fprintf(stderr, "declared %s is missing\n", label);
+    return 1;
+  }
+  const size_t length = strlen(text);
+  if (length < 1 || length > 4 || text[0] == '0') {
+    fprintf(stderr, "declared %s is not a bounded decimal literal\n", label);
+    return 1;
+  }
+  long parsed = 0;
+  for (size_t index = 0; index < length; ++index) {
+    if (text[index] < '0' || text[index] > '9') {
+      fprintf(stderr, "declared %s is not a bounded decimal literal\n", label);
+      return 1;
+    }
+    parsed = parsed * 10 + (text[index] - '0');
+  }
+  if (parsed < 1 || parsed > MAX_DIMENSION) {
+    fprintf(stderr, "declared %s %ld is outside [1, %d]\n", label, parsed,
+            MAX_DIMENSION);
+    return 1;
+  }
+  *value = (int)parsed;
+  return 0;
+}
 
 static int report_heif_error(const char *operation, struct heif_error error) {
   fprintf(stderr, "%s failed (code=%d subcode=%d): %s\n", operation,
@@ -191,8 +257,27 @@ static int write_ppm(const char *path, const struct rgb_raster *raster) {
 }
 
 int main(int argc, char **argv) {
-  if (argc != 3) {
-    fprintf(stderr, "usage: field-raster-libheif INPUT.heic OUTPUT.ppm\n");
+  if (argc != 5) {
+    fprintf(stderr,
+            "usage: field-raster-libheif INPUT.heic OUTPUT.ppm WIDTH HEIGHT\n");
+    return 2;
+  }
+
+  int declared_width = 0;
+  int declared_height = 0;
+  if (parse_declared_dimension(argv[3], "width", &declared_width) != 0 ||
+      parse_declared_dimension(argv[4], "height", &declared_height) != 0) {
+    return 2;
+  }
+  /* Bound the product as well as each axis.  MAX_DIMENSION alone already caps
+   * the P6 payload at 4096*4096*3 = 48 MiB, comfortably inside MAX_PPM_BYTES,
+   * so today this check never fires — it is what keeps the byte guarantee true
+   * if the per-axis ceiling is ever raised, and it names the real downstream
+   * limit rather than leaving it implied by an axis count. */
+  if ((uint64_t)declared_width * (uint64_t)declared_height * 3U >
+      (uint64_t)MAX_PPM_BYTES) {
+    fprintf(stderr, "declared %dx%d raster exceeds the %u-byte P6 ceiling\n",
+            declared_width, declared_height, MAX_PPM_BYTES);
     return 2;
   }
 
@@ -295,12 +380,14 @@ int main(int argc, char **argv) {
   const int ispe_height = heif_image_handle_get_ispe_height(handle);
   const int presented_width = heif_image_handle_get_width(handle);
   const int presented_height = heif_image_handle_get_height(handle);
-  if (ispe_width != EXPECTED_WIDTH || ispe_height != EXPECTED_HEIGHT ||
-      presented_width != EXPECTED_WIDTH ||
-      presented_height != EXPECTED_HEIGHT || ispe_width > MAX_DIMENSION ||
+  if (ispe_width != declared_width || ispe_height != declared_height ||
+      presented_width != declared_width ||
+      presented_height != declared_height || ispe_width > MAX_DIMENSION ||
       ispe_height > MAX_DIMENSION) {
     fprintf(stderr,
-            "libheif handle/ispe dimensions do not match the v1 fixture\n");
+            "libheif handle/ispe dimensions do not match the declared %dx%d "
+            "profile\n",
+            declared_width, declared_height);
     goto cleanup;
   }
   const int transformation_properties =
@@ -390,7 +477,7 @@ int main(int argc, char **argv) {
     goto cleanup;
   }
 
-  printf("schema=patina-field-raster-libheif-helper-v2\n");
+  printf("schema=patina-field-raster-libheif-helper-v3\n");
   printf("libheif_version=%s\n", heif_get_version());
   printf("decoder_id=%s\n", selected_decoder_id);
   printf("decoder_name=%s\n", selected_decoder_name);
@@ -403,6 +490,11 @@ int main(int argc, char **argv) {
   printf("transformation_properties=1\n");
   printf("transformation_property_type=irot\n");
   printf("transformation_rotation_ccw=%d\n", transformation_rotation_ccw);
+  /* Echo the declaration back so the parent binds the profile it asked for to
+   * the profile this run actually enforced, instead of trusting argv silently
+   * reached a helper that still had a size compiled into it. */
+  printf("declared_width=%d\n", declared_width);
+  printf("declared_height=%d\n", declared_height);
   printf("ispe_width=%d\n", ispe_width);
   printf("ispe_height=%d\n", ispe_height);
   printf("presented_width=%d\n", presented_width);

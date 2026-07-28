@@ -5,9 +5,20 @@ Debug iOS fixture and writes a deterministic PPM plus a canonical receipt to a
 new output directory. It deliberately has no queue, database, Storage, worker,
 or configuration imports.
 
+The fixture DECLARES its capture profile (R118). The manifest carries
+``captureProfile`` — the native landscape resolution plus the provenance of that
+reading — and everything here is derived from it: the expected raster sizes, the
+rotated encoded pair, and the entire expected marker set, which is RECOMPUTED by
+exact integer arithmetic rather than read from the manifest. Trusting the
+manifest's marker list would let a forged fixture define its own passing
+criteria. At the 640x360 reference design every derivation collapses to the
+pre-R118 constant, so the generalization is an exact superset, not a redraw.
+
 HEIC decoding is delegated to a tiny packaged C helper compiled unprivileged
-against Ubuntu's security-maintained system libheif. The helper decodes once
-with ``ignore_transformations=1`` and once with libheif defaults, then requires
+against Ubuntu's security-maintained system libheif. The helper is told the
+encoded size on argv and echoes it back, so it cannot silently enforce a
+different profile from the one declared. It decodes once with
+``ignore_transformations=1`` and once with libheif defaults, then requires
 the dimensions and RGB bytes to be identical. Through libheif's public API it
 permits only ImageIO's single recognized, primary-item-associated identity
 ``irot`` property and rejects recognized effective or ambiguous crop, rotation,
@@ -36,15 +47,45 @@ from typing import Any, Callable, Mapping, Protocol, Sequence
 
 FIXTURE_ID = "field-core-image-raster-v1"
 QUALIFICATION_NAME = "p2-item4a-field-core-image-raster"
-QUALIFICATION_SCHEMA_VERSION = 2
+# v3 is the R118 receipt: it records the capture profile it qualified and that
+# profile's provenance. A v2 receipt could not say which profile it covered —
+# there was only one, pinned — so a v2 and a v3 receipt are not interchangeable
+# evidence and must not share a file name. The I92 v2 receipt is superseded, not
+# extended.
+QUALIFICATION_SCHEMA_VERSION = 3
 MATERIALIZED_RASTER_NAME = f"{FIXTURE_ID}-materialized.ppm"
-RECEIPT_NAME = "field-raster-qualification-receipt-v2.json"
+RECEIPT_NAME = "field-raster-qualification-receipt-v3.json"
 
-NATIVE_WIDTH = 640
-NATIVE_HEIGHT = 360
-ENCODED_WIDTH = NATIVE_HEIGHT
-ENCODED_HEIGHT = NATIVE_WIDTH
-NATIVE_ROW_BYTES = NATIVE_WIDTH * 4
+# The 640x360 REFERENCE DRAWING DESIGN.  These are not a capture profile and
+# must never be read as one: they are the basis the fixture's marker geometry is
+# scaled from, and the exporter derives every position and extent from them by
+# exact integer arithmetic.  A fixture's actual size arrives in its manifest's
+# `captureProfile` — see `CaptureProfile` — because capture resolution is a
+# property of the device and the ARKit configuration, not of any code here.
+REFERENCE_NATIVE_WIDTH = 640
+REFERENCE_NATIVE_HEIGHT = 360
+
+# Fixture manifest schema.  v2 added `captureProfile`; v1 declared no size at
+# all beyond the pinned 640x360 and is no longer accepted.
+FIXTURE_MANIFEST_SCHEMA_VERSION = 2
+
+# `captureProfile.deviceModel` the exporter reserves for its reference design.
+# A fixture carrying it is a drawing, not a capture, and is refused outright:
+# accepting one would qualify a profile no device produces, which is exactly the
+# R118 defect.
+REFERENCE_DESIGN_DEVICE_MODEL = "reference-design"
+
+# Profile bounds.  Floor: the exporter refuses anything below the reference
+# design, because the markers scale down with the profile and below 640x360 they
+# stop being safely larger than the encoded-marker search radius.  Ceiling: the
+# per-axis limit is the packaged helper's own MAX_DIMENSION — it applies to the
+# ENCODED pair, but the encoded pair is the native pair swapped, so bounding
+# native bounds both.  The pixel ceiling matches the exporter's 2^24 bound.
+MIN_NATIVE_WIDTH = REFERENCE_NATIVE_WIDTH
+MIN_NATIVE_HEIGHT = REFERENCE_NATIVE_HEIGHT
+MAX_NATIVE_DIMENSION = 4096
+MAX_NATIVE_PIXELS = 1 << 24
+MAX_PROVENANCE_BYTES = 512
 
 ENCODING_PIPELINE = (
     "CVPixelBuffer(32BGRA) -> CIImage(cvPixelBuffer:) -> oriented(.right) "
@@ -68,7 +109,14 @@ MAX_TOOL_OUTPUT_BYTES = 64 * 1024
 MAX_HEVC_DECODER_DESCRIPTORS = 32
 TOOL_TIMEOUT_S = 120.0
 LIBHEIF_HELPER_SOURCE_NAME = "field_raster_libheif.c"
-LIBHEIF_HELPER_SCHEMA = "patina-field-raster-libheif-helper-v2"
+# v3 is the R118 protocol: the encoded raster size is carried to the helper on
+# argv and echoed back as `declared_width`/`declared_height` instead of being
+# compiled in.  The schema string is the protocol's identity, so it moves with
+# the argv arity and the stdout key set.  A v2 helper meeting a v3 parser (or
+# the reverse) already fails closed on the exact key-set comparison below; the
+# version bump is what makes the *reason* legible instead of reporting a
+# generic schema mismatch.
+LIBHEIF_HELPER_SCHEMA = "patina-field-raster-libheif-helper-v3"
 CC_PATH = Path("/usr/bin/cc")
 PKG_CONFIG_PATH = Path("/usr/bin/pkg-config")
 DPKG_QUERY_PATH = Path("/usr/bin/dpkg-query")
@@ -86,6 +134,51 @@ NOBLE_PKG_CONFIG_LIBDIR = (
 
 
 @dataclass(frozen=True)
+class CaptureProfile:
+    """The physical capture profile a fixture declares, plus its provenance.
+
+    The provenance is load-bearing, not decoration.  A manifest that declared a
+    size with no evidence of where the size came from would let exactly the R118
+    defect recur silently — a fixture profile assumed to match production, with
+    nothing in the receipt able to contradict it.  So every string here is
+    required and non-empty, and `resolutionSource` must say which API on which
+    configuration produced the numbers.
+
+    ``native_*`` is the ARKit landscape captured-image size.  The encoded HEIC is
+    that pair SWAPPED, because Field encodes ``.right``-rotated.  Conflating the
+    two is easy and silent, so the two are never both spelled as bare integers:
+    the encoded pair only exists as the derived properties below.
+    """
+
+    native_width: int
+    native_height: int
+    resolution_source: str
+    device_model: str
+    system_version: str
+    video_format: str
+
+    @property
+    def encoded_width(self) -> int:
+        return self.native_height
+
+    @property
+    def encoded_height(self) -> int:
+        return self.native_width
+
+    @property
+    def native_row_bytes(self) -> int:
+        return self.native_width * 4
+
+    @property
+    def native_byte_count(self) -> int:
+        return self.native_row_bytes * self.native_height
+
+    @property
+    def label(self) -> str:
+        return f"{self.native_width}x{self.native_height}"
+
+
+@dataclass(frozen=True)
 class MarkerContract:
     marker_id: str
     role: str
@@ -94,10 +187,15 @@ class MarkerContract:
     native_x: int
     native_y: int
     exact_pixel_count: int
+    encoded_x: int
+    encoded_y: int
+    kind: str
+    primary_half: int
+    secondary_half: int
 
     @property
     def expected_encoded(self) -> tuple[int, int]:
-        return NATIVE_HEIGHT - 1 - self.native_y, self.native_x
+        return self.encoded_x, self.encoded_y
 
     @property
     def rgba(self) -> tuple[int, int, int, int]:
@@ -105,36 +203,120 @@ class MarkerContract:
         return payload[0], payload[1], payload[2], payload[3]
 
 
-MARKER_CONTRACTS = (
-    MarkerContract("corner-top-left", "corner", "square-55", "#FF2020FF", 27, 27, 3025),
-    MarkerContract(
-        "corner-top-right", "corner", "square-55", "#20E060FF", 612, 27, 3025
-    ),
-    MarkerContract(
-        "corner-bottom-left", "corner", "square-55", "#2060FFFF", 27, 332, 3025
-    ),
-    MarkerContract(
-        "corner-bottom-right", "corner", "square-55", "#FFE020FF", 612, 332, 3025
-    ),
-    MarkerContract(
-        "fiducial-magenta",
-        "off-centre-fiducial",
-        "cross-45-thickness-13",
-        "#F020E0FF",
-        173,
-        91,
-        1001,
-    ),
-    MarkerContract(
-        "fiducial-cyan",
-        "off-centre-fiducial",
-        "diamond-radius-21",
-        "#20E8F0FF",
-        487,
-        271,
-        925,
-    ),
+# id, role, rgbaHex, kind, corner index (ignored for non-corners). Order is part
+# of the contract: four corners TL/TR/BL/BR, then the cross, then the diamond.
+_MARKER_BLUEPRINTS = (
+    ("corner-top-left", "corner", "#FF2020FF", "square", 0),
+    ("corner-top-right", "corner", "#20E060FF", "square", 1),
+    ("corner-bottom-left", "corner", "#2060FFFF", "square", 2),
+    ("corner-bottom-right", "corner", "#FFE020FF", "square", 3),
+    ("fiducial-magenta", "off-centre-fiducial", "#F020E0FF", "cross", 0),
+    ("fiducial-cyan", "off-centre-fiducial", "#20E8F0FF", "diamond", 0),
 )
+
+
+def _scaled(value: int, numerator: int, denominator: int) -> int:
+    """round-half-up(value * numerator / denominator), in exact integers.
+
+    Mirrors ``FieldRasterFixtureExporter.scaled``.  Integer arithmetic, not
+    float: the qualifier must land on the same pixel the exporter drew, and a
+    rounding disagreement would present as a marker-mask failure with no clue
+    why.
+    """
+
+    return (2 * value * numerator + denominator) // (2 * denominator)
+
+
+def derive_marker_contracts(profile: CaptureProfile) -> tuple[MarkerContract, ...]:
+    """Recompute the whole expected marker set from the declared profile.
+
+    The qualifier RECOMPUTES rather than trusting the manifest's marker list.
+    Trusting it would let a forged manifest define its own passing criteria —
+    declare a marker wherever the raster happens to be that colour and the
+    fixture always passes.  Every number below is derived from the two declared
+    dimensions and the 640x360 reference design by exact integer arithmetic, so
+    at the reference profile every expression collapses to the pre-R118 constant
+    and the generalization is an exact superset, not a redraw.
+    """
+
+    width = profile.native_width
+    height = profile.native_height
+    size_numerator = min(
+        width * REFERENCE_NATIVE_HEIGHT, height * REFERENCE_NATIVE_WIDTH
+    )
+    size_denominator = REFERENCE_NATIVE_WIDTH * REFERENCE_NATIVE_HEIGHT
+
+    def size(reference: int) -> int:
+        return _scaled(reference, size_numerator, size_denominator)
+
+    def position_x(reference: int) -> int:
+        return _scaled(reference, width, REFERENCE_NATIVE_WIDTH)
+
+    def position_y(reference: int) -> int:
+        return _scaled(reference, height, REFERENCE_NATIVE_HEIGHT)
+
+    def clamped(x: int, y: int, half_x: int, half_y: int) -> tuple[int, int]:
+        return (
+            min(max(x, half_x), width - 1 - half_x),
+            min(max(y, half_y), height - 1 - half_y),
+        )
+
+    corner_half = size(27)
+    cross_half = size(22)
+    cross_thickness = size(6)
+    diamond_radius = size(21)
+
+    corners = (
+        (corner_half, corner_half),
+        (width - 1 - corner_half, corner_half),
+        (corner_half, height - 1 - corner_half),
+        (width - 1 - corner_half, height - 1 - corner_half),
+    )
+    cross_center = clamped(position_x(173), position_y(91), cross_half, cross_half)
+    diamond_center = clamped(
+        position_x(487), position_y(271), diamond_radius, diamond_radius
+    )
+
+    corner_side = 2 * corner_half + 1
+    cross_side = 2 * cross_half + 1
+    cross_bar = 2 * cross_thickness + 1
+    contracts: list[MarkerContract] = []
+    for marker_id, role, rgba_hex, kind, corner_index in _MARKER_BLUEPRINTS:
+        if kind == "square":
+            native_x, native_y = corners[corner_index]
+            shape = f"square-{corner_side}"
+            count = corner_side * corner_side
+            primary, secondary = corner_half, 0
+        elif kind == "cross":
+            native_x, native_y = cross_center
+            shape = f"cross-{cross_side}-thickness-{cross_bar}"
+            # Two overlapping bars minus the double-counted centre block.
+            count = cross_side * cross_bar * 2 - cross_bar * cross_bar
+            primary, secondary = cross_half, cross_thickness
+        else:
+            native_x, native_y = diamond_center
+            shape = f"diamond-radius-{diamond_radius}"
+            # |dx| + |dy| <= r has exactly 2r^2 + 2r + 1 lattice points.
+            count = 2 * diamond_radius * diamond_radius + 2 * diamond_radius + 1
+            primary, secondary = diamond_radius, 0
+        contracts.append(
+            MarkerContract(
+                marker_id=marker_id,
+                role=role,
+                shape=shape,
+                rgba_hex=rgba_hex,
+                native_x=native_x,
+                native_y=native_y,
+                exact_pixel_count=count,
+                # The physical clockwise raster maps native (x,y) -> (H-1-y, x).
+                encoded_x=height - 1 - native_y,
+                encoded_y=native_x,
+                kind=kind,
+                primary_half=primary,
+                secondary_half=secondary,
+            )
+        )
+    return tuple(contracts)
 
 
 class RasterQualificationError(ValueError):
@@ -194,7 +376,13 @@ class QualificationResult:
 
 
 class RasterDecoder(Protocol):
-    def decode_no_autorotate(self, heic: bytes) -> DecodedRaster: ...
+    def decode_no_autorotate(
+        self,
+        heic: bytes,
+        *,
+        encoded_width: int,
+        encoded_height: int,
+    ) -> DecodedRaster: ...
 
 
 CommandRunner = Callable[..., subprocess.CompletedProcess[str]]
@@ -313,6 +501,8 @@ def _parse_helper_metadata(stdout: str) -> dict[str, str]:
         "transformation_properties",
         "transformation_property_type",
         "transformation_rotation_ccw",
+        "declared_width",
+        "declared_height",
         "ispe_width",
         "ispe_height",
         "presented_width",
@@ -377,6 +567,26 @@ def _parse_helper_metadata(stdout: str) -> dict[str, str]:
             "libheif helper reported an invalid decoder descriptor name",
             "FIELD_RASTER_DECODE_FAILED",
         )
+    # `declared_*` is the profile the caller put on argv, echoed back by the
+    # helper.  Checking it here means every consumer of this parser gets the
+    # dimensions carried explicitly and internally consistent, instead of each
+    # one re-deriving a size from whichever of the six reported dimensions it
+    # happened to read.  `_metadata_positive_int` bounds all of them at 4096,
+    # the helper's own MAX_DIMENSION.
+    for axis in ("width", "height"):
+        declared = _metadata_positive_int(values, f"declared_{axis}")
+        for key in (
+            f"ispe_{axis}",
+            f"presented_{axis}",
+            f"raw_{axis}",
+            f"default_{axis}",
+        ):
+            if _metadata_positive_int(values, key) != declared:
+                raise RasterQualificationError(
+                    f"libheif helper {key} disagrees with the declared "
+                    f"{axis} {declared}",
+                    "FIELD_RASTER_DECODE_FAILED",
+                )
     descriptor_count = _metadata_positive_int(values, "decoder_descriptor_count")
     if descriptor_count > MAX_HEVC_DECODER_DESCRIPTORS:
         raise RasterQualificationError(
@@ -553,7 +763,13 @@ class SystemLibheifDecoder:
             )
         return result
 
-    def decode_no_autorotate(self, heic: bytes) -> DecodedRaster:
+    def decode_no_autorotate(
+        self,
+        heic: bytes,
+        *,
+        encoded_width: int,
+        encoded_height: int,
+    ) -> DecodedRaster:
         os_release = _parse_os_release(self._os_release)
         helper_source = _read_packaged_helper_source(self._helper_source)
 
@@ -659,8 +875,17 @@ class SystemLibheifDecoder:
                     "compiler output is not an executable regular file",
                     "FIELD_RASTER_DECODER_UNAVAILABLE",
                 )
+            # The encoded size is DECLARED to the helper rather than assumed by
+            # it (R118).  It comes from the fixture's own captureProfile, so a
+            # fixture at any qualified profile decodes through the same helper.
             helper_result = self._run(
-                (str(helper_path), str(heic_path), str(ppm_path)),
+                (
+                    str(helper_path),
+                    str(heic_path),
+                    str(ppm_path),
+                    str(encoded_width),
+                    str(encoded_height),
+                ),
                 environment=environment,
                 operation="libheif raw/default decode",
             )
@@ -849,12 +1074,100 @@ def _intrinsics(value: Any, label: str) -> dict[str, float | int]:
     }
 
 
+def _require_provenance(value: object, label: str) -> str:
+    text = _require_string(value, label)
+    if not text.strip():
+        raise RasterQualificationError(f"{label} must not be blank")
+    if len(text.encode("utf-8")) > MAX_PROVENANCE_BYTES:
+        raise RasterQualificationError(f"{label} exceeds its byte bound")
+    if any(ord(character) < 0x20 or ord(character) == 0x7F for character in text):
+        raise RasterQualificationError(f"{label} must not contain control characters")
+    return text
+
+
+def _capture_profile(value: object) -> CaptureProfile:
+    """Parse and bound the fixture's declared capture profile.
+
+    Every provenance string is REQUIRED, not merely tolerated.  A profile that
+    is two integers and nothing else cannot be audited: it is indistinguishable
+    from a guess, and a guess about the capture profile is what R118 exists to
+    correct.
+    """
+
+    block = _require_exact_keys(
+        value,
+        {
+            "nativeWidth",
+            "nativeHeight",
+            "resolutionSource",
+            "deviceModel",
+            "systemVersion",
+            "videoFormat",
+        },
+        "captureProfile",
+    )
+    width = _require_int(block["nativeWidth"], "captureProfile.nativeWidth")
+    height = _require_int(block["nativeHeight"], "captureProfile.nativeHeight")
+    profile = CaptureProfile(
+        native_width=width,
+        native_height=height,
+        resolution_source=_require_provenance(
+            block["resolutionSource"], "captureProfile.resolutionSource"
+        ),
+        device_model=_require_provenance(
+            block["deviceModel"], "captureProfile.deviceModel"
+        ),
+        system_version=_require_provenance(
+            block["systemVersion"], "captureProfile.systemVersion"
+        ),
+        video_format=_require_provenance(
+            block["videoFormat"], "captureProfile.videoFormat"
+        ),
+    )
+    # The exporter reserves this identity for its 640x360 reference drawing.
+    # Refuse it outright: it is a design, not something any device captured, and
+    # qualifying it would re-create the exact defect R118 corrects — a fixture
+    # profile that production never ships.
+    if profile.device_model == REFERENCE_DESIGN_DEVICE_MODEL:
+        raise RasterQualificationError(
+            "captureProfile is the exporter's reference design, not a physical "
+            "capture profile",
+            "FIELD_RASTER_PROFILE_NOT_PHYSICAL",
+        )
+    if width < MIN_NATIVE_WIDTH or height < MIN_NATIVE_HEIGHT:
+        raise RasterQualificationError(
+            f"captureProfile {profile.label} is below the "
+            f"{MIN_NATIVE_WIDTH}x{MIN_NATIVE_HEIGHT} reference design",
+            "FIELD_RASTER_PROFILE_UNSUPPORTED",
+        )
+    if height > width:
+        raise RasterQualificationError(
+            "captureProfile must be landscape; ARKit capturedImage always is",
+            "FIELD_RASTER_PROFILE_UNSUPPORTED",
+        )
+    # Bounds the ENCODED pair too, since encoded is native swapped.
+    if width > MAX_NATIVE_DIMENSION or height > MAX_NATIVE_DIMENSION:
+        raise RasterQualificationError(
+            f"captureProfile {profile.label} exceeds the {MAX_NATIVE_DIMENSION}"
+            " per-axis decoder bound",
+            "FIELD_RASTER_PROFILE_UNSUPPORTED",
+        )
+    if width * height > MAX_NATIVE_PIXELS:
+        raise RasterQualificationError(
+            f"captureProfile {profile.label} exceeds the {MAX_NATIVE_PIXELS}"
+            " pixel bound",
+            "FIELD_RASTER_PROFILE_UNSUPPORTED",
+        )
+    return profile
+
+
 def _validate_manifest(manifest: Mapping[str, Any]) -> dict[str, Any]:
     root = _require_exact_keys(
         manifest,
         {
             "schemaVersion",
             "fixtureID",
+            "captureProfile",
             "encodingPipeline",
             "orientation",
             "markerCoordinateConvention",
@@ -866,8 +1179,15 @@ def _validate_manifest(manifest: Mapping[str, Any]) -> dict[str, Any]:
         },
         "manifest",
     )
-    if _require_int(root["schemaVersion"], "schemaVersion") != 1:
-        raise RasterQualificationError("manifest schemaVersion must be 1")
+    if (
+        _require_int(root["schemaVersion"], "schemaVersion")
+        != FIXTURE_MANIFEST_SCHEMA_VERSION
+    ):
+        raise RasterQualificationError(
+            f"manifest schemaVersion must be {FIXTURE_MANIFEST_SCHEMA_VERSION}"
+        )
+    profile = _capture_profile(root["captureProfile"])
+    marker_contracts = derive_marker_contracts(profile)
     if _require_string(root["fixtureID"], "fixtureID") != FIXTURE_ID:
         raise RasterQualificationError(f"manifest fixtureID must be {FIXTURE_ID!r}")
     fixed_strings = (
@@ -888,15 +1208,15 @@ def _validate_manifest(manifest: Mapping[str, Any]) -> dict[str, Any]:
     )
     expected_native = {
         "fileName": f"{FIXTURE_ID}-native.bgra",
-        "width": NATIVE_WIDTH,
-        "height": NATIVE_HEIGHT,
-        "rowBytes": NATIVE_ROW_BYTES,
+        "width": profile.native_width,
+        "height": profile.native_height,
+        "rowBytes": profile.native_row_bytes,
         "pixelFormat": NATIVE_PIXEL_FORMAT,
     }
     for key, expected in expected_native.items():
         if native.get(key) != expected or type(native.get(key)) is not type(expected):
             raise RasterQualificationError(
-                f"nativeRaster.{key} does not match the v1 contract"
+                f"nativeRaster.{key} does not match the declared capture profile"
             )
     native_sha256 = _require_sha256(native["sha256"], "nativeRaster.sha256")
 
@@ -907,8 +1227,8 @@ def _validate_manifest(manifest: Mapping[str, Any]) -> dict[str, Any]:
     )
     expected_encoded = {
         "fileName": f"{FIXTURE_ID}.heic",
-        "width": ENCODED_WIDTH,
-        "height": ENCODED_HEIGHT,
+        "width": profile.encoded_width,
+        "height": profile.encoded_height,
         "mimeType": "image/heic",
     }
     for key, expected in expected_encoded.items():
@@ -920,8 +1240,8 @@ def _validate_manifest(manifest: Mapping[str, Any]) -> dict[str, Any]:
 
     native_intrinsics = _intrinsics(root["nativeIntrinsics"], "nativeIntrinsics")
     if (
-        native_intrinsics["imageWidth"] != NATIVE_WIDTH
-        or native_intrinsics["imageHeight"] != NATIVE_HEIGHT
+        native_intrinsics["imageWidth"] != profile.native_width
+        or native_intrinsics["imageHeight"] != profile.native_height
     ):
         raise RasterQualificationError(
             "native intrinsics dimensions do not match nativeRaster"
@@ -929,10 +1249,10 @@ def _validate_manifest(manifest: Mapping[str, Any]) -> dict[str, Any]:
     mapped_intrinsics: dict[str, float | int] = {
         "fx": native_intrinsics["fy"],
         "fy": native_intrinsics["fx"],
-        "cx": NATIVE_HEIGHT - float(native_intrinsics["cy"]),
+        "cx": profile.native_height - float(native_intrinsics["cy"]),
         "cy": native_intrinsics["cx"],
-        "imageWidth": ENCODED_WIDTH,
-        "imageHeight": ENCODED_HEIGHT,
+        "imageWidth": profile.encoded_width,
+        "imageHeight": profile.encoded_height,
     }
     declared_intrinsics = _intrinsics(
         root["expectedEncodedIntrinsics"], "expectedEncodedIntrinsics"
@@ -950,12 +1270,14 @@ def _validate_manifest(manifest: Mapping[str, Any]) -> dict[str, Any]:
 
     marker_values = root["markers"]
     if not isinstance(marker_values, list) or len(marker_values) != len(
-        MARKER_CONTRACTS
+        marker_contracts
     ):
         raise RasterQualificationError(
-            "manifest markers must contain the six v1 markers"
+            "manifest markers must contain the six fixture markers"
         )
-    for index, (value, contract) in enumerate(zip(marker_values, MARKER_CONTRACTS)):
+    # Compared against the RECOMPUTED set, never trusted. See
+    # `derive_marker_contracts`.
+    for index, (value, contract) in enumerate(zip(marker_values, marker_contracts)):
         marker = _require_exact_keys(
             value,
             {
@@ -976,7 +1298,7 @@ def _validate_manifest(manifest: Mapping[str, Any]) -> dict[str, Any]:
         }
         if any(marker.get(key) != expected for key, expected in fixed.items()):
             raise RasterQualificationError(
-                f"marker {index} does not match the v1 marker contract"
+                f"marker {index} does not match the profile-derived contract"
             )
         if _point(marker["nativeCoordinate"], f"markers[{index}].nativeCoordinate") != (
             contract.native_x,
@@ -1001,6 +1323,8 @@ def _validate_manifest(manifest: Mapping[str, Any]) -> dict[str, Any]:
         "encodedSha256": encoded_sha256,
         "nativeIntrinsics": native_intrinsics,
         "mappedIntrinsics": mapped_intrinsics,
+        "captureProfile": profile,
+        "markerContracts": marker_contracts,
     }
 
 
@@ -1091,7 +1415,11 @@ def _read_fixture_inputs(fixture_dir: Path) -> tuple[bytes, bytes, bytes]:
             (f"{FIXTURE_ID}.json", MAX_MANIFEST_BYTES, "manifest"),
             (
                 f"{FIXTURE_ID}-native.bgra",
-                NATIVE_ROW_BYTES * NATIVE_HEIGHT,
+                # The manifest has not been parsed yet, so bound this read by
+                # the largest profile any manifest could declare. The exact
+                # byte count is checked against the profile afterwards, in
+                # `_validate_native_markers`.
+                MAX_NATIVE_PIXELS * 4,
                 "native BGRA",
             ),
             (f"{FIXTURE_ID}.heic", MAX_HEIC_BYTES, "HEIC"),
@@ -1146,56 +1474,87 @@ def _read_packaged_helper_source(path: Path) -> bytes:
 
 
 def _expected_marker_points(marker: MarkerContract) -> set[tuple[int, int]]:
+    """The exact pixel mask the exporter drew, rebuilt from derived geometry.
+
+    Driven by the contract's integer geometry rather than by parsing its shape
+    string, so the mask and the shape label cannot disagree.
+    """
+
     cx, cy = marker.native_x, marker.native_y
-    if marker.shape == "square-55":
-        return {
-            (x, y) for y in range(cy - 27, cy + 28) for x in range(cx - 27, cx + 28)
-        }
-    if marker.shape == "cross-45-thickness-13":
+    half = marker.primary_half
+    if marker.kind == "square":
         return {
             (x, y)
-            for y in range(cy - 22, cy + 23)
-            for x in range(cx - 22, cx + 23)
-            if abs(x - cx) <= 6 or abs(y - cy) <= 6
+            for y in range(cy - half, cy + half + 1)
+            for x in range(cx - half, cx + half + 1)
         }
-    if marker.shape == "diamond-radius-21":
+    if marker.kind == "cross":
+        thickness = marker.secondary_half
         return {
             (x, y)
-            for y in range(cy - 21, cy + 22)
-            for x in range(cx - 21, cx + 22)
-            if abs(x - cx) + abs(y - cy) <= 21
+            for y in range(cy - half, cy + half + 1)
+            for x in range(cx - half, cx + half + 1)
+            if abs(x - cx) <= thickness or abs(y - cy) <= thickness
         }
-    raise AssertionError(f"unknown marker shape {marker.shape}")
+    if marker.kind == "diamond":
+        return {
+            (x, y)
+            for y in range(cy - half, cy + half + 1)
+            for x in range(cx - half, cx + half + 1)
+            if abs(x - cx) + abs(y - cy) <= half
+        }
+    raise AssertionError(f"unknown marker kind {marker.kind}")
 
 
-def _validate_native_markers(native: bytes) -> list[dict[str, Any]]:
-    if len(native) != NATIVE_ROW_BYTES * NATIVE_HEIGHT:
+def _validate_native_markers(
+    native: bytes,
+    *,
+    profile: CaptureProfile,
+    marker_contracts: tuple[MarkerContract, ...],
+) -> list[dict[str, Any]]:
+    row_bytes = profile.native_row_bytes
+    if len(native) != profile.native_byte_count:
         raise RasterQualificationError(
             "native BGRA byte count does not match dimensions/rowBytes"
         )
     if any(native[offset + 3] != 255 for offset in range(0, len(native), 4)):
         raise RasterQualificationError("native BGRA fixture must be fully opaque")
 
-    evidence: list[dict[str, Any]] = []
-    for marker in MARKER_CONTRACTS:
+    # Every marker pixel must BE the marker's colour, and that colour must
+    # appear nowhere else in the raster. The second half needs a whole-raster
+    # scan; do it once for all six markers rather than once per marker. At the
+    # reference profile that is 1.4M pixel reads instead of 8.3M, and at a real
+    # capture profile it is the difference between seconds and minutes.
+    by_colour: dict[bytes, str] = {}
+    for marker in marker_contracts:
         r, g, b, a = marker.rgba
-        expected_bgra = (b, g, r, a)
+        key = bytes((b, g, r, a))
+        if key in by_colour:
+            raise AssertionError(
+                f"markers {by_colour[key]} and {marker.marker_id} share a colour; "
+                "the exact-count proof below cannot distinguish them"
+            )
+        by_colour[key] = marker.marker_id
+    observed = {marker_id: 0 for marker_id in by_colour.values()}
+    for offset in range(0, len(native), 4):
+        marker_id = by_colour.get(native[offset : offset + 4])
+        if marker_id is not None:
+            observed[marker_id] += 1
+
+    evidence: list[dict[str, Any]] = []
+    for marker in marker_contracts:
+        r, g, b, a = marker.rgba
+        expected_bgra = bytes((b, g, r, a))
         expected_points = _expected_marker_points(marker)
         if len(expected_points) != marker.exact_pixel_count:
             raise AssertionError(f"marker shape contract drifted: {marker.marker_id}")
         for x, y in expected_points:
-            offset = y * NATIVE_ROW_BYTES + x * 4
-            if tuple(native[offset : offset + 4]) != expected_bgra:
+            offset = y * row_bytes + x * 4
+            if native[offset : offset + 4] != expected_bgra:
                 raise RasterQualificationError(
                     f"native marker {marker.marker_id} does not match its exact {marker.shape} mask"
                 )
-        count = 0
-        for y in range(NATIVE_HEIGHT):
-            row_offset = y * NATIVE_ROW_BYTES
-            for x in range(NATIVE_WIDTH):
-                offset = row_offset + x * 4
-                if tuple(native[offset : offset + 4]) == expected_bgra:
-                    count += 1
+        count = observed[marker.marker_id]
         if count != marker.exact_pixel_count:
             raise RasterQualificationError(
                 f"native marker {marker.marker_id} has {count} pixels; "
@@ -1213,8 +1572,15 @@ def _validate_native_markers(native: bytes) -> list[dict[str, Any]]:
     return evidence
 
 
-def _validate_decoded(decoded: DecodedRaster) -> list[dict[str, Any]]:
-    expected_dimensions = (ENCODED_WIDTH, ENCODED_HEIGHT)
+def _validate_decoded(
+    decoded: DecodedRaster,
+    *,
+    profile: CaptureProfile,
+    marker_contracts: tuple[MarkerContract, ...],
+) -> list[dict[str, Any]]:
+    encoded_width = profile.encoded_width
+    encoded_height = profile.encoded_height
+    expected_dimensions = (encoded_width, encoded_height)
     if (decoded.info_width, decoded.info_height) != expected_dimensions:
         raise RasterQualificationError(
             "raw decoder dimensions must be (nativeHeight,nativeWidth)",
@@ -1225,7 +1591,7 @@ def _validate_decoded(decoded: DecodedRaster) -> list[dict[str, Any]]:
             "decoded PPM dimensions must be (nativeHeight,nativeWidth)",
             "FIELD_RASTER_DIMENSION_MISMATCH",
         )
-    if len(decoded.rgb) != ENCODED_WIDTH * ENCODED_HEIGHT * 3:
+    if len(decoded.rgb) != encoded_width * encoded_height * 3:
         raise RasterQualificationError(
             "decoded RGB byte count does not match decoder dimensions"
         )
@@ -1260,7 +1626,7 @@ def _validate_decoded(decoded: DecodedRaster) -> list[dict[str, Any]]:
         )
 
     evidence: list[dict[str, Any]] = []
-    for marker in MARKER_CONTRACTS:
+    for marker in marker_contracts:
         expected_x, expected_y = marker.expected_encoded
         target = marker.rgba[:3]
         best: (
@@ -1268,13 +1634,13 @@ def _validate_decoded(decoded: DecodedRaster) -> list[dict[str, Any]]:
         ) = None
         for y in range(
             max(0, expected_y - LOSSY_MARKER_SEARCH_RADIUS_PX),
-            min(ENCODED_HEIGHT, expected_y + LOSSY_MARKER_SEARCH_RADIUS_PX + 1),
+            min(encoded_height, expected_y + LOSSY_MARKER_SEARCH_RADIUS_PX + 1),
         ):
             for x in range(
                 max(0, expected_x - LOSSY_MARKER_SEARCH_RADIUS_PX),
-                min(ENCODED_WIDTH, expected_x + LOSSY_MARKER_SEARCH_RADIUS_PX + 1),
+                min(encoded_width, expected_x + LOSSY_MARKER_SEARCH_RADIUS_PX + 1),
             ):
-                offset = (y * ENCODED_WIDTH + x) * 3
+                offset = (y * encoded_width + x) * 3
                 observed = tuple(decoded.rgb[offset : offset + 3])
                 errors = tuple(
                     abs(observed[index] - target[index]) for index in range(3)
@@ -1424,13 +1790,23 @@ def run_field_raster_qualification(
     if _sha256(heic_bytes) != contract["encodedSha256"]:
         raise RasterQualificationError("HEIC SHA-256 does not match the manifest")
 
-    native_marker_evidence = _validate_native_markers(native_bytes)
+    profile: CaptureProfile = contract["captureProfile"]
+    marker_contracts: tuple[MarkerContract, ...] = contract["markerContracts"]
+    native_marker_evidence = _validate_native_markers(
+        native_bytes,
+        profile=profile,
+        marker_contracts=marker_contracts,
+    )
     active_decoder = decoder or SystemLibheifDecoder()
     try:
         # Pass the already-hashed bytes. The production decoder copies this
         # payload to private scratch, so a path race cannot swap the HEIC after
         # its manifest hash has been verified.
-        decoded = active_decoder.decode_no_autorotate(heic_bytes)
+        decoded = active_decoder.decode_no_autorotate(
+            heic_bytes,
+            encoded_width=profile.encoded_width,
+            encoded_height=profile.encoded_height,
+        )
     except RasterQualificationError:
         raise
     except Exception as exc:
@@ -1438,10 +1814,15 @@ def run_field_raster_qualification(
             f"HEIC decoder failed ({type(exc).__name__}: {exc})",
             "FIELD_RASTER_DECODE_FAILED",
         ) from exc
-    marker_evidence = _validate_decoded(decoded)
+    marker_evidence = _validate_decoded(
+        decoded,
+        profile=profile,
+        marker_contracts=marker_contracts,
+    )
 
     ppm_bytes = (
-        f"P6\n{ENCODED_WIDTH} {ENCODED_HEIGHT}\n255\n".encode("ascii") + decoded.rgb
+        f"P6\n{profile.encoded_width} {profile.encoded_height}\n255\n".encode("ascii")
+        + decoded.rgb
     )
     receipt: dict[str, Any] = {
         "schemaVersion": QUALIFICATION_SCHEMA_VERSION,
@@ -1459,6 +1840,20 @@ def run_field_raster_qualification(
         },
         "fixture": {
             "fixtureID": FIXTURE_ID,
+            # The receipt must say WHICH profile it qualified and how that
+            # profile was established. Without this a later reader cannot tell a
+            # measured capture profile from an assumed one — the ambiguity R118
+            # was raised to remove.
+            "captureProfile": {
+                "nativeWidth": profile.native_width,
+                "nativeHeight": profile.native_height,
+                "encodedWidth": profile.encoded_width,
+                "encodedHeight": profile.encoded_height,
+                "resolutionSource": profile.resolution_source,
+                "deviceModel": profile.device_model,
+                "systemVersion": profile.system_version,
+                "videoFormat": profile.video_format,
+            },
             "manifest": {
                 "fileName": config.manifest_path.name,
                 "sha256": _sha256(manifest_bytes),
@@ -1468,17 +1863,17 @@ def run_field_raster_qualification(
                 "fileName": config.native_bgra_path.name,
                 "sha256": _sha256(native_bytes),
                 "sizeBytes": len(native_bytes),
-                "width": NATIVE_WIDTH,
-                "height": NATIVE_HEIGHT,
-                "rowBytes": NATIVE_ROW_BYTES,
+                "width": profile.native_width,
+                "height": profile.native_height,
+                "rowBytes": profile.native_row_bytes,
                 "markers": native_marker_evidence,
             },
             "encodedRaster": {
                 "fileName": config.heic_path.name,
                 "sha256": _sha256(heic_bytes),
                 "sizeBytes": len(heic_bytes),
-                "manifestWidth": ENCODED_WIDTH,
-                "manifestHeight": ENCODED_HEIGHT,
+                "manifestWidth": profile.encoded_width,
+                "manifestHeight": profile.encoded_height,
             },
         },
         "decoder": {
@@ -1554,7 +1949,10 @@ def run_field_raster_qualification(
         },
         "geometry": {
             "rotation": "one-physical-clockwise-rotation",
-            "encodedDimensions": {"width": ENCODED_WIDTH, "height": ENCODED_HEIGHT},
+            "encodedDimensions": {
+                "width": profile.encoded_width,
+                "height": profile.encoded_height,
+            },
             "discreteMarkerMapping": "(x,y)=(nativeHeight-1-y,x)",
             "lossyTolerance": {
                 "searchRadiusPx": LOSSY_MARKER_SEARCH_RADIUS_PX,
@@ -1570,8 +1968,8 @@ def run_field_raster_qualification(
         "materializedRaster": {
             "fileName": MATERIALIZED_RASTER_NAME,
             "format": "Netpbm P6 RGB uint8",
-            "width": ENCODED_WIDTH,
-            "height": ENCODED_HEIGHT,
+            "width": profile.encoded_width,
+            "height": profile.encoded_height,
             "sizeBytes": len(ppm_bytes),
             "sha256": _sha256(ppm_bytes),
         },

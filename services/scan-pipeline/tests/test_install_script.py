@@ -175,7 +175,7 @@ def test_gpu_candidate_compiles_and_validates_exact_field_raster_helper():
     )
     transaction = script.index("begin_install_transaction")
 
-    assert "4840e0e6d3c98bbebecc4354349bae3963718583fb5c882f9807b0d222bee9c3" in script
+    assert "3b184937b755dc4acca4347ea6dba43dbeb111f090a91cd340e65d214937c626" in script
     assert "field-raster-libheif-helper-v2" in script
     assert 'helper_manifest="$helper_output.manifest.json"' in script
     assert 'if [ "$GPU" -eq 1 ]; then' in build[:compile_helper]
@@ -194,7 +194,7 @@ def test_gpu_candidate_compiles_and_validates_exact_field_raster_helper():
         '    "$SMOKE_VENV/libexec/patina/field-raster-libheif-helper-v2"'
     ) in script
     assert "_run_as_service_user /usr/bin/timeout 5" in script
-    assert "usage: field-raster-libheif INPUT.heic OUTPUT.ppm" in script
+    assert "usage: field-raster-libheif INPUT.heic OUTPUT.ppm WIDTH HEIGHT" in script
     reprobe = script.index(
         "-- revalidating Field raster libheif identity before activation"
     )
