@@ -42,6 +42,24 @@ public struct CompanionOverlay: View {
     /// surface. Toggled by the `?` button in the expanded panel header.
     @State private var isHelpPanelPresented: Bool = false
 
+    /// Full-screen touch shield, alive for as long as the panel occupies the
+    /// screen — including both animations, and inserted/removed WITHOUT a
+    /// transition of its own.
+    ///
+    /// The backdrop and the panel both arrive and leave on an opacity fade, and
+    /// a view mid-fade does not hit-test. For the length of each animation the
+    /// Companion was therefore painted over the screen while being completely
+    /// transparent to touch, and every tap in that window reached whatever sat
+    /// behind it. Device-verified on the scanFlow manual-room form, where the
+    /// two-row panel puts the ✕ (330,608 · 28×28) exactly on top of the form's
+    /// "Doors" stepper `+` (330,598 · 32×32): a tap aimed at ✕ left the panel
+    /// open and incremented the user's door count instead. The same window on
+    /// the collapse side is how the original walk submitted the form twice
+    /// "at identical coordinates" through a panel it could still see.
+    @State private var panelShielded = false
+    /// Retires `panelShielded` once the collapse animation has finished.
+    @State private var panelShieldTask: Task<Void, Never>?
+
     /// One-shot first-launch coachmark (PT-6-9). Shown over the panel the
     /// first time the user expands the Companion, then persisted as seen so
     /// it never reappears. Backed by UserDefaults so it survives relaunches
@@ -183,13 +201,31 @@ public struct CompanionOverlay: View {
         // so the home-indicator clearance comes for free without measuring
         // the proxy.
         ZStack {
-            // Backdrop when expanded
+            // Touch shield (see `panelShielded`). Declared first so it sits
+            // under the backdrop and the panel: anything they hit-test still
+            // wins, and every other tap stops here instead of reaching the
+            // screen behind the Companion. `.identity` keeps it hit-solid from
+            // the first frame — a fade would reintroduce the hole it closes.
+            if panelShielded {
+                Color.clear
+                    .ignoresSafeArea()
+                    .contentShape(Rectangle())
+                    .onTapGesture {
+                        // Only a settled panel dismisses on an outside tap;
+                        // while the collapse finishes the shield just absorbs.
+                        if state.isExpanded { collapseToButton() }
+                    }
+                    .transition(.identity)
+            }
+
+            // Backdrop when expanded. Purely visual now — the shield above
+            // owns the taps, so the backdrop's fade can never leave a frame
+            // where the dim is on screen but the touch goes through it.
             if state.isExpanded {
                 Color.black.opacity(0.3)
                     .background(.ultraThinMaterial.opacity(0.5))
                     .ignoresSafeArea()
-                    .allowsHitTesting(true)
-                    .onTapGesture { collapseToButton() }
+                    .allowsHitTesting(false)
             }
 
             // Dock zone gradient — gives the companion visual breathing room
@@ -480,6 +516,7 @@ public struct CompanionOverlay: View {
                                     .font(.system(size: 12, weight: .medium))
                                     .foregroundStyle(PatinaColors.pearl)
                             )
+                            .companionHeaderHitTarget()
                     }
                     .accessibilityLabel("Help")
                     .accessibilityHint("Opens the help panel for the Companion.")
@@ -495,6 +532,7 @@ public struct CompanionOverlay: View {
                                     .foregroundStyle(PatinaColors.pearl)
                             )
                             .contentShape(Rectangle())
+                            .companionHeaderHitTarget()
                     }
                     .accessibilityLabel("Close")
                     .accessibilityHint("Collapses the Companion panel.")
@@ -569,11 +607,25 @@ public struct CompanionOverlay: View {
             // hit-tested first, so they still win.
             .contentShape(RoundedRectangle(cornerRadius: 24))
             .onTapGesture {}
+            // `.contain` is load-bearing: a bare `accessibilityIdentifier` on
+            // a container propagates down and overwrites every descendant's
+            // own identifier. Device-verified — the panel's rows and both
+            // header buttons all reported `companion.panel`, so nothing could
+            // address `companion.close` by identifier. `.contain` makes the
+            // panel a semantic container that keeps its children addressable.
+            .accessibilityElement(children: .contain)
             .accessibilityIdentifier("companion.panel")
-            .overlay(alignment: .top) {
+            .overlay(alignment: .topLeading) {
                 if showCoachmark {
                     companionCoachmark
                         .offset(y: -16)
+                        // Reserve the trailing column the header's help and
+                        // close buttons occupy (panel inset + two 36pt hit
+                        // targets + their spacing). Centred, this card covered
+                        // both — hiding the panel's only close affordance
+                        // behind an informational callout on the one open
+                        // where a first-time user most needs the way out.
+                        .padding(.trailing, 88)
                         .transition(reduceMotion ? .opacity : .move(edge: .top).combined(with: .opacity))
                 }
             }
@@ -584,6 +636,11 @@ public struct CompanionOverlay: View {
 
     // MARK: - First-Launch Coachmark (PT-6-9)
 
+    /// Deliberately NOT `.isModal`: the trait hid every sibling — including
+    /// `companion.close` — from the accessibility tree, so on the one panel
+    /// open that shows this card the panel had no reachable way out for
+    /// VoiceOver or for a device pass. It is an informational callout with its
+    /// own "Got it", not a modal.
     private var companionCoachmark: some View {
         VStack(alignment: .leading, spacing: 10) {
             Text("These are your next steps. They change with every room you're in — tap one and I'll take you there.")
@@ -612,7 +669,6 @@ public struct CompanionOverlay: View {
         .padding(.horizontal, 12)
         .accessibilityElement(children: .combine)
         .accessibilityLabel("These are your next steps. They change with every room you're in — tap one and I'll take you there.")
-        .accessibilityAddTraits(.isModal)
     }
 
     // MARK: - State 4: Journey Mode
@@ -774,6 +830,13 @@ public struct CompanionOverlay: View {
         }
         dismissNavAck()
 
+        // Raise the shield in its own transaction, before the animated state
+        // change below — it must be hit-solid on the very first frame of the
+        // expansion, not fade in with the panel.
+        panelShieldTask?.cancel()
+        panelShieldTask = nil
+        panelShielded = true
+
         // PT-5-10: the soft pulse is fired declaratively via
         // `.sensoryFeedback(trigger: state.isExpanded)` below.
         CompanionAnalytics.shared.trackFABTapped(screen: coordinator.currentScreen.displayName)
@@ -830,6 +893,21 @@ public struct CompanionOverlay: View {
             state = .button
         }
         coordinator.isCompanionExpanded = false
+
+        // The panel is still drawn (and still fading) after `state` flips, so
+        // the shield has to outlive the collapse — otherwise the very next tap
+        // lands on the screen the user can still see the panel covering. Under
+        // reduce motion there is no exit animation to outlive.
+        panelShieldTask?.cancel()
+        guard !reduceMotion else {
+            panelShieldTask = nil
+            panelShielded = false
+            return
+        }
+        panelShieldTask = Task {
+            do { try await Task.sleep(for: .seconds(0.45)) } catch { return }
+            panelShielded = false
+        }
     }
 
     private func handleNavigate(to route: AppRoute) {
@@ -1021,6 +1099,23 @@ public struct CompanionOverlay: View {
 // MARK: - Liquid Glass helper (PT-5-7)
 
 private extension View {
+    /// Widens a 28pt Companion header glyph to a 36×44 touch region without
+    /// moving it — an overlay adds hit area, not layout, so the circles stay
+    /// where they are drawn. 36 is the widest that keeps the help and close
+    /// regions from overlapping each other at the header's 8pt spacing.
+    ///
+    /// The 28pt targets these replace were under the HIG minimum and, on the
+    /// two-row scanFlow panel, sat directly on top of the manual-room form's
+    /// "Doors" stepper — so a near-miss on ✕ did not merely fail to dismiss,
+    /// it silently edited the user's room.
+    func companionHeaderHitTarget() -> some View {
+        overlay {
+            Color.clear
+                .frame(width: 36, height: 44)
+                .contentShape(Rectangle())
+        }
+    }
+
     /// Applies the charcoal-tinted Liquid Glass circle used by the Companion
     /// minimal pill. Factored into a helper with an explicit `#available`
     /// guard because `CompanionOverlay` is a `public` View — the compiler
