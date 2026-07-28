@@ -22,12 +22,17 @@ final class RecommendationsViewModel {
     /// marketplace), remembered so `retry()` can re-invoke identically.
     private(set) var lastRoomId: String?
 
-    /// U14/U29: session-local record of what's been saved from this screen,
-    /// driving the Save/Unsave menu toggle and the heart fill state.
+    /// U14/U29: what's been saved, driving the Save/Unsave menu toggle and
+    /// the heart fill state. Seeded from persisted local + remote state by
+    /// `seedSavedState` when the view loads (a prior visit's or another
+    /// screen's/device's save counts too), then kept current by this
+    /// instance's own `saveProduct`/`unsaveProduct` calls.
     private(set) var savedProductIds: Set<String> = []
 
     /// Maps a saved product to the remote `saved_items` row id so Unsave can
-    /// mirror the removal — populated only when the remote save succeeded.
+    /// mirror the removal — populated by `seedSavedState` for pre-existing
+    /// saves and by `saveProduct` when this instance's own remote save
+    /// succeeds.
     private var remoteSavedItemIds: [String: String] = [:]
 
     /// U29: transient notice shown when the remote save mirror fails, so the
@@ -57,8 +62,40 @@ final class RecommendationsViewModel {
         savedProductIds.contains(product.id)
     }
 
+    /// U29 fix: without this, a product saved in a prior visit (or from
+    /// another screen/device) shows as unsaved here — the menu offers
+    /// "Save" again with no unique constraint on `saved_items` to stop a
+    /// duplicate row, and `unsaveProduct` can't mirror the remote delete
+    /// because `remoteSavedItemIds` only ever knew about saves made by
+    /// this instance. Seeds both from what's actually persisted: local
+    /// `TableItemModel` rows for the fast/offline case, and — mirroring
+    /// `CollectionsViewModel`'s own remote reconciliation — each synced
+    /// room's `saved_items` rows for the remote id `unsaveProduct` needs.
+    @MainActor
+    func seedSavedState(context: ModelContext) async {
+        let localDescriptor = FetchDescriptor<TableItemModel>()
+        let localItems = (try? context.fetch(localDescriptor)) ?? []
+        savedProductIds = Set(localItems.compactMap { $0.productId })
+
+        let remoteRoomIds = RoomStore(context: context).allRooms().compactMap { $0.remoteId }
+        for remoteRoomId in remoteRoomIds {
+            guard let rows = try? await RoomsAPIClient.shared.listItems(forRoomId: remoteRoomId) else { continue }
+            for row in rows {
+                guard let productId = row.product_id else { continue }
+                savedProductIds.insert(productId)
+                remoteSavedItemIds[productId] = row.id
+            }
+        }
+    }
+
     // MARK: - Loading
 
+    /// - Parameter roomId: the room's synced **remote** id (`RoomModel.remoteId`),
+    ///   never the local SwiftData id — this is passed straight to the
+    ///   `get_recommendations` RPC's `p_room_id`, which filters against the
+    ///   remote `rooms` table. Callers resolve local → remote before calling
+    ///   (see `RecommendationsView.resolveRoomRemoteId`); a local id here
+    ///   would silently no-op the room filter.
     func loadRecommendations(roomId: String? = nil) async {
         lastRoomId = roomId
         isLoading = true
@@ -159,8 +196,9 @@ final class RecommendationsViewModel {
     }
 
     /// U14: reverses a save from the ⋯ menu — removes the local item and
-    /// best-effort mirrors the removal remotely when this session knows the
-    /// remote row id (i.e. it was the one that created it).
+    /// best-effort mirrors the removal remotely when `remoteSavedItemIds`
+    /// knows the row id, whether that came from `seedSavedState` (a save
+    /// made earlier/elsewhere) or this instance's own `saveProduct`.
     func unsaveProduct(_ product: Product, context: ModelContext) {
         savedProductIds.remove(product.id)
 
