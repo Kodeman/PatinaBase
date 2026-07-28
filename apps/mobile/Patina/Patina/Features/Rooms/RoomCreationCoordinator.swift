@@ -97,6 +97,12 @@ public final class RoomCreationCoordinator {
             manualEntry: true
         )
 
+        // Parity with `RoomScanSyncService.uploadRoomScan`: on a cold launch
+        // the auth-state listener has not published a session yet, so a
+        // signed-in user's first manual room would resolve as unauthenticated
+        // and land local-only for no reason other than timing.
+        await AuthService.shared.waitForAuthReady()
+
         do {
             // 2. Remote write-through
             let userId = try await api.resolveUserId()
