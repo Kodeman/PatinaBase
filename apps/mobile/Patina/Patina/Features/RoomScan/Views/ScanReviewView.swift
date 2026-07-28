@@ -176,7 +176,9 @@ public struct ScanReviewView: View {
                     .foregroundStyle(PatinaColors.Text.primary)
                     .fixedSize(horizontal: false, vertical: true)
 
-                Button(action: { Task { await submit(skipping: lastSubmitSkipped) } }) {
+                Button {
+                    Task { await submit(skipping: lastSubmitSkipped) }
+                } label: {
                     Text("Let's try that again")
                         .font(PatinaTypography.bodySmallMedium)
                         .foregroundStyle(PatinaColors.Text.interactive)

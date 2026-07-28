@@ -137,10 +137,10 @@ struct ScanWalkView: View {
     private var finishControl: some View {
         let canFinish = viewModel.hasMeaningfulScanData
         return VStack(alignment: .trailing, spacing: 6) {
-            Button(action: {
+            Button {
                 guard canFinish else { return }
                 viewModel.didTapFinishPartial()
-            }) {
+            } label: {
                 Text("Finish")
                     .font(PatinaTypography.uiSmall)
                     .foregroundStyle(Color.white.opacity(canFinish ? 0.9 : 0.4))
