@@ -66,7 +66,7 @@ struct StyleResultView: View {
                 }
                 .frame(width: 200, height: 6)
 
-                MonoLabel(text: "\(result.confidencePercent)% Style Confidence")
+                MonoLabel(text: "A starting point — refine it any time.")
             }
             .padding(.bottom, 32)
 
@@ -87,16 +87,6 @@ struct StyleResultView: View {
                     .clipShape(Capsule())
             }
             .padding(.horizontal, 28)
-
-            // Secondary CTA
-            Button {
-                // Future: navigate to refine style flow
-            } label: {
-                Text("Refine your style →")
-                    .font(PatinaTypography.bodySmall)
-                    .foregroundStyle(PatinaColors.Text.interactive)
-            }
-            .padding(.top, 12)
 
             Spacer()
         }
