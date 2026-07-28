@@ -183,21 +183,30 @@ ALIGNMENT_DEGENERATE_CODE = "REFINE_ALIGNMENT_DEGENERATE"
 #: The child's proposal did not survive the parent's own recomputation.
 ALIGNMENT_UNVERIFIED_CODE = "REFINE_ALIGNMENT_UNVERIFIED"
 
-#: Nothing calls this module yet.  Item 6 implements the capability; item 7
-#: composes it and produces the host evidence that could justify flipping
-#: ``NATIVE_ENGINE_OUTPUT_ALIGNMENT_VERIFIED_BY_PARENT``.  Keeping the two
-#: statements separate is deliberate: "implemented" and "qualified" have been
-#: conflated before in this program and the conflation is how a disabled stage
-#: gets treated as a working one.
+#: WHAT CHANGED, AND WHAT DID NOT.  One caller now exists:
+#: ``refine_lifecycle.run_refine_lifecycle``, item 7's composed lifecycle, which
+#: is a named local-scratch CLI and not a stage.  ``scan_pipeline.refine`` is
+#: still unregistered, ``DEFAULT_STAGES`` is unchanged, and nothing under
+#: ``stages/`` imports this module or that one.  So "composed into REFINE" --
+#: which is what this flag's name says -- has NOT happened, and the flag stays
+#: ``False``.  The exact edge set is pinned by
+#: ``test_exactly_the_composed_lifecycle_imports_this_module``.
 #:
-#: WHAT COMPOSITION STILL OWES BEFORE THAT FLAG COULD MEAN "VERIFIED".  Not just
-#: a call site: an ANCHOR.  Every archive this module reads is a child output,
-#: so composing it as it stands would publish a decision that the child agreed
-#: with itself.  ``request.frames`` is the parent's own copy of the device poses
-#: the seed must carry, and item 7 has it; comparing the parsed seed centres and
-#: orientations against those frames is what turns clauses 6 and 7 from an
-#: internal-consistency check into a verification.  Composition is also what
-#: makes a false acceptance PUBLISHABLE, which is why the order matters.
+#: THE ANCHOR THIS FLAG ASKED FOR NOW EXISTS.  Every archive this module reads is
+#: a child output, so a call site alone would publish a decision that the child
+#: agreed with itself.  ``refine_lifecycle.anchor_seed_snapshot_to_request``
+#: compares the parsed seed centres and orientations against ``request.frames``
+#: -- the parent's own copy of the device poses -- before this module's verdict
+#: is used for anything, which is what turns clauses 6 and 7 from an
+#: internal-consistency check into a verification of the submitted scan.
+#:
+#: WHAT IS STILL OWED before ``NATIVE_ENGINE_OUTPUT_ALIGNMENT_VERIFIED_BY_PARENT``
+#: could mean anything: host evidence.  No archive this module has ever parsed
+#: came out of COLMAP, and the composed lifecycle's default child entry point is
+#: the frozen disabled backend, so no run has yet exercised this code against a
+#: real ``pycolmap==4.0.2`` writer.  "Implemented", "composed" and "qualified"
+#: have been conflated before in this program, and the conflation is how a
+#: disabled stage gets treated as a working one.
 PARENT_ALIGNMENT_VERIFICATION_COMPOSED_INTO_REFINE = False
 
 # ---------------------------------------------------------------------------

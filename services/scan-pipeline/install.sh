@@ -885,7 +885,7 @@ else
 fi
 echo "-- smoke-checking package imports and console entrypoint"
 _run_as_service_user "$SMOKE_VENV/bin/python" -I -c \
-  'import patina_scan_worker; import patina_scan_worker.cli; import patina_scan_worker.doctor; import patina_scan_worker.field_raster_materializer; import patina_scan_worker.field_storage_acquirer; import patina_scan_worker.refine_colmap_backend; import patina_scan_worker.refine_colmap_command; import patina_scan_worker.refine_colmap_toolchain; import patina_scan_worker.refine_evidence_builder; import patina_scan_worker.refine_materializer; import patina_scan_worker.refine_model_alignment; import patina_scan_worker.refine_native_process; import patina_scan_worker.refine_packet_extractor; import patina_scan_worker.refine_publisher; import patina_scan_worker.refine_runner'
+  'import patina_scan_worker; import patina_scan_worker.cli; import patina_scan_worker.doctor; import patina_scan_worker.field_raster_materializer; import patina_scan_worker.field_storage_acquirer; import patina_scan_worker.refine_colmap_backend; import patina_scan_worker.refine_colmap_command; import patina_scan_worker.refine_colmap_toolchain; import patina_scan_worker.refine_evidence_builder; import patina_scan_worker.refine_lifecycle; import patina_scan_worker.refine_materializer; import patina_scan_worker.refine_model_alignment; import patina_scan_worker.refine_native_process; import patina_scan_worker.refine_packet_extractor; import patina_scan_worker.refine_publisher; import patina_scan_worker.refine_runner'
 if [ "$GPU" -eq 1 ]; then
   _run_as_service_user /usr/bin/test -x \
     "$SMOKE_VENV/libexec/patina/field-raster-libheif-helper-v2"
