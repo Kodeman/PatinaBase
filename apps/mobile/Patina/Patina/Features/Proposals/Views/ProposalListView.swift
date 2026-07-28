@@ -34,7 +34,10 @@ struct ProposalListView: View {
         VStack(alignment: .leading, spacing: 4) {
             MonoLabel(text: "PROPOSALS")
                 .tracking(2)
-            Text(viewModel.isEmpty ? "Nothing to review yet" : "Your design proposals")
+            // U22: kept static — the empty case names itself in the
+            // PatinaEmptyState below; repeating that exact line here doubled
+            // the same sentence on an empty Studio.
+            Text("Your design proposals")
                 .font(PatinaTypography.h3)
                 .foregroundStyle(PatinaColors.Text.primary)
         }
@@ -45,12 +48,11 @@ struct ProposalListView: View {
     @ViewBuilder
     private var content: some View {
         if viewModel.isLoading && viewModel.proposals.isEmpty {
-            ProgressView()
-                .tint(PatinaColors.Text.interactive)
+            PatinaLoadingState()
                 .padding(.top, 60)
-                .frame(maxWidth: .infinity)
         } else if let error = viewModel.error, viewModel.proposals.isEmpty {
-            errorView(error)
+            PatinaErrorState(message: error, action: { Task { await viewModel.load() } })
+                .padding(.top, 60)
         } else if viewModel.isEmpty {
             emptyView
         } else {
@@ -88,35 +90,30 @@ struct ProposalListView: View {
         }
     }
 
+    /// U22: names the surface, names the trigger, and offers the one CTA
+    /// that actually unblocks it — track an in-flight request if one
+    /// exists, otherwise start one.
     private var emptyView: some View {
-        VStack(spacing: 8) {
-            Image(systemName: "doc.text")
-                .font(.system(size: 28))
-                .foregroundStyle(PatinaColors.sage)
-            Text("No proposals yet")
-                .font(PatinaTypography.bodySmall)
-                .foregroundStyle(PatinaColors.Text.secondary)
-            Text("Your designer will send proposals here when they're ready for your review.")
-                .font(PatinaTypography.caption)
-                .foregroundStyle(PatinaColors.Text.muted)
-                .multilineTextAlignment(.center)
-                .padding(.horizontal, 40)
-        }
-        .frame(maxWidth: .infinity)
+        PatinaEmptyState(
+            icon: "doc.text",
+            title: "Nothing to review yet",
+            message: "Your designer's proposals land here for your signature.",
+            ctaTitle: studioCTATitle,
+            ctaAction: presentStudioCTA
+        )
         .padding(.top, 80)
     }
 
-    private func errorView(_ msg: String) -> some View {
-        VStack(spacing: 10) {
-            Text(msg)
-                .font(PatinaTypography.bodySmall)
-                .foregroundStyle(PatinaColors.Text.secondary)
-            Button("Let's try that again") { Task { await viewModel.load() } }
-                .font(PatinaTypography.bodySmallMedium)
-                .foregroundStyle(PatinaColors.Text.interactive)
+    private var studioCTATitle: String {
+        DesignRequestStatusService.shared.promotedRequest != nil ? "Track your request" : "Get design help"
+    }
+
+    private func presentStudioCTA() {
+        if DesignRequestStatusService.shared.promotedRequest != nil {
+            coordinator.navigate(to: .designRequests(focusLeadId: nil))
+        } else {
+            coordinator.navigate(to: .designerConsultation)
         }
-        .frame(maxWidth: .infinity)
-        .padding(.top, 60)
     }
 }
 

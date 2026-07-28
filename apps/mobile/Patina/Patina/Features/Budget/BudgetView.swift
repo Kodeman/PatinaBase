@@ -47,12 +47,11 @@ struct BudgetView: View {
     @ViewBuilder
     private var content: some View {
         if viewModel.isLoading && viewModel.isEmpty {
-            ProgressView()
-                .tint(PatinaColors.Text.interactive)
+            PatinaLoadingState()
                 .padding(.top, 60)
-                .frame(maxWidth: .infinity)
         } else if let error = viewModel.error, viewModel.isEmpty {
-            errorView(error)
+            PatinaErrorState(message: error, action: { Task { await viewModel.load() } })
+                .padding(.top, 60)
         } else if viewModel.isEmpty {
             emptyView
         } else {
@@ -69,35 +68,30 @@ struct BudgetView: View {
         }
     }
 
+    /// U22: names the surface, names the trigger, and offers the one CTA
+    /// that actually unblocks it — track an in-flight request if one
+    /// exists, otherwise start one.
     private var emptyView: some View {
-        VStack(spacing: 8) {
-            Image(systemName: "chart.pie")
-                .font(.system(size: 28))
-                .foregroundStyle(PatinaColors.sage)
-            Text("No budget yet")
-                .font(PatinaTypography.bodySmall)
-                .foregroundStyle(PatinaColors.Text.secondary)
-            Text("Once you've signed a proposal or received an invoice, your budget appears here.")
-                .font(PatinaTypography.caption)
-                .foregroundStyle(PatinaColors.Text.muted)
-                .multilineTextAlignment(.center)
-                .padding(.horizontal, 40)
-        }
-        .frame(maxWidth: .infinity)
+        PatinaEmptyState(
+            icon: "chart.pie",
+            title: "No budget yet",
+            message: "Sign a proposal or receive an invoice and your budget builds itself here.",
+            ctaTitle: studioCTATitle,
+            ctaAction: presentStudioCTA
+        )
         .padding(.top, 80)
     }
 
-    private func errorView(_ msg: String) -> some View {
-        VStack(spacing: 10) {
-            Text(msg)
-                .font(PatinaTypography.bodySmall)
-                .foregroundStyle(PatinaColors.Text.secondary)
-            Button("Let's try that again") { Task { await viewModel.load() } }
-                .font(PatinaTypography.bodySmallMedium)
-                .foregroundStyle(PatinaColors.Text.interactive)
+    private var studioCTATitle: String {
+        DesignRequestStatusService.shared.promotedRequest != nil ? "Track your request" : "Get design help"
+    }
+
+    private func presentStudioCTA() {
+        if DesignRequestStatusService.shared.promotedRequest != nil {
+            coordinator.navigate(to: .designRequests(focusLeadId: nil))
+        } else {
+            coordinator.navigate(to: .designerConsultation)
         }
-        .frame(maxWidth: .infinity)
-        .padding(.top, 60)
     }
 }
 

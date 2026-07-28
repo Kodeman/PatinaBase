@@ -99,6 +99,12 @@ extension DesignRequestFlowView {
                     summaryRow("Budget", budget.displayName)
                 }
                 summaryRow("Timeline", timeline.displayName)
+                if !requestDescription.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                    // U46: the user must be able to confirm their own words
+                    // before sending — render the vision text verbatim, not
+                    // paraphrased or truncated.
+                    multilineSummaryRow("Vision", requestDescription)
+                }
 
                 if isMetered && !cellularOptedIn {
                     consentCard
@@ -195,9 +201,14 @@ extension DesignRequestFlowView {
                     Task { await coordinator.submit() }
                 }
             } else {
-                ProgressView().tint(PatinaColors.clay)
-                    .frame(maxWidth: .infinity)
-                    .frame(height: 48)
+                HStack(spacing: 10) {
+                    ProgressView().tint(PatinaColors.clay)
+                    Text("Sending your request…")
+                        .font(PatinaTypography.bodySmallMedium)
+                        .foregroundStyle(PatinaColors.Text.primary)
+                }
+                .frame(maxWidth: .infinity)
+                .frame(height: 48)
             }
         }
     }
@@ -267,6 +278,21 @@ extension DesignRequestFlowView {
                 .font(PatinaTypography.bodySmallMedium)
                 .foregroundStyle(PatinaColors.Text.muted)
             Spacer()
+            Text(value)
+                .font(PatinaTypography.bodySmallMedium)
+                .foregroundStyle(PatinaColors.Text.primary)
+        }
+        .padding(.vertical, 6)
+    }
+
+    /// Like `summaryRow`, but stacks label above value instead of forcing
+    /// both onto one line — for free-text values (e.g. Vision) that can run
+    /// to a paragraph and shouldn't be squeezed or truncated.
+    private func multilineSummaryRow(_ label: String, _ value: String) -> some View {
+        VStack(alignment: .leading, spacing: 4) {
+            Text(label)
+                .font(PatinaTypography.bodySmallMedium)
+                .foregroundStyle(PatinaColors.Text.muted)
             Text(value)
                 .font(PatinaTypography.bodySmallMedium)
                 .foregroundStyle(PatinaColors.Text.primary)
