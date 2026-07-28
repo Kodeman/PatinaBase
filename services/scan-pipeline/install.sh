@@ -273,7 +273,7 @@ qualified_package_version = sys.argv[6]
 qualified_pkg_config_version = sys.argv[7]
 qualified_pkg_config_flags = json.loads(sys.argv[8])
 expected_source_sha256 = (
-    "4840e0e6d3c98bbebecc4354349bae3963718583fb5c882f9807b0d222bee9c3"
+    "3b184937b755dc4acca4347ea6dba43dbeb111f090a91cd340e65d214937c626"
 )
 flags = os.O_RDONLY | getattr(os, "O_NOFOLLOW", 0)
 source_fd = os.open(source, flags)
@@ -899,7 +899,7 @@ if [ "$GPU" -eq 1 ]; then
   fi
   if [ "$FIELD_RASTER_HELPER_SMOKE_STATUS" -ne 2 ] || \
      [ "$FIELD_RASTER_HELPER_SMOKE" != \
-       "usage: field-raster-libheif INPUT.heic OUTPUT.ppm" ]; then
+       "usage: field-raster-libheif INPUT.heic OUTPUT.ppm WIDTH HEIGHT" ]; then
     echo "ERROR: Field raster helper no-argument smoke returned" \
       "$FIELD_RASTER_HELPER_SMOKE_STATUS with unexpected output." >&2
     exit 1
