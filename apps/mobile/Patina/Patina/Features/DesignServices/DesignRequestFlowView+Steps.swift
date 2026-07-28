@@ -186,13 +186,14 @@ extension DesignRequestFlowView {
                 // branch above; reaching here means we're idle — a fresh entry
                 // or a RESUMED draft (submit never auto-fires on resume). Always
                 // offer an explicit submit so a resumed roomless request can't
-                // strand on a dead spinner; "Try again" once an attempt failed.
-                PatinaButton(coordinator.lastError != nil ? "Try again" : "Send request",
+                // strand on a dead spinner; "Let's try that again" once an
+                // attempt failed.
+                PatinaButton(coordinator.lastError != nil ? "Let's try that again" : "Send request",
                              style: .primary) {
                     Task { await coordinator.submit() }
                 }
             } else if hasFailedUpload {
-                PatinaButton("Try again", style: .primary) {
+                PatinaButton("Let's try that again", style: .primary) {
                     Task { await coordinator.retryAllFailed(); await maybeSubmit() }
                 }
             } else if allUploaded {

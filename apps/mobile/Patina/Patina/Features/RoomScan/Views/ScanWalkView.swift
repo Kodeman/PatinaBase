@@ -212,7 +212,7 @@ struct ScanWalkView: View {
 
                 VStack(spacing: 12) {
                     Button(action: viewModel.didTapRetryAfterSessionLost) {
-                        Text("Try again")
+                        Text("Let's try that again")
                             .font(PatinaTypography.uiAction)
                             .foregroundStyle(PatinaColors.charcoal)
                             .frame(maxWidth: .infinity)
