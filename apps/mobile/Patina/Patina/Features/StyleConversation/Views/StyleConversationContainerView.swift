@@ -8,6 +8,7 @@
 //
 
 import SwiftUI
+import SwiftData
 
 struct StyleConversationContainerView: View {
 
@@ -17,6 +18,9 @@ struct StyleConversationContainerView: View {
     let onComplete: (StyleProfileResponse) -> Void
 
     @State private var currentProfile: StyleProfileResponse?
+    /// Writes the resolved profile to `StylePreferenceModel` — the row Home
+    /// and Profile read to decide whether a style profile exists.
+    @Environment(\.modelContext) private var modelContext
 
     var body: some View {
         ZStack {
@@ -28,8 +32,7 @@ struct StyleConversationContainerView: View {
                     session: viewModel.session,
                     responses: viewModel.responses,
                     onComplete: { resolved in
-                        currentProfile = resolved
-                        onComplete(resolved)
+                        finish(resolved)
                     }
                 )
                 // `currentProfile` guard above prevents re-running once resolved.
@@ -73,10 +76,20 @@ struct StyleConversationContainerView: View {
         }
         .onAppear {
             viewModel.onFinished = { profile in
-                currentProfile = profile
-                onComplete(profile)
+                finish(profile)
             }
         }
+    }
+
+    /// The conversation's one completion seam. Both routes in — the view
+    /// model's `onFinished` and the Contemplative Pause's own scoring — land
+    /// here, so the taste profile is persisted exactly where the profile is
+    /// handed upward. The write is an upsert, so the double resolution the
+    /// two routes produce leaves a single row.
+    private func finish(_ profile: StyleProfileResponse) {
+        currentProfile = profile
+        viewModel.persistToSwiftData(context: modelContext, profile: profile)
+        onComplete(profile)
     }
 
     // MARK: - Current-question configuration
