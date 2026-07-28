@@ -30,10 +30,19 @@
 //
 //  Failure mode
 //  ------------
-//  Network errors, decoding errors, and "missing content" all collapse to
-//  `nil` so help-content downtime never crashes the UI (spec §13.4). The
-//  client logs warnings via `print` rather than throwing; in production
-//  this lands in OSLog via stdout capture.
+//  `fetchContent`: network errors, decoding errors, and "missing content"
+//  all collapse to `nil` so help-content downtime never crashes the UI
+//  (spec §13.4).
+//
+//  `fetchArticles(forSurfaceKey:)` is deliberately different (U29): a
+//  transport failure, a non-2xx response, or a decode failure throws
+//  `HelpArticleListFetchError` instead of collapsing to `[]`. A surface that
+//  genuinely has zero articles is a *successful* fetch of an empty list —
+//  callers need to tell that apart from "we couldn't check" to avoid
+//  silently rendering a plain empty state over a real load failure.
+//
+//  The client logs warnings via `PatinaLog` rather than `print`; in
+//  production this lands in OSLog via stdout capture.
 //
 
 import Foundation
@@ -223,17 +232,24 @@ public actor SanityHelpClient {
     /// ordered by `surfaceKey` length descending so the most-specific articles
     /// appear first.
     ///
-    /// Failure mode: network/HTTP/decoding errors and an empty result set are
-    /// both modelled as an empty array — the panel renders the
-    /// "no articles for this surface yet" empty state in either case so help
-    /// downtime never crashes the UI (spec §13.4).
+    /// Failure mode (U29): a transport error, a non-2xx response, or a
+    /// decode failure throws `HelpArticleListFetchError` — it is NOT
+    /// modelled as an empty array. A surface that genuinely has zero
+    /// articles is a successful fetch that returns `[]`. Collapsing both
+    /// cases to the same empty array previously left a real load failure
+    /// indistinguishable from "no help content yet," so the caller
+    /// (`HelpPanelSheet`) could never show an error state a retry could fix.
+    /// Failures are also NOT cached, so a retry after a transient blip
+    /// actually re-hits the network rather than replaying a stale miss.
     ///
     /// - Parameter surfaceKey: A valid surface key from
     ///   `Features/Help/SurfaceKeys.swift`.
     /// - Returns: Up to 20 `HelpArticleSummary` entries, ordered by
-    ///   surface-key specificity.
-    /// - Throws: `InvalidSurfaceKeyError` when `surfaceKey` is malformed.
-    ///   All other failures collapse to an empty array.
+    ///   surface-key specificity. Genuinely empty when the surface has no
+    ///   authored articles.
+    /// - Throws: `InvalidSurfaceKeyError` when `surfaceKey` is malformed, or
+    ///   `HelpArticleListFetchError` when the fetch itself failed (network,
+    ///   non-2xx, or decode).
     public func fetchArticles(
         forSurfaceKey surfaceKey: SurfaceKey
     ) async throws -> [HelpArticleSummary] {
@@ -245,8 +261,7 @@ public actor SanityHelpClient {
 
         guard let url = Self.buildArticleListURL(surfaceKey: surfaceKey) else {
             PatinaLog.ui.error("[SanityHelpClient] Failed to build article-list URL surfaceKey=\(surfaceKey)")
-            articleListCache[surfaceKey] = ArticleListCacheEntry(value: [], storedAt: now())
-            return []
+            throw HelpArticleListFetchError(reason: "url-build-failed")
         }
 
         var request = URLRequest(url: url)
@@ -254,24 +269,30 @@ public actor SanityHelpClient {
         request.timeoutInterval = Self.requestTimeout
         request.setValue("application/json", forHTTPHeaderField: "Accept")
 
+        let data: Data
+        let response: URLResponse
         do {
-            let (data, response) = try await session.data(for: request)
-            if let http = response as? HTTPURLResponse, !(200..<300).contains(http.statusCode) {
-                PatinaLog.ui.error(
-                    "[SanityHelpClient] Article-list non-2xx status=\(http.statusCode)" +
-                    " url=\(url.absoluteString)"
-                )
-                articleListCache[surfaceKey] = ArticleListCacheEntry(value: [], storedAt: now())
-                return []
-            }
+            (data, response) = try await session.data(for: request)
+        } catch {
+            PatinaLog.ui.error("[SanityHelpClient] Article-list fetch failed: \(error)")
+            throw HelpArticleListFetchError(reason: "transport: \(error)")
+        }
+
+        if let http = response as? HTTPURLResponse, !(200..<300).contains(http.statusCode) {
+            PatinaLog.ui.error(
+                "[SanityHelpClient] Article-list non-2xx status=\(http.statusCode)" +
+                " url=\(url.absoluteString)"
+            )
+            throw HelpArticleListFetchError(reason: "http-\(http.statusCode)")
+        }
+
+        do {
             let summaries = try decodeArticleList(data: data)
             articleListCache[surfaceKey] = ArticleListCacheEntry(value: summaries, storedAt: now())
             return summaries
         } catch {
-            PatinaLog.ui.error("[SanityHelpClient] Article-list fetch failed: \(error)")
-            // Cache the miss briefly so a transient blip doesn't hammer Sanity.
-            articleListCache[surfaceKey] = ArticleListCacheEntry(value: [], storedAt: now())
-            return []
+            PatinaLog.ui.error("[SanityHelpClient] Article-list decode failed: \(error)")
+            throw HelpArticleListFetchError(reason: "decode: \(error)")
         }
     }
 
@@ -581,6 +602,26 @@ private enum SanityResultBox: Decodable {
             let payload = try encoder.encode(first)
             return try decoder.decode(HelpContent.self, from: payload)
         }
+    }
+}
+
+// MARK: - HelpArticleListFetchError
+
+/// Thrown by `fetchArticles(forSurfaceKey:)` (U29) when the article list
+/// could not be retrieved: a transport error, a non-2xx HTTP response, or a
+/// response body that failed to decode. Distinct from a *successful* fetch
+/// that legitimately found zero articles (which returns `[]`, not this
+/// error) — callers need to tell "nothing here yet" apart from "we couldn't
+/// check" so they can show an error state with a retry that can plausibly
+/// succeed, instead of a plain empty state that hides a real failure.
+public struct HelpArticleListFetchError: Error, Sendable {
+    /// Short, loggable classification (e.g. `"transport"`, `"http-500"`,
+    /// `"decode"`, `"url-build-failed"`), optionally suffixed with the
+    /// underlying error's description — not shown to users.
+    public let reason: String
+
+    public init(reason: String) {
+        self.reason = reason
     }
 }
 

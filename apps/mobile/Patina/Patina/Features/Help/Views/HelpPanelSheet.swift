@@ -211,9 +211,14 @@ public struct HelpPanelSheet: View {
                 self.isLoading = false
             }
         } catch {
-            // Invalid surface keys (the only throwing path) are programmer
-            // errors — log and present the empty state so the UI stays
-            // functional and the bug is caught in QA.
+            // U29: `SanityHelpClient.fetchArticles` throws
+            // `HelpArticleListFetchError` for a genuine transport/HTTP/decode
+            // failure — distinct from a successful fetch that legitimately
+            // found zero articles (`articles.isEmpty` below, not this catch).
+            // That's the real case this error state and retry exist for. A
+            // malformed `surfaceKey` (`InvalidSurfaceKeyError`) also lands
+            // here — a static per-screen configuration bug — logged so it's
+            // caught in QA rather than silently rendering as "no articles."
             PatinaLog.ui.error("[HelpPanelSheet] loadArticles failed: \(error)")
             await MainActor.run {
                 self.articles = []
