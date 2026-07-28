@@ -69,6 +69,7 @@ INSTALL_SOURCE_FILES = (
     "src/patina_scan_worker/refine_evidence_builder.py",
     "src/patina_scan_worker/refine_engine.py",
     "src/patina_scan_worker/refine_materializer.py",
+    "src/patina_scan_worker/refine_model_alignment.py",
     "src/patina_scan_worker/refine_native_process.py",
     "src/patina_scan_worker/refine_packet_extractor.py",
     "src/patina_scan_worker/refine_publisher.py",
@@ -348,6 +349,7 @@ def test_candidate_smoke_imports_disabled_refine_foundations_before_activation()
         "import patina_scan_worker.refine_colmap_toolchain; "
         "import patina_scan_worker.refine_evidence_builder; "
         "import patina_scan_worker.refine_materializer; "
+        "import patina_scan_worker.refine_model_alignment; "
         "import patina_scan_worker.refine_native_process; "
         "import patina_scan_worker.refine_packet_extractor; "
         "import patina_scan_worker.refine_publisher; "
@@ -1707,6 +1709,11 @@ def test_transaction_source_copy_requires_exact_trusted_bytes(tmp_path):
         ),
         pytest.param(
             "drawings,gpu",
+            "patina_scan_worker/refine_model_alignment.py",
+            id="gpu-missing-refine-model-alignment",
+        ),
+        pytest.param(
+            "drawings,gpu",
             "patina_scan_worker/refine_native_process.py",
             id="gpu-missing-refine-native-process",
         ),
@@ -1793,6 +1800,7 @@ _prepare_isolated_source_build "$SRC_DIR"
         "src/patina_scan_worker/refine_colmap_toolchain.py",
         "src/patina_scan_worker/refine_evidence_builder.py",
         "src/patina_scan_worker/refine_materializer.py",
+        "src/patina_scan_worker/refine_model_alignment.py",
         "src/patina_scan_worker/refine_native_process.py",
         "src/patina_scan_worker/refine_packet_extractor.py",
         "src/patina_scan_worker/refine_publisher.py",
@@ -1883,6 +1891,7 @@ _prepare_isolated_source_build "$SRC_DIR"
                 "import patina_scan_worker.refine_colmap_toolchain as colmap_toolchain; "
                 "import patina_scan_worker.refine_evidence_builder as evidence_builder; "
                 "import patina_scan_worker.refine_materializer as materializer; "
+                "import patina_scan_worker.refine_model_alignment as model_alignment; "
                 "import patina_scan_worker.refine_native_process as native; "
                 "import patina_scan_worker.refine_packet_extractor as packet_extractor; "
                 "import patina_scan_worker.refine_publisher as publisher; "
@@ -2100,6 +2109,7 @@ def test_source_validation_rejects_an_unreviewed_package_module(tmp_path):
         "refine_evidence_builder.py",
         "refine_engine.py",
         "refine_materializer.py",
+        "refine_model_alignment.py",
         "refine_native_process.py",
         "refine_packet_extractor.py",
         "refine_publisher.py",
