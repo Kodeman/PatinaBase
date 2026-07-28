@@ -5617,3 +5617,94 @@ gated on a device walk rather than on any code.
 sibling in place to be rediscovered later is not a saving.
 
 *Entries add: R120 · last id = R120*
+
+### I101 · Field Capture P2 · first real Refine run reaches the native boundary; real keyframes decoded — 2026-07-28
+
+The composed Refine lifecycle ran against a real Field capture on the qualified
+host and reached the native engine boundary in **8.43 s**, peak RSS 46 MB. It
+stopped where I100 said it would: `refine_colmap_backend.py` is a deliberate
+fail-closed stub, so `run_native_engine_child` raised `COLMAP native backend is
+disabled and uncomposed`. **This is the designed outcome, not a defect.**
+
+**The subject.** Scan `004aa5b0-bfaa-4577-93f8-c06d9f38f1fc`, captured on the
+R120-fixed build, **49 keyframes**, every one native 1920x1440 / encoded
+1440x1920 — the R119-pinned profile. The bundle is the first this program has
+seen that is internally coherent: all three artifact hashes match the manifest's
+own bindings, all 96 archive members carry the `keyframes/` prefix, and every
+`heicPath` in the index resolves to a real member. R120's fix is therefore
+confirmed on hardware, not merely in a unit test.
+
+**The pin is live in production, and says so unprompted.** The CLI banner reads
+"Raster profile: 1440x1920 (the only one with a physical-device receipt). Any
+other capture resolution fails closed."
+
+**What executed, established from the call stack rather than assumed.** The
+failure surfaced at `refine_lifecycle.py:2626`, which sits inside `with
+materialization:` and after `build_colmap_packet` and `pinned_packet_files`
+have both returned. So, in order: the four artifacts were acquired under
+owner-scoped keys with digests verified; the materialization completed; the
+packet was built and chunked (49 frames x 8_294_417 B = 0.38 GiB, 4 chunks and
+5 pinned files, well inside the 4 GiB / 64-file ceilings); the packet
+descriptors were pinned; and only then did the native call refuse.
+
+**I100's second open question is now closed.** It recorded that "no real Field
+HEIC has been decoded on this path — the helper is a stand-in writing canonical
+PPM." That is no longer true. Materialization is what decodes, and it completed:
+**49 real 1440x1920 Field HEICs were decoded by libheif through the installed,
+root-owned, descriptor-pinned helper** at protocol v3, on the release whose
+manifest binds `sourceSha256` `3b184937…`. This is the first time the shipped
+raster path has touched real capture data.
+
+**Scratch was cleaned on failure** — the workspace lease and cleanup precedence
+behaved as item 4's receipt described, with nothing left behind.
+
+**Three questions remain open, all behind the same gate.** Whether COLMAP
+executes under the pinned toolchain and lease; how long a 49-100 frame
+reconstruction actually takes; and whether the resulting evidence clears
+`evaluate_refinement_evidence` rather than merely the non-vacuity floors of
+R119. None of them can be answered while the native backend is a stub, which is
+what R121 addresses.
+### R121 · Field Capture P2 · the native COLMAP backend is unfrozen and composed; DeskDev privilege granted — 2026-07-28
+
+Two grants from the program owner on 2026-07-28, both reversing constraints
+this program has held since I96.
+
+**1. `refine_colmap_backend.py` is unfrozen.** It has been pinned byte-identical
+to git blob `6743e66eb06369d18e34b0054d10734e03a109ec` throughout — every agent
+brief in the program named that blob and forbade touching it, and the
+composition verified it at each merge. It is a deliberate fail-closed stub, and
+I101 is the receipt of it doing its job: the first real run reached
+`run_native_engine_child` and was refused. **The owner now authorizes writing
+the real child body**, which is the I87 plan: known-pose seed, point
+triangulation, bundle adjustment against COLMAP 4.0.2, with the
+position-prior mapper as fallback. The freeze existed because composing the
+backend had never been reviewed, not because the backend was correct — nothing
+about lifting it makes the resulting code trusted.
+
+**2. Elevated privilege on the qualified host is granted.** The owner states
+DeskDev "is just a test environment for now" and grants `sudo` and whatever
+else the work requires. This lifts the standing prohibitions on `sudo`,
+`install.sh`, `systemctl`, writing outside `~/`, and touching `/opt`, `/etc`
+and `/var/lib/patina` **on that host only**. It does not extend to Strata, to
+Supabase or Storage writes, or to any production system, and the P1 worker
+`patina-scan-worker` is still not to be disturbed gratuitously — a grant of
+permission is not an instruction to be careless with a service that is running.
+
+**What does NOT change.** Refine remains unregistered as a worker stage and
+`DEFAULT_STAGES` remains `ingest,solve,drawings`; composing the backend is not
+enabling the pipeline. The 200-400 frame band stays unqualified per R117. The
+raster pin stays exactly 1440x1920 per R119 ruling 3, with no override. The
+gauge-invariant shape floor and the movement floor stay as R119 ruling 1 built
+them — a backend that returns its input, or returns it under a rigid motion or
+similarity, must still be refused, and the whole point of writing a real
+backend is that those floors now face something that can genuinely fail them.
+
+**What the first successful run must establish**, unchanged from I100 and
+narrowed by I101 to three: that COLMAP executes under the pinned toolchain
+manifest and the one-hour lease; how long a real reconstruction of this size
+actually takes, which nothing in this repository has ever measured; and whether
+the evidence clears `evaluate_refinement_evidence` rather than merely clearing
+the non-vacuity floors. A run that fails any of these is a result and is to be
+recorded as one.
+
+*Entries add: I101 · R121 · last id = R121*
