@@ -281,7 +281,7 @@ public final class AppCoordinator: Coordinator {
              .crossRoom, .manualRoomEntry, .roomDetail, .roomSavedItems,
              .table, .scanFlow, .emergence, .roomEmergence, .pieceDetail,
              .styleQuiz, .styleResult,
-             .arPlacement, .preScanChecklist,
+             .arPlacement,
              .profile, .notifications, .designerConsultation, .designRequests,
              .projectList, .projectDetail,
              .decisionList, .decisionDetail,
@@ -386,8 +386,6 @@ public final class AppCoordinator: Coordinator {
             companionContext.walkProgress = nil
         case .arPlacement:
             companionContext.walkProgress = nil
-        case .preScanChecklist:
-            companionContext.viewingPiece = nil
         case .profile, .notifications, .designerConsultation, .designRequests:
             companionContext.viewingPiece = nil
             companionContext.walkProgress = nil

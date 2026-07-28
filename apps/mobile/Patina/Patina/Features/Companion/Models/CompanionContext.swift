@@ -158,8 +158,6 @@ public struct CompanionContext: Equatable {
             return "Your style profile"
         case .arPlacement:
             return "Placing furniture"
-        case .preScanChecklist:
-            return "Preparing to scan"
         case .profile:
             return "Your profile"
         case .notifications:
@@ -231,8 +229,6 @@ public struct CompanionContext: Equatable {
             return "star.circle"
         case .arPlacement:
             return "arkit"
-        case .preScanChecklist:
-            return "checklist"
         case .profile:
             return "person.circle"
         case .notifications:

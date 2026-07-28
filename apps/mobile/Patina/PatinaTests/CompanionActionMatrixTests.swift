@@ -56,7 +56,6 @@ struct CompanionActionMatrixTests {
         .styleQuiz,
         .styleResult(result: sampleStyle),
         .arPlacement(productId: "piece-1"),
-        .preScanChecklist,
         .profile,
         .notifications,
         .designerConsultation,
@@ -427,8 +426,6 @@ struct CompanionTierAndFreshnessTests {
             let ctx = Fixture.context(for: route, roomCount: 2, active: false)
             #expect(CompanionActionProvider.nudge(for: route, context: ctx) == nil, "\(route) offered a nudge")
         }
-        let preScan = Fixture.context(for: .preScanChecklist, roomCount: 2, active: false)
-        #expect(CompanionActionProvider.nudge(for: .preScanChecklist, context: preScan) == nil)
     }
 
     // MARK: - Style-profile freshness (U42)

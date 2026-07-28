@@ -192,7 +192,7 @@ struct ContentView: View {
         case .scanFlow, .emergence, .roomEmergence, .table, .pieceDetail:
             discoveryDestination(for: route)
 
-        case .styleQuiz, .styleResult, .arPlacement, .preScanChecklist:
+        case .styleQuiz, .styleResult, .arPlacement:
             styleDestination(for: route)
 
         case .profile, .notifications, .designerConsultation, .designRequests,
@@ -291,12 +291,6 @@ struct ContentView: View {
         case .arPlacement(let productId, let roomRemoteId):
             ARPlacementView(productId: productId, roomRemoteId: roomRemoteId)
                 .toolbar(.hidden, for: .navigationBar)
-
-        case .preScanChecklist:
-            PreScanChecklistView {
-                coordinator.navigate(to: .scanFlow(reason: .fresh))
-            }
-            .toolbar(.hidden, for: .navigationBar)
 
         default:
             EmptyView() // unreachable — dispatched only for the cases above

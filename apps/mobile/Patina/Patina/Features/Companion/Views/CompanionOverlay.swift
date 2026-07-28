@@ -108,10 +108,6 @@ public struct CompanionOverlay: View {
         if case .pieceDetail = screen { return .minimal }
         if case .arPlacement = screen { return .minimal }
 
-        // Minimal during pre-scan (it has its own UI but the Companion stays
-        // reachable so the user never loses orientation — PT-6-11).
-        if case .preScanChecklist = screen { return .minimal }
-
         // Minimal during quiz (quiz manages its own flow) — keep the Companion
         // present but unobtrusive instead of disappearing entirely (PT-6-11).
         if case .styleQuiz = screen { return .minimal }

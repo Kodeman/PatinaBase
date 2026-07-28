@@ -74,7 +74,6 @@ public enum AppRoute: Hashable {
 
     // AR & Scan Enhancement routes
     case arPlacement(productId: String, roomRemoteId: String? = nil)
-    case preScanChecklist
 
     // Phase 6 routes
     case profile
@@ -129,7 +128,6 @@ public enum AppRoute: Hashable {
         case .styleQuiz: return "Style Quiz"
         case .styleResult: return "Your Style"
         case .arPlacement: return "AR Placement"
-        case .preScanChecklist: return "Pre-Scan"
         case .profile: return "Profile"
         case .notifications: return "Notifications"
         case .designerConsultation: return "Designer"

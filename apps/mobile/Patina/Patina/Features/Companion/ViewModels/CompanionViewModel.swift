@@ -187,7 +187,6 @@ public final class CompanionViewModel {
         case .styleQuiz: return "style_quiz"
         case .styleResult: return "style_result"
         case .arPlacement: return "ar_placement"
-        case .preScanChecklist: return "pre_scan"
         case .profile: return "profile"
         case .notifications: return "notifications"
         case .designerConsultation: return "designer_consultation"

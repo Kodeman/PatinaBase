@@ -157,21 +157,15 @@ extension CompanionActionProvider {
 
     // MARK: - Scan flow
 
+    /// `.scanFlow` is the only scan route left — mid-capture the Companion
+    /// offers the universal tail and nothing else (don't tempt exits). Every
+    /// scan *entry* is a `scanRow(...)` on the surrounding surfaces, which
+    /// already routes straight to `.scanFlow`.
     static func scanItems(
         _ screen: AppRoute,
         context: CompanionContext
     ) -> [CompanionActionItem] {
-        switch screen {
-        case .preScanChecklist:
-            return [
-                scanRow(label: "Start scanning", hint: "Begin the walk",
-                        reason: .fresh, suggested: true),
-                item("square.and.pencil", "Enter details manually instead", "Skip the scan",
-                     route: .manualRoomEntry, id: "manual_room")
-            ]
-        default: // .scanFlow — mid-capture, tail only (don't tempt exits)
-            return []
-        }
+        []
     }
 
     // MARK: - Style

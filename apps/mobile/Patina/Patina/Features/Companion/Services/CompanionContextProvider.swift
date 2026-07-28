@@ -130,7 +130,7 @@ enum CompanionActionProvider {
         case .roomList, .yourSpaces, .roomDetail, .roomProject,
              .roomSettings, .manualRoomEntry:
             return roomsItems(screen, context: context)
-        case .scanFlow, .preScanChecklist:
+        case .scanFlow:
             return scanItems(screen, context: context)
         case .styleQuiz, .styleResult:
             return styleItems(screen, context: context)
@@ -206,8 +206,6 @@ enum CompanionActionProvider {
             return "Prefer to scan?"
         case .scanFlow:
             return "Keep scanning?"
-        case .preScanChecklist:
-            return "Ready to walk?"
         case .styleQuiz:
             return "Pause the quiz?"
         case .styleResult:
