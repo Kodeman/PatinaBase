@@ -321,8 +321,6 @@ extension CompanionAPIClient {
     private func screenIdentifier(for route: AppRoute) -> String {
         switch route {
         case .heroFrame: return "hero_frame"
-        case .roomList: return "room_list"
-        case .roomDetail: return "room_detail"
         case .roomSavedItems: return "room_saved_items"
         case .scanFlow(let reason):
             switch reason {

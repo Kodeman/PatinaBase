@@ -121,7 +121,7 @@ extension CompanionActionProvider {
         context: CompanionContext
     ) -> [CompanionActionItem] {
         switch screen {
-        case .roomList, .yourSpaces:
+        case .yourSpaces:
             return [
                 scanRow(label: "Add another space", hint: "Scan a new room",
                         reason: .fresh, suggested: true),
@@ -131,7 +131,7 @@ extension CompanionActionProvider {
                      route: .crossRoom, id: "cross_room"),
                 designerRow(roomId: nil, context: context)
             ]
-        case .roomDetail(let roomId), .roomProject(let roomId):
+        case .roomProject(let roomId):
             return [
                 item("sparkles", "See recommendations", "Pieces for this room",
                      route: .roomEmergence(roomId: roomId), id: "room_recommendations", suggested: true),
@@ -143,7 +143,7 @@ extension CompanionActionProvider {
         case .roomSettings(let roomId):
             return [
                 item("arrow.uturn.backward", "Back to the room", "Return to details",
-                     route: .roomDetail(roomId: roomId), id: "back_to_room", suggested: true),
+                     route: .roomProject(roomId: roomId), id: "back_to_room", suggested: true),
                 scanRow(label: "Rescan this room", hint: "Capture updates", reason: .rescan)
             ]
         default: // .manualRoomEntry

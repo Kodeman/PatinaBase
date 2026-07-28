@@ -114,8 +114,6 @@ public struct CompanionContext: Equatable {
                 return room.name
             }
             return "Your Space"
-        case .roomList:
-            return "Your Rooms: \(roomCount) spaces"
         case .scanFlow(let reason):
             switch reason {
             case .rescan:
@@ -142,11 +140,6 @@ public struct CompanionContext: Equatable {
             return "Piece details"
         case .table:
             return "Your Table: \(tableItemCount) pieces gathering"
-        case .roomDetail:
-            if let room = activeRoom {
-                return "Viewing: \(room.name)"
-            }
-            return "Room details"
         case .roomSavedItems:
             if let room = activeRoom {
                 return "Saved items in \(room.name)"
@@ -209,8 +202,6 @@ public struct CompanionContext: Equatable {
         switch currentScreen {
         case .heroFrame:
             return "photo"
-        case .roomList:
-            return "house"
         case .scanFlow:
             return "figure.walk"
         case .emergence, .roomEmergence:
@@ -219,8 +210,6 @@ public struct CompanionContext: Equatable {
             return "chair.lounge"
         case .table:
             return "rectangle.stack"
-        case .roomDetail:
-            return "square.split.bottomrightquarter"
         case .roomSavedItems:
             return "bookmark.fill"
         case .styleQuiz:

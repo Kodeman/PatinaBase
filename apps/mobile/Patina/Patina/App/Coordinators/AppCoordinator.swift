@@ -277,8 +277,8 @@ public final class AppCoordinator: Coordinator {
             navigationPath = NavigationPath()
             updateContext(for: route)
 
-        case .roomList, .yourSpaces, .roomProject, .roomSettings,
-             .crossRoom, .manualRoomEntry, .roomDetail, .roomSavedItems,
+        case .yourSpaces, .roomProject, .roomSettings,
+             .crossRoom, .manualRoomEntry, .roomSavedItems,
              .table, .scanFlow, .emergence, .roomEmergence, .pieceDetail,
              .styleQuiz, .styleResult,
              .arPlacement,
@@ -367,10 +367,7 @@ public final class AppCoordinator: Coordinator {
 
         // Clear context that's no longer relevant
         switch route {
-        case .heroFrame, .roomList:
-            companionContext.viewingPiece = nil
-            companionContext.walkProgress = nil
-        case .roomDetail, .roomSavedItems:
+        case .heroFrame, .roomSavedItems:
             companionContext.viewingPiece = nil
             companionContext.walkProgress = nil
         case .scanFlow:
@@ -466,7 +463,7 @@ public final class AppCoordinator: Coordinator {
             return true
 
         case .showRooms:
-            navigate(to: .roomList)
+            navigate(to: .yourSpaces)
             return true
 
         case .goBack:

@@ -185,7 +185,10 @@ struct ContentView: View {
     @ViewBuilder
     private func destinationView(for route: AppRoute) -> some View {
         switch route {
-        case .heroFrame, .roomList, .yourSpaces, .roomDetail, .roomProject,
+        // `.heroFrame` is a root-reset (it clears the nav path); it is never
+        // pushed as a destination, so it falls through to the group's
+        // EmptyView. The home surface is rendered by `mainHomeView`.
+        case .heroFrame, .yourSpaces, .roomProject,
              .roomSettings, .crossRoom, .manualRoomEntry, .roomSavedItems:
             roomsDestination(for: route)
 
@@ -208,16 +211,10 @@ struct ContentView: View {
     @ViewBuilder
     private func roomsDestination(for route: AppRoute) -> some View {
         switch route {
-        case .heroFrame:
-            // `.heroFrame` is a root-reset (it clears the nav path); it is
-            // never pushed as a destination, so this arm is unreachable.
-            // The home surface is rendered by `mainHomeView`.
-            EmptyView()
-
-        case .roomList, .yourSpaces:
+        case .yourSpaces:
             YourSpacesView()
 
-        case .roomDetail(let roomId), .roomProject(let roomId):
+        case .roomProject(let roomId):
             RoomProjectView(roomId: roomId)
 
         case .roomSettings(let roomId):

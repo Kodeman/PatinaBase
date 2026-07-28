@@ -37,7 +37,7 @@ public final class CompanionViewModel {
     public var apiQuickActions: [APIQuickAction] = []
 
     /// Current context from the coordinator
-    public var context: CompanionContext = CompanionContext(currentScreen: .roomList)
+    public var context: CompanionContext = CompanionContext(currentScreen: .yourSpaces)
 
     // MARK: - Conversation State
 
@@ -172,8 +172,6 @@ public final class CompanionViewModel {
     private func screenIdentifier(for route: AppRoute) -> String {
         switch route {
         case .heroFrame: return "hero_frame"
-        case .roomList: return "room_list"
-        case .roomDetail: return "room_detail"
         case .roomSavedItems: return "room_saved_items"
         case .scanFlow(let reason):
             switch reason {
