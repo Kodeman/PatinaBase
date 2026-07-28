@@ -61,11 +61,20 @@ struct YourSpacesView: View {
                         .padding(.horizontal, 20)
 
                         ForEach(rooms) { room in
-                            RoomGalleryCard(
-                                room: room,
-                                newPickCount: 0,
-                                onTap: { coordinator.navigate(to: .roomProject(roomId: room.id)) }
-                            )
+                            VStack(alignment: .leading, spacing: 6) {
+                                RoomGalleryCard(
+                                    room: room,
+                                    newPickCount: 0,
+                                    onTap: { coordinator.navigate(to: .roomProject(roomId: room.id)) }
+                                )
+                                // A room whose write-through never landed has
+                                // no server-side counterpart — it gets no
+                                // picks and follows the user nowhere. Say so
+                                // rather than letting it pass for synced.
+                                if isLocalOnly(room) {
+                                    syncPill(text: "Saved on this phone", systemImage: "iphone")
+                                }
+                            }
                             .padding(.horizontal, 20)
                         }
 
@@ -210,6 +219,14 @@ struct YourSpacesView: View {
         } else if syncService.isSyncing {
             syncPill(text: "Uploading…", systemImage: "arrow.up.circle")
         }
+    }
+
+    /// A room lives on this phone only when it has no remote counterpart.
+    /// `remoteId` is checked alongside `syncStatus` because rooms created
+    /// before the coordinator started stamping the status sit at the `.local`
+    /// default despite having synced — the id is the non-revisionist half.
+    private func isLocalOnly(_ room: RoomModel) -> Bool {
+        room.syncStatus != .synced && room.remoteId == nil
     }
 
     private func syncPill(text: String, systemImage: String) -> some View {
