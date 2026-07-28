@@ -11,8 +11,8 @@
 //    • RoomCaptureAnalyzer       — coverage / quality / completion metrics +
 //                                  pure-geometry helpers
 //    • RoomCaptureBundleAdapter  — writes captured data into the on-disk bundle
-//  The public API (consumed by WalkView / RoomCaptureViewRepresentable /
-//  ScanViewModel) is unchanged; the service owns the @Observable state, the
+//  The public API (consumed by RoomCaptureViewRepresentable / ScanViewModel)
+//  is unchanged; the service owns the @Observable state, the
 //  RoomCaptureSessionDelegate + ARSessionDelegate conformances, and feature
 //  emission, delegating mechanics/analysis/IO to the collaborators.
 //

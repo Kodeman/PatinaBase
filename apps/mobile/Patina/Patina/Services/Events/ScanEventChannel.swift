@@ -42,12 +42,12 @@ public final class ScanEventChannel {
     // MARK: - Mock scan completion
 
     /// The most recent mock-scan completion (simulator / `--mockar` path).
-    /// `WalkView` observes this and feeds the room data into its completion
-    /// handler. Each post is a fresh `MockScanCompletedEvent` so repeat
-    /// completions are observable.
+    /// Each post is a fresh `MockScanCompletedEvent` so repeat completions
+    /// are observable. No live observer since the Walk v1 stack was retired
+    /// — kept as the seam the mock path publishes through.
     public private(set) var mockScanCompleted: MockScanCompletedEvent?
 
-    /// Post a mock-scan completion. Called by `MockRoomScanView` in place of
+    /// Post a mock-scan completion, in place of
     /// `NotificationCenter.post(name: .mockScanCompleted, ...)`.
     public func postMockScanCompleted(roomData: FirstWalkRoomData) {
         mockScanCompleted = MockScanCompletedEvent(roomData: roomData)
