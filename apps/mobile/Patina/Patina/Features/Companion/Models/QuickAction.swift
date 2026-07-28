@@ -198,7 +198,7 @@ public enum QuickActionFactory {
         // Show table if items exist
         if let tableCount = context?.tableItemCount, tableCount > 0 {
             actions.append(QuickAction(
-                title: "My table",
+                title: "Saved",
                 icon: "rectangle.stack",
                 intent: .showTable
             ))
@@ -300,7 +300,7 @@ public enum QuickActionFactory {
                 intent: .showEmergence
             ),
             QuickAction(
-                title: "My table",
+                title: "Saved",
                 icon: "rectangle.stack",
                 intent: .showTable
             )
@@ -461,7 +461,7 @@ extension QuickActionFactory {
                     isPrimary: true
                 ),
                 QuickAction(
-                    title: "Show my table",
+                    title: "Saved",
                     icon: "rectangle.stack",
                     intent: .showTable
                 )

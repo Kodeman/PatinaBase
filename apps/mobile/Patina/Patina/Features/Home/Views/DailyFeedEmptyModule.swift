@@ -68,7 +68,7 @@ struct DailyFeedEmptyModule: View {
                 + "Scan another room to widen the net, or browse the full collection.",
             primaryTitle: "Scan Another Room",
             primaryAction: onScanRoom,
-            secondary: ("Browse all pieces →", onBrowse)
+            secondary: ("Browse pieces →", onBrowse)
         )
     }
 

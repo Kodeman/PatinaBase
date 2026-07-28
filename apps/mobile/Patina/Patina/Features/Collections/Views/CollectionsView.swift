@@ -43,7 +43,7 @@ struct CollectionsView: View {
             // Header
             VStack(alignment: .leading, spacing: 2) {
                 HStack {
-                    Text("Collections")
+                    Text("Saved")
                         .font(PatinaTypography.h2)
                         .foregroundStyle(PatinaColors.Text.primary)
 
@@ -59,7 +59,7 @@ struct CollectionsView: View {
                             .contentShape(Rectangle())
                     }
                     .accessibilityLabel("New board")
-                    .accessibilityHint("Creates a new collection board.")
+                    .accessibilityHint("Creates a new board.")
                 }
                 // U06: names the room this Saved surface is scoped to.
                 if let scopedRoomName {
@@ -124,7 +124,7 @@ struct CollectionsView: View {
             Button("Create") { viewModel.createBoard(context: modelContext) }
             Button("Cancel", role: .cancel) { viewModel.newBoardName = "" }
         } message: {
-            Text("Give your collection a name")
+            Text("Give this board a name")
         }
     }
 

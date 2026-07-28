@@ -42,7 +42,7 @@ public enum BudgetAssessment {
         switch level {
         case .below50, .approaching: return nil
         case .atRange:               return "You're at your budget for \(roomName)"
-        case .overRange:             return "Work with a designer on \(roomName) →"
+        case .overRange:             return "Get design help with this room →"
         }
     }
 }

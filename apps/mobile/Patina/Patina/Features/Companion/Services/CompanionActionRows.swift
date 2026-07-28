@@ -176,7 +176,7 @@ extension CompanionActionProvider {
     static func designerRow(
         roomId: UUID?,
         context: CompanionContext,
-        label: String = "Ask a designer",
+        label: String = "Get design help",
         suggested: Bool = false
     ) -> CompanionActionItem {
         if context.activeDesignRequest != nil {
@@ -218,7 +218,7 @@ extension CompanionActionProvider {
         // `== 0 ? nil` inversion avoids SwiftLint empty_count on a `> 0` form.
         guard context.tableItemCount != 0 else { return nil }
         let plural = context.tableItemCount == 1 ? "" : "s"
-        return item("heart", "Collections", "\(context.tableItemCount) saved piece\(plural)",
+        return item("heart", "Saved", "\(context.tableItemCount) saved piece\(plural)",
                     route: .table, id: "collections")
     }
 }

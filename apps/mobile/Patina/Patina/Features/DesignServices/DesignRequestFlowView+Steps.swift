@@ -141,7 +141,7 @@ extension DesignRequestFlowView {
     }
 
     private var sendButtonTitle: String {
-        syncService.isNetworkAvailable ? "Send to a designer" : "Save request"
+        syncService.isNetworkAvailable ? "Send request" : "Save request"
     }
 
     // MARK: - Step: sending

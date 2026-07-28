@@ -52,7 +52,7 @@ struct SettingsView: View {
                         settingsRow(icon: "person.circle", iconColor: PatinaColors.clay, label: "Account")
                     }
                     .buttonStyle(.plain)
-                    settingsButtonRow(icon: "qrcode.viewfinder", iconColor: PatinaColors.dustyBlue, label: "Connected Portals") {
+                    settingsButtonRow(icon: "qrcode.viewfinder", iconColor: PatinaColors.dustyBlue, label: "Sign in on the web") {
                         // Swap the active sheet from Settings → QR scanner.
                         // `.sheet(item:)` in ContentView animates the change;
                         // same pattern as AccountView's "Sign in to Web".

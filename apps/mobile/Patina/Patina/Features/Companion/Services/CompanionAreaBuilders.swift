@@ -101,13 +101,13 @@ extension CompanionActionProvider {
                 item("sparkles", "Recommendations for this room", "Pieces for this space",
                      route: .roomEmergence(roomId: roomId), id: "room_recommendations", suggested: true),
                 designerRow(roomId: roomId, context: context),
-                item("heart", "All collections", "Everything you've saved",
+                item("heart", "All saved items", "Everything you've saved",
                      route: .table, id: "collections")
             ]
         default: // .crossRoom
             return [
                 spacesOrScanRow(context: context, suggested: true),
-                item("heart", "Collections", "Everything you've saved",
+                item("heart", "Saved", "Everything you've saved",
                      route: .table, id: "collections"),
                 designerRow(roomId: nil, context: context)
             ]

@@ -61,7 +61,7 @@ public struct CompanionContext: Equatable {
     /// The homeowner's promoted (visible) design request, if any. Session-scoped
     /// and derived fresh from `DesignRequestStatusService.promotedRequest` where
     /// the Companion actions are computed — the provider stays a pure function of
-    /// `(route, context, isAuthenticated)`. When present, every "Ask a designer"
+    /// `(route, context, isAuthenticated)`. When present, every "Get design help"
     /// row renders instead as "Your design request".
     public var activeDesignRequest: ActiveDesignRequestContext?
 

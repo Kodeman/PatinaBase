@@ -120,10 +120,10 @@ public enum AppRoute: Hashable {
         case .roomSettings: return "Room Settings"
         case .crossRoom: return "All Items"
         case .manualRoomEntry: return "Room Details"
-        case .roomSavedItems: return "Saved Items"
+        case .roomSavedItems: return "Saved"
         case .emergence: return "Emergence"
         case .roomEmergence: return "Emergence"
-        case .table: return "Your Table"
+        case .table: return "Saved"
         case .pieceDetail: return "Piece Detail"
         case .scanFlow: return "Quiet Conversation"
         case .styleQuiz: return "Style Quiz"
@@ -163,12 +163,20 @@ public extension AppRoute {
     /// The PostHog screen name for this route. For `.scanFlow` this is the
     /// constant "Quiet Conversation" regardless of `reason` — the `reason`
     /// rides along as an event property instead (see
-    /// `AppCoordinator.screenProperties(for:)`). Every other route uses its
-    /// `displayName`.
+    /// `AppCoordinator.screenProperties(for:)`). `.table` / `.roomSavedItems`
+    /// pin their pre-U09 names here (RouteAnalyticsParityTests,
+    /// `stableRouteScreenNamesAreUnchanged`) — U09 renamed `displayName` to
+    /// "Saved" for the surface's UI/companion-context copy, but the PostHog
+    /// screen name stays put to avoid a silent dashboard regression. Every
+    /// other route uses its `displayName`.
     var analyticsScreenName: String {
         switch self {
         case .scanFlow:
             return ScanAnalyticsScreen.quietConversation
+        case .table:
+            return "Your Table"
+        case .roomSavedItems:
+            return "Saved Items"
         default:
             return displayName
         }

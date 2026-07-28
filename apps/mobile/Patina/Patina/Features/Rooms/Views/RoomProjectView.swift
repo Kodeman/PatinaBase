@@ -112,7 +112,7 @@ struct RoomProjectView: View {
 
     /// Budget-level nudge under the item list. Only the `.overRange` case is
     /// a real invitation into the design-request flow (Companion copy
-    /// "Work with a designer on {room} →"); `.atRange` is informational only
+    /// "Get design help with this room →"); `.atRange` is informational only
     /// ("You're at your budget for {room}") and must not read as a link —
     /// rendering it in the same interactive color/Button as `.overRange`
     /// silently looked tappable and did nothing (U05).
