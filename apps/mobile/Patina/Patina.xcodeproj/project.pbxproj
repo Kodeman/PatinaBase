@@ -8,29 +8,15 @@
 
 /* Begin PBXBuildFile section */
 		CBA446972F6C5997005441C3 /* PostHog in Frameworks */ = {isa = PBXBuildFile; productRef = CBA446962F6C5997005441C3 /* PostHog */; };
-		DE516B1700000000000000A3 /* PatinaDesignKit in Frameworks */ = {isa = PBXBuildFile; productRef = DE516B1700000000000000A2 /* PatinaDesignKit */; };
-		DE516B1700000000000000A4 /* PatinaDesignKit in Embed Frameworks */ = {isa = PBXBuildFile; productRef = DE516B1700000000000000A2 /* PatinaDesignKit */; settings = {ATTRIBUTES = (CodeSignOnCopy, RemoveHeadersOnCopy, ); }; };
 		CBB2D0C32F1D65F8007686CD /* Auth in Frameworks */ = {isa = PBXBuildFile; productRef = CBB2D0C22F1D65F8007686CD /* Auth */; };
 		CBB2D0C52F1D65F8007686CD /* Functions in Frameworks */ = {isa = PBXBuildFile; productRef = CBB2D0C42F1D65F8007686CD /* Functions */; };
 		CBB2D0C72F1D65F8007686CD /* PostgREST in Frameworks */ = {isa = PBXBuildFile; productRef = CBB2D0C62F1D65F8007686CD /* PostgREST */; };
 		CBB2D0C92F1D65F8007686CD /* Realtime in Frameworks */ = {isa = PBXBuildFile; productRef = CBB2D0C82F1D65F8007686CD /* Realtime */; };
 		CBB2D0CB2F1D65F8007686CD /* Storage in Frameworks */ = {isa = PBXBuildFile; productRef = CBB2D0CA2F1D65F8007686CD /* Storage */; };
 		CBB2D0CD2F1D65F8007686CD /* Supabase in Frameworks */ = {isa = PBXBuildFile; productRef = CBB2D0CC2F1D65F8007686CD /* Supabase */; };
+		DE516B1700000000000000A3 /* PatinaDesignKit in Frameworks */ = {isa = PBXBuildFile; productRef = DE516B1700000000000000A2 /* PatinaDesignKit */; };
+		DE516B1700000000000000A4 /* PatinaDesignKit in Embed Frameworks */ = {isa = PBXBuildFile; productRef = DE516B1700000000000000A2 /* PatinaDesignKit */; settings = {ATTRIBUTES = (CodeSignOnCopy, RemoveHeadersOnCopy, ); }; };
 /* End PBXBuildFile section */
-
-/* Begin PBXCopyFilesBuildPhase section */
-		DE516B1700000000000000A5 /* Embed Frameworks */ = {
-			isa = PBXCopyFilesBuildPhase;
-			buildActionMask = 2147483647;
-			dstPath = "";
-			dstSubfolderSpec = 10;
-			files = (
-				DE516B1700000000000000A4 /* PatinaDesignKit in Embed Frameworks */,
-			);
-			name = "Embed Frameworks";
-			runOnlyForDeploymentPostprocessing = 0;
-		};
-/* End PBXCopyFilesBuildPhase section */
 
 /* Begin PBXContainerItemProxy section */
 		CBB2D0242F1D20F8007686CD /* PBXContainerItemProxy */ = {
@@ -48,6 +34,20 @@
 			remoteInfo = Patina;
 		};
 /* End PBXContainerItemProxy section */
+
+/* Begin PBXCopyFilesBuildPhase section */
+		DE516B1700000000000000A5 /* Embed Frameworks */ = {
+			isa = PBXCopyFilesBuildPhase;
+			buildActionMask = 2147483647;
+			dstPath = "";
+			dstSubfolderSpec = 10;
+			files = (
+				DE516B1700000000000000A4 /* PatinaDesignKit in Embed Frameworks */,
+			);
+			name = "Embed Frameworks";
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXCopyFilesBuildPhase section */
 
 /* Begin PBXFileReference section */
 		CBB2D0162F1D20F7007686CD /* Patina.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = Patina.app; sourceTree = BUILT_PRODUCTS_DIR; };
@@ -521,7 +521,7 @@
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
 				INFOPLIST_KEY_UIStatusBarHidden = YES;
 				INFOPLIST_KEY_UISupportedInterfaceOrientations = UIInterfaceOrientationPortrait;
-				IPHONEOS_DEPLOYMENT_TARGET = 17.6;
+				IPHONEOS_DEPLOYMENT_TARGET = 26.5;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/Frameworks",
@@ -569,7 +569,7 @@
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
 				INFOPLIST_KEY_UIStatusBarHidden = YES;
 				INFOPLIST_KEY_UISupportedInterfaceOrientations = UIInterfaceOrientationPortrait;
-				IPHONEOS_DEPLOYMENT_TARGET = 17.6;
+				IPHONEOS_DEPLOYMENT_TARGET = 26.5;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/Frameworks",
@@ -752,10 +752,6 @@
 /* End XCRemoteSwiftPackageReference section */
 
 /* Begin XCSwiftPackageProductDependency section */
-		DE516B1700000000000000A2 /* PatinaDesignKit */ = {
-			isa = XCSwiftPackageProductDependency;
-			productName = PatinaDesignKit;
-		};
 		CBA446962F6C5997005441C3 /* PostHog */ = {
 			isa = XCSwiftPackageProductDependency;
 			package = CBA446952F6C5997005441C3 /* XCRemoteSwiftPackageReference "posthog-ios" */;
@@ -790,6 +786,10 @@
 			isa = XCSwiftPackageProductDependency;
 			package = CBB2D0C12F1D65F8007686CD /* XCRemoteSwiftPackageReference "supabase-swift" */;
 			productName = Supabase;
+		};
+		DE516B1700000000000000A2 /* PatinaDesignKit */ = {
+			isa = XCSwiftPackageProductDependency;
+			productName = PatinaDesignKit;
 		};
 /* End XCSwiftPackageProductDependency section */
 	};

@@ -17,6 +17,7 @@
 
 import SwiftUI
 import RoomPlan
+import SwiftData
 
 /// The Walk - AR room scanning with narrative overlay
 /// A meditative journey through your space

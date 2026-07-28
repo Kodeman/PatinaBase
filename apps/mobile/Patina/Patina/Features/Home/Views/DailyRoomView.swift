@@ -6,6 +6,7 @@
 //
 
 import SwiftUI
+import SwiftData
 
 struct DailyRoomView: View {
     @Environment(\.appCoordinator) private var coordinator
