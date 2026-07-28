@@ -97,14 +97,22 @@ unqualified (``PILOT_200_400_FRAME_RANGE_QUALIFIED`` is ``False``) and nothing
 here special-cases any particular count, including the 100 frames of the subject
 scan.
 
-WHAT ONLY A REAL RUN CAN ESTABLISH.  The child entry point named by
-:data:`DEFAULT_CHILD_ENTRYPOINT` is
-``refine_colmap_backend:run_refine_colmap_native``, which is frozen and refuses
-with ``REFINE_BACKEND_DISABLED``.  A host run therefore fails closed today with
-that exact code, and it will keep doing so until the child-side engine body
-lands.  Everything upstream and downstream of that call is real code exercised
-end to end here against a recorded engine; the call itself has never carried a
-COLMAP process.
+THE CHILD BODY NOW EXISTS, and :data:`DEFAULT_CHILD_ENTRYPOINT` names it.  Until
+it did, the named child was the frozen disabled backend and a host run refused
+with ``REFINE_BACKEND_DISABLED`` before COLMAP was reached at all; that entry
+point is still named, as :data:`DISABLED_CHILD_ENTRYPOINT`, and still refuses.
+The body is ``refine_colmap_engine_body:run_refine_colmap_native_engine``.
+
+WHAT ONLY A REAL RUN CAN ESTABLISH, unchanged in substance by that.  A host run
+still fails closed today -- on ``REFINE_TOOLCHAIN_UNQUALIFIED``, because the
+toolchain manifest is not installed on any host in this repository and the body
+has no unqualified branch.  Everything upstream and downstream of the child call
+is real code exercised end to end here against a recorded engine, and the body
+itself is exercised the same way in ``test_refine_colmap_engine_body``; but no
+COLMAP process has ever run, no PyCOLMAP binding call has ever executed, and no
+archive this repository has parsed came out of COLMAP.  Those three facts are
+what the box run exists to change, and nothing in a green suite substitutes for
+them.
 """
 
 from __future__ import annotations
@@ -162,6 +170,12 @@ from .refine_model_alignment import (
     read_sparse_model_snapshot,
     verify_child_alignment_proposal,
 )
+from .refine_packet_extractor import (
+    ADAPTER_LEDGER_CONTRACT,
+    ADAPTER_LEDGER_SCHEMA_VERSION,
+    SOURCE_LEDGER_CONTRACT,
+    SOURCE_LEDGER_SCHEMA_VERSION,
+)
 from .refine_native_process import (
     NATIVE_CHILD_MAX_PINNED_FILE_BYTES,
     NATIVE_CHILD_MAX_PINNED_FILES,
@@ -206,10 +220,27 @@ REFINE_LIFECYCLE_QUALIFIED = False
 #: reading the real registry rather than by reading this constant.
 REFINE_LIFECYCLE_STAGE_REGISTERED = False
 
-#: The child entry point a real run would execute.  It is the FROZEN disabled
-#: backend, so a real run refuses with ``REFINE_BACKEND_DISABLED`` until a child
-#: engine body lands.  Named here, and only here, so the refusal is legible.
+#: The child entry point a real run executes.  It is now the composed engine
+#: body (``refine_colmap_engine_body``), which runs the I87 primary plan through
+#: the qualified toolchain.
+#:
+#: IT IS A STRING, NOT AN IMPORT, and deliberately so.  The parent must not
+#: import the child body: the body is what the spawned child resolves by name,
+#: it reaches for a PyCOLMAP wheel that exists only on the GPU box, and pulling
+#: it into this module's import graph would put a module that re-materializes
+#: the carried deadline onto the parent's composed path.
+#: ``test_the_lifecycle_and_the_engine_body_agree_on_the_entrypoint`` in
+#: ``test_refine_colmap_engine_body`` proves the two strings are the same and
+#: that this one resolves to the decorated callable.
 DEFAULT_CHILD_ENTRYPOINT = (
+    "patina_scan_worker.refine_colmap_engine_body:run_refine_colmap_native_engine"
+)
+
+#: The entry point the composition named BEFORE the body existed: the frozen
+#: disabled backend, which refuses with ``REFINE_BACKEND_DISABLED``.  Kept named
+#: because it must keep refusing -- it is the fail-closed floor under the body,
+#: and ``refine_colmap_backend.py`` is byte-frozen.
+DISABLED_CHILD_ENTRYPOINT = (
     "patina_scan_worker.refine_colmap_backend:run_refine_colmap_native"
 )
 
@@ -1143,17 +1174,81 @@ def build_colmap_packet(
         }
     )
 
-    # ONE ordered member list: the engine request first, then every frame in
-    # packet order.  The plan groups INDICES into this list, so the writer and
-    # the manifest can never disagree about which chunk a member landed in.
-    member_names = ["engine-request-v1.json"] + [
-        f"images/{frame.engine_name}" for frame in frames
-    ]
-    member_sizes = [len(engine_payload)] + [frame.engine_size_bytes for frame in frames]
-    member_digests = [hashlib.sha256(engine_payload).hexdigest()] + [
-        frame.engine_sha256 for frame in frames
-    ]
-    member_roles = ["engine-request"] + ["engine-image"] * len(frames)
+    # BOTH LEDGERS ARE EMITTED, and they are not optional in practice.  The
+    # packet contract makes ``source-ledger``/``adapter-ledger`` optional
+    # members, but ``refine_evidence_builder`` REQUIRES the fields they carry --
+    # every frame's pre-raster archive key, member, digest and size, plus the
+    # raster adapter's identity -- and nothing else in the packet has them.  A
+    # packet without them cannot produce evidence, so the child refuses one;
+    # emitting them here is what makes the composed run possible at all.
+    materializer_ids = {frame.materializer_id for frame in frames}
+    if len(materializer_ids) != 1:
+        raise _fail("packet frames disagree on their raster materializer identity")
+    source_payload = _canonical_json_bytes(
+        {
+            "schemaVersion": SOURCE_LEDGER_SCHEMA_VERSION,
+            "contract": SOURCE_LEDGER_CONTRACT,
+            "runId": run_id,
+            "frames": [
+                {
+                    "ordinal": index,
+                    "sourceArchiveKey": frame.source_archive_key,
+                    "sourceMember": frame.source_member,
+                    "sourceImageName": frame.source_member.rsplit("/", 1)[-1],
+                    "sourceSha256": frame.source_sha256,
+                    "sourceSizeBytes": frame.source_size_bytes,
+                }
+                for index, frame in enumerate(frames)
+            ],
+        }
+    )
+    adapter_payload = _canonical_json_bytes(
+        {
+            "schemaVersion": ADAPTER_LEDGER_SCHEMA_VERSION,
+            "contract": ADAPTER_LEDGER_CONTRACT,
+            "runId": run_id,
+            "materializerId": next(iter(materializer_ids)),
+        }
+    )
+
+    # ONE ordered member list, and its order is not free.  The manifest requires
+    # members sorted by ``(chunkToken, archiveMember)``, and the writer appends
+    # in this list's order, so the two agree only if each chunk's slice is
+    # already sorted by name.  ``adapter-ledger-v1.json`` therefore leads (``a``
+    # < ``e`` < ``i``) and ``source-ledger-v1.json`` trails (``s`` > ``i``);
+    # putting either anywhere else makes the frozen child refuse the manifest
+    # with "members must use canonical chunk/member order".
+    member_names = (
+        ["adapter-ledger-v1.json", "engine-request-v1.json"]
+        + [f"images/{frame.engine_name}" for frame in frames]
+        + ["source-ledger-v1.json"]
+    )
+    member_sizes = (
+        [len(adapter_payload), len(engine_payload)]
+        + [frame.engine_size_bytes for frame in frames]
+        + [len(source_payload)]
+    )
+    member_digests = (
+        [
+            hashlib.sha256(adapter_payload).hexdigest(),
+            hashlib.sha256(engine_payload).hexdigest(),
+        ]
+        + [frame.engine_sha256 for frame in frames]
+        + [hashlib.sha256(source_payload).hexdigest()]
+    )
+    member_roles = (
+        ["adapter-ledger", "engine-request"]
+        + ["engine-image"] * len(frames)
+        + ["source-ledger"]
+    )
+    #: Which member indices carry bytes this function holds rather than a frame
+    #: descriptor.  The writer consults this instead of testing for index 0,
+    #: which was only ever correct while the request was the first member.
+    inline_payloads = {
+        0: adapter_payload,
+        1: engine_payload,
+        len(member_names) - 1: source_payload,
+    }
     plan = plan_packet_chunks(member_sizes, chunk_max_bytes=chunk_max_bytes)
 
     destination.mkdir(mode=0o700, parents=True, exist_ok=False)
@@ -1178,10 +1273,11 @@ def build_colmap_packet(
                     name = member_names[member_index]
                     size = member_sizes[member_index]
                     chunk.write(_ustar_header(name, size))
-                    if member_index == 0:
-                        chunk.write(engine_payload)
+                    inline = inline_payloads.get(member_index)
+                    if inline is not None:
+                        chunk.write(inline)
                     else:
-                        frame = frames[member_index - 1]
+                        frame = frames[member_index - 2]
                         with materialization.open_verified_file(
                             frame.engine_relative_path,
                             deadline=deadline,
@@ -1253,10 +1349,12 @@ def build_colmap_packet(
         chunk_sha256s=tuple(chunk_digests),
         run_id=run_id,
         # Indexed off the ordered member list, not off ``members[0]``: the
-        # latter is only the request while the planner happens to put member 0
-        # in chunk 000 first, which is a property of the packing rather than a
-        # promise it makes.
-        engine_request_sha256=member_digests[0],
+        # latter is only the request while the planner happens to put that
+        # member in chunk 000 first, which is a property of the packing rather
+        # than a promise it makes.  Index 1 is the request because index 0 is
+        # now the adapter ledger; the constant below is asserted against
+        # ``member_names`` so the two cannot drift.
+        engine_request_sha256=member_digests[member_names.index("engine-request-v1.json")],
         child_request={
             "schemaVersion": PACKET_SCHEMA_VERSION,
             "contract": PACKET_CONTRACT,

@@ -36,6 +36,7 @@ from __future__ import annotations
 
 import ast
 import errno
+import importlib
 import hashlib
 import io
 import json
@@ -891,18 +892,40 @@ def test_the_lifecycle_has_no_console_script_entry_point():
     assert all("refine" not in target for target in scripts.values())
 
 
-def test_the_declared_child_entrypoint_refuses_today():
-    """The named child is the FROZEN disabled backend, and it says so."""
+def test_the_previously_declared_child_entrypoint_still_refuses():
+    """The frozen disabled backend is still named, and still refuses.
+
+    It is no longer the DECLARED entry point -- the engine body is -- but it is
+    the fail-closed floor beneath it and ``refine_colmap_backend.py`` is
+    byte-frozen, so its refusal is pinned here rather than allowed to lapse when
+    the composition stopped pointing at it.
+    """
 
     from patina_scan_worker.refine_colmap_backend import run_refine_colmap_native
+    from patina_scan_worker.refine_lifecycle import DISABLED_CHILD_ENTRYPOINT
 
-    assert DEFAULT_CHILD_ENTRYPOINT == (
+    assert DISABLED_CHILD_ENTRYPOINT == (
         "patina_scan_worker.refine_colmap_backend:run_refine_colmap_native"
     )
+    assert DEFAULT_CHILD_ENTRYPOINT != DISABLED_CHILD_ENTRYPOINT
     with pytest.raises(AdapterError) as raised:
         run_refine_colmap_native({}, None)
     assert raised.value.code == "REFINE_BACKEND_DISABLED"
     assert "disabled and uncomposed" in str(raised.value)
+
+
+def test_the_declared_child_entrypoint_is_the_composed_engine_body():
+    """The named child is the body, and it is a real native entry point."""
+
+    module_name, _, attribute = DEFAULT_CHILD_ENTRYPOINT.partition(":")
+    assert module_name == "patina_scan_worker.refine_colmap_engine_body"
+    assert attribute == "run_refine_colmap_native_engine"
+    module = importlib.import_module(module_name)
+    target = getattr(module, attribute)
+    assert callable(target)
+    # The boundary refuses any target that is not marked; assert the marker the
+    # decorator sets rather than trusting that it was applied.
+    assert getattr(target, "__patina_refine_in_process_only__", False) is True
 
 
 # ===========================================================================
@@ -1567,9 +1590,45 @@ def test_the_packet_members_carry_the_materializers_own_digests(tmp_path):
             with tarfile.open(chunk_path, mode="r:") as archive:
                 names.extend(member.name for member in archive.getmembers())
         assert sorted(names) == sorted(
-            ["engine-request-v1.json"]
+            [
+                "adapter-ledger-v1.json",
+                "engine-request-v1.json",
+                "source-ledger-v1.json",
+            ]
             + [f"images/{frame.engine_name}" for frame in materialization.frames]
         )
+        # Both ledgers carry the roles and the exact packet-root paths the
+        # extractor pins, and the source ledger really covers every frame.
+        assert by_path["adapter-ledger-v1.json"]["role"] == "adapter-ledger"
+        assert by_path["source-ledger-v1.json"]["role"] == "source-ledger"
+        source_document = None
+        adapter_document = None
+        for chunk_path in packet.chunk_paths:
+            with tarfile.open(chunk_path, mode="r:") as archive:
+                for member in archive.getmembers():
+                    if member.name == "source-ledger-v1.json":
+                        source_document = json.loads(
+                            archive.extractfile(member).read()
+                        )
+                    if member.name == "adapter-ledger-v1.json":
+                        adapter_document = json.loads(
+                            archive.extractfile(member).read()
+                        )
+        assert adapter_document == {
+            "schemaVersion": 1,
+            "contract": "patina-refine-colmap-adapter-ledger-v1",
+            "runId": "a" * 64,
+            "materializerId": materialization.frames[0].materializer_id,
+        }
+        assert source_document["contract"] == "patina-refine-colmap-source-ledger-v1"
+        assert [row["ordinal"] for row in source_document["frames"]] == list(
+            range(len(materialization.frames))
+        )
+        for row, frame in zip(source_document["frames"], materialization.frames):
+            assert row["sourceArchiveKey"] == frame.source_archive_key
+            assert row["sourceMember"] == frame.source_member
+            assert row["sourceSha256"] == frame.source_sha256
+            assert row["sourceSizeBytes"] == frame.source_size_bytes
     finally:
         materialization.cleanup()
 
@@ -2844,9 +2903,11 @@ def test_the_packet_writer_really_produces_the_chunks_the_plan_asked_for(tmp_pat
         assert placed == {
             row["relativePath"]: row["chunkToken"] for row in document["members"]
         }
-        assert set(placed) == {"engine-request-v1.json"} | {
-            f"images/{frame.engine_name}" for frame in materialization.frames
-        }
+        assert set(placed) == {
+            "adapter-ledger-v1.json",
+            "engine-request-v1.json",
+            "source-ledger-v1.json",
+        } | {f"images/{frame.engine_name}" for frame in materialization.frames}
     finally:
         materialization.cleanup()
 
@@ -3426,14 +3487,18 @@ def test_the_planner_predicts_the_bytes_the_writer_actually_writes(tmp_path, cei
             chunk_max_bytes=ceiling,
         )
         document = json.loads(packet.manifest_path.read_bytes())
-        request_row = next(
-            row
-            for row in document["members"]
-            if row["relativePath"] == "engine-request-v1.json"
-        )
+        by_path = {row["relativePath"]: row for row in document["members"]}
+        # The ordered member list the writer walks: adapter ledger, engine
+        # request, every frame, source ledger.  Reading the two ledger sizes off
+        # the manifest rather than recomputing them keeps this a comparison of
+        # the PLANNER against the BYTES rather than of two copies of the writer.
         plan = plan_packet_chunks(
-            [request_row["sizeBytes"]]
-            + [frame.engine_size_bytes for frame in materialization.frames],
+            [
+                by_path["adapter-ledger-v1.json"]["sizeBytes"],
+                by_path["engine-request-v1.json"]["sizeBytes"],
+            ]
+            + [frame.engine_size_bytes for frame in materialization.frames]
+            + [by_path["source-ledger-v1.json"]["sizeBytes"]],
             chunk_max_bytes=ceiling,
         )
         actual = [path.stat().st_size for path in packet.chunk_paths]
@@ -3441,5 +3506,98 @@ def test_the_planner_predicts_the_bytes_the_writer_actually_writes(tmp_path, cei
         assert plan.total_chunk_bytes == sum(actual)
         assert len(plan.groups) == len(packet.chunk_paths)
         assert max(actual) <= ceiling
+    finally:
+        materialization.cleanup()
+
+
+def test_the_manifest_names_the_engine_request_digest_not_the_first_member(tmp_path):
+    """``engineRequestSha256`` must be the ENGINE REQUEST's digest.
+
+    Adding the adapter ledger made the engine request member index 1, so an
+    index-0 read now returns the ADAPTER LEDGER's digest instead -- silently,
+    because both are 64 hex characters and both are real member digests.  The
+    manifest field is therefore compared against a digest recomputed from the
+    engine-request bytes pulled back out of the packet, and against the adapter
+    ledger's digest with ``!=``, so an index-0 regression reddens here.
+    """
+
+    bundle_root = tmp_path / "bundle"
+    bundle_root.mkdir()
+    scratch = tmp_path / "scratch"
+    scratch.mkdir(mode=0o700)
+    bundle = _Bundle(bundle_root)
+    materialization = _materialize(bundle, scratch, _deadline())
+    try:
+        packet = build_colmap_packet(
+            materialization,
+            destination=scratch / "packet",
+            gpu_index="0",
+            run_id="e" * 64,
+            deadline=_deadline(),
+        )
+        payloads = {}
+        for chunk_path in packet.chunk_paths:
+            with tarfile.open(chunk_path, mode="r:") as archive:
+                for member in archive.getmembers():
+                    if member.name in (
+                        "engine-request-v1.json",
+                        "adapter-ledger-v1.json",
+                    ):
+                        payloads[member.name] = archive.extractfile(member).read()
+        assert set(payloads) == {"engine-request-v1.json", "adapter-ledger-v1.json"}
+
+        engine_digest = _sha256(payloads["engine-request-v1.json"])
+        adapter_digest = _sha256(payloads["adapter-ledger-v1.json"])
+        assert engine_digest != adapter_digest, "the two members must differ at all"
+        assert packet.engine_request_sha256 == engine_digest
+        assert packet.engine_request_sha256 != adapter_digest
+
+        # And the ordered member list really does put the adapter ledger first,
+        # which is what makes an index-0 read wrong rather than merely fragile.
+        document = json.loads(packet.manifest_path.read_bytes())
+        first = min(
+            (row for row in document["members"]),
+            key=lambda row: (row["chunkToken"], row["archiveMember"]),
+        )
+        assert first["archiveMember"] == "adapter-ledger-v1.json"
+        assert first["sha256"] == adapter_digest
+    finally:
+        materialization.cleanup()
+
+
+def test_frames_that_disagree_on_their_materializer_identity_are_refused(tmp_path):
+    """One packet, one raster adapter.
+
+    The adapter ledger carries a SINGLE ``materializerId`` for the whole packet,
+    so two frames rastered by different adapters cannot be represented; the
+    builder refuses instead of silently publishing one of the two identities.
+    Constructed by rastering a real bundle and then re-declaring one frame's
+    materializer, which is the shape a mixed-adapter re-run would produce.
+    """
+
+    from dataclasses import replace
+
+    bundle_root = tmp_path / "bundle"
+    bundle_root.mkdir()
+    scratch = tmp_path / "scratch"
+    scratch.mkdir(mode=0o700)
+    bundle = _Bundle(bundle_root)
+    materialization = _materialize(bundle, scratch, _deadline())
+    try:
+        frames = list(materialization.frames)
+        assert len({frame.materializer_id for frame in frames}) == 1
+        frames[-1] = replace(frames[-1], materializer_id="other-raster-adapter-v9")
+        mixed = replace(materialization, frames=tuple(frames))
+        with pytest.raises(AdapterError) as raised:
+            build_colmap_packet(
+                mixed,
+                destination=scratch / "packet-mixed",
+                gpu_index="0",
+                run_id="f" * 64,
+                deadline=_deadline(),
+            )
+        assert str(raised.value) == (
+            "packet frames disagree on their raster materializer identity"
+        )
     finally:
         materialization.cleanup()

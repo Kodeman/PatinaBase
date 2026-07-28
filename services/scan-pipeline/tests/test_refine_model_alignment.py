@@ -420,7 +420,29 @@ def test_item_six_implements_the_capability_and_claims_nothing_more():
 #: importer would mean a disabled stage had quietly acquired one, which is the
 #: drift this program keeps catching.  An unexpected edge reddens because the
 #: comparison is EQUALITY against this tuple, not membership in it.
-EXPECTED_IN_PACKAGE_IMPORTERS = ("refine_lifecycle.py",)
+#:
+#: THE SECOND EDGE IS THE CHILD BODY, and it is here deliberately rather than by
+#: accident.  ``refine_colmap_engine_body`` runs inside the spawned child and
+#: imports the PARSER half of this module -- the two reads, the snapshot type
+#: and the two member-order constants, enumerated literally in
+#: :data:`EXPECTED_CHILD_BODY_IMPORTS`.  It uses them to parse ITS OWN
+#: just-written archives, so every scalar the child declares -- both similarity
+#: solves and both pose digests -- is a statement about the bytes the parent is
+#: about to receive rather than about an in-memory reconstruction.  The parent
+#: then runs the SAME parser over the SAME bytes in
+#: ``verify_child_alignment_proposal``.
+#: A child that derived its numbers from a different parser could disagree with
+#: the parent for reasons that are not the child's fault, and the disagreement
+#: would be indistinguishable from a real refusal.
+#:
+#: What the child does NOT import is the verifier: ``verify_child_alignment_
+#: proposal`` is the parent's, and ``test_the_child_body_imports_the_parser_and_
+#: not_the_verifier`` below asserts that exact split, so this edge cannot widen
+#: into the child grading its own proposal.
+EXPECTED_IN_PACKAGE_IMPORTERS = (
+    "refine_colmap_engine_body.py",
+    "refine_lifecycle.py",
+)
 
 
 def test_exactly_the_composed_lifecycle_imports_this_module():
@@ -456,6 +478,65 @@ def test_exactly_the_composed_lifecycle_imports_this_module():
     # file -- a plausible way to smuggle a second call site past a set-based
     # assertion -- is also visible here.
     assert importers == list(EXPECTED_IN_PACKAGE_IMPORTERS)
+
+
+#: Exactly what the child body may take from this module, written out literally
+#: so that deleting a name from the body's import list reddens rather than
+#: silently shrinking the comparison.  Every entry is a PARSER concern.
+EXPECTED_CHILD_BODY_IMPORTS = (
+    "SPARSE_MODEL_CANONICAL_MEMBER_ORDER",
+    "SPARSE_MODEL_REQUIRED_MEMBERS",
+    "SparseModelSnapshot",
+    "canonical_pose_digest",
+    "read_sparse_model_snapshot",
+)
+
+#: The verifier half.  The child grading its own alignment proposal is the exact
+#: failure the parent-side recomputation exists to prevent, so these names must
+#: not appear in the child body at all -- not as an import, and not as an
+#: attribute reached through a module object.
+FORBIDDEN_CHILD_BODY_NAMES = (
+    "verify_child_alignment_proposal",
+    "ChildAlignmentProposal",
+)
+
+
+def test_the_child_body_imports_the_parser_and_not_the_verifier():
+    """The second importer's edge is narrow, and narrow in the right direction.
+
+    ``refine_colmap_engine_body`` is allowed to parse the archives it just wrote
+    with the parent's parser -- that is what makes the child's declared digests
+    statements about the exported bytes.  It is NOT allowed to reach the
+    verifier: the parent recomputes the alignment precisely so that the child's
+    proposal is graded by something the child did not run.
+    """
+
+    package = pathlib.Path(alignment.__file__).resolve().parent
+    body = package / "refine_colmap_engine_body.py"
+    assert body.is_file(), f"child body missing: {body}"
+    source = body.read_text()
+    tree = ast.parse(source)
+
+    imported: list[str] = []
+    for node in ast.walk(tree):
+        if not isinstance(node, ast.ImportFrom):
+            continue
+        if node.module is None or "refine_model_alignment" not in node.module:
+            continue
+        imported.extend(name.name for name in node.names)
+    assert tuple(sorted(imported)) == EXPECTED_CHILD_BODY_IMPORTS
+    # One name per import, so a duplicate alias cannot hide inside the sort.
+    assert len(imported) == len(EXPECTED_CHILD_BODY_IMPORTS)
+
+    # The forbidden names must be absent as identifiers AND as attributes, so
+    # `alignment.verify_child_alignment_proposal(...)` is caught too.
+    reached: list[str] = []
+    for node in ast.walk(tree):
+        if isinstance(node, ast.Name) and node.id in FORBIDDEN_CHILD_BODY_NAMES:
+            reached.append(node.id)
+        elif isinstance(node, ast.Attribute) and node.attr in FORBIDDEN_CHILD_BODY_NAMES:
+            reached.append(node.attr)
+    assert reached == []
 
 
 def test_the_one_importer_is_not_reachable_from_the_worker_dispatch_table():
