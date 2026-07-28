@@ -41,6 +41,11 @@ Matrix3 = tuple[Vector3, Vector3, Vector3]
 ADAPTER_SCHEMA_VERSION = 2
 COLMAP_TARGET_VERSION = "4.0.2"
 ENGINE_QUALIFICATION_STATUS = "unvalidated-pending-field-and-box-fixture"
+#: The DEFAULT engine budget for a refine stage, in seconds.  It is a default,
+#: not a ceiling: :meth:`RefineDeadline.start` accepts ``engine_budget_s`` and a
+#: caller whose whole job is the reconstruction passes its own lease instead.
+#: Leaving it as an unconditional clamp is what capped the composed lifecycle at
+#: four minutes no matter what lease it claimed.
 REFINE_STAGE_ENGINE_BUDGET_S = 4 * 60
 LEASE_COMPLETION_RESERVE_S = 60
 COLMAP_LOG_TAIL_BYTES = 64 * 1024
@@ -139,12 +144,31 @@ class RefineDeadline:
         *,
         lease_expires_at_monotonic_s: float,
         now_monotonic_s: float | None = None,
+        engine_budget_s: float = REFINE_STAGE_ENGINE_BUDGET_S,
     ) -> "RefineDeadline":
+        """Build the ONE deadline: the earlier of the budget and the lease.
+
+        ``engine_budget_s`` defaults to :data:`REFINE_STAGE_ENGINE_BUDGET_S`, so
+        every existing caller is unchanged.  It is a PARAMETER rather than a
+        constant because the budget is a stage policy, not a property of the
+        clock: a caller whose entire task is one reconstruction passes its own
+        lease and is then governed by the lease alone.  The completion reserve is
+        subtracted on BOTH paths, so no value of ``engine_budget_s`` can produce
+        a deadline that outlives the lease.
+        """
+
         now = time.monotonic() if now_monotonic_s is None else now_monotonic_s
         if not math.isfinite(now) or not math.isfinite(lease_expires_at_monotonic_s):
             raise AdapterError("refine deadline needs finite monotonic timestamps")
+        if (
+            isinstance(engine_budget_s, bool)
+            or not isinstance(engine_budget_s, (int, float))
+            or not math.isfinite(engine_budget_s)
+            or engine_budget_s <= 0
+        ):
+            raise AdapterError("refine deadline needs a positive finite engine budget")
         deadline = min(
-            now + REFINE_STAGE_ENGINE_BUDGET_S,
+            now + engine_budget_s,
             lease_expires_at_monotonic_s - LEASE_COMPLETION_RESERVE_S,
         )
         if deadline <= now:

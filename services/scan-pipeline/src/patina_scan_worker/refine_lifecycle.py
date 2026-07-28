@@ -44,15 +44,52 @@ WHAT REMAINS UNANCHORED even so, stated here rather than in a report:
   * Trajectory shape change stays ``certification_role='diagnostic-only'``.  It
     is carried into the report and is never an accuracy claim.
 
-UNCHANGED EVIDENCE IS A FAILURE, and it is not this module that enforces it:
-``refine_runner`` calls ``evaluate_refinement_evidence``, which returns
-``REFINE_NO_MEASURABLE_IMPROVEMENT`` when the best relative improvement is below
-:data:`~patina_scan_worker.refine_adapter.MIN_REFINEMENT_RELATIVE_IMPROVEMENT`,
-and the runner turns that into a fatal ``RefineRunError``.  This module adds one
-thing on top: :func:`_require_evidence_moved` refuses a report whose before and
-after scalars are bit-identical, because such a report is far more likely to be a
-plumbing mistake -- a snapshot taken twice -- than a real run that improved by
-exactly nothing, and the runner's threshold check cannot tell those apart.
+UNCHANGED EVIDENCE IS A FAILURE.  Three separate clauses now carry that rule,
+because the first two are about the child's NUMBERS and neither of them looks at
+the poses actually published:
+
+  * ``refine_runner`` calls ``evaluate_refinement_evidence``, which returns
+    ``REFINE_NO_MEASURABLE_IMPROVEMENT`` when the best relative improvement is
+    below
+    :data:`~patina_scan_worker.refine_adapter.MIN_REFINEMENT_RELATIVE_IMPROVEMENT`;
+  * :func:`_require_evidence_moved` refuses a report whose before and after
+    scalars are bit-identical, which is the signature of one snapshot measured
+    twice rather than of a run that improved by exactly nothing;
+  * :func:`require_refined_poses_moved` refuses the POSES.  Until it existed the
+    rule was documentation: substituting the seed snapshot for the aligned one
+    at the publish seam produced an identity refinement -- no refinement at all
+    -- and left the entire suite green.  It compares what is about to be
+    published against ``request.frames``, both of them parent-held, at the same
+    tolerance :func:`anchor_seed_snapshot_to_request` uses to call two poses
+    identical.
+
+WHICH ARCHIVE GETS PUBLISHED is now proved rather than intended.
+:class:`NativeEngineInvocation` refuses at construction unless the snapshot it
+carries hashes to the ``aligned_pose_digest_sha256`` the parent computed while
+verifying the alignment, so the model published and the model verified cannot
+drift apart.  That check belongs HERE and not in ``refine_model_alignment``:
+item 6 is handed three archives and returns before anything is published, so it
+can neither see the substitution nor measure against ``request.frames``, which
+it has never been given.  What it CAN see -- that a model refined nothing in the
+gauge-invariant sense -- it does not refuse: three identical models and an
+identity proposal satisfy all seventeen of its clauses.  Its ``fit_rmse_m`` is
+bounded above and has no floor, and giving it one needs a fixture whose engine
+models bundle adjustment rather than a pure similarity.  Recorded in
+:func:`require_refined_poses_moved`, not fixed here.
+
+THE PACKET IS CHUNKED, and it has to be.  The subject scan's 100 keyframes are
+uniformly 1440x1920, so one archive of them is 0.77 GiB against a 128 MiB
+per-pinned-file ceiling the frozen child enforces itself -- 6.2x over, refused
+before a pixel was read.  :func:`plan_packet_chunks` packs members under that
+ceiling: 7 chunks and 8 pinned files for 100 frames, 25 and 26 at the 400-frame
+contract maximum, inside 64 files and 4 GiB either way.
+
+ONE DEADLINE, AND THE LEASE GOVERNS IT.  ``RefineDeadline.start`` applied its
+240 s stage budget as an unconditional ``min``, so every composed run was capped
+at four minutes however long a lease it claimed, and a 100-frame reconstruction
+cannot finish in four.  The budget is now a parameter defaulting to the same
+240 s for every existing caller, and :func:`lease_deadline` passes the lease
+itself, so the only term that binds is the lease less the completion reserve.
 
 THE FRAME BAND.  ``COLMAP_PACKET_MIN_ENGINE_IMAGES``/``MAX`` (3..400) is the
 contract this module honours.  The 200-400 operational pilot band remains
@@ -90,7 +127,6 @@ from typing import Any, Protocol
 from .keys import OwnershipError, assert_owner_prefix
 from .refine_adapter import (
     COLMAP_TARGET_VERSION,
-    LEASE_COMPLETION_RESERVE_S,
     AdapterError,
     ColmapPose,
     NormalizedFrame,
@@ -119,12 +155,17 @@ from .refine_materializer import (
     RefineSourceArtifact,
 )
 from .refine_model_alignment import (
+    ParentAlignmentVerification,
     ProposedAlignment,
     SparseModelSnapshot,
+    canonical_pose_digest,
     read_sparse_model_snapshot,
     verify_child_alignment_proposal,
 )
 from .refine_native_process import (
+    NATIVE_CHILD_MAX_PINNED_FILE_BYTES,
+    NATIVE_CHILD_MAX_PINNED_FILES,
+    NATIVE_CHILD_MAX_PINNED_TOTAL_BYTES,
     NATIVE_ENGINE_OUTPUT_TOKENS,
     NATIVE_ENGINE_PERSISTENT_OUTPUT_TOKENS,
     NativeEngineOutput,
@@ -186,6 +227,10 @@ ENGINE_REPORT_SCHEMA_VERSION = 1
 LIFECYCLE_INVALID_CODE = "REFINE_LIFECYCLE_INVALID"
 LIFECYCLE_UNANCHORED_CODE = "REFINE_SEED_UNANCHORED"
 LIFECYCLE_TOOLCHAIN_MISSING_CODE = "REFINE_TOOLCHAIN_UNQUALIFIED"
+#: The run published the poses it was given.  See :func:`require_refined_poses_moved`.
+LIFECYCLE_UNCHANGED_CODE = "REFINE_UNCHANGED_EVIDENCE"
+#: The snapshot about to be published is not the one the parent verified.
+LIFECYCLE_UNVERIFIED_PUBLICATION_CODE = "REFINE_PUBLISHED_MODEL_UNVERIFIED"
 
 # ---------------------------------------------------------------------------
 # The anchor tolerances
@@ -208,9 +253,94 @@ SEED_ANCHOR_MAX_CENTER_DRIFT_M = 1.0e-6
 #: 0.2 arcseconds.
 SEED_ANCHOR_MAX_ROTATION_DRIFT_RAD = 1.0e-6
 
+# ---------------------------------------------------------------------------
+# The unchanged-evidence floor
+# ---------------------------------------------------------------------------
+#: How far the poses the parent is ABOUT TO PUBLISH must sit from the poses the
+#: parent SUBMITTED before the run counts as having refined anything, in metres.
+#:
+#: THE THRESHOLD IS NOT A NEW NUMBER, and that is the entire justification.  It
+#: is :data:`SEED_ANCHOR_MAX_CENTER_DRIFT_M` -- the tolerance within which this
+#: module already declares two poses to be THE SAME POSE.  The anchor says: a
+#: seed centre within 1e-6 m of the submitted centre IS the submitted centre,
+#: unmoved.  The floor says the contrapositive about the same two quantities
+#: measured by the same helper: a PUBLISHED centre within 1e-6 m of the
+#: submitted centre is also the submitted centre, and publishing it is
+#: publishing the input.  Choosing any other number would make this module call
+#: one displacement "identical" in :func:`anchor_seed_snapshot_to_request` and
+#: "changed" in :func:`require_refined_poses_moved`, which is incoherent.
+#: ``test_the_movement_floor_is_the_anchor_tolerance_itself`` is what makes an
+#: edit to either constant contradict this note rather than silently outdate it.
+#:
+#: WHY THE ANCHOR TOLERANCE IS ITSELF FAR BELOW ANY REAL REFINEMENT, so that the
+#: floor cannot refuse a genuine run.  REASONING, not a measurement -- no archive
+#: this repository has parsed came out of COLMAP.  The keyframes are 1440x1920;
+#: a camera a metre from structure resolves roughly 0.7 mm per pixel, so a
+#: 1e-6 m camera displacement is about 1.4e-3 pixels.  Bundle adjustment does not
+#: converge to a change that small, and
+#: ``MIN_REFINEMENT_RELATIVE_IMPROVEMENT`` could not be met by one.  The floor
+#: therefore sits between float64 round-trip noise (order 1e-14 m, derived above)
+#: and the smallest displacement any real reconstruction could produce.
+REFINED_POSE_MIN_CENTER_MOVEMENT_M = SEED_ANCHOR_MAX_CENTER_DRIFT_M
+
+#: The orientation counterpart, in radians, on exactly the same argument: it is
+#: :data:`SEED_ANCHOR_MAX_ROTATION_DRIFT_RAD`, the angle within which this module
+#: already declares two orientations to be the same orientation.
+REFINED_POSE_MIN_ROTATION_MOVEMENT_RAD = SEED_ANCHOR_MAX_ROTATION_DRIFT_RAD
+
 #: Re-check the carried deadline every this many items in the parent's own
 #: per-frame loops.  Extracted rather than inlined so the STRIDE is falsifiable.
 DEADLINE_CHECK_INTERVAL = 32
+
+# ---------------------------------------------------------------------------
+# The one deadline
+# ---------------------------------------------------------------------------
+def lease_deadline(
+    lease_seconds: float,
+    *,
+    now_monotonic_s: float | None = None,
+) -> RefineDeadline:
+    """Build the SINGLE carried deadline this lifecycle threads everywhere.
+
+    ``--lease-seconds`` is the claimed lease, and it GOVERNS.  The engine budget
+    passed to :meth:`RefineDeadline.start` is the whole lease, so the only term
+    that can bind is ``lease - refine_adapter.LEASE_COMPLETION_RESERVE_S`` -- the reserve that
+    keeps the completion path (publication, receipt, cleanup) inside the lease.
+
+    WHAT THIS FIXES.  ``RefineDeadline.start``'s default budget is 240 s, and it
+    was applied as an unconditional ``min``, so every composed run was capped at
+    four minutes however long a lease it claimed.  A 100-frame COLMAP
+    reconstruction does not finish in four minutes, so the lifecycle could only
+    ever have timed out.  The cap is now a default the caller replaces, not a
+    ceiling the caller cannot see.
+
+    There is exactly ONE call to this function in the module, in :func:`main`,
+    and no other code path in the composed lifecycle constructs a deadline;
+    ``test_no_composed_module_acquires_a_second_deadline`` reads the source of
+    every module on the path and proves it.
+    """
+
+    if (
+        isinstance(lease_seconds, bool)
+        or not isinstance(lease_seconds, (int, float))
+        or not math.isfinite(lease_seconds)
+    ):
+        raise _fail("lifecycle lease seconds must be a finite number")
+    now = time.monotonic() if now_monotonic_s is None else now_monotonic_s
+    return RefineDeadline.start(
+        lease_expires_at_monotonic_s=now + float(lease_seconds),
+        now_monotonic_s=now,
+        engine_budget_s=float(lease_seconds),
+    )
+
+
+# ---------------------------------------------------------------------------
+# The native boundary's ceilings, re-exported so the packet builder honours the
+# SAME numbers the frozen child enforces rather than a second copy of them.
+# ---------------------------------------------------------------------------
+PACKET_CHUNK_MAX_BYTES = NATIVE_CHILD_MAX_PINNED_FILE_BYTES
+PACKET_MAX_PINNED_FILES = NATIVE_CHILD_MAX_PINNED_FILES
+PACKET_MAX_AGGREGATE_BYTES = NATIVE_CHILD_MAX_PINNED_TOTAL_BYTES
 
 _SHA256_RE = re.compile(r"^[0-9a-f]{64}$")
 _ENGINE_NAME_RE = re.compile(r"^frame_[0-9]{6}\.ppm$")
@@ -576,6 +706,59 @@ def anchor_seed_snapshot_to_request(
             raise _fail(f"seed anchoring {label} tolerance must be finite positive")
     deadline.remaining_seconds()
 
+    separation = _separation_from_submitted_frames(
+        seed,
+        frames,
+        deadline=deadline,
+        subject="seed anchoring",
+        snapshot_label="seed snapshot",
+        code=LIFECYCLE_UNANCHORED_CODE,
+    )
+    if separation.max_center_m > float(max_center_drift_m):
+        raise _fail(
+            "seed snapshot camera centres drifted from the submitted poses",
+            LIFECYCLE_UNANCHORED_CODE,
+        )
+    if separation.max_rotation_rad > float(max_rotation_drift_rad):
+        raise _fail(
+            "seed snapshot orientations drifted from the submitted poses",
+            LIFECYCLE_UNANCHORED_CODE,
+        )
+    deadline.remaining_seconds()
+    return SeedAnchorVerification(
+        correspondences=separation.correspondences,
+        max_center_drift_m=separation.max_center_m,
+        max_rotation_drift_rad=separation.max_rotation_rad,
+    )
+
+
+@dataclass(frozen=True)
+class _FrameSeparation:
+    """Worst per-pose gap between a parsed snapshot and the submitted frames."""
+
+    correspondences: int
+    max_center_m: float
+    max_rotation_rad: float
+
+
+def _separation_from_submitted_frames(
+    snapshot: SparseModelSnapshot,
+    frames: Sequence[MaterializedRefineFrame] | Sequence[RefineFrameInput],
+    *,
+    deadline: RefineDeadline,
+    subject: str,
+    snapshot_label: str,
+    code: str,
+) -> _FrameSeparation:
+    """Measure a parsed snapshot against ``request.frames``, pose by pose, by name.
+
+    Extracted so that the ANCHOR and the UNCHANGED-EVIDENCE FLOOR measure the
+    identical quantity against the identical ground truth and can only ever
+    disagree about which side of the tolerance is acceptable.  That is the whole
+    argument for the floor's threshold: see
+    :data:`REFINED_POSE_MIN_CENTER_MOVEMENT_M`.
+    """
+
     ordered = tuple(frames)
     if not (
         COLMAP_PACKET_MIN_ENGINE_IMAGES
@@ -583,27 +766,27 @@ def anchor_seed_snapshot_to_request(
         <= COLMAP_PACKET_MAX_ENGINE_IMAGES
     ):
         raise _fail(
-            "seed anchoring needs a frame count inside the reviewed packet band",
-            LIFECYCLE_UNANCHORED_CODE,
+            f"{subject} needs a frame count inside the reviewed packet band",
+            code,
         )
     expected: dict[str, NormalizedFrame] = {}
     for frame in ordered:
         engine_name = frame.engine_name
         if engine_name in expected:
             raise _fail(
-                "seed anchoring received a duplicate engine image name",
-                LIFECYCLE_UNANCHORED_CODE,
+                f"{subject} received a duplicate engine image name",
+                code,
             )
         expected[engine_name] = frame.frame
-    if seed.names() != tuple(sorted(expected)):
+    if snapshot.names() != tuple(sorted(expected)):
         raise _fail(
-            "seed snapshot image names disagree with the submitted frames",
-            LIFECYCLE_UNANCHORED_CODE,
+            f"{snapshot_label} image names disagree with the submitted frames",
+            code,
         )
 
     worst_center = 0.0
     worst_rotation = 0.0
-    for index, pose in enumerate(seed.poses):
+    for index, pose in enumerate(snapshot.poses):
         _checkpoint(deadline, index)
         submitted = expected[pose.name].colmap_pose
         submitted_rotation = _rotation_from_pose(submitted)
@@ -626,21 +809,97 @@ def anchor_seed_snapshot_to_request(
             submitted_rotation,
         )
         worst_rotation = max(worst_rotation, angle)
-    if worst_center > float(max_center_drift_m):
+    return _FrameSeparation(
+        correspondences=len(snapshot.poses),
+        max_center_m=worst_center,
+        max_rotation_rad=worst_rotation,
+    )
+
+
+@dataclass(frozen=True)
+class RefinedPoseMovement:
+    """How far the poses ABOUT TO BE PUBLISHED sit from the ones submitted."""
+
+    correspondences: int
+    max_center_movement_m: float
+    max_rotation_movement_rad: float
+
+
+def require_refined_poses_moved(
+    published: SparseModelSnapshot,
+    frames: Sequence[MaterializedRefineFrame] | Sequence[RefineFrameInput],
+    *,
+    deadline: RefineDeadline,
+    min_center_movement_m: float = REFINED_POSE_MIN_CENTER_MOVEMENT_M,
+    min_rotation_movement_rad: float = REFINED_POSE_MIN_ROTATION_MOVEMENT_RAD,
+) -> RefinedPoseMovement:
+    """Refuse a publication whose poses are the ones the parent submitted.
+
+    "UNCHANGED EVIDENCE IS A FAILURE" is the program's rule, and until this
+    function existed it was documentation.  The composed lifecycle would happily
+    publish the SEED model as the refined result -- an identity refinement, no
+    refinement at all -- and every test stayed green.
+
+    WHAT IS COMPARED, and why it is comparable at all.  Both sides are held by
+    the PARENT: ``published`` is the snapshot the parent parsed out of the
+    archive it is about to turn into refined poses, and ``frames`` is
+    ``request.frames``, the parent's own copy of the device poses it put into the
+    packet.  Neither side is a number the child computed.  This is the same pair
+    :func:`anchor_seed_snapshot_to_request` compares, measured by the same
+    helper, which is what makes the threshold argument below hold.
+
+    WHAT THIS DOES NOT BUY, stated plainly because the gap is real.  A child that
+    returns the seed poses transported by a rigid motion or a similarity moves
+    every camera and therefore PASSES here, while having refined nothing: the
+    cameras did not move RELATIVE TO EACH OTHER.  The gauge-invariant quantity
+    that would catch it is the alignment fit residual item 6 already computes
+    (``ParentAlignmentVerification.fit_rmse_m``), which today is bounded above
+    and has no floor.  A floor cannot be added against this suite's evidence,
+    because the recorded engine's aligned model is the seed under a PURE
+    similarity and so carries exactly zero shape change; giving it a real one
+    means modelling bundle adjustment in the child, which is the child-side
+    engine body and is not this change.  Recorded rather than fixed.
+    """
+
+    if type(published) is not SparseModelSnapshot:
+        raise _fail("refinement movement requires an exact SparseModelSnapshot")
+    if type(deadline) is not RefineDeadline:
+        raise _fail("refinement movement requires the carried refine deadline")
+    for label, value in (
+        ("centre", min_center_movement_m),
+        ("rotation", min_rotation_movement_rad),
+    ):
+        if (
+            isinstance(value, bool)
+            or not isinstance(value, (int, float))
+            or not math.isfinite(float(value))
+            or float(value) <= 0
+        ):
+            raise _fail(f"refinement movement {label} floor must be finite positive")
+    deadline.remaining_seconds()
+
+    separation = _separation_from_submitted_frames(
+        published,
+        frames,
+        deadline=deadline,
+        subject="refinement movement",
+        snapshot_label="published snapshot",
+        code=LIFECYCLE_UNCHANGED_CODE,
+    )
+    if (
+        separation.max_center_m <= float(min_center_movement_m)
+        and separation.max_rotation_rad <= float(min_rotation_movement_rad)
+    ):
         raise _fail(
-            "seed snapshot camera centres drifted from the submitted poses",
-            LIFECYCLE_UNANCHORED_CODE,
-        )
-    if worst_rotation > float(max_rotation_drift_rad):
-        raise _fail(
-            "seed snapshot orientations drifted from the submitted poses",
-            LIFECYCLE_UNANCHORED_CODE,
+            "refined poses are the submitted poses; the run published an "
+            "identity refinement rather than a refinement",
+            LIFECYCLE_UNCHANGED_CODE,
         )
     deadline.remaining_seconds()
-    return SeedAnchorVerification(
-        correspondences=len(seed.poses),
-        max_center_drift_m=worst_center,
-        max_rotation_drift_rad=worst_rotation,
+    return RefinedPoseMovement(
+        correspondences=separation.correspondences,
+        max_center_movement_m=separation.max_center_m,
+        max_rotation_movement_rad=separation.max_rotation_rad,
     )
 
 
@@ -681,15 +940,132 @@ def _ustar_header(name: str, size: int) -> bytes:
 
 @dataclass(frozen=True)
 class BuiltColmapPacket:
-    """The two files the parent pins down to the child, plus its own request."""
+    """The files the parent pins down to the child, plus its own request.
+
+    ``chunk_paths`` is a TUPLE because one archive cannot carry the subject
+    scan: see :func:`plan_packet_chunks` for the arithmetic.
+    """
 
     manifest_path: Path
-    chunk_path: Path
+    chunk_paths: tuple[Path, ...]
     manifest_sha256: str
-    chunk_sha256: str
+    chunk_sha256s: tuple[str, ...]
     run_id: str
     engine_request_sha256: str
     child_request: Mapping[str, Any]
+
+    @property
+    def pinned_file_count(self) -> int:
+        """The manifest plus every chunk -- what the native boundary counts."""
+
+        return 1 + len(self.chunk_paths)
+
+
+def ustar_member_bytes(payload_bytes: int) -> int:
+    """Bytes one USTAR member occupies: a 512 B header plus padded payload."""
+
+    if (
+        isinstance(payload_bytes, bool)
+        or type(payload_bytes) is not int
+        or payload_bytes < 0
+    ):
+        raise _fail("a USTAR member needs a non-negative integer payload size")
+    return _TAR_BLOCK + ((payload_bytes + _TAR_BLOCK - 1) // _TAR_BLOCK) * _TAR_BLOCK
+
+
+@dataclass(frozen=True)
+class PacketChunkPlan:
+    """Which members go in which chunk, and what that will cost, before writing.
+
+    Separated from the writer so the arithmetic is checkable without
+    materialising three gigabytes: ``test_the_hundred_frame_packet_fits_the_native
+    _ceilings`` and its 400-frame sibling call this with the subject scan's real
+    per-frame byte count and assert the resulting shape.
+    """
+
+    groups: tuple[tuple[int, ...], ...]
+    chunk_sizes: tuple[int, ...]
+    total_chunk_bytes: int
+
+    @property
+    def pinned_file_count(self) -> int:
+        return 1 + len(self.groups)
+
+
+def plan_packet_chunks(
+    payload_sizes: Sequence[int],
+    *,
+    chunk_max_bytes: int = PACKET_CHUNK_MAX_BYTES,
+) -> PacketChunkPlan:
+    """Pack members into as few chunks as the per-file ceiling allows.
+
+    WHY THIS EXISTS AT ALL.  The packet used to be ONE archive.  The native
+    boundary's ceilings are 64 unique pinned files, 128 MiB per file and 4 GiB
+    aggregate (``NATIVE_CHILD_MAX_PINNED_FILE_BYTES`` and friends), and the
+    frozen child enforces every one of them -- ``COLMAP packet archive chunk
+    exceeds 128 MiB`` is its own message.  The subject scan's 100 keyframes are
+    uniformly 1440x1920, so each engine raster is a P6 file of
+    ``17 + 1440*1920*3 = 8_294_417`` bytes and each USTAR member costs
+    ``512 + 8_294_912 = 8_295_424`` bytes.  One archive of them is 829_549_568
+    bytes -- 0.77 GiB, or 6.2x the 128 MiB per-file ceiling -- so the child would
+    have refused every run before reading a pixel.
+
+    THE PACKING, and what it yields.  A chunk's budget is the ceiling less the
+    1024-byte end-of-archive terminator every archive carries, i.e. 134_216_704
+    bytes, which holds 16 whole frames (16 x 8_295_424 = 132_726_784, and a
+    seventeenth would need 141_022_208).  The engine request rides in the first
+    chunk and fits in the 1_489_920 bytes left over there.  So 100 frames pack
+    into 7 chunks and 8 pinned files, and the contract maximum of 400 frames
+    packs into 25 chunks and 26 pinned files -- inside 64 either way.  These
+    numbers are asserted literally in the suite rather than recomputed from this
+    docstring, so a change to the packing contradicts a test.
+
+    A member too large for an empty chunk is REFUSED here rather than silently
+    split: splitting a member across archives is not a thing USTAR does, and the
+    raster size that would cause it is a question for the owner, not for this
+    function to paper over.
+    """
+
+    if (
+        isinstance(chunk_max_bytes, bool)
+        or type(chunk_max_bytes) is not int
+        or chunk_max_bytes <= 0
+    ):
+        raise _fail("packet chunk ceiling must be a positive integer")
+    if chunk_max_bytes > PACKET_CHUNK_MAX_BYTES:
+        raise _fail("packet chunk ceiling may be tightened but never raised")
+    sizes = tuple(payload_sizes)
+    if not sizes:
+        raise _fail("packet planning needs at least one member")
+    groups: list[tuple[int, ...]] = []
+    chunk_sizes: list[int] = []
+    current: list[int] = []
+    used = _TAR_BLOCK * 2
+    for index, size in enumerate(sizes):
+        cost = ustar_member_bytes(size)
+        if _TAR_BLOCK * 2 + cost > chunk_max_bytes:
+            raise _fail(
+                "a single packet member is larger than one whole archive chunk"
+            )
+        if current and used + cost > chunk_max_bytes:
+            groups.append(tuple(current))
+            chunk_sizes.append(used)
+            current = []
+            used = _TAR_BLOCK * 2
+        current.append(index)
+        used += cost
+    groups.append(tuple(current))
+    chunk_sizes.append(used)
+    if 1 + len(groups) > PACKET_MAX_PINNED_FILES:
+        raise _fail("packet needs more pinned files than the native boundary allows")
+    total = sum(chunk_sizes)
+    if total > PACKET_MAX_AGGREGATE_BYTES:
+        raise _fail("packet exceeds the native aggregate byte ceiling")
+    return PacketChunkPlan(
+        groups=tuple(groups),
+        chunk_sizes=tuple(chunk_sizes),
+        total_chunk_bytes=total,
+    )
 
 
 def build_colmap_packet(
@@ -699,6 +1075,7 @@ def build_colmap_packet(
     gpu_index: str,
     run_id: str,
     deadline: RefineDeadline,
+    chunk_max_bytes: int = PACKET_CHUNK_MAX_BYTES,
 ) -> BuiltColmapPacket:
     """Assemble one immutable engine-request + engine-image packet on scratch.
 
@@ -766,78 +1143,103 @@ def build_colmap_packet(
         }
     )
 
-    destination.mkdir(mode=0o700, parents=True, exist_ok=False)
-    chunk_path = destination / "packet.chunk.000.tar"
-    members: list[dict[str, Any]] = [
-        {
-            "relativePath": "engine-request-v1.json",
-            "chunkToken": "packet.chunk.000",
-            "archiveMember": "engine-request-v1.json",
-            "sha256": hashlib.sha256(engine_payload).hexdigest(),
-            "sizeBytes": len(engine_payload),
-            "role": "engine-request",
-        }
+    # ONE ordered member list: the engine request first, then every frame in
+    # packet order.  The plan groups INDICES into this list, so the writer and
+    # the manifest can never disagree about which chunk a member landed in.
+    member_names = ["engine-request-v1.json"] + [
+        f"images/{frame.engine_name}" for frame in frames
     ]
-    chunk_descriptor = os.open(
-        chunk_path,
-        os.O_CREAT | os.O_EXCL | os.O_WRONLY | getattr(os, "O_NOFOLLOW", 0),
-        0o600,
-    )
-    try:
-        with os.fdopen(chunk_descriptor, "wb", closefd=True) as chunk:
-            chunk_descriptor = -1
-            chunk.write(_ustar_header("engine-request-v1.json", len(engine_payload)))
-            chunk.write(engine_payload)
-            padding = (-len(engine_payload)) % _TAR_BLOCK
-            if padding:
-                chunk.write(b"\x00" * padding)
-            for index, frame in enumerate(frames):
-                _checkpoint(deadline, index)
-                member = f"images/{frame.engine_name}"
-                chunk.write(_ustar_header(member, frame.engine_size_bytes))
-                with materialization.open_verified_file(
-                    frame.engine_relative_path,
-                    deadline=deadline,
-                ) as source:
-                    copy_exact(
-                        source,
-                        chunk,
-                        size_bytes=frame.engine_size_bytes,
-                        deadline=deadline,
-                    )
-                pad = (-frame.engine_size_bytes) % _TAR_BLOCK
-                if pad:
-                    chunk.write(b"\x00" * pad)
-                members.append(
-                    {
-                        "relativePath": member,
-                        "chunkToken": "packet.chunk.000",
-                        "archiveMember": member,
-                        "sha256": frame.engine_sha256,
-                        "sizeBytes": frame.engine_size_bytes,
-                        "role": "engine-image",
-                    }
-                )
-            chunk.write(b"\x00" * (_TAR_BLOCK * 2))
-    finally:
-        if chunk_descriptor >= 0:  # pragma: no cover - fdopen failure only
-            os.close(chunk_descriptor)
+    member_sizes = [len(engine_payload)] + [frame.engine_size_bytes for frame in frames]
+    member_digests = [hashlib.sha256(engine_payload).hexdigest()] + [
+        frame.engine_sha256 for frame in frames
+    ]
+    member_roles = ["engine-request"] + ["engine-image"] * len(frames)
+    plan = plan_packet_chunks(member_sizes, chunk_max_bytes=chunk_max_bytes)
 
-    chunk_bytes = chunk_path.stat().st_size
-    chunk_digest = _hash_path(chunk_path, deadline=deadline)
+    destination.mkdir(mode=0o700, parents=True, exist_ok=False)
+    members: list[dict[str, Any]] = []
+    chunk_paths: list[Path] = []
+    chunk_digests: list[str] = []
+    chunk_rows: list[dict[str, Any]] = []
+    for chunk_index, group in enumerate(plan.groups):
+        _checkpoint(deadline, chunk_index)
+        token = f"packet.chunk.{chunk_index:03d}"
+        chunk_path = destination / f"{token}.tar"
+        chunk_descriptor = os.open(
+            chunk_path,
+            os.O_CREAT | os.O_EXCL | os.O_WRONLY | getattr(os, "O_NOFOLLOW", 0),
+            0o600,
+        )
+        try:
+            with os.fdopen(chunk_descriptor, "wb", closefd=True) as chunk:
+                chunk_descriptor = -1
+                for member_index in group:
+                    _checkpoint(deadline, member_index)
+                    name = member_names[member_index]
+                    size = member_sizes[member_index]
+                    chunk.write(_ustar_header(name, size))
+                    if member_index == 0:
+                        chunk.write(engine_payload)
+                    else:
+                        frame = frames[member_index - 1]
+                        with materialization.open_verified_file(
+                            frame.engine_relative_path,
+                            deadline=deadline,
+                        ) as source:
+                            copy_exact(
+                                source,
+                                chunk,
+                                size_bytes=size,
+                                deadline=deadline,
+                            )
+                    pad = (-size) % _TAR_BLOCK
+                    if pad:
+                        chunk.write(b"\x00" * pad)
+                    members.append(
+                        {
+                            "relativePath": name,
+                            "chunkToken": token,
+                            "archiveMember": name,
+                            "sha256": member_digests[member_index],
+                            "sizeBytes": size,
+                            "role": member_roles[member_index],
+                        }
+                    )
+                chunk.write(b"\x00" * (_TAR_BLOCK * 2))
+        finally:
+            if chunk_descriptor >= 0:  # pragma: no cover - fdopen failure only
+                os.close(chunk_descriptor)
+
+        # NO post-write size assertion here, deliberately.  Three were written
+        # -- written-vs-planned, written-vs-ceiling, and a second aggregate --
+        # and a mutation sweep showed all three deletable with ZERO red: none of
+        # them can fire unless this writer disagrees with the planner directly
+        # above it, which no input can arrange.  This codebase has removed such
+        # a clause before ("a clause no input can reach is a clause no deletion
+        # can redden") and the same reasoning applies here.  What replaces them
+        # is real: ``test_the_planner_predicts_the_bytes_the_writer_actually_
+        # writes`` compares ``plan.chunk_sizes`` against the sizes on disk at
+        # several ceilings, and the FROZEN child independently refuses an
+        # over-ceiling chunk with "COLMAP packet archive chunk exceeds 128 MiB",
+        # which its own suite covers.
+        written = chunk_path.stat().st_size
+        chunk_paths.append(chunk_path)
+        chunk_digests.append(_hash_path(chunk_path, deadline=deadline))
+        chunk_rows.append(
+            {
+                "token": token,
+                "sha256": chunk_digests[-1],
+                "sizeBytes": written,
+            }
+        )
+
     manifest_payload = _canonical_json_bytes(
         {
             "schemaVersion": PACKET_SCHEMA_VERSION,
             "contract": PACKET_CONTRACT,
             "runId": run_id,
             "requestMember": "engine-request-v1.json",
-            "chunks": [
-                {
-                    "token": "packet.chunk.000",
-                    "sha256": chunk_digest,
-                    "sizeBytes": chunk_bytes,
-                }
-            ],
+            "chunks": chunk_rows,
             "members": members,
         }
     )
@@ -846,11 +1248,15 @@ def build_colmap_packet(
     manifest_digest = hashlib.sha256(manifest_payload).hexdigest()
     return BuiltColmapPacket(
         manifest_path=manifest_path,
-        chunk_path=chunk_path,
+        chunk_paths=tuple(chunk_paths),
         manifest_sha256=manifest_digest,
-        chunk_sha256=chunk_digest,
+        chunk_sha256s=tuple(chunk_digests),
         run_id=run_id,
-        engine_request_sha256=members[0]["sha256"],
+        # Indexed off the ordered member list, not off ``members[0]``: the
+        # latter is only the request while the planner happens to put member 0
+        # in chunk 000 first, which is a property of the packing rather than a
+        # promise it makes.
+        engine_request_sha256=member_digests[0],
         child_request={
             "schemaVersion": PACKET_SCHEMA_VERSION,
             "contract": PACKET_CONTRACT,
@@ -909,22 +1315,38 @@ def pinned_packet_files(
     *,
     deadline: RefineDeadline,
 ) -> Iterator[Mapping[str, NativePinnedFile]]:
-    """Open the two packet files read-only and yield them as pinned inputs.
+    """Open the manifest and EVERY chunk read-only and yield them as pinned inputs.
 
     The descriptors are owned HERE and closed on every exit, including an
     exception, because ``run_native_engine_child`` borrows them and explicitly
     does not take ownership.
+
+    The token set is ``(packet.manifest, packet.chunk.000, ...)``.  The frozen
+    child recomputes ``sorted((manifest_token, *chunk_order))`` and refuses any
+    ledger that does not match exactly, so the count here is not cosmetic: it is
+    the same number :func:`plan_packet_chunks` had to keep under 64.
     """
 
     if type(packet) is not BuiltColmapPacket:
         raise _fail("pinning requires an exact BuiltColmapPacket")
+    if len(packet.chunk_paths) != len(packet.chunk_sha256s):
+        raise _fail("packet chunk paths and digests disagree in number")
+    if packet.pinned_file_count > PACKET_MAX_PINNED_FILES:
+        raise _fail("packet needs more pinned files than the native boundary allows")
     deadline.remaining_seconds()
     with ExitStack() as stack:
         pinned: dict[str, NativePinnedFile] = {}
-        for token, path, digest in (
-            ("packet.manifest", packet.manifest_path, packet.manifest_sha256),
-            ("packet.chunk.000", packet.chunk_path, packet.chunk_sha256),
-        ):
+        entries = [("packet.manifest", packet.manifest_path, packet.manifest_sha256)]
+        for chunk_index, chunk_path in enumerate(packet.chunk_paths):
+            entries.append(
+                (
+                    f"packet.chunk.{chunk_index:03d}",
+                    chunk_path,
+                    packet.chunk_sha256s[chunk_index],
+                )
+            )
+        for token, path, digest in entries:
+            _checkpoint(deadline, len(pinned))
             handle = stack.enter_context(path.open("rb"))
             metadata = os.fstat(handle.fileno())
             pinned[token] = NativePinnedFile(
@@ -1202,13 +1624,46 @@ class NativeEngineInvocation:
     not a pose list the child sent: the refined poses the runner aligns and the
     publisher records therefore come from bytes the parent hashed and parsed for
     itself.  The seed and raw pre-BA snapshots are deliberately absent -- they
-    were already consumed, by the anchor and by the alignment verification, and
-    carrying them here would be state nothing reads.
+    were already consumed, by the anchor and by the alignment verification.
+
+    WHICH ARCHIVE THIS IS, PROVED RATHER THAN INTENDED.  Nothing used to pin
+    which of the three parsed snapshots arrived here.  Substituting the SEED
+    snapshot for the aligned one published an identity refinement and left the
+    whole suite green, because the alignment verification ran on a snapshot that
+    then had no connection to the one being published.  ``__post_init__`` closes
+    that seam: the verification carries ``aligned_pose_digest_sha256``, which the
+    PARENT computed with :func:`canonical_pose_digest` over the aligned model it
+    checked, and the snapshot carried here must hash to exactly that value.  Any
+    other snapshot -- seed, raw pre-BA, or a third one built from thin air --
+    hashes differently and is refused here, at construction, which is the line
+    the substitution touches.
     """
 
     report: ParsedEngineReport
     outputs: Mapping[str, NativeEngineOutput]
     aligned_snapshot: SparseModelSnapshot
+    alignment_verification: ParentAlignmentVerification
+
+    def __post_init__(self) -> None:
+        if type(self.aligned_snapshot) is not SparseModelSnapshot:
+            raise _fail(
+                "the published snapshot must be an exact SparseModelSnapshot",
+                LIFECYCLE_UNVERIFIED_PUBLICATION_CODE,
+            )
+        if type(self.alignment_verification) is not ParentAlignmentVerification:
+            raise _fail(
+                "publishing requires the parent's own alignment verification",
+                LIFECYCLE_UNVERIFIED_PUBLICATION_CODE,
+            )
+        if (
+            canonical_pose_digest(self.aligned_snapshot)
+            != self.alignment_verification.aligned_pose_digest_sha256
+        ):
+            raise _fail(
+                "the snapshot about to be published is not the aligned model the "
+                "parent verified",
+                LIFECYCLE_UNVERIFIED_PUBLICATION_CODE,
+            )
 
 
 _TRANSPORT_CONTENT_TYPE = "application/octet-stream"
@@ -1555,6 +2010,7 @@ class RefineLifecycleReport:
     production_enablement: str
     toolchain: ToolchainPreflight
     seed_anchor: SeedAnchorVerification
+    refined_pose_movement: RefinedPoseMovement
     alignment_verification: Any
     result: RefineRunResult
     publication: RefinePublicationReceipt
@@ -1576,6 +2032,15 @@ class RefineLifecycleReport:
                 "correspondences": self.seed_anchor.correspondences,
                 "maxCenterDriftMeters": self.seed_anchor.max_center_drift_m,
                 "maxRotationDriftRadians": self.seed_anchor.max_rotation_drift_rad,
+            },
+            "refinedPoseMovement": {
+                "correspondences": self.refined_pose_movement.correspondences,
+                "maxCenterMovementMeters": (
+                    self.refined_pose_movement.max_center_movement_m
+                ),
+                "maxRotationMovementRadians": (
+                    self.refined_pose_movement.max_rotation_movement_rad
+                ),
             },
             "alignment": {
                 "scale": self.alignment_verification.transform.scale,
@@ -1738,10 +2203,23 @@ def run_refine_lifecycle(
                     proposal=report.proposal,
                     deadline=deadline,
                 )
+                # THE PUBLISH SEAM.  Both clauses guard this one line, and they
+                # are independent: the first proves the snapshot below IS the
+                # aligned model just verified, the second proves that model is
+                # not simply the poses the parent submitted.  Neither implies
+                # the other -- a third snapshot far from the frames defeats only
+                # the first, and a genuinely identity-refining child defeats
+                # only the second.
+                movement = require_refined_poses_moved(
+                    aligned,
+                    materialization.frames,
+                    deadline=deadline,
+                )
                 invocation = NativeEngineInvocation(
                     report=report,
                     outputs=received,
                     aligned_snapshot=aligned,
+                    alignment_verification=alignment_verification,
                 )
                 with _borrowed_frame_descriptors(
                     materialization,
@@ -1791,6 +2269,7 @@ def run_refine_lifecycle(
         production_enablement=PRODUCTION_ENABLEMENT,
         toolchain=toolchain,
         seed_anchor=seed_anchor,
+        refined_pose_movement=movement,
         alignment_verification=alignment_verification,
         result=result,
         publication=publication,
@@ -1893,13 +2372,17 @@ _BANNER = (
 )
 
 
-def main(argv: Sequence[str] | None = None) -> int:
-    """Run one local-scratch lifecycle from a local bundle directory.
+#: The lease the CLI claims by default, in seconds.  The engine gets this less
+#: ``refine_adapter.LEASE_COMPLETION_RESERVE_S``, i.e. 3540 s of reconstruction
+#: and 60 s of completion.  It is an hour rather than the old 900 s because the
+#: 900 was never reachable: the four-minute cap bound first.  Whether an hour is
+#: the right lease for a 100-frame reconstruction is a HOST question no run in
+#: this repository has yet answered.
+DEFAULT_LEASE_SECONDS = 3600.0
 
-    There is no console-script entry for this in ``pyproject.toml`` on purpose:
-    the only way to reach it is ``python -m
-    patina_scan_worker.refine_lifecycle``, typed by a person.
-    """
+
+def build_argument_parser() -> argparse.ArgumentParser:
+    """The CLI surface, extracted so its defaults are falsifiable."""
 
     parser = argparse.ArgumentParser(
         prog="python -m patina_scan_worker.refine_lifecycle",
@@ -1915,7 +2398,22 @@ def main(argv: Sequence[str] | None = None) -> int:
     parser.add_argument("--room-file-id", required=True)
     parser.add_argument("--room-file-version", type=int, default=1)
     parser.add_argument("--gpu-index", default="0")
-    parser.add_argument("--lease-seconds", type=float, default=900.0)
+    # The lease GOVERNS the one carried deadline; see :func:`lease_deadline`.
+    parser.add_argument(
+        "--lease-seconds", type=float, default=DEFAULT_LEASE_SECONDS
+    )
+    return parser
+
+
+def main(argv: Sequence[str] | None = None) -> int:
+    """Run one local-scratch lifecycle from a local bundle directory.
+
+    There is no console-script entry for this in ``pyproject.toml`` on purpose:
+    the only way to reach it is ``python -m
+    patina_scan_worker.refine_lifecycle``, typed by a person.
+    """
+
+    parser = build_argument_parser()
     arguments = parser.parse_args(argv)
 
     sys.stderr.write(_BANNER)
@@ -1937,11 +2435,7 @@ def main(argv: Sequence[str] | None = None) -> int:
 
     from .field_raster_materializer import PackagedLibheifFieldRasterMaterializer
 
-    deadline = RefineDeadline.start(
-        lease_expires_at_monotonic_s=time.monotonic()
-        + float(arguments.lease_seconds)
-        + LEASE_COMPLETION_RESERVE_S,
-    )
+    deadline = lease_deadline(float(arguments.lease_seconds))
     report = run_refine_lifecycle(
         RefineLifecycleRequest(
             user_id=arguments.user_id,

@@ -52,7 +52,7 @@ from pathlib import Path
 import pytest
 
 from patina_scan_worker import refine_lifecycle
-from patina_scan_worker.refine_adapter import AdapterError, RefineDeadline
+from patina_scan_worker.refine_adapter import AdapterError, RefineDeadline, Sim3
 from patina_scan_worker.refine_lifecycle import (
     DEFAULT_CHILD_ENTRYPOINT,
     ENGINE_REPORT_CONTRACT,
@@ -84,6 +84,7 @@ from patina_scan_worker.refine_materializer import (
     RefineSourceArtifact,
 )
 from patina_scan_worker.refine_model_alignment import (
+    ParentAlignmentVerification,
     SparseModelPose,
     SparseModelSnapshot,
     canonical_pose_digest,
@@ -463,6 +464,36 @@ def _deadline(seconds: float = 120.0) -> RefineDeadline:
     return RefineDeadline(time.monotonic() + seconds)
 
 
+def _verification_for(snapshot: SparseModelSnapshot) -> ParentAlignmentVerification:
+    """A verification whose aligned digest really is this snapshot's.
+
+    Every field other than the digests is a placeholder: the only one the
+    publish-seam binding reads is ``aligned_pose_digest_sha256``, and it must be
+    the PARENT's own digest of the snapshot being published, so it is computed
+    here rather than written down.
+    """
+
+    return ParentAlignmentVerification(
+        transform=Sim3.identity(),
+        raw_pose_digest_sha256="0" * 64,
+        aligned_pose_digest_sha256=canonical_pose_digest(snapshot),
+        correspondences=len(snapshot.poses),
+        scale_relative_difference=0.0,
+        rotation_angle_difference_rad=0.0,
+        translation_difference_m=0.0,
+        gauge_scale_deviation=0.0,
+        gauge_rotation_rad=0.0,
+        gauge_translation_m=0.0,
+        fit_rmse_m=0.0,
+        max_aligned_orientation_change_rad=0.0,
+        seed_rms_radius_m=1.0,
+        max_raw_pose_drift_m=0.0,
+        max_raw_rotation_drift_rad=0.0,
+        seed_min_principal_extent_m=1.0,
+        aligned_min_principal_extent_m=1.0,
+    )
+
+
 def _materialize(bundle: _Bundle, scratch: Path, deadline: RefineDeadline):
     materializer = RefineMaterializer(
         acquirer=LocalScratchArtifactAcquirer(bundle.root),
@@ -590,6 +621,7 @@ class _RecordedEngine:
         *,
         seed_rows=None,
         aligned_rows=None,
+        identity_alignment: bool = False,
         evidence: dict[str, float] | None = None,
         report_mutation=None,
         digest_mutation=None,
@@ -597,11 +629,29 @@ class _RecordedEngine:
         self.artifact_root = artifact_root
         self.frames = frames
         self._seed_rows = seed_rows if seed_rows is not None else _seed_rows(frames)
-        self._aligned_rows = (
-            aligned_rows
-            if aligned_rows is not None
-            else _apply_similarity(self._seed_rows)
-        )
+        # ``identity_alignment`` makes the child hand back the SEED as its
+        # aligned model, with the identity similarity to match.  That is a real
+        # engine output, not a patched one: item 6 accepts it (its clauses are
+        # all satisfied by three identical models and an identity proposal), and
+        # it is exactly the "refined nothing" case the composition must refuse.
+        if identity_alignment:
+            self._aligned_rows = list(self._seed_rows)
+            self._alignment = (
+                1.0,
+                ((1.0, 0.0, 0.0), (0.0, 1.0, 0.0), (0.0, 0.0, 1.0)),
+                (0.0, 0.0, 0.0),
+            )
+        else:
+            self._aligned_rows = (
+                aligned_rows
+                if aligned_rows is not None
+                else _apply_similarity(self._seed_rows)
+            )
+            self._alignment = (
+                _ALIGNED_SCALE,
+                _ALIGNED_ROTATION,
+                _ALIGNED_TRANSLATION,
+            )
         self._evidence = dict(evidence or _GOOD_EVIDENCE)
         self._report_mutation = report_mutation
         self._digest_mutation = digest_mutation
@@ -703,9 +753,9 @@ class _RecordedEngine:
             "bindingVersion": "4.0.2",
             "selectedEngine": "colmap-4-known-pose-triangulate-ba",
             "alignment": {
-                "scale": _ALIGNED_SCALE,
-                "rotation": [list(row) for row in _ALIGNED_ROTATION],
-                "translationMeters": list(_ALIGNED_TRANSLATION),
+                "scale": self._alignment[0],
+                "rotation": [list(row) for row in self._alignment[1]],
+                "translationMeters": list(self._alignment[2]),
                 "rawPoseDigestSha256": canonical_pose_digest(raw_snapshot),
                 "alignedPoseDigestSha256": canonical_pose_digest(aligned_snapshot),
             },
@@ -1506,12 +1556,17 @@ def test_the_packet_members_carry_the_materializers_own_digests(tmp_path):
             assert row["sha256"] == frame.engine_sha256
             assert row["sizeBytes"] == frame.engine_size_bytes
             assert row["role"] == "engine-image"
-        assert document["chunks"][0]["sha256"] == packet.chunk_sha256
+        assert [row["sha256"] for row in document["chunks"]] == list(
+            packet.chunk_sha256s
+        )
         assert _sha256(packet.manifest_path.read_bytes()) == packet.manifest_sha256
-        # The chunk really is a readable USTAR archive with the right members.
-        with tarfile.open(packet.chunk_path, mode="r:") as archive:
-            names = sorted(member.name for member in archive.getmembers())
-        assert names == sorted(
+        # Every chunk really is a readable USTAR archive, and between them they
+        # carry exactly the declared members once each.
+        names = []
+        for chunk_path in packet.chunk_paths:
+            with tarfile.open(chunk_path, mode="r:") as archive:
+                names.extend(member.name for member in archive.getmembers())
+        assert sorted(names) == sorted(
             ["engine-request-v1.json"]
             + [f"images/{frame.engine_name}" for frame in materialization.frames]
         )
@@ -2068,6 +2123,7 @@ def test_the_composed_backend_has_no_fallback_to_replay(tmp_path):
         report=parse_engine_report(_BASE_REPORT()),
         outputs={},
         aligned_snapshot=snapshot,
+        alignment_verification=_verification_for(snapshot),
     )
     with pytest.raises(AdapterError) as raised:
         ComposedRefineBackend(invocation).run_fallback(None, deadline=_deadline())
@@ -2189,3 +2245,1201 @@ def test_scratch_removal_reports_what_survived_instead_of_raising(tmp_path):
     assert (tmp_path / "outside" / "keep").read_bytes() == b"keep"
     # Idempotent on an already-absent tree.
     assert _remove_tree(root) is None
+
+
+# ===========================================================================
+# BLOCKING 1: which archive becomes the published refined poses
+#
+# An independent reviewer substituted the SEED snapshot for the aligned one at
+# the publish seam.  The composition published an identity refinement -- no
+# refinement at all -- and every one of the 1304 tests stayed green, because
+# nothing bound the snapshot being PUBLISHED to the snapshot that had been
+# VERIFIED, and nothing asked whether the result differed from its input.
+#
+# The two clauses below are independent and each has its own mutation:
+#   * the digest binding refuses a snapshot that is not the verified aligned
+#     model, and is defeated by a THIRD snapshot far from the frames;
+#   * the movement floor refuses a result that is the submitted poses, and is
+#     defeated by a child that genuinely refines nothing.
+# ===========================================================================
+def test_the_reviewers_swap_of_the_seed_for_the_aligned_model_is_refused(tmp_path):
+    """THE regression. Publishing the seed where the aligned model belongs."""
+
+    from patina_scan_worker.refine_lifecycle import NativeEngineInvocation
+
+    seed = _snapshot_from_rows(_anchor_rows(), "seed")
+    aligned = _snapshot_from_rows(_apply_similarity(_anchor_rows()), "aligned")
+    # The verification really did run on the aligned model.
+    verification = _verification_for(aligned)
+    assert canonical_pose_digest(aligned) != canonical_pose_digest(seed)
+
+    with pytest.raises(AdapterError) as raised:
+        NativeEngineInvocation(
+            report=parse_engine_report(_BASE_REPORT()),
+            outputs={},
+            aligned_snapshot=seed,
+            alignment_verification=verification,
+        )
+    assert raised.value.code == "REFINE_PUBLISHED_MODEL_UNVERIFIED"
+    assert "not the aligned model the parent verified" in str(raised.value)
+
+
+def test_a_third_snapshot_nobody_verified_is_refused_at_the_publish_seam():
+    """Defeats ONLY the digest binding: this snapshot is far from the frames."""
+
+    from patina_scan_worker.refine_lifecycle import NativeEngineInvocation
+
+    aligned = _snapshot_from_rows(_apply_similarity(_anchor_rows()), "aligned")
+    impostor = _snapshot_from_rows(
+        _apply_similarity(_anchor_rows(offset=(0.5, -0.25, 0.125))),
+        "aligned",
+    )
+    assert canonical_pose_digest(impostor) != canonical_pose_digest(aligned)
+
+    with pytest.raises(AdapterError) as raised:
+        NativeEngineInvocation(
+            report=parse_engine_report(_BASE_REPORT()),
+            outputs={},
+            aligned_snapshot=impostor,
+            alignment_verification=_verification_for(aligned),
+        )
+    assert raised.value.code == "REFINE_PUBLISHED_MODEL_UNVERIFIED"
+
+
+def test_the_publish_seam_refuses_a_verification_of_the_wrong_type():
+    from patina_scan_worker.refine_lifecycle import NativeEngineInvocation
+
+    aligned = _snapshot_from_rows(_apply_similarity(_anchor_rows()), "aligned")
+    with pytest.raises(AdapterError) as raised:
+        NativeEngineInvocation(
+            report=parse_engine_report(_BASE_REPORT()),
+            outputs={},
+            aligned_snapshot=aligned,
+            alignment_verification=None,
+        )
+    assert raised.value.code == "REFINE_PUBLISHED_MODEL_UNVERIFIED"
+    assert "requires the parent's own alignment verification" in str(raised.value)
+
+
+def test_the_publish_seam_refuses_a_snapshot_of_the_wrong_type():
+    from patina_scan_worker.refine_lifecycle import NativeEngineInvocation
+
+    aligned = _snapshot_from_rows(_apply_similarity(_anchor_rows()), "aligned")
+    with pytest.raises(AdapterError) as raised:
+        NativeEngineInvocation(
+            report=parse_engine_report(_BASE_REPORT()),
+            outputs={},
+            aligned_snapshot=list(aligned.poses),
+            alignment_verification=_verification_for(aligned),
+        )
+    assert raised.value.code == "REFINE_PUBLISHED_MODEL_UNVERIFIED"
+    assert "must be an exact SparseModelSnapshot" in str(raised.value)
+
+
+def test_a_child_that_returns_the_seed_as_its_aligned_model_is_refused(tmp_path):
+    """Defeats ONLY the movement floor.
+
+    The child hands back three identical models and an identity similarity.  The
+    digest binding is satisfied -- the snapshot published IS the one verified --
+    and the run still refuses, because what it verified refined nothing.
+    """
+
+    with pytest.raises(AdapterError) as raised:
+        _run(tmp_path, engine_kwargs={"identity_alignment": True})
+    assert raised.value.code == "REFINE_UNCHANGED_EVIDENCE"
+    assert "identity refinement rather than a refinement" in str(raised.value)
+
+
+def test_item_six_accepts_the_identity_refinement_this_composition_refuses():
+    """WHY the floor lives at the publish seam and not in item 6.
+
+    Item 6 is handed three child archives and asked whether they agree.  Three
+    identical models with an identity proposal satisfy every one of its
+    seventeen clauses, so it returns a verification rather than refusing -- its
+    fit residual is bounded above and has no floor.  It cannot close this gap
+    with what it is given: the quantity that says "refined nothing" is the
+    distance from ``request.frames``, the parent's own submitted poses, and item
+    6 has never been handed those.  The composition has.
+    """
+
+    from patina_scan_worker.refine_model_alignment import (
+        ProposedAlignment,
+        verify_child_alignment_proposal,
+    )
+
+    rows = _anchor_rows()
+    snapshot = _snapshot_from_rows(rows, "identical")
+    digest = canonical_pose_digest(snapshot)
+    verification = verify_child_alignment_proposal(
+        seed=snapshot,
+        raw_pre_ba=snapshot,
+        aligned=snapshot,
+        proposal=ProposedAlignment(
+            scale=1.0,
+            rotation=((1.0, 0.0, 0.0), (0.0, 1.0, 0.0), (0.0, 0.0, 1.0)),
+            translation=(0.0, 0.0, 0.0),
+            raw_pose_digest_sha256=digest,
+            aligned_pose_digest_sha256=digest,
+        ),
+        deadline=_deadline(),
+    )
+    # It accepted, and its own shape-change number is exactly zero.
+    assert verification.fit_rmse_m == 0.0
+    assert verification.max_aligned_orientation_change_rad == 0.0
+
+
+def test_the_movement_floor_is_the_anchor_tolerance_itself():
+    """The threshold is not a new number; it is the anchor's own tolerance.
+
+    The anchor says a pose within this distance of the submitted pose IS the
+    submitted pose.  The floor says the same thing about the poses being
+    published.  If these ever diverge, the module calls one displacement
+    'identical' in one function and 'changed' in the other.
+    """
+
+    from patina_scan_worker.refine_lifecycle import (
+        REFINED_POSE_MIN_CENTER_MOVEMENT_M,
+        REFINED_POSE_MIN_ROTATION_MOVEMENT_RAD,
+    )
+
+    assert REFINED_POSE_MIN_CENTER_MOVEMENT_M == SEED_ANCHOR_MAX_CENTER_DRIFT_M
+    assert REFINED_POSE_MIN_ROTATION_MOVEMENT_RAD == SEED_ANCHOR_MAX_ROTATION_DRIFT_RAD
+    # ... and the numbers themselves are the pinned ones.
+    assert REFINED_POSE_MIN_CENTER_MOVEMENT_M == 1.0e-6
+    assert REFINED_POSE_MIN_ROTATION_MOVEMENT_RAD == 1.0e-6
+
+
+@pytest.mark.parametrize("factor", [0.0, 0.5, 1.0])
+def test_movement_at_or_below_the_floor_is_an_identity_refinement(factor):
+    """A translation of at most the floor is refused, including exactly zero."""
+
+    from patina_scan_worker.refine_lifecycle import (
+        REFINED_POSE_MIN_CENTER_MOVEMENT_M,
+        require_refined_poses_moved,
+    )
+
+    rows = _anchor_rows()
+    shifted = _anchor_rows(
+        offset=(REFINED_POSE_MIN_CENTER_MOVEMENT_M * factor, 0.0, 0.0)
+    )
+    with pytest.raises(AdapterError) as raised:
+        require_refined_poses_moved(
+            _snapshot_from_rows(shifted, "published"),
+            _stand_in_frames(rows),
+            deadline=_deadline(),
+        )
+    assert raised.value.code == "REFINE_UNCHANGED_EVIDENCE"
+
+
+def test_movement_just_past_the_floor_is_accepted():
+    from patina_scan_worker.refine_lifecycle import (
+        REFINED_POSE_MIN_CENTER_MOVEMENT_M,
+        require_refined_poses_moved,
+    )
+
+    rows = _anchor_rows()
+    shifted = _anchor_rows(offset=(REFINED_POSE_MIN_CENTER_MOVEMENT_M * 1.5, 0.0, 0.0))
+    movement = require_refined_poses_moved(
+        _snapshot_from_rows(shifted, "published"),
+        _stand_in_frames(rows),
+        deadline=_deadline(),
+    )
+    assert movement.max_center_movement_m > REFINED_POSE_MIN_CENTER_MOVEMENT_M
+    assert movement.correspondences == len(rows)
+
+
+def test_a_rotation_alone_past_the_floor_is_a_refinement():
+    """Centres frozen, orientations turned: the model still CHANGED."""
+
+    from patina_scan_worker.refine_lifecycle import (
+        REFINED_POSE_MIN_ROTATION_MOVEMENT_RAD,
+        require_refined_poses_moved,
+    )
+
+    rows = _anchor_rows()
+    turned = _anchor_rows(turn=REFINED_POSE_MIN_ROTATION_MOVEMENT_RAD * 10.0)
+    movement = require_refined_poses_moved(
+        _snapshot_from_rows(turned, "published"),
+        _stand_in_frames(rows),
+        deadline=_deadline(),
+    )
+    assert movement.max_rotation_movement_rad > REFINED_POSE_MIN_ROTATION_MOVEMENT_RAD
+
+
+def test_the_movement_check_refuses_a_snapshot_of_the_wrong_type():
+    from patina_scan_worker.refine_lifecycle import require_refined_poses_moved
+
+    with pytest.raises(AdapterError) as raised:
+        require_refined_poses_moved(
+            object(), _stand_in_frames(_anchor_rows()), deadline=_deadline()
+        )
+    assert "requires an exact SparseModelSnapshot" in str(raised.value)
+
+
+def test_the_movement_check_requires_the_carried_deadline():
+    from patina_scan_worker.refine_lifecycle import require_refined_poses_moved
+
+    rows = _anchor_rows()
+    with pytest.raises(AdapterError) as raised:
+        require_refined_poses_moved(
+            _snapshot_from_rows(rows, "published"),
+            _stand_in_frames(rows),
+            deadline=object(),
+        )
+    assert "requires the carried refine deadline" in str(raised.value)
+
+
+@pytest.mark.parametrize(
+    ("kwargs", "label"),
+    [
+        ({"min_center_movement_m": 0.0}, "centre"),
+        ({"min_center_movement_m": -1.0}, "centre"),
+        ({"min_center_movement_m": math.inf}, "centre"),
+        ({"min_center_movement_m": True}, "centre"),
+        ({"min_rotation_movement_rad": 0.0}, "rotation"),
+        ({"min_rotation_movement_rad": math.nan}, "rotation"),
+        ({"min_rotation_movement_rad": "1e-6"}, "rotation"),
+    ],
+)
+def test_the_movement_check_refuses_a_nonsense_floor(kwargs, label):
+    from patina_scan_worker.refine_lifecycle import require_refined_poses_moved
+
+    rows = _anchor_rows()
+    with pytest.raises(AdapterError) as raised:
+        require_refined_poses_moved(
+            _snapshot_from_rows(rows, "published"),
+            _stand_in_frames(rows),
+            deadline=_deadline(),
+            **kwargs,
+        )
+    assert f"refinement movement {label} floor must be finite positive" in str(
+        raised.value
+    )
+
+
+def test_the_movement_check_refuses_a_renamed_published_image():
+    from patina_scan_worker.refine_lifecycle import require_refined_poses_moved
+
+    rows = _anchor_rows()
+    renamed = [dict(row) for row in _anchor_rows(offset=(0.4, 0.0, 0.0))]
+    renamed[3]["name"] = "frame_000999.ppm"
+    with pytest.raises(AdapterError) as raised:
+        require_refined_poses_moved(
+            _snapshot_from_rows(renamed, "published"),
+            _stand_in_frames(rows),
+            deadline=_deadline(),
+        )
+    assert raised.value.code == "REFINE_UNCHANGED_EVIDENCE"
+    assert "published snapshot image names disagree with the submitted frames" in str(
+        raised.value
+    )
+
+
+def test_the_movement_check_refuses_a_duplicate_submitted_frame_name():
+    from patina_scan_worker.refine_lifecycle import require_refined_poses_moved
+
+    rows = _anchor_rows()
+    duplicated = list(_stand_in_frames(rows))
+    duplicated[2] = duplicated[1]
+    with pytest.raises(AdapterError) as raised:
+        require_refined_poses_moved(
+            _snapshot_from_rows(rows, "published"),
+            duplicated,
+            deadline=_deadline(),
+        )
+    assert "refinement movement received a duplicate engine image name" in str(
+        raised.value
+    )
+
+
+def test_the_movement_check_refuses_a_frame_count_outside_the_reviewed_band():
+    from patina_scan_worker.refine_lifecycle import require_refined_poses_moved
+
+    rows = _anchor_rows(count=2)
+    with pytest.raises(AdapterError) as raised:
+        require_refined_poses_moved(
+            _snapshot_from_rows(rows, "published"),
+            _stand_in_frames(rows),
+            deadline=_deadline(),
+        )
+    assert "refinement movement needs a frame count inside the reviewed packet band" in str(
+        raised.value
+    )
+
+
+def test_the_report_records_how_far_the_published_poses_moved(tmp_path):
+    report, _engine, _sink, _scratch = _run(tmp_path)
+    document = report.to_document()
+
+    movement = document["refinedPoseMovement"]
+    assert movement["correspondences"] == report.seed_anchor.correspondences
+    assert movement["maxCenterMovementMeters"] > 1.0e-6
+    assert movement["maxRotationMovementRadians"] > 1.0e-6
+    # The anchor and the floor measure the SAME pair, in opposite directions.
+    assert report.seed_anchor.max_center_drift_m <= 1.0e-6
+
+
+# ===========================================================================
+# BLOCKING 2: the packet against the native boundary's pinned-file ceilings
+#
+# The composition built ONE archive.  The subject scan's 100 keyframes are
+# uniformly 1440x1920, so that archive is 0.77 GiB -- 6.2x the 128 MiB per-file
+# ceiling the frozen child enforces.  Every run would have been refused by the
+# child before it read a pixel.
+#
+# The numbers below are written out LITERALLY rather than recomputed from the
+# module, so deleting a term from the packing changes a number rather than
+# silently shrinking an assertion.
+# ===========================================================================
+#: One 1440x1920 P6 keyframe: the header ``P6\n1440 1920\n255\n`` is 17 bytes and
+#: the raster is 1440*1920*3.  Both halves are asserted below.
+_SUBJECT_FRAME_PAYLOAD_BYTES = 8_294_417
+_SUBJECT_FRAME_MEMBER_BYTES = 8_295_424
+_NATIVE_PINNED_FILE_CEILING = 134_217_728
+_NATIVE_PINNED_FILE_COUNT_CEILING = 64
+_NATIVE_AGGREGATE_CEILING = 4 * 1024 * 1024 * 1024
+
+
+def test_the_subject_keyframe_arithmetic_is_the_pinned_one():
+    from patina_scan_worker.refine_lifecycle import ustar_member_bytes
+
+    header = b"P6\n1440 1920\n255\n"
+    assert len(header) == 17
+    assert 1440 * 1920 * 3 == 8_294_400
+    assert len(header) + 1440 * 1920 * 3 == _SUBJECT_FRAME_PAYLOAD_BYTES
+    # A USTAR member is a 512 B header plus the payload padded to 512.
+    assert ustar_member_bytes(_SUBJECT_FRAME_PAYLOAD_BYTES) == _SUBJECT_FRAME_MEMBER_BYTES
+    assert ustar_member_bytes(0) == 512
+    assert ustar_member_bytes(1) == 1024
+    assert ustar_member_bytes(512) == 1024
+    assert ustar_member_bytes(513) == 1536
+
+
+def test_the_native_ceilings_the_packet_honours_are_the_childs_own():
+    from patina_scan_worker import refine_lifecycle as lifecycle
+    from patina_scan_worker import refine_native_process as native
+
+    assert lifecycle.PACKET_CHUNK_MAX_BYTES == _NATIVE_PINNED_FILE_CEILING
+    assert lifecycle.PACKET_MAX_PINNED_FILES == _NATIVE_PINNED_FILE_COUNT_CEILING
+    assert lifecycle.PACKET_MAX_AGGREGATE_BYTES == _NATIVE_AGGREGATE_CEILING
+    # ... and they are the SAME constants the frozen child enforces, not a copy.
+    assert lifecycle.PACKET_CHUNK_MAX_BYTES == native.NATIVE_CHILD_MAX_PINNED_FILE_BYTES
+    assert lifecycle.PACKET_MAX_PINNED_FILES == native.NATIVE_CHILD_MAX_PINNED_FILES
+    assert (
+        lifecycle.PACKET_MAX_AGGREGATE_BYTES
+        == native.NATIVE_CHILD_MAX_PINNED_TOTAL_BYTES
+    )
+
+
+def test_one_archive_of_the_subject_scan_would_breach_the_per_file_ceiling():
+    """WHY the packet is chunked at all -- the shape this replaced."""
+
+    single_archive = 100 * _SUBJECT_FRAME_MEMBER_BYTES + 1024
+    assert single_archive == 829_543_424
+    assert single_archive > _NATIVE_PINNED_FILE_CEILING
+    # 6.18x over. The frozen child refuses this with its own message.
+    assert round(single_archive / _NATIVE_PINNED_FILE_CEILING, 2) == 6.18
+    # Chunked, the same 100 frames cost 6144 bytes more -- one 1024-byte
+    # end-of-archive terminator in each of the seven chunks instead of one.
+    assert 829_549_568 - single_archive == 7 * 1024 - 1024
+
+
+def test_a_hundred_and_twenty_eight_mib_chunk_holds_exactly_sixteen_keyframes():
+    budget = _NATIVE_PINNED_FILE_CEILING - 1024  # the end-of-archive terminator
+    assert budget == 134_216_704
+    assert 16 * _SUBJECT_FRAME_MEMBER_BYTES == 132_726_784
+    assert 16 * _SUBJECT_FRAME_MEMBER_BYTES <= budget
+    assert 17 * _SUBJECT_FRAME_MEMBER_BYTES == 141_022_208
+    assert 17 * _SUBJECT_FRAME_MEMBER_BYTES > budget
+    # ... which leaves this much room in chunk 000 for the engine request.
+    assert budget - 16 * _SUBJECT_FRAME_MEMBER_BYTES == 1_489_920
+
+
+@pytest.mark.parametrize(
+    (
+        "frame_count",
+        "request_bytes",
+        "expected_chunks",
+        "expected_pinned_files",
+        "expected_frames_in_first_chunk",
+    ),
+    [
+        # The subject scan and the contract maximum, with engine requests sized
+        # at 2800 bytes per frame -- four times what the real rows cost, and
+        # still inside chunk 000's 1_489_920 bytes of headroom at 400 frames.
+        (100, 280_000, 7, 8, 16),
+        (400, 1_120_000, 25, 26, 16),
+        # One byte past that headroom the request displaces a frame from chunk
+        # 000, and the whole packet needs one more chunk.  Pinned so that a
+        # request which grew past the headroom cannot pass unnoticed.
+        (400, 1_489_921, 26, 27, 15),
+    ],
+)
+def test_the_subject_scan_and_the_contract_maximum_fit_every_native_ceiling(
+    frame_count,
+    request_bytes,
+    expected_chunks,
+    expected_pinned_files,
+    expected_frames_in_first_chunk,
+):
+    """The two counts that matter: the 100-frame subject and the 400 ceiling."""
+
+    from patina_scan_worker.refine_lifecycle import plan_packet_chunks
+
+    plan = plan_packet_chunks(
+        [request_bytes] + [_SUBJECT_FRAME_PAYLOAD_BYTES] * frame_count
+    )
+
+    assert len(plan.groups) == expected_chunks
+    assert plan.pinned_file_count == expected_pinned_files
+    assert plan.pinned_file_count <= _NATIVE_PINNED_FILE_COUNT_CEILING
+    assert len(plan.groups[0]) - 1 == expected_frames_in_first_chunk
+    # No chunk may exceed 128 MiB -- the clause the single archive breached.
+    assert max(plan.chunk_sizes) <= _NATIVE_PINNED_FILE_CEILING
+    # Every member lands in exactly one chunk, in order.
+    assert [index for group in plan.groups for index in group] == list(
+        range(frame_count + 1)
+    )
+    assert plan.total_chunk_bytes == sum(plan.chunk_sizes)
+    assert plan.total_chunk_bytes <= _NATIVE_AGGREGATE_CEILING
+
+
+def test_the_hundred_frame_packet_is_the_measured_three_quarters_of_a_gibibyte():
+    from patina_scan_worker.refine_lifecycle import plan_packet_chunks
+
+    frames_only = plan_packet_chunks([_SUBJECT_FRAME_PAYLOAD_BYTES] * 100)
+    assert frames_only.total_chunk_bytes == 829_549_568
+    assert round(frames_only.total_chunk_bytes / 2**30, 4) == 0.7726
+    assert (
+        round(100 * frames_only.total_chunk_bytes / _NATIVE_AGGREGATE_CEILING, 2)
+        == 19.31
+    )
+
+
+def test_the_four_hundred_frame_packet_stays_inside_the_aggregate_ceiling():
+    from patina_scan_worker.refine_lifecycle import plan_packet_chunks
+
+    frames_only = plan_packet_chunks([_SUBJECT_FRAME_PAYLOAD_BYTES] * 400)
+    assert len(frames_only.groups) == 25
+    assert frames_only.total_chunk_bytes == 3_318_195_200
+    assert round(frames_only.total_chunk_bytes / 2**30, 2) == 3.09
+    assert frames_only.total_chunk_bytes < _NATIVE_AGGREGATE_CEILING
+
+
+def test_a_member_too_large_for_a_whole_chunk_is_refused_not_split():
+    from patina_scan_worker.refine_lifecycle import plan_packet_chunks
+
+    with pytest.raises(AdapterError) as raised:
+        plan_packet_chunks([_NATIVE_PINNED_FILE_CEILING])
+    assert "larger than one whole archive chunk" in str(raised.value)
+
+
+def test_a_packet_needing_more_than_sixty_four_pinned_files_is_refused():
+    """63 chunks is the most the boundary leaves once the manifest is pinned.
+
+    The ceiling is tightened so one member fills a chunk; at the real 128 MiB
+    ceiling 64 full chunks would breach the 4 GiB aggregate first and this
+    clause would never be the one that fires.
+    """
+
+    from patina_scan_worker.refine_lifecycle import plan_packet_chunks
+
+    plan = plan_packet_chunks([2048] * 63, chunk_max_bytes=4096)
+    assert len(plan.groups) == 63, "each member must fill its own chunk"
+    assert plan.pinned_file_count == 64
+    with pytest.raises(AdapterError) as raised:
+        plan_packet_chunks([2048] * 64, chunk_max_bytes=4096)
+    assert "more pinned files than the native boundary allows" in str(raised.value)
+
+
+def test_a_packet_past_the_aggregate_ceiling_is_refused():
+    """The 4 GiB clause, reached before the pinned-file count at full size."""
+
+    from patina_scan_worker.refine_lifecycle import plan_packet_chunks
+
+    payload = _NATIVE_PINNED_FILE_CEILING - 2048
+    with pytest.raises(AdapterError) as raised:
+        plan_packet_chunks([payload] * 33)
+    assert "exceeds the native aggregate byte ceiling" in str(raised.value)
+    # 32 of them is 4.0 GiB minus change, and still fits.
+    plan = plan_packet_chunks([payload] * 32)
+    assert plan.total_chunk_bytes <= _NATIVE_AGGREGATE_CEILING
+
+
+def test_the_chunk_ceiling_may_be_tightened_but_never_raised():
+    from patina_scan_worker.refine_lifecycle import (
+        PACKET_CHUNK_MAX_BYTES,
+        plan_packet_chunks,
+    )
+
+    plan_packet_chunks([1024], chunk_max_bytes=PACKET_CHUNK_MAX_BYTES)
+    with pytest.raises(AdapterError) as raised:
+        plan_packet_chunks([1024], chunk_max_bytes=PACKET_CHUNK_MAX_BYTES + 1)
+    assert "may be tightened but never raised" in str(raised.value)
+
+
+@pytest.mark.parametrize("ceiling", [0, -1, True, 1.5, "128"])
+def test_the_planner_refuses_a_nonsense_chunk_ceiling(ceiling):
+    from patina_scan_worker.refine_lifecycle import plan_packet_chunks
+
+    with pytest.raises(AdapterError) as raised:
+        plan_packet_chunks([1024], chunk_max_bytes=ceiling)
+    assert "packet chunk ceiling" in str(raised.value)
+
+
+def test_the_planner_refuses_an_empty_member_list():
+    from patina_scan_worker.refine_lifecycle import plan_packet_chunks
+
+    with pytest.raises(AdapterError) as raised:
+        plan_packet_chunks([])
+    assert "needs at least one member" in str(raised.value)
+
+
+def test_the_packet_writer_really_produces_the_chunks_the_plan_asked_for(tmp_path):
+    """A REAL multi-chunk packet, with real bytes through the real writer.
+
+    The ceiling is tightened rather than the frames enlarged: writing 0.77 GiB
+    to prove a layout would be a slow way to test arithmetic already pinned
+    above.  Tightening is the only direction the builder permits.
+    """
+
+    bundle_root = tmp_path / "bundle"
+    bundle_root.mkdir()
+    scratch = tmp_path / "scratch"
+    scratch.mkdir(mode=0o700)
+    bundle = _Bundle(bundle_root)
+    materialization = _materialize(bundle, scratch, _deadline())
+    try:
+        packet = build_colmap_packet(
+            materialization,
+            destination=scratch / "packet",
+            gpu_index="0",
+            run_id="b" * 64,
+            deadline=_deadline(),
+            chunk_max_bytes=8192,
+        )
+        assert len(packet.chunk_paths) > 1, "the ceiling did not force a split"
+        assert packet.pinned_file_count == 1 + len(packet.chunk_paths)
+
+        document = json.loads(packet.manifest_path.read_bytes())
+        tokens = [row["token"] for row in document["chunks"]]
+        assert tokens == [f"packet.chunk.{i:03d}" for i in range(len(tokens))]
+        # The frozen child re-sorts and demands canonical order.
+        assert tokens == sorted(tokens)
+
+        for index, chunk_path in enumerate(packet.chunk_paths):
+            written = chunk_path.stat().st_size
+            assert written <= 8192, "a chunk breached the ceiling it was built under"
+            assert written == document["chunks"][index]["sizeBytes"]
+            assert _sha256(chunk_path.read_bytes()) == document["chunks"][index]["sha256"]
+            assert _sha256(chunk_path.read_bytes()) == packet.chunk_sha256s[index]
+
+        # Every declared member is really in the chunk the manifest names, once.
+        placed = {}
+        for index, chunk_path in enumerate(packet.chunk_paths):
+            with tarfile.open(chunk_path, mode="r:") as archive:
+                for member in archive.getmembers():
+                    assert member.name not in placed
+                    placed[member.name] = f"packet.chunk.{index:03d}"
+        assert placed == {
+            row["relativePath"]: row["chunkToken"] for row in document["members"]
+        }
+        assert set(placed) == {"engine-request-v1.json"} | {
+            f"images/{frame.engine_name}" for frame in materialization.frames
+        }
+    finally:
+        materialization.cleanup()
+
+
+def test_every_chunk_is_pinned_down_to_the_child(tmp_path):
+    """The child's ledger check is exact; a chunk left unpinned is a refusal."""
+
+    from patina_scan_worker.refine_lifecycle import pinned_packet_files
+
+    bundle_root = tmp_path / "bundle"
+    bundle_root.mkdir()
+    scratch = tmp_path / "scratch"
+    scratch.mkdir(mode=0o700)
+    bundle = _Bundle(bundle_root)
+    materialization = _materialize(bundle, scratch, _deadline())
+    try:
+        packet = build_colmap_packet(
+            materialization,
+            destination=scratch / "packet",
+            gpu_index="0",
+            run_id="c" * 64,
+            deadline=_deadline(),
+            chunk_max_bytes=8192,
+        )
+        with pinned_packet_files(packet, deadline=_deadline()) as pinned:
+            expected = ("packet.manifest",) + tuple(
+                f"packet.chunk.{i:03d}" for i in range(len(packet.chunk_paths))
+            )
+            assert tuple(sorted(pinned)) == tuple(sorted(expected))
+            assert len(pinned) == packet.pinned_file_count
+            for index, token in enumerate(
+                f"packet.chunk.{i:03d}" for i in range(len(packet.chunk_paths))
+            ):
+                assert pinned[token].sha256 == packet.chunk_sha256s[index]
+                assert pinned[token].size_bytes == packet.chunk_paths[index].stat().st_size
+    finally:
+        materialization.cleanup()
+
+
+def test_the_engine_saw_every_chunk_of_the_packet_it_was_handed(tmp_path):
+    """End to end: the recorded engine verifies each pinned file's digest."""
+
+    _report, engine, _sink, _scratch = _run(tmp_path)
+    tokens = engine.calls[0]["tokens"]
+    assert tokens[0] == "packet.chunk.000"
+    assert tokens[-1] == "packet.manifest"
+    assert sorted(engine.pinned_snapshot) == sorted(tokens)
+    assert len(tokens) <= _NATIVE_PINNED_FILE_COUNT_CEILING
+    for _digest, size in engine.pinned_snapshot.values():
+        assert 0 < size <= _NATIVE_PINNED_FILE_CEILING
+
+
+# ===========================================================================
+# BLOCKING 3: one lease-aware deadline, and the lease governs it
+#
+# ``RefineDeadline.start`` applied ``min(now + REFINE_STAGE_ENGINE_BUDGET_S, ...)``
+# unconditionally, so every composed run was capped at 240 s however long a
+# lease it claimed.  A 100-frame COLMAP reconstruction does not finish in four
+# minutes.
+# ===========================================================================
+@pytest.mark.parametrize(
+    ("lease_seconds", "expected_engine_seconds"),
+    [
+        (61.0, 1.0),
+        (120.0, 60.0),
+        (300.0, 240.0),
+        (301.0, 241.0),
+        (900.0, 840.0),
+        (3600.0, 3540.0),
+        (7200.0, 7140.0),
+    ],
+)
+def test_the_lease_governs_the_one_carried_deadline(
+    lease_seconds, expected_engine_seconds
+):
+    """The lease, minus the completion reserve. No other term may bind.
+
+    The 301 s row is the regression: under the old unconditional 240 s cap it
+    would have been 240, not 241.  So would every row below it.
+    """
+
+    from patina_scan_worker.refine_lifecycle import lease_deadline
+
+    deadline = lease_deadline(lease_seconds, now_monotonic_s=1000.0)
+    assert deadline.expires_at_monotonic_s == pytest.approx(
+        1000.0 + expected_engine_seconds
+    )
+    assert deadline.remaining_seconds(now_monotonic_s=1000.0) == pytest.approx(
+        expected_engine_seconds
+    )
+
+
+@pytest.mark.parametrize(
+    ("lease_seconds", "expected_code", "expected_message"),
+    [
+        # A non-positive lease is not a lease at all; it never reaches the
+        # reserve arithmetic.
+        (0.0, "REFINE_ADAPTER_INVALID", "positive finite engine budget"),
+        (-30.0, "REFINE_ADAPTER_INVALID", "positive finite engine budget"),
+        # A positive lease with nothing left after the 60 s completion reserve.
+        (1.0, "REFINE_ENGINE_TIMEOUT", "no engine time after the completion reserve"),
+        (59.0, "REFINE_ENGINE_TIMEOUT", "no engine time after the completion reserve"),
+        (60.0, "REFINE_ENGINE_TIMEOUT", "no engine time after the completion reserve"),
+    ],
+)
+def test_a_lease_with_no_engine_time_is_refused(
+    lease_seconds, expected_code, expected_message
+):
+    from patina_scan_worker.refine_lifecycle import lease_deadline
+
+    with pytest.raises(AdapterError) as raised:
+        lease_deadline(lease_seconds, now_monotonic_s=1000.0)
+    assert raised.value.code == expected_code
+    assert expected_message in str(raised.value)
+
+
+@pytest.mark.parametrize("value", [math.nan, math.inf, -math.inf, "900", None, True])
+def test_the_lease_must_be_a_finite_number(value):
+    from patina_scan_worker.refine_lifecycle import lease_deadline
+
+    with pytest.raises(AdapterError) as raised:
+        lease_deadline(value, now_monotonic_s=1000.0)
+    assert "lease seconds must be a finite number" in str(raised.value)
+
+
+def test_the_stage_budget_is_a_default_the_caller_can_replace():
+    """It stays 240 s for everyone who does not say otherwise."""
+
+    from patina_scan_worker.refine_adapter import (
+        LEASE_COMPLETION_RESERVE_S,
+        REFINE_STAGE_ENGINE_BUDGET_S,
+    )
+
+    assert REFINE_STAGE_ENGINE_BUDGET_S == 240
+    assert LEASE_COMPLETION_RESERVE_S == 60
+    # Default: the 240 s stage budget binds inside a long lease.
+    stage = RefineDeadline.start(
+        now_monotonic_s=1000.0, lease_expires_at_monotonic_s=1000.0 + 3600.0
+    )
+    assert stage.expires_at_monotonic_s == pytest.approx(1240.0)
+    # Replaced: the lease binds instead.
+    composed = RefineDeadline.start(
+        now_monotonic_s=1000.0,
+        lease_expires_at_monotonic_s=1000.0 + 3600.0,
+        engine_budget_s=3600.0,
+    )
+    assert composed.expires_at_monotonic_s == pytest.approx(1000.0 + 3540.0)
+    # No budget can ever push the deadline past the lease's reserve.
+    beyond = RefineDeadline.start(
+        now_monotonic_s=1000.0,
+        lease_expires_at_monotonic_s=1000.0 + 3600.0,
+        engine_budget_s=1_000_000.0,
+    )
+    assert beyond.expires_at_monotonic_s == pytest.approx(1000.0 + 3540.0)
+
+
+@pytest.mark.parametrize("budget", [0.0, -1.0, math.nan, math.inf, True, "240"])
+def test_the_engine_budget_must_be_positive_and_finite(budget):
+    with pytest.raises(AdapterError) as raised:
+        RefineDeadline.start(
+            now_monotonic_s=1000.0,
+            lease_expires_at_monotonic_s=1000.0 + 3600.0,
+            engine_budget_s=budget,
+        )
+    assert "positive finite engine budget" in str(raised.value)
+
+
+#: Every module the composed lifecycle runs through.  Written out literally: if
+#: the lifecycle grows an import, this list is what has to be updated, and the
+#: test below proves the list still covers the real import graph.
+_COMPOSED_LIFECYCLE_MODULES = (
+    "refine_lifecycle.py",
+    "refine_materializer.py",
+    "refine_model_alignment.py",
+    "refine_native_process.py",
+    "refine_packet_extractor.py",
+    "refine_publisher.py",
+    "refine_runner.py",
+)
+
+
+def test_no_composed_module_acquires_a_second_deadline():
+    """ONE deadline is created, in ``main``, and threaded from there.
+
+    A stage that called ``RefineDeadline.start`` for itself would get a fresh
+    clock and silently escape the lease.  This reads the shipped source of every
+    module on the composed path rather than watching one run, so a fresh
+    acquisition on a branch no fixture reaches still reddens.
+    """
+
+    source_root = pathlib.Path(refine_lifecycle.__file__).parent
+    acquisitions = []
+    for module_name in _COMPOSED_LIFECYCLE_MODULES:
+        tree = ast.parse((source_root / module_name).read_text())
+        for node in ast.walk(tree):
+            if not isinstance(node, ast.Call):
+                continue
+            function = node.func
+            if (
+                isinstance(function, ast.Attribute)
+                and function.attr == "start"
+                and isinstance(function.value, ast.Name)
+                and function.value.id == "RefineDeadline"
+            ) or (
+                isinstance(function, ast.Name) and function.id == "RefineDeadline"
+            ):
+                acquisitions.append((module_name, node.lineno))
+
+    assert [module for module, _line in acquisitions] == ["refine_lifecycle.py"]
+    # ... and the single acquisition is inside ``lease_deadline``, nowhere else.
+    tree = ast.parse((source_root / "refine_lifecycle.py").read_text())
+    owners = {
+        node.name
+        for node in ast.walk(tree)
+        if isinstance(node, ast.FunctionDef)
+        and any(
+            isinstance(inner, ast.Call)
+            and isinstance(inner.func, ast.Attribute)
+            and inner.func.attr == "start"
+            and isinstance(inner.func.value, ast.Name)
+            and inner.func.value.id == "RefineDeadline"
+            for inner in ast.walk(node)
+        )
+    }
+    assert owners == {"lease_deadline"}
+
+
+def test_the_composed_module_list_covers_the_real_import_graph():
+    """The list above is only trustworthy if it is complete."""
+
+    source_root = pathlib.Path(refine_lifecycle.__file__).parent
+    seen = set()
+    pending = ["refine_lifecycle.py"]
+    while pending:
+        module_name = pending.pop()
+        if module_name in seen:
+            continue
+        seen.add(module_name)
+        tree = ast.parse((source_root / module_name).read_text())
+        for node in ast.walk(tree):
+            if isinstance(node, ast.ImportFrom) and node.level == 1 and node.module:
+                candidate = f"{node.module}.py"
+                if (source_root / candidate).exists():
+                    pending.append(candidate)
+
+    # Modules that only define or carry the deadline, never acquire one.
+    leaves = {
+        "refine_adapter.py",
+        "refine_colmap_backend.py",
+        "refine_colmap_command.py",
+        "refine_colmap_toolchain.py",
+        "refine_evidence_builder.py",
+        "refine_engine.py",
+        "field_raster_materializer.py",
+        "field_raster_qualification.py",
+        "field_storage_acquirer.py",
+        "colmap_qualification.py",
+        "config.py",
+        "db.py",
+        "errors.py",
+        "http.py",
+        "keys.py",
+        "storage.py",
+        "telemetry.py",
+        "untar.py",
+    }
+    assert seen - leaves == set(_COMPOSED_LIFECYCLE_MODULES)
+
+
+def test_the_carried_deadline_is_the_same_object_at_every_seam(tmp_path):
+    """No seam swaps the clock for one of its own."""
+
+    carried = _deadline(300.0)
+    seen: list[int] = []
+
+    bundle_root = tmp_path / "bundle"
+    bundle_root.mkdir(parents=True)
+    scratch = tmp_path / "scratch"
+    scratch.mkdir(mode=0o700, parents=True)
+    publish = tmp_path / "publish"
+    publish.mkdir(mode=0o700, parents=True)
+    manifest = tmp_path / "toolchain.json"
+    manifest.write_text("{}")
+    bundle = _Bundle(bundle_root)
+    probe = _materialize(bundle, scratch, _deadline())
+    frames = probe.frames
+    probe.cleanup()
+
+    engine = _RecordedEngine(tmp_path / "engine-outputs", frames)
+    inner = engine.__call__
+
+    def recording_engine(request, *, deadline, **kwargs):
+        seen.append(id(deadline))
+        return inner(request, deadline=deadline, **kwargs)
+
+    class _RecordingAcquirer(LocalScratchArtifactAcquirer):
+        def acquire(self, *args, **kwargs):
+            deadline = kwargs.get("deadline")
+            if deadline is not None:
+                seen.append(id(deadline))
+            return super().acquire(*args, **kwargs)
+
+    try:
+        run_refine_lifecycle(
+            RefineLifecycleRequest(
+                user_id=USER_ID,
+                scan_id=SCAN_ID,
+                task_id=TASK_ID,
+                lease_id=LEASE_ID,
+                room_file_id=ROOM_FILE_ID,
+                room_file_version=1,
+                scratch_root=scratch,
+                manifest=bundle.manifest,
+                keyframe_index=bundle.index,
+                keyframe_summary=bundle.summary,
+                keyframes_archive=bundle.archive,
+            ),
+            acquirer=_RecordingAcquirer(bundle_root),
+            raster_materializer=_PrematerializedRaster(),
+            storage=LocalScratchStorageSink(publish),
+            deadline=carried,
+            native_engine_call=recording_engine,
+            toolchain_manifest_path=str(manifest),
+        )
+    finally:
+        engine.close()
+
+    assert seen, "no seam reported the deadline it was handed"
+    assert set(seen) == {id(carried)}
+
+
+def test_the_cli_takes_its_deadline_from_the_lease_and_nowhere_else():
+    """``main`` must not rebuild the arithmetic ``lease_deadline`` owns.
+
+    Two clauses, because a sweep showed the first alone was not enough: keeping
+    the ``lease_deadline`` call while assigning over ``arguments.lease_seconds``
+    beforehand would still cap the run, and the call check cannot see that.
+    """
+
+    source_root = pathlib.Path(refine_lifecycle.__file__).parent
+    tree = ast.parse((source_root / "refine_lifecycle.py").read_text())
+    main_node = next(
+        node
+        for node in ast.walk(tree)
+        if isinstance(node, ast.FunctionDef) and node.name == "main"
+    )
+    called = {
+        node.func.id
+        for node in ast.walk(main_node)
+        if isinstance(node, ast.Call) and isinstance(node.func, ast.Name)
+    }
+    assert "lease_deadline" in called
+
+    # Nothing in ``main`` may overwrite the parsed lease before it is used.
+    rebound = {
+        target.attr
+        for node in ast.walk(main_node)
+        if isinstance(node, ast.Assign)
+        for target in node.targets
+        if isinstance(target, ast.Attribute)
+        and isinstance(target.value, ast.Name)
+        and target.value.id == "arguments"
+    }
+    assert rebound == set(), f"main reassigns parsed CLI arguments: {rebound}"
+
+
+def test_the_cli_default_lease_buys_more_than_the_old_four_minute_cap():
+    """The default is a lease, and the lease is what the deadline follows."""
+
+    from patina_scan_worker.refine_lifecycle import (
+        DEFAULT_LEASE_SECONDS,
+        build_argument_parser,
+        lease_deadline,
+    )
+
+    assert DEFAULT_LEASE_SECONDS == 3600.0
+    arguments = build_argument_parser().parse_args(
+        [
+            "--bundle-dir", "/b", "--scratch-dir", "/s", "--publish-dir", "/p",
+            "--user-id", "u", "--scan-id", "s", "--task-id", "t",
+            "--lease-id", "l", "--room-file-id", "r",
+        ]
+    )
+    assert arguments.lease_seconds == 3600.0
+    deadline = lease_deadline(arguments.lease_seconds, now_monotonic_s=0.0)
+    assert deadline.expires_at_monotonic_s == pytest.approx(3540.0)
+    # The number the old unconditional cap would have produced instead.
+    assert deadline.expires_at_monotonic_s != pytest.approx(240.0)
+
+
+def test_the_cli_lease_flag_is_honoured_end_to_end():
+    from patina_scan_worker.refine_lifecycle import (
+        build_argument_parser,
+        lease_deadline,
+    )
+
+    arguments = build_argument_parser().parse_args(
+        [
+            "--bundle-dir", "/b", "--scratch-dir", "/s", "--publish-dir", "/p",
+            "--user-id", "u", "--scan-id", "s", "--task-id", "t",
+            "--lease-id", "l", "--room-file-id", "r",
+            "--lease-seconds", "5400",
+        ]
+    )
+    assert arguments.lease_seconds == 5400.0
+    deadline = lease_deadline(arguments.lease_seconds, now_monotonic_s=0.0)
+    assert deadline.expires_at_monotonic_s == pytest.approx(5340.0)
+
+
+def test_no_loop_in_the_lifecycle_waits_without_consulting_the_deadline():
+    """An unbounded wait escapes the lease as surely as a fresh clock does.
+
+    Every ``while`` in this module reads bytes from something -- a descriptor, a
+    source file, a socket-free copy -- and any of them can stall.  Each must
+    consult the carried deadline inside its own body, not merely before or after
+    it.  Structural rather than behavioural on purpose: a stall that only a real
+    slow disk produces is not something a fixture can stage, but a loop written
+    without the check is something the source can be read for.
+    """
+
+    source_root = pathlib.Path(refine_lifecycle.__file__).parent
+    tree = ast.parse((source_root / "refine_lifecycle.py").read_text())
+    loops = [node for node in ast.walk(tree) if isinstance(node, ast.While)]
+    assert len(loops) == 5, "a loop was added or removed; check it consults the deadline"
+
+    for loop in loops:
+        names = {
+            inner.attr
+            for inner in ast.walk(loop)
+            if isinstance(inner, ast.Attribute)
+        } | {
+            inner.id for inner in ast.walk(loop) if isinstance(inner, ast.Name)
+        }
+        assert "remaining_seconds" in names or "_checkpoint" in names, (
+            f"the while loop at line {loop.lineno} can spin without checking the "
+            "carried deadline"
+        )
+
+
+def test_the_recorded_engine_refines_nothing_in_the_gauge_invariant_sense(tmp_path):
+    """WHY the shape-change floor is absent, pinned rather than only argued.
+
+    The movement floor above compares the published poses against the submitted
+    ones, and the recorded engine passes it easily: it moves every camera by
+    centimetres.  But it moves them by applying ONE similarity to the whole
+    trajectory, so the cameras do not move relative to each other at all -- the
+    gauge-invariant shape change is at float64 noise, not merely small.
+
+    That is the residual.  Item 6's ``fit_rmse_m`` is the right quantity to put
+    a floor under, and it is bounded above and not below; a floor anywhere above
+    machine epsilon would redden every happy-path test in this file, because
+    this fixture's engine does not model bundle adjustment.  Closing it needs a
+    recorded engine that moves cameras relative to one another, which is the
+    child-side engine body.
+
+    The bound below is a NOISE BAND, not a measurement of a fixed value: the
+    exact residual depends on the platform's libm and is only meaningful as
+    "indistinguishable from zero".
+    """
+
+    report, _engine, _sink, _scratch = _run(tmp_path)
+    verification = report.alignment_verification
+
+    assert verification.fit_rmse_m < 1.0e-12
+    assert verification.max_aligned_orientation_change_rad < 1.0e-12
+    # ... while the trajectory it is a residual OF is metres across, so this is
+    # a ratio of order 1e-16 and not a small absolute number on a small model.
+    assert verification.seed_rms_radius_m > 1.0
+
+    # Meanwhile the poses really did move away from the submitted ones, which is
+    # exactly what the movement floor measures and why it passes here.
+    assert report.refined_pose_movement.max_center_movement_m > 1.0e-3
+    assert report.refined_pose_movement.max_rotation_movement_rad > 1.0e-3
+
+
+# ---------------------------------------------------------------------------
+# Clauses a mutation sweep found deletable with zero red, now falsifiable
+# ---------------------------------------------------------------------------
+@pytest.mark.parametrize(
+    "payload",
+    [-1, True, False, 1.0, "512", None, 2**64 + 0.5],
+)
+def test_the_ustar_member_arithmetic_refuses_a_nonsense_payload_size(payload):
+    from patina_scan_worker.refine_lifecycle import ustar_member_bytes
+
+    with pytest.raises(AdapterError) as raised:
+        ustar_member_bytes(payload)
+    assert "non-negative integer payload size" in str(raised.value)
+
+
+def _hand_built_packet(tmp_path, *, chunks, digests):
+    """A BuiltColmapPacket assembled by hand, not by the writer.
+
+    The dataclass is public and frozen, so a caller really can hand
+    ``pinned_packet_files`` a packet the builder would never have produced.
+    That is the only way these two clauses are reachable, and it is a real way.
+    """
+
+    from patina_scan_worker.refine_lifecycle import BuiltColmapPacket
+
+    manifest = tmp_path / "packet-manifest-v1.json"
+    manifest.write_bytes(b"{}")
+    return BuiltColmapPacket(
+        manifest_path=manifest,
+        chunk_paths=tuple(chunks),
+        manifest_sha256="a" * 64,
+        chunk_sha256s=tuple(digests),
+        run_id="b" * 64,
+        engine_request_sha256="c" * 64,
+        child_request={},
+    )
+
+
+def test_pinning_refuses_a_packet_whose_chunks_and_digests_disagree(tmp_path):
+    from patina_scan_worker.refine_lifecycle import pinned_packet_files
+
+    chunk = tmp_path / "packet.chunk.000.tar"
+    chunk.write_bytes(b"\x00" * 1024)
+    packet = _hand_built_packet(tmp_path, chunks=[chunk, chunk], digests=["d" * 64])
+
+    with pytest.raises(AdapterError) as raised:
+        with pinned_packet_files(packet, deadline=_deadline()):
+            pass
+    assert "chunk paths and digests disagree in number" in str(raised.value)
+
+
+def test_pinning_refuses_a_packet_with_more_chunks_than_the_boundary_allows(tmp_path):
+    """64 chunks plus the manifest is 65 pinned files; the ceiling is 64."""
+
+    from patina_scan_worker.refine_lifecycle import pinned_packet_files
+
+    chunk = tmp_path / "packet.chunk.000.tar"
+    chunk.write_bytes(b"\x00" * 1024)
+
+    inside = _hand_built_packet(
+        tmp_path, chunks=[chunk] * 63, digests=["d" * 64] * 63
+    )
+    assert inside.pinned_file_count == 64
+    with pinned_packet_files(inside, deadline=_deadline()) as pinned:
+        # All 63 point at one file, so the token map collapses; what matters is
+        # that the count clause let it through.
+        assert len(pinned) <= 64
+
+    over = _hand_built_packet(tmp_path, chunks=[chunk] * 64, digests=["d" * 64] * 64)
+    assert over.pinned_file_count == 65
+    with pytest.raises(AdapterError) as raised:
+        with pinned_packet_files(over, deadline=_deadline()):
+            pass
+    assert "more pinned files than the native boundary allows" in str(raised.value)
+
+
+@pytest.mark.parametrize("ceiling", [8192, 16384, 32768, 65536])
+def test_the_planner_predicts_the_bytes_the_writer_actually_writes(tmp_path, ceiling):
+    """The tie between the arithmetic and the bytes, at four ceilings.
+
+    This is what replaced three parent-side post-write assertions that no
+    deletion could redden.  It compares the planner's predicted per-chunk sizes
+    against the sizes on disk, so a writer that stopped matching its own plan
+    reddens here instead of nowhere.
+    """
+
+    from patina_scan_worker.refine_lifecycle import plan_packet_chunks
+
+    bundle_root = tmp_path / "bundle"
+    bundle_root.mkdir()
+    scratch = tmp_path / "scratch"
+    scratch.mkdir(mode=0o700)
+    bundle = _Bundle(bundle_root)
+    materialization = _materialize(bundle, scratch, _deadline())
+    try:
+        packet = build_colmap_packet(
+            materialization,
+            destination=scratch / f"packet-{ceiling}",
+            gpu_index="0",
+            run_id="d" * 64,
+            deadline=_deadline(),
+            chunk_max_bytes=ceiling,
+        )
+        document = json.loads(packet.manifest_path.read_bytes())
+        request_row = next(
+            row
+            for row in document["members"]
+            if row["relativePath"] == "engine-request-v1.json"
+        )
+        plan = plan_packet_chunks(
+            [request_row["sizeBytes"]]
+            + [frame.engine_size_bytes for frame in materialization.frames],
+            chunk_max_bytes=ceiling,
+        )
+        actual = [path.stat().st_size for path in packet.chunk_paths]
+        assert list(plan.chunk_sizes) == actual
+        assert plan.total_chunk_bytes == sum(actual)
+        assert len(plan.groups) == len(packet.chunk_paths)
+        assert max(actual) <= ceiling
+    finally:
+        materialization.cleanup()
