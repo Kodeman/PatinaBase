@@ -220,6 +220,32 @@ struct FirstLaunchTourTests {
         #expect(model.currentStep == firstStep)
     }
 
+    @Test
+    func checkFirstLaunch_isSafeToDeferAndRetrigger() {
+        // U38: the host gates auto-start on Home being visible, so
+        // `.task(id: canAutoStart)` calls `checkFirstLaunch()` again when the
+        // covering route pops. That re-fire MUST NOT start a second tour —
+        // exactly one `startTour` may run for the life of the model.
+        let stub = StubFirstLaunchTourDefaults()
+        setFirstLaunchTourDefaults(stub)
+        defer { resetFirstLaunchTourDefaults() }
+
+        let model = FirstLaunchTourModel()
+        model.checkFirstLaunch()
+        #expect(model.isActive)
+        #expect(model.currentStep == 0)
+
+        // Walk one step so a second `startTour` would be observable — it
+        // resets `currentStep` to 0 and re-fires `help.tour.started`.
+        model.advance()
+        #expect(model.currentStep == 1)
+
+        model.checkFirstLaunch()
+        #expect(model.isActive)
+        #expect(model.currentStep == 1)   // no restart — still exactly one tour
+        #expect(getFirstLaunchTourState(model.tourKey).launched == true)
+    }
+
     // MARK: - Imperative actions
 
     @Test
@@ -282,15 +308,15 @@ struct FirstLaunchTourTests {
 
         let model = FirstLaunchTourModel()
         model.anchorMountGracePeriod = .milliseconds(20)
-        // Zero-room home: greeting + profile mount, but the `.savedHeart`
-        // product card never does.
+        // Zero-room home: greeting + profile mount, but the `.addToRoom`
+        // product card (and its "+ Add" button) never does.
         model.registerAnchor(.homeGreeting)
         model.registerAnchor(.profileMonogram)
         model.startTour(triggerSource: "test")
 
         #expect(model.currentStep == 0)   // homeGreeting
         model.advance()
-        #expect(model.currentStep == 1)   // lands on .savedHeart first…
+        #expect(model.currentStep == 1)   // lands on .addToRoom first…
         // …then auto-skips once the grace window elapses with no mount.
         try? await Task.sleep(for: .milliseconds(120))
         #expect(model.currentStep == 2)   // .profileMonogram (mounted)
@@ -314,14 +340,14 @@ struct FirstLaunchTourTests {
         model.startTour(triggerSource: "test")
 
         model.advance()
-        #expect(model.currentStep == 1)   // .savedHeart, not mounted yet
+        #expect(model.currentStep == 1)   // .addToRoom, not mounted yet
         // The product card mounts a beat later, inside the grace window — the
         // pending skip must cancel so the coachmark is kept (the regression the
         // async-skip fix guards against).
         try? await Task.sleep(for: .milliseconds(20))
-        model.registerAnchor(.savedHeart)
+        model.registerAnchor(.addToRoom)
         try? await Task.sleep(for: .milliseconds(260))
-        #expect(model.currentStep == 1)   // stayed on .savedHeart
+        #expect(model.currentStep == 1)   // stayed on .addToRoom
         #expect(model.isActive)
     }
 
@@ -384,22 +410,22 @@ struct FirstLaunchTourTests {
         let model = FirstLaunchTourModel()
         // Dormant — nothing should claim any anchor.
         #expect(!model.isShowingPopover(forAnchor: .homeGreeting))
-        #expect(!model.isShowingPopover(forAnchor: .savedHeart))
+        #expect(!model.isShowingPopover(forAnchor: .addToRoom))
         #expect(!model.isShowingPopover(forAnchor: .profileMonogram))
 
         model.startTour(triggerSource: "test")
         #expect(model.isShowingPopover(forAnchor: .homeGreeting))
-        #expect(!model.isShowingPopover(forAnchor: .savedHeart))
+        #expect(!model.isShowingPopover(forAnchor: .addToRoom))
         #expect(!model.isShowingPopover(forAnchor: .profileMonogram))
 
         model.advance()
         #expect(!model.isShowingPopover(forAnchor: .homeGreeting))
-        #expect(model.isShowingPopover(forAnchor: .savedHeart))
+        #expect(model.isShowingPopover(forAnchor: .addToRoom))
         #expect(!model.isShowingPopover(forAnchor: .profileMonogram))
 
         model.advance()
         #expect(!model.isShowingPopover(forAnchor: .homeGreeting))
-        #expect(!model.isShowingPopover(forAnchor: .savedHeart))
+        #expect(!model.isShowingPopover(forAnchor: .addToRoom))
         #expect(model.isShowingPopover(forAnchor: .profileMonogram))
     }
 
@@ -416,7 +442,7 @@ struct FirstLaunchTourTests {
         #expect(descriptor?.surfaceKey == "ios-app/first-launch-tour/step-1-home")
 
         // Non-matching anchor → nil.
-        #expect(model.currentStepDescriptor(forAnchor: .savedHeart) == nil)
+        #expect(model.currentStepDescriptor(forAnchor: .addToRoom) == nil)
     }
 
     @Test
@@ -429,8 +455,38 @@ struct FirstLaunchTourTests {
         model.startTour(triggerSource: "test")
         #expect(model.currentStepNumber == 1)
         #expect(model.totalSteps == 3)
+        #expect(!model.isOnFinalStep)
         model.advance()
         #expect(model.currentStepNumber == 2)
+        model.advance()
+        #expect(model.isOnFinalStep)
+    }
+
+    @Test
+    func stepCaption_renumbersVisiblyWhenAnAnchorNeverMounts() async {
+        // U32: a skipped step must leave the caption self-consistent —
+        // "Step 1 of 3" → "Step 2 of 2", never "Step 1 of 3" → "Step 3 of 3"
+        // with a step the user reads as missing.
+        let stub = StubFirstLaunchTourDefaults()
+        setFirstLaunchTourDefaults(stub)
+        defer { resetFirstLaunchTourDefaults() }
+
+        let model = FirstLaunchTourModel()
+        model.anchorMountGracePeriod = .milliseconds(20)
+        model.registerAnchor(.homeGreeting)
+        model.registerAnchor(.profileMonogram)
+        model.startTour(triggerSource: "test")
+
+        #expect(model.currentStepNumber == 1)
+        #expect(model.totalSteps == 3)
+
+        model.advance()                                   // lands on .addToRoom
+        try? await Task.sleep(for: .milliseconds(120))     // …which never mounts
+
+        #expect(model.currentStep == 2)                   // .profileMonogram
+        #expect(model.currentStepNumber == 2)             // renumbered, not 3
+        #expect(model.totalSteps == 2)                    // denominator shrank
+        #expect(model.isOnFinalStep)                      // still the last step
     }
 
     // MARK: - Default configuration
@@ -440,7 +496,7 @@ struct FirstLaunchTourTests {
         let model = FirstLaunchTourModel()
         #expect(model.tourKey == "ios-first-launch-tour")
         #expect(model.steps.count == 3)
-        #expect(model.steps.map(\.anchor) == [.homeGreeting, .savedHeart, .profileMonogram])
+        #expect(model.steps.map(\.anchor) == [.homeGreeting, .addToRoom, .profileMonogram])
     }
 
     @Test
@@ -449,6 +505,30 @@ struct FirstLaunchTourTests {
         #expect(steps[0].surfaceKey == SurfaceKeys.IOSApp.FirstLaunchTour.step1Home)
         #expect(steps[1].surfaceKey == SurfaceKeys.IOSApp.FirstLaunchTour.step2Saved)
         #expect(steps[2].surfaceKey == SurfaceKeys.IOSApp.FirstLaunchTour.step3Profile)
+    }
+
+    @Test
+    func defaultStepFallbacksMatchTheGlossary() {
+        // U32: the fallbacks describe controls that actually exist on Home.
+        // Sanity-served copy still overrides these at runtime — these are the
+        // offline / CMS-miss strings, and they are design-authority verbatim.
+        let steps = FirstLaunchTourModel.defaultSteps
+        #expect(steps[0].fallback?.heading == "Welcome to Patina")
+        #expect(steps[0].fallback?.body == "This is your Daily Room — picks and stories chosen for your space.")
+        #expect(steps[1].fallback?.heading == "Save what you love")
+        #expect(steps[1].fallback?.body == "Add pieces to a room with + Add — they follow you everywhere.")
+        #expect(steps[2].fallback?.heading == "Your profile")
+        #expect(steps[2].fallback?.body == "Rooms, saved pieces, and settings live here.")
+    }
+
+    @Test
+    func defaultStepFallbacksNameNoHeartControl() {
+        // The Daily Room ships a "+ Add" capsule, not a heart. Guard the
+        // regression that made step 2 point at a control that never existed.
+        for step in FirstLaunchTourModel.defaultSteps {
+            #expect(step.fallback?.heading.lowercased().contains("heart") == false)
+            #expect(step.fallback?.body.lowercased().contains("heart") == false)
+        }
     }
 
     @Test
@@ -520,7 +600,7 @@ struct FirstLaunchTourTests {
         // breakdowns if we ever capture them as analytics dimensions. Lock
         // them down so a rename forces an explicit migration.
         #expect(FirstLaunchTourAnchor.homeGreeting.rawValue == "home-greeting")
-        #expect(FirstLaunchTourAnchor.savedHeart.rawValue == "saved-heart")
+        #expect(FirstLaunchTourAnchor.addToRoom.rawValue == "add-to-room")
         #expect(FirstLaunchTourAnchor.profileMonogram.rawValue == "profile-monogram")
     }
 }
