@@ -10,23 +10,43 @@ struct RoomContextBar: View {
     let filters: [DailyRoomViewModel.CategoryFilter]
     let activeFilterID: String
     let onSelectFilter: (DailyRoomViewModel.CategoryFilter) -> Void
-    /// Opens the selected room's project view. Only the context text +
-    /// chevron become tappable when set — trailing filter pills keep
-    /// their own targets. Nil renders the text plainly (e.g. the preview).
+    /// Opens the selected room's project view. Drives both the tappable
+    /// context text and the explicit "Open room →" control. Nil renders the
+    /// text plainly with no control (e.g. the preview).
     var onOpenRoom: (() -> Void)?
 
     var body: some View {
-        HStack(alignment: .center) {
-            if let room {
-                contextText(for: room)
-            } else {
-                Spacer()
-            }
-            Spacer(minLength: 8)
-            HStack(spacing: 4) {
-                ForEach(filters) { filter in
-                    filterPill(filter)
+        VStack(alignment: .leading, spacing: 4) {
+            HStack(alignment: .center) {
+                if let room {
+                    contextText(for: room)
+                } else {
+                    Spacer()
                 }
+                Spacer(minLength: 8)
+                HStack(spacing: 4) {
+                    ForEach(filters) { filter in
+                        filterPill(filter)
+                    }
+                }
+            }
+
+            // U13: sq-ft / orientation metadata is a description, not a verb.
+            // The named control is the affordance; the metadata line stays
+            // tappable as an accelerator.
+            if let onOpenRoom, let room {
+                Button(action: onOpenRoom) {
+                    Text("Open room →")
+                        .font(PatinaTypography.monoLabel)
+                        .tracking(0.4)
+                        .textCase(.uppercase)
+                        .foregroundStyle(PatinaColors.Text.interactive)
+                        .frame(minHeight: 32, alignment: .leading)
+                        .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel("Open \(room.name)")
+                .accessibilityHint("Opens this room.")
             }
         }
         .padding(.top, PatinaSpacing.sm)

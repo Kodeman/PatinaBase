@@ -20,26 +20,53 @@ struct ContinueScanCard: View {
     let onDismiss: () -> Void
 
     var body: some View {
+        // U12: the card's primary action is a real Button carrying a visible
+        // "Continue ›" affordance — a whole-card tap gesture announced
+        // nothing and offered no cue that the card was live. The dismiss ✕
+        // stays a SIBLING button: nesting it inside the primary Button's
+        // label would swallow its taps.
         HStack(spacing: PatinaSpacing.xsm) {
-            ZStack {
-                RoundedRectangle(cornerRadius: PatinaRadius.lg, style: .continuous)
-                    .fill(PatinaGradients.earth)
-                    .frame(width: 44, height: 44)
-                Image(systemName: "camera.viewfinder")
-                    .font(.system(size: 18))
-                    .foregroundStyle(PatinaColors.offWhite)
-            }
+            Button(action: onContinue) {
+                HStack(spacing: PatinaSpacing.xsm) {
+                    ZStack {
+                        RoundedRectangle(cornerRadius: PatinaRadius.lg, style: .continuous)
+                            .fill(PatinaGradients.earth)
+                            .frame(width: 44, height: 44)
+                        Image(systemName: "camera.viewfinder")
+                            .font(.system(size: 18))
+                            .foregroundStyle(PatinaColors.offWhite)
+                    }
 
-            VStack(alignment: .leading, spacing: PatinaSpacing.xxxs) {
-                Text("Continue your scan")
-                    .font(PatinaTypography.bodySmallMedium)
-                    .foregroundStyle(PatinaColors.Text.primary)
-                Text("\(photosCount) photo\(photosCount == 1 ? "" : "s") captured · \(relativeStarted)")
-                    .font(PatinaTypography.caption)
-                    .foregroundStyle(PatinaColors.Text.muted)
-            }
+                    VStack(alignment: .leading, spacing: PatinaSpacing.xxxs) {
+                        Text("Continue your scan")
+                            .font(PatinaTypography.bodySmallMedium)
+                            .foregroundStyle(PatinaColors.Text.primary)
+                        Text("\(photosCount) photo\(photosCount == 1 ? "" : "s") captured · \(relativeStarted)")
+                            .font(PatinaTypography.caption)
+                            .foregroundStyle(PatinaColors.Text.muted)
+                    }
 
-            Spacer(minLength: 0)
+                    Spacer(minLength: PatinaSpacing.xs)
+
+                    HStack(spacing: 2) {
+                        Text("Continue")
+                            .font(PatinaTypography.monoLabel)
+                            .tracking(0.4)
+                            .textCase(.uppercase)
+                            .foregroundStyle(PatinaColors.Text.interactive)
+                        Image(systemName: "chevron.right")
+                            .font(PatinaTypography.uiSmall)
+                            .foregroundStyle(PatinaColors.Text.interactive)
+                    }
+                }
+                .frame(minHeight: 44)
+                .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .accessibilityElement(children: .combine)
+            .accessibilityLabel("Continue your saved scan")
+            .accessibilityHint("\(photosCount) photos captured. Resumes the room scan you started earlier.")
+            .accessibilityIdentifier("DailyRoomView.ContinueScanCard")
 
             Button(action: onDismiss) {
                 Image(systemName: "xmark")
@@ -58,12 +85,6 @@ struct ContinueScanCard: View {
             RoundedRectangle(cornerRadius: PatinaRadius.xl, style: .continuous)
                 .stroke(PatinaColors.clay.opacity(0.35), lineWidth: 1)
         )
-        .contentShape(RoundedRectangle(cornerRadius: PatinaRadius.xl, style: .continuous))
-        .onTapGesture(perform: onContinue)
-        .accessibilityElement(children: .combine)
-        .accessibilityLabel("Continue your saved scan")
-        .accessibilityHint("\(photosCount) photos captured. Resumes the room scan you started earlier.")
-        .accessibilityIdentifier("DailyRoomView.ContinueScanCard")
     }
 
     private var relativeStarted: String {

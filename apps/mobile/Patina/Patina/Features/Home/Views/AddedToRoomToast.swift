@@ -7,7 +7,9 @@ import SwiftUI
 
 struct AddedToRoomToast: View {
     let message: String
-    let onView: () -> Void
+    /// U05: opens the room the piece was just added to. Nil when no room is
+    /// resolvable — the button is then omitted rather than shown dead.
+    var onView: (() -> Void)?
 
     var body: some View {
         HStack(spacing: 10) {
@@ -22,15 +24,16 @@ struct AddedToRoomToast: View {
             Text(message)
                 .font(PatinaTypography.caption)
                 .foregroundStyle(PatinaColors.offWhite)
-            Button {
-                onView()
-            } label: {
-                Text("View")
-                    .font(PatinaTypography.caption)
-                    .foregroundStyle(PatinaColors.Text.interactive)
+            if let onView {
+                Button(action: onView) {
+                    Text("View")
+                        .font(PatinaTypography.caption)
+                        .foregroundStyle(PatinaColors.Text.interactive)
+                }
+                .buttonStyle(.plain)
+                .padding(.leading, 4)
+                .accessibilityHint("Opens the room this piece was added to.")
             }
-            .buttonStyle(.plain)
-            .padding(.leading, 4)
         }
         .padding(.vertical, 10)
         .padding(.horizontal, 18)
@@ -44,7 +47,10 @@ struct AddedToRoomToast: View {
 }
 
 #Preview {
-    AddedToRoomToast(message: "Added to Living Room") { }
-        .padding()
-        .background(PatinaColors.Background.primary)
+    VStack(spacing: 16) {
+        AddedToRoomToast(message: "Added to Living Room", onView: {})
+        AddedToRoomToast(message: "Added to Living Room")
+    }
+    .padding()
+    .background(PatinaColors.Background.primary)
 }
