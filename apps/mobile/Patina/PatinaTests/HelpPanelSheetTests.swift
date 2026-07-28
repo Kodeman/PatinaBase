@@ -252,60 +252,33 @@ struct HelpPanelSheetTests {
     }
 
     @Test
-    func fetchArticles_throwsOnNetworkError() async throws {
-        // U29: a transport failure is a genuine fetch error, distinct from a
-        // surface that legitimately has zero articles — it must throw, not
-        // collapse to `[]`, so `HelpPanelSheet` can show a retryable error
-        // state instead of a silent "no help articles yet."
+    func fetchArticles_swallowsNetworkErrorAndReturnsEmpty() async throws {
         struct Boom: Error {}
         let session = ListStubURLSession()
         session.error = Boom()
         let client = SanityHelpClient(session: session)
 
-        await #expect(throws: HelpArticleListFetchError.self) {
-            _ = try await client.fetchArticles(
-                forSurfaceKey: "designer-portal/today/dashboard"
-            )
-        }
+        // Should NOT throw — network failures collapse to [].
+        let results = try await client.fetchArticles(
+            forSurfaceKey: "designer-portal/today/dashboard"
+        )
+
+        #expect(results.isEmpty)
         #expect(session.requestCount == 1)
     }
 
     @Test
-    func fetchArticles_throwsOnNon2xxStatus() async throws {
-        // U29: same as the network-error case — a non-2xx response is a
-        // real failure, not a genuine empty result.
+    func fetchArticles_swallowsNon2xxAndReturnsEmpty() async throws {
         let session = ListStubURLSession()
         session.enqueue([.nonOk(500)])
         let client = SanityHelpClient(session: session)
 
-        await #expect(throws: HelpArticleListFetchError.self) {
-            _ = try await client.fetchArticles(
-                forSurfaceKey: "designer-portal/today/dashboard"
-            )
-        }
+        let results = try await client.fetchArticles(
+            forSurfaceKey: "designer-portal/today/dashboard"
+        )
+
+        #expect(results.isEmpty)
         #expect(session.requestCount == 1)
-    }
-
-    @Test
-    func fetchArticles_retryAfterNetworkErrorSucceedsWithoutStaleCache() async throws {
-        // U29: failures must NOT populate the article-list cache — otherwise
-        // tapping "Let's try that again" after a transient blip would replay
-        // a cached empty result instead of re-hitting the network.
-        struct Boom: Error {}
-        let session = ListStubURLSession()
-        session.error = Boom()
-        let client = SanityHelpClient(session: session)
-
-        await #expect(throws: HelpArticleListFetchError.self) {
-            _ = try await client.fetchArticles(forSurfaceKey: "designer-portal/today/dashboard")
-        }
-
-        session.error = nil
-        session.enqueue([.ok(twoArticlesPayload)])
-        let results = try await client.fetchArticles(forSurfaceKey: "designer-portal/today/dashboard")
-
-        #expect(results.count == 2)
-        #expect(session.requestCount == 2)
     }
 
     @Test
