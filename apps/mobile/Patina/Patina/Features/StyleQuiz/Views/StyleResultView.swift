@@ -12,9 +12,21 @@ struct StyleResultView: View {
     let result: StyleProfileResult
     /// Optional callback for onboarding flow; if nil, uses coordinator navigation
     var onViewRecommendations: (() -> Void)? = nil
+    /// U18: true only for the pushed-nav mount (route `.styleResult`), which
+    /// gets the standard chrome + back chevron. The onboarding mount (no
+    /// enclosing NavigationStack, its own step sequence) stays chromeless.
+    var showsChrome: Bool = false
     @Environment(\.appCoordinator) private var coordinator
 
     var body: some View {
+        if showsChrome {
+            content.patinaScreen(title: nil)
+        } else {
+            content
+        }
+    }
+
+    private var content: some View {
         VStack(spacing: 0) {
             Spacer()
 
@@ -92,7 +104,6 @@ struct StyleResultView: View {
         }
         .padding(.horizontal, 28)
         .background(PatinaColors.Background.primary)
-        .toolbar(.hidden, for: .navigationBar)
     }
 
     // MARK: - Attribute Column
