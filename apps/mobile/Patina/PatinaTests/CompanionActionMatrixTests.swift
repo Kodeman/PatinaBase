@@ -267,7 +267,7 @@ struct CompanionActionMatrixTests {
             "Your recommendations",
             "Your spaces",
             "Add another space",
-            "Collections",
+            "Saved",
             "Your profile"
         ])
     }
@@ -296,7 +296,7 @@ struct CompanionActionMatrixTests {
         #expect(labels == [
             "See recommendations",
             "Saved in this room",
-            "Ask a designer",
+            "Get design help",
             "Rescan room",
             "Home",
             "Your profile"
@@ -352,7 +352,7 @@ struct CompanionTierAndFreshnessTests {
             "Your recommendations",
             "Your spaces",
             "Add another space",
-            "Collections",
+            "Saved",
             "Your studio",
             "Your profile"
         ])
