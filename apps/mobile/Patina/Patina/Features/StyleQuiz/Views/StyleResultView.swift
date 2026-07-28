@@ -75,7 +75,7 @@ struct StyleResultView: View {
                 if let onViewRecommendations {
                     onViewRecommendations()
                 } else {
-                    coordinator.navigate(to: .heroFrame)
+                    coordinator.navigate(to: .emergence(pieceId: nil))
                 }
             } label: {
                 Text("View Recommendations")

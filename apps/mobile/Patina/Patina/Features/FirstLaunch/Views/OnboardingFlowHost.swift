@@ -102,6 +102,7 @@ struct OnboardingFlowHost: View {
         case .styleResult(let result):
             StyleResultView(result: result, onViewRecommendations: {
                 completeOnboarding()
+                coordinator.navigate(to: .emergence(pieceId: nil))
             })
         }
     }
