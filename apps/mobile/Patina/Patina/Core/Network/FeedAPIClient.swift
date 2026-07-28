@@ -2,11 +2,13 @@
 //  FeedAPIClient.swift
 //  Patina
 //
-//  Thin client for the room-aware Daily Room feed. Calls the
-//  Next.js route at `{clientPortalURL}/api/feed/:roomId` which
-//  joins the nightly aesthete-engine cache with `products` and
-//  `spatial_context`, so the iOS client gets ranked products +
-//  "why it fits" copy in a single request.
+//  DEPRECATED — DEAD CODE. Thin client for the Next.js route at
+//  `{clientPortalURL}/api/feed/:roomId`, a portal route that no longer
+//  exists. Its sole caller (`DailyRoomViewModel.refreshFeedForSelectedRoom`)
+//  was removed by U02/U03, which moved the Daily Room onto the same
+//  `get_recommendations` RPC the rest of the app uses. Nothing calls this.
+//
+//  Delete along with the portal-route cleanup in Theme-8.
 //
 
 import Foundation

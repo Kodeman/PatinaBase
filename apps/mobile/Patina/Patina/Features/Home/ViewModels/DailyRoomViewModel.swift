@@ -40,6 +40,10 @@ final class DailyRoomViewModel {
     var presentingAddFor: Product?
     var toastMessage: String?
 
+    /// The room the toast's message refers to, so its "View" action can open
+    /// that exact room instead of doing nothing (U05).
+    private(set) var toastRoomID: RoomSummary.ID?
+
     /// Whether the user has any persisted style profile (quiz / teaching
     /// output). Drives the empty-rail editorial module on the home screen:
     /// no profile → quiz prompt, profile present → scan/browse prompt.
@@ -49,6 +53,15 @@ final class DailyRoomViewModel {
     /// uses this to avoid flashing the empty-rail editorial module before
     /// the first response lands.
     var isFeedLoading: Bool = false
+
+    /// Set when the feed request fails. A failed fetch used to be
+    /// indistinguishable from "this room has no picks"; the home now renders
+    /// this as a retry instead of an empty rail (U29).
+    var feedError: String?
+
+    /// Set when today's editorial story fails to load, so the story slot can
+    /// offer a retry instead of silently collapsing (U29).
+    var storyLoadFailed: Bool = false
 
     /// Spatial-context copy keyed by product ID, populated from the
     /// room-aware feed response so DailyProductCard can render "why it fits"
@@ -86,6 +99,12 @@ final class DailyRoomViewModel {
             default: return true
             }
         }
+    }
+
+    /// Display label of the active category filter — names the filter in the
+    /// filtered-empty copy ("Nothing in Seating for this room yet.").
+    var activeFilterLabel: String {
+        categoryFilters.first(where: { $0.id == activeFilterID })?.label ?? "this filter"
     }
 
     // MARK: - Lifecycle
@@ -137,41 +156,49 @@ final class DailyRoomViewModel {
                 // `MainActor.run` bounce needed (PT-3-4).
                 guard let self else { return }
                 self.todayStory = remote.map { DailyStory(from: $0) }
+                self.storyLoadFailed = false
             } catch {
                 #if DEBUG
                 PatinaLog.ui.error("[DailyRoomVM] story fetch failed: \(error)")
                 #endif
+                guard !Task.isCancelled else { return }
+                self?.storyLoadFailed = true
             }
         }
     }
 
-    /// Fetch the room-aware feed for the currently selected room. The
-    /// remote response is the sole source of recommendations — there is
-    /// no local mock fallback in production.
+    /// Fetch the room-aware feed for the currently selected room from the
+    /// `get_recommendations` RPC — the same source the Recommendations
+    /// surface reads, so match scores and categories on the home are the
+    /// real per-product values rather than a constant (U02/U03). The remote
+    /// response is the sole source of recommendations; there is no local
+    /// mock fallback in production.
     func refreshFeedForSelectedRoom() {
         guard let localId = selectedRoomID,
               let remoteId = remoteIdByLocal[localId] else {
             spatialContext = [:]
             allRecommendations = []
             isFeedLoading = false
+            feedError = nil
             return
         }
         feedTask?.cancel()
         isFeedLoading = true
+        feedError = nil
         feedTask = Task { [weak self] in
             do {
-                let response = try await FeedAPIClient.shared.fetchFeed(roomId: remoteId)
+                let response = try await ProductAPIClient.shared
+                    .fetchRecommendations(roomId: remoteId)
                 // Inherits `@MainActor` isolation (PT-3-4) — no bounce needed.
                 guard let self else { return }
-                self.spatialContext = Dictionary(
-                    uniqueKeysWithValues: response.products.map {
-                        ($0.id, $0.spatial_context ?? [:])
-                    }
-                )
-                self.allRecommendations = response.products.map { fp in
-                    DailyRoomViewModel.recommendation(from: fp)
+                // The RPC carries no per-product spatial copy; the "why it
+                // fits" line stays empty until a room-aware source returns.
+                self.spatialContext = [:]
+                self.allRecommendations = response.items.map {
+                    DailyRoomViewModel.recommendation(from: $0)
                 }
                 self.isFeedLoading = false
+                self.feedError = nil
             } catch {
                 #if DEBUG
                 PatinaLog.ui.error("[DailyRoomVM] feed fetch failed: \(error)")
@@ -181,57 +208,27 @@ final class DailyRoomViewModel {
                 guard !Task.isCancelled else { return }
                 self?.allRecommendations = []
                 self?.isFeedLoading = false
+                self?.feedError = "We couldn't load picks for this room."
             }
         }
     }
 
-    /// Convert a remote `FeedProduct` into the UI's `DailyRecommendation`.
-    /// `whyCopy` is sourced from `spatial_context["why"]` when available;
-    /// the spatial-context dictionary is also wired into `spatialContext`
-    /// so `DailyProductCard` can render "why it fits" text. Maker name,
-    /// product tier, and badges come from the server-side join + tier
-    /// derivation in `/api/feed/:roomId`.
-    private static func recommendation(from fp: FeedProduct) -> DailyRecommendation {
-        let priceCents = Int((fp.price_retail ?? 0).rounded())
-        let productTier = ProductTier(rawValue: fp.tier ?? "") ?? .styleMatch
-        let product = Product(
-            id: fp.id,
-            name: fp.name,
-            priceCents: priceCents,
-            matchScore: 80,
-            makerName: fp.maker_name ?? "Unknown Maker",
-            makerLocation: nil,
-            makerStory: nil,
-            imageURL: fp.images?.first,
-            usdzURL: nil,
-            styleTags: [],
-            materialTags: [],
-            badges: fp.badges ?? [],
-            category: .decor,
-            tier: productTier
-        )
-        let why = fp.spatial_context?["why"] ?? ""
-        return DailyRecommendation(
-            id: fp.id,
+    /// Convert a catalog `Product` into the UI's `DailyRecommendation`.
+    ///
+    /// Both the card's match pill and its category filter read straight off
+    /// the product, so a piece the RPC scored 87 reads 87 and a chair filters
+    /// under Seating. The home card surfaces only `designerSelection` and
+    /// `standard`; `style_match` and `new_arrival` both land on `standard`.
+    static func recommendation(from product: Product) -> DailyRecommendation {
+        DailyRecommendation(
+            id: product.id,
             product: product,
-            matchScore: 80,
-            tier: Self.dailyTier(from: fp.tier),
-            whyCopy: why,
+            matchScore: product.matchScore,
+            tier: product.tier == .designerSelection ? .designerSelection : .standard,
+            whyCopy: "",
             insight: nil,
             pairing: nil
         )
-    }
-
-    /// Map the server-derived tier string onto the home card's tier enum.
-    /// Server emits `designer_selection`, `style_match`, `new_arrival`
-    /// (see `get_recommendations` RPC in migration 00067). The Daily Room
-    /// card surfaces only `designerSelection` and `standard` today; new
-    /// arrivals and plain style matches both fall under `standard`.
-    private static func dailyTier(from raw: String?) -> DailyRecommendation.Tier {
-        switch raw {
-        case "designer_selection": return .designerSelection
-        default: return .standard
-        }
     }
 
     // MARK: - Intent
@@ -251,6 +248,16 @@ final class DailyRoomViewModel {
         UISelectionFeedbackGenerator().selectionChanged()
     }
 
+    /// Clear the category filter — the escape hatch offered by the
+    /// filtered-empty state so a filter with no matches isn't a dead end.
+    func showAllCategories() {
+        guard let all = categoryFilters.first(where: { $0.id == "all" }) else {
+            activeFilterID = "all"
+            return
+        }
+        selectFilter(all)
+    }
+
     func presentAdd(for product: Product) {
         presentingAddFor = product
     }
@@ -268,12 +275,14 @@ final class DailyRoomViewModel {
         let generator = UINotificationFeedbackGenerator()
         generator.notificationOccurred(.success)
         toastMessage = "Added to \(room.name)"
+        toastRoomID = room.id
         toastTask?.cancel()
         toastTask = Task { [weak self] in
             try? await Task.sleep(nanoseconds: 2_400_000_000)
             // Inherits `@MainActor` isolation (PT-3-4) — no bounce needed.
             guard !Task.isCancelled else { return }
             self?.toastMessage = nil
+            self?.toastRoomID = nil
         }
     }
 }
