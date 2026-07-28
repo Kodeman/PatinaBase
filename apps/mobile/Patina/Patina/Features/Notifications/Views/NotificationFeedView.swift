@@ -64,25 +64,30 @@ struct NotificationFeedView: View {
             // the row draws its own hairline) so native `.swipeActions` work.
             // The API only supports marking opened (no unread reversal), so
             // the swipe exposes a single mark-read action on unread rows.
+            // U12: rows are real Buttons (not a bare `.onTapGesture`) so
+            // VoiceOver and Switch Control get a proper activation target;
+            // the unread dot remains the visible tappable-row affordance.
             List {
                 ForEach(viewModel.notifications) { notification in
-                    notificationRow(notification)
-                        .onTapGesture {
-                            handleTap(notification)
-                        }
-                        .listRowInsets(EdgeInsets())
-                        .listRowSeparator(.hidden)
-                        .listRowBackground(Color.clear)
-                        .swipeActions(edge: .trailing, allowsFullSwipe: true) {
-                            if !notification.isRead {
-                                Button {
-                                    viewModel.markRead(notification)
-                                } label: {
-                                    Label("Mark read", systemImage: "envelope.open")
-                                }
-                                .tint(PatinaColors.clay)
+                    Button {
+                        handleTap(notification)
+                    } label: {
+                        notificationRow(notification)
+                    }
+                    .buttonStyle(.plain)
+                    .listRowInsets(EdgeInsets())
+                    .listRowSeparator(.hidden)
+                    .listRowBackground(Color.clear)
+                    .swipeActions(edge: .trailing, allowsFullSwipe: true) {
+                        if !notification.isRead {
+                            Button {
+                                viewModel.markRead(notification)
+                            } label: {
+                                Label("Mark read", systemImage: "envelope.open")
                             }
+                            .tint(PatinaColors.clay)
                         }
+                    }
                 }
             }
             .listStyle(.plain)
@@ -95,8 +100,7 @@ struct NotificationFeedView: View {
     private var loadingView: some View {
         VStack {
             Spacer()
-            ProgressView()
-                .tint(PatinaColors.Text.interactive)
+            PatinaLoadingState()
             Spacer()
         }
         .frame(maxWidth: .infinity)
@@ -125,7 +129,7 @@ struct NotificationFeedView: View {
                 title: "Nothing yet",
                 message: "Updates from your designer will land here. Sign in to stay in the loop.",
                 ctaTitle: "Sign in",
-                ctaAction: { coordinator.presentAuthentication() }
+                ctaAction: { coordinator.presentedSheet = .auth }
             )
             Spacer()
         }
@@ -134,20 +138,12 @@ struct NotificationFeedView: View {
     }
 
     private func errorView(_ message: String) -> some View {
-        VStack(spacing: 12) {
+        VStack(spacing: 0) {
             Spacer()
-            Image(systemName: "exclamationmark.triangle")
-                .font(.system(size: 28))
-                .foregroundStyle(PatinaColors.Text.muted)
-            Text(message)
-                .font(PatinaTypography.bodySmall)
-                .foregroundStyle(PatinaColors.Text.secondary)
-                .multilineTextAlignment(.center)
-            Button("Let's try that again") {
-                Task { await viewModel.load() }
-            }
-            .font(PatinaTypography.bodySmallMedium)
-            .foregroundStyle(PatinaColors.Text.interactive)
+            PatinaErrorState(
+                message: message,
+                action: { Task { await viewModel.load() } }
+            )
             Spacer()
         }
         .padding(.horizontal, 32)
