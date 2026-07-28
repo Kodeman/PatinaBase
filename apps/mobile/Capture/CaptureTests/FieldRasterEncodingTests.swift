@@ -12,12 +12,43 @@ import ImageIO
 import Testing
 @testable import CaptureKit
 
+/// Stands in for `FieldCaptureRasterProfile.resolve()`, which needs a physical
+/// device. File scope so `@Test(arguments:)` can reference these without a
+/// circular reference back into the type being declared.
+private typealias Point = FieldRasterFixtureExporter.Point
+private typealias Intrinsics = FieldRasterFixtureExporter.Intrinsics
+
+private enum FixtureProfile {
+    static let reference = FieldRasterFixtureExporter.referenceProfile
+    /// The landscape native size a LiDAR iPhone's Field rig reports.
+    static let iPhoneLiDAR = make(width: 1_920, height: 1_440)
+
+    static func make(width: Int, height: Int) -> FieldRasterFixtureExporter.CaptureProfile {
+        .init(
+            nativeWidth: width,
+            nativeHeight: height,
+            resolutionSource: "test double for ARWorldTrackingConfiguration.videoFormat.imageResolution",
+            deviceModel: "iPhone18,3",
+            systemVersion: "iOS 26.5",
+            videoFormat: "\(width)x\(height)@60 BuiltInWideAngleCamera"
+        )
+    }
+}
+
 struct FieldRasterEncodingTests {
-    @Test func fixtureExportsDimensionsIntrinsicsMarkersAndHashes() throws {
+    /// The 640x360 reference design must still emit the exact bytes the I92
+    /// receipt was taken against. It is the proof that R118's profile
+    /// generalization is a strict superset of the pinned fixture and not a
+    /// silent redraw — any drift in the derived layout shows up here as a
+    /// SHA-256 mismatch.
+    @Test func referenceProfileReproducesTheI92FixtureByteForByte() throws {
         let directory = try temporaryDirectory()
         defer { try? FileManager.default.removeItem(at: directory) }
 
-        let output = try FieldRasterFixtureExporter.export(to: directory)
+        let output = try FieldRasterFixtureExporter.export(
+            to: directory,
+            profile: FixtureProfile.reference
+        )
         let manifestData = try Data(contentsOf: output.manifestURL)
         let manifest = try JSONDecoder().decode(
             FieldRasterFixtureExporter.Manifest.self,
@@ -25,13 +56,14 @@ struct FieldRasterEncodingTests {
         )
 
         #expect(manifest == output.manifest)
+        #expect(manifest.schemaVersion == 2)
         #expect(manifest.fixtureID == "field-core-image-raster-v1")
         #expect(manifest.nativeRaster.width == 640)
         #expect(manifest.nativeRaster.height == 360)
         #expect(manifest.nativeRaster.rowBytes == 2_560)
         #expect(manifest.encodedRaster.width == 360)
         #expect(manifest.encodedRaster.height == 640)
-        #expect(manifest.nativeIntrinsics == .init(
+        #expect(manifest.nativeIntrinsics == Intrinsics(
             fx: 512.5,
             fy: 509.25,
             cx: 301.25,
@@ -39,7 +71,7 @@ struct FieldRasterEncodingTests {
             imageWidth: 640,
             imageHeight: 360
         ))
-        #expect(manifest.expectedEncodedIntrinsics == .init(
+        #expect(manifest.expectedEncodedIntrinsics == Intrinsics(
             fx: 509.25,
             fy: 512.5,
             cx: 205.25,
@@ -50,6 +82,17 @@ struct FieldRasterEncodingTests {
         #expect(manifest.markers.count == 6)
         #expect(manifest.markers.filter { $0.role == "corner" }.count == 4)
         #expect(manifest.markers.filter { $0.role == "off-centre-fiducial" }.count == 2)
+        let shapes: [String] = manifest.markers.map { $0.shape }
+        #expect(shapes == [
+            "square-55", "square-55", "square-55", "square-55",
+            "cross-45-thickness-13", "diamond-radius-21"
+        ])
+        let nativeCoordinates: [Point] = manifest.markers.map { $0.nativeCoordinate }
+        #expect(nativeCoordinates == [
+            Point(x: 27, y: 27), Point(x: 612, y: 27),
+            Point(x: 27, y: 332), Point(x: 612, y: 332),
+            Point(x: 173, y: 91), Point(x: 487, y: 271)
+        ])
 
         let nativeData = try Data(contentsOf: output.nativeRasterURL)
         let heicData = try Data(contentsOf: output.heicURL)
@@ -61,13 +104,88 @@ struct FieldRasterEncodingTests {
         #expect(output.manifestSHA256 == BundleChecksum.sha256(of: manifestData))
     }
 
-    @Test func productionPipelinePhysicallyRotatesEveryAsymmetricMarkerClockwise() throws {
+    /// The profile a LiDAR iPhone's Field rig actually reports (1920x1440
+    /// landscape native -> 1440x1920 encoded). Every position, size and
+    /// intrinsic is derived from the declared profile, so a Linux qualifier can
+    /// recompute the whole expected marker set from the two dimensions alone.
+    @Test func captureProfileDerivesEveryMarkerSizeCentreAndIntrinsic() throws {
         let directory = try temporaryDirectory()
         defer { try? FileManager.default.removeItem(at: directory) }
-        let output = try FieldRasterFixtureExporter.export(to: directory)
+
+        let output = try FieldRasterFixtureExporter.export(
+            to: directory,
+            profile: FixtureProfile.iPhoneLiDAR
+        )
+        let manifest = output.manifest
+
+        #expect(manifest.schemaVersion == 2)
+        #expect(manifest.captureProfile.nativeWidth == 1_920)
+        #expect(manifest.captureProfile.nativeHeight == 1_440)
+        #expect(manifest.captureProfile.deviceModel == "iPhone18,3")
+        #expect(manifest.nativeRaster.width == 1_920)
+        #expect(manifest.nativeRaster.height == 1_440)
+        #expect(manifest.nativeRaster.rowBytes == 7_680)
+        #expect(manifest.encodedRaster.width == 1_440)
+        #expect(manifest.encodedRaster.height == 1_920)
+
+        // Uniform size scale min(1920/640, 1440/360) = 3.
+        let shapes: [String] = manifest.markers.map { $0.shape }
+        #expect(shapes == [
+            "square-163", "square-163", "square-163", "square-163",
+            "cross-133-thickness-37", "diamond-radius-63"
+        ])
+        // Corners stay flush; fiducials scale by their own axis.
+        let nativeCoordinates: [Point] = manifest.markers.map { $0.nativeCoordinate }
+        #expect(nativeCoordinates == [
+            Point(x: 81, y: 81), Point(x: 1_838, y: 81),
+            Point(x: 81, y: 1_358), Point(x: 1_838, y: 1_358),
+            Point(x: 519, y: 364), Point(x: 1_461, y: 1_084)
+        ])
+        // (x,y) -> (H-1-y, x) at H = 1440.
+        let encodedCoordinates: [Point] = manifest.markers.map { $0.expectedEncodedCoordinate }
+        #expect(encodedCoordinates == [
+            Point(x: 1_358, y: 81), Point(x: 1_358, y: 1_838),
+            Point(x: 81, y: 81), Point(x: 81, y: 1_838),
+            Point(x: 1_075, y: 519), Point(x: 355, y: 1_461)
+        ])
+        #expect(manifest.nativeIntrinsics == Intrinsics(
+            fx: 1_537.5,
+            fy: 1_527.75,
+            cx: 903.75,
+            cy: 619.0,
+            imageWidth: 1_920,
+            imageHeight: 1_440
+        ))
+        #expect(manifest.expectedEncodedIntrinsics == Intrinsics(
+            fx: 1_527.75,
+            fy: 1_537.5,
+            cx: 821.0,
+            cy: 903.75,
+            imageWidth: 1_440,
+            imageHeight: 1_920
+        ))
+
+        let nativeData = try Data(contentsOf: output.nativeRasterURL)
+        #expect(nativeData.count == 1_920 * 1_440 * 4)
+        #expect(manifest.nativeRaster.sha256 == BundleChecksum.sha256(of: nativeData))
+        #expect(manifest.encodedRaster.sha256
+                == BundleChecksum.sha256(of: try Data(contentsOf: output.heicURL)))
+    }
+
+    /// The physical rotation claim, made at BOTH the reference design and a
+    /// real capture profile — the pre-R118 suite only ever made it at 640x360.
+    @Test(arguments: [FixtureProfile.reference, FixtureProfile.iPhoneLiDAR])
+    func productionPipelinePhysicallyRotatesEveryAsymmetricMarkerClockwise(
+        profile: FieldRasterFixtureExporter.CaptureProfile
+    ) throws {
+        let directory = try temporaryDirectory()
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let output = try FieldRasterFixtureExporter.export(to: directory, profile: profile)
         let image = try #require(decodedImage(at: output.heicURL))
         #expect(image.width == output.manifest.encodedRaster.width)
         #expect(image.height == output.manifest.encodedRaster.height)
+        #expect(image.width == profile.nativeHeight)
+        #expect(image.height == profile.nativeWidth)
 
         let rgba = try normalizedRGBA(image)
         for marker in output.manifest.markers {
@@ -93,22 +211,102 @@ struct FieldRasterEncodingTests {
             try? FileManager.default.removeItem(at: secondDirectory)
         }
 
-        let first = try FieldRasterFixtureExporter.export(to: firstDirectory)
-        let second = try FieldRasterFixtureExporter.export(to: secondDirectory)
+        let profile = FixtureProfile.iPhoneLiDAR
+        let first = try FieldRasterFixtureExporter.export(to: firstDirectory, profile: profile)
+        let second = try FieldRasterFixtureExporter.export(to: secondDirectory, profile: profile)
         #expect(first.manifest == second.manifest)
         #expect(try Data(contentsOf: first.nativeRasterURL) == Data(contentsOf: second.nativeRasterURL))
         #expect(try Data(contentsOf: first.heicURL) == Data(contentsOf: second.heicURL))
         #expect(try Data(contentsOf: first.manifestURL) == Data(contentsOf: second.manifestURL))
     }
 
-    @Test func productionImageIOHEICHasOneAssociatedIdentityRotation() throws {
+    /// A different profile must produce a different fixture — otherwise the
+    /// manifest could declare a profile the pixels do not honour.
+    @Test func adifferentCaptureProfileProducesADifferentRaster() throws {
+        let firstDirectory = try temporaryDirectory()
+        let secondDirectory = try temporaryDirectory()
+        defer {
+            try? FileManager.default.removeItem(at: firstDirectory)
+            try? FileManager.default.removeItem(at: secondDirectory)
+        }
+
+        let first = try FieldRasterFixtureExporter.export(
+            to: firstDirectory,
+            profile: FixtureProfile.iPhoneLiDAR
+        )
+        let second = try FieldRasterFixtureExporter.export(
+            to: secondDirectory,
+            profile: FixtureProfile.make(width: 1_280, height: 720)
+        )
+        #expect(first.manifest.nativeRaster.sha256 != second.manifest.nativeRaster.sha256)
+        #expect(first.manifest.encodedRaster.sha256 != second.manifest.encodedRaster.sha256)
+        let shapes: [String] = second.manifest.markers.map { $0.shape }
+        #expect(shapes == [
+            "square-109", "square-109", "square-109", "square-109",
+            "cross-89-thickness-25", "diamond-radius-42"
+        ])
+    }
+
+    @Test func exportRefusesEveryProfileOutsideTheDeclaredBound() throws {
         let directory = try temporaryDirectory()
         defer { try? FileManager.default.removeItem(at: directory) }
 
-        let output = try FieldRasterFixtureExporter.export(to: directory)
+        // Below the reference floor: the scaled markers stop clearing the
+        // qualifier's radius-2 colour probe.
+        expectUnsupportedProfile(FixtureProfile.make(width: 320, height: 180), in: directory)
+        // Portrait: ARKit's capturedImage is always landscape, so a portrait
+        // "native" size means the caller measured the wrong thing.
+        expectUnsupportedProfile(FixtureProfile.make(width: 1_440, height: 1_920), in: directory)
+        // Past the 2^24-pixel ceiling.
+        expectUnsupportedProfile(FixtureProfile.make(width: 8_192, height: 4_096), in: directory)
+        // Provenance is mandatory — a bare pair of integers is what let the
+        // qualified profile drift from the shipped one.
+        expectUnsupportedProfile(
+            FieldRasterFixtureExporter.CaptureProfile(
+                nativeWidth: 1_920,
+                nativeHeight: 1_440,
+                resolutionSource: "",
+                deviceModel: "iPhone18,3",
+                systemVersion: "iOS 26.5",
+                videoFormat: "1920x1440@60"
+            ),
+            in: directory
+        )
+    }
+
+    /// The reference profile self-identifies so a qualification harness can
+    /// refuse it — it is a drawing design, not something any device captures.
+    @Test func theReferenceProfileIsMarkedAsNotAPhysicalCaptureProfile() {
+        #expect(FieldRasterFixtureExporter.referenceProfile.deviceModel
+                == FieldRasterFixtureExporter.CaptureProfile.referenceDeviceModel)
+        #expect(FieldRasterFixtureExporter.referenceProfile.videoFormat == "none")
+    }
+
+    @Test(arguments: [FixtureProfile.reference, FixtureProfile.iPhoneLiDAR])
+    func productionImageIOHEICHasOneAssociatedIdentityRotation(
+        profile: FieldRasterFixtureExporter.CaptureProfile
+    ) throws {
+        let directory = try temporaryDirectory()
+        defer { try? FileManager.default.removeItem(at: directory) }
+
+        let output = try FieldRasterFixtureExporter.export(to: directory, profile: profile)
         let heicData = try Data(contentsOf: output.heicURL)
 
         try HEIFIdentityRotationContract.validate(heicData)
+    }
+
+    private func expectUnsupportedProfile(
+        _ profile: FieldRasterFixtureExporter.CaptureProfile,
+        in directory: URL
+    ) {
+        do {
+            _ = try FieldRasterFixtureExporter.export(to: directory, profile: profile)
+            Issue.record("expected \(profile.nativeWidth)x\(profile.nativeHeight) to be refused")
+        } catch FieldRasterFixtureError.unsupportedCaptureProfile {
+            // expected
+        } catch {
+            Issue.record("expected an unsupportedCaptureProfile error, received \(error)")
+        }
     }
 
     @Test func identityRotationContractRejectsZeroAssociatedTransforms() {

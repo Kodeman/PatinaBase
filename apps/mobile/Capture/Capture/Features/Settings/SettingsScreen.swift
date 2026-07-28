@@ -119,6 +119,13 @@ struct SettingsScreen: View {
 
                 #if DEBUG
                 section("Diagnostics") {
+                    rowChrome("Capture profile") {
+                        Text(captureProfileLabel)
+                            .font(CaptureType.callout)
+                            .foregroundStyle(CaptureColor.inkSoft)
+                            .accessibilityIdentifier("T1.raster-fixture.profile")
+                    }
+                    divider
                     rowChrome("Raster fixture") {
                         Button("Generate") { generateRasterFixture() }
                             .font(CaptureType.callout.weight(.semibold))
@@ -249,19 +256,38 @@ struct SettingsScreen: View {
     private func format(_ d: Double) -> String { String(format: "%.1f", d) }
 
     #if DEBUG
+    /// Shown before Generate so the operator reads the profile the fixture will
+    /// be emitted at, and can compare it against a real scan's keyframe index.
+    private var captureProfileLabel: String {
+        guard let profile = try? FieldCaptureRasterProfile.resolve() else {
+            return "unavailable"
+        }
+        return "\(profile.nativeWidth)x\(profile.nativeHeight)"
+    }
+
+    /// R118: the fixture is emitted at the resolution the PRODUCTION capture
+    /// configuration reports on this device, never at a pinned size. If the
+    /// profile cannot be resolved the export fails loudly rather than falling
+    /// back to a constant — a fixture at the wrong profile qualifies nothing.
     private func generateRasterFixture() {
         do {
+            let profile = try FieldCaptureRasterProfile.resolve()
             let documents = try FileManager.default.url(
                 for: .documentDirectory,
                 in: .userDomainMask,
                 appropriateFor: nil,
                 create: true
             )
+            // Profile-stamped directory: two fixture sets at different profiles
+            // must never be mistakable for each other on disk.
             let directory = documents.appendingPathComponent(
-                FieldRasterFixtureExporter.fixtureID,
+                "\(FieldRasterFixtureExporter.fixtureID)-\(profile.nativeWidth)x\(profile.nativeHeight)",
                 isDirectory: true
             )
-            rasterFixtureExport = try FieldRasterFixtureExporter.export(to: directory)
+            rasterFixtureExport = try FieldRasterFixtureExporter.export(
+                to: directory,
+                profile: profile
+            )
             rasterFixtureError = nil
         } catch {
             rasterFixtureExport = nil
