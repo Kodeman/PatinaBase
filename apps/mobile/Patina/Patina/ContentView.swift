@@ -178,8 +178,35 @@ struct ContentView: View {
 
     // MARK: - Navigation Destinations
 
+    // Split into one dispatcher + 4 grouped helpers (U18 chrome-cleanup
+    // pushed the single switch over SwiftLint's function_body_length /
+    // cyclomatic_complexity thresholds). Same exhaustive case coverage as
+    // before, just delegated by group — no behavior change.
     @ViewBuilder
     private func destinationView(for route: AppRoute) -> some View {
+        switch route {
+        case .heroFrame, .roomList, .yourSpaces, .roomDetail, .roomProject,
+             .roomSettings, .crossRoom, .manualRoomEntry, .roomSavedItems:
+            roomsDestination(for: route)
+
+        case .scanFlow, .emergence, .roomEmergence, .table, .pieceDetail:
+            discoveryDestination(for: route)
+
+        case .styleQuiz, .styleResult, .arPlacement, .preScanChecklist:
+            styleDestination(for: route)
+
+        case .profile, .notifications, .designerConsultation, .designRequests,
+             .projectList, .projectDetail, .decisionList, .decisionDetail:
+            workCoreDestination(for: route)
+
+        case .threadList, .threadDetail, .proposalList, .proposalDetail,
+             .invoiceList, .invoiceDetail, .budget, .documentList:
+            workDocumentsDestination(for: route)
+        }
+    }
+
+    @ViewBuilder
+    private func roomsDestination(for route: AppRoute) -> some View {
         switch route {
         case .heroFrame:
             // `.heroFrame` is a root-reset (it clears the nav path); it is
@@ -205,6 +232,14 @@ struct ContentView: View {
         case .roomSavedItems(let roomId):
             CollectionsView(roomId: roomId)
 
+        default:
+            EmptyView() // unreachable — dispatched only for the cases above
+        }
+    }
+
+    @ViewBuilder
+    private func discoveryDestination(for route: AppRoute) -> some View {
+        switch route {
         case .scanFlow:
             // The single Quiet Conversation entry. The host owns the entire
             // internal step sequence (threshold → walk → review → … →
@@ -238,6 +273,14 @@ struct ContentView: View {
             ProductDetailView(productId: pieceId)
                 .toolbar(.hidden, for: .navigationBar)
 
+        default:
+            EmptyView() // unreachable — dispatched only for the cases above
+        }
+    }
+
+    @ViewBuilder
+    private func styleDestination(for route: AppRoute) -> some View {
+        switch route {
         case .styleQuiz:
             StyleQuizView()
                 .toolbar(.hidden, for: .navigationBar)
@@ -255,6 +298,14 @@ struct ContentView: View {
             }
             .toolbar(.hidden, for: .navigationBar)
 
+        default:
+            EmptyView() // unreachable — dispatched only for the cases above
+        }
+    }
+
+    @ViewBuilder
+    private func workCoreDestination(for route: AppRoute) -> some View {
+        switch route {
         case .profile:
             ProfileView()
 
@@ -279,6 +330,14 @@ struct ContentView: View {
         case .decisionDetail(let decisionId):
             DecisionDetailView(decisionId: decisionId)
 
+        default:
+            EmptyView() // unreachable — dispatched only for the cases above
+        }
+    }
+
+    @ViewBuilder
+    private func workDocumentsDestination(for route: AppRoute) -> some View {
+        switch route {
         case .threadList:
             ThreadListView()
 
@@ -302,6 +361,9 @@ struct ContentView: View {
 
         case .documentList:
             DocumentListView()
+
+        default:
+            EmptyView() // unreachable — dispatched only for the cases above
         }
     }
 }
