@@ -196,11 +196,12 @@ struct ScanWalkView: View {
                     .foregroundStyle(PatinaColors.offWhite.opacity(0.85))
 
                 VStack(spacing: 12) {
-                    Text("Lost the room")
+                    Text("I lost my bearings for a moment.")
                         .font(.custom("PlayfairDisplay-Italic", size: 26, relativeTo: .title2))
                         .foregroundStyle(PatinaColors.offWhite)
+                        .multilineTextAlignment(.center)
 
-                    Text("Tracking dropped — usually from a sudden move or a featureless wall. Let's try once more from where you stand.")
+                    Text("Hold still and I'll try to find my way.")
                         .font(PatinaTypography.bodySmall)
                         .foregroundStyle(PatinaColors.offWhite.opacity(0.75))
                         .multilineTextAlignment(.center)
