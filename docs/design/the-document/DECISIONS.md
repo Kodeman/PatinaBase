@@ -5170,3 +5170,120 @@ reconstruction at capture resolution will succeed, only that it is the profile
 worth qualifying.
 
 *Entries add: R118 · last id = R118*
+
+### I98 · Field Capture P2 · the raster profile becomes a declared, bounded parameter (R118 build) — 2026-07-28
+
+R118's first three obligations are built and verified; the fourth (a receipt
+for a real capture-resolution profile) is not, and cannot be until the program
+owner performs the two steps agents may not. Integration branch
+`field-capture/r118-integration` at merge `5d7ad52c`, from
+`field-capture/raster-capture-resolution` (`39b91638`) and
+`field-capture/raster-fixture-full-res` (`bdd66ad4`).
+
+**The size is now declared end to end, and the helper proves it obeyed.**
+`field_raster_libheif.c` moves to protocol v3: it takes
+`DECLARED_WIDTH`/`DECLARED_HEIGHT` on argv, compares `ispe`/`presented`/`raw`/
+`default` against the declaration instead of `#define`s, and **echoes the
+declaration back on stdout** so the parent can prove the helper enforced the
+profile it was told rather than one still compiled into it. Argv is parsed as
+bare bounded decimal literals rather than through `strtol`, which accepts
+leading whitespace and a sign and would let `"+360"` and `"360"` name one
+profile under two spellings. `FieldRasterProfile` replaces `EXPECTED_WIDTH`/
+`EXPECTED_HEIGHT` and owns the PPM header and size that derived from them; the
+adapter takes it with **no default**, because a default is precisely how a
+fixture size came to be shipped as the production one.
+
+**The qualifier recomputes rather than trusts.** `field_raster_qualification.py`
+reads the fixture's `captureProfile` (manifest `schemaVersion` 2) and derives
+the entire marker set by exact integer arithmetic from the declared profile,
+comparing the manifest's list against it. A trusted marker list would let a
+forged fixture define its own passing criteria. Provenance — which API produced
+the dimensions, which frame semantics, device model, OS — is *required* and
+bounded, not tolerated. The receipt is bumped to v3 and records which profile
+was qualified on what provenance.
+
+**The ceiling is two bounds, both already in the program.** 4096 per axis is
+the helper's existing `MAX_DIMENSION` on every decoded plane and the bound
+`_metadata_positive_int` already applies to every reported dimension. The
+canonical PPM size is bounded by `RefineMaterializationLimits().max_raster_bytes`
+read *live* rather than restated — 128 MiB, verified numerically identical to
+`NATIVE_CHILD_MAX_PINNED_FILE_BYTES`. At a 4096 axis the widest admissible
+profile is 48 MiB, so the axis bound binds first and the byte bound is what
+keeps the guarantee true if the axis bound is ever raised; the code says so
+rather than leaving a check that looks active and is not. R118's illustrative
+60000x60000 is refused. The qualifier can never admit a profile the
+materializer would refuse.
+
+**Capture resolution is not a code constant, and is no longer written as one.**
+`SharedARCaptureRig.makeConfiguration()` never assigns `config.videoFormat`, so
+ARKit selects a default that depends on device and active frame semantics;
+`frame.camera.imageResolution` is stamped per keyframe. 1440x1920 is therefore
+the `.right`-rotated form of a 1920x1440 native that one device produced on one
+scan — not a property of the code. The fixture exporter now resolves a
+`CaptureProfile` at runtime and carries its provenance. 1440x1920 survives in
+the tree only as labelled test data. The keyframe index stores intrinsics in
+native landscape while raster dimensions are the rotated pair; `rotate_intrinsics`
+already asserts `encoded_width == native.image_height`, and `CaptureProfile`
+stores native only, deriving encoded, so the pair is never both spelled as
+integers.
+
+**The I92 receipt is dead, by construction.** `QUALIFIED_HELPER_SOURCE_SHA256`
+moves `4840e0e6…bee9c3` →
+`3b184937b755dc4acca4347ea6dba43dbeb111f090a91cd340e65d214937c626`, and the
+same literal in `install.sh` and `install-path-guard.py` moves with it or the
+installer refuses to build. I92 covers the old helper bytes only. Re-qualification
+is mandatory, not elective.
+
+**Verification.** On the qualified x86_64 host at the integration merge: **2038
+passed, 1 failed, 0 skipped** — an *empty* skip list, which is the point; all 83
+macOS skips are Linux-gated and every one executed. The single failure,
+`test_validator_drift::test_vendored_validator_is_byte_identical`, needs
+`/home/kody/scripts/validate_capture_bundle.py`, which is absent from that host,
+and reproduces identically on base commit `4d983c9d` under a base-commit
+control run. macOS collects the same 2039 tests, so the merge introduced no
+drift. The helper compiles clean there under the release `-Werror` flags and its
+argv validation was smoke-tested (leading zero, oversize, whitespace all
+refused).
+
+**Invariants held.** All fifteen `*_QUALIFIED` flags remain `False`,
+`DEFAULT_STAGES` is `ingest,solve,drawings`, `scan_pipeline.refine` is
+unregistered, and `refine_colmap_backend.py` is byte-identical to
+`6743e66eb06369d18e34b0054d10734e03a109ec` — each independently re-verified at
+the integration merge rather than taken on report.
+
+**Three exceptions carried, none of them silent.**
+
+1. *The reference design is refused; the reference profile is not.* A 640x360
+   fixture carrying genuine device provenance still qualifies end to end, so
+   the previously qualified profile remains qualifiable. A fixture
+   self-identifying as `deviceModel: "reference-design"` is refused
+   (`FIELD_RASTER_PROFILE_NOT_PHYSICAL`) — a synthetic drawing must not be able
+   to qualify itself. Both halves are intended.
+2. *`refine_lifecycle.main()` is broken and stays broken.* It has constructed
+   `PackagedLibheifFieldRasterMaterializer()` with no arguments since item 7
+   (`64f31021`), a latent `TypeError` in a hand-typed entry point with no
+   console script and no test; it now misses two required keyword arguments
+   instead of one. A repair must name a profile, which is either a forbidden
+   literal or a read of the keyframe index — that is composition, and belongs
+   to whoever composes item 7. Deliberately unfixed rather than patched with a
+   constant this ruling forbids.
+3. *The installed helper filename stays `-v2` while the protocol is v3.*
+   `install-path-guard.py` names it in the release's required-executable list,
+   so renaming it would make a new guard refuse an already-installed release on
+   a host agents may not touch. Drift is already caught closed: the manifest
+   binds `sourceSha256` and the open path refuses any release whose manifest is
+   not exactly the new hash. The rename belongs with the install that
+   accompanies re-qualification.
+
+**Two claims deliberately not made.** The Swift exporter's native fixture hash
+`6e9dea45…` is not reproducible from the Python side and never was — the
+exporter draws an asymmetry bar the Python fixture has never contained, so the
+two describe different artifacts, before this change as much as after. What is
+proved instead is the property that matters: the derivation at 640x360 equals
+the frozen pre-R118 marker contract exactly, so the generalization is a
+superset and not a redraw. And whether RoomPlan preserves the AR session's
+selected video format is unverified on device; it is an operator cross-check in
+the runbook, with an explicit instruction not to qualify if the configuration
+and a real scan's keyframe index disagree.
+
+*Entries add: I98 · last id = I98*
