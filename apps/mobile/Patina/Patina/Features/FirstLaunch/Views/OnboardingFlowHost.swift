@@ -74,7 +74,12 @@ struct OnboardingFlowHost: View {
     private var content: some View {
         switch step {
         case .carousel:
+            // U33: the carousel's closing page promises whatever comes next in
+            // THIS variant. Nil (variant not yet resolved) reads as quiz-first,
+            // the shipped default — and walk-first replaces the carousel
+            // outright in `resolveVariant`, so it never renders the wrong close.
             OnboardingFlowView(
+                isWalkFirst: isWalkFirst ?? false,
                 onComplete: { advanceToQuiz() },
                 onSkip: { advanceToQuiz() }
             )
