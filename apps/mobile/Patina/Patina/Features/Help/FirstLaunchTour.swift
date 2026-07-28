@@ -22,7 +22,7 @@
 //  │          GreetingHeader()                                                │
 //  │              .firstLaunchTourAnchor(.homeGreeting)                       │
 //  │          ProductCard()                                                   │
-//  │              .firstLaunchTourAnchor(.savedHeart)                         │
+//  │              .firstLaunchTourAnchor(.addToRoom)                          │
 //  │          ProfileMonogram()                                               │
 //  │              .firstLaunchTourAnchor(.profileMonogram)                    │
 //  │      }                                                                   │
@@ -57,6 +57,13 @@
 //  the equivalent of the web "Skip" action — analytics fire `abandoned` and
 //  the tour is marked resolved.
 //
+//  Tour fires on first visible Home, by design. The host passes
+//  `canAutoStart` (see `DailyRoomView`); when Home mounts under a covering
+//  route — the post-onboarding landing pushes `.emergence` straight onto the
+//  navigation path — the one-shot is DEFERRED rather than burned behind that
+//  cover. `.task(id: canAutoStart)` re-fires the check the moment the path
+//  empties out and Home is actually on screen.
+//
 
 import Auth
 import Observation
@@ -70,8 +77,10 @@ import SwiftUI
 public enum FirstLaunchTourAnchor: String, CaseIterable, Sendable {
     /// Home / Daily Room greeting header (step 1).
     case homeGreeting = "home-greeting"
-    /// Saved (heart) affordance on a daily product card (step 2).
-    case savedHeart = "saved-heart"
+    /// The "+ Add" save affordance on the topmost daily product card (step 2).
+    /// The Daily Room ships no heart control — this anchor names the button
+    /// that actually exists.
+    case addToRoom = "add-to-room"
     /// Profile monogram / avatar entry point (step 3).
     case profileMonogram = "profile-monogram"
 }
@@ -145,10 +154,17 @@ public final class FirstLaunchTourModel {
 
     /// Anchors currently mounted in the view tree. The anchor modifier
     /// registers on appear / unregisters on disappear, so the orchestrator can
-    /// SKIP a step whose anchor never renders — e.g. the `.savedHeart` product
+    /// SKIP a step whose anchor never renders — e.g. the `.addToRoom` product
     /// card doesn't exist for a brand-new user with zero rooms, which used to
     /// strand the tour on an invisible middle step.
     @ObservationIgnored private var mountedAnchors: Set<FirstLaunchTourAnchor> = []
+
+    /// Step indexes dropped because their anchor never mounted. Tracked (not
+    /// `@ObservationIgnored`) because the visible "Step X of Y" caption is
+    /// derived from it: a skipped step is removed from BOTH the numerator and
+    /// the denominator so the caption renumbers ("Step 1 of 2") instead of
+    /// leaving a hole the user reads as a bug ("Step 1 of 3" → "Step 3 of 3").
+    private var skippedSteps: Set<Int> = []
 
     /// Becomes `true` the first time any anchor registers. Skip-unmounted logic
     /// only kicks in once the anchor system is live, so a model driven directly
@@ -159,7 +175,7 @@ public final class FirstLaunchTourModel {
     @ObservationIgnored private var skipTask: Task<Void, Never>?
 
     /// Grace window given to a step's anchor to mount before the step is
-    /// skipped. Covers the async case — e.g. `.savedHeart`'s product card only
+    /// skipped. Covers the async case — e.g. `.addToRoom`'s product card only
     /// mounts after the recommendations feed loads over the network — so a
     /// not-yet-mounted anchor still gets its coachmark, while a truly-absent one
     /// (zero-room user) is skipped once the window elapses. Settable for tests.
@@ -201,23 +217,23 @@ public final class FirstLaunchTourModel {
             anchor: .homeGreeting,
             fallback: (
                 heading: "Welcome to Patina",
-                body: "Your home design board. Today is what's pinned, Saved is the heart, Profile is settings."
+                body: "This is your Daily Room — picks and stories chosen for your space."
             )
         ),
         FirstLaunchTourStep(
             surfaceKey: SurfaceKeys.IOSApp.FirstLaunchTour.step2Saved,
-            anchor: .savedHeart,
+            anchor: .addToRoom,
             fallback: (
-                heading: "Your saved finds",
-                body: "Tap the heart on any product to save it — your saves follow you across rooms and devices."
+                heading: "Save what you love",
+                body: "Add pieces to a room with + Add — they follow you everywhere."
             )
         ),
         FirstLaunchTourStep(
             surfaceKey: SurfaceKeys.IOSApp.FirstLaunchTour.step3Profile,
             anchor: .profileMonogram,
             fallback: (
-                heading: "Your account",
-                body: "Notifications, scan history, designer access, and sign-out all live here."
+                heading: "Your profile",
+                body: "Rooms, saved pieces, and settings live here."
             )
         ),
     ]
@@ -286,6 +302,7 @@ public final class FirstLaunchTourModel {
         }
         startedAt = Date()
         viewedSteps = [0]
+        skippedSteps = []
         currentStep = 0
         isActive = true
         analytics.tourStarted(tourKey: tourKey, triggerSource: triggerSource)
@@ -310,7 +327,7 @@ public final class FirstLaunchTourModel {
             stepSurfaceKey: steps[nextIndex].surfaceKey
         )
         // If this step's anchor isn't on screen, don't skip it outright — its
-        // view may still be mounting (e.g. `.savedHeart`'s product card while
+        // view may still be mounting (e.g. `.addToRoom`'s product card while
         // the feed loads). Give it a grace window; the reactive popover binding
         // shows it the moment it mounts, and only if it's STILL absent after the
         // window do we skip forward — which auto-clears the zero-room dead step.
@@ -333,6 +350,9 @@ public final class FirstLaunchTourModel {
             if self.isActive,
                self.currentStep == index,
                !self.mountedAnchors.contains(self.steps[index].anchor) {
+                // Record the drop BEFORE advancing so the next step's caption
+                // renders against the shrunken denominator in the same pass.
+                self.skippedSteps.insert(index)
                 self.advance()
             }
         }
@@ -383,6 +403,9 @@ public final class FirstLaunchTourModel {
     public func skip() {
         guard isActive else { return }
         skipTask?.cancel()
+        // `steps.count`, not the display-facing `totalSteps` — the event
+        // reports the authored tour length so the PostHog funnel denominator
+        // stays comparable across users who skipped an unmountable step.
         analytics.tourAbandoned(
             tourKey: tourKey,
             atStep: currentStep,
@@ -451,11 +474,24 @@ public final class FirstLaunchTourModel {
         return steps[currentStep]
     }
 
-    /// Zero-based active step, surfaced for the "Step X of Y" caption.
-    public var currentStepNumber: Int { currentStep + 1 }
+    /// One-based position of the active step among the steps the user will
+    /// actually be shown, for the "Step X of Y" caption. Steps skipped for a
+    /// never-mounted anchor are excluded, so the sequence reads 1, 2, 3… with
+    /// no gaps rather than jumping from "Step 1" to "Step 3".
+    public var currentStepNumber: Int {
+        guard steps.indices.contains(currentStep) else { return 1 }
+        return (0...currentStep).filter { !skippedSteps.contains($0) }.count
+    }
 
-    /// Total step count, surfaced for the "Step X of Y" caption.
-    public var totalSteps: Int { steps.count }
+    /// Presentable step count, for the "Step X of Y" caption — the authored
+    /// list minus anything skipped for a missing anchor. Never below 1: the
+    /// caption is only rendered while a step is on screen.
+    public var totalSteps: Int { max(1, steps.count - skippedSteps.count) }
+
+    /// Whether the active step is the last authored one. Derived from
+    /// `steps.count`, NOT the display-facing `totalSteps` — otherwise a skipped
+    /// step would make the final popover's button read "Next" and dead-end.
+    public var isOnFinalStep: Bool { currentStep >= steps.count - 1 }
 }
 
 // MARK: - Orchestrator view
@@ -476,14 +512,22 @@ public struct FirstLaunchTour<Content: View>: View {
     @State private var model: FirstLaunchTourModel
     private let content: () -> Content
 
+    /// Gate on the one-shot auto-start. `false` means "Home is mounted but
+    /// something is covering it" — the check is deferred rather than burned,
+    /// and `.task(id:)` re-runs it the moment this flips to `true`. Hosts pass
+    /// their own visibility signal; see `DailyRoomView`.
+    public var canAutoStart: Bool = true
+
     public init(
         tourKey: String = FirstLaunchTourModel.defaultTourKey,
         steps: [FirstLaunchTourStep] = FirstLaunchTourModel.defaultSteps,
+        canAutoStart: Bool = true,
         @ViewBuilder content: @escaping () -> Content
     ) {
         self._model = State(
             wrappedValue: FirstLaunchTourModel(tourKey: tourKey, steps: steps)
         )
+        self.canAutoStart = canAutoStart
         self.content = content
     }
 
@@ -491,9 +535,11 @@ public struct FirstLaunchTour<Content: View>: View {
     /// drive the orchestrator without standing up a `@State` storage.
     public init(
         model: FirstLaunchTourModel,
+        canAutoStart: Bool = true,
         @ViewBuilder content: @escaping () -> Content
     ) {
         self._model = State(wrappedValue: model)
+        self.canAutoStart = canAutoStart
         self.content = content
     }
 
@@ -506,7 +552,11 @@ public struct FirstLaunchTour<Content: View>: View {
             // but with `@Observable` the optional-keyed `@Environment` value is
             // the single injection path.)
             .environment(\.firstLaunchTourModel, model)
-            .task {
+            // `id: canAutoStart` is load-bearing — a plain `.task` runs once at
+            // mount and would burn the one-shot while Home sits under a pushed
+            // route. Keying on the gate re-runs the check when the cover clears.
+            .task(id: canAutoStart) {
+                guard canAutoStart else { return }
                 // S4-1 — install the Supabase adapter when the user is
                 // authenticated. Read once at task spin-up; on sign-in the
                 // host view re-mounts because of the auth coordinator's
@@ -565,7 +615,7 @@ private struct FirstLaunchTourAnchorModifier: ViewModifier {
     func body(content: Content) -> some View {
         content
             // Track this anchor's presence so the orchestrator can skip a step
-            // whose anchor never mounts (e.g. `.savedHeart` for a zero-room
+            // whose anchor never mounts (e.g. `.addToRoom` for a zero-room
             // user) instead of stalling on an invisible popover.
             .onAppear { model?.registerAnchor(anchor) }
             .onDisappear { model?.unregisterAnchor(anchor) }
@@ -600,7 +650,7 @@ private struct FirstLaunchTourAnchorModifier: ViewModifier {
                 step: step,
                 stepNumber: model.currentStepNumber,
                 totalSteps: model.totalSteps,
-                isFinalStep: model.currentStep == model.totalSteps - 1,
+                isFinalStep: model.isOnFinalStep,
                 onNext: { model.advance() },
                 onSkip: { model.skip() }
             )
@@ -714,10 +764,10 @@ private struct FirstLaunchTourPopoverCard: View {
                 .background(Color.gray.opacity(0.1))
                 .firstLaunchTourAnchor(.homeGreeting)
 
-            Text("Product card with heart")
+            Text("Product card with + Add")
                 .padding()
                 .background(Color.gray.opacity(0.1))
-                .firstLaunchTourAnchor(.savedHeart)
+                .firstLaunchTourAnchor(.addToRoom)
 
             Text("Profile monogram")
                 .padding()

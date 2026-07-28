@@ -38,11 +38,16 @@ struct DailyRoomView: View {
 
     var body: some View {
         // First-launch tour wraps the entire screen so the three coachmark
-        // anchors (greeting header / saved heart / profile monogram) all
-        // receive the orchestrator via SwiftUI environment. The orchestrator
-        // auto-starts the 3-step sequence on the first launch and persists
-        // resolution state so subsequent launches DO NOT re-trigger.
-        FirstLaunchTour {
+        // anchors (greeting header / + Add / profile monogram) all receive the
+        // orchestrator via SwiftUI environment. The orchestrator auto-starts
+        // the 3-step sequence on the first launch and persists resolution
+        // state so subsequent launches DO NOT re-trigger.
+        //
+        // `canAutoStart` gates that one-shot on Home actually being visible:
+        // post-onboarding we land here with `.emergence` already pushed, and
+        // firing the tour under that cover would spend it on a screen nobody
+        // sees. Tour fires on first visible Home, by design.
+        FirstLaunchTour(canAutoStart: coordinator.navigationPath.isEmpty) {
             screenBody
         }
     }
@@ -407,11 +412,11 @@ struct DailyRoomView: View {
                             if index == 0 {
                                 // First-launch tour anchor — Step 2's popover
                                 // attaches to the topmost daily product card, the
-                                // surface that carries the heart/save affordance
-                                // the step describes. Only the first card carries
+                                // surface that carries the "+ Add" control the
+                                // step describes. Only the first card carries
                                 // the anchor so the popover doesn't render
                                 // multiple times for users with a long feed.
-                                card.firstLaunchTourAnchor(.savedHeart)
+                                card.firstLaunchTourAnchor(.addToRoom)
                             } else {
                                 card
                             }
