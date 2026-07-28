@@ -39,14 +39,17 @@ struct ScanWalkView: View {
 
                     Spacer()
 
-                    ScanControlsView(
-                        onPause: viewModel.didTapPause,
-                        onHelp: {
-                            // Brief coaching reshow; for v1 this is a no-op
-                        }
-                    )
-                    .padding(.trailing, 20)
-                    .padding(.top, 60)
+                    // U15: a persistent Finish control sits opposite the
+                    // pause glyph so ending the scan is always visible —
+                    // the pause-menu's "Finish With What We Have" row is
+                    // now the secondary path to the same action.
+                    finishControl
+                        .padding(.trailing, 12)
+                        .padding(.top, 60)
+
+                    ScanControlsView(onPause: viewModel.didTapPause)
+                        .padding(.trailing, 20)
+                        .padding(.top, 60)
                 }
                 Spacer()
             }
@@ -122,6 +125,52 @@ struct ScanWalkView: View {
             guard newText != lastAnnouncedText else { return }
             lastAnnouncedText = newText
             UIAccessibility.post(notification: .announcement, argument: newText)
+        }
+    }
+
+    /// U15: persistent Finish control. Enabled state reuses
+    /// `ScanViewModel.hasMeaningfulScanData` — the same minimum-coverage gate
+    /// the pause menu's "Finish With What We Have" row already enforces — so
+    /// the two paths can never disagree about whether the scan is worth
+    /// keeping. Disabled state shows the same inline caption PauseMenuView
+    /// uses rather than swallowing the tap silently.
+    private var finishControl: some View {
+        let canFinish = viewModel.hasMeaningfulScanData
+        return VStack(alignment: .trailing, spacing: 6) {
+            Button(action: {
+                guard canFinish else { return }
+                viewModel.didTapFinishPartial()
+            }) {
+                Text("Finish")
+                    .font(PatinaTypography.uiSmall)
+                    .foregroundStyle(Color.white.opacity(canFinish ? 0.9 : 0.4))
+                    .padding(.horizontal, 18)
+                    .frame(height: 36)
+                    .background(
+                        Capsule()
+                            .fill(Color.white.opacity(0.12))
+                            .background(.ultraThinMaterial, in: Capsule())
+                    )
+                    .overlay(
+                        Capsule().stroke(Color.white.opacity(0.10), lineWidth: 1)
+                    )
+            }
+            .buttonStyle(.plain)
+            .disabled(!canFinish)
+            .frame(minWidth: 44, minHeight: 44)
+            .accessibilityLabel(
+                Text(canFinish
+                     ? "Finish scan with what you have"
+                     : "Finish scan. Disabled. Walk a little more first.")
+            )
+
+            if !canFinish {
+                Text("Walk a little more first")
+                    .font(PatinaTypography.monoSmall)
+                    .tracking(0.5)
+                    .textCase(.uppercase)
+                    .foregroundStyle(Color.white.opacity(0.7))
+            }
         }
     }
 

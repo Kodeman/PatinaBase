@@ -38,6 +38,15 @@ public struct ScanReviewView: View {
     @State private var loadError: String?
     /// True while we're still trying to read the manifest (poll loop).
     @State private var isLoading: Bool = true
+    /// U26: error from a failed `submit(skipping:)` call, shown as an inline
+    /// banner over the still-loaded form — distinct from `loadError` (which
+    /// only covers the manifest failing to read from disk) so a save failure
+    /// can never be confused with "no scan to review" and never discards the
+    /// user's curation.
+    @State private var saveError: String?
+    /// Which save path the last `submit(skipping:)` call used, so the save
+    /// banner's retry replays the same action the user actually took.
+    @State private var lastSubmitSkipped: Bool = false
 
     /// Room name the user can edit.
     @State private var roomName: String = ""
@@ -149,6 +158,47 @@ public struct ScanReviewView: View {
         }
     }
 
+    // MARK: - Save error banner (U26)
+
+    /// Inline banner shown over the loaded form when `submit(skipping:)`
+    /// fails. Unlike the manifest-load `errorState`, this never replaces the
+    /// form — the user's hero pick, ordering, captions, and notes all stay
+    /// exactly as they were so retrying doesn't cost them their curation.
+    private func saveErrorBanner(message: String) -> some View {
+        HStack(alignment: .top, spacing: 12) {
+            Image(systemName: "exclamationmark.triangle.fill")
+                .font(.system(size: 15, weight: .semibold))
+                .foregroundStyle(PatinaColors.terracotta)
+
+            VStack(alignment: .leading, spacing: 6) {
+                Text(message)
+                    .font(PatinaTypography.bodySmall)
+                    .foregroundStyle(PatinaColors.Text.primary)
+                    .fixedSize(horizontal: false, vertical: true)
+
+                Button(action: { Task { await submit(skipping: lastSubmitSkipped) } }) {
+                    Text("Let's try that again")
+                        .font(PatinaTypography.bodySmallMedium)
+                        .foregroundStyle(PatinaColors.Text.interactive)
+                }
+                .buttonStyle(.plain)
+            }
+
+            Spacer(minLength: 0)
+        }
+        .padding(14)
+        .background(
+            RoundedRectangle(cornerRadius: 12)
+                .fill(PatinaColors.Background.primary)
+                .shadow(color: .black.opacity(0.12), radius: 12, y: 4)
+        )
+        .overlay(
+            RoundedRectangle(cornerRadius: 12)
+                .stroke(PatinaColors.terracotta.opacity(0.4), lineWidth: 1)
+        )
+        .accessibilityElement(children: .combine)
+    }
+
     // MARK: - Loaded content
 
     @ViewBuilder
@@ -173,6 +223,15 @@ public struct ScanReviewView: View {
                 .padding(.bottom, 32)
             }
             .background(PatinaColors.Background.primary.ignoresSafeArea())
+            .overlay(alignment: .top) {
+                if let saveError {
+                    saveErrorBanner(message: saveError)
+                        .padding(.horizontal, 16)
+                        .padding(.top, 8)
+                        .transition(reduceMotion ? .identity : .move(edge: .top).combined(with: .opacity))
+                }
+            }
+            .animation(reduceMotion ? nil : .easeInOut(duration: 0.2), value: saveError)
             .toolbarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .topBarLeading) {
@@ -601,8 +660,14 @@ public struct ScanReviewView: View {
     private func submit(skipping: Bool) async {
         guard let manifest = manifest else { return }
 
+        lastSubmitSkipped = skipping
+        saveError = nil
+
         let trimmedName = roomName.trimmingCharacters(in: .whitespacesAndNewlines)
         let userName: String? = trimmedName.isEmpty ? nil : trimmedName
+        // U28: "Save without notes" only skips the free-form notes text.
+        // The hero pick and photo ordering below are curation the user
+        // already did in this same screen — skipping should never discard it.
         let notes = skipping ? "" : roomNotes
 
         let annotations = ScanManifest.Annotations(
@@ -611,13 +676,8 @@ public struct ScanReviewView: View {
             reviewCompletedAt: Date()
         )
 
-        let heroId = skipping ? nil : (selectedHeroPhotoId ?? effectiveHeroEntry(manifest: manifest)?.id)
-        let reorderedIds: [UUID]
-        if skipping {
-            reorderedIds = []
-        } else {
-            reorderedIds = workingOrder.filter { !hiddenPhotoIds.contains($0) }
-        }
+        let heroId = selectedHeroPhotoId ?? effectiveHeroEntry(manifest: manifest)?.id
+        let reorderedIds = workingOrder.filter { !hiddenPhotoIds.contains($0) }
 
         // Per-photo captions land on PhotoEntry.userAnnotation via
         // finalizeBundleAfterReview. Skip-save still persists captions the user
@@ -635,10 +695,9 @@ public struct ScanReviewView: View {
                 reorderedPhotoIds: reorderedIds,
                 photoAnnotations: photoAnnotations
             )
-            _ = manifest  // keep explicit dependency for guard above
             onComplete()
         } catch {
-            loadError = "We couldn't save your changes. \(error.localizedDescription)"
+            saveError = "We couldn't save your changes. \(error.localizedDescription)"
         }
     }
 }
