@@ -224,8 +224,14 @@ struct RecommendationsView: View {
 
                     guard abs(horizontal) > abs(vertical) else { return }
                     if horizontal > 0 {
-                        // Swipe right → save
-                        viewModel.saveProduct(product, context: modelContext, roomRemoteId: roomRemoteId)
+                        // Swipe right → save, or unsave when already saved
+                        // (matches saveButton's toggle — a plain save call
+                        // here would create a duplicate saved_items row).
+                        if viewModel.isSaved(product) {
+                            viewModel.unsaveProduct(product, context: modelContext)
+                        } else {
+                            viewModel.saveProduct(product, context: modelContext, roomRemoteId: roomRemoteId)
+                        }
                     } else {
                         // Swipe left → skip
                         viewModel.skipProduct(product)
@@ -237,9 +243,16 @@ struct RecommendationsView: View {
         .accessibilityLabel("\(product.name) by \(product.makerName), \(product.fullFormattedPrice), \(product.matchLabel)")
         .accessibilityHint("Double-tap to view details.")
         // PT-2-4: expose the swipe-to-save / swipe-to-skip gestures as
-        // VoiceOver actions, since the swipe itself is inaccessible.
-        .accessibilityAction(named: "Save") {
-            viewModel.saveProduct(product, context: modelContext, roomRemoteId: roomRemoteId)
+        // VoiceOver actions, since the swipe itself is inaccessible. Toggles
+        // to "Unsave" → unsaveProduct when already saved, same as the
+        // visible save button, so VoiceOver can't create a duplicate
+        // saved_items row.
+        .accessibilityAction(named: viewModel.isSaved(product) ? "Unsave" : "Save") {
+            if viewModel.isSaved(product) {
+                viewModel.unsaveProduct(product, context: modelContext)
+            } else {
+                viewModel.saveProduct(product, context: modelContext, roomRemoteId: roomRemoteId)
+            }
         }
         .accessibilityAction(named: "Skip") {
             viewModel.skipProduct(product)
