@@ -47,6 +47,16 @@ struct QuietConversationFlowHost: View {
     /// "Accept" on the floor plan can't start two creates before the first
     /// one stamps `session.localRoomId`.
     @State private var isSavingFallbackRoom = false
+    /// Route to land on once this host's own pop has committed.
+    ///
+    /// The host is a *pushed* NavigationStack destination, so `dismiss()`
+    /// pops it by mutating the very path a follow-on `navigate(to:)` pushes
+    /// onto. Doing both in one turn leaves the stack holding an empty pushed
+    /// container — the landing destination's body never mounts, so the user
+    /// gets a black screen with the system back chevron even though the room
+    /// saved correctly. Holding the route until `onDisappear` keeps the pop
+    /// and the push in separate turns.
+    @State private var exitRoute: AppRoute?
 
     /// Identifiable wrapper so `.fullScreenCover(item:)` can present the
     /// review on any distinct scan completion.
@@ -84,6 +94,12 @@ struct QuietConversationFlowHost: View {
             #if DEBUG
             PatinaLog.scan.debug("[QuietConversationFlowHost] host onDisappear step=\(step)")
             #endif
+            guard let route = exitRoute else { return }
+            exitRoute = nil
+            let nav = coordinator
+            Task { @MainActor in
+                nav.navigate(to: route)
+            }
         }
         .onChange(of: step) { oldValue, newValue in
             #if DEBUG
@@ -116,8 +132,7 @@ struct QuietConversationFlowHost: View {
                             await ScanRecoveryService.shared.discard(review.id, in: ctx)
                         }
                         reviewScan = nil
-                        dismiss()
-                        coordinator.navigate(to: .heroFrame)
+                        leaveFlow(landingOn: .heroFrame)
                     }
                 )
                 .onAppear {
@@ -171,8 +186,7 @@ struct QuietConversationFlowHost: View {
                         #if DEBUG
                         PatinaLog.scan.debug("[QuietConversationFlowHost] .threshold → abandon (reason=\(reason)) — skipping review")
                         #endif
-                        dismiss()
-                        coordinator.navigate(to: .heroFrame)
+                        leaveFlow(landingOn: .heroFrame)
                         return
                     }
                     // Real scan — present the review as a full-screen cover
@@ -203,8 +217,7 @@ struct QuietConversationFlowHost: View {
                 ScanSavedConfirmationView(
                     scanId: scanId,
                     onDone: {
-                        dismiss()
-                        coordinator.navigate(to: .heroFrame)
+                        leaveFlow(landingOn: .heroFrame)
                     },
                     onSetStyle: {
                         withAnimation(reduceMotion ? nil : .easeInOut(duration: 0.3)) {
@@ -290,8 +303,7 @@ struct QuietConversationFlowHost: View {
                             // LiDAR sessions already wrote their RoomModel in
                             // `holdScanLocally` after the review step — saving
                             // again here would create a second room.
-                            dismiss()
-                            coordinator.navigate(to: .emergence(pieceId: nil))
+                            leaveFlow(landingOn: .emergence(pieceId: nil))
                         }
                     },
                     onRescan: {
@@ -312,6 +324,14 @@ struct QuietConversationFlowHost: View {
             conversationViewModel = vm
         }
         return vm
+    }
+
+    /// The single exit from the flow. Pops this host and lands the user on
+    /// `route` once the pop has settled — never both in the same turn (see
+    /// `exitRoute`).
+    private func leaveFlow(landingOn route: AppRoute) {
+        exitRoute = route
+        dismiss()
     }
 
     private func resetForRescan() {
@@ -361,14 +381,10 @@ extension QuietConversationFlowHost {
         Task { @MainActor in
             let roomId = await persistFallbackRoom()
             isSavingFallbackRoom = false
-            dismiss()
-            if let roomId {
-                coordinator.navigate(to: .roomProject(roomId: roomId))
-            } else {
-                // Defensive: the session vanished under us. Home is still a
-                // coherent landing spot; a nil route is not.
-                coordinator.navigate(to: .heroFrame)
-            }
+            // Defensive: a nil id means the session vanished under us. Home is
+            // still a coherent landing spot; a nil route is not.
+            let landing = roomId.map { AppRoute.roomProject(roomId: $0) } ?? .heroFrame
+            leaveFlow(landingOn: landing)
         }
     }
 
@@ -385,43 +401,23 @@ extension QuietConversationFlowHost {
         let store = RoomStore(context: modelContext)
         let creation = RoomCreationCoordinator(store: store)
 
-        let roomId: UUID
-        do {
-            let result = try await creation.createManualRoom(
-                name: draft.name,
-                roomType: draft.roomType,
-                widthFeet: draft.widthFeet,
-                lengthFeet: draft.lengthFeet,
-                ceilingHeightFeet: draft.ceilingHeightFeet,
-                orientationRaw: "",
-                windowCount: draft.windowCount,
-                doorCount: draft.doorCount
-            )
-            roomId = result.room.id
-        } catch {
-            // Mirrors ManualRoomEntryView's offline fallback: guests and
-            // offline users get a local-only room rather than nothing.
-            let local = store.createRoom(
-                name: draft.name,
-                roomType: draft.roomType,
-                widthFeet: draft.widthFeet,
-                lengthFeet: draft.lengthFeet,
-                ceilingHeightFeet: draft.ceilingHeightFeet,
-                orientationRaw: "",
-                windowCount: draft.windowCount,
-                doorCount: draft.doorCount,
-                manualEntry: true
-            )
-            RoomSelectionStore.shared.select(localId: local.id, remoteId: nil)
-            roomId = local.id
-            #if DEBUG
-            PatinaLog.scan.error("[QuietConversationFlowHost] fallback room remote sync failed, created locally only: \(error)")
-            #endif
-        }
+        // One insert per accept, online or not: the coordinator keeps its own
+        // local room and reports `isLocalOnly` rather than throwing, so there
+        // is no failure path here that could add a second room.
+        let result = await creation.createManualRoom(
+            name: draft.name,
+            roomType: draft.roomType,
+            widthFeet: draft.widthFeet,
+            lengthFeet: draft.lengthFeet,
+            ceilingHeightFeet: draft.ceilingHeightFeet,
+            orientationRaw: "",
+            windowCount: draft.windowCount,
+            doorCount: draft.doorCount
+        )
 
-        current.localRoomId = roomId
+        current.localRoomId = result.room.id
         session = current
-        return roomId
+        return result.room.id
     }
 }
 
