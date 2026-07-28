@@ -175,15 +175,9 @@ struct DesignRequestFlowView: View {
         }
     }
 
-    var navTitle: String {
-        switch step {
-        case .pickScans: return "Choose scans"
-        case .details:   return "Your request"
-        case .review:    return "Review"
-        case .sending:   return "Sending"
-        case .success:   return "Sent"
-        }
-    }
+    // U08: one flow, one title — "Your design request" throughout, not a
+    // different noun per step (the step enum/logic below is untouched).
+    var navTitle: String { "Your design request" }
 
     // MARK: - Step: pick scans
 

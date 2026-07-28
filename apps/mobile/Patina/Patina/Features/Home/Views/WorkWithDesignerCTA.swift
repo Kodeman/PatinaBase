@@ -52,7 +52,7 @@ struct WorkWithDesignerCTA: View {
                 .padding(.bottom, 16)
 
             Button(action: onWorkWithDesigner) {
-                Text("Explore design services")
+                Text("Get design help")
                     .font(PatinaTypography.bodySmallMedium)
                     .foregroundStyle(PatinaColors.Text.inverse)
                     .frame(maxWidth: .infinity)

@@ -173,7 +173,7 @@ struct RoomSettingsView: View {
         } label: {
             HStack(spacing: 6) {
                 Text("↗")
-                Text("Share with Designer")
+                Text("Get design help with this room")
             }
             .font(PatinaTypography.uiSmall)
             .foregroundStyle(PatinaColors.offWhite)
