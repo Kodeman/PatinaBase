@@ -14,6 +14,7 @@ struct SyncStatusScreen: View {
     let store: CaptureStore
     let sync: any CaptureSyncService
     let siteScan: any SiteScanService
+    let session: any SessionProviding
     let companion: FieldCompanionController
     let analytics: any CaptureAnalytics
     let coordinator: CaptureCoordinator
@@ -281,7 +282,7 @@ struct SyncStatusScreen: View {
     // MARK: data
 
     private func reload() async {
-        let nextRows = store.search(SpecimenQuery())
+        let nextRows = captureOutbox()
             .filter { $0.transferState.phase != .complete }
             .sorted { weight($0) < weight($1) }
         let nextScanRows = await siteScan.pendingUploads()
@@ -291,6 +292,25 @@ struct SyncStatusScreen: View {
         updateCompanion()
     }
 
+    private func captureOutbox() -> [Specimen] {
+        switch localListScope {
+        case .globalFixtures:
+            return store.outbox()
+        case .owner(let owner):
+            return store.outbox(owner: owner)
+        case .unavailable:
+            return []
+        }
+    }
+
+    private var localListScope: CaptureLocalListScope {
+        CaptureOwnerProjectionPolicy.resolve(
+            runsRealServices: AppConfiguration.runsRealServices,
+            userID: session.userID,
+            workspaceID: session.workspaceID)
+    }
+
+    // swiftlint:disable:next function_body_length
     private func updateCompanion() {
         let captureStates = rows.map(\.transferState)
         let scanStates = scanRows.map(\.state)
@@ -468,6 +488,7 @@ import CaptureKitMocks
             store: store,
             sync: InMemoryCaptureSyncService(),
             siteScan: MockSiteScanService(),
+            session: MockSessionProviding(),
             companion: FieldCompanionController(),
             analytics: MockCaptureAnalytics(),
             coordinator: CaptureCoordinator()

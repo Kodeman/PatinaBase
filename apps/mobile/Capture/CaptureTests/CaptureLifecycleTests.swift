@@ -145,6 +145,47 @@ struct SpecimenProvenanceTests {
     }
 }
 
+struct CaptureOwnerProjectionPolicyTests {
+    @Test func mockAndLaunchHarnessUseGlobalFixtures() {
+        let scope = CaptureOwnerProjectionPolicy.resolve(
+            runsRealServices: false,
+            userID: nil,
+            workspaceID: nil)
+
+        #expect(scope == .globalFixtures)
+    }
+
+    @Test func realServicesFailClosedWithoutACompleteIdentity() {
+        #expect(CaptureOwnerProjectionPolicy.resolve(
+            runsRealServices: true,
+            userID: nil,
+            workspaceID: "workspace-a") == .unavailable)
+        #expect(CaptureOwnerProjectionPolicy.resolve(
+            runsRealServices: true,
+            userID: "user-a",
+            workspaceID: " ") == .unavailable)
+    }
+
+    @Test @MainActor func realServicesResolveAnOwnerForListsAndCreation() throws {
+        let scope = CaptureOwnerProjectionPolicy.resolve(
+            runsRealServices: true,
+            userID: " USER-A ",
+            workspaceID: " WORKSPACE-A ")
+        guard case .owner(let owner) = scope else {
+            Issue.record("Expected an owner-scoped production projection")
+            return
+        }
+
+        let store = try CaptureStore.inMemory()
+        let specimen = store.newDraft(owner: owner)
+
+        #expect(owner.userID == "user-a")
+        #expect(owner.workspaceID == "workspace-a")
+        #expect(specimen.ownerUserID == "user-a")
+        #expect(specimen.ownerWorkspaceID == "workspace-a")
+    }
+}
+
 struct CaptureTransferLifecycleTests {
     @Test func followsHonestLocalToReceiptBackedCompletion() throws {
         var state = CaptureTransferState.local

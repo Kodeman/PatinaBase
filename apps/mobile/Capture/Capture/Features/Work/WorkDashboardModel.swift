@@ -72,6 +72,7 @@ final class WorkDashboardModel {
     private let receivingService: any ReceivingService
     private let siteScanService: any SiteScanService
     private let store: CaptureStore
+    private let session: any SessionProviding
 
     var projects: WorkSectionState<FieldProject> = .loading
     var leads: WorkSectionState<FieldLead> = .loading
@@ -89,6 +90,7 @@ final class WorkDashboardModel {
         receivingService = container.receiving
         siteScanService = container.siteScan
         store = container.store
+        session = container.session
         refreshLocalCaptures()
     }
 
@@ -197,7 +199,7 @@ final class WorkDashboardModel {
     }
 
     private func refreshLocalCaptures() {
-        captures = store.search(SpecimenQuery())
+        captures = localCaptureSpecimens()
             .filter { $0.transferState.phase != .complete }
             .map {
             FieldCaptureActivity(
@@ -209,5 +211,23 @@ final class WorkDashboardModel {
                 updatedAt: $0.updatedAt
             )
         }
+    }
+
+    private func localCaptureSpecimens() -> [Specimen] {
+        switch localListScope {
+        case .globalFixtures:
+            return store.search(SpecimenQuery())
+        case .owner(let owner):
+            return store.search(SpecimenQuery(), owner: owner)
+        case .unavailable:
+            return []
+        }
+    }
+
+    private var localListScope: CaptureLocalListScope {
+        CaptureOwnerProjectionPolicy.resolve(
+            runsRealServices: AppConfiguration.runsRealServices,
+            userID: session.userID,
+            workspaceID: session.workspaceID)
     }
 }

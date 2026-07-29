@@ -14,6 +14,9 @@ import PhotosUI
 import Photos
 import UIKit
 import CaptureKit
+#if DEBUG
+import CaptureKitMocks
+#endif
 
 /// Why the degraded-mode sheet is up: a denied camera permission (R3) or a
 /// share-sheet hand-off that needs finishing (E3). Drives copy + the reflected
@@ -35,6 +38,7 @@ enum PhotoImportContext {
 /// camera: import from Photos, enter by hand, or jump to Settings to re-grant.
 struct PhotoImportSheet: View {
     let store: CaptureStore
+    let session: any SessionProviding
     let coordinator: CaptureCoordinator
     var analytics: (any CaptureAnalytics)?
     var context: PhotoImportContext = .denied
@@ -42,6 +46,7 @@ struct PhotoImportSheet: View {
     @Environment(\.openURL) private var openURL
     @State private var pickerItems: [PhotosPickerItem] = []
     @State private var isImporting = false
+    @State private var creationError: String?
 
     var body: some View {
         VStack(spacing: 0) {
@@ -92,6 +97,14 @@ struct PhotoImportSheet: View {
                 .accessibilityIdentifier("photoImport.byHand")
             }
             .padding(.horizontal, 16)
+
+            if let creationError {
+                Label(creationError, systemImage: "person.crop.circle.badge.exclamationmark")
+                    .font(CaptureType.footnote)
+                    .foregroundStyle(CaptureColor.error)
+                    .padding(.horizontal, 20)
+                    .padding(.top, 12)
+            }
 
             Spacer(minLength: 16)
 
@@ -164,7 +177,11 @@ struct PhotoImportSheet: View {
     private func importPicked(_ items: [PhotosPickerItem]) {
         guard !items.isEmpty else { return }
         isImporting = true
-        let draft = store.newDraft()                 // sync, on the main actor
+        guard let draft = makeDraft() else {
+            pickerItems = []
+            isImporting = false
+            return
+        }
         let draftID = draft.id
         Task { @MainActor in
             var order = 0
@@ -188,11 +205,32 @@ struct PhotoImportSheet: View {
     }
 
     private func enterByHand() {
-        let draft = store.newDraft()
+        guard let draft = makeDraft() else { return }
         try? store.save()
         analytics?.event("capture.manual_entry",
                          ["from": context == .shareImport ? "share" : "denied"])
         openSpecimen(draft.id)
+    }
+
+    private func makeDraft() -> Specimen? {
+        switch localListScope {
+        case .globalFixtures:
+            creationError = nil
+            return store.newDraft()
+        case .owner(let owner):
+            creationError = nil
+            return store.newDraft(owner: owner)
+        case .unavailable:
+            creationError = "Choose a workspace before creating a capture."
+            return nil
+        }
+    }
+
+    private var localListScope: CaptureLocalListScope {
+        CaptureOwnerProjectionPolicy.resolve(
+            runsRealServices: AppConfiguration.runsRealServices,
+            userID: session.userID,
+            workspaceID: session.workspaceID)
     }
 
     private func openSettings() {
@@ -218,6 +256,7 @@ enum ResilienceScreens {
         r.registerSheet(CaptureSheet.photoImport.registryKey) { _ in
             AnyView(
                 PhotoImportSheet(store: container.store,
+                                 session: container.session,
                                  coordinator: coordinator,
                                  analytics: container.analytics,
                                  context: .denied)
@@ -239,6 +278,7 @@ private func photoImportPreview(_ context: PhotoImportContext) -> some View {
     // swiftlint:disable:next force_try
     let store = try! CaptureStore.inMemory()
     return PhotoImportSheet(store: store,
+                            session: MockSessionProviding(),
                             coordinator: CaptureCoordinator(),
                             analytics: nil,
                             context: context)

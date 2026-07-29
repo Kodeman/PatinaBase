@@ -58,6 +58,7 @@ enum CapturePrefs {
 
 struct SettingsScreen: View {
     let store: CaptureStore
+    let session: any SessionProviding
     let analytics: any CaptureAnalytics
 
     @Environment(\.openURL) private var openURL
@@ -174,12 +175,13 @@ struct SettingsScreen: View {
     private var projectRow: some View {
         rowChrome("Default project") {
             Menu {
-                Picker("Default project", selection: $defaultProject) {
+                Picker("Default project", selection: defaultProjectSelection) {
                     Text("Not set").tag("")
                     ForEach(projectOptions(), id: \.self) { Text($0).tag($0) }
                 }
             } label: {
-                valueLabel(defaultProject.isEmpty ? "Not set" : defaultProject)
+                let selected = defaultProjectSelection.wrappedValue
+                valueLabel(selected.isEmpty ? "Not set" : selected)
             }
         }
     }
@@ -248,11 +250,43 @@ struct SettingsScreen: View {
     // MARK: derived
 
     private func projectOptions() -> [String] {
-        let names = store.search(SpecimenQuery()).compactMap { $0.venue?.projectName }
+        let names = localSearch(SpecimenQuery()).compactMap { $0.venue?.projectName }
         var set = Array(Set(names)).sorted()
-        if !defaultProject.isEmpty && !set.contains(defaultProject) { set.insert(defaultProject, at: 0) }
+        if !AppConfiguration.runsRealServices,
+           !defaultProject.isEmpty,
+           !set.contains(defaultProject) {
+            set.insert(defaultProject, at: 0)
+        }
         return set
     }
+
+    private var defaultProjectSelection: Binding<String> {
+        Binding(
+            get: {
+                projectOptions().contains(defaultProject) ? defaultProject : ""
+            },
+            set: { defaultProject = $0 }
+        )
+    }
+
+    private func localSearch(_ query: SpecimenQuery) -> [Specimen] {
+        switch localListScope {
+        case .globalFixtures:
+            return store.search(query)
+        case .owner(let owner):
+            return store.search(query, owner: owner)
+        case .unavailable:
+            return []
+        }
+    }
+
+    private var localListScope: CaptureLocalListScope {
+        CaptureOwnerProjectionPolicy.resolve(
+            runsRealServices: AppConfiguration.runsRealServices,
+            userID: session.userID,
+            workspaceID: session.workspaceID)
+    }
+
     private func format(_ d: Double) -> String { String(format: "%.1f", d) }
 
     #if DEBUG
@@ -316,7 +350,10 @@ import CaptureKitMocks
     s2.venue = VenueStamp(projectName: "Market Pull")
 
     return NavigationStack {
-        SettingsScreen(store: store, analytics: MockCaptureAnalytics())
+        SettingsScreen(
+            store: store,
+            session: MockSessionProviding(),
+            analytics: MockCaptureAnalytics())
     }
 }
 #endif
