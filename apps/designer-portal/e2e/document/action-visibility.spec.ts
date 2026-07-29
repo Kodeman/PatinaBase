@@ -6,9 +6,43 @@ const FOLIO_ACTION =
 
 test.describe.configure({ mode: 'serial' });
 
+/**
+ * The Scored Ink (I107): the visible instrument is a scored word (~26px), so
+ * the 44px floor is carried by the invisible halo the primitive renders last.
+ * The action itself must still be visible; the halo is what the finger hits.
+ */
 async function expectMinTarget(
   action: ReturnType<AuthenticatedPage['locator']>,
-  pixels = 44,
+) {
+  await expect(action).toBeVisible();
+  // Halo-or-self: a DocumentAction carries its 44px floor on the invisible
+  // [data-action-hit] halo, but non-DocumentAction targets (the desk folio
+  // card stamps data-action-variant="primary" on its whole ~200px surface)
+  // have no halo, so fall back to measuring the action element itself.
+  const halo = action.locator('[data-action-hit]');
+  const haloCount = await halo.count();
+  const target = haloCount >= 1 ? halo : action;
+  await expect
+    .poll(async () => {
+      const box = await target.boundingBox();
+      return box?.height ?? 0;
+    })
+    .toBeGreaterThanOrEqual(44);
+  await expect
+    .poll(async () => {
+      const box = await target.boundingBox();
+      return box?.width ?? 0;
+    })
+    .toBeGreaterThanOrEqual(44);
+}
+
+/**
+ * The mobile dock passes `min-h-12 w-full`, so its own row — not the halo —
+ * must stay at least 48px tall.
+ */
+async function expectMinRow(
+  action: ReturnType<AuthenticatedPage['locator']>,
+  pixels: number,
 ) {
   await expect(action).toBeVisible();
   await expect
@@ -52,7 +86,7 @@ async function expectMobileDock(
   const action = dock.locator(`[data-action-key="${actionKey}"]`);
   await expect(action).toHaveCount(1);
   await expect(action).toContainText(label);
-  await expectMinTarget(action, 48);
+  await expectMinRow(action, 48);
 }
 
 test.describe('Inked Instruments action visibility', () => {

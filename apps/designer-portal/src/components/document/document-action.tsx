@@ -16,6 +16,7 @@ import type {
   AnchorHTMLAttributes,
   ButtonHTMLAttributes,
   MouseEvent,
+  PointerEvent as ReactPointerEvent,
   ReactNode,
   RefObject,
 } from 'react';
@@ -35,18 +36,26 @@ interface ActionRegion {
 
 const ActionRegionContext = createContext<ActionRegion | null>(null);
 
+/* ── The Scored Ink (I107) ──────────────────────────────────────────────────
+   A proofreader never draws a box around a word: they rule under it, and the
+   rule is the instruction. So an action is a word with its scoring underneath
+   — no border, no fill, no plate. The chrome the eye used to read as "button"
+   is gone; what remains is ink (.da-pool, z 0), the word and its two scores
+   (.da-label, z 1), and an unseen 44px halo (.da-hit) that keeps the pointer
+   target honest now that the visible control is ~26px tall.
+
+   Everything that moves is triggered by hover/press/focus (R15) and stilled
+   under prefers-reduced-motion; the grammar itself lives in globals.css under
+   the matching "The Scored Ink (I107)" block. Colour and depth are value only
+   — never a shadow (D4). ─────────────────────────────────────────────────── */
 const BASE_CLASS =
-  'relative inline-flex min-h-11 min-w-11 shrink-0 items-center justify-center gap-2 whitespace-nowrap rounded-[4px] px-4 py-2 font-mono text-[12px] font-semibold uppercase tracking-[0.08em] no-underline transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-clay)] disabled:cursor-not-allowed disabled:opacity-50 aria-disabled:cursor-not-allowed aria-disabled:opacity-50';
+  'da-act relative inline-flex shrink-0 items-center justify-center gap-2 whitespace-nowrap px-[6px] pt-[4px] pb-[10px] font-mono text-[12px] uppercase no-underline disabled:cursor-not-allowed disabled:opacity-50 aria-disabled:cursor-not-allowed aria-disabled:opacity-50';
 
 const VARIANT_CLASS: Record<DocumentActionVariant, string> = {
-  primary:
-    'overflow-hidden border border-[var(--color-charcoal)] bg-[var(--color-charcoal)] text-[var(--color-off-white)] before:absolute before:inset-y-[5px] before:left-0 before:w-[2px] before:bg-[var(--color-clay)] hover:bg-[var(--color-mocha)]',
-  secondary:
-    'border border-[var(--color-aged-oak)] bg-[var(--bg-primary)] text-[var(--color-charcoal)] hover:border-[var(--color-clay)] hover:bg-[var(--bg-surface)]',
-  tertiary:
-    'border border-transparent bg-transparent px-2 text-[var(--color-charcoal)] underline decoration-[var(--color-aged-oak)] decoration-1 underline-offset-4 hover:text-[var(--color-clay)] focus-visible:decoration-[var(--color-clay)]',
-  danger:
-    'border border-[var(--color-terracotta)] bg-[var(--color-terracotta)] text-[var(--color-off-white)] hover:border-[var(--color-charcoal)] hover:bg-[var(--color-charcoal)]',
+  primary: 'da-primary font-medium tracking-[0.12em]',
+  secondary: 'da-secondary font-normal tracking-[0.1em]',
+  tertiary: 'da-tertiary font-light tracking-[0.1em]',
+  danger: 'da-danger font-medium tracking-[0.12em]',
 };
 
 interface DocumentActionBaseProps {
@@ -91,6 +100,16 @@ export type DocumentActionProps =
 function restoreFocus(ref: RefObject<HTMLElement | null> | undefined) {
   if (!ref?.current) return;
   window.requestAnimationFrame(() => ref.current?.focus());
+}
+
+/* The ink knows where it was touched: park the contact point on the control as
+   --ink-x/--ink-y so the pool's clip-path circle opens from exactly there.
+   Works identically for the button and the Link render. */
+function markInkPoint(event: ReactPointerEvent<HTMLElement>) {
+  const target = event.currentTarget;
+  const rect = target.getBoundingClientRect();
+  target.style.setProperty('--ink-x', `${event.clientX - rect.left}px`);
+  target.style.setProperty('--ink-y', `${event.clientY - rect.top}px`);
 }
 
 export const DocumentAction = forwardRef<
@@ -146,24 +165,30 @@ export const DocumentAction = forwardRef<
 
   const content = (
     <>
+      {/* the ink, beneath everything — a whisper (tertiary) never floods */}
+      {variant !== 'tertiary' && <span aria-hidden className="da-pool" />}
       {loading ? (
         <span
           aria-hidden
-          className="h-2 w-2 animate-pulse rounded-full bg-current opacity-70 motion-reduce:animate-none"
+          className="relative z-[1] h-2 w-2 animate-pulse rounded-full bg-current opacity-70 motion-reduce:animate-none"
         />
       ) : (
         leading && (
-          <span aria-hidden className="shrink-0">
+          <span aria-hidden className="da-leading shrink-0">
             {leading}
           </span>
         )
       )}
-      <span>{loading && loadingLabel ? loadingLabel : children}</span>
+      <span className="da-label">
+        {loading && loadingLabel ? loadingLabel : children}
+      </span>
       {trailing && (
-        <span aria-hidden className="shrink-0 opacity-75">
+        <span aria-hidden className="da-trailing shrink-0">
           {trailing}
         </span>
       )}
+      {/* the 44px target, unseen: the word is ~26px, the halo is honest */}
+      <span aria-hidden="true" data-action-hit className="da-hit" />
     </>
   );
 
@@ -172,6 +197,8 @@ export const DocumentAction = forwardRef<
     'data-action-variant': variant,
     'data-action-region': regionKey,
     'aria-busy': loading || undefined,
+    onPointerDown: markInkPoint,
+    onPointerMove: markInkPoint,
     className: [BASE_CLASS, VARIANT_CLASS[variant], className ?? ''].join(' '),
   };
 

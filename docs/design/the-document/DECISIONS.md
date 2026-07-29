@@ -6580,3 +6580,32 @@ not a qualified path, and three passes bought under a removed veto are exactly
 that.
 
 *Entries add: I106 · last id = I106*
+
+### I107 — The Scored Ink: DocumentAction sheds its box (2026-07-29)
+
+Kody's ruling from Proof Sheet Nº 001 (docs/design/the-document/button-proofs-2026-07-29.html):
+Proof VI — Proof I's scoring merged with Proof III's wet-ink press — selected for
+implementation. Supersedes I91’s visual prescription while keeping its protections.
+
+- Boxes, borders and fills are retired from DocumentAction. An action is a bare DM Mono
+  word with proofreader’s scoring: primary = double score (1.5px charcoal + 1px clay,
+  the old clay edge-rule transposed into the under-score); secondary = single hairline;
+  tertiary = unscored until hover, when its score draws in; danger = terracotta scores.
+- I91’s floors survive. Labels stay 12px in every role (tertiary differentiates by
+  weight and ink, not size). Pointer targets stay ≥44px but become invisible: a
+  .da-hit halo (data-action-hit) centered on each control; the action-visibility e2e now
+  measures the halo, not the visible box. The mobile dock keeps its visible 48px row.
+- The press is wet ink. A bead gathers at the pointer on hover and follows it; the pool
+  floods from the exact contact point on press (200ms) while the label inks off-white
+  (primary/danger) or charcoal (secondary); it recedes on release (260ms editorial). The
+  control drops 1px on press — 70ms linear in, 240ms editorial out (“a press is a fact;
+  a release is a gesture”). About ten lines of pointer-position script join the primitive.
+- All motion is interaction-triggered — R15 intact. No shadows — D4 intact. Reduced
+  motion: no bead, instant flood, no travel.
+- Focus-visible: the web focus ring is replaced by a clay proofreader’s caret ‸ before
+  the label plus clay-inked scores.
+- Punch list, deliberately deferred: ~72 ad-hoc min-h-11 controls across document
+  surfaces and court-bar’s parallel dark button still wear the old grammar; swept
+  separately so this ruling stays a primitive change.
+
+*Entries add: I107 · last id = I107*
