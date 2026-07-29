@@ -6299,3 +6299,68 @@ No iOS build or device pass has been run against either Swift change. The
 200-400 band is untouched. Fuse, Splat and Present are not composed.
 
 *Entries add: I105 · last id = I105*
+
+### R123 · Field Capture P2 · the loop comparables become advisory; the direction test is the wrong shape — 2026-07-29
+
+The program owner ruled on 2026-07-29, on the evidence of I103, I104 and I105:
+**`evaluate_refinement_evidence` stops vetoing on the two loop comparables.**
+Reprojection, registration coverage and the optional external error remain hard
+gates. The loop numbers are still computed, still validated, and are to be
+reported *more* prominently than before — what is removed is their power to
+refuse, not their existence.
+
+**Why the direction test is wrong in principle, not merely in practice.** The
+loop comparables measure the disagreement between COLMAP's **image-only**
+relative rotation, taken from two-view geometries produced by matching, and the
+rotation implied by the trajectory. Bundle adjustment does not touch a two-view
+geometry: it minimises reprojection over tracks. So after refinement the
+trajectory has moved toward the reprojection optimum while the two-view
+estimates stand exactly where matching left them. On these captures those
+estimates come from 0.25-0.5 m baselines, which is where two-view geometry is
+weakest. A small positive drift is therefore the *expected* behaviour of a
+successful refinement, not a symptom of a failing one. The rule asked whether a
+quantity had decreased when nothing in the optimiser was trying to decrease it.
+
+**Why an edge-count floor was considered and rejected.** R122's fix tripled the
+verified loop evidence on the best capture (31 → 90 edges) and the variance
+across the program collapsed exactly as a noise-dominated statistic should:
++20.31, −5.27, +2.30, −18.08, −1.28, −0.60, +0.54, **+0.22** percent at 8, 9,
+12, 15, 25, 31, 43 and 90 edges. But what survives the collapse is a *positive*
+residual. **Room 2 at 90 verified edges — the healthiest loop evidence this
+program has produced — still regresses and would still be refused.** An
+edge-count floor does not rescue any capture; it relocates the same refusal onto
+the runs carrying the most evidence. Three of three real captures refuse on a
+loop comparable while reprojection improves 28.9-32.9%.
+
+**What this costs, stated rather than glossed.** It gives up the only **global
+consistency** check. Reprojection cannot see a self-consistent but globally
+wrong reconstruction, and loop closure is the classical instrument for catching
+exactly that. This ruling accepts that exposure deliberately and for a bounded
+period. What still gates: reprojection, registration coverage, the external
+error when present, R119's movement and gauge-invariant shape floors, the
+cheirality check that caught the no-revisit sweep, and the entire
+materialisation, packet and toolchain chain ahead of them.
+
+**The replacement is a magnitude bound, and it is deferred on purpose.** The
+meaningful question is not "did the disagreement grow?" but "is the refined
+trajectory *grossly* inconsistent with the image evidence?" — an absolute
+ceiling, not a direction. That threshold is **not** to be derived from the three
+captures now in hand: fitting a bound to the runs one wants to pass is the
+inversion R122 was written to prevent, and R119's floors were built on the
+opposite principle. It waits for enough captures across enough rooms to derive
+honestly.
+
+**Scope of the edit.** Minimal and surgical. The loop metrics keep their
+validation — finite, non-negative, before-and-after — and their place in the
+evidence record; only their membership in the refusal set changes. This is the
+first change to `evaluate_refinement_evidence` since the function was written;
+it has been byte-identical through R119, R121 and R122 precisely so that this
+ruling could be made on evidence rather than convenience.
+
+**Unchanged.** Refine stays unregistered as a stage; `DEFAULT_STAGES` remains
+`ingest,solve,drawings`. The raster pin stays exactly 1440x1920. R119's floors
+stay as built. `PRIMARY_EXECUTION_QUALIFIED` and
+`PILOT_200_400_FRAME_RANGE_QUALIFIED` stay `False`; a passing run under a
+relaxed gate is not a qualified path.
+
+*Entries add: R123 · last id = R123*
