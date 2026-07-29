@@ -60,6 +60,36 @@
  * SAME way in the plan. This is deliberately the "atan2(z, x) then subtract
  * yaw" convention — NOT the mathematical CCW-from-east convention — for
  * consistency with the geometry already on screen.
+ *
+ * ─── THE SECOND LANE: COLMAP `cam_from_world` (refined-poses.ts) ────────────
+ *
+ * Field's Refine stage (services/scan-pipeline) publishes camera poses in
+ * COLMAP's world-to-camera convention, not ARKit's camera-to-world. Those
+ * poses are read by `lib/room-view/refined-poses.ts`, which converts them into
+ * this module's world-space vocabulary and then calls the helpers below — so
+ * there is exactly ONE definition of the plan mapping and ONE definition of
+ * the heading convention, shared by both lanes.
+ *
+ * The single fact that conversion turns on, derived in the P2 plan §3.1 and
+ * stated from the other side by `refine_adapter.optical_axis()`:
+ *
+ *   **The ARKit-world forward vector is the THIRD ROW of `camFromWorld.rotation`.**
+ *
+ * With `A = ARKIT_TO_RIGHT_ROTATED_COLMAP = ((0,1,0),(1,0,0),(0,0,−1))` — which
+ * is symmetric and involutive — the pipeline computes `R = A · R_aᵀ`, hence
+ * `R_a = Rᵀ · A`, and since an ARKit camera looks down its own −Z:
+ *
+ *     forward_world = R_a·(0,0,−1) = −Rᵀ·A·e₃ = −Rᵀ·(0,0,−1) = Rᵀ·e₃
+ *
+ * and `Rᵀ·e₃` is the third ROW of `R`. A transposed read, a column-for-row
+ * read, a dropped `A` or a sign error each produce a plausible-but-wrong
+ * heading, which is why `refined-poses.test.ts` pins the identity by
+ * round-tripping against `photoPlanPose` rather than restating the algebra.
+ *
+ * ⚠ These two lanes carry DIFFERENT IMAGE SETS and must not be joined.
+ * `room_scan_images` (this module's callers) are context photos; Refine
+ * refines SfM keyframes, which have no table at all. `buildPhotoMarkers` and
+ * `photoPlanPose` are deliberately untouched by the refined lane.
  */
 
 /** Meters → feet. Matches parse-room-scan/lib.ts `M_TO_FT` exactly. */
@@ -135,7 +165,12 @@ function isValidTransform(t: unknown): t is number[] {
   return true;
 }
 
-function isValidProvenance(p: unknown): p is PhotoProvenance {
+/**
+ * True only for a well-formed `PhotoProvenance`. Exported because the refined
+ * lane (`refined-poses.ts`) guards on the SAME predicate — a provenance this
+ * module would refuse must not become a refined path point either.
+ */
+export function isValidProvenance(p: unknown): p is PhotoProvenance {
   if (p == null || typeof p !== 'object') return false;
   const prov = p as PhotoProvenance;
   return (
@@ -145,6 +180,74 @@ function isValidProvenance(p: unknown): p is PhotoProvenance {
     isFiniteNumber(prov.originOffsetM.x) &&
     isFiniteNumber(prov.originOffsetM.z)
   );
+}
+
+// ─── The plan mapping, as two exported primitives ────────────────────────────
+
+/**
+ * A world XZ point (meters, ARKit world frame) → plan feet. THE definition of
+ * the position half of the plan mapping — `photoPlanPose` and the refined
+ * lane's `colmapPlanPose` both route through this exact code, not through the
+ * same formula written twice.
+ *
+ * Caller's contract: `provenance` must already have passed
+ * `isValidProvenance`. (Both public entry points check it first.)
+ */
+export function worldToPlanFt(
+  worldX: number,
+  worldZ: number,
+  provenance: PhotoProvenance,
+): { x: number; z: number } {
+  const theta = (provenance.originYawDeg * Math.PI) / 180;
+  const rotated = rotateNeg(worldX, worldZ, theta);
+  return {
+    x: (rotated.x - provenance.originOffsetM.x) * M_TO_FT,
+    z: (rotated.z - provenance.originOffsetM.z) * M_TO_FT,
+  };
+}
+
+/**
+ * A world-space forward direction's XZ components → a plan `headingDeg` in
+ * [0, 360), per the convention documented in this module's header. THE
+ * definition of the heading half of the plan mapping; shared with the refined
+ * lane for the same reason as `worldToPlanFt`.
+ *
+ * Only the ratio of the two components matters, so an unnormalized direction
+ * is fine — but `(0, 0)` is not a direction, and `Math.atan2(0, 0)` would
+ * quietly return 0 rather than refusing. Callers wanting that refusal check
+ * their vector first; this function keeps `photoPlanPose`'s historical
+ * behaviour (a degenerate transform yields heading 0 − yaw) unchanged.
+ */
+export function planHeadingDeg(
+  forwardX: number,
+  forwardZ: number,
+  provenance: PhotoProvenance,
+): number {
+  const worldHeadingDeg = (Math.atan2(forwardZ, forwardX) * 180) / Math.PI;
+  return normalizeDeg(worldHeadingDeg - provenance.originYawDeg);
+}
+
+/**
+ * The whole plan mapping in one call: a world-frame camera CENTRE (meters) and
+ * a world-frame FORWARD direction → a `PhotoPlanPose`. Both lanes' public
+ * entry points are thin callers of this, so "the same code, not the same
+ * formula" is structural rather than a comment.
+ *
+ * `y` is passed straight through as world height in feet — see the header:
+ * it is height above the ARKit world origin, not floor-relative.
+ */
+export function planPoseFromWorld(
+  worldCenter: { x: number; y: number; z: number },
+  worldForward: { x: number; z: number },
+  provenance: PhotoProvenance,
+): PhotoPlanPose {
+  const { x, z } = worldToPlanFt(worldCenter.x, worldCenter.z, provenance);
+  return {
+    x,
+    z,
+    y: worldCenter.y * M_TO_FT,
+    headingDeg: planHeadingDeg(worldForward.x, worldForward.z, provenance),
+  };
 }
 
 // ─── photoPlanPose ───────────────────────────────────────────────────────────
@@ -163,28 +266,14 @@ export function photoPlanPose(
     return null;
   }
 
-  const theta = (provenance.originYawDeg * Math.PI) / 180;
-  const { x: offX, z: offZ } = provenance.originOffsetM;
-
-  // World translation (meters), row-major indices [3],[7],[11].
-  const wx = cameraTransform[3];
-  const wy = cameraTransform[7];
-  const wz = cameraTransform[11];
-
-  // Position → plan feet, exactly as the parser maps a world XZ point.
-  const rotated = rotateNeg(wx, wz, theta);
-  const x = (rotated.x - offX) * M_TO_FT;
-  const z = (rotated.z - offZ) * M_TO_FT;
-  const y = wy * M_TO_FT;
-
-  // Forward = −(local −Z axis) = −(element[2], element[6], element[10]).
-  // Only the XZ components matter for a plan heading.
-  const forwardX = -cameraTransform[2];
-  const forwardZ = -cameraTransform[10];
-  const worldHeadingDeg = (Math.atan2(forwardZ, forwardX) * 180) / Math.PI;
-  const headingDeg = normalizeDeg(worldHeadingDeg - provenance.originYawDeg);
-
-  return { x, z, y, headingDeg };
+  return planPoseFromWorld(
+    // World translation (meters), row-major indices [3],[7],[11].
+    { x: cameraTransform[3], y: cameraTransform[7], z: cameraTransform[11] },
+    // Forward = −(local −Z axis) = −(element[2], element[6], element[10]).
+    // Only the XZ components matter for a plan heading.
+    { x: -cameraTransform[2], z: -cameraTransform[10] },
+    provenance,
+  );
 }
 
 // ─── clusterPoses ─────────────────────────────────────────────────────────────
