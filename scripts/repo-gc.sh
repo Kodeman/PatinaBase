@@ -315,7 +315,13 @@ CANDIDATES=()
 add_candidates() {
   local p
   for p in "$@"; do
-    [[ -d "$p" ]] && CANDIDATES+=("$p")
+    # Explicit if, not `[[ -d "$p" ]] && ...`: when this is the LAST arg and
+    # its dir is absent, a bare `&&` list's exit status (1) becomes this
+    # function's return status, and set -e kills the whole script at the
+    # (untested) call site — silently, right after section 2's header prints.
+    if [[ -d "$p" ]]; then
+      CANDIDATES+=("$p")
+    fi
   done
 }
 
@@ -358,12 +364,32 @@ has_tracked_files() {
 }
 
 FINAL_TARGETS=()
-declare -A SEEN=()
-for t in "${CANDIDATES[@]}"; do
+
+# Plain linear-search dedup, not `declare -A`: the system /usr/bin/env bash on
+# macOS is still 3.2 (no associative arrays) and this script must run under it.
+#
+# Also note the `"${ARR[@]+"${ARR[@]}"}"` shape used on every `for x in ...`
+# below instead of plain `"${ARR[@]}"`: under bash 3.2 (fixed in 4.4+),
+# expanding an EMPTY array's `[@]` elements throws "unbound variable" under
+# `set -u`, even though `${#ARR[@]}` (length) and `${!ARR[@]}` (indices) on
+# the same empty array are both fine. This bit us for real: CANDIDATES is
+# routinely empty (no stale build artifacts to sweep).
+is_new_target() {
+  local needle="$1" existing
+  for existing in "${FINAL_TARGETS[@]+"${FINAL_TARGETS[@]}"}"; do
+    if [[ "$existing" == "$needle" ]]; then
+      return 1
+    fi
+  done
+  return 0
+}
+
+for t in "${CANDIDATES[@]+"${CANDIDATES[@]}"}"; do
   real="$(cd "$t" 2>/dev/null && pwd || true)"
   [[ -z "$real" ]] && continue
-  [[ -n "${SEEN[$real]:-}" ]] && continue
-  SEEN[$real]=1
+  if ! is_new_target "$real"; then
+    continue
+  fi
 
   if ! under_root "$real"; then
     echo "  ! $real resolves outside the repo root — skipping" >&2
@@ -381,7 +407,7 @@ for t in "${CANDIDATES[@]}"; do
 done
 
 TOTAL_KB=0
-for t in "${FINAL_TARGETS[@]}"; do
+for t in "${FINAL_TARGETS[@]+"${FINAL_TARGETS[@]}"}"; do
   kb="$(du -sk "$t" 2>/dev/null | cut -f1)"
   kb="${kb:-0}"
   TOTAL_KB=$((TOTAL_KB + kb))
