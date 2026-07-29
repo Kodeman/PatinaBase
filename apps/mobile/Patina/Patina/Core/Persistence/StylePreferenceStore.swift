@@ -107,6 +107,27 @@ public final class StylePreferenceStore {
         return profile
     }
 
+    /// Applies an explicit user-authored tuning to the durable taste row.
+    /// Adjustments are deliberately small and bounded: they refine the answers
+    /// already given rather than replacing the portrait with a guess.
+    @discardableResult
+    public func tune(_ adjustment: TasteAdjustment) -> StylePreferenceModel? {
+        guard let profile = mostRecent() else { return nil }
+        switch adjustment {
+        case .warmer:
+            profile.warmth = min(1, profile.warmth + 0.1)
+        case .cooler:
+            profile.warmth = max(0, profile.warmth - 0.1)
+        case .moreRelaxed:
+            profile.formality = max(0, profile.formality - 0.1)
+        case .moreTailored:
+            profile.formality = min(1, profile.formality + 0.1)
+        }
+        profile.updatedAt = Date()
+        save()
+        return profile
+    }
+
     // MARK: - Persistence
 
     private func save() {

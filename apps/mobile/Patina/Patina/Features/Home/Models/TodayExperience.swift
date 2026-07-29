@@ -1,0 +1,161 @@
+//
+//  TodayExperience.swift
+//  Patina
+//
+//  Deterministic prioritization for Option B's three-part Today surface:
+//  one next move, one editorial story, and one active room.
+//
+
+import Foundation
+
+struct TodayPriorityInput: Equatable {
+    var hasPendingDesignDraft: Bool = false
+    var resumableScanPhotoCount: Int?
+    var promotedDesignRequestID: String?
+    var promotedDesignRequestStatus: String?
+    var pendingDecisionCount: Int = 0
+    var unreadMessageCount: Int = 0
+    var hasStyleProfile: Bool = false
+    var activeRoom: ContextRoomCandidate?
+}
+
+struct TodayNextMove: Equatable {
+    enum Kind: String, Equatable {
+        case resumeDesignRequest
+        case resumeScan
+        case trackDesignRequest
+        case reviewDecisions
+        case readMessages
+        case scanFirstRoom
+        case discoverStyle
+        case exploreActiveRoom
+        case reviewActiveRoom
+    }
+
+    let kind: Kind
+    let title: String
+    let detail: String
+    let symbol: String
+    let targetID: String?
+
+    var analyticsID: String { kind.rawValue }
+}
+
+enum TodayExperience {
+
+    /// A single, honest priority. Every branch is backed by a real local or
+    /// remote signal; order encodes interruption cost and urgency.
+    static func nextMove(for input: TodayPriorityInput) -> TodayNextMove {
+        if let continuation = continuationMove(for: input) {
+            return continuation
+        }
+        if let project = projectMove(for: input) {
+            return project
+        }
+        return roomMove(for: input)
+    }
+
+    private static func continuationMove(for input: TodayPriorityInput) -> TodayNextMove? {
+        if input.hasPendingDesignDraft {
+            return TodayNextMove(
+                kind: .resumeDesignRequest,
+                title: "Finish your design request",
+                detail: "Your draft is saved and ready to review.",
+                symbol: "paperplane",
+                targetID: nil
+            )
+        }
+
+        if let photos = input.resumableScanPhotoCount {
+            let noun = photos == 1 ? "view" : "views"
+            return TodayNextMove(
+                kind: .resumeScan,
+                title: "Continue your room scan",
+                detail: "\(photos) \(noun) are safely held on this device.",
+                symbol: "camera.viewfinder",
+                targetID: nil
+            )
+        }
+
+        if let requestID = input.promotedDesignRequestID {
+            let status = input.promotedDesignRequestStatus?
+                .trimmingCharacters(in: .whitespacesAndNewlines)
+            return TodayNextMove(
+                kind: .trackDesignRequest,
+                title: "See your design request",
+                detail: (status?.isEmpty == false ? status : nil)
+                    ?? "There is an update waiting for you.",
+                symbol: "person.crop.circle.badge.checkmark",
+                targetID: requestID
+            )
+        }
+        return nil
+    }
+
+    private static func projectMove(for input: TodayPriorityInput) -> TodayNextMove? {
+        if input.pendingDecisionCount > 0 {
+            let noun = input.pendingDecisionCount == 1 ? "decision needs" : "decisions need"
+            return TodayNextMove(
+                kind: .reviewDecisions,
+                title: "Review a project decision",
+                detail: "\(input.pendingDecisionCount) \(noun) your eye.",
+                symbol: "checkmark.seal",
+                targetID: nil
+            )
+        }
+
+        if input.unreadMessageCount > 0 {
+            let noun = input.unreadMessageCount == 1 ? "message is" : "messages are"
+            return TodayNextMove(
+                kind: .readMessages,
+                title: "Pick up the conversation",
+                detail: "\(input.unreadMessageCount) unread \(noun) waiting.",
+                symbol: "bubble.left.and.bubble.right",
+                targetID: nil
+            )
+        }
+        return nil
+    }
+
+    private static func roomMove(for input: TodayPriorityInput) -> TodayNextMove {
+        guard let room = input.activeRoom else {
+            return TodayNextMove(
+                kind: .scanFirstRoom,
+                title: "Bring your first room into Patina",
+                detail: "A short scan gives the Companion a real space to work from.",
+                symbol: "camera.viewfinder",
+                targetID: nil
+            )
+        }
+
+        if !input.hasStyleProfile {
+            return TodayNextMove(
+                kind: .discoverStyle,
+                title: "Shape your taste portrait",
+                detail: "Five choices give Patina a clearer material and palette direction.",
+                symbol: "paintpalette",
+                targetID: nil
+            )
+        }
+
+        if room.itemCount == 0 {
+            return TodayNextMove(
+                kind: .exploreActiveRoom,
+                title: "Find the first piece for \(room.name)",
+                detail: room.hasBeenScanned
+                    ? "See the room-aware edit for this space."
+                    : "Browse Patina's edit and begin shaping the room.",
+                symbol: "sparkles",
+                targetID: room.id.uuidString
+            )
+        }
+
+        return TodayNextMove(
+            kind: .reviewActiveRoom,
+            title: "Return to \(room.name)",
+            detail: "\(room.itemCount) \(room.itemCount == 1 ? "piece is" : "pieces are") gathering there.",
+            symbol: "house",
+            targetID: room.id.uuidString
+        )
+    }
+}

@@ -15,7 +15,6 @@ final class DailyRoomViewModel {
     /// Provided by the view so the VM can read/write real rooms.
     var modelContext: ModelContext?
 
-
     // MARK: - Filters
 
     struct CategoryFilter: Identifiable, Hashable {
@@ -33,6 +32,9 @@ final class DailyRoomViewModel {
 
     var todayStory: DailyStory?
     var rooms: [RoomSummary] = []
+    /// The real SwiftData rows behind `rooms`, retained so Today can show one
+    /// active room with its actual image, timestamps, and saved-item history.
+    var roomModels: [RoomModel] = []
     var selectedRoomID: RoomSummary.ID?
     var categoryFilters: [CategoryFilter] = DailyRoomViewModel.defaultFilters
     var activeFilterID: String = "all"
@@ -48,6 +50,7 @@ final class DailyRoomViewModel {
     /// output). Drives the empty-rail editorial module on the home screen:
     /// no profile → quiz prompt, profile present → scan/browse prompt.
     var hasStyleProfile: Bool = false
+    var tastePortrait: TastePortrait?
 
     /// True while the room-aware feed request is in flight. The home view
     /// uses this to avoid flashing the empty-rail editorial module before
@@ -90,6 +93,27 @@ final class DailyRoomViewModel {
         return rooms.first(where: { $0.id == id }) ?? rooms.first
     }
 
+    var activeRoomModel: RoomModel? {
+        guard let selectedRoomID else { return roomModels.first }
+        return roomModels.first(where: { $0.id == selectedRoomID }) ?? roomModels.first
+    }
+
+    var activeRoomCandidate: ContextRoomCandidate? {
+        activeRoomModel.map {
+            ContextRoomCandidate(
+                id: $0.id,
+                name: $0.name,
+                updatedAt: $0.updatedAt,
+                itemCount: $0.items.count,
+                hasBeenScanned: $0.hasBeenScanned
+            )
+        }
+    }
+
+    var recentSavedItem: SavedItem? {
+        activeRoomModel?.items.max(by: { $0.addedAt < $1.addedAt })
+    }
+
     var recommendations: [DailyRecommendation] {
         guard activeFilterID != "all" else { return allRecommendations }
         return allRecommendations.filter { rec in
@@ -113,29 +137,48 @@ final class DailyRoomViewModel {
         todayStory = nil
         refreshTodaysStory()
         if let ctx = modelContext {
-            hasStyleProfile = ((try? ctx.fetchCount(FetchDescriptor<StylePreferenceModel>())) ?? 0) > 0
+            let preference = StylePreferenceStore(context: ctx).mostRecent()
+            hasStyleProfile = preference != nil
+            tastePortrait = preference.flatMap { TastePortrait(preference: $0) }
             let store = RoomStore(context: ctx)
             let realRooms = store.allRooms()
             // R31: never seed mock rooms — a brand-new user has 0 rooms and
             // home must agree with Profile about that. The empty state is an
             // invitation to scan, not a fake life.
+            roomModels = realRooms
             rooms = realRooms.map { RoomSummary(from: $0) }
             remoteIdByLocal = Dictionary(
-                uniqueKeysWithValues: realRooms.compactMap { r in
-                    r.remoteId.map { (r.id, $0) }
+                uniqueKeysWithValues: realRooms.compactMap { room in
+                    room.remoteId.map { (room.id, $0) }
                 }
             )
         } else {
             rooms = []
+            roomModels = []
             remoteIdByLocal = [:]
+            hasStyleProfile = false
+            tastePortrait = nil
         }
-        // Prefer a room that RoomSelectionStore already has selected (e.g.
-        // one just created via Walk/Manual entry) so first paint matches.
-        if let localId = RoomSelectionStore.shared.selectedLocalId,
-           rooms.contains(where: { $0.id == localId }) {
-            selectedRoomID = localId
-        } else {
-            selectedRoomID = rooms.first?.id
+
+        let candidates = roomModels.map {
+            ContextRoomCandidate(
+                id: $0.id,
+                name: $0.name,
+                updatedAt: $0.updatedAt,
+                itemCount: $0.items.count,
+                hasBeenScanned: $0.hasBeenScanned
+            )
+        }
+        let active = ContextMemoryStore.shared.activeRoom(
+            from: candidates,
+            currentSelectionID: RoomSelectionStore.shared.selectedLocalId
+        )
+        selectedRoomID = active?.id
+        if let active {
+            RoomSelectionStore.shared.select(
+                localId: active.id,
+                remoteId: remoteIdByLocal[active.id]
+            )
         }
         // No mock seed — recommendations are populated exclusively from the
         // backend in refreshFeedForSelectedRoom().
@@ -240,7 +283,31 @@ final class DailyRoomViewModel {
             localId: room.id,
             remoteId: remoteIdByLocal[room.id]
         )
+        ContextMemoryStore.shared.rememberRoom(id: room.id)
         refreshFeedForSelectedRoom()
+    }
+
+    /// Privacy-filtered prompt input for the Companion foundation. Visible
+    /// names are rehydrated from live models and never written to the recency
+    /// store; user-authored room notes and messages are deliberately absent.
+    func companionMemoryContext(projectAttentionSummary: String?) -> CompanionMemoryContext {
+        let memory = ContextMemoryStore.shared
+        guard memory.isEnabled else {
+            return CompanionMemoryContext(isPersonalizationEnabled: false)
+        }
+        let latest = ContextActivityKind.allCases
+            .compactMap { memory.latestActivity(of: $0) }
+            .max(by: { $0.occurredAt < $1.occurredAt })
+
+        return CompanionMemoryContext(
+            isPersonalizationEnabled: true,
+            activeRoomName: activeRoomModel?.name,
+            tasteSummary: tastePortrait?.summary,
+            preferredMaterials: tastePortrait?.materials ?? [],
+            recentSavedItemName: recentSavedItem?.productName,
+            projectAttentionSummary: projectAttentionSummary,
+            latestActivity: latest?.kind
+        )
     }
 
     func selectFilter(_ filter: CategoryFilter) {

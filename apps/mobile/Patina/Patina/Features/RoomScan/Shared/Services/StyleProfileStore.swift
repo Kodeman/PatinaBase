@@ -11,6 +11,7 @@
 //
 
 import Foundation
+import SwiftData
 
 @MainActor
 public final class StyleProfileStore {
@@ -43,9 +44,23 @@ public final class StyleProfileStore {
         defaults.set(true, forKey: completedKey)
     }
 
-    /// Clear the saved profile (debug / reset only).
+    /// Clear the latest Aesthete response.
     public func reset() {
         defaults.removeObject(forKey: key)
         defaults.removeObject(forKey: completedKey)
+    }
+
+    /// Explicitly forget every local taste portrait representation while
+    /// preserving rooms, saved items, scans, and project data.
+    public func resetTasteProfile(in context: ModelContext) {
+        reset()
+        do {
+            try context.delete(model: StylePreferenceModel.self)
+            try context.save()
+        } catch {
+            #if DEBUG
+            PatinaLog.ui.error("[StyleProfileStore] taste reset failed: \(error.localizedDescription)")
+            #endif
+        }
     }
 }

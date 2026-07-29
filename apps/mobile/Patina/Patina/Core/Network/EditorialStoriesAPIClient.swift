@@ -20,16 +20,30 @@ public struct RemoteEditorialStory: Codable, Sendable {
     public let tag: String
     public let title: String
     public let subtitle: String?
-    public let body_md: String?
-    public let read_minutes: Int
-    public let hero_image_url: String?
-    public let hero_gradient_key: String?
-    public let maker_name: String?
-    public let maker_location: String?
-    public let maker_avatar_url: String?
-    public let maker_avatar_gradient_key: String?
-    public let featured_product_id: String?
-    public let published_at: String?
+    public let bodyMarkdown: String?
+    public let readMinutes: Int
+    public let heroImageURL: String?
+    public let heroGradientKey: String?
+    public let makerName: String?
+    public let makerLocation: String?
+    public let makerAvatarURL: String?
+    public let makerAvatarGradientKey: String?
+    public let featuredProductID: String?
+    public let publishedAt: String?
+
+    private enum CodingKeys: String, CodingKey {
+        case id, tag, title, subtitle
+        case bodyMarkdown = "body_md"
+        case readMinutes = "read_minutes"
+        case heroImageURL = "hero_image_url"
+        case heroGradientKey = "hero_gradient_key"
+        case makerName = "maker_name"
+        case makerLocation = "maker_location"
+        case makerAvatarURL = "maker_avatar_url"
+        case makerAvatarGradientKey = "maker_avatar_gradient_key"
+        case featuredProductID = "featured_product_id"
+        case publishedAt = "published_at"
+    }
 }
 
 public actor EditorialStoriesAPIClient {
@@ -60,7 +74,7 @@ public actor EditorialStoriesAPIClient {
             .appending(queryItems: [
                 URLQueryItem(name: "select", value: "*"),
                 URLQueryItem(name: "order", value: "sort_order.desc,published_at.desc"),
-                URLQueryItem(name: "limit", value: "1"),
+                URLQueryItem(name: "limit", value: "1")
             ])
         var request = URLRequest(url: url)
         await applyHeaders(to: &request)
@@ -82,7 +96,7 @@ public actor EditorialStoriesAPIClient {
             .appending(queryItems: [
                 URLQueryItem(name: "select", value: "*"),
                 URLQueryItem(name: "order", value: "published_at.desc"),
-                URLQueryItem(name: "limit", value: String(limit)),
+                URLQueryItem(name: "limit", value: String(limit))
             ])
         var request = URLRequest(url: url)
         await applyHeaders(to: &request)
@@ -103,21 +117,22 @@ extension DailyStory {
     /// Build a `DailyStory` from a remote `editorial_stories` row. Falls back
     /// to sensible gradients when the editorial row didn't pin one.
     init(from remote: RemoteEditorialStory, isUnread: Bool = true) {
-        let hero = PatinaGradients.gradient(forKey: remote.hero_gradient_key) ?? PatinaGradients.hero
-        let avatar = PatinaGradients.gradient(forKey: remote.maker_avatar_gradient_key) ?? PatinaGradients.earth
+        let hero = PatinaGradients.gradient(forKey: remote.heroGradientKey) ?? PatinaGradients.hero
+        let avatar = PatinaGradients.gradient(forKey: remote.makerAvatarGradientKey) ?? PatinaGradients.earth
         self.init(
             id: remote.id,
             tag: remote.tag,
             title: remote.title,
             subtitle: remote.subtitle ?? "",
-            readMinutes: remote.read_minutes,
+            readMinutes: remote.readMinutes,
             heroGradient: hero,
+            heroImageURL: remote.heroImageURL.flatMap(URL.init(string:)),
             isUnread: isUnread,
-            body: remote.body_md ?? "",
-            makerName: remote.maker_name ?? "",
-            makerLocation: remote.maker_location ?? "",
+            body: remote.bodyMarkdown ?? "",
+            makerName: remote.makerName ?? "",
+            makerLocation: remote.makerLocation ?? "",
             makerAvatarGradient: avatar,
-            featuredProductID: remote.featured_product_id
+            featuredProductID: remote.featuredProductID
         )
     }
 }

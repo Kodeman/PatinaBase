@@ -88,6 +88,13 @@ struct ContentView: View {
         )) { sheet in
             sheetContent(for: sheet)
         }
+        // Option B context memory: remember only a coarse activity kind,
+        // opaque identifier, and timestamp when a meaningful route changes.
+        // The store intentionally receives no room notes, messages, imagery,
+        // scan geometry, or other user-authored content.
+        .onChange(of: coordinator.currentScreen, initial: true) { _, screen in
+            ContextMemoryStore.shared.remember(route: screen)
+        }
     }
 
     // MARK: - Sheet Content

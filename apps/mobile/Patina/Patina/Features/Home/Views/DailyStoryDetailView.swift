@@ -57,14 +57,14 @@ struct DailyStoryDetailView: View {
         ZStack(alignment: .bottomLeading) {
             Group {
                 if let namespace {
-                    story.heroGradient
+                    storyArtwork
                         .matchedGeometryEffect(
                             id: "story-hero-\(story.id)",
                             in: namespace,
                             isSource: false
                         )
                 } else {
-                    story.heroGradient
+                    storyArtwork
                 }
             }
             .frame(height: 340)
@@ -100,6 +100,17 @@ struct DailyStoryDetailView: View {
         }
         .frame(height: 340)
         .clipped()
+    }
+
+    @ViewBuilder
+    private var storyArtwork: some View {
+        if let heroImageURL = story.heroImageURL {
+            PatinaAsyncImage(url: heroImageURL, contentMode: .fill)
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+                .clipped()
+        } else {
+            story.heroGradient
+        }
     }
 
     private var bodySection: some View {
