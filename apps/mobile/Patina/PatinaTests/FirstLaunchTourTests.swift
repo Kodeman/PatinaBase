@@ -48,6 +48,47 @@ final class StubFirstLaunchTourDefaults: FirstLaunchTourDefaultsProtocol, @unche
     }
 }
 
+// MARK: - Deterministic waiting
+
+/// Poll `condition` on the main actor until it holds or `timeout` elapses;
+/// returns whether it held.
+///
+/// A literal `Task.sleep` is NOT a safe way to wait out the tour's anchor-mount
+/// grace period. The settle checks are `Task { @MainActor … }` jobs, so a
+/// step's grace window only starts counting down once the main actor gets
+/// around to *running* that job — while the test's own sleep counts wall clock
+/// from the moment it is called. Every `@MainActor` test in this target (two
+/// dozen suites) shares that one actor under Swift Testing's parallel
+/// execution, so a sibling suite holding the actor for longer than the margin
+/// between the two durations pushes the settle past the sleep, and the model
+/// looks like it never dropped the unmountable step. Waiting on the model's own
+/// observable state instead takes exactly as long as the machine needs and no
+/// longer — and a genuine regression still fails loudly: the wait times out,
+/// its `#expect` fires, and every assertion after it fires too.
+@MainActor
+private func waitUntil(
+    timeout: Duration = .seconds(10),
+    _ condition: () -> Bool
+) async -> Bool {
+    let deadline = ContinuousClock.now.advanced(by: timeout)
+    while ContinuousClock.now < deadline {
+        if condition() { return true }
+        try? await Task.sleep(for: .milliseconds(5))
+    }
+    return condition()
+}
+
+/// `.serialized` is load-bearing, not cosmetic. Two things these tests drive
+/// are process-global rather than per-test:
+///
+///  * `setFirstLaunchTourDefaults(_:)` swaps a module-level singleton
+///    (`FirstLaunchTourDefaultsAdapter.shared`), and every test here restores
+///    it in a `defer`. Run in parallel, a sibling's `defer` fires while an
+///    `async` test is parked on an `await` — pointing the stub that test just
+///    installed back at `UserDefaults.standard` mid-flight.
+///  * The main actor. Serializing keeps this suite's own tests out of the queue
+///    the tour's settle tasks have to get through (see `waitUntil`).
+@Suite(.serialized)
 @MainActor
 struct FirstLaunchTourTests {
 
@@ -318,7 +359,8 @@ struct FirstLaunchTourTests {
         model.advance()
         #expect(model.currentStep == 1)   // lands on .addToRoom first…
         // …then auto-skips once the grace window elapses with no mount.
-        try? await Task.sleep(for: .milliseconds(120))
+        let dropped = await waitUntil { model.currentStep == 2 }
+        #expect(dropped, "`.addToRoom` never dropped after its grace window elapsed unmounted")
         #expect(model.currentStep == 2)   // .profileMonogram (mounted)
         #expect(model.isActive)
 
@@ -361,8 +403,19 @@ struct FirstLaunchTourTests {
         #expect(model.totalSteps == 3)
 
         // Simulate the user reading step 1 for longer than the grace window
-        // BEFORE ever tapping "Next" — the realistic case.
-        try? await Task.sleep(for: .milliseconds(80))
+        // BEFORE ever tapping "Next" — the realistic case. Wait on the model's
+        // own "this step is settled as unmountable" signal rather than a
+        // literal sleep (see `waitUntil`); the ordering under test is
+        // "`.addToRoom`'s fate is decided BEFORE advance()", not any particular
+        // wall-clock duration.
+        let settledBeforeAdvance = await waitUntil { model.totalSteps == 2 }
+        #expect(
+            settledBeforeAdvance,
+            "`.addToRoom` never settled as unmountable — the upfront availability check never ran"
+        )
+        // Settling a step the tour is not sitting on must not move the pointer
+        // on its own; the jump below has to come out of `advance()`.
+        #expect(model.currentStep == 0)
 
         model.advance()
 
@@ -417,7 +470,13 @@ struct FirstLaunchTourTests {
         defer { resetFirstLaunchTourDefaults() }
 
         let model = FirstLaunchTourModel()
-        model.anchorMountGracePeriod = .milliseconds(200)
+        // This is the one assertion in the suite that can't be waited for — it
+        // pins a NON-event ("the step was never dropped"), so proving it needs
+        // real time to pass. The grace window is therefore sized generously
+        // against main-actor contention rather than trimmed for speed: the beat
+        // below has to land inside it even when a sibling suite is sitting on
+        // the actor (see `waitUntil`).
+        model.anchorMountGracePeriod = .milliseconds(750)
         model.registerAnchor(.homeGreeting)
         model.registerAnchor(.profileMonogram)
         model.startTour(triggerSource: "test")
@@ -429,7 +488,7 @@ struct FirstLaunchTourTests {
         // async-skip fix guards against).
         try? await Task.sleep(for: .milliseconds(20))
         model.registerAnchor(.addToRoom)
-        try? await Task.sleep(for: .milliseconds(260))
+        try? await Task.sleep(for: .milliseconds(850))
         #expect(model.currentStep == 1)   // stayed on .addToRoom
         #expect(model.isActive)
     }
@@ -564,7 +623,8 @@ struct FirstLaunchTourTests {
         #expect(model.totalSteps == 3)
 
         model.advance()                                   // lands on .addToRoom
-        try? await Task.sleep(for: .milliseconds(120))     // …which never mounts
+        let renumbered = await waitUntil { model.currentStep == 2 }  // …which never mounts
+        #expect(renumbered, "`.addToRoom` never dropped, so the caption never renumbered")
 
         #expect(model.currentStep == 2)                   // .profileMonogram
         #expect(model.currentStepNumber == 2)             // renumbered, not 3
