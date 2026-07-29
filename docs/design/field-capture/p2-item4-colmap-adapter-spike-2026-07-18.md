@@ -344,7 +344,7 @@ The production handler owns this versioned prefix:
 room_file/{uid}/{scanId}/v{roomFileVersion}/refine/
 ```
 
-The standalone adapter spike writes:
+The spike writes:
 
 ```text
 adapter-v2.json
@@ -352,32 +352,18 @@ pairs-v2.txt
 adapter-manifest-v2.json       # commit marker, always last
 ```
 
-`adapter-manifest-v2.json` is the standalone spike's local qualification marker;
-it is not a persistent Refine engine artifact.
-
 The rejected `adapter-v1` proof is superseded and was never a production/storage
 contract; v2 carries the corrected evidence, deadline, qualification, and join
 semantics.
 
-The disabled runner/backend boundary ratifies exactly six persistent engine
-artifacts (a closed set, not a minimum):
+The handler adds at least:
 
 ```text
-adapter-v2.json
-pairs-v2.txt
-database-v1.db
+database-v1.db or deterministic archive
 seed-model-v1.tar
 aligned-sparse-model-v1.tar
-engine-command-evidence-v1.json
-```
-
-The runner adds the deterministic derived documents and commit marker:
-
-```text
 refined-poses-v1.json
 pose-deltas-v1.json
-refinement-evidence-v1.json
-trajectory-shape-v1.json
 refine-manifest-v1.json        # checksums/sizes/engine+version/input hashes, last
 ```
 
@@ -390,36 +376,6 @@ artifact. Publication is create-only. Concurrent writers behave as follows:
 - existing different bytes/checksum: `REFINE_ARTIFACT_CONFLICT`, never overwrite;
 - the manifest is the only completeness marker and is published after every
   referenced artifact is durable.
-
-Engine outputs carry exact semantic media type, transport content type,
-SHA-256, size, and contained relative path in both the engine candidate and
-final result. Timestamped stdout/stderr files remain scratch-only; only the
-canonical bounded `engine-command-evidence-v1.json` may cross the publication
-boundary.
-
-Source identity and engine identity are distinct. Each normalized frame retains
-its original archive key, HEIC member/name, checksum, and size. The materialized
-COLMAP raster uses its own ordered identity
-`images/frame_<six-decimal-ordinal>.ppm`, checksum, and size. Candidate poses,
-adapter rows, pairs, and COLMAP database images use the PPM engine name; the
-manifest records both identities explicitly. A source `.heic` name must never
-be reused as the decoded engine filename.
-
-Engine telemetry is a deeply snapshotted immutable summary capped at 16 KiB of
-canonical JSON and 32 bounded scalar metrics. Raw timestamped command logs are
-not telemetry artifacts. The runner and publisher both call the pure strict
-`validate_refine_result_for_publication` gate; a canonical-looking partial or
-extended manifest is not publishable.
-
-**Disabled implementation status (I91).** The runner, bounded descriptor-pinned
-materializer, and owner-scoped create-only publisher/storage boundary are
-packaged but deliberately unregistered. Source HEIC and canonical engine PPM
-identities remain separate, and the runner plus publisher share the same strict
-result/manifest validator. Materializer paths are display metadata: consumers
-must read through pinned `open_verified_file()` descriptors and retain workspace
-ownership until publication. No safe path-based materializer→runner handoff,
-concrete Field acquirer/decoder, killable engine composition, or production
-handler exists yet.
 
 The local prototype fsyncs the temporary file, atomically hard-links it, then
 fsyncs the destination directory. A real multi-process race test proves exactly
@@ -493,20 +449,39 @@ is represented by events, not competing scalar writes.
 
 ## What this spike does not prove
 
-The exact COLMAP/PyCOLMAP 4.0.2 database/model and GPU-SIFT box probe is closed
-by I90; its immutable receipt is
-`p2-item4a-colmap-qualification-2026-07-22.md`. It does not close the following
-hard gates before deployment:
+The following are hard gates before deployment:
 
-1. **Field/Core Image materialization probe:** capture a known off-centre raster
+1. **COLMAP 4.0.2 box probe:** use
+   `services/scan-pipeline/install-colmap-4.0.2.sh` on DeskDev's Ubuntu 24.04
+   experiment to install commit
+   `d927f7e518fc20afa33390712c4cc20d85b730b8`, CUDA 11.8, GCC/G++ 11, and
+   SM 7.5. Invoke it as the normal operator with
+   `--acknowledge-experimental-ubuntu-24.04`. DeskDev may use
+   `--work-dir /mnt/ada-data/Patina/.patina-builds/patina-colmap-4.0.2-$UID`
+   after precreating the parent as operator-owned mode `0700`; otherwise the
+   default remains `/var/tmp/patina-colmap-4.0.2-$UID`. Retain the selected
+   work directory's `install.log`, and rerun with `--verify-only` for the
+   installed CLI contract. Installer success alone does not qualify item 4.
+   Then execute the repository-owned, local-only
+   `patina_scan_worker.colmap_qualification` harness on the deterministic tiny
+   multiview fixture using
+   `p2-item4a-colmap-qualification-runbook.md`. The harness contains the exact
+   qualification policy and invokes the exact shared
+   `patina_scan_worker.refine_engine` PyCOLMAP database/model calls above; both
+   modules remain unregistered from the worker. The harness also writes and
+   reopens a separate non-identity `[R|t]` seed control so the host proves full
+   pose serialization without disturbing the identity-oriented imagery used
+   for triangulation.
+   Save
+   the `colmap -h` version/build header, `pycolmap.__version__`, mismatch
+   rejection, GPU SIFT
+   result, IDs before/after camera rewrite, expected/actual non-identity
+   `cam_from_world`, both harness and engine source hashes, and the triangulated
+   model as evidence. No artifact may say validated before this passes.
+2. **Field/Core Image materialization probe:** capture a known off-centre raster
    through the real Field `.oriented(.right)` HEIC path. Prove its pixel mapping,
    metadata/dimensions, and the box decoder/materializer result. Source inspection
    and synthetic projection math do not close this gate.
-2. **Concrete lifecycle and deadlines:** implement a real Field acquirer/HEIC
-   decoder plus a descriptor-safe materializer→runner→publisher lifecycle.
-   Acquisition, decode, engine execution, and artifact production must be
-   killable under the single carried deadline; cooperative callbacks do not
-   qualify.
 3. **Real geometric proof:** run read-only/local scratch refinement on the
    already-confirmed inputs for `95266be1`; validate registration coverage,
    same-track reprojection RMSE, verified-loop relative-pose consistency, shape

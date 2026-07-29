@@ -44,11 +44,11 @@ so those items only replace a stub body.
 ## Install on a Linux box
 
 Ubuntu 22.04/24.04 LTS or Debian 12, x86_64, Python 3.11+ with `venv`
-(`apt install python3-venv`). Those bases support CPU workers. The complete
-CUDA 11.8 + physical Field raster pilot is qualified only on the recorded
-DeskDev Ubuntu 24.04 x86_64 profile; `install.sh --gpu` rejects Ubuntu 22.04,
-Debian, and other hosts until a new physical qualification packet exists.
-Outbound 443 only — the host firewall may deny all inbound.
+(`apt install python3-venv`). Those bases support CPU workers. The CUDA 11.8
+GPU pilot is officially qualified only on Ubuntu 22.04; Ubuntu 24.04 and Debian
+12 GPU installs remain explicit qualification experiments and must not claim
+GPU-stage tasks before the doctor and real fixtures pass. Outbound 443 only —
+the host firewall may deny all inbound.
 
 ```bash
 # Stop the worker and fail unless the service UID holds no old source inode.
@@ -112,103 +112,11 @@ points at deleted transaction state. Its package member names and bytes must
 match that trusted source manifest exactly, and its dependency/extra metadata is
 checked before pip is allowed to resolve it.
 The package manifest now includes the queue-independent
-`field_raster_materializer.py`, `field_storage_acquirer.py`,
-`refine_colmap_backend.py`, `refine_colmap_command.py`,
-`refine_evidence_builder.py`, `refine_materializer.py`,
-`refine_native_process.py`, `refine_packet_extractor.py`,
-`refine_publisher.py`, and `refine_runner.py`
-foundations, and every candidate release imports all ten
-as the `patina` service user before activation. GPU candidates also compile the
-byte-identical
-I92-qualified `field_raster_libheif.c` into a root-owned immutable
-`libexec/patina/field-raster-libheif-helper-v2`; CPU candidates do not install
-that executable. The concrete Field raster adapter accepts only the physically
-qualified 360x640 HEIC profile, pins the installed helper and private scratch
-directory by descriptor, and streams validated canonical PPM bytes only after
-unlinking the helper output. It intentionally rejects variable-size keyframes
-until a new helper protocol and physical-device receipt qualify them.
-The concrete Field Storage adapter repeats owner/scan anchoring before creating
-its service-role HTTP client, requests identity-encoded raw bytes, and requires
-an exact status, content length, streamed byte count, and SHA-256 before it
-returns. It writes only through the materializer-owned bounded descriptor sink
-and never receives a destination path. The same absolute Refine deadline
-cancels the asynchronous request, body stream, and response cleanup and is
-checked immediately before and after each synchronous bounded regular-file
-write. A genuinely kernel-blocked local write cannot be preempted by this
-in-process adapter; a later killable composition boundary must close that gate
-before production enablement.
-Storage authentication failures (401/403), retryable statuses, and server
-failures are operational nonfatal `REFINE_INPUT_IO` failures; a missing object
-(404) and other response-ledger drift remain fatal `REFINE_INPUT_INVALID`.
-These foundations remain deliberately unregistered:
-installing or importing them does not add `scan_pipeline.refine` to the stage
-registry or change persistent/default `STAGES`.
-The materializer enforces exact in-call source/raster write ceilings, a 4 GiB
-per-task aggregate raster workspace ceiling, and descriptor-pinned workspace
-access. Its absolute paths are display metadata; disabled composition code must
-consume verified bytes through `RefineMaterialization.open_verified_file()` and
-then call `cleanup()`.
-The runner, materializer, concrete Field Storage and exact-profile Field raster
-adapters, and publisher remain disabled contract boundaries only. No stage
-handler composes them; passing install/import tests or the physical
-raster/COLMAP receipts does not authorize Refine, a queue claim, or a run on a
-real scan.
-The lower-level COLMAP backend contract is disabled and uncomposed too. It
-requires immutable archive chunks (at most 64 pinned files, 128 MiB each) with
-frame metadata inside a canonical member manifest; per-frame descriptors and
-`/proc/self/fd` image trees are not supported. Its pair graph emits only
-canonical engine PPM names, and its CLI child inherits the already-isolated
-native process group so the outer owner can prove quiescence. The 200--400
-frame pilot, packet-extraction production gate, output-descriptor handoff,
-runner path-reopen boundary, and aligned-model artifact construction are still
-explicitly unqualified, so the primary plan is a deterministic protocol
-expectation rather than a qualified execution path. The source-only extraction
-foundation accepts only a manifest-ordered, uncompressed USTAR regular-file
-universe from the already pinned chunk descriptors. It uses positional reads,
-creates every destination descriptor-relatively below a new child-owned 0700
-workspace, rejects links/directories/devices/FIFOs/PAX/GNU/sparse metadata and
-undeclared, duplicate, colliding, or trailing content, then re-hashes each
-chunk before parsing the extracted declared request member. The manifest binds
-the outer run identifier and caps its closed role universe at one request,
-3--400 engine images, and at most one source and adapter ledger. Failure cleanup
-removes only its exact creation ledger. That child-only cleanup cannot run
-after an outer SIGKILL, however, so production composition must first
-pre-provision a parent-owned descriptor-rooted workspace and implement bounded
-secure parent cleanup. The source/adapter ledger member contents also remain
-unparsed at this layer. `PACKET_EXTRACTION_QUALIFIED` remains false pending
-those gates and independent acceptance. Its provisional geometry row
-dataclasses are not yet compatible with the evidence builder and do not claim
-complete track/loop snapshots. A separate Linux-only command supervisor now
-preserves the inherited native group, temporarily enables and restores the
-native owner's prior child-subreaper state, reaps only children adopted after a
-leader-only/no-child preflight, and retries interrupted waits under the carried
-deadline. It refuses a successful phase return—and therefore normal composition
-cannot start a later phase—while the native owner retains any adopted child. It
-normalizes command setup, drain, wait, log, and cleanup failures with cleanup
-precedence. Sequential quiescence and exception-normalization qualification
-still remain false: the disabled helper accepts an arbitrary absolute
-executable, and a hostile helper can escape the native PGID with
-`setsid`/`setpgid`; the supervisor detects that adopted live child and fails
-before phase two, but the outer native group owner cannot yet contain it without
-a separately reviewed pidfd or executable-identity contract. The CLI also
-inherits the native process environment; defining a bounded environment
-allowlist and pinned toolchain policy remains a separate, unqualified
-composition gate and is intentionally not supplied by this disabled helper. The
-position-prior fallback remains off because I90 qualified only the primary
-known-pose path. These gates must close before the backend can implement
-`RefineExecutionBackend` or produce publishable candidate outputs.
-The separate exact evidence builder is disabled and uncomposed as well. It
-accepts only complete database keypoint tables, a fixed post-triangulation,
-pre-BA track universe, the same memberships after BA, and every deterministic
-candidate pair. It derives reprojection and relative-pose metrics itself,
-requires at least 80% verified connected coverage plus a verified non-temporal
-loop, and binds source HEIC, materialized PPM, database, and model snapshot
-identities into canonical digests. Its raw/refined model snapshot names are
-scratch-only evidence commitments: the runner's exact six candidate artifacts
-do not contain the raw pre-BA model, and the native boundary still has no safe
-output-descriptor channel. Therefore snapshot handoff and backend compatibility
-remain false gates; importing or unit-testing the builder does not create
-publishable provenance or authorize Refine.
+`refine_native_process.py` and `refine_runner.py` foundations, and every
+candidate release imports both as the `patina` service user before activation.
+They remain deliberately unregistered: installing or importing them does not
+add `scan_pipeline.refine` to the stage registry or change persistent/default
+`STAGES`.
 Archive-mode rsync also copies the checkout directory's mode onto the staged
 tree. `--chmod=Dgo-w,Fgo-w` removes unsafe write bits during transfer; the
 explicit `chmod -R go-w` repeats that hardening as defense-in-depth.
@@ -263,13 +171,7 @@ Prereqs to install **before** `./install.sh --gpu`:
    doctor without changing the host's global CUDA selection. Architecture
    selection stays box-local so the same package can serve Turing, Ampere, and
    Ada workers; the DeskDev acceptance override below pins `7.5` explicitly.
-4. **Noble Field-raster C/libheif toolchain**: `build-essential`,
-   `pkg-config`, `zlib1g-dev`, `libheif1`, `libheif-dev`, and
-   `libheif-plugin-libde265`. Install these explicitly before the GPU
-   installer; it validates but never apt-installs or upgrades them. The three
-   libheif packages must have the same version and be at least
-   `1.17.6-1ubuntu4.6`.
-5. **COLMAP CLI and CUDA PyCOLMAP 4.0.2 artifact**, with the CLI exposing
+4. **COLMAP CLI and CUDA PyCOLMAP 4.0.2 artifact**, with the CLI exposing
    `feature_extractor`, `sequential_matcher`,
    `exhaustive_matcher`, `point_triangulator`, `bundle_adjuster`, and
    `pose_prior_mapper`. `pyproject.toml` retains the truthful
@@ -338,11 +240,10 @@ Prereqs to install **before** `./install.sh --gpu`:
    ```
 
    A green installer closes the pinned CLI, binding-build, and bounded synthetic
-   GPU-SIFT installation gates. It does **not** replace the retained Item4A
-   COLMAP receipt or I92 physical Field-raster receipt; both remain required
-   rollout evidence.
+   GPU-SIFT installation gates. It does **not** qualify item 4; the database/API
+   fixture and real Field raster evidence below are still required.
 
-6. **Full Open3D wheel/build with CUDA**, not `open3d-cpu`. `doctor` requires
+5. **Full Open3D wheel/build with CUDA**, not `open3d-cpu`. `doctor` requires
    Open3D's public CUDA availability probe and at least one visible device for
    `fuse`; an importable CPU-only wheel is a failure.
 
@@ -371,18 +272,6 @@ expand device-path globs; a future multi-GPU box must add one exact
 `CUDA_CACHE_PATH`, and `TORCH_EXTENSIONS_DIR` under `APP_DIR/.cache` so
 `ProtectSystem=strict` never redirects model, kernel, or extension-build caches
 outside the app-owned write surface.
-
-The GPU release also contains a root-owned native Field-raster helper and a
-canonical manifest binding its source hash, binary hash, compiler flags,
-`pkg-config` flags, and exact host libheif package/header versions. A plain
-`--gpu` run reuses that release only while the manifest still matches the live
-host. A missing, malformed, or stale helper triggers an automatic immutable
-release rebuild; `--gpu --upgrade` always rebuilds. The installer re-probes the
-host immediately before activation and aborts if packages changed during the
-build. If later activation fails, transaction rollback may restore the previous
-helper-less or older release so the prior CPU worker can resume; rerun `--gpu`
-after correcting the failure to create a currently qualified helper. The
-persistent stage list remains unchanged throughout this migration.
 
 `install.sh` does not run doctor from its root shell. Normal service activation
 is gated by `ExecStartPre` in the worker unit. A separate
@@ -590,49 +479,29 @@ the raw stored raster. Instead, the Python gate copies the already-hash-verified
 HEIC bytes to private `0700` scratch, compiles the packaged C helper
 unprivileged with `/usr/bin/cc` and `/usr/bin/pkg-config`, and uses the public
 system-libheif API. The helper requires the public file-type probe to report
-exactly `image/heic` (HEIF using H.265) and requires exactly one
-libheif-recognized transformation property associated with the primary item:
-`irot` with a `0°` counter-clockwise angle. This is ImageIO's identity
-container property, not a second pixel rotation. Zero recognized primary-item
-transform properties are rejected as writer-contract drift; multiple recognized
-properties, nonzero `irot`, primary-item-associated `imir`, and
-primary-item-associated `clap` are rejected. The helper enumerates the public
-HEVC decoder descriptors and requires exactly one available `libde265`
-descriptor, then decodes strict RGB twice (raw
+exactly `image/heic` (HEIF using H.265), requires zero `irot`/`imir`/`clap`
+properties, enumerates the public HEVC decoder descriptors and requires exactly
+one available `libde265` descriptor, then decodes strict RGB twice (raw
 `ignore_transformations=1` and default `ignore_transformations=0`) with that
-descriptor's ID and requires equal dimensions and byte identity. It also
-requires zero attached metadata blocks, so no unseen Exif/XMP orientation
-survives the gate. The asymmetric markers independently prove exactly one
-physical clockwise pixel rotation, and the materialized PPM deliberately carries
-no metadata. HEIC marker matching is deliberately narrow and recorded in the
-receipt: search radius `3 px`, maximum absolute error `64` in each RGB channel.
-The Linux receipt intentionally makes no claim about unknown BMFF property
-types, raw `ipma` essential bits, or reserved/trailing transform payload bytes:
-the public libheif API exposes semantic type/value for its recognized
-primary-item-associated `irot`/`imir`/`clap` set. The separate Capture iOS BMFF
-regression owns the exact ImageIO writer-byte contract for `pitm`, `ipco`/`ipma`
-association/index encoding, and the `irot` payload. See the upstream
+descriptor's ID and requires byte identity. It also requires zero attached
+metadata blocks, so no unseen Exif/XMP
+orientation survives the gate. The asymmetric markers independently prove
+exactly one physical clockwise rotation, and the materialized PPM deliberately
+carries no metadata. HEIC marker matching is deliberately narrow and recorded
+in the receipt: search radius `3 px`, maximum absolute error `64` in each RGB
+channel. See the upstream
 [libheif decode API](https://raw.githubusercontent.com/strukturag/libheif/v1.17.6/libheif/heif.h),
 [transform-property API](https://raw.githubusercontent.com/strukturag/libheif/v1.17.6/libheif/heif_properties.h),
 and [Ubuntu USN-8526-2](https://ubuntu.com/security/notices/USN-8526-2).
 
-On Ubuntu 24.04, provision `build-essential`, `pkg-config`, `zlib1g-dev`
-(required by Noble's `libheif.pc`), `libheif1`, `libheif-dev`, and
-`libheif-plugin-libde265` before running `install.sh --gpu`. The transactional
-installer validates but never installs or upgrades those decoder packages, so
-a candidate rollback cannot leave the live worker on a newly mutated system
-libheif. It fails unless all three libheif packages match and are at least
-`1.17.6-1ubuntu4.6`. If apt metadata is stale, run `sudo apt-get update`,
-install the listed packages explicitly while the worker is stopped, and rerun
-the GPU install. The qualifier repeats the OS, package-status, revision,
-header/runtime-version, and decoder checks and records their exact evidence in
-its receipt.
-
-The helper protocol and qualification receipt are version `2`. Version `1`
-hard-coded a zero-transform assertion that does not describe ImageIO's physical
-fixture. No physical v1 qualification receipt passed; retain any failed v1
-evidence under its original name. The exported fixture/manifest remains
-`field-core-image-raster-v1`.
+On Ubuntu 24.04, `install.sh --gpu` directly installs `build-essential`,
+`pkg-config`, `zlib1g-dev` (required by Noble's `libheif.pc`), `libheif1`,
+`libheif-dev`, and
+`libheif-plugin-libde265`, then fails unless all three libheif packages match
+and are at least `1.17.6-1ubuntu4.6`. If apt metadata is stale, run
+`sudo apt-get update` and rerun the GPU install. The qualifier repeats the OS,
+package-status, revision, header/runtime-version, and decoder checks and records
+their exact evidence in its receipt.
 
 After staging this commit and completing `install.sh --gpu --upgrade`, export
 the fixture per `apps/mobile/Capture/README.md`. Then run the root-owned,
@@ -643,7 +512,7 @@ receipt binds both installed Python harness and packaged C-helper source hashes:
 cd /mnt/ada-data/Patina/PatinaBase
 
 FIELD_RASTER_FIXTURE_DIR=/absolute/path/to/field-core-image-raster-v1-export
-FIELD_RASTER_OUTPUT_DIR="/mnt/ada-data/Patina/.patina-builds/field-raster-qualification-v2-$UID"
+FIELD_RASTER_OUTPUT_DIR="/mnt/ada-data/Patina/.patina-builds/field-raster-qualification-v1-$UID"
 FIELD_RASTER_PYTHON=/opt/patina/scan-pipeline/.venv/bin/python
 
 if [ "$(systemctl is-active patina-scan-worker || true)" != inactive ]; then
@@ -660,7 +529,7 @@ test -x "$FIELD_RASTER_PYTHON"
   --output-dir "$FIELD_RASTER_OUTPUT_DIR"
 
 python3 -m json.tool \
-  "$FIELD_RASTER_OUTPUT_DIR/field-raster-qualification-receipt-v2.json"
+  "$FIELD_RASTER_OUTPUT_DIR/field-raster-qualification-receipt-v1.json"
 sha256sum "$FIELD_RASTER_OUTPUT_DIR"/*
 systemctl is-active patina-scan-worker || true
 ```

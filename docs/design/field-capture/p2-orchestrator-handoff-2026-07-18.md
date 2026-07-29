@@ -1,4 +1,4 @@
-# Field Capture — orchestrator handoff — active 2026-07-25
+# Field Capture — orchestrator handoff — active 2026-07-23
 
 You are picking up the Field Capture program mid-P2. This document is the
 working state an orchestrator needs beyond what the repo already records.
@@ -10,21 +10,19 @@ Read it with, not instead of, the canonical sources below.
    runs (rulings → numbered plan → hard gates). P1 is COMPLETE.
 2. `docs/design/field-capture/field-capture-p2-package.md` — the ACTIVE plan.
    Part B carries Kody's R114 rulings inline; Part E is the numbered plan.
-3. `docs/design/the-document/DECISIONS.md` — entries **R108–R115 and I84–I96**
-   are this program's full decision history. R115 is the latest gate; I96 is
+3. `docs/design/the-document/DECISIONS.md` — entries **R108–R115 and I84–I90**
+   are this program's full decision history. R115 is the latest gate; I90 is
    the latest implementation record.
 4. `docs/design/field-capture/p2-item3-gpu-box-acceptance-2026-07-19.md` — the
    completed real-DeskDev dependency/sandbox receipt (I88).
 5. `docs/design/field-capture/p2-item4-colmap-adapter-spike-2026-07-18.md` —
    item 4's exact engine/API/fixture decision and remaining proof boundary.
-6. `docs/design/field-capture/p2-item4a-field-raster-qualification-2026-07-24.md`
-   — the completed physical iPhone/Core Image raster receipt (I92).
-7. `docs/design/field-capture/scan-pipeline-worker-design.md` — §10 is the
+6. `docs/design/field-capture/scan-pipeline-worker-design.md` — §10 is the
    P2 stage contract (the fork-join in §10.1.1 and budgets in §10.9 are
    implementation law).
-8. Auto-memory `project_field_capture_p1.md` — the compressed ledger with
+7. Auto-memory `project_field_capture_p1.md` — the compressed ledger with
    every warning flag.
-9. `docs/design/field-capture/m4-pilot-checklist.md` — the still-owed Leah
+8. `docs/design/field-capture/m4-pilot-checklist.md` — the still-owed Leah
    pilot runbook.
 
 ## Exact position (as of this handoff)
@@ -88,357 +86,32 @@ Read it with, not instead of, the canonical sources below.
   `global_mapper` is diagnostic-only and standalone GLOMAP is archived.
   **I90 closes the exact database/model API + GPU-SIFT reconstruction half** on
   DeskDev with the immutable v3 receipt in
-  `p2-item4a-colmap-qualification-2026-07-22.md`. **I92 closes the separate
-  physical Field/Core Image HEIC-to-raster convention** with the installed-run
-  receipt in
-  `p2-item4a-field-raster-qualification-2026-07-24.md`. **I93 packages and
-  deploys the exact-profile adapter while keeping it disabled and uncomposed.**
-  **I94 adds the disabled owner-scoped Storage acquirer and descriptor-transfer
-  native-process prerequisite while keeping Refine unregistered.**
-  **I95 adds the reviewed exact evidence-builder contract and lower-level
-  COLMAP backend scaffold, still disabled and uncomposed.**
-  **I96 adds exact packet-extraction and COLMAP command-supervision
-  foundations, still disabled, unqualified, and uncomposed.**
-  The broader acquisition→runner→publisher lifecycle remains unqualified.
-  Newer 4.x still needs separate qualification.
-- **Item 4A COLMAP qualification passed; I91 records disabled Refine
-  boundaries, not a composed stage.** Failed v1/v2 evidence and passing v3
-  evidence are preserved; v3's canonical receipt payload SHA-256 is
+  `p2-item4a-colmap-qualification-2026-07-22.md`. The physical Field/Core Image
+  raster/materializer fixture remains unqualified. Newer 4.x still needs
+  separate qualification.
+- **Item 4A COLMAP qualification passed; the physical raster half remains
+  open.** Failed v1/v2 evidence and passing v3 evidence are preserved; v3's
+  canonical receipt payload SHA-256 is
   `7d60da6b6f67c864e4584b417ed36c209ceea4aee1b9811441d244574f40f278`.
-  The packaged runner binds distinct source-HEIC/engine-PPM identities, exact
-  engine outputs, bounded telemetry, and a strict publication contract. The
-  materializer uses descriptor-pinned bounded workspaces, and the
-  publisher/storage seam is owner-scoped, create-only, same-descriptor, and
-  manifest-last under the carried deadline. These boundaries remain
-  deliberately uncomposed. I94 now supplies a disabled concrete Field Storage
-  acquirer and a bounded SCM_RIGHTS transport for read-only local-file
-  descriptors. I95 now supplies an exact, queue-independent evidence builder
-  and deterministic lower-level COLMAP protocol scaffold, but neither is
-  composed into the runner and no production queue handler exists. The
-  materializer's pinned descriptor still
-  does not cross through a composed raster→runner→publisher lifetime, so
-  absolute materializer paths remain display metadata rather than a safe
-  handoff contract.
-- **Item 4A physical raster qualification passed; I92 records the evidence,
-  not a production materializer.** The installed immutable release
-  `/opt/patina/scan-pipeline/.venv.release.5e55c004de1888d5984d0c2b` passed the
-  physical iPhone 17 Pro Max fixture at code commit `df10a157`. The canonical
-  v2 receipt SHA-256 is
-  `930638e3e98aa49d27f6b305d886d45b51b94714aecd49a84452e0800e0feac6`;
-  the materialized PPM SHA-256 is
-  `78c68791b59f63fb080080d24c70bf6fdbe2fdcba6b6d798694e92c9a29e6f15`.
-  The v2 Linux qualifier uses libheif's public API to
-  require exactly one recognized primary-item-associated identity `irot`
-  (`rotation_ccw=0`) and rejects zero/multiple recognized transforms, nonzero
-  `irot`, primary-item-associated `imir`/`clap`, metadata, or any raw/default
-  pixel difference. It does not claim unknown BMFF properties or raw
-  association/payload bytes; the separate iOS BMFF regression owns the exact
-  ImageIO `pitm`/`ipco`/`ipma` association and `irot` payload writer contract.
-  Failed v1 evidence stays preserved.
-- **I93 packages and deploys the disabled physical raster adapter.** Main
-  `a7aee1f4` is installed as
-  `/opt/patina/scan-pipeline/.venv.release.2fcccaf0feafa92fdca3fd2a`.
-  The adapter pins source/helper/scratch descriptors, shares the carried
-  deadline, kills and reaps the helper process group, validates and unlinks
-  exact-profile output before streaming, and fails closed on cleanup or
-  provenance uncertainty. Its canonical helper manifest binds binary/source
-  hashes, compiler and pkg-config flags, and the exact live Noble libheif
-  identity; reuse, activation, and runtime all reject drift. The installed
-  adapter replayed the retained physical HEIC to the exact I92 PPM SHA-256
-  `78c68791b59f63fb080080d24c70bf6fdbe2fdcba6b6d798694e92c9a29e6f15`.
-  Deployment evidence is retained at
-  `/var/lib/patina/scan-work/qualification/deploy-a7aee1f4-field-raster-v1`.
-- **I94 adds two reviewed, disabled lifecycle prerequisites.** The Field
-  Storage acquirer validates the exact owner/key ledger before constructing an
-  HTTP client, performs one identity-encoded raw object GET with service-role
-  credentials, checks status, declared length, exact byte count, and SHA-256,
-  and writes only through the materializer's bounded private-file sink under
-  the carried deadline. Operational auth/rate-limit/5xx failures stay
-  retryable; missing or identity-invalid input is fatal. Credential-bearing
-  exceptions are normalized without cause/context leakage. The native boundary
-  transfers unique read-only regular-file descriptors with SCM_RIGHTS only
-  after verified `setsid`, independently checks capped token/size/hash/inode
-  ledgers in parent and child, revalidates the original stat snapshot and bytes
-  after engine return, and closes descriptors on every path. The current proof
-  boundary is 64 unique files, 128 MiB per file, and 4 GiB aggregate; a
-  production evidence builder must fit that ceiling deliberately or introduce
-  a separately reviewed batch/file-backed protocol. Process-group
-  signals occur only while the unreaped original leader still owns its PGID;
-  post-reap retry and verification never address that numeric group.
-  Both pieces remain `production_enablement=disabled` or uncomposed
-  prerequisites and made no queue, Strata, or Storage call.
-- **I95 adds two more reviewed foundations without enabling Refine.** The exact
-  evidence builder consumes complete immutable database keypoint tables,
-  source/raster identities, a fixed post-triangulation/pre-BA track universe,
-  the same memberships after BA, and the complete deterministic pair graph. It
-  computes the existing `RefinementEvidence` schema from geometry, enforces
-  exact database index membership, at least 80% verified connected coverage
-  plus one verified non-temporal loop, canonical digests, a 400-frame cap, the
-  carried deadline, and normalized overflow failures. The lower-level COLMAP
-  scaffold defines a bounded archive-chunk packet, canonical PPM identities,
-  the reviewed known-pose→triangulation→BA operation plan, and a direct child
-  that stays in the native process group. Its parser rejects noncanonical
-  schema/GPU/source tokens and numeric overflow. Adversarial review passed only
-  for landing these as disabled scaffolds; it explicitly ruled NO-GO for
-  execution or publishable evidence. Verification passed 338 Refine regression
-  tests and all 144 installer/packaging tests. No install, deployment, queue,
-  Strata, Storage, or real-scan run occurred.
-- **I96 hardens two disabled boundaries without enabling Refine.** The packet
-  extractor accepts only the exact manifest-ordered uncompressed USTAR
-  regular-file universe from pinned chunk descriptors, uses positional and
-  descriptor-relative I/O, rejects noncanonical metadata, undeclared or
-  colliding members and trailing bytes, revalidates every chunk, and parses the
-  extracted declared request. The command supervisor carries the native process
-  group and deadline across sequential commands, uses Linux child-subreaper
-  ownership plus exact reaping to refuse phase advancement while an adopted
-  child remains, and normalizes setup, drain, wait, log, and cleanup failures
-  with cleanup precedence. Both modules are in the exact installer and package
-  trust lists, but all qualification flags remain false. Packet scratch is
-  still child-owned and can survive SIGKILL, source/adapter ledger contents are
-  not parsed, escaped descendants are detected but not contained, the command
-  environment/toolchain is not bounded, and actual Linux lifecycle evidence is
-  still missing.
-  The reviewed output-handoff design is seven child→parent descriptors in
-  transit: the six exact persistent engine artifacts (`adapter-v2.json`,
-  `pairs-v2.txt`, `database-v1.db`, `seed-model-v1.tar`,
-  `aligned-sparse-model-v1.tar`, and
-  `engine-command-evidence-v1.json`) plus a scratch raw pre-BA model snapshot.
-  The child may compute a proposed Sim3 and aligned bytes, but the parent must
-  recompute and verify the alignment and pose digest before accepting them.
-  That parent-owned descriptor lease/workspace is a design constraint, not an
-  I96 implementation. Verification passed all 458 Refine tests with five
-  Linux-only lifecycle skips on macOS and all 148 isolated
-  installer/packaging tests. Focused Ruff correctness and formatting, Python
-  compilation, shell syntax, diff integrity, posture probes, and independent
-  adversarial review passed. The review verdict is GO only for this
-  disabled/uncomposed landing and NO-GO for activation or publishable output.
-  No install, deployment, queue, Strata, Storage, DeskDev, or real-scan run
-  occurred.
-- **Item 4's remaining hard gates begin at the disabled production
-  lifecycle.** I96 supplies source-only packet extraction and command
-  supervision, but neither is qualified for composition. Parent-provisioned
-  descriptor-rooted extraction with kill-safe cleanup, source/adapter ledger
-  parsing, escaped-descendant containment, a pinned environment/toolchain
-  contract, exclusive workspace ownership across the cleanup
-  stat→unlink/rmdir window, and real Linux lifecycle evidence remain open. A
-  safe native output-descriptor channel, runner-path-reopen removal,
-  aligned-output construction, and the seven-descriptor raw/refined artifact
-  contract must also close before the I95 builder can consume real engine
-  snapshots. Only then may a descriptor-safe
-  materializer→raster→backend→runner→publisher lifetime compose the
-  I93/I94/I95/I96 prerequisites under the single carried lease-aware deadline.
-  Only after independent review may that composition produce comparable
-  reprojection/registration/verified-loop evidence on local-scratch scan
-  `95266be1`; unchanged evidence cannot pass and trajectory shape remains
-  diagnostic-only. Queue replay/fork behavior, downstream consumers, and the
-  canonical refine → {fuse→mesh-solve, splat} → Present four-manifest join
-  remain unproved. No production DB or Storage run has occurred.
-- **GPU stages remain disabled and unregistered.** DeskDev's worker and doctor
-  remain inactive; persistent `STAGES` remains `ingest,solve,drawings`. Do not
-  register `scan_pipeline.refine`, add a GPU stage, or start a GPU worker merely
-  because the adapter and doctor pass.
-- **Next safe execution packet:** move extraction into a parent-provisioned
-  descriptor-rooted workspace with a bounded reverse-FD lease and parent
-  cleanup after every child outcome; parse the optional ledgers; add
-  escaped-descendant containment, a pinned command environment/toolchain, and
-  real Linux lifecycle evidence. Implement the seven-descriptor native output
-  handoff, raw/refined model snapshot construction, parent-side
-  alignment/pose-digest verification, and removal of runner display-path
-  reopening. Then compose the I93 raster
-  adapter, I94 owner-scoped acquirer/native descriptor transport, I95
-  backend/evidence contracts, I96 packet/supervision foundations, and existing
-  runner/publisher boundaries under one descriptor-safe workspace and the
-  single carried deadline. Enforce I94's
-  service-owned local-file contract (or move parent hashing behind a killable
-  helper); the current synchronous `pread` cannot preempt a kernel-stalled
-  FUSE/network file. The archive packet must be proven for 200–400 frames
-  without exceeding the 64-file/4-GiB native boundary.
-  Keep `production_enablement=disabled`, keep the composition unregistered, and
-  exercise it only on reviewed local scratch. Do not claim a GPU queue task or
-  run `95266be1` through production DB/Storage. Disable DeskDev suspend before
-  any Refine enablement, or first make the lease-clock contract suspend-aware.
-
-## Current repository and runtime state
-
-This is the exact state at which a new agent should resume:
-
-- Remote `origin/main` is `d7861b6d` (`docs(field-capture): record disabled
-  I96 safety foundations`). The I96 integration branch
-  `field-capture/refine-i96-integration` is pushed and points at the same tip.
-- The clean integration worktree used for this work is
-  `/Users/kody/Code/patina-merged/.Codex/worktrees/agent-refine-i96-integration`.
-  Do not use the shared `/Users/kody/Code/patina-merged` checkout for writes;
-  it carries unrelated user changes and is intentionally not synchronized.
-- The current integration commit sequence after the I95 base
-  `e91aa967` is:
-
-  | Commit | Purpose |
-  | --- | --- |
-  | `9527af6a` | disabled COLMAP command supervisor foundation |
-  | `5e5e0a62` | supervisor fault and cleanup coverage |
-  | `c5d39e6c` | exact disabled packet extraction foundation |
-  | `cc82e853` | installer/package trust-list integration |
-  | `14882878` | exact sealed native-context enforcement for commands |
-  | `010280ef` | packet cleanup, FIFO, identity, and rollback hardening |
-  | `bb405078` | recursive JSON exception normalization |
-  | `68495fd9` | formatting/import hygiene for I96 hardening |
-  | `d7861b6d` | handoff and I96 decision-log record |
-
-- The new implementation modules are
-  `services/scan-pipeline/src/patina_scan_worker/refine_colmap_command.py` and
-  `refine_packet_extractor.py`. The principal integration points are
-  `refine_colmap_backend.py`, `refine_native_process.py`,
-  `install-path-guard.py`, `install.sh`, `tests/test_install_script.py`, and
-  `tests/test_packaging.py`.
-- The worker is not being installed, restarted, or run as part of this handoff.
-  No production DB, Storage, queue, DeskDev, or real-scan mutation occurred.
-  The intended deployed posture remains `patina-scan-worker` inactive with
-  `STAGES=ingest,solve,drawings`.
-
-### Resume verification
-
-Run these read-only checks from the integration worktree before changing code:
-
-```bash
-cd /Users/kody/Code/patina-merged/.Codex/worktrees/agent-refine-i96-integration
-git fetch origin main
-git rev-parse HEAD                 # d7861b6d...
-git rev-parse origin/main          # d7861b6d...
-git status --short --branch
-git diff --check origin/main...HEAD
-python3 scripts/workstream_state.py .
-```
-
-The posture probes should remain visibly false/unregistered:
-
-```bash
-rg -n '^(PACKET_EXTRACTION_QUALIFIED|SEQUENTIAL_COMMAND_QUIESCENCE_QUALIFIED|COMMAND_EXCEPTION_NORMALIZATION_QUALIFIED) = ' \
-  services/scan-pipeline/src/patina_scan_worker/refine_colmap_backend.py
-rg -n '^DEFAULT_STAGES = ' \
-  services/scan-pipeline/src/patina_scan_worker/config.py
-rg -n 'scan_pipeline\.refine' \
-  services/scan-pipeline/src/patina_scan_worker
-```
-
-Expected values are all qualification flags `False`, `DEFAULT_STAGES =
-"ingest,solve,drawings"`, and no stage registration. Do not “prove” a new
-runtime by editing a flag or adding a handler; that would invalidate the
-disabled-foundation boundary.
-
-### Verification commands
-
-The implementing worktree used a Python environment with the scan-pipeline
-test dependencies. If that environment is absent, provision an equivalent
-isolated environment; never install into the system Python or the deployed
-worker while testing.
-
-```bash
-PY=/path/to/scan-pipeline-test-venv/bin/python
-
-# Combined I96 boundary tests.
-"$PY" -m pytest -q \
-  services/scan-pipeline/tests/test_refine_colmap_command.py \
-  services/scan-pipeline/tests/test_refine_packet_extractor.py \
-  services/scan-pipeline/tests/test_refine_colmap_backend.py \
-  services/scan-pipeline/tests/test_refine_native_process.py
-
-# Full queue-independent Refine regression suite.
-"$PY" -m pytest -q services/scan-pipeline/tests/test_refine*.py
-
-# Exact isolated installer/package gate (no project environment or lockfile).
-uv run --no-project --python 3.12 \
-  --with 'pytest>=7.4' \
-  --with 'build>=1.2,<2' \
-  --with 'setuptools>=68' \
-  --with 'wheel>=0.41' \
-  --with 'httpx>=0.24,<1.0' \
-  python -m pytest -q \
-    services/scan-pipeline/tests/test_install_script.py \
-    services/scan-pipeline/tests/test_packaging.py
-
-python3 -m compileall -q services/scan-pipeline/src/patina_scan_worker \
-  services/scan-pipeline/tests
-bash -n services/scan-pipeline/install.sh
-git diff --check
-```
-
-The recorded results at this handoff are 458 Refine tests passed with five
-expected Linux-only lifecycle skips on macOS, and 148 installer/packaging
-tests passed. Linux child-subreaper behavior has not been physically proven on
-this host; the skips are evidence of unavailable platform coverage, not a
-qualification pass.
-
-## I96 implementation contract for the next agent
-
-Treat the following as implementation law, not suggestions:
-
-1. The packet is an exact uncompressed USTAR archive. It has one declared
-   request, 3–400 engine images, at most one source ledger, at most one adapter
-   ledger, no special files, no PAX/GNU/sparse extensions, exact canonical
-   metadata, exact two-block termination, and no trailing bytes.
-2. All packet reads are pinned to descriptors and use positional I/O. The
-   extractor revalidates chunk size/hash and the extracted request before the
-   caller can consume it. The native context must be the exact privately sealed
-   `NativeChildContext`; a lookalike or property-inspection failure is rejected.
-3. Cleanup records and revalidates file and directory identities and rolls back
-   a member if creation succeeds before ledger completion. This is still not a
-   substitute for a parent-owned workspace: `stat` followed by unlink/rmdir is
-   not atomic against a hostile same-UID actor.
-4. The command helper accepts bounded absolute argv, inherits the native group
-   and deadline, and refuses successful phase advancement while adopted
-   children remain. It detects escaped descendants but does not yet contain
-   them. Cleanup and exception failures are fail-closed with cleanup precedence.
-5. The future output handoff is seven child-to-parent descriptors: the six
-   persistent engine artifacts plus a scratch raw pre-BA snapshot. The child
-   may propose aligned/Sim3 bytes; the parent recomputes and verifies the
-   alignment and pose digest. Do not make the child’s proposal authoritative.
-
-## Ordered next-work packet
-
-Do not start composition or enablement until each item below has an owner,
-tests, and an independent adversarial review:
-
-1. Replace child-owned extraction scratch with a parent-provisioned,
-   descriptor-rooted 0700 workspace and a bounded reverse-FD lease. The parent
-   must perform bounded cleanup after normal return, timeout, SIGTERM, and
-   SIGKILL; cleanup must never unlink an object whose identity changed.
-2. Parse and validate the optional source and adapter ledgers, including their
-   cardinality, identity, and relationship to the manifest. Keep the closed
-   role universe and 200–400-frame packet cap explicit.
-3. Add an executable-identity and command/environment allowlist plus pinned
-   GCC/CUDA/toolchain policy. Preserve the single lease-aware deadline through
-   every command, helper, and drain thread.
-4. Prove Linux child-subreaper behavior, adopted-child reaping, escaped
-   descendant handling, and cleanup precedence on the qualified host. The five
-   macOS skips cannot be converted into green acceptance by changing tests.
-5. Implement the seven-descriptor native output handoff. Remove runner
-   display-path reopening; keep all data descriptor-pinned and parent-owned.
-6. Construct raw pre-BA and refined model snapshots, have the child propose
-   alignment, and have the parent recompute/verify Sim3 and pose digests before
-   producing the exact six persistent engine artifacts.
-7. Compose materializer → raster → backend → runner → publisher only on local
-   scratch. Require comparable reprojection, registration, verified-loop, and
-   evidence-builder results for `95266be1`; unchanged evidence is a failure and
-   trajectory shape remains diagnostic-only.
-8. Only after all of the above, Kody’s P2 gates (dense mesh, walkthrough/click-
-   to-measure, and maker quote without a site visit) can be requested. Refine,
-   Fuse, and Splat remain unregistered until Kody explicitly passes the gate.
-
-## Safe operating rules for this handoff
-
-- Never run `install.sh`, `systemctl`, a GPU doctor, a queue task, a real scan,
-  `supabase db push`, or Storage writes as part of I96 resume work.
-- Never blanket-push migrations. The live Field Capture queue head is 00378;
-  re-query the ledger and use the sanctioned surgical path if a later task
-  explicitly authorizes a migration.
-- Never edit `DECISIONS.md` by hand. Draft an `I_NEXT` block, run
-  `scripts/workstream_state.py`, then use `scripts/append_entry.py --check`
-  followed by the real append.
-- Never write from the shared dirty checkout, use `git add -A`, reset hard, or
-  overwrite user work. Use a dedicated worktree and explicit pathspecs.
-- Keep the I96 feature branch and `origin/main` aligned before beginning I97;
-  if another commit has landed, rebase/merge in the isolated worktree and
-  rerun all gates before pushing.
+  The disabled storage/deadline/native/runner foundations are packaged but no
+  production queue handler is registered or composed yet. Before handler
+  enablement/deployment or any real run, pass the physical raster fixture,
+  then prove comparable
+  reprojection/registration/verified-loop evidence (unchanged evidence cannot
+  pass; trajectory shape is diagnostic-only), use the carried lease-aware
+  4-minute deadline, and preserve the canonical
+  refine → {fuse→mesh-solve, splat} → Present four-manifest join. Scan
+  `95266be1` remains the local-scratch proof subject before any DB/storage run.
+- **GPU stages remain disabled and unregistered.** The observed queue-worker
+  posture after I88 is inactive; its persistent `STAGES` remains the safe CPU
+  set. Do not add `refine`, `fuse`, or `splat`, and do not start a GPU-stage
+  worker merely because the doctor passed.
+- **Next safe execution packet:** finish the physical Field/Core Image raster
+  receipt, ratify source-to-engine image naming plus deterministic engine
+  artifacts, and build/prove the materializer/backend/publisher/lease-aware
+  Refine composition while keeping the stage unregistered. Disable DeskDev
+  suspend before any Refine enablement. Do not claim a GPU queue task or run
+  `95266be1` through production DB/Storage until those gates pass.
 
 ## The operating cadence (do not drop it)
 

@@ -32,9 +32,12 @@
 #   when you know that's the sole reason a worktree looks dirty.
 #
 #   In --apply mode, cleanliness is re-checked immediately before removal
-#   (state can change between scan and apply); if `git worktree remove`
-#   still refuses on a worktree we just confirmed clean, the refusal can
-#   only be gitignored junk (or a stale lock) — retried once with --force.
+#   (state can change between scan and apply), through the SAME
+#   --ignore-generated-dirt filter as the scan so the two can't drift; if
+#   `git worktree remove` still refuses on a worktree we just confirmed
+#   clean, the refusal is gitignored junk, a stale lock, or (when
+#   --ignore-generated-dirt is set) the blessed generated-file drift
+#   itself — retried once with --force.
 #   `git worktree prune -v` runs at the end. Branches are NEVER deleted —
 #   the script prints a hint pointing at `git branch --merged main`.
 #
@@ -138,6 +141,20 @@ human_kb() {
   }'
 }
 
+# Applies the --ignore-generated-dirt filter to raw `git status --porcelain`
+# output. Used by BOTH the initial scan and the apply-time recheck so the two
+# can't drift on what counts as "clean" — a prior version only filtered in the
+# scan, so the recheck saw the raw (unfiltered) status and skipped every
+# generated-dirt worktree as "dirtied since scan", defeating the flag.
+filter_generated_dirt() {
+  local raw="$1"
+  if [[ "$IGNORE_GENERATED_DIRT" -eq 1 && -n "$raw" ]]; then
+    printf '%s\n' "$raw" | grep -v '/src/generated/prisma-client/' || true
+  else
+    printf '%s\n' "$raw"
+  fi
+}
+
 MODE_LABEL="DRY RUN"
 [[ "$APPLY" -eq 1 ]] && MODE_LABEL="APPLY"
 echo "== repo-gc: $MODE_LABEL =="
@@ -209,14 +226,11 @@ for i in "${!WT_PATH[@]}"; do
   branch_label="${wt_branch:-<detached>}"
 
   raw_status="$(git -C "$wt_real" status --porcelain)"
-  effective_status="$raw_status"
+  effective_status="$(filter_generated_dirt "$raw_status")"
   ignored_note=""
-  if [[ "$IGNORE_GENERATED_DIRT" -eq 1 && -n "$raw_status" ]]; then
-    effective_status="$(printf '%s\n' "$raw_status" | grep -v '/src/generated/prisma-client/' || true)"
-    if [[ -z "$effective_status" ]]; then
-      raw_count="$(printf '%s\n' "$raw_status" | grep -c . || true)"
-      ignored_note=" (${raw_count} generated-dirt path(s) ignored via --ignore-generated-dirt)"
-    fi
+  if [[ "$IGNORE_GENERATED_DIRT" -eq 1 && -n "$raw_status" && -z "$effective_status" ]]; then
+    raw_count="$(printf '%s\n' "$raw_status" | grep -c . || true)"
+    ignored_note=" (${raw_count} generated-dirt path(s) ignored via --ignore-generated-dirt)"
   fi
   dirty_count=0
   if [[ -n "$effective_status" ]]; then
@@ -269,7 +283,8 @@ if [[ "$APPLY" -eq 1 && "${#REMOVABLE_WT[@]}" -gt 0 ]]; then
       echo "    refusing to remove $wt — no longer strictly under repo root" >&2
       continue
     fi
-    recheck="$(git -C "$wt" status --porcelain)"
+    recheck_raw="$(git -C "$wt" status --porcelain)"
+    recheck="$(filter_generated_dirt "$recheck_raw")"
     if [[ -n "$recheck" ]]; then
       echo "    skip (dirtied since scan): $wt" >&2
       continue
@@ -278,8 +293,12 @@ if [[ "$APPLY" -eq 1 && "${#REMOVABLE_WT[@]}" -gt 0 ]]; then
     if git worktree remove "$wt"; then
       :
     else
-      # Cleanliness was just reconfirmed above, so a refusal here can only be
-      # gitignored junk (or a stale lock) — safe to force through.
+      # Cleanliness was just reconfirmed above (same filter as the scan, via
+      # filter_generated_dirt), so a refusal here can only be one of: gitignored
+      # junk, a stale lock, or — when --ignore-generated-dirt is set — the
+      # blessed generated-file drift itself (git still refuses to remove a
+      # worktree with modified TRACKED files even when we've decided to treat
+      # it as clean). Force through in all three cases.
       echo "    refused — retrying with --force (status was clean)"
       git worktree remove --force "$wt"
     fi

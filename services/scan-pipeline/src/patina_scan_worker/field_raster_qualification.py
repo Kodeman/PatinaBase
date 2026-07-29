@@ -8,11 +8,9 @@ or configuration imports.
 HEIC decoding is delegated to a tiny packaged C helper compiled unprivileged
 against Ubuntu's security-maintained system libheif. The helper decodes once
 with ``ignore_transformations=1`` and once with libheif defaults, then requires
-the dimensions and RGB bytes to be identical. Through libheif's public API it
-permits only ImageIO's single recognized, primary-item-associated identity
-``irot`` property and rejects recognized effective or ambiguous crop, rotation,
-and mirror transforms before off-centre marker geometry is checked or any
-output directory is created.
+the dimensions and RGB bytes to be identical. That rejects hidden crop,
+rotation, and mirror properties before off-centre marker geometry is checked or
+any output directory is created.
 """
 
 from __future__ import annotations
@@ -36,9 +34,9 @@ from typing import Any, Callable, Mapping, Protocol, Sequence
 
 FIXTURE_ID = "field-core-image-raster-v1"
 QUALIFICATION_NAME = "p2-item4a-field-core-image-raster"
-QUALIFICATION_SCHEMA_VERSION = 2
+QUALIFICATION_SCHEMA_VERSION = 1
 MATERIALIZED_RASTER_NAME = f"{FIXTURE_ID}-materialized.ppm"
-RECEIPT_NAME = "field-raster-qualification-receipt-v2.json"
+RECEIPT_NAME = "field-raster-qualification-receipt-v1.json"
 
 NATIVE_WIDTH = 640
 NATIVE_HEIGHT = 360
@@ -68,7 +66,7 @@ MAX_TOOL_OUTPUT_BYTES = 64 * 1024
 MAX_HEVC_DECODER_DESCRIPTORS = 32
 TOOL_TIMEOUT_S = 120.0
 LIBHEIF_HELPER_SOURCE_NAME = "field_raster_libheif.c"
-LIBHEIF_HELPER_SCHEMA = "patina-field-raster-libheif-helper-v2"
+LIBHEIF_HELPER_SCHEMA = "patina-field-raster-libheif-helper-v1"
 CC_PATH = Path("/usr/bin/cc")
 PKG_CONFIG_PATH = Path("/usr/bin/pkg-config")
 DPKG_QUERY_PATH = Path("/usr/bin/dpkg-query")
@@ -174,9 +172,6 @@ class DecodedRaster:
     presented_height: int
     default_width: int
     default_height: int
-    transformation_property_count: int
-    transformation_property_type: str
-    transformation_rotation_ccw: int
     raw_default_rgb_identical: bool
     compiler_version: str
     pkg_config_version: str
@@ -311,8 +306,6 @@ def _parse_helper_metadata(stdout: str) -> dict[str, str]:
         "top_level_images",
         "metadata_blocks",
         "transformation_properties",
-        "transformation_property_type",
-        "transformation_rotation_ccw",
         "ispe_width",
         "ispe_height",
         "presented_width",
@@ -356,21 +349,6 @@ def _parse_helper_metadata(stdout: str) -> dict[str, str]:
         raise RasterQualificationError(
             "libheif helper did not prove exactly one libde265 descriptor",
             "FIELD_RASTER_DECODE_FAILED",
-        )
-    for key in ("transformation_properties", "transformation_rotation_ccw"):
-        if not re.fullmatch(r"(?:0|[1-9][0-9]{0,3})", values[key]):
-            raise RasterQualificationError(
-                f"libheif helper metadata {key} is invalid",
-                "FIELD_RASTER_DECODE_FAILED",
-            )
-    if (
-        values["transformation_properties"] != "1"
-        or values["transformation_property_type"] != "irot"
-        or values["transformation_rotation_ccw"] != "0"
-    ):
-        raise RasterQualificationError(
-            "libheif did not prove exactly one identity irot property",
-            "FIELD_RASTER_ORIENTATION_MISMATCH",
         )
     if not re.fullmatch(r"[ -~]{1,256}", values["decoder_name"]):
         raise RasterQualificationError(
@@ -501,7 +479,7 @@ def _write_scratch_file(path: Path, payload: bytes, mode: int) -> None:
 
 
 class SystemLibheifDecoder:
-    """Compile and run the packaged strict-transform helper without privilege."""
+    """Compile and run the packaged no-transform helper without privilege."""
 
     def __init__(
         self,
@@ -688,13 +666,11 @@ class SystemLibheifDecoder:
         if (
             metadata["top_level_images"] != "1"
             or metadata["metadata_blocks"] != "0"
-            or metadata["transformation_properties"] != "1"
-            or metadata["transformation_property_type"] != "irot"
-            or metadata["transformation_rotation_ccw"] != "0"
+            or metadata["transformation_properties"] != "0"
             or metadata["raw_default_rgb_identical"] != "1"
         ):
             raise RasterQualificationError(
-                "libheif did not prove one image with exactly one identity irot",
+                "libheif did not prove one image with identity transform metadata",
                 "FIELD_RASTER_ORIENTATION_MISMATCH",
             )
         runtime_version = metadata["libheif_version"]
@@ -725,13 +701,6 @@ class SystemLibheifDecoder:
             presented_height=_metadata_positive_int(metadata, "presented_height"),
             default_width=default_width,
             default_height=default_height,
-            transformation_property_count=int(
-                metadata["transformation_properties"]
-            ),
-            transformation_property_type=metadata["transformation_property_type"],
-            transformation_rotation_ccw=int(
-                metadata["transformation_rotation_ccw"]
-            ),
             raw_default_rgb_identical=True,
             compiler_version=cc_version,
             pkg_config_version=pkg_config_version,
@@ -1233,17 +1202,6 @@ def _validate_decoded(decoded: DecodedRaster) -> list[dict[str, Any]]:
         raise RasterQualificationError(
             "HEIC decoder must expose uint8 RGB/RGBA source pixels"
         )
-    if (
-        type(decoded.transformation_property_count) is not int
-        or decoded.transformation_property_count != 1
-        or decoded.transformation_property_type != "irot"
-        or type(decoded.transformation_rotation_ccw) is not int
-        or decoded.transformation_rotation_ccw != 0
-    ):
-        raise RasterQualificationError(
-            "HEIC decoder must prove exactly one identity irot property",
-            "FIELD_RASTER_ORIENTATION_MISMATCH",
-        )
     if decoded.metadata_blocks != 0:
         raise RasterQualificationError(
             "Field fixture HEIC must contain zero unqualified metadata blocks",
@@ -1521,23 +1479,15 @@ def run_field_raster_qualification(
             "sourceChannels": decoded.source_channels,
             "sourcePixelType": decoded.source_pixel_type,
             "orientationProof": {
-                "libheifRecognizedPrimaryItemTransformProperties": {
-                    "associationScope": "primary-item-associated",
-                    "recognizedTypes": ["irot", "imir", "clap"],
-                    "count": decoded.transformation_property_count,
-                    "propertyType": decoded.transformation_property_type,
-                    "rotationCCWDegrees": decoded.transformation_rotation_ccw,
-                },
-                "hiddenLibheifRecognizedPrimaryItemTransformEffect": False,
+                "heifGeometricTransformationProperties": 0,
+                "hiddenHeifCropRotationMirror": False,
                 "rawDefaultRGBIdentical": True,
                 "embeddedMetadataBlocks": decoded.metadata_blocks,
                 "embeddedExifXmpOrientation": "absent (zero metadata blocks)",
                 "materializedRasterCarriesMetadata": False,
                 "scope": (
-                    "public libheif API proof covers recognized primary-item-"
-                    "associated irot/imir/clap semantic type and value, zero "
-                    "attached metadata, and strict raw/default dimension and RGB "
-                    "byte identity; output PPM drops metadata"
+                    "stored pixels, zero attached metadata, and zero HEIF irot/imir/clap; "
+                    "output PPM drops metadata"
                 ),
             },
             "rawDefaultRGBIdentical": decoded.raw_default_rgb_identical,

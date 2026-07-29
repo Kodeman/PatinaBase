@@ -1,5 +1,26 @@
 # Entra ID setup — Cowork Intake Bridge (WP-1.5)
 
+> **STATUS: COMPLETE — 2026-07-14.** All five `MSGRAPH_*` secrets are live on Strata and the
+> step-9 acceptance passed end-to-end (vendor drop → `agent_tasks` `awaiting_review` →
+> file moved to `ingested/` → `bridge_state` `ok` → idempotent re-run → malformed file →
+> `intake_error`). As-built notes:
+>
+> - App `patina-cowork-bridge` (`314caadc-3bcf-478b-8320-88607f0e2ce5`) holds **exactly**
+>   `Sites.Selected` — a tenant-wide `Sites.ReadWrite.All` grant was found during setup and
+>   **removed** (negative check verified: other sites 403). Site-scoped `write` grant on
+>   PatinaOps only.
+> - `MSGRAPH_SITE_ID` = `middleweststudio.sharepoint.com,026e7457-07f5-4deb-ae66-b0cc5e1e04ed,2cf12078-7958-421d-98b0-c9f442128fc5`.
+> - The lanes are an `Ops Inbox/` **folder in the site's default Documents library** (the
+>   site has no dedicated "Ops Inbox" library); `MSGRAPH_DRIVE_ID` is the Documents drive.
+>   The bridge tolerates this shape explicitly (lane matching is a path suffix).
+> - Client secret expires **2028-07** — re-mint and `supabase secrets set
+>   MSGRAPH_CLIENT_SECRET=…` before then, or the bridge starts recording `error` runs
+>   (visible in Mission Control → Runs).
+> - Cowork deliverables must land in the **site** library lanes — never personal OneDrive
+>   (`Sites.Selected` cannot be scoped to a personal drive).
+
+The original one-time procedure follows, for reference / future re-runs.
+
 **Owner:** Kody (manual, one-time). **Status of the bridge until this is done:** the
 `cowork-intake-bridge` edge function is deployed and cron-scheduled (every 30 min,
 migration `00303`), but it is **credential-gated** — with no `MSGRAPH_*` secrets it
@@ -146,7 +167,7 @@ If the "other site" call returns 200, the app has broader permission than intend
 remove any `*.ReadWrite.All` grant from step 3 and re-verify. Do not proceed until
 the cross-site call 403s.
 
-## 9. Live drop-file acceptance — **DEFERRED until steps 1–8 are done**
+## 9. Live drop-file acceptance — **PASSED 2026-07-14**
 
 Once the secrets exist, verify end-to-end (this is the WP-1.5 acceptance):
 

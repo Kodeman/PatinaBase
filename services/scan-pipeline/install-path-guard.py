@@ -73,22 +73,14 @@ SOURCE_PACKAGE_FILES = frozenset(
         f"{SOURCE_PACKAGE_ROOT}/drawing/units.py",
         f"{SOURCE_PACKAGE_ROOT}/errors.py",
         f"{SOURCE_PACKAGE_ROOT}/field_raster_libheif.c",
-        f"{SOURCE_PACKAGE_ROOT}/field_raster_materializer.py",
         f"{SOURCE_PACKAGE_ROOT}/field_raster_qualification.py",
-        f"{SOURCE_PACKAGE_ROOT}/field_storage_acquirer.py",
         f"{SOURCE_PACKAGE_ROOT}/http.py",
         f"{SOURCE_PACKAGE_ROOT}/keys.py",
         f"{SOURCE_PACKAGE_ROOT}/pycolmap_cuda_smoke.py",
         f"{SOURCE_PACKAGE_ROOT}/queue.py",
         f"{SOURCE_PACKAGE_ROOT}/refine_adapter.py",
-        f"{SOURCE_PACKAGE_ROOT}/refine_colmap_backend.py",
-        f"{SOURCE_PACKAGE_ROOT}/refine_colmap_command.py",
-        f"{SOURCE_PACKAGE_ROOT}/refine_evidence_builder.py",
         f"{SOURCE_PACKAGE_ROOT}/refine_engine.py",
-        f"{SOURCE_PACKAGE_ROOT}/refine_materializer.py",
         f"{SOURCE_PACKAGE_ROOT}/refine_native_process.py",
-        f"{SOURCE_PACKAGE_ROOT}/refine_packet_extractor.py",
-        f"{SOURCE_PACKAGE_ROOT}/refine_publisher.py",
         f"{SOURCE_PACKAGE_ROOT}/refine_runner.py",
         f"{SOURCE_PACKAGE_ROOT}/stages/__init__.py",
         f"{SOURCE_PACKAGE_ROOT}/stages/base.py",
@@ -119,33 +111,6 @@ PYCOLMAP_SOURCE_CMAKE_SHA256 = (
 PYCOLMAP_BUILD_TAG = "1patinacu118sm75"
 WORKER_WHEEL_NAME = "patina_scan_worker-0.1.0-py3-none-any.whl"
 WORKER_DIST_INFO = "patina_scan_worker-0.1.0.dist-info"
-FIELD_RASTER_HELPER_RELATIVE_PATH = os.path.join(
-    "libexec",
-    "patina",
-    "field-raster-libheif-helper-v2",
-)
-FIELD_RASTER_HELPER_MANIFEST_RELATIVE_PATH = (
-    FIELD_RASTER_HELPER_RELATIVE_PATH + ".manifest.json"
-)
-FIELD_RASTER_HELPER_MANIFEST_SCHEMA = "patina-field-raster-helper-manifest-v1"
-FIELD_RASTER_HELPER_SOURCE_SHA256 = (
-    "4840e0e6d3c98bbebecc4354349bae3963718583fb5c882f9807b0d222bee9c3"
-)
-FIELD_RASTER_HELPER_COMPILE_FLAGS = (
-    "-std=c11",
-    "-O2",
-    "-Wall",
-    "-Wextra",
-    "-Werror",
-    "-D_FORTIFY_SOURCE=3",
-    "-fstack-protector-strong",
-    "-fPIE",
-    "-pie",
-    "-Wl,-z,relro,-z,now",
-    "-x",
-    "c",
-)
-FIELD_RASTER_HELPER_MAX_BYTES = 16 * 1024 * 1024
 WORKER_PROVIDES_EXTRA = (
     "solve",
     "drawings",
@@ -2066,10 +2031,6 @@ def validate_release(
     *,
     stable_link: bool,
     require_executables: bool,
-    require_field_raster_helper: bool = False,
-    expected_field_raster_libheif_package_version: str | None = None,
-    expected_field_raster_libheif_pkg_config_version: str | None = None,
-    expected_field_raster_pkg_config_flags_json: str | None = None,
     anchor: str,
     uid: int,
     gid: int,
@@ -2109,232 +2070,6 @@ def validate_release(
                 )
             if not os.access(executable, os.X_OK):
                 raise GuardError(f"release executable is not executable: {executable}")
-    if require_field_raster_helper:
-        safe_version = re.compile(r"[0-9A-Za-z.+:~_-]{1,128}")
-        if (
-            not isinstance(expected_field_raster_libheif_package_version, str)
-            or safe_version.fullmatch(
-                expected_field_raster_libheif_package_version
-            )
-            is None
-            or not isinstance(
-                expected_field_raster_libheif_pkg_config_version,
-                str,
-            )
-            or safe_version.fullmatch(
-                expected_field_raster_libheif_pkg_config_version
-            )
-            is None
-            or not isinstance(
-                expected_field_raster_pkg_config_flags_json,
-                str,
-            )
-        ):
-            raise GuardError(
-                "Field raster helper validation requires the current "
-                "libheif package, pkg-config version, and flags"
-            )
-        try:
-            expected_pkg_config_flags = json.loads(
-                expected_field_raster_pkg_config_flags_json
-            )
-            canonical_expected_flags = json.dumps(
-                expected_pkg_config_flags,
-                sort_keys=True,
-                separators=(",", ":"),
-                ensure_ascii=True,
-                allow_nan=False,
-            )
-        except (json.JSONDecodeError, ValueError) as exc:
-            raise GuardError(
-                "expected Field raster pkg-config flags are invalid JSON"
-            ) from exc
-        if (
-            type(expected_pkg_config_flags) is not list
-            or not expected_pkg_config_flags
-            or canonical_expected_flags
-            != expected_field_raster_pkg_config_flags_json
-            or any(
-                type(token) is not str
-                or re.fullmatch(
-                    r"(?:-pthread|-l[A-Za-z0-9_+.-]+|-[IL]/"
-                    r"[A-Za-z0-9_+.,/@:-]+|-D[A-Za-z_][A-Za-z0-9_]*"
-                    r"(?:=[A-Za-z0-9_+.,-]+)?)",
-                    token,
-                )
-                is None
-                for token in expected_pkg_config_flags
-            )
-            or "-lheif" not in expected_pkg_config_flags
-        ):
-            raise GuardError("expected Field raster pkg-config flags are unsafe")
-        directory_flags = (
-            os.O_RDONLY
-            | getattr(os, "O_DIRECTORY", 0)
-            | getattr(os, "O_NOFOLLOW", 0)
-            | getattr(os, "O_CLOEXEC", 0)
-        )
-        file_flags = (
-            os.O_RDONLY
-            | getattr(os, "O_NONBLOCK", 0)
-            | getattr(os, "O_NOFOLLOW", 0)
-            | getattr(os, "O_CLOEXEC", 0)
-        )
-        opened_descriptors: list[int] = []
-        try:
-            current_fd = os.open(target, directory_flags)
-            opened_descriptors.append(current_fd)
-            for component in ("libexec", "patina"):
-                current_fd = os.open(
-                    component,
-                    directory_flags,
-                    dir_fd=current_fd,
-                )
-                opened_descriptors.append(current_fd)
-                directory_info = os.fstat(current_fd)
-                if (
-                    not stat.S_ISDIR(directory_info.st_mode)
-                    or directory_info.st_uid != uid
-                    or directory_info.st_gid != gid
-                    or stat.S_IMODE(directory_info.st_mode) != 0o755
-                ):
-                    raise GuardError(
-                        "Field raster helper directory is not trusted: "
-                        f"{os.path.join(target, 'libexec', 'patina')}"
-                    )
-
-            helper_fd = os.open(
-                os.path.basename(FIELD_RASTER_HELPER_RELATIVE_PATH),
-                file_flags,
-                dir_fd=current_fd,
-            )
-            opened_descriptors.append(helper_fd)
-            helper_info = os.fstat(helper_fd)
-            helper = os.path.join(target, FIELD_RASTER_HELPER_RELATIVE_PATH)
-            if (
-                not stat.S_ISREG(helper_info.st_mode)
-                or helper_info.st_uid != uid
-                or helper_info.st_gid != gid
-                or stat.S_IMODE(helper_info.st_mode) != 0o755
-                or helper_info.st_nlink != 1
-                or helper_info.st_size < 4
-                or helper_info.st_size > FIELD_RASTER_HELPER_MAX_BYTES
-            ):
-                raise GuardError(
-                    f"Field raster helper descriptor is not trusted: {helper}"
-                )
-            if os.pread(helper_fd, 4, 0) != b"\x7fELF":
-                raise GuardError(f"Field raster helper is not an ELF binary: {helper}")
-
-            manifest_fd = os.open(
-                os.path.basename(FIELD_RASTER_HELPER_MANIFEST_RELATIVE_PATH),
-                file_flags,
-                dir_fd=current_fd,
-            )
-            opened_descriptors.append(manifest_fd)
-            manifest_info = os.fstat(manifest_fd)
-            manifest_path = os.path.join(
-                target,
-                FIELD_RASTER_HELPER_MANIFEST_RELATIVE_PATH,
-            )
-            if (
-                not stat.S_ISREG(manifest_info.st_mode)
-                or manifest_info.st_uid != uid
-                or manifest_info.st_gid != gid
-                or stat.S_IMODE(manifest_info.st_mode) != 0o644
-                or manifest_info.st_nlink != 1
-                or manifest_info.st_size < 2
-                or manifest_info.st_size > 4096
-            ):
-                raise GuardError(
-                    f"Field raster helper manifest is not trusted: {manifest_path}"
-                )
-            manifest_bytes = os.pread(
-                manifest_fd,
-                manifest_info.st_size,
-                0,
-            )
-            try:
-                manifest = json.loads(manifest_bytes.decode("ascii"))
-                canonical_manifest = (
-                    json.dumps(
-                        manifest,
-                        sort_keys=True,
-                        separators=(",", ":"),
-                        ensure_ascii=True,
-                        allow_nan=False,
-                    )
-                    + "\n"
-                ).encode("ascii")
-            except (UnicodeDecodeError, json.JSONDecodeError, ValueError) as exc:
-                raise GuardError(
-                    f"Field raster helper manifest is invalid: {manifest_path}"
-                ) from exc
-            if canonical_manifest != manifest_bytes:
-                raise GuardError(
-                    f"Field raster helper manifest is not canonical: {manifest_path}"
-                )
-            expected_keys = {
-                "binarySha256",
-                "compileFlags",
-                "compilerPath",
-                "compilerVersion",
-                "libheifPackageVersion",
-                "libheifPkgConfigVersion",
-                "pkgConfigFlags",
-                "schema",
-                "sourceSha256",
-            }
-            if (
-                type(manifest) is not dict
-                or set(manifest) != expected_keys
-                or manifest.get("schema") != FIELD_RASTER_HELPER_MANIFEST_SCHEMA
-                or manifest.get("sourceSha256")
-                != FIELD_RASTER_HELPER_SOURCE_SHA256
-                or manifest.get("compileFlags")
-                != list(FIELD_RASTER_HELPER_COMPILE_FLAGS)
-                or type(manifest.get("compilerPath")) is not str
-                or not os.path.isabs(manifest["compilerPath"])
-                or type(manifest.get("compilerVersion")) is not str
-                or not 1
-                <= len(manifest["compilerVersion"].encode("utf-8"))
-                <= 256
-                or type(manifest.get("libheifPackageVersion")) is not str
-                or safe_version.fullmatch(manifest["libheifPackageVersion"]) is None
-                or manifest["libheifPackageVersion"]
-                != expected_field_raster_libheif_package_version
-                or type(manifest.get("libheifPkgConfigVersion")) is not str
-                or safe_version.fullmatch(manifest["libheifPkgConfigVersion"]) is None
-                or manifest["libheifPkgConfigVersion"]
-                != expected_field_raster_libheif_pkg_config_version
-                or manifest.get("pkgConfigFlags") != expected_pkg_config_flags
-                or type(manifest.get("binarySha256")) is not str
-                or re.fullmatch(r"[0-9a-f]{64}", manifest["binarySha256"]) is None
-            ):
-                raise GuardError(
-                    f"Field raster helper manifest contract failed: {manifest_path}"
-                )
-            digest = hashlib.sha256()
-            offset = 0
-            while offset < helper_info.st_size:
-                chunk = os.pread(
-                    helper_fd,
-                    min(1024 * 1024, helper_info.st_size - offset),
-                    offset,
-                )
-                if not chunk:
-                    raise GuardError(
-                        f"Field raster helper ended during hashing: {helper}"
-                    )
-                digest.update(chunk)
-                offset += len(chunk)
-            if digest.hexdigest() != manifest["binarySha256"]:
-                raise GuardError(
-                    f"Field raster helper hash differs from manifest: {helper}"
-                )
-        finally:
-            for descriptor in reversed(opened_descriptors):
-                os.close(descriptor)
     return target
 
 
@@ -2434,19 +2169,6 @@ def _parser() -> argparse.ArgumentParser:
         release.add_argument("--stable-link", action="store_true")
         if command == "validate-release":
             release.add_argument("--require-executables", action="store_true")
-            release.add_argument(
-                "--require-field-raster-helper",
-                action="store_true",
-            )
-            release.add_argument(
-                "--expected-field-raster-libheif-package-version",
-            )
-            release.add_argument(
-                "--expected-field-raster-libheif-pkg-config-version",
-            )
-            release.add_argument(
-                "--expected-field-raster-pkg-config-flags-json",
-            )
 
     return parser
 
@@ -2582,16 +2304,6 @@ def main(argv: list[str] | None = None) -> int:
                     args.path,
                     stable_link=args.stable_link,
                     require_executables=args.require_executables,
-                    require_field_raster_helper=args.require_field_raster_helper,
-                    expected_field_raster_libheif_package_version=(
-                        args.expected_field_raster_libheif_package_version
-                    ),
-                    expected_field_raster_libheif_pkg_config_version=(
-                        args.expected_field_raster_libheif_pkg_config_version
-                    ),
-                    expected_field_raster_pkg_config_flags_json=(
-                        args.expected_field_raster_pkg_config_flags_json
-                    ),
                     **common,
                 )
             )

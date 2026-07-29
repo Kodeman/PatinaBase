@@ -22,7 +22,6 @@ the production handler contract is built and separately qualified.
 
 from __future__ import annotations
 
-import hashlib
 import importlib
 import json
 import math
@@ -30,25 +29,18 @@ import multiprocessing
 import os
 import re
 import signal
-import stat
 import sys
 import time
-from collections.abc import Iterable, Iterator, Mapping
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from json.encoder import encode_basestring_ascii
 from multiprocessing.connection import Connection, wait
-from types import MappingProxyType
-from typing import Any
+from typing import Any, Iterable, Iterator, Mapping
 
 from .refine_adapter import AdapterError, RefineDeadline
 
 NATIVE_CHILD_MAX_REQUEST_BYTES = 64 * 1024
 NATIVE_CHILD_MAX_RESPONSE_BYTES = 256 * 1024
 NATIVE_CHILD_MAX_ERROR_BYTES = 1024
-NATIVE_CHILD_MAX_PINNED_FILES = 64
-NATIVE_CHILD_MAX_PINNED_TOKEN_BYTES = 64
-NATIVE_CHILD_MAX_PINNED_FILE_BYTES = 128 * 1024 * 1024
-NATIVE_CHILD_MAX_PINNED_TOTAL_BYTES = 4 * 1024 * 1024 * 1024
 NATIVE_CHILD_TERM_GRACE_S = 0.10
 NATIVE_CHILD_KILL_REAP_S = 1.0
 
@@ -58,7 +50,6 @@ _ACK_READY = b"ready-accept-v1"
 _ACK_ACCEPT = b"accept-v1"
 _TIMEOUT_CODE = "REFINE_ENGINE_TIMEOUT"
 _FAILED_CODE = "REFINE_ENGINE_FAILED"
-_INVALID_INPUT_CODE = "REFINE_INPUT_INVALID"
 _CLEANUP_FAILED_CODE = "REFINE_ENGINE_CLEANUP_FAILED"
 _CHILD_PROTOCOL_REJECT_EXIT_CODE = 74
 _IN_PROCESS_ENTRYPOINT_MARKER = "__patina_refine_in_process_only__"
@@ -69,9 +60,6 @@ _JSON_OUTPUT_CHUNK_CHARS = 1024
 _MAX_CLEANUP_ERRORS = 32
 _MAX_CLEANUP_ERROR_BYTES = 256
 _ERROR_CODE_PATTERN = re.compile(r"^REFINE_[A-Z0-9_]{1,63}$")
-_PINNED_FILE_TOKEN_PATTERN = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_.-]{0,63}$")
-_PINNED_FILE_READ_BYTES = 1024 * 1024
-_NATIVE_CHILD_CONTEXT_SEAL = object()
 
 
 class _ChildBoundaryTimeout(TimeoutError):
@@ -91,23 +79,6 @@ class NativeChildContext:
     """The same absolute engine deadline, visible inside the spawned child."""
 
     expires_at_monotonic_s: float
-    _pinned_files: Mapping[str, int] = field(
-        default_factory=lambda: MappingProxyType({}),
-        repr=False,
-        compare=False,
-    )
-    _boundary_seal: object | None = field(
-        default=None,
-        init=False,
-        repr=False,
-        compare=False,
-    )
-    _boundary_pid: int | None = field(
-        default=None,
-        init=False,
-        repr=False,
-        compare=False,
-    )
 
     def remaining_seconds(self) -> float:
         remaining = self.expires_at_monotonic_s - time.monotonic()
@@ -117,88 +88,6 @@ class NativeChildContext:
                 _TIMEOUT_CODE,
             )
         return remaining
-
-    @property
-    def pinned_file_tokens(self) -> tuple[str, ...]:
-        """Return the canonical closed token set received from the parent."""
-
-        return tuple(self._pinned_files)
-
-    def pinned_file_descriptor(self, token: str) -> int:
-        """Borrow one verified read-only descriptor for the entry point call."""
-
-        if type(token) is not str:
-            raise AdapterError(
-                "native child pinned file token must be a string",
-                _INVALID_INPUT_CODE,
-            )
-        try:
-            return self._pinned_files[token]
-        except KeyError as exc:
-            raise AdapterError(
-                "native child pinned file token is unavailable",
-                _INVALID_INPUT_CODE,
-            ) from exc
-
-    @property
-    def is_verified_native_boundary(self) -> bool:
-        """Authenticate the context created for one isolated child entry point."""
-
-        try:
-            pid = os.getpid()
-            isolated = os.getsid(0) == pid and os.getpgrp() == pid
-        except BaseException:  # noqa: BLE001 - authentication must fail closed
-            return False
-        return (
-            self._boundary_seal is _NATIVE_CHILD_CONTEXT_SEAL
-            and self._boundary_pid == pid
-            and isolated
-        )
-
-
-def _seal_native_child_context(context: NativeChildContext) -> NativeChildContext:
-    """Seal only the final entry-point context after child descriptor receipt."""
-
-    try:
-        pid = os.getpid()
-        isolated = os.getsid(0) == pid and os.getpgrp() == pid
-    except BaseException as exc:  # noqa: BLE001 - normalize injected inspection
-        raise _ChildTransportError(
-            "native child context isolation cannot be inspected"
-        ) from exc
-    if not isolated:
-        raise _ChildTransportError(
-            "native child context cannot be sealed outside its isolated session"
-        )
-    object.__setattr__(context, "_boundary_seal", _NATIVE_CHILD_CONTEXT_SEAL)
-    object.__setattr__(context, "_boundary_pid", pid)
-    return context
-
-
-@dataclass(frozen=True)
-class NativePinnedFile:
-    """Parent descriptor plus the exact immutable fingerprint sent to the child.
-
-    This disabled prerequisite accepts only service-owned local regular files.
-    Callers must not pass FUSE, network, removable, or other externally blocking
-    filesystem descriptors: parent-side ``pread`` hashing is synchronous and
-    cannot preempt a kernel-blocked read. Production composition must enforce
-    that local-file contract or move validation behind another killable process
-    boundary before registering Refine.
-    """
-
-    descriptor: int
-    sha256: str
-    size_bytes: int
-
-
-@dataclass(frozen=True)
-class _PinnedFileTransfer:
-    token: str
-    descriptor: int
-    sha256: str
-    size_bytes: int
-    original_offset: int | None = None
 
 
 def native_engine_entrypoint(target):
@@ -677,482 +566,14 @@ def _receive_exact_child_ack(
         )
 
 
-def _descriptor_snapshot(
-    metadata: os.stat_result,
-    descriptor: int,
-    *,
-    token: str,
-) -> tuple[int, ...]:
-    try:
-        offset = os.lseek(descriptor, 0, os.SEEK_CUR)
-    except OSError as exc:
-        raise AdapterError(
-            f"native pinned file {token} offset is unavailable",
-            _INVALID_INPUT_CODE,
-        ) from exc
-    return (
-        metadata.st_dev,
-        metadata.st_ino,
-        metadata.st_mode,
-        metadata.st_size,
-        metadata.st_mtime_ns,
-        metadata.st_ctime_ns,
-        offset,
-    )
-
-
-def _restore_descriptor_offset(
-    descriptor: int,
-    *,
-    token: str,
-    offset: int,
-) -> None:
-    try:
-        os.lseek(descriptor, offset, os.SEEK_SET)
-    except OSError as exc:
-        raise AdapterError(
-            f"native pinned file {token} shared offset could not be restored",
-            _CLEANUP_FAILED_CODE,
-        ) from exc
-
-
-def _descriptor_access_mode(descriptor: int) -> int:
-    try:
-        import fcntl
-    except ImportError as exc:  # pragma: no cover - POSIX platforms provide fcntl
-        raise AdapterError(
-            "native pinned file access-mode inspection is unavailable",
-            _FAILED_CODE,
-        ) from exc
-    try:
-        return fcntl.fcntl(descriptor, fcntl.F_GETFL) & os.O_ACCMODE
-    except OSError as exc:
-        raise AdapterError(
-            "native pinned file descriptor flags are unavailable",
-            _INVALID_INPUT_CODE,
-        ) from exc
-
-
-def _validate_pinned_descriptor(
-    descriptor: int,
-    *,
-    token: str,
-    expected_sha256: str,
-    expected_size: int,
-    remaining_seconds,
-    expected_snapshot: tuple[int, ...] | None = None,
-) -> tuple[int, ...]:
-    """Verify one read-only regular descriptor without changing its offset."""
-
-    try:
-        remaining_seconds()
-    except AdapterError:
-        raise
-    except BaseException as exc:
-        raise AdapterError(
-            "cannot inspect the native pinned file deadline",
-            _FAILED_CODE,
-        ) from exc
-    if not hasattr(os, "pread"):
-        raise AdapterError(
-            "native pinned files require descriptor-relative reads",
-            _FAILED_CODE,
-        )
-    try:
-        before = os.fstat(descriptor)
-    except OSError as exc:
-        raise AdapterError(
-            f"native pinned file {token} descriptor is unavailable",
-            _INVALID_INPUT_CODE,
-        ) from exc
-    if not stat.S_ISREG(before.st_mode):
-        raise AdapterError(
-            f"native pinned file {token} must be a regular file",
-            _INVALID_INPUT_CODE,
-        )
-    if _descriptor_access_mode(descriptor) != os.O_RDONLY:
-        raise AdapterError(
-            f"native pinned file {token} must be opened read-only",
-            _INVALID_INPUT_CODE,
-        )
-    before_snapshot = _descriptor_snapshot(
-        before,
-        descriptor,
-        token=token,
-    )
-    if expected_snapshot is not None and before_snapshot != expected_snapshot:
-        if (
-            len(expected_snapshot) == len(before_snapshot)
-            and before_snapshot[-1] != expected_snapshot[-1]
-        ):
-            _restore_descriptor_offset(
-                descriptor,
-                token=token,
-                offset=expected_snapshot[-1],
-            )
-        raise AdapterError(
-            f"native pinned file {token} changed after transfer validation",
-            _INVALID_INPUT_CODE,
-        )
-    if before.st_size != expected_size:
-        raise AdapterError(
-            f"native pinned file {token} size does not match its ledger",
-            _INVALID_INPUT_CODE,
-        )
-
-    digest = hashlib.sha256()
-    offset = 0
-    while offset < expected_size:
-        remaining_seconds()
-        read_size = min(_PINNED_FILE_READ_BYTES, expected_size - offset)
-        try:
-            chunk = os.pread(descriptor, read_size, offset)
-        except OSError as exc:
-            raise AdapterError(
-                f"native pinned file {token} could not be read",
-                _INVALID_INPUT_CODE,
-            ) from exc
-        if not chunk:
-            raise AdapterError(
-                f"native pinned file {token} ended before its declared size",
-                _INVALID_INPUT_CODE,
-            )
-        digest.update(chunk)
-        offset += len(chunk)
-    try:
-        trailing = os.pread(descriptor, 1, expected_size)
-        after = os.fstat(descriptor)
-    except OSError as exc:
-        raise AdapterError(
-            f"native pinned file {token} final verification failed",
-            _INVALID_INPUT_CODE,
-        ) from exc
-    if trailing:
-        raise AdapterError(
-            f"native pinned file {token} exceeds its declared size",
-            _INVALID_INPUT_CODE,
-        )
-    after_snapshot = _descriptor_snapshot(
-        after,
-        descriptor,
-        token=token,
-    )
-    if before_snapshot != after_snapshot:
-        if before_snapshot[-1] != after_snapshot[-1]:
-            _restore_descriptor_offset(
-                descriptor,
-                token=token,
-                offset=before_snapshot[-1],
-            )
-        raise AdapterError(
-            f"native pinned file {token} changed during verification",
-            _INVALID_INPUT_CODE,
-        )
-    if digest.hexdigest() != expected_sha256:
-        raise AdapterError(
-            f"native pinned file {token} sha256 does not match its ledger",
-            _INVALID_INPUT_CODE,
-        )
-    remaining_seconds()
-    return after_snapshot
-
-
-def _close_descriptors_safely(
-    descriptors: Iterable[tuple[str, int]],
-) -> tuple[str, ...]:
-    errors: list[str] = []
-    for token, descriptor in descriptors:
-        try:
-            os.close(descriptor)
-        except BaseException as exc:
-            errors.append(
-                _bounded_diagnostic(
-                    "cannot close native pinned file ",
-                    token,
-                    ": ",
-                    _exception_summary(exc),
-                    maximum_bytes=_MAX_CLEANUP_ERROR_BYTES,
-                )
-            )
-    return tuple(errors)
-
-
-def _prepare_pinned_files(
-    values: Mapping[str, NativePinnedFile] | None,
-    *,
-    deadline: RefineDeadline,
-) -> tuple[_PinnedFileTransfer, ...]:
-    """Validate a closed ledger and duplicate its exact descriptors for transfer."""
-
-    if values is None:
-        return ()
-    if type(values) is not dict:
-        raise AdapterError(
-            "native pinned files must be an exact token-to-file dictionary",
-            _INVALID_INPUT_CODE,
-        )
-    count = dict.__len__(values)
-    if count > NATIVE_CHILD_MAX_PINNED_FILES:
-        raise AdapterError(
-            "native pinned file count exceeds the transfer limit",
-            _INVALID_INPUT_CODE,
-        )
-
-    try:
-        rows = tuple(dict.items(values))
-    except RuntimeError as exc:
-        raise AdapterError(
-            "native pinned file dictionary changed during validation",
-            _INVALID_INPUT_CODE,
-        ) from exc
-    if len(rows) != count or dict.__len__(values) != count:
-        raise AdapterError(
-            "native pinned file dictionary changed during validation",
-            _INVALID_INPUT_CODE,
-        )
-    for token, _value in rows:
-        if type(token) is not str:
-            raise AdapterError(
-                "native pinned file tokens must be unique safe bounded strings",
-                _INVALID_INPUT_CODE,
-            )
-
-    seen_descriptors: set[int] = set()
-    declared_total_bytes = 0
-    contracts: list[_PinnedFileTransfer] = []
-    for token, value in sorted(rows, key=lambda item: item[0]):
-        deadline.remaining_seconds()
-        if (
-            len(token) > NATIVE_CHILD_MAX_PINNED_TOKEN_BYTES
-            or _PINNED_FILE_TOKEN_PATTERN.fullmatch(token) is None
-        ):
-            raise AdapterError(
-                "native pinned file tokens must be unique safe bounded strings",
-                _INVALID_INPUT_CODE,
-            )
-        if type(value) is not NativePinnedFile:
-            raise AdapterError(
-                f"native pinned file {token} has the wrong contract type",
-                _INVALID_INPUT_CODE,
-            )
-        descriptor = value.descriptor
-        expected_sha256 = value.sha256
-        expected_size = value.size_bytes
-        if (
-            type(descriptor) is not int
-            or descriptor < 0
-            or descriptor in seen_descriptors
-        ):
-            raise AdapterError(
-                "native pinned file descriptors must be unique non-negative integers",
-                _INVALID_INPUT_CODE,
-            )
-        if (
-            type(expected_sha256) is not str
-            or re.fullmatch(r"[0-9a-f]{64}", expected_sha256) is None
-            or type(expected_size) is not int
-            or expected_size < 0
-        ):
-            raise AdapterError(
-                f"native pinned file {token} has an invalid fingerprint ledger",
-                _INVALID_INPUT_CODE,
-            )
-        if expected_size > NATIVE_CHILD_MAX_PINNED_FILE_BYTES:
-            raise AdapterError(
-                f"native pinned file {token} exceeds the per-file byte limit",
-                _INVALID_INPUT_CODE,
-            )
-        declared_total_bytes += expected_size
-        if declared_total_bytes > NATIVE_CHILD_MAX_PINNED_TOTAL_BYTES:
-            raise AdapterError(
-                "native pinned files exceed the aggregate byte limit",
-                _INVALID_INPUT_CODE,
-            )
-        seen_descriptors.add(descriptor)
-        contracts.append(
-            _PinnedFileTransfer(
-                token=token,
-                descriptor=descriptor,
-                sha256=expected_sha256,
-                size_bytes=expected_size,
-            )
-        )
-
-    seen_identities: set[tuple[int, int]] = set()
-    prepared: list[_PinnedFileTransfer] = []
-    try:
-        for contract in contracts:
-            deadline.remaining_seconds()
-            try:
-                duplicate = os.dup(contract.descriptor)
-            except OSError as exc:
-                raise AdapterError(
-                    f"native pinned file {contract.token} could not be duplicated",
-                    _INVALID_INPUT_CODE,
-                ) from exc
-            transfer = _PinnedFileTransfer(
-                token=contract.token,
-                descriptor=duplicate,
-                sha256=contract.sha256,
-                size_bytes=contract.size_bytes,
-            )
-            prepared.append(transfer)
-            try:
-                os.set_inheritable(duplicate, False)
-            except OSError as exc:
-                raise AdapterError(
-                    (
-                        f"native pinned file {contract.token} could not be made "
-                        "non-inheritable"
-                    ),
-                    _FAILED_CODE,
-                ) from exc
-            snapshot = _validate_pinned_descriptor(
-                duplicate,
-                token=contract.token,
-                expected_sha256=contract.sha256,
-                expected_size=contract.size_bytes,
-                remaining_seconds=deadline.remaining_seconds,
-            )
-            identity = (snapshot[0], snapshot[1])
-            if identity in seen_identities:
-                raise AdapterError(
-                    "native pinned files must reference unique regular-file identities",
-                    _INVALID_INPUT_CODE,
-                )
-            seen_identities.add(identity)
-            prepared[-1] = _PinnedFileTransfer(
-                token=contract.token,
-                descriptor=duplicate,
-                sha256=contract.sha256,
-                size_bytes=contract.size_bytes,
-                original_offset=snapshot[-1],
-            )
-    except BaseException as exc:
-        close_errors = _close_descriptors_safely(
-            (value.token, value.descriptor) for value in prepared
-        )
-        if close_errors:
-            raise _cleanup_failed_error(
-                "native pinned file preparation failed",
-                close_errors,
-            ) from exc
-        raise
-    return tuple(prepared)
-
-
-def _validated_pinned_ledger(
-    value: object,
-) -> tuple[tuple[str, str, int], ...]:
-    if type(value) is not tuple or len(value) > NATIVE_CHILD_MAX_PINNED_FILES:
-        raise _ChildTransportError("native child pinned-file ledger is invalid")
-    seen: set[str] = set()
-    declared_total_bytes = 0
-    rows: list[tuple[str, str, int]] = []
-    for row in value:
-        if type(row) is not tuple or len(row) != 3:
-            raise _ChildTransportError("native child pinned-file ledger is invalid")
-        token, expected_sha256, expected_size = row
-        if (
-            type(token) is not str
-            or len(token) > NATIVE_CHILD_MAX_PINNED_TOKEN_BYTES
-            or _PINNED_FILE_TOKEN_PATTERN.fullmatch(token) is None
-            or token in seen
-            or type(expected_sha256) is not str
-            or re.fullmatch(r"[0-9a-f]{64}", expected_sha256) is None
-            or type(expected_size) is not int
-            or expected_size < 0
-            or expected_size > NATIVE_CHILD_MAX_PINNED_FILE_BYTES
-        ):
-            raise _ChildTransportError("native child pinned-file ledger is invalid")
-        declared_total_bytes += expected_size
-        if declared_total_bytes > NATIVE_CHILD_MAX_PINNED_TOTAL_BYTES:
-            raise _ChildTransportError(
-                "native child pinned-file ledger exceeds its byte limit"
-            )
-        seen.add(token)
-        rows.append((token, expected_sha256, expected_size))
-    if tuple(sorted(seen)) != tuple(row[0] for row in rows):
-        raise _ChildTransportError(
-            "native child pinned-file ledger must use canonical token order"
-        )
-    return tuple(rows)
-
-
-def _receive_pinned_files(
-    connection: Connection | None,
-    ledger: tuple[tuple[str, str, int], ...],
-    *,
-    context: NativeChildContext,
-) -> tuple[Mapping[str, int], Mapping[str, tuple[int, ...]]]:
-    """Receive and independently verify the parent's SCM_RIGHTS descriptors."""
-
-    if not ledger:
-        if connection is not None:
-            raise _ChildTransportError(
-                "native child received an unexpected pinned-file transport"
-            )
-        return MappingProxyType({}), MappingProxyType({})
-    if connection is None:
-        raise _ChildTransportError("native child pinned-file transport is unavailable")
-
-    received: dict[str, int] = {}
-    snapshots: dict[str, tuple[int, ...]] = {}
-    seen_identities: set[tuple[int, int]] = set()
-    try:
-        from multiprocessing.reduction import recv_handle
-
-        for token, expected_sha256, expected_size in ledger:
-            if not connection.poll(context.remaining_seconds()):
-                raise AdapterError(
-                    "native pinned file transfer exceeded the shared deadline",
-                    _TIMEOUT_CODE,
-                )
-            descriptor = recv_handle(connection)
-            received[token] = descriptor
-            os.set_inheritable(descriptor, False)
-            snapshot = _validate_pinned_descriptor(
-                descriptor,
-                token=token,
-                expected_sha256=expected_sha256,
-                expected_size=expected_size,
-                remaining_seconds=context.remaining_seconds,
-            )
-            identity = (snapshot[0], snapshot[1])
-            if identity in seen_identities:
-                raise AdapterError(
-                    "native child pinned files repeat a regular-file identity",
-                    _INVALID_INPUT_CODE,
-                )
-            seen_identities.add(identity)
-            snapshots[token] = snapshot
-    except BaseException as exc:
-        close_errors = _close_descriptors_safely(received.items())
-        if close_errors:
-            raise AdapterError(
-                _bounded_cleanup_report(
-                    "native child pinned-file receipt failed",
-                    close_errors,
-                ),
-                _CLEANUP_FAILED_CODE,
-            ) from exc
-        raise
-    return MappingProxyType(received), MappingProxyType(snapshots)
-
-
 def _child_entry(
     connection: Connection,
-    pinned_connection: Connection | None,
-    pinned_ledger: tuple[tuple[str, str, int], ...],
     entrypoint: str,
     request_payload: bytes,
     expires_at_monotonic_s: float,
 ) -> None:
     """Spawn-safe fixed target; native modules are imported after ``setsid``."""
 
-    received_files: Mapping[str, int] = MappingProxyType({})
-    received_snapshots: Mapping[str, tuple[int, ...]] = MappingProxyType({})
-    terminal: Mapping[str, Any] | None = None
     try:
         if os.name != "posix" or not hasattr(os, "setsid"):
             raise _ChildTransportError(
@@ -1168,7 +589,6 @@ def _child_entry(
                 "pid": pid,
                 "processGroupId": os.getpgrp(),
                 "sessionId": os.getsid(0),
-                "pinnedFileCount": len(pinned_ledger),
             },
         )
         context = NativeChildContext(expires_at_monotonic_s)
@@ -1177,18 +597,6 @@ def _child_entry(
             expected=_ACK_READY,
             context=context,
             phase="readiness",
-        )
-        validated_ledger = _validated_pinned_ledger(pinned_ledger)
-        received_files, received_snapshots = _receive_pinned_files(
-            pinned_connection,
-            validated_ledger,
-            context=context,
-        )
-        context = _seal_native_child_context(
-            NativeChildContext(
-                expires_at_monotonic_s,
-                received_files,
-            )
         )
         context.remaining_seconds()
         request = json.loads(request_payload.decode("utf-8"))
@@ -1199,56 +607,19 @@ def _child_entry(
         target = _resolve_entrypoint(entrypoint)
         result = target(request, context)
         context.remaining_seconds()
-        for token, expected_sha256, expected_size in validated_ledger:
-            _validate_pinned_descriptor(
-                received_files[token],
-                token=token,
-                expected_sha256=expected_sha256,
-                expected_size=expected_size,
-                remaining_seconds=context.remaining_seconds,
-                expected_snapshot=received_snapshots[token],
-            )
-        terminal = {
-            "protocolVersion": _PROTOCOL_VERSION,
-            "kind": "result",
-            "value": result,
-        }
-        _bounded_json_bytes(
-            terminal,
-            maximum_bytes=NATIVE_CHILD_MAX_RESPONSE_BYTES,
-            overflow_message="native child result exceeds the bounded transport",
+        _send_envelope(
+            connection,
+            {
+                "protocolVersion": _PROTOCOL_VERSION,
+                "kind": "result",
+                "value": result,
+            },
         )
     except BaseException as exc:
-        terminal = _error_envelope(exc)
-    finally:
-        cleanup_errors = list(_close_descriptors_safely(received_files.items()))
-        if pinned_connection is not None:
-            cleanup_errors.extend(
-                _close_connections_safely((("child pinned-file", pinned_connection),))
-            )
-        if cleanup_errors:
-            terminal = _error_envelope(
-                AdapterError(
-                    _bounded_cleanup_report(
-                        "native child pinned-file cleanup failed",
-                        tuple(cleanup_errors),
-                    ),
-                    _CLEANUP_FAILED_CODE,
-                )
-            )
-
-    if terminal is None:  # pragma: no cover - every path sets a terminal envelope
-        terminal = _error_envelope(
-            AdapterError("native child produced no terminal result", _FAILED_CODE)
-        )
-    try:
-        _send_envelope(connection, terminal)
-    except BaseException:
         try:
-            connection.close()
+            _send_envelope(connection, _error_envelope(exc))
         except BaseException:
-            pass
-        return
+            return
 
     protocol_rejected = False
     try:
@@ -1328,141 +699,6 @@ def _receive_envelope(
     return envelope
 
 
-def _parse_linux_process_stat(payload: bytes) -> tuple[int, int]:
-    """Parse the PID and process-group fields from one bounded procfs stat row."""
-
-    if type(payload) is not bytes or len(payload) == 0 or len(payload) > 8192:
-        raise ValueError("Linux process stat payload is invalid")
-    opening = payload.find(b" (")
-    closing = payload.rfind(b") ")
-    if opening <= 0 or closing <= opening:
-        raise ValueError("Linux process stat payload is malformed")
-    prefix = payload[:opening]
-    fields = payload[closing + 2 :].split()
-    if not prefix.isdigit() or len(fields) < 3:
-        raise ValueError("Linux process stat fields are malformed")
-    pid = int(prefix)
-    process_group_id = int(fields[2])
-    if pid <= 0 or process_group_id <= 0:
-        raise ValueError("Linux process stat identifiers are invalid")
-    return pid, process_group_id
-
-
-def _read_linux_process_stat(path: str) -> tuple[int, int]:
-    flags = os.O_RDONLY
-    if hasattr(os, "O_CLOEXEC"):
-        flags |= os.O_CLOEXEC
-    descriptor = os.open(path, flags)
-    try:
-        payload = os.read(descriptor, 8193)
-    finally:
-        os.close(descriptor)
-    return _parse_linux_process_stat(payload)
-
-
-def _linux_process_group_members(
-    group_leader_pid: int,
-    *,
-    deadline: RefineDeadline,
-) -> tuple[int, ...]:
-    """Inspect the frozen Linux group while its unreaped leader reserves the PGID."""
-
-    members: list[int] = []
-    try:
-        entries = os.scandir("/proc")
-    except OSError as exc:
-        raise AdapterError(
-            _bounded_diagnostic(
-                "cannot enumerate Linux process groups: ",
-                _exception_summary(exc),
-            ),
-            _CLEANUP_FAILED_CODE,
-        ) from exc
-    with entries:
-        for entry in entries:
-            deadline.remaining_seconds()
-            name = entry.name
-            if type(name) is not str or not name.isdecimal():
-                continue
-            pid = int(name)
-            if pid == group_leader_pid:
-                continue
-            try:
-                reported_pid, process_group_id = _read_linux_process_stat(
-                    f"/proc/{name}/stat"
-                )
-            except (FileNotFoundError, ProcessLookupError):
-                continue
-            except (OSError, ValueError) as exc:
-                raise AdapterError(
-                    _bounded_diagnostic(
-                        "cannot inspect Linux process group member: ",
-                        _exception_summary(exc),
-                    ),
-                    _CLEANUP_FAILED_CODE,
-                ) from exc
-            if reported_pid != pid:
-                raise AdapterError(
-                    "Linux process stat changed identity during group inspection",
-                    _CLEANUP_FAILED_CODE,
-                )
-            if process_group_id == group_leader_pid:
-                members.append(pid)
-                if len(members) >= 4:
-                    break
-    return tuple(members)
-
-
-def _success_group_quiescence_errors(
-    *,
-    group_leader_pid: int,
-    deadline: RefineDeadline,
-) -> tuple[str, ...]:
-    """Freeze and inspect a successful child's group before reaping its leader."""
-
-    deadline.remaining_seconds()
-    try:
-        os.killpg(group_leader_pid, signal.SIGSTOP)
-    except ProcessLookupError:
-        return ()
-    except PermissionError as exc:
-        if sys.platform == "darwin":
-            # Darwin reports EPERM when the group contains only our dead,
-            # unreaped leader. Every live descendant of this unprivileged child
-            # retains our uid and would make the group signal succeed.
-            return ()
-        return (
-            _bounded_diagnostic(
-                "cannot freeze successful native child process group: ",
-                _exception_summary(exc),
-            ),
-        )
-    except OSError as exc:
-        return (
-            _bounded_diagnostic(
-                "cannot freeze successful native child process group: ",
-                _exception_summary(exc),
-            ),
-        )
-
-    if sys.platform.startswith("linux"):
-        # Repeat after the first scan. A descendant racing fork with SIGSTOP
-        # cannot keep spawning once stopped; the second frozen snapshot closes
-        # that delivery window while the unreaped leader still reserves PGID.
-        for _attempt in range(2):
-            members = _linux_process_group_members(
-                group_leader_pid,
-                deadline=deadline,
-            )
-            if members:
-                return ("native child process group retains descendant members",)
-            time.sleep(0)
-        return ()
-    if sys.platform == "darwin":
-        return ("native child process group retains a live descendant",)
-    return ("successful native child process-group inspection is unsupported",)
-
-
 def _signal_group(
     group_leader_pid: int,
     sig: signal.Signals,
@@ -1491,63 +727,6 @@ def _signal_error(sig: signal.Signals, exc: OSError) -> str:
     )
 
 
-def _reap_proven_quiescent_leader(
-    process: multiprocessing.Process,
-) -> tuple[str, ...]:
-    """Reap only the known leader after its group was frozen and proven empty."""
-
-    errors: list[str] = []
-    try:
-        process.join(NATIVE_CHILD_KILL_REAP_S)
-    except BaseException as exc:
-        errors.append(
-            _bounded_diagnostic(
-                "cannot retry joining quiescent native child leader: ",
-                _exception_summary(exc),
-            )
-        )
-    try:
-        leader_alive = process.is_alive()
-    except BaseException as exc:
-        errors.append(
-            _bounded_diagnostic(
-                "cannot inspect quiescent native child leader: ",
-                _exception_summary(exc),
-            )
-        )
-        leader_alive = True
-    if leader_alive:
-        try:
-            process.kill()
-        except BaseException as exc:
-            errors.append(
-                _bounded_diagnostic(
-                    "cannot kill quiescent native child leader directly: ",
-                    _exception_summary(exc),
-                )
-            )
-        try:
-            process.join(NATIVE_CHILD_KILL_REAP_S)
-        except BaseException as exc:
-            errors.append(
-                _bounded_diagnostic(
-                    "cannot join killed quiescent native child leader: ",
-                    _exception_summary(exc),
-                )
-            )
-    try:
-        if process.is_alive():
-            errors.append("quiescent native child leader could not be reaped")
-    except BaseException as exc:
-        errors.append(
-            _bounded_diagnostic(
-                "cannot confirm quiescent native child leader exit: ",
-                _exception_summary(exc),
-            )
-        )
-    return tuple(errors)
-
-
 def _terminate_and_reap(
     process: multiprocessing.Process,
     *,
@@ -1556,6 +735,7 @@ def _terminate_and_reap(
     """Bounded TERM/KILL cleanup; the direct session leader is always joined."""
 
     errors: list[str] = []
+    deferred_kill_permission_error: str | None = None
     if group_leader_pid is not None:
         error = _signal_group(group_leader_pid, signal.SIGTERM)
         if error is not None:
@@ -1566,13 +746,13 @@ def _terminate_and_reap(
         error = _signal_group(group_leader_pid, signal.SIGKILL)
         if error is not None:
             message = _signal_error(signal.SIGKILL, error)
-            if not (sys.platform == "darwin" and isinstance(error, PermissionError)):
+            if isinstance(error, PermissionError):
+                # Darwin reports EPERM when a process group contains only our
+                # already-dead, unreaped leader.  Defer that report until the
+                # leader is reaped, then prove the group no longer exists.
+                deferred_kill_permission_error = message
+            else:
                 errors.append(message)
-            # Darwin reports EPERM when the group contains only our dead,
-            # unreaped leader. Every live descendant of this unprivileged
-            # child retains our uid, so a live descendant would make the
-            # signal succeed. Resolve that case while the leader still
-            # reserves the PGID; never defer a numeric-PGID probe past reap.
     else:
         try:
             process.terminate()
@@ -1640,6 +820,22 @@ def _terminate_and_reap(
         leader_alive = True
     if leader_alive:
         errors.append("native child session leader could not be reaped")
+    if deferred_kill_permission_error is not None:
+        try:
+            os.killpg(group_leader_pid, 0)
+        except ProcessLookupError:
+            pass
+        except OSError as exc:
+            errors.append(deferred_kill_permission_error)
+            errors.append(
+                _bounded_diagnostic(
+                    "cannot confirm native child process group removal after reap: ",
+                    _exception_summary(exc),
+                )
+            )
+        else:
+            errors.append(deferred_kill_permission_error)
+            errors.append("native child process group still exists after leader reap")
     return tuple(errors)
 
 
@@ -1741,6 +937,20 @@ def _emergency_kill_and_reap(
     if leader_alive:
         errors.append("emergency cleanup could not reap native child leader")
 
+    if group_leader_pid is not None and not leader_alive:
+        try:
+            os.killpg(group_leader_pid, 0)
+        except ProcessLookupError:
+            pass
+        except BaseException as exc:
+            errors.append(
+                _bounded_diagnostic(
+                    "emergency cleanup cannot confirm process-group removal: ",
+                    _exception_summary(exc),
+                )
+            )
+        else:
+            errors.append("emergency cleanup process group still exists after reap")
     return tuple(errors)
 
 
@@ -1749,12 +959,7 @@ def _verify_cleanup_complete(
     *,
     group_leader_pid: int | None,
 ) -> tuple[str, ...]:
-    """Prove the direct child is gone without addressing a possibly reused PGID.
-
-    All process-group signals happen before the direct leader can be reaped.
-    Once cleanup reaches this verifier, the numeric group identifier is no
-    longer safe to inspect or signal and is intentionally ignored.
-    """
+    """Independently prove the direct child and its known group are gone."""
 
     errors: list[str] = []
     leader_alive: bool | None = None
@@ -1782,6 +987,40 @@ def _verify_cleanup_complete(
                 "native child leader remains alive after cleanup verification"
             )
 
+    if group_leader_pid is not None:
+        # Darwin can transiently report EPERM while the group contains only a
+        # killed descendant awaiting reaping. Once the direct leader is proven
+        # dead, retry that uncertainty for one bounded reap window.
+        permission_deadline = time.monotonic() + NATIVE_CHILD_KILL_REAP_S
+        while True:
+            try:
+                os.killpg(group_leader_pid, 0)
+            except ProcessLookupError:
+                break
+            except PermissionError as exc:
+                if leader_alive is False and time.monotonic() < permission_deadline:
+                    time.sleep(0.01)
+                    continue
+                errors.append(
+                    _bounded_diagnostic(
+                        "cannot verify native child process-group removal: ",
+                        _exception_summary(exc),
+                    )
+                )
+                break
+            except BaseException as exc:
+                errors.append(
+                    _bounded_diagnostic(
+                        "cannot verify native child process-group removal: ",
+                        _exception_summary(exc),
+                    )
+                )
+                break
+            else:
+                errors.append(
+                    "native child process group remains alive after cleanup verification"
+                )
+                break
     return tuple(errors)
 
 
@@ -1846,27 +1085,6 @@ def _emergency_cleanup_errors(
     return normalized
 
 
-def _leader_exit_observed_without_reap(
-    process: multiprocessing.Process,
-) -> tuple[bool | None, tuple[str, ...]]:
-    """Observe the child sentinel without calling waitpid or releasing its PID."""
-
-    try:
-        sentinel = process.sentinel
-        exited = wait((sentinel,), timeout=0)
-    except BaseException as exc:
-        return (
-            None,
-            (
-                _bounded_diagnostic(
-                    "cannot inspect native child sentinel before emergency cleanup: ",
-                    _exception_summary(exc),
-                ),
-            ),
-        )
-    return bool(exited), ()
-
-
 def _bounded_cleanup_report(
     message: str,
     cleanup_errors: tuple[str, ...],
@@ -1919,56 +1137,30 @@ def _cleanup_process(
         else:
             primary_errors = normalized_errors
 
-    # Decide whether a group signal is still identity-safe before any verifier
-    # can join/reap the direct leader. If the sentinel is not ready, our live
-    # child still owns its PID/PGID and an immediate group SIGKILL is safe. If
-    # exit is already observable, primary cleanup may have reaped it; from that
-    # point onward emergency cleanup is leader-only and no numeric PGID is ever
-    # addressed again.
-    exit_observed, observation_errors = _leader_exit_observed_without_reap(process)
-    if exit_observed is False:
-        observation_errors = (
-            *observation_errors,
-            "native child leader remains alive after cleanup verification",
-        )
-    emergency_group_leader_pid = group_leader_pid if exit_observed is False else None
-    emergency_errors: tuple[str, ...] = ()
-    emergency_attempted = force_emergency or exit_observed is not True
-    if emergency_attempted:
-        emergency_errors = _emergency_cleanup_errors(
-            process,
-            group_leader_pid=emergency_group_leader_pid,
-        )
-
     verification_errors = _cleanup_verification_errors(
         process,
-        group_leader_pid=None,
+        group_leader_pid=group_leader_pid,
     )
-    if verification_errors and not emergency_attempted:
-        # Verification runs only after all identity-safe group work. A retry may
-        # address the direct process object, but never the old numeric PGID.
+    if force_emergency or verification_errors:
         emergency_errors = _emergency_cleanup_errors(
             process,
-            group_leader_pid=None,
+            group_leader_pid=group_leader_pid,
         )
-        verification_errors = (
+        post_emergency_errors = _cleanup_verification_errors(
+            process,
+            group_leader_pid=group_leader_pid,
+        )
+        combined = (
+            *primary_errors,
             *verification_errors,
-            *_cleanup_verification_errors(
-                process,
-                group_leader_pid=None,
-            ),
+            *emergency_errors,
+            *post_emergency_errors,
         )
-
-    combined = (
-        *primary_errors,
-        *observation_errors,
-        *emergency_errors,
-        *verification_errors,
-    )
-    normalized_combined = _normalize_cleanup_errors(combined)
-    if normalized_combined is None:
-        return ("native child cleanup produced excessive uncertainty",)
-    return normalized_combined
+        normalized_combined = _normalize_cleanup_errors(combined)
+        if normalized_combined is None:
+            return ("native child cleanup produced excessive uncertainty",)
+        return normalized_combined
+    return primary_errors
 
 
 def _cleanup_failed_error(
@@ -2029,107 +1221,11 @@ def _add_cleanup_note(exc: BaseException, errors: tuple[str, ...]) -> None:
         return
 
 
-def _send_pinned_files(
-    connection: Connection | None,
-    transfers: tuple[_PinnedFileTransfer, ...],
-    *,
-    destination_pid: int,
-    deadline: RefineDeadline,
-) -> None:
-    if not transfers:
-        if connection is not None:
-            raise AdapterError(
-                "native pinned-file transport exists without a ledger",
-                _FAILED_CODE,
-            )
-        return
-    if connection is None:
-        raise AdapterError(
-            "native pinned-file transport is unavailable",
-            _FAILED_CODE,
-        )
-    try:
-        from multiprocessing.reduction import send_handle
-
-        for transfer in transfers:
-            deadline.remaining_seconds()
-            send_handle(connection, transfer.descriptor, destination_pid)
-        deadline.remaining_seconds()
-    except AdapterError:
-        raise
-    except OSError as exc:
-        raise AdapterError(
-            _bounded_diagnostic(
-                "cannot transfer native pinned file descriptor: ",
-                _exception_summary(exc),
-            ),
-            _FAILED_CODE,
-        ) from exc
-
-
-def _restore_transfer_offsets_safely(
-    transfers: Iterable[_PinnedFileTransfer],
-) -> tuple[str, ...]:
-    """Restore shared open-file-description offsets before parent fd close."""
-
-    errors: list[str] = []
-    for transfer in transfers:
-        original_offset = transfer.original_offset
-        if original_offset is None:
-            continue
-        try:
-            current_offset = os.lseek(
-                transfer.descriptor,
-                0,
-                os.SEEK_CUR,
-            )
-        except OSError as exc:
-            errors.append(
-                _bounded_diagnostic(
-                    "cannot inspect native pinned file ",
-                    transfer.token,
-                    " shared offset during parent cleanup: ",
-                    _exception_summary(exc),
-                    maximum_bytes=_MAX_CLEANUP_ERROR_BYTES,
-                )
-            )
-            continue
-        if current_offset == original_offset:
-            continue
-        try:
-            os.lseek(
-                transfer.descriptor,
-                original_offset,
-                os.SEEK_SET,
-            )
-        except OSError as exc:
-            errors.append(
-                _bounded_diagnostic(
-                    "cannot restore native pinned file ",
-                    transfer.token,
-                    " shared offset during parent cleanup: ",
-                    _exception_summary(exc),
-                    maximum_bytes=_MAX_CLEANUP_ERROR_BYTES,
-                )
-            )
-            continue
-        errors.append(
-            _bounded_diagnostic(
-                "native pinned file ",
-                transfer.token,
-                " changed its shared offset; parent cleanup restored it",
-                maximum_bytes=_MAX_CLEANUP_ERROR_BYTES,
-            )
-        )
-    return tuple(errors)
-
-
 def run_native_engine_child(
     entrypoint: str,
     request: Mapping[str, Any],
     *,
     deadline: RefineDeadline,
-    pinned_files: Mapping[str, NativePinnedFile] | None = None,
 ) -> Any:
     """Run one importable JSON engine operation in a killable child session.
 
@@ -2177,49 +1273,25 @@ def run_native_engine_child(
             _FAILED_CODE,
         ) from exc
 
-    transfers = _prepare_pinned_files(pinned_files, deadline=deadline)
-    parent_pinned_connection: Connection | None = None
-    child_pinned_connection: Connection | None = None
     try:
         context = multiprocessing.get_context("spawn")
         parent_connection, child_connection = context.Pipe(duplex=True)
-        if transfers:
-            parent_pinned_connection, child_pinned_connection = context.Pipe(
-                duplex=True
-            )
     except BaseException as exc:
-        connection_errors: tuple[str, ...] = ()
-        if "parent_connection" in locals() and "child_connection" in locals():
-            connection_errors = _close_connections_safely(
-                (
-                    ("parent", parent_connection),
-                    ("child", child_connection),
+        raise AdapterError(
+            _bounded_diagnostic(
+                "cannot create refine native child transport: ",
+                _safe_exception_message(
+                    exc,
+                    fallback="transport setup failed",
                 ),
-            )
-        descriptor_errors = _close_descriptors_safely(
-            (transfer.token, transfer.descriptor) for transfer in transfers
-        )
-        cleanup_errors = (*connection_errors, *descriptor_errors)
-        message = _bounded_diagnostic(
-            "cannot create refine native child transport: ",
-            _safe_exception_message(
-                exc,
-                fallback="transport setup failed",
             ),
-        )
-        if cleanup_errors:
-            raise _cleanup_failed_error(message, cleanup_errors) from exc
-        raise AdapterError(message, _FAILED_CODE) from exc
-    pinned_ledger = tuple(
-        (transfer.token, transfer.sha256, transfer.size_bytes) for transfer in transfers
-    )
+            _FAILED_CODE,
+        ) from exc
     try:
         process = context.Process(
             target=_child_entry,
             args=(
                 child_connection,
-                child_pinned_connection,
-                pinned_ledger,
                 entrypoint,
                 request_payload,
                 deadline.expires_at_monotonic_s,
@@ -2232,19 +1304,7 @@ def run_native_engine_child(
             (
                 ("parent", parent_connection),
                 ("child", child_connection),
-                *(
-                    (
-                        ("parent pinned-file", parent_pinned_connection),
-                        ("child pinned-file", child_pinned_connection),
-                    )
-                    if parent_pinned_connection is not None
-                    and child_pinned_connection is not None
-                    else ()
-                ),
             )
-        )
-        descriptor_errors = _close_descriptors_safely(
-            (transfer.token, transfer.descriptor) for transfer in transfers
         )
         message = _bounded_diagnostic(
             "cannot prepare refine native child: ",
@@ -2253,9 +1313,8 @@ def run_native_engine_child(
                 fallback="process construction failed",
             ),
         )
-        cleanup_errors = (*close_errors, *descriptor_errors)
-        if cleanup_errors:
-            raise _cleanup_failed_error(message, cleanup_errors) from exc
+        if close_errors:
+            raise _cleanup_failed_error(message, close_errors) from exc
         raise AdapterError(message, _FAILED_CODE) from exc
     started = False
     group_leader_pid: int | None = None
@@ -2281,8 +1340,6 @@ def run_native_engine_child(
         started = True
         try:
             child_connection.close()
-            if child_pinned_connection is not None:
-                child_pinned_connection.close()
         except OSError as exc:
             raise AdapterError(
                 _bounded_diagnostic(
@@ -2308,14 +1365,11 @@ def run_native_engine_child(
                 _validated_error_code(ready.get("code")),
             )
         pid = process.pid
-        reported_pinned_count = ready.get("pinnedFileCount")
         if (
             type(pid) is not int
             or ready.get("pid") != pid
             or ready.get("processGroupId") != pid
             or ready.get("sessionId") != pid
-            or (bool(transfers) and reported_pinned_count != len(transfers))
-            or (not transfers and reported_pinned_count not in (None, 0))
         ):
             raise AdapterError(
                 "refine native child did not establish its dedicated POSIX session",
@@ -2335,12 +1389,6 @@ def run_native_engine_child(
                 ),
                 _FAILED_CODE,
             ) from exc
-        _send_pinned_files(
-            parent_pinned_connection,
-            transfers,
-            destination_pid=pid,
-            deadline=deadline,
-        )
 
         terminal = _receive_envelope(parent_connection, process, deadline)
         kind = terminal.get("kind")
@@ -2375,65 +1423,18 @@ def run_native_engine_child(
                 _FAILED_CODE,
             ) from exc
         try:
-            exited = wait(
-                (process.sentinel,),
-                timeout=deadline.remaining_seconds(),
-            )
+            process.join(deadline.remaining_seconds())
         except OSError as exc:
             raise AdapterError(
                 _bounded_diagnostic(
-                    "cannot wait for refine native child leader exit: ",
+                    "cannot join refine native child leader: ",
                     _safe_exception_message(
                         exc,
-                        fallback="leader exit wait failed",
+                        fallback="leader join failed",
                     ),
                 ),
                 _FAILED_CODE,
             ) from exc
-        if not exited:
-            raise _ChildBoundaryTimeout
-        success_group_errors = _success_group_quiescence_errors(
-            group_leader_pid=group_leader_pid,
-            deadline=deadline,
-        )
-        if success_group_errors:
-            descendant_cleanup_errors = _cleanup_process(
-                process,
-                group_leader_pid=group_leader_pid,
-            )
-            # Cleanup held the unreaped leader through its final group signal.
-            # Never address this PGID again after cleanup may have released it.
-            cleanup_handled = True
-            reaped = True
-            raise _cleanup_failed_error(
-                "refine native child returned before its process group was quiescent",
-                (*success_group_errors, *descendant_cleanup_errors),
-            )
-
-        try:
-            process.join(deadline.remaining_seconds())
-        except OSError as exc:
-            message = _bounded_diagnostic(
-                "cannot join refine native child leader: ",
-                _safe_exception_message(
-                    exc,
-                    fallback="leader join failed",
-                ),
-            )
-            direct_reap_errors = _reap_proven_quiescent_leader(process)
-            # The group was proven empty before the first join. Retrying only
-            # the direct leader cannot hit a recycled PGID.
-            cleanup_handled = True
-            reaped = True
-            if direct_reap_errors:
-                raise _cleanup_failed_error(
-                    message,
-                    direct_reap_errors,
-                ) from exc
-            raise AdapterError(message, _FAILED_CODE) from exc
-        # The frozen group was proven empty while this unreaped leader still
-        # reserved its PID. From here onward no code may signal/probe that PGID.
-        reaped = True
         try:
             leader_alive = process.is_alive()
         except (AssertionError, OSError, ValueError) as exc:
@@ -2449,6 +1450,7 @@ def run_native_engine_child(
             ) from exc
         if leader_alive:
             raise _ChildBoundaryTimeout
+        reaped = True
         exitcode = process.exitcode
         if type(exitcode) is not int or exitcode != 0:
             detail = (
@@ -2466,7 +1468,7 @@ def run_native_engine_child(
         return terminal["value"]
     except _ChildBoundaryTimeout as exc:
         cleanup_errors = ()
-        if started and not reaped:
+        if started:
             cleanup_errors = _cleanup_process(
                 process,
                 group_leader_pid=group_leader_pid,
@@ -2544,22 +1546,7 @@ def run_native_engine_child(
                 (
                     ("parent", parent_connection),
                     ("child", child_connection),
-                    *(
-                        (
-                            ("parent pinned-file", parent_pinned_connection),
-                            ("child pinned-file", child_pinned_connection),
-                        )
-                        if parent_pinned_connection is not None
-                        and child_pinned_connection is not None
-                        else ()
-                    ),
                 )
-            )
-        )
-        offset_restore_errors = _restore_transfer_offsets_safely(transfers)
-        resource_errors.extend(
-            _close_descriptors_safely(
-                (transfer.token, transfer.descriptor) for transfer in transfers
             )
         )
         if started:
@@ -2585,12 +1572,8 @@ def run_native_engine_child(
                         )
                     )
 
-        all_final_errors = (
-            *final_cleanup_errors,
-            *offset_restore_errors,
-            *resource_errors,
-        )
-        if final_cleanup_errors or offset_restore_errors:
+        all_final_errors = (*final_cleanup_errors, *resource_errors)
+        if final_cleanup_errors:
             raise _cleanup_failed_error(
                 "refine native child cleanup failed",
                 all_final_errors,
