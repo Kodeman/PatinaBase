@@ -17,46 +17,79 @@ struct WhisperBarView: View {
 
     let state: WhisperState
 
-    /// When true, disables animated transitions (Reduce Motion).
+    /// When true, swaps the shell morph for a short crossfade.
     var reduceMotion: Bool = false
 
-    var body: some View {
-        VStack(alignment: .leading, spacing: 6) {
-            Text(state.text)
-                .font(.custom("PlayfairDisplay-Italic", size: 17, relativeTo: .body))
-                .foregroundStyle(PatinaColors.charcoal)
-                .id(state.text)
-                .transition(.opacity)
+    @State private var presentation: CompanionPresentationState = .collapsed(
+        hint: "Measuring the room"
+    )
+    @State private var hasPresentedCompanion = false
 
-            Text(state.subtext)
-                .font(PatinaTypography.mono)
-                .tracking(0.6)
-                .textCase(.uppercase)
-                .foregroundStyle(PatinaColors.Text.interactive)
-                .id(state.subtext)
-                .transition(.opacity)
-        }
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .padding(.horizontal, 20)
-        .padding(.top, 20)
-        .padding(.bottom, 38) // above home indicator
-        .background(
-            PatinaColors.offWhite
-                .opacity(0.95)
-                .background(.ultraThinMaterial)
-        )
-        .clipShape(
-            UnevenRoundedRectangle(
-                topLeadingRadius: 24,
-                bottomLeadingRadius: 0,
-                bottomTrailingRadius: 0,
-                topTrailingRadius: 24
+    private var progressPresentation: CompanionPresentationState {
+        let step = min(max(Int(state.progress * 4) + 1, 1), 4)
+        return .progress(
+            CompanionProgressPresentation(
+                fraction: Double(state.progress),
+                title: state.text,
+                detail: state.subtext,
+                step: step,
+                totalSteps: 4
             )
         )
-        .animation(reduceMotion ? nil : .easeInOut(duration: 0.4), value: state.text)
-        .animation(reduceMotion ? nil : .easeInOut(duration: 0.4), value: state.subtext)
-        .accessibilityElement(children: .combine)
-        .accessibilityLabel(Text("\(state.text). \(state.subtext)"))
+    }
+
+    var body: some View {
+        CompanionHearthView(presentation: presentation)
+            .safeAreaPadding(.bottom, 28)
+            .onAppear {
+                presentCompanionIfNeeded()
+            }
+            .onChange(of: state) { _, _ in
+                updateCompanionProgress()
+            }
+            .onDisappear {
+                guard hasPresentedCompanion else { return }
+                CompanionAnalytics.shared.trackPresentationDismissed(
+                    screen: "room_scan",
+                    from: .progress
+                )
+            }
+    }
+
+    private func presentCompanionIfNeeded() {
+        guard !hasPresentedCompanion else {
+            updateCompanionProgress()
+            return
+        }
+
+        hasPresentedCompanion = true
+        CompanionAnalytics.shared.trackPresentationExposed(
+            state: .collapsed,
+            surface: "room_scan"
+        )
+
+        Task { @MainActor in
+            try? await Task.sleep(for: .milliseconds(80))
+            updateCompanionProgress()
+        }
+    }
+
+    private func updateCompanionProgress() {
+        withAnimation(
+            reduceMotion
+                ? .easeOut(duration: CompanionConstants.reducedMotionCrossfadeDuration)
+                : .spring(
+                    response: CompanionConstants.springResponse,
+                    dampingFraction: CompanionConstants.springDamping
+                )
+        ) {
+            presentation = progressPresentation
+        }
+
+        CompanionAnalytics.shared.trackPresentationExposed(
+            state: .progress,
+            surface: "room_scan"
+        )
     }
 }
 

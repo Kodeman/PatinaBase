@@ -11,6 +11,7 @@ import SwiftData
 struct ProfileView: View {
     @Environment(\.modelContext) private var modelContext
     @Environment(\.appCoordinator) private var coordinator
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
     @State private var viewModel = ProfileViewModel()
     /// Drives the contextual help-panel sheet attached to the Profile surface.
     /// Toggled by the `?` button in the top-right corner of the header.
@@ -40,7 +41,7 @@ struct ProfileView: View {
                             Image(systemName: "questionmark.circle")
                                 .font(.system(size: 17, weight: .regular))
                                 .foregroundStyle(PatinaColors.Text.secondary)
-                                .frame(width: 36, height: 36)
+                                .frame(width: 44, height: 44)
                                 .contentShape(Rectangle())
                         }
                         .buttonStyle(.plain)
@@ -60,6 +61,7 @@ struct ProfileView: View {
                                 .foregroundStyle(PatinaColors.offWhite)
                         )
                         .padding(.bottom, 16)
+                        .accessibilityHidden(true)
 
                     Text(viewModel.userName)
                         .font(PatinaTypography.h3)
@@ -108,25 +110,7 @@ struct ProfileView: View {
                 // Stats row — Saved and Match are Patina-specific concepts,
                 // so each is wrapped in HelpTooltip. Rooms is self-explanatory
                 // and gets no affordance to keep the row uncluttered.
-                HStack(spacing: 0) {
-                    statItem(value: "\(viewModel.roomCount)", label: "Rooms")
-                    statDivider
-                    HelpTooltip(
-                        surfaceKey: SurfaceKeys.IOSApp.Profile.savedItems,
-                        fallback: "Saved counts every piece you've hearted across the app — from the daily feed, room views, and product details. They flow into your style signature."
-                    ) {
-                        statItem(value: "\(viewModel.savedItemCount)", label: "Saved")
-                            .accessibilityLabel("Saved items: \(viewModel.savedItemCount). More information available.")
-                    }
-                    statDivider
-                    HelpTooltip(
-                        surfaceKey: SurfaceKeys.IOSApp.Profile.matchPercentage,
-                        fallback: "Match is the average score Patina has computed for the pieces you've seen — it goes up as the app learns your taste and the room context tightens."
-                    ) {
-                        statItem(value: viewModel.matchPercentage, label: "Match")
-                            .accessibilityLabel("Match: \(viewModel.matchPercentage). More information available.")
-                    }
-                }
+                stats
                 .padding(.vertical, 20)
                 .padding(.horizontal, 24)
                 .overlay(alignment: .top) {
@@ -136,51 +120,33 @@ struct ProfileView: View {
                     Rectangle().fill(PatinaColors.Text.muted.opacity(0.25)).frame(height: 1)
                 }
 
+                StudioHubView()
+                    .padding(.horizontal, 24)
+                    .padding(.top, 28)
+
                 // Your Rooms section
                 if !viewModel.rooms.isEmpty {
                     VStack(alignment: .leading, spacing: 12) {
                         Text("YOUR ROOMS")
                             .font(PatinaTypography.monoMedium)
-                            .foregroundStyle(PatinaColors.Text.muted)
+                            .foregroundStyle(PatinaColors.Text.secondary)
                             .tracking(1)
+                            .accessibilityAddTraits(.isHeader)
 
-                        ScrollView(.horizontal, showsIndicators: false) {
-                            HStack(spacing: 12) {
-                                ForEach(viewModel.rooms) { room in
-                                    Button {
-                                        coordinator.navigate(to: .roomProject(roomId: room.id))
-                                    } label: {
-                                        roomCard(room)
-                                    }
-                                    .buttonStyle(.plain)
-                                    .accessibilityLabel("Open \(room.name)")
-                                    .accessibilityHint("Opens this room.")
-                                }
-                            }
-                        }
+                        roomList
                     }
-                    .padding(24)
+                    .padding(.horizontal, 24)
+                    .padding(.top, 28)
                 }
 
                 // Actions
-                VStack(spacing: 12) {
-                    // C.1 / R29: studio surfaces — secondary entries mirroring
-                    // the home Studio rail. Sign-in gated: guests have no
-                    // projects/threads/decisions behind these routes.
-                    if AuthService.shared.isAuthenticated {
-                        profileActionRow(icon: "folder", label: "Projects") {
-                            coordinator.navigate(to: .projectList)
-                        }
-                        profileActionRow(icon: "bubble.left.and.bubble.right", label: "Messages") {
-                            coordinator.navigate(to: .threadList)
-                        }
-                        profileActionRow(icon: "checkmark.circle", label: "Decisions") {
-                            coordinator.navigate(to: .decisionList)
-                        }
-                        profileActionRow(icon: "chart.pie", label: "Budget") {
-                            coordinator.navigate(to: .budget)
-                        }
-                    }
+                VStack(alignment: .leading, spacing: 12) {
+                    Text("YOUR PROFILE")
+                        .font(PatinaTypography.monoMedium)
+                        .foregroundStyle(PatinaColors.Text.secondary)
+                        .tracking(1)
+                        .accessibilityAddTraits(.isHeader)
+
                     profileActionRow(icon: "paintpalette", label: "Retake Style Quiz") {
                         coordinator.navigate(to: .styleQuiz)
                     }
@@ -192,7 +158,7 @@ struct ProfileView: View {
                     }
                 }
                 .padding(.horizontal, 24)
-                .padding(.top, viewModel.rooms.isEmpty ? 24 : 0)
+                .padding(.top, 28)
 
                 Spacer().frame(height: 120)
             }
@@ -214,23 +180,106 @@ struct ProfileView: View {
 
     // MARK: - Components
 
+    @ViewBuilder
+    private var stats: some View {
+        if dynamicTypeSize.isAccessibilitySize {
+            VStack(spacing: 14) {
+                statItem(value: "\(viewModel.roomCount)", label: "Rooms")
+                statHorizontalDivider
+                savedStat
+                statHorizontalDivider
+                matchStat
+            }
+        } else {
+            HStack(spacing: 0) {
+                statItem(value: "\(viewModel.roomCount)", label: "Rooms")
+                statDivider
+                savedStat
+                statDivider
+                matchStat
+            }
+        }
+    }
+
+    private var savedStat: some View {
+        HelpTooltip(
+            surfaceKey: SurfaceKeys.IOSApp.Profile.savedItems,
+            fallback: "Saved counts every piece you've hearted across the app — from the daily feed, room views, and product details. They flow into your style signature."
+        ) {
+            statItem(value: "\(viewModel.savedItemCount)", label: "Saved")
+                .accessibilityLabel("Saved items: \(viewModel.savedItemCount). More information available.")
+        }
+    }
+
+    private var matchStat: some View {
+        HelpTooltip(
+            surfaceKey: SurfaceKeys.IOSApp.Profile.matchPercentage,
+            fallback: "Match is the average score Patina has computed for the pieces you've seen — it goes up as the app learns your taste and the room context tightens."
+        ) {
+            statItem(value: viewModel.matchPercentage, label: "Match")
+                .accessibilityLabel("Match: \(viewModel.matchPercentage). More information available.")
+        }
+    }
+
     private func statItem(value: String, label: String) -> some View {
         VStack(spacing: 2) {
             Text(value)
-                .font(.custom("PlayfairDisplay-Medium", size: 22, relativeTo: .title2))
+                .font(PatinaTypography.h4)
                 .foregroundStyle(PatinaColors.Text.primary)
             MonoLabel(text: label, size: PatinaTypography.monoLabel)
         }
         .frame(maxWidth: .infinity)
+        .frame(minHeight: 44)
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel("\(label): \(value)")
     }
 
     private var statDivider: some View {
         Rectangle()
             .fill(PatinaColors.Text.muted.opacity(0.25))
             .frame(width: 1, height: 36)
+            .accessibilityHidden(true)
     }
 
-    private func roomCard(_ room: RoomModel) -> some View {
+    private var statHorizontalDivider: some View {
+        Rectangle()
+            .fill(PatinaColors.Text.muted.opacity(0.25))
+            .frame(maxWidth: .infinity)
+            .frame(height: 1)
+            .accessibilityHidden(true)
+    }
+
+    @ViewBuilder
+    private var roomList: some View {
+        if dynamicTypeSize.isAccessibilitySize {
+            LazyVStack(spacing: 12) {
+                ForEach(viewModel.rooms) { room in
+                    roomButton(room, wide: true)
+                }
+            }
+        } else {
+            ScrollView(.horizontal, showsIndicators: false) {
+                HStack(spacing: 12) {
+                    ForEach(viewModel.rooms) { room in
+                        roomButton(room, wide: false)
+                    }
+                }
+            }
+        }
+    }
+
+    private func roomButton(_ room: RoomModel, wide: Bool) -> some View {
+        Button {
+            coordinator.navigate(to: .roomProject(roomId: room.id))
+        } label: {
+            roomCard(room, wide: wide)
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel("Open \(room.name)")
+        .accessibilityHint("Opens this room.")
+    }
+
+    private func roomCard(_ room: RoomModel, wide: Bool = false) -> some View {
         VStack(alignment: .leading, spacing: 0) {
             // Theme V: use the room's scan hero photo when one exists
             // instead of a bare gradient; falls back to the room-type
@@ -254,7 +303,8 @@ struct ProfileView: View {
             .padding(.horizontal, 10)
             .padding(.vertical, 8)
         }
-        .frame(width: 140)
+        .frame(width: wide ? nil : 140)
+        .frame(maxWidth: wide ? .infinity : nil)
         .background(PatinaColors.Background.secondary)
         .clipShape(RoundedRectangle(cornerRadius: 12))
     }

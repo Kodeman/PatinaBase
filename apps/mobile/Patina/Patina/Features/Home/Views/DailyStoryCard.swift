@@ -14,14 +14,14 @@ struct DailyStoryCard: View {
         ZStack(alignment: .bottomLeading) {
             Group {
                 if let namespace {
-                    story.heroGradient
+                    storyArtwork
                         .matchedGeometryEffect(
                             id: "story-hero-\(story.id)",
                             in: namespace,
                             isSource: !isExpanded
                         )
                 } else {
-                    story.heroGradient
+                    storyArtwork
                 }
             }
 
@@ -91,6 +91,17 @@ struct DailyStoryCard: View {
         .padding(.top, PatinaSpacing.md)
         .padding(.horizontal, PatinaSpacing.mdLarge)
         .opacity(isExpanded ? 0 : 1)
+    }
+
+    @ViewBuilder
+    private var storyArtwork: some View {
+        if let heroImageURL = story.heroImageURL {
+            PatinaAsyncImage(url: heroImageURL, contentMode: .fill)
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+                .clipped()
+        } else {
+            story.heroGradient
+        }
     }
 }
 

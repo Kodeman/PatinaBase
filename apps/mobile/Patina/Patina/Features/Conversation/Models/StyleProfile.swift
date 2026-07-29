@@ -284,3 +284,242 @@ extension StyleProfile {
         return merged
     }
 }
+
+// MARK: - Human-readable Taste Portrait
+
+// swiftlint:disable file_length
+/// A plain-language portrait assembled only from answers already persisted in
+/// `StylePreferenceModel` (or the real result returned by the style quiz).
+/// It does not invent recommendation rationale from empty feed fields.
+@MainActor
+public struct TastePortrait: Equatable {
+    public let title: String
+    public let summary: String
+    public let materials: [String]
+    public let evidence: [String]
+    public let confidence: Double
+
+    let materialKeys: [String]
+    let keywordKeys: [String]
+
+    public init?(preference: StylePreferenceModel) {
+        let rawKeywords = preference.keywords.filter { !$0.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }
+        let styleName = rawKeywords.first.map(Self.humanize) ?? "Your evolving taste"
+        let rawMaterials = preference.materials.filter { !$0.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }
+        let materialNames = rawMaterials.map(Self.humanize)
+
+        guard !rawKeywords.isEmpty || !rawMaterials.isEmpty || preference.confidence > 0 else {
+            return nil
+        }
+
+        self.title = styleName
+        self.materials = materialNames
+        self.materialKeys = rawMaterials.map(Self.normalized)
+        self.keywordKeys = rawKeywords.map(Self.normalized)
+        self.confidence = preference.confidence
+        self.summary = Self.summary(styleName: styleName, materials: materialNames, warmth: preference.warmth)
+        self.evidence = Self.preferenceEvidence(
+            materials: materialNames,
+            keywords: rawKeywords.dropFirst().map(Self.normalized),
+            warmth: preference.warmth,
+            budgetRange: preference.budgetRange
+        )
+    }
+
+    /// Fallback used by the result screen before the durable SwiftData row is
+    /// available. Every sentence is grounded in fields returned by the real
+    /// quiz result (style, material, palette, and budget).
+    public init(result: StyleProfileResult) {
+        let material = Self.humanize(result.primaryMaterial)
+        self.title = result.displayName
+        self.materials = material.isEmpty ? [] : [material]
+        self.materialKeys = material.isEmpty ? [] : [Self.normalized(material)]
+        self.keywordKeys = [Self.normalized(result.primaryStyle)]
+        self.confidence = result.confidence
+        self.summary = Self.summary(
+            styleName: result.displayName,
+            materials: materials,
+            warmth: result.paletteWarmth.lowercased().contains("warm") ? 0.75 : 0.3
+        )
+
+        var evidence: [String] = []
+        if !material.isEmpty {
+            evidence.append("You chose \(material). Patina will begin with that material signal.")
+        }
+        if !result.paletteWarmth.isEmpty {
+            evidence.append("Your palette answer was \(result.paletteWarmth.lowercased()), which guides the color temperature of the edit.")
+        }
+        if !result.budgetLabel.isEmpty, result.budgetLabel != "TBD" {
+            evidence.append("Your \(result.budgetLabel) range keeps the recommendations grounded in the investment you named.")
+        }
+        self.evidence = evidence
+    }
+
+    /// A recommendation explanation only when a real signal supports it:
+    /// matching material tags, matching style tags, or a room-scoped RPC.
+    func recommendationRationale(for product: Product, roomName: String?) -> String? {
+        let productMaterialTokens = Set(product.materialTags.flatMap(Self.tokens))
+        if let materialIndex = materialKeys.firstIndex(where: { key in
+            !Set(Self.tokens(key)).isDisjoint(with: productMaterialTokens)
+        }) {
+            return "\(materials[materialIndex]) matches a material you chose."
+        }
+
+        let productStyleTokens = Set(product.styleTags.flatMap(Self.tokens))
+        if keywordKeys.contains(where: { key in
+            !Set(Self.tokens(key)).isDisjoint(with: productStyleTokens)
+        }) {
+            return "Its style tags connect to your \(title) portrait."
+        }
+
+        if let roomName, !roomName.isEmpty {
+            return "Selected from Patina's room-aware edit for \(roomName)."
+        }
+        return nil
+    }
+
+    private static func summary(styleName: String, materials: [String], warmth: Double) -> String {
+        if !materials.isEmpty {
+            return "\(styleName), grounded in \(naturalList(materials.prefix(2).map { $0 }))."
+        }
+        switch warmth {
+        case ..<0.4:
+            return "\(styleName), with a cooler, clearer palette."
+        case 0.62...:
+            return "\(styleName), with a warmer, softer palette."
+        default:
+            return "\(styleName), with a balanced palette."
+        }
+    }
+
+    private static func preferenceEvidence(
+        materials: [String],
+        keywords: [String],
+        warmth: Double,
+        budgetRange: String?
+    ) -> [String] {
+        var evidence: [String] = []
+
+        if !materials.isEmpty {
+            evidence.append(
+                "You chose \(naturalList(materials.prefix(3).map { $0 })). Patina will begin with those material signals."
+            )
+        }
+
+        if let lifestyle = lifestyleRationale(from: keywords) {
+            evidence.append(lifestyle)
+        }
+
+        if warmth >= 0.62 {
+            evidence.append("Your answers lean warm, so the edit will favor softened neutrals and warmer finishes.")
+        } else if warmth < 0.4 {
+            evidence.append("Your answers lean cool, so the edit will favor clearer neutrals and cooler finishes.")
+        }
+
+        if let budget = formattedBudget(budgetRange) {
+            evidence.append("Your \(budget) room range keeps the edit grounded in the investment you named.")
+        }
+
+        return evidence
+    }
+
+    private static func lifestyleRationale(from keywords: [String]) -> String? {
+        let values = Set(keywords)
+        if !values.isDisjoint(with: ["sanctuary", "personal_retreat", "retreat", "rest"]) {
+            return "Your sanctuary and rest answers point toward quiet, restorative pieces."
+        }
+        if !values.isDisjoint(with: ["entertaining", "gathering", "family", "family_central"]) {
+            return "Your gathering answers favor pieces that make everyday connection easier."
+        }
+        if values.contains("work_from_home") {
+            return "Your work-from-home answer gives comfort, focus, and practical scale extra weight."
+        }
+        if !values.isDisjoint(with: ["invest_quality", "making_it_mine"]) {
+            return "You said this space should feel more your own, so character and longevity carry more weight."
+        }
+        return nil
+    }
+
+    private static func formattedBudget(_ raw: String?) -> String? {
+        guard let raw else { return nil }
+        let parts = raw.split(separator: "-").compactMap { Int($0) }
+        guard parts.count == 2, parts[0] > 0, parts[1] > 0 else { return nil }
+        let formatter = NumberFormatter()
+        formatter.numberStyle = .currency
+        formatter.maximumFractionDigits = 0
+        guard let low = formatter.string(from: NSNumber(value: parts[0])),
+              let high = formatter.string(from: NSNumber(value: parts[1])) else {
+            return nil
+        }
+        return "\(low)–\(high)"
+    }
+
+    private static func naturalList(_ values: [String]) -> String {
+        switch values.count {
+        case 0: return ""
+        case 1: return values[0]
+        case 2: return "\(values[0]) and \(values[1])"
+        default:
+            guard let last = values.last else { return "" }
+            return values.dropLast().joined(separator: ", ") + ", and " + last
+        }
+    }
+
+    static func humanize(_ raw: String) -> String {
+        raw
+            .replacingOccurrences(of: "_", with: " ")
+            .replacingOccurrences(of: "-", with: " ")
+            .split(separator: " ")
+            .map { word in
+                let lower = word.lowercased()
+                if lower == "midcentury" { return "Mid-Century" }
+                return lower.prefix(1).uppercased() + String(lower.dropFirst())
+            }
+            .joined(separator: " ")
+    }
+
+    private static func normalized(_ raw: String) -> String {
+        raw.lowercased()
+            .replacingOccurrences(of: "-", with: "_")
+            .replacingOccurrences(of: " ", with: "_")
+    }
+
+    private static func tokens(_ raw: String) -> [String] {
+        normalized(raw)
+            .split(separator: "_")
+            .map(String.init)
+            .filter { !$0.isEmpty && !["soft", "smooth", "aged", "brushed", "weathered"].contains($0) }
+    }
+}
+
+public enum TasteAdjustment: String, CaseIterable, Identifiable, Sendable {
+    case warmer
+    case cooler
+    case moreRelaxed = "more_relaxed"
+    case moreTailored = "more_tailored"
+
+    public var id: String { rawValue }
+
+    public var label: String {
+        switch self {
+        case .warmer: return "A little warmer"
+        case .cooler: return "A little cooler"
+        case .moreRelaxed: return "More relaxed"
+        case .moreTailored: return "More tailored"
+        }
+    }
+
+    public var analyticsDimension: String {
+        switch self {
+        case .warmer, .cooler: return "warmth"
+        case .moreRelaxed, .moreTailored: return "formality"
+        }
+    }
+
+    public var analyticsDirection: String {
+        switch self {
+        case .warmer, .moreTailored: return "increase"
+        case .cooler, .moreRelaxed: return "decrease"
+        }
+    }
+}
