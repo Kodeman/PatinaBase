@@ -22,7 +22,8 @@ struct ContextualExperienceTests {
     }
 
     private func makeMemoryStore(
-        owner: String = "owner-a"
+        owner: String = "owner-a",
+        enabled: Bool = true
     ) throws -> MemoryFixture {
         let suite = "ContextualExperienceTests.\(UUID().uuidString)"
         let defaults = try #require(UserDefaults(suiteName: suite))
@@ -32,6 +33,9 @@ struct ContextualExperienceTests {
             ownerIDProvider: { owner },
             nowProvider: { now }
         )
+        if enabled {
+            store.setEnabled(true)
+        }
         return MemoryFixture(store: store, defaults: defaults, suite: suite)
     }
 
@@ -80,6 +84,23 @@ struct ContextualExperienceTests {
     }
 
     // MARK: - Context memory
+
+    @Test
+    func contextualMemoryRequiresAnExplicitFirstRunOptIn() throws {
+        let fixture = try makeMemoryStore(enabled: false)
+        defer { fixture.defaults.removePersistentDomain(forName: fixture.suite) }
+
+        let ignored = room(name: "Bedroom", updatedAt: now.addingTimeInterval(-300))
+        let freshest = room(name: "Living Room", updatedAt: now)
+        fixture.store.rememberRoom(id: ignored.id)
+
+        #expect(fixture.store.isEnabled == false)
+        #expect(fixture.store.latestActivity(of: .room) == nil)
+        #expect(
+            fixture.store.activeRoom(from: [ignored, freshest], currentSelectionID: nil)?.id
+                == freshest.id
+        )
+    }
 
     @Test
     func currentRoomSelectionWinsOverRememberedAndFreshestRooms() throws {

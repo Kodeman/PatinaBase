@@ -169,7 +169,7 @@ struct SettingsView: View {
                 Text("Use activity for context")
                     .font(PatinaTypography.bodySmall)
                     .foregroundStyle(PatinaColors.Text.primary)
-                Text("Remembers only activity type, an identifier, and time for up to 90 days.")
+                Text("Off until you choose it. When on, Patina remembers only activity type, an identifier, and time for up to 90 days.")
                     .font(PatinaTypography.caption)
                     .foregroundStyle(PatinaColors.Text.muted)
                     .fixedSize(horizontal: false, vertical: true)

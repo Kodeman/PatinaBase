@@ -82,7 +82,7 @@ public final class ContextMemoryStore {
         self.defaults = defaults
         self.ownerIDProvider = ownerIDProvider
         self.nowProvider = nowProvider
-        self.isEnabled = defaults.object(forKey: Self.enabledKey) as? Bool ?? true
+        self.isEnabled = defaults.object(forKey: Self.enabledKey) as? Bool ?? false
     }
 
     /// Enables or disables contextual learning for this device. Turning it off
