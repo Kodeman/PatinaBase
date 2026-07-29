@@ -10,10 +10,15 @@ manifest itself lives at ``manifests/{userId}/{roomId}/manifest.json``. This is
 pinned as a contract in capture-bundle-spec-v1.md **B-18** (storage layout); the
 map below MUST stay in lockstep with the iOS ``ScanUploadDescriptor.all`` table.
 
-Both iOS apps write PUBLIC-shaped (`/object/public/room-scans/…`) URLs into the
-room_scans columns as mere path-carriers; ``object_key_from_url`` derives the
-bucket-relative key by splitting on the LAST ``/room-scans/`` (mirrors
-parse-room-scan / confirm-scan-bundle).
+The room_scans URL columns carry a bucket-relative KEY. Both iOS apps used to
+write a PUBLIC-shaped (`/object/public/room-scans/…`) URL there as a mere
+path-carrier -- a URL that never resolved, because the bucket is private
+(`public = false`, 00031); I104 recorded it against ``scan_bundle_url`` and
+``depth_archive_url`` and R122 authorised the writer-side repair, so both apps
+now store the plain key (the ``capture-media`` 00234 / ``site-requests`` 00374
+convention). ``object_key_from_url`` handles BOTH: it splits on the LAST
+``/room-scans/`` when a marker is present and uses a bare key as-is (mirrors
+parse-room-scan / confirm-scan-bundle), so rows written either way resolve.
 
 Bundle-read contract (design §2.3 leaves the mechanism a code call):
   * The manifest (``bundle_manifest_url``) is the authoritative inventory; its

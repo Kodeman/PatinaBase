@@ -518,18 +518,26 @@ def test_frames_standing_still_are_excluded_by_the_minimum_baseline(tmp_path):
 
 
 def test_the_bundle_identity_comes_from_the_bundles_own_object_keys(tmp_path):
+    """Segment ``[2]`` is the ROOM, and the harness now names it that.
+
+    The bundles on the qualified host were laid out under the manifest's own
+    ``scanId`` to satisfy the old contract (I104, measurement only).  A bundle
+    laid out under the real ``room_scans.room_id`` -- which is what
+    ``RoomScanStoragePath.object`` writes -- is the shape this reads.
+    """
+
     bundle = tmp_path / "capture"
     bundle.mkdir()
     (bundle / "sources.json").write_text(
         json.dumps(
             {
                 "bundleManifest": {
-                    "objectKey": "manifests/user-1/scan-9/manifest.json",
+                    "objectKey": "manifests/user-1/room-9/manifest.json",
                     "sha256": _DIGEST_A,
                     "sizeBytes": 1,
                 },
                 "keyframeIndex": {
-                    "objectKey": "keyframes/user-1/scan-9/keyframe_index.ndjson",
+                    "objectKey": "keyframes/user-1/room-9/keyframe_index.ndjson",
                     "sha256": _DIGEST_A,
                     "sizeBytes": 1,
                 },
@@ -537,6 +545,92 @@ def test_the_bundle_identity_comes_from_the_bundles_own_object_keys(tmp_path):
         ),
         encoding="utf-8",
     )
-    assert harness.read_bundle_identity(bundle) == ("user-1", "scan-9")
+    assert harness.read_bundle_identity(bundle) == ("user-1", "room-9")
     assert harness.keyframe_index_path(bundle).name == "keyframe_index.ndjson"
     assert harness.discover_bundles(tmp_path) == [bundle]
+
+
+def test_the_probe_passes_the_room_to_the_reader_and_a_scan_to_the_publisher(
+    tmp_path, monkeypatch
+):
+    """The harness plumbs TWO identifiers now, and does not invent the second.
+
+    ``--room-id`` is derived from the bundle's own keys; ``--scan-id`` cannot be
+    (no bundle directory carries ``room_scans.id``), so it is an operator
+    argument that falls back to the room.  This pins both the derivation and the
+    fallback without running a reconstruction.
+    """
+
+    bundle = tmp_path / "capture"
+    bundle.mkdir()
+    (bundle / "sources.json").write_text(
+        json.dumps(
+            {
+                kind: {"objectKey": key, "sha256": _DIGEST_A, "sizeBytes": 1}
+                for kind, key in (
+                    ("bundleManifest", "manifests/user-1/room-9/manifest.json"),
+                    ("keyframeIndex", "keyframes/user-1/room-9/keyframe_index.ndjson"),
+                )
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    seen: list[list[str]] = []
+
+    class _Lifecycle:
+        @staticmethod
+        def main(argv):
+            seen.append(list(argv))
+            return 0
+
+    # ``run_probe`` does ``from patina_scan_worker import refine_lifecycle``,
+    # which resolves by ATTRIBUTE on the already-imported package -- patching
+    # ``sys.modules`` alone silently misses once any other test module has
+    # imported the real one, which is exactly how this test first passed alone
+    # and failed in the suite.
+    import patina_scan_worker
+
+    # ``raising=False`` because the attribute only exists once something has
+    # imported the submodule -- which depends on test ordering, and is precisely
+    # the ordering dependence this patch is here to remove.
+    monkeypatch.setattr(
+        patina_scan_worker, "refine_lifecycle", _Lifecycle, raising=False
+    )
+    monkeypatch.setattr(harness, "install_observers", lambda **_kwargs: _Recorder())
+
+    def _probe(scan_argument):
+        arguments = harness.build_argument_parser().parse_args(
+            [
+                "probe",
+                "--bundle-dir", str(bundle),
+                "--scratch-dir", str(tmp_path),
+                "--publish-dir", str(tmp_path),
+                "--row-out", str(tmp_path / "row.json"),
+                *scan_argument,
+            ]
+        )
+        harness.run_probe(arguments)
+        argv = seen[-1]
+        return argv[argv.index("--user-id") + 1], argv[argv.index("--scan-id") + 1], argv[
+            argv.index("--room-id") + 1
+        ]
+
+    assert _probe([]) == ("user-1", "room-9", "room-9")
+    assert _probe(["--scan-id", "scan-7"]) == ("user-1", "scan-7", "room-9")
+
+    row = json.loads((tmp_path / "row.json").read_text(encoding="utf-8"))
+    assert row["roomId"] == "room-9"
+    assert row["scanId"] == "scan-7"
+
+
+class _Recorder:
+    """The observer surface ``run_probe`` touches, and nothing more."""
+
+    rule_calls: list = []
+    child_artifacts: dict = {}
+    shape_changes: list = []
+    notes: list = []
+
+    def restore(self) -> None:
+        return None

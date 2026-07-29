@@ -27,7 +27,15 @@ from patina_scan_worker.refine_materializer import (
 
 
 USER_ID = "user-1"
+# THREE identifiers, deliberately all different (R122 / I104).  ``ROOM_ID`` is
+# the only one that appears in a Storage key; ``SCAN_ID`` is ``room_scans.id``
+# and appears only on the publication side; ``CAPTURE_SESSION_ID`` is what the
+# device wrote into the manifest and has no server-side counterpart at all.
+# Keeping them distinct is what makes the fixture a bundle "as the app actually
+# writes it" rather than a shape only the old contract could satisfy.
 SCAN_ID = "scan-1"
+ROOM_ID = "room-1"
+CAPTURE_SESSION_ID = "e3ea64a8-d12c-4059-8572-2af5abe41c84"
 TASK_ID = "task-1"
 LEASE_ID = "lease-1"
 
@@ -122,11 +130,11 @@ class _MemoryAcquirer:
         *,
         source: RefineSourceArtifact,
         user_id: str,
-        scan_id: str,
+        room_id: str,
         destination,
         deadline: RefineDeadline,
     ) -> None:
-        self.calls.append((source, user_id, scan_id, destination, deadline))
+        self.calls.append((source, user_id, room_id, destination, deadline))
         destination.write(self.objects[source.object_key])
 
 
@@ -226,24 +234,24 @@ class _Fixture:
         archive_payload = _tar_bytes(archive_entries)
 
         self.index = RefineSourceArtifact(
-            object_key=f"keyframes/{USER_ID}/{SCAN_ID}/keyframe_index.ndjson",
+            object_key=f"keyframes/{USER_ID}/{ROOM_ID}/keyframe_index.ndjson",
             sha256=_sha256(index_payload),
             size_bytes=len(index_payload),
         )
         self.summary = RefineSourceArtifact(
-            object_key=f"keyframes/{USER_ID}/{SCAN_ID}/keyframe_summary.json",
+            object_key=f"keyframes/{USER_ID}/{ROOM_ID}/keyframe_summary.json",
             sha256=_sha256(summary_payload),
             size_bytes=len(summary_payload),
         )
         self.archive = RefineSourceArtifact(
-            object_key=f"bundle/{USER_ID}/{SCAN_ID}/keyframes.tar",
+            object_key=f"bundle/{USER_ID}/{ROOM_ID}/keyframes.tar",
             sha256=_sha256(archive_payload),
             size_bytes=len(archive_payload),
         )
         manifest_document = {
             "schemaVersion": 3,
             "bundleSpecVersion": 1,
-            "scanId": SCAN_ID,
+            "scanId": CAPTURE_SESSION_ID,
             "checksumAlgorithm": "sha256",
             "artifacts": [
                 {
@@ -271,7 +279,7 @@ class _Fixture:
         }
         manifest_payload = _canonical_json(manifest_document)
         self.manifest = RefineSourceArtifact(
-            object_key=f"manifests/{USER_ID}/{SCAN_ID}/manifest.json",
+            object_key=f"manifests/{USER_ID}/{ROOM_ID}/manifest.json",
             sha256=_sha256(manifest_payload),
             size_bytes=len(manifest_payload),
         )
@@ -284,6 +292,7 @@ class _Fixture:
         self.request = RefineMaterializationRequest(
             user_id=USER_ID,
             scan_id=SCAN_ID,
+            room_id=ROOM_ID,
             task_id=TASK_ID,
             lease_id=LEASE_ID,
             workspace_parent=workspace_parent,
@@ -371,7 +380,7 @@ def test_materializes_private_deterministic_runner_seam(tmp_path):
         fixture.summary.object_key,
         fixture.archive.object_key,
     ]
-    assert all(call[1:3] == (USER_ID, SCAN_ID) for call in acquirer.calls)
+    assert all(call[1:3] == (USER_ID, ROOM_ID) for call in acquirer.calls)
     assert not (result.workspace_root / "incoming").exists()
     assert not (result.workspace_root / "raster-incoming").exists()
     with result.open_verified_file(
@@ -390,7 +399,7 @@ def test_owner_prefix_is_rejected_before_workspace_or_acquirer_io(tmp_path):
         fixture.request,
         keyframes_archive=replace(
             fixture.archive,
-            object_key=f"bundle/other-user/{SCAN_ID}/keyframes.tar",
+            object_key=f"bundle/other-user/{ROOM_ID}/keyframes.tar",
         ),
     )
     materializer, acquirer, _ = _materializer(fixture)
@@ -402,6 +411,155 @@ def test_owner_prefix_is_rejected_before_workspace_or_acquirer_io(tmp_path):
     assert caught.value.fatal is True
     assert acquirer.calls == []
     assert not workspace_parent.exists()
+
+
+def test_bundle_written_the_way_the_app_writes_it_is_accepted(tmp_path):
+    """The I104 case, end to end: keys under the ROOM, manifest under its own id.
+
+    The old contract required the request's ``scan_id`` to equal both the key's
+    third segment and ``document["scanId"]``; on a real capture those are two
+    different UUIDs, so no request could satisfy it.  Nothing here is contrived
+    for the test -- ``_Fixture`` now builds exactly the layout
+    ``RoomScanStoragePath.object`` produces, and the manifest carries the
+    device's capture-session id, which nothing server-side has ever held.
+    """
+
+    fixture = _Fixture(tmp_path)
+    materializer, acquirer, _ = _materializer(fixture)
+
+    result = materializer.materialize(fixture.request, deadline=_deadline())
+
+    # The three identifiers really are three.
+    assert len({USER_ID, SCAN_ID, ROOM_ID, CAPTURE_SESSION_ID}) == 4
+    # Reads were owner-scoped by the ROOM, on every acquisition.
+    assert [call[0].object_key.split("/")[2] for call in acquirer.calls] == [ROOM_ID] * 4
+    assert all(call[1:3] == (USER_ID, ROOM_ID) for call in acquirer.calls)
+    # The manifest's own id survived as evidence instead of being discarded.
+    assert result.capture_session_id == CAPTURE_SESSION_ID
+    result.cleanup()
+
+
+def test_key_under_a_foreign_room_is_still_refused_as_ownership(tmp_path):
+    """The mirror of the case above: the owner check did not become permissive.
+
+    Splitting the field could have been done by relaxing what segment ``[2]`` is
+    allowed to be.  It was not: a key under another room, with everything else
+    identical and the user segment correct, still fails OWNERSHIP before any
+    workspace or acquirer I/O.
+    """
+
+    workspace_parent = tmp_path / "must-not-be-touched"
+    fixture = _Fixture(workspace_parent)
+    request = replace(
+        fixture.request,
+        keyframe_index=replace(
+            fixture.index,
+            object_key=f"keyframes/{USER_ID}/room-belonging-to-someone-else/"
+            "keyframe_index.ndjson",
+        ),
+    )
+    materializer, acquirer, _ = _materializer(fixture)
+
+    with pytest.raises(RefineMaterializerError) as caught:
+        materializer.materialize(request, deadline=_deadline())
+
+    assert caught.value.code is MaterializerFailureCode.OWNERSHIP
+    assert caught.value.fatal is True
+    assert acquirer.calls == []
+    assert not workspace_parent.exists()
+
+
+def test_a_key_under_the_scan_id_is_refused_now_that_the_room_is_the_prefix(tmp_path):
+    """The old-shaped key is not quietly still accepted.
+
+    If both identifiers were tolerated at segment ``[2]`` the split would be
+    cosmetic. A key laid out under ``room_scans.id`` -- the shape I104's
+    measurement workaround produced -- is a foreign prefix now, and is refused.
+    """
+
+    fixture = _Fixture(tmp_path)
+    request = replace(
+        fixture.request,
+        keyframes_archive=replace(
+            fixture.archive,
+            object_key=f"bundle/{USER_ID}/{SCAN_ID}/keyframes.tar",
+        ),
+    )
+    materializer, acquirer, _ = _materializer(fixture)
+
+    with pytest.raises(RefineMaterializerError) as caught:
+        materializer.materialize(request, deadline=_deadline())
+
+    assert caught.value.code is MaterializerFailureCode.OWNERSHIP
+    assert acquirer.calls == []
+
+
+def test_absent_capture_session_id_records_the_manifest_id_without_equating(tmp_path):
+    fixture = _Fixture(tmp_path)
+    assert fixture.request.capture_session_id is None
+    materializer, _, _ = _materializer(fixture)
+
+    result = materializer.materialize(fixture.request, deadline=_deadline())
+
+    assert result.capture_session_id == CAPTURE_SESSION_ID
+    result.cleanup()
+
+
+def test_supplied_capture_session_id_must_equal_the_manifest_scan_id(tmp_path):
+    """A caller that DOES know the capture session keeps a real guard."""
+
+    fixture = _Fixture(tmp_path)
+    materializer, _, _ = _materializer(fixture)
+
+    matching = replace(fixture.request, capture_session_id=CAPTURE_SESSION_ID)
+    accepted = materializer.materialize(matching, deadline=_deadline())
+    assert accepted.capture_session_id == CAPTURE_SESSION_ID
+    accepted.cleanup()
+
+    mismatched = replace(
+        fixture.request,
+        capture_session_id="11111111-2222-3333-4444-555555555555",
+        task_id="task-2",
+    )
+    with pytest.raises(RefineMaterializerError) as caught:
+        materializer.materialize(mismatched, deadline=_deadline())
+
+    assert caught.value.code is MaterializerFailureCode.INPUT_INVALID
+    assert caught.value.fatal is True
+
+
+@pytest.mark.parametrize("bad", [None, "", 42, {"id": "x"}, "../escape"])
+def test_manifest_scan_id_must_still_be_a_well_formed_identifier(tmp_path, bad):
+    """Dropping the equality did not drop the key.
+
+    An absent, empty, non-string or path-shaped ``scanId`` is still a rejected
+    manifest -- the value is the only thing tying a published run back to the
+    device session that produced it, so a bundle that does not assert one is not
+    a bundle this materializer will accept.
+    """
+
+    fixture = _Fixture(tmp_path)
+    document = json.loads(fixture.objects[fixture.manifest.object_key])
+    if bad is None:
+        document.pop("scanId")
+    else:
+        document["scanId"] = bad
+    payload = _canonical_json(document)
+    fixture.objects[fixture.manifest.object_key] = payload
+    request = replace(
+        fixture.request,
+        manifest=replace(
+            fixture.manifest,
+            sha256=_sha256(payload),
+            size_bytes=len(payload),
+        ),
+    )
+    materializer, _, _ = _materializer(fixture)
+
+    with pytest.raises(RefineMaterializerError) as caught:
+        materializer.materialize(request, deadline=_deadline())
+
+    assert caught.value.code is MaterializerFailureCode.INPUT_INVALID
 
 
 def test_expired_deadline_prevents_workspace_and_acquirer_io(tmp_path):
@@ -430,11 +588,11 @@ def test_acquirer_write_is_hard_bounded_during_the_injected_call(tmp_path):
             *,
             source,
             user_id,
-            scan_id,
+            room_id,
             destination,
             deadline,
         ):
-            self.calls.append((source, user_id, scan_id, destination, deadline))
+            self.calls.append((source, user_id, room_id, destination, deadline))
             assert not isinstance(destination, Path)
             destination.write(self.objects[source.object_key] + b"x")
             self.overflow_returned = True
@@ -476,14 +634,14 @@ def test_deadline_expiry_after_acquirer_is_fail_closed(tmp_path):
             *,
             source,
             user_id,
-            scan_id,
+            room_id,
             destination,
             deadline,
         ):
             super().acquire(
                 source=source,
                 user_id=user_id,
-                scan_id=scan_id,
+                room_id=room_id,
                 destination=destination,
                 deadline=deadline,
             )
@@ -537,11 +695,11 @@ def test_acquirer_error_codes_are_stably_mapped_and_cleanup(
             *,
             source,
             user_id,
-            scan_id,
+            room_id,
             destination,
             deadline,
         ):
-            self.calls.append((source, user_id, scan_id, destination, deadline))
+            self.calls.append((source, user_id, room_id, destination, deadline))
             raise AdapterError("classified acquisition failure", adapter_code)
 
     acquirer = _FailingAcquirer(fixture.objects)
@@ -555,7 +713,7 @@ def test_acquirer_error_codes_are_stably_mapped_and_cleanup(
 
     assert caught.value.code is expected_code
     assert acquirer.calls[0][0] == fixture.manifest
-    assert acquirer.calls[0][1:3] == (USER_ID, SCAN_ID)
+    assert acquirer.calls[0][1:3] == (USER_ID, ROOM_ID)
     assert list(tmp_path.iterdir()) == []
 
 
@@ -1010,14 +1168,14 @@ def test_acquirer_ancestor_swap_never_redirects_freeze_or_cleanup(tmp_path):
             *,
             source,
             user_id,
-            scan_id,
+            room_id,
             destination,
             deadline,
         ):
             super().acquire(
                 source=source,
                 user_id=user_id,
-                scan_id=scan_id,
+                room_id=room_id,
                 destination=destination,
                 deadline=deadline,
             )

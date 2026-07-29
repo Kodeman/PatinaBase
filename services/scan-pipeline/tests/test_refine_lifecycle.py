@@ -99,7 +99,13 @@ from patina_scan_worker.refine_native_process import (
 )
 
 USER_ID = "user-1"
+# R122's three identifiers, all distinct so no assertion can pass by accident:
+# ``ROOM_ID`` is the READ prefix segment (B-18), ``SCAN_ID`` is ``room_scans.id``
+# and appears only under ``room_file/`` on the WRITE side, and the bundle's own
+# manifest carries a third value the server has never stored.
 SCAN_ID = "scan-1"
+ROOM_ID = "room-9"
+CAPTURE_SESSION_ID = "e3ea64a8-d12c-4059-8572-2af5abe41c84"
 TASK_ID = "task-1"
 LEASE_ID = "lease-1"
 ROOM_FILE_ID = "room-1"
@@ -424,17 +430,17 @@ class _Bundle:
         archive_payload = archive.getvalue()
 
         self.index = RefineSourceArtifact(
-            object_key=f"keyframes/{USER_ID}/{SCAN_ID}/keyframe_index.ndjson",
+            object_key=f"keyframes/{USER_ID}/{ROOM_ID}/keyframe_index.ndjson",
             sha256=_sha256(index_payload),
             size_bytes=len(index_payload),
         )
         self.summary = RefineSourceArtifact(
-            object_key=f"keyframes/{USER_ID}/{SCAN_ID}/keyframe_summary.json",
+            object_key=f"keyframes/{USER_ID}/{ROOM_ID}/keyframe_summary.json",
             sha256=_sha256(summary_payload),
             size_bytes=len(summary_payload),
         )
         self.archive = RefineSourceArtifact(
-            object_key=f"bundle/{USER_ID}/{SCAN_ID}/keyframes.tar",
+            object_key=f"bundle/{USER_ID}/{ROOM_ID}/keyframes.tar",
             sha256=_sha256(archive_payload),
             size_bytes=len(archive_payload),
         )
@@ -442,7 +448,7 @@ class _Bundle:
             {
                 "schemaVersion": 3,
                 "bundleSpecVersion": 1,
-                "scanId": SCAN_ID,
+                "scanId": CAPTURE_SESSION_ID,
                 "checksumAlgorithm": "sha256",
                 "artifacts": [
                     {
@@ -470,7 +476,7 @@ class _Bundle:
             }
         )
         self.manifest = RefineSourceArtifact(
-            object_key=f"manifests/{USER_ID}/{SCAN_ID}/manifest.json",
+            object_key=f"manifests/{USER_ID}/{ROOM_ID}/manifest.json",
             sha256=_sha256(manifest_payload),
             size_bytes=len(manifest_payload),
         )
@@ -534,6 +540,7 @@ def _materialize(
         RefineMaterializationRequest(
             user_id=USER_ID,
             scan_id=SCAN_ID,
+            room_id=ROOM_ID,
             task_id=TASK_ID,
             lease_id=LEASE_ID,
             workspace_parent=scratch,
@@ -1096,6 +1103,7 @@ def _run(
             RefineLifecycleRequest(
                 user_id=USER_ID,
                 scan_id=SCAN_ID,
+                room_id=ROOM_ID,
                 task_id=TASK_ID,
                 lease_id=LEASE_ID,
                 room_file_id=ROOM_FILE_ID,
@@ -1281,6 +1289,7 @@ def test_the_lifecycle_refuses_before_it_acquires_anything(tmp_path):
             RefineLifecycleRequest(
                 user_id=USER_ID,
                 scan_id=SCAN_ID,
+                room_id=ROOM_ID,
                 task_id=TASK_ID,
                 lease_id=LEASE_ID,
                 room_file_id=ROOM_FILE_ID,
@@ -1348,6 +1357,33 @@ def test_the_whole_lifecycle_runs_and_publishes_every_artifact(tmp_path):
     assert document["engine"]["selected"] == "colmap-4-known-pose-triangulate-ba"
 
 
+def test_one_run_reads_under_the_room_and_writes_under_the_scan(tmp_path):
+    """The R122 split, asserted on ONE composed run rather than two units.
+
+    Before the split a single ``scan_id`` fed both prefixes, so a bundle
+    acquired from Storage as the app writes it could not be read at all (I104).
+    Both halves have to hold at once: every acquisition key is
+    ``{folder}/{user}/{ROOM}/…`` (B-18, 00077 RLS) and every publication key is
+    ``room_file/{user}/{SCAN}/v1/…`` (00287 matches ``rs.id::text = [3]``; the
+    P2 handoff states the same pair as a standing invariant).  ``SCAN_ID`` and
+    ``ROOM_ID`` are different strings, so neither assertion can be satisfied by
+    the other identifier.
+    """
+
+    report, _engine, sink, _scratch = _run(tmp_path)
+
+    read_keys = [row.key for row in report.result.inputs]
+    assert read_keys, "the run acquired nothing"
+    for key in read_keys:
+        assert key.split("/")[1:3] == [USER_ID, ROOM_ID], key
+        assert SCAN_ID not in key
+
+    assert sink.published, "the run published nothing"
+    for key in sink.published:
+        assert key.startswith(f"room_file/{USER_ID}/{SCAN_ID}/v1/"), key
+        assert ROOM_ID not in key
+
+
 def test_the_scratch_raw_snapshot_is_never_published(tmp_path):
     """Seven descriptors come back; only six are publishable artifacts."""
 
@@ -1374,6 +1410,12 @@ def test_the_report_document_states_its_own_posture(tmp_path):
     assert document["qualified"] is False
     assert document["trajectoryShapeChange"]["certificationRole"] == "diagnostic-only"
     assert document["seedAnchor"]["correspondences"] == FRAME_COUNT
+    # Provenance, reported and not compared: the device's own capture-session
+    # id, which is neither the scan nor the room and which nothing server-side
+    # stores (R122).  A run that dropped it would leave no way to say which
+    # capture on which phone produced the published deliverables.
+    assert document["captureSessionId"] == CAPTURE_SESSION_ID
+    assert document["captureSessionId"] not in {SCAN_ID, ROOM_ID}
 
 
 def test_all_scratch_is_removed_on_success(tmp_path):
@@ -1724,6 +1766,7 @@ def test_a_deadline_that_expires_during_the_engine_call_stops_publication(tmp_pa
                 RefineLifecycleRequest(
                     user_id=USER_ID,
                     scan_id=SCAN_ID,
+                    room_id=ROOM_ID,
                     task_id=TASK_ID,
                     lease_id=LEASE_ID,
                     room_file_id=ROOM_FILE_ID,
@@ -2069,12 +2112,12 @@ def test_the_local_acquirer_refuses_a_key_owned_by_somebody_else(tmp_path):
     with pytest.raises(AdapterError) as raised:
         acquirer.acquire(
             source=RefineSourceArtifact(
-                object_key="keyframes/someone-else/scan-1/keyframe_index.ndjson",
+                object_key="keyframes/someone-else/room-9/keyframe_index.ndjson",
                 sha256="a" * 64,
                 size_bytes=1,
             ),
             user_id=USER_ID,
-            scan_id=SCAN_ID,
+            room_id=ROOM_ID,
             destination=None,
             deadline=_deadline(),
         )
@@ -2683,6 +2726,7 @@ def test_the_lifecycle_refuses_a_publication_target_that_is_not_a_storage_client
             RefineLifecycleRequest(
                 user_id=USER_ID,
                 scan_id=SCAN_ID,
+                room_id=ROOM_ID,
                 task_id=TASK_ID,
                 lease_id=LEASE_ID,
                 room_file_id=ROOM_FILE_ID,
@@ -2705,7 +2749,7 @@ def test_the_lifecycle_refuses_a_publication_target_that_is_not_a_storage_client
 
 @pytest.mark.parametrize(
     "field",
-    ("user_id", "scan_id", "task_id", "lease_id", "room_file_id"),
+    ("user_id", "scan_id", "room_id", "task_id", "lease_id", "room_file_id"),
 )
 def test_the_lifecycle_refuses_an_unsafe_identifier(tmp_path, field):
     bundle_root = tmp_path / "bundle"
@@ -2720,6 +2764,7 @@ def test_the_lifecycle_refuses_an_unsafe_identifier(tmp_path, field):
     fields = {
         "user_id": USER_ID,
         "scan_id": SCAN_ID,
+        "room_id": ROOM_ID,
         "task_id": TASK_ID,
         "lease_id": LEASE_ID,
         "room_file_id": ROOM_FILE_ID,
@@ -3823,6 +3868,7 @@ def test_the_carried_deadline_is_the_same_object_at_every_seam(tmp_path):
             RefineLifecycleRequest(
                 user_id=USER_ID,
                 scan_id=SCAN_ID,
+                room_id=ROOM_ID,
                 task_id=TASK_ID,
                 lease_id=LEASE_ID,
                 room_file_id=ROOM_FILE_ID,
@@ -3895,7 +3941,7 @@ def test_the_cli_default_lease_buys_more_than_the_old_four_minute_cap():
     arguments = build_argument_parser().parse_args(
         [
             "--bundle-dir", "/b", "--scratch-dir", "/s", "--publish-dir", "/p",
-            "--user-id", "u", "--scan-id", "s", "--task-id", "t",
+            "--user-id", "u", "--scan-id", "s", "--room-id", "m", "--task-id", "t",
             "--lease-id", "l", "--room-file-id", "r",
         ]
     )
@@ -3915,7 +3961,7 @@ def test_the_cli_lease_flag_is_honoured_end_to_end():
     arguments = build_argument_parser().parse_args(
         [
             "--bundle-dir", "/b", "--scratch-dir", "/s", "--publish-dir", "/p",
-            "--user-id", "u", "--scan-id", "s", "--task-id", "t",
+            "--user-id", "u", "--scan-id", "s", "--room-id", "m", "--task-id", "t",
             "--lease-id", "l", "--room-file-id", "r",
             "--lease-seconds", "5400",
         ]
@@ -4867,6 +4913,7 @@ def test_the_unqualified_profile_is_refused_before_a_single_byte_is_acquired(tmp
             RefineLifecycleRequest(
                 user_id=USER_ID,
                 scan_id=SCAN_ID,
+                room_id=ROOM_ID,
                 task_id=TASK_ID,
                 lease_id=LEASE_ID,
                 room_file_id=ROOM_FILE_ID,
@@ -5005,6 +5052,7 @@ def _cli_argv(bundle_root: Path, scratch: Path, publish: Path) -> list[str]:
         "--publish-dir", str(publish),
         "--user-id", USER_ID,
         "--scan-id", SCAN_ID,
+        "--room-id", ROOM_ID,
         "--task-id", TASK_ID,
         "--lease-id", LEASE_ID,
         "--room-file-id", ROOM_FILE_ID,

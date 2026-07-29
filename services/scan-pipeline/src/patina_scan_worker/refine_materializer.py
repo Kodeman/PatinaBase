@@ -48,29 +48,49 @@ _MAX_MATERIALIZER_ID_BYTES = 128
 _SAFE_IDENTIFIER = re.compile(r"[A-Za-z0-9][A-Za-z0-9._:-]{0,127}")
 _SAFE_ARCHIVE_MEMBER = re.compile(r"keyframes/[A-Za-z0-9][A-Za-z0-9._-]*\.(?:heic|bin)")
 _SHA256 = re.compile(r"[0-9a-f]{64}")
+# THE READ LAYOUT IS KEYED BY ``room_id``, NOT by the scan.  Every template
+# below formats ``{room_id}`` because that is what the shipped uploader actually
+# writes: ``RoomScanStoragePath.object`` (CaptureKit) builds every ``room-scans``
+# key as ``{folder}/{userId}/{roomId}/{filename}``, capture-bundle-spec-v1 B-18
+# pins that shape as a contract, and ``keys.assert_owner_prefix`` has always said
+# segment ``[2]`` is the row's ``room_id`` -- every P1 caller (ingest, solve,
+# drawings) passes ``scan_row["room_id"]`` into it.
+#
+# These templates formatted ``{scan_id}`` until I104.  That was not a second
+# opinion about the layout; it was the same parameter renamed at the call site.
+# It made a Storage-sourced Refine run impossible: the request's ``scan_id`` had
+# to equal BOTH this key segment and the manifest's ``scanId``, and on the real
+# capture I104 measured those are two different UUIDs.  R122 authorised the split.
+#
+# The REJECTED alternative was to keep one field and teach the acquirer to accept
+# either identifier at ``[2]``.  That reads as leniency, but it is the opposite:
+# it turns the ownership check into "matches one of the ids I happen to hold",
+# which is exactly the RLS-equivalent the worker's service key makes load-bearing
+# (B-18: the service key bypasses storage RLS, so this check IS the guard).  Three
+# identifiers exist; the contract now names three.
 _INPUT_LAYOUT = (
     (
         "bundleManifest",
         "manifest",
-        "manifests/{user_id}/{scan_id}/manifest.json",
+        "manifests/{user_id}/{room_id}/manifest.json",
         4 * 1024 * 1024,
     ),
     (
         "keyframeIndex",
         "keyframe_index",
-        "keyframes/{user_id}/{scan_id}/keyframe_index.ndjson",
+        "keyframes/{user_id}/{room_id}/keyframe_index.ndjson",
         32 * 1024 * 1024,
     ),
     (
         "keyframeSummary",
         "keyframe_summary",
-        "keyframes/{user_id}/{scan_id}/keyframe_summary.json",
+        "keyframes/{user_id}/{room_id}/keyframe_summary.json",
         1024 * 1024,
     ),
     (
         "keyframesArchive",
         "keyframes_archive",
-        "bundle/{user_id}/{scan_id}/keyframes.tar",
+        "bundle/{user_id}/{room_id}/keyframes.tar",
         1024 * 1024 * 1024,
     ),
 )
@@ -145,10 +165,28 @@ class RefineMaterializationRequest:
 
     ``workspace_parent`` is not inspected until every object key has passed its
     owner-prefix and exact-layout checks.
+
+    THREE IDENTIFIERS, DELIBERATELY NOT ONE (R122, on the evidence of I104):
+
+    * ``room_id`` -- ``room_scans.room_id``.  The Storage owner-prefix segment
+      for READS out of the private ``room-scans`` bucket.  B-18 pins it; the iOS
+      uploader writes it; ``keys.assert_owner_prefix``'s own docstring names it.
+    * ``scan_id`` -- ``room_scans.id``.  The queue payload's identity and the
+      publication prefix ``room_file/{user}/{scan}/v{n}/``.  It is NOT a read
+      segment and this module never asserts a read key against it; it is carried
+      so the composed lifecycle can hand the same request to the publisher.
+    * ``capture_session_id`` -- the manifest's own ``scanId``.  Device-minted at
+      capture-session start (``RoomPlanScanSession.scanSessionId``) with NO
+      server-side counterpart: no ``room_scans`` column has ever held it.
+      OPTIONAL, default ``None``: a caller that knows the value still gets an
+      exact equality guard in ``_validate_manifest``; a caller that does not --
+      which is every caller today, because nothing persists it -- gets the value
+      recorded on the result instead of a contract it cannot satisfy.
     """
 
     user_id: str
     scan_id: str
+    room_id: str
     task_id: str
     lease_id: str
     workspace_parent: Path
@@ -156,6 +194,7 @@ class RefineMaterializationRequest:
     keyframe_index: RefineSourceArtifact
     keyframe_summary: RefineSourceArtifact
     keyframes_archive: RefineSourceArtifact
+    capture_session_id: str | None = None
 
 
 @dataclass(frozen=True)
@@ -210,7 +249,9 @@ class RefineArtifactAcquirer(Protocol):
     """Injected authenticated acquisition seam.
 
     The implementation receives the exact validated source fingerprint and
-    owner identity. It must repeat owner scoping before service-role I/O, stream
+    owner identity -- ``user_id`` plus ``room_id``, which are the two segments
+    the 00077 storage RLS reads and therefore the only two an acquirer may
+    re-check. It must repeat owner scoping before service-role I/O, stream
     only through ``destination``, and obey the supplied absolute deadline. The
     sink is the materializer-owned private regular-file writer and enforces the
     reviewed source size while the callback is running; no unrestricted
@@ -224,7 +265,7 @@ class RefineArtifactAcquirer(Protocol):
         *,
         source: RefineSourceArtifact,
         user_id: str,
-        scan_id: str,
+        room_id: str,
         destination: RefineBoundedWriter,
         deadline: RefineDeadline,
     ) -> None: ...
@@ -314,6 +355,12 @@ class RefineMaterialization:
     workspace_root: Path
     inputs: tuple[VerifiedRefineInput, ...]
     frames: tuple[MaterializedRefineFrame, ...]
+    #: The manifest's own ``scanId``, as OBSERVED -- recorded, not equated.
+    #: Nothing server-side holds this value, so a run that carries it forward is
+    #: the only way a later reader can tell which device capture session produced
+    #: the bundle.  Discarding it (the shape before R122) meant the one
+    #: identifier the bundle actually asserts about itself left no trace.
+    capture_session_id: str
     _workspace_anchor: _PrivateWorkspace = field(repr=False, compare=False)
     production_enablement: str = field(default="disabled", init=False)
 
@@ -932,9 +979,20 @@ def _safe_owner_key(
     value: object,
     *,
     user_id: str,
-    scan_id: str,
+    room_id: str,
     expected: str,
 ) -> str:
+    """Owner-anchor and exact-layout one Storage READ key.
+
+    ``room_id``, not the scan: ``assert_owner_prefix`` compares segment ``[2]``
+    against ``room_scans.room_id`` (its docstring, its error text, and all five
+    P1 call sites agree), and the exact-match below is against a template that
+    formats the same identifier.  The two checks are deliberately redundant --
+    the prefix assert is the RLS-equivalent, the equality is the layout contract
+    -- and they must therefore be fed the SAME identifier or one of them is
+    always vacuous.
+    """
+
     if (
         not isinstance(value, str)
         or not value
@@ -950,7 +1008,7 @@ def _safe_owner_key(
     ):
         _fail(MaterializerFailureCode.OWNERSHIP, "unsafe Storage object key")
     try:
-        assert_owner_prefix(value, user_id, scan_id)
+        assert_owner_prefix(value, user_id, room_id)
     except OwnershipError as exc:
         _fail(MaterializerFailureCode.OWNERSHIP, str(exc))
     if value != expected:
@@ -967,7 +1025,7 @@ def _validate_source(
     maximum_size: int,
     expected_key: str,
     user_id: str,
-    scan_id: str,
+    room_id: str,
 ) -> RefineSourceArtifact:
     if not isinstance(value, RefineSourceArtifact):
         _fail(
@@ -977,7 +1035,7 @@ def _validate_source(
     _safe_owner_key(
         value.object_key,
         user_id=user_id,
-        scan_id=scan_id,
+        room_id=room_id,
         expected=expected_key,
     )
     if not isinstance(value.sha256, str) or _SHA256.fullmatch(value.sha256) is None:
@@ -1010,9 +1068,15 @@ def _validate_request(
             "materialization request has the wrong contract type",
         )
     user_id = _stable_identifier(request.user_id, "user_id")
-    scan_id = _stable_identifier(request.scan_id, "scan_id")
+    # ``scan_id`` is validated but NOT used to build or check a read key.  It is
+    # the publication identity (``room_scans.id``); a malformed one has to fail
+    # here rather than three stages later at the publisher.
+    _stable_identifier(request.scan_id, "scan_id")
+    room_id = _stable_identifier(request.room_id, "room_id")
     _stable_identifier(request.task_id, "task_id")
     _stable_identifier(request.lease_id, "lease_id")
+    if request.capture_session_id is not None:
+        _stable_identifier(request.capture_session_id, "capture_session_id")
     if (
         not isinstance(request.workspace_parent, Path)
         or not request.workspace_parent.is_absolute()
@@ -1034,9 +1098,9 @@ def _validate_request(
         source = _validate_source(
             getattr(request, attribute),
             maximum_size=configured_maxima[attribute],
-            expected_key=template.format(user_id=user_id, scan_id=scan_id),
+            expected_key=template.format(user_id=user_id, room_id=room_id),
             user_id=user_id,
-            scan_id=scan_id,
+            room_id=room_id,
         )
         if source.object_key in keys:
             _fail(
@@ -1684,7 +1748,48 @@ def _validate_manifest(
     payload: bytes,
     *,
     request: RefineMaterializationRequest,
-) -> None:
+) -> str:
+    """Check the manifest against the request; return its observed ``scanId``.
+
+    WHAT CHANGED AND WHY IT IS NOT A WEAKENING.  This function used to require
+    ``document["scanId"] == request.scan_id``.  No server-side identifier has
+    ever held the manifest's ``scanId``: the iOS instrument mints it as
+    ``RoomPlanScanSession.scanSessionId = UUID()`` when the capture session
+    OPENS, minutes before ``room_scans.id`` exists (that row is reserved at
+    upload, ``SupabaseSiteScanService.reservation``), and no ``ADD COLUMN`` in
+    any migration persists it.  The equality was therefore not a check that
+    could fail on a doctored bundle and pass on an honest one -- it was a check
+    that could only fail, which is what I104 measured on the real capture
+    (``da3af6b7…`` at the key, ``e3ea64a8…`` in the manifest).  R122 requires a
+    bundle "as the app actually writes it" to be satisfiable.
+
+    Manifest identity is still anchored, twice, and neither anchor moved:
+
+    1. THE OBJECT KEY.  The manifest was fetched from
+       ``manifests/{user_id}/{room_id}/manifest.json`` -- owner-asserted by
+       ``_safe_owner_key`` against the row's ``user_id`` and ``room_id`` before
+       any I/O, and exact-matched against the B-18 template.  A manifest from
+       another owner or another room cannot reach this function.
+    2. THE EXPECTED DIGEST.  ``RefineMaterializer.materialize`` freezes the
+       acquired bytes through ``_freeze_untrusted_file(..., expected_sha256=
+       source.sha256)``, which re-hashes the private copy and fails
+       INPUT_INVALID on any mismatch.  ``payload`` below is read back out of
+       that frozen file.  So this is not "some JSON the network returned": it is
+       the exact bytes the caller's ledger named.
+
+    What the ``scanId`` still has to be is a well-formed stable identifier by
+    the SAME rule the request's own identifiers pass -- an empty string, a null,
+    a nested object or a path-shaped value is still a rejected manifest.  And
+    when the caller supplies ``capture_session_id`` it is still required to
+    match exactly, so a caller that does know the value keeps a real guard
+    rather than being told the check no longer exists.
+
+    The REJECTED alternative was to drop the key entirely from the schema check.
+    That would have let a bundle with no session identity at all through, and
+    the observed value is the only thing tying a published Refine run back to
+    the device capture session that produced it.
+    """
+
     document = _json_value(payload, "bundle manifest")
     if not isinstance(document, dict):
         _fail(
@@ -1695,12 +1800,23 @@ def _validate_manifest(
         or document["schemaVersion"] != 3
         or type(document.get("bundleSpecVersion")) is not int
         or document["bundleSpecVersion"] != 1
-        or document.get("scanId") != request.scan_id
         or document.get("checksumAlgorithm") != "sha256"
     ):
         _fail(
             MaterializerFailureCode.INPUT_INVALID,
             "bundle manifest identity/schema contract does not match the request",
+        )
+    capture_session_id = _stable_identifier(
+        document.get("scanId"),
+        "bundle manifest scanId",
+    )
+    if (
+        request.capture_session_id is not None
+        and capture_session_id != request.capture_session_id
+    ):
+        _fail(
+            MaterializerFailureCode.INPUT_INVALID,
+            "bundle manifest scanId does not match the requested capture session",
         )
     artifacts = document.get("artifacts")
     if not isinstance(artifacts, list) or len(artifacts) > 256:
@@ -1743,6 +1859,7 @@ def _validate_manifest(
                 MaterializerFailureCode.INPUT_INVALID,
                 f"bundle manifest does not bind the requested {kind} artifact",
             )
+    return capture_session_id
 
 
 def _validate_member_path(value: object, *, suffix: str) -> str:
@@ -2489,7 +2606,10 @@ class RefineMaterializer:
                         self._acquirer.acquire(
                             source=source,
                             user_id=request.user_id,
-                            scan_id=request.scan_id,
+                            # The READ identity, not the publication one: the
+                            # acquirer re-checks the same ``[1]``/``[2]`` pair
+                            # the storage RLS would have checked.
+                            room_id=request.room_id,
                             destination=destination,
                             deadline=deadline,
                         )
@@ -2528,7 +2648,7 @@ class RefineMaterializer:
                 frozen_by_kind["bundleManifest"],
                 deadline=deadline,
             )
-            _validate_manifest(manifest_payload, request=request)
+            capture_session_id = _validate_manifest(manifest_payload, request=request)
             index_payload = _read_frozen_file(
                 frozen_by_kind["keyframeIndex"],
                 deadline=deadline,
@@ -2670,6 +2790,7 @@ class RefineMaterializer:
                 workspace_root=workspace,
                 inputs=tuple(verified_inputs),
                 frames=tuple(materialized_frames),
+                capture_session_id=capture_session_id,
                 _workspace_anchor=workspace_anchor,
             )
             workspace_anchor = None

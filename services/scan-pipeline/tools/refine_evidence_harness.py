@@ -379,6 +379,7 @@ def build_row(
     *,
     bundle: str,
     scan_id: str,
+    room_id: str = "",
     attempt: int,
     outcome: str,
     error_text: str | None,
@@ -398,7 +399,12 @@ def build_row(
     return {
         "schemaVersion": HARNESS_SCHEMA_VERSION,
         "bundle": bundle,
+        # BOTH ids, because a row that carries one of them cannot be read back
+        # unambiguously: ``scanId`` is the publication segment and ``roomId`` is
+        # the segment the bundle was READ from.  ``determinism_key`` looks at
+        # neither, so adding one changes no comparison.
         "scanId": scan_id,
+        "roomId": room_id,
         "attempt": attempt,
         "outcome": outcome,
         "errorText": error_text,
@@ -613,13 +619,22 @@ def render_graph_table(rows: Sequence[Mapping[str, object]]) -> str:
 # Bundles.
 # ---------------------------------------------------------------------------
 def read_bundle_identity(bundle_dir: Path) -> tuple[str, str]:
-    """``(user_id, scan_id)`` read out of the bundle's own object keys."""
+    """``(user_id, room_id)`` read out of the bundle's own object keys.
+
+    Segment ``[2]`` is the ROOM, not the scan.  This function returned it under
+    the name ``scan_id`` until R122, and the bundle directories on the qualified
+    host were laid out under the manifest's own ``scanId`` to make that name come
+    true -- I104's measurement-only workaround, which altered no content and no
+    manifest but did mean the harness was exercising a layout the app never
+    writes.  A bundle laid out under the real ``room_scans.room_id``, exactly as
+    ``RoomScanStoragePath.object`` builds it, is now the shape that works.
+    """
 
     document = json.loads((bundle_dir / "sources.json").read_text(encoding="utf-8"))
     key = document["bundleManifest"]["objectKey"]
     parts = str(key).split("/")
     if len(parts) != 4 or parts[0] != "manifests":
-        raise ValueError(f"{bundle_dir}: bundleManifest key is not manifests/<user>/<scan>/manifest.json")
+        raise ValueError(f"{bundle_dir}: bundleManifest key is not manifests/<user>/<room>/manifest.json")
     return parts[1], parts[2]
 
 
@@ -641,7 +656,16 @@ def run_probe(arguments: argparse.Namespace) -> int:
     from patina_scan_worker import refine_lifecycle, refine_runner
 
     bundle_dir = Path(arguments.bundle_dir).resolve(strict=True)
-    user_id, scan_id = read_bundle_identity(bundle_dir)
+    user_id, room_id = read_bundle_identity(bundle_dir)
+    # THE READ id comes out of the bundle's own keys; THE WRITE id cannot,
+    # because a bundle directory carries no ``room_scans.id`` anywhere -- the
+    # queue payload does, and this harness has no queue.  ``--scan-id`` lets an
+    # operator who knows the row supply it; absent that it falls back to the
+    # room id, which is a legal publication segment by 00287's own policy
+    # (``rs.id::text = [3] OR rs.room_id::text = [3]``) and in any case this
+    # harness publishes to ``LocalScratchStorageSink``, a directory, never to
+    # Supabase Storage.
+    scan_id = str(arguments.scan_id) if arguments.scan_id else room_id
     graph: dict[str, object] | None = None
     try:
         graph = candidate_graph_stats(keyframe_index_path(bundle_dir))
@@ -663,6 +687,8 @@ def run_probe(arguments: argparse.Namespace) -> int:
         user_id,
         "--scan-id",
         scan_id,
+        "--room-id",
+        room_id,
         "--task-id",
         arguments.task_id,
         "--lease-id",
@@ -693,6 +719,7 @@ def run_probe(arguments: argparse.Namespace) -> int:
     row = build_row(
         bundle=bundle_dir.name,
         scan_id=scan_id,
+        room_id=room_id,
         attempt=int(arguments.attempt),
         outcome=outcome,
         error_text=error_text,
@@ -956,6 +983,9 @@ def build_argument_parser() -> argparse.ArgumentParser:
     probe.add_argument("--publish-dir", required=True)
     probe.add_argument("--row-out", required=True)
     probe.add_argument("--attempt", default=1, type=int)
+    # Optional: the bundle's own keys cannot carry ``room_scans.id``, so the
+    # publication segment is either supplied here or falls back to the room id.
+    probe.add_argument("--scan-id", default=None)
     probe.add_argument("--task-id", default="harness-probe")
     probe.add_argument("--lease-id", default="harness-lease")
     probe.add_argument("--room-file-id", default="9d3e2a70-0000-4000-8000-000000000122")

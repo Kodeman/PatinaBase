@@ -2460,16 +2460,22 @@ class LocalScratchArtifactAcquirer:
         *,
         source: RefineSourceArtifact,
         user_id: str,
-        scan_id: str,
+        room_id: str,
         destination: Any,
         deadline: RefineDeadline,
     ) -> None:
         # The SAME guard the Storage acquirer runs, not a local paraphrase of
-        # it: segment[1] is the owner and segment[2] is the scan.  A local
-        # directory has no RLS, so this is the only thing standing between a
-        # mistyped key and another owner's bundle on the same scratch disk.
+        # it: segment[1] is the OWNER and segment[2] is the ROOM.  The comment
+        # here said "the scan" until R122, and it was wrong in the way that
+        # matters -- ``assert_owner_prefix``'s third parameter has always been
+        # ``room_scans.room_id`` (its own docstring and error text say so, and
+        # every P1 stage passes ``scan_row["room_id"]``), so a local bundle laid
+        # out the way the app writes it could never satisfy the check this
+        # method claimed to run.  A local directory has no RLS, so this is still
+        # the only thing standing between a mistyped key and another owner's
+        # bundle on the same scratch disk.
         try:
-            assert_owner_prefix(source.object_key, user_id, scan_id)
+            assert_owner_prefix(source.object_key, user_id, room_id)
         except OwnershipError as exc:
             raise _fail(f"local scratch object key is not owner scoped: {exc}") from exc
         relative = PurePosixPath(source.object_key)
@@ -2623,10 +2629,28 @@ def production_native_engine_call(
 
 @dataclass(frozen=True)
 class RefineLifecycleRequest:
-    """One local-scratch lifecycle run."""
+    """One local-scratch lifecycle run.
+
+    ``room_id`` and ``scan_id`` are BOTH here and they are not interchangeable
+    (R122).  One run reads and writes under two different prefixes:
+
+    * READ -- ``{folder}/{user_id}/{room_id}/{file}``, the bundle as the iOS
+      instrument uploaded it (B-18).  ``room_id`` is what the acquirer and the
+      materializer owner-assert.
+    * WRITE -- ``room_file/{user_id}/{scan_id}/v{n}/…``, the Refine deliverable
+      prefix.  ``scan_id`` is ``room_scans.id``; 00287's designer-read policy
+      matches ``rs.id::text = [3] OR rs.room_id::text = [3]`` and the
+      scan-pipeline design §5.2 rules that ``scanId`` at ``[3]`` is correct for
+      publication.  That side was never broken and is untouched here.
+
+    The handoff (p2-orchestrator-handoff-2026-07-18) states the same split as a
+    standing invariant: "bundles at ``{folder}/{uid}/{room}/{file}``,
+    deliverables under ``room_file/{uid}/{scanId}/v{n}/``".
+    """
 
     user_id: str
     scan_id: str
+    room_id: str
     task_id: str
     lease_id: str
     room_file_id: str
@@ -2637,6 +2661,11 @@ class RefineLifecycleRequest:
     keyframe_summary: RefineSourceArtifact
     keyframes_archive: RefineSourceArtifact
     gpu_index: str = "0"
+    #: OPTIONAL expected manifest ``scanId``.  Nothing server-side persists the
+    #: device's capture-session id, so this is ``None`` on every path that
+    #: exists today; supplying it re-arms the exact-equality guard in the
+    #: materializer for a caller that has the value from somewhere else.
+    capture_session_id: str | None = None
 
 
 @dataclass(frozen=True)
@@ -2656,12 +2685,18 @@ class RefineLifecycleReport:
     result: RefineRunResult
     publication: RefinePublicationReceipt
     p1_comparison: tuple[ComparisonRow, ...]
+    #: The manifest's own ``scanId``, observed by the materializer.  It is
+    #: PROVENANCE, not identity: nothing server-side holds it, so it is reported
+    #: rather than compared (R122).  It is the only value in the report that
+    #: names the DEVICE capture session the bundle came out of.
+    capture_session_id: str = ""
 
     def to_document(self) -> dict[str, Any]:
         return {
             "schemaVersion": self.schema_version,
             "contract": self.contract,
             "productionEnablement": self.production_enablement,
+            "captureSessionId": self.capture_session_id,
             "stageRegistered": REFINE_LIFECYCLE_STAGE_REGISTERED,
             "qualified": REFINE_LIFECYCLE_QUALIFIED,
             "toolchain": {
@@ -2776,6 +2811,7 @@ def run_refine_lifecycle(
     for label, value in (
         ("user id", request.user_id),
         ("scan id", request.scan_id),
+        ("room id", request.room_id),
         ("task id", request.task_id),
         ("lease id", request.lease_id),
         ("room file id", request.room_file_id),
@@ -2801,6 +2837,7 @@ def run_refine_lifecycle(
         RefineMaterializationRequest(
             user_id=request.user_id,
             scan_id=request.scan_id,
+            room_id=request.room_id,
             task_id=request.task_id,
             lease_id=request.lease_id,
             workspace_parent=request.scratch_root,
@@ -2808,6 +2845,7 @@ def run_refine_lifecycle(
             keyframe_index=request.keyframe_index,
             keyframe_summary=request.keyframe_summary,
             keyframes_archive=request.keyframes_archive,
+            capture_session_id=request.capture_session_id,
         ),
         deadline=deadline,
     )
@@ -2949,6 +2987,7 @@ def run_refine_lifecycle(
         result=result,
         publication=publication,
         p1_comparison=compare_against_p1_certificate(result, certificate),
+        capture_session_id=materialization.capture_session_id,
     )
 
 
@@ -3069,7 +3108,15 @@ def build_argument_parser() -> argparse.ArgumentParser:
     parser.add_argument("--scratch-dir", required=True)
     parser.add_argument("--publish-dir", required=True)
     parser.add_argument("--user-id", required=True)
+    # TWO identifiers, both required, because one run uses two prefixes.
+    # ``--scan-id`` is ``room_scans.id`` and governs the PUBLICATION prefix
+    # ``room_file/{user}/{scan}/v{n}/``.  ``--room-id`` is ``room_scans.room_id``
+    # and governs the READ prefix ``{folder}/{user}/{room}/{file}`` -- the shape
+    # the iOS instrument actually uploads (B-18).  Neither is defaulted from the
+    # other: an operator who conflates them should get a legible refusal from the
+    # owner-prefix check, not a silently wrong publication.
     parser.add_argument("--scan-id", required=True)
+    parser.add_argument("--room-id", required=True)
     parser.add_argument("--task-id", required=True)
     parser.add_argument("--lease-id", required=True)
     parser.add_argument("--room-file-id", required=True)
@@ -3161,6 +3208,7 @@ def build_composed_invocation(
         request=RefineLifecycleRequest(
             user_id=arguments.user_id,
             scan_id=arguments.scan_id,
+            room_id=arguments.room_id,
             task_id=arguments.task_id,
             lease_id=arguments.lease_id,
             room_file_id=arguments.room_file_id,
