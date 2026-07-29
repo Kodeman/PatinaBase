@@ -127,9 +127,12 @@ final class ArtifactUploader {
     // MARK: - Artifact upload
 
     /// Upload a single artifact to Supabase Storage. Returns nil when the
-    /// kind is a sidecar (no storage upload required); returns the public
-    /// URL string otherwise. On success we merge the SHA256 into
-    /// `room_scans.artifacts_sha256` via the `merge_scan_artifact_sha256` RPC.
+    /// kind is a sidecar (no storage upload required); otherwise returns the
+    /// **bucket object key** — what the caller writes into the artifact's
+    /// `room_scans` URL column. `room-scans` is private, so a public URL there
+    /// would not resolve; see the comment at the assignment below. On success
+    /// we merge the SHA256 into `room_scans.artifacts_sha256` via the
+    /// `merge_scan_artifact_sha256` RPC.
     func uploadArtifact(
         artifact: ScanManifest.Artifact,
         from bundleURL: URL,
@@ -151,9 +154,27 @@ final class ArtifactUploader {
         // "new row violates row-level security policy" in the 2026-05-13
         // retest (scan 9AD8F978).
         let path = "\(folderPrefix)/\(userId.uuidString.lowercased())/\(roomId.uuidString.lowercased())/\(filename)"
-        let publicUrlString = (try? supabase.storage
-            .from(usdzBucket)
-            .getPublicURL(path: path).absoluteString) ?? ""
+        // STORE THE PLAIN BUCKET KEY, not a public URL. `room-scans` is a
+        // PRIVATE bucket (`public = false`, migration 00031, never flipped), so
+        // the `…/storage/v1/object/public/room-scans/<key>` string this line
+        // used to return is a URL that answers `400 Bucket not found` —
+        // recorded in I104 against `room_scans.scan_bundle_url` and
+        // `depth_archive_url`, both of which this method feeds.
+        //
+        // Nothing regresses by dropping it: every consumer in the repo already
+        // reduces the column back to a bucket key and never fetches it as a URL
+        // (`confirm-scan-bundle`, `parse-room-scan`'s `objectKeyFromUrl`, the
+        // scan worker's `keys.object_key_from_url`, the portals'
+        // `publicUrlToPath`), and each has an explicit "no marker / no scheme →
+        // use as-is" branch, pinned by `parse-room-scan/lib.test.ts`.
+        //
+        // Not `/object/authenticated/…`: no precedent in this repo, and it
+        // embeds the project host in a data column. Not a signed URL: those
+        // expire, and the house pattern is to sign at READ time
+        // (`use-room-scans.ts`). Private buckets added since do exactly this —
+        // `capture-media` (00234) stores `path`, `site-requests` (00374) stores
+        // `object_path`.
+        let storedReference = Self.storedReference(forObjectPath: path)
 
         // Size-gated strategy. Large files (>= 5 MB) go through the
         // BackgroundScanUploader so they survive app-suspension; smaller
@@ -213,7 +234,7 @@ final class ArtifactUploader {
             }
         }
 
-        return publicUrlString
+        return storedReference
     }
 
     /// Enqueue an artifact through `BackgroundScanUploader` and await its
@@ -319,6 +340,16 @@ final class ArtifactUploader {
             return nil
         }
     }
+
+    /// What goes in a `room_scans` artifact URL column for an object at
+    /// `path` — the **plain bucket key**, unchanged.
+    ///
+    /// Extracted so the choice is reachable from a test rather than buried in
+    /// an async method that needs a live Supabase client. See the long comment
+    /// in `uploadArtifact` for why a key and not a public URL, an
+    /// `/object/authenticated/` path, or a signed URL. Field's uploader has the
+    /// identical seam (`RoomScanStoragePath.storedReference`).
+    nonisolated static func storedReference(forObjectPath path: String) -> String { path }
 
     nonisolated static func storagePathComponents(for artifact: ScanManifest.Artifact) -> (folder: String, filename: String)? {
         let filename: String
