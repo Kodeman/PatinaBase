@@ -13,6 +13,7 @@ private enum CullAction: Equatable { case keep, cull }
 
 struct V2CullDeckScreen: View {
     let store: CaptureStore
+    let sync: any CaptureSyncService
     let session: any SessionProviding
     let coordinator: CaptureCoordinator
     private let sessionContext = CaptureSessionContextStore.shared
@@ -22,6 +23,8 @@ struct V2CullDeckScreen: View {
     @State private var drag: CGSize = .zero
     @State private var lastAction: CullAction = .keep
     @State private var actionTick = 0
+    @State private var isSendingAll = false
+    @State private var bulkRouteError: String?
 
     private let threshold: CGFloat = 120
 
@@ -58,14 +61,7 @@ struct V2CullDeckScreen: View {
             guard actionTick > 0 else { return nil }
             return lastAction == .keep ? .impact(weight: .light) : .impact(flexibility: .rigid)
         }
-        .onAppear {
-            let context = sessionContext.current(
-                identity: CaptureSessionIdentity(
-                    userID: session.userID,
-                    workspaceID: session.workspaceID))
-            deck = store.session(visitID: context.visitID)
-            index = 0
-        }
+        .onAppear { reloadDeck() }
     }
 
     private var header: some View {
@@ -172,6 +168,10 @@ struct V2CullDeckScreen: View {
 
     private func commit(_ action: CullAction) {
         guard let specimen = current else { return }
+        guard CaptureRouteSafetyPolicy.canCull(specimen.transferState) else {
+            reloadDeck()
+            return
+        }
         lastAction = action
         actionTick += 1
 
@@ -195,33 +195,74 @@ struct V2CullDeckScreen: View {
     }
 
     private var footer: some View {
-        HStack(spacing: 10) {
-            RouteActionButton("Send all to inbox", systemImage: "tray.and.arrow.down", kind: .danger) {
-                sendAllToInbox()
+        VStack(spacing: 8) {
+            if let bulkRouteError {
+                Label(bulkRouteError, systemImage: "exclamationmark.triangle")
+                    .font(CaptureType.footnote)
+                    .foregroundStyle(CaptureColor.error)
+                    .frame(maxWidth: .infinity, alignment: .leading)
             }
-            RouteActionButton("Keep all", systemImage: "checkmark", kind: .primary) {
-                keepAll()
+
+            HStack(spacing: 10) {
+                RouteActionButton(
+                    isSendingAll ? "Sending…" : "Send all to inbox",
+                    systemImage: "tray.and.arrow.down",
+                    kind: .danger
+                ) {
+                    sendAllToInbox()
+                }
+                RouteActionButton("Keep all", systemImage: "checkmark", kind: .primary) {
+                    keepAll()
+                }
             }
+            .disabled(isSendingAll)
         }
     }
 
     private func sendAllToInbox() {
-        for specimen in deck {
-            specimen.destination = .inbox
-            specimen.touch()
+        guard !isSendingAll else { return }
+        let ids = deck
+            .filter { CaptureRouteSafetyPolicy.canCull($0.transferState) }
+            .map(\.id)
+        guard !ids.isEmpty else {
+            coordinator.dismissSheet()
+            return
         }
-        try? store.save()
-        coordinator.dismissSheet()
-        coordinator.popToRoot()
+
+        isSendingAll = true
+        bulkRouteError = nil
+        Task { @MainActor in
+            do {
+                try await sync.routeAll(ids, to: .inbox)
+                isSendingAll = false
+                coordinator.dismissSheet()
+                coordinator.popToRoot()
+            } catch {
+                isSendingAll = false
+                bulkRouteError = "Some captures still need routing. The rest remain safely in this session."
+                reloadDeck()
+            }
+        }
     }
 
     private func keepAll() {
-        for specimen in deck {
+        for specimen in deck
+        where CaptureRouteSafetyPolicy.canCull(specimen.transferState) {
             specimen.status = .ready
             specimen.touch()
         }
         try? store.save()
         coordinator.dismissSheet()
+    }
+
+    private func reloadDeck() {
+        let context = sessionContext.current(
+            identity: CaptureSessionIdentity(
+                userID: session.userID,
+                workspaceID: session.workspaceID))
+        deck = store.session(visitID: context.visitID)
+            .filter { CaptureRouteSafetyPolicy.canCull($0.transferState) }
+        index = 0
     }
 
     private var completionCard: some View {
@@ -247,7 +288,8 @@ import CaptureKitMocks
 #Preview {
     let demo = RoutePreviewData.make()
     return V2CullDeckScreen(
-        store: demo.store, session: MockSessionProviding(),
+        store: demo.store, sync: InMemoryCaptureSyncService(),
+        session: MockSessionProviding(),
         coordinator: CaptureCoordinator())
 }
 #endif

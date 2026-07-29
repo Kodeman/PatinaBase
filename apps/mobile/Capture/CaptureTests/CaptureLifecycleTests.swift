@@ -156,6 +156,53 @@ struct CaptureTransferLifecycleTests {
     }
 }
 
+struct CaptureRouteSafetyPolicyTests {
+    @Test func onlyDeviceLocalTransfersCanEnterTheCullDeck() {
+        #expect(CaptureRouteSafetyPolicy.canCull(.local))
+
+        let protectedPhases: [CaptureTransferPhase] = [
+            .queued,
+            .uploading,
+            .awaitingConfirmation,
+            .complete,
+            .retryableFailure,
+            .rejected
+        ]
+        for phase in protectedPhases {
+            let transfer = CaptureTransferState(
+                phase: phase,
+                receiptID: phase == .complete ? "receipt" : nil)
+            #expect(!CaptureRouteSafetyPolicy.canCull(transfer))
+        }
+    }
+
+    @Test func terminalDestinationRequiresReceiptBackedServerTruth() {
+        let confirmed = CaptureTransferState(
+            phase: .complete,
+            progress: 100,
+            receiptID: "capture-receipt")
+
+        #expect(CaptureRouteSafetyPolicy.confirmedDestination(
+            recordedDestination: .library,
+            transfer: confirmed) == .library)
+        #expect(CaptureRouteSafetyPolicy.confirmedDestination(
+            recordedDestination: .inbox,
+            transfer: confirmed) == .inbox)
+        #expect(CaptureRouteSafetyPolicy.confirmedDestination(
+            recordedDestination: .undecided,
+            transfer: confirmed) == nil)
+    }
+
+    @Test func queuedOrReceiptlessDestinationsAreNeverReportedAsTerminal() {
+        #expect(CaptureRouteSafetyPolicy.confirmedDestination(
+            recordedDestination: .library,
+            transfer: CaptureTransferState(phase: .queued)) == nil)
+        #expect(CaptureRouteSafetyPolicy.confirmedDestination(
+            recordedDestination: .inbox,
+            transfer: CaptureTransferState(phase: .complete)) == nil)
+    }
+}
+
 struct CaptureSessionContextPolicyTests {
     private let identity = CaptureSessionIdentity(
         userID: "designer-a",
@@ -184,6 +231,28 @@ struct CaptureSessionContextPolicyTests {
 
         #expect(remembered.visitID == initial.visitID)
         #expect(remembered.routing == routing)
+    }
+
+    @Test func assignmentUpdatePreservesTheLastSuccessfulDestination() {
+        let prior = CaptureRoutingMemory(
+            destination: .library,
+            projectID: "old-project",
+            projectName: "Old project",
+            room: "Gallery",
+            shelf: "Lighting")
+
+        let updated = CaptureRouteSafetyPolicy.updatingAssignment(
+            in: prior,
+            projectID: "new-project",
+            projectName: "New project",
+            room: "Dining room",
+            shelf: "Seating")
+
+        #expect(updated.destination == .library)
+        #expect(updated.projectID == "new-project")
+        #expect(updated.projectName == "New project")
+        #expect(updated.room == "Dining room")
+        #expect(updated.shelf == "Seating")
     }
 
     @Test func resetsForWorkspaceOrUserChange() {
@@ -243,6 +312,43 @@ struct CaptureSessionContextPolicyTests {
 
         #expect(reset.visitID != first.visitID)
         #expect(reset.routing == .empty)
+    }
+}
+
+private actor RecordingRouteSyncService: CaptureSyncService {
+    private var recordedRoutes: [(UUID, CaptureDestination)] = []
+
+    func enqueue(_ specimenID: UUID) async {}
+    func drain() async {}
+    func commit(_ specimenID: UUID) async throws -> CommitReceipt {
+        CommitReceipt(
+            remoteId: "receipt",
+            productId: nil,
+            destination: .inbox,
+            created: true)
+    }
+    func route(_ specimenID: UUID, to destination: CaptureDestination) async throws {
+        recordedRoutes.append((specimenID, destination))
+    }
+    nonisolated var snapshots: AsyncStream<SyncSnapshot> {
+        AsyncStream { continuation in continuation.finish() }
+    }
+
+    func routes() -> [(UUID, CaptureDestination)] {
+        recordedRoutes
+    }
+}
+
+struct CaptureBulkRouteTests {
+    @Test func sendAllUsesThePerRecordRouteContract() async throws {
+        let ids = [UUID(), UUID(), UUID()]
+        let sync = RecordingRouteSyncService()
+
+        try await sync.routeAll(ids, to: .inbox)
+
+        let routes = await sync.routes()
+        #expect(routes.map { $0.0 } == ids)
+        #expect(routes.allSatisfy { $0.1 == .inbox })
     }
 }
 

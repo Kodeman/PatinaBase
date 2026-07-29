@@ -44,8 +44,64 @@ public protocol CaptureSyncService: Sendable {
     var snapshots: AsyncStream<SyncSnapshot> { get }
 }
 
+/// Safety rules shared by route terminals, assignment, and session culling.
+public enum CaptureRouteSafetyPolicy {
+    /// Update visit-scoped assignment context without changing the last
+    /// destination that S3 successfully routed.
+    public static func updatingAssignment(
+        in routing: CaptureRoutingMemory,
+        projectID: String?,
+        projectName: String?,
+        room: String?,
+        shelf: String?
+    ) -> CaptureRoutingMemory {
+        var updated = routing
+        updated.projectID = projectID
+        updated.projectName = projectName
+        updated.room = room
+        updated.shelf = shelf
+        return updated
+    }
+
+    /// Once a record leaves the device-local phase, review must not rewrite it.
+    public static func canCull(_ transfer: CaptureTransferState) -> Bool {
+        transfer.phase == .local
+    }
+
+    /// A terminal can name a destination only when both the server receipt and
+    /// server-mapped destination are present.
+    public static func confirmedDestination(
+        recordedDestination: CaptureDestination,
+        transfer: CaptureTransferState
+    ) -> CaptureDestination? {
+        guard transfer.phase == .complete,
+              let receipt = transfer.receiptID?.trimmingCharacters(
+                in: .whitespacesAndNewlines),
+              !receipt.isEmpty else {
+            return nil
+        }
+        switch recordedDestination {
+        case .library, .inbox:
+            return recordedDestination
+        case .undecided:
+            return nil
+        }
+    }
+}
+
 public extension CaptureSyncService {
     func reconcilePendingTransfers() async {
         await drain()
+    }
+
+    /// Route a bounded set through the same per-record sync contract. Stops at
+    /// the first error so the caller can keep unresolved records visible.
+    func routeAll(
+        _ specimenIDs: [UUID],
+        to destination: CaptureDestination
+    ) async throws {
+        for specimenID in specimenIDs {
+            try await route(specimenID, to: destination)
+        }
     }
 }

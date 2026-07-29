@@ -3,8 +3,8 @@
 //
 //  S1 · Assign — with venue stamp. Tags the specimen to a project / room / shelf
 //  while the venue + timestamp ride along automatically (F-08/F-09). Last-used
-//  project & room are pre-filled for a fast showroom rhythm; the two footer moves
-//  carry a destination recommendation into S3 where the route() actually commits.
+//  project & room are pre-filled for a fast showroom rhythm. S1 persists only
+//  assignment context; S3 owns the destination decision and route() commit.
 
 import Foundation
 import SwiftUI
@@ -87,13 +87,12 @@ private struct S1Content: View {
 
                 Spacer(minLength: 8)
 
-                VStack(spacing: 10) {
-                    RouteActionButton("Save to library", systemImage: "books.vertical", kind: .primary) {
-                        advance(to: .library)
-                    }
-                    RouteActionButton("Inbox — finish later", systemImage: "tray", kind: .secondary) {
-                        advance(to: .inbox)
-                    }
+                RouteActionButton(
+                    "Choose destination",
+                    systemImage: "arrow.right",
+                    kind: .primary
+                ) {
+                    advance()
                 }
             }
             .padding(20)
@@ -196,12 +195,12 @@ private struct S1Content: View {
         specimen.venue = venue
     }
 
-    private func advance(to recommendation: CaptureDestination) {
-        persistRouting(recommendation: recommendation)
+    private func advance() {
+        persistRouting()
         coordinator.present(.destination(specimen.id))
     }
 
-    private func persistRouting(recommendation: CaptureDestination) {
+    private func persistRouting() {
         var venue = specimen.venue ?? VenueStamp()
         let trimmedName = venueName.trimmingCharacters(in: .whitespacesAndNewlines)
         if !trimmedName.isEmpty { venue.placemarkName = trimmedName }
@@ -210,13 +209,13 @@ private struct S1Content: View {
         venue.room = room.isEmpty ? nil : room
         venue.shelf = shelf.isEmpty ? nil : shelf
         specimen.venue = venue
-        specimen.destination = recommendation
         specimen.touch()
         try? store.save()
 
+        let priorRouting = sessionContext.current(identity: identity).routing
         sessionContext.remember(
-            CaptureRoutingMemory(
-                destination: recommendation,
+            CaptureRouteSafetyPolicy.updatingAssignment(
+                in: priorRouting,
                 projectID: selectedProjectId.isEmpty ? nil : selectedProjectId,
                 projectName: projectName.isEmpty ? nil : projectName,
                 room: room.isEmpty ? nil : room,
