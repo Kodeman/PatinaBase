@@ -23,6 +23,9 @@ public final class ScanUploadRecord {
 
     public var scanID: String
     public var roomID: String
+    /// Immutable creation-time owner stamp. Nil only for legacy/quarantined rows.
+    public private(set) var ownerUserID: String?
+    public private(set) var ownerWorkspaceID: String?
     public var name: String
     public var projectID: String?
     public var projectRoomID: String?
@@ -41,10 +44,13 @@ public final class ScanUploadRecord {
 
     public init(bundlePath: String, scanID: String, roomID: String, name: String,
                 projectID: String?, projectRoomID: String?, scanSchemaVersion: Int = 3,
-                artifacts: [ScanArtifactUploadState] = []) {
+                artifacts: [ScanArtifactUploadState] = [],
+                owner: CaptureOwnerIdentity? = nil) {
         self.bundlePath = bundlePath
         self.scanID = scanID
         self.roomID = roomID
+        self.ownerUserID = owner?.userID
+        self.ownerWorkspaceID = owner?.workspaceID
         self.name = name
         self.projectID = projectID
         self.projectRoomID = projectRoomID

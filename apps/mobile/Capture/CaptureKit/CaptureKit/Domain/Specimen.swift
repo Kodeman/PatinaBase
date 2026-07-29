@@ -9,6 +9,35 @@
 import Foundation
 import SwiftData
 
+/// Immutable identity stamp for locally persisted work.
+///
+/// The optional owner columns on persisted models exist for lightweight migration:
+/// pre-Option-B rows decode as nil and remain quarantined. New authenticated work
+/// receives both normalized values at creation and never changes owners.
+public struct CaptureOwnerIdentity: Sendable, Hashable {
+    public let userID: String
+    public let workspaceID: String
+
+    public init?(userID: String?, workspaceID: String?) {
+        guard let userID = Self.normalize(userID),
+              let workspaceID = Self.normalize(workspaceID) else { return nil }
+        self.userID = userID
+        self.workspaceID = workspaceID
+    }
+
+    public func matches(userID: String?, workspaceID: String?) -> Bool {
+        Self.normalize(userID) == self.userID
+            && Self.normalize(workspaceID) == self.workspaceID
+    }
+
+    private static func normalize(_ value: String?) -> String? {
+        let normalized = value?
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+            .lowercased() ?? ""
+        return normalized.isEmpty ? nil : normalized
+    }
+}
+
 @Model
 public final class Specimen {
     @Attribute(.unique) public var id: UUID
@@ -17,6 +46,9 @@ public final class Specimen {
     public var clientToken: UUID
     public var createdAt: Date
     public var updatedAt: Date
+    /// Immutable creation-time owner stamp. Nil only for legacy/quarantined rows.
+    public private(set) var ownerUserID: String?
+    public private(set) var ownerWorkspaceID: String?
 
     // ── Recognised / editable scalar fields ──
     public var title: String?
@@ -78,6 +110,7 @@ public final class Specimen {
         clientToken: UUID = UUID(),
         createdAt: Date = Date(),
         captureSessionID: UUID? = nil,
+        owner: CaptureOwnerIdentity? = nil,
         categoryRaw: String = SpecimenCategory.unknown.rawValue,
         destinationRaw: String = CaptureDestination.undecided.rawValue,
         statusRaw: String = CaptureStatus.draft.rawValue,
@@ -87,6 +120,8 @@ public final class Specimen {
         self.clientToken = clientToken
         self.createdAt = createdAt
         self.updatedAt = createdAt
+        self.ownerUserID = owner?.userID
+        self.ownerWorkspaceID = owner?.workspaceID
         self.captureSessionID = captureSessionID
         self.categoryRaw = categoryRaw
         self.materials = []

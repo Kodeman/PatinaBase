@@ -104,8 +104,9 @@ public final class CaptureStore {
 
     // ── CRUD / outbox ──
     @discardableResult
-    public func newDraft(sessionID: UUID? = nil) -> Specimen {
-        let s = Specimen(captureSessionID: sessionID)
+    public func newDraft(sessionID: UUID? = nil,
+                         owner: CaptureOwnerIdentity? = nil) -> Specimen {
+        let s = Specimen(captureSessionID: sessionID, owner: owner)
         context.insert(s)
         return s
     }
@@ -121,6 +122,17 @@ public final class CaptureStore {
         return try? context.fetch(descriptor).first
     }
 
+    /// Owner-scoped lookup for real upload and user-facing paths. Legacy rows
+    /// (nil owner) and mismatches intentionally resolve as absent.
+    public func specimen(id: UUID, owner: CaptureOwnerIdentity) -> Specimen? {
+        guard let specimen = specimen(id: id),
+              owner.matches(
+                userID: specimen.ownerUserID,
+                workspaceID: specimen.ownerWorkspaceID
+              ) else { return nil }
+        return specimen
+    }
+
     // ── Scan upload records (item 8 — durable resumable upload) ──
 
     /// The durable upload record for a bundle dir, if one exists (resume path).
@@ -129,6 +141,18 @@ public final class CaptureStore {
         let descriptor = FetchDescriptor<ScanUploadRecord>(
             predicate: #Predicate { $0.bundlePath == bundlePath })
         return try? context.fetch(descriptor).first
+    }
+
+    public func scanUploadRecord(
+        bundlePath: String,
+        owner: CaptureOwnerIdentity
+    ) -> ScanUploadRecord? {
+        guard let record = scanUploadRecord(bundlePath: bundlePath),
+              owner.matches(
+                userID: record.ownerUserID,
+                workspaceID: record.ownerWorkspaceID
+              ) else { return nil }
+        return record
     }
 
     /// The durable upload record for a scan id, if one exists — used to route an
@@ -140,13 +164,40 @@ public final class CaptureStore {
         return try? context.fetch(descriptor).first
     }
 
+    public func scanUploadRecord(
+        scanID: String,
+        owner: CaptureOwnerIdentity
+    ) -> ScanUploadRecord? {
+        guard let record = scanUploadRecord(scanID: scanID),
+              owner.matches(
+                userID: record.ownerUserID,
+                workspaceID: record.ownerWorkspaceID
+              ) else { return nil }
+        return record
+    }
+
     /// Durable scan transfers that remain discoverable after leaving F4 or
     /// relaunching. Completed receipts are omitted by default.
     public func scanUploadRecords(includeComplete: Bool = false) -> [ScanUploadRecord] {
         let descriptor = FetchDescriptor<ScanUploadRecord>(
             sortBy: [SortDescriptor(\.updatedAt, order: .reverse)])
         let records = (try? context.fetch(descriptor)) ?? []
-        return includeComplete ? records : records.filter { $0.statusRaw != "complete" }
+        return includeComplete
+            ? records
+            : records.filter { $0.transferState.phase != .complete }
+    }
+
+    /// Owner-scoped durable transfers for real pending/reconcile paths.
+    public func scanUploadRecords(
+        owner: CaptureOwnerIdentity,
+        includeComplete: Bool = false
+    ) -> [ScanUploadRecord] {
+        scanUploadRecords(includeComplete: includeComplete).filter {
+            owner.matches(
+                userID: $0.ownerUserID,
+                workspaceID: $0.ownerWorkspaceID
+            )
+        }
     }
 
     @discardableResult
@@ -232,20 +283,52 @@ public final class CaptureStore {
         return (try? context.fetch(descriptor)) ?? []
     }
 
+    /// Owner-scoped visit/list projection for authenticated app surfaces.
+    public func session(
+        visitID: UUID? = nil,
+        owner: CaptureOwnerIdentity
+    ) -> [Specimen] {
+        session(visitID: visitID).filter {
+            owner.matches(
+                userID: $0.ownerUserID,
+                workspaceID: $0.ownerWorkspaceID
+            )
+        }
+    }
+
     /// Everything awaiting/failing sync — drained oldest-first (R4/U1).
     public func outbox() -> [Specimen] {
         let ready = CaptureStatus.ready.rawValue
         let queued = CaptureStatus.queued.rawValue
         let uploading = CaptureStatus.uploading.rawValue
         let failed = CaptureStatus.failed.rawValue
+        let committed = CaptureStatus.committed.rawValue
         let descriptor = FetchDescriptor<Specimen>(
             predicate: #Predicate {
                 $0.statusRaw == ready || $0.statusRaw == queued
                     || $0.statusRaw == uploading || $0.statusRaw == failed
+                    || $0.statusRaw == committed
             },
             sortBy: [SortDescriptor(\.createdAt, order: .forward)]
         )
-        return (try? context.fetch(descriptor)) ?? []
+        let records = (try? context.fetch(descriptor)) ?? []
+        return records.filter {
+            guard $0.statusRaw == committed else { return true }
+            return ($0.remoteId ?? "")
+                .trimmingCharacters(in: .whitespacesAndNewlines)
+                .isEmpty
+        }
+    }
+
+    /// Owner-scoped outbox for real sync. Unowned legacy rows are deliberately
+    /// quarantined instead of being claimed by whoever signs in next.
+    public func outbox(owner: CaptureOwnerIdentity) -> [Specimen] {
+        outbox().filter {
+            owner.matches(
+                userID: $0.ownerUserID,
+                workspaceID: $0.ownerWorkspaceID
+            )
+        }
     }
 
     /// Library/dedupe search from the field (U2).
@@ -266,6 +349,19 @@ public final class CaptureStore {
             results = results.filter { $0.destinationRaw == destination.rawValue }
         }
         return results
+    }
+
+    /// Owner-scoped search/list projection for authenticated app surfaces.
+    public func search(
+        _ query: SpecimenQuery,
+        owner: CaptureOwnerIdentity
+    ) -> [Specimen] {
+        search(query).filter {
+            owner.matches(
+                userID: $0.ownerUserID,
+                workspaceID: $0.ownerWorkspaceID
+            )
+        }
     }
 
     // ── Media files in the App Group container ──

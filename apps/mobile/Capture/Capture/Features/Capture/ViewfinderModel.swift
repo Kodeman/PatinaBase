@@ -120,7 +120,14 @@ final class ViewfinderModel {
     }
 
     private func refreshSessionCount() {
-        sessionCount = store.session(visitID: visitID).count
+        guard let owner = CaptureOwnerIdentity(
+            userID: session.userID,
+            workspaceID: session.workspaceID
+        ) else {
+            sessionCount = 0
+            return
+        }
+        sessionCount = store.session(visitID: visitID, owner: owner).count
     }
 
     // MARK: Mode (tap / swipe)
@@ -300,7 +307,11 @@ final class ViewfinderModel {
     private func makeDraft() -> Specimen {
         let context = currentSessionContext()
         visitID = context.visitID
-        let draft = store.newDraft(sessionID: context.visitID)
+        let owner = CaptureOwnerIdentity(
+            userID: session.userID,
+            workspaceID: session.workspaceID
+        )
+        let draft = store.newDraft(sessionID: context.visitID, owner: owner)
         draft.venue = venueStamp
         draft.category = .unknown
         draft.destination = context.routing.destination

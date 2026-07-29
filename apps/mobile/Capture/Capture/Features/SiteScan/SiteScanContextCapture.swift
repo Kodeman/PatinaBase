@@ -29,11 +29,12 @@ final class SiteScanContextModel {
     private var partialTranscript = ""
     private var voiceTask: Task<Void, Never>?
 
-    init(store: CaptureStore, projectID: String?, projectRoomID: String?,
+    init(store: CaptureStore, owner: CaptureOwnerIdentity?,
+         projectID: String?, projectRoomID: String?,
          voice: any VoiceNoteService,
          scanSessionIdProvider: @escaping () -> String?,
          frameProvider: @escaping () async -> ContextFrameSnapshot?) {
-        self.service = ContextCaptureService(store: store)
+        self.service = ContextCaptureService(store: store, owner: owner)
         self.projectID = projectID
         self.projectRoomID = projectRoomID
         self.voice = voice
@@ -163,7 +164,12 @@ struct SiteScanContextScreen: View {
             await container.camera.start()
             if model == nil {
                 model = SiteScanContextModel(
-                    store: container.store, projectID: projectID, projectRoomID: projectRoomID,
+                    store: container.store,
+                    owner: CaptureOwnerIdentity(
+                        userID: container.session.userID,
+                        workspaceID: container.session.workspaceID
+                    ),
+                    projectID: projectID, projectRoomID: projectRoomID,
                     voice: SpeechVoiceNoteService(mediaDirectory: container.store.mediaDirectory()),
                     scanSessionIdProvider: { nil },      // no scan session on a non-Pro device
                     frameProvider: { [container] in

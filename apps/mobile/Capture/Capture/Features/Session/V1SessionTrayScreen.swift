@@ -140,7 +140,14 @@ struct V1SessionTrayScreen: View {
 
     private func reload() {
         let context = sessionContext.current(identity: identity)
-        items = store.session(visitID: context.visitID)
+        guard let owner = CaptureOwnerIdentity(
+            userID: session.userID,
+            workspaceID: session.workspaceID
+        ) else {
+            items = []
+            return
+        }
+        items = store.session(visitID: context.visitID, owner: owner)
     }
 
     private func endVisit() {
