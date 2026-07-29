@@ -5708,3 +5708,141 @@ the non-vacuity floors. A run that fails any of these is a result and is to be
 recorded as one.
 
 *Entries add: I101 · R121 · last id = R121*
+
+### I102 · Field Capture P2 · the real COLMAP child body; the first end-to-end engine run, and what refused it — 2026-07-28
+
+R121's authorisation is built.  `refine_colmap_backend.py` — pinned byte-identical
+to `6743e66e` since I96 and named as untouchable in every agent brief since — now
+carries the I87 primary plan as executable code, and that code has run COLMAP
+4.0.2 against a real Field capture on the qualified host.
+
+**What the child does, in the order it does it.**  `run_refine_colmap_native`
+loads the pinned `/opt/colmap/4.0.2` toolchain FIRST, so a drifted box is refused
+while the lease is still empty; then extracts the packet; then GPU SIFT
+(`CameraMode.PER_IMAGE`), the device intrinsics rewritten over COLMAP's guesses
+with database ids preserved, guided GPU matching over the deterministic candidate
+graph, the post-match overlap policy, the known-pose seed carrying the device's
+full poses, the one allowlisted CLI phase (`point_triangulator`, inheriting the
+already-isolated process group), bundle adjustment at `TWO_CAMS_FROM_WORLD` with
+intrinsics fixed, and last the Sim(3) rebase back into the seed's metric frame.
+It writes the seven closed output tokens and returns the report the parent parses.
+
+**The child computes its proposal with the PARENT's own code.**  It writes its
+three sparse-model archives, then re-reads them through
+`refine_model_alignment.read_sparse_model_snapshot` and solves the centres-only
+similarity with `refine_adapter.estimate_sim3`.  Agreement then means the two
+sides read one archive the same way, not that two implementations converged.
+That is the second in-package edge into `refine_model_alignment`, and it is
+pinned by test rather than left incidental.
+
+**Two ledgers were added to the packet, because evidence needs provenance the
+child cannot have.**  The engine request describes ENGINE images; the evidence
+builder needs the capture archive key, member, digest and size per frame plus the
+raster adapter's identity, and only the parent holds those.  `build_colmap_packet`
+now emits `source-ledger-v1.json` and `adapter-ledger-v1.json` — two member roles
+the extractor already knew how to parse and that nothing had ever produced.
+
+**THE RUN.**  Scan `004aa5b0-bfaa-4577-93f8-c06d9f38f1fc`, 49 keyframes, the
+R120-fixed bundle, from a root-owned R121 release built beside the live one so
+`patina-scan-worker` was never touched.  **28.6-29.4 s wall across four runs, peak RSS 596-660 MB**, under a
+3600 s lease — the first measurement this repository has ever had of a real
+reconstruction.  Inside it: GPU SIFT 3.2 s for **341_749 features** over 49
+frames (min 250, max 13_425, mean 6_974); guided matching and geometric
+verification **4.14 s**; bundle adjustment **0.56 s, 34 iterations, 87_950
+residuals, CONVERGENCE, initial cost 1.01046 px, final 0.682295 px**.  Four
+minutes was never the constraint; R119 ruling 2's whole-lease budget was not
+needed either.
+
+**R121's three questions, answered.**  COLMAP executes under the pinned manifest
+and the lease: yes.  How long 49 frames take: 29 s.  Whether the evidence
+clears `evaluate_refinement_evidence`: **NO.**  The run was refused
+`REFINE_EVIDENCE_REGRESSION / comparable_geometric_evidence_regressed` with
+coverage 1.0000 -> 1.0000, reprojection RMSE **2.015458 -> 1.351599 px (-32.9%)**,
+loop translation-direction RMSE 17.165228 -> 17.080197 deg, and loop rotation RMSE
+**4.915408 -> 4.930533 deg — worse by 0.015 deg, 0.31%** — over **four** verified
+non-temporal loop edges, on 42_587 common observations.  One comparable metric
+regressed and the rule is that none may.  Bundle adjustment reduced reprojection
+error by a third and moved the long-baseline rotations very slightly the wrong
+way; with a sample of four edges that difference is not distinguishable from
+noise.  Nothing was tuned to make it pass.
+
+**The R119 floors faced real output and cleared it.**  The refusal is downstream
+of them: `anchor_seed_snapshot_to_request`, `verify_child_alignment_proposal`,
+`require_refined_poses_moved` and `require_refined_shape_changed` all passed on
+bytes a real engine wrote.  The gauge-invariant shape floor in particular was
+built against a recorded fixture and has now been satisfied by a genuine
+refinement rather than by a construction.
+
+**Three defects only a real run could reach.**  (1) The packet writer emitted
+USTAR members at mode 0644 with NUL device fields; the child's extractor requires
+0600 and canonical zero-valued octal, and refused every parent-built packet.  It
+had been wrong since the writer existed — the parent's tests read its archives
+with `tarfile`, which does not care, and the extractor's tests hand-build their
+own headers, so the two implementations had never been compared.  They are now,
+directly.  (2) COLMAP 4.0.2 really does emit tracks that observe one image twice;
+the evidence builder's membership key forbids it.  Such tracks are excluded from
+BOTH models by a structural criterion that never looks at a residual, and the
+counts are carried into telemetry and `adapter-v2.json` rather than absorbed.
+(3) `pycolmap`'s `TwoViewGeometry.cam2_from_cam1` is optional and really returns
+`None`.
+
+**The seed anchor's rotation tolerance was unreachable by ANY child, and the fix
+was the metric, not the floor.**  The device's `cam_from_world` matrices arrive
+orthonormal only to `3.3e-7`; `acos(1 - x) ~ sqrt(2x)`, so
+`_separation_from_submitted_frames` reported `4.899e-4` rad of "drift" against a
+seed the child had not moved at all — 490x the `1e-6` tolerance, and set by the
+reference's own representation error rather than by the snapshot.  The tolerances
+are UNCHANGED; the submitted matrix is now projected onto SO(3) before the
+angular comparison, so the number is a rotation difference.  Both directions are
+constructed: an exact-copy snapshot against a defective reference now measures
+below `1e-8`, and a genuinely turned snapshot is still refused at 1.5x and 10x
+the tolerance.  Both refusals carry their margins, as does the evidence verdict —
+the first real run reported only that something "drifted".
+
+**Seven posture flags moved, none of them decorative.**
+`PACKET_EXTRACTION_QUALIFIED`, `OUTPUT_DESCRIPTOR_HANDOFF_QUALIFIED`,
+`ALIGNED_MODEL_BUILD_QUALIFIED`, `EVIDENCE_BUILDER_CONTRACT_COMPATIBLE`,
+`PARENT_ALIGNMENT_VERIFICATION_COMPOSED_INTO_REFINE` and
+`NATIVE_ENGINE_OUTPUT_ALIGNMENT_VERIFIED_BY_PARENT` each rest on the host run;
+`COMMAND_EXCEPTION_NORMALIZATION_QUALIFIED` rests on a constructed test, because
+it names a property of the guard rather than of the box.  **`PRIMARY_EXECUTION_
+QUALIFIED` stays False**: the plan executed and was then refused, and a path
+qualified only up to the point where it is refused is not qualified.
+`RUNNER_PATH_REOPEN_COMPOSITION_QUALIFIED` stays False because the run stops
+upstream of the artifact builder; `SEQUENTIAL_COMMAND_QUIESCENCE_QUALIFIED`
+because the plan has one CLI phase; `MEASUREMENT_SNAPSHOT_QUALIFIED` because that
+row schema is unused; `FALLBACK_QUALIFIED` and
+`PILOT_200_400_FRAME_RANGE_QUALIFIED` per I90 and R117.  The posture test that
+was supposed to make a quiet flip impossible only scanned names ending
+`_QUALIFIED` and was blind to three of these; it now scans every module-level
+boolean in the package and compares the true set for equality.
+
+**Posture otherwise unchanged and re-verified, not taken on report.**
+`DEFAULT_STAGES = "ingest,solve,drawings"`; `scan_pipeline.refine` unregistered;
+the raster pin exactly 1440x1920; `DEFAULT_LEASE_SECONDS = 3600.0`.
+
+**Verification.**  macOS: **2081 passed, 0 failed, 85 skipped**.  Qualified
+x86_64 host: **2081 passed, 84 failed, 1 skipped**, against a base-commit control
+at `9ef18190` on the same host and venv (**2065 passed, 84 failed**) showing **the
+identical 84** — zero new, zero fixed.  Those 84 are 82 `test_install_script.py` (root/systemd/staged
+installer), `test_packaging` (real wheel build) and the known
+`test_validator_drift`; they are properties of running from a checkout rather
+than from `install.sh`, and the control is what proves none of them is ours.
+A mutation sweep against the FULL tree ran a no-op control to 0 extra red before
+any count was read, then killed every clause it tried.  Three survivors were reported rather than absorbed — the evidence
+refusal's numbers, the candidate-graph agreement check and the source-ledger
+row binding — and each was given a reaching test before the sweep was rerun; the
+graph check had to be EXTRACTED from behind the GPU to be reachable at all, which
+is the same move this codebase made for `copy_exact`.
+
+**What is still not true.**  No run has published anything.  The 200-400 band is
+untouched.  Fuse, Splat and Present are not composed.  The pin covers one device,
+one OS, one capture and one COLMAP build; four verified loop edges is a thin
+basis for any statement about this subject, and whether the loop-rotation
+regression is a property of the capture, of the candidate graph's 0.25-1.5 m
+spatial band, or of `evaluate_refinement_evidence`'s all-metrics-must-not-regress
+rule is an open question this run cannot settle.
+
+*Entries add: I102 · last id = I102*
+
+*Entries add: I102 · last id = I102*
