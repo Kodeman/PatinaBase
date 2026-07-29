@@ -65,13 +65,18 @@ function prettyRoomType(roomType: string): string {
   return roomType.replace(/_/g, ' ').trim();
 }
 
-/** Mode-row button styling — active carries the clay underline + charcoal ink; inactive
- *  is quiet mocha that warms to charcoal on hover (matches the prototype's mode toggle). */
+/** Mode-row button styling. The mode row marks WHERE YOU STAND, not what you can
+ *  do, so under I107 it keeps a device of its own and never borrows the button
+ *  scoring: a 2px charcoal rule set flush ON the row's hairline (`-mb-px`), where
+ *  a scored control's rule is 1px and floats 3px clear of its word. Type and ink
+ *  values are the grammar's — mono 12px, aged oak at rest warming to charcoal,
+ *  charcoal for the mode you're in. No box: the rounded plate is gone, the 44px
+ *  target stays as padding. */
 function modeClass(active: boolean, pad: string): string {
-  const base = `${pad} min-h-11 rounded-[3px] pb-3 pt-2.5 font-mono text-[10.5px] uppercase tracking-[0.14em] transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-clay)]`;
+  const base = `${pad} min-h-11 -mb-px border-b-2 pb-3 pt-2.5 font-mono text-[12px] uppercase tracking-[0.1em] transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-clay)]`;
   return active
-    ? `${base} border-b-2 border-[var(--color-clay)] text-[var(--color-charcoal)]`
-    : `${base} text-[var(--color-mocha)] hover:text-[var(--color-charcoal)]`;
+    ? `${base} border-[var(--color-charcoal)] text-[var(--color-charcoal)]`
+    : `${base} border-transparent text-[var(--color-aged-oak)] hover:text-[var(--color-charcoal)]`;
 }
 
 export interface RoomViewProps {
@@ -252,7 +257,7 @@ export function RoomView({
         </button>
         <span
           aria-disabled="true"
-          className="cursor-not-allowed px-5 pb-3 pt-2.5 font-mono text-[10.5px] uppercase tracking-[0.14em] text-[var(--color-mocha)] opacity-35"
+          className="-mb-px cursor-not-allowed border-b-2 border-transparent px-5 pb-3 pt-2.5 font-mono text-[12px] uppercase tracking-[0.1em] text-[var(--color-mocha)] opacity-35"
         >
           Walk
           <span className="mt-0.5 block text-[8px] tracking-[0.1em] text-[var(--color-clay)] opacity-100">

@@ -538,15 +538,18 @@ export function MakerProfile({
               Terms, purchase orders, and the running thread with {name} live in
               the Orders book.
             </p>
-            <button
-              type="button"
+            <DocumentAction
+              actionKey="open-maker-orders"
+              surfaceKey="people"
+              regionKey="maker-trade-orders"
+              variant="tertiary"
+              className="mt-[0.6rem]"
               onClick={() =>
                 openLedger('orders', { page: 'vendors', vendorId })
               }
-              className="mt-[0.6rem] inline-flex min-h-11 min-w-11 items-center font-mono text-[0.56rem] font-semibold uppercase tracking-[0.08em] text-[var(--color-clay)] hover:text-[var(--color-aged-oak)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-clay)]"
             >
               terms & orders →
-            </button>
+            </DocumentAction>
           </Card>
 
           {/* ── Roster standing ── */}

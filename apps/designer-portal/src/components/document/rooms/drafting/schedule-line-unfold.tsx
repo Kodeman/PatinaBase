@@ -680,10 +680,13 @@ function AlternativesBand({
             >
               Swap
             </DocumentAction>
+            {/* A dismiss beside a scored Swap: a bare glyph that darkens, never
+                a box that appears on hover (I107). The 44px target survives as
+                invisible padding. */}
             <button
               type="button"
               aria-label={`Dismiss ${p.name}`}
-              className="inline-flex min-h-11 min-w-11 items-center justify-center rounded-[4px] border border-transparent px-1.5 py-1 text-[12px] leading-none text-[var(--text-muted)] hover:border-[var(--color-pearl)] hover:text-[var(--color-charcoal)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-clay)]"
+              className="da-glyph-btn inline-flex min-h-11 min-w-11 items-center justify-center px-1.5 py-1 text-[12px] leading-none"
               onClick={() => doDismiss(p, i)}
             >
               ×

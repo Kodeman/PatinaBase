@@ -120,12 +120,20 @@ export function RoomShell({
 
       {/* The thin band that frames a Room: leave · ident · one action. */}
       <header className="sticky top-0 z-20 flex items-center gap-3 border-b border-[var(--doc-ink-border)] bg-[rgba(252,250,246,0.85)] px-4 py-3 backdrop-blur-sm sm:px-6">
+        {/* The way out is a word, not a box (I107). The Room's own action sits
+            at the other end of this same row as a scored DocumentAction, so the
+            leave reads as its quietest relative: tertiary ink values, the score
+            drawn only on hover/focus, and the 44px target kept as invisible
+            padding around a ~26px word. */}
         <button
           type="button"
           onClick={leave}
-          className="inline-flex min-h-11 min-w-11 items-center gap-1.5 rounded-[4px] border border-transparent px-2 py-1 font-mono text-[10px] uppercase tracking-[0.1em] text-[var(--color-aged-oak)] transition-colors hover:border-[var(--doc-ink-border)] hover:text-[var(--color-mocha)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-clay)]"
+          className="inline-flex min-h-11 min-w-11 items-center gap-1.5 px-2 py-1 font-mono text-[12px] font-light uppercase tracking-[0.1em] text-[var(--color-aged-oak)] transition-colors hover:text-[var(--color-charcoal)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-clay)]"
         >
-          <span aria-hidden>←</span> {backLabel ?? originLabel(origin)}
+          <span aria-hidden>←</span>{' '}
+          <span className="da-score-hover">
+            {backLabel ?? originLabel(origin)}
+          </span>
         </button>
 
         <div className="mx-auto flex items-center gap-2.5">

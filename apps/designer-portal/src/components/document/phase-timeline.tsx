@@ -216,19 +216,25 @@ export function PhaseTimeline({ projectId }: { projectId: string }) {
             Unplaced
           </span>
           {unplaced.map((p) => {
-            const { muted } = phaseColor(p.status);
+            const selected = editId === p.id;
             return (
               <button
                 key={p.id}
                 type="button"
                 onClick={() => openEditor(p)}
-                className={`min-h-11 min-w-11 rounded-[4px] border px-2 py-1 font-mono text-[8.5px] uppercase tracking-[0.04em] transition-colors hover:border-[var(--color-clay)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-clay)] ${
-                  editId === p.id
-                    ? 'border-[var(--color-clay)] text-[var(--color-clay)]'
-                    : 'border-[var(--color-pearl)] text-[var(--color-aged-oak)]'
-                } ${muted ? '' : 'bg-[rgba(196,165,123,0.06)]'}`}
+                className={`group inline-flex min-h-11 min-w-11 items-center justify-center px-2 py-1 font-mono text-[8.5px] uppercase tracking-[0.04em] transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-clay)] motion-reduce:transition-none ${
+                  selected
+                    ? 'text-[var(--color-charcoal)]'
+                    : 'text-[var(--color-aged-oak)] hover:text-[var(--color-charcoal)]'
+                }`}
               >
-                {phaseLabel(p)}
+                <span
+                  className={`da-score-hover group-hover:after:scale-x-100 group-focus-visible:after:scale-x-100 ${
+                    selected ? 'da-score-on' : ''
+                  }`}
+                >
+                  {phaseLabel(p)}
+                </span>
               </button>
             );
           })}
@@ -242,13 +248,15 @@ export function PhaseTimeline({ projectId }: { projectId: string }) {
             <span className="text-[12px] font-medium text-[var(--color-charcoal)]">
               {phaseLabel(editing)}
             </span>
-            <button
-              type="button"
+            <DocumentAction
+              actionKey="close-phase-editor"
+              surfaceKey="open-document"
+              regionKey="phase-dates"
+              variant="tertiary"
               onClick={() => setEditId(null)}
-              className="min-h-11 min-w-11 font-mono text-[8px] uppercase tracking-[0.06em] text-[var(--text-muted)] hover:text-[var(--color-clay)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-clay)]"
             >
               Close
-            </button>
+            </DocumentAction>
           </div>
           <DocumentActionRow
             surfaceKey="open-document"

@@ -252,7 +252,7 @@ export function ReviewsView({ notify }: PeopleViewProps) {
               type="button"
               onClick={() => setTab(key)}
               aria-pressed={on}
-              className={`relative min-h-11 min-w-11 pb-1.5 font-mono text-[0.54rem] font-semibold uppercase tracking-[0.06em] transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-clay)] ${
+              className={`relative min-h-11 min-w-11 pb-1.5 font-mono text-[11px] font-medium uppercase tracking-[0.1em] transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-clay)] ${
                 on
                   ? 'text-[var(--color-charcoal)]'
                   : 'text-[var(--color-aged-oak)] hover:text-[var(--color-mocha)]'

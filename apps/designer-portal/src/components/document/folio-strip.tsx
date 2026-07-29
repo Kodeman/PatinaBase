@@ -38,6 +38,19 @@ const SECTION_LABELS: Record<string, string> = {
   care: 'Care',
 };
 
+/* The Scored Ink (I107) reaches the folio: a chip is no longer a plate.
+   The bordered stack, its paper fill and the per-version boxes are retired,
+   and each part of a chip — the title, the version toggle, the shared/studio
+   toggle — reads as a bare word that takes its rule on hover. The stacked-edge
+   device went with the boxes on purpose: `v2` already says the file carries
+   history, and a filled card was the loudest thing left in a row whose whole
+   argument is quiet words beside a bare `+ File`. Grouping is carried by
+   proximity instead — a chip's parts sit 6px apart, its neighbours 20px.
+
+   Every button keeps its 44px box as invisible padding (never shrink a target);
+   the score rides on an inner span so the rule hugs the word rather than the
+   halo, and truncation sits one level deeper still — `overflow:hidden` would
+   clip the rule right off. */
 function FileChip({
   chain,
   onOpen,
@@ -53,71 +66,63 @@ function FileChip({
 
   return (
     <span className="inline-flex items-center gap-1.5">
-      <span className="relative inline-block">
-        {/* The Desk's stacked edges, scaled to a chip: versions behind. */}
-        {stacked && (
-          <>
-            <span
-              aria-hidden
-              className="absolute bottom-[-3px] left-[3px] right-[-3px] top-[3px] rounded-[3px] border border-[var(--doc-ink-border)] bg-[var(--doc-sheet-3)]"
-            />
-            <span
-              aria-hidden
-              className="absolute bottom-[-1.5px] left-[1.5px] right-[-1.5px] top-[1.5px] rounded-[3px] border border-[var(--doc-ink-border)] bg-[var(--doc-sheet-2)]"
-            />
-          </>
-        )}
-        <span className="relative z-[1] inline-flex items-center gap-1.5 rounded-[3px] border border-[var(--doc-ink-border)] bg-[var(--doc-paper)] px-2 py-[3px]">
-          <button
-            type="button"
-            onClick={() => onOpen(head)}
-            className="min-h-11 min-w-11 max-w-[180px] truncate text-[10.5px] text-[var(--color-charcoal)] hover:text-[var(--color-clay)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-clay)]"
-            title={head.title}
-          >
-            {head.title}
-          </button>
-          {stacked && (
-            <button
-              type="button"
-              onClick={() => setSlidOut((v) => !v)}
-              aria-expanded={slidOut}
-              className="min-h-11 min-w-11 font-mono text-[8.5px] uppercase tracking-[0.05em] text-[var(--text-muted)] hover:text-[var(--color-clay)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-clay)]"
-              title={
-                slidOut ? 'Slide versions back' : 'Slide older versions out'
-              }
-            >
-              v{versions.length + 1}
-            </button>
-          )}
-          <button
-            type="button"
-            onClick={() => onToggleVisibility(head)}
-            className="min-h-11 min-w-11 font-mono text-[8.5px] uppercase tracking-[0.05em] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-clay)]"
-            style={{
-              color: head.client_visible
-                ? '#85947C'
-                : 'var(--color-aged-oak, #8B7355)',
-            }}
-            title={
-              head.client_visible
-                ? 'Shared — the client mirror renders this file'
-                : 'Studio only — click to share with the client'
-            }
-          >
-            {head.client_visible ? 'shared' : 'studio'}
-          </button>
+      <button
+        type="button"
+        onClick={() => onOpen(head)}
+        className="inline-flex min-h-11 min-w-11 max-w-[180px] items-center justify-center text-[10.5px] text-[var(--color-mocha)] transition-colors hover:text-[var(--color-charcoal)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-clay)] motion-reduce:transition-none"
+        title={head.title}
+      >
+        <span className="da-score-hover block min-w-0 max-w-full">
+          <span className="block truncate">{head.title}</span>
         </span>
-      </span>
+      </button>
+      {stacked && (
+        <button
+          type="button"
+          onClick={() => setSlidOut((v) => !v)}
+          aria-expanded={slidOut}
+          className="da-glyph-btn inline-flex min-h-11 min-w-11 items-center justify-center font-mono text-[8.5px] uppercase tracking-[0.05em]"
+          title={slidOut ? 'Slide versions back' : 'Slide older versions out'}
+        >
+          <span
+            className={`da-score-hover block${slidOut ? ' da-score-on' : ''}`}
+          >
+            v{versions.length + 1}
+          </span>
+        </button>
+      )}
+      <button
+        type="button"
+        onClick={() => onToggleVisibility(head)}
+        className="inline-flex min-h-11 min-w-11 items-center justify-center font-mono text-[8.5px] uppercase tracking-[0.05em] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-clay)]"
+        style={{
+          color: head.client_visible
+            ? '#85947C'
+            : 'var(--color-aged-oak, #8B7355)',
+        }}
+        title={
+          head.client_visible
+            ? 'Shared — the client mirror renders this file'
+            : 'Studio only — click to share with the client'
+        }
+      >
+        {/* shared is the held state: the rule stays down, the ink stays sage. */}
+        <span
+          className={`da-score-hover block${head.client_visible ? ' da-score-on' : ''}`}
+        >
+          {head.client_visible ? 'shared' : 'studio'}
+        </span>
+      </button>
       {slidOut &&
         versions.map((v) => (
           <button
             key={v.id}
             type="button"
             onClick={() => onOpen(v)}
-            className="min-h-11 min-w-11 rounded-[3px] border border-[var(--doc-ink-border)] bg-[var(--doc-sheet-2)] px-2 py-[3px] text-[10px] text-[var(--text-muted)] hover:text-[var(--color-charcoal)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-clay)]"
+            className="da-glyph-btn inline-flex min-h-11 min-w-11 items-center justify-center text-[10px]"
             title={`Superseded ${fmtDay(v.created_at)}`}
           >
-            {fmtDay(v.created_at)}
+            <span className="da-score-hover block">{fmtDay(v.created_at)}</span>
           </button>
         ))}
     </span>
@@ -192,7 +197,7 @@ export function FolioStrip({
             upload.mutate({ file, anchor });
           }
         }}
-        className={`my-1.5 flex flex-wrap items-center gap-2 rounded-[3px] px-1 py-1 transition-colors ${
+        className={`my-1.5 flex flex-wrap items-center gap-x-5 gap-y-2 rounded-[3px] px-1 py-1 transition-colors ${
           catching
             ? 'border border-dashed border-[var(--color-clay)] bg-[rgba(196,165,123,0.06)]'
             : 'border border-dashed border-transparent'
@@ -277,7 +282,7 @@ export function ProposalFolioStrip({ proposalId }: { proposalId: string }) {
             upload.mutate({ file });
           }
         }}
-        className={`my-1.5 flex flex-wrap items-center gap-2 rounded-[3px] px-1 py-1 transition-colors ${
+        className={`my-1.5 flex flex-wrap items-center gap-x-5 gap-y-2 rounded-[3px] px-1 py-1 transition-colors ${
           dragOver
             ? 'border border-dashed border-[var(--color-clay)] bg-[rgba(196,165,123,0.06)]'
             : 'border border-dashed border-transparent'
@@ -370,21 +375,26 @@ export function FolioLetterhead({ projectId }: { projectId: string }) {
 
   return (
     <div className="mt-1">
+      {/* The disclosure is a word, not a chip: unopened it takes its rule on
+          hover, opened it holds one (da-score-on) so the state is legible with
+          the pointer elsewhere. The 44px box stays, and stays unseen. */}
       <button
         type="button"
         onClick={() => setOpen((v) => !v)}
         aria-expanded={open}
-        className="min-h-11 min-w-11 font-mono text-[9px] uppercase tracking-[0.08em] text-[var(--text-muted)] hover:text-[var(--color-clay)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-clay)]"
+        className="da-glyph-btn inline-flex min-h-11 min-w-11 items-center justify-center font-mono text-[9px] uppercase tracking-[0.08em]"
       >
-        The folio · {chains.length} {chains.length === 1 ? 'file' : 'files'}{' '}
-        {open ? '↑' : '↓'}
+        <span className={`da-score-hover block${open ? ' da-score-on' : ''}`}>
+          The folio · {chains.length} {chains.length === 1 ? 'file' : 'files'}{' '}
+          {open ? '↑' : '↓'}
+        </span>
       </button>
       {open && (
         <div className="mt-1 border-t border-dashed border-[var(--color-pearl)] pt-1.5">
           {[...groups.entries()].map(([key, group]) => (
             <div
               key={key}
-              className="mb-1.5 flex flex-wrap items-baseline gap-2"
+              className="mb-1.5 flex flex-wrap items-baseline gap-x-5 gap-y-2"
             >
               <span className="w-20 font-mono text-[8.5px] uppercase tracking-[0.05em] text-[var(--text-muted)]">
                 {groupLabel(key)}

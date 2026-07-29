@@ -131,14 +131,16 @@ export function Select({
   );
 }
 
-/** A small ✕ remove control reused across the row editors. */
+/** A small ✕ remove control reused across the row editors. Scored Ink (I107):
+ *  no box at all — the 44px square survives as invisible target, the eye sees
+ *  only the glyph darkening when asked. */
 export function RemoveButton({ onClick }: { onClick: () => void }) {
   return (
     <button
       type="button"
       aria-label="Remove"
       onClick={onClick}
-      className="inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-[3px] border border-[var(--color-pearl)] font-mono text-[11px] leading-none text-[var(--text-muted)] transition-colors hover:border-[var(--color-clay)] hover:text-[var(--color-charcoal)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-clay)]"
+      className="da-glyph-btn inline-flex h-11 w-11 shrink-0 items-center justify-center font-mono text-[11px] leading-none"
     >
       ✕
     </button>
@@ -166,7 +168,10 @@ export function AddRowButton({
   );
 }
 
-/** Multi-select chips backed by a fixed vocabulary (the style tags). */
+/** Multi-select chips backed by a fixed vocabulary (the style tags). Scored
+ *  Ink (I107): a chosen tag is a word ruled under, not a word in a box — the
+ *  chip loses its border and fill, keeps its 44px target as unseen padding,
+ *  and says "chosen" in charcoal + a held score. */
 export function ChipMultiSelect({
   options,
   selected,
@@ -185,13 +190,16 @@ export function ChipMultiSelect({
             key={o.value}
             type="button"
             onClick={() => onToggle(o.value)}
-            className={`min-h-11 rounded-[3px] border px-2.5 py-1 text-[11.5px] transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-clay)] ${
+            className={`min-h-11 px-2.5 py-1 text-[11.5px] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-clay)] ${
               on
-                ? 'border-[var(--color-clay)] bg-[rgba(196,165,123,0.12)] text-[var(--color-mocha)]'
-                : 'border-[var(--color-pearl)] bg-[var(--doc-paper)] text-[var(--color-charcoal)] hover:border-[var(--color-clay)]'
+                ? 'text-[var(--color-charcoal)]'
+                : 'text-[var(--color-aged-oak)]'
             }`}
           >
-            {o.label}
+            {/* the score rides with the word, never with the 44px box */}
+            <span className={`da-score-hover${on ? ' da-score-on' : ''}`}>
+              {o.label}
+            </span>
           </button>
         );
       })}
@@ -228,7 +236,7 @@ export function KeywordChips({
               type="button"
               aria-label={`Remove ${v}`}
               onClick={() => onChange(values.filter((x) => x !== v))}
-              className="inline-flex h-11 w-11 items-center justify-center rounded-[3px] leading-none text-[var(--color-aged-oak)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-clay)]"
+              className="da-glyph-btn inline-flex h-11 w-11 items-center justify-center leading-none"
             >
               ✕
             </button>

@@ -14,9 +14,9 @@
  *   Verify — ONLY rendered when ≥1 wall reads low confidence (I73a).
  *
  * Below `.facts`, the prototype's `.toolrow` (W2-T4, package accept 2.3):
- * a quiet Measure button ("the tool" treatment: 1px rule border, mocha text,
- * no fill) that inverts to ink when armed, plus a Clear button shown ONLY
- * once a measurement exists.
+ * a quiet Measure button — since I107 "the tool" treatment is the Scored Ink
+ * one: a bare word, no border and no fill, that takes a steady charcoal score
+ * when armed — plus a Clear button shown ONLY once a measurement exists.
  */
 
 import type { ReactNode } from 'react';
@@ -129,15 +129,17 @@ export function FactsRail({
 
       {photos && photos.count > 0 && (
         <Fact k="Photos">
-          {/* Quiet, not button-chrome (Measure-toolrow precedent): reads like
-              any other fact value, warms to clay + reveals a mono "view" hint
-              on hover/focus. */}
+          {/* Quiet, not button-chrome (Measure-toolrow precedent): a scored
+              word in the fact-value slot (I107) — the hairline draws under it
+              on hover/focus and the mono "view" hint arrives with it. */}
           <button
             type="button"
             onClick={photos.onOpen}
-            className="group inline-flex min-h-11 items-center gap-1.5 rounded-[3px] text-left text-[14px] text-[var(--color-charcoal)] outline-none transition-colors hover:text-[var(--color-clay)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-clay)]"
+            className="group inline-flex min-h-11 items-center gap-1.5 text-left font-mono text-[12px] font-light uppercase tracking-[0.1em] text-[var(--color-charcoal)] outline-none focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-clay)]"
           >
-            {plural(photos.count, 'photo')}
+            <span className="da-score-hover">
+              {plural(photos.count, 'photo')}
+            </span>
             <span className="font-mono text-[9px] uppercase tracking-[0.12em] text-[var(--color-aged-oak)] opacity-0 transition-opacity group-hover:opacity-100 group-focus-visible:opacity-100">
               view
             </span>
@@ -155,14 +157,14 @@ export function FactsRail({
 
       {roomFile && (
         <Fact k="Room File">
-          {/* Quiet, not button-chrome (Photos/Measure precedent): reads like any
-              other fact value, warms to clay + reveals a mono "open" hint on
+          {/* Quiet, not button-chrome (Photos/Measure precedent): the same
+              scored word in the fact-value slot, with a mono "open" hint on
               hover/focus. Links into /portal/projects/[id]/room-file/[scanId]. */}
           <Link
             href={roomFile.href}
-            className="group inline-flex min-h-11 items-center gap-1.5 rounded-[3px] text-[14px] text-[var(--color-charcoal)] outline-none transition-colors hover:text-[var(--color-clay)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-clay)]"
+            className="group inline-flex min-h-11 items-center gap-1.5 font-mono text-[12px] font-light uppercase tracking-[0.1em] text-[var(--color-charcoal)] no-underline outline-none focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-clay)]"
           >
-            drawing set
+            <span className="da-score-hover">drawing set</span>
             <span className="font-mono text-[9px] uppercase tracking-[0.12em] text-[var(--color-aged-oak)] opacity-0 transition-opacity group-hover:opacity-100 group-focus-visible:opacity-100">
               open
             </span>
@@ -181,26 +183,34 @@ export function FactsRail({
 
       {measure && (
         <div className="mt-4 flex gap-2.5">
+          {/* The tool is a word, and arming it is a rule held under that word
+              (I107): armed = charcoal ink + the steady score; at rest = aged
+              oak, the score drawn only when asked. No fill, no box — the 44px
+              target survives as invisible padding. */}
           <button
             type="button"
             onClick={measure.onArm}
             aria-pressed={measure.armed}
             className={cn(
-              'min-h-11 rounded-[3px] border px-3.5 py-2 font-mono text-[10px] uppercase tracking-[0.12em] transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-clay)]',
+              'inline-flex min-h-11 min-w-11 items-center justify-center px-1.5 font-mono text-[12px] uppercase tracking-[0.12em] transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-clay)]',
               measure.armed
-                ? 'border-[var(--color-charcoal)] bg-[var(--color-charcoal)] text-[var(--color-off-white)]'
-                : 'border-[var(--doc-ink-border)] bg-transparent text-[var(--color-mocha)]',
+                ? 'text-[var(--color-charcoal)]'
+                : 'text-[var(--color-aged-oak)] hover:text-[var(--color-charcoal)]',
             )}
           >
-            Measure
+            <span
+              className={cn('da-score-hover', measure.armed && 'da-score-on')}
+            >
+              Measure
+            </span>
           </button>
           {measure.hasMeasurement && (
             <button
               type="button"
               onClick={measure.onClear}
-              className="min-h-11 rounded-[3px] border border-[var(--doc-ink-border)] bg-transparent px-3.5 py-2 font-mono text-[10px] uppercase tracking-[0.12em] text-[var(--color-mocha)] transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-clay)]"
+              className="inline-flex min-h-11 min-w-11 items-center justify-center px-1.5 font-mono text-[12px] font-light uppercase tracking-[0.12em] text-[var(--color-aged-oak)] transition-colors hover:text-[var(--color-charcoal)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-clay)]"
             >
-              Clear
+              <span className="da-score-hover">Clear</span>
             </button>
           )}
         </div>
