@@ -8,20 +8,53 @@
  *
  * Renders ONLY when there are photos (Field scans have none — the strip is
  * absent entirely, no empty label). Its own horizontal-scroll container never
- * pushes page overflow. Each tile prefers `signedThumbUrl`, falls back to
- * `signedImageUrl`; a photo whose only source is an undecodable HEIC (or has
- * neither) shows a quiet mono placeholder tile and is still counted honestly.
+ * pushes page overflow.
+ *
+ * Tile source ladder (`stripSrcLadder`): 512 px thumb → 1600 px preview →
+ * the original, and the original ONLY when its mime says a browser can decode
+ * it. That last gate is a real saving, not bookkeeping: without it a
+ * derivative-less HEIC row makes a 64×64 tile download ~237 KB of bytes no
+ * browser can draw, and then fall to the placeholder anyway. A photo with no
+ * usable source shows a quiet mono placeholder tile and is still counted
+ * honestly. Tiles are natively lazy — production tops out at 42 distinct
+ * tiles against the iOS producer's hard 60-photo cap, so `loading="lazy"`
+ * buys what virtualization would, with no dependency and no scroll anchoring
+ * to get wrong.
+ *
  * A mono capture-time microcaption fades in on hover/focus. Click opens the
  * viewer at that photo.
  */
 
 import { useState } from 'react';
 import type { RoomScanPhoto } from '@patina/supabase';
+import { isBrowserDecodableMime, type ViewerSrcPhoto } from './photo-viewer';
 
 export interface PhotoStripProps {
   photos: RoomScanPhoto[];
   /** Opens the viewer at the given index. */
   onOpen: (index: number) => void;
+}
+
+/**
+ * The ordered, distinct, non-null sources a 64×64 tile may try, cheapest
+ * first: thumb → preview → original. The original is included ONLY when
+ * `mime_type` doesn't positively say the browser can't decode it (an absent
+ * or unknown mime counts as decodable — see `isBrowserDecodableMime`), so a
+ * derivative-less HEIC row never spends ~237 KB to reach the placeholder.
+ *
+ * Pure. Returns `[]` when the photo has no usable source at all.
+ */
+export function stripSrcLadder(photo: ViewerSrcPhoto): string[] {
+  const candidates = [
+    photo.signedThumbUrl,
+    photo.signedPreviewUrl ?? null,
+    isBrowserDecodableMime(photo.mime_type) ? photo.signedImageUrl : null,
+  ];
+  const ladder: string[] = [];
+  for (const src of candidates) {
+    if (src && !ladder.includes(src)) ladder.push(src);
+  }
+  return ladder;
 }
 
 export function PhotoStrip({ photos, onOpen }: PhotoStripProps) {
@@ -59,19 +92,16 @@ function timeCaption(iso: string | null): string | null {
 }
 
 function ThumbTile({ photo, onClick }: { photo: RoomScanPhoto; onClick: () => void }) {
-  const initialSrc = photo.signedThumbUrl ?? photo.signedImageUrl;
-  const [src, setSrc] = useState<string | null>(initialSrc);
+  const ladder = stripSrcLadder(photo);
+  // Position on the ladder, advanced one rung per failed load. Tiles are keyed
+  // by photo id in the parent, so a changed photo remounts and resets this.
+  const [rung, setRung] = useState(0);
+  const src = ladder[rung] ?? null;
   const caption = timeCaption(photo.captured_at);
 
-  const onError = () => {
-    // thumb failed → try the full image once; if that was the source too,
-    // drop to the placeholder tile (never a broken-image glyph).
-    if (src === photo.signedThumbUrl && photo.signedImageUrl && photo.signedImageUrl !== src) {
-      setSrc(photo.signedImageUrl);
-    } else {
-      setSrc(null);
-    }
-  };
+  // Each failure steps down one rung; stepping past the last leaves `src`
+  // null, which is the quiet placeholder tile (never a broken-image glyph).
+  const onError = () => setRung((r) => r + 1);
 
   return (
     <button
@@ -85,14 +115,19 @@ function ThumbTile({ photo, onClick }: { photo: RoomScanPhoto; onClick: () => vo
       {src ? (
 
         <img
+          key={src}
           src={src}
           alt=""
           onError={onError}
+          loading="lazy"
+          decoding="async"
           className="h-full w-full object-cover"
         />
       ) : (
+        // Mime-agnostic on purpose: a JPEG row with no derivatives and an
+        // unreachable original lands here too, so "HEIC" was a guess.
         <span className="flex h-full w-full items-center justify-center bg-[var(--color-aged-oak)]/[0.06] font-mono text-[7.5px] uppercase leading-tight tracking-[0.1em] text-[var(--color-aged-oak)]">
-          HEIC
+          no preview
         </span>
       )}
       {caption && (
