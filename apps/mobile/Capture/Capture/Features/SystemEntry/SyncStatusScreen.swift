@@ -24,6 +24,13 @@ struct SyncStatusScreen: View {
     @State private var snapshot = SyncSnapshot(queued: 0, uploading: 0, failed: 0)
     @State private var retryRequest = 0
     @State private var isRetrying = false
+    @State private var retryingScanID: String?
+    @State private var scanRetryErrors: [String: String] = [:]
+    @State private var reviewedScan: FieldScanPendingUpload?
+
+    private var isRecoveryBusy: Bool {
+        isRetrying || retryingScanID != nil
+    }
 
     var body: some View {
         VStack(spacing: 0) {
@@ -62,7 +69,21 @@ struct SyncStatusScreen: View {
             isRetrying = false
             await reload()
         }
-        .navigationBarBackButtonHidden(isRetrying)
+        .task(id: retryingScanID) {
+            guard let scanID = retryingScanID else { return }
+            await retryScan(id: scanID)
+        }
+        .alert(item: $reviewedScan) { scan in
+            Alert(
+                title: Text("Review \(scan.name)"),
+                message: Text(reviewMessage(for: scan)),
+                primaryButton: .default(Text("Retry scan")) {
+                    requestScanRetry(scan, reviewConfirmed: true)
+                },
+                secondaryButton: .cancel()
+            )
+        }
+        .navigationBarBackButtonHidden(isRecoveryBusy)
         .accessibilityIdentifier(CaptureScreenID.u1Sync.rawValue)
     }
 
@@ -87,12 +108,18 @@ struct SyncStatusScreen: View {
 
     private var pendingCount: Int { rows.count + scanRows.count }
     private var hasRetryableTransfer: Bool {
-        let phases = rows.map { $0.transferState.phase }
-            + scanRows.map { $0.state.phase }
-        return phases.contains {
-            $0 == .queued || $0 == .uploading
-                || $0 == .awaitingConfirmation || $0 == .retryableFailure
+        let hasRetryableCapture = rows.contains {
+            let phase = $0.transferState.phase
+            return phase == .queued || phase == .uploading
+                || phase == .awaitingConfirmation || phase == .retryableFailure
         }
+        let hasRetryableScan = scanRows.contains {
+            FieldScanRecoveryPolicy.canResumeWithoutReview(
+                phase: $0.state.phase,
+                retryFailures: true
+            )
+        }
+        return hasRetryableCapture || hasRetryableScan
     }
 
     private var headline: String {
@@ -203,20 +230,107 @@ struct SyncStatusScreen: View {
     }
 
     private func scanRow(_ scan: FieldScanPendingUpload) -> some View {
-        HStack(alignment: .center, spacing: 12) {
-            VStack(alignment: .leading, spacing: 3) {
-                Text(scan.name)
-                    .font(CaptureType.bodyEmph)
-                    .foregroundStyle(CaptureColor.ink)
-                Text("SITE SCAN · KEPT ON DEVICE")
-                    .font(CaptureType.monoSmall)
-                    .foregroundStyle(CaptureColor.inkSoft)
+        VStack(alignment: .leading, spacing: 8) {
+            HStack(alignment: .top, spacing: 12) {
+                VStack(alignment: .leading, spacing: 3) {
+                    Text(scan.name)
+                        .font(CaptureType.bodyEmph)
+                        .foregroundStyle(CaptureColor.ink)
+                    Text("SITE SCAN · FINISH-LATER TRANSFER")
+                        .font(CaptureType.monoSmall)
+                        .foregroundStyle(CaptureColor.inkSoft)
+                }
+                Spacer(minLength: 8)
+                VStack(alignment: .trailing, spacing: 4) {
+                    statusPill(
+                        rowStatus(for: scan.state),
+                        progress: scan.state.progress
+                    )
+                    scanRecoveryAction(scan)
+                }
             }
-            Spacer(minLength: 8)
-            statusPill(rowStatus(for: scan.state), progress: scan.state.progress)
+
+            if let issue = scanIssue(for: scan) {
+                Text("Issue: \(issue)")
+                    .font(CaptureType.footnote)
+                    .foregroundStyle(CaptureColor.error)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .accessibilityLabel("Transfer issue: \(issue)")
+            }
         }
         .padding(.horizontal, 20)
         .padding(.vertical, 14)
+    }
+
+    @ViewBuilder
+    private func scanRecoveryAction(_ scan: FieldScanPendingUpload) -> some View {
+        if retryingScanID == scan.id {
+            HStack(spacing: 6) {
+                ProgressView()
+                    .controlSize(.small)
+                    .tint(CaptureColor.goldenHour)
+                Text("Retrying…")
+                    .font(CaptureType.eyebrow)
+                    .textCase(.uppercase)
+                    .foregroundStyle(CaptureColor.goldenHour)
+            }
+            .frame(minHeight: 44)
+            .accessibilityElement(children: .combine)
+            .accessibilityLabel("Retrying \(scan.name)")
+        } else {
+            switch FieldScanRecoveryPolicy.action(for: scan.state.phase) {
+            case .retry:
+                Button("Retry") {
+                    requestScanRetry(scan, reviewConfirmed: false)
+                }
+                .buttonStyle(.bordered)
+                .tint(CaptureColor.success)
+                .frame(minHeight: 44)
+                .disabled(isRecoveryBusy)
+                .accessibilityLabel("Retry \(scan.name)")
+                .accessibilityHint("Retries only this site scan")
+                .accessibilityIdentifier("sync.scan.\(scan.id).retry")
+            case .review:
+                Button("Review") {
+                    reviewedScan = scan
+                    analytics.event("sync.review_scan", [
+                        "status": scan.state.phase.rawValue
+                    ])
+                }
+                .buttonStyle(.bordered)
+                .tint(CaptureColor.error)
+                .frame(minHeight: 44)
+                .disabled(isRecoveryBusy)
+                .accessibilityLabel("Review \(scan.name)")
+                .accessibilityHint(
+                    "Shows the recorded issue and asks before retrying"
+                )
+                .accessibilityIdentifier("sync.scan.\(scan.id).review")
+            case .none:
+                EmptyView()
+            }
+        }
+    }
+
+    private func scanIssue(for scan: FieldScanPendingUpload) -> String? {
+        if let retryError = scanRetryErrors[scan.id], !retryError.isEmpty {
+            return retryError
+        }
+        if let recordedError = scan.state.errorMessage, !recordedError.isEmpty {
+            return recordedError
+        }
+        return nil
+    }
+
+    private func reviewMessage(for scan: FieldScanPendingUpload) -> String {
+        let issue = scanIssue(for: scan)
+            ?? "No additional error detail was recorded."
+        return """
+        Recorded issue:
+        \(issue)
+
+        Rejected scans are not included in Retry all. Retry only after reviewing this issue.
+        """
     }
 
     private func sectionLabel(_ title: String) -> some View {
@@ -264,14 +378,17 @@ struct SyncStatusScreen: View {
                             .fill(hasRetryableTransfer ? CaptureColor.success : CaptureColor.inkSoft)
                     )
             }
-            .disabled(!hasRetryableTransfer || isRetrying)
+            .disabled(!hasRetryableTransfer || isRecoveryBusy)
+            .accessibilityHint(
+                "Retries queued and paused work. Rejected scans require review."
+            )
 
             Button("Done") { coordinator.goBack() }
                 .font(CaptureType.bodyEmph)
                 .foregroundStyle(CaptureColor.ink)
                 .padding(.vertical, 14)
                 .padding(.horizontal, 16)
-                .disabled(isRetrying)
+                .disabled(isRecoveryBusy)
         }
         .padding(.horizontal, 20)
         .padding(.top, 8)
@@ -287,8 +404,19 @@ struct SyncStatusScreen: View {
             .sorted { weight($0) < weight($1) }
         let nextScanRows = await siteScan.pendingUploads()
         guard !Task.isCancelled else { return }
+
+        let pendingScanIDs = Set(nextScanRows.map(\.id))
         rows = nextRows
         scanRows = nextScanRows
+        scanRetryErrors = scanRetryErrors.filter {
+            pendingScanIDs.contains($0.key)
+        }
+        if let reviewedScan,
+           !nextScanRows.contains(where: {
+               $0.id == reviewedScan.id && $0.state.phase == .rejected
+           }) {
+            self.reviewedScan = nil
+        }
         updateCompanion()
     }
 
@@ -315,6 +443,18 @@ struct SyncStatusScreen: View {
         let captureStates = rows.map(\.transferState)
         let scanStates = scanRows.map(\.state)
         let states = captureStates + scanStates
+
+        if let retryingScanID {
+            let scanName = scanRows.first(where: { $0.id == retryingScanID })?.name
+                ?? "site scan"
+            companion.send(.reportProgress(.init(
+                activityID: "field.sync.scan.\(retryingScanID)",
+                kind: .indeterminate,
+                title: "Retrying \(scanName)",
+                detail: "Waiting for a confirmed receipt for this scan"
+            )))
+            return
+        }
 
         if isRetrying {
             let uploading = states.filter { $0.phase == .uploading }
@@ -401,6 +541,100 @@ struct SyncStatusScreen: View {
                 ? "Everything you captured has been confirmed."
                 : "Every pending item remains safely on this device until it is confirmed."
         )))
+    }
+
+    private func requestScanRetry(
+        _ scan: FieldScanPendingUpload,
+        reviewConfirmed: Bool
+    ) {
+        guard !isRecoveryBusy,
+              let currentScan = scanRows.first(where: { $0.id == scan.id }),
+              FieldScanRecoveryPolicy.allowsIndividualRetry(
+                  phase: currentScan.state.phase,
+                  reviewConfirmed: reviewConfirmed
+              ) else { return }
+
+        scanRetryErrors.removeValue(forKey: currentScan.id)
+        analytics.event("sync.retry_scan", [
+            "status": currentScan.state.phase.rawValue,
+            "review_confirmed": reviewConfirmed ? "true" : "false"
+        ])
+        retryingScanID = currentScan.id
+        updateCompanion()
+    }
+
+    private func retryScan(id: String) async {
+        guard let scan = scanRows.first(where: { $0.id == id }) else {
+            await reload()
+            guard !Task.isCancelled else { return }
+            companion.send(.communicate(.init(
+                title: "Retry could not start",
+                detail: "This scan transfer is no longer listed on this device."
+            )))
+            retryingScanID = nil
+            return
+        }
+
+        do {
+            _ = try await siteScan.retryPendingUpload(id: id)
+            guard !Task.isCancelled else { return }
+            scanRetryErrors.removeValue(forKey: id)
+            await reload()
+            guard !Task.isCancelled else { return }
+            analytics.event("sync.retry_scan_succeeded")
+            reportScanRetrySuccess(scan)
+            retryingScanID = nil
+        } catch {
+            guard !Task.isCancelled else { return }
+            let message = retryErrorMessage(error)
+            scanRetryErrors[id] = message
+            await reload()
+            guard !Task.isCancelled else { return }
+            analytics.event("sync.retry_scan_failed", [
+                "status": scan.state.phase.rawValue
+            ])
+            companion.send(.communicate(.init(
+                title: "Retry could not finish",
+                detail: retryFailureDetail(
+                    scan: scan,
+                    message: message
+                )
+            )))
+            retryingScanID = nil
+        }
+    }
+
+    private func reportScanRetrySuccess(_ scan: FieldScanPendingUpload) {
+        guard pendingCount > 0 else {
+            companion.send(.collapse(
+                hint: "\(scan.name) confirmed",
+                action: nil
+            ))
+            return
+        }
+
+        let remaining = pendingCount == 1
+            ? "1 transfer remains listed below."
+            : "\(pendingCount) transfers remain listed below."
+        companion.send(.communicate(.init(
+            title: "\(scan.name) confirmed",
+            detail: remaining
+        )))
+    }
+
+    private func retryErrorMessage(_ error: Error) -> String {
+        let message = error.localizedDescription
+        return message.isEmpty ? "Retry could not be completed." : message
+    }
+
+    private func retryFailureDetail(
+        scan: FieldScanPendingUpload,
+        message: String
+    ) -> String {
+        if scanRows.contains(where: { $0.id == scan.id }) {
+            return "\(scan.name) is still listed below. \(message)"
+        }
+        return message
     }
 
     private func weight(_ s: Specimen) -> Int {

@@ -109,7 +109,6 @@ struct UploadStateTests {
         #expect(SiteScanBundleHome.relativeKey(for: a) == SiteScanBundleHome.relativeKey(for: b))
     }
 
-
     @Test func backgroundTransferKeysIncludeTheScanID() {
         let first = ScanArtifactTransferKey(
             scanID: "scan-a",
@@ -302,5 +301,63 @@ struct UploadStateTests {
         #expect(removed == 1)
         #expect(fileManager.fileExists(atPath: protected.path))
         #expect(!fileManager.fileExists(atPath: orphan.path))
+    }
+
+    @Test func scanRecoveryRequiresReviewOnlyForRejectedWork() {
+        #expect(
+            FieldScanRecoveryPolicy.action(for: .retryableFailure) == .retry
+        )
+        #expect(
+            FieldScanRecoveryPolicy.allowsIndividualRetry(
+                phase: .retryableFailure,
+                reviewConfirmed: false
+            )
+        )
+        #expect(FieldScanRecoveryPolicy.action(for: .rejected) == .review)
+        #expect(
+            !FieldScanRecoveryPolicy.allowsIndividualRetry(
+                phase: .rejected,
+                reviewConfirmed: false
+            )
+        )
+        #expect(
+            FieldScanRecoveryPolicy.allowsIndividualRetry(
+                phase: .rejected,
+                reviewConfirmed: true
+            )
+        )
+    }
+
+    @Test func scanRecoveryNeverIncludesRejectedWorkInRetryAll() {
+        #expect(
+            FieldScanRecoveryPolicy.canResumeWithoutReview(
+                phase: .queued,
+                retryFailures: true
+            )
+        )
+        #expect(
+            !FieldScanRecoveryPolicy.canResumeWithoutReview(
+                phase: .retryableFailure,
+                retryFailures: false
+            )
+        )
+        #expect(
+            FieldScanRecoveryPolicy.canResumeWithoutReview(
+                phase: .retryableFailure,
+                retryFailures: true
+            )
+        )
+        #expect(
+            !FieldScanRecoveryPolicy.canResumeWithoutReview(
+                phase: .rejected,
+                retryFailures: false
+            )
+        )
+        #expect(
+            !FieldScanRecoveryPolicy.canResumeWithoutReview(
+                phase: .rejected,
+                retryFailures: true
+            )
+        )
     }
 }

@@ -1009,8 +1009,10 @@ final class SupabaseSiteScanService: SiteScanService {
         for record in store.scanUploadRecords(owner: owner) {
             guard activeOwner == owner else { return }
             let phase = record.transferState.phase
-            if phase == .rejected || phase == .complete { continue }
-            if phase == .retryableFailure, !retryFailures { continue }
+            guard FieldScanRecoveryPolicy.canResumeWithoutReview(
+                phase: phase,
+                retryFailures: retryFailures
+            ) else { continue }
 
             if phase == .retryableFailure {
                 record.prepareForRetry()
