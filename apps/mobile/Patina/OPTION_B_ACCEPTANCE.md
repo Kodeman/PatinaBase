@@ -10,6 +10,8 @@ mock-only product surfaces.
 - The current three-strata mark remains visible in every Companion state.
 - Collapsed is the default: a centered 56–64 point dark circle with one short,
   contextual hint below it.
+- At accessibility text sizes, the visual hint may collapse into the circle's
+  spoken value so the Companion never obscures the active surface.
 - The Hearth is reserved layout space, not a persistent visible bar. App content
   does not render beneath the active Companion shape.
 - Progress is a compact morph of the same shell for bounded work such as quiz or
@@ -25,13 +27,16 @@ mock-only product surfaces.
 
 - Context comes only from real, available signals: style preferences, rooms,
   saved pieces, scan state, active design work, and recency.
-- Memory is privacy-conscious, locally inspectable, and can be disabled or
-  cleared by the customer.
+- Memory is privacy-conscious, locally inspectable, off by default, and only
+  begins after an explicit customer opt-in. It can be disabled or cleared at
+  any time.
 - The taste portrait explains materials, warmth, formality, and confidence in
   plain language and provides a tuning route.
 - Today presents exactly one prioritized next move, one real editorial or taste
   story, and one active room. Missing data produces a truthful fallback rather
   than fabricated rationale.
+- Editorial and room modules prefer real available imagery. Missing photography
+  uses an honest branded fallback; the app does not invent or mislabel imagery.
 
 ## Studio contract
 

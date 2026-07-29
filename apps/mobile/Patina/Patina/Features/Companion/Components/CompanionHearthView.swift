@@ -143,7 +143,11 @@ private extension CompanionHearthView {
             .accessibilityHint("Opens the Companion.")
             .accessibilityIdentifier("companion.bubble")
 
-            if !hint.isEmpty {
+            // At accessibility text sizes the visual hint stops being subtle
+            // and can obscure the surface below the floating Hearth. The same
+            // context remains available as the Companion button's announced
+            // accessibility value and inside the expanded panel.
+            if !dynamicTypeSize.isAccessibilitySize, !hint.isEmpty {
                 if let onHintAction {
                     Button(action: onHintAction) {
                         hintLabel(hint)
@@ -324,12 +328,10 @@ private extension CompanionHearthView {
             }
             .frame(maxWidth: presentation.usesFullSheet ? .infinity : 380)
             .padding(.horizontal, presentation.usesFullSheet ? 0 : 24)
-            .accessibilityElement(children: .contain)
-            .accessibilityLabel(content.title)
-            .accessibilityValue(presentation.accessibilityValue ?? "")
-            .accessibilityIdentifier("companion.panel")
             .contentShape(RoundedRectangle(cornerRadius: 26, style: .continuous))
             .onTapGesture {}
+            .accessibilityElement(children: .contain)
+            .accessibilityIdentifier("companion.panel")
         }
         .accessibilityElement(children: .contain)
         .accessibilityIdentifier("companion.state.expanded")

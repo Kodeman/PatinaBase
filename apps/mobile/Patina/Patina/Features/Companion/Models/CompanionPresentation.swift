@@ -196,3 +196,63 @@ public enum CompanionPresentationReducer {
         return trimmed.isEmpty ? fallback : trimmed
     }
 }
+
+/// Short, deterministic copy that carries Option B's real context through the
+/// same Companion shell. Live Studio attention does not depend on memory
+/// consent; recency-based personalization is considered only after opt-in.
+public enum CompanionContextualCopy {
+    public static func collapsedHint(
+        memory: CompanionMemoryContext?,
+        studioAttentionHint: String?
+    ) -> String {
+        if let studioAttentionHint = normalized(studioAttentionHint) {
+            return studioAttentionHint
+        }
+
+        guard let memory, memory.isPersonalizationEnabled else {
+            return "Next steps"
+        }
+
+        if let projectAttention = normalized(memory.projectAttentionSummary) {
+            return projectAttention
+        }
+        if let activeRoomName = normalized(memory.activeRoomName) {
+            return "Continue with \(activeRoomName)"
+        }
+        if let savedItemName = normalized(memory.recentSavedItemName) {
+            return "Build from \(savedItemName)"
+        }
+        return "Next steps"
+    }
+
+    public static func expandedDetail(
+        memory: CompanionMemoryContext?,
+        studioAttentionHint: String?
+    ) -> String {
+        if let studioAttentionHint = normalized(studioAttentionHint) {
+            return "\(studioAttentionHint)."
+        }
+
+        guard let memory, memory.isPersonalizationEnabled else {
+            return "A considered next move, based on where you are."
+        }
+
+        if let activeRoomName = normalized(memory.activeRoomName),
+           let material = memory.preferredMaterials.compactMap({ normalized($0) }).first {
+            return "Grounded in \(activeRoomName) and your preference for \(material)."
+        }
+        if let activeRoomName = normalized(memory.activeRoomName) {
+            return "Grounded in \(activeRoomName) and the taste you’ve shared."
+        }
+        if let tasteSummary = normalized(memory.tasteSummary) {
+            return tasteSummary
+        }
+        return "A considered next move, based on the taste you’ve shared."
+    }
+
+    private static func normalized(_ value: String?) -> String? {
+        guard let value else { return nil }
+        let trimmed = value.trimmingCharacters(in: .whitespacesAndNewlines)
+        return trimmed.isEmpty ? nil : trimmed
+    }
+}

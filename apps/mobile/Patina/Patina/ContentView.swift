@@ -160,6 +160,10 @@ struct ContentView: View {
                     // for the whole stack (guarded to never fire at root).
                     .interactivePopGestureEnabled()
             }
+            // The root Companion floats inside a 120-point invisible Hearth.
+            // Scan and quiz provide their own in-flow Companion surfaces, so
+            // those routes reclaim the space instead of rendering two docks.
+            .companionHearthReservation(isActive: reservesRootCompanionHearth)
             // The expanded Companion is a modal panel drawn over this stack,
             // but nothing told the accessibility tree that: VoiceOver walked
             // straight past the open panel into the content behind it (device-
@@ -178,6 +182,12 @@ struct ContentView: View {
             PatinaLog.nav.debug("[ContentView] phase \(old) → \(new)")
             #endif
         }
+    }
+
+    private var reservesRootCompanionHearth: Bool {
+        CompanionHearthMetrics.reservesRootHearth(
+            for: coordinator.currentScreen
+        )
     }
 
     // MARK: - Home View

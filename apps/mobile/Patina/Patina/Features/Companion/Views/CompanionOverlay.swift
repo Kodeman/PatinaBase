@@ -26,8 +26,8 @@ enum CompanionDisplayMode: Equatable {
 public struct CompanionOverlay: View {
     @Environment(\.appCoordinator) private var coordinator
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
-    @Environment(\.accessibilityReduceTransparency) private var reduceTransparency
     @State private var viewModel = CompanionViewModel()
+    @State private var studioViewModel = StudioHubViewModel.shared
     @State private var state: CompanionState = .button
     @State private var voiceInputState: VoiceInputState = .idle
 
@@ -202,7 +202,7 @@ public struct CompanionOverlay: View {
     private var canonicalPresentation: CompanionPresentationState {
         switch displayMode {
         case .resting:
-            return .collapsed(hint: "Next steps")
+            return .collapsed(hint: contextualCollapsedHint)
 
         case let .nudging(nudge):
             return .collapsed(hint: nudge.label)
@@ -225,7 +225,7 @@ public struct CompanionOverlay: View {
                         for: coordinator.currentScreen,
                         context: enrichedContext
                     ),
-                    detail: "A considered next move, based on where you are.",
+                    detail: contextualExpandedDetail,
                     communicationLength: .brief
                 )
             )
@@ -234,6 +234,27 @@ public struct CompanionOverlay: View {
             // These legacy display modes render through their dedicated paths.
             return .resting
         }
+    }
+
+    private var liveStudioAttentionHint: String? {
+        if studioViewModel.hasLoaded, let hint = studioViewModel.attentionSummary.hint {
+            return hint
+        }
+        return coordinator.companionContext.attentionSummary
+    }
+
+    private var contextualCollapsedHint: String {
+        CompanionContextualCopy.collapsedHint(
+            memory: coordinator.companionContext.memory,
+            studioAttentionHint: liveStudioAttentionHint
+        )
+    }
+
+    private var contextualExpandedDetail: String {
+        CompanionContextualCopy.expandedDetail(
+            memory: coordinator.companionContext.memory,
+            studioAttentionHint: liveStudioAttentionHint
+        )
     }
 
     private var hearthPrimaryAction: (() -> Void)? {
@@ -356,12 +377,6 @@ public struct CompanionOverlay: View {
                     .allowsHitTesting(false)
             }
 
-            // Dock zone gradient — gives the companion visual breathing room
-            if shouldShowDockGradient {
-                companionDockGradient
-                    .transition(.opacity)
-            }
-
             // Resting, progress, and expanded communication stay mounted in
             // one Hearth view so the charcoal shell and Strata mark morph
             // continuously between canonical states.
@@ -454,36 +469,6 @@ public struct CompanionOverlay: View {
             isPresented: $isHelpPanelPresented,
             surfaceKey: SurfaceKeys.IOSApp.Companion.root
         )
-    }
-
-    // MARK: - Dock Zone Gradient
-
-    /// Whether to show the dock zone gradient behind the companion
-    private var shouldShowDockGradient: Bool {
-        if reduceTransparency { return false }
-
-        switch displayMode {
-        case .resting, .nudging, .journeyMode:
-            return true
-        case .expanded, .minimal, .hidden:
-            return false
-        }
-    }
-
-    /// Subtle gradient fade that gives the companion button visual breathing
-    /// room. PT-6-8: drops the explicit `safeAreaBottom` parameter — the
-    /// gradient bleeds to the screen edge via `.ignoresSafeArea`, which is
-    /// what we want for the fade, so no inset measurement is needed.
-    private var companionDockGradient: some View {
-        // Wave 1 E.1: the gradient's default tint is static softCream, which
-        // rendered a near-white band on every dark screen. Tint with the
-        // dynamic canvas color instead — the scrim's whole job is to fade
-        // content into the background, so it must track light/dark with it.
-        PatinaGradients.companionDock(warmTint: PatinaColors.Background.primary)
-            .frame(height: 140)
-            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottom)
-            .allowsHitTesting(false)
-            .ignoresSafeArea(edges: .bottom)
     }
 
     // MARK: - State 1: Resting

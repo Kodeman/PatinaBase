@@ -267,6 +267,7 @@ struct DailyRoomView: View {
         coordinator.companionContext.memory = viewModel.companionMemoryContext(
             projectAttentionSummary: projectAttentionSummary
         )
+        coordinator.companionContext.attentionSummary = projectAttentionSummary
 
         if let room = viewModel.activeRoomModel {
             coordinator.updateActiveRoom(ActiveRoomContext(

@@ -129,7 +129,89 @@ struct CompanionPresentationTests {
         #expect(CompanionConstants.minimumTouchTarget >= 44)
         #expect(CompanionConstants.springResponse >= 0.42)
         #expect(CompanionConstants.springResponse <= 0.52)
-        #expect(CompanionHearthMetrics.reservedHeight >= CompanionConstants.buttonSize)
+        #expect(CompanionHearthMetrics.reservedHeight == 120)
+        #expect(CompanionHearthMetrics.reservesRootHearth(for: .heroFrame))
+        #expect(!CompanionHearthMetrics.reservesRootHearth(for: .scanFlow(reason: .fresh)))
+        #expect(!CompanionHearthMetrics.reservesRootHearth(for: .styleQuiz))
         #expect(CompanionConstants.contentFollowDelay > 0)
+    }
+
+    @Test
+    func liveStudioAttentionLeadsTheCollapsedCompanionWithoutMemoryConsent() {
+        let memory = CompanionMemoryContext(
+            isPersonalizationEnabled: false,
+            activeRoomName: "Living Room",
+            projectAttentionSummary: "A project decision is waiting"
+        )
+
+        #expect(
+            CompanionContextualCopy.collapsedHint(
+                memory: memory,
+                studioAttentionHint: "2 things need your eye"
+            ) == "2 things need your eye"
+        )
+        #expect(
+            CompanionContextualCopy.expandedDetail(
+                memory: memory,
+                studioAttentionHint: "2 things need your eye"
+            ) == "2 things need your eye."
+        )
+    }
+
+    @Test
+    func companionContextCarriesLiveAttentionSeparatelyFromOptInMemory() {
+        let context = CompanionContext(
+            memory: CompanionMemoryContext(isPersonalizationEnabled: false),
+            attentionSummary: "A project decision is waiting"
+        )
+
+        #expect(context.memory?.isPersonalizationEnabled == false)
+        #expect(context.attentionSummary == "A project decision is waiting")
+    }
+
+    @Test
+    func optedOutMemoryNeverChangesCompanionCopy() {
+        let memory = CompanionMemoryContext(
+            isPersonalizationEnabled: false,
+            activeRoomName: "Living Room",
+            tasteSummary: "Warm and tailored",
+            recentSavedItemName: "Oak Credenza"
+        )
+
+        #expect(
+            CompanionContextualCopy.collapsedHint(
+                memory: memory,
+                studioAttentionHint: nil
+            ) == "Next steps"
+        )
+        #expect(
+            CompanionContextualCopy.expandedDetail(
+                memory: memory,
+                studioAttentionHint: nil
+            ) == "A considered next move, based on where you are."
+        )
+    }
+
+    @Test
+    func optedInMemoryCarriesRoomAndTasteThroughTheSameShell() {
+        let memory = CompanionMemoryContext(
+            isPersonalizationEnabled: true,
+            activeRoomName: "Library",
+            tasteSummary: "Warm, quiet, and tailored",
+            preferredMaterials: ["Walnut", "Linen"]
+        )
+
+        #expect(
+            CompanionContextualCopy.collapsedHint(
+                memory: memory,
+                studioAttentionHint: nil
+            ) == "Continue with Library"
+        )
+        #expect(
+            CompanionContextualCopy.expandedDetail(
+                memory: memory,
+                studioAttentionHint: nil
+            ) == "Grounded in Library and your preference for Walnut."
+        )
     }
 }

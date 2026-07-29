@@ -62,6 +62,11 @@ public struct CompanionContext: Equatable {
     /// room notes, messages, images, scan geometry, or opaque database IDs.
     public var memory: CompanionMemoryContext?
 
+    /// Concise, live work-state signal for the collapsed Companion. This is
+    /// derived from currently loaded Studio/badge records and is not persisted,
+    /// so it remains available without opting into contextual memory.
+    public var attentionSummary: String?
+
     // MARK: - Design Request
 
     /// The homeowner's promoted (visible) design request, if any. Session-scoped
@@ -97,6 +102,7 @@ public struct CompanionContext: Equatable {
         roomCount: Int = 0,
         hasStyleProfile: Bool = false,
         memory: CompanionMemoryContext? = nil,
+        attentionSummary: String? = nil,
         activeDesignRequest: ActiveDesignRequestContext? = nil
     ) {
         self.currentScreen = currentScreen
@@ -109,6 +115,7 @@ public struct CompanionContext: Equatable {
         self.roomCount = roomCount
         self.hasStyleProfile = hasStyleProfile
         self.memory = memory
+        self.attentionSummary = attentionSummary
         self.activeDesignRequest = activeDesignRequest
     }
 

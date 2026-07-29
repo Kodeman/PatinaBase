@@ -4,9 +4,8 @@
 //
 //  Patina Design System - Layout
 //
-//  Adds bottom padding so scrollable content clears the floating Companion
-//  affordance docked at the bottom of the screen (PT-6-14). Additive
-//  foundation — call sites adopt `.companionSafeArea()` in a later wave.
+//  Adds bottom padding so app content clears the floating Companion
+//  affordance docked at the bottom of the screen (PT-6-14).
 //
 
 import SwiftUI
@@ -21,13 +20,35 @@ public enum CompanionHearthMetrics {
     /// Content clearance above the home-indicator safe area.
     public static let reservedHeight: CGFloat =
         collapsedDiameter + hintAllowance + verticalSpacing
+
+    /// Root overlay ownership policy. Scan and quiz render their own in-flow
+    /// Companion, so reserving the root Hearth there would create dead space.
+    static func reservesRootHearth(for route: AppRoute) -> Bool {
+        switch route {
+        case .scanFlow, .styleQuiz:
+            return false
+        default:
+            return true
+        }
+    }
 }
 
 extension View {
     /// Reserves the invisible Hearth so scrollable content cannot settle under
     /// the centered Companion circle and contextual hint.
-    func companionHearthReservation() -> some View {
-        safeAreaPadding(.bottom, CompanionHearthMetrics.reservedHeight)
+    func companionHearthReservation(isActive: Bool = true) -> some View {
+        safeAreaInset(edge: .bottom, spacing: 0) {
+            if isActive {
+                Color.clear
+                    .frame(height: CompanionHearthMetrics.reservedHeight)
+                    .background {
+                        PatinaColors.Background.primary
+                            .ignoresSafeArea(edges: .bottom)
+                    }
+                    .allowsHitTesting(false)
+                    .accessibilityHidden(true)
+            }
+        }
     }
 
     /// Source-compatible name retained for existing and in-flight call sites.
