@@ -52,6 +52,22 @@ public struct FieldScanUploadReceipt: Sendable, Codable {
     }
 }
 
+/// A durable scan left on-device for upload, confirmation, or recovery.
+public struct FieldScanPendingUpload: Identifiable, Sendable, Equatable {
+    public let id: String
+    public let name: String
+    public let projectID: String?
+    public let state: CaptureTransferState
+
+    public init(id: String, name: String, projectID: String?,
+                state: CaptureTransferState) {
+        self.id = id
+        self.name = name
+        self.projectID = projectID
+        self.state = state
+    }
+}
+
 /// A live scan session handle (F2). Returned by `SiteScanService.startSession`;
 /// the screen observes `events`, then either `finish()`es to a result or
 /// `cancel()`s. A reference type — it wraps the live AR/RoomPlan session.
@@ -74,4 +90,19 @@ public protocol SiteScanService: AnyObject {
     /// Upload a finished scan, tying it to a project/room; returns the remote id.
     func upload(result: FieldScanResult, projectID: String?, projectRoomID: String?,
                 name: String) async throws -> FieldScanUploadReceipt
+    /// Discover transfers that survived leaving the upload flow or a relaunch.
+    func pendingUploads() async -> [FieldScanPendingUpload]
+    /// Idempotently resume the same durable reservations. Startup callers pass
+    /// `false`; explicit user retry passes `true`.
+    func resumePendingUploads(retryFailures: Bool) async
+    /// Composition-root startup seam; intentionally not wired by the workflow slice.
+    func reconcilePendingUploads() async
+}
+
+public extension SiteScanService {
+    func pendingUploads() async -> [FieldScanPendingUpload] { [] }
+    func resumePendingUploads(retryFailures: Bool) async {}
+    func reconcilePendingUploads() async {
+        await resumePendingUploads(retryFailures: false)
+    }
 }

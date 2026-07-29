@@ -15,10 +15,13 @@ public enum CaptureLifecycle {
         case enriching     // N1–N5 sub-action in flight
         case session       // V1 batch
         case routed        // S1 stamped + placed
+        case uploading     // bytes in flight
+        case awaitingConfirmation // bytes landed; server receipt pending
         case saved         // S4 library (terminal)
         case inbox         // S5 inbox (terminal)
         case queued        // R4 offline (transient terminal until signal)
         case failed        // sync error
+        case rejected      // server explicitly rejected the payload (terminal)
     }
 
     public enum EnrichKind: Sendable { case ocr, code, measure, voice, smartGuess }
@@ -34,8 +37,11 @@ public enum CaptureLifecycle {
         case chooseDestination(CaptureDestination)
         case save
         case enqueueOffline
+        case beginUpload
+        case awaitConfirmation
         case commitSucceeded
         case commitFailed(String)
+        case commitRejected(String)
         case retry
     }
 
@@ -54,9 +60,12 @@ public enum CaptureLifecycle {
         case (_, .chooseDestination(.inbox)):        return .routed
         case (_, .chooseDestination(.undecided)):    return state
         case (_, .enqueueOffline):                   return .queued
+        case (.queued, .beginUpload):                return .uploading
+        case (.uploading, .awaitConfirmation):       return .awaitingConfirmation
         case (.routed, .save):                       return .routed
-        case (_, .commitSucceeded):                  return .saved
+        case (.awaitingConfirmation, .commitSucceeded): return .saved
         case (_, .commitFailed):                     return .failed
+        case (.awaitingConfirmation, .commitRejected): return .rejected
         case (.failed, .retry):                      return .queued
         case (.queued, .retry):                      return .queued
         default:                                     return state
@@ -64,6 +73,6 @@ public enum CaptureLifecycle {
     }
 
     public static func isTerminal(_ state: State) -> Bool {
-        state == .saved || state == .inbox
+        state == .saved || state == .inbox || state == .rejected
     }
 }

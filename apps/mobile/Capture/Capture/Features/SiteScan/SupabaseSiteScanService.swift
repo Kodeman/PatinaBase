@@ -171,8 +171,38 @@ final class SupabaseSiteScanService: SiteScanService {
 
     func upload(result: FieldScanResult, projectID: String?, projectRoomID: String?,
                 name: String) async throws -> FieldScanUploadReceipt {
-        let userID = try await currentUserID()
+        do {
+            return try await performUpload(
+                result: result, projectID: projectID,
+                projectRoomID: projectRoomID, name: name)
+        } catch {
+            let key = SiteScanBundleHome.relativeKey(for: result.localBundleURL)
+            if let record = store.scanUploadRecord(bundlePath: key) {
+                let prior = record.transferState
+                let rejected: Bool
+                if case SiteScanError.bundleRejected = error {
+                    rejected = true
+                } else {
+                    rejected = false
+                }
+                store.updateScanUploadRecord(
+                    record,
+                    transfer: CaptureTransferState(
+                        phase: rejected ? .rejected : .retryableFailure,
+                        progress: prior.progress,
+                        errorMessage: error.localizedDescription,
+                        retryCount: prior.retryCount + (rejected ? 0 : 1)))
+            }
+            throw error
+        }
+    }
 
+    private func performUpload(
+        result: FieldScanResult,
+        projectID: String?,
+        projectRoomID: String?,
+        name: String
+    ) async throws -> FieldScanUploadReceipt {
         // Adopt the background session's surviving tasks before planning this upload, so
         // a resume dedups against them and their completions aren't dropped (M3).
         if !didReconcileUploads {
@@ -182,44 +212,35 @@ final class SupabaseSiteScanService: SiteScanService {
 
         // 1. Reserve this attempt's scan/room ids — or resume a prior attempt's,
         //    if this is a retry (see `reservation(for:...)` doc below).
-        let reserved = try await reservation(for: result.localBundleURL,
-                                             picked: projectRoomID, name: name, userID: userID)
+        let reserved = reservation(
+            for: result.localBundleURL,
+            projectID: projectID,
+            projectRoomID: projectRoomID,
+            name: name)
+        guard reserved.record.transferState.phase != .rejected else {
+            throw SiteScanError.bundleRejected
+        }
+        let userID = try await currentUserID()
+        try await ensureRoom(
+            reserved: reserved, picked: projectRoomID,
+            name: name, userID: userID)
         let scanID = reserved.scanID
         let roomID = reserved.roomID
+        store.updateScanUploadRecord(
+            reserved.record,
+            transfer: CaptureTransferState(
+                phase: .uploading,
+                progress: reserved.record.transferState.progress,
+                retryCount: reserved.record.retryCount))
         // Re-derive the bundle dir under the CURRENT container from the durable relative
         // key (the app-container path may have moved since it was written) — C2.
         let bundle = (try? SiteScanBundleHome.resolve(relativeKey: reserved.record.bundlePath))
             ?? result.localBundleURL
 
-        // 2. Upsert (not insert) the scan row (status=processing) with the project
-        //    linkage + best-effort metrics, keyed on the reserved id. Upsert (vs.
-        //    a plain insert) tolerates a retry that resumes after a prior attempt
-        //    already wrote this row — see `reservation(for:...)`. project_room_id
-        //    stays nil in v1 — F1 picks a public.rooms id (→ room_id), not a
-        //    project_rooms scope room.
-        let iso = ISO8601DateFormatter()
-        let now = iso.string(from: Date())
-        let metrics = scanMetrics()
-        let insert = RoomScanInsert(
-            id: scanID, user_id: userID, room_id: roomID,
-            project_id: projectID.flatMap { UUID(uuidString: $0) },
-            project_room_id: nil,
-            name: name, status: "processing",
-            dimensions: metrics.dims.map {
-                .init(width: $0.x, length: $0.z, height: $0.y, unit: "meters")
-            },
-            floor_area: metrics.area,
-            coverage_percentage: metrics.coverage,
-            scanned_at: now, created_at: now)
-        do {
-            try await client.from("room_scans").upsert(insert, onConflict: "id").execute()
-        } catch let error as PostgrestError
-                    where error.message.contains("owned by a different designer") {
-            // Residual case (see SiteScanError.foreignProjectOwner): 00258's
-            // guard still runs on every upsert attempt, insert-path or not, so it
-            // catches this even on a retry of an already-reserved id.
-            throw SiteScanError.foreignProjectOwner
-        }
+        // 2. Upsert the processing row with routing + best-effort metrics.
+        try await upsertProcessingScan(
+            reserved: reserved, userID: userID,
+            projectID: projectID, name: name)
 
         // 3. Upload the full artifact set + patch URL columns + scan_schema_version
         //    (resumable — already-uploaded artifacts are skipped). See the helper.
@@ -232,6 +253,12 @@ final class SupabaseSiteScanService: SiteScanService {
         }
 
         // 5. confirm-scan-bundle (with C1 unreachable-vs-rejected discrimination).
+        store.updateScanUploadRecord(
+            reserved.record,
+            artifacts: artifactStates,
+            transfer: CaptureTransferState(
+                phase: .awaitingConfirmation, progress: 100,
+                retryCount: reserved.record.retryCount))
         try await confirmBundle(scanID: scanID, reserved: reserved, artifactStates: artifactStates)
 
         // 6. Posed photos (I76) — SEPARATE, best-effort lane, STRICTLY after ready.
@@ -241,10 +268,49 @@ final class SupabaseSiteScanService: SiteScanService {
             logger.error("[SiteScan] posed-photo upload failed; scan is ready without photos: \(error.localizedDescription)")
         }
 
-        store.updateScanUploadRecord(reserved.record, artifacts: artifactStates, status: "complete")
+        store.updateScanUploadRecord(
+            reserved.record,
+            artifacts: artifactStates,
+            transfer: CaptureTransferState(
+                phase: .complete, progress: 100,
+                retryCount: reserved.record.retryCount,
+                receiptID: scanID.uuidString))
         // 7. Retention: the bytes are safely server-side — reclaim the local bundle (C2).
         SiteScanBundleHome.remove(bundleURL: bundle)
         return FieldScanUploadReceipt(remoteScanID: scanID.uuidString)
+    }
+
+    private func upsertProcessingScan(
+        reserved: ScanReservation,
+        userID: UUID,
+        projectID: String?,
+        name: String
+    ) async throws {
+        let now = ISO8601DateFormatter().string(from: Date())
+        let metrics = scanMetrics()
+        let insert = RoomScanInsert(
+            id: reserved.scanID,
+            user_id: userID,
+            room_id: reserved.roomID,
+            project_id: projectID.flatMap { UUID(uuidString: $0) },
+            project_room_id: nil,
+            name: name,
+            status: "processing",
+            dimensions: metrics.dims.map {
+                .init(width: $0.x, length: $0.z, height: $0.y, unit: "meters")
+            },
+            floor_area: metrics.area,
+            coverage_percentage: metrics.coverage,
+            scanned_at: now,
+            created_at: now)
+        do {
+            try await client.from("room_scans")
+                .upsert(insert, onConflict: "id")
+                .execute()
+        } catch let error as PostgrestError
+                    where error.message.contains("owned by a different designer") {
+            throw SiteScanError.foreignProjectOwner
+        }
     }
 
     /// confirm-scan-bundle HEAD-verifies the patched URLs server-side and flips the row to
@@ -268,7 +334,13 @@ final class SupabaseSiteScanService: SiteScanService {
                                      params: ScanIDParam(p_scan_id: scanID.uuidString)).execute()
             case .propagate:
                 logger.error("[SiteScan] confirm-scan-bundle rejected the bundle (status \(status.map(String.init) ?? "?")); leaving row processing for retry")
-                store.updateScanUploadRecord(reserved.record, artifacts: artifactStates, status: "incomplete")
+                store.updateScanUploadRecord(
+                    reserved.record,
+                    artifacts: artifactStates,
+                    transfer: CaptureTransferState(
+                        phase: .rejected, progress: 100,
+                        errorMessage: SiteScanError.bundleRejected.localizedDescription,
+                        retryCount: reserved.record.retryCount))
                 throw SiteScanError.bundleRejected
             }
         }
@@ -326,7 +398,10 @@ final class SupabaseSiteScanService: SiteScanService {
                 working.status = .failed
                 working.lastError = "background upload failed (attempt \(working.attempts))"
                 upsert(&states, working)
-                store.updateScanUploadRecord(reserved.record, artifacts: states, status: "failed")
+                store.updateScanUploadRecord(
+                    reserved.record,
+                    artifacts: states,
+                    status: CaptureTransferPhase.retryableFailure.rawValue)
                 throw SiteScanError.exportFailed("Upload of \(descriptor.kind) failed — retry resumes where it left off.")
             }
             if let sha {
@@ -430,8 +505,9 @@ final class SupabaseSiteScanService: SiteScanService {
     /// reuses the SAME scanID instead of minting a fresh room_scans row (+ a spare rooms
     /// row), which is the orphaned-`processing`-row hazard the audit flagged in the prior
     /// in-memory dictionary.
-    private func reservation(for bundleURL: URL, picked: String?, name: String,
-                             userID: UUID) async throws -> ScanReservation {
+    private func reservation(for bundleURL: URL, projectID: String?,
+                             projectRoomID: String?,
+                             name: String) -> ScanReservation {
         // Container-independent key so a resume re-finds the record after a container
         // move (C2) — "SiteScans/site-scan-…", not the volatile absolute path.
         let key = SiteScanBundleHome.relativeKey(for: bundleURL)
@@ -440,12 +516,77 @@ final class SupabaseSiteScanService: SiteScanService {
            let roomID = UUID(uuidString: existing.roomID) {
             return ScanReservation(scanID: scanID, roomID: roomID, record: existing)   // resume
         }
-        let roomID = try await resolveRoomID(picked: picked, name: name, userID: userID)
+        let roomID = projectRoomID.flatMap(UUID.init(uuidString:)) ?? UUID()
         let scanID = UUID()
         let record = store.insertScanUploadRecord(ScanUploadRecord(
             bundlePath: key, scanID: scanID.uuidString, roomID: roomID.uuidString,
-            name: name, projectID: nil, projectRoomID: picked))
+            name: name, projectID: projectID, projectRoomID: projectRoomID))
         return ScanReservation(scanID: scanID, roomID: roomID, record: record)
+    }
+
+    // MARK: - Durable recovery
+
+    func pendingUploads() async -> [FieldScanPendingUpload] {
+        store.scanUploadRecords().map {
+            FieldScanPendingUpload(
+                id: $0.scanID,
+                name: $0.name,
+                projectID: $0.projectID,
+                state: $0.transferState)
+        }
+    }
+
+    /// Startup reconciliation seam: the composition root may call this with
+    /// `retryFailures: false` after auth is ready. Explicit U1 retry passes true.
+    /// The existing durable reservation keeps every replay idempotent.
+    func resumePendingUploads(retryFailures: Bool) async {
+        if !didReconcileUploads {
+            didReconcileUploads = true
+            await backgroundUploader.reconcileExistingTasks()
+        }
+
+        for record in store.scanUploadRecords() {
+            let phase = record.transferState.phase
+            if phase == .rejected || phase == .complete { continue }
+            if phase == .retryableFailure, !retryFailures { continue }
+
+            if phase == .retryableFailure {
+                record.artifacts = record.artifacts.map { artifact in
+                    var reset = artifact
+                    if reset.status == .failed {
+                        reset.status = .pending
+                        reset.attempts = 0
+                        reset.lastError = nil
+                    }
+                    return reset
+                }
+                record.applyTransferState(CaptureTransferState(
+                    phase: .queued,
+                    retryCount: record.retryCount))
+                try? store.save()
+            }
+
+            guard let bundle = try? SiteScanBundleHome.resolve(
+                relativeKey: record.bundlePath),
+                FileManager.default.fileExists(atPath: bundle.path) else {
+                store.updateScanUploadRecord(
+                    record,
+                    transfer: CaptureTransferState(
+                        phase: .retryableFailure,
+                        errorMessage: "The local scan bundle is unavailable.",
+                        retryCount: record.retryCount + 1))
+                continue
+            }
+
+            let result = FieldScanResult(
+                localBundleURL: bundle,
+                roomName: record.name)
+            _ = try? await upload(
+                result: result,
+                projectID: record.projectID,
+                projectRoomID: record.projectRoomID,
+                name: record.name)
+        }
     }
 
     private func currentUserID() async throws -> UUID {
@@ -458,13 +599,22 @@ final class SupabaseSiteScanService: SiteScanService {
         }
     }
 
-    private func resolveRoomID(picked: String?, name: String, userID: UUID) async throws -> UUID {
-        if let picked, let existing = UUID(uuidString: picked) { return existing }
-        let roomID = UUID()
+    private func ensureRoom(
+        reserved: ScanReservation,
+        picked: String?,
+        name: String,
+        userID: UUID
+    ) async throws {
+        guard picked.flatMap(UUID.init(uuidString:)) == nil else { return }
         try await client.from("rooms")
-            .insert(RoomInsert(id: roomID, user_id: userID, name: name, type: "other"))
+            .upsert(
+                RoomInsert(
+                    id: reserved.roomID,
+                    user_id: userID,
+                    name: name,
+                    type: "other"),
+                onConflict: "id")
             .execute()
-        return roomID
     }
 
     // MARK: - Posed photos (I76)

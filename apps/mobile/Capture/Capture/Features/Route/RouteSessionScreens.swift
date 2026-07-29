@@ -19,10 +19,12 @@ enum RouteSessionScreens {
         let location = container.location
         let projectCreator = container.projectCreator
         let analytics = container.analytics
+        let session = container.session
 
         // ── Flow 6 routes ──────────────────────────────────────────────
         r.registerRoute(CaptureRoute.session.registryKey) { _ in
-            AnyView(V1SessionTrayScreen(store: store, coordinator: coordinator))
+            AnyView(V1SessionTrayScreen(
+                store: store, session: session, coordinator: coordinator))
         }
         r.registerRoute(CaptureRoute.specimen(UUID()).registryKey) { route in
             guard case let .specimen(id) = route else { return AnyView(EmptyView()) }
@@ -35,17 +37,20 @@ enum RouteSessionScreens {
             guard case let .assignVenue(id) = sheet else { return AnyView(EmptyView()) }
             return AnyView(S1AssignVenueScreen(
                 specimen: store.specimen(id: id), store: store,
-                location: location, coordinator: coordinator, analytics: analytics))
+                location: location, session: session,
+                coordinator: coordinator, analytics: analytics))
         }
         r.registerSheet(CaptureSheet.createProject.registryKey) { _ in
             AnyView(S2CreateProjectScreen(store: store, coordinator: coordinator,
-                                          analytics: analytics, projectCreator: projectCreator))
+                                          analytics: analytics, session: session,
+                                          projectCreator: projectCreator))
         }
         r.registerSheet(CaptureSheet.destination(UUID()).registryKey) { sheet in
             guard case let .destination(id) = sheet else { return AnyView(EmptyView()) }
             return AnyView(S3DestinationScreen(
                 specimen: store.specimen(id: id), store: store,
-                sync: sync, coordinator: coordinator, analytics: analytics))
+                sync: sync, session: session,
+                coordinator: coordinator, analytics: analytics))
         }
         r.registerSheet(CaptureSheet.savedTerminal(UUID()).registryKey) { sheet in
             guard case let .savedTerminal(id) = sheet else { return AnyView(EmptyView()) }
@@ -60,7 +65,8 @@ enum RouteSessionScreens {
 
         // ── Flow 6 sheet (cull deck) ───────────────────────────────────
         r.registerSheet(CaptureSheet.cullDeck.registryKey) { _ in
-            AnyView(V2CullDeckScreen(store: store, coordinator: coordinator))
+            AnyView(V2CullDeckScreen(
+                store: store, session: session, coordinator: coordinator))
         }
     }
 }

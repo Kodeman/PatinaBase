@@ -19,6 +19,7 @@ enum SystemSurfaceScreens {
             AnyView(SyncStatusScreen(
                 store: container.store,
                 sync: container.sync,
+                siteScan: container.siteScan,
                 analytics: container.analytics,
                 coordinator: coordinator
             ))

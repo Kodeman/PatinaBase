@@ -20,6 +20,7 @@ struct SpecimenSheetScreen: View {
     let specimen: Specimen      // @Model — Observation tracks the fields read in body
 
     @Environment(\.dismiss) private var dismiss
+    @State private var showMoreDetails = false
 
     var body: some View {
         NavigationStack {
@@ -27,6 +28,7 @@ struct SpecimenSheetScreen: View {
                 VStack(alignment: .leading, spacing: 22) {
                     SpecimenPhotoStrip(store: store, specimen: specimen)
                     fields
+                    enrichmentActions
                     actions
                 }
                 .padding(20)
@@ -57,22 +59,83 @@ struct SpecimenSheetScreen: View {
             SpecimenFieldRow("Maker", value: scalarBinding(.maker) { specimen.maker },
                              source: specimen.provenance(for: .maker),
                              placeholder: "Vendor / brand")
-            SpecimenFieldRow("SKU", value: scalarBinding(.sku) { specimen.sku },
-                             source: specimen.provenance(for: .sku))
-            SpecimenFieldRow("Colorway", value: scalarBinding(.colorway) { specimen.colorway },
-                             source: specimen.provenance(for: .colorway))
             SpecimenFieldRow("Material", value: scalarBinding(.material) { specimen.materialNote },
                              source: specimen.provenance(for: .material))
-            SpecimenFieldRow("Trade price", value: priceBinding,
-                             source: specimen.provenance(for: .price))
-            SpecimenFieldRow("Dimensions", value: dimensionsBinding,
-                             source: specimen.provenance(for: .dimensions),
-                             placeholder: "Add in Measure")
-            if hasVoiceNote {
-                SpecimenFieldRow("Voice note", value: voiceBinding, source: .voice,
-                                 placeholder: "Transcript")
+
+            DisclosureGroup(isExpanded: $showMoreDetails) {
+                VStack(spacing: 0) {
+                    SpecimenFieldRow("SKU", value: scalarBinding(.sku) { specimen.sku },
+                                     source: specimen.provenance(for: .sku))
+                    SpecimenFieldRow("Colorway", value: scalarBinding(.colorway) { specimen.colorway },
+                                     source: specimen.provenance(for: .colorway))
+                    SpecimenFieldRow("Finish", value: finishBinding,
+                                     source: .manual)
+                    SpecimenFieldRow("Trade price", value: priceBinding,
+                                     source: specimen.provenance(for: .price))
+                    SpecimenFieldRow("Dimensions", value: dimensionsBinding,
+                                     source: specimen.provenance(for: .dimensions),
+                                     placeholder: "Add in Measure")
+                    SpecimenFieldRow("Source", value: scalarBinding(.sourceURL) { specimen.sourceURL },
+                                     source: specimen.provenance(for: .sourceURL),
+                                     placeholder: "Website or showroom")
+                    SpecimenFieldRow("Notes", value: scalarBinding(.note) { specimen.note },
+                                     source: specimen.provenance(for: .note))
+                    if hasVoiceNote {
+                        SpecimenFieldRow("Voice note", value: voiceBinding, source: .voice,
+                                         placeholder: "Transcript")
+                    }
+                }
+            } label: {
+                HStack {
+                    Text("More details")
+                        .font(CaptureType.bodyEmph)
+                        .foregroundStyle(CaptureColor.ink)
+                    Spacer()
+                    Text(detailSummary)
+                        .font(CaptureType.footnote)
+                        .foregroundStyle(CaptureColor.inkSoft)
+                }
+                .padding(.vertical, 14)
+            }
+            .tint(CaptureColor.verdigris)
+        }
+    }
+
+    private var enrichmentActions: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            Text("Add what matters")
+                .font(CaptureType.eyebrow)
+                .textCase(.uppercase)
+                .foregroundStyle(CaptureColor.inkSoft)
+            HStack(spacing: 8) {
+                enrichmentButton("Tag", icon: "text.viewfinder", sheet: .ocr(specimen.id))
+                enrichmentButton("Code", icon: "barcode.viewfinder", sheet: .code(specimen.id))
+                enrichmentButton("Measure", icon: "ruler", sheet: .measure(specimen.id))
+                enrichmentButton("Voice", icon: "waveform", sheet: .voice(specimen.id))
             }
         }
+    }
+
+    private func enrichmentButton(
+        _ title: String,
+        icon: String,
+        sheet: CaptureSheet
+    ) -> some View {
+        Button {
+            try? store.save()
+            coordinator.present(sheet)
+        } label: {
+            VStack(spacing: 6) {
+                Image(systemName: icon)
+                Text(title)
+                    .font(CaptureType.footnote)
+            }
+            .foregroundStyle(CaptureColor.ink)
+            .frame(maxWidth: .infinity)
+            .padding(.vertical, 11)
+            .background(CaptureColor.paper2, in: RoundedRectangle(cornerRadius: 10))
+        }
+        .buttonStyle(.plain)
     }
 
     // MARK: Actions
@@ -125,6 +188,16 @@ struct SpecimenSheetScreen: View {
         )
     }
 
+    private var finishBinding: Binding<String> {
+        Binding(
+            get: { specimen.finish ?? "" },
+            set: {
+                specimen.finish = $0.isEmpty ? nil : $0
+                specimen.touch()
+            }
+        )
+    }
+
     // Display-only: measurements are authored in Measure (N3, Team C).
     private var dimensionsBinding: Binding<String> {
         Binding(get: { Self.dimensionString(specimen.measurements) }, set: { _ in })
@@ -142,6 +215,18 @@ struct SpecimenSheetScreen: View {
 
     private var hasVoiceNote: Bool {
         specimen.voiceTranscript != nil || specimen.voicePartialTranscript != nil
+    }
+
+    private var detailSummary: String {
+        var count = 0
+        if !(specimen.sku ?? "").isEmpty { count += 1 }
+        if !(specimen.colorway ?? "").isEmpty { count += 1 }
+        if !(specimen.finish ?? "").isEmpty { count += 1 }
+        if specimen.priceTradeCents != nil { count += 1 }
+        if !specimen.measurements.isEmpty { count += 1 }
+        if !(specimen.sourceURL ?? "").isEmpty { count += 1 }
+        if !(specimen.note ?? "").isEmpty { count += 1 }
+        return count == 0 ? "Optional" : "\(count) added"
     }
 
     /// A recognised/measured value the designer changes is "edited"; an empty or

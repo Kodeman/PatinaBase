@@ -12,6 +12,7 @@ import CaptureKit
 
 struct CaptureCardOverlay: View {
     let specimen: Specimen
+    let saveTitle: String
     let onSave: () -> Void
     let onAddDetail: () -> Void
     let onDismiss: () -> Void
@@ -47,8 +48,9 @@ struct CaptureCardOverlay: View {
                 .frame(maxWidth: .infinity)
 
             HStack(spacing: 8) {
-                ProgressView().controlSize(.small).tint(CaptureColor.goldenHour)
-                Text("Identifying…")
+                Image(systemName: "checkmark.circle.fill")
+                    .foregroundStyle(CaptureColor.verdigris)
+                Text("Ready to place")
                     .font(CaptureType.eyebrow).textCase(.uppercase)
                     .foregroundStyle(CaptureColor.inkSoft)
             }
@@ -70,7 +72,7 @@ struct CaptureCardOverlay: View {
                         .overlay(RoundedRectangle(cornerRadius: 12).stroke(CaptureColor.line2, lineWidth: 1))
                 }
                 Button(action: onSave) {
-                    Text("Save")
+                    Text(saveTitle)
                         .font(CaptureType.bodyEmph)
                         .foregroundStyle(CaptureColor.paper3)
                         .frame(maxWidth: .infinity)

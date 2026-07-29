@@ -18,13 +18,16 @@ struct S1AssignVenueScreen: View {
     let specimen: Specimen?
     let store: CaptureStore
     let location: any LocationService
+    let session: any SessionProviding
     let coordinator: CaptureCoordinator
     let analytics: any CaptureAnalytics
 
     var body: some View {
         Group {
             if let specimen {
-                S1Content(specimen: specimen, store: store, location: location, coordinator: coordinator)
+                S1Content(
+                    specimen: specimen, store: store, location: location,
+                    session: session, coordinator: coordinator)
             } else {
                 RouteMissingSpecimen()
             }
@@ -41,12 +44,11 @@ private struct S1Content: View {
     let specimen: Specimen
     let store: CaptureStore
     let location: any LocationService
+    let session: any SessionProviding
     let coordinator: CaptureCoordinator
 
-    @AppStorage("capture.lastProjectId") private var lastProjectId = ""
-    @AppStorage("capture.lastProjectName") private var lastProjectName = ""
-    @AppStorage("capture.lastRoom") private var lastRoom = ""
     @AppStorage("capture.routingSpecimenId") private var routingSpecimenId = ""
+    private let sessionContext = CaptureSessionContextStore.shared
 
     @State private var projects: [CaptureProjectRef] = []
     @State private var selectedProjectId = ""
@@ -163,10 +165,11 @@ private struct S1Content: View {
         projects = (try? store.context.fetch(descriptor)) ?? []
 
         let venue = specimen.venue
-        projectName = venue?.projectName ?? lastProjectName
-        selectedProjectId = venue?.projectId ?? lastProjectId
-        room = venue?.room ?? lastRoom
-        shelf = venue?.shelf ?? ""
+        let remembered = sessionContext.current(identity: identity).routing
+        projectName = venue?.projectName ?? remembered.projectName ?? ""
+        selectedProjectId = venue?.projectId ?? remembered.projectID ?? ""
+        room = venue?.room ?? remembered.room ?? ""
+        shelf = venue?.shelf ?? remembered.shelf ?? ""
         venueName = venue?.placemarkName ?? ""
 
         if venueName.isEmpty { Task { await stampVenue() } }
@@ -211,9 +214,20 @@ private struct S1Content: View {
         specimen.touch()
         try? store.save()
 
-        lastProjectId = selectedProjectId
-        lastProjectName = projectName
-        lastRoom = room
+        sessionContext.remember(
+            CaptureRoutingMemory(
+                destination: recommendation,
+                projectID: selectedProjectId.isEmpty ? nil : selectedProjectId,
+                projectName: projectName.isEmpty ? nil : projectName,
+                room: room.isEmpty ? nil : room,
+                shelf: shelf.isEmpty ? nil : shelf),
+            identity: identity)
+    }
+
+    private var identity: CaptureSessionIdentity {
+        CaptureSessionIdentity(
+            userID: session.userID,
+            workspaceID: session.workspaceID)
     }
 }
 
@@ -224,6 +238,7 @@ private struct S1Content: View {
         specimen: demo.specimen,
         store: demo.store,
         location: MockLocationService(),
+        session: MockSessionProviding(),
         coordinator: CaptureCoordinator(),
         analytics: MockCaptureAnalytics()
     )

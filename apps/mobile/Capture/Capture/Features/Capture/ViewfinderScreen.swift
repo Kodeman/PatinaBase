@@ -52,6 +52,7 @@ struct ViewfinderScreen: View {
             if let specimen = model.cardSpecimen {
                 CaptureCardOverlay(
                     specimen: specimen,
+                    saveTitle: model.quickSaveTitle,
                     onSave: model.saveFromCard,
                     onAddDetail: model.addDetailFromCard,
                     onDismiss: model.dismissCard

@@ -105,6 +105,9 @@ final class SupabaseSessionService: SessionProviding {
     }
 
     func selectWorkspace(id: String) {
+        if activeWorkspaceID != id {
+            CaptureSessionContextStore.shared.reset()
+        }
         activeWorkspaceID = id
         if let match = workspaces.first(where: { $0.id == id }) {
             activeWorkspaceName = match.name
@@ -113,6 +116,7 @@ final class SupabaseSessionService: SessionProviding {
     }
 
     func signOut() async {
+        CaptureSessionContextStore.shared.reset()
         do {
             try await client.auth.signOut()
         } catch {

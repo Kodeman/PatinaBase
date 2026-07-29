@@ -16,14 +16,13 @@ struct S2CreateProjectScreen: View {
     let store: CaptureStore
     let coordinator: CaptureCoordinator
     let analytics: any CaptureAnalytics
+    let session: any SessionProviding
     /// Real mode: inserts into public.projects before caching locally. nil in mock
     /// mode → the local-only path (unchanged harness behavior).
     let projectCreator: (any CaptureProjectCreating)?
 
-    @AppStorage("capture.lastProjectId") private var lastProjectId = ""
-    @AppStorage("capture.lastProjectName") private var lastProjectName = ""
-    @AppStorage("capture.lastRoom") private var lastRoom = ""
     @AppStorage("capture.routingSpecimenId") private var routingSpecimenId = ""
+    private let sessionContext = CaptureSessionContextStore.shared
 
     @State private var name = ""
     @State private var addRoom = false
@@ -135,10 +134,18 @@ struct S2CreateProjectScreen: View {
         store.context.insert(project)
         try? store.save()
 
-        lastProjectId = remoteId ?? project.id.uuidString
-        lastProjectName = projectName
         let trimmedRoom = room.trimmingCharacters(in: .whitespacesAndNewlines)
-        if addRoom, !trimmedRoom.isEmpty { lastRoom = trimmedRoom }
+        let identity = CaptureSessionIdentity(
+            userID: session.userID, workspaceID: session.workspaceID)
+        let current = sessionContext.current(identity: identity).routing
+        sessionContext.remember(
+            CaptureRoutingMemory(
+                destination: current.destination,
+                projectID: remoteId ?? project.id.uuidString,
+                projectName: projectName,
+                room: addRoom && !trimmedRoom.isEmpty ? trimmedRoom : current.room,
+                shelf: current.shelf),
+            identity: identity)
 
         // Return to S1 for the specimen we came from (createProject carries no id).
         if let id = UUID(uuidString: routingSpecimenId) {
@@ -156,7 +163,8 @@ import CaptureKitMocks
     // swiftlint:disable:next force_try
     let store = try! CaptureStore.inMemory()
     return S2CreateProjectScreen(store: store, coordinator: CaptureCoordinator(),
-                                 analytics: MockCaptureAnalytics(), projectCreator: nil)
+                                 analytics: MockCaptureAnalytics(),
+                                 session: MockSessionProviding(), projectCreator: nil)
         .modelContainer(store.container)
 }
 #endif

@@ -104,8 +104,8 @@ public final class CaptureStore {
 
     // ── CRUD / outbox ──
     @discardableResult
-    public func newDraft() -> Specimen {
-        let s = Specimen()
+    public func newDraft(sessionID: UUID? = nil) -> Specimen {
+        let s = Specimen(captureSessionID: sessionID)
         context.insert(s)
         return s
     }
@@ -140,6 +140,15 @@ public final class CaptureStore {
         return try? context.fetch(descriptor).first
     }
 
+    /// Durable scan transfers that remain discoverable after leaving F4 or
+    /// relaunching. Completed receipts are omitted by default.
+    public func scanUploadRecords(includeComplete: Bool = false) -> [ScanUploadRecord] {
+        let descriptor = FetchDescriptor<ScanUploadRecord>(
+            sortBy: [SortDescriptor(\.updatedAt, order: .reverse)])
+        let records = (try? context.fetch(descriptor)) ?? []
+        return includeComplete ? records : records.filter { $0.statusRaw != "complete" }
+    }
+
     @discardableResult
     public func insertScanUploadRecord(_ record: ScanUploadRecord) -> ScanUploadRecord {
         context.insert(record)
@@ -153,6 +162,16 @@ public final class CaptureStore {
         record.artifacts = artifacts
         record.statusRaw = status
         record.updatedAt = Date()
+        try? save()
+    }
+
+    public func updateScanUploadRecord(
+        _ record: ScanUploadRecord,
+        artifacts: [ScanArtifactUploadState]? = nil,
+        transfer: CaptureTransferState
+    ) {
+        if let artifacts { record.artifacts = artifacts }
+        record.applyTransferState(transfer)
         try? save()
     }
 
@@ -195,8 +214,15 @@ public final class CaptureStore {
         try save()
     }
 
-    /// This visit's captures (drafts + ready), newest first — V1 session tray.
-    public func session() -> [Specimen] {
+    /// A scoped visit returns all of its captures, including queued transfers.
+    /// The nil legacy query remains drafts + ready for older callers.
+    public func session(visitID: UUID? = nil) -> [Specimen] {
+        if let visitID {
+            let descriptor = FetchDescriptor<Specimen>(
+                sortBy: [SortDescriptor(\.createdAt, order: .reverse)])
+            let results = (try? context.fetch(descriptor)) ?? []
+            return results.filter { $0.captureSessionID == visitID }
+        }
         let draft = CaptureStatus.draft.rawValue
         let ready = CaptureStatus.ready.rawValue
         let descriptor = FetchDescriptor<Specimen>(
@@ -210,9 +236,13 @@ public final class CaptureStore {
     public func outbox() -> [Specimen] {
         let ready = CaptureStatus.ready.rawValue
         let queued = CaptureStatus.queued.rawValue
+        let uploading = CaptureStatus.uploading.rawValue
         let failed = CaptureStatus.failed.rawValue
         let descriptor = FetchDescriptor<Specimen>(
-            predicate: #Predicate { $0.statusRaw == ready || $0.statusRaw == queued || $0.statusRaw == failed },
+            predicate: #Predicate {
+                $0.statusRaw == ready || $0.statusRaw == queued
+                    || $0.statusRaw == uploading || $0.statusRaw == failed
+            },
             sortBy: [SortDescriptor(\.createdAt, order: .forward)]
         )
         return (try? context.fetch(descriptor)) ?? []
