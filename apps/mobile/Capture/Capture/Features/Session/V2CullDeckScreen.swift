@@ -168,7 +168,7 @@ struct V2CullDeckScreen: View {
 
     private func commit(_ action: CullAction) {
         guard let specimen = current else { return }
-        guard CaptureRouteSafetyPolicy.canCull(specimen.transferState) else {
+        guard CaptureRouteSafetyPolicy.canCull(specimen) else {
             reloadDeck()
             return
         }
@@ -180,7 +180,9 @@ struct V2CullDeckScreen: View {
         }
 
         if action == .keep {
-            specimen.status = .ready
+            // Keep means "retain in this visit", not "send to Library". The
+            // explicit S3 destination choice remains outstanding.
+            specimen.lifecycleRaw = CaptureLifecycle.State.session.rawValue
             specimen.touch()
             try? store.save()
         }
@@ -222,7 +224,7 @@ struct V2CullDeckScreen: View {
     private func sendAllToInbox() {
         guard !isSendingAll else { return }
         let ids = deck
-            .filter { CaptureRouteSafetyPolicy.canCull($0.transferState) }
+            .filter(CaptureRouteSafetyPolicy.canCull)
             .map(\.id)
         guard !ids.isEmpty else {
             coordinator.dismissSheet()
@@ -247,8 +249,8 @@ struct V2CullDeckScreen: View {
 
     private func keepAll() {
         for specimen in deck
-        where CaptureRouteSafetyPolicy.canCull(specimen.transferState) {
-            specimen.status = .ready
+        where CaptureRouteSafetyPolicy.canCull(specimen) {
+            specimen.lifecycleRaw = CaptureLifecycle.State.session.rawValue
             specimen.touch()
         }
         try? store.save()
@@ -261,7 +263,7 @@ struct V2CullDeckScreen: View {
                 userID: session.userID,
                 workspaceID: session.workspaceID))
         deck = sessionSpecimens(visitID: context.visitID)
-            .filter { CaptureRouteSafetyPolicy.canCull($0.transferState) }
+            .filter(CaptureRouteSafetyPolicy.canCull)
         index = 0
     }
 

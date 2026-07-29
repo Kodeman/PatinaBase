@@ -68,6 +68,19 @@ public enum CaptureRouteSafetyPolicy {
         transfer.phase == .local
     }
 
+    /// A kept item remains local until the designer explicitly routes it, but it
+    /// should not reappear in the same visit's cull deck.
+    public static func canCull(_ specimen: Specimen) -> Bool {
+        guard canCull(specimen.transferState) else { return false }
+        return CaptureLifecycle.State(rawValue: specimen.lifecycleRaw) != .session
+    }
+
+    /// Server commits require the explicit S3 destination choice. In particular,
+    /// `.undecided` must never be interpreted as Library by a fallback branch.
+    public static func canCommit(_ destination: CaptureDestination) -> Bool {
+        destination == .library || destination == .inbox
+    }
+
     /// A terminal can name a destination only when both the server receipt and
     /// server-mapped destination are present.
     public static func confirmedDestination(

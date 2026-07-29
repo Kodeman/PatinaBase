@@ -21,6 +21,7 @@ enum LocalSyncError: LocalizedError {
     /// No signed-in session — the capture must stay queued, not fail.
     case notAuthenticated
     case remoteUnavailable
+    case destinationRequired
     case missingRemoteReceipt
     case remoteRejected(String)
 
@@ -32,6 +33,8 @@ enum LocalSyncError: LocalizedError {
             return "Not signed in — captures stay queued until you connect."
         case .remoteUnavailable:
             return "Sync isn't available yet — this capture stays on this device."
+        case .destinationRequired:
+            return "Choose Library or Inbox before sending this capture."
         case .missingRemoteReceipt:
             return "The server did not confirm this capture."
         case .remoteRejected(let message):
@@ -47,6 +50,7 @@ enum LocalSyncError: LocalizedError {
     }
 
     var isRejected: Bool {
+        if case .destinationRequired = self { return true }
         if case .remoteRejected = self { return true }
         return false
     }
@@ -227,6 +231,9 @@ final class LocalCaptureSyncService: CaptureSyncService {
         guard let specimen = scopedSpecimen(id: specimenID, owner: owner) else {
             throw LocalSyncError.specimenNotFound(specimenID)
         }
+        guard CaptureRouteSafetyPolicy.canCommit(specimen.destination) else {
+            throw LocalSyncError.destinationRequired
+        }
         guard let remote else { throw LocalSyncError.remoteUnavailable }
         guard let uid = UUID(uuidString: owner.userID) else {
             throw LocalSyncError.notAuthenticated
@@ -259,9 +266,18 @@ final class LocalCaptureSyncService: CaptureSyncService {
             retryCount: specimen.retryCount))
         try? store.save()
         emitTransferState(lastTitle: specimen.title)
+        let destination: String
+        switch specimen.destination {
+        case .library:
+            destination = "library"
+        case .inbox:
+            destination = "inbox"
+        case .undecided:
+            throw LocalSyncError.destinationRequired
+        }
         let result = try await remote.commit(
             clientCaptureID: specimen.clientToken,
-            destination: specimen.destination == .inbox ? "inbox" : "library",
+            destination: destination,
             payload: payload,
             routing: routing
         )
@@ -351,6 +367,9 @@ final class LocalCaptureSyncService: CaptureSyncService {
         _ specimenID: UUID,
         to destination: CaptureDestination
     ) async throws {
+        guard CaptureRouteSafetyPolicy.canCommit(destination) else {
+            throw LocalSyncError.destinationRequired
+        }
         guard let owner = activeOwner else {
             throw LocalSyncError.notAuthenticated
         }

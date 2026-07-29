@@ -260,6 +260,22 @@ struct CaptureRouteSafetyPolicyTests {
         }
     }
 
+    @Test func keptCapturesStayLocalWithoutReenteringCull() {
+        let specimen = Specimen()
+        #expect(CaptureRouteSafetyPolicy.canCull(specimen))
+
+        specimen.lifecycleRaw = CaptureLifecycle.State.session.rawValue
+
+        #expect(specimen.transferState.phase == .local)
+        #expect(!CaptureRouteSafetyPolicy.canCull(specimen))
+    }
+
+    @Test func commitRequiresAnExplicitDestination() {
+        #expect(CaptureRouteSafetyPolicy.canCommit(.library))
+        #expect(CaptureRouteSafetyPolicy.canCommit(.inbox))
+        #expect(!CaptureRouteSafetyPolicy.canCommit(.undecided))
+    }
+
     @Test func terminalDestinationRequiresReceiptBackedServerTruth() {
         let confirmed = CaptureTransferState(
             phase: .complete,
