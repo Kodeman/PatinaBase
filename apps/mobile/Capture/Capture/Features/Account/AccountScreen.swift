@@ -43,7 +43,10 @@ struct AccountScreen: View {
         .navigationBarTitleDisplayMode(.large)
         .task {
             analytics.screen(CaptureScreenID.t2Account.rawValue)
-            unsyncedCount = store.outbox().count
+            unsyncedCount = CaptureOwnerIdentity(
+                userID: session.userID,
+                workspaceID: session.workspaceID
+            ).map { store.outbox(owner: $0).count } ?? 0
             for await snap in sync.snapshots { snapshot = snap }
         }
         .alert("Captures still on this device", isPresented: $showSignOutConfirm) {
@@ -195,7 +198,10 @@ struct AccountScreen: View {
                     analytics.event("account.sync_now")
                     Task {
                         await sync.drain()
-                        unsyncedCount = store.outbox().count
+                        unsyncedCount = CaptureOwnerIdentity(
+                            userID: session.userID,
+                            workspaceID: session.workspaceID
+                        ).map { store.outbox(owner: $0).count } ?? 0
                     }
                 }
                 .font(CaptureType.callout.weight(.semibold))

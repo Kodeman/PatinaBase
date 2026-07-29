@@ -93,12 +93,55 @@ struct SpecimenProvenanceTests {
 
     @Test @MainActor func committedWithoutReceiptStaysUnconfirmed() throws {
         let store = try CaptureStore.inMemory()
-        let specimen = store.newDraft()
+        let owner = try #require(CaptureOwnerIdentity(
+            userID: " USER-A ",
+            workspaceID: " WORKSPACE-A "
+        ))
+        let specimen = store.newDraft(owner: owner)
         specimen.status = .committed
         specimen.remoteId = nil
+        try store.save()
 
+        #expect(specimen.ownerUserID == "user-a")
+        #expect(specimen.ownerWorkspaceID == "workspace-a")
         #expect(specimen.transferState.phase == .awaitingConfirmation)
         #expect(specimen.transferState.receiptID == nil)
+        #expect(store.outbox(owner: owner).map(\.id) == [specimen.id])
+    }
+
+    @Test @MainActor
+    func identityScopedQueriesQuarantineLegacyAndMismatchedRows() throws {
+        let store = try CaptureStore.inMemory()
+        let visit = UUID()
+        let ownerA = try #require(CaptureOwnerIdentity(
+            userID: "user-a",
+            workspaceID: "workspace-a"
+        ))
+        let ownerB = try #require(CaptureOwnerIdentity(
+            userID: "user-a",
+            workspaceID: "workspace-b"
+        ))
+
+        let owned = store.newDraft(sessionID: visit, owner: ownerA)
+        owned.title = "Owned"
+        owned.status = .ready
+        let otherWorkspace = store.newDraft(sessionID: visit, owner: ownerB)
+        otherWorkspace.title = "Other workspace"
+        otherWorkspace.status = .ready
+        let legacy = store.newDraft(sessionID: visit)
+        legacy.title = "Legacy"
+        legacy.status = .ready
+        try store.save()
+
+        #expect(store.specimen(id: owned.id, owner: ownerA)?.id == owned.id)
+        #expect(store.specimen(id: otherWorkspace.id, owner: ownerA) == nil)
+        #expect(store.specimen(id: legacy.id, owner: ownerA) == nil)
+        #expect(store.session(visitID: visit, owner: ownerA).map(\.id) == [owned.id])
+        #expect(store.outbox(owner: ownerA).map(\.id) == [owned.id])
+        #expect(
+            store.search(SpecimenQuery(), owner: ownerA).map(\.id)
+                == [owned.id]
+        )
     }
 }
 
@@ -381,5 +424,65 @@ struct DurableScanTransferTests {
             receiptID: "scan-1"))
         #expect(record.transferState.phase == .complete)
         #expect(record.transferState.receiptID == "scan-1")
+    }
+
+    @Test @MainActor
+    func scanPendingProjectionIsOwnerScopedAndReceiptAware() throws {
+        let store = try CaptureStore.inMemory()
+        let owner = try #require(CaptureOwnerIdentity(
+            userID: "user-a",
+            workspaceID: "workspace-a"
+        ))
+        let otherOwner = try #require(CaptureOwnerIdentity(
+            userID: "user-b",
+            workspaceID: "workspace-a"
+        ))
+
+        let recoverable = ScanUploadRecord(
+            bundlePath: "SiteScans/owned",
+            scanID: "scan-owned",
+            roomID: "room-owned",
+            name: "Owned",
+            projectID: nil,
+            projectRoomID: nil,
+            owner: owner
+        )
+        recoverable.statusRaw = CaptureTransferPhase.complete.rawValue
+
+        let foreign = ScanUploadRecord(
+            bundlePath: "SiteScans/foreign",
+            scanID: "scan-foreign",
+            roomID: "room-foreign",
+            name: "Foreign",
+            projectID: nil,
+            projectRoomID: nil,
+            owner: otherOwner
+        )
+        let legacy = ScanUploadRecord(
+            bundlePath: "SiteScans/legacy",
+            scanID: "scan-legacy",
+            roomID: "room-legacy",
+            name: "Legacy",
+            projectID: nil,
+            projectRoomID: nil
+        )
+        _ = store.insertScanUploadRecord(recoverable)
+        _ = store.insertScanUploadRecord(foreign)
+        _ = store.insertScanUploadRecord(legacy)
+
+        #expect(recoverable.ownerUserID == owner.userID)
+        #expect(recoverable.ownerWorkspaceID == owner.workspaceID)
+        #expect(recoverable.transferState.phase == .awaitingConfirmation)
+        #expect(
+            store.scanUploadRecords(owner: owner).map(\.scanID)
+                == ["scan-owned"]
+        )
+        #expect(
+            store.scanUploadRecord(scanID: "scan-foreign", owner: owner) == nil
+        )
+        #expect(
+            store.scanUploadRecord(bundlePath: "SiteScans/legacy", owner: owner)
+                == nil
+        )
     }
 }

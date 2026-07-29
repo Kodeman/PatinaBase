@@ -169,15 +169,28 @@ final class SupabaseSiteScanService: SiteScanService {
 
     // MARK: - Upload
 
-    func upload(result: FieldScanResult, projectID: String?, projectRoomID: String?,
-                name: String) async throws -> FieldScanUploadReceipt {
+    func upload(
+        result: FieldScanResult,
+        projectID: String?,
+        projectRoomID: String?,
+        name: String
+    ) async throws -> FieldScanUploadReceipt {
         do {
             return try await performUpload(
-                result: result, projectID: projectID,
-                projectRoomID: projectRoomID, name: name)
+                result: result,
+                projectID: projectID,
+                projectRoomID: projectRoomID,
+                name: name
+            )
         } catch {
-            let key = SiteScanBundleHome.relativeKey(for: result.localBundleURL)
-            if let record = store.scanUploadRecord(bundlePath: key) {
+            let key = SiteScanBundleHome.relativeKey(
+                for: result.localBundleURL
+            )
+            if let owner = activeOwner,
+               let record = store.scanUploadRecord(
+                    bundlePath: key,
+                    owner: owner
+               ) {
                 let prior = record.transferState
                 let rejected: Bool
                 if case SiteScanError.bundleRejected = error {
@@ -191,7 +204,9 @@ final class SupabaseSiteScanService: SiteScanService {
                         phase: rejected ? .rejected : .retryableFailure,
                         progress: prior.progress,
                         errorMessage: error.localizedDescription,
-                        retryCount: prior.retryCount + (rejected ? 0 : 1)))
+                        retryCount: prior.retryCount + (rejected ? 0 : 1)
+                    )
+                )
             }
             throw error
         }
@@ -203,81 +218,144 @@ final class SupabaseSiteScanService: SiteScanService {
         projectRoomID: String?,
         name: String
     ) async throws -> FieldScanUploadReceipt {
-        // Adopt the background session's surviving tasks before planning this upload, so
-        // a resume dedups against them and their completions aren't dropped (M3).
+        let prepared = try await prepareUpload(
+            result: result,
+            projectID: projectID,
+            projectRoomID: projectRoomID,
+            name: name
+        )
+        let reserved = prepared.reserved
+        let states = try await uploadBundleArtifacts(
+            bundle: prepared.bundle,
+            scanID: reserved.scanID,
+            roomID: reserved.roomID,
+            userID: prepared.userID,
+            reserved: reserved
+        )
+        try requireActiveOwner(prepared.owner)
+        guard ScanUploadPlanner.allDone(states) else {
+            throw SiteScanError.exportFailed(
+                "Scan upload didn't finish — retry to complete it."
+            )
+        }
+
+        store.updateScanUploadRecord(
+            reserved.record,
+            artifacts: states,
+            transfer: CaptureTransferState(
+                phase: .awaitingConfirmation,
+                progress: 100,
+                retryCount: reserved.record.retryCount
+            )
+        )
+        try await confirmBundle(
+            scanID: reserved.scanID,
+            reserved: reserved,
+            artifactStates: states
+        )
+        try requireActiveOwner(prepared.owner)
+        try await uploadPosedPhotosBestEffort(prepared)
+
+        store.updateScanUploadRecord(
+            reserved.record,
+            artifacts: states,
+            transfer: CaptureTransferState(
+                phase: .complete,
+                progress: 100,
+                retryCount: reserved.record.retryCount,
+                receiptID: reserved.scanID.uuidString
+            )
+        )
+        SiteScanBundleHome.remove(bundleURL: prepared.bundle)
+        return FieldScanUploadReceipt(
+            remoteScanID: reserved.scanID.uuidString
+        )
+    }
+
+    private func prepareUpload(
+        result: FieldScanResult,
+        projectID: String?,
+        projectRoomID: String?,
+        name: String
+    ) async throws -> PreparedUpload {
+        guard let owner = activeOwner else {
+            throw SiteScanError.notAuthenticated
+        }
         if !didReconcileUploads {
             didReconcileUploads = true
             await backgroundUploader.reconcileExistingTasks()
         }
+        try requireActiveOwner(owner)
 
-        // 1. Reserve this attempt's scan/room ids — or resume a prior attempt's,
-        //    if this is a retry (see `reservation(for:...)` doc below).
-        let reserved = reservation(
+        let userID = try await currentUserID()
+        guard owner.matches(
+            userID: userID.uuidString,
+            workspaceID: session.workspaceID
+        ) else {
+            throw SiteScanError.notAuthenticated
+        }
+        let reserved = try reservation(
             for: result.localBundleURL,
             projectID: projectID,
             projectRoomID: projectRoomID,
-            name: name)
+            name: name,
+            owner: owner
+        )
         guard reserved.record.transferState.phase != .rejected else {
             throw SiteScanError.bundleRejected
         }
-        let userID = try await currentUserID()
+
         try await ensureRoom(
-            reserved: reserved, picked: projectRoomID,
-            name: name, userID: userID)
-        let scanID = reserved.scanID
-        let roomID = reserved.roomID
+            reserved: reserved,
+            picked: projectRoomID,
+            name: name,
+            userID: userID
+        )
+        try requireActiveOwner(owner)
         store.updateScanUploadRecord(
             reserved.record,
             transfer: CaptureTransferState(
                 phase: .uploading,
                 progress: reserved.record.transferState.progress,
-                retryCount: reserved.record.retryCount))
-        // Re-derive the bundle dir under the CURRENT container from the durable relative
-        // key (the app-container path may have moved since it was written) — C2.
-        let bundle = (try? SiteScanBundleHome.resolve(relativeKey: reserved.record.bundlePath))
-            ?? result.localBundleURL
-
-        // 2. Upsert the processing row with routing + best-effort metrics.
+                retryCount: reserved.record.retryCount
+            )
+        )
+        let bundle = (
+            try? SiteScanBundleHome.resolve(
+                relativeKey: reserved.record.bundlePath
+            )
+        ) ?? result.localBundleURL
         try await upsertProcessingScan(
-            reserved: reserved, userID: userID,
-            projectID: projectID, name: name)
+            reserved: reserved,
+            userID: userID,
+            projectID: projectID,
+            name: name
+        )
+        try requireActiveOwner(owner)
+        return PreparedUpload(
+            owner: owner,
+            userID: userID,
+            reserved: reserved,
+            bundle: bundle
+        )
+    }
 
-        // 3. Upload the full artifact set + patch URL columns + scan_schema_version
-        //    (resumable — already-uploaded artifacts are skipped). See the helper.
-        let artifactStates = try await uploadBundleArtifacts(
-            bundle: bundle, scanID: scanID, roomID: roomID, userID: userID, reserved: reserved)
-
-        // 4. Never confirm a partial bundle.
-        guard ScanUploadPlanner.allDone(artifactStates) else {
-            throw SiteScanError.exportFailed("Scan upload didn't finish — retry to complete it.")
-        }
-
-        // 5. confirm-scan-bundle (with C1 unreachable-vs-rejected discrimination).
-        store.updateScanUploadRecord(
-            reserved.record,
-            artifacts: artifactStates,
-            transfer: CaptureTransferState(
-                phase: .awaitingConfirmation, progress: 100,
-                retryCount: reserved.record.retryCount))
-        try await confirmBundle(scanID: scanID, reserved: reserved, artifactStates: artifactStates)
-
-        // 6. Posed photos (I76) — SEPARATE, best-effort lane, STRICTLY after ready.
+    private func uploadPosedPhotosBestEffort(
+        _ prepared: PreparedUpload
+    ) async throws {
         do {
-            try await uploadScanPhotos(bundle: bundle, scanID: scanID, roomID: roomID, userID: userID)
+            try await uploadScanPhotos(
+                bundle: prepared.bundle,
+                scanID: prepared.reserved.scanID,
+                roomID: prepared.reserved.roomID,
+                userID: prepared.userID
+            )
         } catch {
-            logger.error("[SiteScan] posed-photo upload failed; scan is ready without photos: \(error.localizedDescription)")
+            logger.error(
+                "[SiteScan] posed-photo upload failed; scan is ready without photos: \(error.localizedDescription)"
+            )
         }
-
-        store.updateScanUploadRecord(
-            reserved.record,
-            artifacts: artifactStates,
-            transfer: CaptureTransferState(
-                phase: .complete, progress: 100,
-                retryCount: reserved.record.retryCount,
-                receiptID: scanID.uuidString))
-        // 7. Retention: the bytes are safely server-side — reclaim the local bundle (C2).
-        SiteScanBundleHome.remove(bundleURL: bundle)
-        return FieldScanUploadReceipt(remoteScanID: scanID.uuidString)
+        try requireActiveOwner(prepared.owner)
     }
 
     private func upsertProcessingScan(
@@ -499,40 +577,78 @@ final class SupabaseSiteScanService: SiteScanService {
         let record: ScanUploadRecord
     }
 
+    private struct PreparedUpload {
+        let owner: CaptureOwnerIdentity
+        let userID: UUID
+        let reserved: ScanReservation
+        let bundle: URL
+    }
+
     /// The DURABLE (scanID, roomID) reservation for a bundle — persisted in a
     /// `ScanUploadRecord` (item 8) keyed by the bundle's container-independent relative
     /// path (`SiteScanBundleHome.relativeKey`). A relaunch (or a "Finish later" resume)
     /// reuses the SAME scanID instead of minting a fresh room_scans row (+ a spare rooms
     /// row), which is the orphaned-`processing`-row hazard the audit flagged in the prior
     /// in-memory dictionary.
-    private func reservation(for bundleURL: URL, projectID: String?,
-                             projectRoomID: String?,
-                             name: String) -> ScanReservation {
-        // Container-independent key so a resume re-finds the record after a container
-        // move (C2) — "SiteScans/site-scan-…", not the volatile absolute path.
+    private func reservation(
+        for bundleURL: URL,
+        projectID: String?,
+        projectRoomID: String?,
+        name: String,
+        owner: CaptureOwnerIdentity
+    ) throws -> ScanReservation {
         let key = SiteScanBundleHome.relativeKey(for: bundleURL)
-        if let existing = store.scanUploadRecord(bundlePath: key),
-           let scanID = UUID(uuidString: existing.scanID),
-           let roomID = UUID(uuidString: existing.roomID) {
-            return ScanReservation(scanID: scanID, roomID: roomID, record: existing)   // resume
+        if let existing = store.scanUploadRecord(bundlePath: key) {
+            guard owner.matches(
+                userID: existing.ownerUserID,
+                workspaceID: existing.ownerWorkspaceID
+            ) else {
+                throw SiteScanError.exportFailed(
+                    "This scan belongs to a different account or workspace."
+                )
+            }
+            guard let scanID = UUID(uuidString: existing.scanID),
+                  let roomID = UUID(uuidString: existing.roomID) else {
+                throw SiteScanError.exportFailed(
+                    "This scan’s local transfer record is invalid."
+                )
+            }
+            return ScanReservation(
+                scanID: scanID,
+                roomID: roomID,
+                record: existing
+            )
         }
+
         let roomID = projectRoomID.flatMap(UUID.init(uuidString:)) ?? UUID()
         let scanID = UUID()
         let record = store.insertScanUploadRecord(ScanUploadRecord(
-            bundlePath: key, scanID: scanID.uuidString, roomID: roomID.uuidString,
-            name: name, projectID: projectID, projectRoomID: projectRoomID))
-        return ScanReservation(scanID: scanID, roomID: roomID, record: record)
+            bundlePath: key,
+            scanID: scanID.uuidString,
+            roomID: roomID.uuidString,
+            name: name,
+            projectID: projectID,
+            projectRoomID: projectRoomID,
+            owner: owner
+        ))
+        return ScanReservation(
+            scanID: scanID,
+            roomID: roomID,
+            record: record
+        )
     }
 
     // MARK: - Durable recovery
 
     func pendingUploads() async -> [FieldScanPendingUpload] {
-        store.scanUploadRecords().map {
+        guard let owner = activeOwner else { return [] }
+        return store.scanUploadRecords(owner: owner).map {
             FieldScanPendingUpload(
                 id: $0.scanID,
                 name: $0.name,
                 projectID: $0.projectID,
-                state: $0.transferState)
+                state: $0.transferState
+            )
         }
     }
 
@@ -540,12 +656,16 @@ final class SupabaseSiteScanService: SiteScanService {
     /// `retryFailures: false` after auth is ready. Explicit U1 retry passes true.
     /// The existing durable reservation keeps every replay idempotent.
     func resumePendingUploads(retryFailures: Bool) async {
+        guard let owner = activeOwner else { return }
+
         if !didReconcileUploads {
             didReconcileUploads = true
             await backgroundUploader.reconcileExistingTasks()
         }
+        guard activeOwner == owner else { return }
 
-        for record in store.scanUploadRecords() {
+        for record in store.scanUploadRecords(owner: owner) {
+            guard activeOwner == owner else { return }
             let phase = record.transferState.phase
             if phase == .rejected || phase == .complete { continue }
             if phase == .retryableFailure, !retryFailures { continue }
@@ -562,30 +682,49 @@ final class SupabaseSiteScanService: SiteScanService {
                 }
                 record.applyTransferState(CaptureTransferState(
                     phase: .queued,
-                    retryCount: record.retryCount))
+                    retryCount: record.retryCount
+                ))
                 try? store.save()
             }
 
             guard let bundle = try? SiteScanBundleHome.resolve(
-                relativeKey: record.bundlePath),
-                FileManager.default.fileExists(atPath: bundle.path) else {
+                relativeKey: record.bundlePath
+            ),
+            FileManager.default.fileExists(atPath: bundle.path) else {
                 store.updateScanUploadRecord(
                     record,
                     transfer: CaptureTransferState(
                         phase: .retryableFailure,
                         errorMessage: "The local scan bundle is unavailable.",
-                        retryCount: record.retryCount + 1))
+                        retryCount: record.retryCount + 1
+                    )
+                )
                 continue
             }
 
             let result = FieldScanResult(
                 localBundleURL: bundle,
-                roomName: record.name)
+                roomName: record.name
+            )
             _ = try? await upload(
                 result: result,
                 projectID: record.projectID,
                 projectRoomID: record.projectRoomID,
-                name: record.name)
+                name: record.name
+            )
+        }
+    }
+
+    private var activeOwner: CaptureOwnerIdentity? {
+        CaptureOwnerIdentity(
+            userID: session.userID,
+            workspaceID: session.workspaceID
+        )
+    }
+
+    private func requireActiveOwner(_ owner: CaptureOwnerIdentity) throws {
+        guard activeOwner == owner else {
+            throw SiteScanError.notAuthenticated
         }
     }
 

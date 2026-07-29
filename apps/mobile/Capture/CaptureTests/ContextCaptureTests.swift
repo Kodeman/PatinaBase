@@ -94,4 +94,32 @@ struct ContextCaptureTests {
         #expect(specimen.voiceDurationSeconds == 3.2)
         #expect(store.outbox().contains { $0.id == specimen.id })
     }
+
+    @MainActor
+    @Test func authenticatedContextCaptureStampsOwner() throws {
+        let store = try CaptureStore.inMemory()
+        let owner = try #require(CaptureOwnerIdentity(
+            userID: "designer-a",
+            workspaceID: "studio-a"
+        ))
+        let service = ContextCaptureService(store: store, owner: owner)
+        let provenance = ContextCaptureProvenance(
+            scanSessionId: "scan-1",
+            projectId: "project-1",
+            projectRoomId: nil,
+            cameraPoseRowMajor: nil,
+            capturedAt: "2026-07-17T00:00:00Z"
+        )
+
+        let specimen = service.enqueueVoice(
+            transcript: "north wall",
+            audioFilename: nil,
+            durationSeconds: 0,
+            provenance: provenance
+        )
+
+        #expect(specimen.ownerUserID == owner.userID)
+        #expect(specimen.ownerWorkspaceID == owner.workspaceID)
+        #expect(store.outbox(owner: owner).map(\.id) == [specimen.id])
+    }
 }

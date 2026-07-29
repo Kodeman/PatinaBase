@@ -60,7 +60,10 @@ final class LocalCaptureSyncService: CaptureSyncService {
 
     private let stream: AsyncStream<SyncSnapshot>
     private let continuation: AsyncStream<SyncSnapshot>.Continuation
-    private var isDraining = false
+    /// One drain task per authenticated identity. Re-entrant callers await the
+    /// same task; a workspace/account switch starts an isolated task whose first
+    /// owner revalidation safely defers the old one.
+    private var activeDrainTasks: [CaptureOwnerIdentity: Task<Void, Never>] = [:]
 
     init(store: CaptureStore,
          analytics: (any CaptureAnalytics)? = nil,
@@ -83,72 +86,109 @@ final class LocalCaptureSyncService: CaptureSyncService {
     /// Persist the specimen in the local queue. Offline-safe: never reaches for
     /// the network.
     func enqueue(_ specimenID: UUID) async {
-        guard let s = store.specimen(id: specimenID) else { return }
-        s.applyTransferState(CaptureTransferState(
-            phase: .queued, retryCount: s.retryCount))
+        let owner = activeOwner
+        guard let specimen = scopedSpecimen(id: specimenID, owner: owner) else {
+            return
+        }
+        specimen.applyTransferState(CaptureTransferState(
+            phase: .queued, retryCount: specimen.retryCount))
         try? store.save()
         analytics?.event("sync.enqueue", ["id": specimenID.uuidString])
-        emitFromOutbox(lastTitle: s.title)
+        emitFromOutbox(lastTitle: specimen.title)
+
+        // Preserve CaptureSyncService's offline-safe/nonblocking enqueue contract:
+        // authenticated real-mode captures schedule a serialized drain and return.
+        guard remote != nil else { return }
+        Task { @MainActor [weak self] in
+            await self?.drain()
+        }
     }
 
     // ── drain ────────────────────────────────────────────────────────────────
     /// Back online / manual retry: walk the outbox oldest-first, upload + commit
     /// each, emitting progress snapshots. Re-entrancy guarded.
     func drain() async {
-        guard !isDraining else { return }
-        let items = store.outbox().filter {
-            $0.transferState.phase != .rejected
+        guard let owner = activeOwner else {
+            emit(queued: 0, uploading: 0, failed: 0, lastTitle: nil)
+            return
         }
-        guard !items.isEmpty else { emitFromOutbox(); return }
-
-        // Real mode with no session yet: nothing can be uploaded — keep the whole
-        // outbox queued (never surface a failure) and wait for auth.
-        if remote != nil, session?.userID == nil {
-            for s in items where s.status != .queued {
-                s.applyTransferState(CaptureTransferState(
-                    phase: .queued, retryCount: s.retryCount))
-            }
-            try? store.save()
-            analytics?.event("sync.drain.deferred", ["reason": "no-session", "count": "\(items.count)"])
-            emitFromOutbox()
+        if let active = activeDrainTasks[owner] {
+            await active.value
             return
         }
 
-        isDraining = true
-        defer { isDraining = false }
+        let task = Task { @MainActor [weak self] in
+            guard let self else { return }
+            await self.drainOwned(owner)
+            self.activeDrainTasks.removeValue(forKey: owner)
+        }
+        activeDrainTasks[owner] = task
+        await task.value
+    }
 
-        beginDrain(items)
+    private func drainOwned(_ owner: CaptureOwnerIdentity) async {
+        var attempted: Set<UUID> = []
+        var didBegin = false
 
-        var remaining = items.count
-        for s in items {
-            s.applyTransferState(CaptureTransferState(
-                phase: .uploading, retryCount: s.retryCount))
-            try? store.save()
-            emit(queued: max(remaining - 1, 0), uploading: 1, lastTitle: s.title)
-
-            do {
-                _ = try await commit(s.id)                 // real: upload + RPC
-                analytics?.event("sync.commit.ok", ["id": s.id.uuidString])
-            } catch let error as LocalSyncError where error.isDeferrable {
-                // No auth mid-drain — requeue with no retry penalty.
-                s.applyTransferState(CaptureTransferState(
-                    phase: .queued, retryCount: s.retryCount))
-                try? store.save()
-                analytics?.event("sync.commit.deferred", ["id": s.id.uuidString])
-            } catch {
-                let rejected = (error as? LocalSyncError)?.isRejected == true
-                s.applyTransferState(CaptureTransferState(
-                    phase: rejected ? .rejected : .retryableFailure,
-                    progress: s.uploadProgress,
-                    errorMessage: error.localizedDescription,
-                    retryCount: s.retryCount + (rejected ? 0 : 1)))
-                try? store.save()
-                analytics?.event("sync.commit.fail", ["id": s.id.uuidString])
+        while activeOwner == owner {
+            let items = scopedOutbox(owner: owner).filter {
+                !attempted.contains($0.id)
+                    && $0.transferState.phase != .rejected
             }
-            remaining -= 1
-            emit(queued: remaining, uploading: 0, lastTitle: s.title)
+            guard !items.isEmpty else { break }
+
+            if !didBegin {
+                beginDrain(items)
+                didBegin = true
+            }
+
+            var remaining = items.count
+            for specimen in items {
+                guard activeOwner == owner else { break }
+                attempted.insert(specimen.id)
+                specimen.applyTransferState(CaptureTransferState(
+                    phase: .uploading, retryCount: specimen.retryCount))
+                try? store.save()
+                emit(
+                    queued: max(remaining - 1, 0),
+                    uploading: 1,
+                    lastTitle: specimen.title
+                )
+
+                do {
+                    _ = try await commit(specimen.id, owner: owner)
+                    analytics?.event("sync.commit.ok", ["id": specimen.id.uuidString])
+                } catch let error as LocalSyncError where error.isDeferrable {
+                    specimen.applyTransferState(CaptureTransferState(
+                        phase: .queued, retryCount: specimen.retryCount))
+                    try? store.save()
+                    analytics?.event("sync.commit.deferred", ["id": specimen.id.uuidString])
+                } catch {
+                    let rejected = (error as? LocalSyncError)?.isRejected == true
+                    specimen.applyTransferState(CaptureTransferState(
+                        phase: rejected ? .rejected : .retryableFailure,
+                        progress: specimen.uploadProgress,
+                        errorMessage: error.localizedDescription,
+                        retryCount: specimen.retryCount + (rejected ? 0 : 1)))
+                    try? store.save()
+                    analytics?.event("sync.commit.fail", ["id": specimen.id.uuidString])
+                }
+
+                remaining -= 1
+                if activeOwner == owner {
+                    emit(
+                        queued: remaining,
+                        uploading: 0,
+                        lastTitle: specimen.title
+                    )
+                }
+            }
         }
 
+        guard activeOwner == owner else {
+            emitFromOutbox()
+            return
+        }
         let failed = failedCount()
         liveActivity?.end(.init(queued: 0, uploading: 0, failed: failed))
         analytics?.event("sync.drain.done", ["failed": "\(failed)"])
@@ -160,79 +200,120 @@ final class LocalCaptureSyncService: CaptureSyncService {
     /// `Specimen.clientToken`. No gateway leaves the item queued.
     @discardableResult
     func commit(_ specimenID: UUID) async throws -> CommitReceipt {
-        guard let s = store.specimen(id: specimenID) else {
+        guard let owner = activeOwner else {
+            throw LocalSyncError.notAuthenticated
+        }
+        return try await commit(specimenID, owner: owner)
+    }
+
+    @discardableResult
+    private func commit(
+        _ specimenID: UUID,
+        owner: CaptureOwnerIdentity
+    ) async throws -> CommitReceipt {
+        guard activeOwner == owner else {
+            throw LocalSyncError.notAuthenticated
+        }
+        guard let specimen = scopedSpecimen(id: specimenID, owner: owner) else {
             throw LocalSyncError.specimenNotFound(specimenID)
         }
         guard let remote else { throw LocalSyncError.remoteUnavailable }
-
-        // Auth precondition: no session → stay queued (surfaced as deferrable, not
-        // a failure). Missing/invalid workspace is fine — pass NULL org (00235
-        // accepts a nullable p_organization_id).
-        guard let uidString = session?.userID, let uid = UUID(uuidString: uidString) else {
+        guard let uid = UUID(uuidString: owner.userID) else {
             throw LocalSyncError.notAuthenticated
         }
 
-        // (a) Upload each artifact to <uid>/<clientToken>/<file> in capture-media.
-        // CaptureMediaPath lowercases both segments — storage RLS (00234) compares
-        // against Postgres's lowercase auth.uid()::text, while Foundation's
-        // uuidString is uppercase; building this inline previously threw an RLS
-        // violation on every real upload.
-        let folder = CaptureMediaPath.folder(userID: uid, clientToken: s.clientToken)
-        let orderedPhotos = s.photos.sorted { $0.order < $1.order }
-        let hasVoice = !(s.voiceAudioFilename ?? "").isEmpty
-        let total = orderedPhotos.count + (hasVoice ? 1 : 0)
-        var done = 0
-
-        for photo in orderedPhotos {
-            let url = store.mediaURL(for: photo.filename)
-            guard let data = try? Data(contentsOf: url) else { continue } // file gone → skip
-            let path = "\(folder)/\(photo.filename)"
-            try await remote.upload(data, to: path, contentType: Self.mimeType(for: photo.filename))
-            photo.remotePath = path
-            done += 1
-            bumpProgress(s, uploaded: done, total: total)
-        }
-
-        var uploadedVoicePath: String?
-        if let voiceFile = s.voiceAudioFilename, !voiceFile.isEmpty {
-            let url = store.mediaURL(for: voiceFile)
-            if let data = try? Data(contentsOf: url) {
-                let path = "\(folder)/\(voiceFile)"
-                try await remote.upload(data, to: path, contentType: Self.mimeType(for: voiceFile))
-                uploadedVoicePath = path
-                done += 1
-                bumpProgress(s, uploaded: done, total: total)
-            }
-        }
-        try? store.save()
-
-        // (b) Build the payload and call commit_field_capture.
-        var payload = FieldCapturePayload(specimen: s, device: Self.deviceInfo())
-        // Upgrade the voice path from the local filename to the full object path.
-        if let uploadedVoicePath { payload.voice?.audioPath = uploadedVoicePath }
-
-        let destination = s.destination == .inbox ? "inbox" : "library"
-        let routing = CaptureRoutingContext(
-            projectID: s.venue?.projectId.flatMap { UUID(uuidString: $0) },
-            projectRoomID: s.venue?.projectRoomId.flatMap { UUID(uuidString: $0) },
-            shelf: s.venue?.shelf,
-            organizationID: session?.workspaceID.flatMap { UUID(uuidString: $0) }
+        let uploadedVoicePath = try await uploadMedia(
+            for: specimen,
+            owner: owner,
+            remote: remote,
+            userID: uid
         )
-        s.applyTransferState(CaptureTransferState(
+        var payload = FieldCapturePayload(
+            specimen: specimen,
+            device: Self.deviceInfo()
+        )
+        if let uploadedVoicePath {
+            payload.voice?.audioPath = uploadedVoicePath
+        }
+
+        let routing = CaptureRoutingContext(
+            projectID: specimen.venue?.projectId.flatMap { UUID(uuidString: $0) },
+            projectRoomID: specimen.venue?.projectRoomId.flatMap { UUID(uuidString: $0) },
+            shelf: specimen.venue?.shelf,
+            organizationID: UUID(uuidString: owner.workspaceID)
+        )
+        try requireActiveOwner(owner)
+        specimen.applyTransferState(CaptureTransferState(
             phase: .awaitingConfirmation,
             progress: 100,
-            retryCount: s.retryCount))
+            retryCount: specimen.retryCount))
         try? store.save()
-        emitTransferState(lastTitle: s.title)
+        emitTransferState(lastTitle: specimen.title)
         let result = try await remote.commit(
-            clientCaptureID: s.clientToken,
-            destination: destination,
+            clientCaptureID: specimen.clientToken,
+            destination: specimen.destination == .inbox ? "inbox" : "library",
             payload: payload,
             routing: routing
         )
+        try requireActiveOwner(owner)
+        return try applyCommitResult(result, to: specimen)
+    }
 
-        // (c) Map the result home.
-        return try applyCommitResult(result, to: s)
+    private func uploadMedia(
+        for specimen: Specimen,
+        owner: CaptureOwnerIdentity,
+        remote: SupabaseCaptureGateway,
+        userID: UUID
+    ) async throws -> String? {
+        let folder = CaptureMediaPath.folder(
+            userID: userID,
+            clientToken: specimen.clientToken
+        )
+        let photos = specimen.photos.sorted { $0.order < $1.order }
+        let voiceFilename = specimen.voiceAudioFilename
+        let hasVoice = !(voiceFilename ?? "").isEmpty
+        let total = photos.count + (hasVoice ? 1 : 0)
+        var uploaded = 0
+
+        for photo in photos {
+            try requireActiveOwner(owner)
+            let url = store.mediaURL(for: photo.filename)
+            guard let data = try? Data(contentsOf: url) else { continue }
+            let path = "\(folder)/\(photo.filename)"
+            try await remote.upload(
+                data,
+                to: path,
+                contentType: Self.mimeType(for: photo.filename)
+            )
+            photo.remotePath = path
+            uploaded += 1
+            bumpProgress(specimen, uploaded: uploaded, total: total)
+        }
+
+        var voicePath: String?
+        if let filename = voiceFilename, !filename.isEmpty {
+            try requireActiveOwner(owner)
+            let url = store.mediaURL(for: filename)
+            if let data = try? Data(contentsOf: url) {
+                let path = "\(folder)/\(filename)"
+                try await remote.upload(
+                    data,
+                    to: path,
+                    contentType: Self.mimeType(for: filename)
+                )
+                voicePath = path
+                uploaded += 1
+                bumpProgress(specimen, uploaded: uploaded, total: total)
+            }
+        }
+        try? store.save()
+        return voicePath
+    }
+
+    private func requireActiveOwner(_ owner: CaptureOwnerIdentity) throws {
+        guard activeOwner == owner else {
+            throw LocalSyncError.notAuthenticated
+        }
     }
 
     // ── route ────────────────────────────────────────────────────────────────
@@ -240,17 +321,23 @@ final class LocalCaptureSyncService: CaptureSyncService {
     /// A not-yet-committed specimen keeps only the local mutation (it carries its
     /// `destination` into the eventual commit). An already-committed capture being
     /// promoted to the library mirrors server-side via `route_field_capture`.
-    func route(_ specimenID: UUID, to destination: CaptureDestination) async throws {
-        guard let s = store.specimen(id: specimenID) else {
+    func route(
+        _ specimenID: UUID,
+        to destination: CaptureDestination
+    ) async throws {
+        guard let owner = activeOwner else {
+            throw LocalSyncError.notAuthenticated
+        }
+        guard let specimen = scopedSpecimen(id: specimenID, owner: owner) else {
             throw LocalSyncError.specimenNotFound(specimenID)
         }
-        let previousDestination = s.destination
+        let previousDestination = specimen.destination
 
-        guard let remoteId = s.remoteId,
+        guard let remoteId = specimen.remoteId,
               let captureUUID = UUID(uuidString: remoteId),
-              s.status == .committed else {
-            s.destination = destination
-            s.touch()
+              specimen.status == .committed else {
+            specimen.destination = destination
+            specimen.touch()
             try? store.save()
             await enqueue(specimenID)
             analytics?.event("sync.route", [
@@ -261,23 +348,33 @@ final class LocalCaptureSyncService: CaptureSyncService {
             return
         }
 
-        // A committed inbox capture can be promoted only after the server
-        // returns a fresh receipt/status. Never optimistically claim success.
         if destination == .library {
             guard let remote else { throw LocalSyncError.remoteUnavailable }
-            guard session?.userID != nil else { throw LocalSyncError.notAuthenticated }
+            guard activeOwner == owner else {
+                throw LocalSyncError.notAuthenticated
+            }
             let routing = CaptureRoutingContext(
-                projectID: s.venue?.projectId.flatMap { UUID(uuidString: $0) },
-                projectRoomID: s.venue?.projectRoomId.flatMap { UUID(uuidString: $0) },
-                shelf: s.venue?.shelf)
-            let result = try await remote.route(captureID: captureUUID, routing: routing)
-            _ = try applyCommitResult(result, to: s)
+                projectID: specimen.venue?.projectId.flatMap { UUID(uuidString: $0) },
+                projectRoomID: specimen.venue?.projectRoomId.flatMap { UUID(uuidString: $0) },
+                shelf: specimen.venue?.shelf
+            )
+            let result = try await remote.route(
+                captureID: captureUUID,
+                routing: routing
+            )
+            guard activeOwner == owner else {
+                throw LocalSyncError.notAuthenticated
+            }
+            _ = try applyCommitResult(result, to: specimen)
         } else if previousDestination != .inbox {
             throw LocalSyncError.remoteRejected(
                 "A confirmed library capture can’t be moved to the inbox from this device.")
         }
 
-        analytics?.event("sync.route", ["id": specimenID.uuidString, "to": destination.rawValue])
+        analytics?.event("sync.route", [
+            "id": specimenID.uuidString,
+            "to": destination.rawValue
+        ])
         emitFromOutbox()
     }
 
@@ -373,8 +470,32 @@ final class LocalCaptureSyncService: CaptureSyncService {
     }
 
     // ── snapshot plumbing ──────────────────────────────────────────────────────
+    private var activeOwner: CaptureOwnerIdentity? {
+        CaptureOwnerIdentity(
+            userID: session?.userID,
+            workspaceID: session?.workspaceID
+        )
+    }
+
+    /// Real mode is always owner-scoped. Mock mode keeps the historical global
+    /// projection so fixture records created without auth stamps still render.
+    private func scopedOutbox(owner: CaptureOwnerIdentity? = nil) -> [Specimen] {
+        guard remote != nil else { return store.outbox() }
+        guard let owner = owner ?? activeOwner else { return [] }
+        return store.outbox(owner: owner)
+    }
+
+    private func scopedSpecimen(
+        id: UUID,
+        owner: CaptureOwnerIdentity?
+    ) -> Specimen? {
+        guard remote != nil else { return store.specimen(id: id) }
+        guard let owner else { return nil }
+        return store.specimen(id: id, owner: owner)
+    }
+
     private func failedCount() -> Int {
-        store.outbox().filter {
+        scopedOutbox().filter {
             $0.transferState.phase == .retryableFailure
                 || $0.transferState.phase == .rejected
         }.count
@@ -387,7 +508,7 @@ final class LocalCaptureSyncService: CaptureSyncService {
     }
 
     private func emitTransferState(lastTitle: String? = nil) {
-        let out = store.outbox()
+        let out = scopedOutbox()
         let uploading = out.filter {
             $0.transferState.phase == .uploading
                 || $0.transferState.phase == .awaitingConfirmation
@@ -405,14 +526,27 @@ final class LocalCaptureSyncService: CaptureSyncService {
         )
     }
 
-    private func emit(queued: Int, uploading: Int, failed: Int? = nil, lastTitle: String?) {
+    private func emit(
+        queued: Int,
+        uploading: Int,
+        failed: Int? = nil,
+        lastTitle: String?
+    ) {
         let failedN = failed ?? failedCount()
-        let lastErr = store.outbox()
+        let lastErr = scopedOutbox()
             .compactMap { $0.transferState.errorMessage }
             .first
-        continuation.yield(SyncSnapshot(queued: queued, uploading: uploading,
-                                        failed: failedN, lastError: lastErr))
-        liveActivity?.update(.init(queued: queued, uploading: uploading,
-                                   failed: failedN, lastSpecimenTitle: lastTitle))
+        continuation.yield(SyncSnapshot(
+            queued: queued,
+            uploading: uploading,
+            failed: failedN,
+            lastError: lastErr
+        ))
+        liveActivity?.update(.init(
+            queued: queued,
+            uploading: uploading,
+            failed: failedN,
+            lastSpecimenTitle: lastTitle
+        ))
     }
 }
