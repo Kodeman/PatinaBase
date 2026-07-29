@@ -126,14 +126,14 @@ final class ViewfinderModel {
     }
 
     private func refreshSessionCount() {
-        guard let owner = CaptureOwnerIdentity(
-            userID: session.userID,
-            workspaceID: session.workspaceID
-        ) else {
+        switch localListScope {
+        case .globalFixtures:
+            sessionCount = store.session(visitID: visitID).count
+        case .owner(let owner):
+            sessionCount = store.session(visitID: visitID, owner: owner).count
+        case .unavailable:
             sessionCount = 0
-            return
         }
-        sessionCount = store.session(visitID: visitID, owner: owner).count
     }
 
     // MARK: Mode (tap / swipe)
@@ -334,6 +334,13 @@ final class ViewfinderModel {
         sessionContext.current(identity: CaptureSessionIdentity(
             userID: session.userID,
             workspaceID: session.workspaceID))
+    }
+
+    private var localListScope: CaptureLocalListScope {
+        CaptureOwnerProjectionPolicy.resolve(
+            runsRealServices: AppConfiguration.runsRealServices,
+            userID: session.userID,
+            workspaceID: session.workspaceID)
     }
 
     private func captureFrame(into draft: Specimen, primary: Bool) async {

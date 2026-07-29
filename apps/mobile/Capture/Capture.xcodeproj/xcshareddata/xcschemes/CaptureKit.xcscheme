@@ -14,7 +14,7 @@
             buildForAnalyzing = "YES">
             <BuildableReference
                BuildableIdentifier = "primary"
-               BlueprintIdentifier = "90631384DA338F3004155BFA862A130A"
+               BlueprintIdentifier = "AA6B5D545906B2E1C323E8E52DB84AF1"
                BuildableName = "CaptureKit.framework"
                BlueprintName = "CaptureKit"
                ReferencedContainer = "container:Capture.xcodeproj">

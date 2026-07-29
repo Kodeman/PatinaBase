@@ -260,9 +260,27 @@ struct V2CullDeckScreen: View {
             identity: CaptureSessionIdentity(
                 userID: session.userID,
                 workspaceID: session.workspaceID))
-        deck = store.session(visitID: context.visitID)
+        deck = sessionSpecimens(visitID: context.visitID)
             .filter { CaptureRouteSafetyPolicy.canCull($0.transferState) }
         index = 0
+    }
+
+    private func sessionSpecimens(visitID: UUID) -> [Specimen] {
+        switch localListScope {
+        case .globalFixtures:
+            return store.session(visitID: visitID)
+        case .owner(let owner):
+            return store.session(visitID: visitID, owner: owner)
+        case .unavailable:
+            return []
+        }
+    }
+
+    private var localListScope: CaptureLocalListScope {
+        CaptureOwnerProjectionPolicy.resolve(
+            runsRealServices: AppConfiguration.runsRealServices,
+            userID: session.userID,
+            workspaceID: session.workspaceID)
     }
 
     private var completionCard: some View {

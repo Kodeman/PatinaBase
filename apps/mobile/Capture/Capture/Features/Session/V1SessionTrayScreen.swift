@@ -140,14 +140,14 @@ struct V1SessionTrayScreen: View {
 
     private func reload() {
         let context = sessionContext.current(identity: identity)
-        guard let owner = CaptureOwnerIdentity(
-            userID: session.userID,
-            workspaceID: session.workspaceID
-        ) else {
+        switch localListScope {
+        case .globalFixtures:
+            items = store.session(visitID: context.visitID)
+        case .owner(let owner):
+            items = store.session(visitID: context.visitID, owner: owner)
+        case .unavailable:
             items = []
-            return
         }
-        items = store.session(visitID: context.visitID, owner: owner)
     }
 
     private func endVisit() {
@@ -158,6 +158,13 @@ struct V1SessionTrayScreen: View {
 
     private var identity: CaptureSessionIdentity {
         CaptureSessionIdentity(
+            userID: session.userID,
+            workspaceID: session.workspaceID)
+    }
+
+    private var localListScope: CaptureLocalListScope {
+        CaptureOwnerProjectionPolicy.resolve(
+            runsRealServices: AppConfiguration.runsRealServices,
             userID: session.userID,
             workspaceID: session.workspaceID)
     }
