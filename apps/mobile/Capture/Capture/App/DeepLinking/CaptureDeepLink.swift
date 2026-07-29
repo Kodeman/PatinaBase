@@ -15,13 +15,13 @@ enum CaptureDeepLink {
     /// controller that runs the exchange + confirm/toast UI); everything else is
     /// screen/entry-point navigation.
     @MainActor
-    static func handle(_ url: URL,
-                       coordinator: CaptureCoordinator,
-                       store: CaptureStore,
-                       login: PortalLoginController? = nil) {
-        // Only the new `sr_` namespace belongs to Site Requests. Legacy Field
-        // Coordination uses 64-hex `/field/{token}` links and must remain web
-        // first even though both products share the route prefix.
+    static func handle(
+        _ url: URL,
+        coordinator: CaptureCoordinator,
+        store: CaptureStore,
+        session: any SessionProviding,
+        login: PortalLoginController? = nil
+    ) {
         if url.scheme == "https",
            url.host == AppConfiguration.guestSiteBaseURL.host,
            url.pathComponents.count == 3,
@@ -34,21 +34,20 @@ enum CaptureDeepLink {
 
         guard url.scheme == AppConfiguration.urlScheme else { return }
 
-        // field://login?v=1&th=<token_hash> — portal QR sign-in (works from a
-        // signed-out cold start; confirms before switching a live session).
         if url.host == PortalLoginToken.host {
             login?.receive(url: url)
             return
         }
 
-        // field://screen/<id>  — drive a specific screen (debug/verification).
-        if url.host == "screen", let raw = url.pathComponents.dropFirst().first,
-           let id = CaptureScreenID(rawValue: "screen.\(raw)") ?? CaptureScreenID.allCases.first(where: { $0.rawValue.hasSuffix(raw) }) {
-            route(for: id, coordinator: coordinator, store: store)
+        if url.host == "screen",
+           let raw = url.pathComponents.dropFirst().first,
+           let id = CaptureScreenID(rawValue: "screen.\(raw)")
+                ?? CaptureScreenID.allCases.first(where: { $0.rawValue.hasSuffix(raw) }) {
+            guard verificationHarnessAllowed else { return }
+            route(for: id, coordinator: coordinator, store: store, session: session)
             return
         }
 
-        // field://capture — instant viewfinder (E1/E2).
         if url.host == "capture" || url.host == nil {
             coordinator.switchRealm(.camera, reset: true)
         }
@@ -56,48 +55,52 @@ enum CaptureDeepLink {
 
     /// Drive a specific screen directly (launch-arg `-CaptureScreen <id>` and tests).
     @MainActor
-    static func drive(screen id: CaptureScreenID, coordinator: CaptureCoordinator, store: CaptureStore) {
-        route(for: id, coordinator: coordinator, store: store)
+    static func drive(
+        screen id: CaptureScreenID,
+        coordinator: CaptureCoordinator,
+        store: CaptureStore,
+        session: any SessionProviding
+    ) {
+        guard verificationHarnessAllowed else { return }
+        route(for: id, coordinator: coordinator, store: store, session: session)
     }
 
     @MainActor
-    private static func route(for id: CaptureScreenID, coordinator: CaptureCoordinator, store: CaptureStore) {
-        // Route into the owning realm first. Reset only that realm so the other
-        // one retains its history for the next explicit realm crossing.
+    private static func route(
+        for id: CaptureScreenID,
+        coordinator: CaptureCoordinator,
+        store: CaptureStore,
+        session: any SessionProviding
+    ) {
         coordinator.onboardingStep = nil
         coordinator.switchRealm(realm(for: id), reset: true)
 
-        // Create representative specimen data only for harness screens that
-        // actually need it. Work deep links must never leave phantom drafts.
-        var sampleID: UUID?
-        func sample() -> UUID {
-            if let sampleID { return sampleID }
-            let id = store.session().first?.id ?? store.newDraft().id
-            sampleID = id
-            return id
+        func withSample(_ action: (UUID) -> Void) {
+            guard let sampleID = sampleSpecimenID(store: store, session: session) else { return }
+            action(sampleID)
         }
 
         switch id {
         case .c1Viewfinder, .c2Framing, .c3Specimen, .c4MultiShot,
              .e1AppIcon, .e2SystemEntry, .r1LowLight:
-            break // these live on the viewfinder root
-        case .c5SpecimenSheet:  coordinator.present(.specimenSheet(sample()))
-        case .n1TagOCR:         coordinator.present(.ocr(sample()))
-        case .n2Scan:           coordinator.present(.code(sample()))
-        case .n3Measure:        coordinator.present(.measure(sample()))
-        case .n4Voice:          coordinator.present(.voice(sample()))
-        case .n5SmartGuess:     coordinator.present(.smartGuessCard(sample()))
-        case .r2OCRFallback:    coordinator.present(.ocr(sample()))
+            break
+        case .c5SpecimenSheet:  withSample { coordinator.present(.specimenSheet($0)) }
+        case .n1TagOCR:         withSample { coordinator.present(.ocr($0)) }
+        case .n2Scan:           withSample { coordinator.present(.code($0)) }
+        case .n3Measure:        withSample { coordinator.present(.measure($0)) }
+        case .n4Voice:          withSample { coordinator.present(.voice($0)) }
+        case .n5SmartGuess:     withSample { coordinator.present(.smartGuessCard($0)) }
+        case .r2OCRFallback:    withSample { coordinator.present(.ocr($0)) }
         case .r3Denied, .e3ShareSheet: coordinator.present(.photoImport)
         case .r4Offline:        coordinator.navigate(to: .syncStatus)
-        case .s1Assign:         coordinator.present(.assignVenue(sample()))
+        case .s1Assign:         withSample { coordinator.present(.assignVenue($0)) }
         case .s2CreateProject:  coordinator.present(.createProject)
-        case .s3Destination:    coordinator.present(.destination(sample()))
-        case .s4Saved:          coordinator.present(.savedTerminal(sample()))
-        case .s5Inbox:          coordinator.present(.inboxTerminal(sample()))
+        case .s3Destination:    withSample { coordinator.present(.destination($0)) }
+        case .s4Saved:          withSample { coordinator.present(.savedTerminal($0)) }
+        case .s5Inbox:          withSample { coordinator.present(.inboxTerminal($0)) }
         case .v1SessionTray:    coordinator.navigate(to: .session)
         case .v2Cull:           coordinator.present(.cullDeck)
-        case .v3Detail:         coordinator.navigate(to: .specimen(sample()))
+        case .v3Detail:         withSample { coordinator.navigate(to: .specimen($0)) }
         case .u1Sync:           coordinator.navigate(to: .syncStatus)
         case .u2LibrarySearch:  coordinator.navigate(to: .librarySearch)
         case .t1Settings:       coordinator.navigate(to: .settings)
@@ -128,6 +131,27 @@ enum CaptureDeepLink {
         }
     }
 
+    @MainActor
+    private static func sampleSpecimenID(
+        store: CaptureStore,
+        session: any SessionProviding
+    ) -> UUID? {
+        let specimen: Specimen?
+        switch CaptureOwnerProjectionPolicy.resolve(
+            runsRealServices: AppConfiguration.runsRealServices,
+            userID: session.userID,
+            workspaceID: session.workspaceID
+        ) {
+        case .globalFixtures:
+            specimen = store.session().first ?? store.newDraft()
+        case .owner(let owner):
+            specimen = store.session(owner: owner).first ?? store.newDraft(owner: owner)
+        case .unavailable:
+            specimen = nil
+        }
+        return specimen?.id
+    }
+
     /// Phase 2 designer/pro harness routes. Detail screens resolve the stable
     /// fixture ids below; W1 itself is already the Work realm root.
     @MainActor
@@ -156,6 +180,14 @@ enum CaptureDeepLink {
         default:
             assertionFailure("Non-Work screen sent to routeWorkScreen")
         }
+    }
+
+    private static var verificationHarnessAllowed: Bool {
+        #if DEBUG
+        return true
+        #else
+        return !AppConfiguration.runsRealServices
+        #endif
     }
 
     private static func realm(for id: CaptureScreenID) -> FieldRealm {

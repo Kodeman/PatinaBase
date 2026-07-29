@@ -213,11 +213,25 @@ public final class CaptureProjectRef {
     public var remoteId: String?
     public var name: String
     public var createdAt: Date
+    public private(set) var ownerUserID: String?
+    public private(set) var ownerWorkspaceID: String?
 
-    public init(id: UUID = UUID(), remoteId: String? = nil, name: String, createdAt: Date = Date()) {
+    public init(
+        id: UUID = UUID(),
+        remoteId: String? = nil,
+        name: String,
+        createdAt: Date = Date(),
+        owner: CaptureOwnerIdentity? = nil
+    ) {
         self.id = id
         self.remoteId = remoteId
         self.name = name
         self.createdAt = createdAt
+        self.ownerUserID = owner?.userID
+        self.ownerWorkspaceID = owner?.workspaceID
+    }
+
+    public func belongs(to owner: CaptureOwnerIdentity) -> Bool {
+        owner.matches(userID: ownerUserID, workspaceID: ownerWorkspaceID)
     }
 }

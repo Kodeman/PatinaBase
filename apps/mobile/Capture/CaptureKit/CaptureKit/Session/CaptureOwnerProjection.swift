@@ -30,4 +30,48 @@ public enum CaptureOwnerProjectionPolicy {
         }
         return .owner(owner)
     }
+
+    @MainActor
+    public static func specimen(
+        id: UUID,
+        store: CaptureStore,
+        runsRealServices: Bool,
+        userID: String?,
+        workspaceID: String?
+    ) -> Specimen? {
+        switch resolve(
+            runsRealServices: runsRealServices,
+            userID: userID,
+            workspaceID: workspaceID
+        ) {
+        case .globalFixtures:
+            return store.specimen(id: id)
+        case .owner(let owner):
+            return store.specimen(id: id, owner: owner)
+        case .unavailable:
+            return nil
+        }
+    }
+
+    @MainActor
+    public static func newDraft(
+        store: CaptureStore,
+        sessionID: UUID? = nil,
+        runsRealServices: Bool,
+        userID: String?,
+        workspaceID: String?
+    ) -> Specimen? {
+        switch resolve(
+            runsRealServices: runsRealServices,
+            userID: userID,
+            workspaceID: workspaceID
+        ) {
+        case .globalFixtures:
+            return store.newDraft(sessionID: sessionID)
+        case .owner(let owner):
+            return store.newDraft(sessionID: sessionID, owner: owner)
+        case .unavailable:
+            return nil
+        }
+    }
 }
