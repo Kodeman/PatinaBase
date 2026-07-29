@@ -11,15 +11,28 @@
 
 import SwiftUI
 
-/// Bottom inset (pt) reserved so content scrolls clear of the Companion.
-private let companionSafeAreaInset: CGFloat = 120
+/// Spatial contract for the invisible Companion Hearth. The Hearth is a
+/// reserved layout region, never a painted bar or persistent piece of chrome.
+public enum CompanionHearthMetrics {
+    public static let collapsedDiameter: CGFloat = 64
+    public static let hintAllowance: CGFloat = 36
+    public static let verticalSpacing: CGFloat = 20
+
+    /// Content clearance above the home-indicator safe area.
+    public static let reservedHeight: CGFloat =
+        collapsedDiameter + hintAllowance + verticalSpacing
+}
 
 extension View {
-    /// Reserves bottom space so scrollable content is not obscured by the
-    /// floating Companion. Use on the scroll content of screens that present
-    /// the Companion.
+    /// Reserves the invisible Hearth so scrollable content cannot settle under
+    /// the centered Companion circle and contextual hint.
+    func companionHearthReservation() -> some View {
+        safeAreaPadding(.bottom, CompanionHearthMetrics.reservedHeight)
+    }
+
+    /// Source-compatible name retained for existing and in-flight call sites.
     func companionSafeArea() -> some View {
-        safeAreaPadding(.bottom, companionSafeAreaInset)
+        companionHearthReservation()
     }
 }
 

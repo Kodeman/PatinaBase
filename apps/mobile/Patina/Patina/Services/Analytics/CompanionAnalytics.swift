@@ -101,6 +101,67 @@ public final class CompanionAnalytics {
         )
     }
 
+    // MARK: - Canonical Presentation Events
+
+    /// Records state exposure without sending rendered copy or user content.
+    public func trackPresentationExposed(
+        state: CompanionCanonicalState,
+        surface: String,
+        extent: CompanionExpansionExtent? = nil
+    ) {
+        var properties: [String: Any] = [
+            "state": state.rawValue,
+            "surface": surface,
+            "session_id": sessionMetrics.sessionId
+        ]
+        if let extent {
+            properties["extent"] = extent.rawValue
+        }
+        postHog.capture(CompanionEvent.presentationExposed.rawValue, properties: properties)
+    }
+
+    /// `hintId` is a stable taxonomy key, never the visible contextual copy.
+    public func trackHintActivated(screen: String, hintId: String) {
+        postHog.capture(
+            CompanionEvent.hintActivated.rawValue,
+            properties: [
+                "screen": screen,
+                "hint_id": hintId,
+                "session_id": sessionMetrics.sessionId
+            ]
+        )
+    }
+
+    public func trackPresentationExpanded(
+        screen: String,
+        from sourceState: CompanionCanonicalState,
+        extent: CompanionExpansionExtent
+    ) {
+        postHog.capture(
+            CompanionEvent.presentationExpanded.rawValue,
+            properties: [
+                "screen": screen,
+                "from_state": sourceState.rawValue,
+                "extent": extent.rawValue,
+                "session_id": sessionMetrics.sessionId
+            ]
+        )
+    }
+
+    public func trackPresentationDismissed(
+        screen: String,
+        from sourceState: CompanionCanonicalState
+    ) {
+        postHog.capture(
+            CompanionEvent.presentationDismissed.rawValue,
+            properties: [
+                "screen": screen,
+                "from_state": sourceState.rawValue,
+                "session_id": sessionMetrics.sessionId
+            ]
+        )
+    }
+
     // MARK: - Conversation Events
 
     /// Track message sent by user
@@ -352,6 +413,12 @@ public enum CompanionEvent: String {
     // Nudge events
     case nudgeTapped = "companion_nudge_tapped"
 
+    // Canonical presentation events
+    case presentationExposed = "companion_presentation_exposed"
+    case hintActivated = "companion_hint_activated"
+    case presentationExpanded = "companion_presentation_expanded"
+    case presentationDismissed = "companion_presentation_dismissed"
+
     // Conversation events
     case messageSent = "companion_message_sent"
     case responseReceived = "companion_response_received"
@@ -391,9 +458,9 @@ public enum CompanionEvent: String {
 
 /// Authentication methods for analytics
 public enum AuthMethod: String {
-    case apple = "apple"
-    case email = "email"
-    case google = "google"
+    case apple
+    case email
+    case google
 }
 
 // MARK: - Convenience Extensions
