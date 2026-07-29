@@ -70,6 +70,15 @@ public final class CaptureCoordinator: CaptureCoordinating {
     public func goBack() { realmHistory.goBack() }
     public func popToRoot() { realmHistory.popToRoot() }
 
+    /// Drop every owner-bound navigation reference before a new account or
+    /// workspace can become visible. Both realm histories are replaced together.
+    public func resetOwnerBoundUI() {
+        sheet = nil
+        onboardingStep = nil
+        leaveGuestRequest()
+        realmHistory = FieldRealmHistory()
+    }
+
     public func enterGuestRequest(accessToken: String) {
         switchRealm(.work, reset: true)
         guestAccessSession.enter(accessToken)

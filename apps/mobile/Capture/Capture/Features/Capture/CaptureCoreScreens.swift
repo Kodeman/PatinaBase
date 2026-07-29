@@ -16,18 +16,25 @@ import CaptureKit
 enum CaptureCoreScreens {
     @MainActor
     static func register(into r: RouteRegistry, container: AppContainer, coordinator: CaptureCoordinator) {
-        // C1 · Viewfinder — the app home (route)
         r.registerRoute(CaptureRoute.viewfinder.registryKey) { _ in
             AnyView(ViewfinderScreen(container: container, coordinator: coordinator))
         }
 
-        // C5 · Specimen sheet (sheet, carries the specimen id)
         r.registerSheet(CaptureSheet.specimenSheet(UUID()).registryKey) { sheet in
             guard case let .specimenSheet(id) = sheet,
-                  let specimen = container.store.specimen(id: id) else {
+                  let specimen = CaptureOwnerProjectionPolicy.specimen(
+                    id: id,
+                    store: container.store,
+                    runsRealServices: AppConfiguration.runsRealServices,
+                    userID: container.session.userID,
+                    workspaceID: container.session.workspaceID
+                  ) else {
                 return AnyView(SpecimenMissingView())
             }
-            return AnyView(SpecimenSheetScreen(store: container.store, coordinator: coordinator, specimen: specimen))
+            return AnyView(SpecimenSheetScreen(
+                store: container.store,
+                coordinator: coordinator,
+                specimen: specimen))
         }
     }
 }

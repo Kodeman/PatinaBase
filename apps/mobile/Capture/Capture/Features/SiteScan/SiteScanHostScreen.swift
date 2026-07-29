@@ -58,24 +58,37 @@ final class SiteScanHostModel {
 
     // Item-7 context capture (mid-scan photo + voice → Capture Inbox).
     private let store: CaptureStore
-    @ObservationIgnored private let owner: CaptureOwnerIdentity?
+    private let sync: any CaptureSyncService
+    @ObservationIgnored private let ownerScopeProvider: () -> CaptureLocalListScope
     private let projectID: String?
     private let projectRoomID: String?
     private let voiceService: any VoiceNoteService
 
     @ObservationIgnored lazy var contextModel = SiteScanContextModel(
-        store: store, owner: owner,
-        projectID: projectID, projectRoomID: projectRoomID, voice: voiceService,
+        store: store,
+        sync: sync,
+        ownerScope: ownerScopeProvider,
+        projectID: projectID,
+        projectRoomID: projectRoomID,
+        voice: voiceService,
         scanSessionIdProvider: { [weak self] in (self?.session as? ContextCapturing)?.scanSessionId },
         frameProvider: { [weak self] in (self?.session as? ContextCapturing)?.captureContextFrame() })
 
-    init(siteScan: any SiteScanService, name: String, store: CaptureStore,
-         owner: CaptureOwnerIdentity?,
-         projectID: String?, projectRoomID: String?, voice: any VoiceNoteService) {
+    init(
+        siteScan: any SiteScanService,
+        name: String,
+        store: CaptureStore,
+        sync: any CaptureSyncService,
+        ownerScope: @escaping () -> CaptureLocalListScope,
+        projectID: String?,
+        projectRoomID: String?,
+        voice: any VoiceNoteService
+    ) {
         self.siteScan = siteScan
         self.name = name
         self.store = store
-        self.owner = owner
+        self.sync = sync
+        self.ownerScopeProvider = ownerScope
         self.projectID = projectID
         self.projectRoomID = projectRoomID
         self.voiceService = voice
@@ -184,12 +197,18 @@ struct SiteScanHostScreen: View {
         self.handoffProjectName = handoff.projectName
         let name = handoff.name.isEmpty ? SiteScanSetupModel.defaultName() : handoff.name
         _model = State(wrappedValue: SiteScanHostModel(
-            siteScan: container.siteScan, name: name, store: container.store,
-            owner: CaptureOwnerIdentity(
-                userID: container.session.userID,
-                workspaceID: container.session.workspaceID
-            ),
-            projectID: projectID, projectRoomID: projectRoomID,
+            siteScan: container.siteScan,
+            name: name,
+            store: container.store,
+            sync: container.sync,
+            ownerScope: {
+                CaptureOwnerProjectionPolicy.resolve(
+                    runsRealServices: AppConfiguration.runsRealServices,
+                    userID: container.session.userID,
+                    workspaceID: container.session.workspaceID)
+            },
+            projectID: projectID,
+            projectRoomID: projectRoomID,
             voice: SpeechVoiceNoteService(mediaDirectory: container.store.mediaDirectory())))
     }
 

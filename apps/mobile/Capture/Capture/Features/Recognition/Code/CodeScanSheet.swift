@@ -13,6 +13,7 @@ import CaptureKit
 struct CodeScanSheet: View {
     let specimenID: UUID
     let store: CaptureStore
+    let session: any SessionProviding
     let codeService: DataScannerCodeService
     let analytics: any CaptureAnalytics
     let coordinator: CaptureCoordinator?
@@ -134,7 +135,7 @@ struct CodeScanSheet: View {
     }
 
     private func useMatch() {
-        guard let scanned, let specimen = store.specimen(id: specimenID) else { return }
+        guard let scanned, let specimen = currentSpecimen() else { return }
         let tag = codeTag(scanned)
         if !specimen.scannedCodes.contains(tag) { specimen.scannedCodes.append(tag) }
         if let title = catalogTitle {
@@ -151,6 +152,15 @@ struct CodeScanSheet: View {
         try? store.save()
         analytics.event("N2.use-match", ["matched": String(catalogTitle != nil)])
         coordinator?.present(.specimenSheet(specimenID))
+    }
+
+    private func currentSpecimen() -> Specimen? {
+        CaptureOwnerProjectionPolicy.specimen(
+            id: specimenID,
+            store: store,
+            runsRealServices: AppConfiguration.runsRealServices,
+            userID: session.userID,
+            workspaceID: session.workspaceID)
     }
 
     private func codeTag(_ code: ScannedCode) -> String {
@@ -172,6 +182,7 @@ import CaptureKitMocks
     return CodeScanSheet(
         specimenID: specimen.id,
         store: store,
+        session: MockSessionProviding(),
         codeService: DataScannerCodeService(),
         analytics: MockCaptureAnalytics(),
         coordinator: CaptureCoordinator()

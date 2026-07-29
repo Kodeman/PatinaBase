@@ -20,6 +20,7 @@ final class ViewfinderModel {
     private let coordinator: CaptureCoordinator
     private let sync: any CaptureSyncService
     private let session: any SessionProviding
+    private let companion: FieldCompanionController
     private let sessionContext: CaptureSessionContextStore
     private var visitID: UUID?
 
@@ -75,6 +76,7 @@ final class ViewfinderModel {
         self.coordinator = coordinator
         self.sync = container.sync
         self.session = container.session
+        self.companion = container.companion
         self.sessionContext = .shared
     }
 
@@ -215,23 +217,24 @@ final class ViewfinderModel {
         defer { capturing = false }
         CaptureHaptics.impact(.light)
 
-        let draft = makeDraft()
+        guard let draft = makeDraft() else { return }
         await captureFrame(into: draft, primary: true)
-        guard !draft.photos.isEmpty else { discard(draft); return }
+        guard let currentDraft = currentSpecimen(id: draft.id) else { return }
+        guard !currentDraft.photos.isEmpty else { discard(currentDraft); return }
 
-        applySmartGuess(to: draft)
+        applySmartGuess(to: currentDraft)
         try? store.save()
         refreshSessionCount()
         analytics.event("capture", ["mode": mode.rawValue])
         switch SpecimenCapturePolicy.nextStep(for: mode) {
         case .quickConfirm:
-            cardSpecimen = draft
+            cardSpecimen = currentDraft
         case .tagOCR:
-            coordinator.present(.ocr(draft.id))
+            coordinator.present(.ocr(currentDraft.id))
         case .codeScan:
-            coordinator.present(.code(draft.id))
+            coordinator.present(.code(currentDraft.id))
         case .measure:
-            coordinator.present(.measure(draft.id))
+            coordinator.present(.measure(currentDraft.id))
         }
     }
 
@@ -239,9 +242,10 @@ final class ViewfinderModel {
 
     private func beginMultiShot() async {
         guard !isHolding, cardSpecimen == nil else { return }
+        guard let draft = makeDraft() else { return }
+
         isHolding = true
         holdCount = 0
-        let draft = makeDraft()
         multiShotID = draft.id
         CaptureHaptics.impact(.medium)
         burstTask = Task { [weak self] in
@@ -258,8 +262,9 @@ final class ViewfinderModel {
         isHolding = false
         burstTask?.cancel(); burstTask = nil
         CaptureHaptics.impact(.medium)
-        guard let id = multiShotID, let draft = store.specimen(id: id) else { return }
+        guard let id = multiShotID else { return }
         multiShotID = nil
+        guard let draft = currentSpecimen(id: id) else { return }
         guard !draft.photos.isEmpty else { discard(draft); return }
 
         flagNearDuplicates(in: draft)
@@ -310,14 +315,25 @@ final class ViewfinderModel {
 
     // MARK: Plumbing
 
-    private func makeDraft() -> Specimen {
+    private func makeDraft() -> Specimen? {
+        guard localListScope != .unavailable else {
+            reportOwnerUnavailable()
+            return nil
+        }
+
         let context = currentSessionContext()
         visitID = context.visitID
-        let owner = CaptureOwnerIdentity(
+        guard let draft = CaptureOwnerProjectionPolicy.newDraft(
+            store: store,
+            sessionID: context.visitID,
+            runsRealServices: AppConfiguration.runsRealServices,
             userID: session.userID,
             workspaceID: session.workspaceID
-        )
-        let draft = store.newDraft(sessionID: context.visitID, owner: owner)
+        ) else {
+            reportOwnerUnavailable()
+            return nil
+        }
+
         draft.venue = venueStamp
         draft.category = .unknown
         draft.destination = context.routing.destination
@@ -328,6 +344,24 @@ final class ViewfinderModel {
         venue.shelf = context.routing.shelf
         draft.venue = venue
         return draft
+    }
+
+    private func currentSpecimen(id: UUID) -> Specimen? {
+        CaptureOwnerProjectionPolicy.specimen(
+            id: id,
+            store: store,
+            runsRealServices: AppConfiguration.runsRealServices,
+            userID: session.userID,
+            workspaceID: session.workspaceID)
+    }
+
+    private func reportOwnerUnavailable() {
+        let message = "Choose a workspace before capturing."
+        lastError = message
+        companion.send(.communicate(.init(
+            title: "Choose a workspace",
+            detail: "Patina needs an active studio before it can save this capture."
+        )))
     }
 
     private func currentSessionContext() -> CaptureSessionContext {
@@ -347,6 +381,8 @@ final class ViewfinderModel {
         do {
             if torchOn { camera.setTorch(.on) }
             let frame = try await camera.capture()
+            guard !Task.isCancelled, currentSpecimen(id: draft.id) != nil else { return }
+
             let filename = "\(UUID().uuidString).heic"
             try? store.writeMedia(frame.data, filename: filename)
             let photo = CapturePhoto(

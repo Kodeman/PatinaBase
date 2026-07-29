@@ -20,6 +20,13 @@ struct RootView: View {
     @State private var registered = false
     /// Step for the phase-based onboarding flow (real mode with no session).
     @State private var onboardingFlowStep = 0
+    @State private var ownerTracker = CaptureOwnerTransitionTracker()
+
+    @State private var lastReconciledOwner: CaptureOwnerIdentity?
+    @State private var reconciliationOwner: CaptureOwnerIdentity?
+    @State private var reconciliationToken: UUID?
+    @State private var ownerUIInvalidated = false
+    @State private var readyRequested = false
     /// Runs `field://login` deep-link sign-in (portal QR handoff). Owned by the
     /// composition root so the deep-link handler, this shell, and Q1 share one
     /// instance; configured in `.task` once `coordinator` can be bound.
@@ -27,6 +34,7 @@ struct RootView: View {
 
     var body: some View {
         @Bindable var coord = coordinator
+        let ownerState = container.session.ownerState
         realmShell
         .environment(coordinator)
         .environment(container.companion)
@@ -45,42 +53,46 @@ struct RootView: View {
         .task {
             ScreenRegistry.registerAll(container: container, coordinator: coordinator)
             registered = true
-            // Wire the portal-QR sign-in controller; a signed-in exchange leaves
-            // onboarding for the app surface. Replays any cold-start login link.
             portalLogin.configure(
                 session: container.session,
                 authorizer: container.authorizer,
-                onSignedIn: { if coordinator.phase != .ready { coordinator.phase = .ready } }
+                onSignedIn: { requestOwnerReady() }
             )
-            // Resolve the opening phase honestly from the session: a restored
-            // session goes straight to the viewfinder; no session lands on
-            // O1/O2 onboarding. Mock mode is authenticated immediately, so this
-            // settles on `.ready` and the `-CaptureScreen` harness is unaffected.
+
             await container.session.waitForReady()
-            if coordinator.phase == .launching {
-                coordinator.phase = container.session.isAuthenticated ? .ready : .auth
-            }
-            if container.session.isAuthenticated {
-                await container.sync.reconcilePendingTransfers()
-                await container.siteScan.reconcilePendingUploads()
-            }
+            guard !Task.isCancelled else { return }
+
             if let raw = AppConfiguration.initialScreenRaw,
                let id = CaptureScreenID.allCases.first(where: { $0.rawValue.hasSuffix(raw) }) {
-                CaptureDeepLink.drive(screen: id, coordinator: coordinator, store: container.store)
+                CaptureDeepLink.drive(
+                    screen: id,
+                    coordinator: coordinator,
+                    store: container.store,
+                    session: container.session)
             }
+        }
+        .task(id: ownerState) {
+            await container.session.waitForReady()
+            guard !Task.isCancelled else { return }
+            await observeOwnerState(ownerState)
         }
         .task(id: companionPlacement) {
             applyCompanionPlacement()
         }
         .onOpenURL { url in
-            CaptureDeepLink.handle(url, coordinator: coordinator, store: container.store, login: portalLogin)
+            CaptureDeepLink.handle(
+                url,
+                coordinator: coordinator,
+                store: container.store,
+                session: container.session,
+                login: portalLogin)
         }
         .onChange(of: coordinator.phase) {
-            // Entering onboarding (cold start with no session, or after sign-out)
-            // always restarts the flow at O1.
-            if coordinator.phase == .auth { onboardingFlowStep = 0 }
+            if coordinator.phase == .auth,
+               container.session.ownerState == .signedOut {
+                onboardingFlowStep = 0
+            }
         }
-        // Portal-QR sign-in over a live session: confirm before switching.
         .alert(
             "Sign in with this code?",
             isPresented: Binding(
@@ -264,6 +276,95 @@ struct RootView: View {
         }
     }
 
+    private func requestOwnerReady() {
+        readyRequested = true
+        guard let owner = container.session.ownerIdentity,
+              ownerTracker.currentOwner == owner else { return }
+        readyRequested = false
+        coordinator.phase = .ready
+    }
+
+    private func observeOwnerState(_ state: CaptureSessionOwnerState) async {
+        let wasLaunching = coordinator.phase == .launching
+        let transition = ownerTracker.observe(state)
+
+        switch state {
+        case .loading:
+            if case .invalidated = transition { invalidateOwnerBoundUI() }
+            if wasLaunching, ownerTracker.lastConfirmedOwner == nil {
+                // A restored session whose first membership query failed should
+                // recover directly once a later auth event validates its owner.
+                readyRequested = true
+            }
+            coordinator.phase = .auth
+            onboardingFlowStep = 1
+
+        case .signedOut:
+            if case .invalidated = transition { invalidateOwnerBoundUI() }
+            readyRequested = false
+            coordinator.phase = .auth
+            onboardingFlowStep = 0
+
+        case .needsWorkspace:
+            if case .invalidated = transition { invalidateOwnerBoundUI() }
+            coordinator.phase = .auth
+            onboardingFlowStep = 1
+
+        case .ready(let owner):
+            if case .changed = transition { invalidateOwnerBoundUI() }
+            let shouldEnterReady = coordinator.phase == .launching || ownerUIInvalidated
+
+            guard container.session.ownerIdentity == owner else { return }
+            ownerUIInvalidated = false
+            if shouldEnterReady || readyRequested {
+                readyRequested = false
+                coordinator.phase = .ready
+            }
+
+            // Reconciliation is deliberately downstream of readiness. Background
+            // URLSession work can wait for connectivity indefinitely; it must not
+            // make an authenticated, owner-validated offline launch look blocked.
+            guard lastReconciledOwner != owner,
+                  reconciliationOwner != owner else { return }
+            let token = UUID()
+            reconciliationOwner = owner
+            reconciliationToken = token
+            await reconcileQueues(for: owner, token: token)
+        }
+    }
+
+    private func invalidateOwnerBoundUI() {
+        coordinator.phase = .launching
+        coordinator.resetOwnerBoundUI()
+        onboardingFlowStep = 0
+        lastReconciledOwner = nil
+        reconciliationOwner = nil
+        reconciliationToken = nil
+        ownerUIInvalidated = true
+        readyRequested = false
+        CaptureSessionContextStore.shared.reset()
+        container.companion.send(.collapse(hint: nil, action: nil))
+    }
+
+    private func reconcileQueues(for owner: CaptureOwnerIdentity, token: UUID) async {
+        defer {
+            if reconciliationToken == token {
+                reconciliationOwner = nil
+                reconciliationToken = nil
+            }
+        }
+
+        await container.sync.reconcilePendingTransfers()
+        guard !Task.isCancelled,
+              reconciliationToken == token,
+              container.session.ownerIdentity == owner else { return }
+        await container.siteScan.reconcilePendingUploads()
+        guard !Task.isCancelled,
+              reconciliationToken == token,
+              container.session.ownerIdentity == owner else { return }
+        lastReconciledOwner = owner
+    }
+
     @ViewBuilder private func rootContent(for realm: FieldRealm) -> some View {
         if let accessToken = coordinator.guestAccessToken {
             GuestSiteRequestRootView(
@@ -288,7 +389,7 @@ struct RootView: View {
                     Task { await container.session.signOut() }
                     onboardingFlowStep = 0   // back to O1; fresh O2 on return
                 },
-                onComplete: { coordinator.phase = .ready }
+                onComplete: { requestOwnerReady() }
             )
         case .ready:
             // `registered` is read first so this recomputes once registration

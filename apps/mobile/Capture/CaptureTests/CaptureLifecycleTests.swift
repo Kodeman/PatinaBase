@@ -184,6 +184,113 @@ struct CaptureOwnerProjectionPolicyTests {
         #expect(specimen.ownerUserID == "user-a")
         #expect(specimen.ownerWorkspaceID == "workspace-a")
     }
+
+    @Test @MainActor func identifierResolutionNeverCrossesARealOwnerBoundary() throws {
+        let store = try CaptureStore.inMemory()
+        let ownerA = try #require(CaptureOwnerIdentity(
+            userID: "user-a", workspaceID: "workspace-a"))
+        let ownerB = try #require(CaptureOwnerIdentity(
+            userID: "user-b", workspaceID: "workspace-b"))
+        let specimenA = store.newDraft(owner: ownerA)
+
+        #expect(CaptureOwnerProjectionPolicy.specimen(
+            id: specimenA.id,
+            store: store,
+            runsRealServices: true,
+            userID: ownerB.userID,
+            workspaceID: ownerB.workspaceID) == nil)
+        #expect(CaptureOwnerProjectionPolicy.specimen(
+            id: specimenA.id,
+            store: store,
+            runsRealServices: true,
+            userID: nil,
+            workspaceID: nil) == nil)
+        #expect(CaptureOwnerProjectionPolicy.specimen(
+            id: specimenA.id,
+            store: store,
+            runsRealServices: false,
+            userID: nil,
+            workspaceID: nil)?.id == specimenA.id)
+    }
+
+    @Test @MainActor func draftCreationFailsClosedInRealModeAndStaysGlobalInMocks() throws {
+        let store = try CaptureStore.inMemory()
+        let owner = try #require(CaptureOwnerIdentity(
+            userID: "user-a", workspaceID: "workspace-a"))
+
+        #expect(CaptureOwnerProjectionPolicy.newDraft(
+            store: store,
+            sessionID: nil,
+            runsRealServices: true,
+            userID: nil,
+            workspaceID: nil) == nil)
+
+        let owned = try #require(CaptureOwnerProjectionPolicy.newDraft(
+            store: store,
+            sessionID: nil,
+            runsRealServices: true,
+            userID: owner.userID,
+            workspaceID: owner.workspaceID))
+        let fixture = try #require(CaptureOwnerProjectionPolicy.newDraft(
+            store: store,
+            sessionID: nil,
+            runsRealServices: false,
+            userID: nil,
+            workspaceID: nil))
+
+        #expect(owner.matches(
+            userID: owned.ownerUserID,
+            workspaceID: owned.ownerWorkspaceID))
+        #expect(fixture.ownerUserID == nil)
+        #expect(fixture.ownerWorkspaceID == nil)
+    }
+}
+
+
+struct CaptureOwnerTransitionTrackerTests {
+    @Test func invalidatesImmediatelyAndRemembersTheConfirmedOwnerAcrossLoading() throws {
+        let ownerA = try #require(CaptureOwnerIdentity(
+            userID: "user-a", workspaceID: "workspace-a"))
+        let ownerB = try #require(CaptureOwnerIdentity(
+            userID: "user-b", workspaceID: "workspace-b"))
+        var tracker = CaptureOwnerTransitionTracker()
+
+        #expect(tracker.observe(.loading) == .unchanged)
+        #expect(tracker.observe(.ready(ownerA)) == .established(ownerA))
+        #expect(tracker.observe(.loading) == .invalidated(ownerA))
+        #expect(tracker.observe(.loading) == .unchanged)
+        #expect(tracker.observe(.ready(ownerB)) == .changed(from: ownerA, to: ownerB))
+        #expect(tracker.lastConfirmedOwner == ownerB)
+    }
+
+    @Test func workspaceRequirementIsNeverProjectedAsReady() throws {
+        let owner = try #require(CaptureOwnerIdentity(
+            userID: "user-a", workspaceID: "workspace-a"))
+        var tracker = CaptureOwnerTransitionTracker()
+
+        _ = tracker.observe(.ready(owner))
+        #expect(tracker.observe(.needsWorkspace(userID: owner.userID)) == .invalidated(owner))
+        #expect(CaptureSessionOwnerState.needsWorkspace(userID: owner.userID).owner == nil)
+    }
+}
+
+struct CaptureProjectRefOwnershipTests {
+    @Test func ownerStampIsNormalizedAndLegacyRowsStayQuarantined() throws {
+        let ownerA = try #require(CaptureOwnerIdentity(
+            userID: " USER-A ", workspaceID: " WORKSPACE-A "))
+        let ownerB = try #require(CaptureOwnerIdentity(
+            userID: "user-b", workspaceID: "workspace-b"))
+        let owned = CaptureProjectRef(name: "Owned", owner: ownerA)
+        let legacy = CaptureProjectRef(name: "Legacy")
+
+        #expect(owned.ownerUserID == "user-a")
+        #expect(owned.ownerWorkspaceID == "workspace-a")
+        #expect(owned.belongs(to: ownerA))
+        #expect(!owned.belongs(to: ownerB))
+        #expect(!legacy.belongs(to: ownerA))
+        #expect(legacy.ownerUserID == nil)
+        #expect(legacy.ownerWorkspaceID == nil)
+    }
 }
 
 struct CaptureTransferLifecycleTests {

@@ -158,10 +158,28 @@ private struct S1Content: View {
 
     private func load() {
         routingSpecimenId = specimen.id.uuidString
-        let descriptor = FetchDescriptor<CaptureProjectRef>(
-            sortBy: [SortDescriptor(\.createdAt, order: .reverse)]
-        )
-        projects = (try? store.context.fetch(descriptor)) ?? []
+
+        if AppConfiguration.runsRealServices {
+            if let owner = session.ownerIdentity {
+                let ownerUserID = owner.userID
+                let ownerWorkspaceID = owner.workspaceID
+                let descriptor = FetchDescriptor<CaptureProjectRef>(
+                    predicate: #Predicate { project in
+                        project.ownerUserID == ownerUserID
+                            && project.ownerWorkspaceID == ownerWorkspaceID
+                    },
+                    sortBy: [SortDescriptor(\.createdAt, order: .reverse)]
+                )
+                projects = (try? store.context.fetch(descriptor)) ?? []
+            } else {
+                projects = []
+            }
+        } else {
+            let descriptor = FetchDescriptor<CaptureProjectRef>(
+                sortBy: [SortDescriptor(\.createdAt, order: .reverse)]
+            )
+            projects = (try? store.context.fetch(descriptor)) ?? []
+        }
 
         let venue = specimen.venue
         let remembered = sessionContext.current(identity: identity).routing

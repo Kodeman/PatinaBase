@@ -13,6 +13,7 @@ import CaptureKit
 struct MeasureSheet: View {
     let specimenID: UUID
     let store: CaptureStore
+    let session: any SessionProviding
     let measureService: any MeasureService
     let analytics: any CaptureAnalytics
     let coordinator: CaptureCoordinator?
@@ -192,7 +193,7 @@ struct MeasureSheet: View {
     }
 
     private func commit() {
-        guard let specimen = store.specimen(id: specimenID) else { return }
+        guard let specimen = currentSpecimen() else { return }
         for axis in Self.axes {
             guard let mm = values[axis], mm > 0 else { continue }
             let source = sources[axis] ?? .manual
@@ -201,6 +202,15 @@ struct MeasureSheet: View {
         try? store.save()
         analytics.event("N3.add-dimensions", ["count": String(values.count)])
         coordinator?.present(.specimenSheet(specimenID))
+    }
+
+    private func currentSpecimen() -> Specimen? {
+        CaptureOwnerProjectionPolicy.specimen(
+            id: specimenID,
+            store: store,
+            runsRealServices: AppConfiguration.runsRealServices,
+            userID: session.userID,
+            workspaceID: session.workspaceID)
     }
 }
 
@@ -214,6 +224,7 @@ import CaptureKitMocks
     return MeasureSheet(
         specimenID: specimen.id,
         store: store,
+        session: MockSessionProviding(),
         measureService: MockMeasureService(),
         analytics: MockCaptureAnalytics(),
         coordinator: CaptureCoordinator()

@@ -29,8 +29,23 @@ import Foundation
 import Supabase
 import CaptureKit
 
+private enum ProjectsOwnerError: LocalizedError {
+    case unavailable
+    case changed
+
+    var errorDescription: String? {
+        switch self {
+        case .unavailable:
+            return "Choose a workspace before loading projects."
+        case .changed:
+            return "Your account or workspace changed while projects were loading."
+        }
+    }
+}
+
 struct SupabaseProjectsService: ProjectsService {
     let client: SupabaseClient
+    let session: any SessionProviding
 
     // MARK: ProjectsService
 
@@ -39,13 +54,22 @@ struct SupabaseProjectsService: ProjectsService {
     /// &order=updated_at.desc.nullslast` — RLS-scoped, most-recent first
     /// (reference: ProjectsAPIClient.listProjects orders updated_at.desc).
     func listProjects() async throws -> [FieldProject] {
+        guard let owner = await session.ownerIdentity else {
+            throw ProjectsOwnerError.unavailable
+        }
+
         let rows: [ProjectRow] = try await client
             .from("projects")
             .select("id, name, status, current_phase, updated_at, "
                 + "client:profiles!projects_client_id_fkey(full_name, display_name)")
+            .eq("studio_id", value: owner.workspaceID)
             .order("updated_at", ascending: false)
             .execute()
             .value
+
+        guard await session.ownerIdentity == owner else {
+            throw ProjectsOwnerError.changed
+        }
         return rows.map { $0.field }
     }
 
@@ -53,27 +77,41 @@ struct SupabaseProjectsService: ProjectsService {
     /// project row is fetched first (the rooms query needs its `client_id`);
     /// the four collections then load in parallel.
     func projectDetail(id: String) async throws -> FieldProjectDetail {
+        guard let owner = await session.ownerIdentity else {
+            throw ProjectsOwnerError.unavailable
+        }
+
         let row: ProjectRow = try await client
             .from("projects")
             .select("id, name, status, current_phase, updated_at, client_id, "
                 + "client:profiles!projects_client_id_fkey(full_name, display_name)")
             .eq("id", value: id)
+            .eq("studio_id", value: owner.workspaceID)
             .single()
             .execute()
             .value
+
+        guard await session.ownerIdentity == owner else {
+            throw ProjectsOwnerError.changed
+        }
 
         async let phases = fetchPhases(projectID: id)
         async let milestones = fetchMilestones(projectID: id)
         async let ffeItems = fetchFFEItems(projectID: id)
         async let rooms = fetchClientRooms(clientID: row.clientID)
 
-        return try await FieldProjectDetail(
+        let detail = try await FieldProjectDetail(
             project: row.field,
             phases: phases,
             milestones: milestones,
             ffeItems: ffeItems,
             rooms: rooms
         )
+
+        guard await session.ownerIdentity == owner else {
+            throw ProjectsOwnerError.changed
+        }
+        return detail
     }
 
     // MARK: Detail collections

@@ -10,6 +10,6 @@ import CaptureKit
 
 enum ProjectsServiceFactory {
     static func make(deps: WorkServiceDependencies) -> any ProjectsService {
-        SupabaseProjectsService(client: deps.client)
+        SupabaseProjectsService(client: deps.client, session: deps.session)
     }
 }
