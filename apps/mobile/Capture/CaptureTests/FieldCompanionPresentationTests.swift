@@ -39,6 +39,13 @@ struct FieldCompanionPresentationTests {
         #expect(progress.accessibilityValue == "In progress, Keeping this screen open")
     }
 
+    @Test func aggregateTransferProgressUsesDeterminateZeroWhenSnapshotsExist() {
+        #expect(FieldCompanionProgressKind.averaging(percentages: []) == .indeterminate)
+        #expect(FieldCompanionProgressKind.averaging(percentages: [0]) == .determinate(0))
+        #expect(FieldCompanionProgressKind.averaging(percentages: [20, 80]) == .determinate(0.5))
+        #expect(FieldCompanionProgressKind.averaging(percentages: [-10, 120]) == .determinate(0.5))
+    }
+
     @Test func stepMetadataIsClampedOrRemovedAsAPair() {
         let clamped = FieldCompanionProgressPresentation(
             kind: .determinate(0.5),

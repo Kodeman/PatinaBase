@@ -75,12 +75,12 @@ public struct StrataMarkView: View {
             if newValue && !reduceMotion {
                 startBreathing()
             } else {
-                stopBreathing()
+                stopBreathing(animated: !reduceMotion)
             }
         }
         .onChange(of: reduceMotion) { _, isReduced in
             if isReduced {
-                stopBreathing()
+                stopBreathing(animated: false)
             } else if breathing {
                 startBreathing()
             }
@@ -96,9 +96,17 @@ public struct StrataMarkView: View {
         }
     }
 
-    private func stopBreathing() {
-        withAnimation(.easeOut(duration: 0.3)) {
-            breatheScale = 1.0
+    private func stopBreathing(animated: Bool) {
+        if animated {
+            withAnimation(.easeOut(duration: 0.3)) {
+                breatheScale = 1.0
+            }
+        } else {
+            var transaction = Transaction()
+            transaction.disablesAnimations = true
+            withTransaction(transaction) {
+                breatheScale = 1.0
+            }
         }
     }
 }

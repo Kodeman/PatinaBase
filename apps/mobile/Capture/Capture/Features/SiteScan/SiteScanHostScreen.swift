@@ -80,6 +80,7 @@ final class SiteScanHostModel {
     func startScan() async {
         scanError = nil
         coverage = 0
+        coverageSnapshot = nil
         status = "Preparing scan…"
         do {
             let scan = try await siteScan.startSession()
@@ -95,6 +96,7 @@ final class SiteScanHostModel {
         eventTask?.cancel()
         eventTask = Task { [weak self] in
             for await event in scan.events {
+                guard !Task.isCancelled else { return }
                 guard let self else { return }
                 switch event {
                 case .coverage(let value): self.coverage = value
@@ -142,6 +144,14 @@ final class SiteScanHostModel {
     }
 
     func retake() {
+        eventTask?.cancel()
+        session?.cancel()
+        session = nil
+        coverage = 0
+        coverageSnapshot = nil
+        status = "Preparing scan…"
+        scanError = nil
+        isFinishingScan = false
         step = .scanning
         Task { await startScan() }
     }
@@ -177,6 +187,9 @@ struct SiteScanHostScreen: View {
 
     var body: some View {
         content
+            .safeAreaInset(edge: .top, spacing: 0) {
+                companionSurface
+            }
             .task {
                 container.analytics.screen(CaptureScreenID.f2SiteScan.rawValue)
                 reportScanProgress()
@@ -197,6 +210,7 @@ struct SiteScanHostScreen: View {
                 }
             }
             .onChange(of: model.coverage) { _, _ in reportScanProgress() }
+            .onChange(of: model.status) { _, _ in reportScanProgress() }
             .onChange(of: model.scanError) { _, _ in reportScanProgress() }
             .navigationBarBackButtonHidden(true)
             .onDisappear { model.cancelScan() }
@@ -206,15 +220,20 @@ struct SiteScanHostScreen: View {
         switch model.step {
         case .scanning:
             SiteScanScanStep(model: model,
-                             companion: container.companion,
                              analytics: container.analytics,
                              onCancel: {
                                  model.cancelScan()
                                  coordinator.goBack()
+                             },
+                             onFinish: {
+                                 container.companion.send(.communicate(.init(
+                                     title: "Add reference points",
+                                     detail: "A few measured spans help the room stay accurate."
+                                 )))
+                                 model.beginAnchoring()
                              })
         case .anchoring:
             SiteScanAnchorStep(model: model,
-                               companion: container.companion,
                                analytics: container.analytics,
                                onDone: {
                                    guard model.beginFinishingScan() else { return }
@@ -228,7 +247,7 @@ struct SiteScanHostScreen: View {
                                })
         case .review(let result):
             SiteScanReviewStep(
-                result: result, model: model, companion: container.companion,
+                result: result, model: model,
                 analytics: container.analytics,
                 onRetake: {
                     model.retake()
@@ -256,7 +275,51 @@ struct SiteScanHostScreen: View {
     /// deep-link into `.siteScan` — the upload step then resolves it lazily).
     private var uploadProjectName: String? { handoffProjectName }
 
+    private var companionSurface: some View {
+        FieldCompanionHearthView(
+            presentation: container.companion.presentation,
+            onOpen: openCompanion,
+            onDismiss: { container.companion.send(.dismiss) }
+        )
+        .padding(.top, 8)
+        .padding(.bottom, 6)
+        .zIndex(1)
+    }
+
+    private func openCompanion() {
+        switch model.step {
+        case .scanning:
+            reportScanProgress()
+        case .anchoring:
+            container.companion.send(.communicate(.init(
+                title: "Add reference points",
+                detail: "A few measured spans help the room stay accurate."
+            )))
+        case .review:
+            container.companion.send(.communicate(.init(
+                title: "Review this scan",
+                detail: "Confirm the room name and captured artifacts before continuing."
+            )))
+        case .upload:
+            container.companion.send(.communicate(.init(
+                title: "Your scan stays safe",
+                detail: "Its transfer status remains visible below, and the original stays on this device until confirmed."
+            )))
+        }
+    }
+
     private func reportScanProgress() {
+        switch model.step {
+        case .review, .upload:
+            return
+        case .anchoring where model.scanError == nil:
+            // Ignore late coverage/status events from the cancelled scan stream
+            // so they cannot replace the anchor or build message.
+            return
+        case .scanning, .anchoring:
+            break
+        }
+
         if let scanError = model.scanError {
             container.companion.send(.communicate(.init(
                 title: "The scan needs a moment",
@@ -278,32 +341,19 @@ struct SiteScanHostScreen: View {
 
 struct SiteScanScanStep: View {
     let model: SiteScanHostModel
-    let companion: FieldCompanionController
     let analytics: any CaptureAnalytics
     let onCancel: () -> Void
+    let onFinish: () -> Void
+
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
 
     var body: some View {
         ZStack {
             scanSurface.ignoresSafeArea()
-            VStack(spacing: 0) {
-                SiteScanCoverageMeter(coverage: model.coverage, status: model.status)
-                    .padding(.horizontal, 18)
-                    .padding(.top, 8)
-                if let snapshot = model.coverageSnapshot {
-                    SiteScanCoachOverlay(snapshot: snapshot)
-                        .padding(.horizontal, 18)
-                        .padding(.top, 10)
-                }
-                FieldCompanionHearthView(
-                    presentation: companion.presentation,
-                    onDismiss: { companion.send(.dismiss) }
-                )
-                .padding(.top, 10)
-                Spacer()
-                SiteScanContextControls(model: model.contextModel)   // item 7 — photo/voice → Inbox
-                    .padding(.bottom, 8)
-                if let scanError = model.scanError { errorBanner(scanError) }
-                controls
+            if dynamicTypeSize.isAccessibilitySize {
+                accessibilityChrome
+            } else {
+                standardChrome
             }
         }
         .statusBarHidden(true)
@@ -325,26 +375,78 @@ struct SiteScanScanStep: View {
         #endif
     }
 
-    private var controls: some View {
-        HStack(spacing: 12) {
-            SiteScanSecondaryButton(title: "Cancel", systemImage: "xmark", tint: CaptureColor.error) {
-                analytics.event("siteScan.cancel")
-                onCancel()
+    private var standardChrome: some View {
+        VStack(spacing: 0) {
+            scanReadout
+            Spacer()
+            SiteScanContextControls(model: model.contextModel)   // item 7 — photo/voice → Inbox
+                .padding(.bottom, 8)
+            if let scanError = model.scanError { errorBanner(scanError) }
+            controls
+        }
+    }
+
+    private var accessibilityChrome: some View {
+        ScrollView {
+            VStack(spacing: 12) {
+                scanReadout
+                SiteScanContextControls(model: model.contextModel)
+                if let scanError = model.scanError { errorBanner(scanError) }
             }
-            SiteScanPrimaryButton(title: "Finish", systemImage: "checkmark") {
-                analytics.event("siteScan.finish")
-                companion.send(.communicate(.init(
-                    title: "Add reference points",
-                    detail: "A few measured spans help the room stay accurate."
-                )))
-                model.beginAnchoring()          // → typed anchor entry (item 6)
+            .padding(.bottom, 12)
+        }
+        .scrollIndicators(.hidden)
+        .safeAreaInset(edge: .bottom, spacing: 0) {
+            controls
+        }
+    }
+
+    private var scanReadout: some View {
+        VStack(spacing: 0) {
+            SiteScanCoverageMeter(coverage: model.coverage, status: model.status)
+                .padding(.horizontal, 18)
+                .padding(.top, 8)
+            if let snapshot = model.coverageSnapshot {
+                SiteScanCoachOverlay(snapshot: snapshot)
+                    .padding(.horizontal, 18)
+                    .padding(.top, 10)
             }
-            .disabled(model.scanError != nil)
+        }
+    }
+
+    @ViewBuilder private var controls: some View {
+        Group {
+            if dynamicTypeSize.isAccessibilitySize {
+                VStack(spacing: 8) {
+                    finishButton
+                    cancelButton
+                }
+            } else {
+                HStack(spacing: 12) {
+                    cancelButton
+                    finishButton
+                }
+            }
         }
         .padding(.horizontal, 18)
         .padding(.top, 12)
         .padding(.bottom, 14)
         .background(.ultraThinMaterial)
+    }
+
+    private var cancelButton: some View {
+        SiteScanSecondaryButton(title: "Cancel", systemImage: "xmark", tint: CaptureColor.error) {
+            analytics.event("siteScan.cancel")
+            onCancel()
+        }
+    }
+
+    private var finishButton: some View {
+        SiteScanPrimaryButton(title: "Finish", systemImage: "checkmark") {
+            analytics.event("siteScan.finish")
+            onFinish()          // → typed anchor entry (item 6)
+        }
+        .disabled(model.scanError != nil)
     }
 
     private func errorBanner(_ message: String) -> some View {
