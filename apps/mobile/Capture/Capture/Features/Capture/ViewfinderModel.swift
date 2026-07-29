@@ -145,7 +145,10 @@ final class ViewfinderModel {
 
     func openWork() {
         analytics.event("work.open", ["from": "viewfinder"])
-        coordinator.navigate(to: .work)
+        // Release AV/AR resources before the realm transition; onDisappear
+        // repeats stop() defensively for every other Work entry path.
+        stop()
+        coordinator.switchRealm(.work)
     }
 
     // MARK: Shutter press → single tap vs. multi-shot hold

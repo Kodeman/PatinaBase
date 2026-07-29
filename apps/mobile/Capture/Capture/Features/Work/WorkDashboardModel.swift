@@ -1,19 +1,13 @@
 //  WorkDashboardModel.swift
-//  Capture · Wave W (Work dashboard)
+//  Capture · Option B Work realm
 //
-//  W1 state. Work has no service of its own — it composes the four frozen
-//  read services (projects, leads, decisions, messaging) from AppContainer
-//  into one per-section-loaded model. Each section tracks its own state so a
-//  failure in one (e.g. the network drops mid-fetch) never blocks or blanks
-//  the others, and a retry only re-runs that one section.
+//  Work composes existing list seams and local CaptureStore state. Every
+//  source loads independently: available attention stays visible when another
+//  source fails, and no detail/N+1 fetches are used.
 
 import Foundation
 import CaptureKit
 
-/// Independent load state for one dashboard section. `.loaded` is only
-/// reached with a non-empty collection — a successful-but-empty fetch is
-/// `.empty` so the screen can render a designed empty state instead of an
-/// empty list under a header.
 enum WorkSectionState<Element> {
     case loading
     case loaded([Element])
@@ -22,13 +16,50 @@ enum WorkSectionState<Element> {
 }
 
 extension WorkSectionState {
-    /// True once this section has real content on screen — used to decide
-    /// whether a (re)load should show the skeleton again (no, it would flash
-    /// on a pull-to-refresh) or fetch quietly behind the existing rows.
     var hasContent: Bool {
         if case .loaded = self { return true }
         return false
     }
+
+    var items: [Element] {
+        if case .loaded(let items) = self { return items }
+        return []
+    }
+
+    var count: Int? {
+        switch self {
+        case .loaded(let items): items.count
+        case .empty: 0
+        case .loading, .error: nil
+        }
+    }
+
+    var isLoading: Bool {
+        if case .loading = self { return true }
+        return false
+    }
+
+    var errorMessage: String? {
+        if case .error(let message) = self { return message }
+        return nil
+    }
+}
+
+enum WorkDataSource: String, CaseIterable, Identifiable {
+    case projects
+    case leads
+    case decisions
+    case messages
+    case receiving
+
+    var id: String { rawValue }
+    var label: String { rawValue.capitalized }
+}
+
+struct WorkLoadIssue: Identifiable {
+    let source: WorkDataSource
+    let message: String
+    var id: WorkDataSource { source }
 }
 
 @Observable
@@ -38,27 +69,72 @@ final class WorkDashboardModel {
     private let leadsService: any LeadsService
     private let decisionsService: any DecisionsReadService
     private let messagingService: any MessagingService
+    private let receivingService: any ReceivingService
+    private let store: CaptureStore
 
     var projects: WorkSectionState<FieldProject> = .loading
     var leads: WorkSectionState<FieldLead> = .loading
     var decisions: WorkSectionState<FieldDecision> = .loading
     var threads: WorkSectionState<FieldThread> = .loading
+    var arrivingPOs: WorkSectionState<FieldArrivingPO> = .loading
+    private(set) var captures: [FieldCaptureActivity] = []
 
     init(container: AppContainer) {
-        self.projectsService = container.projects
-        self.leadsService = container.leads
-        self.decisionsService = container.decisions
-        self.messagingService = container.messaging
+        projectsService = container.projects
+        leadsService = container.leads
+        decisionsService = container.decisions
+        messagingService = container.messaging
+        receivingService = container.receiving
+        store = container.store
+        refreshLocalCaptures()
     }
 
-    /// Initial load + pull-to-refresh: all four sections concurrently, each
-    /// keeping its own success/failure independent of the others.
+    var attention: FieldAttentionSnapshot {
+        FieldAttentionBuilder.build(
+            projects: projects.items,
+            leads: leads.items,
+            decisions: decisions.items,
+            threads: threads.items,
+            arrivingPOs: arrivingPOs.items,
+            captures: captures
+        )
+    }
+
+    var hasLoadingSources: Bool {
+        projects.isLoading || leads.isLoading || decisions.isLoading
+            || threads.isLoading || arrivingPOs.isLoading
+    }
+
+    var loadIssues: [WorkLoadIssue] {
+        [
+            projects.errorMessage.map { WorkLoadIssue(source: .projects, message: $0) },
+            leads.errorMessage.map { WorkLoadIssue(source: .leads, message: $0) },
+            decisions.errorMessage.map { WorkLoadIssue(source: .decisions, message: $0) },
+            threads.errorMessage.map { WorkLoadIssue(source: .messages, message: $0) },
+            arrivingPOs.errorMessage.map { WorkLoadIssue(source: .receiving, message: $0) }
+        ].compactMap { $0 }
+    }
+
+    /// Initial load + pull-to-refresh. These are the five existing list calls,
+    /// run concurrently; local capture activity is a single store read.
     func loadAll() async {
-        async let p = loadProjects()
-        async let l = loadLeads()
-        async let d = loadDecisions()
-        async let m = loadThreads()
-        _ = await (p, l, d, m)
+        refreshLocalCaptures()
+        async let p: Void = loadProjects()
+        async let l: Void = loadLeads()
+        async let d: Void = loadDecisions()
+        async let m: Void = loadThreads()
+        async let r: Void = loadReceiving()
+        _ = await (p, l, d, m, r)
+    }
+
+    func retry(_ source: WorkDataSource) async {
+        switch source {
+        case .projects: await loadProjects()
+        case .leads: await loadLeads()
+        case .decisions: await loadDecisions()
+        case .messages: await loadThreads()
+        case .receiving: await loadReceiving()
+        }
     }
 
     func loadProjects() async {
@@ -67,7 +143,7 @@ final class WorkDashboardModel {
             let items = try await projectsService.listProjects()
             projects = items.isEmpty ? .empty : .loaded(items)
         } catch {
-            projects = .error("Couldn't load projects")
+            projects = .error("Projects couldn’t load")
         }
     }
 
@@ -77,7 +153,7 @@ final class WorkDashboardModel {
             let items = try await leadsService.listOpenLeads()
             leads = items.isEmpty ? .empty : .loaded(items)
         } catch {
-            leads = .error("Couldn't load leads")
+            leads = .error("Leads couldn’t load")
         }
     }
 
@@ -87,7 +163,7 @@ final class WorkDashboardModel {
             let items = try await decisionsService.listPending()
             decisions = items.isEmpty ? .empty : .loaded(items)
         } catch {
-            decisions = .error("Couldn't load decisions")
+            decisions = .error("Decisions couldn’t load")
         }
     }
 
@@ -97,7 +173,29 @@ final class WorkDashboardModel {
             let items = try await messagingService.listThreads()
             threads = items.isEmpty ? .empty : .loaded(items)
         } catch {
-            threads = .error("Couldn't load messages")
+            threads = .error("Messages couldn’t load")
+        }
+    }
+
+    func loadReceiving() async {
+        if !arrivingPOs.hasContent { arrivingPOs = .loading }
+        do {
+            let items = try await receivingService.arrivingPOs()
+            arrivingPOs = items.isEmpty ? .empty : .loaded(items)
+        } catch {
+            arrivingPOs = .error("Receiving couldn’t load")
+        }
+    }
+
+    private func refreshLocalCaptures() {
+        captures = store.session().map {
+            FieldCaptureActivity(
+                id: $0.id,
+                title: $0.title,
+                status: $0.status,
+                destination: $0.destination,
+                updatedAt: $0.updatedAt
+            )
         }
     }
 }

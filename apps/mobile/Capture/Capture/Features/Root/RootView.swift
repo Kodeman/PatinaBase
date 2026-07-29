@@ -1,10 +1,8 @@
 //  RootView.swift
 //  Capture
 //
-//  The app shell: a NavigationStack + sheet presentation driven by
-//  CaptureCoordinator, rendering registered screens through RouteRegistry.
-//  The viewfinder is the home; everything else is one gesture (or deep link)
-//  away. INTEGRATION OWNER edits this file only.
+//  The app shell: Camera and Work are peer realms with independent
+//  NavigationStacks, both driven by CaptureCoordinator and RouteRegistry.
 
 import SwiftUI
 import CaptureKit
@@ -29,12 +27,7 @@ struct RootView: View {
 
     var body: some View {
         @Bindable var coord = coordinator
-        NavigationStack(path: $coord.path) {
-            rootContent
-                .navigationDestination(for: CaptureRoute.self) { route in
-                    RouteRegistry.shared.view(for: route)
-                }
-        }
+        realmShell
         .environment(coordinator)
         .sheet(item: $coord.sheet) { sheet in
             RouteRegistry.shared.view(for: sheet)
@@ -95,6 +88,27 @@ struct RootView: View {
         .overlay(alignment: .top) { portalLoginToast }
     }
 
+    @ViewBuilder private var realmShell: some View {
+        switch coordinator.activeRealm {
+        case .camera:
+            realmNavigation(.camera)
+        case .work:
+            realmNavigation(.work)
+        }
+    }
+
+    private func realmNavigation(_ realm: FieldRealm) -> some View {
+        NavigationStack(path: Binding(
+            get: { coordinator.path(for: realm) },
+            set: { coordinator.replacePath($0, for: realm) }
+        )) {
+            rootContent(for: realm)
+                .navigationDestination(for: CaptureRoute.self) { route in
+                    RouteRegistry.shared.view(for: route)
+                }
+        }
+    }
+
     /// Transient banner for portal-QR deep-link sign-in outcomes.
     @ViewBuilder private var portalLoginToast: some View {
         if let toast = portalLogin.toast {
@@ -123,7 +137,7 @@ struct RootView: View {
         }
     }
 
-    @ViewBuilder private var rootContent: some View {
+    @ViewBuilder private func rootContent(for realm: FieldRealm) -> some View {
         if let accessToken = coordinator.guestAccessToken {
             GuestSiteRequestRootView(
                 accessToken: accessToken,
@@ -151,9 +165,11 @@ struct RootView: View {
             )
         case .ready:
             // `registered` is read first so this recomputes once registration
-            // runs; the placeholder is the pre-registration / fallback state.
-            if registered, RouteRegistry.shared.hasRoute(.viewfinder) {
-                RouteRegistry.shared.view(for: .viewfinder)
+            // runs. Each realm owns a stable root; crossing between them replaces
+            // the live camera hierarchy, triggering ViewfinderScreen's stop().
+            let rootRoute: CaptureRoute = realm == .camera ? .viewfinder : .work
+            if registered, RouteRegistry.shared.hasRoute(rootRoute) {
+                RouteRegistry.shared.view(for: rootRoute)
             } else {
                 ViewfinderPlaceholder()
             }

@@ -12,7 +12,6 @@ import CaptureKit
 @MainActor
 public final class CaptureCoordinator: CaptureCoordinating {
     public var phase: CapturePhase
-    public var path: [CaptureRoute] = []
     public var sheet: CaptureSheet?
     /// When set (0=O1…3=O4), RootView shows that onboarding step over the app
     /// (phase-based flow + the `-CaptureScreen oN.*` verification harness).
@@ -23,6 +22,9 @@ public final class CaptureCoordinator: CaptureCoordinating {
     public var guestAccessToken: String?
     private var guestRequestID: String?
     private let guestAccessSession: GuestAccessSession
+    private var realmHistory = FieldRealmHistory()
+
+    public var activeRealm: FieldRealm { realmHistory.activeRealm }
 
     public init(phase: CapturePhase = .ready,
                 guestAccessStore: (any GuestAccessTokenStoring)? = nil) {
@@ -31,16 +33,45 @@ public final class CaptureCoordinator: CaptureCoordinating {
             store: guestAccessStore ?? KeychainGuestAccessTokenStore())
         self.guestAccessSession = session
         self.guestAccessToken = session.restore()
+        if guestAccessToken != nil {
+            realmHistory.activate(.work)
+        }
     }
 
-    public func navigate(to route: CaptureRoute) { path.append(route) }
+    public func path(for realm: FieldRealm) -> [CaptureRoute] {
+        realmHistory.path(for: realm)
+    }
+
+    public func replacePath(_ path: [CaptureRoute], for realm: FieldRealm) {
+        realmHistory.replacePath(path, for: realm)
+    }
+
+    /// Cross the Camera ↔ Work boundary without flattening either realm's
+    /// navigation history. Dismissing transient chrome keeps sheets from
+    /// visually leaking across the boundary.
+    public func switchRealm(_ realm: FieldRealm, reset: Bool = false) {
+        dismissSheet()
+        realmHistory.activate(realm)
+        if reset { realmHistory.popToRoot() }
+    }
+
+    public func navigate(to route: CaptureRoute) {
+        // `.work` remains a compatibility intent for the existing viewfinder
+        // and Account callers. Work is now a root realm, never a pushed screen.
+        if route == .work {
+            switchRealm(.work)
+        } else {
+            realmHistory.push(route)
+        }
+    }
+
     public func present(_ sheet: CaptureSheet) { self.sheet = sheet }
     public func dismissSheet() { sheet = nil }
-    public func goBack() { if !path.isEmpty { path.removeLast() } }
-    public func popToRoot() { path.removeAll() }
+    public func goBack() { realmHistory.goBack() }
+    public func popToRoot() { realmHistory.popToRoot() }
+
     public func enterGuestRequest(accessToken: String) {
-        dismissSheet()
-        popToRoot()
+        switchRealm(.work, reset: true)
         guestAccessSession.enter(accessToken)
         guestAccessToken = accessToken
         guestRequestID = nil
