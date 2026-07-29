@@ -1423,3 +1423,18 @@ export type { PhaseRelinkUpdate, RipplePendingEditInput, SerializedRippleEdit } 
 // rows + their geometry elements, one query per scan set.
 export { useRoomRoster } from './use-room-roster';
 export type { RoomRosterScan, RoomRosterScanRow, RoomRosterGeometryElementRow } from './use-room-roster';
+
+// Field Capture P2 (Layer 3) — Refine's published artifacts: the delivery
+// record in `room_files.present.refine_engine` plus the documents it points
+// at. Gate at the QUERY level (`enabled: false`) so a flag-off costs zero
+// database and zero Storage calls.
+export {
+  useScanRefineArtifacts,
+  parseScanRefineRecord,
+  DEFAULT_REFINE_ARTIFACT_NAMES,
+} from './use-scan-refine-artifacts';
+export type {
+  ScanRefineArtifacts,
+  ScanRefineArtifactSet,
+  UseScanRefineArtifactsOptions,
+} from './use-scan-refine-artifacts';

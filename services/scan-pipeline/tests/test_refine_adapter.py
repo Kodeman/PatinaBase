@@ -1760,3 +1760,197 @@ def test_subprocess_deadline_is_shared_across_commands(monkeypatch, tmp_path):
     )
 
     assert timeouts == pytest.approx([140.0, 60.0])
+
+
+# ═══════════════════════════════════════════════════════════════════════════
+# CROSS-LANGUAGE POSE-VECTOR PIN (Field Capture P2, Layer 3 §3.5)
+#
+# The designer portal reads Refine's published poses and converts them back
+# into the ARKit world frame to draw them against the room's plan geometry.
+# That conversion lives in TypeScript, so the two languages now hold the SAME
+# basis convention in two places -- and no refine artifact has ever been
+# written to production Storage, so there is no live document that would catch
+# them drifting apart.
+#
+# These eight vectors are the pin.  The identical table is frozen at
+#     apps/designer-portal/src/lib/room-view/__fixtures__/refine-pose-vectors.ts
+# whose header names THIS test as its generator.  This side asserts the table
+# still equals what `arkit_c2w_to_colmap_w2c` produces; the portal side asserts
+# `colmapPlanPose` on the same table agrees with `photoPlanPose` on the same
+# `cameraTransform`.  A convention change on either side turns exactly one of
+# the two suites red.
+#
+# The tolerance is 1e-12 rather than exact equality: the values are shortest
+# round-trip decimal reprs of IEEE-754 doubles, so a last-ulp difference across
+# platforms must not be reported as a convention drift, while any real drift is
+# many orders of magnitude larger.
+# ═══════════════════════════════════════════════════════════════════════════
+
+CROSS_LANGUAGE_POSE_VECTORS = (
+    {
+        "label": "identity at origin",
+        "cameraTransform": (1.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0, 1.0),
+        "cameraCenterMeters": (0.0, 0.0, 0.0),
+        "qvecHamilton": (0.0, 0.7071067811865476, 0.7071067811865475, 0.0),
+        "rotation": (
+            (0.0, 1.0, 0.0),
+            (1.0, 0.0, 0.0),
+            (0.0, 0.0, -1.0),
+        ),
+    },
+    {
+        "label": "yaw +30 about world +Y",
+        "cameraTransform": (0.8660254037844387, 0.0, 0.49999999999999994, 1.25, 0.0, 1.0, 0.0, 1.6, -0.49999999999999994, 0.0, 0.8660254037844387, -0.4, 0.0, 0.0, 0.0, 1.0),
+        "cameraCenterMeters": (1.25, 1.6, -0.4),
+        "qvecHamilton": (0.18301270189221927, 0.6830127018922194, 0.6830127018922193, -0.18301270189221927),
+        "rotation": (
+            (0.0, 1.0, 0.0),
+            (0.8660254037844387, 0.0, -0.49999999999999994),
+            (-0.49999999999999994, 0.0, -0.8660254037844387),
+        ),
+    },
+    {
+        "label": "yaw -115 about world +Y",
+        "cameraTransform": (-0.42261826174069933, 0.0, -0.90630778703665, -2.0, 0.0, 1.0, 0.0, 1.55, 0.90630778703665, 0.0, -0.42261826174069933, 3.5, 0.0, 0.0, 0.0, 1.0),
+        "cameraCenterMeters": (-2.0, 1.55, 3.5),
+        "qvecHamilton": (0.5963678105290181, -0.3799281965909153, -0.3799281965909153, -0.5963678105290181),
+        "rotation": (
+            (0.0, 1.0, 0.0),
+            (-0.42261826174069933, 0.0, 0.90630778703665),
+            (0.90630778703665, 0.0, 0.42261826174069933),
+        ),
+    },
+    {
+        "label": "pitch +20 about world +X",
+        "cameraTransform": (1.0, 0.0, 0.0, 0.5, 0.0, 0.9396926207859084, -0.3420201433256687, 1.7, 0.0, 0.3420201433256687, 0.9396926207859084, 0.5, 0.0, 0.0, 0.0, 1.0),
+        "cameraCenterMeters": (0.5, 1.7, 0.5),
+        "qvecHamilton": (0.12278780396897283, 0.696364240320019, 0.6963642403200189, 0.12278780396897283),
+        "rotation": (
+            (0.0, 0.9396926207859084, 0.3420201433256687),
+            (1.0, 0.0, 0.0),
+            (0.0, 0.3420201433256687, -0.9396926207859084),
+        ),
+    },
+    {
+        "label": "roll +45 about world +Z",
+        "cameraTransform": (0.7071067811865476, -0.7071067811865475, 0.0, -1.1, 0.7071067811865475, 0.7071067811865476, 0.0, 1.45, 0.0, 0.0, 1.0, -2.2, 0.0, 0.0, 0.0, 1.0),
+        "cameraCenterMeters": (-1.1, 1.45, -2.2),
+        "qvecHamilton": (0.0, 0.3826834323650898, 0.9238795325112867, 0.0),
+        "rotation": (
+            (-0.7071067811865475, 0.7071067811865476, 0.0),
+            (0.7071067811865476, 0.7071067811865475, 0.0),
+            (0.0, 0.0, -1.0),
+        ),
+    },
+    {
+        "label": "77 about (1,2,3)",
+        "cameraTransform": (0.28031169331930317, -0.6705127828394977, 0.6869046241198975, 3.33, 0.8919553387412507, 0.44639361024561786, 0.07175248025583797, 1.62, -0.3547407902672681, 0.5925751874494207, 0.723196805122809, -0.77, 0.0, 0.0, 0.0, 1.0),
+        "cameraCenterMeters": (3.33, 1.62, -0.77),
+        "qvecHamilton": (0.3529326248659027, 0.20045490985634443, 0.9063201595881498, -0.11764420828863424),
+        "rotation": (
+            (-0.6705127828394977, 0.44639361024561786, 0.5925751874494207),
+            (0.28031169331930317, 0.8919553387412507, -0.3547407902672681),
+            (-0.6869046241198975, -0.07175248025583797, -0.723196805122809),
+        ),
+    },
+    {
+        "label": "143 about (-2,1,0.5)",
+        "cameraTransform": (0.5717534499887399, -0.8165212846825813, -0.07994363067987847, 0.0, -0.5538676753534515, -0.45603827003828473, 0.6966058386627636, 1.5, -0.6052508493381379, -0.35400859865375534, -0.7129862000450409, 4.2, 0.0, 0.0, 0.0, 1.0),
+        "cameraCenterMeters": (0.0, 1.5, 4.2),
+        "qvecHamilton": (0.2926590336932247, -0.0780387573994957, -0.37069779109272044, 0.8779771010796742),
+        "rotation": (
+            (-0.8165212846825813, -0.45603827003828473, -0.35400859865375534),
+            (0.5717534499887399, -0.5538676753534515, -0.6052508493381379),
+            (0.07994363067987847, -0.6966058386627636, 0.7129862000450409),
+        ),
+    },
+    {
+        "label": "179 about (0.3,-0.9,0.2)",
+        "cameraTransform": (-0.808372915832907, -0.5780244945300044, 0.11144914836434075, -4.4, -0.5708241814109012, 0.7234253187549671, -0.38834979348629584, 1.38, 0.14385055740030492, -0.37754932380764117, -0.9147477932348427, 0.9, 0.0, 0.0, 0.0, 1.0),
+        "cameraCenterMeters": (-4.4, 1.38, 0.9),
+        "qvecHamilton": (0.43757831221792093, 0.1396888449788083, -0.15203002983313893, -0.8751566244358419),
+        "rotation": (
+            (-0.5780244945300044, 0.7234253187549671, -0.37754932380764117),
+            (-0.808372915832907, -0.5708241814109012, 0.14385055740030492),
+            (-0.11144914836434075, 0.38834979348629584, 0.9147477932348427),
+        ),
+    },
+)
+
+#: The portal's copy of the table lives at this path; the assertion below
+#: names it so a reader of either file can find the other in one grep.
+CROSS_LANGUAGE_POSE_FIXTURE_PATH = (
+    "apps/designer-portal/src/lib/room-view/__fixtures__/refine-pose-vectors.ts"
+)
+
+
+def test_cross_language_pose_vector_pin_matches_the_frozen_portal_fixture():
+    assert len(CROSS_LANGUAGE_POSE_VECTORS) == 8
+
+    for case in CROSS_LANGUAGE_POSE_VECTORS:
+        label = case["label"]
+        transform = list(case["cameraTransform"])
+        pose = arkit_c2w_to_colmap_w2c(transform)
+
+        # The centre the portal reads straight out of the artifact.
+        assert colmap_w2c_to_arkit_c2w(pose)[3::4][:3] == pytest.approx(
+            case["cameraCenterMeters"], abs=1e-12
+        ), label
+        assert pose.qvec == pytest.approx(case["qvecHamilton"], abs=1e-12), label
+        assert _flatten(pose.rotation) == pytest.approx(
+            _flatten(case["rotation"]), abs=1e-12
+        ), label
+
+
+def test_the_pinned_vectors_carry_the_third_row_forward_identity():
+    """The one fact the portal's conversion turns on, asserted on both sides.
+
+    ``optical_axis`` reads the third ROW of ``cam_from_world``; the portal's
+    ``forwardFromW2cRotation`` reads the same row, and its
+    ``forwardFromW2cQuat`` reads the third row of the quaternion's rotation.
+    Here both are checked against the quantity they are supposed to equal --
+    minus the third COLUMN of the ARKit camera-to-world rotation, i.e. the
+    direction an ARKit camera (which looks down its own -Z) actually points.
+    """
+
+    for case in CROSS_LANGUAGE_POSE_VECTORS:
+        label = case["label"]
+        transform = case["cameraTransform"]
+        arkit_forward = (-transform[2], -transform[6], -transform[10])
+
+        pose = arkit_c2w_to_colmap_w2c(list(transform))
+        assert adapter.optical_axis(pose.rotation) == pytest.approx(
+            arkit_forward, abs=1e-12
+        ), label
+
+        # And the quaternion's third row -- the formula the portal uses when it
+        # only has `pose-deltas-v1.json`, which publishes no rotation matrices.
+        w, x, y, z = pose.qvec
+        quaternion_forward = (
+            2.0 * (x * z - y * w),
+            2.0 * (y * z + x * w),
+            1.0 - 2.0 * (x * x + y * y),
+        )
+        assert quaternion_forward == pytest.approx(arkit_forward, abs=1e-12), label
+
+
+def test_the_conversion_constant_keeps_the_algebra_the_derivation_assumes():
+    """``A`` must stay symmetric, involutive and proper.
+
+    The third-ROW identity is derived from exactly these three properties.  A
+    future "fix" to the constant that broke any of them would leave every
+    caller compiling and every pose plausible, so it is asserted here rather
+    than trusted.
+    """
+
+    a = adapter.ARKIT_TO_RIGHT_ROTATED_COLMAP
+    identity = ((1.0, 0.0, 0.0), (0.0, 1.0, 0.0), (0.0, 0.0, 1.0))
+
+    assert _flatten(_mat_mul(a, a)) == pytest.approx(_flatten(identity))
+    assert _flatten(_transpose(a)) == pytest.approx(_flatten(a))
+    determinant = (
+        a[0][0] * (a[1][1] * a[2][2] - a[1][2] * a[2][1])
+        - a[0][1] * (a[1][0] * a[2][2] - a[1][2] * a[2][0])
+        + a[0][2] * (a[1][0] * a[2][1] - a[1][1] * a[2][0])
+    )
+    assert determinant == pytest.approx(1.0)
