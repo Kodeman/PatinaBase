@@ -53,12 +53,7 @@ struct SyncStatusScreen: View {
             guard retryRequest > 0 else { return }
             isRetrying = true
             defer { isRetrying = false }
-            companion.send(.reportProgress(.init(
-                activityID: "field.sync.retry",
-                kind: .indeterminate,
-                title: "Retrying your work",
-                detail: "Everything remains safely on this device"
-            )))
+            updateCompanion()
             await sync.drain()
             guard !Task.isCancelled else { return }
             await siteScan.resumePendingUploads(retryFailures: true)
@@ -297,7 +292,32 @@ struct SyncStatusScreen: View {
     }
 
     private func updateCompanion() {
+        let captureStates = rows.map(\.transferState)
+        let scanStates = scanRows.map(\.state)
+        let states = captureStates + scanStates
+
         if isRetrying {
+            let uploading = states.filter { $0.phase == .uploading }
+            if snapshot.uploading > 0 || !uploading.isEmpty {
+                companion.send(.reportProgress(.init(
+                    activityID: "field.sync.retry",
+                    kind: .averaging(percentages: uploading.map(\.progress)),
+                    title: "Sending your work",
+                    detail: transferCountDetail
+                )))
+                return
+            }
+
+            if states.contains(where: { $0.phase == .awaitingConfirmation }) {
+                companion.send(.reportProgress(.init(
+                    activityID: "field.sync.retry",
+                    kind: .indeterminate,
+                    title: "Confirming your work",
+                    detail: transferCountDetail
+                )))
+                return
+            }
+
             companion.send(.reportProgress(.init(
                 activityID: "field.sync.retry",
                 kind: .indeterminate,
@@ -306,10 +326,6 @@ struct SyncStatusScreen: View {
             )))
             return
         }
-
-        let captureStates = rows.map(\.transferState)
-        let scanStates = scanRows.map(\.state)
-        let states = captureStates + scanStates
 
         if states.contains(where: { $0.phase == .rejected }) {
             companion.send(.communicate(.init(
@@ -340,21 +356,9 @@ struct SyncStatusScreen: View {
 
         let uploading = states.filter { $0.phase == .uploading }
         if snapshot.uploading > 0 || !uploading.isEmpty {
-            let progressValues = uploading
-                .map(\.progress)
-                .filter { $0 > 0 }
-            let kind: FieldCompanionProgressKind
-            if progressValues.isEmpty {
-                kind = .indeterminate
-            } else {
-                let average = Double(progressValues.reduce(0, +))
-                    / Double(progressValues.count)
-                    / 100
-                kind = .determinate(average)
-            }
             companion.send(.reportProgress(.init(
                 activityID: "field.sync",
-                kind: kind,
+                kind: .averaging(percentages: uploading.map(\.progress)),
                 title: "Sending your work",
                 detail: transferCountDetail
             )))

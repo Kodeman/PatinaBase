@@ -54,6 +54,17 @@ public struct FieldCompanionCollapsedPresentation: Equatable, Sendable {
 public enum FieldCompanionProgressKind: Equatable, Sendable {
     case determinate(Double)
     case indeterminate
+
+    /// Builds honest aggregate progress when transfer snapshots expose
+    /// per-item percentages. An empty collection means the host knows work is
+    /// active, but not how far along it is.
+    public static func averaging(percentages: [Int]) -> Self {
+        guard !percentages.isEmpty else { return .indeterminate }
+        let total = percentages.reduce(0) { partial, percentage in
+            partial + min(max(percentage, 0), 100)
+        }
+        return .determinate(Double(total) / Double(percentages.count) / 100)
+    }
 }
 
 public struct FieldCompanionProgressPresentation: Equatable, Sendable {

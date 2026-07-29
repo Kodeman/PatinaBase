@@ -18,7 +18,6 @@ import PatinaDesignKit
 struct SiteScanReviewStep: View {
     let result: FieldScanResult
     let model: SiteScanHostModel
-    let companion: FieldCompanionController
     let analytics: any CaptureAnalytics
     let onRetake: () -> Void
     let onContinue: () -> Void
@@ -26,16 +25,6 @@ struct SiteScanReviewStep: View {
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 22) {
-                FieldCompanionHearthView(
-                    presentation: companion.presentation,
-                    onOpen: {
-                        companion.send(.communicate(.init(
-                            title: "Review this scan",
-                            detail: "Confirm the room name and captured artifacts before continuing."
-                        )))
-                    },
-                    onDismiss: { companion.send(.dismiss) }
-                )
                 header
                 if let scorecard = result.scorecard {
                     SiteScanScorecardCard(scorecard: scorecard)
@@ -195,10 +184,6 @@ struct SiteScanUploadStep: View {
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 22) {
-                FieldCompanionHearthView(
-                    presentation: container.companion.presentation,
-                    onDismiss: { container.companion.send(.dismiss) }
-                )
                 destinationSection
                 statusView
             }

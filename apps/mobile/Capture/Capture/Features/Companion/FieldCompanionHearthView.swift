@@ -11,7 +11,7 @@ import UIKit
 
 struct FieldCompanionHearthView: View {
     let presentation: FieldCompanionPresentationState
-    var onOpen: () -> Void
+    var onOpen: (() -> Void)?
     var onDismiss: () -> Void
     var onAction: (FieldCompanionAction) -> Void
 
@@ -21,7 +21,7 @@ struct FieldCompanionHearthView: View {
 
     init(
         presentation: FieldCompanionPresentationState,
-        onOpen: @escaping () -> Void = {},
+        onOpen: (() -> Void)? = nil,
         onDismiss: @escaping () -> Void = {},
         onAction: @escaping (FieldCompanionAction) -> Void = { _ in }
     ) {
@@ -115,22 +115,27 @@ private extension FieldCompanionHearthView {
 
     func collapsedView(_ content: FieldCompanionCollapsedPresentation) -> some View {
         VStack(spacing: 4) {
-            Button(action: onOpen) {
-                shell(cornerRadius: 32) {
-                    mark(frame: 64, scale: 0.8, breathing: !reduceMotion)
+            if let onOpen {
+                Button(action: onOpen) {
+                    collapsedMark
                 }
-                .frame(width: 64, height: 64)
-                .contentShape(Circle())
+                .buttonStyle(.plain)
+                .frame(minWidth: 64, minHeight: 64)
+                .accessibilityElement(children: .ignore)
+                .accessibilityLabel(Text("Patina companion"))
+                .accessibilityValue(Text(content.hint))
+                .accessibilityHint(Text("Opens the Companion."))
+                .accessibilityIdentifier("fieldCompanion.bubble")
+            } else {
+                collapsedMark
+                    .allowsHitTesting(false)
+                    .accessibilityElement(children: .ignore)
+                    .accessibilityLabel(Text("Patina companion"))
+                    .accessibilityValue(Text(content.hint))
+                    .accessibilityIdentifier("fieldCompanion.bubble")
             }
-            .buttonStyle(.plain)
-            .frame(minWidth: 64, minHeight: 64)
-            .accessibilityElement(children: .ignore)
-            .accessibilityLabel(Text("Patina companion"))
-            .accessibilityValue(Text(content.hint))
-            .accessibilityHint(Text("Opens the Companion."))
-            .accessibilityIdentifier("fieldCompanion.bubble")
 
-            if !dynamicTypeSize.isAccessibilitySize, !content.hint.isEmpty {
+            if !content.hint.isEmpty {
                 if let action = content.action {
                     Button {
                         onAction(action)
@@ -159,9 +164,20 @@ private extension FieldCompanionHearthView {
         Text(hint)
             .font(CaptureType.footnote)
             .foregroundStyle(CaptureColor.inkSoft)
-            .lineLimit(1)
+            .multilineTextAlignment(.center)
+            .lineLimit(dynamicTypeSize.isAccessibilitySize ? 3 : 2)
+            .fixedSize(horizontal: false, vertical: true)
             .padding(.horizontal, 10)
             .padding(.vertical, 4)
+            .background(.ultraThinMaterial, in: Capsule())
+    }
+
+    private var collapsedMark: some View {
+        shell(cornerRadius: 32) {
+            mark(frame: 64, scale: 0.8, breathing: !reduceMotion)
+        }
+        .frame(width: 64, height: 64)
+        .contentShape(Circle())
     }
 }
 
