@@ -408,7 +408,13 @@ public final class MockSiteScanService: SiteScanService {
     }
     public func pendingUploads() async -> [FieldScanPendingUpload] { pending }
     public func resumePendingUploads(retryFailures: Bool) async {
-        if retryFailures, !MockFailure.failUpload { pending.removeAll() }
+        guard retryFailures, !MockFailure.failUpload else { return }
+        pending.removeAll {
+            FieldScanRecoveryPolicy.canResumeWithoutReview(
+                phase: $0.state.phase,
+                retryFailures: true
+            )
+        }
     }
     public func retryPendingUpload(
         id: String

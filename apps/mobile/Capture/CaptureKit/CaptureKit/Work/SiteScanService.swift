@@ -98,6 +98,57 @@ public struct FieldScanPendingUpload: Identifiable, Sendable, Equatable {
     }
 }
 
+/// Presentation and execution rules for recovering one durable site scan.
+/// Rejected work is review-gated and is never eligible for bulk retry.
+public enum FieldScanRecoveryAction: Equatable, Sendable {
+    case none
+    case retry
+    case review
+}
+
+public enum FieldScanRecoveryPolicy {
+    public static func action(
+        for phase: CaptureTransferPhase
+    ) -> FieldScanRecoveryAction {
+        switch phase {
+        case .retryableFailure:
+            return .retry
+        case .rejected:
+            return .review
+        case .local, .queued, .uploading, .awaitingConfirmation, .complete:
+            return .none
+        }
+    }
+
+    public static func allowsIndividualRetry(
+        phase: CaptureTransferPhase,
+        reviewConfirmed: Bool
+    ) -> Bool {
+        switch phase {
+        case .retryableFailure:
+            return true
+        case .rejected:
+            return reviewConfirmed
+        case .local, .queued, .uploading, .awaitingConfirmation, .complete:
+            return false
+        }
+    }
+
+    public static func canResumeWithoutReview(
+        phase: CaptureTransferPhase,
+        retryFailures: Bool
+    ) -> Bool {
+        switch phase {
+        case .local, .queued, .uploading, .awaitingConfirmation:
+            return true
+        case .retryableFailure:
+            return retryFailures
+        case .complete, .rejected:
+            return false
+        }
+    }
+}
+
 /// A live scan session handle (F2). Returned by `SiteScanService.startSession`;
 /// the screen observes `events`, then either `finish()`es to a result or
 /// `cancel()`s. A reference type — it wraps the live AR/RoomPlan session.
