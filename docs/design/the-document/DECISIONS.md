@@ -5846,3 +5846,138 @@ rule is an open question this run cannot settle.
 *Entries add: I102 · last id = I102*
 
 *Entries add: I102 · last id = I102*
+
+### I103 · Field Capture P2 · the evidence harness; seven runs over two rooms, and what the loop comparables actually do — 2026-07-28
+
+I102 left one question open: whether the loop-rotation regression that refused
+the first real run is a property of the capture, of the candidate graph, or of
+`evaluate_refinement_evidence`. It could not be settled with one capture, and
+the numbers survived only because the refusal renders them — a run that PASSES
+prints nothing comparable. **`services/scan-pipeline/tools/refine_evidence_harness.py`**
+is the instrument for that question: it runs the composed lifecycle over a
+directory of bundles and tabulates one evidence row per run, INCLUDING for the
+runs the rule refuses.
+
+**It measures the rule; it does not touch it.** Three runtime hooks, each
+calling the original exactly once and returning its value unchanged:
+`refine_runner.evaluate_refinement_evidence` (the rule under study — the exact
+`RefinementEvidence` in, the exact verdict out), `refine_lifecycle.Composed
+ArtifactBuilder` (the child's `adapter-v2.json` and command evidence, read
+positionally with `os.pread` out of the parent's anonymous descriptors, so the
+telemetry survives the lease purge without consuming anything), and
+`require_refined_shape_changed`. `evaluate_refinement_evidence` is byte-identical
+to what I102 ran; the release under measurement,
+`/opt/patina/scan-pipeline-r121`, was confirmed byte-identical to the branch for
+all five refine modules before a number was read. Recording is separately
+guarded — a harness that threw while documenting would change the outcome of the
+run it is measuring — and the observer has no branch on the verdict, so there is
+no path by which it could turn a refusal into a pass. Both directions are
+constructed in `tests/test_refine_evidence_harness.py`, and four mutations
+(swallow the refusal, stop at the first failing bundle, put the clock in the
+determinism key, drop the row when the rule raises) each reddened it before the
+counts were read.
+
+**Two real captures existed, not one.** `004aa5b0` (49 frames) is I102's. The
+100-frame subject scan R120 ruled on — scan `a7de00f1`, the P1-certificate
+capture — is also on the host, and its transport archive is the pre-R120 flat-
+member form. It was made consumable by applying R120's own fix after the fact:
+every member re-prefixed `keyframes/`, the exact string its index already names,
+and the manifest's `keyframesArchive` row re-bound to the repacked digest. No
+image byte, pose, intrinsic or timestamp was touched, and the worker was not
+relaxed. Five further bundles are FRAME SLICES of `a7de00f1` — halves, middle,
+and the even and odd frames — because the pipeline is deterministic upstream of
+bundle adjustment, so repeating one bundle cannot vary the verified edge set and
+only a different slice of the same walk can.
+
+**SEVEN RUNS. Reprojection improved every single time; the loop comparables did
+not.**
+
+```
+bundle                frames  edges  reproj px          d%       looprot deg        d%       looptrn deg         d%       verdict
+004aa5b0 (whole)      49      4      2.015458>1.351599  -32.94   4.915408>4.930533  +0.31    17.165228>17.080197  -0.50   REFUSED
+a7de00f1 (whole)      100     43     1.899211>1.281987  -32.50   5.979739>6.012273  +0.54    25.058985>25.258783  +0.80   REFUSED
+a7de00f1 first half   50      12     1.941583>1.192916  -38.56   7.560061>7.734245  +2.30    25.689888>26.651891  +3.74   REFUSED
+a7de00f1 second half  50      25     1.872026>1.334987  -28.69   5.336552>5.267981  -1.28    27.019122>26.958782  -0.22   PASS
+a7de00f1 middle       50      15     1.895696>1.234701  -34.87   1.014703>0.831273  -18.08    2.520286>2.407587   -4.47   PASS
+a7de00f1 even frames  50      8      1.939805>1.125393  -41.98   2.598570>3.126295  +20.31    6.612081>14.156897 +114.11  REFUSED
+a7de00f1 odd frames   50      9      1.797599>1.134248  -36.90   6.318068>5.984869  -5.27    15.451312>14.857576  -3.84   PASS
+```
+
+Registration coverage was 1.0000 before and after in all seven. **Reprojection
+RMSE fell by 28.7% to 42.0% in all seven and never once regressed.** Loop
+rotation moved between -18.08% and +20.31%, four times worse and three times
+better; loop translation between -4.47% and +114.11%. **Every refusal was caused
+by a loop comparable. Not one was caused by reprojection or by coverage.**
+
+**The two interleaved samples are the sharpest pair.** Even-indexed and
+odd-indexed frames of one walk are the same room, the same device, the same
+trajectory at the same cadence, half a frame apart. Their loop-rotation BEFORE
+values are 2.598570 and 6.318068 degrees — a factor of 2.4 — and the refinement
+moves one +20.31% and the other -5.27%. One is refused and the other passes. The
+same walk's second half passes; its first half is refused. A statistic whose
+baseline varies 7.5-fold and whose direction flips between interleaved samples of
+one capture is not measuring a property of that capture's refinement.
+
+**What `loop_rotation_rmse_deg` actually is.** For each verified non-temporal
+pair it compares the relative rotation COLMAP estimated from image
+correspondences alone (`TwoViewGeometry.cam2_from_cam1`) against the relative
+rotation implied by the trajectory — the device's ARKit poses BEFORE, the
+bundle-adjusted poses AFTER — and takes the RMS over the loop set. It is a
+DISAGREEMENT between two estimates, both of which carry error, not a residual
+against ground truth. Its absolute value is ~4.9 degrees because the two-view
+side is weak here, not because the trajectory is 4.9 degrees wrong: on
+`004aa5b0` every loop baseline is between 0.25 and 0.51 m and the whole
+trajectory is 0.66 m across. Nothing in bundle adjustment optimises this
+quantity — BA minimises reprojection over the tracks and never sees a two-view
+geometry — so its direction after refinement is unforced.
+
+**Why four loop edges, answered.** Not the room, not COLMAP. The candidate graph
+offered **270** non-temporal pairs on `004aa5b0` and matching verified **four**
+of them (1.5%), while verifying 232 of 435 temporal pairs (53%). The reason is
+in `build_pair_graph`: loop candidates are selected by CAMERA CENTRE DISTANCE
+alone and never by where the camera points. On a capture whose entire trajectory
+is 0.66 m across — the operator turned in place — the median angle between the
+two optical axes of a loop candidate is **106 degrees**, **not one** of the 270
+is under 30 degrees, and only nine are under 45. A pair looking 106 degrees apart
+shares no image content and can never reach the 30-inlier floor. On the 100-frame
+walk (3.59 m extent) the median is 73 degrees, 17 candidates are under 15
+degrees, and 43 of 574 verify. The count scales with how much the capture
+revisits a place FACING THE SAME WAY, which the selection policy does not measure.
+
+**Determinism, checked rather than taken on report.** Both original bundles were
+run twice. Every BEFORE metric is bit-identical (relative drift exactly 0.0):
+feature extraction, matching, geometric verification and triangulation reproduce
+exactly. Every AFTER metric drifts at 1e-10 relative — Ceres running
+multithreaded — and because the evidence digests cover the refined points,
+`common_observation_set_sha256` and `verified_loop_set_sha256` **differ on every
+run**. The verdicts and every digit the refusal prints are identical. So "the run
+reproduces to the digit" is true and "the run reproduces" is not, and the harness
+reports those as separate claims. The drift is 4e-8 of I102's decision margin:
+the regression is not run-to-run noise.
+
+**What this does NOT establish.** Seven runs over TWO rooms, and six of the seven
+are slices of one of them — this is a characterisation of one metric on one
+device in two rooms, not a distribution. Nothing was published. No tolerance was
+proposed, no threshold moved, and `evaluate_refinement_evidence` is unchanged to
+the byte. The ruling on whether the loop comparables should carry a veto at this
+edge count, and whether a strict inequality at zero tolerance is the right test
+for a statistic with this spread, belongs to the program owner.
+
+**Posture unchanged and re-verified.** `DEFAULT_STAGES = "ingest,solve,drawings"`;
+`scan_pipeline.refine` unregistered; the raster pin exactly 1440x1920; R119's
+floors as built; `PRIMARY_EXECUTION_QUALIFIED` still False. No flag moved. The
+harness lives in `tools/`, outside the package and outside the wheel.
+
+**Verification.** macOS: **2087 passed, 16 failed, 85 skipped**, against a
+control with the two new files removed on the same interpreter showing **the
+identical 16** — all `test_install_script` and `test_packaging`, all caused by
+running under a venv outside the tree. Qualified x86_64 host: **2094 passed, 93
+failed, 1 skipped**, against a base-commit control at `d871d373` extracted to a
+sibling directory and run on the same venv (**2072 passed, 93 failed**) showing
+**the identical 93** — zero new, zero fixed, +22 passes, which is exactly the new
+test count. The 93 are 82 `test_install_script`, 8 `test_field_raster_materializer`,
+`test_packaging`, `test_refine_lifecycle`'s raster-adapter case and
+`test_validator_drift`; they are properties of running from a checkout rather
+than from `install.sh`, and the control is what proves none of them is ours.
+
+*Entries add: I103 · last id = I103*
