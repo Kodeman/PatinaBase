@@ -23,7 +23,7 @@ struct S4SavedTerminalScreen: View {
                 Circle()
                     .fill(accent.opacity(0.12))
                     .frame(width: 96, height: 96)
-                Image(systemName: isConfirmed ? "checkmark" : "arrow.up")
+                Image(systemName: terminalIcon)
                     .font(CaptureType.display)
                     .foregroundStyle(accent)
             }
@@ -32,7 +32,7 @@ struct S4SavedTerminalScreen: View {
             .animation(.spring(response: 0.45, dampingFraction: 0.6), value: appeared)
 
             VStack(spacing: 6) {
-                Text(isConfirmed ? "Kept to your library" : "Saved on this device")
+                Text(title)
                     .font(CaptureType.title)
                     .foregroundStyle(CaptureColor.ink)
                 if let where_ = landed {
@@ -44,13 +44,11 @@ struct S4SavedTerminalScreen: View {
             }
 
             VStack(alignment: .leading, spacing: 6) {
-                Text(isConfirmed ? "Confirmed by Patina" : transferLabel)
+                Text(eyebrow)
                     .font(CaptureType.eyebrow)
                     .textCase(.uppercase)
                     .foregroundStyle(accent)
-                Text(isConfirmed
-                     ? "Photos, measures, the tag and your voice note are ready to reuse."
-                     : "Nothing is lost. Patina will finish sending this capture and confirm when it lands.")
+                Text(explanation)
                     .font(CaptureType.callout)
                     .foregroundStyle(CaptureColor.inkSoft)
                     .fixedSize(horizontal: false, vertical: true)
@@ -60,7 +58,12 @@ struct S4SavedTerminalScreen: View {
             Spacer(minLength: 8)
 
             VStack(spacing: 10) {
-                if specimen != nil {
+                if confirmedDestination == .inbox {
+                    RouteActionButton("Open inbox", systemImage: "tray.full", kind: .secondary) {
+                        coordinator.dismissSheet()
+                        coordinator.navigate(to: .librarySearch)
+                    }
+                } else if specimen != nil {
                     RouteActionButton("View", systemImage: "doc.text.magnifyingglass", kind: .secondary) {
                         if let id = specimen?.id {
                             coordinator.navigate(to: .specimen(id))
@@ -86,7 +89,7 @@ struct S4SavedTerminalScreen: View {
             analytics.screen(CaptureScreenID.s4Saved.rawValue)
             analytics.event(
                 isConfirmed ? "capture.route_completed" : "capture.route_queued",
-                ["destination": "project"])
+                ["destination": analyticsDestination])
         }
     }
 
@@ -95,11 +98,59 @@ struct S4SavedTerminalScreen: View {
     }
 
     private var isConfirmed: Bool {
-        transfer.phase == .complete && transfer.receiptID != nil
+        confirmedDestination != nil
+    }
+
+    private var confirmedDestination: CaptureDestination? {
+        CaptureRouteSafetyPolicy.confirmedDestination(
+            recordedDestination: specimen?.destination ?? .undecided,
+            transfer: transfer)
+    }
+
+    private var terminalIcon: String {
+        switch confirmedDestination {
+        case .library: return "checkmark"
+        case .inbox: return "tray.and.arrow.down.fill"
+        case .undecided, nil: return "arrow.up"
+        }
+    }
+
+    private var title: String {
+        switch confirmedDestination {
+        case .library: return "Kept to your library"
+        case .inbox: return "Parked in your inbox"
+        case .undecided, nil: return "Saved on this device"
+        }
+    }
+
+    private var eyebrow: String {
+        switch confirmedDestination {
+        case .library: return "Confirmed by Patina"
+        case .inbox: return "Safe in Patina"
+        case .undecided, nil: return transferLabel
+        }
+    }
+
+    private var explanation: String {
+        switch confirmedDestination {
+        case .library:
+            return "Photos, measures, the tag and your voice note are ready to reuse."
+        case .inbox:
+            return "The capture landed safely in your inbox for review before it joins the library."
+        case .undecided, nil:
+            if transfer.phase == .complete {
+                return "Patina has the receipt, but the destination still needs confirmation."
+            }
+            return "Nothing is lost. Patina will finish sending this capture and confirm when it lands."
+        }
     }
 
     private var accent: Color {
-        isConfirmed ? CaptureColor.success : CaptureColor.goldenHour
+        switch confirmedDestination {
+        case .library: return CaptureColor.success
+        case .inbox: return CaptureColor.warning
+        case .undecided, nil: return CaptureColor.goldenHour
+        }
     }
 
     private var transferLabel: String {
@@ -107,17 +158,28 @@ struct S4SavedTerminalScreen: View {
         case .uploading: return "Uploading"
         case .awaitingConfirmation: return "Awaiting confirmation"
         case .retryableFailure: return "Retry needed"
+        case .complete: return "Destination unconfirmed"
         default: return "Queued to sync"
         }
     }
 
     private var landed: String? {
-        guard let venue = specimen?.venue else { return nil }
         var parts: [String] = []
-        if let project = venue.projectName { parts.append(project) }
-        if let room = venue.room { parts.append(room) }
-        if let placemark = venue.placemarkName { parts.append("from \(placemark)") }
+        switch confirmedDestination {
+        case .library: parts.append("Library")
+        case .inbox: parts.append("Inbox")
+        case .undecided, nil: break
+        }
+        if let venue = specimen?.venue {
+            if let project = venue.projectName { parts.append(project) }
+            if let room = venue.room { parts.append(room) }
+            if let placemark = venue.placemarkName { parts.append("from \(placemark)") }
+        }
         return parts.isEmpty ? nil : parts.joined(separator: " · ")
+    }
+
+    private var analyticsDestination: String {
+        (confirmedDestination ?? specimen?.destination ?? .undecided).rawValue
     }
 }
 

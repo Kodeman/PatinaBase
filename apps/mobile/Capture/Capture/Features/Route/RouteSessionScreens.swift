@@ -66,7 +66,8 @@ enum RouteSessionScreens {
         // ── Flow 6 sheet (cull deck) ───────────────────────────────────
         r.registerSheet(CaptureSheet.cullDeck.registryKey) { _ in
             AnyView(V2CullDeckScreen(
-                store: store, session: session, coordinator: coordinator))
+                store: store, sync: sync, session: session,
+                coordinator: coordinator))
         }
     }
 }
