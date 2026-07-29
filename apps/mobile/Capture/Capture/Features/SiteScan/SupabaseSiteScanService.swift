@@ -75,9 +75,6 @@ final class SupabaseSiteScanService: SiteScanService {
     private var activeUploadTasks:
         [ScanUploadFlightKey: Task<FieldScanUploadReceipt, Error>] = [:]
 
-    /// Adopt the background session's surviving tasks once per launch (M3).
-    private var didReconcileUploads = false
-
     init(deps: WorkServiceDependencies) {
         self.client = deps.client
         self.session = deps.session
@@ -101,7 +98,12 @@ final class SupabaseSiteScanService: SiteScanService {
         _ descriptor: FieldBackgroundScanUploader.Descriptor,
         _ result: Result<Void, FieldBackgroundScanUploader.UploadError>
     ) {
+        guard let owner = CaptureOwnerIdentity(
+            userID: descriptor.ownerUserID,
+            workspaceID: descriptor.ownerWorkspaceID
+        ) else { return }
         let key = ScanArtifactTransferKey(
+            owner: owner,
             scanID: descriptor.scanID,
             kind: descriptor.kind
         )
@@ -401,10 +403,7 @@ final class SupabaseSiteScanService: SiteScanService {
         guard result.owner == owner else {
             throw SiteScanError.notAuthenticated
         }
-        if !didReconcileUploads {
-            didReconcileUploads = true
-            await backgroundUploader.reconcileExistingTasks()
-        }
+        await backgroundUploader.reconcileExistingTasks()
         try requireActiveOwner(owner)
 
         let userID = try await validatedUserID(for: owner)
@@ -440,7 +439,7 @@ final class SupabaseSiteScanService: SiteScanService {
                 relativeKey: reserved.record.bundlePath
             )
         ) ?? result.localBundleURL
-        try await upsertProcessingScan(
+        try await insertProcessingScanIfNeeded(
             reserved: reserved,
             userID: userID,
             projectID: projectID,
@@ -476,7 +475,7 @@ final class SupabaseSiteScanService: SiteScanService {
         try requireActiveOwner(prepared.owner)
     }
 
-    private func upsertProcessingScan(
+    private func insertProcessingScanIfNeeded(
         reserved: ScanReservation,
         userID: UUID,
         projectID: String?,
@@ -503,7 +502,12 @@ final class SupabaseSiteScanService: SiteScanService {
         do {
             try requireActiveOwner(owner)
             try await client.from("room_scans")
-                .upsert(insert, onConflict: "id")
+                .upsert(
+                    insert,
+                    onConflict: "id",
+                    returning: .minimal,
+                    ignoreDuplicates: true
+                )
                 .execute()
             try requireActiveOwner(owner)
         } catch {
@@ -640,6 +644,7 @@ final class SupabaseSiteScanService: SiteScanService {
             folder: descriptor.folder,
             userID: context.userID,
             roomID: context.roomID,
+            scanID: context.scanID,
             filename: descriptor.filename
         )
         working.sha256 = sha
@@ -765,7 +770,12 @@ final class SupabaseSiteScanService: SiteScanService {
     private func uploadViaBackground(
         _ descriptor: FieldBackgroundScanUploader.Descriptor
     ) async -> Bool {
+        guard let owner = CaptureOwnerIdentity(
+            userID: descriptor.ownerUserID,
+            workspaceID: descriptor.ownerWorkspaceID
+        ) else { return false }
         let key = ScanArtifactTransferKey(
+            owner: owner,
             scanID: descriptor.scanID,
             kind: descriptor.kind
         )
@@ -917,7 +927,7 @@ final class SupabaseSiteScanService: SiteScanService {
 
         let roomID = projectRoomID.flatMap(UUID.init(uuidString:)) ?? UUID()
         let scanID = UUID()
-        let record = store.insertScanUploadRecord(ScanUploadRecord(
+        let record = try store.insertScanUploadRecord(ScanUploadRecord(
             bundlePath: key,
             scanID: scanID.uuidString,
             roomID: roomID.uuidString,
@@ -1000,10 +1010,7 @@ final class SupabaseSiteScanService: SiteScanService {
     func resumePendingUploads(retryFailures: Bool) async {
         guard let owner = activeOwner else { return }
 
-        if !didReconcileUploads {
-            didReconcileUploads = true
-            await backgroundUploader.reconcileExistingTasks()
-        }
+        await backgroundUploader.reconcileExistingTasks()
         guard activeOwner == owner else { return }
 
         for record in store.scanUploadRecords(owner: owner) {
@@ -1117,7 +1124,7 @@ final class SupabaseSiteScanService: SiteScanService {
 
     /// Upload the scan's posed photos, then write ONE batched `room_scan_images`
     /// insert — the SEPARATE, variable-count lane that rides the SAME storage-key
-    /// shape (`photos/{uid}/{roomId}/{filename}`) as the two core artifacts, so it
+    /// shape (`photos/{uid}/{roomId}/{scanId}/{filename}`) as the two core artifacts, so it
     /// needs zero policy work (00077 owner INSERT + 00287 designer read).
     ///
     /// Reads the `photos_metadata.json` sidecar the session wrote; an absent or
@@ -1149,8 +1156,8 @@ final class SupabaseSiteScanService: SiteScanService {
                 // Full JPEG (required for a row).
                 let jpegData = try Data(contentsOf: photosDir.appendingPathComponent(entry.filename))
                 let jpegPath = RoomScanStoragePath.object(
-                    folder: RoomScanStoragePath.Folder.photos,
-                    userID: userID, roomID: roomID, filename: entry.filename)
+                    folder: RoomScanStoragePath.Folder.photos, userID: userID,
+                    roomID: roomID, scanID: scanID, filename: entry.filename)
                 try requireActiveOwner(owner)
                 try await client.storage.from(bucket).upload(
                     jpegPath, data: jpegData,
@@ -1166,8 +1173,8 @@ final class SupabaseSiteScanService: SiteScanService {
                     do {
                         let thumbData = try Data(contentsOf: photosDir.appendingPathComponent(thumbName))
                         let thumbPath = RoomScanStoragePath.object(
-                            folder: RoomScanStoragePath.Folder.photos,
-                            userID: userID, roomID: roomID, filename: thumbName)
+                            folder: RoomScanStoragePath.Folder.photos, userID: userID,
+                            roomID: roomID, scanID: scanID, filename: thumbName)
                         try requireActiveOwner(owner)
                         try await client.storage.from(bucket).upload(
                             thumbPath, data: thumbData,
@@ -1193,7 +1200,13 @@ final class SupabaseSiteScanService: SiteScanService {
         try requireActiveOwner(owner)
         guard !rows.isEmpty else { return }
         try requireActiveOwner(owner)
-        try await client.from("room_scan_images").insert(rows).execute()
+        try await client.from("room_scan_images")
+            .upsert(
+                rows,
+                onConflict: "id",
+                returning: .minimal
+            )
+            .execute()
         try requireActiveOwner(owner)
     }
 

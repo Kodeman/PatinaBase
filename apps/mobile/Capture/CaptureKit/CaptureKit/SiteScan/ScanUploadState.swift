@@ -19,7 +19,7 @@ public struct ScanArtifactUploadState: Codable, Equatable, Sendable {
     public var kind: String            // ArtifactKind wire string
     public var relativePath: String    // in the bundle dir
     public var mimeType: String
-    public var storagePath: String?    // {folder}/{userId}/{scanId}/{filename} once known
+    public var storagePath: String?    // {folder}/{userId}/{roomId}/{scanId}/{filename} once known
     public var remoteUrl: String?      // patched onto the room_scans column
     public var sha256: String?
     public var column: String?         // room_scans URL column, nil if the kind has none

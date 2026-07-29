@@ -111,17 +111,44 @@ struct UploadStateTests {
 
 
     @Test func backgroundTransferKeysIncludeTheScanID() {
+        let owner = CaptureOwnerIdentity(
+            userID: "designer-a",
+            workspaceID: "studio-a"
+        )!
         let first = ScanArtifactTransferKey(
+            owner: owner,
             scanID: "scan-a",
             kind: "mesh"
         )
         let second = ScanArtifactTransferKey(
+            owner: owner,
             scanID: "scan-b",
             kind: "mesh"
         )
 
         #expect(first != second)
         #expect(Set([first, second]).count == 2)
+    }
+
+    @Test func backgroundTransferKeysIncludeTheOwner() {
+        let first = ScanArtifactTransferKey(
+            owner: CaptureOwnerIdentity(
+                userID: "designer-a",
+                workspaceID: "studio-a"
+            )!,
+            scanID: "scan-a",
+            kind: "mesh"
+        )
+        let second = ScanArtifactTransferKey(
+            owner: CaptureOwnerIdentity(
+                userID: "designer-a",
+                workspaceID: "studio-b"
+            )!,
+            scanID: "scan-a",
+            kind: "mesh"
+        )
+
+        #expect(first != second)
     }
 
     @Test func scanResultCarriesTheF2OwnerAcrossCodableRoundTrip() throws {
@@ -173,7 +200,7 @@ struct UploadStateTests {
             userID: "designer-a",
             workspaceID: "studio-b"
         ))
-        _ = store.insertScanUploadRecord(ScanUploadRecord(
+        _ = try store.insertScanUploadRecord(ScanUploadRecord(
             bundlePath: "SiteScans/scan-a",
             scanID: "scan-a",
             roomID: "room-a",

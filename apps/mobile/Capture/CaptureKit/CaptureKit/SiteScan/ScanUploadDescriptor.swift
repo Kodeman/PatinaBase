@@ -35,7 +35,7 @@ public struct ScanUploadDescriptor: Sendable, Equatable {
     ///
     /// STORAGE LAYOUT CONTRACT (capture-bundle-spec-v1 **B-18** · §4 "Storage layout"):
     /// this `folder` column is the authoritative kind→folder map — every artifact
-    /// PUTs to `{folder}/{userId}/{roomId}/{filename}`. The item-9 scan-pipeline
+    /// PUTs to `{folder}/{userId}/{roomId}/{scanId}/{filename}`. The item-9 scan-pipeline
     /// worker mirrors it in `keys.KIND_TO_FOLDER` (services/scan-pipeline) and
     /// resolves the column-less kinds (`depthIndex`/`scorecard`/`anchors`/
     /// `keyframeIndex`/`keyframeSummary`) by prefix-swap off the manifest key.
@@ -90,10 +90,16 @@ public extension ScanUploadDescriptor {
 /// Correlates a background completion to one artifact of one scan. Artifact kind
 /// alone is not unique when startup recovery and a foreground upload overlap.
 public struct ScanArtifactTransferKey: Hashable, Sendable {
+    public let owner: CaptureOwnerIdentity
     public let scanID: String
     public let kind: String
 
-    public init(scanID: String, kind: String) {
+    public init(
+        owner: CaptureOwnerIdentity,
+        scanID: String,
+        kind: String
+    ) {
+        self.owner = owner
         self.scanID = scanID
         self.kind = kind
     }

@@ -38,6 +38,7 @@ struct RoomScanStoredReferenceTests {
         folder: RoomScanStoragePath.Folder.usdz,
         userID: UUID(uuidString: "9AD8F978-58B1-4E1A-9C2D-3F1B2C4D5E6F")!,
         roomID: UUID(uuidString: "ABCDEF01-2345-6789-ABCD-EF0123456789")!,
+        scanID: UUID(uuidString: "12345678-1234-5678-9ABC-123456789ABC")!,
         filename: RoomScanStoragePath.Filename.usdz
     )
 
@@ -67,6 +68,6 @@ struct RoomScanStoredReferenceTests {
         #expect(derived == Self.key)
         // …and that key is still the RLS-legal shape: [1]=folder, [2]=user,
         // [3]=room (00077, 1-based).
-        #expect(derived.split(separator: "/").count == 4)
+        #expect(derived.split(separator: "/").count == 5)
     }
 }

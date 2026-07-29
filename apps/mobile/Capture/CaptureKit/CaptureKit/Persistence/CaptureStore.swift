@@ -223,10 +223,26 @@ public final class CaptureStore {
     }
 
     @discardableResult
-    public func insertScanUploadRecord(_ record: ScanUploadRecord) -> ScanUploadRecord {
+    public func insertScanUploadRecord(_ record: ScanUploadRecord) throws -> ScanUploadRecord {
+        try insertScanUploadRecord(record, persistence: save)
+    }
+
+    @discardableResult
+    func insertScanUploadRecord(
+        _ record: ScanUploadRecord,
+        persistence: () throws -> Void
+    ) throws -> ScanUploadRecord {
         context.insert(record)
-        try? save()
-        return record
+        do {
+            try persistence()
+            return record
+        } catch {
+            // A reservation is the durable owner of its bundle. If that first
+            // write fails, remove the unsaved insertion and make the caller
+            // abort before creating any remote room or scan rows.
+            context.delete(record)
+            throw error
+        }
     }
 
     /// Persist per-artifact progress + status on an existing record.

@@ -523,9 +523,9 @@ struct DurableScanTransferTests {
             projectID: nil,
             projectRoomID: nil
         )
-        _ = store.insertScanUploadRecord(recoverable)
-        _ = store.insertScanUploadRecord(foreign)
-        _ = store.insertScanUploadRecord(legacy)
+        _ = try store.insertScanUploadRecord(recoverable)
+        _ = try store.insertScanUploadRecord(foreign)
+        _ = try store.insertScanUploadRecord(legacy)
 
         #expect(recoverable.ownerUserID == owner.userID)
         #expect(recoverable.ownerWorkspaceID == owner.workspaceID)
@@ -571,8 +571,8 @@ struct DurableScanTransferTests {
             progress: 100,
             receiptID: "scan-confirmed"
         ))
-        [queued, rejected, receiptlessComplete, confirmed].forEach {
-            _ = store.insertScanUploadRecord($0)
+        try [queued, rejected, receiptlessComplete, confirmed].forEach {
+            _ = try store.insertScanUploadRecord($0)
         }
 
         #expect(store.scanBundlePathsProtectedFromSweep() == [
@@ -584,7 +584,7 @@ struct DurableScanTransferTests {
 
     @Test @MainActor func durableCompletionRequiresAndPersistsReceipt() throws {
         let store = try CaptureStore.inMemory()
-        let record = store.insertScanUploadRecord(ScanUploadRecord(
+        let record = try store.insertScanUploadRecord(ScanUploadRecord(
             bundlePath: "SiteScans/receipt-gate",
             scanID: "scan-receipt-gate",
             roomID: "room-receipt-gate",
@@ -618,6 +618,31 @@ struct DurableScanTransferTests {
         ))
         #expect(persisted.transferState.phase == .complete)
         #expect(persisted.receiptID == "scan-receipt-gate")
+    }
+
+    @Test @MainActor func failedInitialReservationIsNotVisibleToRecovery() throws {
+        struct ExpectedSaveFailure: Error {}
+        let store = try CaptureStore.inMemory()
+        let record = ScanUploadRecord(
+            bundlePath: "SiteScans/reservation-save-failure",
+            scanID: "scan-reservation-save-failure",
+            roomID: "room-reservation-save-failure",
+            name: "Reservation save failure",
+            projectID: nil,
+            projectRoomID: nil
+        )
+
+        #expect(throws: ExpectedSaveFailure.self) {
+            try store.insertScanUploadRecord(
+                record,
+                persistence: { throw ExpectedSaveFailure() }
+            )
+        }
+        #expect(
+            store.scanUploadRecord(
+                scanID: "scan-reservation-save-failure"
+            ) == nil
+        )
     }
 
     @Test @MainActor func failedCompletionSaveRestoresLiveRecord() throws {
@@ -670,8 +695,8 @@ struct DurableScanTransferTests {
             mimeType: "application/octet-stream",
             status: .uploaded
         )
-        func record(_ suffix: String) -> ScanUploadRecord {
-            store.insertScanUploadRecord(ScanUploadRecord(
+        func record(_ suffix: String) throws -> ScanUploadRecord {
+            try store.insertScanUploadRecord(ScanUploadRecord(
                 bundlePath: "SiteScans/\(suffix)",
                 scanID: "scan-\(suffix)",
                 roomID: "room-\(suffix)",
@@ -681,17 +706,17 @@ struct DurableScanTransferTests {
             ))
         }
 
-        let complete = record("complete")
+        let complete = try record("complete")
         complete.applyTransferState(CaptureTransferState(
             phase: .complete,
             receiptID: "scan-complete"
         ))
-        let rejected = record("rejected")
+        let rejected = try record("rejected")
         rejected.applyTransferState(CaptureTransferState(
             phase: .rejected,
             errorMessage: "Review"
         ))
-        let failed = record("failed")
+        let failed = try record("failed")
         failed.applyTransferState(CaptureTransferState(
             phase: .retryableFailure,
             errorMessage: "Offline",
