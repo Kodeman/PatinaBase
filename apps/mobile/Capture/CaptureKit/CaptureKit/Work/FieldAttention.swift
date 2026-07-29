@@ -110,7 +110,10 @@ public enum FieldAttentionBuilder {
         let projectGroups = projectCandidates(projects, now: now, calendar: calendar)
         let needsYou = captureGroups.needs + scanGroups.needs
             + threadGroups.needs + leadCandidates(leads)
-        let waiting = decisionCandidates(decisions) + projectGroups.waiting
+        // Only pending decisions identify an actual external dependency. A
+        // project's `on_hold` status does not say who paused it, so it must not
+        // imply that another person is blocking the designer.
+        let waiting = decisionCandidates(decisions)
         let moving = arrivalCandidates(arrivingPOs, now: now, calendar: calendar)
             + captureGroups.moving + scanGroups.moving
             + projectGroups.moving + threadGroups.moving
@@ -130,7 +133,6 @@ public enum FieldAttentionBuilder {
 
     private struct CandidateGroups {
         var needs: [Candidate] = []
-        var waiting: [Candidate] = []
         var moving: [Candidate] = []
     }
 
@@ -143,7 +145,7 @@ public enum FieldAttentionBuilder {
         for capture in captures {
             let id = "capture:\(capture.id.uuidString.lowercased())"
             let title = nonEmpty(capture.title) ?? "Untitled capture"
-            let destination = FieldAttentionDestination.specimen(capture.id)
+            let specimenDestination = FieldAttentionDestination.specimen(capture.id)
             switch capture.transferPhase {
             case .retryableFailure:
                 groups.needs.append(Candidate(
@@ -151,7 +153,7 @@ public enum FieldAttentionBuilder {
                     item: FieldAttentionItem(
                         id: id, kind: .capture, title: title,
                         detail: "Retry this transfer",
-                        timestamp: capture.updatedAt, destination: destination
+                        timestamp: capture.updatedAt, destination: .syncStatus
                     )
                 ))
                 continue
@@ -161,7 +163,7 @@ public enum FieldAttentionBuilder {
                     item: FieldAttentionItem(
                         id: id, kind: .capture, title: title,
                         detail: "Review this transfer",
-                        timestamp: capture.updatedAt, destination: destination
+                        timestamp: capture.updatedAt, destination: .syncStatus
                     )
                 ))
                 continue
@@ -178,7 +180,7 @@ public enum FieldAttentionBuilder {
                         item: FieldAttentionItem(
                             id: id, kind: .capture, title: title,
                             detail: detail,
-                            timestamp: capture.updatedAt, destination: destination
+                            timestamp: capture.updatedAt, destination: specimenDestination
                         )
                     ))
                     continue
@@ -188,30 +190,47 @@ public enum FieldAttentionBuilder {
             case .local, .none:
                 break
             }
-            switch capture.status {
-            case .draft:
-                groups.needs.append(Candidate(
-                    priority: 0,
-                    item: FieldAttentionItem(
-                        id: id, kind: .capture, title: title,
-                        detail: "Continue this capture",
-                        timestamp: capture.updatedAt, destination: destination
-                    )
-                ))
-            case .ready where calendar.isDate(capture.updatedAt, inSameDayAs: now):
-                groups.moving.append(Candidate(
-                    priority: 1,
-                    item: FieldAttentionItem(
-                        id: id, kind: .capture, title: title,
-                        detail: "Ready from Camera",
-                        timestamp: capture.updatedAt, destination: destination
-                    )
-                ))
-            default:
-                break
-            }
+            appendLocalCaptureCandidate(
+                capture,
+                now: now,
+                calendar: calendar,
+                to: &groups
+            )
         }
         return groups
+    }
+
+    private static func appendLocalCaptureCandidate(
+        _ capture: FieldCaptureActivity,
+        now: Date,
+        calendar: Calendar,
+        to groups: inout CandidateGroups
+    ) {
+        let id = "capture:\(capture.id.uuidString.lowercased())"
+        let title = nonEmpty(capture.title) ?? "Untitled capture"
+        let destination = FieldAttentionDestination.specimen(capture.id)
+        switch capture.status {
+        case .draft:
+            groups.needs.append(Candidate(
+                priority: 0,
+                item: FieldAttentionItem(
+                    id: id, kind: .capture, title: title,
+                    detail: "Continue this capture",
+                    timestamp: capture.updatedAt, destination: destination
+                )
+            ))
+        case .ready where calendar.isDate(capture.updatedAt, inSameDayAs: now):
+            groups.moving.append(Candidate(
+                priority: 1,
+                item: FieldAttentionItem(
+                    id: id, kind: .capture, title: title,
+                    detail: "Ready from Camera",
+                    timestamp: capture.updatedAt, destination: destination
+                )
+            ))
+        default:
+            break
+        }
     }
 
     private static func scanCandidates(
@@ -316,26 +335,15 @@ public enum FieldAttentionBuilder {
         now: Date,
         calendar: Calendar
     ) -> CandidateGroups {
-        let closed: Set<String> = [
+        let inactive: Set<String> = [
             "archived", "cancelled", "canceled", "completed", "draft", "on_hold"
         ]
         var groups = CandidateGroups()
         for project in projects {
             let status = normalized(project.status)
-            if status == "on_hold" {
-                groups.waiting.append(Candidate(
-                    priority: 1,
-                    item: FieldAttentionItem(
-                        id: "project:\(project.id)", kind: .project,
-                        title: project.name,
-                        detail: nonEmpty(project.phaseLabel) ?? "Project on hold",
-                        timestamp: project.updatedAt,
-                        destination: .project(project.id)
-                    )
-                ))
-            } else if !closed.contains(status),
-                      let updatedAt = project.updatedAt,
-                      calendar.isDate(updatedAt, inSameDayAs: now) {
+            if !inactive.contains(status),
+               let updatedAt = project.updatedAt,
+               calendar.isDate(updatedAt, inSameDayAs: now) {
                 groups.moving.append(Candidate(
                     priority: 2,
                     item: FieldAttentionItem(

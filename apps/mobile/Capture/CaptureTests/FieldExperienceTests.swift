@@ -129,8 +129,7 @@ struct FieldAttentionBuilderTests {
             "lead:lead-new"
         ])
         #expect(snapshot.waitingOnOthers.map(\.id) == [
-            "decision:decision-pending",
-            "project:project-waiting"
+            "decision:decision-pending"
         ])
         #expect(snapshot.movingToday.map(\.id) == [
             "arrival:po-today",
@@ -147,6 +146,7 @@ struct FieldAttentionBuilderTests {
         #expect(!allIDs.contains("lead:lead-contacted"))
         #expect(!allIDs.contains("decision:decision-done"))
         #expect(!allIDs.contains("arrival:po-tomorrow"))
+        #expect(!allIDs.contains("project:project-waiting"))
     }
 
     @Test func priorityPrecedesRecencyAndStableIDBreaksTies() {
@@ -182,6 +182,9 @@ struct FieldAttentionBuilderTests {
         let failedCapture = UUID(
             uuidString: "cccccccc-0000-0000-0000-000000000001"
         )!
+        let rejectedCapture = UUID(
+            uuidString: "cccccccc-0000-0000-0000-000000000002"
+        )!
 
         let snapshot = FieldAttentionBuilder.build(
             captures: [
@@ -191,6 +194,14 @@ struct FieldAttentionBuilderTests {
                     status: .failed,
                     destination: .inbox,
                     transferPhase: .retryableFailure,
+                    updatedAt: now
+                ),
+                FieldCaptureActivity(
+                    id: rejectedCapture,
+                    title: "Rejected table",
+                    status: .failed,
+                    destination: .library,
+                    transferPhase: .rejected,
                     updatedAt: now
                 )
             ],
@@ -211,12 +222,33 @@ struct FieldAttentionBuilderTests {
 
         #expect(snapshot.needsYou.map(\.id) == [
             "capture:\(failedCapture.uuidString.lowercased())",
+            "capture:\(rejectedCapture.uuidString.lowercased())",
             "scan:scan-review"
         ])
         #expect(snapshot.needsYou.map(\.destination) == [
-            .specimen(failedCapture),
+            .syncStatus,
+            .syncStatus,
             .syncStatus
         ])
+    }
+
+    @Test func onHoldProjectDoesNotInventAnExternalBlocker() {
+        let snapshot = FieldAttentionBuilder.build(
+            projects: [
+                FieldProject(
+                    id: "project-paused",
+                    name: "Paused project",
+                    status: "on_hold",
+                    phaseLabel: "On hold",
+                    updatedAt: date(29)
+                )
+            ],
+            now: date(29),
+            calendar: calendar
+        )
+
+        #expect(snapshot.waitingOnOthers.isEmpty)
+        #expect(snapshot.movingToday.isEmpty)
     }
 
     @Test func activeTransfersMoveTodayWithoutBecomingNeedsYou() {

@@ -229,6 +229,7 @@ struct WorkDashboardScreen: View {
                     .font(CaptureType.footnote)
                     .foregroundStyle(CaptureColor.verdigrisInk)
                     .frame(minHeight: 44)
+                    .accessibilityLabel("Retry \(issue.source.label)")
                 }
             }
         }

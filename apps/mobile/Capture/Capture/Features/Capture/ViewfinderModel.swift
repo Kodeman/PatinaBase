@@ -87,6 +87,12 @@ final class ViewfinderModel {
         mode = camera.currentMode
         isLowLight = camera.isLowLight
         await camera.start()
+        guard !Task.isCancelled else {
+            // `stop()` may have run while camera authorization was awaiting.
+            // Do not install a new frame observer after the view has disappeared.
+            camera.stop()
+            return
+        }
         if let av = camera as? AVFoundationCameraService {
             cameraAuthorization = av.authorization
         }
