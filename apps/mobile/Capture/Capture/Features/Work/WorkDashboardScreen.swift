@@ -12,6 +12,7 @@ struct WorkDashboardScreen: View {
     let session: any SessionProviding
     let analytics: any CaptureAnalytics
     let coordinator: CaptureCoordinator
+    let companion: FieldCompanionController
 
     @State private var model: WorkDashboardModel
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
@@ -20,6 +21,7 @@ struct WorkDashboardScreen: View {
         session = container.session
         analytics = container.analytics
         self.coordinator = coordinator
+        companion = container.companion
         _model = State(wrappedValue: WorkDashboardModel(container: container))
     }
 
@@ -67,6 +69,10 @@ struct WorkDashboardScreen: View {
         .task {
             analytics.screen(CaptureScreenID.w1Work.rawValue)
             await model.loadAll()
+            updateCompanionHint()
+        }
+        .onChange(of: contentRevision) {
+            updateCompanionHint()
         }
         .animation(
             reduceMotion ? nil : .easeInOut(duration: 0.22),
@@ -137,6 +143,23 @@ struct WorkDashboardScreen: View {
             return timeGreeting
         }
         return "\(timeGreeting), \(firstName)"
+    }
+
+    private func updateCompanionHint() {
+        let hint: String
+        let needsYouCount = model.attention.needsYou.count
+        if needsYouCount == 1 {
+            hint = "1 item needs you"
+        } else if needsYouCount > 1 {
+            hint = "\(needsYouCount) items need you"
+        } else if !model.loadIssues.isEmpty {
+            hint = "Some work needs a retry"
+        } else if model.hasLoadingSources {
+            hint = "Gathering your work"
+        } else {
+            hint = "You’re caught up"
+        }
+        companion.send(.collapse(hint: hint, action: nil))
     }
 
     // MARK: - Attention

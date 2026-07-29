@@ -29,6 +29,10 @@ struct RootView: View {
         @Bindable var coord = coordinator
         realmShell
         .environment(coordinator)
+        .environment(container.companion)
+        .safeAreaInset(edge: .bottom, spacing: 0) {
+            companionSurface
+        }
         .sheet(item: $coord.sheet) { sheet in
             RouteRegistry.shared.view(for: sheet)
         }
@@ -61,6 +65,9 @@ struct RootView: View {
                 CaptureDeepLink.drive(screen: id, coordinator: coordinator, store: container.store)
             }
         }
+        .task(id: companionPlacement) {
+            applyCompanionPlacement()
+        }
         .onOpenURL { url in
             CaptureDeepLink.handle(url, coordinator: coordinator, store: container.store, login: portalLogin)
         }
@@ -86,6 +93,102 @@ struct RootView: View {
             } ?? "You’re already signed in. Continue to sign in with this code?")
         }
         .overlay(alignment: .top) { portalLoginToast }
+    }
+
+    private var companionSurface: some View {
+        FieldCompanionHearthView(
+            presentation: container.companion.presentation,
+            onOpen: expandCompanion,
+            onDismiss: { container.companion.send(.dismiss) },
+            onAction: handleCompanionAction
+        )
+        .padding(.vertical, 8)
+    }
+
+    private var companionPlacement: FieldCompanionPlacement {
+        guard coordinator.phase == .ready,
+              coordinator.guestAccessToken == nil,
+              coordinator.onboardingStep == nil else {
+            return .hidden(.onboarding)
+        }
+        if coordinator.sheet != nil {
+            return .hidden(.modalPresented)
+        }
+
+        let realm = coordinator.activeRealm
+        let route = coordinator.path(for: realm).last
+        if realm == .camera, route == nil {
+            return .hidden(.cameraActive)
+        }
+        switch route {
+        case .qrScan, .siteScan:
+            return .hidden(.featureOwned)
+        default:
+            return .collapsed(realm, route)
+        }
+    }
+
+    private func applyCompanionPlacement() {
+        switch companionPlacement {
+        case let .hidden(reason):
+            container.companion.send(.hide(reason: reason))
+        case let .collapsed(realm, route):
+            container.companion.send(.collapse(
+                hint: companionHint(for: realm, route: route),
+                action: nil
+            ))
+        }
+    }
+
+    private func companionHint(for realm: FieldRealm, route: CaptureRoute?) -> String {
+        switch route {
+        case .syncStatus:
+            return "Sync status"
+        case .specimen:
+            return "Review this specimen"
+        case .session:
+            return "Review this session"
+        case .settings, .account:
+            return "Field settings"
+        default:
+            return realm == .work ? "What needs you" : "Next steps"
+        }
+    }
+
+    private func expandCompanion() {
+        guard case let .collapsed(content) = container.companion.presentation else {
+            return
+        }
+        let destination: FieldCompanionAction
+        let detail: String
+        switch coordinator.activeRealm {
+        case .camera:
+            destination = .init(id: "realm.work", label: "Open Work")
+            detail = "Keep capturing, or see what needs your attention in Work."
+        case .work:
+            destination = .init(id: "realm.camera", label: "Open Camera")
+            detail = "Your active work stays in place while you return to Camera."
+        }
+        container.analytics.event("field.companion_opened", [
+            "realm": coordinator.activeRealm.rawValue
+        ])
+        container.companion.send(.communicate(.init(
+            title: content.hint,
+            detail: detail,
+            primaryAction: destination
+        )))
+    }
+
+    private func handleCompanionAction(_ action: FieldCompanionAction) {
+        container.analytics.event("field.companion_action", ["action": action.id])
+        switch action.id {
+        case "realm.work":
+            coordinator.switchRealm(.work)
+        case "realm.camera":
+            coordinator.switchRealm(.camera)
+        default:
+            break
+        }
     }
 
     @ViewBuilder private var realmShell: some View {
@@ -175,4 +278,9 @@ struct RootView: View {
             }
         } }
     }
+}
+
+private enum FieldCompanionPlacement: Equatable {
+    case hidden(FieldCompanionHiddenReason)
+    case collapsed(FieldRealm, CaptureRoute?)
 }
