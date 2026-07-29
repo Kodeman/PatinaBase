@@ -6,12 +6,17 @@
 //
 
 import SwiftUI
+import SwiftData
 
 struct SettingsView: View {
     @Environment(\.dismiss) private var dismiss
     @Environment(\.appCoordinator) private var coordinator
     @Environment(\.openURL) private var openURL
+    @Environment(\.modelContext) private var modelContext
     @State private var settings = SettingsService.shared
+    @State private var contextMemory = ContextMemoryStore.shared
+    @State private var showingForgetContextConfirmation = false
+    @State private var showingResetTasteConfirmation = false
     /// Cellular opt-in for large scan artifact uploads. Backing store is
     /// read by `RoomScanSyncService` at upload-time — UserDefaults key
     /// `patina.scanUploadOnCellularEnabled` keeps the two sides in sync.
@@ -84,6 +89,26 @@ struct SettingsView: View {
                     appearanceRow
                 }
 
+                settingsGroup(title: "Privacy & Memory") {
+                    contextMemoryToggle
+                    settingsButtonRow(
+                        icon: "clock.arrow.circlepath",
+                        iconColor: PatinaColors.agedOak,
+                        label: "Forget recent context"
+                    ) {
+                        showingForgetContextConfirmation = true
+                    }
+                    .accessibilityIdentifier("SettingsView.ForgetContextButton")
+                    settingsButtonRow(
+                        icon: "paintpalette",
+                        iconColor: PatinaColors.clay,
+                        label: "Reset taste portrait"
+                    ) {
+                        showingResetTasteConfirmation = true
+                    }
+                    .accessibilityIdentifier("SettingsView.ResetTasteButton")
+                }
+
                 // Support group
                 settingsGroup(title: "Support") {
                     settingsButtonRow(icon: "questionmark.circle", iconColor: PatinaColors.sage, label: "Help Center") {
@@ -105,9 +130,74 @@ struct SettingsView: View {
         .task {
             await settings.load()
         }
+        .alert("Forget recent context?", isPresented: $showingForgetContextConfirmation) {
+            Button("Cancel", role: .cancel) {}
+            Button("Forget", role: .destructive) {
+                contextMemory.forgetAll()
+                RoomSelectionStore.shared.clear()
+                PostHogService.shared.capture("context_memory_forgotten")
+            }
+        } message: {
+            Text("Patina will forget recent room, product, project, and style activity. Your rooms, scans, saved pieces, projects, and taste portrait stay intact.")
+        }
+        .alert("Reset taste portrait?", isPresented: $showingResetTasteConfirmation) {
+            Button("Cancel", role: .cancel) {}
+            Button("Reset", role: .destructive) {
+                StyleProfileStore.shared.resetTasteProfile(in: modelContext)
+                contextMemory.forgetStyle()
+                PostHogService.shared.capture("taste_portrait_reset")
+            }
+        } message: {
+            Text("This removes your local taste portrait and its tuning. Rooms, scans, saved pieces, and projects are not changed.")
+        }
     }
 
     // MARK: - Components
+
+    private var contextMemoryToggle: some View {
+        HStack(alignment: .top, spacing: PatinaSpacing.xsm) {
+            ZStack {
+                RoundedRectangle(cornerRadius: PatinaRadius.md)
+                    .fill(PatinaColors.sage.opacity(0.15))
+                    .frame(width: 32, height: 32)
+                Image(systemName: "brain.head.profile")
+                    .font(.system(size: 14))
+                    .foregroundStyle(PatinaColors.sage)
+            }
+
+            VStack(alignment: .leading, spacing: 2) {
+                Text("Use activity for context")
+                    .font(PatinaTypography.bodySmall)
+                    .foregroundStyle(PatinaColors.Text.primary)
+                Text("Remembers only activity type, an identifier, and time for up to 90 days.")
+                    .font(PatinaTypography.caption)
+                    .foregroundStyle(PatinaColors.Text.muted)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+
+            Spacer(minLength: 8)
+
+            Toggle("Use activity for context", isOn: Binding(
+                get: { contextMemory.isEnabled },
+                set: { enabled in
+                    contextMemory.setEnabled(enabled)
+                    PostHogService.shared.capture("context_memory_setting_changed", properties: [
+                        "enabled": enabled
+                    ])
+                }
+            ))
+            .labelsHidden()
+            .tint(PatinaColors.Text.interactive)
+            .accessibilityHint("Turning this off also forgets all recent contextual activity stored on this device.")
+            .accessibilityIdentifier("SettingsView.ContextMemoryToggle")
+        }
+        .padding(.horizontal, PatinaSpacing.md)
+        .padding(.vertical, PatinaSpacing.sm)
+        .overlay(alignment: .bottom) {
+            Rectangle().fill(PatinaColors.Text.muted.opacity(0.25)).frame(height: 1)
+                .padding(.leading, 60)
+        }
+    }
 
     /// Appearance picker row (Wave 3 dark-mode). Mirrors the settingsRow
     /// visual language with a trailing menu picker instead of a chevron.

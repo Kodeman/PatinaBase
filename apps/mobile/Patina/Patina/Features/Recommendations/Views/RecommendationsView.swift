@@ -28,6 +28,8 @@ struct RecommendationsView: View {
     /// marketplace rather than sending a local id that would silently no-op
     /// the RPC's room filter and violate the `saved_items` FK on every save.
     @State private var roomRemoteId: String?
+    @State private var roomName: String?
+    @State private var tastePortrait: TastePortrait?
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
@@ -86,7 +88,12 @@ struct RecommendationsView: View {
         // above carries the title, so the chrome adds only the back chevron.
         .patinaScreen(title: nil)
         .task {
-            roomRemoteId = resolveRoomRemoteId()
+            let room = resolveRoom()
+            roomRemoteId = room?.remoteId
+            roomName = room?.name
+            tastePortrait = StylePreferenceStore(context: modelContext)
+                .mostRecent()
+                .flatMap { TastePortrait(preference: $0) }
             // U29 fix: seed already-saved state (prior visit, another
             // screen, another device) before the grid renders, so the
             // heart/menu never offer "Save" on something already saved.
@@ -98,9 +105,9 @@ struct RecommendationsView: View {
 
     /// U06/U07 fix: `roomId` is the local `RoomModel.id`; resolve it to the
     /// room's synced `remoteId` before it reaches the RPC or a save.
-    private func resolveRoomRemoteId() -> String? {
+    private func resolveRoom() -> RoomModel? {
         guard let roomId, let localId = UUID(uuidString: roomId) else { return nil }
-        return RoomStore(context: modelContext).room(id: localId)?.remoteId
+        return RoomStore(context: modelContext).room(id: localId)
     }
 
     // MARK: - Content states (U39)
@@ -240,9 +247,28 @@ struct RecommendationsView: View {
                 .font(PatinaTypography.h5)
                 .foregroundStyle(PatinaColors.Text.primary)
                 .padding(.top, 4)
+
+            if let rationale = recommendationRationale(for: product) {
+                Text(rationale)
+                    .font(PatinaTypography.caption)
+                    .foregroundStyle(PatinaColors.Text.muted)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .padding(.top, 5)
+            }
         }
         .padding(.horizontal, 12)
         .padding(.vertical, 10)
+    }
+
+    private func recommendationRationale(for product: Product) -> String? {
+        let scopedRoomName = roomRemoteId == nil ? nil : roomName
+        if let tastePortrait {
+            return tastePortrait.recommendationRationale(for: product, roomName: scopedRoomName)
+        }
+        if let scopedRoomName {
+            return "Selected from Patina's room-aware edit for \(scopedRoomName)."
+        }
+        return nil
     }
 
     private func productCardSwipeGesture(_ product: Product) -> some Gesture {
