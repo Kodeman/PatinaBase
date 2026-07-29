@@ -27,8 +27,6 @@ from .refine_adapter import (
     MAX_SPATIAL_NEIGHBORS,
     MIN_CONNECTED_FRACTION,
     MIN_VERIFIED_INLIERS,
-    SPATIAL_MIN_BASELINE_M,
-    SPATIAL_RADIUS_M,
     TEMPORAL_WINDOW,
     AdapterError,
     ColmapPose,
@@ -37,6 +35,7 @@ from .refine_adapter import (
     RefineDeadline,
     RefinementEvidence,
     Vector3,
+    loop_candidate_admitted,
 )
 
 EVIDENCE_INVALID_CODE = "REFINE_EVIDENCE_INVALID"
@@ -185,6 +184,11 @@ class RefinementEvidenceBuildRequest:
 class _ValidatedFrame:
     value: EvidenceFrameSnapshot
     raw_center: Vector3
+    #: The raw model's own ``cam_from_world`` rotation, carried beside the centre
+    #: because R122's loop-candidate policy reads BOTH.  Deriving it here rather
+    #: than at the use site keeps this derivation of the candidate graph reading
+    #: exactly the pose the raw model wrote, as the centre already did.
+    raw_rotation: Matrix3
 
 
 @dataclass(frozen=True, slots=True)
@@ -550,7 +554,9 @@ def _validate_frames(
             raw_cam_from_world=raw_pose,
             refined_cam_from_world=refined_pose,
         )
-        validated.append(_ValidatedFrame(copied, _camera_center(raw_pose)))
+        validated.append(
+            _ValidatedFrame(copied, _camera_center(raw_pose), raw_pose.rotation)
+        )
     return tuple(validated)
 
 
@@ -938,7 +944,13 @@ def _pair_graph(
             distance = math.dist(left.raw_center, right.raw_center)
             if not math.isfinite(distance):
                 raise _invalid("raw camera-centre distance overflowed")
-            if SPATIAL_MIN_BASELINE_M <= distance <= SPATIAL_RADIUS_M:
+            # R122: near AND co-directed.  The predicate is imported, never
+            # restated, so this third derivation cannot drift from the matcher's.
+            if loop_candidate_admitted(
+                distance_m=distance,
+                first_rotation=left.raw_rotation,
+                second_rotation=right.raw_rotation,
+            ):
                 spatial.append((distance, right.value.engine_image_name, right_index))
         for _distance, _name, right_index in sorted(spatial)[:MAX_SPATIAL_NEIGHBORS]:
             first, second = sorted(

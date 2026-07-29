@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import math
 import os
 import pathlib
 import signal
@@ -1454,7 +1455,7 @@ def _engine_frames_with_centres(centres):
 def test_the_two_candidate_graph_derivations_must_agree():
     """CONSTRUCTED on the band edge, which is the only place they can differ.
 
-    The matcher's graph comes from the packet's declared centres; the evidence
+    The matcher's graph comes from the packet's declared poses; the evidence
     builder rebuilds its own from the raw model's parsed poses.  They agree to
     float noise -- except at ``SPATIAL_MIN_BASELINE_M``/``SPATIAL_RADIUS_M``,
     where a pair can land on opposite sides.  The disagreement is refused with
@@ -1474,9 +1475,12 @@ def test_the_two_candidate_graph_derivations_must_agree():
     frames = _engine_frames_with_centres(centres)
     pairs = build_engine_pair_graph(frames)
     by_name = {frame.engine_image_name: frame.raw_camera_center_m for frame in frames}
+    rotations = {
+        frame.engine_image_name: frame.cam_from_world_rotation for frame in frames
+    }
 
-    # Identical centres: agreement, and no exception.
-    require_candidate_graph_agreement(pairs, frames, by_name)
+    # Identical poses: agreement, and no exception.
+    require_candidate_graph_agreement(pairs, frames, by_name, rotations)
 
     # A model centre one ULP-scale step OUTSIDE the radius drops that pair from
     # the rebuilt graph, and the guard says so.
@@ -1489,7 +1493,64 @@ def test_the_two_candidate_graph_derivations_must_agree():
         )
     ) != pairs, "the fixture does not actually straddle the band edge"
     with pytest.raises(AdapterError) as raised:
-        require_candidate_graph_agreement(pairs, frames, nudged)
+        require_candidate_graph_agreement(pairs, frames, nudged, rotations)
+    assert raised.value.code == "REFINE_ENGINE_FAILED"
+    assert "differs from the one the matcher was given" in str(raised.value)
+
+
+def test_the_graph_agreement_guard_also_covers_the_view_axis_edge():
+    """R122 added a SECOND hard edge to the policy; the guard must reach it.
+
+    Before R122 the shadow substituted only the raw model's CENTRES, so a
+    derivation that disagreed about where a camera POINTS would have gone
+    undetected -- the shadow would have re-used the packet's rotations and
+    agreed with itself.  This constructs exactly that: the centres are
+    identical in both derivations and only the rotation moves, across
+    :data:`LOOP_MAX_VIEW_AXIS_ANGLE_DEG`.  Substituting centres alone leaves
+    this test green, which is what makes it a test of the change rather than of
+    the pre-existing guard.
+    """
+
+    from patina_scan_worker.refine_adapter import (
+        LOOP_MAX_VIEW_AXIS_ANGLE_DEG,
+        SPATIAL_RADIUS_M,
+    )
+    from patina_scan_worker.refine_colmap_backend import (
+        require_candidate_graph_agreement,
+    )
+
+    centres = [(0.0, 0.0, 3.0 * index) for index in range(12)]
+    centres[11] = (SPATIAL_RADIUS_M * 0.5, 0.0, 0.0)
+    frames = _engine_frames_with_centres(centres)
+    pairs = build_engine_pair_graph(frames)
+    by_name = {frame.engine_image_name: frame.raw_camera_center_m for frame in frames}
+    rotations = {
+        frame.engine_image_name: frame.cam_from_world_rotation for frame in frames
+    }
+    assert any(
+        pair == ("frame_000000.ppm", "frame_000011.ppm") for pair in pairs
+    ), "the fixture must offer the co-directed loop pair in the first place"
+
+    require_candidate_graph_agreement(pairs, frames, by_name, rotations)
+
+    # Turn ONE camera just past the bound about the y axis.  Its centre is
+    # untouched, so nothing about the distance half of the policy changes.
+    turned = math.radians(LOOP_MAX_VIEW_AXIS_ANGLE_DEG * 1.0001)
+    cos_t, sin_t = math.cos(turned), math.sin(turned)
+    rotated = dict(rotations)
+    rotated["frame_000011.ppm"] = (
+        (cos_t, 0.0, sin_t),
+        (0.0, 1.0, 0.0),
+        (-sin_t, 0.0, cos_t),
+    )
+    assert build_engine_pair_graph(
+        tuple(
+            replace(frame, cam_from_world_rotation=rotated[frame.engine_image_name])
+            for frame in frames
+        )
+    ) != pairs, "the fixture does not actually straddle the view-axis bound"
+    with pytest.raises(AdapterError) as raised:
+        require_candidate_graph_agreement(pairs, frames, by_name, rotated)
     assert raised.value.code == "REFINE_ENGINE_FAILED"
     assert "differs from the one the matcher was given" in str(raised.value)
 

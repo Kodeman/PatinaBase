@@ -40,8 +40,6 @@ from .refine_adapter import (
     MAX_SPATIAL_NEIGHBORS,
     MIN_CONNECTED_FRACTION,
     MIN_VERIFIED_INLIERS,
-    SPATIAL_MIN_BASELINE_M,
-    SPATIAL_RADIUS_M,
     TEMPORAL_WINDOW,
     AdapterError,
     ColmapPose,
@@ -49,6 +47,7 @@ from .refine_adapter import (
     RefineDeadline,
     Sim3,
     estimate_sim3,
+    loop_candidate_admitted,
 )
 from .refine_colmap_command import (
     run_inherited_colmap_command as _run_inherited_colmap_command,
@@ -938,7 +937,13 @@ def parse_engine_request_member(
 def build_engine_pair_graph(
     frames: Sequence[ColmapEngineFrame],
 ) -> tuple[tuple[str, str], ...]:
-    """Build I87 pairs on geometry/order but emit only canonical PPM identities."""
+    """Build I87 pairs on geometry/order but emit only canonical PPM identities.
+
+    The loop half of the policy is R122's NEAR-AND-CO-DIRECTED predicate,
+    delegated to ``refine_adapter.loop_candidate_admitted`` rather than restated,
+    so this derivation and the parent's cannot drift apart in the one place they
+    used to be able to.
+    """
 
     pairs: set[tuple[str, str]] = set()
     ordered = tuple(frames)
@@ -956,7 +961,11 @@ def build_engine_pair_graph(
             distance = math.dist(
                 frame.raw_camera_center_m, candidate.raw_camera_center_m
             )
-            if SPATIAL_MIN_BASELINE_M <= distance <= SPATIAL_RADIUS_M:
+            if loop_candidate_admitted(
+                distance_m=distance,
+                first_rotation=frame.cam_from_world_rotation,  # type: ignore[arg-type]
+                second_rotation=candidate.cam_from_world_rotation,  # type: ignore[arg-type]
+            ):
                 spatial.append((distance, candidate.engine_image_name, right))
         for _, _, right in sorted(spatial)[:MAX_SPATIAL_NEIGHBORS]:
             pairs.add(
@@ -1827,18 +1836,25 @@ def require_candidate_graph_agreement(
     pairs: Sequence[tuple[str, str]],
     frames: Sequence[ColmapEngineFrame],
     centres_by_name: Mapping[str, tuple[float, float, float]],
+    rotations_by_name: Mapping[str, tuple[tuple[float, float, float], ...]],
 ) -> None:
     """Refuse a run whose two derivations of the candidate graph disagree.
 
-    TWO DIFFERENT CENTRES produce this graph.  The MATCHER is given the graph
-    built from ``rawCameraCenterMeters`` as the packet declared it; the EVIDENCE
-    BUILDER rebuilds its own from ``-R^T t`` of the raw model's parsed poses.
-    Those agree to float noise, and the packet parser already bounds their
-    disagreement at ``1e-6`` m -- but the spatial band has hard edges at
-    ``SPATIAL_MIN_BASELINE_M`` and ``SPATIAL_RADIUS_M``, and a pair sitting
-    exactly on one could fall on different sides in the two derivations.  The
-    builder would then refuse with "two-view snapshot omitted a deterministic
-    candidate pair", which says nothing about the cause.
+    TWO DIFFERENT POSES produce this graph.  The MATCHER is given the graph built
+    from ``rawCameraCenterMeters``/``camFromWorldRotation`` as the packet
+    declared them; the EVIDENCE BUILDER rebuilds its own from ``-R^T t`` and the
+    R of the raw model's parsed poses.  Those agree to float noise, and the
+    packet parser already bounds the centre disagreement at ``1e-6`` m -- but the
+    policy has hard edges at ``SPATIAL_MIN_BASELINE_M``, ``SPATIAL_RADIUS_M`` and
+    (since R122) ``LOOP_MAX_VIEW_AXIS_ANGLE_DEG``, and a pair sitting exactly on
+    one could fall on different sides in the two derivations.  The builder would
+    then refuse with "two-view snapshot omitted a deterministic candidate pair",
+    which says nothing about the cause.
+
+    BOTH halves of the pose are substituted, not just the centre.  R122 added a
+    second hard edge to the policy; a shadow that re-derived only the distances
+    would have gone on agreeing with itself about the angles and the guard would
+    have quietly stopped covering the new edge.
 
     Extracted from ``_run_primary_plan`` rather than inlined for the reason this
     codebase has extracted a guard before: inlined, it sits behind a GPU, a
@@ -1850,6 +1866,7 @@ def require_candidate_graph_agreement(
         dataclasses.replace(
             frame,
             raw_camera_center_m=centres_by_name[frame.engine_image_name],
+            cam_from_world_rotation=rotations_by_name[frame.engine_image_name],
         )
         for frame in frames
     )
@@ -2116,6 +2133,7 @@ def _run_primary_plan(
             name: _camera_center_m(row["pose"])
             for name, row in raw_rows.items()
         },
+        {name: row["pose"].rotation for name, row in raw_rows.items()},
     )
 
     # 9. Bundle adjustment, the only step permitted to move a known pose.

@@ -324,6 +324,351 @@ def test_sim3_rejects_collinear_correspondences():
         estimate_sim3(source, source)
 
 
+def _yaw(degrees: float) -> tuple[tuple[float, float, float], ...]:
+    """ARKit camera-to-world rotation for a camera turned `degrees` about world +Y.
+
+    Chosen so the angle between two cameras' optical axes IS the yaw difference:
+    ARKit's camera looks down its own -Z, so a yaw of theta puts its world-space
+    viewing direction at ``(-sin theta, 0, -cos theta)`` and the dot product with
+    an unturned camera's ``(0, 0, -1)`` is exactly ``cos theta``.
+    """
+
+    radians = math.radians(degrees)
+    cosine, sine = math.cos(radians), math.sin(radians)
+    return ((cosine, 0.0, sine), (0.0, 1.0, 0.0), (-sine, 0.0, cosine))
+
+
+def _turned_frames(yaw_degrees, centers):
+    return [
+        normalize_keyframe_entry(
+            {**_entry(index, center), "cameraTransform": _transform(center, _yaw(yaw))},
+            index,
+        )
+        for index, (yaw, center) in enumerate(zip(yaw_degrees, centers))
+    ]
+
+
+def test_view_axis_angle_is_the_angle_between_the_two_cameras_optical_axes():
+    """A property, not a number: the COLMAP pose must agree with the ARKit one.
+
+    ``optical_axis`` reads the third ROW of the COLMAP ``cam_from_world``
+    rotation.  That is only the right thing to read if it comes out equal to
+    minus the third COLUMN of the ARKit camera-to-world rotation, which is where
+    the device's viewing direction actually lives.  Both are constructed here
+    from the same transform and compared, so a sign error or a transpose in
+    either direction reddens rather than quietly selecting the wrong pairs.
+    """
+
+    for degrees in (0.0, 17.5, 59.999, 60.0, 90.0, 179.0):
+        first, second = _turned_frames((0.0, degrees), ((0.0, 0.0, 0.0), (1.0, 0.0, 0.0)))
+        assert adapter.view_axis_angle_deg(
+            first.colmap_pose.rotation, second.colmap_pose.rotation
+        ) == pytest.approx(degrees, abs=1e-9)
+
+        # And the same angle read straight off the ARKit transform.
+        def arkit_axis(frame):
+            flat = frame.arkit_camera_to_world
+            return (-flat[2], -flat[6], -flat[10])
+
+        dot = sum(a * b for a, b in zip(arkit_axis(first), arkit_axis(second)))
+        assert math.degrees(math.acos(max(-1.0, min(1.0, dot)))) == pytest.approx(
+            degrees, abs=1e-9
+        )
+
+
+def test_a_near_loop_candidate_is_refused_when_the_cameras_point_apart():
+    """R122's whole point, constructed both ways on one pair.
+
+    Two frames 0.5 m apart and far outside the temporal window are a loop
+    candidate under the distance-only policy no matter where they look.  I103
+    measured what that costs: 270 such candidates at a median 106 degrees, four
+    verified.  Here the SAME two frames are offered when co-directed and refused
+    when turned, with nothing else changed.
+    """
+
+    centers = [(0.0, 0.0, 0.4 * index) for index in range(13)]
+    centers[12] = (0.5, 0.0, 0.0)
+    loop = ("keyframe_000000.heic", "keyframe_000012.heic")
+
+    co_directed = _turned_frames([0.0] * 13, centers)
+    assert loop in build_pair_graph(co_directed, temporal_window=2)
+
+    turned = _turned_frames([0.0] * 12 + [90.0], centers)
+    assert loop not in build_pair_graph(turned, temporal_window=2)
+
+    # The bound is inclusive, and it is the bound that decides -- not 89 or 91.
+    at_bound = _turned_frames([0.0] * 12 + [adapter.LOOP_MAX_VIEW_AXIS_ANGLE_DEG], centers)
+    assert loop in build_pair_graph(at_bound, temporal_window=2)
+    past_bound = _turned_frames(
+        [0.0] * 12 + [adapter.LOOP_MAX_VIEW_AXIS_ANGLE_DEG * 1.0001], centers
+    )
+    assert loop not in build_pair_graph(past_bound, temporal_window=2)
+
+
+def test_the_view_filter_runs_before_the_neighbour_cap_not_after():
+    """The crowding-out fix, which is where the edge count actually came from.
+
+    Frame 0 has three NEAR candidates that point away and three FARTHER ones
+    that point the same way, with a cap of three.  Filtering after the cap --
+    or not filtering at all -- spends the whole budget on the near mis-directed
+    three and offers nothing that can verify.  Filtering first spends it on the
+    three co-directed ones.  On I104's 100-frame capture this is the difference
+    between 563 offered loop candidates yielding 31 verified edges and 291
+    yielding 90.
+    """
+
+    centers = [(0.0, 0.0, 0.3 * index) for index in range(11)]
+    centers.extend([(0.30, 0.0, 0.0), (0.35, 0.0, 0.0), (0.40, 0.0, 0.0)])
+    centers.extend([(0.90, 0.0, 0.0), (0.95, 0.0, 0.0), (1.00, 0.0, 0.0)])
+    yaws = [0.0] * 11 + [120.0, 120.0, 120.0] + [0.0, 0.0, 0.0]
+    frames = _turned_frames(yaws, centers)
+
+    pairs = build_pair_graph(frames, temporal_window=2, max_spatial_neighbors=3)
+    offered = {
+        second for first, second in pairs if first == "keyframe_000000.heic"
+    } | {first for first, second in pairs if second == "keyframe_000000.heic"}
+
+    near_mis_directed = {f"keyframe_{index:06d}.heic" for index in (11, 12, 13)}
+    far_co_directed = {f"keyframe_{index:06d}.heic" for index in (14, 15, 16)}
+    assert not (offered & near_mis_directed), "a mis-directed pair was still offered"
+    assert far_co_directed <= offered, "the co-directed pairs were crowded out"
+
+
+def test_the_loop_candidate_bound_is_the_neighbour_cap_and_the_angle_does_not_relax_it():
+    """R122 did not raise the cap, and this proves the cap still binds.
+
+    Twenty co-directed frames all inside the spatial band: every one of them is
+    admissible, so only ``max_spatial_neighbors`` may be taken per frame.  The
+    ceiling asserted is the one the matcher's cost is budgeted against --
+    ``len(frames) * (temporal_window + max_spatial_neighbors)`` -- and the graph
+    must sit strictly below the complete graph, or the cap is not doing anything.
+    """
+
+    frames = _turned_frames([0.0] * 20, [(0.05 * index, 0.0, 0.0) for index in range(20)])
+    order = {frame.image_name: index for index, frame in enumerate(frames)}
+
+    pairs = build_pair_graph(
+        frames, temporal_window=2, spatial_min_baseline_m=0.25, max_spatial_neighbors=3
+    )
+    loops = [pair for pair in pairs if abs(order[pair[1]] - order[pair[0]]) > 2]
+
+    assert loops, "the fixture must offer loop candidates at all"
+    assert len(pairs) <= len(frames) * (2 + 3)
+    assert len(pairs) < len(frames) * (len(frames) - 1) // 2
+    per_frame = {frame.image_name: 0 for frame in frames}
+    for first, second in loops:
+        per_frame[first] += 1
+        per_frame[second] += 1
+    # A pair is offered by EITHER endpoint, so a frame can appear in more than
+    # the cap; what the cap bounds is how many any one frame CONTRIBUTES.
+    assert max(per_frame.values()) <= 2 * 3
+
+
+def test_temporal_pairs_are_never_filtered_by_view_angle():
+    """Deliberate, and the connectivity floor is why.
+
+    An operator who turns quickly produces temporally adjacent frames pointing
+    far apart.  Dropping those would break the chain that
+    ``MIN_CONNECTED_FRACTION`` is measured over and trade a connected
+    reconstruction for a handful of saved matches.  R122 changed the loop
+    policy; it did not change the backbone.
+    """
+
+    frames = _turned_frames([0.0, 179.0, 0.0, 179.0], [(0.0, 0.0, 0.05 * i) for i in range(4)])
+    pairs = build_pair_graph(frames, temporal_window=3)
+
+    assert ("keyframe_000000.heic", "keyframe_000001.heic") in pairs
+    assert len(pairs) == 6
+
+
+def test_a_verified_edge_between_mis_directed_cameras_is_no_longer_a_loop_edge():
+    """The policy reaches the VERDICT, not just the pair list.
+
+    ``classify_overlap`` only counts an edge the candidate graph offered.  A
+    wide-angle pair the matcher somehow verified is now outside the graph, so
+    the run reports that it has no non-temporal loop evidence rather than
+    counting a pair that shares no image content.
+    """
+
+    centers = [(0.0, 0.0, 0.4 * index) for index in range(13)]
+    centers[12] = (0.5, 0.0, 0.0)
+    frames = _turned_frames([0.0] * 12 + [90.0], centers)
+    verified = {
+        (frames[index].image_name, frames[index + 1].image_name): 50
+        for index in range(len(frames) - 1)
+    }
+    verified[(frames[0].image_name, frames[12].image_name)] = 400
+
+    verdict = classify_overlap(frames, verified, temporal_window=2)
+
+    assert verdict.verified_loop_edges == 0
+    assert verdict.reason == "no_verified_non_temporal_loop"
+
+    # Same capture, same verified inliers, cameras co-directed: it counts.
+    co_directed = _turned_frames([0.0] * 13, centers)
+    counted = classify_overlap(
+        co_directed,
+        {
+            (co_directed[index].image_name, co_directed[index + 1].image_name): 50
+            for index in range(len(co_directed) - 1)
+        }
+        | {(co_directed[0].image_name, co_directed[12].image_name): 400},
+        temporal_window=2,
+    )
+    assert counted.verified_loop_edges == 1
+    assert counted.ok
+
+
+def test_the_engine_derivation_of_the_graph_matches_the_adapters():
+    """TWO of the three derivations, compared directly on one capture.
+
+    ``build_pair_graph`` (parent, over ``NormalizedFrame``) and
+    ``build_engine_pair_graph`` (child, over the packet's ``ColmapEngineFrame``)
+    must produce the same pairs or the evidence builder refuses with "two-view
+    snapshot omitted a deterministic candidate pair" two layers away.  They
+    share ``loop_candidate_admitted`` precisely so they cannot disagree; this
+    is the test that would notice if one of them stopped calling it.
+    """
+
+    from patina_scan_worker.refine_colmap_backend import (
+        ColmapEngineFrame,
+        build_engine_pair_graph,
+    )
+
+    centers = [(0.0, 0.0, 0.35 * index) for index in range(24)]
+    centers[20] = (0.4, 0.0, 0.1)
+    centers[21] = (0.5, 0.0, 0.2)
+    centers[22] = (0.6, 0.0, 0.3)
+    centers[23] = (0.7, 0.0, 0.4)
+    yaws = [0.0] * 20 + [10.0, 75.0, 30.0, 140.0]
+    frames = _turned_frames(yaws, centers)
+
+    engine_frames = tuple(
+        ColmapEngineFrame(
+            ordinal=index,
+            source_image_name=frame.image_name,
+            frame_timestamp_s=frame.frame_timestamp_s,
+            engine_image_name=frame.image_name,
+            engine_relative_path=f"images/{frame.image_name}",
+            engine_sha256="0" * 64,
+            engine_size_bytes=1,
+            intrinsics=(600.0, 600.0, 320.0, 240.0, 640, 480),
+            cam_from_world_rotation=frame.colmap_pose.rotation,
+            cam_from_world_translation=frame.colmap_pose.translation,
+            raw_camera_center_m=frame.camera_center_m,
+        )
+        for index, frame in enumerate(frames)
+    )
+
+    expected = build_pair_graph(frames)
+    assert build_engine_pair_graph(engine_frames) == expected
+
+    # The fixture has to exercise the filter, or the equality is vacuous: some
+    # loop pairs must be offered, and some in-band ones must have been refused.
+    order = {frame.image_name: index for index, frame in enumerate(frames)}
+    loops = [p for p in expected if abs(order[p[1]] - order[p[0]]) > adapter.TEMPORAL_WINDOW]
+    assert loops
+    assert ("keyframe_000000.heic", "keyframe_000021.heic") not in expected
+    assert len(expected) < len(frames) * (len(frames) - 1) // 2
+
+
+def test_the_bound_admits_the_widest_pair_the_qualification_capture_verified():
+    """The measurement, encoded so a quiet tightening reddens.
+
+    A constant nobody reaches is a constant anybody can move.  The widest
+    VERIFIED loop edge in the capture the bound was derived from sits at 51.5
+    degrees, and the narrower of that device's two fields of view is 55.8 --
+    so a bound at 45, which reads as harmlessly conservative, silently discards
+    real edges the engine had already found.  The pair at 51.5 must be admitted
+    and the pair past the bound must not; between them they pin the constant to
+    the interval the evidence supports rather than to a literal.
+    """
+
+    centers = [(0.0, 0.0, 0.4 * index) for index in range(13)]
+    centers[12] = (0.5, 0.0, 0.0)
+    loop = ("keyframe_000000.heic", "keyframe_000012.heic")
+
+    widest_verified = _turned_frames([0.0] * 12 + [51.5], centers)
+    assert loop in build_pair_graph(widest_verified, temporal_window=2)
+
+    beyond_the_narrow_field_of_view = _turned_frames([0.0] * 12 + [61.0], centers)
+    assert loop not in build_pair_graph(beyond_the_narrow_field_of_view, temporal_window=2)
+
+
+def test_the_bound_is_inclusive_at_exactly_the_bound():
+    """Constructed exactly on it, so '<=' and '<' cannot both be green.
+
+    Turning a camera by a nominal 60 degrees and asking whether 60 is admitted
+    tests floating point, not the comparison: the measured angle lands a few
+    ULPs either side and both operators agree.  Feeding the bound the angle the
+    function itself just computed removes that slack -- the two values are the
+    same float, so only an inclusive comparison admits the pair.
+    """
+
+    first, second = _turned_frames((0.0, 37.25), ((0.0, 0.0, 0.0), (0.5, 0.0, 0.0)))
+    exact = adapter.view_axis_angle_deg(
+        first.colmap_pose.rotation, second.colmap_pose.rotation
+    )
+
+    assert adapter.loop_candidate_admitted(
+        distance_m=0.5,
+        first_rotation=first.colmap_pose.rotation,
+        second_rotation=second.colmap_pose.rotation,
+        max_view_axis_angle_deg=exact,
+    )
+    assert not adapter.loop_candidate_admitted(
+        distance_m=0.5,
+        first_rotation=first.colmap_pose.rotation,
+        second_rotation=second.colmap_pose.rotation,
+        max_view_axis_angle_deg=math.nextafter(exact, 0.0),
+    )
+
+
+def test_classify_overlap_forwards_the_view_axis_bound_it_was_given():
+    """The verdict must obey the caller's bound, not a default it re-reads.
+
+    ``classify_overlap`` builds its own candidate graph, and a pass-through it
+    forgets is invisible at the default -- every test using the default value
+    stays green while a caller's argument is silently ignored.  Two calls over
+    the SAME frames and the SAME verified inliers, differing only in the bound,
+    must reach different verdicts.
+    """
+
+    centers = [(0.0, 0.0, 0.4 * index) for index in range(13)]
+    centers[12] = (0.5, 0.0, 0.0)
+    frames = _turned_frames([0.0] * 12 + [50.0], centers)
+    verified = {
+        (frames[index].image_name, frames[index + 1].image_name): 50
+        for index in range(len(frames) - 1)
+    }
+    verified[(frames[0].image_name, frames[12].image_name)] = 400
+
+    admitted = classify_overlap(
+        frames, verified, temporal_window=2, max_view_axis_angle_deg=55.0
+    )
+    refused = classify_overlap(
+        frames, verified, temporal_window=2, max_view_axis_angle_deg=45.0
+    )
+
+    assert admitted.verified_loop_edges == 1 and admitted.ok
+    assert refused.verified_loop_edges == 0
+    assert refused.reason == "no_verified_non_temporal_loop"
+
+
+def test_the_view_axis_bound_must_be_a_usable_angle():
+    frames = _turned_frames([0.0] * 13, [(0.0, 0.0, 0.4 * index) for index in range(13)])
+
+    for bad in (0.0, -1.0, 180.1):
+        with pytest.raises(AdapterError, match="view-axis bound"):
+            build_pair_graph(frames, temporal_window=2, max_view_axis_angle_deg=bad)
+
+    with pytest.raises(AdapterError, match="no usable optical axis"):
+        adapter.view_axis_angle_deg(
+            ((1.0, 0.0, 0.0), (0.0, 1.0, 0.0), (0.0, 0.0, 0.0)),
+            ((1.0, 0.0, 0.0), (0.0, 1.0, 0.0), (0.0, 0.0, 1.0)),
+        )
+
+
 def test_pair_graph_is_deterministic_and_retains_a_spatial_loop_closure():
     centers = _returning_loop_centers()
     frames = [normalize_keyframe_entry(_entry(i, center), i) for i, center in enumerate(centers)]

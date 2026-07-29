@@ -61,6 +61,38 @@ SPATIAL_RADIUS_M = 1.5
 SPATIAL_MIN_BASELINE_M = 0.25
 MAX_SPATIAL_NEIGHBORS = 8
 MIN_VERIFIED_INLIERS = 30
+#: The widest angle between two cameras' optical axes at which a NON-TEMPORAL
+#: pair is still offered to the matcher.
+#:
+#: MEASURED, not chosen.  I104's 100-frame capture published its COLMAP
+#: database; joining that database's ``two_view_geometries`` table against the
+#: capture's own ARKit poses gives the verification rate of all 1_508 candidate
+#: pairs as a function of this angle.  The two populations in that capture --
+#: the 563 non-temporal loop candidates, and INDEPENDENTLY the 945 temporal ones
+#: this policy does not touch -- collapse in the same place:
+#:
+#:     axis angle    loop pairs  verified     temporal pairs  verified
+#:     under 45 deg          56     48.2%                394     63.5%
+#:     45 to 60 deg          47      8.5%                172      6.4%
+#:     60 to 75 deg          58      0.0%                125      1.6%
+#:     over 75 deg          402      0.0%                254      0.0%
+#:
+#: 60 degrees is the smallest bucket edge above which not one of 460 real loop
+#: candidates verified.  It keeps every one of that capture's 31 verified loop
+#: edges -- the widest sits at 51.5 deg -- and discards the 460 that produced
+#: none.  A tighter 45 would have thrown away 4 of the 31 for no measured gain.
+#:
+#: The device's optics say WHY the collapse is there, which is the check that
+#: this is a property of cameras rather than of one room.  The keyframe
+#: intrinsics give a 70.5 x 55.8 degree field of view, so two cameras whose axes
+#: differ by more than 55.8 deg are no longer guaranteed to share any viewing
+#: direction at all, and past the 82.8-degree diagonal they cannot.  The widest
+#: verified pair of ANY kind in that capture sits at 74.2 deg, inside the
+#: bracket.  Beyond it a pair has no common image content, so no amount of GPU
+#: time can carry it to :data:`MIN_VERIFIED_INLIERS`; offering it is spend, not
+#: opportunity.  See R122 and I103's finding that the 49-frame capture's 270
+#: loop candidates had a MEDIAN axis angle of 106 deg and verified four.
+LOOP_MAX_VIEW_AXIS_ANGLE_DEG = 60.0
 MIN_CONNECTED_FRACTION = 0.80
 MIN_REFINEMENT_RELATIVE_IMPROVEMENT = 0.01
 POSE_PRIOR_STD_M = 0.10
@@ -681,6 +713,75 @@ def _canonical_pair(first: str, second: str) -> tuple[str, str]:
     return (first, second) if first < second else (second, first)
 
 
+def optical_axis(rotation: Matrix3) -> Vector3:
+    """World-space viewing direction of a COLMAP ``cam_from_world`` rotation.
+
+    COLMAP's camera looks down +Z of its own frame and ``x_cam = R x_world + t``,
+    so the direction it points in world coordinates is ``R^T e_z`` -- the third
+    ROW of R.  (For a Field capture that is identically minus the third column
+    of the ARKit camera-to-world rotation, because ARKit's camera looks down its
+    own -Z; the two agree by construction through
+    :func:`arkit_c2w_to_colmap_w2c`.)
+
+    Reading it off the COLMAP pose rather than the ARKit transform is
+    deliberate.  THREE separate derivations of the candidate graph exist -- this
+    module's :func:`build_pair_graph` over ``NormalizedFrame``,
+    ``refine_colmap_backend.build_engine_pair_graph`` over the packet's
+    ``ColmapEngineFrame``, and ``refine_evidence_builder._pair_graph`` over the
+    raw model the engine wrote -- and the ``cam_from_world`` rotation is the one
+    quantity all three hold.  Anything else would make them disagree about where
+    a camera points by reading different fields, which is exactly the failure
+    :func:`refine_colmap_backend.require_candidate_graph_agreement` exists to
+    catch.
+
+    The device's rotations arrive orthonormal only to ~3.3e-7 (I102), so the row
+    is normalised before it is used as a direction.
+    """
+
+    axis = rotation[2]
+    norm = math.sqrt(axis[0] * axis[0] + axis[1] * axis[1] + axis[2] * axis[2])
+    if not math.isfinite(norm) or norm <= 1e-9:
+        raise AdapterError("a camera rotation carries no usable optical axis")
+    return (axis[0] / norm, axis[1] / norm, axis[2] / norm)
+
+
+def view_axis_angle_deg(first: Matrix3, second: Matrix3) -> float:
+    """Angle in degrees between two cameras' optical axes."""
+
+    left = optical_axis(first)
+    right = optical_axis(second)
+    dot = left[0] * right[0] + left[1] * right[1] + left[2] * right[2]
+    return math.degrees(math.acos(min(1.0, max(-1.0, dot))))
+
+
+def loop_candidate_admitted(
+    *,
+    distance_m: float,
+    first_rotation: Matrix3,
+    second_rotation: Matrix3,
+    spatial_min_baseline_m: float = SPATIAL_MIN_BASELINE_M,
+    spatial_radius_m: float = SPATIAL_RADIUS_M,
+    max_view_axis_angle_deg: float = LOOP_MAX_VIEW_AXIS_ANGLE_DEG,
+) -> bool:
+    """NEAR **and** CO-DIRECTED: both conditions a loop candidate must meet.
+
+    The single point of truth for the loop-candidate policy.  All three
+    derivations of the candidate graph call this rather than restating the
+    predicate, because before R122 they restated the distance half of it three
+    times and a fourth restatement is how they would drift.
+
+    Distance alone was the whole policy until R122, and I103/I104 measured what
+    that costs: on a capture where the operator turned in place, 270 candidates
+    were offered at a median optical-axis separation of 106 degrees and four
+    verified.  Pairs that far apart share no image content; they are not loop
+    closures, they are two cameras that happened to be standing near each other.
+    """
+
+    if not (spatial_min_baseline_m <= distance_m <= spatial_radius_m):
+        return False
+    return view_axis_angle_deg(first_rotation, second_rotation) <= max_view_axis_angle_deg
+
+
 def build_pair_graph(
     frames: Iterable[NormalizedFrame],
     *,
@@ -688,13 +789,41 @@ def build_pair_graph(
     spatial_radius_m: float = SPATIAL_RADIUS_M,
     spatial_min_baseline_m: float = SPATIAL_MIN_BASELINE_M,
     max_spatial_neighbors: int = MAX_SPATIAL_NEIGHBORS,
+    max_view_axis_angle_deg: float = LOOP_MAX_VIEW_AXIS_ANGLE_DEG,
 ) -> tuple[tuple[str, str], ...]:
-    """Build sorted temporal pairs plus bounded ARKit-spatial loop candidates."""
+    """Build sorted temporal pairs plus bounded NEAR, CO-DIRECTED loop candidates.
+
+    THE BOUND IS UNCHANGED AND IS NOT THE ANGLE.  At most
+    ``max_spatial_neighbors`` loop candidates are taken per frame, exactly as
+    before, so the graph still cannot exceed ``len(frames) * (temporal_window +
+    max_spatial_neighbors)`` pairs however the room is shaped -- the matcher's
+    cost ceiling is a property of the frame count, not of the trajectory.  The
+    R122 change is entirely inside the SELECTION: the per-frame shortlist is now
+    filtered to co-directed candidates BEFORE the nearest ``max_spatial_
+    neighbors`` are taken, so the cap spends its budget on pairs that can
+    verify.  Measured on I104's three captures, the proposed graph is SMALLER
+    than the one it replaces (walkA 1_508 -> 1_236 pairs) while offering more
+    loop candidates that the measurement says can succeed, because the near-but-
+    mis-directed pairs were crowding out co-directed ones further away.
+
+    Raising the cap instead was considered and rejected: it buys more of the
+    same population, and 460 of walkA's loop candidates beyond
+    :data:`LOOP_MAX_VIEW_AXIS_ANGLE_DEG` produced zero verified edges between
+    them.  More of nothing is nothing, paid for in GPU time.
+
+    TEMPORAL pairs are deliberately NOT filtered by view angle.  They are the
+    trajectory's backbone and what :data:`MIN_CONNECTED_FRACTION` is measured
+    over; dropping them because the operator turned quickly would trade a
+    connected reconstruction for a handful of saved matches.  They are also
+    already bounded at ``temporal_window`` per frame.
+    """
 
     if temporal_window < 1 or max_spatial_neighbors < 1:
         raise AdapterError("pair-graph windows must be positive")
     if not (0 <= spatial_min_baseline_m < spatial_radius_m):
         raise AdapterError("spatial pair bounds must satisfy 0 <= minimum < radius")
+    if not (0 < max_view_axis_angle_deg <= 180):
+        raise AdapterError("the loop view-axis bound must be an angle in (0, 180] degrees")
     ordered = sorted(frames, key=lambda frame: (frame.frame_timestamp_s, frame.image_name))
     if len({frame.image_name for frame in ordered}) != len(ordered):
         raise AdapterError("pair graph needs unique image names")
@@ -710,7 +839,14 @@ def build_pair_graph(
             distance = _norm(
                 tuple(candidate.camera_center_m[axis] - ordered[left].camera_center_m[axis] for axis in range(3))
             )
-            if spatial_min_baseline_m <= distance <= spatial_radius_m:
+            if loop_candidate_admitted(
+                distance_m=distance,
+                first_rotation=ordered[left].colmap_pose.rotation,
+                second_rotation=candidate.colmap_pose.rotation,
+                spatial_min_baseline_m=spatial_min_baseline_m,
+                spatial_radius_m=spatial_radius_m,
+                max_view_axis_angle_deg=max_view_axis_angle_deg,
+            ):
                 spatial_candidates.append((distance, candidate.image_name, right))
         for _, _, right in sorted(spatial_candidates)[:max_spatial_neighbors]:
             pairs.add(_canonical_pair(ordered[left].image_name, ordered[right].image_name))
@@ -725,6 +861,7 @@ def classify_overlap(
     spatial_radius_m: float = SPATIAL_RADIUS_M,
     spatial_min_baseline_m: float = SPATIAL_MIN_BASELINE_M,
     max_spatial_neighbors: int = MAX_SPATIAL_NEIGHBORS,
+    max_view_axis_angle_deg: float = LOOP_MAX_VIEW_AXIS_ANGLE_DEG,
     minimum_inliers: int = MIN_VERIFIED_INLIERS,
     minimum_connected_fraction: float = MIN_CONNECTED_FRACTION,
 ) -> OverlapVerdict:
@@ -740,6 +877,7 @@ def classify_overlap(
             spatial_radius_m=spatial_radius_m,
             spatial_min_baseline_m=spatial_min_baseline_m,
             max_spatial_neighbors=max_spatial_neighbors,
+            max_view_axis_angle_deg=max_view_axis_angle_deg,
         )
     )
     positions = {frame.image_name: index for index, frame in enumerate(ordered)}
@@ -1336,6 +1474,7 @@ def build_adapter_artifacts(
             "spatialRadiusMeters": SPATIAL_RADIUS_M,
             "spatialMinimumBaselineMeters": SPATIAL_MIN_BASELINE_M,
             "maximumSpatialNeighbors": MAX_SPATIAL_NEIGHBORS,
+            "maximumViewAxisAngleDegrees": LOOP_MAX_VIEW_AXIS_ANGLE_DEG,
         },
         "frames": frame_rows,
     }

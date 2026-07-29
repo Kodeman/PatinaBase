@@ -9,6 +9,7 @@ from dataclasses import replace
 
 import pytest
 from patina_scan_worker.refine_adapter import (
+    LOOP_MAX_VIEW_AXIS_ANGLE_DEG,
     AdapterError,
     ColmapPose,
     PinholeIntrinsics,
@@ -651,3 +652,80 @@ def test_builder_obeys_the_carried_absolute_deadline():
     with pytest.raises(AdapterError, match="deadline is exhausted") as raised:
         build_refinement_evidence(_request(), deadline=_deadline(-1.0))
     assert raised.value.code == "REFINE_ENGINE_TIMEOUT"
+
+
+def _rotation_y(degrees: float):
+    angle = math.radians(degrees)
+    return (
+        (math.cos(angle), 0.0, math.sin(angle)),
+        (0.0, 1.0, 0.0),
+        (-math.sin(angle), 0.0, math.cos(angle)),
+    )
+
+
+def test_the_builders_own_candidate_graph_obeys_the_view_axis_bound():
+    """The THIRD derivation of the graph, reached directly.
+
+    ``_pair_graph`` sits behind a GPU, a pinned COLMAP and a real capture in
+    production, so nothing that runs here would notice if it stopped filtering
+    by direction -- it would simply rebuild the pre-R122 graph, disagree with
+    the matcher's, and surface as "two-view snapshot omitted a deterministic
+    candidate pair" from somewhere else entirely.  Building its ``_ValidatedFrame``
+    rows by hand is the same move this package already made for the engine's
+    candidate-graph guard: named, it is directly falsifiable.
+
+    The existing fixture rotates about Z, which leaves the optical axis exactly
+    where it was -- a camera rolling about its own line of sight still looks the
+    same way.  These turn about Y, which is what actually moves it.
+    """
+
+    from patina_scan_worker.refine_evidence_builder import _pair_graph, _ValidatedFrame
+
+    frames = _frames()
+    centres = [(0.4 * index, 0.0, 0.0) for index in range(len(frames))]
+    centres[-1] = (0.5, 0.0, 0.0)
+    loop = (frames[0].engine_image_name, frames[-1].engine_image_name)
+
+    def graph(turn_last_by: float):
+        rows = tuple(
+            _ValidatedFrame(
+                frame,
+                centres[index],
+                _rotation_y(turn_last_by if index == len(frames) - 1 else 0.0),
+            )
+            for index, frame in enumerate(frames)
+        )
+        return _pair_graph(rows, deadline=_deadline())
+
+    assert loop in graph(0.0)
+    assert loop in graph(LOOP_MAX_VIEW_AXIS_ANGLE_DEG)
+    assert loop not in graph(LOOP_MAX_VIEW_AXIS_ANGLE_DEG * 1.0001)
+    assert loop not in graph(120.0)
+
+
+def test_the_builders_graph_is_derived_from_the_raw_pose_not_the_refined_one():
+    """The graph must not depend on the answer.
+
+    The candidate set is a property of the capture the device submitted.  If it
+    were rebuilt from the REFINED rotations, the set of pairs the evidence is
+    measured over would move with the result being measured -- and a refinement
+    that turned a camera could quietly delete the loop edge that was about to
+    judge it.  The centre has always been read from the raw pose; this pins the
+    rotation to the same model.
+    """
+
+    from patina_scan_worker.refine_evidence_builder import _validate_frames
+
+    frames = list(_frames())
+    half = math.radians(90.0) / 2.0
+    turned = replace(
+        frames[-1].refined_cam_from_world,
+        rotation=_rotation_y(90.0),
+        qvec=(math.cos(half), 0.0, math.sin(half), 0.0),
+    )
+    frames[-1] = replace(frames[-1], refined_cam_from_world=turned)
+
+    validated = _validate_frames(tuple(frames), deadline=_deadline())
+
+    assert validated[-1].raw_rotation == frames[-1].raw_cam_from_world.rotation
+    assert validated[-1].raw_rotation != frames[-1].refined_cam_from_world.rotation
