@@ -14,7 +14,7 @@ import SwiftData
 /// The optional owner columns on persisted models exist for lightweight migration:
 /// pre-Option-B rows decode as nil and remain quarantined. New authenticated work
 /// receives both normalized values at creation and never changes owners.
-public struct CaptureOwnerIdentity: Sendable, Hashable {
+public struct CaptureOwnerIdentity: Sendable, Hashable, Codable {
     public let userID: String
     public let workspaceID: String
 

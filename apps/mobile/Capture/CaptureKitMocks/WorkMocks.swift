@@ -265,7 +265,11 @@ public struct MockPortalAuthApprovalService: PortalAuthApprovalService {
 /// on the simulator (where real RoomPlan/LiDAR is unavailable).
 @MainActor
 public final class MockScanSession: FieldScanSession, AnchorCapturing, ContextCapturing {
-    public init() {}
+    private let owner: CaptureOwnerIdentity?
+
+    public init(owner: CaptureOwnerIdentity? = nil) {
+        self.owner = owner
+    }
 
     // Item-7 context capture (scripted — a placeholder frame so the sim flow enqueues).
     public let scanSessionId = UUID().uuidString.lowercased()
@@ -306,6 +310,7 @@ public final class MockScanSession: FieldScanSession, AnchorCapturing, ContextCa
         // Scorecard reflects the anchors the sim user entered (drives UNVERIFIED).
         FieldScanResult(localBundleURL: WorkFixtures.scanBundleURL,
                         roomName: "Living room", areaLabel: "312 sq ft",
+                        owner: owner,
                         scorecard: Scorecard(
                             coveragePct: 100, sharpFrameRatio: 0.88, trackingHealth: .good,
                             anchorCount: capturedAnchors.count, verdict: .green,
@@ -371,10 +376,16 @@ public final class MockScanSession: FieldScanSession, AnchorCapturing, ContextCa
 @MainActor
 public final class MockSiteScanService: SiteScanService {
     private var pending: [FieldScanPendingUpload] = []
-    public init() {}
+    private let owner: CaptureOwnerIdentity?
+
+    public init(owner: CaptureOwnerIdentity? = nil) {
+        self.owner = owner
+    }
     /// Always supported for previews/sim (the real seam gates on LiDAR).
     public var isSupported: Bool { true }
-    public func startSession() async throws -> any FieldScanSession { MockScanSession() }
+    public func startSession() async throws -> any FieldScanSession {
+        MockScanSession(owner: owner)
+    }
     public func upload(result: FieldScanResult, projectID: String?, projectRoomID: String?,
                        name: String) async throws -> FieldScanUploadReceipt {
         if MockFailure.failUpload {
@@ -398,5 +409,21 @@ public final class MockSiteScanService: SiteScanService {
     public func pendingUploads() async -> [FieldScanPendingUpload] { pending }
     public func resumePendingUploads(retryFailures: Bool) async {
         if retryFailures, !MockFailure.failUpload { pending.removeAll() }
+    }
+    public func retryPendingUpload(
+        id: String
+    ) async throws -> FieldScanUploadReceipt {
+        guard let index = pending.firstIndex(where: { $0.id == id }) else {
+            throw FieldScanRecoveryError.transferNotFound
+        }
+        let phase = pending[index].state.phase
+        guard phase == .rejected || phase == .retryableFailure else {
+            throw FieldScanRecoveryError.invalidTransferState
+        }
+        guard !MockFailure.failUpload else {
+            throw MockInjectedFailure("Upload failed.")
+        }
+        pending.remove(at: index)
+        return FieldScanUploadReceipt(remoteScanID: id)
     }
 }

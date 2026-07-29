@@ -32,6 +32,7 @@
 //  timeout that fails the continuation and re-enqueues is deferred to a later cycle.
 
 import Foundation
+import CaptureKit
 
 @MainActor
 final class FieldBackgroundScanUploader: NSObject {
@@ -41,6 +42,8 @@ final class FieldBackgroundScanUploader: NSObject {
     struct Descriptor: Sendable {
         let scanID: String
         let kind: String
+        let ownerUserID: String
+        let ownerWorkspaceID: String
         let sha256: String?
         let mimeType: String
         let fileURL: URL
@@ -145,9 +148,16 @@ final class FieldBackgroundScanUploader: NSObject {
         guard let request = task.originalRequest, let path = request.url?.path,
               let range = path.range(of: "/object/room-scans/") else { return nil }
         let storagePath = String(path[range.upperBound...])
-        let meta = request.value(forHTTPHeaderField: "x-metadata").flatMap(decodeMetadataHeader) ?? [:]
-        guard let scanID = meta["scanId"], let kind = meta["artifactKind"] else { return nil }
-        return Descriptor(scanID: scanID, kind: kind, sha256: meta["sha256"],
+        let values = request.value(forHTTPHeaderField: "x-metadata")
+            .flatMap(decodeMetadataHeader) ?? [:]
+        guard let metadata = ScanBackgroundTransferMetadata(
+            dictionary: values
+        ) else { return nil }
+        return Descriptor(scanID: metadata.scanID,
+                          kind: metadata.artifactKind,
+                          ownerUserID: metadata.owner.userID,
+                          ownerWorkspaceID: metadata.owner.workspaceID,
+                          sha256: metadata.sha256,
                           mimeType: request.value(forHTTPHeaderField: "Content-Type") ?? "application/octet-stream",
                           fileURL: URL(fileURLWithPath: ""), storagePath: storagePath)
     }
@@ -167,9 +177,17 @@ final class FieldBackgroundScanUploader: NSObject {
         request.setValue(anonKey, forHTTPHeaderField: "apikey")
         request.setValue(descriptor.mimeType, forHTTPHeaderField: "Content-Type")
         request.setValue("true", forHTTPHeaderField: "x-upsert")
-        var meta: [String: String] = ["scanId": descriptor.scanID, "artifactKind": descriptor.kind]
-        if let sha = descriptor.sha256, !sha.isEmpty { meta["sha256"] = sha }
-        if let header = Self.encodeMetadataHeader(meta) {
+        guard let owner = CaptureOwnerIdentity(
+            userID: descriptor.ownerUserID,
+            workspaceID: descriptor.ownerWorkspaceID
+        ) else { return nil }
+        let metadata = ScanBackgroundTransferMetadata(
+            scanID: descriptor.scanID,
+            artifactKind: descriptor.kind,
+            owner: owner,
+            sha256: descriptor.sha256
+        )
+        if let header = Self.encodeMetadataHeader(metadata.dictionary) {
             request.setValue(header, forHTTPHeaderField: "x-metadata")
         }
         return request
