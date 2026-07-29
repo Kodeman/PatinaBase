@@ -191,14 +191,24 @@ NATIVE_CHILD_MAX_OUTPUT_TOTAL_BYTES = 8 * 1024 * 1024 * 1024
 #: ``aligned-sparse-model-v1.tar``), recomputes the alignment from the first two,
 #: and refuses the third unless its own transform and pose digest agree.
 #:
-#: THAT CAPABILITY NOW EXISTS, in ``refine_model_alignment``
+#: THAT CAPABILITY EXISTS in ``refine_model_alignment``
 #: (:func:`~patina_scan_worker.refine_model_alignment
-#: .verify_child_alignment_proposal`).  This flag stays False anyway, and the
-#: distinction is the whole point: the flag means QUALIFIED, and nothing in this
-#: repository composes the verifier onto a real engine run or has host evidence
-#: that it agrees with a real COLMAP writer.  That is item 7.  Nothing in this
-#: module may be read as that verification having happened.
-NATIVE_ENGINE_OUTPUT_ALIGNMENT_VERIFIED_BY_PARENT = False
+#: .verify_child_alignment_proposal`), and at R121 BOTH conditions this comment
+#: previously named as missing were met on the qualified host: ``refine_lifecycle``
+#: composes the verifier onto the real engine child, and a real run of
+#: ``pycolmap==4.0.2``'s own writer produced the three archives it verified --
+#: agreeing on scale, rotation and translation inside every pinned tolerance and
+#: reproducing both pose digests.  So the flag moves.
+#:
+#: WHAT IT STILL DOES NOT MEAN, because the sentence is narrow.  THIS module
+#: transports and identity-binds; it does not verify anything itself, and it
+#: never learned to.  The flag records that the PARENT verified the aligned
+#: model somewhere on the composed path, on one subject, one host and one
+#: COLMAP build.  It is not a statement that the alignment was CORRECT in any
+#: absolute sense -- ``refine_model_alignment``'s own docstring is explicit that
+#: it decides self-consistency, and the anchor to the parent's own poses lives
+#: in ``refine_lifecycle.anchor_seed_snapshot_to_request``.
+NATIVE_ENGINE_OUTPUT_ALIGNMENT_VERIFIED_BY_PARENT = True
 #: What "frozen" means for the descriptors this channel returns, stated as a
 #: fact rather than a hope.  It is True because the returned descriptor is a
 #: private anonymous COPY (``O_TMPFILE | O_EXCL``) the parent created after the
@@ -652,6 +662,35 @@ class NativeChildContext:
                 _TIMEOUT_CODE,
             )
         return remaining
+
+    def carried_deadline(self) -> RefineDeadline:
+        """Rehydrate the PARENT's deadline on this side of the process boundary.
+
+        This is not a second clock and it is not an acquisition.  A
+        :class:`RefineDeadline` is a Python object; it cannot be sent through a
+        ``spawn``ed process boundary, so what crosses is the one thing that
+        matters -- the absolute ``time.monotonic`` instant the parent computed
+        in ``refine_lifecycle.lease_deadline``.  ``expires_at_monotonic_s`` IS
+        that instant, transported and already used by
+        :meth:`remaining_seconds`; this accessor only lets the child hand the
+        same instant to collaborators that type-check for the dataclass
+        (``read_sparse_model_snapshot``, ``build_refinement_evidence``,
+        ``plan_leased_colmap_command``, ``run_inherited_colmap_command``).
+
+        The distinction is load-bearing and is pinned by test rather than by
+        this docstring: ``RefineDeadline.start`` reads ``time.monotonic()`` and
+        would give the child a FRESH lease, which is why it stays forbidden
+        everywhere outside ``lease_deadline``; this constructor reads a
+        transported field and cannot invent a later expiry than the one the
+        parent already enforces on its own side of the boundary.
+
+        Monotonic clocks are per-boot, not per-process, on every platform this
+        runs on, so the transported instant is comparable in the child.  The
+        child is created by ``fork``+``exec`` from the parent on the same host;
+        nothing here is valid across hosts and nothing sends it across one.
+        """
+
+        return RefineDeadline(self.expires_at_monotonic_s)
 
     @property
     def pinned_file_tokens(self) -> tuple[str, ...]:

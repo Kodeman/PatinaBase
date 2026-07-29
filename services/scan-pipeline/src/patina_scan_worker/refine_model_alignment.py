@@ -133,18 +133,25 @@ WHAT THIS MODULE DOES NOT DO, stated so nothing here can be misread as more:
     similarity puts it -- which is what stops a model whose cameras face
     backwards from being certified -- but a uniform sub-ceiling misorientation
     is accepted, and no clause available to this module could refuse it.
-  * It does not compose anything.  Nothing in ``refine_runner``,
-    ``refine_publisher`` or ``refine_native_process`` calls into this module.
-    ``NATIVE_ENGINE_OUTPUT_ALIGNMENT_VERIFIED_BY_PARENT`` stays ``False``
-    because that flag means QUALIFIED, and qualification needs item 7's
-    composition plus host evidence.  See
-    :data:`PARENT_ALIGNMENT_VERIFICATION_COMPOSED_INTO_REFINE`.
-  * It has never parsed a real COLMAP 4.0.2 archive.  The binary layout here is
-    implemented from the documented sparse-model format.  Every mismatch is a
-    refusal rather than a silent misparse -- exact sizes, exact member order,
-    exact trailing bytes -- but "fails closed on drift" is not the same claim as
-    "known to match COLMAP 4.0.2 output", and only a host run can make the
-    second one.
+  * It composes into exactly one caller and no more.  ``refine_lifecycle``
+    calls :func:`verify_child_alignment_proposal`; ``refine_runner``,
+    ``refine_publisher`` and ``refine_native_process` still do not.  R121 added
+    a SECOND in-package importer, ``refine_colmap_backend``, and that edge is
+    deliberate rather than incidental: the CHILD computes its declared Sim(3)
+    and both pose digests by parsing its own archives through THIS module's
+    reader and solver, so parent/child agreement means the two sides read one
+    archive the same way instead of two implementations happening to converge.
+    ``test_exactly_the_composed_lifecycle_imports_this_module`` pins both edges.
+  * IT HAS NOW PARSED REAL COLMAP 4.0.2 ARCHIVES, and this paragraph used to
+    say it never had.  R121's host run on scan ``004aa5b0`` fed it three
+    archives written by ``pycolmap==4.0.2``'s own ``Reconstruction.write`` --
+    the known-pose seed, the post-``point_triangulator`` model and the aligned
+    model -- and all three parsed: 49 registered images, PINHOLE cameras, the
+    classic ``<I 7d I>`` image record, and COLMAP 4's ``rigs.bin`` and
+    ``frames.bin`` carried as the optional members this module already
+    reserved.  What is still NOT claimed is coverage of shapes this subject did
+    not produce: no archive with a non-PINHOLE camera, none above the 400-image
+    ceiling, and none from any COLMAP other than the pinned 4.0.2 build.
 
 CHILD PROPOSAL CONTRACT (what item 7's child must emit alongside the archives):
 
@@ -211,7 +218,7 @@ ALIGNMENT_UNVERIFIED_CODE = "REFINE_ALIGNMENT_UNVERIFIED"
 #: real ``pycolmap==4.0.2`` writer.  "Implemented", "composed" and "qualified"
 #: have been conflated before in this program, and the conflation is how a
 #: disabled stage gets treated as a working one.
-PARENT_ALIGNMENT_VERIFICATION_COMPOSED_INTO_REFINE = False
+PARENT_ALIGNMENT_VERIFICATION_COMPOSED_INTO_REFINE = True
 
 # ---------------------------------------------------------------------------
 # The snapshot archive contract

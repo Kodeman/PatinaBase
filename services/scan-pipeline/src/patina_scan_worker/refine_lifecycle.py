@@ -187,6 +187,12 @@ from .refine_colmap_toolchain import (
     QUALIFIED_COLMAP_PREFIX,
     TOOLCHAIN_MANIFEST_RELATIVE_PATH,
 )
+from .refine_packet_extractor import (
+    ADAPTER_LEDGER_CONTRACT,
+    ADAPTER_LEDGER_SCHEMA_VERSION,
+    SOURCE_LEDGER_CONTRACT,
+    SOURCE_LEDGER_SCHEMA_VERSION,
+)
 from .refine_materializer import (
     MaterializedRefineFrame,
     RefineMaterialization,
@@ -943,6 +949,78 @@ def _rotation_from_pose(pose: ColmapPose) -> tuple[tuple[float, float, float], .
     return tuple(tuple(float(value) for value in row) for row in pose.rotation)
 
 
+def _nearest_rotation(
+    matrix: Sequence[Sequence[float]],
+) -> tuple[tuple[float, float, float], ...]:
+    """Project a nearly-orthonormal matrix onto SO(3) via its unit quaternion.
+
+    WHY THIS EXISTS, measured on the qualified host rather than reasoned about.
+    The device's ``cam_from_world`` matrices reach this module orthonormal only
+    to ``3.3e-7`` per element -- they are floats that came off ARKit through a
+    conversion, not exact rotations.  ``_geodesic_angle_rad`` is
+    ``acos((tr(A B^T) - 1) / 2)``, which is well-conditioned only when BOTH
+    arguments are rotations: ``acos(1 - x) ~ sqrt(2x)``, so a trace deficit of
+    ``5e-7`` from the reference's own representation error appears as ``5e-4``
+    rad of "drift".  On scan ``004aa5b0`` that artefact measured
+    ``4.899e-4`` rad, and it is EXACTLY the number ``_separation_from_submitted
+    _frames`` reported against a seed the child had not moved at all.
+
+    The consequence is not that the tolerance was too tight.  It is that NO
+    child could pass it: the smallest angle this metric can report against a
+    reference with that defect is set by the reference, not by the snapshot.
+    The tolerances are therefore UNCHANGED at ``1e-6``; what changed is that the
+    comparison now happens between two rotations, so the number it produces is a
+    rotation difference rather than the reference's own distance from SO(3).
+
+    The projection is the standard matrix-to-quaternion conversion followed by
+    the inverse -- the branch-selected form, which is numerically stable through
+    the half-turn case where the naive ``sqrt(1 + trace)`` branch is not.  It
+    moves the reference by at most its own defect and cannot conceal a real
+    rotation: a snapshot rotated by ``1e-5`` rad is still ``1e-5`` rad away from
+    the projected reference.
+    """
+
+    trace = matrix[0][0] + matrix[1][1] + matrix[2][2]
+    if trace > 0.0:
+        scale = math.sqrt(trace + 1.0) * 2.0
+        quaternion = (
+            0.25 * scale,
+            (matrix[2][1] - matrix[1][2]) / scale,
+            (matrix[0][2] - matrix[2][0]) / scale,
+            (matrix[1][0] - matrix[0][1]) / scale,
+        )
+    elif matrix[0][0] > matrix[1][1] and matrix[0][0] > matrix[2][2]:
+        scale = math.sqrt(1.0 + matrix[0][0] - matrix[1][1] - matrix[2][2]) * 2.0
+        quaternion = (
+            (matrix[2][1] - matrix[1][2]) / scale,
+            0.25 * scale,
+            (matrix[0][1] + matrix[1][0]) / scale,
+            (matrix[0][2] + matrix[2][0]) / scale,
+        )
+    elif matrix[1][1] > matrix[2][2]:
+        scale = math.sqrt(1.0 + matrix[1][1] - matrix[0][0] - matrix[2][2]) * 2.0
+        quaternion = (
+            (matrix[0][2] - matrix[2][0]) / scale,
+            (matrix[0][1] + matrix[1][0]) / scale,
+            0.25 * scale,
+            (matrix[1][2] + matrix[2][1]) / scale,
+        )
+    else:
+        scale = math.sqrt(1.0 + matrix[2][2] - matrix[0][0] - matrix[1][1]) * 2.0
+        quaternion = (
+            (matrix[1][0] - matrix[0][1]) / scale,
+            (matrix[0][2] + matrix[2][0]) / scale,
+            (matrix[1][2] + matrix[2][1]) / scale,
+            0.25 * scale,
+        )
+    norm = math.sqrt(sum(component * component for component in quaternion))
+    if not math.isfinite(norm) or norm <= 0.0:
+        raise _fail("a submitted pose carries a degenerate rotation")
+    return _quaternion_to_rotation(
+        tuple(component / norm for component in quaternion)
+    )
+
+
 def _transpose3(matrix: Sequence[Sequence[float]]) -> tuple[tuple[float, ...], ...]:
     return tuple(tuple(matrix[row][column] for row in range(3)) for column in range(3))
 
@@ -1052,14 +1130,27 @@ def anchor_seed_snapshot_to_request(
         snapshot_label="seed snapshot",
         code=LIFECYCLE_UNANCHORED_CODE,
     )
+    # THE MARGIN IS IN THE MESSAGE.  ``ParentAlignmentVerification`` returns its
+    # margins rather than a bare boolean for exactly this reason, and the
+    # refusal path needs it more than the success path does: the first host run
+    # to reach this clause reported only that orientations "drifted", which
+    # cannot distinguish a child that rewrote a pose from float noise one decade
+    # over the tolerance.  Both numbers are unconditional so no reader has to
+    # know which clause fired to see how far out the run was.
+    margins = (
+        f"(max centre {separation.max_center_m:.3e} m of "
+        f"{float(max_center_drift_m):.3e}; max rotation "
+        f"{separation.max_rotation_rad:.3e} rad of "
+        f"{float(max_rotation_drift_rad):.3e})"
+    )
     if separation.max_center_m > float(max_center_drift_m):
         raise _fail(
-            "seed snapshot camera centres drifted from the submitted poses",
+            f"seed snapshot camera centres drifted from the submitted poses {margins}",
             LIFECYCLE_UNANCHORED_CODE,
         )
     if separation.max_rotation_rad > float(max_rotation_drift_rad):
         raise _fail(
-            "seed snapshot orientations drifted from the submitted poses",
+            f"seed snapshot orientations drifted from the submitted poses {margins}",
             LIFECYCLE_UNANCHORED_CODE,
         )
     deadline.remaining_seconds()
@@ -1142,9 +1233,14 @@ def _separation_from_submitted_frames(
             )
         )
         worst_center = max(worst_center, drift)
+        # The ANGLE is measured against the submitted matrix projected onto
+        # SO(3); the CENTRE above is deliberately still measured against the raw
+        # matrix, because ``-R^T t`` is well-conditioned and the projection
+        # would move it by the reference's own defect for no gain.  See
+        # :func:`_nearest_rotation` for the measurement this fixes.
         angle = _geodesic_angle_rad(
             _quaternion_to_rotation(pose.qvec),
-            submitted_rotation,
+            _nearest_rotation(submitted_rotation),
         )
         worst_rotation = max(worst_rotation, angle)
     return _FrameSeparation(
@@ -1354,12 +1450,31 @@ def _canonical_json_bytes(value: object) -> bytes:
 
 
 def _ustar_header(name: str, size: int) -> bytes:
+    """Emit the exact header ``refine_packet_extractor._parse_ustar_header`` takes.
+
+    THE MODE IS 0600 AND THAT IS NOT A STYLE CHOICE.  The child's extractor
+    refuses any other value with "COLMAP packet archive member metadata is not
+    canonical", and this writer emitted 0644 from the day it was written.
+    Nothing caught it: the parent's own tests read these archives back with
+    ``tarfile``, which does not care, and the extractor's tests hand-build their
+    headers at 0600, so the two implementations were never compared to each
+    other.  The FIRST run that actually extracted a parent-built packet died
+    here.  ``test_the_packet_writers_headers_are_exactly_what_the_child_parses``
+    is what now ties the two together directly.
+
+    This is also the mode the chunk file itself is created with (0o600), so the
+    archive and its members now agree: a packet is private scratch, start to
+    finish.  The sparse-model archives the CHILD writes are a DIFFERENT contract
+    -- ``refine_model_alignment`` requires 0644 there -- and the two must not be
+    unified.
+    """
+
     if len(name.encode("ascii")) > 100:
         raise _fail("packet member name does not fit a canonical USTAR header")
     header = bytearray(_TAR_BLOCK)
     encoded = name.encode("ascii")
     header[0 : len(encoded)] = encoded
-    header[100:108] = b"0000644\x00"
+    header[100:108] = b"0000600\x00"
     header[108:116] = b"0000000\x00"
     header[116:124] = b"0000000\x00"
     header[124:136] = ("%011o\x00" % size).encode("ascii")
@@ -1367,6 +1482,13 @@ def _ustar_header(name: str, size: int) -> bytes:
     header[156:157] = b"0"
     header[257:263] = b"ustar\x00"
     header[263:265] = b"00"
+    # ``devmajor``/``devminor``.  The child requires the canonical zero-VALUED
+    # octal fields, not zero BYTES, and this writer left them NUL-filled -- the
+    # second half of the same never-compared-to-each-other defect as the mode
+    # above, and equally invisible to ``tarfile``, which treats an empty device
+    # field as absent.
+    header[329:337] = b"0000000\x00"
+    header[337:345] = b"0000000\x00"
     header[148:156] = b" " * 8
     header[148:156] = ("%06o\x00 " % sum(header)).encode("ascii")
     return bytes(header)
@@ -1502,6 +1624,25 @@ def plan_packet_chunks(
     )
 
 
+def _single_materializer_id(
+    frames: Sequence[MaterializedRefineFrame],
+) -> str:
+    """Return the ONE raster adapter identity every frame in this run carries.
+
+    The materializer stamps its identity per frame.  A packet whose frames were
+    rastered by two different adapters is not a packet whose evidence can name
+    "the" adapter, so the disagreement is refused here rather than resolved by
+    picking the first row.
+    """
+
+    identities = {frame.materializer_id for frame in frames}
+    if len(identities) != 1:
+        raise _fail(
+            "packet frames were rastered by more than one adapter identity"
+        )
+    return identities.pop()
+
+
 def build_colmap_packet(
     materialization: RefineMaterialization,
     *,
@@ -1577,17 +1718,78 @@ def build_colmap_packet(
         }
     )
 
-    # ONE ordered member list: the engine request first, then every frame in
-    # packet order.  The plan groups INDICES into this list, so the writer and
-    # the manifest can never disagree about which chunk a member landed in.
-    member_names = ["engine-request-v1.json"] + [
-        f"images/{frame.engine_name}" for frame in frames
-    ]
-    member_sizes = [len(engine_payload)] + [frame.engine_size_bytes for frame in frames]
-    member_digests = [hashlib.sha256(engine_payload).hexdigest()] + [
-        frame.engine_sha256 for frame in frames
-    ]
-    member_roles = ["engine-request"] + ["engine-image"] * len(frames)
+    # THE TWO LEDGERS.  Both packet-root member roles the extractor already
+    # parses, and both carry the one thing the engine request does not: where
+    # the rasters CAME FROM.  The evidence builder requires a source archive
+    # key, member, digest and size per frame plus the raster adapter's identity,
+    # and the only process that holds those is this one -- the child sees
+    # engine-image bytes and nothing about their provenance.  Emitting them here
+    # is what lets the child build evidence out of facts the parent measured
+    # rather than facts it invented.
+    #
+    # The digests are the materializer's own, not recomputed here; see
+    # ``refine_packet_extractor._parse_source_ledger`` for exactly how far the
+    # extractor's checking of them goes (shape and self-consistency, never a
+    # re-read of an object no process on this path opens again).
+    adapter_payload = _canonical_json_bytes(
+        {
+            "schemaVersion": ADAPTER_LEDGER_SCHEMA_VERSION,
+            "contract": ADAPTER_LEDGER_CONTRACT,
+            "runId": run_id,
+            "materializerId": _single_materializer_id(frames),
+        }
+    )
+    source_payload = _canonical_json_bytes(
+        {
+            "schemaVersion": SOURCE_LEDGER_SCHEMA_VERSION,
+            "contract": SOURCE_LEDGER_CONTRACT,
+            "runId": run_id,
+            "frames": [
+                {
+                    "ordinal": index,
+                    "sourceArchiveKey": frame.source_archive_key,
+                    "sourceMember": frame.source_member,
+                    "sourceImageName": frame.source_member.rsplit("/", 1)[-1],
+                    "sourceSha256": frame.source_sha256,
+                    "sourceSizeBytes": frame.source_size_bytes,
+                }
+                for index, frame in enumerate(frames)
+            ],
+        }
+    )
+
+    # ONE ordered member list, in CANONICAL ARCHIVE-MEMBER ORDER.  The manifest
+    # requires ``(chunkToken, archiveMember)`` to be sorted, and the planner
+    # fills chunks in this list's order, so the list itself has to be sorted by
+    # name: ``adapter-ledger`` < ``engine-request`` < ``images/`` <
+    # ``source-ledger``.  The plan groups INDICES into this list, so the writer
+    # and the manifest can never disagree about which chunk a member landed in.
+    inline_payloads: dict[int, bytes] = {0: adapter_payload, 1: engine_payload}
+    member_names = (
+        ["adapter-ledger-v1.json", "engine-request-v1.json"]
+        + [f"images/{frame.engine_name}" for frame in frames]
+        + ["source-ledger-v1.json"]
+    )
+    member_sizes = (
+        [len(adapter_payload), len(engine_payload)]
+        + [frame.engine_size_bytes for frame in frames]
+        + [len(source_payload)]
+    )
+    member_digests = (
+        [
+            hashlib.sha256(adapter_payload).hexdigest(),
+            hashlib.sha256(engine_payload).hexdigest(),
+        ]
+        + [frame.engine_sha256 for frame in frames]
+        + [hashlib.sha256(source_payload).hexdigest()]
+    )
+    member_roles = (
+        ["adapter-ledger", "engine-request"]
+        + ["engine-image"] * len(frames)
+        + ["source-ledger"]
+    )
+    inline_payloads[len(member_names) - 1] = source_payload
+    frame_index_by_member = {index + 2: index for index in range(len(frames))}
     plan = plan_packet_chunks(member_sizes, chunk_max_bytes=chunk_max_bytes)
 
     destination.mkdir(mode=0o700, parents=True, exist_ok=False)
@@ -1612,10 +1814,11 @@ def build_colmap_packet(
                     name = member_names[member_index]
                     size = member_sizes[member_index]
                     chunk.write(_ustar_header(name, size))
-                    if member_index == 0:
-                        chunk.write(engine_payload)
+                    inline = inline_payloads.get(member_index)
+                    if inline is not None:
+                        chunk.write(inline)
                     else:
-                        frame = frames[member_index - 1]
+                        frame = frames[frame_index_by_member[member_index]]
                         with materialization.open_verified_file(
                             frame.engine_relative_path,
                             deadline=deadline,
@@ -1686,11 +1889,12 @@ def build_colmap_packet(
         manifest_sha256=manifest_digest,
         chunk_sha256s=tuple(chunk_digests),
         run_id=run_id,
-        # Indexed off the ordered member list, not off ``members[0]``: the
-        # latter is only the request while the planner happens to put member 0
-        # in chunk 000 first, which is a property of the packing rather than a
-        # promise it makes.
-        engine_request_sha256=member_digests[0],
+        # Indexed off the ordered member list BY ROLE, not off ``members[0]``
+        # and not off a fixed position either: the request stopped being member
+        # zero the moment the adapter ledger sorted ahead of it, and a positional
+        # index would have silently published the ledger's digest as the
+        # request's.
+        engine_request_sha256=member_digests[member_roles.index("engine-request")],
         child_request={
             "schemaVersion": PACKET_SCHEMA_VERSION,
             "contract": PACKET_CONTRACT,

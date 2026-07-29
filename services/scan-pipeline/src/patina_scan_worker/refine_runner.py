@@ -1970,7 +1970,28 @@ def _validate_evidence(
             RefineFailureCode.EVIDENCE_INVALID,
             "evidence verdict returned an unknown failure code",
         )
-    _fail(code, verdict.reason)
+    # THE COMPARABLE NUMBERS TRAVEL WITH THE REFUSAL.  A verdict reason alone
+    # ("comparable_geometric_evidence_regressed") says a metric got worse but
+    # not WHICH ONE or BY HOW MUCH, and the evidence is destroyed with the
+    # child's lease moments later.  The first real engine run on the qualified
+    # host was refused by this line and the operator had nothing to diagnose it
+    # with.  These are the exact fields ``evaluate_refinement_evidence`` reads,
+    # rendered once, with no interpretation added.
+    _fail(
+        code,
+        f"{verdict.reason} "
+        f"(coverage {verdict.registration_coverage_before:.4f}->"
+        f"{verdict.registration_coverage_after:.4f}; "
+        f"reprojection_rmse_px {evidence.reprojection_rmse_px_before:.6f}->"
+        f"{evidence.reprojection_rmse_px_after:.6f}; "
+        f"loop_rotation_rmse_deg {evidence.loop_rotation_rmse_deg_before:.6f}->"
+        f"{evidence.loop_rotation_rmse_deg_after:.6f}; "
+        f"loop_translation_rmse_deg "
+        f"{evidence.loop_translation_direction_rmse_deg_before:.6f}->"
+        f"{evidence.loop_translation_direction_rmse_deg_after:.6f}; "
+        f"observations {evidence.common_observations}; "
+        f"loop_edges {evidence.verified_loop_edges})",
+    )
 
 
 def _sim3_document(alignment: Sim3) -> dict[str, object]:
