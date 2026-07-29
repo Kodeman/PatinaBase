@@ -8,6 +8,18 @@
 
 import SwiftUI
 
+/// Lets a host decide whether the Strata mark is the accessible control or a
+/// decorative glyph inside a larger accessible shell.
+public enum StrataMarkAccessibility: Equatable, Sendable {
+    case decorative
+    case labeled(label: String, hint: String?)
+
+    public static let companionControl = StrataMarkAccessibility.labeled(
+        label: "Patina Companion",
+        hint: "Double tap to open, or drag up for quick actions"
+    )
+}
+
 /// The Strata Mark - Patina's animated brand mark
 /// Three horizontal lines representing accumulated layers of time and value
 /// Per spec: Line 1 (Mocha Brown), Line 2 (Clay Beige), Line 3 (Clay Beige @ 50%)
@@ -16,15 +28,23 @@ public struct StrataMarkView: View {
     var scale: CGFloat = 1.0
     var breathing: Bool = false
     var useSpecColors: Bool = true  // Use spec-accurate colors
+    let accessibility: StrataMarkAccessibility
 
     @State private var breatheScale: CGFloat = 1.0
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
-    public init(color: Color, scale: CGFloat = 1.0, breathing: Bool = false, useSpecColors: Bool = true) {
+    public init(
+        color: Color,
+        scale: CGFloat = 1.0,
+        breathing: Bool = false,
+        useSpecColors: Bool = true,
+        accessibility: StrataMarkAccessibility = .companionControl
+    ) {
         self.color = color
         self.scale = scale
         self.breathing = breathing
         self.useSpecColors = useSpecColors
+        self.accessibility = accessibility
     }
 
     public var body: some View {
@@ -45,8 +65,7 @@ public struct StrataMarkView: View {
                 .frame(width: 12 * scale, height: 3 * scale)
         }
         .scaleEffect(breathing ? breatheScale : 1.0)
-        .accessibilityLabel("Patina Companion")
-        .accessibilityHint("Double tap to open, or drag up for quick actions")
+        .modifier(StrataMarkAccessibilityModifier(accessibility: accessibility))
         .onAppear {
             if breathing && !reduceMotion {
                 startBreathing()
@@ -56,12 +75,12 @@ public struct StrataMarkView: View {
             if newValue && !reduceMotion {
                 startBreathing()
             } else {
-                stopBreathing()
+                stopBreathing(animated: !reduceMotion)
             }
         }
         .onChange(of: reduceMotion) { _, isReduced in
             if isReduced {
-                stopBreathing()
+                stopBreathing(animated: false)
             } else if breathing {
                 startBreathing()
             }
@@ -70,16 +89,47 @@ public struct StrataMarkView: View {
 
     private func startBreathing() {
         withAnimation(
-            .easeInOut(duration: 3.0)  // 3s per spec (CompanionConstants.breathingDuration; inlined — app-local type)
+            .easeInOut(duration: PatinaCompanionMotion.breathingDuration)
             .repeatForever(autoreverses: true)
         ) {
             breatheScale = 1.08
         }
     }
 
-    private func stopBreathing() {
-        withAnimation(.easeOut(duration: 0.3)) {
-            breatheScale = 1.0
+    private func stopBreathing(animated: Bool) {
+        if animated {
+            withAnimation(.easeOut(duration: 0.3)) {
+                breatheScale = 1.0
+            }
+        } else {
+            var transaction = Transaction()
+            transaction.disablesAnimations = true
+            withTransaction(transaction) {
+                breatheScale = 1.0
+            }
+        }
+    }
+}
+
+private struct StrataMarkAccessibilityModifier: ViewModifier {
+    let accessibility: StrataMarkAccessibility
+
+    @ViewBuilder
+    func body(content: Content) -> some View {
+        switch accessibility {
+        case .decorative:
+            content.accessibilityHidden(true)
+        case let .labeled(label, hint):
+            if let hint, !hint.isEmpty {
+                content
+                    .accessibilityElement(children: .ignore)
+                    .accessibilityLabel(Text(label))
+                    .accessibilityHint(Text(hint))
+            } else {
+                content
+                    .accessibilityElement(children: .ignore)
+                    .accessibilityLabel(Text(label))
+            }
         }
     }
 }

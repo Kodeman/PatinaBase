@@ -16,13 +16,16 @@ struct S3DestinationScreen: View {
     let specimen: Specimen?
     let store: CaptureStore
     let sync: any CaptureSyncService
+    let session: any SessionProviding
     let coordinator: CaptureCoordinator
     let analytics: any CaptureAnalytics
 
     var body: some View {
         Group {
             if let specimen {
-                S3Content(specimen: specimen, store: store, sync: sync, coordinator: coordinator)
+                S3Content(
+                    specimen: specimen, store: store, sync: sync,
+                    session: session, coordinator: coordinator)
             } else {
                 RouteMissingSpecimen()
             }
@@ -39,7 +42,9 @@ private struct S3Content: View {
     let specimen: Specimen
     let store: CaptureStore
     let sync: any CaptureSyncService
+    let session: any SessionProviding
     let coordinator: CaptureCoordinator
+    private let sessionContext = CaptureSessionContextStore.shared
 
     @State private var routing: CaptureDestination?
     @State private var routeError: String?
@@ -141,6 +146,7 @@ private struct S3Content: View {
         Task { @MainActor in
             do {
                 try await sync.route(specimen.id, to: destination)
+                remember(destination)
                 routing = nil
                 coordinator.present(destination == .library
                                     ? .savedTerminal(specimen.id)
@@ -151,6 +157,14 @@ private struct S3Content: View {
             }
         }
     }
+
+    private func remember(_ destination: CaptureDestination) {
+        let identity = CaptureSessionIdentity(
+            userID: session.userID, workspaceID: session.workspaceID)
+        var remembered = sessionContext.current(identity: identity).routing
+        remembered.destination = destination
+        sessionContext.remember(remembered, identity: identity)
+    }
 }
 
 #if DEBUG
@@ -160,6 +174,7 @@ private struct S3Content: View {
         specimen: demo.specimen,
         store: demo.store,
         sync: InMemoryCaptureSyncService(),
+        session: MockSessionProviding(),
         coordinator: CaptureCoordinator(),
         analytics: MockCaptureAnalytics()
     )

@@ -103,6 +103,7 @@ final class SiteScanUploadModel {
         case uploading
         case done(String)
         case failed(String)
+        case rejected(String)
     }
 
     var phase: Phase = .idle
@@ -146,7 +147,11 @@ final class SiteScanUploadModel {
         } catch {
             let message = (error as? LocalizedError)?.errorDescription ?? "Upload failed."
             analytics.event("siteScan.upload_failure")
-            phase = .failed(message)
+            if case SiteScanError.bundleRejected = error {
+                phase = .rejected(message)
+            } else {
+                phase = .failed(message)
+            }
         }
     }
 }
@@ -192,8 +197,10 @@ struct SiteScanUploadStep: View {
         .task {
             container.analytics.screen(CaptureScreenID.f4ScanUpload.rawValue)
             await model.resolveProjectName()
+            updateCompanion()
             if model.phase == .idle { await model.upload() }
         }
+        .onChange(of: model.phase) { _, _ in updateCompanion() }
         .accessibilityIdentifier(CaptureScreenID.f4ScanUpload.rawValue)
     }
 
@@ -216,6 +223,8 @@ struct SiteScanUploadStep: View {
             successRow(scanID)
         case .failed(let message):
             failureRow(message)
+        case .rejected(let message):
+            rejectedRow(message)
         }
     }
 
@@ -265,6 +274,24 @@ struct SiteScanUploadStep: View {
         .accessibilityElement(children: .combine)
     }
 
+    private func rejectedRow(_ message: String) -> some View {
+        HStack(alignment: .top, spacing: 10) {
+            Image(systemName: "exclamationmark.octagon.fill")
+                .font(CaptureType.title2)
+                .foregroundStyle(CaptureColor.error)
+                .accessibilityHidden(true)
+            VStack(alignment: .leading, spacing: 3) {
+                Text("Scan needs review")
+                    .font(CaptureType.bodyEmph)
+                    .foregroundStyle(CaptureColor.ink)
+                Text(message + " It remains on this device and won’t be retried automatically.")
+                    .font(CaptureType.footnote)
+                    .foregroundStyle(CaptureColor.inkSoft)
+            }
+        }
+        .accessibilityElement(children: .combine)
+    }
+
     @ViewBuilder private var actions: some View {
         switch model.phase {
         case .done:
@@ -288,8 +315,45 @@ struct SiteScanUploadStep: View {
             }
             .padding(.horizontal, 20).padding(.vertical, 12)
             .background(.ultraThinMaterial)
+        case .rejected:
+            PatinaButton(
+                "Keep for review",
+                style: .secondary,
+                icon: Image(systemName: "tray.and.arrow.down")) {
+                    container.analytics.event("scan.upload_rejected_finish_later")
+                    onDone()
+                }
+                .padding(.horizontal, 20).padding(.vertical, 12)
+                .background(.ultraThinMaterial)
         case .idle, .uploading:
             EmptyView()
+        }
+    }
+
+    private func updateCompanion() {
+        switch model.phase {
+        case .idle, .uploading:
+            container.companion.send(.reportProgress(.init(
+                activityID: "field.site-scan-upload",
+                kind: .indeterminate,
+                title: "Sending your scan",
+                detail: "The original remains safely on this device"
+            )))
+        case .done:
+            container.companion.send(.collapse(
+                hint: "Scan confirmed",
+                action: nil
+            ))
+        case .failed:
+            container.companion.send(.communicate(.init(
+                title: "Upload paused safely",
+                detail: "Your scan is still on this device. Retry now or finish later."
+            )))
+        case .rejected:
+            container.companion.send(.communicate(.init(
+                title: "This scan needs review",
+                detail: "It remains on this device and won’t be retried automatically."
+            )))
         }
     }
 }

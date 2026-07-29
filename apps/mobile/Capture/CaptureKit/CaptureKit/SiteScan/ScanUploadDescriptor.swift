@@ -69,6 +69,104 @@ public struct ScanUploadDescriptor: Sendable, Equatable {
     ]
 }
 
+public extension ScanUploadDescriptor {
+    /// The full local artifact contract. A required file must be a non-empty,
+    /// regular file before the client may ask the server to confirm the bundle.
+    static func missingRequiredArtifacts(
+        in bundleURL: URL,
+        fileManager: FileManager = .default
+    ) -> [ScanUploadDescriptor] {
+        all.filter { descriptor in
+            let fileURL = bundleURL.appendingPathComponent(descriptor.relativePath)
+            guard fileManager.fileExists(atPath: fileURL.path) else { return true }
+            let values = try? fileURL.resourceValues(
+                forKeys: [.isRegularFileKey, .fileSizeKey]
+            )
+            return values?.isRegularFile != true || (values?.fileSize ?? 0) <= 0
+        }
+    }
+}
+
+/// Correlates a background completion to one artifact of one scan. Artifact kind
+/// alone is not unique when startup recovery and a foreground upload overlap.
+public struct ScanArtifactTransferKey: Hashable, Sendable {
+    public let owner: CaptureOwnerIdentity
+    public let scanID: String
+    public let kind: String
+
+    public init(
+        owner: CaptureOwnerIdentity,
+        scanID: String,
+        kind: String
+    ) {
+        self.owner = owner
+        self.scanID = scanID
+        self.kind = kind
+    }
+}
+
+/// Persisted identity carried by a background URLSession task. It allows a
+/// completion delivered after relaunch to mutate only its original owner’s record.
+public struct ScanBackgroundTransferMetadata: Equatable, Sendable {
+    public let scanID: String
+    public let artifactKind: String
+    public let owner: CaptureOwnerIdentity
+    public let sha256: String?
+
+    public init(
+        scanID: String,
+        artifactKind: String,
+        owner: CaptureOwnerIdentity,
+        sha256: String? = nil
+    ) {
+        self.scanID = scanID
+        self.artifactKind = artifactKind
+        self.owner = owner
+        self.sha256 = sha256
+    }
+
+    public init?(dictionary: [String: String]) {
+        guard let scanID = dictionary["scanId"],
+              let artifactKind = dictionary["artifactKind"],
+              let owner = CaptureOwnerIdentity(
+                userID: dictionary["ownerUserId"],
+                workspaceID: dictionary["ownerWorkspaceId"]
+              ) else { return nil }
+        self.init(
+            scanID: scanID,
+            artifactKind: artifactKind,
+            owner: owner,
+            sha256: dictionary["sha256"]
+        )
+    }
+
+    public var dictionary: [String: String] {
+        var values = [
+            "scanId": scanID,
+            "artifactKind": artifactKind,
+            "ownerUserId": owner.userID,
+            "ownerWorkspaceId": owner.workspaceID
+        ]
+        if let sha256, !sha256.isEmpty { values["sha256"] = sha256 }
+        return values
+    }
+}
+
+public enum ScanArtifactIntegrityError: LocalizedError, Equatable {
+    case missingRequiredArtifacts([String])
+
+    public var transferPhase: CaptureTransferPhase { .rejected }
+
+    public var errorDescription: String? {
+        switch self {
+        case .missingRequiredArtifacts(let kinds):
+            return "Scan bundle is incomplete (missing: "
+                + "\(kinds.joined(separator: ", "))). Review or rescan "
+                + "before retrying."
+        }
+    }
+}
+
 /// Pinned copy of the `room-scans` bucket `allowed_mime_types` —
 /// supabase/migrations/00077_advanced_room_scan.sql. Storage returns a deterministic
 /// 400 `invalid_mime_type` on any upload Content-Type outside this set (and the retry

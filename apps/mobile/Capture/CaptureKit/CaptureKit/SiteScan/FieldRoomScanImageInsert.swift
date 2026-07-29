@@ -16,9 +16,11 @@
 //  `is_primary` = false everywhere (cover resolution is portal-side),
 //  `is_full_resolution` = false, `mime_type` = "image/jpeg".
 
+import CryptoKit
 import Foundation
 
 public struct FieldRoomScanImageInsert: Encodable, Sendable {
+    public let id: UUID
     public let scan_id: UUID
     public let room_id: UUID
     public let role: String
@@ -50,13 +52,15 @@ public struct FieldRoomScanImageInsert: Encodable, Sendable {
     }
 
     public init(
-        scan_id: UUID, room_id: UUID, role: String, is_primary: Bool, display_order: Int,
+        id: UUID, scan_id: UUID, room_id: UUID, role: String,
+        is_primary: Bool, display_order: Int,
         image_url: String, thumbnail_url: String, captured_at: String,
         camera_transform: [Double], camera_intrinsics: Intrinsics, euler_angles: [Double],
         photo_kind: String, is_full_resolution: Bool, timestamp_seconds: Double,
         width: Int, height: Int, file_size_bytes: Int, mime_type: String,
         light_estimate_lumens: Double?
     ) {
+        self.id = id
         self.scan_id = scan_id
         self.room_id = room_id
         self.role = role
@@ -89,6 +93,7 @@ public struct FieldRoomScanImageInsert: Encodable, Sendable {
         urls: (image: String, thumbnail: String)
     ) -> FieldRoomScanImageInsert {
         FieldRoomScanImageInsert(
+            id: deterministicID(scanID: scanID, filename: entry.filename),
             scan_id: scanID,
             room_id: roomID,
             role: "auto",
@@ -116,5 +121,27 @@ public struct FieldRoomScanImageInsert: Encodable, Sendable {
             mime_type: "image/jpeg",
             light_estimate_lumens: entry.lightEstimateLumens
         )
+    }
+
+    /// UUIDv5 keyed by the durable scan reservation and stable sidecar filename.
+    /// A replay therefore conflicts on `room_scan_images.id` and becomes an
+    /// update, rather than inserting another row and inflating `image_count`.
+    public static func deterministicID(
+        scanID: UUID,
+        filename: String
+    ) -> UUID {
+        var namespace = scanID.uuid
+        var input = withUnsafeBytes(of: &namespace) { Data($0) }
+        input.append(contentsOf: filename.utf8)
+
+        var bytes = Array(Insecure.SHA1.hash(data: input).prefix(16))
+        bytes[6] = (bytes[6] & 0x0f) | 0x50
+        bytes[8] = (bytes[8] & 0x3f) | 0x80
+        return UUID(uuid: (
+            bytes[0], bytes[1], bytes[2], bytes[3],
+            bytes[4], bytes[5], bytes[6], bytes[7],
+            bytes[8], bytes[9], bytes[10], bytes[11],
+            bytes[12], bytes[13], bytes[14], bytes[15]
+        ))
     }
 }

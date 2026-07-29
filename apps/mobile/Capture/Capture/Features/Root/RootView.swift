@@ -1,10 +1,8 @@
 //  RootView.swift
 //  Capture
 //
-//  The app shell: a NavigationStack + sheet presentation driven by
-//  CaptureCoordinator, rendering registered screens through RouteRegistry.
-//  The viewfinder is the home; everything else is one gesture (or deep link)
-//  away. INTEGRATION OWNER edits this file only.
+//  The app shell: Camera and Work are peer realms with independent
+//  NavigationStacks, both driven by CaptureCoordinator and RouteRegistry.
 
 import SwiftUI
 import CaptureKit
@@ -22,6 +20,13 @@ struct RootView: View {
     @State private var registered = false
     /// Step for the phase-based onboarding flow (real mode with no session).
     @State private var onboardingFlowStep = 0
+    @State private var ownerTracker = CaptureOwnerTransitionTracker()
+
+    @State private var lastReconciledOwner: CaptureOwnerIdentity?
+    @State private var reconciliationOwner: CaptureOwnerIdentity?
+    @State private var reconciliationToken: UUID?
+    @State private var ownerUIInvalidated = false
+    @State private var readyRequested = false
     /// Runs `field://login` deep-link sign-in (portal QR handoff). Owned by the
     /// composition root so the deep-link handler, this shell, and Q1 share one
     /// instance; configured in `.task` once `coordinator` can be bound.
@@ -29,13 +34,13 @@ struct RootView: View {
 
     var body: some View {
         @Bindable var coord = coordinator
-        NavigationStack(path: $coord.path) {
-            rootContent
-                .navigationDestination(for: CaptureRoute.self) { route in
-                    RouteRegistry.shared.view(for: route)
-                }
-        }
+        let ownerState = container.session.ownerState
+        realmShell
         .environment(coordinator)
+        .environment(container.companion)
+        .safeAreaInset(edge: .bottom, spacing: 0) {
+            companionSurface
+        }
         .sheet(item: $coord.sheet) { sheet in
             RouteRegistry.shared.view(for: sheet)
         }
@@ -48,35 +53,46 @@ struct RootView: View {
         .task {
             ScreenRegistry.registerAll(container: container, coordinator: coordinator)
             registered = true
-            // Wire the portal-QR sign-in controller; a signed-in exchange leaves
-            // onboarding for the app surface. Replays any cold-start login link.
             portalLogin.configure(
                 session: container.session,
                 authorizer: container.authorizer,
-                onSignedIn: { if coordinator.phase != .ready { coordinator.phase = .ready } }
+                onSignedIn: { requestOwnerReady() }
             )
-            // Resolve the opening phase honestly from the session: a restored
-            // session goes straight to the viewfinder; no session lands on
-            // O1/O2 onboarding. Mock mode is authenticated immediately, so this
-            // settles on `.ready` and the `-CaptureScreen` harness is unaffected.
+
             await container.session.waitForReady()
-            if coordinator.phase == .launching {
-                coordinator.phase = container.session.isAuthenticated ? .ready : .auth
-            }
+            guard !Task.isCancelled else { return }
+
             if let raw = AppConfiguration.initialScreenRaw,
                let id = CaptureScreenID.allCases.first(where: { $0.rawValue.hasSuffix(raw) }) {
-                CaptureDeepLink.drive(screen: id, coordinator: coordinator, store: container.store)
+                CaptureDeepLink.drive(
+                    screen: id,
+                    coordinator: coordinator,
+                    store: container.store,
+                    session: container.session)
             }
         }
+        .task(id: ownerState) {
+            await container.session.waitForReady()
+            guard !Task.isCancelled else { return }
+            await observeOwnerState(ownerState)
+        }
+        .task(id: companionPlacement) {
+            applyCompanionPlacement()
+        }
         .onOpenURL { url in
-            CaptureDeepLink.handle(url, coordinator: coordinator, store: container.store, login: portalLogin)
+            CaptureDeepLink.handle(
+                url,
+                coordinator: coordinator,
+                store: container.store,
+                session: container.session,
+                login: portalLogin)
         }
         .onChange(of: coordinator.phase) {
-            // Entering onboarding (cold start with no session, or after sign-out)
-            // always restarts the flow at O1.
-            if coordinator.phase == .auth { onboardingFlowStep = 0 }
+            if coordinator.phase == .auth,
+               container.session.ownerState == .signedOut {
+                onboardingFlowStep = 0
+            }
         }
-        // Portal-QR sign-in over a live session: confirm before switching.
         .alert(
             "Sign in with this code?",
             isPresented: Binding(
@@ -93,6 +109,143 @@ struct RootView: View {
             } ?? "You’re already signed in. Continue to sign in with this code?")
         }
         .overlay(alignment: .top) { portalLoginToast }
+    }
+
+    @ViewBuilder private var companionSurface: some View {
+        if !usesFeatureOwnedCompanionSurface {
+            FieldCompanionHearthView(
+                presentation: container.companion.presentation,
+                onOpen: expandCompanion,
+                onDismiss: { container.companion.send(.dismiss) },
+                onAction: handleCompanionAction
+            )
+            .padding(.vertical, 8)
+        }
+    }
+
+    private var usesFeatureOwnedCompanionSurface: Bool {
+        guard coordinator.phase == .ready else { return false }
+        switch coordinator.path(for: coordinator.activeRealm).last {
+        case .siteScan, .syncStatus:
+            return true
+        default:
+            return false
+        }
+    }
+
+    private var companionPlacement: FieldCompanionPlacement {
+        guard coordinator.phase == .ready,
+              coordinator.guestAccessToken == nil,
+              coordinator.onboardingStep == nil else {
+            return .hidden(.onboarding)
+        }
+
+        let realm = coordinator.activeRealm
+        let route = coordinator.path(for: realm).last
+        switch route {
+        case .siteScan, .syncStatus:
+            return .featureOwned
+        default:
+            break
+        }
+        if coordinator.sheet != nil {
+            return .hidden(.modalPresented)
+        }
+        if realm == .camera, route == nil {
+            return .hidden(.cameraActive)
+        }
+        switch route {
+        case .qrScan:
+            return .hidden(.featureOwned)
+        default:
+            return .collapsed(realm, route)
+        }
+    }
+
+    private func applyCompanionPlacement() {
+        switch companionPlacement {
+        case let .hidden(reason):
+            container.companion.send(.hide(reason: reason))
+        case .featureOwned:
+            break
+        case let .collapsed(realm, route):
+            container.companion.send(.collapse(
+                hint: companionHint(for: realm, route: route),
+                action: nil
+            ))
+        }
+    }
+
+    private func companionHint(for realm: FieldRealm, route: CaptureRoute?) -> String {
+        switch route {
+        case .syncStatus:
+            return "Sync status"
+        case .specimen:
+            return "Review this specimen"
+        case .session:
+            return "Review this session"
+        case .settings, .account:
+            return "Field settings"
+        default:
+            return realm == .work ? "What needs you" : "Next steps"
+        }
+    }
+
+    private func expandCompanion() {
+        guard case let .collapsed(content) = container.companion.presentation else {
+            return
+        }
+        let destination: FieldCompanionAction
+        let detail: String
+        switch coordinator.activeRealm {
+        case .camera:
+            destination = .init(id: "realm.work", label: "Open Work")
+            detail = "Keep capturing, or see what needs your attention in Work."
+        case .work:
+            destination = .init(id: "realm.camera", label: "Open Camera")
+            detail = "Your active work stays in place while you return to Camera."
+        }
+        container.analytics.event("field.companion_opened", [
+            "realm": coordinator.activeRealm.rawValue
+        ])
+        container.companion.send(.communicate(.init(
+            title: content.hint,
+            detail: detail,
+            primaryAction: destination
+        )))
+    }
+
+    private func handleCompanionAction(_ action: FieldCompanionAction) {
+        container.analytics.event("field.companion_action", ["action": action.id])
+        switch action.id {
+        case "realm.work":
+            coordinator.switchRealm(.work)
+        case "realm.camera":
+            coordinator.switchRealm(.camera)
+        default:
+            break
+        }
+    }
+
+    @ViewBuilder private var realmShell: some View {
+        switch coordinator.activeRealm {
+        case .camera:
+            realmNavigation(.camera)
+        case .work:
+            realmNavigation(.work)
+        }
+    }
+
+    private func realmNavigation(_ realm: FieldRealm) -> some View {
+        NavigationStack(path: Binding(
+            get: { coordinator.path(for: realm) },
+            set: { coordinator.replacePath($0, for: realm) }
+        )) {
+            rootContent(for: realm)
+                .navigationDestination(for: CaptureRoute.self) { route in
+                    RouteRegistry.shared.view(for: route)
+                }
+        }
     }
 
     /// Transient banner for portal-QR deep-link sign-in outcomes.
@@ -123,7 +276,96 @@ struct RootView: View {
         }
     }
 
-    @ViewBuilder private var rootContent: some View {
+    private func requestOwnerReady() {
+        readyRequested = true
+        guard let owner = container.session.ownerIdentity,
+              ownerTracker.currentOwner == owner else { return }
+        readyRequested = false
+        coordinator.phase = .ready
+    }
+
+    private func observeOwnerState(_ state: CaptureSessionOwnerState) async {
+        let wasLaunching = coordinator.phase == .launching
+        let transition = ownerTracker.observe(state)
+
+        switch state {
+        case .loading:
+            if case .invalidated = transition { invalidateOwnerBoundUI() }
+            if wasLaunching, ownerTracker.lastConfirmedOwner == nil {
+                // A restored session whose first membership query failed should
+                // recover directly once a later auth event validates its owner.
+                readyRequested = true
+            }
+            coordinator.phase = .auth
+            onboardingFlowStep = 1
+
+        case .signedOut:
+            if case .invalidated = transition { invalidateOwnerBoundUI() }
+            readyRequested = false
+            coordinator.phase = .auth
+            onboardingFlowStep = 0
+
+        case .needsWorkspace:
+            if case .invalidated = transition { invalidateOwnerBoundUI() }
+            coordinator.phase = .auth
+            onboardingFlowStep = 1
+
+        case .ready(let owner):
+            if case .changed = transition { invalidateOwnerBoundUI() }
+            let shouldEnterReady = coordinator.phase == .launching || ownerUIInvalidated
+
+            guard container.session.ownerIdentity == owner else { return }
+            ownerUIInvalidated = false
+            if shouldEnterReady || readyRequested {
+                readyRequested = false
+                coordinator.phase = .ready
+            }
+
+            // Reconciliation is deliberately downstream of readiness. Background
+            // URLSession work can wait for connectivity indefinitely; it must not
+            // make an authenticated, owner-validated offline launch look blocked.
+            guard lastReconciledOwner != owner,
+                  reconciliationOwner != owner else { return }
+            let token = UUID()
+            reconciliationOwner = owner
+            reconciliationToken = token
+            await reconcileQueues(for: owner, token: token)
+        }
+    }
+
+    private func invalidateOwnerBoundUI() {
+        coordinator.phase = .launching
+        coordinator.resetOwnerBoundUI()
+        onboardingFlowStep = 0
+        lastReconciledOwner = nil
+        reconciliationOwner = nil
+        reconciliationToken = nil
+        ownerUIInvalidated = true
+        readyRequested = false
+        CaptureSessionContextStore.shared.reset()
+        container.companion.send(.collapse(hint: nil, action: nil))
+    }
+
+    private func reconcileQueues(for owner: CaptureOwnerIdentity, token: UUID) async {
+        defer {
+            if reconciliationToken == token {
+                reconciliationOwner = nil
+                reconciliationToken = nil
+            }
+        }
+
+        await container.sync.reconcilePendingTransfers()
+        guard !Task.isCancelled,
+              reconciliationToken == token,
+              container.session.ownerIdentity == owner else { return }
+        await container.siteScan.reconcilePendingUploads()
+        guard !Task.isCancelled,
+              reconciliationToken == token,
+              container.session.ownerIdentity == owner else { return }
+        lastReconciledOwner = owner
+    }
+
+    @ViewBuilder private func rootContent(for realm: FieldRealm) -> some View {
         if let accessToken = coordinator.guestAccessToken {
             GuestSiteRequestRootView(
                 accessToken: accessToken,
@@ -147,16 +389,24 @@ struct RootView: View {
                     Task { await container.session.signOut() }
                     onboardingFlowStep = 0   // back to O1; fresh O2 on return
                 },
-                onComplete: { coordinator.phase = .ready }
+                onComplete: { requestOwnerReady() }
             )
         case .ready:
             // `registered` is read first so this recomputes once registration
-            // runs; the placeholder is the pre-registration / fallback state.
-            if registered, RouteRegistry.shared.hasRoute(.viewfinder) {
-                RouteRegistry.shared.view(for: .viewfinder)
+            // runs. Each realm owns a stable root; crossing between them replaces
+            // the live camera hierarchy, triggering ViewfinderScreen's stop().
+            let rootRoute: CaptureRoute = realm == .camera ? .viewfinder : .work
+            if registered, RouteRegistry.shared.hasRoute(rootRoute) {
+                RouteRegistry.shared.view(for: rootRoute)
             } else {
                 ViewfinderPlaceholder()
             }
         } }
     }
+}
+
+private enum FieldCompanionPlacement: Equatable {
+    case hidden(FieldCompanionHiddenReason)
+    case featureOwned
+    case collapsed(FieldRealm, CaptureRoute?)
 }

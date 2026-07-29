@@ -19,6 +19,9 @@ enum SystemSurfaceScreens {
             AnyView(SyncStatusScreen(
                 store: container.store,
                 sync: container.sync,
+                siteScan: container.siteScan,
+                session: container.session,
+                companion: container.companion,
                 analytics: container.analytics,
                 coordinator: coordinator
             ))
@@ -28,6 +31,7 @@ enum SystemSurfaceScreens {
             AnyView(LibrarySearchScreen(
                 store: container.store,
                 location: container.location,
+                session: container.session,
                 analytics: container.analytics,
                 coordinator: coordinator
             ))
@@ -36,6 +40,7 @@ enum SystemSurfaceScreens {
         r.registerRoute(CaptureRoute.settings.registryKey) { _ in
             AnyView(SettingsScreen(
                 store: container.store,
+                session: container.session,
                 analytics: container.analytics
             ))
         }

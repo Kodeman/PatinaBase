@@ -20,6 +20,7 @@ enum RecognitionScreens {
             return AnyView(TagOCRSheet(
                 specimenID: id,
                 store: container.store,
+                session: container.session,
                 camera: container.camera,
                 ocr: VisionTagOCRService(),
                 analytics: container.analytics,
@@ -33,6 +34,7 @@ enum RecognitionScreens {
             return AnyView(CodeScanSheet(
                 specimenID: id,
                 store: container.store,
+                session: container.session,
                 codeService: DataScannerCodeService(),
                 analytics: container.analytics,
                 coordinator: coordinator
@@ -45,6 +47,7 @@ enum RecognitionScreens {
             return AnyView(MeasureSheet(
                 specimenID: id,
                 store: container.store,
+                session: container.session,
                 measureService: ARKitMeasureService(),
                 analytics: container.analytics,
                 coordinator: coordinator
@@ -57,6 +60,7 @@ enum RecognitionScreens {
             return AnyView(VoiceNoteSheet(
                 specimenID: id,
                 store: container.store,
+                session: container.session,
                 voice: SpeechVoiceNoteService(mediaDirectory: container.store.mediaDirectory()),
                 analytics: container.analytics,
                 coordinator: coordinator
@@ -69,6 +73,7 @@ enum RecognitionScreens {
             return AnyView(SmartGuessSheet(
                 specimenID: id,
                 store: container.store,
+                session: container.session,
                 camera: container.camera,
                 smartGuess: HeuristicSmartGuessService(),
                 analytics: container.analytics,

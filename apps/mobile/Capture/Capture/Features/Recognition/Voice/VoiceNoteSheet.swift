@@ -15,6 +15,7 @@ import CaptureKit
 struct VoiceNoteSheet: View {
     let specimenID: UUID
     let store: CaptureStore
+    let session: any SessionProviding
     let voice: any VoiceNoteService
     let analytics: any CaptureAnalytics
     let coordinator: CaptureCoordinator?
@@ -198,7 +199,7 @@ struct VoiceNoteSheet: View {
     }
 
     private func attach() {
-        guard let specimen = store.specimen(id: specimenID) else { return }
+        guard let specimen = currentSpecimen() else { return }
         let text = transcript.trimmingCharacters(in: .whitespacesAndNewlines)
         specimen.voiceTranscript = text
         specimen.voiceAudioFilename = result?.audioFilename
@@ -207,6 +208,15 @@ struct VoiceNoteSheet: View {
         try? store.save()
         analytics.event("N4.attach", ["chars": String(text.count)])
         coordinator?.present(.specimenSheet(specimenID))
+    }
+
+    private func currentSpecimen() -> Specimen? {
+        CaptureOwnerProjectionPolicy.specimen(
+            id: specimenID,
+            store: store,
+            runsRealServices: AppConfiguration.runsRealServices,
+            userID: session.userID,
+            workspaceID: session.workspaceID)
     }
 
     // MARK: - Helpers
@@ -233,6 +243,7 @@ import CaptureKitMocks
     return VoiceNoteSheet(
         specimenID: specimen.id,
         store: store,
+        session: MockSessionProviding(),
         voice: MockVoiceNoteService(),
         analytics: MockCaptureAnalytics(),
         coordinator: CaptureCoordinator()

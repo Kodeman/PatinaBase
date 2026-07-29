@@ -215,7 +215,9 @@ private struct ArrivingPORow: Decodable {
         let formatter = DateFormatter()
         formatter.calendar = Calendar(identifier: .iso8601)
         formatter.locale = Locale(identifier: "en_US_POSIX")
-        formatter.timeZone = TimeZone(secondsFromGMT: 0)
+        // Postgres DATE is a calendar day, not a UTC instant. Parsing in the
+        // device zone keeps July 29 on July 29 for local "Moving today" logic.
+        formatter.timeZone = .current
         formatter.dateFormat = "yyyy-MM-dd"
         return formatter
     }()

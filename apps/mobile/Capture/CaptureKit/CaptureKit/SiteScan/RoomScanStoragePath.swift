@@ -5,7 +5,8 @@
 //  can never regress into the wrong segment order or the uppercase-UUID form that
 //  trips storage RLS. Mirrors the reference app's convention exactly
 //  (Patina/Services/Sync/ArtifactUploader.swift +
-//  RoomScanSyncService.uploadUSDZ): `{artifactType}/{userId}/{roomId}/{filename}`.
+//  RoomScanSyncService.uploadUSDZ):
+//  `{artifactType}/{userId}/{roomId}/{filename}`.
 //
 //  Lives in CaptureKit (public) so the app-target site-scan code AND the
 //  CaptureTests logic-test bundle (which links CaptureKit only) both reach it —
@@ -32,18 +33,25 @@
 //                                     room: 22222222-2222-2222-2222-222222222222,
 //                                     filename: "scan.usdz")
 //      == "usdz/11111111-1111-1111-1111-111111111111/22222222-2222-2222-2222-222222222222/scan.usdz"
-//         segments → [1]=usdz  [2]=<userId>  [3]=<roomId>  [4]=scan.usdz   ✓ RLS [2]=user, [3]=room
+//         segments → [1]=usdz  [2]=<userId>  [3]=<roomId>  [4]=scan.usdz
+//         ✓ RLS [2]=user, [3]=room
 //    object(folder: "photos", user: …AAAA (uppercase in), room: …BBBB, filename: "auto_001.50.jpg")
 //      lowercases both UUIDs → "photos/…aaaa/…bbbb/auto_001.50.jpg"
 
 import Foundation
 
 public enum RoomScanStoragePath {
-    /// `{folder}/{userId}/{roomId}/{filename}`, both UUID segments lowercased to
-    /// match the canonical text form Postgres's storage RLS compares against.
+    /// `{folder}/{userId}/{roomId}/{filename}`, with both UUID segments
+    /// lowercased to match the canonical text form Postgres compares against.
     /// `folder` is the artifact-type root (`usdz`, `captured_room`, `photos`, …).
-    public static func object(folder: String, userID: UUID, roomID: UUID, filename: String) -> String {
-        "\(folder)/\(userID.uuidString.lowercased())/\(roomID.uuidString.lowercased())/\(filename)"
+    public static func object(
+        folder: String,
+        userID: UUID,
+        roomID: UUID,
+        filename: String
+    ) -> String {
+        "\(folder)/\(userID.uuidString.lowercased())/"
+            + "\(roomID.uuidString.lowercased())/\(filename)"
     }
 
     /// What goes in a `room_scans` artifact URL column for an object at

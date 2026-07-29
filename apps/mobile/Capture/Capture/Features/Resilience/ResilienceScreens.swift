@@ -14,6 +14,9 @@ import PhotosUI
 import Photos
 import UIKit
 import CaptureKit
+#if DEBUG
+import CaptureKitMocks
+#endif
 
 /// Why the degraded-mode sheet is up: a denied camera permission (R3) or a
 /// share-sheet hand-off that needs finishing (E3). Drives copy + the reflected
@@ -35,6 +38,7 @@ enum PhotoImportContext {
 /// camera: import from Photos, enter by hand, or jump to Settings to re-grant.
 struct PhotoImportSheet: View {
     let store: CaptureStore
+    let session: any SessionProviding
     let coordinator: CaptureCoordinator
     var analytics: (any CaptureAnalytics)?
     var context: PhotoImportContext = .denied
@@ -42,6 +46,9 @@ struct PhotoImportSheet: View {
     @Environment(\.openURL) private var openURL
     @State private var pickerItems: [PhotosPickerItem] = []
     @State private var isImporting = false
+    @State private var creationError: String?
+    @State private var importTask: Task<Void, Never>?
+    @State private var importToken: UUID?
 
     var body: some View {
         VStack(spacing: 0) {
@@ -93,6 +100,14 @@ struct PhotoImportSheet: View {
             }
             .padding(.horizontal, 16)
 
+            if let creationError {
+                Label(creationError, systemImage: "person.crop.circle.badge.exclamationmark")
+                    .font(CaptureType.footnote)
+                    .foregroundStyle(CaptureColor.error)
+                    .padding(.horizontal, 20)
+                    .padding(.top, 12)
+            }
+
             Spacer(minLength: 16)
 
             // ── Settings / dismiss ──
@@ -120,6 +135,11 @@ struct PhotoImportSheet: View {
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .background(CaptureColor.paper)
         .onChange(of: pickerItems) { _, items in importPicked(items) }
+        .onDisappear {
+            importTask?.cancel()
+            importTask = nil
+            importToken = nil
+        }
         .task { analytics?.screen(context.screenID.rawValue) }
         .accessibilityIdentifier(context.screenID.rawValue)
     }
@@ -163,36 +183,93 @@ struct PhotoImportSheet: View {
     // ── Actions ──
     private func importPicked(_ items: [PhotosPickerItem]) {
         guard !items.isEmpty else { return }
+        importTask?.cancel()
+        importTask = nil
+        importToken = nil
+
+        let creationScope = localListScope
         isImporting = true
-        let draft = store.newDraft()                 // sync, on the main actor
+        guard let draft = makeDraft(in: creationScope) else {
+            pickerItems = []
+            isImporting = false
+            return
+        }
         let draftID = draft.id
-        Task { @MainActor in
+
+        let token = UUID()
+        importToken = token
+        importTask = Task { @MainActor in
+            defer {
+                if importToken == token {
+                    isImporting = false
+                    importTask = nil
+                    importToken = nil
+                }
+            }
+
             var order = 0
             for item in items {
+                guard !Task.isCancelled, isCurrent(creationScope) else { return }
                 guard let data = try? await item.loadTransferable(type: Data.self) else { continue }
+                guard !Task.isCancelled, isCurrent(creationScope) else { return }
+
                 let name = "import-\(UUID().uuidString).img"
                 guard (try? store.writeMedia(data, filename: name)) != nil else { continue }
-                let photo = CapturePhoto(filename: name, isPrimary: order == 0,
-                                         order: order, captureModeRaw: CameraMode.photo.rawValue)
+                let photo = CapturePhoto(
+                    filename: name,
+                    isPrimary: order == 0,
+                    order: order,
+                    captureModeRaw: CameraMode.photo.rawValue)
                 photo.specimen = draft
                 draft.photos.append(photo)
                 order += 1
             }
-            // Provenance: the record originates from an import, not the camera.
+
+            guard !Task.isCancelled, isCurrent(creationScope) else { return }
             draft.provenanceRaw[FieldKey.note.rawValue] = ProvenanceSource.imported.rawValue
             try? store.save()
-            isImporting = false
+            guard !Task.isCancelled, isCurrent(creationScope) else { return }
+
             analytics?.event("capture.photo_import", ["count": "\(order)"])
-            openSpecimen(draftID)
+            openSpecimen(draftID, scope: creationScope)
         }
     }
 
     private func enterByHand() {
-        let draft = store.newDraft()
+        let creationScope = localListScope
+        guard let draft = makeDraft(in: creationScope),
+              isCurrent(creationScope) else { return }
         try? store.save()
-        analytics?.event("capture.manual_entry",
-                         ["from": context == .shareImport ? "share" : "denied"])
-        openSpecimen(draft.id)
+        guard isCurrent(creationScope) else { return }
+        analytics?.event(
+            "capture.manual_entry",
+            ["from": context == .shareImport ? "share" : "denied"])
+        openSpecimen(draft.id, scope: creationScope)
+    }
+
+    private func makeDraft(in scope: CaptureLocalListScope) -> Specimen? {
+        switch scope {
+        case .globalFixtures:
+            creationError = nil
+            return store.newDraft()
+        case .owner(let owner):
+            creationError = nil
+            return store.newDraft(owner: owner)
+        case .unavailable:
+            creationError = "Choose a workspace before creating a capture."
+            return nil
+        }
+    }
+
+    private func isCurrent(_ scope: CaptureLocalListScope) -> Bool {
+        scope == localListScope
+    }
+
+    private var localListScope: CaptureLocalListScope {
+        CaptureOwnerProjectionPolicy.resolve(
+            runsRealServices: AppConfiguration.runsRealServices,
+            userID: session.userID,
+            workspaceID: session.workspaceID)
     }
 
     private func openSettings() {
@@ -203,9 +280,11 @@ struct PhotoImportSheet: View {
 
     /// Hand off to the C5 specimen sheet (Team B). Dismiss first so SwiftUI
     /// cleanly swaps the single presented sheet.
-    private func openSpecimen(_ id: UUID) {
+    private func openSpecimen(_ id: UUID, scope: CaptureLocalListScope) {
+        guard isCurrent(scope) else { return }
         coordinator.dismissSheet()
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) {
+            guard isCurrent(scope) else { return }
             coordinator.present(.specimenSheet(id))
         }
     }
@@ -218,6 +297,7 @@ enum ResilienceScreens {
         r.registerSheet(CaptureSheet.photoImport.registryKey) { _ in
             AnyView(
                 PhotoImportSheet(store: container.store,
+                                 session: container.session,
                                  coordinator: coordinator,
                                  analytics: container.analytics,
                                  context: .denied)
@@ -239,6 +319,7 @@ private func photoImportPreview(_ context: PhotoImportContext) -> some View {
     // swiftlint:disable:next force_try
     let store = try! CaptureStore.inMemory()
     return PhotoImportSheet(store: store,
+                            session: MockSessionProviding(),
                             coordinator: CaptureCoordinator(),
                             analytics: nil,
                             context: context)

@@ -15,6 +15,7 @@ import CaptureKit
 struct LibrarySearchScreen: View {
     let store: CaptureStore
     let location: any LocationService
+    let session: any SessionProviding
     let analytics: any CaptureAnalytics
     let coordinator: CaptureCoordinator
 
@@ -247,7 +248,8 @@ struct LibrarySearchScreen: View {
     }
 
     private func runSearch() {
-        let base = store.search(SpecimenQuery(text: queryText.isEmpty ? nil : queryText))
+        let base = localSearch(
+            SpecimenQuery(text: queryText.isEmpty ? nil : queryText))
         switch scope {
         case .all:
             results = base
@@ -271,7 +273,25 @@ struct LibrarySearchScreen: View {
     /// venue so "This project" can scope honestly. (Seam gap — see manifest.)
     private func deriveActiveProject() {
         activeProjectName = venue?.projectName
-            ?? store.search(SpecimenQuery()).compactMap { $0.venue?.projectName }.first
+            ?? localSearch(SpecimenQuery()).compactMap { $0.venue?.projectName }.first
+    }
+
+    private func localSearch(_ query: SpecimenQuery) -> [Specimen] {
+        switch localListScope {
+        case .globalFixtures:
+            return store.search(query)
+        case .owner(let owner):
+            return store.search(query, owner: owner)
+        case .unavailable:
+            return []
+        }
+    }
+
+    private var localListScope: CaptureLocalListScope {
+        CaptureOwnerProjectionPolicy.resolve(
+            runsRealServices: AppConfiguration.runsRealServices,
+            userID: session.userID,
+            workspaceID: session.workspaceID)
     }
 }
 
@@ -302,6 +322,7 @@ import CaptureKitMocks
         LibrarySearchScreen(
             store: store,
             location: MockLocationService(),
+            session: MockSessionProviding(),
             analytics: MockCaptureAnalytics(),
             coordinator: CaptureCoordinator()
         )

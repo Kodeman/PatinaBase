@@ -17,7 +17,9 @@ import CaptureKit
 @Observable
 final class SiteScanContextModel {
 
-    private let service: ContextCaptureService
+    private let store: CaptureStore
+    private let sync: any CaptureSyncService
+    private let ownerScopeProvider: () -> CaptureLocalListScope
     private let frameProvider: () async -> ContextFrameSnapshot?
     private let scanSessionIdProvider: () -> String?
     private let projectID: String?
@@ -28,12 +30,21 @@ final class SiteScanContextModel {
     var isRecordingVoice = false
     private var partialTranscript = ""
     private var voiceTask: Task<Void, Never>?
+    private var recordingScope: CaptureLocalListScope?
 
-    init(store: CaptureStore, projectID: String?, projectRoomID: String?,
-         voice: any VoiceNoteService,
-         scanSessionIdProvider: @escaping () -> String?,
-         frameProvider: @escaping () async -> ContextFrameSnapshot?) {
-        self.service = ContextCaptureService(store: store)
+    init(
+        store: CaptureStore,
+        sync: any CaptureSyncService,
+        ownerScope: @escaping () -> CaptureLocalListScope,
+        projectID: String?,
+        projectRoomID: String?,
+        voice: any VoiceNoteService,
+        scanSessionIdProvider: @escaping () -> String?,
+        frameProvider: @escaping () async -> ContextFrameSnapshot?
+    ) {
+        self.store = store
+        self.sync = sync
+        self.ownerScopeProvider = ownerScope
         self.projectID = projectID
         self.projectRoomID = projectRoomID
         self.voice = voice
@@ -44,19 +55,34 @@ final class SiteScanContextModel {
     private func provenance(pose: [Double]?) -> ContextCaptureProvenance {
         ContextCaptureProvenance(
             scanSessionId: scanSessionIdProvider(),
-            projectId: projectID, projectRoomId: projectRoomID,
+            projectId: projectID,
+            projectRoomId: projectRoomID,
             cameraPoseRowMajor: pose,
             capturedAt: ISO8601DateFormatter().string(from: Date()))
     }
 
     func capturePhoto() async {
+        let creationScope = ownerScopeProvider()
+        guard service(for: creationScope) != nil else {
+            reportOwnerUnavailable()
+            return
+        }
         guard let snapshot = await frameProvider() else {
             toast = "Couldn't capture — try again"
             return
         }
-        service.enqueuePhoto(imageData: snapshot.imageData, width: snapshot.width,
-                             height: snapshot.height, filenameExtension: snapshot.filenameExtension,
-                             provenance: provenance(pose: snapshot.poseRowMajor))
+        guard !Task.isCancelled,
+              ownerScopeProvider() == creationScope,
+              let service = service(for: creationScope) else { return }
+
+        let created = service.enqueuePhoto(
+            imageData: snapshot.imageData,
+            width: snapshot.width,
+            height: snapshot.height,
+            filenameExtension: snapshot.filenameExtension,
+            provenance: provenance(pose: snapshot.poseRowMajor))
+        await sync.enqueue(created.id)
+        guard !Task.isCancelled, ownerScopeProvider() == creationScope else { return }
         toast = "Photo added to Inbox"
     }
 
@@ -65,12 +91,23 @@ final class SiteScanContextModel {
     }
 
     private func startVoice() {
+        let scope = ownerScopeProvider()
+        guard service(for: scope) != nil else {
+            reportOwnerUnavailable()
+            return
+        }
         do {
             let stream = try voice.startLiveTranscription()
+            recordingScope = scope
             isRecordingVoice = true
             partialTranscript = ""
             voiceTask = Task { [weak self] in
-                do { for try await chunk in stream { self?.partialTranscript = chunk.text } } catch {}
+                do {
+                    for try await chunk in stream {
+                        guard !Task.isCancelled else { return }
+                        self?.partialTranscript = chunk.text
+                    }
+                } catch {}
             }
         } catch {
             toast = "Microphone unavailable"
@@ -80,19 +117,44 @@ final class SiteScanContextModel {
     private func stopVoice() {
         voiceTask?.cancel()
         isRecordingVoice = false
+        let creationScope = recordingScope
+        recordingScope = nil
         Task { [weak self] in
-            guard let self else { return }
+            guard let self, let creationScope else { return }
             let result = await self.voice.finish()
+            guard !Task.isCancelled,
+                  self.ownerScopeProvider() == creationScope,
+                  let service = self.service(for: creationScope) else { return }
             let transcript = result.transcript.isEmpty ? self.partialTranscript : result.transcript
             guard !transcript.isEmpty || result.audioFilename != nil else {
                 self.toast = "Nothing recorded"
                 return
             }
-            self.service.enqueueVoice(transcript: transcript, audioFilename: result.audioFilename,
-                                      durationSeconds: result.durationSeconds,
-                                      provenance: self.provenance(pose: nil))
+            let created = service.enqueueVoice(
+                transcript: transcript,
+                audioFilename: result.audioFilename,
+                durationSeconds: result.durationSeconds,
+                provenance: self.provenance(pose: nil))
+            await self.sync.enqueue(created.id)
+            guard !Task.isCancelled,
+                  self.ownerScopeProvider() == creationScope else { return }
             self.toast = "Voice note added to Inbox"
         }
+    }
+
+    private func service(for scope: CaptureLocalListScope) -> ContextCaptureService? {
+        switch scope {
+        case .globalFixtures:
+            return ContextCaptureService(store: store)
+        case .owner(let owner):
+            return ContextCaptureService(store: store, owner: owner)
+        case .unavailable:
+            return nil
+        }
+    }
+
+    private func reportOwnerUnavailable() {
+        toast = "Choose a workspace before adding context"
     }
 }
 
@@ -163,7 +225,15 @@ struct SiteScanContextScreen: View {
             await container.camera.start()
             if model == nil {
                 model = SiteScanContextModel(
-                    store: container.store, projectID: projectID, projectRoomID: projectRoomID,
+                    store: container.store,
+                    sync: container.sync,
+                    ownerScope: {
+                        CaptureOwnerProjectionPolicy.resolve(
+                            runsRealServices: AppConfiguration.runsRealServices,
+                            userID: container.session.userID,
+                            workspaceID: container.session.workspaceID)
+                    },
+                    projectID: projectID, projectRoomID: projectRoomID,
                     voice: SpeechVoiceNoteService(mediaDirectory: container.store.mediaDirectory()),
                     scanSessionIdProvider: { nil },      // no scan session on a non-Pro device
                     frameProvider: { [container] in

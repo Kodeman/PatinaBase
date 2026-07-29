@@ -14,6 +14,7 @@ import CaptureKit
 struct SmartGuessSheet: View {
     let specimenID: UUID
     let store: CaptureStore
+    let session: any SessionProviding
     let camera: any CameraService
     let smartGuess: any SmartGuessService
     let analytics: any CaptureAnalytics
@@ -134,14 +135,19 @@ struct SmartGuessSheet: View {
     // MARK: - Load + apply
 
     private func loadGuess() async {
-        guard !loaded, let specimen = store.specimen(id: specimenID) else { return }
+        guard !loaded, let sourceSpecimen = currentSpecimen() else { return }
         loaded = true
         analytics.screen("N5.smart-guess")
 
-        let image = await RecognitionImageLoader.captureImage(for: specimen, store: store, camera: camera)
-        let guess = await smartGuess.guess(image: image, ocr: [], codes: [])
+        let image = await RecognitionImageLoader.captureImage(
+            for: sourceSpecimen,
+            store: store,
+            camera: camera)
+        guard !Task.isCancelled, currentSpecimen() != nil else { return }
 
-        // Seed working state from the guess, falling back to any existing values.
+        let guess = await smartGuess.guess(image: image, ocr: [], codes: [])
+        guard !Task.isCancelled, let specimen = currentSpecimen() else { return }
+
         categoryRaw = guess.category == .unknown ? specimen.categoryRaw : guess.category.rawValue
         confidence["Category"] = guess.categoryConfidence
         for field in guess.fields {
@@ -160,7 +166,6 @@ struct SmartGuessSheet: View {
         styleOriginal = style
         colourOriginal = colour
 
-        // Persist as unconfirmed guesses so they show badged on the specimen (C3/C5).
         applyAsGuess(specimen)
         try? store.save()
     }
@@ -186,7 +191,7 @@ struct SmartGuessSheet: View {
     // MARK: - Accept (promote to confirmed)
 
     private func accept() {
-        guard let specimen = store.specimen(id: specimenID) else { return }
+        guard let specimen = currentSpecimen() else { return }
         if categoryRaw != SpecimenCategory.unknown.rawValue {
             specimen.setValue(categoryRaw, for: .category, source: promotedSource(categoryRaw, categoryOriginal))
         }
@@ -210,6 +215,15 @@ struct SmartGuessSheet: View {
         coordinator?.present(.specimenSheet(specimenID))
     }
 
+    private func currentSpecimen() -> Specimen? {
+        CaptureOwnerProjectionPolicy.specimen(
+            id: specimenID,
+            store: store,
+            runsRealServices: AppConfiguration.runsRealServices,
+            userID: session.userID,
+            workspaceID: session.workspaceID)
+    }
+
     /// Accepted unchanged → .manual (designer-confirmed); corrected → .edited.
     private func promotedSource(_ value: String, _ original: String) -> ProvenanceSource {
         value == original ? .manual : .edited
@@ -226,6 +240,7 @@ import CaptureKitMocks
     return SmartGuessSheet(
         specimenID: specimen.id,
         store: store,
+        session: MockSessionProviding(),
         camera: MockCameraService(),
         smartGuess: StubSmartGuessService(),
         analytics: MockCaptureAnalytics(),

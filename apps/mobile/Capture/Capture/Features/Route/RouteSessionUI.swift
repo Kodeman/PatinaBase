@@ -289,8 +289,13 @@ enum RoutePreviewData {
             shelf: "Seating · maybe",
             placemarkName: "High Point · Showroom 214"
         )
+        let visitID = CaptureSessionContextStore.shared.current(
+            identity: CaptureSessionIdentity(
+                userID: "00000000-0000-0000-0000-000000000001",
+                workspaceID: "00000000-0000-0000-0000-0000000000aa")
+        ).visitID
 
-        let chair = store.newDraft()
+        let chair = store.newDraft(sessionID: visitID)
         chair.title = "Lounge chair"
         chair.category = .seating
         chair.setValue("Holloway & Co.", for: .maker, source: .ocr)
@@ -305,14 +310,14 @@ enum RoutePreviewData {
         chair.voiceDurationSeconds = 6
         chair.venue = venue
 
-        let lamp = store.newDraft()
+        let lamp = store.newDraft(sessionID: visitID)
         lamp.title = "Brass lamp"
         lamp.setValue("Brass lamp", for: .title, source: .manual)
         lamp.setValue("Soane", for: .maker, source: .ocr)
         lamp.destination = .inbox
         lamp.venue = venue
 
-        let table = store.newDraft()
+        let table = store.newDraft(sessionID: visitID)
         table.title = "Side table"
         table.scannedCodes = ["gtin:0012345678905"]
         table.status = .ready

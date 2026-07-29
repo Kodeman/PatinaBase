@@ -75,9 +75,11 @@ struct ViewfinderWorkButton: View {
             .foregroundStyle(CaptureColor.paper)
             .padding(.horizontal, 10).padding(.vertical, 7)
             .background(.black.opacity(0.42), in: Capsule())
+            .frame(minHeight: 44)
         }
         .accessibilityLabel("Work")
-        .accessibilityHint("Opens projects, leads, decisions, and messages")
+        .accessibilityHint("Switches to Work and keeps your place in Camera")
+        .accessibilityIdentifier("field.realm.work")
     }
 }
 

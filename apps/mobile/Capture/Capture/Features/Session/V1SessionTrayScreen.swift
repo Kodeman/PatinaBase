@@ -13,9 +13,11 @@ import PatinaDesignKit
 
 struct V1SessionTrayScreen: View {
     let store: CaptureStore
+    let session: any SessionProviding
     let coordinator: CaptureCoordinator
 
     @State private var items: [Specimen] = []
+    private let sessionContext = CaptureSessionContextStore.shared
 
     private var groups: [(venue: String, items: [Specimen])] {
         let grouped = Dictionary(grouping: items) { specimen in
@@ -54,8 +56,15 @@ struct V1SessionTrayScreen: View {
         }
         .navigationTitle("")
         .navigationBarTitleDisplayMode(.inline)
+        .toolbar {
+            ToolbarItem(placement: .topBarTrailing) {
+                Button("End visit", action: endVisit)
+                    .font(CaptureType.callout)
+                    .foregroundStyle(CaptureColor.inkSoft)
+            }
+        }
         .accessibilityIdentifier(CaptureScreenID.v1SessionTray.rawValue)
-        .onAppear { items = store.session() }
+        .onAppear(perform: reload)
     }
 
     private func venueSection(_ venue: String, _ specimens: [Specimen]) -> some View {
@@ -128,13 +137,48 @@ struct V1SessionTrayScreen: View {
                          title: "Nothing captured yet",
                          message: "Captures from this visit gather here.")
     }
+
+    private func reload() {
+        let context = sessionContext.current(identity: identity)
+        switch localListScope {
+        case .globalFixtures:
+            items = store.session(visitID: context.visitID)
+        case .owner(let owner):
+            items = store.session(visitID: context.visitID, owner: owner)
+        case .unavailable:
+            items = []
+        }
+    }
+
+    private func endVisit() {
+        _ = sessionContext.endVisit(identity: identity)
+        items = []
+        coordinator.popToRoot()
+    }
+
+    private var identity: CaptureSessionIdentity {
+        CaptureSessionIdentity(
+            userID: session.userID,
+            workspaceID: session.workspaceID)
+    }
+
+    private var localListScope: CaptureLocalListScope {
+        CaptureOwnerProjectionPolicy.resolve(
+            runsRealServices: AppConfiguration.runsRealServices,
+            userID: session.userID,
+            workspaceID: session.workspaceID)
+    }
 }
 
 #if DEBUG
+import CaptureKitMocks
+
 #Preview {
     let demo = RoutePreviewData.make()
     return NavigationStack {
-        V1SessionTrayScreen(store: demo.store, coordinator: CaptureCoordinator())
+        V1SessionTrayScreen(
+            store: demo.store, session: MockSessionProviding(),
+            coordinator: CaptureCoordinator())
     }
 }
 #endif

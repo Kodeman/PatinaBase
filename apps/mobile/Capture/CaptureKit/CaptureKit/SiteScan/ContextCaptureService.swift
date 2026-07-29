@@ -20,9 +20,11 @@ import Foundation
 public final class ContextCaptureService {
 
     private let store: CaptureStore
+    private let owner: CaptureOwnerIdentity?
 
-    public init(store: CaptureStore) {
+    public init(store: CaptureStore, owner: CaptureOwnerIdentity? = nil) {
         self.store = store
+        self.owner = owner
     }
 
     /// Enqueue a detail-photo context capture. `imageData` is written to the media
@@ -31,7 +33,7 @@ public final class ContextCaptureService {
     public func enqueuePhoto(imageData: Data, width: Int, height: Int,
                              filenameExtension: String = "jpg",
                              provenance: ContextCaptureProvenance) -> Specimen {
-        let draft = store.newDraft()
+        let draft = store.newDraft(owner: owner)
         apply(provenance, to: draft)
         let filename = "\(UUID().uuidString.lowercased()).\(filenameExtension)"
         try? store.writeMedia(imageData, filename: filename)
@@ -49,7 +51,7 @@ public final class ContextCaptureService {
     public func enqueueVoice(transcript: String, audioFilename: String?,
                              durationSeconds: Double,
                              provenance: ContextCaptureProvenance) -> Specimen {
-        let draft = store.newDraft()
+        let draft = store.newDraft(owner: owner)
         apply(provenance, to: draft)
         draft.voiceTranscript = transcript.isEmpty ? nil : transcript
         draft.voiceAudioFilename = audioFilename

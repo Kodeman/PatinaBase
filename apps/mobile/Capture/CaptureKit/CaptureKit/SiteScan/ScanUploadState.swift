@@ -19,7 +19,7 @@ public struct ScanArtifactUploadState: Codable, Equatable, Sendable {
     public var kind: String            // ArtifactKind wire string
     public var relativePath: String    // in the bundle dir
     public var mimeType: String
-    public var storagePath: String?    // {folder}/{userId}/{scanId}/{filename} once known
+    public var storagePath: String?    // {folder}/{userId}/{roomId}/{filename} once known
     public var remoteUrl: String?      // patched onto the room_scans column
     public var sha256: String?
     public var column: String?         // room_scans URL column, nil if the kind has none
@@ -49,6 +49,18 @@ public enum ScanUploadPlanner {
     /// skipped). Empty → not done (nothing to complete — completion gating).
     public static func allDone(_ artifacts: [ScanArtifactUploadState]) -> Bool {
         !artifacts.isEmpty && artifacts.allSatisfy { $0.status == .uploaded || $0.status == .skipped }
+    }
+
+    /// Required confirmation gate: every declared kind must have a durable
+    /// `.uploaded` state. A subset (or a deliberately skipped artifact) is never
+    /// sufficient for a successful scan receipt.
+    public static func allRequiredUploaded(
+        _ requiredKinds: [String],
+        existing: [ScanArtifactUploadState]
+    ) -> Bool {
+        guard !requiredKinds.isEmpty else { return false }
+        let uploaded = Set(existing.filter { $0.status == .uploaded }.map(\.kind))
+        return requiredKinds.allSatisfy(uploaded.contains)
     }
 
     /// Fraction complete (uploaded + skipped) / total, for the F4 progress bar.
