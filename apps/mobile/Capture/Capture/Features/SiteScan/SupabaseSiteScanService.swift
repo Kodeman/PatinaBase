@@ -644,7 +644,6 @@ final class SupabaseSiteScanService: SiteScanService {
             folder: descriptor.folder,
             userID: context.userID,
             roomID: context.roomID,
-            scanID: context.scanID,
             filename: descriptor.filename
         )
         working.sha256 = sha
@@ -1126,7 +1125,7 @@ final class SupabaseSiteScanService: SiteScanService {
 
     /// Upload the scan's posed photos, then write ONE batched `room_scan_images`
     /// insert — the SEPARATE, variable-count lane that rides the SAME storage-key
-    /// shape (`photos/{uid}/{roomId}/{scanId}/{filename}`) as the two core artifacts, so it
+    /// shape (`photos/{uid}/{roomId}/{filename}`) as the two core artifacts, so it
     /// needs zero policy work (00077 owner INSERT + 00287 designer read).
     ///
     /// Reads the `photos_metadata.json` sidecar the session wrote; an absent or
@@ -1159,7 +1158,7 @@ final class SupabaseSiteScanService: SiteScanService {
                 let jpegData = try Data(contentsOf: photosDir.appendingPathComponent(entry.filename))
                 let jpegPath = RoomScanStoragePath.object(
                     folder: RoomScanStoragePath.Folder.photos, userID: userID,
-                    roomID: roomID, scanID: scanID, filename: entry.filename)
+                    roomID: roomID, filename: entry.filename)
                 try requireActiveOwner(owner)
                 try await client.storage.from(bucket).upload(
                     jpegPath, data: jpegData,
@@ -1176,7 +1175,7 @@ final class SupabaseSiteScanService: SiteScanService {
                         let thumbData = try Data(contentsOf: photosDir.appendingPathComponent(thumbName))
                         let thumbPath = RoomScanStoragePath.object(
                             folder: RoomScanStoragePath.Folder.photos, userID: userID,
-                            roomID: roomID, scanID: scanID, filename: thumbName)
+                            roomID: roomID, filename: thumbName)
                         try requireActiveOwner(owner)
                         try await client.storage.from(bucket).upload(
                             thumbPath, data: thumbData,

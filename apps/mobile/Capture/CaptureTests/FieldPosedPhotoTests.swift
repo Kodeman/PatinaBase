@@ -55,20 +55,18 @@ struct FieldPosedPhotoTests {
     @Test func photosStoragePathShapeAndCase() {
         let uid = UUID(uuidString: "11111111-1111-1111-1111-111111111111")!
         let rid = UUID(uuidString: "22222222-2222-2222-2222-222222222222")!
-        let sid = UUID(uuidString: "33333333-3333-3333-3333-333333333333")!
         let path = RoomScanStoragePath.object(
             folder: RoomScanStoragePath.Folder.photos,
             userID: uid,
             roomID: rid,
-            scanID: sid,
             filename: "auto_001.50.jpg"
         )
-        // seg[1]=photos  seg[2]=uid  seg[3]=roomId  seg[4]=scanId
+        // seg[1]=photos  seg[2]=uid  seg[3]=roomId  seg[4]=filename
         #expect(
             path
                 == "photos/11111111-1111-1111-1111-111111111111/"
                 + "22222222-2222-2222-2222-222222222222/"
-                + "33333333-3333-3333-3333-333333333333/auto_001.50.jpg"
+                + "auto_001.50.jpg"
         )
         #expect(RoomScanStoragePath.Folder.photos == "photos")
 
@@ -78,25 +76,14 @@ struct FieldPosedPhotoTests {
             folder: "photos",
             userID: upper,
             roomID: rid,
-            scanID: upper,
             filename: "thumb_auto_001.50.jpg"
         )
         #expect(
             lowered
                 == "photos/aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa/"
                 + "22222222-2222-2222-2222-222222222222/"
-                + "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa/"
                 + "thumb_auto_001.50.jpg"
         )
-
-        let anotherScan = RoomScanStoragePath.object(
-            folder: RoomScanStoragePath.Folder.photos,
-            userID: uid,
-            roomID: rid,
-            scanID: UUID(uuidString: "55555555-5555-5555-5555-555555555555")!,
-            filename: "auto_001.50.jpg"
-        )
-        #expect(path != anotherScan)
     }
 
     // MARK: - Insert DTO JSON-key snapshot (+ 16-element camera_transform)

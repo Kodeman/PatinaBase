@@ -35,7 +35,7 @@ public struct ScanUploadDescriptor: Sendable, Equatable {
     ///
     /// STORAGE LAYOUT CONTRACT (capture-bundle-spec-v1 **B-18** · §4 "Storage layout"):
     /// this `folder` column is the authoritative kind→folder map — every artifact
-    /// PUTs to `{folder}/{userId}/{roomId}/{scanId}/{filename}`. The item-9 scan-pipeline
+    /// PUTs to `{folder}/{userId}/{roomId}/{filename}`. The item-9 scan-pipeline
     /// worker mirrors it in `keys.KIND_TO_FOLDER` (services/scan-pipeline) and
     /// resolves the column-less kinds (`depthIndex`/`scorecard`/`anchors`/
     /// `keyframeIndex`/`keyframeSummary`) by prefix-swap off the manifest key.

@@ -47,7 +47,7 @@ final class FieldBackgroundScanUploader: NSObject {
         let sha256: String?
         let mimeType: String
         let fileURL: URL
-        let storagePath: String   // {folder}/{userId}/{roomId}/{scanId}/{filename}
+        let storagePath: String   // {folder}/{userId}/{roomId}/{filename}
     }
 
     enum UploadError: Error, Equatable {
