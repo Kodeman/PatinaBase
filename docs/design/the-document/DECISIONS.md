@@ -5981,3 +5981,98 @@ test count. The 93 are 82 `test_install_script`, 8 `test_field_raster_materializ
 than from `install.sh`, and the control is what proves none of them is ours.
 
 *Entries add: I103 · last id = I103*
+
+### I104 · Field Capture P2 · Refine completes end to end on a real capture; the verdict tracks loop-edge count — 2026-07-29
+
+**The Refine lifecycle completed and published for the first time.** A real
+100-frame Field capture (`e3ea64a8-d12c-4059-8572-2af5abe41c84`, a second room)
+ran acquire → decode → packet → COLMAP → align → floors → evidence → publish on
+the qualified host in **52.2 s**, verdict `PASS
+internal_geometric_refinement_evidenced_absolute_accuracy_unproven`, writing
+eight artifacts under `.../v1/refine/` including `refined-poses-v1.json`,
+`pose-deltas-v1.json`, `adapter-v2.json` and `seed-model-v1.tar`. Every prior
+run in this program stopped short of publication.
+
+**Three real captures, walked to a design.** The owner walked a second room
+normally, and a deliberate single sweep with no revisits, against the existing
+49-frame first room.
+
+| capture | frames | verified edges | reprojection | loop rotation | loop translation | verdict |
+|---|---|---|---|---|---|---|
+| room 2, normal | 100 | **31** | −29.63% | −0.60% | −3.00% | **PASS** |
+| room 1 | 49 | **4** | −32.94% | **+0.31%** | −0.50% | REFUSED |
+| single sweep | 31 | — | — | — | — | FAILED (cheirality) |
+
+**The verdict tracks the verified loop-edge count, not the quality of the
+refinement.** At 31 edges all three loop comparables move the same direction and
+the run passes. At 4 edges, loop rotation wobbles +0.31% against a −32.94%
+reprojection improvement and the run is refused. Taken with I103's slice study
+this is now consistent across ten completed runs: **reprojection improved in
+every run that completed (−28.7% to −42.0%), and every refusal has been caused
+by a loop comparable — never by reprojection, never by coverage.**
+
+**The sweep failed differently, and usefully.** Not a refusal: an
+`AdapterError` — "refined model observation projects outside the positive-depth
+camera", a cheirality violation, a point reconstructed behind a camera. A pure
+sweep with no revisit is the weakest geometry the instrument can produce, and it
+degenerated rather than producing a plausible-but-wrong result. The control
+behaved as a control should, and the pipeline caught it instead of publishing
+nonsense.
+
+**Two identifier defects, found the way R120 was found — by running.**
+
+1. **A Storage-sourced Refine run is impossible as the contract stands.**
+   Storage object keys are keyed by `room_scans.room_id`, while the bundle
+   manifest carries a different `scanId`, and `refine_materializer` requires the
+   request's `scan_id` to equal **both** the key's third segment
+   (`assert_owner_prefix`) and `document["scanId"]`
+   (`_validate_manifest_identity`). For scan `83f0d63d…` those are `da3af6b7…`
+   and `e3ea64a8…` — one request cannot satisfy both. Three distinct
+   identifiers are in play: `room_scans.id`, `room_id`, and the manifest
+   `scanId`. Worked around for measurement only by laying the fetched bytes out
+   locally under the manifest's own `scanId`; no content and no manifest was
+   altered.
+2. **`room_scans.scan_bundle_url` and `depth_archive_url` store a `/object/public/`
+   URL for the `room-scans` bucket, which is `public = false`.** Those URLs
+   return `400 Bucket not found`. Anything consuming those columns directly is
+   broken; the objects are reachable only with credentials.
+
+**Read-only Storage access was used** with the owner's authorisation, via the
+scan worker's own service-role credentials on the qualified host. Nothing was
+written to Storage or to any table.
+
+### R122 · Field Capture P2 · fix the loop-candidate policy before judging the evidence rule — 2026-07-29
+
+The program owner ruled on 2026-07-29, on the evidence of I103 and I104: **fix
+the loop-candidate selection policy first, re-run the three real captures, and
+only then decide whether `evaluate_refinement_evidence` needs changing at all.**
+
+**Why the policy and not the rule.** `build_pair_graph` selects loop candidates
+by camera-centre distance alone and never by where the camera points. On the
+49-frame capture it offered 270 non-temporal candidates of which matching
+verified **4** — 1.5% — with a median angle of **106°** between the two optical
+axes and not one candidate under 30°. Pairs that far apart share no image
+content and can never reach the inlier floor. The thin edge set is manufactured
+by the policy, and the erratic verdict follows from the thin edge set: the
+100-frame capture, whose walk revisits places facing the same way, produced 31
+edges and a well-behaved metric on the first attempt.
+
+**The rule is therefore not yet judged.** It may be sound once the statistic it
+reads is no longer noise-dominated. Changing a gate to make a failing run pass,
+before fixing the input that made the gate noisy, is the inversion this program
+exists to avoid — and R119's floors were written on exactly that principle.
+`evaluate_refinement_evidence` stays byte-identical until the re-run says
+otherwise.
+
+**Also authorised:** repair both identifier defects recorded in I104. The
+`scan_id` contract must be satisfiable by a bundle acquired from Storage as the
+app actually writes it, and the stored URL columns must name a form that
+resolves for a private bucket.
+
+**Unchanged.** Refine stays unregistered as a stage; `DEFAULT_STAGES` remains
+`ingest,solve,drawings`. The raster pin stays exactly 1440x1920. R119's movement
+and shape floors stay as built. `PRIMARY_EXECUTION_QUALIFIED` stays `False`
+until a path is qualified beyond its refusal — one PASS on one capture is not
+that.
+
+*Entries add: I104 · R122 · last id = R122*
