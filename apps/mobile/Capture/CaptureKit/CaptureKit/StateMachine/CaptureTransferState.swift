@@ -8,7 +8,7 @@
 
 import Foundation
 
-public enum CaptureTransferPhase: String, Codable, CaseIterable, Sendable {
+public enum CaptureTransferPhase: String, Hashable, Codable, CaseIterable, Sendable {
     case local
     case queued
     case uploading

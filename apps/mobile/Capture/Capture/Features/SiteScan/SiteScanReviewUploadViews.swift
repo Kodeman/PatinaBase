@@ -18,6 +18,7 @@ import PatinaDesignKit
 struct SiteScanReviewStep: View {
     let result: FieldScanResult
     let model: SiteScanHostModel
+    let companion: FieldCompanionController
     let analytics: any CaptureAnalytics
     let onRetake: () -> Void
     let onContinue: () -> Void
@@ -25,6 +26,16 @@ struct SiteScanReviewStep: View {
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 22) {
+                FieldCompanionHearthView(
+                    presentation: companion.presentation,
+                    onOpen: {
+                        companion.send(.communicate(.init(
+                            title: "Review this scan",
+                            detail: "Confirm the room name and captured artifacts before continuing."
+                        )))
+                    },
+                    onDismiss: { companion.send(.dismiss) }
+                )
                 header
                 if let scorecard = result.scorecard {
                     SiteScanScorecardCard(scorecard: scorecard)
@@ -184,6 +195,10 @@ struct SiteScanUploadStep: View {
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 22) {
+                FieldCompanionHearthView(
+                    presentation: container.companion.presentation,
+                    onDismiss: { container.companion.send(.dismiss) }
+                )
                 destinationSection
                 statusView
             }
@@ -197,8 +212,10 @@ struct SiteScanUploadStep: View {
         .task {
             container.analytics.screen(CaptureScreenID.f4ScanUpload.rawValue)
             await model.resolveProjectName()
+            updateCompanion()
             if model.phase == .idle { await model.upload() }
         }
+        .onChange(of: model.phase) { _, _ in updateCompanion() }
         .accessibilityIdentifier(CaptureScreenID.f4ScanUpload.rawValue)
     }
 
@@ -325,6 +342,33 @@ struct SiteScanUploadStep: View {
                 .background(.ultraThinMaterial)
         case .idle, .uploading:
             EmptyView()
+        }
+    }
+
+    private func updateCompanion() {
+        switch model.phase {
+        case .idle, .uploading:
+            container.companion.send(.reportProgress(.init(
+                activityID: "field.site-scan-upload",
+                kind: .indeterminate,
+                title: "Sending your scan",
+                detail: "The original remains safely on this device"
+            )))
+        case .done:
+            container.companion.send(.collapse(
+                hint: "Scan confirmed",
+                action: nil
+            ))
+        case .failed:
+            container.companion.send(.communicate(.init(
+                title: "Upload paused safely",
+                detail: "Your scan is still on this device. Retry now or finish later."
+            )))
+        case .rejected:
+            container.companion.send(.communicate(.init(
+                title: "This scan needs review",
+                detail: "It remains on this device and won’t be retried automatically."
+            )))
         }
     }
 }

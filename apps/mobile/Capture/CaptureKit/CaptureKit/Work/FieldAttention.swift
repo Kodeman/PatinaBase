@@ -11,6 +11,7 @@ public struct FieldCaptureActivity: Hashable, Sendable {
     public let title: String?
     public let status: CaptureStatus
     public let destination: CaptureDestination
+    public let transferPhase: CaptureTransferPhase?
     public let updatedAt: Date
 
     public init(
@@ -18,18 +19,21 @@ public struct FieldCaptureActivity: Hashable, Sendable {
         title: String?,
         status: CaptureStatus,
         destination: CaptureDestination,
+        transferPhase: CaptureTransferPhase? = nil,
         updatedAt: Date
     ) {
         self.id = id
         self.title = title
         self.status = status
         self.destination = destination
+        self.transferPhase = transferPhase
         self.updatedAt = updatedAt
     }
 }
 
 public enum FieldAttentionKind: String, Hashable, Sendable {
     case capture
+    case scan
     case message
     case lead
     case decision
@@ -44,6 +48,7 @@ public enum FieldAttentionDestination: Hashable, Sendable {
     case decision(String)
     case project(String)
     case receiving
+    case syncStatus
 }
 
 public struct FieldAttentionItem: Identifiable, Hashable, Sendable {
@@ -95,16 +100,20 @@ public enum FieldAttentionBuilder {
         threads: [FieldThread] = [],
         arrivingPOs: [FieldArrivingPO] = [],
         captures: [FieldCaptureActivity] = [],
+        scanUploads: [FieldScanPendingUpload] = [],
         now: Date = Date(),
         calendar: Calendar = .current
     ) -> FieldAttentionSnapshot {
         let captureGroups = captureCandidates(captures, now: now, calendar: calendar)
+        let scanGroups = scanCandidates(scanUploads)
         let threadGroups = threadCandidates(threads, now: now, calendar: calendar)
         let projectGroups = projectCandidates(projects, now: now, calendar: calendar)
-        let needsYou = captureGroups.needs + threadGroups.needs + leadCandidates(leads)
+        let needsYou = captureGroups.needs + scanGroups.needs
+            + threadGroups.needs + leadCandidates(leads)
         let waiting = decisionCandidates(decisions) + projectGroups.waiting
         let moving = arrivalCandidates(arrivingPOs, now: now, calendar: calendar)
-            + captureGroups.moving + projectGroups.moving + threadGroups.moving
+            + captureGroups.moving + scanGroups.moving
+            + projectGroups.moving + threadGroups.moving
 
         var assigned = Set<String>()
         return FieldAttentionSnapshot(
@@ -135,6 +144,50 @@ public enum FieldAttentionBuilder {
             let id = "capture:\(capture.id.uuidString.lowercased())"
             let title = nonEmpty(capture.title) ?? "Untitled capture"
             let destination = FieldAttentionDestination.specimen(capture.id)
+            switch capture.transferPhase {
+            case .retryableFailure:
+                groups.needs.append(Candidate(
+                    priority: 0,
+                    item: FieldAttentionItem(
+                        id: id, kind: .capture, title: title,
+                        detail: "Retry this transfer",
+                        timestamp: capture.updatedAt, destination: destination
+                    )
+                ))
+                continue
+            case .rejected:
+                groups.needs.append(Candidate(
+                    priority: 0,
+                    item: FieldAttentionItem(
+                        id: id, kind: .capture, title: title,
+                        detail: "Review this transfer",
+                        timestamp: capture.updatedAt, destination: destination
+                    )
+                ))
+                continue
+            case .uploading, .awaitingConfirmation, .queued:
+                if calendar.isDate(capture.updatedAt, inSameDayAs: now) {
+                    let detail: String
+                    switch capture.transferPhase {
+                    case .uploading: detail = "Sending from Camera"
+                    case .awaitingConfirmation: detail = "Waiting for confirmation"
+                    default: detail = "Safe on this device"
+                    }
+                    groups.moving.append(Candidate(
+                        priority: 1,
+                        item: FieldAttentionItem(
+                            id: id, kind: .capture, title: title,
+                            detail: detail,
+                            timestamp: capture.updatedAt, destination: destination
+                        )
+                    ))
+                    continue
+                }
+            case .complete:
+                continue
+            case .local, .none:
+                break
+            }
             switch capture.status {
             case .draft:
                 groups.needs.append(Candidate(
@@ -157,6 +210,35 @@ public enum FieldAttentionBuilder {
             default:
                 break
             }
+        }
+        return groups
+    }
+
+    private static func scanCandidates(
+        _ scans: [FieldScanPendingUpload]
+    ) -> CandidateGroups {
+        var groups = CandidateGroups()
+        for scan in scans {
+            let detail: String
+            switch scan.state.phase {
+            case .retryableFailure:
+                detail = "Retry this site scan"
+            case .rejected:
+                detail = "Review this site scan"
+            default:
+                continue
+            }
+            groups.needs.append(Candidate(
+                priority: 0,
+                item: FieldAttentionItem(
+                    id: "scan:\(scan.id)",
+                    kind: .scan,
+                    title: nonEmpty(scan.name) ?? "Site scan",
+                    detail: detail,
+                    timestamp: nil,
+                    destination: .syncStatus
+                )
+            ))
         }
         return groups
     }

@@ -33,6 +33,7 @@ final class SiteScanHostModel {
     var coverage: Double = 0
     var status: String = "Preparing scan…"
     var scanError: String?
+    var isFinishingScan = false
     /// Live coach detail (item 5) — per-surface checklist + warnings. Nil until the
     /// first `.coverageUpdate` (device real mode, or the mock's scripted ramp).
     var coverageSnapshot: CoverageSnapshot?
@@ -113,16 +114,26 @@ final class SiteScanHostModel {
         step = .anchoring
     }
 
-    func finishScan() async {
+    func beginFinishingScan() -> Bool {
+        guard !isFinishingScan, session != nil else { return false }
+        isFinishingScan = true
+        return true
+    }
+
+    func finishScan() async -> Bool {
+        guard isFinishingScan, let session else { return false }
+        defer { isFinishingScan = false }
         do {
-            guard let result = try await session?.finish() else { return }
+            let result = try await session.finish()
             eventTask?.cancel()
             step = .review(result)
+            return true
         } catch SiteScanError.cancelled {
             // Raced with a cancel/teardown — no error to surface.
         } catch {
             scanError = (error as? LocalizedError)?.errorDescription ?? "Couldn't finish the scan."
         }
+        return false
     }
 
     func cancelScan() {
@@ -148,6 +159,7 @@ struct SiteScanHostScreen: View {
     private let handoffProjectName: String?
 
     @State private var model: SiteScanHostModel
+    @State private var finishRequest = 0
 
     init(container: AppContainer, coordinator: CaptureCoordinator,
          projectID: String?, projectRoomID: String?, handoff: SiteScanHandoff) {
@@ -167,8 +179,25 @@ struct SiteScanHostScreen: View {
         content
             .task {
                 container.analytics.screen(CaptureScreenID.f2SiteScan.rawValue)
+                reportScanProgress()
                 if model.session == nil { await model.startScan() }
+                reportScanProgress()
             }
+            .task(id: finishRequest) {
+                guard finishRequest > 0, model.isFinishingScan else { return }
+                let finished = await model.finishScan()
+                guard !Task.isCancelled else { return }
+                if finished {
+                    container.companion.send(.collapse(
+                        hint: "Review this scan",
+                        action: nil
+                    ))
+                } else {
+                    reportScanProgress()
+                }
+            }
+            .onChange(of: model.coverage) { _, _ in reportScanProgress() }
+            .onChange(of: model.scanError) { _, _ in reportScanProgress() }
             .navigationBarBackButtonHidden(true)
             .onDisappear { model.cancelScan() }
     }
@@ -177,6 +206,7 @@ struct SiteScanHostScreen: View {
         switch model.step {
         case .scanning:
             SiteScanScanStep(model: model,
+                             companion: container.companion,
                              analytics: container.analytics,
                              onCancel: {
                                  model.cancelScan()
@@ -184,13 +214,35 @@ struct SiteScanHostScreen: View {
                              })
         case .anchoring:
             SiteScanAnchorStep(model: model,
+                               companion: container.companion,
                                analytics: container.analytics,
-                               onDone: { Task { await model.finishScan() } })
+                               onDone: {
+                                   guard model.beginFinishingScan() else { return }
+                                   container.companion.send(.reportProgress(.init(
+                                       activityID: "field.site-scan",
+                                       kind: .indeterminate,
+                                       title: "Building your scan",
+                                       detail: "Keeping the room and reference points together"
+                                   )))
+                                   finishRequest += 1
+                               })
         case .review(let result):
             SiteScanReviewStep(
-                result: result, model: model, analytics: container.analytics,
-                onRetake: { model.retake() },
-                onContinue: { model.proceedToUpload(result) })
+                result: result, model: model, companion: container.companion,
+                analytics: container.analytics,
+                onRetake: {
+                    model.retake()
+                    reportScanProgress()
+                },
+                onContinue: {
+                    container.companion.send(.reportProgress(.init(
+                        activityID: "field.site-scan-upload",
+                        kind: .indeterminate,
+                        title: "Preparing your scan",
+                        detail: "The original remains safely on this device"
+                    )))
+                    model.proceedToUpload(result)
+                })
         case .upload(let result):
             SiteScanUploadStep(
                 result: result, name: model.name,
@@ -203,12 +255,30 @@ struct SiteScanHostScreen: View {
     /// Project label F1 handed off for the F4 destination summary (nil on a direct
     /// deep-link into `.siteScan` — the upload step then resolves it lazily).
     private var uploadProjectName: String? { handoffProjectName }
+
+    private func reportScanProgress() {
+        if let scanError = model.scanError {
+            container.companion.send(.communicate(.init(
+                title: "The scan needs a moment",
+                detail: "\(scanError) Your work remains on this device."
+            )))
+            return
+        }
+
+        container.companion.send(.reportProgress(.init(
+            activityID: "field.site-scan",
+            kind: .determinate(model.coverage),
+            title: "Scanning the room",
+            detail: model.status
+        )))
+    }
 }
 
 // MARK: - F2 · Scan step
 
 struct SiteScanScanStep: View {
     let model: SiteScanHostModel
+    let companion: FieldCompanionController
     let analytics: any CaptureAnalytics
     let onCancel: () -> Void
 
@@ -224,6 +294,11 @@ struct SiteScanScanStep: View {
                         .padding(.horizontal, 18)
                         .padding(.top, 10)
                 }
+                FieldCompanionHearthView(
+                    presentation: companion.presentation,
+                    onDismiss: { companion.send(.dismiss) }
+                )
+                .padding(.top, 10)
                 Spacer()
                 SiteScanContextControls(model: model.contextModel)   // item 7 — photo/voice → Inbox
                     .padding(.bottom, 8)
@@ -258,6 +333,10 @@ struct SiteScanScanStep: View {
             }
             SiteScanPrimaryButton(title: "Finish", systemImage: "checkmark") {
                 analytics.event("siteScan.finish")
+                companion.send(.communicate(.init(
+                    title: "Add reference points",
+                    detail: "A few measured spans help the room stay accurate."
+                )))
                 model.beginAnchoring()          // → typed anchor entry (item 6)
             }
             .disabled(model.scanError != nil)

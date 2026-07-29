@@ -94,6 +94,7 @@ final class SiteScanAnchorModel {
 
 struct SiteScanAnchorStep: View {
     let model: SiteScanHostModel
+    let companion: FieldCompanionController
     let analytics: any CaptureAnalytics
     let onDone: () -> Void
 
@@ -119,6 +120,11 @@ struct SiteScanAnchorStep: View {
             // Chrome respects the safe area (kept out from under the notch / home bar).
             VStack(spacing: 0) {
                 instructionBar
+                FieldCompanionHearthView(
+                    presentation: companion.presentation,
+                    onDismiss: { companion.send(.dismiss) }
+                )
+                .padding(.top, 10)
                 Spacer()
                 entryPanel
             }
@@ -245,11 +251,14 @@ struct SiteScanAnchorStep: View {
     private var doneButton: some View {
         let unverified = anchor?.isUnverified ?? true
         return SiteScanPrimaryButton(
-            title: unverified ? "Finish — mark UNVERIFIED" : "Finish",
+            title: model.isFinishingScan
+                ? "Building scan…"
+                : (unverified ? "Finish — mark UNVERIFIED" : "Finish"),
             systemImage: unverified ? "exclamationmark.triangle" : "checkmark"
         ) {
             analytics.event("siteScan.anchor.done")
             onDone()
         }
+        .disabled(model.isFinishingScan)
     }
 }

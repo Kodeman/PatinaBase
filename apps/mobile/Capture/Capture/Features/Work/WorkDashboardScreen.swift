@@ -198,6 +198,8 @@ struct WorkDashboardScreen: View {
             coordinator.navigate(to: .project(id))
         case .receiving:
             coordinator.navigate(to: .receiving)
+        case .syncStatus:
+            coordinator.navigate(to: .syncStatus)
         }
     }
 
@@ -436,6 +438,7 @@ private struct WorkAttentionSection: View {
     private func symbol(for kind: FieldAttentionKind) -> String {
         switch kind {
         case .capture: "camera.viewfinder"
+        case .scan: "cube.transparent"
         case .message: "bubble.left.fill"
         case .lead: "person.crop.circle.badge.plus"
         case .decision: "checkmark.bubble"

@@ -60,6 +60,10 @@ struct RootView: View {
             if coordinator.phase == .launching {
                 coordinator.phase = container.session.isAuthenticated ? .ready : .auth
             }
+            if container.session.isAuthenticated {
+                await container.sync.reconcilePendingTransfers()
+                await container.siteScan.reconcilePendingUploads()
+            }
             if let raw = AppConfiguration.initialScreenRaw,
                let id = CaptureScreenID.allCases.first(where: { $0.rawValue.hasSuffix(raw) }) {
                 CaptureDeepLink.drive(screen: id, coordinator: coordinator, store: container.store)
@@ -95,14 +99,26 @@ struct RootView: View {
         .overlay(alignment: .top) { portalLoginToast }
     }
 
-    private var companionSurface: some View {
-        FieldCompanionHearthView(
-            presentation: container.companion.presentation,
-            onOpen: expandCompanion,
-            onDismiss: { container.companion.send(.dismiss) },
-            onAction: handleCompanionAction
-        )
-        .padding(.vertical, 8)
+    @ViewBuilder private var companionSurface: some View {
+        if !usesFeatureOwnedCompanionSurface {
+            FieldCompanionHearthView(
+                presentation: container.companion.presentation,
+                onOpen: expandCompanion,
+                onDismiss: { container.companion.send(.dismiss) },
+                onAction: handleCompanionAction
+            )
+            .padding(.vertical, 8)
+        }
+    }
+
+    private var usesFeatureOwnedCompanionSurface: Bool {
+        guard coordinator.phase == .ready else { return false }
+        switch coordinator.path(for: coordinator.activeRealm).last {
+        case .siteScan, .syncStatus:
+            return true
+        default:
+            return false
+        }
     }
 
     private var companionPlacement: FieldCompanionPlacement {
@@ -111,17 +127,23 @@ struct RootView: View {
               coordinator.onboardingStep == nil else {
             return .hidden(.onboarding)
         }
-        if coordinator.sheet != nil {
-            return .hidden(.modalPresented)
-        }
 
         let realm = coordinator.activeRealm
         let route = coordinator.path(for: realm).last
+        switch route {
+        case .siteScan, .syncStatus:
+            return .featureOwned
+        default:
+            break
+        }
+        if coordinator.sheet != nil {
+            return .hidden(.modalPresented)
+        }
         if realm == .camera, route == nil {
             return .hidden(.cameraActive)
         }
         switch route {
-        case .qrScan, .siteScan:
+        case .qrScan:
             return .hidden(.featureOwned)
         default:
             return .collapsed(realm, route)
@@ -132,6 +154,8 @@ struct RootView: View {
         switch companionPlacement {
         case let .hidden(reason):
             container.companion.send(.hide(reason: reason))
+        case .featureOwned:
+            break
         case let .collapsed(realm, route):
             container.companion.send(.collapse(
                 hint: companionHint(for: realm, route: route),
@@ -282,5 +306,6 @@ struct RootView: View {
 
 private enum FieldCompanionPlacement: Equatable {
     case hidden(FieldCompanionHiddenReason)
+    case featureOwned
     case collapsed(FieldRealm, CaptureRoute?)
 }

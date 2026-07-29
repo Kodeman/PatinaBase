@@ -223,6 +223,7 @@ final class LocalCaptureSyncService: CaptureSyncService {
             progress: 100,
             retryCount: s.retryCount))
         try? store.save()
+        emitTransferState(lastTitle: s.title)
         let result = try await remote.commit(
             clientCaptureID: s.clientToken,
             destination: destination,
@@ -320,6 +321,7 @@ final class LocalCaptureSyncService: CaptureSyncService {
         // Reserve the last 10% for the commit RPC.
         s.uploadProgress = min(90, Int(Double(uploaded) / Double(max(total, 1)) * 90))
         try? store.save()
+        emitTransferState(lastTitle: s.title)
     }
 
     private func beginDrain(_ items: [Specimen]) {
@@ -372,21 +374,42 @@ final class LocalCaptureSyncService: CaptureSyncService {
 
     // ── snapshot plumbing ──────────────────────────────────────────────────────
     private func failedCount() -> Int {
-        store.outbox().filter { $0.status == .failed }.count
+        store.outbox().filter {
+            $0.transferState.phase == .retryableFailure
+                || $0.transferState.phase == .rejected
+        }.count
     }
 
     /// Emit a snapshot derived purely from what's still in the outbox
     /// (ready/queued/failed) — used after enqueue/route and at drain edges.
     private func emitFromOutbox(lastTitle: String? = nil) {
+        emitTransferState(lastTitle: lastTitle)
+    }
+
+    private func emitTransferState(lastTitle: String? = nil) {
         let out = store.outbox()
-        let failed = out.filter { $0.status == .failed }.count
-        let queued = out.count - failed
-        emit(queued: queued, uploading: 0, failed: failed, lastTitle: lastTitle ?? out.last?.title)
+        let uploading = out.filter {
+            $0.transferState.phase == .uploading
+                || $0.transferState.phase == .awaitingConfirmation
+        }.count
+        let failed = out.filter {
+            $0.transferState.phase == .retryableFailure
+                || $0.transferState.phase == .rejected
+        }.count
+        let queued = max(out.count - uploading - failed, 0)
+        emit(
+            queued: queued,
+            uploading: uploading,
+            failed: failed,
+            lastTitle: lastTitle ?? out.last?.title
+        )
     }
 
     private func emit(queued: Int, uploading: Int, failed: Int? = nil, lastTitle: String?) {
         let failedN = failed ?? failedCount()
-        let lastErr = store.outbox().first(where: { $0.status == .failed })?.lastSyncError
+        let lastErr = store.outbox()
+            .compactMap { $0.transferState.errorMessage }
+            .first
         continuation.yield(SyncSnapshot(queued: queued, uploading: uploading,
                                         failed: failedN, lastError: lastErr))
         liveActivity?.update(.init(queued: queued, uploading: uploading,

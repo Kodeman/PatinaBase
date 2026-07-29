@@ -70,6 +70,7 @@ final class WorkDashboardModel {
     private let decisionsService: any DecisionsReadService
     private let messagingService: any MessagingService
     private let receivingService: any ReceivingService
+    private let siteScanService: any SiteScanService
     private let store: CaptureStore
 
     var projects: WorkSectionState<FieldProject> = .loading
@@ -78,6 +79,7 @@ final class WorkDashboardModel {
     var threads: WorkSectionState<FieldThread> = .loading
     var arrivingPOs: WorkSectionState<FieldArrivingPO> = .loading
     private(set) var captures: [FieldCaptureActivity] = []
+    private(set) var scanUploads: [FieldScanPendingUpload] = []
 
     init(container: AppContainer) {
         projectsService = container.projects
@@ -85,6 +87,7 @@ final class WorkDashboardModel {
         decisionsService = container.decisions
         messagingService = container.messaging
         receivingService = container.receiving
+        siteScanService = container.siteScan
         store = container.store
         refreshLocalCaptures()
     }
@@ -96,7 +99,8 @@ final class WorkDashboardModel {
             decisions: decisions.items,
             threads: threads.items,
             arrivingPOs: arrivingPOs.items,
-            captures: captures
+            captures: captures,
+            scanUploads: scanUploads
         )
     }
 
@@ -124,7 +128,8 @@ final class WorkDashboardModel {
         async let d: Void = loadDecisions()
         async let m: Void = loadThreads()
         async let r: Void = loadReceiving()
-        _ = await (p, l, d, m, r)
+        async let s: Void = loadScanUploads()
+        _ = await (p, l, d, m, r, s)
     }
 
     func retry(_ source: WorkDataSource) async {
@@ -187,13 +192,20 @@ final class WorkDashboardModel {
         }
     }
 
+    func loadScanUploads() async {
+        scanUploads = await siteScanService.pendingUploads()
+    }
+
     private func refreshLocalCaptures() {
-        captures = store.session().map {
+        captures = store.search(SpecimenQuery())
+            .filter { $0.transferState.phase != .complete }
+            .map {
             FieldCaptureActivity(
                 id: $0.id,
                 title: $0.title,
                 status: $0.status,
                 destination: $0.destination,
+                transferPhase: $0.transferState.phase,
                 updatedAt: $0.updatedAt
             )
         }

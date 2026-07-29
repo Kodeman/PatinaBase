@@ -177,6 +177,75 @@ struct FieldAttentionBuilderTests {
         ])
     }
 
+    @Test func transferFailuresAndRejectedScansNeedAttention() {
+        let now = date(29)
+        let failedCapture = UUID(
+            uuidString: "cccccccc-0000-0000-0000-000000000001"
+        )!
+
+        let snapshot = FieldAttentionBuilder.build(
+            captures: [
+                FieldCaptureActivity(
+                    id: failedCapture,
+                    title: "Chair label",
+                    status: .failed,
+                    destination: .inbox,
+                    transferPhase: .retryableFailure,
+                    updatedAt: now
+                )
+            ],
+            scanUploads: [
+                FieldScanPendingUpload(
+                    id: "scan-review",
+                    name: "Library",
+                    projectID: "project-a",
+                    state: CaptureTransferState(
+                        phase: .rejected,
+                        errorMessage: "Bundle needs review"
+                    )
+                )
+            ],
+            now: now,
+            calendar: calendar
+        )
+
+        #expect(snapshot.needsYou.map(\.id) == [
+            "capture:\(failedCapture.uuidString.lowercased())",
+            "scan:scan-review"
+        ])
+        #expect(snapshot.needsYou.map(\.destination) == [
+            .specimen(failedCapture),
+            .syncStatus
+        ])
+    }
+
+    @Test func activeTransfersMoveTodayWithoutBecomingNeedsYou() {
+        let now = date(29)
+        let confirming = UUID(
+            uuidString: "dddddddd-0000-0000-0000-000000000001"
+        )!
+
+        let snapshot = FieldAttentionBuilder.build(
+            captures: [
+                FieldCaptureActivity(
+                    id: confirming,
+                    title: "Oak finish",
+                    status: .uploading,
+                    destination: .library,
+                    transferPhase: .awaitingConfirmation,
+                    updatedAt: now
+                )
+            ],
+            now: now,
+            calendar: calendar
+        )
+
+        #expect(snapshot.needsYou.isEmpty)
+        #expect(snapshot.movingToday.map(\.id) == [
+            "capture:\(confirming.uuidString.lowercased())"
+        ])
+    }
+
     @Test func todayUsesTheInjectedCalendarBoundary() {
         let now = date(29, 0, 30)
         let event = date(28, 23, 30)

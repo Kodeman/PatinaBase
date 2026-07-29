@@ -20,6 +20,7 @@ enum SystemSurfaceScreens {
                 store: container.store,
                 sync: container.sync,
                 siteScan: container.siteScan,
+                companion: container.companion,
                 analytics: container.analytics,
                 coordinator: coordinator
             ))

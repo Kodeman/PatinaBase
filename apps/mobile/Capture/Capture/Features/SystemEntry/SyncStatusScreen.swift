@@ -14,17 +14,26 @@ struct SyncStatusScreen: View {
     let store: CaptureStore
     let sync: any CaptureSyncService
     let siteScan: any SiteScanService
+    let companion: FieldCompanionController
     let analytics: any CaptureAnalytics
     let coordinator: CaptureCoordinator
 
     @State private var rows: [Specimen] = []
     @State private var scanRows: [FieldScanPendingUpload] = []
     @State private var snapshot = SyncSnapshot(queued: 0, uploading: 0, failed: 0)
+    @State private var retryRequest = 0
+    @State private var isRetrying = false
 
     var body: some View {
         VStack(spacing: 0) {
             statusStrip
             content
+            FieldCompanionHearthView(
+                presentation: companion.presentation,
+                onOpen: openCompanion,
+                onDismiss: { companion.send(.dismiss) }
+            )
+            .padding(.vertical, 8)
             footer
         }
         .background(CaptureColor.paper)
@@ -32,12 +41,32 @@ struct SyncStatusScreen: View {
         .navigationBarTitleDisplayMode(.large)
         .task {
             analytics.screen(CaptureScreenID.u1Sync.rawValue)
+            companion.send(.collapse(hint: "Checking sync", action: nil))
             await reload()
             for await snap in sync.snapshots {
+                guard !Task.isCancelled else { break }
                 snapshot = snap
                 await reload()
             }
         }
+        .task(id: retryRequest) {
+            guard retryRequest > 0 else { return }
+            isRetrying = true
+            defer { isRetrying = false }
+            companion.send(.reportProgress(.init(
+                activityID: "field.sync.retry",
+                kind: .indeterminate,
+                title: "Retrying your work",
+                detail: "Everything remains safely on this device"
+            )))
+            await sync.drain()
+            guard !Task.isCancelled else { return }
+            await siteScan.resumePendingUploads(retryFailures: true)
+            guard !Task.isCancelled else { return }
+            isRetrying = false
+            await reload()
+        }
+        .navigationBarBackButtonHidden(isRetrying)
         .accessibilityIdentifier(CaptureScreenID.u1Sync.rawValue)
     }
 
@@ -227,13 +256,9 @@ struct SyncStatusScreen: View {
         HStack(spacing: 12) {
             Button {
                 analytics.event("sync.retry_all")
-                Task {
-                    await sync.drain()
-                    await siteScan.resumePendingUploads(retryFailures: true)
-                    await reload()
-                }
+                retryRequest += 1
             } label: {
-                Text("Retry all")
+                Text(isRetrying ? "Retrying…" : "Retry all")
                     .font(CaptureType.bodyEmph)
                     .foregroundStyle(CaptureColor.paper3)
                     .frame(maxWidth: .infinity)
@@ -243,13 +268,14 @@ struct SyncStatusScreen: View {
                             .fill(hasRetryableTransfer ? CaptureColor.success : CaptureColor.inkSoft)
                     )
             }
-            .disabled(!hasRetryableTransfer)
+            .disabled(!hasRetryableTransfer || isRetrying)
 
             Button("Done") { coordinator.goBack() }
                 .font(CaptureType.bodyEmph)
                 .foregroundStyle(CaptureColor.ink)
                 .padding(.vertical, 14)
                 .padding(.horizontal, 16)
+                .disabled(isRetrying)
         }
         .padding(.horizontal, 20)
         .padding(.top, 8)
@@ -260,10 +286,97 @@ struct SyncStatusScreen: View {
     // MARK: data
 
     private func reload() async {
-        rows = store.search(SpecimenQuery())
+        let nextRows = store.search(SpecimenQuery())
             .filter { $0.transferState.phase != .complete }
             .sorted { weight($0) < weight($1) }
-        scanRows = await siteScan.pendingUploads()
+        let nextScanRows = await siteScan.pendingUploads()
+        guard !Task.isCancelled else { return }
+        rows = nextRows
+        scanRows = nextScanRows
+        updateCompanion()
+    }
+
+    private func updateCompanion() {
+        if isRetrying {
+            companion.send(.reportProgress(.init(
+                activityID: "field.sync.retry",
+                kind: .indeterminate,
+                title: "Retrying your work",
+                detail: "Everything remains safely on this device"
+            )))
+            return
+        }
+
+        let captureStates = rows.map(\.transferState)
+        let scanStates = scanRows.map(\.state)
+        let states = captureStates + scanStates
+
+        if states.contains(where: { $0.phase == .rejected }) {
+            companion.send(.communicate(.init(
+                title: "A transfer needs review",
+                detail: "It remains safely on this device and won’t be sent again until it’s reviewed."
+            )))
+            return
+        }
+
+        if snapshot.failed > 0 || snapshot.lastError != nil
+            || states.contains(where: { $0.phase == .retryableFailure }) {
+            companion.send(.communicate(.init(
+                title: "A transfer paused safely",
+                detail: "Nothing was lost. Use Retry all when you’re ready to continue."
+            )))
+            return
+        }
+
+        if states.contains(where: { $0.phase == .awaitingConfirmation }) {
+            companion.send(.reportProgress(.init(
+                activityID: "field.sync",
+                kind: .indeterminate,
+                title: "Confirming your work",
+                detail: transferCountDetail
+            )))
+            return
+        }
+
+        let uploading = states.filter { $0.phase == .uploading }
+        if snapshot.uploading > 0 || !uploading.isEmpty {
+            let progressValues = uploading
+                .map(\.progress)
+                .filter { $0 > 0 }
+            let kind: FieldCompanionProgressKind
+            if progressValues.isEmpty {
+                kind = .indeterminate
+            } else {
+                let average = Double(progressValues.reduce(0, +))
+                    / Double(progressValues.count)
+                    / 100
+                kind = .determinate(average)
+            }
+            companion.send(.reportProgress(.init(
+                activityID: "field.sync",
+                kind: kind,
+                title: "Sending your work",
+                detail: transferCountDetail
+            )))
+            return
+        }
+
+        companion.send(.collapse(hint: headline, action: nil))
+    }
+
+    private var transferCountDetail: String {
+        pendingCount == 1
+            ? "1 transfer is safely in progress"
+            : "\(pendingCount) transfers are safely in progress"
+    }
+
+    private func openCompanion() {
+        companion.send(.communicate(.init(
+            title: headline,
+            detail: pendingCount == 0
+                ? "Everything you captured has been confirmed."
+                : "Every pending item remains safely on this device until it is confirmed."
+        )))
     }
 
     private func weight(_ s: Specimen) -> Int {
@@ -351,6 +464,7 @@ import CaptureKitMocks
             store: store,
             sync: InMemoryCaptureSyncService(),
             siteScan: MockSiteScanService(),
+            companion: FieldCompanionController(),
             analytics: MockCaptureAnalytics(),
             coordinator: CaptureCoordinator()
         )
