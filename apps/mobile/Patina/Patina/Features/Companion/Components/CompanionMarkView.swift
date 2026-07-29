@@ -47,9 +47,18 @@ public enum WakePhase: Equatable {
 // MARK: - Mark view
 
 /// The Companion's animated resting mark.
+/// Controls whether the living Strata mark supplies its own charcoal disc or
+/// is embedded into the larger Companion shell during a morph.
+public enum CompanionMarkSurface: Equatable, Sendable {
+    case disc
+    case embedded
+}
+
 public struct CompanionMarkView: View {
     let attention: MarkAttention
     let wakePhase: WakePhase
+    let surface: CompanionMarkSurface
+    let allowsAmbientMotion: Bool
 
     /// Preview-only override — see the `previewReduceMotion:` initializer
     /// below for why this exists instead of a `.environment(...)` override
@@ -58,9 +67,16 @@ public struct CompanionMarkView: View {
 
     @Environment(\.accessibilityReduceMotion) private var systemReduceMotion
 
-    public init(attention: MarkAttention, wakePhase: WakePhase = .awake) {
+    public init(
+        attention: MarkAttention,
+        wakePhase: WakePhase = .awake,
+        surface: CompanionMarkSurface = .disc,
+        allowsAmbientMotion: Bool = true
+    ) {
         self.attention = attention
         self.wakePhase = wakePhase
+        self.surface = surface
+        self.allowsAmbientMotion = allowsAmbientMotion
         self.reduceMotionOverride = nil
     }
 
@@ -75,6 +91,8 @@ public struct CompanionMarkView: View {
     fileprivate init(attention: MarkAttention, wakePhase: WakePhase = .awake, previewReduceMotion: Bool) {
         self.attention = attention
         self.wakePhase = wakePhase
+        self.surface = .disc
+        self.allowsAmbientMotion = true
         self.reduceMotionOverride = previewReduceMotion
     }
 
@@ -105,7 +123,7 @@ public struct CompanionMarkView: View {
             // 1. Attention pulse rings — full attention, steady state only.
             // Structurally unmounted under reduce motion: no vestigial pulse
             // ring should render, even inert.
-            if attention == .full, isAwake, !reduceMotion {
+            if allowsAmbientMotion, attention == .full, isAwake, !reduceMotion {
                 PulseAnimation(color: PatinaColors.clay, isActive: true)
                     .frame(width: 58, height: 58)
                     .allowsHitTesting(false)
@@ -120,25 +138,36 @@ public struct CompanionMarkView: View {
             // `.pulse` shortly after mounting it; that sequencing is owned
             // by the overlay, out of scope here. Also structurally unmounted
             // under reduce motion, matching the steady-state pulse above.
-            if effectiveWakePhase == .pulse, !reduceMotion {
+            if allowsAmbientMotion, effectiveWakePhase == .pulse, !reduceMotion {
                 PulseAnimation(color: PatinaColors.clay, isActive: true)
                     .frame(width: 58, height: 58)
                     .allowsHitTesting(false)
             }
 
-            // 2. Breathing glow ring — active at all attention levels, once awake.
-            Circle()
-                .stroke(PatinaColors.clay.opacity(0.35), lineWidth: 1.5)
-                .frame(width: 58, height: 58)
-                .breathing(minScale: 1.0, maxScale: 1.10, duration: 3.0, isActive: isAwake)
+            // 2. Breathing glow ring — belongs only to the resting circle.
+            // Progress and expanded states keep the mark still inside the shell.
+            if allowsAmbientMotion {
+                Circle()
+                    .stroke(PatinaColors.clay.opacity(0.35), lineWidth: 1.5)
+                    .frame(width: 58, height: 58)
+                    .breathing(
+                        minScale: 1.0,
+                        maxScale: 1.10,
+                        duration: 3.0,
+                        isActive: isAwake
+                    )
+            }
 
-            // 3. Charcoal disc — unchanged from the current mark.
-            Circle()
-                .fill(PatinaColors.Background.dark)
-                .frame(width: 52, height: 52)
-                .patinaShadow(PatinaShadows.companion)
+            // 3. Charcoal disc — supplied by the mark at rest, and by the
+            // shared shell while the Companion is communicating.
+            if surface == .disc {
+                Circle()
+                    .fill(PatinaColors.Background.dark)
+                    .frame(width: 52, height: 52)
+                    .patinaShadow(PatinaShadows.companion)
+            }
 
-            // 4. Strata lines (white on charcoal).
+            // 4. Exact three-strata mark (white on charcoal).
             strataLines
         }
         .scaleEffect(isDormant ? 0.6 : 1.0)
@@ -171,7 +200,7 @@ public struct CompanionMarkView: View {
     /// structurally (the `phaseAnimator` simply isn't in the view tree)
     /// rather than merely deactivated, since it's a repeating animator.
     private var shimmerActive: Bool {
-        isAwake && !reduceMotion && (attention == .full || attention == .ambient)
+        allowsAmbientMotion && isAwake && !reduceMotion && (attention == .full || attention == .ambient)
     }
 
     @ViewBuilder

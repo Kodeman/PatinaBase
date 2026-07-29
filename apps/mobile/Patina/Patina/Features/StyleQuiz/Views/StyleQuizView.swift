@@ -5,8 +5,8 @@
 //  5-question style quiz with visual resonance, lifestyle, material, budget, catalyst
 //
 
-import SwiftUI
 import SwiftData
+import SwiftUI
 
 struct StyleQuizView: View {
     @Environment(\.dismiss) private var dismiss
@@ -17,11 +17,13 @@ struct StyleQuizView: View {
     /// R26: selection/progress springs respect Reduce Motion.
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var viewModel = StyleQuizViewModel()
+    @State private var companionPresentation: CompanionPresentationState = .resting
+    @State private var hasPresentedCompanion = false
     /// R05: drives the mid-quiz "save or discard?" exit confirmation.
     @State private var showExitDialog = false
 
     /// Optional callback when quiz completes (for onboarding flow)
-    var onComplete: ((StyleProfileResult) -> Void)? = nil
+    var onComplete: ((StyleProfileResult) -> Void)?
 
     /// Step labels for the journey pill
     private let stepLabels = [
@@ -88,6 +90,19 @@ struct StyleQuizView: View {
         } message: {
             Text("Save your answers so far and pick up where you left off next time.")
         }
+        .onAppear {
+            presentQuizCompanionIfNeeded()
+        }
+        .onChange(of: viewModel.currentQuestion) { _, _ in
+            updateQuizCompanion()
+        }
+        .onDisappear {
+            guard hasPresentedCompanion else { return }
+            CompanionAnalytics.shared.trackPresentationDismissed(
+                screen: "style_quiz",
+                from: .expanded
+            )
+        }
         .onChange(of: viewModel.isComplete) { _, complete in
             if complete, let result = viewModel.result {
                 // Persist before routing: both mounts leave through this one
@@ -136,75 +151,52 @@ struct StyleQuizView: View {
     // MARK: - Journey Progress Pill
 
     private var quizProgressPill: some View {
-        let step = viewModel.currentQuestion + 1
-        let total = viewModel.questions.count
-        let progress = Double(step) / Double(total)
-        let label = stepLabels[min(viewModel.currentQuestion, stepLabels.count - 1)]
         let isMultiSelect = !viewModel.currentQuestionData.type.isSingleSelect
         let nudge = viewModel.companionNudgeLabel
 
-        return Button {
-            if isMultiSelect && viewModel.canAdvance {
-                HapticManager.shared.impact(.light)
-                viewModel.advance()
-            }
-        } label: {
-            HStack(spacing: 12) {
-                // Progress ring
-                ZStack {
-                    Circle()
-                        .stroke(Color.white.opacity(0.15), lineWidth: 2.5)
-                        .frame(width: 40, height: 40)
-
-                    Circle()
-                        .trim(from: 0, to: progress)
-                        .stroke(PatinaColors.clay, style: StrokeStyle(lineWidth: 2.5, lineCap: .round))
-                        .frame(width: 40, height: 40)
-                        .rotationEffect(.degrees(-90))
-                        .animation(reduceMotion ? nil : .spring(response: 0.4, dampingFraction: 0.85), value: progress)
-
-                    // Deliberately fixed: lives inside a 40pt progress ring;
-                    // Dynamic Type scaling would overflow the gauge.
-                    Text("\(Int(progress * 100))%")
-                        .font(.custom("PlayfairDisplay-Medium", size: 13))
-                        .foregroundStyle(PatinaColors.offWhite)
-                }
-
-                // Text
-                VStack(alignment: .leading, spacing: 1) {
-                    Text(label)
-                        .font(PatinaTypography.uiSmall)
-                        .foregroundStyle(PatinaColors.offWhite)
-
-                    MonoLabel(text: "Question \(step) of \(total)", size: PatinaTypography.monoSmall, color: PatinaColors.clay)
-                }
-
-                Spacer()
-
-                // Nudge or step dots
-                if let nudge, isMultiSelect {
+        return CompanionHearthView(
+            presentation: companionPresentation,
+            onDismiss: nil
+        ) {
+            VStack(alignment: .leading, spacing: 10) {
+                if let nudge, !nudge.isEmpty {
                     Text(nudge)
                         .font(PatinaTypography.uiSmall)
-                        .foregroundStyle(PatinaColors.Text.interactive)
-                } else {
-                    HStack(spacing: 4) {
-                        ForEach(1...total, id: \.self) { i in
-                            Circle()
-                                .fill(quizDotColor(step: i, currentStep: step))
-                                .frame(width: 6, height: 6)
+                        .foregroundStyle(PatinaColors.Text.inverse.opacity(0.78))
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+
+                if isMultiSelect {
+                    Button {
+                        guard viewModel.canAdvance else { return }
+                        HapticManager.shared.impact(.light)
+                        viewModel.advance()
+                    } label: {
+                        HStack(spacing: 8) {
+                            Text("Continue")
+                                .font(PatinaTypography.uiSmall)
+                            Spacer()
+                            Image(systemName: "arrow.right")
+                                .font(.system(size: 13, weight: .semibold))
                         }
+                        .foregroundStyle(
+                            viewModel.canAdvance
+                                ? PatinaColors.offWhite
+                                : PatinaColors.Text.inverse.opacity(0.42)
+                        )
+                        .frame(maxWidth: .infinity, minHeight: 44)
+                        .padding(.horizontal, 14)
+                        .background(Color.white.opacity(viewModel.canAdvance ? 0.10 : 0.05))
+                        .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
+                        .contentShape(Rectangle())
                     }
+                    .buttonStyle(.plain)
+                    .disabled(!viewModel.canAdvance)
+                    .accessibilityHint("Moves to the next quiz question.")
+                    .accessibilityIdentifier("companion.quiz.continue")
                 }
             }
-            .padding(.horizontal, 20)
-            .padding(.vertical, 12)
-            .background(PatinaColors.Background.dark)
-            .clipShape(Capsule())
-            .patinaShadow(PatinaShadows.companion)
-            .padding(.horizontal, 40)
         }
-        .buttonStyle(.plain)
-        .animation(reduceMotion ? nil : .spring(response: 0.3), value: nudge)
     }
 
     private func quizDotColor(step: Int, currentStep: Int) -> Color {
@@ -220,13 +212,13 @@ struct StyleQuizView: View {
         let currentSelections = viewModel.selections[question.id] ?? []
 
         switch question.type {
-        case .imageGrid(let options):
+        case let .imageGrid(options):
             imageGridView(options: options, questionId: question.id, selections: currentSelections)
 
-        case .iconList(let options), .budgetTiers(let options):
+        case let .iconList(options), let .budgetTiers(options):
             listView(options: options, questionId: question.id, selections: currentSelections, isBudget: question.id == 3)
 
-        case .materialCards(let options):
+        case let .materialCards(options):
             materialCardsView(options: options, questionId: question.id, selections: currentSelections)
         }
     }
@@ -359,7 +351,73 @@ struct StyleQuizView: View {
         HapticManager.shared.impact(.light)
         viewModel.toggleSelection(question: question, option: option)
     }
+}
 
+private extension StyleQuizView {
+    var currentQuizCompanionPresentation: CompanionPresentationState {
+        let step = viewModel.currentQuestion + 1
+        let total = viewModel.questions.count
+        let fraction = total > 0 ? Double(step) / Double(total) : 0
+        let label = stepLabels[min(viewModel.currentQuestion, stepLabels.count - 1)]
+        let progress = CompanionProgressPresentation(
+            fraction: fraction,
+            title: label,
+            detail: "Question \(step) of \(total)",
+            step: step,
+            totalSteps: total
+        )
+
+        return .expanded(
+            CompanionExpandedPresentation(
+                title: label,
+                detail: "Question \(step) of \(total)",
+                progress: progress,
+                communicationLength: .brief
+            )
+        )
+    }
+
+    func presentQuizCompanionIfNeeded() {
+        guard !hasPresentedCompanion else {
+            updateQuizCompanion()
+            return
+        }
+
+        hasPresentedCompanion = true
+        CompanionAnalytics.shared.trackPresentationExposed(
+            state: .collapsed,
+            surface: "style_quiz"
+        )
+
+        Task { @MainActor in
+            try? await Task.sleep(for: .milliseconds(80))
+            CompanionAnalytics.shared.trackPresentationExpanded(
+                screen: "style_quiz",
+                from: .collapsed,
+                extent: .card
+            )
+            updateQuizCompanion()
+        }
+    }
+
+    func updateQuizCompanion() {
+        withAnimation(
+            reduceMotion
+                ? .easeOut(duration: CompanionConstants.reducedMotionCrossfadeDuration)
+                : .spring(
+                    response: CompanionConstants.springResponse,
+                    dampingFraction: CompanionConstants.springDamping
+                )
+        ) {
+            companionPresentation = currentQuizCompanionPresentation
+        }
+
+        CompanionAnalytics.shared.trackPresentationExposed(
+            state: .expanded,
+            surface: "style_quiz",
+            extent: .card
+        )
+    }
 }
 
 #Preview {

@@ -6,9 +6,9 @@
 //  5 states: Resting, Nudging, Expanded, Journey Mode, Minimal
 //
 
-import SwiftUI
-import SwiftData
 import Supabase
+import SwiftData
+import SwiftUI
 
 // MARK: - Companion Display State
 
@@ -30,7 +30,7 @@ public struct CompanionOverlay: View {
     @State private var viewModel = CompanionViewModel()
     @State private var state: CompanionState = .button
     @State private var voiceInputState: VoiceInputState = .idle
-    @State private var contentOpacity: Double = 0
+
     @State private var showingAuthPanel = false
     @State private var isAuthenticated = AuthService.shared.isAuthenticated
     @State private var panelOpenTime: Date?
@@ -105,36 +105,41 @@ public struct CompanionOverlay: View {
 
     /// Computed display mode based on current screen context
     private var displayMode: CompanionDisplayMode {
-        // Hidden during certain flows
         if state == .hidden { return .hidden }
-
-        // If expanded, show expanded
-        if state.isExpanded { return .expanded }
 
         let screen = coordinator.currentScreen
 
-        // Journey mode during the Quiet Conversation scan walk. The flow
-        // host drives `walkProgress`; when present, surface the journey UI.
-        if case .scanFlow = screen, let progress = coordinator.companionContext.walkProgress {
-            let step = Int(progress * 4) + 1
+        // Scan and quiz own in-flow Companion surfaces because they have the
+        // live progress source. Suppress the root overlay so only one
+        // Companion is presented and announced.
+        if case .scanFlow = screen { return .hidden }
+        if case .styleQuiz = screen { return .hidden }
+
+        if state.isExpanded { return .expanded }
+
+        // Legacy journey mode remains source-compatible for context adapters
+        // outside the in-flow scan. If another flow publishes walk progress,
+        // it still maps to the canonical progress capsule.
+        if let progress = coordinator.companionContext.walkProgress {
+            let step = min(Int(progress * 4) + 1, 4)
             let labels = ["Scanning room", "Capturing walls", "Finding details", "Almost done"]
             let label = labels[min(step - 1, labels.count - 1)]
-            return .journeyMode(progress: Double(progress), step: step, totalSteps: 4, stepLabel: label)
+            return .journeyMode(
+                progress: Double(progress),
+                step: step,
+                totalSteps: 4,
+                stepLabel: label
+            )
         }
 
-        // Minimal in AR / immersive views
         if case .pieceDetail = screen { return .minimal }
         if case .arPlacement = screen { return .minimal }
-
-        // Minimal during quiz (quiz manages its own flow) — keep the Companion
-        // present but unobtrusive instead of disappearing entirely (PT-6-11).
-        if case .styleQuiz = screen { return .minimal }
         if case .styleResult = screen { return .resting }
 
-        // Nudging based on context provider. Derived fresh from
-        // `coordinator.currentScreen` on every render — never cached — so a
-        // nudge cannot outlive the screen that produced it (R11).
-        if let nudge = CompanionActionProvider.nudge(for: screen, context: coordinator.companionContext) {
+        if let nudge = CompanionActionProvider.nudge(
+            for: screen,
+            context: coordinator.companionContext
+        ) {
             return .nudging(nudge)
         }
 
@@ -192,6 +197,129 @@ public struct CompanionOverlay: View {
         return context
     }
 
+    /// Adapts the overlay's legacy display modes into the canonical three-state
+    /// Hearth contract. Context ownership stays unchanged.
+    private var canonicalPresentation: CompanionPresentationState {
+        switch displayMode {
+        case .resting:
+            return .collapsed(hint: "Next steps")
+
+        case let .nudging(nudge):
+            return .collapsed(hint: nudge.label)
+
+        case let .journeyMode(progress, step, totalSteps, stepLabel):
+            return .progress(
+                CompanionProgressPresentation(
+                    fraction: progress,
+                    title: stepLabel,
+                    detail: "Step \(step) of \(totalSteps)",
+                    step: step,
+                    totalSteps: totalSteps
+                )
+            )
+
+        case .expanded:
+            return .expanded(
+                CompanionExpandedPresentation(
+                    title: CompanionActionProvider.panelTitle(
+                        for: coordinator.currentScreen,
+                        context: enrichedContext
+                    ),
+                    detail: "A considered next move, based on where you are.",
+                    communicationLength: .brief
+                )
+            )
+
+        case .minimal, .hidden:
+            // These legacy display modes render through their dedicated paths.
+            return .resting
+        }
+    }
+
+    private var hearthPrimaryAction: (() -> Void)? {
+        switch displayMode {
+        case .resting, .nudging:
+            return { expandToPanel() }
+        default:
+            return nil
+        }
+    }
+
+    private var hearthHintAction: (() -> Void)? {
+        guard case let .nudging(nudge) = displayMode else { return nil }
+        return {
+            CompanionAnalytics.shared.trackNudgeTapped(
+                screen: coordinator.currentScreen.displayName,
+                label: nudge.label
+            )
+            CompanionAnalytics.shared.trackHintActivated(
+                screen: coordinator.currentScreen.displayName,
+                hintId: "contextual_next_step"
+            )
+            handleNavigate(to: nudge.route)
+        }
+    }
+
+    private var canonicalHearthView: some View {
+        VStack(spacing: 0) {
+            if introVisible {
+                introBubbleView
+                    .padding(.bottom, 12)
+            } else if navAckVisible {
+                navAckBubbleView
+                    .padding(.bottom, 12)
+            }
+
+            CompanionHearthView(
+                presentation: canonicalPresentation,
+                attention: coaching.markAttention,
+                wakePhase: wakePhase,
+                onPrimaryAction: hearthPrimaryAction,
+                onHintAction: hearthHintAction,
+                onHelp: {
+                    collapseToButton()
+                    Task {
+                        try? await Task.sleep(for: .seconds(0.3))
+                        isHelpPanelPresented = true
+                    }
+                },
+                onDismiss: { collapseToButton() },
+                expandedContent: {
+                    expandedView
+                }
+            )
+            .overlay(alignment: .topLeading) {
+                if state.isExpanded, showCoachmark {
+                    companionCoachmark
+                        .offset(y: -16)
+                        .padding(.trailing, 88)
+                        .transition(
+                            reduceMotion
+                                ? .opacity
+                                : .move(edge: .top).combined(with: .opacity)
+                        )
+                }
+            }
+        }
+    }
+
+    private func trackCanonicalExposure() {
+        guard displayMode != .hidden, displayMode != .minimal else { return }
+
+        let extent: CompanionExpansionExtent?
+        if case let .expanded(content) = canonicalPresentation {
+            extent = content.extent
+        } else {
+            extent = nil
+        }
+
+        CompanionAnalytics.shared.trackPresentationExposed(
+            state: canonicalPresentation.canonicalState,
+            surface: coordinator.currentScreen.displayName,
+            extent: extent
+        )
+    }
+
     public init() {}
 
     public var body: some View {
@@ -234,39 +362,34 @@ public struct CompanionOverlay: View {
                     .transition(.opacity)
             }
 
-            // Render based on display mode
+            // Resting, progress, and expanded communication stay mounted in
+            // one Hearth view so the charcoal shell and Strata mark morph
+            // continuously between canonical states.
             switch displayMode {
             case .hidden:
                 EmptyView()
-
-            case .resting:
-                restingView
-                    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottom)
-                    .safeAreaPadding(.bottom, 28)
-
-            case .nudging(let nudge):
-                nudgingView(nudge: nudge)
-                    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottom)
-                    .safeAreaPadding(.bottom, 28)
-
-            case .expanded:
-                expandedView
-                    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottom)
-                    .safeAreaPadding(.bottom, 24)
-
-            case .journeyMode(let progress, let step, let totalSteps, let stepLabel):
-                journeyModeView(progress: progress, step: step, totalSteps: totalSteps, stepLabel: stepLabel)
-                    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottom)
-                    .safeAreaPadding(.bottom, 28)
 
             case .minimal:
                 minimalView
                     .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottomTrailing)
                     .safeAreaPadding(.bottom, 28)
                     .padding(.trailing, 20)
+
+            case .resting, .nudging, .expanded, .journeyMode:
+                canonicalHearthView
+                    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottom)
+                    .safeAreaPadding(.bottom, state.isExpanded ? 24 : 28)
             }
         }
-        .animation(reduceMotion ? nil : .spring(response: 0.4, dampingFraction: 0.85), value: displayMode)
+        .animation(
+            reduceMotion
+                ? .easeOut(duration: CompanionConstants.reducedMotionCrossfadeDuration)
+                : .spring(
+                    response: CompanionConstants.springResponse,
+                    dampingFraction: CompanionConstants.springDamping
+                ),
+            value: displayMode
+        )
         // PT-5-10: expand/collapse haptics are now declarative, keyed on the
         // expanded state. Expanding fires the soft companion pulse; collapsing
         // fires a light impact — matching the prior imperative calls in
@@ -301,11 +424,13 @@ public struct CompanionOverlay: View {
         // by explicit `withAnimation` inside `dismissIntro`, not this key.
         .onChange(of: displayMode) { _, _ in
             syncIntroToSurface()
+            trackCanonicalExposure()
         }
         .onAppear {
             isAuthenticated = AuthService.shared.isAuthenticated
             viewModel.updateContext(coordinator.companionContext)
             coaching.recordMainSessionStart()
+            trackCanonicalExposure()
         }
         // Wake-up self-intro: gated per screen so it re-evaluates whenever the
         // surface changes, and cancels cleanly when the user leaves.
@@ -313,7 +438,7 @@ public struct CompanionOverlay: View {
             await maybePresentIntro()
         }
         .task {
-            for await (event, _) in supabase.auth.authStateChanges {
+            for await _ in supabase.auth.authStateChanges {
                 await MainActor.run {
                     let newAuthState = AuthService.shared.isAuthenticated
                     if newAuthState != isAuthenticated {
@@ -363,15 +488,7 @@ public struct CompanionOverlay: View {
 
     // MARK: - State 1: Resting
 
-    private var restingView: some View {
-        companionMarkStack(nudge: nil)
-    }
-
     // MARK: - State 2: Nudging
-
-    private func nudgingView(nudge: CompanionNudge) -> some View {
-        companionMarkStack(nudge: nudge)
-    }
 
     /// The mark plus the slot above it. The slot holds — in priority order —
     /// the wake-up self-intro, the transient first-nav ack, or the nudge pill.
@@ -385,61 +502,10 @@ public struct CompanionOverlay: View {
     /// It retires at `.learned`, and is hidden from VoiceOver (the mark button
     /// itself already carries the label + hint) and from hit testing (a caption
     /// that swallowed taps would sit right under the primary affordance).
-    @ViewBuilder
-    private func companionMarkStack(nudge: CompanionNudge?) -> some View {
-        VStack(spacing: 0) {
-            if introVisible {
-                introBubbleView
-                    .padding(.bottom, 12)
-            } else if navAckVisible {
-                navAckBubbleView
-                    .padding(.bottom, 12)
-            } else if let nudge, introTask == nil {
-                nudgePill(nudge: nudge)
-            }
-
-            companionMarkButton
-
-            if coaching.phase != .learned {
-                Text("Next steps")
-                    .font(PatinaTypography.monoSmall)
-                    .tracking(0.4)
-                    .textCase(.uppercase)
-                    .foregroundStyle(PatinaColors.Text.muted)
-                    .padding(.top, 6)
-                    .accessibilityHidden(true)
-                    .allowsHitTesting(false)
-            }
-        }
-    }
 
     /// The suggested-action pill shown in nudging mode. A real affordance, not
     /// décor (R01/R02): tapping it performs the suggested action; the mark
     /// below opens the panel.
-    private func nudgePill(nudge: CompanionNudge) -> some View {
-        Button {
-            CompanionAnalytics.shared.trackNudgeTapped(
-                screen: coordinator.currentScreen.displayName,
-                label: nudge.label
-            )
-            handleNavigate(to: nudge.route)
-        } label: {
-            Text(nudge.label)
-                .font(PatinaTypography.caption)
-                .foregroundStyle(PatinaColors.Text.inverse)
-                .padding(.horizontal, 14)
-                .padding(.vertical, 6)
-                .background(PatinaColors.Interactive.active)
-                .clipShape(RoundedRectangle(cornerRadius: 14))
-                .patinaShadow(PatinaShadows.md)
-                // 44pt hit target without inflating the visual pill.
-                .frame(minHeight: 44)
-                .contentShape(Rectangle())
-        }
-        .buttonStyle(.plain)
-        .accessibilityLabel(nudge.label)
-        .accessibilityIdentifier("companion.nudge")
-    }
 
     /// The one-time wake-up self-introduction. "Show me" (and tapping the mark)
     /// dismiss it and open the panel; "Later" dismisses it and lets the mark
@@ -468,170 +534,55 @@ public struct CompanionOverlay: View {
     // PT-6-8: the unused `geometry: GeometryProxy` parameter is dropped now
     // that the body no longer threads a GeometryReader proxy through.
     private var expandedView: some View {
-        VStack(spacing: 0) {
-            // Panel
-            VStack(spacing: 0) {
-                // One enrichment per panel open, shared by the title and the
-                // rows — they must agree, and the enrichment hits the stores.
-                let context = enrichedContext
+        let context = enrichedContext
+        let actions = CompanionActionProvider.actions(
+            for: coordinator.currentScreen,
+            context: context,
+            isAuthenticated: AuthService.shared.isAuthenticated
+        )
 
-                // Header
-                HStack(alignment: .firstTextBaseline, spacing: 8) {
-                    Text(CompanionActionProvider.panelTitle(
-                        for: coordinator.currentScreen,
-                        context: context
-                    ))
-                        .font(.custom("PlayfairDisplay-Italic", size: 16, relativeTo: .callout))
-                        .foregroundStyle(PatinaColors.offWhite)
-
-                    // Contextual help: explains the Companion concept —
-                    // a context-aware action menu that replaces the
-                    // tab bar with whatever you're most likely to want next.
-                    HelpInfoIcon(
-                        surfaceKey: SurfaceKeys.IOSApp.Companion.whatNext,
-                        fallback: "The Companion shows the actions Patina thinks you'll want next based on the screen you're on. It replaces the tab bar — your next step is always one tap away.",
-                        size: 12
+        return VStack(spacing: 6) {
+            ForEach(actions) { item in
+                companionAction(
+                    icon: item.icon,
+                    label: item.label,
+                    hint: item.hint,
+                    isSuggested: item.isSuggested
+                ) {
+                    panelInteractionCount += 1
+                    CompanionAnalytics.shared.trackQuickActionTapped(
+                        actionId: item.analyticsId,
+                        actionTitle: item.label,
+                        screen: coordinator.currentScreen.displayName
                     )
-
-                    Spacer()
-
-                    // `?` help-panel trigger — opens a sheet listing all
-                    // Companion-related articles. Placed before close so the
-                    // user can read up before dismissing.
-                    Button {
-                        // Collapse the panel first so the sheet has the
-                        // foreground; deferring the sheet ensures the
-                        // animation doesn't fight the dismissal.
+                    if let route = item.route {
+                        handleNavigate(to: route)
+                    } else if let special = item.specialAction {
                         collapseToButton()
+                        let navOutcome = coaching.recordCompanionNavigation()
                         Task {
                             try? await Task.sleep(for: .seconds(0.3))
-                            isHelpPanelPresented = true
-                        }
-                    } label: {
-                        Circle()
-                            .fill(Color.white.opacity(0.1))
-                            .frame(width: 28, height: 28)
-                            .overlay(
-                                Image(systemName: "questionmark")
-                                    .font(.system(size: 12, weight: .medium))
-                                    .foregroundStyle(PatinaColors.pearl)
-                            )
-                            .companionHeaderHitTarget()
-                    }
-                    .accessibilityLabel("Help")
-                    .accessibilityHint("Opens the help panel for the Companion.")
-                    .accessibilityIdentifier("companion.help")
-
-                    Button { collapseToButton() } label: {
-                        Circle()
-                            .fill(Color.white.opacity(0.1))
-                            .frame(width: 28, height: 28)
-                            .overlay(
-                                Image(systemName: "xmark")
-                                    .font(.system(size: 12, weight: .medium))
-                                    .foregroundStyle(PatinaColors.pearl)
-                            )
-                            .contentShape(Rectangle())
-                            .companionHeaderHitTarget()
-                    }
-                    .accessibilityLabel("Close")
-                    .accessibilityHint("Collapses the Companion panel.")
-                    .accessibilityIdentifier("companion.close")
-                }
-                .padding(.bottom, 16)
-
-                // Dynamic actions from context provider. Read auth state
-                // directly from the @Observable AuthService rather than the
-                // @State copy below — the @State snapshots auth on View init,
-                // which is racy on cold launch where supabase-swift restores
-                // the session asynchronously and the `.task` watcher can miss
-                // the `.initialSession` event. The @Observable read here is
-                // tracked by SwiftUI and re-renders when auth state flips.
-                VStack(spacing: 6) {
-                    let actions = CompanionActionProvider.actions(
-                        for: coordinator.currentScreen,
-                        context: context,
-                        isAuthenticated: AuthService.shared.isAuthenticated
-                    )
-                    ForEach(actions) { item in
-                        companionAction(
-                            icon: item.icon,
-                            label: item.label,
-                            hint: item.hint,
-                            isSuggested: item.isSuggested
-                        ) {
-                            panelInteractionCount += 1
-                            CompanionAnalytics.shared.trackQuickActionTapped(
-                                actionId: item.analyticsId,
-                                actionTitle: item.label,
-                                screen: coordinator.currentScreen.displayName
-                            )
-                            if let route = item.route {
-                                handleNavigate(to: route)
-                            } else if let special = item.specialAction {
-                                collapseToButton()
-                                // A special action is a companion navigation too
-                                // (it accrues toward graduation and can trigger
-                                // the one-shot first-nav ack).
-                                let navOutcome = coaching.recordCompanionNavigation()
-                                Task {
-                                    try? await Task.sleep(for: .seconds(0.3))
-                                    switch special {
-                                    case .openQRScanner:
-                                        coordinator.presentedSheet = .qr
-                                    case .openSettings:
-                                        coordinator.presentedSheet = .settings
-                                    case .openAuth:
-                                        coordinator.presentedSheet = .auth
-                                    case .openDesignServices(let roomId):
-                                        coordinator.presentedSheet = .designServices(roomId: roomId, preselectedScanIds: [])
-                                    }
-                                    if navOutcome == .showFirstNavAck {
-                                        presentFirstNavAck()
-                                    }
-                                }
+                            switch special {
+                            case .openQRScanner:
+                                coordinator.presentedSheet = .qr
+                            case .openSettings:
+                                coordinator.presentedSheet = .settings
+                            case .openAuth:
+                                coordinator.presentedSheet = .auth
+                            case let .openDesignServices(roomId):
+                                coordinator.presentedSheet = .designServices(
+                                    roomId: roomId,
+                                    preselectedScanIds: []
+                                )
+                            }
+                            if navOutcome == .showFirstNavAck {
+                                presentFirstNavAck()
                             }
                         }
                     }
                 }
             }
-            .padding(20)
-            // Deliberately dark Companion panel — charcoal in both modes
-            // (subtle elevation over the graphite canvas in dark).
-            .background(PatinaColors.Background.dark)
-            .clipShape(RoundedRectangle(cornerRadius: 24))
-            .patinaShadow(PatinaShadows.companion)
-            // The panel consumes its own touches (U41): a tap on panel chrome
-            // must not reach the dimmed backdrop behind it, whose tap gesture
-            // collapses the Companion. Action rows and header buttons are
-            // hit-tested first, so they still win.
-            .contentShape(RoundedRectangle(cornerRadius: 24))
-            .onTapGesture {}
-            // `.contain` is load-bearing: a bare `accessibilityIdentifier` on
-            // a container propagates down and overwrites every descendant's
-            // own identifier. Device-verified — the panel's rows and both
-            // header buttons all reported `companion.panel`, so nothing could
-            // address `companion.close` by identifier. `.contain` makes the
-            // panel a semantic container that keeps its children addressable.
-            .accessibilityElement(children: .contain)
-            .accessibilityIdentifier("companion.panel")
-            .overlay(alignment: .topLeading) {
-                if showCoachmark {
-                    companionCoachmark
-                        .offset(y: -16)
-                        // Reserve the trailing column the header's help and
-                        // close buttons occupy (panel inset + two 36pt hit
-                        // targets + their spacing). Centred, this card covered
-                        // both — hiding the panel's only close affordance
-                        // behind an informational callout on the one open
-                        // where a first-time user most needs the way out.
-                        .padding(.trailing, 88)
-                        .transition(reduceMotion ? .opacity : .move(edge: .top).combined(with: .opacity))
-                }
-            }
         }
-        .padding(.horizontal, 24)
-        .transition(.move(edge: .bottom).combined(with: .opacity))
     }
 
     // MARK: - First-Launch Coachmark (PT-6-9)
@@ -644,7 +595,7 @@ public struct CompanionOverlay: View {
     private var companionCoachmark: some View {
         VStack(alignment: .leading, spacing: 10) {
             Text("These are your next steps. They change with every room you're in — tap one and I'll take you there.")
-                .font(.custom("PlayfairDisplay-Italic", size: 15, relativeTo: .subheadline))
+                .font(PatinaTypography.patinaVoice)
                 .foregroundStyle(PatinaColors.Text.primary)
                 .fixedSize(horizontal: false, vertical: true)
 
@@ -672,58 +623,6 @@ public struct CompanionOverlay: View {
     }
 
     // MARK: - State 4: Journey Mode
-
-    private func journeyModeView(progress: Double, step: Int, totalSteps: Int, stepLabel: String) -> some View {
-        HStack(spacing: 12) {
-            // Progress ring
-            ZStack {
-                Circle()
-                    .stroke(Color.white.opacity(0.15), lineWidth: 2.5)
-                    .frame(width: 40, height: 40)
-
-                Circle()
-                    .trim(from: 0, to: progress)
-                    .stroke(PatinaColors.clay, style: StrokeStyle(lineWidth: 2.5, lineCap: .round))
-                    .frame(width: 40, height: 40)
-                    .rotationEffect(.degrees(-90))
-
-                Text("\(Int(progress * 100))%")
-                    .font(.custom("PlayfairDisplay-Medium", size: 13, relativeTo: .footnote))
-                    .foregroundStyle(PatinaColors.offWhite)
-            }
-            // VoiceOver: surface the scan progress as a spoken value.
-            .accessibilityElement(children: .ignore)
-            .accessibilityLabel("Scan progress")
-            .accessibilityValue("\(Int(progress * 100)) percent")
-
-            // Text
-            VStack(alignment: .leading, spacing: 1) {
-                Text(stepLabel)
-                    .font(PatinaTypography.uiSmall)
-                    .foregroundStyle(PatinaColors.offWhite)
-
-                MonoLabel(text: "Step \(step) of \(totalSteps)", size: PatinaTypography.monoSmall, color: PatinaColors.clay)
-            }
-
-            Spacer()
-
-            // Step dots
-            HStack(spacing: 4) {
-                ForEach(1...totalSteps, id: \.self) { i in
-                    Circle()
-                        .fill(dotColor(step: i, currentStep: step))
-                        .frame(width: 6, height: 6)
-                }
-            }
-        }
-        .padding(.horizontal, 20)
-        .padding(.vertical, 12)
-        // Deliberately dark journey pill — charcoal in both modes.
-        .background(PatinaColors.Background.dark)
-        .clipShape(Capsule())
-        .patinaShadow(PatinaShadows.companion)
-        .padding(.horizontal, 40)
-    }
 
     // MARK: - State 5: Minimal
 
@@ -819,9 +718,12 @@ public struct CompanionOverlay: View {
         .buttonStyle(.plain)
     }
 
+}
+
+private extension CompanionOverlay {
     // MARK: - Actions
 
-    private func expandToPanel() {
+    func expandToPanel() {
         // The wake-up intro and first-nav ack live in the mark's slot; opening
         // the panel retires them. Tapping through the intro (mark or "Show me")
         // counts as accepting it — record "expanded".
@@ -840,12 +742,21 @@ public struct CompanionOverlay: View {
         // PT-5-10: the soft pulse is fired declaratively via
         // `.sensoryFeedback(trigger: state.isExpanded)` below.
         CompanionAnalytics.shared.trackFABTapped(screen: coordinator.currentScreen.displayName)
+        CompanionAnalytics.shared.trackPresentationExpanded(
+            screen: coordinator.currentScreen.displayName,
+            from: canonicalPresentation.canonicalState,
+            extent: .card
+        )
 
-        withAnimation(reduceMotion ? nil : .spring(response: 0.4, dampingFraction: 0.85)) {
+        withAnimation(
+            reduceMotion
+                ? .easeOut(duration: CompanionConstants.reducedMotionCrossfadeDuration)
+                : .spring(
+                    response: CompanionConstants.springResponse,
+                    dampingFraction: CompanionConstants.springDamping
+                )
+        ) {
             state = .expanded
-        }
-        withAnimation(reduceMotion ? nil : .easeIn(duration: 0.2).delay(0.15)) {
-            contentOpacity = 1
         }
         coordinator.isCompanionExpanded = true
         panelOpenTime = Date()
@@ -858,7 +769,7 @@ public struct CompanionOverlay: View {
         // one-shot next-steps coachmark. Now also gated on the coaching model
         // so learned and legacy-migrated users never see it; showing it counts
         // as a reinforcement.
-        if !hasSeenCompanionCoachmark && coaching.shouldShowPanelCoachmark {
+        if !hasSeenCompanionCoachmark, coaching.shouldShowPanelCoachmark {
             coaching.recordReinforcementShown(kind: "panel_coachmark")
             withAnimation(reduceMotion ? nil : .easeOut(duration: 0.3).delay(0.35)) {
                 showCoachmark = true
@@ -882,14 +793,24 @@ public struct CompanionOverlay: View {
             interactionCount: panelInteractionCount,
             dwellTime: dwellTime
         )
+        CompanionAnalytics.shared.trackPresentationDismissed(
+            screen: coordinator.currentScreen.displayName,
+            from: .expanded
+        )
         panelOpenTime = nil
 
         // Treat collapsing as acknowledging the coachmark so it doesn't
         // reappear next expansion (PT-6-9).
         if showCoachmark { dismissCoachmark() }
 
-        withAnimation(reduceMotion ? nil : .easeOut(duration: 0.1)) { contentOpacity = 0 }
-        withAnimation(reduceMotion ? nil : .spring(response: 0.4, dampingFraction: 0.85).delay(0.05)) {
+        withAnimation(
+            reduceMotion
+                ? .easeOut(duration: CompanionConstants.reducedMotionCrossfadeDuration)
+                : .spring(
+                    response: CompanionConstants.springResponse,
+                    dampingFraction: CompanionConstants.springDamping
+                ).delay(0.05)
+        ) {
             state = .button
         }
         coordinator.isCompanionExpanded = false
@@ -922,12 +843,6 @@ public struct CompanionOverlay: View {
                 presentFirstNavAck()
             }
         }
-    }
-
-    private func dotColor(step: Int, currentStep: Int) -> Color {
-        if step < currentStep { return PatinaColors.clay }
-        if step == currentStep { return PatinaColors.offWhite }
-        return Color.white.opacity(0.2)
     }
 
     // MARK: - Coaching: wake-up intro
@@ -984,26 +899,26 @@ public struct CompanionOverlay: View {
     /// auto-dismissal.
     private func runWakeChoreography(trigger: String) async {
         do {
-            wakePhase = .dormant                                   // 1 — snap, no animation
+            wakePhase = .dormant // 1 — snap, no animation
             try await Task.sleep(for: .seconds(0.15))
 
-            withAnimation(.patinaHero) { wakePhase = .rising }     // 2
+            withAnimation(.patinaHero) { wakePhase = .rising } // 2
             try await Task.sleep(for: .seconds(0.45))
 
-            wakePhase = .drawing                                   // 3 — mark staggers the draw-in
+            wakePhase = .drawing // 3 — mark staggers the draw-in
             try await Task.sleep(for: .seconds(0.55))
 
-            wakePhase = .pulse                                     // 4 — burst + haptic + bounce
+            wakePhase = .pulse // 4 — burst + haptic + bounce
             HapticManager.shared.companionPulse()
             withAnimation(.spring(response: 0.35, dampingFraction: 0.6)) { markBounceScale = 1.1 }
             try await Task.sleep(for: .seconds(0.18))
             withAnimation(.spring(response: 0.35, dampingFraction: 0.6)) { markBounceScale = 1.0 }
             try await Task.sleep(for: .seconds(0.32))
 
-            wakePhase = .awake                                     // 5 — settle, then present
+            wakePhase = .awake // 5 — settle, then present
             try await Task.sleep(for: .seconds(0.3))
         } catch {
-            return   // cancelled — interruption handler settles + records
+            return // cancelled — interruption handler settles + records
         }
         presentIntroBubble(trigger: trigger)
     }
@@ -1099,23 +1014,6 @@ public struct CompanionOverlay: View {
 // MARK: - Liquid Glass helper (PT-5-7)
 
 private extension View {
-    /// Widens a 28pt Companion header glyph to a 36×44 touch region without
-    /// moving it — an overlay adds hit area, not layout, so the circles stay
-    /// where they are drawn. 36 is the widest that keeps the help and close
-    /// regions from overlapping each other at the header's 8pt spacing.
-    ///
-    /// The 28pt targets these replace were under the HIG minimum and, on the
-    /// two-row scanFlow panel, sat directly on top of the manual-room form's
-    /// "Doors" stepper — so a near-miss on ✕ did not merely fail to dismiss,
-    /// it silently edited the user's room.
-    func companionHeaderHitTarget() -> some View {
-        overlay {
-            Color.clear
-                .frame(width: 36, height: 44)
-                .contentShape(Rectangle())
-        }
-    }
-
     /// Applies the charcoal-tinted Liquid Glass circle used by the Companion
     /// minimal pill. Factored into a helper with an explicit `#available`
     /// guard because `CompanionOverlay` is a `public` View — the compiler
@@ -1126,10 +1024,9 @@ private extension View {
     @ViewBuilder
     func companionGlassCircle() -> some View {
         if #available(iOS 26.0, *) {
-            self.glassEffect(.regular.tint(PatinaColors.charcoal.opacity(0.7)), in: .circle)
+            glassEffect(.regular.tint(PatinaColors.charcoal.opacity(0.7)), in: .circle)
         } else {
-            self
-                .background(PatinaColors.charcoal.opacity(0.7))
+            background(PatinaColors.charcoal.opacity(0.7))
                 .background(.ultraThinMaterial)
                 .clipShape(Circle())
         }
