@@ -6076,3 +6076,226 @@ until a path is qualified beyond its refusal — one PASS on one capture is not
 that.
 
 *Entries add: I104 · R122 · last id = R122*
+
+### I105 · Field Capture P2 · the loop-candidate policy learns where the camera points; the three captures re-run — 2026-07-29
+
+R122's three instructions are built: the loop-candidate selection policy now
+considers viewing direction, both I104 identifier defects are repaired, and the
+three real captures were re-run on the qualified host. **`evaluate_refinement_
+evidence` is byte-identical to what I102, I103 and I104 ran** — verified by
+extracting the function from the base commit and from the branch and comparing
+the 5_833 bytes, not by inspection.
+
+**THE THRESHOLD WAS MEASURED BEFORE IT WAS CHOSEN.** I104's 100-frame run
+PASSED, so it published, and among its eight artifacts is `database-v1.db` —
+COLMAP's own `two_view_geometries` table, one row per candidate pair. Joining
+that table against the capture's ARKit poses gives the verification rate of all
+**1_508** candidate pairs as a function of the angle between the two optical
+axes. Nothing in that join runs an engine; the outcome was decided by COLMAP
+before the question was asked.
+
+```
+axis angle    loop pairs  verified     temporal pairs  verified
+under 45 deg          56     48.2%                394     63.5%
+45 to 60 deg          47      8.5%                172      6.4%
+60 to 75 deg          58      0.0%                125      1.6%
+over 75 deg          402      0.0%                254      0.0%
+```
+
+The two populations are independent — the 563 non-temporal candidates the policy
+selects, and the 945 temporal ones it does not touch — and they collapse in the
+same place. **60 degrees is the smallest bucket edge above which not one of 460
+real loop candidates verified.** It keeps every one of that capture's 31 verified
+loop edges (the widest sits at 51.5 deg) and discards the 460 that produced none;
+a tighter 45 would have thrown away 4 of the 31 for no measured gain.
+
+**The device's optics say why the collapse is there**, which is the check that
+this is a property of cameras and not of one room. The keyframe intrinsics give
+a **70.5 x 55.8 degree** field of view, so two cameras whose axes differ by more
+than 55.8 deg are no longer guaranteed to share any viewing direction and past
+the 82.8-degree diagonal cannot. The widest verified pair of ANY kind in the
+capture sits at **74.2 deg**, inside that bracket. `LOOP_MAX_VIEW_AXIS_ANGLE_DEG
+= 60.0` sits between the two, and the comment carries both derivations.
+
+**THE BOUND IS UNCHANGED AND IS NOT THE ANGLE.** `MAX_SPATIAL_NEIGHBORS` stays
+8, so the graph still cannot exceed `frames * (temporal_window + neighbors)`
+pairs however the room is shaped. What changed is the ORDER: the per-frame
+shortlist is filtered to co-directed candidates BEFORE the nearest 8 are taken.
+That is where the edges came from — near-but-mis-directed pairs were crowding
+out co-directed ones further away. The new graph is **smaller** than the one it
+replaces on all three captures (walkA 1_508 -> 1_236 pairs) while offering loop
+candidates the measurement says can succeed: walkA's loop-candidate median axis
+angle falls from **100.4 deg to 41.1 deg** and its median baseline rises from
+0.46 m to 0.65 m. Raising the cap instead was considered and rejected — it buys
+more of a population in which 460 candidates produced zero edges between them.
+
+**A held-out check, because a threshold fitted to its own outcome proves
+nothing.** The 30.1% rate was measured on the 103 loop candidates the OLD policy
+offered inside 60 deg. The NEW policy offers 291, of which **188 were never in
+that sample**. Predicted edges: 291 x 0.301 = **87.6**. Observed: **90**. The
+number was fixed before the re-run and is not a fit to it.
+
+**ONE PREDICATE, THREE DERIVATIONS.** The candidate graph is derived three times
+— `refine_adapter.build_pair_graph` over `NormalizedFrame`, `refine_colmap_
+backend.build_engine_pair_graph` over the packet's `ColmapEngineFrame`, and
+`refine_evidence_builder._pair_graph` over the raw model the engine wrote — and
+before R122 all three restated the distance band. A fourth restatement is how
+they would have drifted, so `loop_candidate_admitted` is imported by all three
+and the viewing direction is read from the `cam_from_world` rotation, the one
+quantity all three hold. `require_candidate_graph_agreement` now substitutes the
+raw model's ROTATIONS as well as its centres: R122 added a second hard edge to
+the policy, and a shadow that re-derived only the distances would have gone on
+agreeing with itself about the angles while the guard quietly stopped covering
+the new edge. A constructed test moves only a rotation, across the bound, with
+every centre untouched.
+
+**THE RE-RUN. Three captures, same host, same release discipline — a root-owned
+build beside the live one, `patina-scan-worker` never touched (`NRestarts=0`).**
+
+```
+                         BEFORE (I104, distance-only)          AFTER (R122, near AND co-directed)
+capture          frames  edges  reproj   looprot  verdict      edges  reproj   looprot  looptrn  verdict
+room 2, normal   100     31     -29.63%  -0.60%   PASS         90     -28.89%  +0.22%   -1.11%   REFUSED
+room 1           49       4     -32.94%  +0.31%   REFUSED       4     -32.94%  +0.31%   -0.50%   REFUSED
+single sweep     31      --     --       --       FAILED       14     -32.78%  +2.10%   -1.03%   REFUSED
+```
+
+**Does the edge count rise: yes, 2.9x on the capture that had a walk to work
+with.** 31 -> 90 on room 2, from a SMALLER candidate set. Common observations
+rose 39_233 -> 40_851, so the reconstruction is more constrained, not merely
+differently constrained.
+
+**Does walkB still refuse: yes, and its numbers are bit-identical to I104's.**
+Room 1 was walked by turning in place: the operator never revisited anywhere
+facing the same way. Its 270 loop candidates had a MEDIAN axis angle of 106 deg
+and a MINIMUM of 32.1; the new policy offers 40, all in 32-60 deg, and the same
+four verify. **The policy did not manufacture edges out of a capture that has
+none**, which is the outcome that would have discredited it. A walk with no loop
+closure is a fact about the walk.
+
+**The sweep no longer degenerates.** I104's control failed with an `AdapterError`
+— "refined model observation projects outside the positive-depth camera", a
+cheirality violation. With the mis-directed pairs gone it completes, publishes
+nothing (it is refused), and reports 14 loop edges with a loop-translation
+disagreement of **39.7 deg** — by far the worst of the three, which is what a
+pure sweep with no revisit should look like. The control still refuses; it now
+refuses legibly instead of degenerating.
+
+**WHAT THE BETTER-CONDITIONED STATISTIC SAYS ABOUT THE RULE. Reported, not
+acted on.** R122 held that the rule may be sound once the statistic it reads is
+no longer noise-dominated. It is now far better conditioned, and the shape of
+`loop_rotation_rmse_deg`'s change across every completed run in this program is:
+
+```
+edges     8      9     12     15     25     31     43     90
+delta  +20.31 -5.27  +2.30 -18.08 -1.28  -0.60  +0.54  +0.22 %
+```
+
+The variance collapses with edge count exactly as a noise-dominated statistic
+should — and what remains at 90 edges, the largest sample this program has ever
+had, is a small **positive** value. The regression is 5.5e7 times the run-to-run
+drift (relative drift 3.9e-11 over two attempts), so it is not reproducibility
+noise. This is the behaviour I103 predicted from first principles: bundle
+adjustment minimises reprojection over the tracks and never sees a two-view
+geometry, so nothing in it pushes this disagreement down. **Three of three
+captures now refuse on a loop comparable while reprojection improves 28.9-32.9%,
+and the single PASS in this program's history sat at 31 edges inside the noise
+band that the better-conditioned run has now collapsed.** An all-metrics-must-
+not-regress rule at strict inequality and zero tolerance, applied to a quantity
+the optimiser does not optimise, refuses good refinements. That is a finding for
+the program owner and **not a change**: `evaluate_refinement_evidence` is
+untouched to the byte, no tolerance was proposed, and no threshold moved. The
+counter-hypothesis is recorded too — admitting pairs out to 60 deg raised the
+loop-rotation BASELINE from 5.33 to 12.69 deg, and a tighter bound would give a
+cleaner statistic. Tightening it to make the gate pass is the inversion R122
+exists to prevent, and the bound was fixed from verification yield before the
+re-run rather than after it.
+
+**IDENTIFIER DEFECT 1: the conflated field was the defect.** One `scan_id` was
+carrying three different identifiers, and one string cannot be all of them.
+Split, each named for what it is. **`room_id`** is the Storage READ owner prefix
+— B-18 pins `{folder}/{userId}/{roomId}/{filename}`, `keys.assert_owner_prefix`'s
+own docstring and error text already said "row `room_id`", all five live P1
+callers already pass it, and the iOS uploader builds every key from `roomID`.
+**`scan_id` stays `room_scans.id` on the publication prefix** — 00287 matches
+`rs.id::text` at segment [3], the worker design ruled it, and that half was never
+broken. **`capture_session_id`** is the manifest's `scanId`: minted device-side
+at capture-session start, held in no column anywhere, and therefore no longer
+equated to a server identifier — it is required to be a well-formed stable
+identifier, recorded, and equated only when a caller supplies an expected value.
+Manifest identity does not rest on that equality and never did: the key is
+owner-anchored on user and room, and the bytes are re-hashed against the
+request's ledger sha256 before they are parsed. A bundle laid out exactly as the
+app writes it is now accepted, a key under a foreign room is still refused, and
+a key under the SCAN id is refused too — the tempting non-fix of accepting either
+identifier at [2] is closed by a test.
+
+**IDENTIFIER DEFECT 2: the writers now store the object key.** Both iOS apps
+called `getPublicURL` on a path they already held and stored
+`/object/public/room-scans/...` into `scan_bundle_url` and `depth_archive_url`,
+which 400 for a bucket that is `public = false`. The repair is writer-side and
+stores the bare key, because that is what this repository already does for every
+other private bucket (`capture-media`'s `path`, `site-requests`'s `object_path`)
+and because all four consumers already reduce the stored value to a key and
+already accept a bare one unchanged. `/object/authenticated/` was rejected — no
+precedent here, and it embeds the project host in a column; a persisted signed
+URL was rejected because it expires. **No migration, no backfill, nothing written
+to Strata**; the SQL to normalise existing rows is described for the owner and is
+hygiene rather than repair, since every reader already strips both forms.
+
+**Verification, both platforms, each against a base-commit control extracted
+with `git archive be16f132` to a sibling directory and run on the same
+interpreter — so a pre-existing failure can never be reported as ours.**
+macOS: **2_114 passed, 16 failed, 85 skipped** against **2_087
+passed, 16 failed**; the identical 16, zero new, zero fixed. Qualified x86_64
+host: **2_131 passed, 83 failed, 1 skipped** against **2_104 passed, 83
+failed**; the **identical 83**, zero new, zero fixed, **+27 passes — exactly the
+new test count**. The 83 are 82 `test_install_script` and `test_packaging`:
+properties of running from a checkout rather than from `install.sh`.
+
+One control artifact is worth recording because it nearly became a false
+positive. The first host control showed nine EXTRA failures in
+`test_field_raster_materializer` and `test_refine_lifecycle` — all
+"packaged helper source has unsafe type or mode". They were an extraction
+artifact: `field_raster_libheif.c` landed group-writable (0664), which
+`_open_packaged_source`'s `st_mode & 0o022` correctly refuses. The guard was
+right and the control was wrong. Both trees are now extracted and normalised
+identically, and the nine are gone from both.
+
+**Mutation sweep against the full suite**, control asserted to **0 red** before
+any count was read. Sixteen clauses: the angle filter removed in each of the
+three derivations; the bound widened to 180 and tightened to 45; the inclusive
+comparison made strict; the distance band dropped; the optical axis read off the
+wrong matrix row; the normalisation guard removed; the bound validation removed;
+the neighbour cap removed; temporal pairs wrongly angle-filtered;
+`classify_overlap` not forwarding the bound; the agreement guard not
+substituting rotations, and not raising at all; and the evidence builder
+deriving its graph from the REFINED rotation instead of the raw one. **Five
+survived the first sweep and are reported rather than absorbed** — the bound's
+value, the inclusive comparison, `classify_overlap`'s pass-through, and both
+clauses inside the evidence builder, whose `_pair_graph` sits behind a GPU in
+production and had no reachable test at all. Each was given a reaching test
+built by construction — the widest verified pair from the qualification capture
+for the bound, the function's own computed angle fed back as the bound for the
+comparison, two `classify_overlap` calls differing only in the bound, and
+hand-built `_ValidatedFrame` rows for the builder — and the sweep was rerun. All
+sixteen killed.
+
+**Posture unchanged and re-verified, not taken on report.** `DEFAULT_STAGES =
+"ingest,solve,drawings"`; `scan_pipeline.refine` unregistered; the raster pin
+exactly `FieldRasterProfile(1440, 1920)`; `DEFAULT_LEASE_SECONDS = 3600.0`;
+`PILOT_200_400_FRAME_RANGE_QUALIFIED` and `PRIMARY_EXECUTION_QUALIFIED` both
+still `False` — a path refused on all three captures is not a qualified path.
+R119's movement and shape floors are as built and cleared every run.
+
+**What is still not true.** The threshold rests on ONE capture's published
+database — one device, one OS, two rooms — and the held-out check that validates
+it is a single number. Nothing was published by any of the three re-runs. Whether
+`evaluate_refinement_evidence` should carry a loop-comparable veto at all is now
+a sharper question than it was, and it is still the owner's. `room_scan_images.
+image_url`/`thumbnail_url` and `stages/drawings.py`'s `svg_url`/`pdf_url` still
+carry the non-resolving public form; only the two columns I104 names were fixed.
+No iOS build or device pass has been run against either Swift change. The
+200-400 band is untouched. Fuse, Splat and Present are not composed.
+
+*Entries add: I105 · last id = I105*
