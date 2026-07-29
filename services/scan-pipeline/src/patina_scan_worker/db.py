@@ -204,6 +204,114 @@ class DbClient:
                 "room_file_measurements", rows, prefer="return=minimal"
             )
 
+    # ── Present-Layer record (00376/00377) ────────────────────────────────────
+    def record_room_file_refine(
+        self,
+        room_file_id: str,
+        *,
+        scan_id: str,
+        version: int,
+        present_patch: dict[str, Any],
+        present_status: str,
+        allowed_present_status: tuple[str, ...],
+        record_observation_fields: tuple[str, ...] = (),
+    ) -> str:
+        """Merge one Refine delivery record into ``room_files.present``.
+
+        Returns ``'written'``, ``'replayed'`` (an identical record is already
+        there and nothing was written) or ``'skipped'`` (the forward-only guard
+        declined, because the version has already moved past the Present states
+        Refine may advance).
+
+        THREE DISCIPLINES, EACH BORROWED FROM WORKING CODE IN THIS FILE.
+
+        1. A DIVERGENT EXISTING RECORD REFUSES RATHER THAN OVERWRITING.  The
+           eleven artifacts it points at are create-only and immutable; a row
+           that could be silently rewritten to point somewhere else would be the
+           one mutable thing in an immutable chain.  An IDENTICAL record writes
+           nothing at all, so a replay leaves the row byte-for-byte as the first
+           delivery left it.
+        2. THE PATCH IS FORWARD-ONLY via a PostgREST filter, the same idiom as
+           ``finalize_room_file_generated``: the update is scoped to
+           ``present_status IS NULL`` or one of ``allowed_present_status``, so a
+           replay can never regress a version that Fuse or Splat has advanced.
+        3. READ-MODIFY-WRITE, WITH ITS LIMIT NAMED.  PostgREST cannot merge a
+           jsonb object server-side, so this reads ``present``, merges, and
+           PATCHes the whole column.  That is safe TODAY only because Refine is
+           the sole writer of ``present``; the moment a second Present-layer
+           stage writes it, this needs a server-side merge RPC
+           (``jsonb_set``/``||`` inside a SECURITY DEFINER function) or two
+           writers will clobber each other's keys.  Flagged here rather than
+           pre-built, because building the RPC now would be a production
+           migration for a second writer that does not exist.
+        """
+
+        rows = self._get(
+            "room_files?id=eq.{}&select=id,scan_id,version,present,present_status".format(
+                room_file_id
+            )
+        )
+        if not rows:
+            raise PermanentError(f"room_files row not found: {room_file_id}")
+        row = rows[0]
+        if str(row.get("scan_id")) != str(scan_id) or int(row.get("version")) != int(
+            version
+        ):
+            raise PermanentError(
+                "room_files row {} is (scan {}, v{}), the delivery names "
+                "(scan {}, v{})".format(
+                    room_file_id,
+                    row.get("scan_id"),
+                    row.get("version"),
+                    scan_id,
+                    version,
+                ),
+                token="REFINE_DELIVERY_IDENTITY",
+            )
+        existing = row.get("present")
+        if not isinstance(existing, dict):
+            existing = {}
+        incoming_record = present_patch.get("refine")
+        existing_record = existing.get("refine")
+        if existing_record is not None:
+            # ``record_observation_fields`` names the parts of a record that are
+            # observations of ONE delivery (which keys this run created and
+            # which it replayed) rather than properties of the artifact set.
+            # They are excluded from the comparison, and because an identical
+            # replay writes nothing at all, the row keeps the FIRST delivery's
+            # observation instead of being rewritten with the latest.  The list
+            # is a PARAMETER so this method stays free of the record's
+            # semantics; ``refine_delivery`` owns the shape and names the
+            # exceptions.
+            def _core(value: Any) -> Any:
+                if not isinstance(value, dict):
+                    return value
+                return {
+                    key: inner
+                    for key, inner in value.items()
+                    if key not in record_observation_fields
+                }
+
+            if _core(existing_record) != _core(incoming_record):
+                raise PermanentError(
+                    "room_files.present already carries a DIFFERENT refine "
+                    "delivery record for {}; immutable artifacts do not get a "
+                    "mutable row".format(room_file_id),
+                    token="REFINE_DELIVERY_RECORD_CONFLICT",
+                )
+            return "replayed"
+
+        merged = dict(existing)
+        merged.update(present_patch)
+        updated = self._patch(
+            "room_files?id=eq.{}&or=(present_status.is.null,present_status.in.({}))".format(
+                room_file_id, ",".join(allowed_present_status)
+            ),
+            {"present": merged, "present_status": present_status},
+            prefer="return=representation",
+        )
+        return "written" if updated else "skipped"
+
     def finalize_room_file_solved(
         self,
         room_file_id: str,

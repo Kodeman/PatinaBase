@@ -99,6 +99,25 @@ _ENGINE_ARTIFACT_MEDIA_TYPES: Mapping[str, str] = MappingProxyType(
     }
 )
 
+#: The COMPLETE published name set for one refine version -- the six engine
+#: outputs, the four runner documents, and the manifest that commits them --
+#: DERIVED from the two sets above rather than restated, so a future artifact
+#: cannot be added to one place and forgotten in the other.
+#:
+#: Promoted from the two private frozensets because a second reader now exists.
+#: ``refine_delivery`` re-verifies an already-published scratch tree from the
+#: FILES, with no ``RefineRunResult`` in memory, and the one thing it must not do
+#: is carry its own hand-copied list of what "the eleven" are: a copy is a place
+#: for the two readings to disagree silently, which is the opposite of what a
+#: second reading is for.
+PUBLISHED_REFINE_ARTIFACT_NAMES: tuple[str, ...] = tuple(
+    sorted(
+        _REQUIRED_ENGINE_ARTIFACT_NAMES
+        | _RUNNER_ARTIFACT_NAMES
+        | {REFINE_MANIFEST_NAME}
+    )
+)
+
 
 def _bounded_error_text(value: object, *, maximum_bytes: int) -> str:
     """Return deterministic UTF-8 text within the existing 64 KiB log ceiling."""
