@@ -15,6 +15,7 @@ import SwiftUI
 
 struct OnboardingFlowView: View {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
     @State private var currentPage = 0
     /// PT-4-7 variant signal, resolved by `OnboardingFlowHost`. Only the third
     /// page differs — walk-first heads into a camera ask, quiz-first into the
@@ -33,19 +34,19 @@ struct OnboardingFlowView: View {
             ),
             OnboardingPage(
                 title: "See it in your space",
-                body: "Walk your room. Our camera captures every corner. Then watch as perfectly matched furniture appears right where it belongs.",
+                body: "A guided scan records the room’s shape and a few reference photos on this iPhone. Or enter the room details yourself.",
                 ctaText: "Continue",
                 gradient: PatinaGradients.sageGradient
             ),
-            isWalkFirst ? Self.cameraPage : Self.quizPage,
+            isWalkFirst ? Self.cameraPage : Self.quizPage
         ]
     }
 
     /// Walk-first close — the very next screen is the camera primer.
     private static let cameraPage = OnboardingPage(
-        title: "We'll need your camera",
-        body: "To see your space and place furniture in it. Nothing leaves your device until you choose to share.",
-        ctaText: "Let's Begin",
+        title: "Choose how to add your room",
+        body: CameraTrustCopy.onboardingSummary,
+        ctaText: "See your choices",
         gradient: PatinaGradients.linen
     )
 
@@ -82,8 +83,12 @@ struct OnboardingFlowView: View {
                         }
                         .font(PatinaTypography.uiSmall)
                         .foregroundStyle(PatinaColors.Text.muted)
+                        .frame(minWidth: 44, minHeight: 44)
+                        .contentShape(Rectangle())
                         .padding(.top, 58)
                         .padding(.trailing, 24)
+                        .accessibilityHint("Skips the introduction and continues to style questions.")
+                        .accessibilityIdentifier("Onboarding.SkipButton")
                     }
                     Spacer()
                 }
@@ -93,77 +98,126 @@ struct OnboardingFlowView: View {
 
     @ViewBuilder
     private func onboardingScreen(page: OnboardingPage, index: Int) -> some View {
+        GeometryReader { proxy in
+            ScrollView(showsIndicators: false) {
+                VStack(spacing: 0) {
+                    pageIllustration(
+                        page,
+                        index: index,
+                        viewportHeight: proxy.size.height
+                    )
+                    pageContent(
+                        page,
+                        index: index,
+                        viewportHeight: proxy.size.height
+                    )
+                }
+                .frame(maxWidth: .infinity)
+            }
+        }
+        .accessibilityIdentifier("Onboarding.Page.\(index)")
+    }
+
+    private func pageIllustration(
+        _ page: OnboardingPage,
+        index: Int,
+        viewportHeight: CGFloat
+    ) -> some View {
+        ZStack {
+            page.gradient
+            illustration(for: index)
+        }
+        .frame(maxWidth: .infinity)
+        .frame(
+            height: dynamicTypeSize.isAccessibilitySize
+                ? 190
+                : max(250, viewportHeight * 0.46)
+        )
+        .accessibilityHidden(true)
+    }
+
+    private func pageContent(
+        _ page: OnboardingPage,
+        index: Int,
+        viewportHeight: CGFloat
+    ) -> some View {
         VStack(spacing: 0) {
-            // Top half — illustration area
-            ZStack {
-                page.gradient
+            Text(page.title)
+                .font(PatinaTypography.h2)
+                .foregroundStyle(PatinaColors.Text.primary)
+                .multilineTextAlignment(.center)
+                .fixedSize(horizontal: false, vertical: true)
+                .padding(.bottom, 12)
+                .accessibilityAddTraits(.isHeader)
 
-                if index == 0 {
-                    // Room illustration placeholder
-                    roomIllustration
-                } else if index == 1 {
-                    // Phone illustration placeholder
-                    phoneIllustration
-                } else if isWalkFirst {
-                    // Camera permission illustration
-                    cameraIllustration
+            Text(page.body)
+                .font(PatinaTypography.uiAction)
+                .foregroundStyle(PatinaColors.Text.secondary)
+                .multilineTextAlignment(.center)
+                .lineSpacing(4)
+                .fixedSize(horizontal: false, vertical: true)
+                .frame(maxWidth: dynamicTypeSize.isAccessibilitySize ? 560 : 320)
+
+            pageDots(index: index)
+            Spacer(minLength: dynamicTypeSize.isAccessibilitySize ? 28 : 40)
+            primaryButton(page, index: index)
+        }
+        .padding(.horizontal, 28)
+        .padding(.top, dynamicTypeSize.isAccessibilitySize ? 24 : 32)
+        .padding(.bottom, 40)
+        .frame(
+            minHeight: dynamicTypeSize.isAccessibilitySize
+                ? 0
+                : max(300, viewportHeight * 0.50)
+        )
+    }
+
+    private func pageDots(index: Int) -> some View {
+        HStack(spacing: 8) {
+            ForEach(0..<pages.count, id: \.self) { pageIndex in
+                if pageIndex == currentPage {
+                    Capsule()
+                        .fill(PatinaColors.clay)
+                        .frame(width: 24, height: 8)
                 } else {
-                    // Quiz-first never asks for the camera during onboarding —
-                    // a camera glyph here would promise an ask that doesn't come.
-                    styleIllustration
+                    Circle()
+                        .fill(PatinaColors.Text.secondary.opacity(0.35))
+                        .frame(width: 8, height: 8)
                 }
             }
-            .frame(maxWidth: .infinity)
-            .frame(maxHeight: .infinity)
+        }
+        .padding(.top, 20)
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel("Page \(index + 1) of \(pages.count)")
+    }
 
-            // Bottom half — content
-            VStack(spacing: 0) {
-                Text(page.title)
-                    .font(PatinaTypography.h2)
-                    .foregroundStyle(PatinaColors.Text.primary)
-                    .multilineTextAlignment(.center)
-                    .padding(.bottom, 12)
-
-                Text(page.body)
-                    .font(PatinaTypography.uiAction)
-                    .foregroundStyle(PatinaColors.Text.secondary)
-                    .multilineTextAlignment(.center)
-                    .lineSpacing(4)
-                    .frame(maxWidth: 300)
-
-                // Dots
-                HStack(spacing: 8) {
-                    ForEach(0..<pages.count, id: \.self) { i in
-                        if i == currentPage {
-                            Capsule()
-                                .fill(PatinaColors.clay)
-                                .frame(width: 24, height: 8)
-                        } else {
-                            Circle()
-                                .fill(PatinaColors.Text.muted.opacity(0.25))
-                                .frame(width: 8, height: 8)
-                        }
-                    }
+    private func primaryButton(
+        _ page: OnboardingPage,
+        index: Int
+    ) -> some View {
+        PatinaButton(page.ctaText, style: .primary) {
+            if currentPage < pages.count - 1 {
+                withAnimation(reduceMotion ? nil : .default) {
+                    currentPage += 1
                 }
-                .padding(.top, 20)
-
-                Spacer()
-
-                // CTA Button
-                PatinaButton(page.ctaText, style: .primary) {
-                    if currentPage < pages.count - 1 {
-                        withAnimation(reduceMotion ? nil : .default) {
-                            currentPage += 1
-                        }
-                    } else {
-                        onComplete()
-                    }
-                }
-                .padding(.horizontal, 28)
-                .padding(.bottom, 40)
+            } else {
+                onComplete()
             }
-            .padding(.top, 32)
-            .frame(maxHeight: .infinity)
+        }
+        .frame(minHeight: 44)
+        .accessibilityIdentifier("Onboarding.PrimaryButton.\(index)")
+    }
+
+    @ViewBuilder
+    private func illustration(for index: Int) -> some View {
+        if index == 0 {
+            roomIllustration
+        } else if index == 1 {
+            phoneIllustration
+        } else if isWalkFirst {
+            cameraIllustration
+        } else {
+            styleIllustration
         }
     }
 
@@ -256,7 +310,7 @@ struct OnboardingFlowView: View {
                     .font(.system(size: 12))
                     .foregroundStyle(PatinaColors.mocha)
 
-                Text("Your room stays private")
+                Text("Saved on this iPhone first")
                     .font(PatinaTypography.caption)
                     .foregroundStyle(PatinaColors.mocha)
             }
