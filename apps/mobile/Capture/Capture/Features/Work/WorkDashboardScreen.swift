@@ -16,6 +16,7 @@ struct WorkDashboardScreen: View {
 
     @State private var model: WorkDashboardModel
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
 
     init(container: AppContainer, coordinator: CaptureCoordinator) {
         session = container.session
@@ -83,21 +84,36 @@ struct WorkDashboardScreen: View {
 
     // MARK: - Realm header
 
+    @ViewBuilder
     private var header: some View {
-        HStack(alignment: .top, spacing: 16) {
-            VStack(alignment: .leading, spacing: 5) {
-                Text((session.workspaceName ?? "Your studio").uppercased())
-                    .font(CaptureType.eyebrow)
-                    .foregroundStyle(CaptureColor.inkSoft)
-                Text(greeting)
-                    .font(CaptureType.display)
-                    .foregroundStyle(CaptureColor.ink)
-                Text(CaptureDates.dayHeading(Date()))
-                    .font(CaptureType.callout)
-                    .foregroundStyle(CaptureColor.inkSoft)
+        if dynamicTypeSize.isAccessibilitySize {
+            VStack(alignment: .leading, spacing: 16) {
+                greetingHeader
+                cameraRealmButton
             }
-            Spacer(minLength: 4)
-            cameraRealmButton
+        } else {
+            HStack(alignment: .top, spacing: 16) {
+                greetingHeader
+                Spacer(minLength: 4)
+                cameraRealmButton
+            }
+        }
+    }
+
+    private var greetingHeader: some View {
+        VStack(alignment: .leading, spacing: 5) {
+            Text((session.workspaceName ?? "Your studio").uppercased())
+                .font(CaptureType.eyebrow)
+                .foregroundStyle(CaptureColor.inkSoft)
+                .fixedSize(horizontal: false, vertical: true)
+            Text(greeting)
+                .font(CaptureType.display)
+                .foregroundStyle(CaptureColor.ink)
+                .fixedSize(horizontal: false, vertical: true)
+            Text(CaptureDates.dayHeading(Date()))
+                .font(CaptureType.callout)
+                .foregroundStyle(CaptureColor.inkSoft)
+                .fixedSize(horizontal: false, vertical: true)
         }
     }
 
@@ -106,12 +122,20 @@ struct WorkDashboardScreen: View {
             analytics.event("work.switch_to_camera")
             coordinator.switchRealm(.camera)
         } label: {
-            VStack(spacing: 4) {
-                Image(systemName: "camera.fill")
-                    .font(CaptureType.title2)
-                Text("Camera")
-                    .font(CaptureType.eyebrow)
-                    .textCase(.uppercase)
+            Group {
+                if dynamicTypeSize.isAccessibilitySize {
+                    Label("Camera", systemImage: "camera.fill")
+                        .font(CaptureType.bodyEmph)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                } else {
+                    VStack(spacing: 4) {
+                        Image(systemName: "camera.fill")
+                            .font(CaptureType.title2)
+                        Text("Camera")
+                            .font(CaptureType.eyebrow)
+                            .textCase(.uppercase)
+                    }
+                }
             }
             .foregroundStyle(CaptureColor.verdigrisInk)
             .frame(minWidth: 68, minHeight: 48)
@@ -256,7 +280,9 @@ struct WorkDashboardScreen: View {
             )
 
             LazyVGrid(
-                columns: [GridItem(.adaptive(minimum: 144), spacing: 12)],
+                columns: dynamicTypeSize.isAccessibilitySize
+                    ? [GridItem(.flexible(), spacing: 12)]
+                    : [GridItem(.adaptive(minimum: 144), spacing: 12)],
                 spacing: 12
             ) {
                 browseTile(
@@ -355,6 +381,7 @@ private struct WorkAttentionSection: View {
     let emptyText: String
     let accent: Color
     let onSelect: (FieldAttentionItem) -> Void
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
@@ -395,45 +422,97 @@ private struct WorkAttentionSection: View {
 
     private func attentionRow(_ item: FieldAttentionItem) -> some View {
         Button { onSelect(item) } label: {
-            HStack(spacing: 12) {
-                Image(systemName: symbol(for: item.kind))
-                    .font(CaptureType.callout)
-                    .foregroundStyle(accent)
-                    .frame(width: 34, height: 34)
-                    .background(accent.opacity(0.12), in: Circle())
-
-                VStack(alignment: .leading, spacing: 3) {
-                    Text(item.title)
-                        .font(CaptureType.bodyEmph)
-                        .foregroundStyle(CaptureColor.ink)
-                        .lineLimit(2)
-                    Text(item.detail)
-                        .font(CaptureType.footnote)
-                        .foregroundStyle(CaptureColor.inkSoft)
-                        .lineLimit(2)
-                }
-
-                Spacer(minLength: 8)
-
-                if let timestamp = item.timestamp {
-                    Text(CaptureDates.timeOrShortDate(timestamp))
-                        .font(CaptureType.monoSmall)
-                        .foregroundStyle(CaptureColor.inkSoft)
-                        .lineLimit(1)
-                }
-                Image(systemName: "chevron.right")
-                    .font(CaptureType.footnote)
-                    .foregroundStyle(CaptureColor.line2)
+            if dynamicTypeSize.isAccessibilitySize {
+                accessibilityAttentionRow(item)
+            } else {
+                standardAttentionRow(item)
             }
-            .padding(.horizontal, 14)
-            .padding(.vertical, 11)
-            .frame(minHeight: 56)
-            .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
         .accessibilityLabel("\(item.title), \(item.detail)")
         .accessibilityHint("Opens this item")
         .accessibilityIdentifier("work.attention.\(item.id)")
+    }
+
+    private func standardAttentionRow(_ item: FieldAttentionItem) -> some View {
+        HStack(spacing: 12) {
+            attentionBadge(for: item)
+
+            VStack(alignment: .leading, spacing: 3) {
+                Text(item.title)
+                    .font(CaptureType.bodyEmph)
+                    .foregroundStyle(CaptureColor.ink)
+                    .lineLimit(2)
+                Text(item.detail)
+                    .font(CaptureType.footnote)
+                    .foregroundStyle(CaptureColor.inkSoft)
+                    .lineLimit(2)
+            }
+
+            Spacer(minLength: 8)
+
+            if let timestamp = item.timestamp {
+                Text(CaptureDates.timeOrShortDate(timestamp))
+                    .font(CaptureType.monoSmall)
+                    .foregroundStyle(CaptureColor.inkSoft)
+                    .lineLimit(1)
+            }
+            Image(systemName: "chevron.right")
+                .font(CaptureType.footnote)
+                .foregroundStyle(CaptureColor.line2)
+        }
+        .padding(.horizontal, 14)
+        .padding(.vertical, 11)
+        .frame(minHeight: 56)
+        .contentShape(Rectangle())
+    }
+
+    private func accessibilityAttentionRow(_ item: FieldAttentionItem) -> some View {
+        VStack(alignment: .leading, spacing: 10) {
+            HStack(spacing: 12) {
+                attentionBadge(for: item)
+
+                VStack(alignment: .leading, spacing: 3) {
+                    Text(item.title)
+                        .font(CaptureType.bodyEmph)
+                        .foregroundStyle(CaptureColor.ink)
+                        .fixedSize(horizontal: false, vertical: true)
+                    Text(item.detail)
+                        .font(CaptureType.footnote)
+                        .foregroundStyle(CaptureColor.inkSoft)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+
+                Spacer(minLength: 0)
+
+                Image(systemName: "chevron.right")
+                    .font(.system(size: 18, weight: .semibold))
+                    .foregroundStyle(CaptureColor.line2)
+            }
+
+            if let timestamp = item.timestamp {
+                Text(CaptureDates.timeOrShortDate(timestamp))
+                    .font(CaptureType.monoSmall)
+                    .foregroundStyle(CaptureColor.inkSoft)
+                    .padding(.leading, 46)
+            }
+        }
+        .padding(14)
+        .frame(minHeight: 56)
+        .contentShape(Rectangle())
+    }
+
+    private func attentionBadge(for item: FieldAttentionItem) -> some View {
+        Image(systemName: symbol(for: item.kind))
+            .font(
+                dynamicTypeSize.isAccessibilitySize
+                    ? .system(size: 18, weight: .semibold)
+                    : CaptureType.callout
+            )
+            .foregroundStyle(accent)
+            .frame(width: dynamicTypeSize.isAccessibilitySize ? 44 : 34,
+                   height: dynamicTypeSize.isAccessibilitySize ? 44 : 34)
+            .background(accent.opacity(0.12), in: Circle())
     }
 
     private func symbol(for kind: FieldAttentionKind) -> String {
