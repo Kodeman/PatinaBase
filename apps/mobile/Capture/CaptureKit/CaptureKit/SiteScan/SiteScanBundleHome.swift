@@ -13,8 +13,8 @@
 //  • The durable key is the path RELATIVE to Application Support ("SiteScans/site-scan-…"),
 //    so a resume re-resolves the absolute URL under the CURRENT container even if the
 //    app-container path changed since the record was written (`relativeKey` is pure).
-//  • Retention: the owner deletes a bundle when its record completes; `sweepOrphans`
-//    reaps dirs whose upload never finished, older than `retentionDays` (blessed = 7).
+//  • Retention: the owner deletes a bundle after durable completion; `sweepOrphans`
+//    reaps only old dirs not protected by any durable transfer record.
 
 import Foundation
 
@@ -23,9 +23,7 @@ public enum SiteScanBundleHome {
     /// Subdirectory of Application Support that holds every scan bundle.
     public static let dirName = "SiteScans"
 
-    /// Blessed retention window for abandoned (never-completed) bundle dirs. A scan
-    /// whose upload hasn't finished in a week is treated as abandoned — long enough to
-    /// survive normal reconnect/retry cycles, short enough to bound disk use.
+    /// Retention window for abandoned dirs that have no durable transfer owner.
     public static let retentionDays = 7
 
     // MARK: - Locations
@@ -72,23 +70,46 @@ public enum SiteScanBundleHome {
         try? fileManager.removeItem(at: bundleURL)
     }
 
-    /// Reap abandoned bundle dirs older than `days`. Returns the count removed.
-    /// Best-effort — a failed removal is skipped, never fatal.
+    /// Reap unprotected abandoned bundle dirs older than `days`. Returns the count
+    /// removed. Best-effort — a failed removal is skipped, never fatal.
     @discardableResult
-    public static func sweepOrphans(olderThan days: Int = retentionDays,
-                                    fileManager: FileManager = .default,
-                                    now: Date = Date()) -> Int {
-        guard let root = try? root(fileManager: fileManager),
-              let entries = try? fileManager.contentsOfDirectory(
-                at: root, includingPropertiesForKeys: [.contentModificationDateKey, .isDirectoryKey],
-                options: [.skipsHiddenFiles]) else { return 0 }
+    public static func sweepOrphans(
+        olderThan days: Int = retentionDays,
+        protectedRelativeKeys: Set<String> = [],
+        rootURL: URL? = nil,
+        fileManager: FileManager = .default,
+        now: Date = Date()
+    ) -> Int {
+        let scanRoot: URL
+        if let rootURL {
+            scanRoot = rootURL
+        } else if let durableRoot = try? root(fileManager: fileManager) {
+            scanRoot = durableRoot
+        } else {
+            return 0
+        }
+        guard let entries = try? fileManager.contentsOfDirectory(
+            at: scanRoot,
+            includingPropertiesForKeys: [
+                .contentModificationDateKey,
+                .isDirectoryKey
+            ],
+            options: [.skipsHiddenFiles]
+        ) else { return 0 }
         let cutoff = now.addingTimeInterval(-Double(days) * 86_400)
         var removed = 0
         for entry in entries {
-            let values = try? entry.resourceValues(forKeys: [.contentModificationDateKey, .isDirectoryKey])
+            let relativeKey = relativeKey(for: entry)
+            guard !protectedRelativeKeys.contains(relativeKey) else { continue }
+            let values = try? entry.resourceValues(
+                forKeys: [.contentModificationDateKey, .isDirectoryKey]
+            )
             guard values?.isDirectory == true else { continue }
             let modified = values?.contentModificationDate ?? .distantFuture
-            if modified < cutoff, (try? fileManager.removeItem(at: entry)) != nil { removed += 1 }
+            if modified < cutoff,
+               (try? fileManager.removeItem(at: entry)) != nil {
+                removed += 1
+            }
         }
         return removed
     }

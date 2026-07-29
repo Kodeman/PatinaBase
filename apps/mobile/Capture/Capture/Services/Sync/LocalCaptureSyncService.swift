@@ -26,11 +26,16 @@ enum LocalSyncError: LocalizedError {
 
     var errorDescription: String? {
         switch self {
-        case .specimenNotFound(let id): return "Specimen \(id) not found in the local store."
-        case .notAuthenticated: return "Not signed in — captures stay queued until you connect."
-        case .remoteUnavailable: return "Sync isn't available yet — this capture stays on this device."
-        case .missingRemoteReceipt: return "The server did not confirm this capture."
-        case .remoteRejected(let message): return message
+        case .specimenNotFound(let id):
+            return "Specimen \(id) not found in the local store."
+        case .notAuthenticated:
+            return "Not signed in — captures stay queued until you connect."
+        case .remoteUnavailable:
+            return "Sync isn't available yet — this capture stays on this device."
+        case .missingRemoteReceipt:
+            return "The server did not confirm this capture."
+        case .remoteRejected(let message):
+            return message
         }
     }
 
@@ -164,7 +169,7 @@ final class LocalCaptureSyncService: CaptureSyncService {
                     try? store.save()
                     analytics?.event("sync.commit.deferred", ["id": specimen.id.uuidString])
                 } catch {
-                    let rejected = (error as? LocalSyncError)?.isRejected == true
+                    let rejected = shouldReject(error)
                     specimen.applyTransferState(CaptureTransferState(
                         phase: rejected ? .rejected : .retryableFailure,
                         progress: specimen.uploadProgress,
@@ -193,6 +198,11 @@ final class LocalCaptureSyncService: CaptureSyncService {
         liveActivity?.end(.init(queued: 0, uploading: 0, failed: failed))
         analytics?.event("sync.drain.done", ["failed": "\(failed)"])
         emitFromOutbox()
+    }
+
+    private func shouldReject(_ error: Error) -> Bool {
+        (error as? LocalSyncError)?.isRejected == true
+            || error is CaptureMediaAvailabilityError
     }
 
     // ── commit ───────────────────────────────────────────────────────────────
@@ -265,20 +275,34 @@ final class LocalCaptureSyncService: CaptureSyncService {
         remote: SupabaseCaptureGateway,
         userID: UUID
     ) async throws -> String? {
+        try store.validateRequiredMedia(for: specimen)
+
         let folder = CaptureMediaPath.folder(
             userID: userID,
             clientToken: specimen.clientToken
         )
-        let photos = specimen.photos.sorted { $0.order < $1.order }
-        let voiceFilename = specimen.voiceAudioFilename
-        let hasVoice = !(voiceFilename ?? "").isEmpty
-        let total = photos.count + (hasVoice ? 1 : 0)
+        let photos = specimen.photos
+            .filter {
+                ($0.remotePath?.trimmingCharacters(
+                    in: .whitespacesAndNewlines
+                ) ?? "").isEmpty
+            }
+            .sorted { $0.order < $1.order }
+        let voiceFilename = specimen.voiceAudioFilename.flatMap { filename in
+            filename.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+                ? nil
+                : filename
+        }
+        let total = photos.count + (voiceFilename == nil ? 0 : 1)
         var uploaded = 0
 
         for photo in photos {
             try requireActiveOwner(owner)
             let url = store.mediaURL(for: photo.filename)
-            guard let data = try? Data(contentsOf: url) else { continue }
+            guard let data = try? Data(contentsOf: url), !data.isEmpty else {
+                throw CaptureMediaAvailabilityError
+                    .missingLocalMedia([photo.filename])
+            }
             let path = "\(folder)/\(photo.filename)"
             try await remote.upload(
                 data,
@@ -291,20 +315,22 @@ final class LocalCaptureSyncService: CaptureSyncService {
         }
 
         var voicePath: String?
-        if let filename = voiceFilename, !filename.isEmpty {
+        if let filename = voiceFilename {
             try requireActiveOwner(owner)
             let url = store.mediaURL(for: filename)
-            if let data = try? Data(contentsOf: url) {
-                let path = "\(folder)/\(filename)"
-                try await remote.upload(
-                    data,
-                    to: path,
-                    contentType: Self.mimeType(for: filename)
-                )
-                voicePath = path
-                uploaded += 1
-                bumpProgress(specimen, uploaded: uploaded, total: total)
+            guard let data = try? Data(contentsOf: url), !data.isEmpty else {
+                throw CaptureMediaAvailabilityError
+                    .missingLocalMedia([filename])
             }
+            let path = "\(folder)/\(filename)"
+            try await remote.upload(
+                data,
+                to: path,
+                contentType: Self.mimeType(for: filename)
+            )
+            voicePath = path
+            uploaded += 1
+            bumpProgress(specimen, uploaded: uploaded, total: total)
         }
         try? store.save()
         return voicePath

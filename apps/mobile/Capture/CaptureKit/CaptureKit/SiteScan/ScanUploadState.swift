@@ -51,6 +51,18 @@ public enum ScanUploadPlanner {
         !artifacts.isEmpty && artifacts.allSatisfy { $0.status == .uploaded || $0.status == .skipped }
     }
 
+    /// Required confirmation gate: every declared kind must have a durable
+    /// `.uploaded` state. A subset (or a deliberately skipped artifact) is never
+    /// sufficient for a successful scan receipt.
+    public static func allRequiredUploaded(
+        _ requiredKinds: [String],
+        existing: [ScanArtifactUploadState]
+    ) -> Bool {
+        guard !requiredKinds.isEmpty else { return false }
+        let uploaded = Set(existing.filter { $0.status == .uploaded }.map(\.kind))
+        return requiredKinds.allSatisfy(uploaded.contains)
+    }
+
     /// Fraction complete (uploaded + skipped) / total, for the F4 progress bar.
     public static func progress(_ artifacts: [ScanArtifactUploadState]) -> Double {
         guard !artifacts.isEmpty else { return 0 }

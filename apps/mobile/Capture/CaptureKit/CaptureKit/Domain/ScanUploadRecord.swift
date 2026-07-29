@@ -108,4 +108,25 @@ public extension ScanUploadRecord {
         if let confirmedReceipt { receiptID = confirmedReceipt }
         updatedAt = now
     }
+
+    /// Explicit recovery transition for a user-reviewed failed or rejected scan.
+    /// Successful artifact receipts remain intact; only failed attempts are reset.
+    func prepareForRetry(now: Date = Date()) {
+        artifacts = artifacts.map { artifact in
+            var reset = artifact
+            if reset.status == .failed {
+                reset.status = .pending
+                reset.attempts = 0
+                reset.lastError = nil
+            }
+            return reset
+        }
+        applyTransferState(
+            CaptureTransferState(
+                phase: .queued,
+                retryCount: retryCount
+            ),
+            now: now
+        )
+    }
 }

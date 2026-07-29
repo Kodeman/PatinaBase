@@ -379,4 +379,259 @@ struct DurableScanTransferTests {
                 == nil
         )
     }
+
+
+    @Test @MainActor func sweepProtectionIncludesEveryUnconfirmedState() throws {
+        let store = try CaptureStore.inMemory()
+        func record(_ suffix: String) -> ScanUploadRecord {
+            ScanUploadRecord(
+                bundlePath: "SiteScans/\(suffix)",
+                scanID: "scan-\(suffix)",
+                roomID: "room-\(suffix)",
+                name: suffix,
+                projectID: nil,
+                projectRoomID: nil
+            )
+        }
+
+        let queued = record("queued")
+        let rejected = record("rejected")
+        rejected.applyTransferState(CaptureTransferState(
+            phase: .rejected,
+            errorMessage: "Review required"
+        ))
+        let receiptlessComplete = record("receiptless")
+        receiptlessComplete.statusRaw = CaptureTransferPhase.complete.rawValue
+        let confirmed = record("confirmed")
+        confirmed.applyTransferState(CaptureTransferState(
+            phase: .complete,
+            progress: 100,
+            receiptID: "scan-confirmed"
+        ))
+        [queued, rejected, receiptlessComplete, confirmed].forEach {
+            _ = store.insertScanUploadRecord($0)
+        }
+
+        #expect(store.scanBundlePathsProtectedFromSweep() == [
+            queued.bundlePath,
+            rejected.bundlePath,
+            receiptlessComplete.bundlePath
+        ])
+    }
+
+    @Test @MainActor func durableCompletionRequiresAndPersistsReceipt() throws {
+        let store = try CaptureStore.inMemory()
+        let record = store.insertScanUploadRecord(ScanUploadRecord(
+            bundlePath: "SiteScans/receipt-gate",
+            scanID: "scan-receipt-gate",
+            roomID: "room-receipt-gate",
+            name: "Receipt gate",
+            projectID: nil,
+            projectRoomID: nil
+        ))
+        let artifacts = [ScanArtifactUploadState(
+            kind: "usdz",
+            relativePath: "scan.usdz",
+            mimeType: "model/vnd.usdz+zip",
+            status: .uploaded
+        )]
+
+        #expect(throws: CaptureTransferTransitionError.missingReceipt) {
+            try store.persistCompletedScanUploadRecord(
+                record,
+                artifacts: artifacts,
+                receiptID: "  "
+            )
+        }
+        #expect(record.transferState.phase != .complete)
+
+        try store.persistCompletedScanUploadRecord(
+            record,
+            artifacts: artifacts,
+            receiptID: " scan-receipt-gate "
+        )
+        let persisted = try #require(store.scanUploadRecord(
+            scanID: "scan-receipt-gate"
+        ))
+        #expect(persisted.transferState.phase == .complete)
+        #expect(persisted.receiptID == "scan-receipt-gate")
+    }
+
+    @Test @MainActor func failedCompletionSaveRestoresLiveRecord() throws {
+        struct ExpectedSaveFailure: Error {}
+        let store = try CaptureStore.inMemory()
+        let original = ScanArtifactUploadState(
+            kind: "mesh",
+            relativePath: "mesh.ply",
+            mimeType: "application/octet-stream",
+            status: .pending
+        )
+        let record = ScanUploadRecord(
+            bundlePath: "SiteScans/save-failure",
+            scanID: "scan-save-failure",
+            roomID: "room-save-failure",
+            name: "Save failure",
+            projectID: nil,
+            projectRoomID: nil,
+            artifacts: [original]
+        )
+        record.applyTransferState(CaptureTransferState(
+            phase: .retryableFailure,
+            errorMessage: "offline",
+            retryCount: 2
+        ))
+        let priorUpdatedAt = record.updatedAt
+
+        #expect(throws: ExpectedSaveFailure.self) {
+            try store.persistCompletedScanUploadRecord(
+                record,
+                artifacts: [],
+                receiptID: "scan-save-failure",
+                persistence: { throw ExpectedSaveFailure() }
+            )
+        }
+        #expect(record.transferState.phase == .retryableFailure)
+        #expect(record.lastError == "offline")
+        #expect(record.retryCount == 2)
+        #expect(record.receiptID == nil)
+        #expect(record.artifacts == [original])
+        #expect(record.updatedAt == priorUpdatedAt)
+    }
+
+    @Test @MainActor
+    func orphanCompletionPreservesTerminalAndFailurePhases() throws {
+        let store = try CaptureStore.inMemory()
+        let artifact = ScanArtifactUploadState(
+            kind: "mesh",
+            relativePath: "mesh.ply",
+            mimeType: "application/octet-stream",
+            status: .uploaded
+        )
+        func record(_ suffix: String) -> ScanUploadRecord {
+            store.insertScanUploadRecord(ScanUploadRecord(
+                bundlePath: "SiteScans/\(suffix)",
+                scanID: "scan-\(suffix)",
+                roomID: "room-\(suffix)",
+                name: suffix,
+                projectID: nil,
+                projectRoomID: nil
+            ))
+        }
+
+        let complete = record("complete")
+        complete.applyTransferState(CaptureTransferState(
+            phase: .complete,
+            receiptID: "scan-complete"
+        ))
+        let rejected = record("rejected")
+        rejected.applyTransferState(CaptureTransferState(
+            phase: .rejected,
+            errorMessage: "Review"
+        ))
+        let failed = record("failed")
+        failed.applyTransferState(CaptureTransferState(
+            phase: .retryableFailure,
+            errorMessage: "Offline",
+            retryCount: 1
+        ))
+
+        #expect(!store.applyBackgroundScanArtifactCompletion(
+            artifact,
+            to: complete
+        ))
+        #expect(!store.applyBackgroundScanArtifactCompletion(
+            artifact,
+            to: rejected
+        ))
+        #expect(store.applyBackgroundScanArtifactCompletion(
+            artifact,
+            to: failed
+        ))
+        #expect(complete.artifacts.isEmpty)
+        #expect(rejected.artifacts.isEmpty)
+        #expect(failed.transferState.phase == .retryableFailure)
+        #expect(failed.lastError == "Offline")
+        #expect(failed.artifacts == [artifact])
+    }
+
+    @Test @MainActor func explicitRetryResetsOnlyFailedArtifacts() {
+        let record = ScanUploadRecord(
+            bundlePath: "SiteScans/retry",
+            scanID: "scan-retry",
+            roomID: "room-retry",
+            name: "Retry",
+            projectID: nil,
+            projectRoomID: nil,
+            artifacts: [
+                ScanArtifactUploadState(
+                    kind: "usdz",
+                    relativePath: "scan.usdz",
+                    mimeType: "model/vnd.usdz+zip",
+                    status: .uploaded,
+                    attempts: 1
+                ),
+                ScanArtifactUploadState(
+                    kind: "mesh",
+                    relativePath: "mesh.ply",
+                    mimeType: "application/octet-stream",
+                    status: .failed,
+                    attempts: 3,
+                    lastError: "offline"
+                )
+            ]
+        )
+        record.applyTransferState(CaptureTransferState(
+            phase: .rejected,
+            progress: 100,
+            errorMessage: "Review required",
+            retryCount: 2
+        ))
+
+        record.prepareForRetry()
+
+        #expect(record.transferState.phase == .queued)
+        #expect(record.retryCount == 2)
+        #expect(record.artifacts[0].status == .uploaded)
+        #expect(record.artifacts[0].attempts == 1)
+        #expect(record.artifacts[1].status == .pending)
+        #expect(record.artifacts[1].attempts == 0)
+        #expect(record.artifacts[1].lastError == nil)
+    }
+
+    @Test @MainActor func missingCaptureMediaThrowsExplicitReviewError() throws {
+        let store = try CaptureStore.inMemory()
+        let specimen = store.newDraft()
+        let token = UUID().uuidString
+        let photoFilename = "missing-photo-\(token).heic"
+        let voiceFilename = "missing-voice-\(token).m4a"
+        let photo = CapturePhoto(filename: photoFilename)
+        photo.specimen = specimen
+        specimen.photos.append(photo)
+        specimen.voiceAudioFilename = voiceFilename
+        defer {
+            try? FileManager.default.removeItem(
+                at: store.mediaURL(for: photoFilename)
+            )
+            try? FileManager.default.removeItem(
+                at: store.mediaURL(for: voiceFilename)
+            )
+        }
+
+        #expect(throws: CaptureMediaAvailabilityError.missingLocalMedia([
+            photoFilename,
+            voiceFilename
+        ])) {
+            try store.validateRequiredMedia(for: specimen)
+        }
+
+        try store.writeMedia(Data([0x01]), filename: photoFilename)
+        try store.writeMedia(Data([0x02]), filename: voiceFilename)
+        try store.validateRequiredMedia(for: specimen)
+
+        try FileManager.default.removeItem(
+            at: store.mediaURL(for: photoFilename)
+        )
+        photo.remotePath = "remote/\(photoFilename)"
+        try store.validateRequiredMedia(for: specimen)
+    }
 }

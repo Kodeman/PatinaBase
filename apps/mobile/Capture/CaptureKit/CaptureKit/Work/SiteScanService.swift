@@ -29,16 +29,25 @@ public struct FieldScanResult: Sendable, Codable {
     public let localBundleURL: URL
     public let roomName: String?
     public let areaLabel: String?
+    /// Identity captured when F2 created the scan session. Nil is accepted only
+    /// for mock, preview, and legacy decoding; real upload requires an exact match.
+    public let owner: CaptureOwnerIdentity?
     /// End-of-scan QA scorecard (item 5). Persisted to `scorecard.json` in the
     /// bundle; carried here so the F3 review can render the verdict without re-reading
     /// disk. Nil only for a legacy/degenerate scan that produced none.
     public let scorecard: Scorecard?
 
-    public init(localBundleURL: URL, roomName: String? = nil, areaLabel: String? = nil,
-                scorecard: Scorecard? = nil) {
+    public init(
+        localBundleURL: URL,
+        roomName: String? = nil,
+        areaLabel: String? = nil,
+        owner: CaptureOwnerIdentity? = nil,
+        scorecard: Scorecard? = nil
+    ) {
         self.localBundleURL = localBundleURL
         self.roomName = roomName
         self.areaLabel = areaLabel
+        self.owner = owner
         self.scorecard = scorecard
     }
 }
@@ -49,6 +58,27 @@ public struct FieldScanUploadReceipt: Sendable, Codable {
 
     public init(remoteScanID: String) {
         self.remoteScanID = remoteScanID
+    }
+}
+
+/// Honest local recovery errors for a durable scan the user explicitly retries.
+public enum FieldScanRecoveryError: LocalizedError, Equatable {
+    case transferNotFound
+    case localBundleUnavailable
+    case retryUnavailable
+    case invalidTransferState
+
+    public var errorDescription: String? {
+        switch self {
+        case .transferNotFound:
+            return "This scan transfer is no longer available on this device."
+        case .localBundleUnavailable:
+            return "The local scan bundle is unavailable."
+        case .retryUnavailable:
+            return "Retry is not available for this scan."
+        case .invalidTransferState:
+            return "This scan is not waiting for recovery."
+        }
     }
 }
 
@@ -95,6 +125,9 @@ public protocol SiteScanService: AnyObject {
     /// Idempotently resume the same durable reservations. Startup callers pass
     /// `false`; explicit user retry passes `true`.
     func resumePendingUploads(retryFailures: Bool) async
+
+    /// Retry one user-reviewed rejected or failed durable scan and return its receipt.
+    func retryPendingUpload(id: String) async throws -> FieldScanUploadReceipt
     /// Composition-root startup seam; intentionally not wired by the workflow slice.
     func reconcilePendingUploads() async
 }
@@ -102,6 +135,10 @@ public protocol SiteScanService: AnyObject {
 public extension SiteScanService {
     func pendingUploads() async -> [FieldScanPendingUpload] { [] }
     func resumePendingUploads(retryFailures: Bool) async {}
+
+    func retryPendingUpload(id: String) async throws -> FieldScanUploadReceipt {
+        throw FieldScanRecoveryError.retryUnavailable
+    }
     func reconcilePendingUploads() async {
         await resumePendingUploads(retryFailures: false)
     }

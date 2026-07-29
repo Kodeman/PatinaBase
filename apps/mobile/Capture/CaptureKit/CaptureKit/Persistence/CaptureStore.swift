@@ -9,6 +9,18 @@ import Foundation
 import SwiftData
 import os
 
+public enum CaptureMediaAvailabilityError: LocalizedError, Equatable {
+    case missingLocalMedia([String])
+
+    public var errorDescription: String? {
+        switch self {
+        case .missingLocalMedia(let filenames):
+            return "Local media is missing (\(filenames.joined(separator: ", "))). "
+                + "Review this capture before retrying."
+        }
+    }
+}
+
 public struct SpecimenQuery: Sendable {
     public var text: String?
     public var category: SpecimenCategory?
@@ -200,6 +212,16 @@ public final class CaptureStore {
         }
     }
 
+    /// Bundle keys owned by durable work that orphan sweeping must never remove.
+    /// Receiptless legacy `complete` rows project as awaiting confirmation here.
+    public func scanBundlePathsProtectedFromSweep() -> Set<String> {
+        Set(
+            scanUploadRecords(includeComplete: true)
+                .filter { $0.transferState.phase != .complete }
+                .map(\.bundlePath)
+        )
+    }
+
     @discardableResult
     public func insertScanUploadRecord(_ record: ScanUploadRecord) -> ScanUploadRecord {
         context.insert(record)
@@ -224,6 +246,94 @@ public final class CaptureStore {
         if let artifacts { record.artifacts = artifacts }
         record.applyTransferState(transfer)
         try? save()
+    }
+
+    /// Applies an orphaned background success without regressing a terminal or
+    /// user-review transfer. Non-terminal records keep their exact phase/error.
+    @discardableResult
+    public func applyBackgroundScanArtifactCompletion(
+        _ artifact: ScanArtifactUploadState,
+        to record: ScanUploadRecord
+    ) -> Bool {
+        let transfer = record.transferState
+        guard transfer.phase != .complete,
+              transfer.phase != .rejected,
+              record.artifacts.first(where: {
+                $0.kind == artifact.kind
+              })?.status != .uploaded else { return false }
+
+        var artifacts = record.artifacts
+        if let index = artifacts.firstIndex(where: {
+            $0.kind == artifact.kind
+        }) {
+            artifacts[index] = artifact
+        } else {
+            artifacts.append(artifact)
+        }
+        updateScanUploadRecord(
+            record,
+            artifacts: artifacts,
+            transfer: transfer
+        )
+        return true
+    }
+
+    /// Atomically records receipt-backed completion before callers remove bundle bytes.
+    /// The throwing save is intentional: a caller must retain the bundle whenever the
+    /// completion record cannot be durably written.
+    public func persistCompletedScanUploadRecord(
+        _ record: ScanUploadRecord,
+        artifacts: [ScanArtifactUploadState],
+        receiptID: String
+    ) throws {
+        try persistCompletedScanUploadRecord(
+            record,
+            artifacts: artifacts,
+            receiptID: receiptID,
+            persistence: save
+        )
+    }
+
+    func persistCompletedScanUploadRecord(
+        _ record: ScanUploadRecord,
+        artifacts: [ScanArtifactUploadState],
+        receiptID: String,
+        persistence: () throws -> Void
+    ) throws {
+        let receipt = receiptID.trimmingCharacters(
+            in: .whitespacesAndNewlines
+        )
+        guard !receipt.isEmpty else {
+            throw CaptureTransferTransitionError.missingReceipt
+        }
+        let previous = (
+            artifacts: record.artifacts,
+            statusRaw: record.statusRaw,
+            lastError: record.lastError,
+            retryCount: record.retryCount,
+            receiptID: record.receiptID,
+            updatedAt: record.updatedAt
+        )
+        record.artifacts = artifacts
+        record.applyTransferState(
+            CaptureTransferState(
+                phase: .complete,
+                progress: 100,
+                retryCount: record.retryCount,
+                receiptID: receipt
+            )
+        )
+        do {
+            try persistence()
+        } catch {
+            record.artifacts = previous.artifacts
+            record.statusRaw = previous.statusRaw
+            record.lastError = previous.lastError
+            record.retryCount = previous.retryCount
+            record.receiptID = previous.receiptID
+            record.updatedAt = previous.updatedAt
+            throw error
+        }
     }
 
     // ── Site Request guest delivery outbox ──
@@ -376,6 +486,38 @@ public final class CaptureStore {
 
     public func mediaURL(for filename: String) -> URL {
         mediaDirectory().appendingPathComponent(filename)
+    }
+
+    /// Required local media that cannot be read as non-empty regular files.
+    /// Photos with a durable remote path no longer depend on their local copy.
+    public func missingRequiredMedia(for specimen: Specimen) -> [String] {
+        let photos = specimen.photos.sorted { $0.order < $1.order }
+        var required = photos.compactMap { photo -> String? in
+            let remotePath = photo.remotePath?.trimmingCharacters(
+                in: .whitespacesAndNewlines
+            ) ?? ""
+            return remotePath.isEmpty ? photo.filename : nil
+        }
+        if let voice = specimen.voiceAudioFilename?.trimmingCharacters(
+            in: .whitespacesAndNewlines
+        ), !voice.isEmpty {
+            required.append(voice)
+        }
+
+        return required.filter { filename in
+            let fileURL = mediaURL(for: filename)
+            let values = try? fileURL.resourceValues(
+                forKeys: [.isRegularFileKey, .fileSizeKey]
+            )
+            return values?.isRegularFile != true || (values?.fileSize ?? 0) <= 0
+        }
+    }
+
+    public func validateRequiredMedia(for specimen: Specimen) throws {
+        let missing = missingRequiredMedia(for: specimen)
+        guard missing.isEmpty else {
+            throw CaptureMediaAvailabilityError.missingLocalMedia(missing)
+        }
     }
 
     @discardableResult
