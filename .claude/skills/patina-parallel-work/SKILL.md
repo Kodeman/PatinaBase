@@ -45,7 +45,7 @@ Don't use when:
    git merge-base --is-ancestor <branch> main
    ```
    Two prior "not merged" notes in project memory were wrong — both branches were already on `main`.
-10. **Clean up when done.** Once a worktree's branch is confirmed merged, remove the worktree and delete the branch (see Commands). Locked/stale worktrees otherwise accumulate — 99 sit under `.claude/worktrees/` as of last check, 59 still `locked`.
+10. **Clean up when done — mandatory, not optional.** The orchestrator MUST remove each agent worktree at task end, whether its work merged or was abandoned — don't leave it sitting "for later." Once a branch is confirmed merged, remove the worktree and delete the branch (see Commands); an abandoned worktree gets removed regardless of branch status. Use `scripts/repo-gc.sh` (dry-run by default; `--apply` to execute) to sweep any stragglers that slip through this discipline. Left unchecked these pile up fast: a 2026-07-29 sweep found 185 accumulated worktrees under `.claude/worktrees/`, consuming tens of GB in duplicated `node_modules`/`.next`/`.build` — 82 were removable outright. This policy exists to prevent that recurring.
 11. **End of task**: group changes into logical Conventional Commits and push to `origin`, including feature branches — not just `main`.
 
 ## Commands
@@ -78,6 +78,10 @@ git log --oneline --all --grep=renumber -i
 git worktree unlock .claude/worktrees/agent-<id>   # only if `locked` in `git worktree list`
 git worktree remove .claude/worktrees/agent-<id>
 git branch -d <branch>                             # only after confirming it's merged
+
+# Sweep stragglers across the whole repo — dry run reports only, --apply removes
+scripts/repo-gc.sh
+scripts/repo-gc.sh --apply
 
 # Push everything, not just main
 git push origin <branch>
@@ -114,7 +118,7 @@ git push origin main
 | First build in a fresh worktree | Run `pnpm build`/`type-check` immediately | `pnpm install` then `pnpm turbo build --filter=<pkgs>...` first |
 | Checking whether a branch shipped | Trust a memory note or that the branch still exists | `git merge-base --is-ancestor <branch> main` |
 | Two agents in one wave both need the local DB | Each runs its own `supabase db reset` | One agent owns reset/seed for the whole wave |
-| A worktree's work is done | Leave it on disk | `git worktree remove` (unlock first if `locked`) + delete the branch |
+| A worktree's work is done | Leave it on disk | `git worktree remove` (unlock first if `locked`) + delete the branch; run `scripts/repo-gc.sh` to sweep any stragglers that already piled up |
 
 ## Report back
 

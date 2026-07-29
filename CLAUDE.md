@@ -211,6 +211,6 @@ Prod mutations require an explicit user request in the current session; a "ship 
 - **Types**: import from `@patina/types`, never redefine.
 - **Components**: use `@patina/design-system` (rich components) and the portal-local `ui/controls` (form controls).
 - **Commits**: Conventional Commits (`feat:`, `fix:`, `docs:`, `refactor:`, `test:`, `chore:`). Group logical changes; push at task end (feature branches included).
-- **Git hygiene**: never `git add -A` (the tree carries untracked landmines) — stage explicit pathspecs. Concurrent agents/sessions each get their own worktree (see patina-parallel-work; a shared-checkout commit once swallowed 286 foreign files).
+- **Git hygiene**: never `git add -A` (the tree carries untracked landmines) — stage explicit pathspecs. Concurrent agents/sessions each get their own worktree (see patina-parallel-work; a shared-checkout commit once swallowed 286 foreign files). Worktrees must be retired at task end (merge or abandon) — `scripts/repo-gc.sh` (dry-run by default) sweeps stragglers plus rebuildable build artifacts. Compress large screenshots under `docs/` before committing (e.g. `sips -Z`/pngquant) — docs history already carries 138 MB, mostly PNGs.
 - **NestJS services**: only orders, media, and projects. Do not add new NestJS services — use Supabase edge functions instead.
 - **No CI gates exist**: nothing runs tests/types/lint on push or PR, and the docker-publish workflow is dead — local verification is the only verification (see patina-verification).
