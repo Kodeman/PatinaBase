@@ -82,7 +82,11 @@ describe('BriefScanStrip — cover fallback order', () => {
 
   function renderTile(overrides: {
     thumbnail_url?: string | null;
-    cover?: { signedThumbUrl: string | null; signedImageUrl: string | null } | null;
+    cover?: {
+      signedThumbUrl: string | null;
+      signedPreviewUrl?: string | null;
+      signedImageUrl: string | null;
+    } | null;
     coversLoaded?: boolean;
   }) {
     mockUseLeadScans.mockReturnValue({
@@ -128,6 +132,21 @@ describe('BriefScanStrip — cover fallback order', () => {
     });
     const img = screen.getByAltText('Scan tile') as HTMLImageElement;
     expect(img.src).toBe('https://signed/cover-image.jpg');
+  });
+
+  it('prefers the 1600 px preview over the original when there is no signed thumbnail', () => {
+    renderTile({
+      thumbnail_url: null,
+      cover: {
+        signedThumbUrl: null,
+        signedPreviewUrl: 'https://signed/cover-preview-1600.jpg',
+        signedImageUrl: 'https://signed/cover-image.heic',
+      },
+    });
+    const img = screen.getByAltText('Scan tile') as HTMLImageElement;
+    expect(img.src).toBe('https://signed/cover-preview-1600.jpg');
+    expect(img.getAttribute('loading')).toBe('lazy');
+    expect(img.getAttribute('decoding')).toBe('async');
   });
 
   it('shows "No preview" only when the scan truly has zero photos (cover resolved to null)', () => {

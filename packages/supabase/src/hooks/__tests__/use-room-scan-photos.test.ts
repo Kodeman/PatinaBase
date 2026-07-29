@@ -108,6 +108,7 @@ function row(overrides: Partial<RoomScanPhotoRow>): RoomScanPhotoRow {
     scan_id: 'scan-1',
     image_url: 'https://x/room-scans/img.heic',
     thumbnail_url: null,
+    preview_url: null,
     is_primary: false,
     display_order: 0,
     quality_score: null,
@@ -150,6 +151,24 @@ describe('dedupeRoomScanPhotos', () => {
   it('keeps input order for non-duplicate rows', () => {
     const rows = [row({ id: 'a', image_url: 'a.heic' }), row({ id: 'b', image_url: 'b.heic' })];
     expect(dedupeRoomScanPhotos(rows).map((r) => r.id)).toEqual(['a', 'b']);
+  });
+
+  it('prefers the row with MORE derivatives (thumb + preview beats thumb alone)', () => {
+    const thumbOnly = row({
+      id: 'thumb-only',
+      image_url: 'https://x/room-scans/img.heic',
+      thumbnail_url: 'https://x/room-scans/img_512.jpg',
+      preview_url: null,
+    });
+    const both = row({
+      id: 'both',
+      image_url: 'https://x/room-scans/img.heic',
+      thumbnail_url: 'https://x/room-scans/img_512.jpg',
+      preview_url: 'https://x/room-scans/img_1600.jpg',
+    });
+    expect(dedupeRoomScanPhotos([thumbOnly, both])[0].id).toBe('both');
+    // …and order-independently — the score decides, not arrival.
+    expect(dedupeRoomScanPhotos([both, thumbOnly])[0].id).toBe('both');
   });
 });
 
@@ -261,6 +280,108 @@ describe('useRoomScanPhotos', () => {
     expect(b.signedThumbUrl).toBeNull(); // thumbnail_url was null on that row
   });
 
+  it('signs the preview rung inside the SAME single call — 2 paths per row becomes 3, still one round-trip', async () => {
+    // Two HEIC rows, each carrying the full 00340 derivative set. Six distinct
+    // paths where the pre-preview hook would have sent four.
+    tableResult = {
+      data: [
+        row({
+          id: 'a',
+          image_url: 'https://x.supabase.co/storage/v1/object/public/room-scans/u1/s1/a.heic',
+          preview_url:
+            'https://x.supabase.co/storage/v1/object/public/room-scans/photo_derivatives/u1/s1/a_1600.jpg',
+          thumbnail_url:
+            'https://x.supabase.co/storage/v1/object/public/room-scans/photo_derivatives/u1/s1/a_512.jpg',
+          display_order: 0,
+        }),
+        row({
+          id: 'b',
+          image_url: 'https://x.supabase.co/storage/v1/object/public/room-scans/u1/s1/b.heic',
+          preview_url:
+            'https://x.supabase.co/storage/v1/object/public/room-scans/photo_derivatives/u1/s1/b_1600.jpg',
+          thumbnail_url:
+            'https://x.supabase.co/storage/v1/object/public/room-scans/photo_derivatives/u1/s1/b_512.jpg',
+          display_order: 1,
+        }),
+      ],
+      error: null,
+    };
+    signedUrlsResult = {
+      data: [
+        { path: 'u1/s1/a.heic', signedUrl: 'https://signed/a.heic', error: null },
+        { path: 'photo_derivatives/u1/s1/a_1600.jpg', signedUrl: 'https://signed/a_1600.jpg', error: null },
+        { path: 'photo_derivatives/u1/s1/a_512.jpg', signedUrl: 'https://signed/a_512.jpg', error: null },
+        { path: 'u1/s1/b.heic', signedUrl: 'https://signed/b.heic', error: null },
+        { path: 'photo_derivatives/u1/s1/b_1600.jpg', signedUrl: 'https://signed/b_1600.jpg', error: null },
+        { path: 'photo_derivatives/u1/s1/b_512.jpg', signedUrl: 'https://signed/b_512.jpg', error: null },
+      ],
+      error: null,
+    };
+
+    const config = useRoomScanPhotos('scan-1') as unknown as {
+      queryFn: () => Promise<
+        Array<{
+          id: string;
+          signedImageUrl: string | null;
+          signedPreviewUrl: string | null;
+          signedThumbUrl: string | null;
+        }>
+      >;
+    };
+    const result = await config.queryFn();
+
+    // THE no-second-round-trip contract: the path array grew from 2N to 3N,
+    // and it is still exactly ONE createSignedUrls call.
+    expect(createSignedUrls).toHaveBeenCalledTimes(1);
+    expect(createSignedUrls.mock.calls[0][0]).toHaveLength(6);
+    expect(createSignedUrls.mock.calls[0][0].sort()).toEqual([
+      'photo_derivatives/u1/s1/a_1600.jpg',
+      'photo_derivatives/u1/s1/a_512.jpg',
+      'photo_derivatives/u1/s1/b_1600.jpg',
+      'photo_derivatives/u1/s1/b_512.jpg',
+      'u1/s1/a.heic',
+      'u1/s1/b.heic',
+    ]);
+
+    const a = result.find((r) => r.id === 'a')!;
+    expect(a.signedImageUrl).toBe('https://signed/a.heic');
+    expect(a.signedPreviewUrl).toBe('https://signed/a_1600.jpg');
+    expect(a.signedThumbUrl).toBe('https://signed/a_512.jpg');
+  });
+
+  it('leaves signedPreviewUrl null for a JPEG row — by design, the sweep is HEIC-only', async () => {
+    tableResult = {
+      data: [
+        row({
+          id: 'jpeg',
+          mime_type: 'image/jpeg',
+          image_url: 'https://x.supabase.co/storage/v1/object/public/room-scans/u1/s1/j.jpg',
+          preview_url: null,
+          thumbnail_url:
+            'https://x.supabase.co/storage/v1/object/public/room-scans/photo_derivatives/u1/s1/j_512.jpg',
+        }),
+      ],
+      error: null,
+    };
+    signedUrlsResult = {
+      data: [
+        { path: 'u1/s1/j.jpg', signedUrl: 'https://signed/j.jpg', error: null },
+        { path: 'photo_derivatives/u1/s1/j_512.jpg', signedUrl: 'https://signed/j_512.jpg', error: null },
+      ],
+      error: null,
+    };
+
+    const config = useRoomScanPhotos('scan-1') as unknown as {
+      queryFn: () => Promise<Array<{ signedPreviewUrl: string | null; signedImageUrl: string | null }>>;
+    };
+    const [photo] = await config.queryFn();
+
+    expect(photo.signedPreviewUrl).toBeNull();
+    // The original is itself web-viewable, so nothing is lost by that null.
+    expect(photo.signedImageUrl).toBe('https://signed/j.jpg');
+    expect(createSignedUrls.mock.calls[0][0]).toHaveLength(2);
+  });
+
   it('returns [] without touching storage when the scan has no photo rows', async () => {
     tableResult = { data: [], error: null };
 
@@ -366,6 +487,40 @@ describe('useRoomScanCovers', () => {
       'u1/s1/high_thumb.jpg',
       'u1/s2/only.heic',
     ]);
+  });
+
+  it('signs the resolved cover’s preview rung too, still in ONE call', async () => {
+    tableResult = {
+      data: [
+        row({
+          id: 's1-only',
+          scan_id: 'scan-1',
+          image_url: 'https://x.supabase.co/storage/v1/object/public/room-scans/u1/s1/c.heic',
+          preview_url:
+            'https://x.supabase.co/storage/v1/object/public/room-scans/photo_derivatives/u1/s1/c_1600.jpg',
+          thumbnail_url:
+            'https://x.supabase.co/storage/v1/object/public/room-scans/photo_derivatives/u1/s1/c_512.jpg',
+        }),
+      ],
+      error: null,
+    };
+    signedUrlsResult = {
+      data: [
+        { path: 'u1/s1/c.heic', signedUrl: 'https://signed/c.heic', error: null },
+        { path: 'photo_derivatives/u1/s1/c_1600.jpg', signedUrl: 'https://signed/c_1600.jpg', error: null },
+        { path: 'photo_derivatives/u1/s1/c_512.jpg', signedUrl: 'https://signed/c_512.jpg', error: null },
+      ],
+      error: null,
+    };
+
+    const config = useRoomScanCovers(['scan-1']) as unknown as {
+      queryFn: () => Promise<Map<string, { signedPreviewUrl: string | null } | null>>;
+    };
+    const result = await config.queryFn();
+
+    expect(createSignedUrls).toHaveBeenCalledTimes(1);
+    expect(createSignedUrls.mock.calls[0][0]).toHaveLength(3);
+    expect(result.get('scan-1')?.signedPreviewUrl).toBe('https://signed/c_1600.jpg');
   });
 
   it('skips the storage call entirely when every requested scan has zero photos', async () => {

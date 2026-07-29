@@ -21,10 +21,10 @@
  *
  * Per-tile source order: the legacy scalar (kept first in case a future
  * producer ever fills it — zero-cost to prefer) → the resolved cover's
- * signed thumbnail → its signed full image → the quiet "No preview"
- * placeholder. That placeholder also covers the strip's brief loading
- * window (covers is `undefined` until the batch query resolves) — no
- * spinner, same box either way.
+ * signed thumbnail → its signed 1600 px preview → its signed full image →
+ * the quiet "No preview" placeholder. That placeholder also covers the
+ * strip's brief loading window (covers is `undefined` until the batch query
+ * resolves) — no spinner, same box either way.
  */
 
 import { useRouter } from 'next/navigation';
@@ -49,7 +49,11 @@ export function BriefScanStrip({ leadId }: { leadId: string }) {
         {rows.map((row) => {
           const cover = covers?.get(row.scan_id) ?? null;
           const coverSrc =
-            row.scan?.thumbnail_url || cover?.signedThumbUrl || cover?.signedImageUrl || null;
+            row.scan?.thumbnail_url ||
+            cover?.signedThumbUrl ||
+            cover?.signedPreviewUrl ||
+            cover?.signedImageUrl ||
+            null;
 
           return (
             <button
@@ -64,6 +68,8 @@ export function BriefScanStrip({ leadId }: { leadId: string }) {
                 <img
                   src={coverSrc}
                   alt={row.scan?.name ?? 'Room scan'}
+                  loading="lazy"
+                  decoding="async"
                   className="h-full w-full object-cover transition-opacity group-hover:opacity-80"
                 />
               ) : (
