@@ -34,9 +34,18 @@ public protocol CaptureSyncService: Sendable {
     func enqueue(_ specimenID: UUID) async
     /// Back-online / manual retry: drain the outbox oldest-first.
     func drain() async
+    /// Composition-root startup seam. Call after auth is ready; idempotency is
+    /// anchored by each specimen's stable client token.
+    func reconcilePendingTransfers() async
     /// Upload artifacts + call commit_field_capture. Idempotent on clientToken.
     func commit(_ specimenID: UUID) async throws -> CommitReceipt
     /// Triage: route a synced/inbox capture to library vs inbox.
     func route(_ specimenID: UUID, to destination: CaptureDestination) async throws
     var snapshots: AsyncStream<SyncSnapshot> { get }
+}
+
+public extension CaptureSyncService {
+    func reconcilePendingTransfers() async {
+        await drain()
+    }
 }

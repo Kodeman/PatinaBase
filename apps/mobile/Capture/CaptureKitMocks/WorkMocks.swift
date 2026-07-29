@@ -370,6 +370,7 @@ public final class MockScanSession: FieldScanSession, AnchorCapturing, ContextCa
 
 @MainActor
 public final class MockSiteScanService: SiteScanService {
+    private var pending: [FieldScanPendingUpload] = []
     public init() {}
     /// Always supported for previews/sim (the real seam gates on LiDAR).
     public var isSupported: Bool { true }
@@ -377,8 +378,25 @@ public final class MockSiteScanService: SiteScanService {
     public func upload(result: FieldScanResult, projectID: String?, projectRoomID: String?,
                        name: String) async throws -> FieldScanUploadReceipt {
         if MockFailure.failUpload {
+            let id = result.localBundleURL.lastPathComponent
+            if !pending.contains(where: { $0.id == id }) {
+                pending.append(FieldScanPendingUpload(
+                    id: id,
+                    name: name,
+                    projectID: projectID,
+                    state: CaptureTransferState(
+                        phase: .retryableFailure,
+                        errorMessage: "Upload failed.",
+                        retryCount: 1)))
+            }
             throw MockInjectedFailure("Upload failed.")
         }
-        return FieldScanUploadReceipt(remoteScanID: "scan-\(UUID().uuidString.prefix(8))")
+        let receipt = "scan-\(UUID().uuidString.prefix(8))"
+        pending.removeAll { $0.id == result.localBundleURL.lastPathComponent }
+        return FieldScanUploadReceipt(remoteScanID: receipt)
+    }
+    public func pendingUploads() async -> [FieldScanPendingUpload] { pending }
+    public func resumePendingUploads(retryFailures: Bool) async {
+        if retryFailures, !MockFailure.failUpload { pending.removeAll() }
     }
 }

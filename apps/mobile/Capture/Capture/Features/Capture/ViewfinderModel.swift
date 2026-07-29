@@ -18,6 +18,10 @@ final class ViewfinderModel {
     private let location: any LocationService
     private let analytics: any CaptureAnalytics
     private let coordinator: CaptureCoordinator
+    private let sync: any CaptureSyncService
+    private let session: any SessionProviding
+    private let sessionContext: CaptureSessionContextStore
+    private var visitID: UUID?
 
     // ── Mode + framing (C1/C2) ──
     var mode: CameraMode = .photo
@@ -48,6 +52,14 @@ final class ViewfinderModel {
     var cardSpecimen: Specimen?          // C3 card subject (nil = no card)
     var lastError: String?
 
+    var quickSaveTitle: String {
+        switch cardSpecimen?.destination {
+        case .library: return "Save to library"
+        case .inbox: return "Send to inbox"
+        default: return "Choose destination"
+        }
+    }
+
     private let lowLightThreshold = 0.18
     private var frameTask: Task<Void, Never>?
     private var burstTask: Task<Void, Never>?
@@ -61,12 +73,16 @@ final class ViewfinderModel {
         self.location = container.location
         self.analytics = container.analytics
         self.coordinator = coordinator
+        self.sync = container.sync
+        self.session = container.session
+        self.sessionContext = .shared
     }
 
     // MARK: Lifecycle
 
     func start() async {
         analytics.screen(CaptureScreenID.c1Viewfinder.rawValue)
+        visitID = currentSessionContext().visitID
         refreshSessionCount()
         mode = camera.currentMode
         isLowLight = camera.isLowLight
@@ -103,7 +119,9 @@ final class ViewfinderModel {
         venueLabel = venue.placemarkName ?? venue.room ?? "Stamped here"
     }
 
-    private func refreshSessionCount() { sessionCount = store.session().count }
+    private func refreshSessionCount() {
+        sessionCount = store.session(visitID: visitID).count
+    }
 
     // MARK: Mode (tap / swipe)
 
@@ -153,6 +171,7 @@ final class ViewfinderModel {
     func pressChanged() {
         guard !pressActive, cardSpecimen == nil, !capturing else { return }
         pressActive = true
+        guard mode == .photo else { return }
         holdTriggerTask?.cancel()
         holdTriggerTask = Task { [weak self] in
             try? await Task.sleep(for: .milliseconds(350))
@@ -188,7 +207,16 @@ final class ViewfinderModel {
         try? store.save()
         refreshSessionCount()
         analytics.event("capture", ["mode": mode.rawValue])
-        cardSpecimen = draft
+        switch SpecimenCapturePolicy.nextStep(for: mode) {
+        case .quickConfirm:
+            cardSpecimen = draft
+        case .tagOCR:
+            coordinator.present(.ocr(draft.id))
+        case .codeScan:
+            coordinator.present(.code(draft.id))
+        case .measure:
+            coordinator.present(.measure(draft.id))
+        }
     }
 
     // MARK: Multi-shot (C4) → C5 sheet on release
@@ -230,12 +258,26 @@ final class ViewfinderModel {
 
     func saveFromCard() {
         guard let specimen = cardSpecimen else { return }
-        specimen.status = .ready
-        try? store.save()
         CaptureHaptics.success()
         let id = specimen.id
         cardSpecimen = nil
-        coordinator.present(.destination(id))          // S3 route & save
+        guard specimen.destination != .undecided else {
+            specimen.status = .ready
+            try? store.save()
+            coordinator.present(.destination(id))
+            return
+        }
+        Task { @MainActor in
+            do {
+                try await sync.route(id, to: specimen.destination)
+                coordinator.present(specimen.destination == .library
+                    ? .savedTerminal(id)
+                    : .inboxTerminal(id))
+            } catch {
+                // The local record still exists; S3 exposes the recoverable choice.
+                coordinator.present(.destination(id))
+            }
+        }
     }
 
     func addDetailFromCard() {
@@ -253,10 +295,25 @@ final class ViewfinderModel {
     // MARK: Plumbing
 
     private func makeDraft() -> Specimen {
-        let draft = store.newDraft()
+        let context = currentSessionContext()
+        visitID = context.visitID
+        let draft = store.newDraft(sessionID: context.visitID)
         draft.venue = venueStamp
         draft.category = .unknown
+        draft.destination = context.routing.destination
+        var venue = draft.venue ?? VenueStamp()
+        venue.projectId = context.routing.projectID
+        venue.projectName = context.routing.projectName
+        venue.room = context.routing.room
+        venue.shelf = context.routing.shelf
+        draft.venue = venue
         return draft
+    }
+
+    private func currentSessionContext() -> CaptureSessionContext {
+        sessionContext.current(identity: CaptureSessionIdentity(
+            userID: session.userID,
+            workspaceID: session.workspaceID))
     }
 
     private func captureFrame(into draft: Specimen, primary: Bool) async {

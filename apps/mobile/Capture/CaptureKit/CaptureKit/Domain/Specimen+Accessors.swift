@@ -20,6 +20,84 @@ public extension Specimen {
         set { statusRaw = newValue.rawValue }
     }
 
+    /// Honest transfer state projected from persisted sync fields. `.complete`
+    /// is impossible without a non-empty remote receipt.
+    var transferState: CaptureTransferState {
+        let lifecycle = CaptureLifecycle.State(rawValue: lifecycleRaw)
+        if status == .committed, let receipt = remoteId?.trimmingCharacters(
+            in: .whitespacesAndNewlines), !receipt.isEmpty {
+            return CaptureTransferState(
+                phase: .complete, progress: 100, retryCount: retryCount,
+                receiptID: receipt)
+        }
+        if lifecycle == .awaitingConfirmation {
+            return CaptureTransferState(
+                phase: .awaitingConfirmation, progress: 100,
+                retryCount: retryCount)
+        }
+        if lifecycle == .rejected {
+            return CaptureTransferState(
+                phase: .rejected, progress: uploadProgress,
+                errorMessage: lastSyncError, retryCount: retryCount)
+        }
+        switch status {
+        case .draft:
+            return CaptureTransferState(
+                phase: .local, progress: uploadProgress,
+                retryCount: retryCount)
+        case .ready, .queued:
+            return CaptureTransferState(
+                phase: .queued, progress: uploadProgress,
+                retryCount: retryCount)
+        case .uploading:
+            return CaptureTransferState(
+                phase: .uploading, progress: uploadProgress,
+                retryCount: retryCount)
+        case .failed:
+            return CaptureTransferState(
+                phase: .retryableFailure, progress: uploadProgress,
+                errorMessage: lastSyncError, retryCount: retryCount)
+        case .committed:
+            // Legacy/broken row: bytes may have landed, but no receipt means
+            // it remains visibly unconfirmed.
+            return CaptureTransferState(
+                phase: .awaitingConfirmation, progress: 100,
+                retryCount: retryCount)
+        }
+    }
+
+    /// Persist a transfer transition through the existing frozen schema.
+    func applyTransferState(_ state: CaptureTransferState) {
+        uploadProgress = state.progress
+        retryCount = state.retryCount
+        lastSyncError = state.errorMessage
+        switch state.phase {
+        case .local:
+            status = .draft
+            lifecycleRaw = CaptureLifecycle.State.captured.rawValue
+        case .queued:
+            status = .queued
+            lifecycleRaw = CaptureLifecycle.State.queued.rawValue
+        case .uploading:
+            status = .uploading
+            lifecycleRaw = CaptureLifecycle.State.uploading.rawValue
+        case .awaitingConfirmation:
+            status = .uploading
+            lifecycleRaw = CaptureLifecycle.State.awaitingConfirmation.rawValue
+        case .complete:
+            guard let receipt = state.receiptID, !receipt.isEmpty else { return }
+            remoteId = receipt
+            status = .committed
+        case .retryableFailure:
+            status = .failed
+            lifecycleRaw = CaptureLifecycle.State.failed.rawValue
+        case .rejected:
+            status = .failed
+            lifecycleRaw = CaptureLifecycle.State.rejected.rawValue
+        }
+        touch()
+    }
+
     /// Provenance of a field, if it has been set.
     func provenance(for key: FieldKey) -> ProvenanceSource? {
         provenanceRaw[key.rawValue].flatMap(ProvenanceSource.init(rawValue:))

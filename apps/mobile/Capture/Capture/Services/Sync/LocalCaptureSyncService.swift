@@ -8,9 +8,9 @@
 //  (00235), idempotent on `Specimen.clientToken`. It streams `SyncSnapshot`s that
 //  drive U1 and the offline-sync Live Activity.
 //
-//  Network I/O goes through the injected `SupabaseCaptureGateway`. When no gateway
-//  is present (previews / non-networked runs) the service settles records locally
-//  exactly as Phase 1a did — so the mock harness is byte-for-byte unchanged.
+//  Network I/O goes through the injected `SupabaseCaptureGateway`. A missing
+//  gateway is deferrable: the record remains queued and is never presented as a
+//  remote success without a server receipt.
 
 import Foundation
 import UIKit
@@ -20,17 +20,29 @@ enum LocalSyncError: LocalizedError {
     case specimenNotFound(UUID)
     /// No signed-in session — the capture must stay queued, not fail.
     case notAuthenticated
+    case remoteUnavailable
+    case missingRemoteReceipt
+    case remoteRejected(String)
 
     var errorDescription: String? {
         switch self {
         case .specimenNotFound(let id): return "Specimen \(id) not found in the local store."
         case .notAuthenticated: return "Not signed in — captures stay queued until you connect."
+        case .remoteUnavailable: return "Sync isn't available yet — this capture stays on this device."
+        case .missingRemoteReceipt: return "The server did not confirm this capture."
+        case .remoteRejected(let message): return message
         }
     }
 
     /// Deferrable failures leave the item queued (no `.failed`, no retry penalty).
     var isDeferrable: Bool {
         if case .notAuthenticated = self { return true }
+        if case .remoteUnavailable = self { return true }
+        return false
+    }
+
+    var isRejected: Bool {
+        if case .remoteRejected = self { return true }
         return false
     }
 }
@@ -43,8 +55,7 @@ final class LocalCaptureSyncService: CaptureSyncService {
     private let liveActivity: CaptureLiveActivityController?
     /// Identity source for the storage path (`<uid>/…`) + `p_organization_id`.
     private let session: (any SessionProviding)?
-    /// When present, commits do real upload + RPC; when nil, records settle
-    /// locally (previews / non-networked). Exactly one path per instance.
+    /// When present, commits do real upload + RPC; nil leaves records queued.
     private let remote: SupabaseCaptureGateway?
 
     private let stream: AsyncStream<SyncSnapshot>
@@ -69,15 +80,12 @@ final class LocalCaptureSyncService: CaptureSyncService {
     var snapshots: AsyncStream<SyncSnapshot> { stream }
 
     // ── enqueue ──────────────────────────────────────────────────────────────
-    /// Mark the specimen ready and persist to the local outbox. Offline-safe:
-    /// never reaches for the network. `.ready` and `.queued` both live in the
-    /// outbox; we mark `.ready` here and let a drain (or the offline banner)
-    /// move a stuck item to `.queued` — `CaptureStore.outbox()` covers both.
+    /// Persist the specimen in the local queue. Offline-safe: never reaches for
+    /// the network.
     func enqueue(_ specimenID: UUID) async {
         guard let s = store.specimen(id: specimenID) else { return }
-        s.status = .ready
-        s.lifecycleRaw = CaptureLifecycle.State.routed.rawValue
-        s.lastSyncError = nil
+        s.applyTransferState(CaptureTransferState(
+            phase: .queued, retryCount: s.retryCount))
         try? store.save()
         analytics?.event("sync.enqueue", ["id": specimenID.uuidString])
         emitFromOutbox(lastTitle: s.title)
@@ -88,13 +96,18 @@ final class LocalCaptureSyncService: CaptureSyncService {
     /// each, emitting progress snapshots. Re-entrancy guarded.
     func drain() async {
         guard !isDraining else { return }
-        let items = store.outbox()                       // ready/queued/failed, oldest-first
+        let items = store.outbox().filter {
+            $0.transferState.phase != .rejected
+        }
         guard !items.isEmpty else { emitFromOutbox(); return }
 
         // Real mode with no session yet: nothing can be uploaded — keep the whole
         // outbox queued (never surface a failure) and wait for auth.
         if remote != nil, session?.userID == nil {
-            for s in items where s.status != .queued { s.status = .queued }
+            for s in items where s.status != .queued {
+                s.applyTransferState(CaptureTransferState(
+                    phase: .queued, retryCount: s.retryCount))
+            }
             try? store.save()
             analytics?.event("sync.drain.deferred", ["reason": "no-session", "count": "\(items.count)"])
             emitFromOutbox()
@@ -104,43 +117,31 @@ final class LocalCaptureSyncService: CaptureSyncService {
         isDraining = true
         defer { isDraining = false }
 
-        liveActivity?.start(
-            venueLabel: items.first?.venue?.placemarkName,
-            state: .init(queued: items.count, uploading: 0, failed: 0,
-                         lastSpecimenTitle: items.first?.title)
-        )
-        analytics?.event("sync.drain.start", ["count": "\(items.count)"])
+        beginDrain(items)
 
         var remaining = items.count
         for s in items {
-            s.status = .uploading
-            s.uploadProgress = 0
+            s.applyTransferState(CaptureTransferState(
+                phase: .uploading, retryCount: s.retryCount))
             try? store.save()
             emit(queued: max(remaining - 1, 0), uploading: 1, lastTitle: s.title)
-
-            if remote == nil {
-                // Local-only: simulate byte progress (previews / non-networked).
-                // Real uploads report their own progress inside `commit`.
-                for step in stride(from: 20, through: 100, by: 20) {
-                    s.uploadProgress = step
-                    try? store.save()
-                    try? await Task.sleep(nanoseconds: 60_000_000) // 60ms
-                }
-            }
 
             do {
                 _ = try await commit(s.id)                 // real: upload + RPC
                 analytics?.event("sync.commit.ok", ["id": s.id.uuidString])
             } catch let error as LocalSyncError where error.isDeferrable {
                 // No auth mid-drain — requeue with no retry penalty.
-                s.status = .queued
-                s.uploadProgress = 0
+                s.applyTransferState(CaptureTransferState(
+                    phase: .queued, retryCount: s.retryCount))
                 try? store.save()
                 analytics?.event("sync.commit.deferred", ["id": s.id.uuidString])
             } catch {
-                s.status = .failed
-                s.retryCount += 1
-                s.lastSyncError = error.localizedDescription
+                let rejected = (error as? LocalSyncError)?.isRejected == true
+                s.applyTransferState(CaptureTransferState(
+                    phase: rejected ? .rejected : .retryableFailure,
+                    progress: s.uploadProgress,
+                    errorMessage: error.localizedDescription,
+                    retryCount: s.retryCount + (rejected ? 0 : 1)))
                 try? store.save()
                 analytics?.event("sync.commit.fail", ["id": s.id.uuidString])
             }
@@ -156,13 +157,13 @@ final class LocalCaptureSyncService: CaptureSyncService {
 
     // ── commit ───────────────────────────────────────────────────────────────
     /// Upload artifacts + land the record server-side. Idempotent on
-    /// `Specimen.clientToken`. No gateway → settle locally (unchanged Phase 1a).
+    /// `Specimen.clientToken`. No gateway leaves the item queued.
     @discardableResult
     func commit(_ specimenID: UUID) async throws -> CommitReceipt {
         guard let s = store.specimen(id: specimenID) else {
             throw LocalSyncError.specimenNotFound(specimenID)
         }
-        guard let remote else { return settleLocally(s) }
+        guard let remote else { throw LocalSyncError.remoteUnavailable }
 
         // Auth precondition: no session → stay queued (surfaced as deferrable, not
         // a failure). Missing/invalid workspace is fine — pass NULL org (00235
@@ -217,6 +218,11 @@ final class LocalCaptureSyncService: CaptureSyncService {
             shelf: s.venue?.shelf,
             organizationID: session?.workspaceID.flatMap { UUID(uuidString: $0) }
         )
+        s.applyTransferState(CaptureTransferState(
+            phase: .awaitingConfirmation,
+            progress: 100,
+            retryCount: s.retryCount))
+        try? store.save()
         let result = try await remote.commit(
             clientCaptureID: s.clientToken,
             destination: destination,
@@ -225,7 +231,7 @@ final class LocalCaptureSyncService: CaptureSyncService {
         )
 
         // (c) Map the result home.
-        return applyCommitResult(result, to: s)
+        return try applyCommitResult(result, to: s)
     }
 
     // ── route ────────────────────────────────────────────────────────────────
@@ -237,41 +243,37 @@ final class LocalCaptureSyncService: CaptureSyncService {
         guard let s = store.specimen(id: specimenID) else {
             throw LocalSyncError.specimenNotFound(specimenID)
         }
-        s.destination = destination
-        s.lifecycleRaw = (destination == .inbox
-            ? CaptureLifecycle.State.inbox
-            : CaptureLifecycle.State.saved).rawValue
-        try? store.save()
+        let previousDestination = s.destination
 
-        if let remote,
-           destination == .library,
-           session?.userID != nil,
-           let remoteId = s.remoteId,
-           let captureUUID = UUID(uuidString: remoteId) {
-            do {
-                let routing = CaptureRoutingContext(
-                    projectID: s.venue?.projectId.flatMap { UUID(uuidString: $0) },
-                    projectRoomID: s.venue?.projectRoomId.flatMap { UUID(uuidString: $0) },
-                    shelf: s.venue?.shelf)
-                let result = try await remote.route(captureID: captureUUID, routing: routing)
-                if let productID = result.productID { s.committedProductId = productID.uuidString }
-                if result.status == "inbox" {
-                    // Safe-harbored (00235): the library mint failed server-side and
-                    // the capture landed back in the inbox. Correct BOTH the
-                    // destination and the lifecycle the optimistic update above set
-                    // to `.saved` — leaving lifecycle at `.saved` while destination
-                    // reads `.inbox` is the exact inconsistency this branch exists
-                    // to prevent.
-                    s.destination = .inbox
-                    s.lifecycleRaw = CaptureLifecycle.State.inbox.rawValue
-                }
-                s.lastSyncError = nil
-                try? store.save()
-            } catch {
-                // Best-effort mirror — the local decision already stands.
-                s.lastSyncError = error.localizedDescription
-                try? store.save()
-            }
+        guard let remoteId = s.remoteId,
+              let captureUUID = UUID(uuidString: remoteId),
+              s.status == .committed else {
+            s.destination = destination
+            s.touch()
+            try? store.save()
+            await enqueue(specimenID)
+            analytics?.event("sync.route", [
+                "id": specimenID.uuidString,
+                "to": destination.rawValue,
+                "state": "queued"
+            ])
+            return
+        }
+
+        // A committed inbox capture can be promoted only after the server
+        // returns a fresh receipt/status. Never optimistically claim success.
+        if destination == .library {
+            guard let remote else { throw LocalSyncError.remoteUnavailable }
+            guard session?.userID != nil else { throw LocalSyncError.notAuthenticated }
+            let routing = CaptureRoutingContext(
+                projectID: s.venue?.projectId.flatMap { UUID(uuidString: $0) },
+                projectRoomID: s.venue?.projectRoomId.flatMap { UUID(uuidString: $0) },
+                shelf: s.venue?.shelf)
+            let result = try await remote.route(captureID: captureUUID, routing: routing)
+            _ = try applyCommitResult(result, to: s)
+        } else if previousDestination != .inbox {
+            throw LocalSyncError.remoteRejected(
+                "A confirmed library capture can’t be moved to the inbox from this device.")
         }
 
         analytics?.event("sync.route", ["id": specimenID.uuidString, "to": destination.rawValue])
@@ -279,22 +281,27 @@ final class LocalCaptureSyncService: CaptureSyncService {
     }
 
     // ── result mapping ─────────────────────────────────────────────────────────
-    private func applyCommitResult(_ result: CaptureCommitResult, to s: Specimen) -> CommitReceipt {
-        s.status = .committed
-        s.uploadProgress = 100
-        s.lastSyncError = nil
-        if let captureID = result.captureID { s.remoteId = captureID.uuidString }
+    private func applyCommitResult(
+        _ result: CaptureCommitResult,
+        to s: Specimen
+    ) throws -> CommitReceipt {
+        guard let captureID = result.captureID else {
+            throw LocalSyncError.missingRemoteReceipt
+        }
+        guard result.status == "saved" || result.status == "inbox" else {
+            throw LocalSyncError.remoteRejected(
+                "The server rejected this capture; review it before retrying.")
+        }
+
+        s.applyTransferState(CaptureTransferState(
+            phase: .complete,
+            progress: 100,
+            retryCount: s.retryCount,
+            receiptID: captureID.uuidString))
         if let productID = result.productID { s.committedProductId = productID.uuidString }
 
-        // Server truth: only status=="saved" (00235) is a real library landing.
-        // Everything else — the plain "inbox" destination, a library commit that
-        // hit the safe-harbor, AND any other terminal status an idempotent
-        // replay can surface (e.g. "dismissed", from dismiss_field_capture) —
-        // must NOT present as saved/committed-with-product locally. CaptureKit's
-        // lifecycle enum is frozen (Domain/CaptureEnums.swift), so a first-class
-        // local `.dismissed` state is deferred; fold every non-"saved" status
-        // into `.inbox` for now so a server-dismissed capture never shows up
-        // locally as saved.
+        // Server truth: only status=="saved" is a library landing. The only
+        // other accepted receipt-backed result is the inbox safe harbor.
         let landedSaved = (result.status == "saved")
         s.destination = landedSaved ? .library : .inbox
         s.lifecycleRaw = (landedSaved ? CaptureLifecycle.State.saved
@@ -302,30 +309,10 @@ final class LocalCaptureSyncService: CaptureSyncService {
         try? store.save()
 
         return CommitReceipt(
-            remoteId: s.remoteId ?? s.clientToken.uuidString,
+            remoteId: captureID.uuidString,
             productId: s.committedProductId,
             destination: landedSaved ? .library : .inbox,
             created: result.created ?? true
-        )
-    }
-
-    /// The Phase 1a local settle — used when there is no gateway (previews).
-    private func settleLocally(_ s: Specimen) -> CommitReceipt {
-        s.status = .committed
-        s.uploadProgress = 100
-        s.lastSyncError = nil
-        if s.remoteId == nil { s.remoteId = UUID().uuidString }
-        switch s.destination {
-        case .inbox:                 s.lifecycleRaw = CaptureLifecycle.State.inbox.rawValue
-        case .library, .undecided:   s.lifecycleRaw = CaptureLifecycle.State.saved.rawValue
-        }
-        try? store.save()
-
-        return CommitReceipt(
-            remoteId: s.remoteId ?? s.id.uuidString,
-            productId: s.committedProductId,
-            destination: s.destination == .undecided ? .library : s.destination,
-            created: true
         )
     }
 
@@ -333,6 +320,17 @@ final class LocalCaptureSyncService: CaptureSyncService {
         // Reserve the last 10% for the commit RPC.
         s.uploadProgress = min(90, Int(Double(uploaded) / Double(max(total, 1)) * 90))
         try? store.save()
+    }
+
+    private func beginDrain(_ items: [Specimen]) {
+        liveActivity?.start(
+            venueLabel: items.first?.venue?.placemarkName,
+            state: .init(
+                queued: items.count,
+                uploading: 0,
+                failed: 0,
+                lastSpecimenTitle: items.first?.title))
+        analytics?.event("sync.drain.start", ["count": "\(items.count)"])
     }
 
     // ── device + mime helpers ──────────────────────────────────────────────────

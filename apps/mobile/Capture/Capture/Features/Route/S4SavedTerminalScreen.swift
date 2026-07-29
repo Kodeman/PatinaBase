@@ -21,18 +21,18 @@ struct S4SavedTerminalScreen: View {
 
             ZStack {
                 Circle()
-                    .fill(CaptureColor.success.opacity(0.12))
+                    .fill(accent.opacity(0.12))
                     .frame(width: 96, height: 96)
-                Image(systemName: "checkmark")
+                Image(systemName: isConfirmed ? "checkmark" : "arrow.up")
                     .font(CaptureType.display)
-                    .foregroundStyle(CaptureColor.success)
+                    .foregroundStyle(accent)
             }
             .scaleEffect(appeared ? 1 : 0.6)
             .opacity(appeared ? 1 : 0)
             .animation(.spring(response: 0.45, dampingFraction: 0.6), value: appeared)
 
             VStack(spacing: 6) {
-                Text("Kept to your library")
+                Text(isConfirmed ? "Kept to your library" : "Saved on this device")
                     .font(CaptureType.title)
                     .foregroundStyle(CaptureColor.ink)
                 if let where_ = landed {
@@ -44,11 +44,13 @@ struct S4SavedTerminalScreen: View {
             }
 
             VStack(alignment: .leading, spacing: 6) {
-                Text("Specimen saved")
+                Text(isConfirmed ? "Confirmed by Patina" : transferLabel)
                     .font(CaptureType.eyebrow)
                     .textCase(.uppercase)
-                    .foregroundStyle(CaptureColor.success)
-                Text("Photos, measures, the tag and your voice note — reusable in seconds, months from now.")
+                    .foregroundStyle(accent)
+                Text(isConfirmed
+                     ? "Photos, measures, the tag and your voice note are ready to reuse."
+                     : "Nothing is lost. Patina will finish sending this capture and confirm when it lands.")
                     .font(CaptureType.callout)
                     .foregroundStyle(CaptureColor.inkSoft)
                     .fixedSize(horizontal: false, vertical: true)
@@ -82,7 +84,30 @@ struct S4SavedTerminalScreen: View {
         .onAppear { appeared = true }
         .task {
             analytics.screen(CaptureScreenID.s4Saved.rawValue)
-            analytics.event("capture.route_completed", ["destination": "project"])
+            analytics.event(
+                isConfirmed ? "capture.route_completed" : "capture.route_queued",
+                ["destination": "project"])
+        }
+    }
+
+    private var transfer: CaptureTransferState {
+        specimen?.transferState ?? .local
+    }
+
+    private var isConfirmed: Bool {
+        transfer.phase == .complete && transfer.receiptID != nil
+    }
+
+    private var accent: Color {
+        isConfirmed ? CaptureColor.success : CaptureColor.goldenHour
+    }
+
+    private var transferLabel: String {
+        switch transfer.phase {
+        case .uploading: return "Uploading"
+        case .awaitingConfirmation: return "Awaiting confirmation"
+        case .retryableFailure: return "Retry needed"
+        default: return "Queued to sync"
         }
     }
 

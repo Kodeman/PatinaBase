@@ -13,7 +13,9 @@ private enum CullAction: Equatable { case keep, cull }
 
 struct V2CullDeckScreen: View {
     let store: CaptureStore
+    let session: any SessionProviding
     let coordinator: CaptureCoordinator
+    private let sessionContext = CaptureSessionContextStore.shared
 
     @State private var deck: [Specimen] = []
     @State private var index = 0
@@ -57,7 +59,11 @@ struct V2CullDeckScreen: View {
             return lastAction == .keep ? .impact(weight: .light) : .impact(flexibility: .rigid)
         }
         .onAppear {
-            deck = store.session()
+            let context = sessionContext.current(
+                identity: CaptureSessionIdentity(
+                    userID: session.userID,
+                    workspaceID: session.workspaceID))
+            deck = store.session(visitID: context.visitID)
             index = 0
         }
     }
@@ -236,8 +242,12 @@ struct V2CullDeckScreen: View {
 }
 
 #if DEBUG
+import CaptureKitMocks
+
 #Preview {
     let demo = RoutePreviewData.make()
-    return V2CullDeckScreen(store: demo.store, coordinator: CaptureCoordinator())
+    return V2CullDeckScreen(
+        store: demo.store, session: MockSessionProviding(),
+        coordinator: CaptureCoordinator())
 }
 #endif

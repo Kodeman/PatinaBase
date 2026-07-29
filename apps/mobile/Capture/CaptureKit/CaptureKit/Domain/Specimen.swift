@@ -62,6 +62,8 @@ public final class Specimen {
     public var venue: VenueStamp?
 
     // ── Routing + lifecycle + sync bookkeeping ──
+    /// Visit-scoped capture grouping. Nil only for records created before Option B.
+    public var captureSessionID: UUID?
     public var destinationRaw: String    // CaptureDestination.rawValue
     public var statusRaw: String         // CaptureStatus.rawValue
     public var lifecycleRaw: String      // CaptureLifecycle.State.rawValue
@@ -75,6 +77,7 @@ public final class Specimen {
         id: UUID = UUID(),
         clientToken: UUID = UUID(),
         createdAt: Date = Date(),
+        captureSessionID: UUID? = nil,
         categoryRaw: String = SpecimenCategory.unknown.rawValue,
         destinationRaw: String = CaptureDestination.undecided.rawValue,
         statusRaw: String = CaptureStatus.draft.rawValue,
@@ -84,6 +87,7 @@ public final class Specimen {
         self.clientToken = clientToken
         self.createdAt = createdAt
         self.updatedAt = createdAt
+        self.captureSessionID = captureSessionID
         self.categoryRaw = categoryRaw
         self.materials = []
         self.colors = []

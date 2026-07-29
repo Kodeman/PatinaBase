@@ -13,12 +13,13 @@ import CaptureKit
 struct SyncStatusScreen: View {
     let store: CaptureStore
     let sync: any CaptureSyncService
+    let siteScan: any SiteScanService
     let analytics: any CaptureAnalytics
     let coordinator: CaptureCoordinator
 
     @State private var rows: [Specimen] = []
+    @State private var scanRows: [FieldScanPendingUpload] = []
     @State private var snapshot = SyncSnapshot(queued: 0, uploading: 0, failed: 0)
-    @State private var isPaused = false
 
     var body: some View {
         VStack(spacing: 0) {
@@ -29,20 +30,13 @@ struct SyncStatusScreen: View {
         .background(CaptureColor.paper)
         .navigationTitle("Sync")
         .navigationBarTitleDisplayMode(.large)
-        .toolbar {
-            ToolbarItem(placement: .topBarTrailing) {
-                Button(isPaused ? "Resume" : "Pause") {
-                    isPaused.toggle()
-                    analytics.event(isPaused ? "sync.pause" : "sync.resume")
-                }
-                .font(CaptureType.callout)
-                .foregroundStyle(isPaused ? CaptureColor.verdigris : CaptureColor.error)
-            }
-        }
         .task {
             analytics.screen(CaptureScreenID.u1Sync.rawValue)
-            reload()
-            for await snap in sync.snapshots { snapshot = snap }
+            await reload()
+            for await snap in sync.snapshots {
+                snapshot = snap
+                await reload()
+            }
         }
         .accessibilityIdentifier(CaptureScreenID.u1Sync.rawValue)
     }
@@ -66,53 +60,97 @@ struct SyncStatusScreen: View {
         .padding(.bottom, 12)
     }
 
-    private var uploaded: Int { rows.filter { $0.status == .committed }.count }
+    private var pendingCount: Int { rows.count + scanRows.count }
+    private var hasRetryableTransfer: Bool {
+        let phases = rows.map { $0.transferState.phase }
+            + scanRows.map { $0.state.phase }
+        return phases.contains {
+            $0 == .queued || $0 == .uploading
+                || $0 == .awaitingConfirmation || $0 == .retryableFailure
+        }
+    }
 
     private var headline: String {
-        let total = rows.count
-        if isPaused { return "Paused · \(max(total - uploaded, snapshot.queued)) waiting" }
-        if snapshot.failed > 0 || snapshot.lastError != nil { return "Offline · will retry, oldest first" }
-        if snapshot.uploading > 0 { return "\(uploaded) of \(total) uploaded · uploading…" }
-        if total > 0 && uploaded == total { return "All \(total) synced" }
-        if total == 0 { return "Nothing waiting" }
-        return "\(uploaded) of \(total) uploaded · on Wi-Fi"
+        if rows.contains(where: { $0.transferState.phase == .rejected })
+            || scanRows.contains(where: { $0.state.phase == .rejected }) {
+            return "\(pendingCount) waiting · review needed"
+        }
+        if snapshot.failed > 0 || snapshot.lastError != nil
+            || rows.contains(where: { $0.transferState.phase == .retryableFailure })
+            || scanRows.contains(where: { $0.state.phase == .retryableFailure }) {
+            return "\(pendingCount) waiting · retry available"
+        }
+        if rows.contains(where: { $0.transferState.phase == .awaitingConfirmation })
+            || scanRows.contains(where: { $0.state.phase == .awaitingConfirmation }) {
+            return "\(pendingCount) waiting · confirming"
+        }
+        if snapshot.uploading > 0
+            || rows.contains(where: { $0.transferState.phase == .uploading })
+            || scanRows.contains(where: { $0.state.phase == .uploading }) {
+            return "\(pendingCount) waiting · uploading"
+        }
+        if pendingCount == 0 { return "Everything confirmed" }
+        return "\(pendingCount) safely on this device"
     }
 
     private var headlineColor: Color {
-        if isPaused || snapshot.failed > 0 || snapshot.lastError != nil { return CaptureColor.error }
-        if rows.count > 0 && uploaded == rows.count { return CaptureColor.success }
+        if snapshot.failed > 0 || snapshot.lastError != nil
+            || rows.contains(where: {
+                $0.transferState.phase == .retryableFailure
+                    || $0.transferState.phase == .rejected
+            })
+            || scanRows.contains(where: {
+                $0.state.phase == .retryableFailure || $0.state.phase == .rejected
+            }) {
+            return CaptureColor.error
+        }
+        if pendingCount == 0 { return CaptureColor.success }
         return CaptureColor.inkSoft
     }
 
     private var headlineDetail: String? {
         snapshot.lastError
+            ?? rows.compactMap { $0.transferState.errorMessage }.first
+            ?? scanRows.compactMap { $0.state.errorMessage }.first
     }
 
     // MARK: rows
 
     @ViewBuilder private var content: some View {
-        if rows.isEmpty {
+        if rows.isEmpty && scanRows.isEmpty {
             VStack(spacing: 10) {
                 Image(systemName: "checkmark.seal")
                     .font(.largeTitle)
                     .foregroundStyle(CaptureColor.success)
-                Text("Everything's uploaded")
+                Text("Everything's confirmed")
                     .font(CaptureType.body)
                     .foregroundStyle(CaptureColor.inkSoft)
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
         } else {
             ScrollView {
-                LazyVStack(spacing: 0) {
-                    ForEach(rows, id: \.id) { specimen in
-                        Button {
-                            analytics.event("sync.open_row", ["status": specimen.status.rawValue])
-                            coordinator.navigate(to: .specimen(specimen.id))
-                        } label: {
-                            row(specimen)
+                LazyVStack(alignment: .leading, spacing: 0) {
+                    if !rows.isEmpty {
+                        sectionLabel("Captures")
+                        ForEach(rows, id: \.id) { specimen in
+                            Button {
+                                analytics.event("sync.open_row", [
+                                    "status": specimen.transferState.phase.rawValue
+                                ])
+                                coordinator.navigate(to: .specimen(specimen.id))
+                            } label: {
+                                row(specimen)
+                            }
+                            .buttonStyle(.plain)
+                            Rectangle().fill(CaptureColor.line).frame(height: 1)
                         }
-                        .buttonStyle(.plain)
-                        Rectangle().fill(CaptureColor.line).frame(height: 1)
+                    }
+                    if !scanRows.isEmpty {
+                        sectionLabel("Finish-later scans")
+                        ForEach(scanRows) { scan in
+                            scanRow(scan)
+                            Rectangle().fill(CaptureColor.line).frame(height: 1)
+                        }
                     }
                 }
             }
@@ -120,7 +158,7 @@ struct SyncStatusScreen: View {
     }
 
     private func row(_ s: Specimen) -> some View {
-        let status = rowStatus(for: s)
+        let status = rowStatus(for: s.transferState)
         return HStack(alignment: .center, spacing: 12) {
             VStack(alignment: .leading, spacing: 3) {
                 Text(s.title ?? s.maker ?? "Untitled capture")
@@ -137,6 +175,33 @@ struct SyncStatusScreen: View {
         .padding(.horizontal, 20)
         .padding(.vertical, 14)
         .contentShape(Rectangle())
+    }
+
+    private func scanRow(_ scan: FieldScanPendingUpload) -> some View {
+        HStack(alignment: .center, spacing: 12) {
+            VStack(alignment: .leading, spacing: 3) {
+                Text(scan.name)
+                    .font(CaptureType.bodyEmph)
+                    .foregroundStyle(CaptureColor.ink)
+                Text("SITE SCAN · KEPT ON DEVICE")
+                    .font(CaptureType.monoSmall)
+                    .foregroundStyle(CaptureColor.inkSoft)
+            }
+            Spacer(minLength: 8)
+            statusPill(rowStatus(for: scan.state), progress: scan.state.progress)
+        }
+        .padding(.horizontal, 20)
+        .padding(.vertical, 14)
+    }
+
+    private func sectionLabel(_ title: String) -> some View {
+        Text(title)
+            .font(CaptureType.eyebrow)
+            .textCase(.uppercase)
+            .foregroundStyle(CaptureColor.inkSoft)
+            .padding(.horizontal, 20)
+            .padding(.top, 18)
+            .padding(.bottom, 6)
     }
 
     private func statusPill(_ status: RowStatus, progress: Int) -> some View {
@@ -162,7 +227,11 @@ struct SyncStatusScreen: View {
         HStack(spacing: 12) {
             Button {
                 analytics.event("sync.retry_all")
-                Task { await sync.drain(); reload() }
+                Task {
+                    await sync.drain()
+                    await siteScan.resumePendingUploads(retryFailures: true)
+                    await reload()
+                }
             } label: {
                 Text("Retry all")
                     .font(CaptureType.bodyEmph)
@@ -171,10 +240,10 @@ struct SyncStatusScreen: View {
                     .padding(.vertical, 14)
                     .background(
                         RoundedRectangle(cornerRadius: 12)
-                            .fill(isPaused || rows.isEmpty ? CaptureColor.inkSoft : CaptureColor.success)
+                            .fill(hasRetryableTransfer ? CaptureColor.success : CaptureColor.inkSoft)
                     )
             }
-            .disabled(isPaused || rows.isEmpty)
+            .disabled(!hasRetryableTransfer)
 
             Button("Done") { coordinator.goBack() }
                 .font(CaptureType.bodyEmph)
@@ -190,25 +259,19 @@ struct SyncStatusScreen: View {
 
     // MARK: data
 
-    private func reload() {
-        // The pending outbox (ready / queued / failed), oldest-first — the
-        // canonical "needs syncing" set.
-        let pending = store.outbox()
-        // Plus already-uploaded / in-flight captures so "N of M" reads honestly.
-        let all = store.search(SpecimenQuery())
-        let pendingIDs = Set(pending.map(\.id))
-        let extra = all.filter {
-            !pendingIDs.contains($0.id) && ($0.status == .uploading || $0.status == .committed)
-        }
-        rows = (pending + extra).sorted { weight($0) < weight($1) }
+    private func reload() async {
+        rows = store.search(SpecimenQuery())
+            .filter { $0.transferState.phase != .complete }
+            .sorted { weight($0) < weight($1) }
+        scanRows = await siteScan.pendingUploads()
     }
 
     private func weight(_ s: Specimen) -> Int {
-        switch s.status {
-        case .uploading: return 0
-        case .failed: return 1
-        case .ready, .queued, .draft: return 2
-        case .committed: return 3
+        switch s.transferState.phase {
+        case .uploading, .awaitingConfirmation: return 0
+        case .retryableFailure, .rejected: return 1
+        case .local, .queued: return 2
+        case .complete: return 3
         }
     }
 
@@ -224,31 +287,38 @@ struct SyncStatusScreen: View {
     }
 
     private enum RowStatus: Equatable {
-        case synced, uploading, queued, retry
+        case local, uploading, confirming, queued, retry, rejected
         func label(progress: Int) -> String {
             switch self {
-            case .synced: return "synced"
+            case .local: return "on device"
             case .uploading: return progress > 0 ? "uploading \(progress)%" : "uploading"
+            case .confirming: return "confirming"
             case .queued: return "queued"
             case .retry: return "retry"
+            case .rejected: return "review"
             }
         }
         var color: Color {
             switch self {
-            case .synced: return CaptureColor.success
+            case .local: return CaptureColor.inkSoft
             case .uploading: return CaptureColor.goldenHour
+            case .confirming: return CaptureColor.goldenHour
             case .queued: return CaptureColor.inkSoft
             case .retry: return CaptureColor.error
+            case .rejected: return CaptureColor.error
             }
         }
     }
 
-    private func rowStatus(for s: Specimen) -> RowStatus {
-        switch s.status {
-        case .committed: return .synced
+    private func rowStatus(for transfer: CaptureTransferState) -> RowStatus {
+        switch transfer.phase {
+        case .local: return .local
+        case .queued: return .queued
         case .uploading: return .uploading
-        case .failed: return .retry
-        case .ready, .queued, .draft: return .queued
+        case .awaitingConfirmation: return .confirming
+        case .retryableFailure: return .retry
+        case .rejected: return .rejected
+        case .complete: return .confirming
         }
     }
 }
@@ -280,6 +350,7 @@ import CaptureKitMocks
         SyncStatusScreen(
             store: store,
             sync: InMemoryCaptureSyncService(),
+            siteScan: MockSiteScanService(),
             analytics: MockCaptureAnalytics(),
             coordinator: CaptureCoordinator()
         )
