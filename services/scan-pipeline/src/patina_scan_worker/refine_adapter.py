@@ -41,6 +41,11 @@ Matrix3 = tuple[Vector3, Vector3, Vector3]
 ADAPTER_SCHEMA_VERSION = 2
 COLMAP_TARGET_VERSION = "4.0.2"
 ENGINE_QUALIFICATION_STATUS = "unvalidated-pending-field-and-box-fixture"
+#: The DEFAULT engine budget for a refine stage, in seconds.  It is a default,
+#: not a ceiling: :meth:`RefineDeadline.start` accepts ``engine_budget_s`` and a
+#: caller whose whole job is the reconstruction passes its own lease instead.
+#: Leaving it as an unconditional clamp is what capped the composed lifecycle at
+#: four minutes no matter what lease it claimed.
 REFINE_STAGE_ENGINE_BUDGET_S = 4 * 60
 LEASE_COMPLETION_RESERVE_S = 60
 COLMAP_LOG_TAIL_BYTES = 64 * 1024
@@ -56,6 +61,38 @@ SPATIAL_RADIUS_M = 1.5
 SPATIAL_MIN_BASELINE_M = 0.25
 MAX_SPATIAL_NEIGHBORS = 8
 MIN_VERIFIED_INLIERS = 30
+#: The widest angle between two cameras' optical axes at which a NON-TEMPORAL
+#: pair is still offered to the matcher.
+#:
+#: MEASURED, not chosen.  I104's 100-frame capture published its COLMAP
+#: database; joining that database's ``two_view_geometries`` table against the
+#: capture's own ARKit poses gives the verification rate of all 1_508 candidate
+#: pairs as a function of this angle.  The two populations in that capture --
+#: the 563 non-temporal loop candidates, and INDEPENDENTLY the 945 temporal ones
+#: this policy does not touch -- collapse in the same place:
+#:
+#:     axis angle    loop pairs  verified     temporal pairs  verified
+#:     under 45 deg          56     48.2%                394     63.5%
+#:     45 to 60 deg          47      8.5%                172      6.4%
+#:     60 to 75 deg          58      0.0%                125      1.6%
+#:     over 75 deg          402      0.0%                254      0.0%
+#:
+#: 60 degrees is the smallest bucket edge above which not one of 460 real loop
+#: candidates verified.  It keeps every one of that capture's 31 verified loop
+#: edges -- the widest sits at 51.5 deg -- and discards the 460 that produced
+#: none.  A tighter 45 would have thrown away 4 of the 31 for no measured gain.
+#:
+#: The device's optics say WHY the collapse is there, which is the check that
+#: this is a property of cameras rather than of one room.  The keyframe
+#: intrinsics give a 70.5 x 55.8 degree field of view, so two cameras whose axes
+#: differ by more than 55.8 deg are no longer guaranteed to share any viewing
+#: direction at all, and past the 82.8-degree diagonal they cannot.  The widest
+#: verified pair of ANY kind in that capture sits at 74.2 deg, inside the
+#: bracket.  Beyond it a pair has no common image content, so no amount of GPU
+#: time can carry it to :data:`MIN_VERIFIED_INLIERS`; offering it is spend, not
+#: opportunity.  See R122 and I103's finding that the 49-frame capture's 270
+#: loop candidates had a MEDIAN axis angle of 106 deg and verified four.
+LOOP_MAX_VIEW_AXIS_ANGLE_DEG = 60.0
 MIN_CONNECTED_FRACTION = 0.80
 MIN_REFINEMENT_RELATIVE_IMPROVEMENT = 0.01
 POSE_PRIOR_STD_M = 0.10
@@ -139,12 +176,31 @@ class RefineDeadline:
         *,
         lease_expires_at_monotonic_s: float,
         now_monotonic_s: float | None = None,
+        engine_budget_s: float = REFINE_STAGE_ENGINE_BUDGET_S,
     ) -> "RefineDeadline":
+        """Build the ONE deadline: the earlier of the budget and the lease.
+
+        ``engine_budget_s`` defaults to :data:`REFINE_STAGE_ENGINE_BUDGET_S`, so
+        every existing caller is unchanged.  It is a PARAMETER rather than a
+        constant because the budget is a stage policy, not a property of the
+        clock: a caller whose entire task is one reconstruction passes its own
+        lease and is then governed by the lease alone.  The completion reserve is
+        subtracted on BOTH paths, so no value of ``engine_budget_s`` can produce
+        a deadline that outlives the lease.
+        """
+
         now = time.monotonic() if now_monotonic_s is None else now_monotonic_s
         if not math.isfinite(now) or not math.isfinite(lease_expires_at_monotonic_s):
             raise AdapterError("refine deadline needs finite monotonic timestamps")
+        if (
+            isinstance(engine_budget_s, bool)
+            or not isinstance(engine_budget_s, (int, float))
+            or not math.isfinite(engine_budget_s)
+            or engine_budget_s <= 0
+        ):
+            raise AdapterError("refine deadline needs a positive finite engine budget")
         deadline = min(
-            now + REFINE_STAGE_ENGINE_BUDGET_S,
+            now + engine_budget_s,
             lease_expires_at_monotonic_s - LEASE_COMPLETION_RESERVE_S,
         )
         if deadline <= now:
@@ -259,6 +315,14 @@ class RefinementEvidenceVerdict:
     reason: str
     registration_coverage_before: float
     registration_coverage_after: float
+    #: R123: the loop comparables no longer refuse, so they have to be READ.
+    #: Before R123 a PASS implied "neither loop comparable regressed" and there
+    #: was nothing to say; now a passing run can carry a positive loop drift and
+    #: the reader would otherwise have to open the evidence artifact to find it.
+    #: Rendered on EVERY verdict, refusal and pass alike, with no interpretation
+    #: beyond the direction of each change.  It is a report, not an input: no
+    #: branch anywhere reads this string.
+    loop_consistency_advisory: str
 
 
 @dataclass(frozen=True)
@@ -657,6 +721,75 @@ def _canonical_pair(first: str, second: str) -> tuple[str, str]:
     return (first, second) if first < second else (second, first)
 
 
+def optical_axis(rotation: Matrix3) -> Vector3:
+    """World-space viewing direction of a COLMAP ``cam_from_world`` rotation.
+
+    COLMAP's camera looks down +Z of its own frame and ``x_cam = R x_world + t``,
+    so the direction it points in world coordinates is ``R^T e_z`` -- the third
+    ROW of R.  (For a Field capture that is identically minus the third column
+    of the ARKit camera-to-world rotation, because ARKit's camera looks down its
+    own -Z; the two agree by construction through
+    :func:`arkit_c2w_to_colmap_w2c`.)
+
+    Reading it off the COLMAP pose rather than the ARKit transform is
+    deliberate.  THREE separate derivations of the candidate graph exist -- this
+    module's :func:`build_pair_graph` over ``NormalizedFrame``,
+    ``refine_colmap_backend.build_engine_pair_graph`` over the packet's
+    ``ColmapEngineFrame``, and ``refine_evidence_builder._pair_graph`` over the
+    raw model the engine wrote -- and the ``cam_from_world`` rotation is the one
+    quantity all three hold.  Anything else would make them disagree about where
+    a camera points by reading different fields, which is exactly the failure
+    :func:`refine_colmap_backend.require_candidate_graph_agreement` exists to
+    catch.
+
+    The device's rotations arrive orthonormal only to ~3.3e-7 (I102), so the row
+    is normalised before it is used as a direction.
+    """
+
+    axis = rotation[2]
+    norm = math.sqrt(axis[0] * axis[0] + axis[1] * axis[1] + axis[2] * axis[2])
+    if not math.isfinite(norm) or norm <= 1e-9:
+        raise AdapterError("a camera rotation carries no usable optical axis")
+    return (axis[0] / norm, axis[1] / norm, axis[2] / norm)
+
+
+def view_axis_angle_deg(first: Matrix3, second: Matrix3) -> float:
+    """Angle in degrees between two cameras' optical axes."""
+
+    left = optical_axis(first)
+    right = optical_axis(second)
+    dot = left[0] * right[0] + left[1] * right[1] + left[2] * right[2]
+    return math.degrees(math.acos(min(1.0, max(-1.0, dot))))
+
+
+def loop_candidate_admitted(
+    *,
+    distance_m: float,
+    first_rotation: Matrix3,
+    second_rotation: Matrix3,
+    spatial_min_baseline_m: float = SPATIAL_MIN_BASELINE_M,
+    spatial_radius_m: float = SPATIAL_RADIUS_M,
+    max_view_axis_angle_deg: float = LOOP_MAX_VIEW_AXIS_ANGLE_DEG,
+) -> bool:
+    """NEAR **and** CO-DIRECTED: both conditions a loop candidate must meet.
+
+    The single point of truth for the loop-candidate policy.  All three
+    derivations of the candidate graph call this rather than restating the
+    predicate, because before R122 they restated the distance half of it three
+    times and a fourth restatement is how they would drift.
+
+    Distance alone was the whole policy until R122, and I103/I104 measured what
+    that costs: on a capture where the operator turned in place, 270 candidates
+    were offered at a median optical-axis separation of 106 degrees and four
+    verified.  Pairs that far apart share no image content; they are not loop
+    closures, they are two cameras that happened to be standing near each other.
+    """
+
+    if not (spatial_min_baseline_m <= distance_m <= spatial_radius_m):
+        return False
+    return view_axis_angle_deg(first_rotation, second_rotation) <= max_view_axis_angle_deg
+
+
 def build_pair_graph(
     frames: Iterable[NormalizedFrame],
     *,
@@ -664,13 +797,41 @@ def build_pair_graph(
     spatial_radius_m: float = SPATIAL_RADIUS_M,
     spatial_min_baseline_m: float = SPATIAL_MIN_BASELINE_M,
     max_spatial_neighbors: int = MAX_SPATIAL_NEIGHBORS,
+    max_view_axis_angle_deg: float = LOOP_MAX_VIEW_AXIS_ANGLE_DEG,
 ) -> tuple[tuple[str, str], ...]:
-    """Build sorted temporal pairs plus bounded ARKit-spatial loop candidates."""
+    """Build sorted temporal pairs plus bounded NEAR, CO-DIRECTED loop candidates.
+
+    THE BOUND IS UNCHANGED AND IS NOT THE ANGLE.  At most
+    ``max_spatial_neighbors`` loop candidates are taken per frame, exactly as
+    before, so the graph still cannot exceed ``len(frames) * (temporal_window +
+    max_spatial_neighbors)`` pairs however the room is shaped -- the matcher's
+    cost ceiling is a property of the frame count, not of the trajectory.  The
+    R122 change is entirely inside the SELECTION: the per-frame shortlist is now
+    filtered to co-directed candidates BEFORE the nearest ``max_spatial_
+    neighbors`` are taken, so the cap spends its budget on pairs that can
+    verify.  Measured on I104's three captures, the proposed graph is SMALLER
+    than the one it replaces (walkA 1_508 -> 1_236 pairs) while offering more
+    loop candidates that the measurement says can succeed, because the near-but-
+    mis-directed pairs were crowding out co-directed ones further away.
+
+    Raising the cap instead was considered and rejected: it buys more of the
+    same population, and 460 of walkA's loop candidates beyond
+    :data:`LOOP_MAX_VIEW_AXIS_ANGLE_DEG` produced zero verified edges between
+    them.  More of nothing is nothing, paid for in GPU time.
+
+    TEMPORAL pairs are deliberately NOT filtered by view angle.  They are the
+    trajectory's backbone and what :data:`MIN_CONNECTED_FRACTION` is measured
+    over; dropping them because the operator turned quickly would trade a
+    connected reconstruction for a handful of saved matches.  They are also
+    already bounded at ``temporal_window`` per frame.
+    """
 
     if temporal_window < 1 or max_spatial_neighbors < 1:
         raise AdapterError("pair-graph windows must be positive")
     if not (0 <= spatial_min_baseline_m < spatial_radius_m):
         raise AdapterError("spatial pair bounds must satisfy 0 <= minimum < radius")
+    if not (0 < max_view_axis_angle_deg <= 180):
+        raise AdapterError("the loop view-axis bound must be an angle in (0, 180] degrees")
     ordered = sorted(frames, key=lambda frame: (frame.frame_timestamp_s, frame.image_name))
     if len({frame.image_name for frame in ordered}) != len(ordered):
         raise AdapterError("pair graph needs unique image names")
@@ -686,7 +847,14 @@ def build_pair_graph(
             distance = _norm(
                 tuple(candidate.camera_center_m[axis] - ordered[left].camera_center_m[axis] for axis in range(3))
             )
-            if spatial_min_baseline_m <= distance <= spatial_radius_m:
+            if loop_candidate_admitted(
+                distance_m=distance,
+                first_rotation=ordered[left].colmap_pose.rotation,
+                second_rotation=candidate.colmap_pose.rotation,
+                spatial_min_baseline_m=spatial_min_baseline_m,
+                spatial_radius_m=spatial_radius_m,
+                max_view_axis_angle_deg=max_view_axis_angle_deg,
+            ):
                 spatial_candidates.append((distance, candidate.image_name, right))
         for _, _, right in sorted(spatial_candidates)[:max_spatial_neighbors]:
             pairs.add(_canonical_pair(ordered[left].image_name, ordered[right].image_name))
@@ -701,6 +869,7 @@ def classify_overlap(
     spatial_radius_m: float = SPATIAL_RADIUS_M,
     spatial_min_baseline_m: float = SPATIAL_MIN_BASELINE_M,
     max_spatial_neighbors: int = MAX_SPATIAL_NEIGHBORS,
+    max_view_axis_angle_deg: float = LOOP_MAX_VIEW_AXIS_ANGLE_DEG,
     minimum_inliers: int = MIN_VERIFIED_INLIERS,
     minimum_connected_fraction: float = MIN_CONNECTED_FRACTION,
 ) -> OverlapVerdict:
@@ -716,6 +885,7 @@ def classify_overlap(
             spatial_radius_m=spatial_radius_m,
             spatial_min_baseline_m=spatial_min_baseline_m,
             max_spatial_neighbors=max_spatial_neighbors,
+            max_view_axis_angle_deg=max_view_axis_angle_deg,
         )
     )
     positions = {frame.image_name: index for index, frame in enumerate(ordered)}
@@ -927,6 +1097,39 @@ def _relative_gain(before: float, after: float) -> float:
     return (after - before) / before
 
 
+def _signed_percent(before: float, after: float) -> str:
+    """Direction of a before/after pair, or ``n/a`` when there is no baseline."""
+
+    if before <= 1e-12:
+        return "n/a"
+    return f"{100.0 * (after - before) / before:+.2f}%"
+
+
+def render_loop_consistency_advisory(evidence: RefinementEvidence) -> str:
+    """Render the loop comparables for a reader, on every verdict.
+
+    R123 removed these two from the refusal set; it did not remove them from the
+    record, and required them reported MORE prominently than before rather than
+    less.  A refusal already carried the numbers (``refine_runner`` renders them
+    beside the failure code), but a PASS carried none -- it did not need to,
+    because reaching a pass had already proven neither loop comparable
+    regressed.  That implication is gone, so the numbers ride on the verdict
+    itself.  Nothing reads this string; it exists to be read.
+    """
+
+    return (
+        "advisory_not_gating_r123: "
+        f"loop_rotation_rmse_deg {evidence.loop_rotation_rmse_deg_before:.6f}->"
+        f"{evidence.loop_rotation_rmse_deg_after:.6f} "
+        f"({_signed_percent(evidence.loop_rotation_rmse_deg_before, evidence.loop_rotation_rmse_deg_after)}); "
+        "loop_translation_direction_rmse_deg "
+        f"{evidence.loop_translation_direction_rmse_deg_before:.6f}->"
+        f"{evidence.loop_translation_direction_rmse_deg_after:.6f} "
+        f"({_signed_percent(evidence.loop_translation_direction_rmse_deg_before, evidence.loop_translation_direction_rmse_deg_after)}); "
+        f"verified_loop_edges {evidence.verified_loop_edges}"
+    )
+
+
 def evaluate_refinement_evidence(evidence: RefinementEvidence) -> RefinementEvidenceVerdict:
     """Evaluate comparable geometric evidence without claiming absolute accuracy.
 
@@ -937,6 +1140,10 @@ def evaluate_refinement_evidence(evidence: RefinementEvidence) -> RefinementEvid
     function never sets ``absolute_accuracy_certified``. The separate trajectory
     shape-change diagnostic is intentionally not an input and cannot grant or
     veto this verdict.
+
+    THE TWO LOOP COMPARABLES ARE ADVISORY (R123). They are computed, validated
+    and reported, and they cannot refuse a run. See the comment on the refusal
+    set below for why.
     """
 
     integer_fields = {
@@ -980,11 +1187,19 @@ def evaluate_refinement_evidence(evidence: RefinementEvidence) -> RefinementEvid
     elif any(not isinstance(value, str) or not value.strip() for value in external_metadata):
         raise AdapterError("external errors require evidence kind and provenance reference")
 
+    # Rendered once, from the same fields the validation above has just proven
+    # finite and non-negative, and carried by every verdict below.
+    advisory = render_loop_consistency_advisory(evidence)
+
     coverage_before = evidence.registered_images_before / evidence.input_images
     coverage_after = evidence.registered_images_after / evidence.input_images
     if evidence.verified_loop_edges < 1:
+        # UNTOUCHED BY R123.  "No loop evidence at all" is a different condition
+        # from "the loop evidence disagrees": this run produced nothing to be
+        # advisory about, and the ruling removed a veto on a MEASUREMENT, not
+        # the requirement that the measurement exist.
         return RefinementEvidenceVerdict(
-            False, False, "REFINE_LOW_OVERLAP", "no_verified_loop_evidence", coverage_before, coverage_after
+            False, False, "REFINE_LOW_OVERLAP", "no_verified_loop_evidence", coverage_before, coverage_after, advisory
         )
     if coverage_after < MIN_CONNECTED_FRACTION or coverage_after < coverage_before:
         return RefinementEvidenceVerdict(
@@ -994,12 +1209,36 @@ def evaluate_refinement_evidence(evidence: RefinementEvidence) -> RefinementEvid
             "registration_coverage_regressed_or_below_floor",
             coverage_before,
             coverage_after,
+            advisory,
         )
+    # THE REFUSAL SET.  R123 removed the two loop comparables from this tuple
+    # and left everything else exactly as it was.
+    #
+    # Bundle adjustment minimises reprojection over tracks and NEVER TOUCHES A
+    # TWO-VIEW GEOMETRY.  The loop comparables measure the disagreement between
+    # COLMAP's image-only relative rotation -- estimated by matching, from
+    # ``TwoViewGeometry.cam2_from_cam1`` -- and the rotation implied by the
+    # trajectory.  After refinement the trajectory has moved to the reprojection
+    # optimum while the two-view estimates stand exactly where matching left
+    # them, so the two sides are no longer describing the same thing.  On the
+    # 0.25-0.5 m baselines these captures produce, which is where two-view
+    # geometry is weakest, a SMALL POSITIVE DRIFT IS THE EXPECTED BEHAVIOUR OF A
+    # SUCCESSFUL REFINEMENT.  The rule asked whether a quantity had decreased
+    # when nothing in the optimiser was trying to decrease it, and it refused
+    # three of three real captures while reprojection improved 28.9-32.9% --
+    # including the run with 90 verified loop edges, the healthiest loop
+    # evidence this program has produced.
+    #
+    # What is NOT here and is deliberate: no tolerance, no magnitude ceiling, no
+    # edge-count floor.  The meaningful replacement is an absolute bound ("is
+    # the refined trajectory GROSSLY inconsistent with the image evidence?"),
+    # and R123 defers it rather than fit it to the three captures in hand.
+    # Until then global consistency is unguarded: reprojection cannot see a
+    # self-consistent but globally wrong reconstruction, and loop closure was
+    # the only instrument here that could.  That exposure is accepted, bounded,
+    # and stated -- not hidden behind a number nobody derived.
     regressions = (
         evidence.reprojection_rmse_px_after > evidence.reprojection_rmse_px_before,
-        evidence.loop_rotation_rmse_deg_after > evidence.loop_rotation_rmse_deg_before,
-        evidence.loop_translation_direction_rmse_deg_after
-        > evidence.loop_translation_direction_rmse_deg_before,
         external_pair[0] is not None and external_pair[1] > external_pair[0],
     )
     if any(regressions):
@@ -1010,7 +1249,15 @@ def evaluate_refinement_evidence(evidence: RefinementEvidence) -> RefinementEvid
             "comparable_geometric_evidence_regressed",
             coverage_before,
             coverage_after,
+            advisory,
         )
+    # LEFT BYTE-IDENTICAL BY R123, INCLUDING THE TWO LOOP TERMS.  This is the
+    # "did anything measurably move" floor, not the refusal set; the ruling
+    # removed the loop comparables' power to REFUSE and nothing else.  Dropping
+    # them from here would newly refuse runs the ruling did not ask to refuse,
+    # which is a second change wearing the first one's clothes.  It does leave
+    # a loop comparable able to GRANT the floor on its own -- reported, not
+    # acted on, because the ruling did not authorise acting on it.
     improvements = [
         _relative_improvement(evidence.reprojection_rmse_px_before, evidence.reprojection_rmse_px_after),
         _relative_improvement(evidence.loop_rotation_rmse_deg_before, evidence.loop_rotation_rmse_deg_after),
@@ -1030,6 +1277,7 @@ def evaluate_refinement_evidence(evidence: RefinementEvidence) -> RefinementEvid
             "unchanged_or_below_measurable_improvement_floor",
             coverage_before,
             coverage_after,
+            advisory,
         )
     return RefinementEvidenceVerdict(
         True,
@@ -1038,6 +1286,7 @@ def evaluate_refinement_evidence(evidence: RefinementEvidence) -> RefinementEvid
         "internal_geometric_refinement_evidenced_absolute_accuracy_unproven",
         coverage_before,
         coverage_after,
+        advisory,
     )
 
 
@@ -1312,6 +1561,7 @@ def build_adapter_artifacts(
             "spatialRadiusMeters": SPATIAL_RADIUS_M,
             "spatialMinimumBaselineMeters": SPATIAL_MIN_BASELINE_M,
             "maximumSpatialNeighbors": MAX_SPATIAL_NEIGHBORS,
+            "maximumViewAxisAngleDegrees": LOOP_MAX_VIEW_AXIS_ANGLE_DEG,
         },
         "frames": frame_rows,
     }

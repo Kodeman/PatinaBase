@@ -4869,3 +4869,1714 @@ disabled actions do not emit selections. The change rides the existing
 `the-document-pilot` audience with no additional flag.
 
 *Entries add: I97 · last id = I97*
+
+### I97 (Field Capture P2) · item 4 · parent-owned lease, pinned toolchain, packet ledgers, and the frozen output handoff — 2026-07-27
+
+The ordered next-work packet's items 1, 2, 3, and 5 are integrated on
+`field-capture/refine-i97-final` through code tip `2887dd0e`, and item 4's
+qualified-host evidence exists. Every piece lands disabled and uncomposed.
+
+Item 1 replaces child-owned extraction scratch with a parent-provisioned
+descriptor-rooted 0700 workspace beneath a caller-named container. The parent
+pins container and workspace by descriptor, verifies identity, mode, ownership
+and emptiness, leases a duplicate descriptor to the child over SCM_RIGHTS on its
+own transport with the reverse direction declared in the ready envelope and
+independently re-verified by the child, and purges the tree from the same
+`finally` that reaps the leader — after normal return, timeout, SIGTERM, and
+SIGKILL — bounded by depth and entry budget rather than by the shared deadline,
+so an exhausted deadline can never strand scratch. Cleanup's identity guard is
+now an `O_PATH` pin taken before an entry is touched, because `(st_dev, st_ino)`
+alone is not an identity on Linux: a just-freed inode number comes straight back
+to the next creator, measured in this repository's own gate container 20/20
+times against 0/20 on macOS/APFS. Which hosts recycle is deliberately not
+isolated and not claimed — an earlier revision named the ext4 allocator as the
+mechanism and that provenance is withdrawn, since the container's `/tmp` reports
+`overlayfs`. Holding the reference keeps the number from being re-issued, which
+is what makes the later comparison mean sameness. Provisioning also refuses a
+symlinked or non-canonical container before any `os.open`, and refuses a lease
+root that cannot host a COLMAP path option: the argv ceiling and the lease path
+are one budget, so the root is capped at 960 bytes with 64 reserved for the
+longest reviewed argv tail.
+
+Item 3 pins what may execute and in what environment. Executable identity is
+hashed under the carried deadline against a canonical installed manifest and
+re-proven in the instant before `execve`, with `st_ctime_ns`/`st_mtime_ns`
+recorded so a same-length in-place rewrite of an already-verified inode cannot
+execute; `qualified` is derived from a manifest the loader proves rather than
+accepted as a caller bool. The child receives exactly the 13-key
+`COMMAND_ENVIRONMENT_ALLOWLIST` — never the ambient environment — with every
+writable value confined to `APP_DIR` or the private workspace so
+`ProtectSystem=strict` stays intact. Argv is an allowlist confined **per
+option** to its own leased surface rather than to one shared root:
+`--image_path` reads `packet/`, `--input_path`, `--database_path` and
+`--output_path` are rooted at writable `work/`, and `tmp/` is nobody's surface.
+A single shared root had made `--output_path <lease>/packet/images` a plannable
+command that would write the reconstruction over the hash-validated extracted
+source images the evidence builder later binds to. The toolchain identity
+(COLMAP 4.0.2, source commit `d927f7e`, CUDA 11.8, nvcc 11.8.89, gcc-11,
+`sm_75`, driver 580.159.03) is pinned from values this repository already
+receipts and rejects drift rather than adapting to it; values knowable only from
+the box remain declared manifest inputs in `OWED_BOX_VALUES` and are not guessed.
+
+Item 2 parses the optional source and adapter ledgers. `COLMAP_PACKET_MEMBER_ROLES`
+closes the member role universe, at most one ledger per role is permitted,
+exactly one engine request is required and must be declared and correctly
+routed, each ledger is pinned to its exact packet-root path and capped at 4 MiB,
+and validation runs before the workspace lease so a bad packet never creates a
+file. Ledger bytes are captured during the copy and re-read descriptor-relatively
+with positional I/O against exact mode, owner, size, link count, byte equality
+and the manifest digest; source rows are bound one-to-one to engine-request
+frames. A role-universe drift guard AST-parses the loader's own `allowed_roles`
+literal and asserts set equality with the backend constant, so adding a role on
+either side reddens. The adapter ledger is trimmed to the envelope
+`{schemaVersion, contract, runId, materializerId}` after every per-row assertion
+proved re-derivable from the engine request and manifest alone; a `frames` key
+is now refused as an unknown field, and the trim's premise is executable rather
+than asserted. Declared source HEIC digests, `materializerId` authentication,
+and the ledger schemas themselves are recorded as residuals, not claims.
+
+Item 5 implements the reviewed seven-descriptor native output handoff: the six
+persistent engine artifacts plus one scratch raw pre-BA model snapshot, named as
+a closed token universe before the child exists. The child may fill only those
+names under leased `work/` and hands the descriptors up over SCM_RIGHTS; the
+parent does not trust the child's size/digest ledger — it opens the same names
+relative to its own pinned lease descriptor, requires the transported descriptor
+to be the same `(st_dev, st_ino)`, hashes its own descriptor, and refuses the
+run unless its own computation reproduces the declaration. The bytes are frozen
+**by construction** rather than by `fstat`: each output is copied at receipt into
+an `O_TMPFILE | O_EXCL` anonymous file the parent creates in a private 0700 vault
+on the lease's own filesystem and is hashed from that copy's own descriptor, so
+the returned object never had a name, can never be given one, and no other
+process ever held a descriptor to it. `_open_output_freeze_vault` drops this
+process's dumpable flag with `prctl(PR_SET_DUMPABLE, 0)` before any copy exists,
+which closes the descriptor-theft routes at their common gate; the price — no
+core dump, permanently, and no live debugger — is written where a caller reads
+it. Three exploits demonstrated against earlier revisions all now fail: a
+same-length rewrite plus `futimens` that leaves every remaining `fstat` field
+identical, a same-UID `/proc/<pid>/fd` reopen of a held descriptor, and a
+`pidfd_open` + `pidfd_getfd` descriptor theft. The theft is measured at euid 1000
+under an unconfined seccomp profile and skips under Docker's default profile,
+which refuses the syscall regardless of target; the skip reports the measured
+refusal rather than claiming a proof.
+
+Item 4's qualified-host run produced the evidence and found a production blocker
+that two green local gate environments and every review round to that point had
+missed. `_parse_linux_process_stat` rejected `pgrp == 0`, which every Linux
+kernel thread legitimately reports — no session, no process group — and on the
+qualified host 283 of 547 live PIDs read that way, so the native quiescence scan
+raised on the first kernel thread it walked past and every *successful* native
+Refine call failed `REFINE_ENGINE_CLEANUP_FAILED`. macOS has no `/proc` and a
+container has its own PID namespace with no kernel threads in it, which is why
+neither gate could see it. Zero is now read as the legitimate value it is rather
+than tolerated as a parse failure: a member is recorded only when its group
+equals the leader PID and the scan refuses outright any leader that is not
+strictly positive, so a zero can never compare equal to one, while genuinely
+malformed rows still raise and still fail the scan closed. The fix was re-proven
+on the host — zero parse failures across every live `/proc` row, with every
+`pgrp 0` row confirmed a kernel thread by absent `VmSize` and absent `cmdline`
+and no userland row among them (host measurement; not reproducible from this
+repository). In-repo coverage feeds verbatim captured rows through the parser
+and drives the real scandir/open/parse/membership path against a synthetic
+procfs, so it runs on macOS too.
+
+Workspace-lease provisioning refusals classify by errno rather than by exception
+type, and default **retryable** with the fatal side enumerated: `ELOOP`,
+`ENOTDIR`, `EACCES`, `EPERM`, `EROFS`, and `ENAMETOOLONG`, each justified at its
+row as a statement about the operator's configuration rather than the host's
+momentary state. The rationale is the bounded retry budget in
+`complete_agent_task`: retries are capped with backoff, so a wrongly retryable
+permanent error costs a bounded attempt budget while a wrongly fatal transient
+error is unrecoverable. Known-transient errnos keep their rows even though they
+now fall to the default, because the row is what puts the errno's name in the
+journal line instead of "unclassified errno".
+
+Final state is 1139 passed / 0 skipped on the qualified host (host measurement)
+and 1136 passed / 3 skipped in the container gate. All 14 `*_QUALIFIED` flags
+remain `False`, `NATIVE_ENGINE_OUTPUT_ALIGNMENT_VERIFIED_BY_PARENT` remains
+`False`, `DEFAULT_STAGES` remains `"ingest,solve,drawings"`, nothing registers or
+dispatches `scan_pipeline.refine`, and `refine_colmap_backend.py` is
+byte-identical to `0b7b47fa` (blob `6743e66eb06369d18e34b0054d10734e03a109ec`).
+No install, deployment, queue, Strata, Storage, DeskDev, or real-scan mutation
+occurred.
+
+**Boundary:** I97 proves no composition. Item 6 — raw pre-BA and refined model
+snapshots, a child-proposed alignment, and parent-recomputed Sim3 and pose
+digests before the six persistent artifacts are produced — is next, then item 7's
+materializer → raster → backend → runner → publisher composition on local
+scratch, then Kody's gates. No real scan has run, no COLMAP or GPU execution
+occurred anywhere in this line, and nothing here moves activation closer. Item 3's
+toolchain pin is inert until an operator produces `OWED_BOX_VALUES`; the
+installer does not yet emit
+`/opt/colmap/4.0.2/share/patina/refine-colmap-toolchain-v1.manifest.json`.
+`_validate_workspace_path` remains lexical, so a symlink planted inside `work/`
+still escapes it; the final `unlinkat`/`rmdir` in cleanup is still name-based;
+`materializerId` authenticates no adapter build; and the 200–400-frame pilot
+band is exposed as constants but deliberately unenforced with
+`PILOT_200_400_FRAME_RANGE_QUALIFIED` still `False`. Comparable
+reprojection/registration/verified-loop evidence on local-scratch scan
+`95266be1`, queue replay/fork, the downstream four-manifest join, registration,
+and every GPU queue stage remain hard gates.
+
+*Entries add: I97 · last id = I97*
+
+### R116 · Field Capture P2 item 4 CLOSED — qualified-host acceptance; two scoped exceptions carried — 2026-07-27
+
+Ordered next-work item 4 is **closed**. Its evidence is
+`docs/design/field-capture/p2-item4-qualified-host-acceptance-2026-07-27.md`
+— measured on the qualified x86_64/ext4 host at code commit `77b4ff19` —
+together with I97.
+
+**Basis.** Linux child-subreaper behaviour and adopted-child reaping are
+established on the host through the shipped helpers, not a local `prctl`:
+the subreaper transition is complete and reversible, an adopted grandchild
+reparents to the subreaper and is consumed by the helper rather than the
+probe, a live same-group descendant is correctly reported non-quiescent,
+and a dead solo leader is correctly reported quiescent. Cleanup precedence
+is established across three paired controls — non-zero exit, deadline
+overrun, and success, each with and without residue — driven through the
+real `run_inherited_colmap_command` inside a real `setsid` leader with
+nothing monkeypatched: `REFINE_ENGINE_CLEANUP_FAILED` replaces both
+`REFINE_ENGINE_FAILED` and `REFINE_ENGINE_TIMEOUT`, and a command that
+exits 0 with residue still refuses to return a result. The five Linux-only
+lifecycle tests that skipped on macOS at I96 — the skips that made this
+item necessary — all execute on the host: the gate ran 1139 passed with an
+**empty** skip list, four times.
+
+**Escaped-`setsid` handling is accepted as scoped.** This program has held
+throughout that detection is in scope and containment is later work, and
+the receipt measures both halves rather than blurring them. The
+process-group scan cannot see an escapee — a `setsid` child has its own
+pgrp by construction, so that is a blind spot by design, not a defect —
+while the shipped adoption/`waitpid` scan does see it and the call fails
+closed. The clause is satisfied as written. Containment stays open and is
+carried to item 7's composition.
+
+**Two exceptions are carried, not closed.** (1) Escaped-descendant
+containment, above. (2) Precedence over the `drain_errors` branch *in
+isolation* is in-repo coverage, not a host measurement: on that host the
+drain fault surfaced as a cleanup error, so no case produced `drain_errors`
+non-empty with `cleanup_errors` empty to compare against. Neither exception
+may be quietly dropped from the packet.
+
+**What closing item 4 does not mean.** No composition exists. No COLMAP and
+no GPU ran, no real scan ran, and no production DB or Storage was touched.
+All fourteen `*_QUALIFIED` flags remain `False`,
+`NATIVE_ENGINE_OUTPUT_ALIGNMENT_VERIFIED_BY_PARENT` remains `False`,
+`DEFAULT_STAGES` remains `ingest,solve,drawings`, and
+`scan_pipeline.refine` remains unregistered. Nothing here moves activation
+closer. This is a technical acceptance on evidence and nothing more.
+
+**Authority.** Under the package's escalate-vs-bless rule this is a
+pipeline/acceptance judgement — blessed and logged, not an owner-facing
+gate. Kody's P2 milestone gates are untouched: M2 (first dense mesh from
+`95266be1` judged against the P1 certificate), M3 (walkthrough and
+click-to-measure), and M4 (a maker quotes without a site visit) remain his
+to call, and every downstream hard gate named in I97 remains open. Item 6
+is next.
+
+*Entries add: R116 · last id = R116*
+
+### R117 · Field Capture P2 — 100-frame pilot accepted for `95266be1`; the 200–400 band recorded UNQUALIFIED — 2026-07-27
+
+Kody accepts a **100-frame** pilot for the standing subject scan
+`95266be1-5185-4aeb-8b6a-a09dceecca21`, and the 200–400 frame band is
+recorded **unqualified** — not failed.
+
+**Basis.** The scan has 100 keyframes, not 200–400. Its bundle is staged
+read-only on the qualified host at `~/refine-i96-scan-95266be1` —
+46,435,109 bytes across 31 files — and both keyframe records agree:
+`keyframe_summary.json` reports `fired: 100` with zero blur rejections and
+zero encode drops, and `keyframe_index.ndjson` carries exactly 100 rows,
+every one of them a 1440×1920 raster. 100 sits inside the packet
+contract's enforced `[3, 400]` bound (`COLMAP_PACKET_MIN_ENGINE_IMAGES` /
+`COLMAP_PACKET_MAX_ENGINE_IMAGES`) and below the pilot band's floor of
+200, so the packet accepts it and the band does not describe it.
+
+**Capacity is not what is holding the band back.** This is arithmetic from
+the measured frame count and the shipped constants, not a measurement — no
+production packet builder exists, so no packet of any size has been built.
+On that arithmetic a 100-frame PPM packet is 7 archive chunks, 8 pinned
+files, ≈0.77 GiB: about a fifth of the 4 GiB
+`NATIVE_CHILD_MAX_PINNED_TOTAL_BYTES` aggregate ceiling and far inside the
+64-file `NATIVE_CHILD_MAX_PINNED_FILES` bound. The same arithmetic clears
+a full 400 frames at 25 chunks / 26 pinned files / ≈3.09 GiB. Host
+headroom was 22 GiB free when this was ruled. The band is unproven because
+no scan in it has been captured, not because a packet could not carry one.
+
+**`PILOT_200_400_FRAME_RANGE_QUALIFIED` therefore stays `False`,** and this
+entry is the record of *why* it stays `False`. Qualifying it requires a
+longer capture — a real Field session that fires at least 200 keyframes —
+and then the evidence that band would have to carry. Nothing shorter
+substitutes, and the flag is not to be flipped on this ruling.
+
+**Carried, not decided:** the shipped raster materializer hard-pins its
+qualified raster to the item-4a fixture's 360×640 and rejects any other
+encoded size, while this scan's keyframes are 1440×1920. A real-capture
+raster size is therefore not yet qualified. That belongs to item 7's
+composition; nothing here qualifies it.
+
+**What this does not decide.** It does not qualify the 200–400 band. It
+does not enable Refine, register `scan_pipeline.refine`, move
+`DEFAULT_STAGES` off `ingest,solve,drawings`, or flip any `*_QUALIFIED`
+flag — all of them, including
+`NATIVE_ENGINE_OUTPUT_ALIGNMENT_VERIFIED_BY_PARENT`, remain `False`. No
+COLMAP, no GPU, no queue task, no production DB or Storage touch. Kody's
+P2 milestone gates are untouched and remain his to call: M2 (first dense
+mesh from `95266be1` judged against the P1 certificate), M3 (walkthrough
+and click-to-measure) and M4 (a maker quotes without a site visit). Item 7
+composes at 100 frames.
+
+*Entries add: R117 · last id = R117*
+
+### R118 · Field Capture P2 · Refine qualifies at capture resolution; the 360x640 raster pin is superseded — 2026-07-28
+
+The Refine raster path is to be qualified at the **physical capture
+resolution** of the Field keyframes. The program owner ruled this on
+2026-07-28 after being shown the three options and their costs. Downscaling
+production keyframes to the I92-qualified 360x640 profile is **rejected**, and
+an intermediate profile is **rejected**.
+
+**What forced the ruling.** The only concrete materializer this repository has
+implements exactly one raster profile and refuses everything else:
+`EXPECTED_WIDTH`/`EXPECTED_HEIGHT` are 360 and 640
+(`field_raster_materializer.py:48-49`), and a mismatch fails
+`RASTER_UNQUALIFIED` at `:1142-1146` before a pixel is read. The subject
+scan's keyframes are 1440x1920, so a composed run against real capture data
+refuses at its first frame. The module's own docstring states the remedy:
+"Variable-size production keyframes require a new helper protocol and a new
+physical-device qualification receipt."
+
+That 360x640 is a **fixture** size, not a production one.
+`FieldRasterFixtureExporter.swift:32-33` synthesizes at `nativeWidth = 640`,
+`nativeHeight = 360`, while production writes a full-resolution HEIC
+(`FieldKeyframeRecorder.swift:303`) through an encoder that passes
+`cgImage.width`/`cgImage.height` straight out
+(`FieldRasterEncoder.swift:41`). Nothing downscales anywhere on the capture
+path. The qualified profile and the shipped profile were never the same
+profile.
+
+**Why capture resolution and not a downscale.** Three reasons, the first
+measured and the other two read off the code.
+
+1. The packet layer is *already built* for 1440x1920 and is inside budget at
+   it. One frame is a P6 file of `17 + 1440*1920*3 = 8_294_417` bytes; 100
+   frames pack into 7 chunks and 8 pinned files at 0.77 GiB, and the 400-frame
+   contract maximum into 25 and 26 — inside the 64-file and 4 GiB ceilings
+   either way (`refine_lifecycle.py:1038-1039`,
+   `test_refine_lifecycle.py:2653-2668`). Nothing about full resolution
+   strains the transport that exists.
+2. A downscale would be geometrically wrong as the code stands. Intrinsics are
+   passed to the engine verbatim from the capture index
+   (`refine_lifecycle.py:1152-1158`) and nothing rescales them, so 360x640
+   rasters would reach COLMAP carrying a focal length four times too large for
+   the image they describe. The rescale is unwritten work, which means the
+   "cheap" option is not cheaper — it relocates the qualification burden and
+   degrades the result at the same time.
+3. 360x640 is 230k pixels against 2.76M — 8.3% of the captured detail — fed to
+   feature detection and matching whose whole job is finding structure. This
+   is reasoning about reconstruction quality, not a measurement; no archive
+   this repository has parsed came out of COLMAP.
+
+**What the ruling obligates.** Four things, in order, none of them optional.
+
+1. The helper protocol carries dimensions instead of assuming them.
+   `_PPM_HEADER` and `_PPM_SIZE` (`field_raster_materializer.py:84-85`) and
+   the eight metadata comparisons at `:890-897` are all derived from the two
+   pinned constants and must become functions of the declared profile, under a
+   bound so the size is constrained rather than merely variable.
+2. Re-qualification is mandatory **by construction**, not by choice.
+   `QUALIFIED_HELPER_SOURCE_SHA256` is the SHA-256 of
+   `field_raster_libheif.c` itself — recomputed as
+   `4840e0e6d3c98bbebecc4354349bae3963718583fb5c882f9807b0d222bee9c3`, and
+   asserted by `test_packaged_source_is_the_i92_qualified_source`. Any edit to
+   the helper source invalidates the I92 receipt automatically.
+3. A new physical-device fixture at capture resolution, a new qualification run
+   on the qualified host, and a new receipt superseding I92. The fixture
+   exporter must emit at capture resolution for the qualification to be about
+   the profile production actually ships.
+4. The new profile is pinned only once its receipt exists. Until then the
+   raster qualification flags stay `False`, Refine stays disabled and
+   uncomposed, and no `scan_pipeline.refine` registration or stage-set change
+   is made.
+
+**Operator dependencies.** Two steps in this chain cannot be performed by an
+agent under the standing constraints: emitting the physical fixture from the
+iPhone, and installing the rebuilt immutable release to `/opt` — agents do not
+run `install.sh` and do not write outside `~/`. The qualification therefore
+gates on the program owner at both points.
+
+**What this does not decide.** The 200-400 frame operational band remains
+unqualified per R117 and is untouched here. No claim is made that a
+reconstruction at capture resolution will succeed, only that it is the profile
+worth qualifying.
+
+*Entries add: R118 · last id = R118*
+
+### I98 · Field Capture P2 · the raster profile becomes a declared, bounded parameter (R118 build) — 2026-07-28
+
+R118's first three obligations are built and verified; the fourth (a receipt
+for a real capture-resolution profile) is not, and cannot be until the program
+owner performs the two steps agents may not. Integration branch
+`field-capture/r118-integration` at merge `5d7ad52c`, from
+`field-capture/raster-capture-resolution` (`39b91638`) and
+`field-capture/raster-fixture-full-res` (`bdd66ad4`).
+
+**The size is now declared end to end, and the helper proves it obeyed.**
+`field_raster_libheif.c` moves to protocol v3: it takes
+`DECLARED_WIDTH`/`DECLARED_HEIGHT` on argv, compares `ispe`/`presented`/`raw`/
+`default` against the declaration instead of `#define`s, and **echoes the
+declaration back on stdout** so the parent can prove the helper enforced the
+profile it was told rather than one still compiled into it. Argv is parsed as
+bare bounded decimal literals rather than through `strtol`, which accepts
+leading whitespace and a sign and would let `"+360"` and `"360"` name one
+profile under two spellings. `FieldRasterProfile` replaces `EXPECTED_WIDTH`/
+`EXPECTED_HEIGHT` and owns the PPM header and size that derived from them; the
+adapter takes it with **no default**, because a default is precisely how a
+fixture size came to be shipped as the production one.
+
+**The qualifier recomputes rather than trusts.** `field_raster_qualification.py`
+reads the fixture's `captureProfile` (manifest `schemaVersion` 2) and derives
+the entire marker set by exact integer arithmetic from the declared profile,
+comparing the manifest's list against it. A trusted marker list would let a
+forged fixture define its own passing criteria. Provenance — which API produced
+the dimensions, which frame semantics, device model, OS — is *required* and
+bounded, not tolerated. The receipt is bumped to v3 and records which profile
+was qualified on what provenance.
+
+**The ceiling is two bounds, both already in the program.** 4096 per axis is
+the helper's existing `MAX_DIMENSION` on every decoded plane and the bound
+`_metadata_positive_int` already applies to every reported dimension. The
+canonical PPM size is bounded by `RefineMaterializationLimits().max_raster_bytes`
+read *live* rather than restated — 128 MiB, verified numerically identical to
+`NATIVE_CHILD_MAX_PINNED_FILE_BYTES`. At a 4096 axis the widest admissible
+profile is 48 MiB, so the axis bound binds first and the byte bound is what
+keeps the guarantee true if the axis bound is ever raised; the code says so
+rather than leaving a check that looks active and is not. R118's illustrative
+60000x60000 is refused. The qualifier can never admit a profile the
+materializer would refuse.
+
+**Capture resolution is not a code constant, and is no longer written as one.**
+`SharedARCaptureRig.makeConfiguration()` never assigns `config.videoFormat`, so
+ARKit selects a default that depends on device and active frame semantics;
+`frame.camera.imageResolution` is stamped per keyframe. 1440x1920 is therefore
+the `.right`-rotated form of a 1920x1440 native that one device produced on one
+scan — not a property of the code. The fixture exporter now resolves a
+`CaptureProfile` at runtime and carries its provenance. 1440x1920 survives in
+the tree only as labelled test data. The keyframe index stores intrinsics in
+native landscape while raster dimensions are the rotated pair; `rotate_intrinsics`
+already asserts `encoded_width == native.image_height`, and `CaptureProfile`
+stores native only, deriving encoded, so the pair is never both spelled as
+integers.
+
+**The I92 receipt is dead, by construction.** `QUALIFIED_HELPER_SOURCE_SHA256`
+moves `4840e0e6…bee9c3` →
+`3b184937b755dc4acca4347ea6dba43dbeb111f090a91cd340e65d214937c626`, and the
+same literal in `install.sh` and `install-path-guard.py` moves with it or the
+installer refuses to build. I92 covers the old helper bytes only. Re-qualification
+is mandatory, not elective.
+
+**Verification.** On the qualified x86_64 host at the integration merge: **2038
+passed, 1 failed, 0 skipped** — an *empty* skip list, which is the point; all 83
+macOS skips are Linux-gated and every one executed. The single failure,
+`test_validator_drift::test_vendored_validator_is_byte_identical`, needs
+`/home/kody/scripts/validate_capture_bundle.py`, which is absent from that host,
+and reproduces identically on base commit `4d983c9d` under a base-commit
+control run. macOS collects the same 2039 tests, so the merge introduced no
+drift. The helper compiles clean there under the release `-Werror` flags and its
+argv validation was smoke-tested (leading zero, oversize, whitespace all
+refused).
+
+**Invariants held.** All fifteen `*_QUALIFIED` flags remain `False`,
+`DEFAULT_STAGES` is `ingest,solve,drawings`, `scan_pipeline.refine` is
+unregistered, and `refine_colmap_backend.py` is byte-identical to
+`6743e66eb06369d18e34b0054d10734e03a109ec` — each independently re-verified at
+the integration merge rather than taken on report.
+
+**Three exceptions carried, none of them silent.**
+
+1. *The reference design is refused; the reference profile is not.* A 640x360
+   fixture carrying genuine device provenance still qualifies end to end, so
+   the previously qualified profile remains qualifiable. A fixture
+   self-identifying as `deviceModel: "reference-design"` is refused
+   (`FIELD_RASTER_PROFILE_NOT_PHYSICAL`) — a synthetic drawing must not be able
+   to qualify itself. Both halves are intended.
+2. *`refine_lifecycle.main()` is broken and stays broken.* It has constructed
+   `PackagedLibheifFieldRasterMaterializer()` with no arguments since item 7
+   (`64f31021`), a latent `TypeError` in a hand-typed entry point with no
+   console script and no test; it now misses two required keyword arguments
+   instead of one. A repair must name a profile, which is either a forbidden
+   literal or a read of the keyframe index — that is composition, and belongs
+   to whoever composes item 7. Deliberately unfixed rather than patched with a
+   constant this ruling forbids.
+3. *The installed helper filename stays `-v2` while the protocol is v3.*
+   `install-path-guard.py` names it in the release's required-executable list,
+   so renaming it would make a new guard refuse an already-installed release on
+   a host agents may not touch. Drift is already caught closed: the manifest
+   binds `sourceSha256` and the open path refuses any release whose manifest is
+   not exactly the new hash. The rename belongs with the install that
+   accompanies re-qualification.
+
+**Two claims deliberately not made.** The Swift exporter's native fixture hash
+`6e9dea45…` is not reproducible from the Python side and never was — the
+exporter draws an asymmetry bar the Python fixture has never contained, so the
+two describe different artifacts, before this change as much as after. What is
+proved instead is the property that matters: the derivation at 640x360 equals
+the frozen pre-R118 marker contract exactly, so the generalization is a
+superset and not a redraw. And whether RoomPlan preserves the AR session's
+selected video format is unverified on device; it is an operator cross-check in
+the runbook, with an explicit instruction not to qualify if the configuration
+and a real scan's keyframe index disagree.
+
+*Entries add: I98 · last id = I98*
+
+### I99 · Field Capture P2 · capture-resolution raster qualified on the physical device; I92 superseded — 2026-07-28
+
+R118's fourth obligation is met. The Field raster convention is qualified at
+the resolution production actually captures, on the physical device, against
+the rebuilt immutable release. **This supersedes I92**, whose receipt covered
+the old helper bytes and the 360x640 fixture profile only.
+
+**Verdict: PASS.** Receipt `schemaVersion` 3, `status: passed`, qualification
+`p2-item4a-field-core-image-raster`, retained at
+`~/r118-qual/field-raster-qualification-v3-iphone17promax-00008150-20260728-51355159/`
+on the qualified host.
+
+```text
+field-raster-qualification-receipt-v3.json
+sha256=f48fa56d905a8e57dac152c6d79c797f9060fe9421c18f449536708234ff1775
+
+field-core-image-raster-v1-materialized.ppm
+sha256=50dccb8a57741c4249a1db11fa3d49cd012dddaafb37b0d3f5ccbda74d116d2f
+8_294_417 bytes, header `P6\n1440 1920\n255\n`
+```
+
+**The profile, and how it was established rather than assumed.** Native
+1920x1440, encoded 1440x1920, on iPhone 17 Pro Max (`iPhone18,2`, UDID prefix
+`00008150`) running iOS 27.0, ARKit format `1920x1440@60
+BuiltInWideAngleCamera`. Four independent links, each measured:
+
+1. The device's own Diagnostics row reported 1920x1440 off
+   `ARWorldTrackingConfiguration.videoFormat.imageResolution`, read from
+   `SharedARCaptureRig.makeConfiguration()` before any session runs. The
+   manifest records that `videoFormat` was *unassigned*, so this is ARKit's
+   default for this device and configuration — the provenance states its own
+   weakness rather than hiding it.
+2. **The RoomPlan cross-check passed**, which is the link R118 flagged as
+   documented by Apple but never verified in this repository. A real site scan
+   (`site-scan-844cf194`) was pulled off the device and every one of its **67**
+   keyframes reports `intrinsics.imageWidth/imageHeight` = 1920x1440 and
+   `width`/`height` = 1440x1920 — uniform, zero variation. RoomPlan does
+   preserve the AR session's selected video format on this device and OS.
+3. The fixture declared that profile with full provenance under manifest
+   `schemaVersion` 2, and both artifact hashes verified byte-intact after
+   transfer to the host.
+4. The rebuilt release qualified it.
+
+**The install that made re-qualification possible.** The immutable release moved
+`.venv.release.2fcccaf0feafa92fdca3fd2a` →
+`.venv.release.36629d73bd8f8299d4ec6c8c`, built from a closed 61-file source
+tree that satisfies `validate-source-tree` under trust anchor `/` at uid:gid
+0:0. The installed helper's usage string moved from `INPUT.heic OUTPUT.ppm` to
+`INPUT.heic OUTPUT.ppm WIDTH HEIGHT`, and its manifest `sourceSha256` is
+`3b184937b755dc4acca4347ea6dba43dbeb111f090a91cd340e65d214937c626` — protocol
+v3. `patina-scan-worker` returned to `active`. The operator performed the
+install; no agent ran `install.sh`, used `sudo`, or wrote outside `~/`.
+
+**What the receipt proves beyond "it decoded".**
+
+- **Geometry.** All six markers resolved at their expected encoded coordinates
+  with `maxChannelError` of **1**, through a lossy HEIC round-trip whose
+  tolerance is 64 and search radius 3 px. The discrete mapping
+  `(x,y)=(nativeHeight-1-y,x)` holds at capture resolution.
+- **Orientation is physical, not metadata.** `orientationProof` records
+  *absent* embedded EXIF/XMP orientation with zero metadata blocks, so the
+  right-rotation is a real raster transform. This is the defect class item 4A
+  existed to catch, re-proved at the new profile rather than inherited.
+- **Decode fidelity.** libheif 1.17.6 with libde265 1.0.15, exactly one
+  matching HEVC decoder descriptor, `rawDefaultRGBIdentical: true`, raw =
+  presented = default = 1440x1920.
+- **The intrinsics agree with the shipped code.** The receipt's continuous
+  mapping (`fx` 1527.75, `fy` 1537.5, `cx` 821.0, `cy` 903.75) is exactly what
+  `right_rotated_intrinsics` computes from the manifest's native intrinsics on
+  all six fields. The manifest deliberately uses two conventions — `H-1-y` for
+  discrete marker pixels, `H-cy` for the continuous principal point — and both
+  are correct for their quantity; conflating them would be a one-pixel error.
+- **Safety.** `databaseWrites: false`, `storageCalls: false`, `queueClaims:
+  false`, `inputFilesMutated: false`, `externalSystemsTouched: []`,
+  `controlledPhysicalDeviceInputOnly: true`.
+
+**What is deliberately still not claimed.** The fixture's synthetic intrinsics
+are not the device's real optics — a real keyframe measures `fx/fy` 1358.03 and
+`cx/cy` 959.09 / 721.66, near image centre, while the fixture's are off-centre
+by construction so a symmetric bug cannot hide. They test the rotation
+contract, not the lens. Separately, this receipt qualifies the raster
+convention only: no reconstruction has been run, no `*_QUALIFIED` flag is
+flipped by this entry, Refine remains disabled and uncomposed, and the
+200-400 frame band stays unqualified per R117.
+
+*Entries add: I99 · last id = I99*
+
+### R119 · Field Capture P2 · four rulings after the capture-resolution qualification — 2026-07-28
+
+The program owner ruled on four open questions on 2026-07-28, after I99
+qualified the raster convention at capture resolution. Recorded together
+because they set the order of the remaining P2 work.
+
+**1. The gauge-invariant shape floor is closed BEFORE anything else.** The
+movement floor added at `4d983c9d` refuses a child that republishes the poses
+the parent submitted, but it does not refuse a child that returns the seed
+under a rigid motion or a similarity: the cameras do not move relative to one
+another, so the reconstruction is unchanged in the only sense that matters
+while every published pose differs. The right quantity is item 6's
+`ParentAlignmentVerification.fit_rmse_m`, which today is bounded above and has
+no floor. Closing it requires a recorded engine that models bundle adjustment
+rather than a pure similarity — the currently recorded engine produces shape
+change at **4.12e-16 m / 2.38e-16 rad** on a 1.93 m-radius trajectory, machine
+epsilon, so any floor above roughly 1e-15 would redden every happy-path test.
+That is the work, and it precedes composition, pinning, and any run on the
+qualified host. **A run whose degenerate outcome cannot be distinguished from
+success is not worth scheduling**, which is the whole reason this ordering was
+chosen over the faster alternatives.
+
+**2. The engine lease is one hour; the 3600 s default stands.** The
+`--lease-seconds` flag now denotes the lease itself and the engine receives
+`lease - LEASE_COMPLETION_RESERVE_S`, so an hour yields 3540 s. The
+justification is explicitly that **nothing in this repository has ever measured
+how long a 100-frame reconstruction takes** — the previous 240 s stage cap
+bound first and made every configured value unreachable, so no run ever
+produced the number. The first real run is therefore given enough room to
+finish and thereby produce that measurement. This is a starting value chosen to
+be informative, not a claim that an hour is correct; it is expected to be
+revised from the first run's data.
+
+**3. The raster pin admits exactly 1440x1920 and nothing else.** Only the
+profile carrying a physical-device receipt is admissible on the composed path;
+any other resolution fails closed until it earns its own receipt. A
+receipt-lookup design admitting a set of profiles was considered and rejected,
+because it would make the code trust a lookup where it now trusts a measured
+constant. Pinning a single qualified profile is what made the original defect
+catchable — R118 exists because a fixture size was shipped as the production
+one — and the pin keeps "qualified" meaning "measured on this hardware". An
+operator override was likewise rejected: an escape hatch that skips
+re-qualification reintroduces exactly the gap this program closed.
+
+**4. Qualification evidence is retained under the I92 convention.** The I99
+output moves to `/mnt/ada-data/Patina/.patina-builds/` under the same
+no-replace rule as I92, so all qualification evidence sits in one place with
+one immutability discipline. The move is an operator step: writing outside
+`~/` on the qualified host is outside the constraints agents work under here,
+and that boundary is not relaxed for convenience.
+
+**What these rulings do not change.** Refine stays disabled and uncomposed
+until the floor is closed: `DEFAULT_STAGES` remains `ingest,solve,drawings`,
+`scan_pipeline.refine` stays unregistered, and no `*_QUALIFIED` flag flips as a
+consequence of this entry. The 200-400 frame band remains unqualified per R117.
+`refine_lifecycle.main()`'s latent `TypeError` remains open by design — ruling
+3 now supplies the profile it may name, but the repair belongs with the
+composition that follows the floor, not before it.
+
+*Entries add: R119 · last id = R119*
+
+### I100 · Field Capture P2 · the Refine lifecycle is composed and the qualified profile pinned; build work closed — 2026-07-28
+
+R119's remaining rulings are built. The P2 Refine **build** work is closed; what
+remains is operational and belongs to the program owner. Integration line
+`field-capture/r118-integration` at merge `3d51cc6e`, carrying composition
+`b86f29c9`, shape floor `434988ea`, and the toolchain manifest emitter
+`84bae45f`.
+
+**The profile is pinned where the pin belongs.**
+`QUALIFIED_CAPTURE_RASTER_PROFILE = FieldRasterProfile(1440, 1920)` lives in
+`refine_lifecycle.py`, deliberately **not** in `field_raster_materializer.py` —
+R118/I98 moved that adapter off a compiled-in size on purpose, and what R119
+ruling 3 pins is narrower: *which declaration the composed path may make*.
+`require_qualified_raster_profile()` runs before anything is acquired, in six
+clauses with six distinct messages: a receipt must be in force; it must still
+cover the packaged helper source; the pinned profile must reproduce the
+receipt's own 8_294_417-byte PPM; the adapter must declare a profile; the
+declaration must be a `FieldRasterProfile`; and it must be *the* one. Neither
+design R119 rejected exists: there is no `--profile` flag, no environment
+variable, and no receipt lookup, and a test reads the argument parser to prove
+the surface is absent rather than merely unused.
+
+**Exactly one flag moved, and it is load-bearing rather than decorative.**
+`FIELD_RASTER_CAPTURE_PROFILE_QUALIFIED = True`, justified by I99 alone —
+receipt `f48fa56d…`, materialized PPM `50dccb8a…` at 8_294_417 bytes under
+header `P6\n1440 1920\n255\n`, helper source `3b184937…`. It is bound to those
+literals so it cannot drift: the guard compares the pinned helper digest
+against `field_raster_materializer.QUALIFIED_HELPER_SOURCE_SHA256`, so editing
+`field_raster_libheif.c` fails the composition **closed** rather than leaving a
+stale receipt in force. Set the flag `False` and the composed path admits no
+profile at all — verified directly on the qualified host, not inferred.
+Every other `*_QUALIFIED` flag remains `False`, **including
+`REFINE_LIFECYCLE_QUALIFIED`**: composing the lifecycle did not declare it
+qualified. A test AST-parses the whole package and asserts the true set is
+exactly `{FIELD_RASTER_CAPTURE_PROFILE_QUALIFIED}`.
+
+**`refine_lifecycle.main()` is repaired.** It had constructed
+`PackagedLibheifFieldRasterMaterializer()` with no arguments since item 7
+(`64f31021`). Two prior agents found it, fixed it, and deliberately reverted,
+because a repair must name a capture profile and none was qualified; R119
+ruling 3 supplied one. The construction moved into
+`build_composed_invocation(arguments)` so it is reachable from a test — that
+extraction *is* the fix's testability. `main()` now runs end to end under
+`python -m`, exiting 2 with one diagnostic and writing nothing, because the
+owner-installed toolchain manifest does not yet exist.
+
+**The shipped adapter is on the composed path for the first time.** A Linux
+test drives materializer → the real `PackagedLibheifFieldRasterMaterializer` →
+packet → recorded engine → runner → publisher at 1440x1920 over 8 frames (8 =
+`ALIGNMENT_MIN_CORRESPONDENCES`, the smallest bundle the parent's Sim(3)
+recomputation accepts). Every previous lifecycle test rasterized through a
+stand-in. The profile is proved to cross a real process boundary: the helper
+logs its argv and the test asserts `'1440', '1920'` reached the child, that
+every engine raster is 8_294_417 bytes, and that `materializer_id` is the
+packaged adapter's and ends `-1440x1920`.
+
+**Adversarial cases constructed, not asserted.** A real adapter at 360x640 —
+*the previously qualified I92 profile* — is refused
+`REFINE_RASTER_PROFILE_UNQUALIFIED`, as are 1920x1440 (the native pair, the
+plausible mistake), 1080x1920, and ±1 px on each axis. Refusal happens before
+acquisition: a counting acquirer records zero calls and both scratch and
+publish directories are empty. The converse is covered too — a qualified
+declaration with an unqualified *bundle* is refused per frame, which is what a
+run from any other device would look like.
+
+**One surviving mutation, reported rather than absorbed.** The clause "the
+pinned profile reproduces the receipt's PPM size" survived the first sweep
+because no input could reach it — precisely the failure mode this program keeps
+finding. The guard was kept (it refuses a *run*, where the assertion only
+refuses a commit), given a reaching test, and re-verified RED against a fresh
+control. The sweep's own log retained a stale pre-fix survivor line, and the
+author flagged that rather than letting it read as the verdict.
+
+**Verification.** Fully merged line on the qualified x86_64 host: **2149
+passed, 1 failed, 0 skipped**. The empty Linux skip list holds. The single
+failure is `test_validator_drift::test_vendored_validator_is_byte_identical`,
+absent `/home/kody/scripts/validate_capture_bundle.py`, reproduced on a
+base-commit control. The `install.sh` smoke-import list conflicted on merge —
+each side had modules the other lacked — and was resolved as the union; all
+four trust lists (`install.sh`, `install-path-guard.py`,
+`tests/test_install_script.py`, `tests/test_packaging.py`) were then
+cross-checked and agree on every module.
+
+**Posture is unchanged and was re-verified at the merge, not taken on report.**
+`DEFAULT_STAGES = "ingest,solve,drawings"`; `scan_pipeline.refine` unregistered
+(comments only); `PILOT_200_400_FRAME_RANGE_QUALIFIED` `False` per R117;
+`DEFAULT_LEASE_SECONDS = 3600.0` per R119 ruling 2; `refine_colmap_backend.py`
+byte-identical to `6743e66eb06369d18e34b0054d10734e03a109ec`.
+
+**What the composed path still does not prove — recorded in the module
+docstring, not only here.** No COLMAP, CUDA or GPU has ever run; the path fails
+closed at the toolchain preflight because the manifest is an owner-installed
+artifact. No real Field HEIC has been decoded on this path — the Linux test
+drives the real adapter, real descriptor pinning and a real helper *process*,
+but the helper is a stand-in writing canonical PPM; libheif on a real capture
+needs the root-owned installed release. No archive this repository has parsed
+came out of COLMAP; every sparse model in the suite is packed byte by byte by
+its tests. Nothing has measured how long a 100-frame reconstruction takes. The
+pin covers one device, one OS and one ARKit format by design. Escaped-`setsid`
+containment remains open as R116 exception (a) — detected, not contained.
+
+**Therefore the first real run is expected to establish exactly four things:**
+that COLMAP executes under the pinned toolchain and the one-hour lease; that
+libheif decodes real 1440x1920 Field keyframes through the installed helper;
+how long 100 frames actually take; and whether the resulting evidence clears
+`evaluate_refinement_evidence` rather than merely clearing the non-vacuity
+floors. Nothing before that run can answer any of them.
+
+*Entries add: I100 · last id = I100*
+
+### R120 · Field Capture P2 · the capture app's transport archives contradicted their own index; the app is the side that changes — 2026-07-28
+
+The first real Refine run was attempted on 2026-07-28 against the 100-frame
+subject scan and **did not reach COLMAP**. It found a shipping contract break
+between the capture app and the scan-pipeline worker. The ruling: **the capture
+app is wrong and the app changes.** Relaxing the worker was considered and
+rejected.
+
+**The defect.** `SupabaseSiteScanService.buildTransportArchives` tarred both
+heavy streams with `TarArchive.Entry(name: $0.lastPathComponent, …)` — bare
+filenames. The same app's `keyframe_index.ndjson` records `heicPath` and
+`depthPath` as `keyframes/<file>`, and the worker resolves every member by
+exactly that string (`refine_materializer.py:2566`,
+`extracted[indexed.frame.heic_path]`), with `_SAFE_ARCHIVE_MEMBER` requiring
+the `keyframes/` prefix. A flat member can never match. **Every bundle this app
+has ever produced contradicts its own index**, and none was consumable by
+Refine. The subject scan demonstrates it: the tar holds
+`keyframe_000001_001313016_128.heic` while its index calls that same file
+`keyframes/keyframe_000001_001313016_128.heic`.
+
+**Why the app and not the worker.** The index is the wire contract — it is what
+names, orders and describes the frames, and the worker, the validator and the
+archive all exist to serve it. The app is the only party that disagrees with
+itself: it writes both the index and the archive, and gives the same file two
+different names. Teaching the worker to accept flat members would bless a
+bundle that cannot describe its own contents, and would leave the app free to
+keep emitting archives that no reader can join to an index.
+
+**Why no test caught it.** The existing tar tests pass arbitrary names straight
+to `TarArchive.write`, so they exercise the *writer* and never the *naming
+rule*; the rule lived only as a closure at one call site, where nothing could
+reach it. The fix therefore extracts `TarArchive.bundleEntries(directory:files:)`
+— a named function is what gives the rule somewhere to be tested. Proven
+non-vacuous: reverting it to the shipped bare-filename form reddens the new
+test with four assertion failures. 171 tests pass restored, against 170 before.
+
+**Safe for P1.** Ingest extracts these archives into `work/_untar/<kind>/`
+purely as a containment check and **nothing reads that output**, so no live
+consumer depends on the old member names. The archives are validated as opaque
+artifacts (present + sha256 + size); the validator never inspects tar
+internals.
+
+**What the run proved before it stopped, which is not nothing.** The pinned
+toolchain preflight **passed** — the manifest installed at
+`/opt/colmap/4.0.2/share/patina/refine-colmap-toolchain-v1.manifest.json`
+(824 bytes, 19 sorted keys, executable `60db810e…`) is in force and the run
+cleared it. Owner-scoped key layout, artifact digests and sizes were all
+enforced correctly, each refusal naming its own cause: first an invented key
+layout, then the canonical Field layout accepted, then the archive members.
+
+**And one refusal worth recording on its own.** An attempt was made to repack
+the archive with correct member names so the run could proceed to COLMAP. The
+run refused it: `REFINE_INPUT_INVALID: bundle manifest does not bind the
+requested keyframesArchive artifact`. The bundle manifest binds every
+artifact's SHA-256, so a corrected archive cannot be substituted without
+**forging the manifest** — which was not done, and will not be. The integrity
+chain worked exactly as designed: it is not possible to manufacture a passing
+run from a doctored input by accident, only by deliberate forgery.
+
+**Consequence.** The first real Refine run now requires a **new capture from a
+rebuilt app**: no existing bundle can be made consumable without breaking its
+own manifest binding. The four questions I100 named — COLMAP under the pinned
+toolchain, libheif on real 1440x1920 keyframes, 100-frame runtime, and whether
+the evidence clears `evaluate_refinement_evidence` — remain open, and are now
+gated on a device walk rather than on any code.
+
+**The `depth/` lane is fixed in the same pass** though Refine does not consume
+`depth.tar`: it carried the identical defect, and leaving a known-broken
+sibling in place to be rediscovered later is not a saving.
+
+*Entries add: R120 · last id = R120*
+
+### I101 · Field Capture P2 · first real Refine run reaches the native boundary; real keyframes decoded — 2026-07-28
+
+The composed Refine lifecycle ran against a real Field capture on the qualified
+host and reached the native engine boundary in **8.43 s**, peak RSS 46 MB. It
+stopped where I100 said it would: `refine_colmap_backend.py` is a deliberate
+fail-closed stub, so `run_native_engine_child` raised `COLMAP native backend is
+disabled and uncomposed`. **This is the designed outcome, not a defect.**
+
+**The subject.** Scan `004aa5b0-bfaa-4577-93f8-c06d9f38f1fc`, captured on the
+R120-fixed build, **49 keyframes**, every one native 1920x1440 / encoded
+1440x1920 — the R119-pinned profile. The bundle is the first this program has
+seen that is internally coherent: all three artifact hashes match the manifest's
+own bindings, all 96 archive members carry the `keyframes/` prefix, and every
+`heicPath` in the index resolves to a real member. R120's fix is therefore
+confirmed on hardware, not merely in a unit test.
+
+**The pin is live in production, and says so unprompted.** The CLI banner reads
+"Raster profile: 1440x1920 (the only one with a physical-device receipt). Any
+other capture resolution fails closed."
+
+**What executed, established from the call stack rather than assumed.** The
+failure surfaced at `refine_lifecycle.py:2626`, which sits inside `with
+materialization:` and after `build_colmap_packet` and `pinned_packet_files`
+have both returned. So, in order: the four artifacts were acquired under
+owner-scoped keys with digests verified; the materialization completed; the
+packet was built and chunked (49 frames x 8_294_417 B = 0.38 GiB, 4 chunks and
+5 pinned files, well inside the 4 GiB / 64-file ceilings); the packet
+descriptors were pinned; and only then did the native call refuse.
+
+**I100's second open question is now closed.** It recorded that "no real Field
+HEIC has been decoded on this path — the helper is a stand-in writing canonical
+PPM." That is no longer true. Materialization is what decodes, and it completed:
+**49 real 1440x1920 Field HEICs were decoded by libheif through the installed,
+root-owned, descriptor-pinned helper** at protocol v3, on the release whose
+manifest binds `sourceSha256` `3b184937…`. This is the first time the shipped
+raster path has touched real capture data.
+
+**Scratch was cleaned on failure** — the workspace lease and cleanup precedence
+behaved as item 4's receipt described, with nothing left behind.
+
+**Three questions remain open, all behind the same gate.** Whether COLMAP
+executes under the pinned toolchain and lease; how long a 49-100 frame
+reconstruction actually takes; and whether the resulting evidence clears
+`evaluate_refinement_evidence` rather than merely the non-vacuity floors of
+R119. None of them can be answered while the native backend is a stub, which is
+what R121 addresses.
+### R121 · Field Capture P2 · the native COLMAP backend is unfrozen and composed; DeskDev privilege granted — 2026-07-28
+
+Two grants from the program owner on 2026-07-28, both reversing constraints
+this program has held since I96.
+
+**1. `refine_colmap_backend.py` is unfrozen.** It has been pinned byte-identical
+to git blob `6743e66eb06369d18e34b0054d10734e03a109ec` throughout — every agent
+brief in the program named that blob and forbade touching it, and the
+composition verified it at each merge. It is a deliberate fail-closed stub, and
+I101 is the receipt of it doing its job: the first real run reached
+`run_native_engine_child` and was refused. **The owner now authorizes writing
+the real child body**, which is the I87 plan: known-pose seed, point
+triangulation, bundle adjustment against COLMAP 4.0.2, with the
+position-prior mapper as fallback. The freeze existed because composing the
+backend had never been reviewed, not because the backend was correct — nothing
+about lifting it makes the resulting code trusted.
+
+**2. Elevated privilege on the qualified host is granted.** The owner states
+DeskDev "is just a test environment for now" and grants `sudo` and whatever
+else the work requires. This lifts the standing prohibitions on `sudo`,
+`install.sh`, `systemctl`, writing outside `~/`, and touching `/opt`, `/etc`
+and `/var/lib/patina` **on that host only**. It does not extend to Strata, to
+Supabase or Storage writes, or to any production system, and the P1 worker
+`patina-scan-worker` is still not to be disturbed gratuitously — a grant of
+permission is not an instruction to be careless with a service that is running.
+
+**What does NOT change.** Refine remains unregistered as a worker stage and
+`DEFAULT_STAGES` remains `ingest,solve,drawings`; composing the backend is not
+enabling the pipeline. The 200-400 frame band stays unqualified per R117. The
+raster pin stays exactly 1440x1920 per R119 ruling 3, with no override. The
+gauge-invariant shape floor and the movement floor stay as R119 ruling 1 built
+them — a backend that returns its input, or returns it under a rigid motion or
+similarity, must still be refused, and the whole point of writing a real
+backend is that those floors now face something that can genuinely fail them.
+
+**What the first successful run must establish**, unchanged from I100 and
+narrowed by I101 to three: that COLMAP executes under the pinned toolchain
+manifest and the one-hour lease; how long a real reconstruction of this size
+actually takes, which nothing in this repository has ever measured; and whether
+the evidence clears `evaluate_refinement_evidence` rather than merely clearing
+the non-vacuity floors. A run that fails any of these is a result and is to be
+recorded as one.
+
+*Entries add: I101 · R121 · last id = R121*
+
+### I102 · Field Capture P2 · the real COLMAP child body; the first end-to-end engine run, and what refused it — 2026-07-28
+
+R121's authorisation is built.  `refine_colmap_backend.py` — pinned byte-identical
+to `6743e66e` since I96 and named as untouchable in every agent brief since — now
+carries the I87 primary plan as executable code, and that code has run COLMAP
+4.0.2 against a real Field capture on the qualified host.
+
+**What the child does, in the order it does it.**  `run_refine_colmap_native`
+loads the pinned `/opt/colmap/4.0.2` toolchain FIRST, so a drifted box is refused
+while the lease is still empty; then extracts the packet; then GPU SIFT
+(`CameraMode.PER_IMAGE`), the device intrinsics rewritten over COLMAP's guesses
+with database ids preserved, guided GPU matching over the deterministic candidate
+graph, the post-match overlap policy, the known-pose seed carrying the device's
+full poses, the one allowlisted CLI phase (`point_triangulator`, inheriting the
+already-isolated process group), bundle adjustment at `TWO_CAMS_FROM_WORLD` with
+intrinsics fixed, and last the Sim(3) rebase back into the seed's metric frame.
+It writes the seven closed output tokens and returns the report the parent parses.
+
+**The child computes its proposal with the PARENT's own code.**  It writes its
+three sparse-model archives, then re-reads them through
+`refine_model_alignment.read_sparse_model_snapshot` and solves the centres-only
+similarity with `refine_adapter.estimate_sim3`.  Agreement then means the two
+sides read one archive the same way, not that two implementations converged.
+That is the second in-package edge into `refine_model_alignment`, and it is
+pinned by test rather than left incidental.
+
+**Two ledgers were added to the packet, because evidence needs provenance the
+child cannot have.**  The engine request describes ENGINE images; the evidence
+builder needs the capture archive key, member, digest and size per frame plus the
+raster adapter's identity, and only the parent holds those.  `build_colmap_packet`
+now emits `source-ledger-v1.json` and `adapter-ledger-v1.json` — two member roles
+the extractor already knew how to parse and that nothing had ever produced.
+
+**THE RUN.**  Scan `004aa5b0-bfaa-4577-93f8-c06d9f38f1fc`, 49 keyframes, the
+R120-fixed bundle, from a root-owned R121 release built beside the live one so
+`patina-scan-worker` was never touched.  **28.6-29.4 s wall across four runs, peak RSS 596-660 MB**, under a
+3600 s lease — the first measurement this repository has ever had of a real
+reconstruction.  Inside it: GPU SIFT 3.2 s for **341_749 features** over 49
+frames (min 250, max 13_425, mean 6_974); guided matching and geometric
+verification **4.14 s**; bundle adjustment **0.56 s, 34 iterations, 87_950
+residuals, CONVERGENCE, initial cost 1.01046 px, final 0.682295 px**.  Four
+minutes was never the constraint; R119 ruling 2's whole-lease budget was not
+needed either.
+
+**R121's three questions, answered.**  COLMAP executes under the pinned manifest
+and the lease: yes.  How long 49 frames take: 29 s.  Whether the evidence
+clears `evaluate_refinement_evidence`: **NO.**  The run was refused
+`REFINE_EVIDENCE_REGRESSION / comparable_geometric_evidence_regressed` with
+coverage 1.0000 -> 1.0000, reprojection RMSE **2.015458 -> 1.351599 px (-32.9%)**,
+loop translation-direction RMSE 17.165228 -> 17.080197 deg, and loop rotation RMSE
+**4.915408 -> 4.930533 deg — worse by 0.015 deg, 0.31%** — over **four** verified
+non-temporal loop edges, on 42_587 common observations.  One comparable metric
+regressed and the rule is that none may.  Bundle adjustment reduced reprojection
+error by a third and moved the long-baseline rotations very slightly the wrong
+way; with a sample of four edges that difference is not distinguishable from
+noise.  Nothing was tuned to make it pass.
+
+**The R119 floors faced real output and cleared it.**  The refusal is downstream
+of them: `anchor_seed_snapshot_to_request`, `verify_child_alignment_proposal`,
+`require_refined_poses_moved` and `require_refined_shape_changed` all passed on
+bytes a real engine wrote.  The gauge-invariant shape floor in particular was
+built against a recorded fixture and has now been satisfied by a genuine
+refinement rather than by a construction.
+
+**Three defects only a real run could reach.**  (1) The packet writer emitted
+USTAR members at mode 0644 with NUL device fields; the child's extractor requires
+0600 and canonical zero-valued octal, and refused every parent-built packet.  It
+had been wrong since the writer existed — the parent's tests read its archives
+with `tarfile`, which does not care, and the extractor's tests hand-build their
+own headers, so the two implementations had never been compared.  They are now,
+directly.  (2) COLMAP 4.0.2 really does emit tracks that observe one image twice;
+the evidence builder's membership key forbids it.  Such tracks are excluded from
+BOTH models by a structural criterion that never looks at a residual, and the
+counts are carried into telemetry and `adapter-v2.json` rather than absorbed.
+(3) `pycolmap`'s `TwoViewGeometry.cam2_from_cam1` is optional and really returns
+`None`.
+
+**The seed anchor's rotation tolerance was unreachable by ANY child, and the fix
+was the metric, not the floor.**  The device's `cam_from_world` matrices arrive
+orthonormal only to `3.3e-7`; `acos(1 - x) ~ sqrt(2x)`, so
+`_separation_from_submitted_frames` reported `4.899e-4` rad of "drift" against a
+seed the child had not moved at all — 490x the `1e-6` tolerance, and set by the
+reference's own representation error rather than by the snapshot.  The tolerances
+are UNCHANGED; the submitted matrix is now projected onto SO(3) before the
+angular comparison, so the number is a rotation difference.  Both directions are
+constructed: an exact-copy snapshot against a defective reference now measures
+below `1e-8`, and a genuinely turned snapshot is still refused at 1.5x and 10x
+the tolerance.  Both refusals carry their margins, as does the evidence verdict —
+the first real run reported only that something "drifted".
+
+**Seven posture flags moved, none of them decorative.**
+`PACKET_EXTRACTION_QUALIFIED`, `OUTPUT_DESCRIPTOR_HANDOFF_QUALIFIED`,
+`ALIGNED_MODEL_BUILD_QUALIFIED`, `EVIDENCE_BUILDER_CONTRACT_COMPATIBLE`,
+`PARENT_ALIGNMENT_VERIFICATION_COMPOSED_INTO_REFINE` and
+`NATIVE_ENGINE_OUTPUT_ALIGNMENT_VERIFIED_BY_PARENT` each rest on the host run;
+`COMMAND_EXCEPTION_NORMALIZATION_QUALIFIED` rests on a constructed test, because
+it names a property of the guard rather than of the box.  **`PRIMARY_EXECUTION_
+QUALIFIED` stays False**: the plan executed and was then refused, and a path
+qualified only up to the point where it is refused is not qualified.
+`RUNNER_PATH_REOPEN_COMPOSITION_QUALIFIED` stays False because the run stops
+upstream of the artifact builder; `SEQUENTIAL_COMMAND_QUIESCENCE_QUALIFIED`
+because the plan has one CLI phase; `MEASUREMENT_SNAPSHOT_QUALIFIED` because that
+row schema is unused; `FALLBACK_QUALIFIED` and
+`PILOT_200_400_FRAME_RANGE_QUALIFIED` per I90 and R117.  The posture test that
+was supposed to make a quiet flip impossible only scanned names ending
+`_QUALIFIED` and was blind to three of these; it now scans every module-level
+boolean in the package and compares the true set for equality.
+
+**Posture otherwise unchanged and re-verified, not taken on report.**
+`DEFAULT_STAGES = "ingest,solve,drawings"`; `scan_pipeline.refine` unregistered;
+the raster pin exactly 1440x1920; `DEFAULT_LEASE_SECONDS = 3600.0`.
+
+**Verification.**  macOS: **2081 passed, 0 failed, 85 skipped**.  Qualified
+x86_64 host: **2081 passed, 84 failed, 1 skipped**, against a base-commit control
+at `9ef18190` on the same host and venv (**2065 passed, 84 failed**) showing **the
+identical 84** — zero new, zero fixed.  Those 84 are 82 `test_install_script.py` (root/systemd/staged
+installer), `test_packaging` (real wheel build) and the known
+`test_validator_drift`; they are properties of running from a checkout rather
+than from `install.sh`, and the control is what proves none of them is ours.
+A mutation sweep against the FULL tree ran a no-op control to 0 extra red before
+any count was read, then killed every clause it tried.  Three survivors were reported rather than absorbed — the evidence
+refusal's numbers, the candidate-graph agreement check and the source-ledger
+row binding — and each was given a reaching test before the sweep was rerun; the
+graph check had to be EXTRACTED from behind the GPU to be reachable at all, which
+is the same move this codebase made for `copy_exact`.
+
+**What is still not true.**  No run has published anything.  The 200-400 band is
+untouched.  Fuse, Splat and Present are not composed.  The pin covers one device,
+one OS, one capture and one COLMAP build; four verified loop edges is a thin
+basis for any statement about this subject, and whether the loop-rotation
+regression is a property of the capture, of the candidate graph's 0.25-1.5 m
+spatial band, or of `evaluate_refinement_evidence`'s all-metrics-must-not-regress
+rule is an open question this run cannot settle.
+
+*Entries add: I102 · last id = I102*
+
+*Entries add: I102 · last id = I102*
+
+### I103 · Field Capture P2 · the evidence harness; seven runs over two rooms, and what the loop comparables actually do — 2026-07-28
+
+I102 left one question open: whether the loop-rotation regression that refused
+the first real run is a property of the capture, of the candidate graph, or of
+`evaluate_refinement_evidence`. It could not be settled with one capture, and
+the numbers survived only because the refusal renders them — a run that PASSES
+prints nothing comparable. **`services/scan-pipeline/tools/refine_evidence_harness.py`**
+is the instrument for that question: it runs the composed lifecycle over a
+directory of bundles and tabulates one evidence row per run, INCLUDING for the
+runs the rule refuses.
+
+**It measures the rule; it does not touch it.** Three runtime hooks, each
+calling the original exactly once and returning its value unchanged:
+`refine_runner.evaluate_refinement_evidence` (the rule under study — the exact
+`RefinementEvidence` in, the exact verdict out), `refine_lifecycle.Composed
+ArtifactBuilder` (the child's `adapter-v2.json` and command evidence, read
+positionally with `os.pread` out of the parent's anonymous descriptors, so the
+telemetry survives the lease purge without consuming anything), and
+`require_refined_shape_changed`. `evaluate_refinement_evidence` is byte-identical
+to what I102 ran; the release under measurement,
+`/opt/patina/scan-pipeline-r121`, was confirmed byte-identical to the branch for
+all five refine modules before a number was read. Recording is separately
+guarded — a harness that threw while documenting would change the outcome of the
+run it is measuring — and the observer has no branch on the verdict, so there is
+no path by which it could turn a refusal into a pass. Both directions are
+constructed in `tests/test_refine_evidence_harness.py`, and four mutations
+(swallow the refusal, stop at the first failing bundle, put the clock in the
+determinism key, drop the row when the rule raises) each reddened it before the
+counts were read.
+
+**Two real captures existed, not one.** `004aa5b0` (49 frames) is I102's. The
+100-frame subject scan R120 ruled on — scan `a7de00f1`, the P1-certificate
+capture — is also on the host, and its transport archive is the pre-R120 flat-
+member form. It was made consumable by applying R120's own fix after the fact:
+every member re-prefixed `keyframes/`, the exact string its index already names,
+and the manifest's `keyframesArchive` row re-bound to the repacked digest. No
+image byte, pose, intrinsic or timestamp was touched, and the worker was not
+relaxed. Five further bundles are FRAME SLICES of `a7de00f1` — halves, middle,
+and the even and odd frames — because the pipeline is deterministic upstream of
+bundle adjustment, so repeating one bundle cannot vary the verified edge set and
+only a different slice of the same walk can.
+
+**SEVEN RUNS. Reprojection improved every single time; the loop comparables did
+not.**
+
+```
+bundle                frames  edges  reproj px          d%       looprot deg        d%       looptrn deg         d%       verdict
+004aa5b0 (whole)      49      4      2.015458>1.351599  -32.94   4.915408>4.930533  +0.31    17.165228>17.080197  -0.50   REFUSED
+a7de00f1 (whole)      100     43     1.899211>1.281987  -32.50   5.979739>6.012273  +0.54    25.058985>25.258783  +0.80   REFUSED
+a7de00f1 first half   50      12     1.941583>1.192916  -38.56   7.560061>7.734245  +2.30    25.689888>26.651891  +3.74   REFUSED
+a7de00f1 second half  50      25     1.872026>1.334987  -28.69   5.336552>5.267981  -1.28    27.019122>26.958782  -0.22   PASS
+a7de00f1 middle       50      15     1.895696>1.234701  -34.87   1.014703>0.831273  -18.08    2.520286>2.407587   -4.47   PASS
+a7de00f1 even frames  50      8      1.939805>1.125393  -41.98   2.598570>3.126295  +20.31    6.612081>14.156897 +114.11  REFUSED
+a7de00f1 odd frames   50      9      1.797599>1.134248  -36.90   6.318068>5.984869  -5.27    15.451312>14.857576  -3.84   PASS
+```
+
+Registration coverage was 1.0000 before and after in all seven. **Reprojection
+RMSE fell by 28.7% to 42.0% in all seven and never once regressed.** Loop
+rotation moved between -18.08% and +20.31%, four times worse and three times
+better; loop translation between -4.47% and +114.11%. **Every refusal was caused
+by a loop comparable. Not one was caused by reprojection or by coverage.**
+
+**The two interleaved samples are the sharpest pair.** Even-indexed and
+odd-indexed frames of one walk are the same room, the same device, the same
+trajectory at the same cadence, half a frame apart. Their loop-rotation BEFORE
+values are 2.598570 and 6.318068 degrees — a factor of 2.4 — and the refinement
+moves one +20.31% and the other -5.27%. One is refused and the other passes. The
+same walk's second half passes; its first half is refused. A statistic whose
+baseline varies 7.5-fold and whose direction flips between interleaved samples of
+one capture is not measuring a property of that capture's refinement.
+
+**What `loop_rotation_rmse_deg` actually is.** For each verified non-temporal
+pair it compares the relative rotation COLMAP estimated from image
+correspondences alone (`TwoViewGeometry.cam2_from_cam1`) against the relative
+rotation implied by the trajectory — the device's ARKit poses BEFORE, the
+bundle-adjusted poses AFTER — and takes the RMS over the loop set. It is a
+DISAGREEMENT between two estimates, both of which carry error, not a residual
+against ground truth. Its absolute value is ~4.9 degrees because the two-view
+side is weak here, not because the trajectory is 4.9 degrees wrong: on
+`004aa5b0` every loop baseline is between 0.25 and 0.51 m and the whole
+trajectory is 0.66 m across. Nothing in bundle adjustment optimises this
+quantity — BA minimises reprojection over the tracks and never sees a two-view
+geometry — so its direction after refinement is unforced.
+
+**Why four loop edges, answered.** Not the room, not COLMAP. The candidate graph
+offered **270** non-temporal pairs on `004aa5b0` and matching verified **four**
+of them (1.5%), while verifying 232 of 435 temporal pairs (53%). The reason is
+in `build_pair_graph`: loop candidates are selected by CAMERA CENTRE DISTANCE
+alone and never by where the camera points. On a capture whose entire trajectory
+is 0.66 m across — the operator turned in place — the median angle between the
+two optical axes of a loop candidate is **106 degrees**, **not one** of the 270
+is under 30 degrees, and only nine are under 45. A pair looking 106 degrees apart
+shares no image content and can never reach the 30-inlier floor. On the 100-frame
+walk (3.59 m extent) the median is 73 degrees, 17 candidates are under 15
+degrees, and 43 of 574 verify. The count scales with how much the capture
+revisits a place FACING THE SAME WAY, which the selection policy does not measure.
+
+**Determinism, checked rather than taken on report.** Both original bundles were
+run twice. Every BEFORE metric is bit-identical (relative drift exactly 0.0):
+feature extraction, matching, geometric verification and triangulation reproduce
+exactly. Every AFTER metric drifts at 1e-10 relative — Ceres running
+multithreaded — and because the evidence digests cover the refined points,
+`common_observation_set_sha256` and `verified_loop_set_sha256` **differ on every
+run**. The verdicts and every digit the refusal prints are identical. So "the run
+reproduces to the digit" is true and "the run reproduces" is not, and the harness
+reports those as separate claims. The drift is 4e-8 of I102's decision margin:
+the regression is not run-to-run noise.
+
+**What this does NOT establish.** Seven runs over TWO rooms, and six of the seven
+are slices of one of them — this is a characterisation of one metric on one
+device in two rooms, not a distribution. Nothing was published. No tolerance was
+proposed, no threshold moved, and `evaluate_refinement_evidence` is unchanged to
+the byte. The ruling on whether the loop comparables should carry a veto at this
+edge count, and whether a strict inequality at zero tolerance is the right test
+for a statistic with this spread, belongs to the program owner.
+
+**Posture unchanged and re-verified.** `DEFAULT_STAGES = "ingest,solve,drawings"`;
+`scan_pipeline.refine` unregistered; the raster pin exactly 1440x1920; R119's
+floors as built; `PRIMARY_EXECUTION_QUALIFIED` still False. No flag moved. The
+harness lives in `tools/`, outside the package and outside the wheel.
+
+**Verification.** macOS: **2087 passed, 16 failed, 85 skipped**, against a
+control with the two new files removed on the same interpreter showing **the
+identical 16** — all `test_install_script` and `test_packaging`, all caused by
+running under a venv outside the tree. Qualified x86_64 host: **2094 passed, 93
+failed, 1 skipped**, against a base-commit control at `d871d373` extracted to a
+sibling directory and run on the same venv (**2072 passed, 93 failed**) showing
+**the identical 93** — zero new, zero fixed, +22 passes, which is exactly the new
+test count. The 93 are 82 `test_install_script`, 8 `test_field_raster_materializer`,
+`test_packaging`, `test_refine_lifecycle`'s raster-adapter case and
+`test_validator_drift`; they are properties of running from a checkout rather
+than from `install.sh`, and the control is what proves none of them is ours.
+
+*Entries add: I103 · last id = I103*
+
+### I104 · Field Capture P2 · Refine completes end to end on a real capture; the verdict tracks loop-edge count — 2026-07-29
+
+**The Refine lifecycle completed and published for the first time.** A real
+100-frame Field capture (`e3ea64a8-d12c-4059-8572-2af5abe41c84`, a second room)
+ran acquire → decode → packet → COLMAP → align → floors → evidence → publish on
+the qualified host in **52.2 s**, verdict `PASS
+internal_geometric_refinement_evidenced_absolute_accuracy_unproven`, writing
+eight artifacts under `.../v1/refine/` including `refined-poses-v1.json`,
+`pose-deltas-v1.json`, `adapter-v2.json` and `seed-model-v1.tar`. Every prior
+run in this program stopped short of publication.
+
+**Three real captures, walked to a design.** The owner walked a second room
+normally, and a deliberate single sweep with no revisits, against the existing
+49-frame first room.
+
+| capture | frames | verified edges | reprojection | loop rotation | loop translation | verdict |
+|---|---|---|---|---|---|---|
+| room 2, normal | 100 | **31** | −29.63% | −0.60% | −3.00% | **PASS** |
+| room 1 | 49 | **4** | −32.94% | **+0.31%** | −0.50% | REFUSED |
+| single sweep | 31 | — | — | — | — | FAILED (cheirality) |
+
+**The verdict tracks the verified loop-edge count, not the quality of the
+refinement.** At 31 edges all three loop comparables move the same direction and
+the run passes. At 4 edges, loop rotation wobbles +0.31% against a −32.94%
+reprojection improvement and the run is refused. Taken with I103's slice study
+this is now consistent across ten completed runs: **reprojection improved in
+every run that completed (−28.7% to −42.0%), and every refusal has been caused
+by a loop comparable — never by reprojection, never by coverage.**
+
+**The sweep failed differently, and usefully.** Not a refusal: an
+`AdapterError` — "refined model observation projects outside the positive-depth
+camera", a cheirality violation, a point reconstructed behind a camera. A pure
+sweep with no revisit is the weakest geometry the instrument can produce, and it
+degenerated rather than producing a plausible-but-wrong result. The control
+behaved as a control should, and the pipeline caught it instead of publishing
+nonsense.
+
+**Two identifier defects, found the way R120 was found — by running.**
+
+1. **A Storage-sourced Refine run is impossible as the contract stands.**
+   Storage object keys are keyed by `room_scans.room_id`, while the bundle
+   manifest carries a different `scanId`, and `refine_materializer` requires the
+   request's `scan_id` to equal **both** the key's third segment
+   (`assert_owner_prefix`) and `document["scanId"]`
+   (`_validate_manifest_identity`). For scan `83f0d63d…` those are `da3af6b7…`
+   and `e3ea64a8…` — one request cannot satisfy both. Three distinct
+   identifiers are in play: `room_scans.id`, `room_id`, and the manifest
+   `scanId`. Worked around for measurement only by laying the fetched bytes out
+   locally under the manifest's own `scanId`; no content and no manifest was
+   altered.
+2. **`room_scans.scan_bundle_url` and `depth_archive_url` store a `/object/public/`
+   URL for the `room-scans` bucket, which is `public = false`.** Those URLs
+   return `400 Bucket not found`. Anything consuming those columns directly is
+   broken; the objects are reachable only with credentials.
+
+**Read-only Storage access was used** with the owner's authorisation, via the
+scan worker's own service-role credentials on the qualified host. Nothing was
+written to Storage or to any table.
+
+### R122 · Field Capture P2 · fix the loop-candidate policy before judging the evidence rule — 2026-07-29
+
+The program owner ruled on 2026-07-29, on the evidence of I103 and I104: **fix
+the loop-candidate selection policy first, re-run the three real captures, and
+only then decide whether `evaluate_refinement_evidence` needs changing at all.**
+
+**Why the policy and not the rule.** `build_pair_graph` selects loop candidates
+by camera-centre distance alone and never by where the camera points. On the
+49-frame capture it offered 270 non-temporal candidates of which matching
+verified **4** — 1.5% — with a median angle of **106°** between the two optical
+axes and not one candidate under 30°. Pairs that far apart share no image
+content and can never reach the inlier floor. The thin edge set is manufactured
+by the policy, and the erratic verdict follows from the thin edge set: the
+100-frame capture, whose walk revisits places facing the same way, produced 31
+edges and a well-behaved metric on the first attempt.
+
+**The rule is therefore not yet judged.** It may be sound once the statistic it
+reads is no longer noise-dominated. Changing a gate to make a failing run pass,
+before fixing the input that made the gate noisy, is the inversion this program
+exists to avoid — and R119's floors were written on exactly that principle.
+`evaluate_refinement_evidence` stays byte-identical until the re-run says
+otherwise.
+
+**Also authorised:** repair both identifier defects recorded in I104. The
+`scan_id` contract must be satisfiable by a bundle acquired from Storage as the
+app actually writes it, and the stored URL columns must name a form that
+resolves for a private bucket.
+
+**Unchanged.** Refine stays unregistered as a stage; `DEFAULT_STAGES` remains
+`ingest,solve,drawings`. The raster pin stays exactly 1440x1920. R119's movement
+and shape floors stay as built. `PRIMARY_EXECUTION_QUALIFIED` stays `False`
+until a path is qualified beyond its refusal — one PASS on one capture is not
+that.
+
+*Entries add: I104 · R122 · last id = R122*
+
+### I105 · Field Capture P2 · the loop-candidate policy learns where the camera points; the three captures re-run — 2026-07-29
+
+R122's three instructions are built: the loop-candidate selection policy now
+considers viewing direction, both I104 identifier defects are repaired, and the
+three real captures were re-run on the qualified host. **`evaluate_refinement_
+evidence` is byte-identical to what I102, I103 and I104 ran** — verified by
+extracting the function from the base commit and from the branch and comparing
+the 5_833 bytes, not by inspection.
+
+**THE THRESHOLD WAS MEASURED BEFORE IT WAS CHOSEN.** I104's 100-frame run
+PASSED, so it published, and among its eight artifacts is `database-v1.db` —
+COLMAP's own `two_view_geometries` table, one row per candidate pair. Joining
+that table against the capture's ARKit poses gives the verification rate of all
+**1_508** candidate pairs as a function of the angle between the two optical
+axes. Nothing in that join runs an engine; the outcome was decided by COLMAP
+before the question was asked.
+
+```
+axis angle    loop pairs  verified     temporal pairs  verified
+under 45 deg          56     48.2%                394     63.5%
+45 to 60 deg          47      8.5%                172      6.4%
+60 to 75 deg          58      0.0%                125      1.6%
+over 75 deg          402      0.0%                254      0.0%
+```
+
+The two populations are independent — the 563 non-temporal candidates the policy
+selects, and the 945 temporal ones it does not touch — and they collapse in the
+same place. **60 degrees is the smallest bucket edge above which not one of 460
+real loop candidates verified.** It keeps every one of that capture's 31 verified
+loop edges (the widest sits at 51.5 deg) and discards the 460 that produced none;
+a tighter 45 would have thrown away 4 of the 31 for no measured gain.
+
+**The device's optics say why the collapse is there**, which is the check that
+this is a property of cameras and not of one room. The keyframe intrinsics give
+a **70.5 x 55.8 degree** field of view, so two cameras whose axes differ by more
+than 55.8 deg are no longer guaranteed to share any viewing direction and past
+the 82.8-degree diagonal cannot. The widest verified pair of ANY kind in the
+capture sits at **74.2 deg**, inside that bracket. `LOOP_MAX_VIEW_AXIS_ANGLE_DEG
+= 60.0` sits between the two, and the comment carries both derivations.
+
+**THE BOUND IS UNCHANGED AND IS NOT THE ANGLE.** `MAX_SPATIAL_NEIGHBORS` stays
+8, so the graph still cannot exceed `frames * (temporal_window + neighbors)`
+pairs however the room is shaped. What changed is the ORDER: the per-frame
+shortlist is filtered to co-directed candidates BEFORE the nearest 8 are taken.
+That is where the edges came from — near-but-mis-directed pairs were crowding
+out co-directed ones further away. The new graph is **smaller** than the one it
+replaces on all three captures (walkA 1_508 -> 1_236 pairs) while offering loop
+candidates the measurement says can succeed: walkA's loop-candidate median axis
+angle falls from **100.4 deg to 41.1 deg** and its median baseline rises from
+0.46 m to 0.65 m. Raising the cap instead was considered and rejected — it buys
+more of a population in which 460 candidates produced zero edges between them.
+
+**A held-out check, because a threshold fitted to its own outcome proves
+nothing.** The 30.1% rate was measured on the 103 loop candidates the OLD policy
+offered inside 60 deg. The NEW policy offers 291, of which **188 were never in
+that sample**. Predicted edges: 291 x 0.301 = **87.6**. Observed: **90**. The
+number was fixed before the re-run and is not a fit to it.
+
+**ONE PREDICATE, THREE DERIVATIONS.** The candidate graph is derived three times
+— `refine_adapter.build_pair_graph` over `NormalizedFrame`, `refine_colmap_
+backend.build_engine_pair_graph` over the packet's `ColmapEngineFrame`, and
+`refine_evidence_builder._pair_graph` over the raw model the engine wrote — and
+before R122 all three restated the distance band. A fourth restatement is how
+they would have drifted, so `loop_candidate_admitted` is imported by all three
+and the viewing direction is read from the `cam_from_world` rotation, the one
+quantity all three hold. `require_candidate_graph_agreement` now substitutes the
+raw model's ROTATIONS as well as its centres: R122 added a second hard edge to
+the policy, and a shadow that re-derived only the distances would have gone on
+agreeing with itself about the angles while the guard quietly stopped covering
+the new edge. A constructed test moves only a rotation, across the bound, with
+every centre untouched.
+
+**THE RE-RUN. Three captures, same host, same release discipline — a root-owned
+build beside the live one, `patina-scan-worker` never touched (`NRestarts=0`).**
+
+```
+                         BEFORE (I104, distance-only)          AFTER (R122, near AND co-directed)
+capture          frames  edges  reproj   looprot  verdict      edges  reproj   looprot  looptrn  verdict
+room 2, normal   100     31     -29.63%  -0.60%   PASS         90     -28.89%  +0.22%   -1.11%   REFUSED
+room 1           49       4     -32.94%  +0.31%   REFUSED       4     -32.94%  +0.31%   -0.50%   REFUSED
+single sweep     31      --     --       --       FAILED       14     -32.78%  +2.10%   -1.03%   REFUSED
+```
+
+**Does the edge count rise: yes, 2.9x on the capture that had a walk to work
+with.** 31 -> 90 on room 2, from a SMALLER candidate set. Common observations
+rose 39_233 -> 40_851, so the reconstruction is more constrained, not merely
+differently constrained.
+
+**Does walkB still refuse: yes, and its numbers are bit-identical to I104's.**
+Room 1 was walked by turning in place: the operator never revisited anywhere
+facing the same way. Its 270 loop candidates had a MEDIAN axis angle of 106 deg
+and a MINIMUM of 32.1; the new policy offers 40, all in 32-60 deg, and the same
+four verify. **The policy did not manufacture edges out of a capture that has
+none**, which is the outcome that would have discredited it. A walk with no loop
+closure is a fact about the walk.
+
+**The sweep no longer degenerates.** I104's control failed with an `AdapterError`
+— "refined model observation projects outside the positive-depth camera", a
+cheirality violation. With the mis-directed pairs gone it completes, publishes
+nothing (it is refused), and reports 14 loop edges with a loop-translation
+disagreement of **39.7 deg** — by far the worst of the three, which is what a
+pure sweep with no revisit should look like. The control still refuses; it now
+refuses legibly instead of degenerating.
+
+**WHAT THE BETTER-CONDITIONED STATISTIC SAYS ABOUT THE RULE. Reported, not
+acted on.** R122 held that the rule may be sound once the statistic it reads is
+no longer noise-dominated. It is now far better conditioned, and the shape of
+`loop_rotation_rmse_deg`'s change across every completed run in this program is:
+
+```
+edges     8      9     12     15     25     31     43     90
+delta  +20.31 -5.27  +2.30 -18.08 -1.28  -0.60  +0.54  +0.22 %
+```
+
+The variance collapses with edge count exactly as a noise-dominated statistic
+should — and what remains at 90 edges, the largest sample this program has ever
+had, is a small **positive** value. The regression is 5.5e7 times the run-to-run
+drift (relative drift 3.9e-11 over two attempts), so it is not reproducibility
+noise. This is the behaviour I103 predicted from first principles: bundle
+adjustment minimises reprojection over the tracks and never sees a two-view
+geometry, so nothing in it pushes this disagreement down. **Three of three
+captures now refuse on a loop comparable while reprojection improves 28.9-32.9%,
+and the single PASS in this program's history sat at 31 edges inside the noise
+band that the better-conditioned run has now collapsed.** An all-metrics-must-
+not-regress rule at strict inequality and zero tolerance, applied to a quantity
+the optimiser does not optimise, refuses good refinements. That is a finding for
+the program owner and **not a change**: `evaluate_refinement_evidence` is
+untouched to the byte, no tolerance was proposed, and no threshold moved. The
+counter-hypothesis is recorded too — admitting pairs out to 60 deg raised the
+loop-rotation BASELINE from 5.33 to 12.69 deg, and a tighter bound would give a
+cleaner statistic. Tightening it to make the gate pass is the inversion R122
+exists to prevent, and the bound was fixed from verification yield before the
+re-run rather than after it.
+
+**IDENTIFIER DEFECT 1: the conflated field was the defect.** One `scan_id` was
+carrying three different identifiers, and one string cannot be all of them.
+Split, each named for what it is. **`room_id`** is the Storage READ owner prefix
+— B-18 pins `{folder}/{userId}/{roomId}/{filename}`, `keys.assert_owner_prefix`'s
+own docstring and error text already said "row `room_id`", all five live P1
+callers already pass it, and the iOS uploader builds every key from `roomID`.
+**`scan_id` stays `room_scans.id` on the publication prefix** — 00287 matches
+`rs.id::text` at segment [3], the worker design ruled it, and that half was never
+broken. **`capture_session_id`** is the manifest's `scanId`: minted device-side
+at capture-session start, held in no column anywhere, and therefore no longer
+equated to a server identifier — it is required to be a well-formed stable
+identifier, recorded, and equated only when a caller supplies an expected value.
+Manifest identity does not rest on that equality and never did: the key is
+owner-anchored on user and room, and the bytes are re-hashed against the
+request's ledger sha256 before they are parsed. A bundle laid out exactly as the
+app writes it is now accepted, a key under a foreign room is still refused, and
+a key under the SCAN id is refused too — the tempting non-fix of accepting either
+identifier at [2] is closed by a test.
+
+**IDENTIFIER DEFECT 2: the writers now store the object key.** Both iOS apps
+called `getPublicURL` on a path they already held and stored
+`/object/public/room-scans/...` into `scan_bundle_url` and `depth_archive_url`,
+which 400 for a bucket that is `public = false`. The repair is writer-side and
+stores the bare key, because that is what this repository already does for every
+other private bucket (`capture-media`'s `path`, `site-requests`'s `object_path`)
+and because all four consumers already reduce the stored value to a key and
+already accept a bare one unchanged. `/object/authenticated/` was rejected — no
+precedent here, and it embeds the project host in a column; a persisted signed
+URL was rejected because it expires. **No migration, no backfill, nothing written
+to Strata**; the SQL to normalise existing rows is described for the owner and is
+hygiene rather than repair, since every reader already strips both forms.
+
+**Verification, both platforms, each against a base-commit control extracted
+with `git archive be16f132` to a sibling directory and run on the same
+interpreter — so a pre-existing failure can never be reported as ours.**
+macOS: **2_114 passed, 16 failed, 85 skipped** against **2_087
+passed, 16 failed**; the identical 16, zero new, zero fixed. Qualified x86_64
+host: **2_131 passed, 83 failed, 1 skipped** against **2_104 passed, 83
+failed**; the **identical 83**, zero new, zero fixed, **+27 passes — exactly the
+new test count**. The 83 are 82 `test_install_script` and `test_packaging`:
+properties of running from a checkout rather than from `install.sh`.
+
+One control artifact is worth recording because it nearly became a false
+positive. The first host control showed nine EXTRA failures in
+`test_field_raster_materializer` and `test_refine_lifecycle` — all
+"packaged helper source has unsafe type or mode". They were an extraction
+artifact: `field_raster_libheif.c` landed group-writable (0664), which
+`_open_packaged_source`'s `st_mode & 0o022` correctly refuses. The guard was
+right and the control was wrong. Both trees are now extracted and normalised
+identically, and the nine are gone from both.
+
+**Mutation sweep against the full suite**, control asserted to **0 red** before
+any count was read. Sixteen clauses: the angle filter removed in each of the
+three derivations; the bound widened to 180 and tightened to 45; the inclusive
+comparison made strict; the distance band dropped; the optical axis read off the
+wrong matrix row; the normalisation guard removed; the bound validation removed;
+the neighbour cap removed; temporal pairs wrongly angle-filtered;
+`classify_overlap` not forwarding the bound; the agreement guard not
+substituting rotations, and not raising at all; and the evidence builder
+deriving its graph from the REFINED rotation instead of the raw one. **Five
+survived the first sweep and are reported rather than absorbed** — the bound's
+value, the inclusive comparison, `classify_overlap`'s pass-through, and both
+clauses inside the evidence builder, whose `_pair_graph` sits behind a GPU in
+production and had no reachable test at all. Each was given a reaching test
+built by construction — the widest verified pair from the qualification capture
+for the bound, the function's own computed angle fed back as the bound for the
+comparison, two `classify_overlap` calls differing only in the bound, and
+hand-built `_ValidatedFrame` rows for the builder — and the sweep was rerun. All
+sixteen killed.
+
+**Posture unchanged and re-verified, not taken on report.** `DEFAULT_STAGES =
+"ingest,solve,drawings"`; `scan_pipeline.refine` unregistered; the raster pin
+exactly `FieldRasterProfile(1440, 1920)`; `DEFAULT_LEASE_SECONDS = 3600.0`;
+`PILOT_200_400_FRAME_RANGE_QUALIFIED` and `PRIMARY_EXECUTION_QUALIFIED` both
+still `False` — a path refused on all three captures is not a qualified path.
+R119's movement and shape floors are as built and cleared every run.
+
+**What is still not true.** The threshold rests on ONE capture's published
+database — one device, one OS, two rooms — and the held-out check that validates
+it is a single number. Nothing was published by any of the three re-runs. Whether
+`evaluate_refinement_evidence` should carry a loop-comparable veto at all is now
+a sharper question than it was, and it is still the owner's. `room_scan_images.
+image_url`/`thumbnail_url` and `stages/drawings.py`'s `svg_url`/`pdf_url` still
+carry the non-resolving public form; only the two columns I104 names were fixed.
+No iOS build or device pass has been run against either Swift change. The
+200-400 band is untouched. Fuse, Splat and Present are not composed.
+
+*Entries add: I105 · last id = I105*
+
+### R123 · Field Capture P2 · the loop comparables become advisory; the direction test is the wrong shape — 2026-07-29
+
+The program owner ruled on 2026-07-29, on the evidence of I103, I104 and I105:
+**`evaluate_refinement_evidence` stops vetoing on the two loop comparables.**
+Reprojection, registration coverage and the optional external error remain hard
+gates. The loop numbers are still computed, still validated, and are to be
+reported *more* prominently than before — what is removed is their power to
+refuse, not their existence.
+
+**Why the direction test is wrong in principle, not merely in practice.** The
+loop comparables measure the disagreement between COLMAP's **image-only**
+relative rotation, taken from two-view geometries produced by matching, and the
+rotation implied by the trajectory. Bundle adjustment does not touch a two-view
+geometry: it minimises reprojection over tracks. So after refinement the
+trajectory has moved toward the reprojection optimum while the two-view
+estimates stand exactly where matching left them. On these captures those
+estimates come from 0.25-0.5 m baselines, which is where two-view geometry is
+weakest. A small positive drift is therefore the *expected* behaviour of a
+successful refinement, not a symptom of a failing one. The rule asked whether a
+quantity had decreased when nothing in the optimiser was trying to decrease it.
+
+**Why an edge-count floor was considered and rejected.** R122's fix tripled the
+verified loop evidence on the best capture (31 → 90 edges) and the variance
+across the program collapsed exactly as a noise-dominated statistic should:
++20.31, −5.27, +2.30, −18.08, −1.28, −0.60, +0.54, **+0.22** percent at 8, 9,
+12, 15, 25, 31, 43 and 90 edges. But what survives the collapse is a *positive*
+residual. **Room 2 at 90 verified edges — the healthiest loop evidence this
+program has produced — still regresses and would still be refused.** An
+edge-count floor does not rescue any capture; it relocates the same refusal onto
+the runs carrying the most evidence. Three of three real captures refuse on a
+loop comparable while reprojection improves 28.9-32.9%.
+
+**What this costs, stated rather than glossed.** It gives up the only **global
+consistency** check. Reprojection cannot see a self-consistent but globally
+wrong reconstruction, and loop closure is the classical instrument for catching
+exactly that. This ruling accepts that exposure deliberately and for a bounded
+period. What still gates: reprojection, registration coverage, the external
+error when present, R119's movement and gauge-invariant shape floors, the
+cheirality check that caught the no-revisit sweep, and the entire
+materialisation, packet and toolchain chain ahead of them.
+
+**The replacement is a magnitude bound, and it is deferred on purpose.** The
+meaningful question is not "did the disagreement grow?" but "is the refined
+trajectory *grossly* inconsistent with the image evidence?" — an absolute
+ceiling, not a direction. That threshold is **not** to be derived from the three
+captures now in hand: fitting a bound to the runs one wants to pass is the
+inversion R122 was written to prevent, and R119's floors were built on the
+opposite principle. It waits for enough captures across enough rooms to derive
+honestly.
+
+**Scope of the edit.** Minimal and surgical. The loop metrics keep their
+validation — finite, non-negative, before-and-after — and their place in the
+evidence record; only their membership in the refusal set changes. This is the
+first change to `evaluate_refinement_evidence` since the function was written;
+it has been byte-identical through R119, R121 and R122 precisely so that this
+ruling could be made on evidence rather than convenience.
+
+**Unchanged.** Refine stays unregistered as a stage; `DEFAULT_STAGES` remains
+`ingest,solve,drawings`. The raster pin stays exactly 1440x1920. R119's floors
+stay as built. `PRIMARY_EXECUTION_QUALIFIED` and
+`PILOT_200_400_FRAME_RANGE_QUALIFIED` stay `False`; a passing run under a
+relaxed gate is not a qualified path.
+
+*Entries add: R123 · last id = R123*
+
+### I106 · Field Capture P2 · the loop comparables become advisory; three of three real captures pass and publish — 2026-07-29
+
+R123 is built. **`evaluate_refinement_evidence` changed for the first time since
+it was written** — it had been byte-identical through R119, R121 and R122 on
+purpose, so that this ruling could be made on evidence rather than convenience.
+Two clauses left the refusal set. Nothing else about the rule moved: no
+tolerance was introduced, no threshold was invented, no floor was widened.
+
+**THE EDIT, IN FULL.** The `regressions` tuple went from four members to two:
+
+```
+    regressions = (
+        evidence.reprojection_rmse_px_after > evidence.reprojection_rmse_px_before,
+-       evidence.loop_rotation_rmse_deg_after > evidence.loop_rotation_rmse_deg_before,
+-       evidence.loop_translation_direction_rmse_deg_after
+-       > evidence.loop_translation_direction_rmse_deg_before,
+        external_pair[0] is not None and external_pair[1] > external_pair[0],
+    )
+```
+
+Everything else still gates and was checked by construction rather than by
+inspection: reprojection RMSE, the registration-coverage floor
+(`MIN_CONNECTED_FRACTION`), the coverage regression check, the optional external
+error, and `verified_loop_edges < 1`. The last of those is deliberately
+untouched — "the loop evidence disagrees" and "there is no loop evidence" are
+different conditions, and R123 removed a veto on a MEASUREMENT, not the
+requirement that the measurement exist. The measurable-improvement floor is also
+byte-identical, including its two loop terms; dropping them from there would
+newly refuse runs the ruling did not ask to refuse.
+
+**THE REASONING IS IN THE CODE, NOT ONLY IN THE LOG.** The refusal set now
+carries the argument: bundle adjustment minimises reprojection over tracks and
+never touches a two-view geometry, so after refinement the trajectory has moved
+to the reprojection optimum while COLMAP's image-only relative rotations stand
+exactly where matching left them. On the 0.25-0.5 m baselines these captures
+produce — where two-view geometry is weakest — a small positive drift is the
+EXPECTED behaviour of a successful refinement. The comment also states what is
+absent and why: no magnitude ceiling, no edge-count floor, and global
+consistency unguarded until an absolute bound can be derived honestly.
+
+**ADVISORY MEANS REPORTED, AND THAT NEEDED NEW SURFACE.** Before R123 a PASS
+implied "neither loop comparable regressed", so a passing verdict said nothing
+about them and did not need to. That implication is gone. `Refinement
+EvidenceVerdict` gains one field, `loop_consistency_advisory`, set on ALL FIVE
+exits, rendering both pairs with their direction and the verified edge count:
+
+```
+advisory_not_gating_r123: loop_rotation_rmse_deg 12.694556->12.721874 (+0.22%);
+loop_translation_direction_rmse_deg 14.824698->14.659653 (-1.11%);
+verified_loop_edges 90
+```
+
+It reaches three published surfaces — the evidence record
+(`refinement-evidence-v1.json`), the run manifest's `refinementEvidence` block,
+and the lifecycle run summary — and the publication validator checks it like
+everything else published: the manifest's copy must equal the verdict's, the key
+set is exact, and a blank or non-string advisory is refused. **No branch anywhere
+reads the string.** It exists to be read.
+
+**THE RE-RUN. Same host, same three bundles, same discipline as I105 — a
+root-owned release at `/opt/patina/scan-pipeline-r123` beside the live venv,
+`patina-scan-worker` never touched (`NRestarts=5`, unchanged, from the
+2026-07-29 01:04 host network blip and not from this work).**
+
+```
+                         BEFORE (I105, R122 policy)                AFTER (R123 rule)
+capture          frames  edges  reproj   looprot  looptrn  verdict edges  reproj   looprot  looptrn  verdict
+room 2, normal   100     90     -28.89%  +0.22%   -1.11%   REFUSED 90     -28.89%  +0.22%   -1.11%   PASS
+room 1           49       4     -32.94%  +0.31%   -0.50%   REFUSED  4     -32.94%  +0.31%   -0.50%   PASS
+single sweep     31      14     -32.78%  +2.10%   -1.03%   REFUSED 14     -32.78%  +2.10%   -1.03%   PASS
+```
+
+**EVERY MEASURED DIGIT IS IDENTICAL TO I105's.** Reprojection, both loop
+comparables, coverage (1.000 before and after on all three), observation counts,
+verified edges, and the candidate graph (walkA 1_236 pairs / 291 loop candidates
+/ 90 edges) all reproduce exactly. The evidence did not change; only the rule's
+reading of it did. That is the cleanest possible statement of what this ruling
+was: nothing about the reconstructions got better.
+
+**ALL THREE PUBLISHED, AND WALKB AND WALKC ARE THE FIRST OF THEIR KIND.** Only
+one run in this program's history had ever published (I104's, before R122
+re-measured it into a refusal). Each of the three now writes eleven artifacts
+under `.../v1/refine/`, and each published manifest carries its own loop
+disagreement in words. Room 1's says `+0.31%` over four edges; the sweep's says
+`+2.10%` over fourteen with a 39.3-degree translation disagreement — by far the
+worst of the three, which is what a pure sweep with no revisit should look like.
+**The control still looks like a control; it is simply no longer refused for
+looking like one.** Nothing was written to Storage or to any table.
+
+**CONSTRUCTED TESTS, ANCHORED ON REAL EVIDENCE.** The battery's base is the
+walkB capture exactly as I103 measured it and I105 re-measured it bit-identically
+— the evidence this function refused on every run it ever made of it — so the
+first case cannot pass against an unmodified subject: before the edit,
+`_r123_evidence()` refused. Seventeen new tests. A loop-rotation regression
+alone now passes; a loop-translation regression alone passes; both together
+pass. A reprojection regression still refuses WITH BOTH LOOP COMPARABLES
+IMPROVING, which is where a tolerance-widening non-fix would have shown. The
+coverage floor and the coverage regression check are refused separately, each
+isolated so the other cannot be what fires (30/49 with before equal to after;
+45/49 which clears the floor and is still refused). An external-error regression
+refuses and its mirror passes, so the refusal is shown to come from the
+direction rather than from external evidence merely being present. A run with
+zero verified loop edges still refuses. And the advisory property: a PASSING
+verdict carries `4.915408->4.930533 (+0.31%)`, both derived percentages are
+checked against their numbers, all five exits are walked for the advisory, the
+zero-baseline case renders `n/a` instead of dividing, and the loop metrics are
+still hard `AdapterError`s when non-finite or negative.
+
+**MUTATION SWEEP AGAINST THE FULL SUITE, control asserted 0 red before any count
+was read.** Nineteen clauses: each removed loop clause put BACK into the refusal
+set; the reprojection clause deleted; the external clause deleted; the coverage
+floor removed; the coverage regression check removed; the no-loop-evidence
+return removed; the loop metrics dropped from validation; the advisory reduced
+to its prefix, sign-inverted, stripped of its translation pair, stripped of its
+edge count, and detached from the PASS verdict; the zero-baseline guard removed;
+and the advisory dropped from each of the evidence record, the manifest and the
+run summary, plus the validator's equality and non-empty guards removed.
+**All nineteen were killed on the first sweep, and the control was clean before
+any count was read.** Two are worth recording. Detaching the advisory from the
+PASS verdict reddens 74 tests and dropping it from the published manifest
+reddens 70 — the publication validator refuses a manifest whose advisory
+disagrees with the verdict or is blank, so an advisory that silently stopped
+being produced cannot publish rather than publishing empty. And removing the
+zero-baseline guard reddens two PRE-EXISTING `test_refine_evidence_builder`
+cases, not only the constructed one: the builder really does produce a zero loop
+RMSE on an exactly-reproduced model, so an unguarded division was reachable from
+the suite that already existed.
+
+**VERIFICATION, both platforms, each against a base-commit control extracted
+from `93f7d56a` to a sibling directory and run on the same interpreter.**
+macOS: **2_131 passed, 16 failed, 85 skipped** against **2_114 passed, 16 failed, 85 skipped** — the identical 16, zero new, zero
+fixed. Qualified x86_64 host: **2_147 passed, 84 failed, 1 skipped** against
+**2_130 passed, 84 failed, 1 skipped** — the **identical 84**, zero new, zero
+fixed, **+17 passes, exactly the new test count**. The 84 are 82
+`test_install_script`, `test_packaging` and `test_validator_drift`: properties
+of running from a checkout rather than from `install.sh`. Both trees were
+extracted and mode-normalised identically, because I105 recorded that a
+group-writable extraction artifact can manufacture nine false control failures.
+
+**WHAT IS STILL NOT TRUE, STATED RATHER THAN GLOSSED.**
+
+**Global consistency is now unguarded.** Reprojection cannot see a
+self-consistent but globally wrong reconstruction — a drifted loop that closes
+onto itself minimises reprojection perfectly well — and loop closure was the
+only instrument in this rule that could. R123 accepted that exposure for a
+bounded period and deferred the replacement, an absolute magnitude bound, until
+enough captures across enough rooms exist to derive one honestly. Until then a
+grossly inconsistent trajectory whose reprojection improves and whose coverage
+holds will PASS, and the only thing standing between it and publication is the
+cheirality check, R119's movement and shape floors, and a reader looking at the
+advisory. **Nothing in the code will stop it.**
+
+**A loop comparable can still GRANT the measurable-improvement floor on its
+own.** That list was left byte-identical per the ruling's scope, so a run whose
+reprojection is flat and whose loop rotation improved 1% still clears the floor
+— an unforced quantity granting a pass. Reported, not acted on: removing it is
+a second change wearing the first one's clothes and would newly refuse runs.
+
+Three captures, one device, two rooms plus a sweep. No magnitude threshold was
+derived and none should be read out of the numbers above. The advisory string is
+a report with no consumer: nothing alerts on it, nothing trends it, and no
+operator has yet been asked to read one. No iOS build or device pass was run.
+The 200-400 frame band is untouched. Fuse, Splat and Present are not composed.
+
+**Posture unchanged and re-verified, not taken on report.** `DEFAULT_STAGES =
+"ingest,solve,drawings"`; `scan_pipeline.refine` unregistered; the raster pin
+exactly `FieldRasterProfile(1440, 1920)`; R119's movement and gauge-invariant
+shape floors byte-identical and cleared on every run.
+`PILOT_200_400_FRAME_RANGE_QUALIFIED` and `PRIMARY_EXECUTION_QUALIFIED` both
+still `False` — R123 says explicitly that a passing run under a relaxed gate is
+not a qualified path, and three passes bought under a removed veto are exactly
+that.
+
+*Entries add: I106 · last id = I106*

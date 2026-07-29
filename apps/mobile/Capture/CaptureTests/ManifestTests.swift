@@ -164,6 +164,40 @@ struct ManifestTests {
         #expect(members.first { $0.name == "depth_0002.bin" }?.content == payloadB)
     }
 
+    /// R120 — the transport archive must name its members the way the bundle's own
+    /// indexes name those files. `keyframe_index.ndjson` records `heicPath` as
+    /// `keyframes/<file>`, and the scan-pipeline worker resolves each member by
+    /// exactly that string; the shipped writer used the bare filename, so every
+    /// bundle contradicted its own index and none was consumable. The other tar
+    /// tests pass arbitrary names straight to `write`, which is why none of them
+    /// could catch it — this one asserts the NAMING RULE, through the same seam
+    /// the uploader uses.
+    @Test func bundleEntriesCarryTheDirectoryPrefixTheIndexRecords() throws {
+        let dir = try tempDir()
+        defer { try? FileManager.default.removeItem(at: dir) }
+        let heic = dir.appendingPathComponent("keyframe_000001_001313016_128.heic")
+        let bin  = dir.appendingPathComponent("keyframe_000001_001313016_128.bin")
+        try Data("heic".utf8).write(to: heic)
+        try Data("bin".utf8).write(to: bin)
+
+        let entries = TarArchive.bundleEntries(directory: "keyframes", files: [heic, bin])
+        #expect(entries.map(\.name) == ["keyframes/keyframe_000001_001313016_128.heic",
+                                        "keyframes/keyframe_000001_001313016_128.bin"])
+
+        // And the rule survives the writer: the members on disk are what the index
+        // would look up, not bare filenames.
+        let out = dir.appendingPathComponent("keyframes.tar")
+        _ = try TarArchive.write(entries: entries, to: out)
+        let names = extractUstar(try Data(contentsOf: out)).map(\.name)
+        #expect(names == ["keyframes/keyframe_000001_001313016_128.bin",
+                          "keyframes/keyframe_000001_001313016_128.heic"])   // sorted
+        #expect(names.allSatisfy { $0.hasPrefix("keyframes/") })
+
+        // The same rule, applied to the depth lane the uploader also archives.
+        #expect(TarArchive.bundleEntries(directory: "depth", files: [bin]).map(\.name)
+                == ["depth/keyframe_000001_001313016_128.bin"])
+    }
+
     /// Minimal independent ustar reader: walks 512-byte blocks, reading the name field
     /// [0,100) and the octal size field [124,136), then the content padded to 512.
     private func extractUstar(_ data: Data) -> [(name: String, content: Data)] {

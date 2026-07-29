@@ -216,11 +216,33 @@ def _client(session: _Session) -> StorageClient:
     )
 
 
+#: Descriptors borrowed by a test, released after it whether it passed or not.
+#: Immutable publication no longer takes a path, so every call site has to hold
+#: an open descriptor the way a real caller does.
+_BORROWED_DESCRIPTORS: list[int] = []
+
+
+def _descriptor(source: Path) -> int:
+    descriptor = os.open(source, os.O_RDONLY)
+    _BORROWED_DESCRIPTORS.append(descriptor)
+    return descriptor
+
+
+@pytest.fixture(autouse=True)
+def _release_borrowed_descriptors():
+    yield
+    while _BORROWED_DESCRIPTORS:
+        try:
+            os.close(_BORROWED_DESCRIPTORS.pop())
+        except OSError:
+            pass
+
+
 def _publish(client: StorageClient, source: Path, name: str = "artifact.bin") -> bool:
     payload = source.read_bytes()
-    return client.publish_immutable_file(
+    return client.publish_immutable_descriptor(
         f"{_PREFIX}/{name}",
-        source,
+        _descriptor(source),
         "application/octet-stream",
         expected_sha256=hashlib.sha256(payload).hexdigest(),
         expected_size=len(payload),
@@ -559,15 +581,107 @@ def test_duplicate_verification_stream_failure_is_transient(tmp_path):
     assert caught.value.token == "REFINE_ARTIFACT_IO"
 
 
+def test_a_matching_measured_identity_is_accepted(tmp_path):
+    source = tmp_path / "artifact.bin"
+    source.write_bytes(b"payload")
+    session = _Session(_Response(200))
+    descriptor = _descriptor(source)
+    metadata = os.fstat(descriptor)
+
+    created = _client(session).publish_immutable_descriptor(
+        f"{_PREFIX}/artifact.bin",
+        descriptor,
+        "application/octet-stream",
+        expected_sha256=hashlib.sha256(b"payload").hexdigest(),
+        expected_size=7,
+        user_id=_USER_ID,
+        scan_id=_SCAN_ID,
+        expected_identity=(metadata.st_dev, metadata.st_ino),
+    )
+
+    assert created is True
+    assert len(session.posts) == 1
+
+
+def test_a_descriptor_that_is_not_the_measured_inode_is_refused(tmp_path):
+    """An fd number is a slot in a table; a reused slot is a different object.
+
+    The bytes here are byte-identical to what the caller measured, so the
+    digest, the size and every staging check would pass.  Only the inode says
+    this is not the object that was measured.
+    """
+
+    measured = tmp_path / "measured.bin"
+    measured.write_bytes(b"payload")
+    substitute = tmp_path / "substitute.bin"
+    substitute.write_bytes(b"payload")
+    session = _Session(_Response(200))
+    measured_metadata = os.stat(measured)
+
+    with pytest.raises(PermanentError) as caught:
+        _client(session).publish_immutable_descriptor(
+            f"{_PREFIX}/artifact.bin",
+            _descriptor(substitute),
+            "application/octet-stream",
+            expected_sha256=hashlib.sha256(b"payload").hexdigest(),
+            expected_size=7,
+            user_id=_USER_ID,
+            scan_id=_SCAN_ID,
+            expected_identity=(
+                measured_metadata.st_dev,
+                measured_metadata.st_ino,
+            ),
+        )
+
+    assert caught.value.token == "REFINE_ARTIFACT_SOURCE"
+    assert "not the inode it was measured on" in str(caught.value)
+    assert session.posts == []
+    assert session.gets == []
+
+
+@pytest.mark.parametrize(
+    "expected_identity",
+    [
+        (),
+        (1,),
+        (1, 2, 3),
+        [1, 2],
+        ("1", 2),
+        (True, 2),
+        (1, None),
+    ],
+)
+def test_a_malformed_measured_identity_is_refused(tmp_path, expected_identity):
+    source = tmp_path / "artifact.bin"
+    source.write_bytes(b"payload")
+    session = _Session(_Response(200))
+
+    with pytest.raises(PermanentError) as caught:
+        _client(session).publish_immutable_descriptor(
+            f"{_PREFIX}/artifact.bin",
+            _descriptor(source),
+            "application/octet-stream",
+            expected_sha256=hashlib.sha256(b"payload").hexdigest(),
+            expected_size=7,
+            user_id=_USER_ID,
+            scan_id=_SCAN_ID,
+            expected_identity=expected_identity,
+        )
+
+    assert caught.value.token == "REFINE_ARTIFACT_SOURCE"
+    assert "(st_dev, st_ino) pair" in str(caught.value)
+    assert session.posts == []
+
+
 def test_owner_prefix_is_required_before_any_service_role_write(tmp_path):
     source = tmp_path / "artifact.bin"
     source.write_bytes(b"payload")
     session = _Session(_Response(200))
 
     with pytest.raises(PermanentError) as caught:
-        _client(session).publish_immutable_file(
+        _client(session).publish_immutable_descriptor(
             f"room_file/other-user/{_SCAN_ID}/v2/refine/artifact.bin",
-            source,
+            _descriptor(source),
             "application/octet-stream",
             expected_sha256=hashlib.sha256(b"payload").hexdigest(),
             expected_size=7,
@@ -599,9 +713,9 @@ def test_unsafe_object_key_is_rejected_before_service_role_write(tmp_path, objec
     session = _Session(_Response(200))
 
     with pytest.raises(PermanentError) as caught:
-        _client(session).publish_immutable_file(
+        _client(session).publish_immutable_descriptor(
             object_key,
-            source,
+            _descriptor(source),
             "application/octet-stream",
             expected_sha256=hashlib.sha256(b"payload").hexdigest(),
             expected_size=7,
@@ -624,46 +738,98 @@ def test_non_regular_source_is_rejected_before_any_service_role_write():
     assert session.posts == []
 
 
-def test_symlink_source_is_rejected_before_any_service_role_write(tmp_path):
-    target = tmp_path / "target.bin"
+def test_publication_never_opens_anything_by_path(tmp_path, monkeypatch):
+    """The whole point of the descriptor contract, asserted directly.
+
+    The old path-based publisher validated one ``open`` and uploaded from a
+    second.  There is now no ``open`` of the source at all, so a name swap
+    between the two has nothing to aim at.  Every ``os.open`` and ``os.lstat``
+    the call makes is recorded and the source's name must not be among them.
+    (The private upload scratch still opens, via ``tempfile``.)
+    """
+
+    payload = b"descriptor-only payload"
     source = tmp_path / "artifact.bin"
-    target.write_bytes(b"payload")
-    source.symlink_to(target)
+    source.write_bytes(payload)
     session = _Session(_Response(200))
-
-    with pytest.raises(PermanentError) as caught:
-        _publish(_client(session), source)
-
-    assert caught.value.token == "REFINE_ARTIFACT_SOURCE"
-    assert session.posts == []
-
-
-@pytest.mark.skipif(
-    not hasattr(os, "mkfifo") or not hasattr(os, "O_NONBLOCK"),
-    reason="FIFO race defense requires POSIX nonblocking opens",
-)
-def test_regular_source_replaced_by_fifo_cannot_block_publication(tmp_path, monkeypatch):
-    source = tmp_path / "artifact.bin"
-    source.write_bytes(b"payload")
-    session = _Session(_Response(200))
+    descriptor = _descriptor(source)
+    touched: list[str] = []
+    real_open = storage_module.os.open
     real_lstat = storage_module.os.lstat
-    raced = False
+    real_stat = storage_module.os.stat
 
-    def replace_after_lstat(path):
-        nonlocal raced
-        metadata = real_lstat(path)
-        if not raced and os.fspath(path) == os.fspath(source):
-            raced = True
-            source.unlink()
-            os.mkfifo(source)
-        return metadata
+    def record(real):
+        def wrapper(path, *args, **kwargs):
+            try:
+                touched.append(os.fspath(path))
+            except TypeError:
+                pass
+            return real(path, *args, **kwargs)
 
-    monkeypatch.setattr(storage_module.os, "lstat", replace_after_lstat)
+        return wrapper
+
+    monkeypatch.setattr(storage_module.os, "open", record(real_open))
+    monkeypatch.setattr(storage_module.os, "lstat", record(real_lstat))
+    monkeypatch.setattr(storage_module.os, "stat", record(real_stat))
+
+    assert (
+        _client(session).publish_immutable_descriptor(
+            f"{_PREFIX}/artifact.bin",
+            descriptor,
+            "application/octet-stream",
+            expected_sha256=hashlib.sha256(payload).hexdigest(),
+            expected_size=len(payload),
+            user_id=_USER_ID,
+            scan_id=_SCAN_ID,
+        )
+        is True
+    )
+    assert session.posts[0]["body"] == payload
+    assert os.fspath(source) not in touched
+    assert not any(os.fspath(source) in entry for entry in touched)
+
+
+def test_replacing_the_source_at_its_path_cannot_change_published_bytes(tmp_path):
+    """A same-UID swap at the name is simply not reachable from a descriptor."""
+
+    original = b"first payload"
+    replacement = b"swapped payload!"
+    source = tmp_path / "artifact.bin"
+    source.write_bytes(original)
+    descriptor = _descriptor(source)
+    decoy = tmp_path / "decoy.bin"
+    decoy.write_bytes(replacement)
+    os.replace(decoy, source)
+    session = _Session(_Response(200))
+
+    assert (
+        _client(session).publish_immutable_descriptor(
+            f"{_PREFIX}/artifact.bin",
+            descriptor,
+            "application/octet-stream",
+            expected_sha256=hashlib.sha256(original).hexdigest(),
+            expected_size=len(original),
+            user_id=_USER_ID,
+            scan_id=_SCAN_ID,
+        )
+        is True
+    )
+    assert session.posts[0]["body"] == original
+    assert source.read_bytes() == replacement
+
+
+@pytest.mark.skipif(not hasattr(os, "mkfifo"), reason="FIFO needs POSIX")
+def test_a_non_regular_descriptor_is_rejected_before_any_service_role_write(tmp_path):
+    fifo = tmp_path / "artifact.fifo"
+    os.mkfifo(fifo)
+    descriptor = os.open(fifo, os.O_RDONLY | os.O_NONBLOCK)
+    _BORROWED_DESCRIPTORS.append(descriptor)
+    session = _Session(_Response(200))
 
     with pytest.raises(PermanentError) as caught:
-        _client(session).publish_immutable_file(
+        _client(session).publish_immutable_descriptor(
             f"{_PREFIX}/artifact.bin",
-            source,
+            descriptor,
             "application/octet-stream",
             expected_sha256=hashlib.sha256(b"payload").hexdigest(),
             expected_size=7,
@@ -671,7 +837,25 @@ def test_regular_source_replaced_by_fifo_cannot_block_publication(tmp_path, monk
             scan_id=_SCAN_ID,
         )
 
-    assert raced is True
+    assert caught.value.token == "REFINE_ARTIFACT_SOURCE"
+    assert session.posts == []
+
+
+@pytest.mark.parametrize("descriptor", ("not-a-descriptor", None, True, 1.0))
+def test_a_non_descriptor_source_is_rejected_before_any_service_role_write(descriptor):
+    session = _Session(_Response(200))
+
+    with pytest.raises(PermanentError) as caught:
+        _client(session).publish_immutable_descriptor(
+            f"{_PREFIX}/artifact.bin",
+            descriptor,
+            "application/octet-stream",
+            expected_sha256=hashlib.sha256(b"payload").hexdigest(),
+            expected_size=7,
+            user_id=_USER_ID,
+            scan_id=_SCAN_ID,
+        )
+
     assert caught.value.token == "REFINE_ARTIFACT_SOURCE"
     assert session.posts == []
 
@@ -680,30 +864,25 @@ def test_source_mutation_while_staging_never_reaches_remote(tmp_path, monkeypatc
     original = b"a" * ((1 << 20) * 2)
     source = tmp_path / "artifact.bin"
     source.write_bytes(original)
-    real_chunks = storage_module._bounded_file_chunks
-    source_inode = source.stat().st_ino
+    real_pread = storage_module.os.pread
+    mutated = False
 
-    def handle_stat(handle):
-        return storage_module.os.fstat(handle.fileno())
+    def mutate_between_source_chunks(descriptor, size, offset):
+        nonlocal mutated
+        chunk = real_pread(descriptor, size, offset)
+        if not mutated and offset == 0:
+            mutated = True
+            with source.open("r+b") as handle:
+                handle.write(b"b" * len(original))
+        return chunk
 
-    def mutate_between_source_chunks(handle):
-        for index, chunk in enumerate(real_chunks(handle)):
-            yield chunk
-            if index == 0 and handle.fileno() >= 0:
-                if source_inode == source.stat().st_ino == handle_stat(handle).st_ino:
-                    source.write_bytes(b"b" * len(original))
-
-    monkeypatch.setattr(
-        storage_module,
-        "_bounded_file_chunks",
-        mutate_between_source_chunks,
-    )
+    monkeypatch.setattr(storage_module.os, "pread", mutate_between_source_chunks)
     session = _Session(_Response(200))
 
     with pytest.raises(TransientError) as caught:
-        _client(session).publish_immutable_file(
+        _client(session).publish_immutable_descriptor(
             f"{_PREFIX}/artifact.bin",
-            source,
+            _descriptor(source),
             "application/octet-stream",
             expected_sha256=hashlib.sha256(original).hexdigest(),
             expected_size=len(original),
@@ -711,7 +890,9 @@ def test_source_mutation_while_staging_never_reaches_remote(tmp_path, monkeypatc
             scan_id=_SCAN_ID,
         )
 
+    assert mutated is True
     assert caught.value.token == "REFINE_ARTIFACT_IO"
+    assert "changed while staging" in str(caught.value)
     assert session.posts == []
 
 
@@ -744,9 +925,9 @@ def test_invalid_expected_fingerprint_is_rejected_before_network(
     session = _Session(_Response(200))
 
     with pytest.raises(PermanentError) as caught:
-        _client(session).publish_immutable_file(
+        _client(session).publish_immutable_descriptor(
             f"{_PREFIX}/artifact.bin",
-            source,
+            _descriptor(source),
             "application/octet-stream",
             expected_sha256=expected_sha256,
             expected_size=expected_size,
@@ -773,9 +954,9 @@ def test_manifest_fingerprint_mismatch_is_rejected_before_network(
     session = _Session(_Response(200))
 
     with pytest.raises(TransientError) as caught:
-        _client(session).publish_immutable_file(
+        _client(session).publish_immutable_descriptor(
             f"{_PREFIX}/artifact.bin",
-            source,
+            _descriptor(source),
             "application/octet-stream",
             expected_sha256=expected_sha256,
             expected_size=expected_size,
@@ -784,6 +965,15 @@ def test_manifest_fingerprint_mismatch_is_rejected_before_network(
         )
 
     assert caught.value.token == "REFINE_ARTIFACT_IO"
+    # The exact clause matters: a declared size that disagrees with the live
+    # descriptor must be refused before a single byte is staged, not diagnosed
+    # later by the digest.
+    expected_message = (
+        "size no longer matches its manifest"
+        if expected_size != 7
+        else "hash no longer matches its manifest"
+    )
+    assert expected_message in str(caught.value)
     assert session.posts == []
 
 
@@ -829,9 +1019,9 @@ def test_refine_deadline_bounds_download_and_upload_requests(tmp_path):
     source.write_bytes(payload)
     upload_session = _Session(_Response(200))
     assert (
-        _client(upload_session).publish_immutable_file(
+        _client(upload_session).publish_immutable_descriptor(
             f"{_PREFIX}/upload.bin",
-            source,
+            _descriptor(source),
             "application/octet-stream",
             expected_sha256=hashlib.sha256(payload).hexdigest(),
             expected_size=len(payload),
@@ -856,9 +1046,9 @@ def test_refine_deadline_duplicate_verification_is_async_and_idempotent(tmp_path
     )
 
     assert (
-        _client(session).publish_immutable_file(
+        _client(session).publish_immutable_descriptor(
             f"{_PREFIX}/artifact.bin",
-            source,
+            _descriptor(source),
             "application/octet-stream",
             expected_sha256=hashlib.sha256(payload).hexdigest(),
             expected_size=len(payload),
@@ -919,9 +1109,9 @@ def test_refine_total_deadline_cancels_a_stalled_upload(tmp_path):
     started = time.monotonic()
 
     with pytest.raises(TransientError) as caught:
-        client.publish_immutable_file(
+        client.publish_immutable_descriptor(
             f"{_PREFIX}/artifact.bin",
-            source,
+            _descriptor(source),
             "application/octet-stream",
             expected_sha256=hashlib.sha256(payload).hexdigest(),
             expected_size=len(payload),
@@ -956,9 +1146,9 @@ def test_refine_deadline_exhaustion_stops_before_network(tmp_path):
     assert download_error.value.token == "REFINE_ENGINE_TIMEOUT"
 
     with pytest.raises(TransientError) as upload_error:
-        client.publish_immutable_file(
+        client.publish_immutable_descriptor(
             f"{_PREFIX}/artifact.bin",
-            source,
+            _descriptor(source),
             "application/octet-stream",
             expected_sha256=hashlib.sha256(payload).hexdigest(),
             expected_size=len(payload),
@@ -1001,30 +1191,105 @@ def test_download_stops_when_deadline_expires_between_chunks(tmp_path):
     assert destination.stat().st_size == 1 << 20
 
 
-def test_missing_nonblocking_flag_fails_before_source_open_or_network(
-    tmp_path,
-    monkeypatch,
-):
+def test_a_source_that_shrinks_mid_stage_never_reaches_remote(tmp_path, monkeypatch):
+    """The short-read probe, reached the only way it can be: a shrink race."""
+
+    payload = b"s" * ((1 << 20) * 2)
     source = tmp_path / "artifact.bin"
-    source.write_bytes(b"payload")
+    source.write_bytes(payload)
     session = _Session(_Response(200))
-    open_calls = 0
+    real_pread = storage_module.os.pread
+    truncated = False
 
-    def forbidden_open(*args, **kwargs):
-        del args, kwargs
-        nonlocal open_calls
-        open_calls += 1
-        raise AssertionError("os.open must not run without O_NONBLOCK")
+    def truncate_once(fd, size, offset):
+        nonlocal truncated
+        chunk = real_pread(fd, size, offset)
+        if not truncated:
+            truncated = True
+            os.truncate(source, 16)
+        return chunk
 
-    monkeypatch.delattr(storage_module.os, "O_NONBLOCK")
-    monkeypatch.setattr(storage_module.os, "open", forbidden_open)
+    monkeypatch.setattr(storage_module.os, "pread", truncate_once)
 
-    with pytest.raises(PermanentError) as caught:
-        _publish(_client(session), source)
+    with pytest.raises(TransientError) as caught:
+        _client(session).publish_immutable_descriptor(
+            f"{_PREFIX}/artifact.bin",
+            _descriptor(source),
+            "application/octet-stream",
+            expected_sha256=hashlib.sha256(payload).hexdigest(),
+            expected_size=len(payload),
+            user_id=_USER_ID,
+            scan_id=_SCAN_ID,
+        )
 
-    assert caught.value.token == "REFINE_ARTIFACT_SOURCE"
-    assert open_calls == 0
+    assert truncated is True
+    assert caught.value.token == "REFINE_ARTIFACT_IO"
+    assert "ended before its manifest size" in str(caught.value)
     assert session.posts == []
+
+
+def test_a_source_that_grows_mid_stage_never_reaches_remote(tmp_path, monkeypatch):
+    """The trailing-byte probe, reached the only way it can be: a growth race."""
+
+    payload = b"g" * 32
+    source = tmp_path / "artifact.bin"
+    source.write_bytes(payload)
+    session = _Session(_Response(200))
+    real_pread = storage_module.os.pread
+    grown = False
+
+    def grow_once(fd, size, offset):
+        nonlocal grown
+        chunk = real_pread(fd, size, offset)
+        if not grown:
+            grown = True
+            with source.open("ab") as handle:
+                handle.write(b"extra")
+        return chunk
+
+    monkeypatch.setattr(storage_module.os, "pread", grow_once)
+
+    with pytest.raises(TransientError) as caught:
+        _client(session).publish_immutable_descriptor(
+            f"{_PREFIX}/artifact.bin",
+            _descriptor(source),
+            "application/octet-stream",
+            expected_sha256=hashlib.sha256(payload).hexdigest(),
+            expected_size=len(payload),
+            user_id=_USER_ID,
+            scan_id=_SCAN_ID,
+        )
+
+    assert grown is True
+    assert caught.value.token == "REFINE_ARTIFACT_IO"
+    assert "grew while staging" in str(caught.value)
+    assert session.posts == []
+
+
+def test_publication_never_moves_the_borrowed_offset(tmp_path):
+    """Positional reads only: the owner may read the same descriptor after us."""
+
+    payload = b"c" * ((1 << 20) + 11)
+    source = tmp_path / "artifact.bin"
+    source.write_bytes(payload)
+    descriptor = _descriptor(source)
+    os.lseek(descriptor, 5, os.SEEK_SET)
+    session = _Session(_Response(200))
+
+    assert (
+        _client(session).publish_immutable_descriptor(
+            f"{_PREFIX}/artifact.bin",
+            descriptor,
+            "application/octet-stream",
+            expected_sha256=hashlib.sha256(payload).hexdigest(),
+            expected_size=len(payload),
+            user_id=_USER_ID,
+            scan_id=_SCAN_ID,
+        )
+        is True
+    )
+    assert os.lseek(descriptor, 0, os.SEEK_CUR) == 5
+    assert session.posts[0]["body"] == payload
 
 
 def test_existing_p1_upload_bytes_still_upserts(tmp_path):

@@ -1,4 +1,4 @@
-# Field Capture — orchestrator handoff — active 2026-07-25
+# Field Capture — orchestrator handoff — active 2026-07-27
 
 You are picking up the Field Capture program mid-P2. This document is the
 working state an orchestrator needs beyond what the repo already records.
@@ -10,22 +10,29 @@ Read it with, not instead of, the canonical sources below.
    runs (rulings → numbered plan → hard gates). P1 is COMPLETE.
 2. `docs/design/field-capture/field-capture-p2-package.md` — the ACTIVE plan.
    Part B carries Kody's R114 rulings inline; Part E is the numbered plan.
-3. `docs/design/the-document/DECISIONS.md` — entries **R108–R115 and I84–I96**
-   are this program's full decision history. R115 is the latest gate; I96 is
-   the latest implementation record.
+3. `docs/design/the-document/DECISIONS.md` — entries **R108–R116 and I84–I97**
+   are this program's full decision history. R115 is the latest owner gate;
+   **R116 closes ordered item 4**; I97 is the latest implementation record.
 4. `docs/design/field-capture/p2-item3-gpu-box-acceptance-2026-07-19.md` — the
    completed real-DeskDev dependency/sandbox receipt (I88).
 5. `docs/design/field-capture/p2-item4-colmap-adapter-spike-2026-07-18.md` —
    item 4's exact engine/API/fixture decision and remaining proof boundary.
 6. `docs/design/field-capture/p2-item4a-field-raster-qualification-2026-07-24.md`
    — the completed physical iPhone/Core Image raster receipt (I92).
-7. `docs/design/field-capture/scan-pipeline-worker-design.md` — §10 is the
+7. `docs/design/field-capture/p2-item4-qualified-host-acceptance-2026-07-27.md`
+   — item 4's DeskDev receipt: the gate (1139/0 skipped, four runs), the four
+   named acceptance clauses (subreaper, adopted-child reaping/quiescence,
+   escaped-`setsid` handling, cleanup precedence), the kernel-thread parser on
+   real `/proc`, the `PR_SET_DUMPABLE` seal, both descriptor-theft routes, and
+   the `O_TMPFILE` freeze on real ext4. Read its boundary section before
+   treating any of it as a gate.
+8. `docs/design/field-capture/scan-pipeline-worker-design.md` — §10 is the
    P2 stage contract (the fork-join in §10.1.1 and budgets in §10.9 are
    implementation law).
-8. Auto-memory `project_field_capture_p1.md` — the compressed ledger with
+9. Auto-memory `project_field_capture_p1.md` — the compressed ledger with
    every warning flag.
-9. `docs/design/field-capture/m4-pilot-checklist.md` — the still-owed Leah
-   pilot runbook.
+10. `docs/design/field-capture/m4-pilot-checklist.md` — the still-owed Leah
+    pilot runbook.
 
 ## Exact position (as of this handoff)
 
@@ -214,45 +221,75 @@ Read it with, not instead of, the canonical sources below.
   disabled/uncomposed landing and NO-GO for activation or publishable output.
   No install, deployment, queue, Strata, Storage, DeskDev, or real-scan run
   occurred.
-- **Item 4's remaining hard gates begin at the disabled production
-  lifecycle.** I96 supplies source-only packet extraction and command
-  supervision, but neither is qualified for composition. Parent-provisioned
-  descriptor-rooted extraction with kill-safe cleanup, source/adapter ledger
-  parsing, escaped-descendant containment, a pinned environment/toolchain
-  contract, exclusive workspace ownership across the cleanup
-  stat→unlink/rmdir window, and real Linux lifecycle evidence remain open. A
-  safe native output-descriptor channel, runner-path-reopen removal,
-  aligned-output construction, and the seven-descriptor raw/refined artifact
-  contract must also close before the I95 builder can consume real engine
-  snapshots. Only then may a descriptor-safe
+- **I97 closes ordered next-work items 1, 2, 3 and 5, and produces item 4's
+  qualified-host evidence — all still disabled and uncomposed.** Item 1 gives
+  extraction a parent-provisioned descriptor-rooted 0700 workspace with a
+  bounded reverse-FD lease and parent cleanup after normal return, timeout,
+  SIGTERM and SIGKILL; its identity guard pins each entry with `O_PATH` first,
+  because `(st_dev, st_ino)` alone is not an identity where inode numbers
+  recycle. Item 3 adds executable-identity pinning re-proven immediately before
+  `execve`, a 13-key closed command environment, argv confined **per option** to
+  its own leased surface (`packet/` read, `work/` write, `tmp/` scratch), and a
+  pinned toolchain identity that rejects drift. Item 2 parses the source and
+  adapter ledgers with a closed role universe, cardinality and
+  manifest-relationship validation; the adapter ledger is now envelope-only,
+  because its per-row content proved derivable from the engine request. Item 5
+  implements the seven-descriptor native output handoff and freezes it **by
+  construction** — every output is copied at receipt into a parent-created
+  `O_TMPFILE` and hashed there — behind a `PR_SET_DUMPABLE` seal that closes the
+  descriptor-theft routes. Three exploits demonstrated against earlier revisions
+  now fail: a `futimens` mtime forge, a same-UID `/proc/<pid>/fd` reopen, and
+  `pidfd_open` + `pidfd_getfd` descriptor theft. Full receipt: **I97**.
+- **Item 4's remaining hard gates begin at the composition, not at the
+  foundations.** Items 1, 2, 3 and 5 are landed and reviewed; **item 4 is
+  closed by R116** on its qualified-host evidence, with two scoped exceptions
+  carried forward (escaped-`setsid` containment → item 7; `drain_errors`
+  precedence in isolation → in-repo coverage only).
+  What is still open is item 6 — raw pre-BA and
+  refined model snapshot construction, a child-proposed alignment, and
+  parent-recomputed Sim3 and pose digests — and then item 7's composition. Only
+  after item 6 may a descriptor-safe
   materializer→raster→backend→runner→publisher lifetime compose the
-  I93/I94/I95/I96 prerequisites under the single carried lease-aware deadline.
-  Only after independent review may that composition produce comparable
-  reprojection/registration/verified-loop evidence on local-scratch scan
-  `95266be1`; unchanged evidence cannot pass and trajectory shape remains
+  I93/I94/I95/I96/I97 prerequisites under the single carried lease-aware
+  deadline. Only after independent review may that composition produce
+  comparable reprojection/registration/verified-loop evidence on local-scratch
+  scan `95266be1`; unchanged evidence cannot pass and trajectory shape remains
   diagnostic-only. Queue replay/fork behavior, downstream consumers, and the
   canonical refine → {fuse→mesh-solve, splat} → Present four-manifest join
   remain unproved. No production DB or Storage run has occurred.
-- **GPU stages remain disabled and unregistered.** DeskDev's worker and doctor
-  remain inactive; persistent `STAGES` remains `ingest,solve,drawings`. Do not
-  register `scan_pipeline.refine`, add a GPU stage, or start a GPU worker merely
-  because the adapter and doctor pass.
-- **Next safe execution packet:** move extraction into a parent-provisioned
-  descriptor-rooted workspace with a bounded reverse-FD lease and parent
-  cleanup after every child outcome; parse the optional ledgers; add
-  escaped-descendant containment, a pinned command environment/toolchain, and
-  real Linux lifecycle evidence. Implement the seven-descriptor native output
-  handoff, raw/refined model snapshot construction, parent-side
-  alignment/pose-digest verification, and removal of runner display-path
-  reopening. Then compose the I93 raster
-  adapter, I94 owner-scoped acquirer/native descriptor transport, I95
-  backend/evidence contracts, I96 packet/supervision foundations, and existing
-  runner/publisher boundaries under one descriptor-safe workspace and the
-  single carried deadline. Enforce I94's
+- **GPU stages remain disabled and unregistered.** Persistent `STAGES` remains
+  `ingest,solve,drawings` and nothing registers `scan_pipeline.refine`. Do not
+  register it, add a GPU stage, or start a GPU worker merely because the
+  adapter, toolchain pin and doctor pass. ⚠ **Corrected:** earlier revisions of
+  this document said DeskDev's worker "remains inactive". It does not.
+  `patina-scan-worker` is **enabled**, and the box has rebooted, so the unit is
+  active and running (host observation; not checkable from this repository).
+  That is a divergence between the intended qualification posture and reality,
+  and reconciling it is **the owner's call, not an agent's** — do not
+  `systemctl` anything to make the document true.
+- **Next safe execution packet:** ordered item 6. Construct the raw pre-BA and
+  refined model snapshots, have the child propose the alignment, and have the
+  parent recompute and verify Sim3 and the pose digests before the six
+  persistent engine artifacts are produced.
+  `NATIVE_ENGINE_OUTPUT_ALIGNMENT_VERIFIED_BY_PARENT` is the flag that names
+  this gap and it is `False`. Only then item 7: compose the I93 raster adapter,
+  I94 owner-scoped acquirer/native descriptor transport, I95 backend/evidence
+  contracts, I96 packet/supervision foundations, and I97's lease, toolchain,
+  ledgers and output channel with the existing runner/publisher boundaries under
+  one descriptor-safe workspace and the single carried deadline. Enforce I94's
   service-owned local-file contract (or move parent hashing behind a killable
   helper); the current synchronous `pread` cannot preempt a kernel-stalled
-  FUSE/network file. The archive packet must be proven for 200–400 frames
-  without exceeding the 64-file/4-GiB native boundary.
+  FUSE/network file. **Ruled R117 (2026-07-27):** the pilot runs at **100
+  frames**, not 200–400 — scan `95266be1` has 100 keyframes (`fired: 100`, 100
+  `keyframe_index.ndjson` rows), which is inside the enforced `[3, 400]` packet
+  bound and below the band's floor of 200. So the archive packet must be proven
+  at **100** frames without exceeding the 64-file/4-GiB native boundary.
+  The 200–400 band is recorded **unqualified, not failed**: capacity is not the
+  constraint (the arithmetic puts 100 frames at 7 chunks / 8 pinned files /
+  ≈0.77 GiB, and even 400 at ≈3.09 GiB, both well inside the boundary) — no
+  scan in the band has been captured. `PILOT_200_400_FRAME_RANGE_QUALIFIED` is
+  still `False`, R117 is the record of why, and it is not to be flipped on that
+  ruling; qualifying it needs a longer capture.
   Keep `production_enablement=disabled`, keep the composition unregistered, and
   exercise it only on reviewed local scratch. Do not claim a GPU queue task or
   run `95266be1` through production DB/Storage. Disable DeskDev suspend before
@@ -262,87 +299,113 @@ Read it with, not instead of, the canonical sources below.
 
 This is the exact state at which a new agent should resume:
 
-- Remote `origin/main` is `d7861b6d` (`docs(field-capture): record disabled
-  I96 safety foundations`). The I96 integration branch
-  `field-capture/refine-i96-integration` is pushed and points at the same tip.
-- The clean integration worktree used for this work is
-  `/Users/kody/Code/patina-merged/.Codex/worktrees/agent-refine-i96-integration`.
+- The I97 line is on branch **`field-capture/refine-i97-final`**, pushed, with
+  its record appended as I97. It descends from `d7861b6d` (the I96 tip that was
+  `origin/main` at the previous handoff). Confirm where `origin/main` actually
+  is before assuming; do not infer it from this document.
+- The clean integration worktree used for the record work is
+  `/Users/kody/Code/patina-merged/.claude/worktrees/agent-i97-final`.
   Do not use the shared `/Users/kody/Code/patina-merged` checkout for writes;
   it carries unrelated user changes and is intentionally not synchronized.
-- The current integration commit sequence after the I95 base
-  `e91aa967` is:
+- The I97 line is a set of item branches merged into one integration line, each
+  reviewed adversarially before the next stacked on it. The merge points, oldest
+  first:
 
   | Commit | Purpose |
   | --- | --- |
-  | `9527af6a` | disabled COLMAP command supervisor foundation |
-  | `5e5e0a62` | supervisor fault and cleanup coverage |
-  | `c5d39e6c` | exact disabled packet extraction foundation |
-  | `cc82e853` | installer/package trust-list integration |
-  | `14882878` | exact sealed native-context enforcement for commands |
-  | `010280ef` | packet cleanup, FIFO, identity, and rollback hardening |
-  | `bb405078` | recursive JSON exception normalization |
-  | `68495fd9` | formatting/import hygiene for I96 hardening |
-  | `d7861b6d` | handoff and I96 decision-log record |
+  | `2ae6b8ae` | item 1 — parent-provisioned descriptor-rooted workspace lease |
+  | `ca77bc4a` | item 3 — pinned toolchain identity and command allowlist |
+  | `9dee8b23` | per-option COLMAP argv confinement + lease byte budget |
+  | `10d6cc4d` | item 4 fix — accept a Linux kernel thread's zero process group |
+  | `7ee854df` | item 2 — parse the optional source and adapter ledgers |
+  | `efcc7720` | item 5 — freeze the seven-descriptor engine output handoff |
+  | `e0bb309c` | lease errno classification: default retryable, symlinks pre-open |
+  | `2887dd0e` | tip — comment defects on the pre-open symlink gate |
 
-- The new implementation modules are
-  `services/scan-pipeline/src/patina_scan_worker/refine_colmap_command.py` and
-  `refine_packet_extractor.py`. The principal integration points are
-  `refine_colmap_backend.py`, `refine_native_process.py`,
-  `install-path-guard.py`, `install.sh`, `tests/test_install_script.py`, and
-  `tests/test_packaging.py`.
-- The worker is not being installed, restarted, or run as part of this handoff.
-  No production DB, Storage, queue, DeskDev, or real-scan mutation occurred.
-  The intended deployed posture remains `patina-scan-worker` inactive with
-  `STAGES=ingest,solve,drawings`.
+- The new implementation module is
+  `services/scan-pipeline/src/patina_scan_worker/refine_colmap_toolchain.py`.
+  The heavily changed integration points are `refine_native_process.py` (the
+  lease, the output channel, the freeze vault and the seal),
+  `refine_packet_extractor.py`, `refine_colmap_command.py`, `refine_runner.py`,
+  `refine_publisher.py`, and `storage.py`. New test files are
+  `tests/test_refine_native_outputs.py`, `tests/test_refine_workspace_seam.py`,
+  `tests/test_refine_colmap_toolchain.py`, and the two helpers
+  `tests/_colmap_toolchain.py` and `tests/_json_recursion.py`.
+- The worker was not installed, restarted, or run as part of this line. No
+  production DB, Storage, queue, DeskDev, or real-scan mutation occurred.
+  ⚠ The *intended* posture remains `patina-scan-worker` inactive with
+  `STAGES=ingest,solve,drawings`; the *actual* posture on the box is the unit
+  enabled and running after a reboot (host observation). Persistent `STAGES` is
+  unchanged and no Refine stage is registered, so nothing GPU-side can be
+  claimed by it — but the document no longer describes the box, and closing that
+  gap is Kody's decision.
 
 ### Resume verification
 
 Run these read-only checks from the integration worktree before changing code:
 
 ```bash
-cd /Users/kody/Code/patina-merged/.Codex/worktrees/agent-refine-i96-integration
+cd <your own worktree>            # never the shared checkout
 git fetch origin main
-git rev-parse HEAD                 # d7861b6d...
-git rev-parse origin/main          # d7861b6d...
+git rev-parse HEAD
+git rev-parse origin/main
 git status --short --branch
 git diff --check origin/main...HEAD
-python3 scripts/workstream_state.py .
+python3 scripts/workstream_state.py .   # expect: next I = I98
 ```
 
-The posture probes should remain visibly false/unregistered:
+The posture probes should remain visibly false/unregistered. There are now
+**fourteen** `*_QUALIFIED` flags across three modules, not the three the I96
+handoff listed:
 
 ```bash
-rg -n '^(PACKET_EXTRACTION_QUALIFIED|SEQUENTIAL_COMMAND_QUIESCENCE_QUALIFIED|COMMAND_EXCEPTION_NORMALIZATION_QUALIFIED) = ' \
-  services/scan-pipeline/src/patina_scan_worker/refine_colmap_backend.py
+rg -n '_QUALIFIED = ' services/scan-pipeline/src/patina_scan_worker   # 14, all False
+rg -n '^NATIVE_ENGINE_OUTPUT_ALIGNMENT_VERIFIED_BY_PARENT = ' \
+  services/scan-pipeline/src/patina_scan_worker/refine_native_process.py
 rg -n '^DEFAULT_STAGES = ' \
   services/scan-pipeline/src/patina_scan_worker/config.py
 rg -n 'scan_pipeline\.refine' \
-  services/scan-pipeline/src/patina_scan_worker
+  services/scan-pipeline/src/patina_scan_worker   # comments only, no registration
+
+# The byte-pin that says the backend did not move:
+git rev-parse HEAD:services/scan-pipeline/src/patina_scan_worker/refine_colmap_backend.py
+# expect 6743e66eb06369d18e34b0054d10734e03a109ec (identical at 0b7b47fa)
 ```
 
-Expected values are all qualification flags `False`, `DEFAULT_STAGES =
-"ingest,solve,drawings"`, and no stage registration. Do not “prove” a new
-runtime by editing a flag or adding a handler; that would invalidate the
+Expected values are all fourteen qualification flags `False`,
+`NATIVE_ENGINE_OUTPUT_ALIGNMENT_VERIFIED_BY_PARENT` `False`, `DEFAULT_STAGES =
+"ingest,solve,drawings"`, and no stage registration or dispatch. Do not “prove”
+a new runtime by editing a flag or adding a handler; that would invalidate the
 disabled-foundation boundary.
 
 ### Verification commands
 
-The implementing worktree used a Python environment with the scan-pipeline
-test dependencies. If that environment is absent, provision an equivalent
-isolated environment; never install into the system Python or the deployed
-worker while testing.
+The I97 line's standing gate is a **Linux container**, not the macOS host —
+most of what this code asserts is invisible off Linux (see *Verification
+lessons* below). Run it first; anything else is supplementary.
+
+```bash
+# THE gate. Expect: 1136 passed, 3 skipped.
+docker run --rm -v "$PWD":/w -w /w/services/scan-pipeline python:3.12-slim \
+  sh -c "pip install -q 'pytest>=7.4' 'httpx>=0.24,<1.0' 'numpy>=1.26' && \
+         python -m pytest -q tests/test_refine*.py tests/test_storage.py -rs"
+```
+
+The three skips are load-bearing and must be read, not counted: a root-owned
+fixture that cannot express a non-root-owner refusal under a root euid, the
+`pidfd_getfd` theft whose positive control Docker's default seccomp profile
+refuses to let anyone build, and a mode-000 directory that cannot refuse a root
+euid. Under `--security-opt seccomp=unconfined` the pidfd theft runs and the
+count moves to 1137/2. Never convert a skip into a pass by weakening its
+assertion; the skip text is the evidence.
+
+Supplementary, in an isolated Python environment with the scan-pipeline test
+dependencies — never the system Python and never the deployed worker:
 
 ```bash
 PY=/path/to/scan-pipeline-test-venv/bin/python
 
-# Combined I96 boundary tests.
-"$PY" -m pytest -q \
-  services/scan-pipeline/tests/test_refine_colmap_command.py \
-  services/scan-pipeline/tests/test_refine_packet_extractor.py \
-  services/scan-pipeline/tests/test_refine_colmap_backend.py \
-  services/scan-pipeline/tests/test_refine_native_process.py
-
-# Full queue-independent Refine regression suite.
+# Full queue-independent Refine regression suite (macOS skips far more).
 "$PY" -m pytest -q services/scan-pipeline/tests/test_refine*.py
 
 # Exact isolated installer/package gate (no project environment or lockfile).
@@ -362,15 +425,72 @@ bash -n services/scan-pipeline/install.sh
 git diff --check
 ```
 
-The recorded results at this handoff are 458 Refine tests passed with five
-expected Linux-only lifecycle skips on macOS, and 148 installer/packaging
-tests passed. Linux child-subreaper behavior has not been physically proven on
-this host; the skips are evidence of unavailable platform coverage, not a
-qualification pass.
+The recorded results at this handoff are **1136 passed / 3 skipped** in the
+container gate, and **1139 passed / 0 skipped** on the qualified host (host
+measurement, reported by the operator; not reproducible from this repository).
+The container number is the one an agent can re-derive, and the one to quote.
 
-## I96 implementation contract for the next agent
+## Verification lessons (procedure, not commentary)
 
-Treat the following as implementation law, not suggestions:
+I97 spent most of its cost on verification that was not verifying. Treat the
+following as procedure.
+
+**A green local gate is not evidence for this codebase.** Each environment is
+blind to a different part of what the code asserts, and the blind spots are
+exactly where the bugs were:
+
+- **macOS** cannot see `/proc`, child-subreapers, `O_PATH`, or inode-number
+  recycling. Whole guards are structurally unreachable there.
+- **An aarch64 container** cannot see kernel threads (its PID namespace has
+  none), real ext4 allocation, Yama, or `pidfd_getfd` (Docker's default seccomp
+  profile refuses the syscall outright, so the exploit hides).
+- **Only the qualified host** sees the rest. Item 4's blocker — `pgrp == 0`
+  rejected, so every *successful* native Refine call failed
+  `REFINE_ENGINE_CLEANUP_FAILED` — survived two green gate environments and
+  every review round before it, and was found the first time the code met a real
+  Linux `/proc`.
+
+**Anti-vacuity habits.** The review rounds on this line converged on four, and
+all four were learned by finding tests that proved nothing:
+
+1. **Sweep every clause of a changed function against the full selection.** Not
+   the file's own tests — the whole gate. Six of nine clauses of
+   `_parse_linux_process_stat` were deletable with zero red, because they shared
+   an exception class and `pytest.raises` could not tell them apart. Counting
+   tests finds none of these; deleting a clause and demanding a red does.
+2. **Assert the exact message per row.** A substring that every clause of a
+   guard emits means whichever clause happens to fire satisfies the assertion,
+   and the others are uncovered. One row per disjunct, each input chosen so only
+   its own clause can reject it.
+3. **Write expected tables out literally.** Reading an expectation off the
+   module under test makes the test a tautology. Where the table must stay in
+   sync with a constant, AST-parse the module's own literal and assert set
+   equality, so drift on either side reddens.
+4. **Construct the condition for real rather than monkeypatching the syscall.**
+   Build the symlinked root, the self-looping root, the FIFO, the mode-000
+   directory, the full filesystem — and assert the real errno before asserting
+   the verdict. A patched `os.open` proves the handler runs, not that the
+   condition reaches it.
+
+**Retracted.** An earlier claim in this line that four tests fail under the
+production non-root identity is **withdrawn**: they pass as uid 1000 on the
+qualified host on both trees. The failures observed were environment-specific
+(a fixture built under an inherited `umask 002` and refused, correctly, by the
+shipped trust checks) and were fixed at `86c460f9` by giving every fixture
+directory an explicit mode. Do not re-derive a permissions story from that
+episode.
+
+**Corrected.** The qualified host's kernel is **`7.0.0-28-generic`**, not
+`6.17.0-35`. The `6.17.0-35` figure appeared in a docstring alongside
+measurements that could not be reproduced and was removed from the source at
+`b47ab2c8`; it should not be reintroduced anywhere. Both kernel strings are host
+facts — neither is checkable from this repository.
+
+## I97 implementation contract for the next agent
+
+Treat the following as implementation law, not suggestions. Items 1–2 and 4 are
+carried unchanged from the I96 contract; 3 and 5 are **superseded** by I97 and
+rewritten here; 6–10 are new.
 
 1. The packet is an exact uncompressed USTAR archive. It has one declared
    request, 3–400 engine images, at most one source ledger, at most one adapter
@@ -380,46 +500,154 @@ Treat the following as implementation law, not suggestions:
    extractor revalidates chunk size/hash and the extracted request before the
    caller can consume it. The native context must be the exact privately sealed
    `NativeChildContext`; a lookalike or property-inspection failure is rejected.
-3. Cleanup records and revalidates file and directory identities and rolls back
-   a member if creation succeeds before ledger completion. This is still not a
-   substitute for a parent-owned workspace: `stat` followed by unlink/rmdir is
-   not atomic against a hostile same-UID actor.
+3. **(superseded)** The workspace is parent-provisioned, not child-owned. The
+   parent creates a private 0700 lease beneath a caller-named container, pins
+   both by descriptor, leases a duplicate down over SCM_RIGHTS with the reverse
+   direction declared in the ready envelope and re-verified by the child, and
+   purges the tree from the same `finally` that reaps the leader — after normal
+   return, timeout, SIGTERM, and SIGKILL — bounded by depth and entry budget, not
+   by the deadline. Cleanup pins each entry with `O_PATH` **before** touching it:
+   `(st_dev, st_ino)` is not an identity where inode numbers recycle, and a held
+   reference is what makes the later comparison mean sameness. The residual is
+   named and unchanged: the final `unlinkat`/`rmdir` is still name-based.
 4. The command helper accepts bounded absolute argv, inherits the native group
    and deadline, and refuses successful phase advancement while adopted
    children remain. It detects escaped descendants but does not yet contain
    them. Cleanup and exception failures are fail-closed with cleanup precedence.
-5. The future output handoff is seven child-to-parent descriptors: the six
-   persistent engine artifacts plus a scratch raw pre-BA snapshot. The child
-   may propose aligned/Sim3 bytes; the parent recomputes and verifies the
-   alignment and pose digest. Do not make the child’s proposal authoritative.
+5. **(superseded — now implemented)** The output handoff is seven
+   child-to-parent descriptors: the six persistent engine artifacts plus a
+   scratch raw pre-BA snapshot, named as a closed token universe before the child
+   exists. The parent does **not** trust the child's size/digest ledger: it opens
+   the same names relative to its own pinned lease descriptor, requires the same
+   `(st_dev, st_ino)`, hashes its own descriptor, and refuses unless its own
+   computation reproduces the declaration. The child may still propose
+   aligned/Sim3 bytes and the parent must recompute and verify the alignment and
+   the pose digest — that half is **item 6 and does not exist yet**, which is
+   what `NATIVE_ENGINE_OUTPUT_ALIGNMENT_VERIFIED_BY_PARENT = False` means. Do not
+   make the child's proposal authoritative.
+6. Output bytes are frozen **by construction, not by inspection**. Each output
+   is copied at receipt into an `O_TMPFILE | O_EXCL` anonymous file the parent
+   creates in a private 0700 vault on the lease's own filesystem, and hashed from
+   that copy's own descriptor. No subset of `fstat` can prove bytes did not
+   change — a same-length rewrite plus `futimens` forges every remaining field —
+   so do not reintroduce a stat-comparison freeze proof.
+7. The freeze vault drops the process's dumpable flag
+   (`prctl(PR_SET_DUMPABLE, 0)`) before any copy exists, which closes
+   `/proc/<pid>/fd` reopen and `pidfd_getfd` theft at their common gate,
+   `ptrace_may_access`. The price is permanent: no core dump and no live
+   debugger for this worker. Do not "temporarily" remove the seal to debug.
+8. Argv path options are confined **per option**, each to one leased surface:
+   `--image_path` reads `packet/`; `--input_path`, `--database_path` and
+   `--output_path` are rooted at writable `work/`; `tmp/` is nobody's artifact
+   surface. Collapsing these onto one root makes
+   `--output_path <lease>/packet/images` plannable, which overwrites the
+   hash-validated extracted source images the evidence builder binds to.
+   `_validate_workspace_path` is **lexical only** — a symlink planted inside
+   `work/` still escapes it.
+9. The command environment is the exact 13-key `COMMAND_ENVIRONMENT_ALLOWLIST`,
+   never inherited, with every writable value confined to `APP_DIR` or the
+   private workspace so `ProtectSystem=strict` holds. The toolchain pin rejects
+   drift rather than adapting to it, and every value knowable only from the box
+   stays a declared input in `OWED_BOX_VALUES` — do not guess one to make a
+   check pass.
+10. Lease-provisioning refusals classify by **errno**, not exception type, and
+    default **retryable**, with the fatal side enumerated (`ELOOP`, `ENOTDIR`,
+    `EACCES`, `EPERM`, `EROFS`, `ENAMETOOLONG` — each a statement about the
+    operator's configuration, not the host's momentary state). The reason is the
+    bounded retry budget in `complete_agent_task`: a wrongly retryable permanent
+    error costs a bounded attempt budget, while a wrongly fatal transient error
+    is unrecoverable. Keep the known-transient rows even though they fall to the
+    default — the row is what puts the errno's name in the journal line.
 
 ## Ordered next-work packet
 
 Do not start composition or enablement until each item below has an owner,
-tests, and an independent adversarial review:
+tests, and an independent adversarial review. **Item 6 is where you resume.**
 
-1. Replace child-owned extraction scratch with a parent-provisioned,
-   descriptor-rooted 0700 workspace and a bounded reverse-FD lease. The parent
-   must perform bounded cleanup after normal return, timeout, SIGTERM, and
-   SIGKILL; cleanup must never unlink an object whose identity changed.
-2. Parse and validate the optional source and adapter ledgers, including their
-   cardinality, identity, and relationship to the manifest. Keep the closed
-   role universe and 200–400-frame packet cap explicit.
-3. Add an executable-identity and command/environment allowlist plus pinned
-   GCC/CUDA/toolchain policy. Preserve the single lease-aware deadline through
-   every command, helper, and drain thread.
-4. Prove Linux child-subreaper behavior, adopted-child reaping, escaped
-   descendant handling, and cleanup precedence on the qualified host. The five
-   macOS skips cannot be converted into green acceptance by changing tests.
-5. Implement the seven-descriptor native output handoff. Remove runner
-   display-path reopening; keep all data descriptor-pinned and parent-owned.
-6. Construct raw pre-BA and refined model snapshots, have the child propose
-   alignment, and have the parent recompute/verify Sim3 and pose digests before
-   producing the exact six persistent engine artifacts.
-7. Compose materializer → raster → backend → runner → publisher only on local
-   scratch. Require comparable reprojection, registration, verified-loop, and
-   evidence-builder results for `95266be1`; unchanged evidence is a failure and
-   trajectory shape remains diagnostic-only.
+1. ✅ **DONE (I97).** Parent-provisioned, descriptor-rooted 0700 workspace with a
+   bounded reverse-FD lease; parent cleanup after normal return, timeout,
+   SIGTERM and SIGKILL; `O_PATH` entry pinning so an identity comparison is
+   sound where inode numbers recycle. Also refuses a symlinked or non-canonical
+   container before any `os.open`, and a lease root too long to host a COLMAP
+   path option (960-byte cap, 64 reserved for the longest reviewed argv tail).
+2. ✅ **DONE (I97).** Source and adapter ledgers parsed with a closed role
+   universe, one-ledger-per-role cardinality, exact packet-root paths, a 4 MiB
+   ledger ceiling, descriptor-relative re-read against the manifest digest, and
+   source rows bound one-to-one to engine-request frames. The adapter ledger is
+   envelope-only — its per-row content was derivable from the engine request, so
+   it was removed rather than validated. The 200–400-frame pilot band is exposed
+   as constants and deliberately **not** enforced
+   (`PILOT_200_400_FRAME_RANGE_QUALIFIED` is `False`; R117 rules the pilot at
+   100 frames and records the band unqualified, so that flag stays `False`).
+3. ✅ **DONE (I97).** Executable-identity pinning re-proven immediately before
+   `execve`, a 13-key closed command environment, per-option argv confinement,
+   and a pinned toolchain identity that rejects drift. The single lease-aware
+   deadline is carried through every command, helper, and drain thread.
+4. ✅ **CLOSED (R116).** Evidence: I97 plus
+   `docs/design/field-capture/p2-item4-qualified-host-acceptance-2026-07-27.md`
+   — a DeskDev run at commit `77b4ff19` re-measuring all four named acceptance
+   clauses on the qualified x86_64/ext4 host.
+
+   The qualified-host run paid for itself immediately:
+   `_parse_linux_process_stat` rejected `pgrp == 0`, which every Linux kernel
+   thread reports (283 of 547 live PIDs on that box), so **every successful
+   native Refine call failed `REFINE_ENGINE_CLEANUP_FAILED`**. Fixed and
+   re-proven on the host — zero parse failures across every live `/proc` row,
+   every `pgrp 0` row confirmed a kernel thread by absent `VmSize` and absent
+   `cmdline`, zero userland. The other clauses: subreaper state transition and
+   adopted-grandchild reaping through the shipped helpers; adopted-child
+   reaping and quiescence scoped to a real child group leader (member named
+   when live, quiescent when the leader is dead and alone); the
+   escaped-`setsid` descendant, accepted **as scoped** — the group scan cannot
+   see an escapee (a blind spot by construction, since a `setsid` child has its
+   own pgrp) while the shipped adoption/`waitpid` scan does see it and the call
+   fails closed; and cleanup precedence, driven through the real
+   `run_inherited_colmap_command` in a real `setsid` leader with no
+   monkeypatching and with paired controls, showing
+   `REFINE_ENGINE_CLEANUP_FAILED` replacing `REFINE_ENGINE_FAILED` and
+   `REFINE_ENGINE_TIMEOUT`. The gate ran 1139 passed / 0 skipped four times
+   (three under `umask 022`, one under the ambient `0002`), so the five
+   Linux-only lifecycle tests that skip on macOS all executed.
+
+   **Two scoped exceptions are carried forward by R116 — do not drop them:**
+   (a) **escaped-`setsid` containment is still open** and belongs to item 7's
+   composition; only *detection* was in item 4's scope, and the receipt records
+   the group-scan blind spot as a measured fact rather than a pass.
+   (b) **Precedence over the `drain_errors` branch in isolation is in-repo
+   coverage only**, not a host measurement — on that host the drain fault
+   surfaced as a *cleanup* error, so no case produced `drain_errors` non-empty
+   with `cleanup_errors` empty to compare against.
+
+   R116 is a pipeline/acceptance judgement, blessed and logged. It closes item 4
+   and nothing else: skips still cannot be converted into acceptance by changing
+   tests, every downstream hard gate is untouched, and Kody's P2 milestone gates
+   (M2 dense mesh, M3 walkthrough/click-to-measure, M4 maker quote) remain his
+   to call.
+5. ✅ **DONE (I97).** Seven-descriptor native output handoff, frozen by
+   construction (`O_TMPFILE` copy at receipt, hashed from the copy) behind a
+   `PR_SET_DUMPABLE` seal. Runner display-path reopening is removed: engine
+   artifacts and frame inputs are both descriptor-pinned, and a successful run
+   has no reason to call `open` at all.
+6. ⬅ **NEXT.** Construct raw pre-BA and refined model snapshots, have the child
+   propose alignment, and have the parent recompute/verify Sim3 and pose digests
+   before producing the exact six persistent engine artifacts. This is the half
+   of the output contract I97 did **not** implement;
+   `NATIVE_ENGINE_OUTPUT_ALIGNMENT_VERIFIED_BY_PARENT` is the flag that says so.
+7. ⏳ **IN PROGRESS.** Compose materializer → raster → backend → runner →
+   publisher only on local scratch. Require comparable reprojection,
+   registration, verified-loop, and evidence-builder results for `95266be1`;
+   unchanged evidence is a failure and trajectory shape remains
+   diagnostic-only.
+
+   **Scope ruled R117: 100 frames.** `95266be1` has 100 keyframes, so the
+   composition is proven at 100 — inside the enforced `[3, 400]` packet bound,
+   below the 200-frame pilot floor. The 200–400 band stays **unqualified, not
+   failed** (`PILOT_200_400_FRAME_RANGE_QUALIFIED` remains `False`); do not
+   flip it, and do not treat a passing 100-frame composition as evidence for
+   it. Carried into this item from R117: the raster materializer hard-pins its
+   qualified raster to the item-4a fixture's 360×640 while this scan's
+   keyframes are 1440×1920, so a real-capture raster size is not yet
+   qualified.
 8. Only after all of the above, Kody’s P2 gates (dense mesh, walkthrough/click-
    to-measure, and maker quote without a site visit) can be requested. Refine,
    Fuse, and Splat remain unregistered until Kody explicitly passes the gate.
@@ -427,7 +655,9 @@ tests, and an independent adversarial review:
 ## Safe operating rules for this handoff
 
 - Never run `install.sh`, `systemctl`, a GPU doctor, a queue task, a real scan,
-  `supabase db push`, or Storage writes as part of I96 resume work.
+  `supabase db push`, or Storage writes as part of I98 resume work. This now
+  includes *not* stopping or disabling `patina-scan-worker` to make the
+  "intended posture" line true — that is Kody's call, not an agent's.
 - Never blanket-push migrations. The live Field Capture queue head is 00378;
   re-query the ledger and use the sanctioned surgical path if a later task
   explicitly authorizes a migration.
@@ -436,9 +666,9 @@ tests, and an independent adversarial review:
   followed by the real append.
 - Never write from the shared dirty checkout, use `git add -A`, reset hard, or
   overwrite user work. Use a dedicated worktree and explicit pathspecs.
-- Keep the I96 feature branch and `origin/main` aligned before beginning I97;
-  if another commit has landed, rebase/merge in the isolated worktree and
-  rerun all gates before pushing.
+- Keep `field-capture/refine-i97-final` and `origin/main` aligned before
+  beginning I98; if another commit has landed, rebase/merge in the isolated
+  worktree and rerun the container gate before pushing.
 
 ## The operating cadence (do not drop it)
 
@@ -488,9 +718,15 @@ tests, and an independent adversarial review:
   `ProtectSystem=strict` — every writable surface (all four XDG dirs, and
   for P2 the torch/CUDA caches) must be confined to APP_DIR **and** listed
   in `ReadWritePaths`; `doctor` probes them preflight. Upgrade story: update
-  source copy → `sudo ./install.sh` → `systemctl restart`. Keep the worker
-  inactive/GPU stages absent during qualification, and disable host suspend
-  before Refine is ever enabled.
+  source copy → `sudo ./install.sh` → `systemctl restart`. Keep GPU stages
+  absent during qualification, and disable host suspend before Refine is ever
+  enabled. ⚠ The worker unit is `enabled` and the box has rebooted, so it is
+  active and running — the older "keep the worker inactive" instruction no
+  longer describes the box. Persistent `STAGES` is still
+  `ingest,solve,drawings` and no Refine stage is registered, so the running unit
+  claims no GPU work; reconciling posture with intent is Kody's decision. The
+  host's kernel is `7.0.0-28-generic` (host observation); the `6.17.0-35` figure
+  that once appeared in a docstring was wrong and was removed at `b47ab2c8`.
 - **Storage/schema invariants**: B-18 (bundle spec) is the storage layout
   contract — per-kind folders `{folder}/{uid}/{room}/{file}`, deliverables
   under `room_file/{uid}/{scanId}/v{n}/`. The worker service key bypasses
@@ -515,6 +751,18 @@ tests, and an independent adversarial review:
 - Parked garbage: agent_task `69dd152c…` / scan `fa361ed4…` (abandoned
   pre-MIME-fix upload, no manifest) — leave failed; 7-day sweep reaps its
   partial objects.
+- **Operator items opened by I97:**
+  - The **toolchain manifest generator is still owed.** I97's toolchain pin
+    reads a canonical installed manifest at
+    `/opt/colmap/4.0.2/share/patina/refine-colmap-toolchain-v1.manifest.json`,
+    and `install-colmap-4.0.2.sh` does not emit it. Until it does, the pin is
+    inert and `OWED_BOX_VALUES` lists exactly what an operator must produce
+    (executable sha256 and size, `gcc-11 -dumpfullversion`, the PyCOLMAP wheel
+    sha256, and the manifest itself). Do not guess any of them to make a check
+    pass.
+  - `/tmp/pytest-of-kody` on the box holds stale entries from a killed run
+    (host observation). Harmless, but it will confuse the next person reading
+    scratch on that machine.
 - ⚠ PostHog flags `arrival-arc` and `schedule-spine` are at TRUE 100%
   rollout despite kody-only intent — flagged to Kody 2026-07-18, unruled.
 - P2 ledger (package Part F): co-designer download walk before sharing

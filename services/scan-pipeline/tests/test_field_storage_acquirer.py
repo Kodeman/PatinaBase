@@ -21,8 +21,11 @@ from patina_scan_worker.refine_materializer import (
 from patina_scan_worker.stages import get_handler
 
 USER_ID = "user-1"
-SCAN_ID = "scan-1"
-OBJECT_KEY = f"manifests/{USER_ID}/{SCAN_ID}/manifest.json"
+# The Storage owner prefix is ``{user}/{room}`` (B-18 / 00077 RLS), so the room
+# is the id every key here carries.  ``room_scans.id`` never appears in a
+# ``room-scans`` key at all and this adapter has no business knowing it.
+ROOM_ID = "room-1"
+OBJECT_KEY = f"manifests/{USER_ID}/{ROOM_ID}/manifest.json"
 _ENV = {
     "WORKER_ID": "field-storage-test",
     "SUPABASE_URL": "https://example.supabase.co",
@@ -199,12 +202,12 @@ def _acquire(
     *,
     deadline: RefineDeadline | None = None,
     user_id: str = USER_ID,
-    scan_id: str = SCAN_ID,
+    room_id: str = ROOM_ID,
 ) -> None:
     adapter.acquire(
         source=source,
         user_id=user_id,
-        scan_id=scan_id,
+        room_id=room_id,
         destination=sink,
         deadline=deadline or _deadline(),
     )
@@ -275,24 +278,24 @@ def test_real_httpx_success_path_proves_auth_raw_bytes_and_closure():
 
 
 @pytest.mark.parametrize(
-    ("object_key", "user_id", "scan_id"),
+    ("object_key", "user_id", "room_id"),
     (
-        (f"manifests/other/{SCAN_ID}/manifest.json", USER_ID, SCAN_ID),
-        (f"manifests/{USER_ID}/other/manifest.json", USER_ID, SCAN_ID),
-        (f"/{OBJECT_KEY}", USER_ID, SCAN_ID),
-        (f"manifests/{USER_ID}/{SCAN_ID}/../manifest.json", USER_ID, SCAN_ID),
-        (f"manifests/{USER_ID}/{SCAN_ID}//manifest.json", USER_ID, SCAN_ID),
-        (f"{OBJECT_KEY}?download=1", USER_ID, SCAN_ID),
-        (f"{OBJECT_KEY}#fragment", USER_ID, SCAN_ID),
-        (f"{OBJECT_KEY}%2e", USER_ID, SCAN_ID),
-        (OBJECT_KEY, "bad owner", SCAN_ID),
-        (OBJECT_KEY, USER_ID, "bad scan"),
+        (f"manifests/other/{ROOM_ID}/manifest.json", USER_ID, ROOM_ID),
+        (f"manifests/{USER_ID}/other/manifest.json", USER_ID, ROOM_ID),
+        (f"/{OBJECT_KEY}", USER_ID, ROOM_ID),
+        (f"manifests/{USER_ID}/{ROOM_ID}/../manifest.json", USER_ID, ROOM_ID),
+        (f"manifests/{USER_ID}/{ROOM_ID}//manifest.json", USER_ID, ROOM_ID),
+        (f"{OBJECT_KEY}?download=1", USER_ID, ROOM_ID),
+        (f"{OBJECT_KEY}#fragment", USER_ID, ROOM_ID),
+        (f"{OBJECT_KEY}%2e", USER_ID, ROOM_ID),
+        (OBJECT_KEY, "bad owner", ROOM_ID),
+        (OBJECT_KEY, USER_ID, "bad room"),
     ),
 )
 def test_owner_and_key_validation_precedes_client_and_sink(
     object_key,
     user_id,
-    scan_id,
+    room_id,
 ):
     payload = b"payload"
     response = _Response(200, payload)
@@ -305,7 +308,7 @@ def test_owner_and_key_validation_precedes_client_and_sink(
             _source(payload, object_key=object_key),
             sink,
             user_id=user_id,
-            scan_id=scan_id,
+            room_id=room_id,
         )
 
     assert caught.value.code in {

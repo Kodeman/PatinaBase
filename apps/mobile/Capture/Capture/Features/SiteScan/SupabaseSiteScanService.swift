@@ -97,8 +97,9 @@ final class SupabaseSiteScanService: SiteScanService {
     }
 
     /// A success with no waiter = a task that finished while the app was dead. Mark its
-    /// artifact `uploaded` on the durable record (public URL derived from the storage
-    /// path) so a later resume skips it rather than re-uploading (M3).
+    /// artifact `uploaded` on the durable record (the plain bucket key — see
+    /// `RoomScanStoragePath.storedReference`) so a later resume skips it rather than
+    /// re-uploading (M3).
     private func persistOrphanCompletion(_ descriptor: FieldBackgroundScanUploader.Descriptor) {
         guard let record = store.scanUploadRecord(scanID: descriptor.scanID),
               let plan = Self.uploadDescriptors.first(where: { $0.kind == descriptor.kind }) else { return }
@@ -109,7 +110,7 @@ final class SupabaseSiteScanService: SiteScanService {
                                        mimeType: descriptor.mimeType, column: plan.column)
         state.status = .uploaded
         state.storagePath = descriptor.storagePath
-        state.remoteUrl = try? client.storage.from(bucket).getPublicURL(path: descriptor.storagePath).absoluteString
+        state.remoteUrl = RoomScanStoragePath.storedReference(forObjectPath: descriptor.storagePath)
         state.sha256 = descriptor.sha256
         upsert(&states, state)
         store.updateScanUploadRecord(record, artifacts: states, status: "uploading")
@@ -334,7 +335,13 @@ final class SupabaseSiteScanService: SiteScanService {
                                                    p_kind: descriptor.kind, p_sha: sha)).execute()
             }
             working.status = .uploaded
-            working.remoteUrl = try client.storage.from(bucket).getPublicURL(path: storagePath).absoluteString
+            // The PLAIN BUCKET KEY, not a public URL. `room-scans` is private
+            // (00031), so `/object/public/room-scans/<key>` returns 400 Bucket
+            // not found — I104 caught `scan_bundle_url` and `depth_archive_url`
+            // storing exactly that. Every consumer already strips whatever is
+            // here back to a key and signs at read time; the reasoning and the
+            // rejected alternatives live on `storedReference`.
+            working.remoteUrl = RoomScanStoragePath.storedReference(forObjectPath: storagePath)
             upsert(&states, working)
             store.updateScanUploadRecord(reserved.record, artifacts: states, status: "uploading")
         }
@@ -384,7 +391,9 @@ final class SupabaseSiteScanService: SiteScanService {
             let src = bundle.appendingPathComponent(dir, isDirectory: true)
             guard let files = try? fm.contentsOfDirectory(at: src, includingPropertiesForKeys: nil)
                 .filter({ extensions.contains($0.pathExtension) }), !files.isEmpty else { return }
-            try? TarArchive.write(entries: files.map { TarArchive.Entry(name: $0.lastPathComponent, url: $0) },
+            // Members carry the bundle-relative path, NOT the bare filename — see
+            // TarArchive.bundleEntries, where the rule and the reason live (R120).
+            try? TarArchive.write(entries: TarArchive.bundleEntries(directory: dir, files: files),
                                   to: bundle.appendingPathComponent(name))
         }
         tar(dir: "depth", extensions: ["bin"], to: "depth.tar")

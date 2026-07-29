@@ -83,9 +83,13 @@ SOURCE_PACKAGE_FILES = frozenset(
         f"{SOURCE_PACKAGE_ROOT}/refine_adapter.py",
         f"{SOURCE_PACKAGE_ROOT}/refine_colmap_backend.py",
         f"{SOURCE_PACKAGE_ROOT}/refine_colmap_command.py",
+        f"{SOURCE_PACKAGE_ROOT}/refine_colmap_manifest.py",
+        f"{SOURCE_PACKAGE_ROOT}/refine_colmap_toolchain.py",
         f"{SOURCE_PACKAGE_ROOT}/refine_evidence_builder.py",
         f"{SOURCE_PACKAGE_ROOT}/refine_engine.py",
+        f"{SOURCE_PACKAGE_ROOT}/refine_lifecycle.py",
         f"{SOURCE_PACKAGE_ROOT}/refine_materializer.py",
+        f"{SOURCE_PACKAGE_ROOT}/refine_model_alignment.py",
         f"{SOURCE_PACKAGE_ROOT}/refine_native_process.py",
         f"{SOURCE_PACKAGE_ROOT}/refine_packet_extractor.py",
         f"{SOURCE_PACKAGE_ROOT}/refine_publisher.py",
@@ -129,7 +133,7 @@ FIELD_RASTER_HELPER_MANIFEST_RELATIVE_PATH = (
 )
 FIELD_RASTER_HELPER_MANIFEST_SCHEMA = "patina-field-raster-helper-manifest-v1"
 FIELD_RASTER_HELPER_SOURCE_SHA256 = (
-    "4840e0e6d3c98bbebecc4354349bae3963718583fb5c882f9807b0d222bee9c3"
+    "3b184937b755dc4acca4347ea6dba43dbeb111f090a91cd340e65d214937c626"
 )
 FIELD_RASTER_HELPER_COMPILE_FLAGS = (
     "-std=c11",

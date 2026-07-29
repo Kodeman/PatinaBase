@@ -65,9 +65,13 @@ INSTALL_SOURCE_FILES = (
     "src/patina_scan_worker/refine_adapter.py",
     "src/patina_scan_worker/refine_colmap_backend.py",
     "src/patina_scan_worker/refine_colmap_command.py",
+    "src/patina_scan_worker/refine_colmap_manifest.py",
+    "src/patina_scan_worker/refine_colmap_toolchain.py",
     "src/patina_scan_worker/refine_evidence_builder.py",
     "src/patina_scan_worker/refine_engine.py",
+    "src/patina_scan_worker/refine_lifecycle.py",
     "src/patina_scan_worker/refine_materializer.py",
+    "src/patina_scan_worker/refine_model_alignment.py",
     "src/patina_scan_worker/refine_native_process.py",
     "src/patina_scan_worker/refine_packet_extractor.py",
     "src/patina_scan_worker/refine_publisher.py",
@@ -172,7 +176,7 @@ def test_gpu_candidate_compiles_and_validates_exact_field_raster_helper():
     )
     transaction = script.index("begin_install_transaction")
 
-    assert "4840e0e6d3c98bbebecc4354349bae3963718583fb5c882f9807b0d222bee9c3" in script
+    assert "3b184937b755dc4acca4347ea6dba43dbeb111f090a91cd340e65d214937c626" in script
     assert "field-raster-libheif-helper-v2" in script
     assert 'helper_manifest="$helper_output.manifest.json"' in script
     assert 'if [ "$GPU" -eq 1 ]; then' in build[:compile_helper]
@@ -191,7 +195,7 @@ def test_gpu_candidate_compiles_and_validates_exact_field_raster_helper():
         '    "$SMOKE_VENV/libexec/patina/field-raster-libheif-helper-v2"'
     ) in script
     assert "_run_as_service_user /usr/bin/timeout 5" in script
-    assert "usage: field-raster-libheif INPUT.heic OUTPUT.ppm" in script
+    assert "usage: field-raster-libheif INPUT.heic OUTPUT.ppm WIDTH HEIGHT" in script
     reprobe = script.index(
         "-- revalidating Field raster libheif identity before activation"
     )
@@ -344,8 +348,12 @@ def test_candidate_smoke_imports_disabled_refine_foundations_before_activation()
         "import patina_scan_worker.field_storage_acquirer; "
         "import patina_scan_worker.refine_colmap_backend; "
         "import patina_scan_worker.refine_colmap_command; "
+        "import patina_scan_worker.refine_colmap_manifest; "
+        "import patina_scan_worker.refine_colmap_toolchain; "
         "import patina_scan_worker.refine_evidence_builder; "
+        "import patina_scan_worker.refine_lifecycle; "
         "import patina_scan_worker.refine_materializer; "
+        "import patina_scan_worker.refine_model_alignment; "
         "import patina_scan_worker.refine_native_process; "
         "import patina_scan_worker.refine_packet_extractor; "
         "import patina_scan_worker.refine_publisher; "
@@ -1690,13 +1698,33 @@ def test_transaction_source_copy_requires_exact_trusted_bytes(tmp_path):
         ),
         pytest.param(
             "drawings,gpu",
+            "patina_scan_worker/refine_colmap_manifest.py",
+            id="gpu-missing-refine-colmap-manifest",
+        ),
+        pytest.param(
+            "drawings,gpu",
+            "patina_scan_worker/refine_colmap_toolchain.py",
+            id="gpu-missing-refine-colmap-toolchain",
+        ),
+        pytest.param(
+            "drawings,gpu",
             "patina_scan_worker/refine_evidence_builder.py",
             id="gpu-missing-refine-evidence-builder",
         ),
         pytest.param(
             "drawings,gpu",
+            "patina_scan_worker/refine_lifecycle.py",
+            id="gpu-missing-refine-lifecycle",
+        ),
+        pytest.param(
+            "drawings,gpu",
             "patina_scan_worker/refine_materializer.py",
             id="gpu-missing-refine-materializer",
+        ),
+        pytest.param(
+            "drawings,gpu",
+            "patina_scan_worker/refine_model_alignment.py",
+            id="gpu-missing-refine-model-alignment",
         ),
         pytest.param(
             "drawings,gpu",
@@ -1783,8 +1811,12 @@ _prepare_isolated_source_build "$SRC_DIR"
         "src/patina_scan_worker/field_storage_acquirer.py",
         "src/patina_scan_worker/refine_colmap_backend.py",
         "src/patina_scan_worker/refine_colmap_command.py",
+        "src/patina_scan_worker/refine_colmap_manifest.py",
+        "src/patina_scan_worker/refine_colmap_toolchain.py",
         "src/patina_scan_worker/refine_evidence_builder.py",
+        "src/patina_scan_worker/refine_lifecycle.py",
         "src/patina_scan_worker/refine_materializer.py",
+        "src/patina_scan_worker/refine_model_alignment.py",
         "src/patina_scan_worker/refine_native_process.py",
         "src/patina_scan_worker/refine_packet_extractor.py",
         "src/patina_scan_worker/refine_publisher.py",
@@ -1872,8 +1904,10 @@ _prepare_isolated_source_build "$SRC_DIR"
                 "import patina_scan_worker.field_storage_acquirer as storage_acquirer; "
                 "import patina_scan_worker.refine_colmap_backend as colmap_backend; "
                 "import patina_scan_worker.refine_colmap_command as colmap_command; "
+                "import patina_scan_worker.refine_colmap_toolchain as colmap_toolchain; "
                 "import patina_scan_worker.refine_evidence_builder as evidence_builder; "
                 "import patina_scan_worker.refine_materializer as materializer; "
+                "import patina_scan_worker.refine_model_alignment as model_alignment; "
                 "import patina_scan_worker.refine_native_process as native; "
                 "import patina_scan_worker.refine_packet_extractor as packet_extractor; "
                 "import patina_scan_worker.refine_publisher as publisher; "
@@ -1883,6 +1917,7 @@ _prepare_isolated_source_build "$SRC_DIR"
                 "assert pathlib.Path(storage_acquirer.__file__).resolve().is_relative_to(root); "
                 "assert pathlib.Path(colmap_backend.__file__).resolve().is_relative_to(root); "
                 "assert pathlib.Path(colmap_command.__file__).resolve().is_relative_to(root); "
+                "assert pathlib.Path(colmap_toolchain.__file__).resolve().is_relative_to(root); "
                 "assert pathlib.Path(evidence_builder.__file__).resolve().is_relative_to(root); "
                 "assert pathlib.Path(materializer.__file__).resolve().is_relative_to(root); "
                 "assert pathlib.Path(native.__file__).resolve().is_relative_to(root); "
@@ -2086,9 +2121,13 @@ def test_source_validation_rejects_an_unreviewed_package_module(tmp_path):
         "refine_adapter.py",
         "refine_colmap_backend.py",
         "refine_colmap_command.py",
+        "refine_colmap_manifest.py",
+        "refine_colmap_toolchain.py",
         "refine_evidence_builder.py",
         "refine_engine.py",
+        "refine_lifecycle.py",
         "refine_materializer.py",
+        "refine_model_alignment.py",
         "refine_native_process.py",
         "refine_packet_extractor.py",
         "refine_publisher.py",
@@ -3113,6 +3152,48 @@ def test_restrictive_legacy_rollback_uses_fresh_alias_isolated_release(tmp_path)
 
 
 def test_crash_before_legacy_quarantine_discards_and_recopies_fresh_release(tmp_path):
+    """The stale half-materialized release must be DISCARDED, not adopted.
+
+    HOW THAT IS PROVED, and why it is no longer proved by an inode number.  This
+    test used to assert ``marker.st_ino != first_inode`` as a proxy for "a
+    different file".  A qualified-host probe showed the installer is correct --
+    tainting the stale release and dropping a sentinel found the taint erased,
+    the sentinel absent, and ``statx`` btime about a second later, i.e. a
+    genuinely different file -- and that the assertion still FAILED, as
+    ``assert 7903675 != 7903675``.  The release directory is content-addressed,
+    so the allocation sequence repeats exactly, and **the filesystem hands the
+    just-freed inode number straight back**.
+
+    WHAT WAS MEASURED, and nothing beyond it.  Running the pre-fix revision of
+    this file in this repository's own gate container fails the same way, as
+    ``assert 6945173 != 6945173``; probing that container directly, an
+    unlink-and-recreate of the same allocation sequence recycled the inode
+    number 20/20 times.  The fixed revision passes there and on macOS/APFS.
+
+    An earlier revision of this docstring named ext4 as the mechanism and said
+    the test "was green in CI only because overlayfs and tmpfs allocate inode
+    numbers differently".  BOTH HALVES ARE WITHDRAWN, because the gate container
+    where the failure reproduces has no separate ``/tmp`` mount and reports
+    ``overlayfs`` -- Docker's overlay upper layer passes the backing
+    filesystem's inode numbers straight through, so overlayfs is not the
+    discriminator it was claimed to be.  What discriminates a host that recycles
+    from one that does not has NOT been isolated here and is therefore not
+    stated.  What holds without it: recycling is real, it is reproducible on
+    both hosts this repository is tested on, and an inode number is consequently
+    not an identity.
+
+    That is the same property that forced an earlier increment to pin directory
+    identity with an ``O_PATH`` descriptor instead of a name-plus-stat re-check
+    (``NATIVE_WORKSPACE_ENTRY_PIN_IS_UNIVERSAL`` in ``refine_native_process``):
+    ``st_ino`` is a REUSED handle, not an identity, and nothing may treat it as
+    one.
+
+    What replaces it is the evidence the probe actually collected: a taint
+    written into the stale release's payload and a sentinel file that only the
+    stale copy has.  If recovery adopted the stale release, the taint survives
+    and the sentinel is present.  Both must be gone.
+    """
+
     result, env, app, _units, staged, targets, _candidates = _run_transaction(
         tmp_path,
         active=True,
@@ -3125,7 +3206,11 @@ def test_crash_before_legacy_quarantine_discards_and_recopies_fresh_release(tmp_
     materialized = Path(
         (transaction / "legacy_materialized_release").read_text().strip()
     )
-    first_inode = (materialized / "marker").stat().st_ino
+    # Taint the stale release in two independent ways: rewrite the payload the
+    # final assertion reads, and add a file the true source does not have.
+    assert (materialized / "marker").read_text() == "old"
+    (materialized / "marker").write_text("stale-materialized-release")
+    (materialized / "discarded-release-sentinel").write_text("stale\n")
     assert (app / ".venv").is_dir() and not (app / ".venv").is_symlink()
     assert not list(app.glob(".venv.quarantine.*"))
     assert not (transaction / "legacy_materialized_ready").exists()
@@ -3135,8 +3220,11 @@ def test_crash_before_legacy_quarantine_discards_and_recopies_fresh_release(tmp_
 
     assert recovered.returncode == 0, recovered.stderr
     assert (app / ".venv").is_symlink()
+    # The taint is erased and the sentinel never arrives, so what is live is a
+    # fresh copy of the true source rather than the stale materialization --
+    # regardless of what inode number the filesystem chose to reuse for it.
     assert (app / ".venv" / "marker").read_text() == "old"
-    assert (app / ".venv" / "marker").stat().st_ino != first_inode
+    assert not (app / ".venv" / "discarded-release-sentinel").exists()
     assert not list(app.glob(".venv.quarantine.*"))
     assert not staged.exists()
 

@@ -3,31 +3,51 @@
 This module owns only the child-side extraction boundary.  It never opens a
 caller display path or ``/proc/self/fd`` alias: source archive reads are
 positional reads from descriptors already pinned by ``refine_native_process``.
-Destinations are created descriptor-relatively beneath one new private 0700
-workspace.  Execution, output handoff, publication, fallback, and stage
-registration remain separate disabled gates.  This child-owned scratch model is
-also not timeout-safe: SIGKILL can strand it before Python cleanup runs.
-Production composition therefore still requires a parent-provisioned,
-descriptor-rooted workspace with bounded parent-owned cleanup.
+Destinations are created descriptor-relatively beneath the ``packet/`` child of
+the parent-provisioned 0700 workspace leased through
+:meth:`NativeChildContext.workspace_descriptor`.  The extractor borrows that
+directory; it never creates, names, or removes the workspace root or any of its
+siblings, so a SIGKILLed child can no longer strand scratch — the parent
+performs bounded descriptor-relative cleanup after every child outcome.  The
+child-side ledger cleanup retained here is a fast-path courtesy, not the
+authority.  Execution, output handoff, publication, fallback, and stage
+registration remain separate disabled gates.
+
+The two optional provenance ledgers (``source-ledger`` and ``adapter-ledger``)
+are parsed here rather than left opaque.  Their bytes are bound to the packet
+manifest exactly like every other member.  Past that the two carry very
+different weight, and the docstrings below say so per ledger rather than in one
+blurred sentence:
+
+* A ``source-ledger`` row names an object that is *not* in this packet -- a
+  pre-raster capture HEIC.  No source row is compared against any manifest
+  member, because there is no member to compare it to.  Rows are checked for
+  shape, for internal consistency, and against the extracted engine request's
+  frame identities; the declared digests stay carried claims.
+* The ``adapter-ledger`` carries no rows at all.  Every per-frame fact a row
+  could state is already proven by ``parse_engine_request_member`` binding each
+  frame to its declared ``engine-image`` member, so the document is reduced to
+  the one thing nothing else in the packet records: its ``materializerId``.
 """
 
 from __future__ import annotations
 
 import hashlib
+import json
 import os
 import re
 import stat
-import tempfile
 from collections.abc import Iterator, Mapping, Sequence
 from contextlib import contextmanager
 from dataclasses import dataclass, field
-from pathlib import Path, PurePosixPath
+from pathlib import PurePosixPath
 from typing import TYPE_CHECKING, Any
 
 from .refine_adapter import AdapterError
 from .refine_native_process import (
     NATIVE_CHILD_MAX_PINNED_FILE_BYTES,
     NATIVE_CHILD_MAX_PINNED_TOTAL_BYTES,
+    NATIVE_WORKSPACE_PACKET_SUBDIRECTORY,
     NativeChildContext,
 )
 
@@ -42,6 +62,73 @@ COLMAP_PACKET_TAR_BLOCK_BYTES = 512
 COLMAP_PACKET_MEMBER_MAX_BYTES = NATIVE_CHILD_MAX_PINNED_FILE_BYTES
 COLMAP_PACKET_EXTRACTED_MAX_BYTES = NATIVE_CHILD_MAX_PINNED_TOTAL_BYTES
 
+# The closed member-role universe.  ``load_colmap_packet_manifest`` owns the
+# authoritative manifest-level copy of this set; it is restated here as an
+# executable constant because extraction is the step that actually creates
+# files, and it must refuse a role it does not understand rather than treat it
+# as an inert blob.  ``test_packet_role_universe_matches_the_manifest_loader``
+# guards the two copies against drift.
+COLMAP_PACKET_ENGINE_REQUEST_ROLE = "engine-request"
+COLMAP_PACKET_ENGINE_IMAGE_ROLE = "engine-image"
+COLMAP_PACKET_SOURCE_LEDGER_ROLE = "source-ledger"
+COLMAP_PACKET_ADAPTER_LEDGER_ROLE = "adapter-ledger"
+COLMAP_PACKET_MEMBER_ROLES = frozenset(
+    {
+        COLMAP_PACKET_ENGINE_REQUEST_ROLE,
+        COLMAP_PACKET_ENGINE_IMAGE_ROLE,
+        COLMAP_PACKET_SOURCE_LEDGER_ROLE,
+        COLMAP_PACKET_ADAPTER_LEDGER_ROLE,
+    }
+)
+# Both ledgers are optional and appear at most once.  Their destination paths
+# are exact: a ledger is a packet-root document, never a file hiding inside the
+# engine image tree.  This is a chosen convention, not one derived from an
+# existing producer -- no production packet builder exists yet.
+COLMAP_PACKET_LEDGER_MEMBER_PATHS: Mapping[str, str] = {
+    COLMAP_PACKET_SOURCE_LEDGER_ROLE: "source-ledger-v1.json",
+    COLMAP_PACKET_ADAPTER_LEDGER_ROLE: "adapter-ledger-v1.json",
+}
+# A ledger is read into memory whole, so it carries the same 4 MiB envelope the
+# engine request uses, not the 128 MiB per-member archive ceiling.  400 source
+# rows are well under 200 KiB, and an adapter ledger is a single rowless object.
+COLMAP_PACKET_LEDGER_MAX_BYTES = 4 * 1024 * 1024
+# A source-ledger row describes an object that is not in this packet, so its
+# declared size cannot be measured here -- only bounded.  The bound reused is
+# the per-file native pinned-file ceiling every packet member already obeys
+# (``NATIVE_CHILD_MAX_PINNED_FILE_BYTES``, 128 MiB).  That is a convention, not
+# a derivation: nothing in this process has seen the object, and the capture
+# bundle spec bounds the *bundle* (B-4's 300--600 MB budget, B-16's tar'd heavy
+# streams) rather than bounding an individual HEIC at all.  A real Field capture
+# HEIC is single-digit MB, so this ceiling is far too loose to catch a plausible
+# lie; its whole job is to refuse the arithmetically impossible -- a row
+# claiming 10**60 bytes -- so an absurd number cannot ride into evidence
+# unchallenged.  Engine-request sizes need no such ceiling: they are bound to
+# real declared members and are therefore measured, not asserted.
+COLMAP_PACKET_SOURCE_OBJECT_MAX_BYTES = COLMAP_PACKET_MEMBER_MAX_BYTES
+SOURCE_LEDGER_SCHEMA_VERSION = 1
+SOURCE_LEDGER_CONTRACT = "patina-refine-colmap-source-ledger-v1"
+ADAPTER_LEDGER_SCHEMA_VERSION = 1
+ADAPTER_LEDGER_CONTRACT = "patina-refine-colmap-adapter-ledger-v1"
+
+# Two different numbers are in play and they are not the same contract.
+#
+# * ``COLMAP_PACKET_MIN_ENGINE_IMAGES`` / ``COLMAP_PACKET_MAX_ENGINE_IMAGES``
+#   in ``refine_colmap_backend`` (3 and 400) are the authoritative *enforced*
+#   packet bound.  ``_validate_packet_member_roles`` imports those exact
+#   constants rather than restating them, and rejects anything outside them.
+# * 200--400 below is the separate *operational pilot target* -- the frame
+#   count a real Field capture is expected to produce.  It is deliberately NOT
+#   enforced: ``refine_colmap_backend.PILOT_200_400_FRAME_RANGE_QUALIFIED`` is
+#   still ``False``, no packet in that range has ever been built or extracted,
+#   and every fixture in this repository uses 3 frames.  Enforcing it here
+#   would reject the only packets that exist while proving nothing.
+#
+# It is therefore exposed as an explicit, inspectable classification
+# (:attr:`ExtractedColmapPacket.within_pilot_frame_range`) so a caller can see
+# whether a packet is inside the unqualified pilot band instead of inferring it.
+COLMAP_PACKET_PILOT_MIN_ENGINE_IMAGES = 200
+COLMAP_PACKET_PILOT_MAX_ENGINE_IMAGES = 400
+
 _PACKET_INVALID = "REFINE_COLMAP_PACKET_INVALID"
 _BACKEND_DISABLED = "REFINE_BACKEND_DISABLED"
 _ENGINE_FAILED = "REFINE_ENGINE_FAILED"
@@ -51,6 +138,18 @@ _ZERO_BLOCK = b"\x00" * COLMAP_PACKET_TAR_BLOCK_BYTES
 _USTAR_MAGIC = b"ustar\x00"
 _USTAR_VERSION = b"00"
 _REQUIRED_DIR_FD_FUNCTIONS = (os.open, os.mkdir, os.stat, os.unlink, os.rmdir)
+_SHA256_PATTERN = re.compile(r"^[0-9a-f]{64}$")
+_MATERIALIZER_ID_PATTERN = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_.:-]{0,127}$")
+# Roles whose bytes the extractor keeps while copying so it can compare them
+# against the re-read extracted file.  Engine images are deliberately absent:
+# they are hashed streaming and never held in memory.
+_CAPTURED_MEMBER_ROLES = frozenset(
+    {
+        COLMAP_PACKET_ENGINE_REQUEST_ROLE,
+        COLMAP_PACKET_SOURCE_LEDGER_ROLE,
+        COLMAP_PACKET_ADAPTER_LEDGER_ROLE,
+    }
+)
 
 
 def _fail(message: str, code: str = _PACKET_INVALID) -> AdapterError:
@@ -58,18 +157,108 @@ def _fail(message: str, code: str = _PACKET_INVALID) -> AdapterError:
 
 
 @dataclass(frozen=True)
-class ExtractedColmapPacket:
-    """One child-owned extraction, valid only while its context is open."""
+class ColmapSourceLedgerRow:
+    """One declared pre-raster source object for a single engine frame.
 
-    workspace: Path
+    Three of the six fields are cross-checked against something outside the row
+    itself: ``ordinal`` against its position in the array, ``source_image_name``
+    against the extracted engine request's frame at that ordinal, and
+    ``source_member`` against that same image name by basename equality.
+
+    The other three are checked for shape and for consistency with each other,
+    and nothing more.  ``source_archive_key`` must be a canonical relative path
+    and is half of a per-row uniqueness tuple, but no owner, scan, or run is
+    anchored to it -- see the residual list on :func:`_parse_source_ledger`.
+    ``source_sha256`` and ``source_size_bytes`` describe an object that is not
+    in this packet: the digest is never recomputed, and the size is only bounded
+    by :data:`COLMAP_PACKET_SOURCE_OBJECT_MAX_BYTES` and required to be the same
+    everywhere one digest appears.
+    """
+
+    ordinal: int
+    source_archive_key: str
+    source_member: str
+    source_image_name: str
+    source_sha256: str
+    source_size_bytes: int
+
+
+@dataclass(frozen=True)
+class ColmapSourceLedger:
+    """The parsed optional ``source-ledger`` member, bound to this packet."""
+
+    relative_path: str
+    sha256: str
+    rows: tuple[ColmapSourceLedgerRow, ...]
+
+
+@dataclass(frozen=True)
+class ColmapAdapterLedger:
+    """The parsed optional ``adapter-ledger`` member, bound to this packet.
+
+    This ledger deliberately carries no per-frame rows.  Everything a row could
+    have said about an engine image -- its name, its packet-relative path, its
+    digest, its size -- is already proven by ``parse_engine_request_member``,
+    which binds every frame to exactly one declared ``engine-image`` member
+    carrying exactly those values.  Rows would have been a derived copy of
+    facts already verified elsewhere (~80 KB at 400 frames) and one more
+    surface for a future producer to contradict itself on.
+
+    What survives is the one fact nothing else in the packet records:
+    ``materializer_id``.  It is an opaque identity token checked for shape
+    only; nothing here proves which adapter build produced the bytes.
+    """
+
+    relative_path: str
+    sha256: str
+    materializer_id: str
+
+
+@dataclass(frozen=True)
+class ExtractedColmapPacket:
+    """One extraction into the leased workspace, valid while its context is open.
+
+    ``workspace_descriptor`` is a borrowed directory descriptor, not a path:
+    consumers must stay descriptor-relative.  The parent owns the underlying
+    directory and removes it after the child exits by any route.
+
+    ``source_ledger`` and ``adapter_ledger`` are ``None`` when the packet
+    declared no such member; both are optional by contract.
+    """
+
+    workspace_descriptor: int
     manifest: ColmapPacketManifest
     engine_request: ColmapEngineRequest
     extracted_relative_paths: tuple[str, ...]
+    source_ledger: ColmapSourceLedger | None = None
+    adapter_ledger: ColmapAdapterLedger | None = None
+
+    @property
+    def engine_image_count(self) -> int:
+        return sum(
+            1
+            for member in self.manifest.members
+            if member.role == COLMAP_PACKET_ENGINE_IMAGE_ROLE
+        )
+
+    @property
+    def within_pilot_frame_range(self) -> bool:
+        """Whether this packet sits in the 200--400 operational pilot band.
+
+        This is a classification, not a qualification: the band itself is
+        unproven (``PILOT_200_400_FRAME_RANGE_QUALIFIED`` is ``False``) and the
+        enforced packet bound stays 3--400.
+        """
+
+        return (
+            COLMAP_PACKET_PILOT_MIN_ENGINE_IMAGES
+            <= self.engine_image_count
+            <= COLMAP_PACKET_PILOT_MAX_ENGINE_IMAGES
+        )
 
 
 @dataclass
 class _ExtractionLedger:
-    workspace: Path
     root_descriptor: int
     root_identity: tuple[int, int]
     files: list[str]
@@ -125,6 +314,8 @@ def _require_extraction_platform_capabilities() -> None:
             )
             and hasattr(os, "supports_follow_symlinks")
             and os.stat in os.supports_follow_symlinks
+            and hasattr(os, "supports_fd")
+            and os.listdir in os.supports_fd
         )
     except BaseException:  # noqa: BLE001 - platform inspection must fail closed
         supported = False
@@ -133,6 +324,98 @@ def _require_extraction_platform_capabilities() -> None:
             "COLMAP packet extraction platform lacks required descriptor safety",
             _BACKEND_DISABLED,
         )
+
+
+@dataclass(frozen=True)
+class _PacketLedgerMembers:
+    """The optional ledger members a validated manifest declared, if any."""
+
+    source: ColmapPacketMember | None
+    adapter: ColmapPacketMember | None
+    engine_image_count: int
+
+    @property
+    def declared_roles(self) -> frozenset[str]:
+        roles: set[str] = set()
+        if self.source is not None:
+            roles.add(COLMAP_PACKET_SOURCE_LEDGER_ROLE)
+        if self.adapter is not None:
+            roles.add(COLMAP_PACKET_ADAPTER_LEDGER_ROLE)
+        return frozenset(roles)
+
+
+def _validate_packet_member_roles(
+    manifest: ColmapPacketManifest,
+) -> _PacketLedgerMembers:
+    """Close the role universe and ledger cardinality before touching the disk.
+
+    Five of the seven bounds below restate ones ``load_colmap_packet_manifest``
+    also applies: the closed role universe, at most one member per ledger role,
+    exactly one engine request, the 3--400 engine-image count, and a request
+    member that is both declared and carries the request role.  Restating them
+    is intentional -- extraction is reachable from tests and future callers with
+    a manifest object it did not build itself, and it must not create a single
+    file on the strength of somebody else's validation.  The engine-image bound
+    is imported from the backend rather than retyped so the two cannot drift.
+
+    The remaining two exist **only here**; a reader will not find them in
+    ``load_colmap_packet_manifest``:
+
+    * a ledger member must sit at its exact packet-root path
+      (:data:`COLMAP_PACKET_LEDGER_MEMBER_PATHS`) -- the backend accepts a
+      ledger role at any canonical relative path;
+    * a ledger member may not exceed :data:`COLMAP_PACKET_LEDGER_MAX_BYTES`
+      (4 MiB, the whole-document envelope), where the backend applies only the
+      128 MiB per-member archive ceiling.
+    """
+
+    from .refine_colmap_backend import (
+        COLMAP_PACKET_MAX_ENGINE_IMAGES,
+        COLMAP_PACKET_MIN_ENGINE_IMAGES,
+    )
+
+    ledgers: dict[str, ColmapPacketMember] = {}
+    engine_requests = 0
+    engine_images = 0
+    for member in manifest.members:
+        if member.role not in COLMAP_PACKET_MEMBER_ROLES:
+            raise _fail("COLMAP packet member declares a role outside the universe")
+        if member.role == COLMAP_PACKET_ENGINE_REQUEST_ROLE:
+            engine_requests += 1
+            continue
+        if member.role == COLMAP_PACKET_ENGINE_IMAGE_ROLE:
+            engine_images += 1
+            continue
+        if member.role in ledgers:
+            raise _fail("COLMAP packet declares more than one ledger for a role")
+        if member.relative_path != COLMAP_PACKET_LEDGER_MEMBER_PATHS[member.role]:
+            raise _fail("COLMAP packet ledger is not at its exact declared path")
+        if member.size_bytes > COLMAP_PACKET_LEDGER_MAX_BYTES:
+            raise _fail("COLMAP packet ledger exceeds its byte ceiling")
+        ledgers[member.role] = member
+    if engine_requests != 1:
+        raise _fail("COLMAP packet must declare exactly one engine request")
+    if not (
+        COLMAP_PACKET_MIN_ENGINE_IMAGES
+        <= engine_images
+        <= COLMAP_PACKET_MAX_ENGINE_IMAGES
+    ):
+        raise _fail(
+            "COLMAP packet must declare between "
+            f"{COLMAP_PACKET_MIN_ENGINE_IMAGES} and "
+            f"{COLMAP_PACKET_MAX_ENGINE_IMAGES} engine images"
+        )
+    request_member = manifest.member_by_path.get(manifest.request_member)
+    if (
+        request_member is None
+        or request_member.role != COLMAP_PACKET_ENGINE_REQUEST_ROLE
+    ):
+        raise _fail("COLMAP packet request member is undeclared or misrouted")
+    return _PacketLedgerMembers(
+        ledgers.get(COLMAP_PACKET_SOURCE_LEDGER_ROLE),
+        ledgers.get(COLMAP_PACKET_ADAPTER_LEDGER_ROLE),
+        engine_images,
+    )
 
 
 def _pread_exact(
@@ -181,6 +464,50 @@ def _canonical_relative_path(value: str, label: str) -> str:
     ):
         raise _fail(f"{label} exceeds the bounded portable path length")
     return value
+
+
+def _ledger_relative_path(value: object, label: str) -> str:
+    if type(value) is not str:
+        raise _fail(f"{label} must be a non-empty POSIX relative path")
+    return _canonical_relative_path(value, label)
+
+
+def _ledger_exact_int(
+    value: object,
+    label: str,
+    *,
+    minimum: int,
+    maximum: int | None = None,
+) -> int:
+    if type(value) is not int or value < minimum:
+        raise _fail(f"{label} must be an integer >= {minimum}")
+    if maximum is not None and value > maximum:
+        raise _fail(f"{label} must be an integer <= {maximum}")
+    return value
+
+
+def _ledger_sha256(value: object, label: str) -> str:
+    if type(value) is not str or _SHA256_PATTERN.fullmatch(value) is None:
+        raise _fail(f"{label} must be a lowercase SHA-256")
+    return value
+
+
+def _canonical_json_bytes(value: Any) -> bytes:
+    """Mirror the backend's canonical form, including recursion normalization."""
+
+    try:
+        return (
+            json.dumps(
+                value,
+                sort_keys=True,
+                separators=(",", ":"),
+                ensure_ascii=True,
+                allow_nan=False,
+            )
+            + "\n"
+        ).encode("utf-8")
+    except (RecursionError, TypeError, ValueError) as exc:
+        raise _fail("COLMAP packet JSON is not canonicalizable") from exc
 
 
 def _canonical_ustar_split(value: str, label: str) -> tuple[str, str]:
@@ -313,64 +640,71 @@ def _raise_cleanup_failures(
     raise error from (cause if cause is not None else failures[0][1])
 
 
-def _new_extraction_workspace() -> _ExtractionLedger:
-    workspace: Path | None = None
+def _lease_extraction_workspace(context: NativeChildContext) -> _ExtractionLedger:
+    """Borrow the parent-provisioned ``packet/`` directory; never own the root.
+
+    Extraction takes the ``packet/`` child of the lease rather than the lease
+    root itself.  The root is shared: item 3 points an exec'd COLMAP's
+    ``TMPDIR`` and ``cwd`` at its siblings ``tmp/`` and ``work/``, so requiring
+    an empty *root* here would break the moment those orderings shifted.  The
+    empty-at-borrow precondition therefore belongs to ``packet/``, which nothing
+    else writes.  Removal of the whole tree still stays exclusively with the
+    parent.
+    """
+
+    leased_descriptor = context.workspace_descriptor()
     root_descriptor: int | None = None
     try:
-        temporary_parent = Path(tempfile.gettempdir()).resolve(strict=True)
-        workspace = Path(
-            tempfile.mkdtemp(
-                prefix="patina-refine-colmap-packet-",
-                dir=temporary_parent,
-            )
-        )
-        metadata = os.lstat(workspace)
+        metadata = os.fstat(leased_descriptor)
         if (
             not stat.S_ISDIR(metadata.st_mode)
-            or stat.S_ISLNK(metadata.st_mode)
             or metadata.st_uid != os.geteuid()
             or stat.S_IMODE(metadata.st_mode) != 0o700
-            or workspace.resolve(strict=True) != workspace
         ):
-            raise OSError("new extraction workspace is not private")
+            raise _fail(
+                "COLMAP packet workspace lease is not a private owned directory",
+                _ENGINE_FAILED,
+            )
         root_descriptor = os.open(
-            workspace,
+            NATIVE_WORKSPACE_PACKET_SUBDIRECTORY,
             os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW | os.O_CLOEXEC,
+            dir_fd=leased_descriptor,
         )
+        os.set_inheritable(root_descriptor, False)
         root_metadata = os.fstat(root_descriptor)
         if (
-            (root_metadata.st_dev, root_metadata.st_ino)
-            != (metadata.st_dev, metadata.st_ino)
+            not stat.S_ISDIR(root_metadata.st_mode)
             or root_metadata.st_uid != os.geteuid()
             or stat.S_IMODE(root_metadata.st_mode) != 0o700
+            or (root_metadata.st_dev, root_metadata.st_ino)
+            == (metadata.st_dev, metadata.st_ino)
         ):
-            raise OSError("extraction workspace descriptor identity changed")
+            raise _fail(
+                "COLMAP packet workspace lease is not a private owned directory",
+                _ENGINE_FAILED,
+            )
+        if os.listdir(root_descriptor):
+            raise _fail(
+                "COLMAP packet workspace lease is not empty",
+                _ENGINE_FAILED,
+            )
     except BaseException as exc:
-        cleanup_failures: list[tuple[str, OSError]] = []
         if root_descriptor is not None:
             close_failure = _attempt_descriptor_close(
                 root_descriptor,
-                "failed COLMAP packet workspace descriptor",
+                "failed COLMAP packet workspace borrow",
             )
             if close_failure is not None:
-                cleanup_failures.append(close_failure)
-        if workspace is not None:
-            try:
-                os.rmdir(workspace)
-            except OSError as cleanup_exc:
-                cleanup_failures.append(
-                    ("cannot remove failed COLMAP packet workspace", cleanup_exc)
-                )
-        if cleanup_failures:
-            _raise_cleanup_failures(cleanup_failures, cause=exc)
+                _raise_cleanup_failures([close_failure], cause=exc)
+        if isinstance(exc, AdapterError):
+            raise
         raise _fail(
-            "cannot create a private child-owned COLMAP packet workspace",
+            "cannot borrow the parent-provisioned COLMAP packet workspace",
             _ENGINE_FAILED,
         ) from exc
     return _ExtractionLedger(
-        workspace,
         root_descriptor,
-        (metadata.st_dev, metadata.st_ino),
+        (root_metadata.st_dev, root_metadata.st_ino),
         [],
         [],
     )
@@ -670,7 +1004,12 @@ def _copy_archive_member(
 ) -> bytes | None:
     digest = hashlib.sha256()
     copied = 0
-    request_payload = bytearray() if member.role == "engine-request" else None
+    if (
+        member.role in COLMAP_PACKET_LEDGER_MEMBER_PATHS
+        and member.size_bytes > COLMAP_PACKET_LEDGER_MAX_BYTES
+    ):
+        raise _fail("COLMAP packet ledger exceeds its byte ceiling")
+    captured_payload = bytearray() if member.role in _CAPTURED_MEMBER_ROLES else None
     while copied < member.size_bytes:
         context.remaining_seconds()
         try:
@@ -683,8 +1022,8 @@ def _copy_archive_member(
             raise _fail("cannot read a declared COLMAP packet member") from exc
         if not block:
             raise _fail("COLMAP packet member ended before its declared size")
-        if request_payload is not None:
-            request_payload.extend(block)
+        if captured_payload is not None:
+            captured_payload.extend(block)
         digest.update(block)
         written = 0
         while written < len(block):
@@ -711,7 +1050,7 @@ def _copy_archive_member(
     if metadata.st_size != member.size_bytes:
         raise _fail("extracted COLMAP packet member size does not match its manifest")
     context.remaining_seconds()
-    return bytes(request_payload) if request_payload is not None else None
+    return bytes(captured_payload) if captured_payload is not None else None
 
 
 def _close_descriptor_or_fail(descriptor: int, label: str) -> None:
@@ -758,6 +1097,7 @@ def _extract_archive_chunk(
     context: NativeChildContext,
     ledger: _ExtractionLedger,
     extracted_paths: set[str],
+    ledger_payloads: dict[str, bytes] | None = None,
 ) -> bytes | None:
     descriptor = context.pinned_file_descriptor(chunk.token)
     declared = {
@@ -823,9 +1163,16 @@ def _extract_archive_chunk(
                 "extracted COLMAP packet member",
             )
         if payload is not None:
-            if request_payload is not None:
-                raise _fail("COLMAP packet archive repeats the engine request")
-            request_payload = payload
+            if member.role == COLMAP_PACKET_ENGINE_REQUEST_ROLE:
+                if request_payload is not None:
+                    raise _fail("COLMAP packet archive repeats the engine request")
+                request_payload = payload
+            elif ledger_payloads is None:
+                raise _fail("COLMAP packet ledger has nowhere to be captured")
+            elif member.role in ledger_payloads:
+                raise _fail("COLMAP packet archive repeats a ledger role")
+            else:
+                ledger_payloads[member.role] = payload
         extracted_paths.add(member.relative_path)
         offset += size_bytes
         padding = (-size_bytes) % COLMAP_PACKET_TAR_BLOCK_BYTES
@@ -934,26 +1281,116 @@ def _cleanup_extraction_workspace(ledger: _ExtractionLedger) -> tuple[str, ...]:
                     errors.append(close_failure[0])
     try:
         live_metadata = os.fstat(ledger.root_descriptor)
-        path_metadata = os.lstat(ledger.workspace)
-        if (live_metadata.st_dev, live_metadata.st_ino) != ledger.root_identity or (
-            path_metadata.st_dev,
-            path_metadata.st_ino,
-        ) != ledger.root_identity:
+        if (live_metadata.st_dev, live_metadata.st_ino) != ledger.root_identity:
             errors.append("COLMAP packet workspace identity changed before cleanup")
     except OSError:
         errors.append("cannot verify COLMAP packet workspace before cleanup")
+    # The leased root itself is never removed here: the parent owns it and
+    # removes it after this child exits by any route, including SIGKILL.
     root_close_failure = _attempt_descriptor_close(
         ledger.root_descriptor,
         "COLMAP packet workspace descriptor",
     )
     if root_close_failure is not None:
         errors.append(root_close_failure[0])
-    if not errors:
-        try:
-            os.rmdir(ledger.workspace)
-        except OSError:
-            errors.append("cannot remove COLMAP packet workspace")
     return tuple(errors)
+
+
+def _read_extracted_member_payload(
+    *,
+    ledger: _ExtractionLedger,
+    member: ColmapPacketMember,
+    context: NativeChildContext,
+    expected_payload: bytes | None,
+    label: str,
+) -> bytes:
+    """Re-read one extracted member descriptor-relatively and prove its identity.
+
+    The bytes captured while copying are not trusted on their own: the file the
+    consumer will actually use is opened again beneath the leased workspace,
+    its mode/owner/size/link count are checked, and its content must equal both
+    the captured payload and the manifest digest.
+    """
+
+    if expected_payload is None:
+        raise _fail(f"extracted COLMAP {label} was never captured")
+    parts = PurePosixPath(member.relative_path).parts
+    try:
+        member_directory = _open_existing_directory_chain(
+            ledger.root_descriptor,
+            parts[:-1],
+            expected_identities=ledger.directory_identities,
+        )
+    except OSError as exc:
+        raise _fail(f"cannot open the extracted COLMAP {label} directory") from exc
+    member_descriptor: int | None = None
+    try:
+        member_descriptor = os.open(
+            parts[-1],
+            os.O_RDONLY | os.O_NONBLOCK | os.O_NOFOLLOW | os.O_CLOEXEC,
+            dir_fd=member_directory,
+        )
+    except BaseException as exc:
+        close_failure = _attempt_descriptor_close(
+            member_directory,
+            f"COLMAP packet {label} directory",
+        )
+        if close_failure is not None:
+            _raise_cleanup_failures([close_failure], cause=exc)
+        if isinstance(exc, OSError):
+            raise _fail(f"cannot open the extracted COLMAP {label}") from exc
+        raise
+    directory_close_failure = _attempt_descriptor_close(
+        member_directory,
+        f"COLMAP packet {label} directory",
+    )
+    if directory_close_failure is not None:
+        member_close_failure = _attempt_descriptor_close(
+            member_descriptor,
+            f"extracted COLMAP {label} after directory close failure",
+        )
+        failures = [directory_close_failure]
+        if member_close_failure is not None:
+            failures.append(member_close_failure)
+        _raise_cleanup_failures(failures)
+    try:
+        try:
+            member_metadata = os.fstat(member_descriptor)
+        except OSError as exc:
+            raise _fail(f"cannot inspect the extracted COLMAP {label}") from exc
+        if (
+            not stat.S_ISREG(member_metadata.st_mode)
+            or member_metadata.st_uid != os.geteuid()
+            or stat.S_IMODE(member_metadata.st_mode) != 0o600
+            or member_metadata.st_size != member.size_bytes
+            or member_metadata.st_nlink != 1
+        ):
+            raise _fail(f"extracted COLMAP {label} identity is not exact")
+        extracted_payload = _pread_exact(
+            member_descriptor,
+            offset=0,
+            size_bytes=member.size_bytes,
+            context=context,
+            label=f"extracted COLMAP {label}",
+        )
+    except BaseException as exc:
+        close_failure = _attempt_descriptor_close(
+            member_descriptor,
+            f"extracted COLMAP {label}",
+        )
+        if close_failure is not None:
+            _raise_cleanup_failures([close_failure], cause=exc)
+        raise
+    _close_descriptor_or_fail(
+        member_descriptor,
+        f"extracted COLMAP {label}",
+    )
+    if (
+        extracted_payload != expected_payload
+        or hashlib.sha256(extracted_payload).hexdigest() != member.sha256
+    ):
+        raise _fail(f"extracted COLMAP {label} identity changed")
+    return extracted_payload
 
 
 def _read_and_parse_extracted_request(
@@ -966,89 +1403,280 @@ def _read_and_parse_extracted_request(
     from .refine_colmap_backend import parse_engine_request_member
 
     request_member = manifest.member_by_path[manifest.request_member]
-    parts = PurePosixPath(request_member.relative_path).parts
-    try:
-        request_directory = _open_existing_directory_chain(
-            ledger.root_descriptor,
-            parts[:-1],
-            expected_identities=ledger.directory_identities,
-        )
-    except OSError as exc:
-        raise _fail(
-            "cannot open the extracted COLMAP engine request directory"
-        ) from exc
-    request_descriptor: int | None = None
-    try:
-        request_descriptor = os.open(
-            parts[-1],
-            os.O_RDONLY | os.O_NONBLOCK | os.O_NOFOLLOW | os.O_CLOEXEC,
-            dir_fd=request_directory,
-        )
-    except BaseException as exc:
-        close_failure = _attempt_descriptor_close(
-            request_directory,
-            "COLMAP packet request directory",
-        )
-        if close_failure is not None:
-            _raise_cleanup_failures([close_failure], cause=exc)
-        if isinstance(exc, OSError):
-            raise _fail("cannot open the extracted COLMAP engine request") from exc
-        raise
-    directory_close_failure = _attempt_descriptor_close(
-        request_directory,
-        "COLMAP packet request directory",
+    extracted_request_payload = _read_extracted_member_payload(
+        ledger=ledger,
+        member=request_member,
+        context=context,
+        expected_payload=expected_request_payload,
+        label="engine request",
     )
-    if directory_close_failure is not None:
-        request_close_failure = _attempt_descriptor_close(
-            request_descriptor,
-            "extracted COLMAP engine request after directory close failure",
-        )
-        failures = [directory_close_failure]
-        if request_close_failure is not None:
-            failures.append(request_close_failure)
-        _raise_cleanup_failures(failures)
-    try:
-        try:
-            request_metadata = os.fstat(request_descriptor)
-        except OSError as exc:
-            raise _fail("cannot inspect the extracted COLMAP engine request") from exc
-        if (
-            not stat.S_ISREG(request_metadata.st_mode)
-            or request_metadata.st_uid != os.geteuid()
-            or stat.S_IMODE(request_metadata.st_mode) != 0o600
-            or request_metadata.st_size != request_member.size_bytes
-            or request_metadata.st_nlink != 1
-        ):
-            raise _fail("extracted COLMAP engine request identity is not exact")
-        extracted_request_payload = _pread_exact(
-            request_descriptor,
-            offset=0,
-            size_bytes=request_member.size_bytes,
-            context=context,
-            label="extracted COLMAP engine request",
-        )
-    except BaseException as exc:
-        close_failure = _attempt_descriptor_close(
-            request_descriptor,
-            "extracted COLMAP engine request",
-        )
-        if close_failure is not None:
-            _raise_cleanup_failures([close_failure], cause=exc)
-        raise
-    _close_descriptor_or_fail(
-        request_descriptor,
-        "extracted COLMAP engine request",
-    )
-    if (
-        extracted_request_payload != expected_request_payload
-        or hashlib.sha256(extracted_request_payload).hexdigest()
-        != request_member.sha256
-    ):
-        raise _fail("extracted COLMAP engine request identity changed")
     return parse_engine_request_member(
         extracted_request_payload,
         manifest,
     )
+
+
+def _parse_ledger_document(
+    payload: bytes,
+    *,
+    manifest: ColmapPacketManifest,
+    contract: str,
+    schema_version: int,
+    fields: frozenset[str],
+    label: str,
+) -> Mapping[str, Any]:
+    """Validate the envelope every ledger shares, including its run binding.
+
+    Only the envelope: canonical JSON, the exact field set, the contract and
+    schema version, and the manifest run binding.  ``frames`` is not part of
+    the shared envelope -- the source ledger owns that array and checks it
+    itself, and the adapter ledger has none.
+    """
+
+    try:
+        document = json.loads(payload)
+    except (RecursionError, UnicodeDecodeError, ValueError) as exc:
+        raise _fail(f"COLMAP packet {label} is not valid UTF-8 JSON") from exc
+    if type(document) is not dict or payload != _canonical_json_bytes(document):
+        raise _fail(f"COLMAP packet {label} is not canonical JSON")
+    if set(document) != fields:
+        raise _fail(f"COLMAP packet {label} has an unknown or missing field")
+    if (
+        type(document["schemaVersion"]) is not int
+        or document["schemaVersion"] != schema_version
+        or document["contract"] != contract
+    ):
+        raise _fail(f"COLMAP packet {label} contract is unsupported")
+    if document["runId"] != manifest.run_id:
+        raise _fail(f"COLMAP packet {label} runId does not match its manifest")
+    return document
+
+
+def _parse_source_ledger(
+    payload: bytes,
+    *,
+    manifest: ColmapPacketManifest,
+    member: ColmapPacketMember,
+    engine_request: ColmapEngineRequest,
+) -> ColmapSourceLedger:
+    """Bind pre-raster source provenance to the extracted engine frames.
+
+    Coverage is exact: one row per engine frame, in frame order.  Each row's
+    image identity must equal its frame's ``sourceImageName``, its member
+    basename must equal that image name, and no two rows may name the same
+    ``(archiveKey, member)`` object.  Self-consistency is enforced where it can
+    be: one ``sourceSha256`` may not appear at two different
+    ``sourceSizeBytes``, since that is impossible for real objects and needs
+    nothing outside the document to detect.
+
+    The residual is everything that would require reading an object this
+    process never sees, and it is larger than "digests are unverified":
+
+    * ``sourceSha256`` is never recomputed.  Nothing downstream of the packet
+      re-reads a source HEIC either.  ``field_storage_acquirer`` does re-hash
+      what it streams, but it is *upstream* -- it acquires the capture bundle
+      before any packet exists, and it checks against the ingest manifest's
+      digest, never against a ledger row.  A wrong ``sourceSha256`` is
+      therefore caught by nothing in this pipeline today.
+    * ``sourceSizeBytes`` is bounded, not measured; see
+      :data:`COLMAP_PACKET_SOURCE_OBJECT_MAX_BYTES` for why that bound is a
+      convention rather than a derivation.
+    * ``sourceArchiveKey`` is anchored to nothing.  The packet manifest carries
+      only a 64-hex ``runId`` -- no owner id, no scan id -- so a row naming
+      another owner's archive path is accepted here and flows into
+      :class:`ColmapSourceLedgerRow`.  ``refine_evidence_builder._canonical_path``
+      does not anchor it either, so the value can reach published evidence
+      unanchored.  Closing this needs an owner/scan binding in the manifest
+      itself; it cannot be closed inside this function.
+    """
+
+    label = "source ledger"
+    document = _parse_ledger_document(
+        payload,
+        manifest=manifest,
+        contract=SOURCE_LEDGER_CONTRACT,
+        schema_version=SOURCE_LEDGER_SCHEMA_VERSION,
+        fields=frozenset({"schemaVersion", "contract", "runId", "frames"}),
+        label=label,
+    )
+    rows = document["frames"]
+    if type(rows) is not list:
+        raise _fail(f"COLMAP packet {label} frames must be an exact JSON array")
+    frames = engine_request.frames
+    if len(rows) != len(frames):
+        raise _fail("COLMAP packet source ledger does not cover every engine frame")
+    parsed: list[ColmapSourceLedgerRow] = []
+    seen_source_objects: set[tuple[str, str]] = set()
+    declared_sizes: dict[str, int] = {}
+    for index, row in enumerate(rows):
+        if type(row) is not dict or set(row) != {
+            "ordinal",
+            "sourceArchiveKey",
+            "sourceMember",
+            "sourceImageName",
+            "sourceSha256",
+            "sourceSizeBytes",
+        }:
+            raise _fail(f"COLMAP packet source ledger row {index} has an invalid shape")
+        ordinal = _ledger_exact_int(
+            row["ordinal"],
+            f"source ledger row {index} ordinal",
+            minimum=0,
+        )
+        if ordinal != index:
+            raise _fail(
+                "COLMAP packet source ledger ordinals must be dense and ordered"
+            )
+        image_name = row["sourceImageName"]
+        if type(image_name) is not str or image_name != frames[index].source_image_name:
+            raise _fail(
+                "COLMAP packet source ledger row does not match its engine frame"
+            )
+        archive_key = _ledger_relative_path(
+            row["sourceArchiveKey"],
+            f"source ledger row {index} sourceArchiveKey",
+        )
+        source_member = _ledger_relative_path(
+            row["sourceMember"],
+            f"source ledger row {index} sourceMember",
+        )
+        if PurePosixPath(source_member).name != image_name:
+            raise _fail(
+                "COLMAP packet source ledger member does not match its image identity"
+            )
+        source_object = (archive_key, source_member)
+        if source_object in seen_source_objects:
+            raise _fail("COLMAP packet source ledger repeats a source object identity")
+        seen_source_objects.add(source_object)
+        source_sha256 = _ledger_sha256(
+            row["sourceSha256"],
+            f"source ledger row {index} sourceSha256",
+        )
+        source_size_bytes = _ledger_exact_int(
+            row["sourceSizeBytes"],
+            f"source ledger row {index} sourceSizeBytes",
+            minimum=1,
+            maximum=COLMAP_PACKET_SOURCE_OBJECT_MAX_BYTES,
+        )
+        # Two rows may legitimately repeat one (digest, size) pair -- two frames
+        # can be rastered from byte-identical sources.  One digest at two sizes
+        # cannot happen for real objects, and needs nothing outside this
+        # document to detect, so it is refused rather than carried.
+        first_size = declared_sizes.setdefault(source_sha256, source_size_bytes)
+        if first_size != source_size_bytes:
+            raise _fail(
+                "COLMAP packet source ledger declares one source digest at two sizes"
+            )
+        parsed.append(
+            ColmapSourceLedgerRow(
+                ordinal,
+                archive_key,
+                source_member,
+                image_name,
+                source_sha256,
+                source_size_bytes,
+            )
+        )
+    return ColmapSourceLedger(
+        member.relative_path,
+        member.sha256,
+        tuple(parsed),
+    )
+
+
+def _parse_adapter_ledger(
+    payload: bytes,
+    *,
+    manifest: ColmapPacketManifest,
+    member: ColmapPacketMember,
+) -> ColmapAdapterLedger:
+    """Parse the rowless raster-adapter envelope.
+
+    The document is ``{schemaVersion, contract, runId, materializerId}`` and
+    nothing else -- a ``frames`` key is refused by the envelope's exact field
+    set like any other unknown field.  See :class:`ColmapAdapterLedger` for why
+    per-frame rows were removed rather than validated: every fact they could
+    carry is already proven by ``parse_engine_request_member``.
+
+    ``materializerId`` is checked for shape only.  It is an opaque token: this
+    function cannot tell a real adapter build id from a well-formed invention,
+    and no adapter build is authenticated anywhere in this path.
+    """
+
+    document = _parse_ledger_document(
+        payload,
+        manifest=manifest,
+        contract=ADAPTER_LEDGER_CONTRACT,
+        schema_version=ADAPTER_LEDGER_SCHEMA_VERSION,
+        fields=frozenset({"schemaVersion", "contract", "runId", "materializerId"}),
+        label="adapter ledger",
+    )
+    materializer_id = document["materializerId"]
+    if (
+        type(materializer_id) is not str
+        or _MATERIALIZER_ID_PATTERN.fullmatch(materializer_id) is None
+    ):
+        raise _fail("COLMAP packet adapter ledger materializerId is not canonical")
+    return ColmapAdapterLedger(
+        member.relative_path,
+        member.sha256,
+        materializer_id,
+    )
+
+
+def _read_and_parse_optional_ledgers(
+    *,
+    ledger: _ExtractionLedger,
+    manifest: ColmapPacketManifest,
+    context: NativeChildContext,
+    engine_request: ColmapEngineRequest,
+    members: _PacketLedgerMembers,
+    ledger_payloads: Mapping[str, bytes],
+) -> tuple[ColmapSourceLedger | None, ColmapAdapterLedger | None]:
+    """Read and parse whichever optional ledgers this packet declared.
+
+    Source-ledger rows are bound to engine frames by ordinal, so the extracted
+    request and the manifest-declared engine-image universe must first agree on
+    how many frames exist.  That agreement is checked here rather than assumed
+    from the request parser, and it is checked unconditionally: it also
+    establishes -- together with ``parse_engine_request_member`` binding each
+    frame to a distinct declared ``engine-image`` member -- that the request's
+    frames cover that member universe exactly.  The adapter ledger relies on
+    exactly that fact instead of restating it row by row.
+    """
+
+    if len(engine_request.frames) != members.engine_image_count:
+        raise _fail(
+            "COLMAP packet engine frame count disagrees with its declared engine images"
+        )
+    source_ledger: ColmapSourceLedger | None = None
+    adapter_ledger: ColmapAdapterLedger | None = None
+    if members.source is not None:
+        source_ledger = _parse_source_ledger(
+            _read_extracted_member_payload(
+                ledger=ledger,
+                member=members.source,
+                context=context,
+                expected_payload=ledger_payloads.get(COLMAP_PACKET_SOURCE_LEDGER_ROLE),
+                label="source ledger",
+            ),
+            manifest=manifest,
+            member=members.source,
+            engine_request=engine_request,
+        )
+    if members.adapter is not None:
+        adapter_ledger = _parse_adapter_ledger(
+            _read_extracted_member_payload(
+                ledger=ledger,
+                member=members.adapter,
+                context=context,
+                expected_payload=ledger_payloads.get(COLMAP_PACKET_ADAPTER_LEDGER_ROLE),
+                label="adapter ledger",
+            ),
+            manifest=manifest,
+            member=members.adapter,
+        )
+    return source_ledger, adapter_ledger
 
 
 @contextmanager
@@ -1063,8 +1691,10 @@ def extract_colmap_packet(
     _require_extraction_platform_capabilities()
     _require_native_child_session(context)
     manifest = load_colmap_packet_manifest(request, context)
-    ledger = _new_extraction_workspace()
+    ledger_members = _validate_packet_member_roles(manifest)
+    ledger = _lease_extraction_workspace(context)
     extracted_paths: set[str] = set()
+    ledger_payloads: dict[str, bytes] = {}
     request_payload: bytes | None = None
     try:
         for chunk in manifest.chunks:
@@ -1074,6 +1704,7 @@ def extract_colmap_packet(
                 context=context,
                 ledger=ledger,
                 extracted_paths=extracted_paths,
+                ledger_payloads=ledger_payloads,
             )
             if payload is not None:
                 if request_payload is not None:
@@ -1087,11 +1718,21 @@ def extract_colmap_packet(
             context=context,
             expected_request_payload=request_payload,
         )
+        source_ledger, adapter_ledger = _read_and_parse_optional_ledgers(
+            ledger=ledger,
+            manifest=manifest,
+            context=context,
+            engine_request=engine_request,
+            members=ledger_members,
+            ledger_payloads=ledger_payloads,
+        )
         yield ExtractedColmapPacket(
-            ledger.workspace,
+            ledger.root_descriptor,
             manifest,
             engine_request,
             tuple(sorted(extracted_paths)),
+            source_ledger=source_ledger,
+            adapter_ledger=adapter_ledger,
         )
     finally:
         cleanup_errors = _cleanup_extraction_workspace(ledger)

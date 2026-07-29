@@ -15,14 +15,13 @@ this state machine without a GPU, database, network, or physical raster fixture.
 
 from __future__ import annotations
 
-import errno
 import hashlib
 import json
 import math
 import os
 import re
 import stat
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from enum import Enum
 from pathlib import Path, PurePosixPath
 from types import MappingProxyType
@@ -142,6 +141,36 @@ class RefineFailureCode(str, Enum):
     ENGINE_TIMEOUT = "REFINE_ENGINE_TIMEOUT"
     ENGINE_FAILED = "REFINE_ENGINE_FAILED"
     INPUT_IO = "REFINE_INPUT_IO"
+    #: A full workspace filesystem, kept as its own token rather than folded
+    #: into a neighbour.  ``refine_native_process`` already raises
+    #: ``REFINE_ENGINE_NO_SPACE`` when the engine-output freeze cannot mint or
+    #: fill its private copy, precisely because "free disk space on the
+    #: workspace container" is a different operator instruction from every
+    #: other failure this runner reports.  Translating it to ``INPUT_IO`` here
+    #: would send the operator to look at the refine INPUT packet, which is not
+    #: what is wrong; translating it to ``ENGINE_FAILED`` would say only that
+    #: something went wrong.  Carrying the same token end to end costs nothing:
+    #: this enum has no persisted or cross-language consumer (it is referenced
+    #: only by this module and its tests, and ``scan_pipeline.refine`` is not
+    #: registered), and ``REFINE_FAILURE_FATALITY`` below is guarded exhaustive,
+    #: so a member cannot be added without a deliberate fatality decision.
+    ENGINE_NO_SPACE = "REFINE_ENGINE_NO_SPACE"
+    #: The boundary could not provision its OWN private scratch -- the workspace
+    #: lease or the engine-output freeze vault -- because the HOST refused a
+    #: resource: no free inodes, an exhausted descriptor table, a scratch root
+    #: that does not exist yet, or a run of colliding random names.  Same
+    #: reasoning as ``ENGINE_NO_SPACE`` and reached by the same audit: these are
+    #: operational conditions with an operator fix and no defect in the task,
+    #: and ``refine_native_process`` raises them under
+    #: ``_SCRATCH_UNAVAILABLE_CODE`` precisely so this runner can keep them
+    #: retryable instead of letting them fall through to a FATAL default.
+    #:
+    #: DELIBERATELY NOT this code: ``REFINE_ENGINE_FAILED``'s other sites, which
+    #: report deterministic facts (an absent platform primitive, a malformed
+    #: ledger, a mismatched token set) and must stay fatal, and every "not a
+    #: fresh private directory" check, which reports a same-UID actor in our
+    #: scratch rather than a shortage of it.
+    ENGINE_SCRATCH_UNAVAILABLE = "REFINE_ENGINE_SCRATCH_UNAVAILABLE"
     GPU_DRIVER = "REFINE_GPU_DRIVER"
     GPU_OOM = "REFINE_GPU_OOM"
     ENGINE_VERSION_MISMATCH = "REFINE_ENGINE_VERSION_MISMATCH"
@@ -160,6 +189,18 @@ REFINE_FAILURE_FATALITY: Mapping[RefineFailureCode, bool] = MappingProxyType(
         RefineFailureCode.ENGINE_TIMEOUT: False,
         RefineFailureCode.ENGINE_FAILED: False,
         RefineFailureCode.INPUT_IO: False,
+        # RETRYABLE ON PURPOSE.  A full workspace filesystem is an operational
+        # condition with an operator fix and no defect in the task, so the task
+        # must survive to be retried once the disk has headroom.  Marking it
+        # fatal would permanently kill a scan for a transient disk state.
+        RefineFailureCode.ENGINE_NO_SPACE: False,
+        # RETRYABLE ON PURPOSE, for the same reason and by the same argument as
+        # ENGINE_NO_SPACE: the host could not hand this boundary a private
+        # scratch directory right now.  An operator frees inodes, raises the
+        # descriptor limit or creates the configured scratch root, and the same
+        # task then runs.  Marking it fatal would kill a scan permanently for a
+        # condition that has nothing to do with the scan.
+        RefineFailureCode.ENGINE_SCRATCH_UNAVAILABLE: False,
         RefineFailureCode.GPU_DRIVER: False,
         RefineFailureCode.GPU_OOM: False,
         RefineFailureCode.ENGINE_VERSION_MISMATCH: True,
@@ -300,15 +341,23 @@ class RefineRunRequest:
 
 @dataclass(frozen=True)
 class RefineFrameInput:
-    """One source HEIC and its distinct canonical materialized engine PPM."""
+    """One source HEIC and its distinct canonical materialized engine PPM.
+
+    Both files arrive as BORROWED read-only descriptors opened by whoever
+    produced them -- the acquirer for the source, the raster materializer for the
+    engine PPM.  The runner reads them and never closes them.  The two relative
+    paths are manifest/display metadata; nothing opens them.
+    """
 
     frame: NormalizedFrame
+    source_descriptor: int
     relative_source_path: str
     source_archive_key: str
     source_member: str
     source_sha256: str
     source_size_bytes: int
     engine_name: str
+    engine_descriptor: int
     engine_relative_path: str
     engine_sha256: str
     engine_size_bytes: int
@@ -317,26 +366,39 @@ class RefineFrameInput:
 
 @dataclass(frozen=True)
 class PreparedRefineFrame:
-    """Runner-time path snapshot for a backend handoff.
+    """Verified descriptor snapshot for a backend handoff.
 
-    Containment and checksum validation do not make a path TOCTOU-safe.  A
-    concrete backend must bind its read to a no-follow descriptor (or an
-    equivalently isolated immutable workspace) instead of validating one open
-    and consuming another.
+    Containment plus a checksum never made a path TOCTOU-safe -- the object could
+    change between the check and the ``open``, and between the runner's ``open``
+    and the backend's.  Both files are therefore pinned to the descriptor their
+    producer already holds: the runner verifies that descriptor and the backend
+    reads that same descriptor, so the gap has no place left to exist.
+
+    The descriptors are borrowed.  Their owner is the composed caller, which must
+    keep them open for the whole run and close them afterwards.
+
+    Each descriptor's ``(st_dev, st_ino)`` is carried alongside it.  A descriptor
+    NUMBER is only a slot in a table: if the borrowed descriptor were ever closed
+    and the number reused, everything downstream would keep reading through the
+    same integer and see a different object.  Carrying the identity the runner
+    already proved lets any later consumer make that a positive ``fstat`` check
+    instead of an argument about digest collisions.
     """
 
     frame: NormalizedFrame
-    source_path: Path
+    source_descriptor: int
     relative_source_path: str
     source_archive_key: str
     source_member: str
     source_sha256: str
     source_size_bytes: int
+    source_identity: tuple[int, int]
     engine_name: str
-    engine_path: Path
+    engine_descriptor: int
     engine_relative_path: str
     engine_sha256: str
     engine_size_bytes: int
+    engine_identity: tuple[int, int]
     materializer_id: str
 
 
@@ -353,21 +415,41 @@ class PreparedRefineRunRequest:
 
 @dataclass(frozen=True)
 class RefineFileArtifact:
-    """Streaming publisher input; binary payload is never retained in memory.
+    """Streaming publisher input bound to one BORROWED read-only descriptor.
 
-    This is a handoff descriptor, not a durable attestation.  The create-only
-    publisher MUST open without following links and hash, size, and publish the
-    exact same open descriptor; validating one path open and uploading from a
-    second is not sufficient.  Runner-time verification cannot stop a workspace
-    file from changing after :meth:`RefineRunner.run` returns.
+    ``descriptor`` is the handoff.  It is not opened here and not closed here:
+    its owner is whoever opened it -- in the composed pipeline, the
+    ``NativeEngineOutputs`` sink the native boundary populated.  The runner
+    verifies that exact descriptor and the publisher uploads that exact
+    descriptor, so there is no window in which the object being measured and the
+    object being published could differ.  Every read on it is positional, so the
+    owner's file offset is never disturbed.
+
+    ``display_path`` is exactly what its name says: metadata for humans and for
+    the manifest.  Nothing may open it.  It was previously a ``source_path`` that
+    the runner resolved and hashed and the publisher then opened a SECOND time,
+    which is the reopen this contract exists to remove.
+
+    ``identity`` is the ``(st_dev, st_ino)`` the runner measured while it hashed
+    ``descriptor``.  The runner always sets it on what it emits; a builder need
+    not supply it.  The publisher requires it and re-``fstat``s the descriptor
+    against it before staging a byte, which turns "an fd number cannot have been
+    reused" from an argument about digest collisions into a check.
     """
 
     name: str
-    source_path: Path
+    # A file-descriptor NUMBER is an incidental handle, not part of the
+    # artifact's value: two runs over identical bytes must still compare equal,
+    # and the byte-determinism contract is carried by ``sha256``/``size_bytes``.
+    descriptor: int = field(compare=False)
     sha256: str
     size_bytes: int
     transport_content_type: str
     semantic_media_type: str
+    display_path: str | None = None
+    # Incidental for the same reason ``descriptor`` is: the inode number of two
+    # byte-identical artifacts differs, and equality here is about bytes.
+    identity: tuple[int, int] | None = field(default=None, compare=False)
 
 
 @dataclass(frozen=True)
@@ -758,72 +840,78 @@ def _safe_relative_path(
     return path
 
 
-def _stable_file_sha256(
-    path: Path,
+def _borrowed_descriptor_stat(
+    descriptor: object,
     *,
+    label: str,
+    failure_code: RefineFailureCode = RefineFailureCode.ARTIFACT_INVALID,
+) -> os.stat_result:
+    """Fail closed on anything that is not a borrowed read-only regular file."""
+
+    if type(descriptor) is not int or descriptor < 0:
+        _fail(
+            failure_code,
+            f"{label} descriptor must be a non-negative integer",
+        )
+    try:
+        metadata = os.fstat(descriptor)
+    except OSError as exc:
+        _fail(RefineFailureCode.INPUT_IO, f"cannot inspect {label}: {exc}")
+    if not stat.S_ISREG(metadata.st_mode):
+        _fail(
+            failure_code,
+            f"{label} must be a regular file",
+        )
+    try:
+        import fcntl
+
+        access_mode = fcntl.fcntl(descriptor, fcntl.F_GETFL) & os.O_ACCMODE
+    except (ImportError, OSError) as exc:
+        _fail(RefineFailureCode.INPUT_IO, f"cannot inspect {label} flags: {exc}")
+    if access_mode != os.O_RDONLY:
+        _fail(
+            failure_code,
+            f"{label} must be borrowed read-only",
+        )
+    return metadata
+
+
+def _stable_descriptor_sha256(
+    descriptor: int,
+    *,
+    expected_size: int,
     deadline: RefineDeadline,
 ) -> tuple[str, os.stat_result]:
-    """Stream one regular file while proving its identity stayed unchanged."""
+    """Hash a borrowed descriptor positionally, proving its identity held still.
+
+    ``pread`` rather than ``read``: the descriptor belongs to someone else, so
+    consuming its offset would corrupt an owner that reads it before or after
+    this call -- and, unlike the removed path-based hasher, there is no second
+    ``open`` here for an attacker to aim at.
+    """
 
     _require_engine_budget(deadline)
-    try:
-        nonblocking_flag = os.O_NONBLOCK
-    except AttributeError as exc:
-        raise ValueError("nonblocking source opens are unavailable") from exc
-    try:
-        path_snapshot = os.lstat(path)
-    except OSError as exc:
-        raise OSError("source path could not be inspected safely") from exc
-    if not stat.S_ISREG(path_snapshot.st_mode):
-        raise ValueError("source is not a regular non-symlink file")
-
-    flags = (
-        os.O_RDONLY
-        | getattr(os, "O_CLOEXEC", 0)
-        | getattr(os, "O_NOFOLLOW", 0)
-        | nonblocking_flag
-    )
-    try:
-        descriptor = os.open(path, flags)
-    except OSError as exc:
-        if exc.errno == errno.ELOOP:
-            raise ValueError(
-                "source changed to a symbolic link before hashing"
-            ) from exc
-        raise OSError("source could not be opened safely") from exc
-
+    if not hasattr(os, "pread"):
+        raise ValueError("descriptor-relative reads are unavailable")
+    before = os.fstat(descriptor)
+    if not stat.S_ISREG(before.st_mode):
+        raise ValueError("source is not a regular file")
+    if before.st_size != expected_size:
+        raise ValueError("source size does not match its ledger")
     digest = hashlib.sha256()
-    pending_error = False
-    try:
-        before = os.fstat(descriptor)
-        if not stat.S_ISREG(before.st_mode):
-            raise ValueError("source is not a regular non-symlink file")
-        if (before.st_dev, before.st_ino) != (
-            path_snapshot.st_dev,
-            path_snapshot.st_ino,
-        ):
-            raise ValueError("source changed identity before hashing")
-        chunk_index = 0
-        while True:
-            _deadline_checkpoint(deadline, chunk_index)
-            chunk = os.read(descriptor, 1024 * 1024)
-            if not chunk:
-                break
-            digest.update(chunk)
-            chunk_index += 1
-        after = os.fstat(descriptor)
-    except OSError as exc:
-        pending_error = True
-        raise OSError("source descriptor could not be consumed safely") from exc
-    except BaseException:  # preserve typed runner failures while closing the descriptor
-        pending_error = True
-        raise
-    finally:
-        try:
-            os.close(descriptor)
-        except OSError as exc:
-            if not pending_error:
-                raise OSError("source descriptor could not be closed safely") from exc
+    offset = 0
+    chunk_index = 0
+    while offset < expected_size:
+        _deadline_checkpoint(deadline, chunk_index)
+        chunk = os.pread(descriptor, min(1024 * 1024, expected_size - offset), offset)
+        if not chunk:
+            raise ValueError("source ended before its declared size")
+        digest.update(chunk)
+        offset += len(chunk)
+        chunk_index += 1
+    if os.pread(descriptor, 1, expected_size):
+        raise ValueError("source exceeds its declared size")
+    after = os.fstat(descriptor)
     _require_engine_budget(deadline)
     stable_fields_before = (
         before.st_dev,
@@ -846,34 +934,34 @@ def _stable_file_sha256(
     return digest.hexdigest(), after
 
 
-def _verified_frame_file(
+def _verified_frame_descriptor(
     *,
-    workspace_root: Path,
+    descriptor: object,
     relative_path: object,
     expected_name: str,
     expected_sha256: object,
     expected_size_bytes: object,
     label: str,
     deadline: RefineDeadline,
-) -> Path:
+) -> tuple[int, int]:
+    """Verify one borrowed frame descriptor and return its ``(dev, ino)``.
+
+    The declared relative path is still validated -- it goes into the manifest --
+    but it is never joined, resolved, or opened.  Containment is no longer the
+    safety property; descriptor identity is.
+    """
+
     relative = _safe_relative_path(relative_path, f"{label} path")
     if relative.name != expected_name:
         _fail(
             RefineFailureCode.INPUT_INVALID,
             f"{label} basename must equal its declared image name",
         )
-    candidate = workspace_root.joinpath(*relative.parts)
-    try:
-        resolved = candidate.resolve(strict=True)
-        resolved.relative_to(workspace_root)
-        file_stat = resolved.stat()
-    except (OSError, ValueError) as exc:
-        _fail(RefineFailureCode.INPUT_INVALID, f"frame source is not contained: {exc}")
-    if resolved != candidate or not stat.S_ISREG(file_stat.st_mode):
-        _fail(
-            RefineFailureCode.INPUT_INVALID,
-            "frame source must be a contained regular file without symlinks",
-        )
+    file_stat = _borrowed_descriptor_stat(
+        descriptor,
+        label=label,
+        failure_code=RefineFailureCode.INPUT_INVALID,
+    )
     if (
         type(expected_size_bytes) is not int
         or expected_size_bytes <= 0
@@ -892,8 +980,9 @@ def _verified_frame_file(
             f"{label} sha256 must be lowercase hexadecimal",
         )
     try:
-        actual_sha256, stable_stat = _stable_file_sha256(
-            resolved,
+        actual_sha256, stable_stat = _stable_descriptor_sha256(
+            descriptor,
+            expected_size=expected_size_bytes,
             deadline=deadline,
         )
     except OSError as exc:
@@ -907,7 +996,7 @@ def _verified_frame_file(
             RefineFailureCode.INPUT_INVALID,
             f"{label} sha256 does not match its ledger",
         )
-    return resolved
+    return (stable_stat.st_dev, stable_stat.st_ino)
 
 
 def _validate_request(
@@ -938,6 +1027,16 @@ def _validate_request(
     except Exception as exc:  # noqa: BLE001 - normalize the request boundary
         _fail(RefineFailureCode.INPUT_INVALID, str(exc))
 
+    # These checks are a NAME allow-list, not containment.  Nothing in this
+    # module derives file access from ``workspace_root`` any more: frames and
+    # engine artifacts are pinned to the descriptors their producers already
+    # hold, and ``_validate_engine_artifacts`` no longer binds an artifact to
+    # ``reference.relative_path``.  What survives here is only "the scratch root
+    # the caller named exists, is absolute, is not a symlink, and is a
+    # directory", which the backend needs before it can be handed a workspace.
+    # A future reader must not read these lines as proof that anything read or
+    # written during a run lives inside this tree -- they do not establish that,
+    # and a containment check followed by an ``open`` never could.
     if (
         not isinstance(request.workspace_root, Path)
         or not request.workspace_root.is_absolute()
@@ -969,6 +1068,7 @@ def _validate_request(
     names: set[str] = set()
     engine_names: set[str] = set()
     ordinals: set[int] = set()
+    frame_identities: set[tuple[int, int]] = set()
     prepared_frames: list[PreparedRefineFrame] = []
     for frame_index, frame_input in enumerate(frame_values):
         _deadline_checkpoint(deadline, frame_index)
@@ -1057,8 +1157,8 @@ def _validate_request(
                 RefineFailureCode.INPUT_INVALID,
                 "frame materializer id must be a bounded visible string",
             )
-        source_path = _verified_frame_file(
-            workspace_root=workspace_root,
+        source_identity = _verified_frame_descriptor(
+            descriptor=frame_input.source_descriptor,
             relative_path=frame_input.relative_source_path,
             expected_name=name,
             expected_sha256=frame_input.source_sha256,
@@ -1066,8 +1166,8 @@ def _validate_request(
             label="frame source HEIC",
             deadline=deadline,
         )
-        engine_path = _verified_frame_file(
-            workspace_root=workspace_root,
+        engine_identity = _verified_frame_descriptor(
+            descriptor=frame_input.engine_descriptor,
             relative_path=frame_input.engine_relative_path,
             expected_name=frame_input.engine_name,
             expected_sha256=frame_input.engine_sha256,
@@ -1075,20 +1175,33 @@ def _validate_request(
             label="frame engine PPM",
             deadline=deadline,
         )
+        # The source HEIC and its materialized engine PPM are distinct objects by
+        # contract; one inode standing in for both would mean the raster step
+        # never ran.  Reusing an inode across frames would mean two frames share
+        # pixels, which the pose solve would silently accept.
+        for identity in (source_identity, engine_identity):
+            if identity in frame_identities:
+                _fail(
+                    RefineFailureCode.INPUT_INVALID,
+                    "frame files must reference unique file identities",
+                )
+            frame_identities.add(identity)
         prepared_frames.append(
             PreparedRefineFrame(
                 frame=frame,
-                source_path=source_path,
+                source_descriptor=frame_input.source_descriptor,
                 relative_source_path=frame_input.relative_source_path,
                 source_archive_key=str(source_archive_key),
                 source_member=str(source_member),
                 source_sha256=frame_input.source_sha256,
                 source_size_bytes=frame_input.source_size_bytes,
+                source_identity=source_identity,
                 engine_name=frame_input.engine_name,
-                engine_path=engine_path,
+                engine_descriptor=frame_input.engine_descriptor,
                 engine_relative_path=frame_input.engine_relative_path,
                 engine_sha256=frame_input.engine_sha256,
                 engine_size_bytes=frame_input.engine_size_bytes,
+                engine_identity=engine_identity,
                 materializer_id=frame_input.materializer_id,
             )
         )
@@ -1857,7 +1970,28 @@ def _validate_evidence(
             RefineFailureCode.EVIDENCE_INVALID,
             "evidence verdict returned an unknown failure code",
         )
-    _fail(code, verdict.reason)
+    # THE COMPARABLE NUMBERS TRAVEL WITH THE REFUSAL.  A verdict reason alone
+    # ("comparable_geometric_evidence_regressed") says a metric got worse but
+    # not WHICH ONE or BY HOW MUCH, and the evidence is destroyed with the
+    # child's lease moments later.  The first real engine run on the qualified
+    # host was refused by this line and the operator had nothing to diagnose it
+    # with.  These are the exact fields ``evaluate_refinement_evidence`` reads,
+    # rendered once, with no interpretation added.
+    _fail(
+        code,
+        f"{verdict.reason} "
+        f"(coverage {verdict.registration_coverage_before:.4f}->"
+        f"{verdict.registration_coverage_after:.4f}; "
+        f"reprojection_rmse_px {evidence.reprojection_rmse_px_before:.6f}->"
+        f"{evidence.reprojection_rmse_px_after:.6f}; "
+        f"loop_rotation_rmse_deg {evidence.loop_rotation_rmse_deg_before:.6f}->"
+        f"{evidence.loop_rotation_rmse_deg_after:.6f}; "
+        f"loop_translation_rmse_deg "
+        f"{evidence.loop_translation_direction_rmse_deg_before:.6f}->"
+        f"{evidence.loop_translation_direction_rmse_deg_after:.6f}; "
+        f"observations {evidence.common_observations}; "
+        f"loop_edges {evidence.verified_loop_edges})",
+    )
 
 
 def _sim3_document(alignment: Sim3) -> dict[str, object]:
@@ -1961,6 +2095,11 @@ def _evidence_document(
         "absoluteAccuracyCertified": verdict.absolute_accuracy_certified,
         "verdictCode": verdict.code,
         "verdictReason": verdict.reason,
+        # R123: the loop comparables no longer refuse. The raw numbers are two
+        # keys up; this renders them with their direction so the record does not
+        # require the reader to do the arithmetic that decides whether a passing
+        # run's global consistency drifted.
+        "loopConsistencyAdvisory": verdict.loop_consistency_advisory,
     }
 
 
@@ -2018,10 +2157,17 @@ def _pose_documents(
 def _validate_engine_artifacts(
     values: object,
     *,
-    workspace_root: Path,
     expected_outputs: tuple[RefineEngineOutputReference, ...],
     deadline: RefineDeadline,
 ) -> tuple[RefineFileArtifact, ...]:
+    """Verify every engine artifact through its borrowed descriptor only.
+
+    There is no path here on purpose.  ``workspace_root`` containment used to be
+    the safety story, but a containment check followed by an ``open`` is only as
+    good as the gap between them; binding to the descriptor the builder already
+    holds removes the gap instead of narrowing it.
+    """
+
     artifacts = _snapshot_sequence(
         values,
         label="artifact builder output",
@@ -2029,6 +2175,7 @@ def _validate_engine_artifacts(
         deadline=deadline,
     )
     seen: set[str] = set()
+    seen_identities: set[tuple[int, int]] = set()
     expected_by_name = {reference.name: reference for reference in expected_outputs}
     validated: list[RefineFileArtifact] = []
     for artifact_index, artifact in enumerate(artifacts):
@@ -2067,45 +2214,30 @@ def _validate_engine_artifacts(
                 RefineFailureCode.ARTIFACT_INVALID,
                 "artifact semantic media type does not match its canonical name",
             )
-        if (
-            not isinstance(artifact.source_path, Path)
-            or not artifact.source_path.is_absolute()
+        if artifact.display_path is not None and (
+            type(artifact.display_path) is not str or not artifact.display_path
         ):
             _fail(
                 RefineFailureCode.ARTIFACT_INVALID,
-                "artifact source path must be absolute",
+                "artifact display path must be absent or a non-empty string",
             )
-        try:
-            resolved = artifact.source_path.resolve(strict=True)
-            resolved.relative_to(workspace_root)
-            file_stat = resolved.stat()
-        except OSError as exc:
-            _fail(RefineFailureCode.INPUT_IO, f"cannot inspect engine artifact: {exc}")
-        except ValueError as exc:
-            _fail(
-                RefineFailureCode.ARTIFACT_INVALID,
-                f"engine artifact escapes workspace: {exc}",
-            )
-        if resolved != artifact.source_path or not stat.S_ISREG(file_stat.st_mode):
-            _fail(
-                RefineFailureCode.ARTIFACT_INVALID,
-                "engine artifact must be a contained regular file without symlinks",
-            )
+        file_stat = _borrowed_descriptor_stat(
+            artifact.descriptor,
+            label="engine artifact",
+        )
         reference = expected_by_name.get(artifact.name)
         if reference is None:
             _fail(
                 RefineFailureCode.ARTIFACT_INVALID,
                 "engine artifact is absent from the candidate output references",
             )
-        try:
-            relative_path = resolved.relative_to(workspace_root).as_posix()
-        except ValueError as exc:  # pragma: no cover - containment checked above
-            _fail(RefineFailureCode.ARTIFACT_INVALID, str(exc))
-        if relative_path != reference.relative_path:
+        identity = (file_stat.st_dev, file_stat.st_ino)
+        if identity in seen_identities:
             _fail(
                 RefineFailureCode.ARTIFACT_INVALID,
-                "engine artifact path disagrees with its candidate output reference",
+                "engine artifacts must reference unique file identities",
             )
+        seen_identities.add(identity)
         if (
             type(artifact.size_bytes) is not int
             or artifact.size_bytes <= 0
@@ -2123,8 +2255,9 @@ def _validate_engine_artifacts(
                 "engine artifact sha256 is malformed",
             )
         try:
-            actual_sha256, stable_stat = _stable_file_sha256(
-                resolved,
+            actual_sha256, stable_stat = _stable_descriptor_sha256(
+                artifact.descriptor,
+                expected_size=artifact.size_bytes,
                 deadline=deadline,
             )
         except OSError as exc:
@@ -2155,11 +2288,15 @@ def _validate_engine_artifacts(
         validated.append(
             RefineFileArtifact(
                 name=artifact.name,
-                source_path=resolved,
+                descriptor=artifact.descriptor,
                 sha256=artifact.sha256,
                 size_bytes=artifact.size_bytes,
                 transport_content_type=artifact.transport_content_type,
                 semantic_media_type=artifact.semantic_media_type,
+                display_path=artifact.display_path,
+                # Carried, not discarded after the uniqueness check: the
+                # publisher re-proves this descriptor is still that inode.
+                identity=identity,
             )
         )
     missing = _REQUIRED_ENGINE_ARTIFACT_NAMES - seen
@@ -2708,6 +2845,7 @@ def validate_refine_result_for_publication(result: object) -> None:
                 "refinementEvidenced",
                 "absoluteAccuracyCertified",
                 "verdictReason",
+                "loopConsistencyAdvisory",
             }
         ),
         "refine manifest evidence",
@@ -2717,6 +2855,8 @@ def validate_refine_result_for_publication(result: object) -> None:
         or type(result.evidence_verdict.refinement_evidenced) is not bool
         or type(result.evidence_verdict.absolute_accuracy_certified) is not bool
         or type(result.evidence_verdict.reason) is not str
+        or type(result.evidence_verdict.loop_consistency_advisory) is not str
+        or not result.evidence_verdict.loop_consistency_advisory.strip()
     ):
         _publication_invalid("result evidence verdict has the wrong contract type")
     if (
@@ -2728,6 +2868,11 @@ def validate_refine_result_for_publication(result: object) -> None:
         or evidence["absoluteAccuracyCertified"]
         != result.evidence_verdict.absolute_accuracy_certified
         or evidence["verdictReason"] != result.evidence_verdict.reason
+        # R123: the advisory is published, so it is checked like everything else
+        # published. A manifest that carried a different advisory from the
+        # verdict would report a loop drift the run did not have.
+        or evidence["loopConsistencyAdvisory"]
+        != result.evidence_verdict.loop_consistency_advisory
     ):
         _publication_invalid("manifest evidence disagrees with the result")
 
@@ -2928,6 +3073,24 @@ class RefineRunner:
                 _fail(RefineFailureCode.ENGINE_TIMEOUT, str(exc))
             if exc.code == RefineFailureCode.INPUT_IO.value:
                 _fail(RefineFailureCode.INPUT_IO, str(exc))
+            # The default below is ARTIFACT_INVALID, which is FATAL.  Every
+            # typed adapter code that means "this could succeed on a retry"
+            # therefore has to be named here or it is silently converted into a
+            # permanent failure.  ENGINE_NO_SPACE is exactly that case: the
+            # engine-output freeze raises it when the workspace filesystem
+            # fills, an operator frees disk, and the same task then runs.
+            if exc.code == RefineFailureCode.ENGINE_NO_SPACE.value:
+                _fail(RefineFailureCode.ENGINE_NO_SPACE, str(exc))
+            # The SECOND instance of that same defect shape, found by auditing
+            # the rest of the boundary rather than by a second outage: the
+            # boundary could not provision its own private scratch because the
+            # HOST refused a resource.  Deterministic ``REFINE_ENGINE_FAILED``
+            # sites are deliberately NOT named here -- re-running those produces
+            # the identical refusal, so the fatal default below is what they
+            # should get, and the default is pinned by
+            # ``test_artifact_builder_failures_have_stable_retryability``.
+            if exc.code == RefineFailureCode.ENGINE_SCRATCH_UNAVAILABLE.value:
+                _fail(RefineFailureCode.ENGINE_SCRATCH_UNAVAILABLE, str(exc))
             _fail(RefineFailureCode.ARTIFACT_INVALID, str(exc))
         except OSError as exc:
             _require_engine_budget(deadline)
@@ -2941,7 +3104,6 @@ class RefineRunner:
         _require_engine_budget(deadline)
         engine_artifacts = _validate_engine_artifacts(
             built_artifacts,
-            workspace_root=prepared.workspace_root,
             expected_outputs=candidate.outputs,
             deadline=deadline,
         )
@@ -3031,6 +3193,10 @@ class RefineRunner:
                 "refinementEvidenced": evidence_verdict.refinement_evidenced,
                 "absoluteAccuracyCertified": evidence_verdict.absolute_accuracy_certified,
                 "verdictReason": evidence_verdict.reason,
+                # R123. A published manifest that says only "refinementEvidenced
+                # true" no longer implies the loop comparables held, so it has to
+                # say what they did.
+                "loopConsistencyAdvisory": evidence_verdict.loop_consistency_advisory,
             },
             "engineTelemetry": _telemetry_document(candidate.telemetry),
             "engineOutputs": [

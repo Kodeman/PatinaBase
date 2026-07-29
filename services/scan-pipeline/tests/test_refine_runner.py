@@ -191,12 +191,14 @@ def _request(tmp_path: Path) -> RefineRunRequest:
         frames.append(
             RefineFrameInput(
                 frame=frame,
+                source_descriptor=_borrowed_artifact_descriptor(source),
                 relative_source_path=f"extracted/keyframes/{frame.image_name}",
                 source_archive_key="keyframes/user-1/room-1/keyframes.tar",
                 source_member=frame.heic_path,
                 source_sha256=hashlib.sha256(payload).hexdigest(),
                 source_size_bytes=len(payload),
                 engine_name=engine_name,
+                engine_descriptor=_borrowed_artifact_descriptor(engine),
                 engine_relative_path=f"images/{engine_name}",
                 engine_sha256=hashlib.sha256(engine_payload).hexdigest(),
                 engine_size_bytes=len(engine_payload),
@@ -338,6 +340,32 @@ class _FakeBackend:
         return self._return_or_raise(self.fallback)
 
 
+#: Engine-artifact descriptors a fake builder opened, released after each test.
+#: In production these are owned by the ``NativeEngineOutputs`` sink; here the
+#: test session owns them, and either way the runner and publisher only borrow.
+_OPEN_ARTIFACT_DESCRIPTORS: list[int] = []
+
+
+@pytest.fixture(autouse=True)
+def _release_artifact_descriptors():
+    yield
+    while _OPEN_ARTIFACT_DESCRIPTORS:
+        try:
+            os.close(_OPEN_ARTIFACT_DESCRIPTORS.pop())
+        except OSError:
+            pass
+
+
+def _borrowed_artifact_descriptor(path: Path) -> int:
+    flags = os.O_RDONLY
+    flags |= getattr(os, "O_CLOEXEC", 0)
+    flags |= getattr(os, "O_NOFOLLOW", 0)
+    flags |= getattr(os, "O_NONBLOCK", 0)
+    descriptor = os.open(path, flags)
+    _OPEN_ARTIFACT_DESCRIPTORS.append(descriptor)
+    return descriptor
+
+
 class _FakeArtifactBuilder:
     def __init__(self, *, large_aligned_model: bool = False) -> None:
         self.calls = []
@@ -349,11 +377,12 @@ class _FakeArtifactBuilder:
             digest = hashlib.file_digest(handle, "sha256").hexdigest()
         return RefineFileArtifact(
             name=name,
-            source_path=path,
+            descriptor=_borrowed_artifact_descriptor(path),
             sha256=digest,
             size_bytes=path.stat().st_size,
             transport_content_type="application/octet-stream",
             semantic_media_type=semantic_media_type,
+            display_path=str(path),
         )
 
     def build_engine_artifacts(
@@ -408,33 +437,6 @@ def _with_manifest_document(result, document):
     )
 
 
-def _install_open_substitution(
-    monkeypatch,
-    *,
-    target: Path,
-    replacement_kind: str,
-    symlink_target: Path,
-) -> dict[str, int]:
-    real_open = os.open
-    observed: dict[str, int] = {}
-
-    def _racing_open(path, flags, *args, **kwargs):
-        if os.fspath(path) == os.fspath(target) and not observed:
-            observed["flags"] = flags
-            target.unlink()
-            if replacement_kind == "fifo":
-                os.mkfifo(target, 0o600)
-            elif replacement_kind == "symlink":
-                symlink_target.write_bytes(b"must-not-be-hashed\n")
-                target.symlink_to(symlink_target)
-            else:  # pragma: no cover - test helper contract
-                raise AssertionError(replacement_kind)
-        return real_open(path, flags, *args, **kwargs)
-
-    monkeypatch.setattr(refine_runner.os, "open", _racing_open)
-    return observed
-
-
 def test_primary_success_builds_byte_deterministic_manifest_last_artifacts(tmp_path):
     request = _request(tmp_path)
     backend = _FakeBackend(primary=_candidate())
@@ -482,6 +484,28 @@ def test_primary_success_builds_byte_deterministic_manifest_last_artifacts(tmp_p
     assert manifest["trajectoryShapeChange"]["certificationRole"] == "diagnostic-only"
     assert manifest["refinementEvidence"]["refinementEvidenced"] is True
     assert manifest["refinementEvidence"]["absoluteAccuracyCertified"] is False
+    # R123: `refinementEvidenced: true` no longer implies the loop comparables
+    # held, so the PUBLISHED manifest has to say what they did.  A manifest that
+    # dropped this key would be refused by the publication validator; a manifest
+    # that carried an empty one would sail through it, which is why the content
+    # is asserted and not merely the key.
+    published_advisory = manifest["refinementEvidence"]["loopConsistencyAdvisory"]
+    assert published_advisory.startswith("advisory_not_gating_r123: ")
+    assert "loop_rotation_rmse_deg 1.000000->0.900000 (-10.00%)" in published_advisory
+    assert (
+        "loop_translation_direction_rmse_deg 2.000000->1.800000 (-10.00%)"
+        in published_advisory
+    )
+    assert "verified_loop_edges 1" in published_advisory
+    # ... and the same string in the evidence record beside it.
+    evidence_artifact = json.loads(
+        next(
+            file for file in first.files if file.name == "refinement-evidence-v1.json"
+        ).payload
+    )
+    assert evidence_artifact["loopConsistencyAdvisory"] == published_advisory
+    assert evidence_artifact["loopRotationRmseDegBefore"] == 1.0
+    assert evidence_artifact["loopRotationRmseDegAfter"] == 0.9
     assert manifest["frameInputs"][0]["sourceHeic"] == {
         "archiveKey": "keyframes/user-1/room-1/keyframes.tar",
         "imageName": "frame_0000.heic",
@@ -570,6 +594,80 @@ def test_publication_validator_rejects_extra_manifest_keys(tmp_path):
         validate_refine_result_for_publication(
             _with_manifest_document(result, document)
         )
+
+    assert raised.value.code is RefineFailureCode.ARTIFACT_INVALID
+
+
+def test_publication_validator_rejects_a_rewritten_loop_advisory(tmp_path):
+    """R123: the advisory is PUBLISHED, so it is checked like everything else
+    published.  A manifest whose advisory disagreed with the verdict would tell
+    a reader the run's global consistency drifted less than it did -- and after
+    R123 nothing else in the manifest contradicts it, because the verdict no
+    longer refuses on it."""
+
+    result = RefineRunner(
+        backend=_FakeBackend(primary=_candidate()),
+        artifact_builder=_FakeArtifactBuilder(),
+    ).run(_request(tmp_path), deadline=_deadline())
+    document = json.loads(result.manifest.payload)
+    document["refinementEvidence"]["loopConsistencyAdvisory"] = (
+        "advisory_not_gating_r123: loop_rotation_rmse_deg 1.000000->0.100000 "
+        "(-90.00%); loop_translation_direction_rmse_deg 2.000000->0.200000 "
+        "(-90.00%); verified_loop_edges 1"
+    )
+
+    with pytest.raises(RefineRunError) as raised:
+        validate_refine_result_for_publication(
+            _with_manifest_document(result, document)
+        )
+
+    assert raised.value.code is RefineFailureCode.ARTIFACT_INVALID
+
+
+def test_publication_validator_rejects_a_missing_loop_advisory(tmp_path):
+    """Dropping the key is the other half: the validator's key set is exact, so
+    a producer that stopped emitting the advisory cannot publish."""
+
+    result = RefineRunner(
+        backend=_FakeBackend(primary=_candidate()),
+        artifact_builder=_FakeArtifactBuilder(),
+    ).run(_request(tmp_path), deadline=_deadline())
+    document = json.loads(result.manifest.payload)
+    del document["refinementEvidence"]["loopConsistencyAdvisory"]
+
+    with pytest.raises(RefineRunError) as raised:
+        validate_refine_result_for_publication(
+            _with_manifest_document(result, document)
+        )
+
+    assert raised.value.code is RefineFailureCode.ARTIFACT_INVALID
+
+
+@pytest.mark.parametrize("advisory", ("   ", 5))
+def test_publication_validator_rejects_a_blank_or_non_string_loop_advisory(
+    tmp_path, advisory
+):
+    """The failure a key-set check cannot see: the manifest and the verdict
+    AGREE, and what they agree on says nothing.  Both sides are set to the same
+    bad value so the disagreement clause cannot be what fires -- only the
+    verdict's own non-empty-string guard can be."""
+
+    result = RefineRunner(
+        backend=_FakeBackend(primary=_candidate()),
+        artifact_builder=_FakeArtifactBuilder(),
+    ).run(_request(tmp_path), deadline=_deadline())
+    document = json.loads(result.manifest.payload)
+    document["refinementEvidence"]["loopConsistencyAdvisory"] = advisory
+    blanked = _with_manifest_document(result, document)
+    blanked = replace(
+        blanked,
+        evidence_verdict=replace(
+            blanked.evidence_verdict, loop_consistency_advisory=advisory
+        ),
+    )
+
+    with pytest.raises(RefineRunError) as raised:
+        validate_refine_result_for_publication(blanked)
 
     assert raised.value.code is RefineFailureCode.ARTIFACT_INVALID
 
@@ -1166,7 +1264,7 @@ def test_large_engine_artifact_stays_file_backed_and_is_stream_verified(
     )
     assert isinstance(aligned, RefineFileArtifact)
     assert aligned.size_bytes == 8 * 1024 * 1024
-    assert aligned.source_path.is_file()
+    assert os.fstat(aligned.descriptor).st_size == 8 * 1024 * 1024
     assert not hasattr(aligned, "payload")
 
 
@@ -1187,219 +1285,305 @@ def test_engine_artifact_hash_is_reverified_before_manifest_construction(tmp_pat
     assert raised.value.fatal is True
 
 
-@pytest.mark.parametrize("replacement_kind", ("fifo", "symlink"))
-def test_frame_hash_substitution_fails_promptly_before_backend_or_manifest(
+@pytest.mark.parametrize("replacement_kind", ("fifo", "symlink", "regular"))
+def test_engine_artifact_substituted_at_its_path_is_simply_not_consulted(
     tmp_path,
     monkeypatch,
     replacement_kind,
 ):
+    """The reopen this contract removed, probed from the attacker's side.
+
+    The builder hands over a descriptor and the object at that name is then
+    replaced -- with a FIFO that would hang a blocking open, a symlink that
+    would redirect one, or a plain file with different bytes.  A runner that
+    still reopened by path would hang, hash the wrong inode, or fail.  This one
+    never looks at the name, so the run completes on the original bytes.
+    """
+
+    target_name = "database-v1.db"
+    decoy = tmp_path / "outside-engine-artifact.bin"
+
+    class _SwappingBuilder(_FakeArtifactBuilder):
+        def build_engine_artifacts(self, **kwargs):
+            artifacts = super().build_engine_artifacts(**kwargs)
+            nonlocal armed
+            armed = True
+            target = (
+                kwargs["request"].workspace_root / "engine-artifacts" / target_name
+            )
+            target.unlink()
+            if replacement_kind == "fifo":
+                os.mkfifo(target, 0o600)
+            elif replacement_kind == "symlink":
+                decoy.write_bytes(b"must-not-be-hashed\n")
+                target.symlink_to(decoy)
+            else:
+                target.write_bytes(b"must-not-be-hashed\n")
+            return artifacts
+
     request = _request(tmp_path)
-    target = request.workspace_root / request.frames[0].relative_source_path
-    observed = _install_open_substitution(
-        monkeypatch,
-        target=target,
-        replacement_kind=replacement_kind,
-        symlink_target=tmp_path / "outside-frame.bin",
-    )
-    backend = _FakeBackend(primary=_candidate())
-    builder = _FakeArtifactBuilder()
-    manifest_calls = []
+    forbidden = request.workspace_root / "engine-artifacts" / target_name
+    real_open = refine_runner.os.open
+    armed = False
 
-    def _manifest_trap(*args, **kwargs):
-        manifest_calls.append((args, kwargs))
-        raise AssertionError("manifest construction must not run")
+    def guarded_open(path, *args, **kwargs):
+        if armed and os.fspath(path) == os.fspath(forbidden):
+            raise AssertionError("the runner must not reopen an artifact by path")
+        return real_open(path, *args, **kwargs)
 
-    monkeypatch.setattr(refine_runner, "_inline_json", _manifest_trap)
+    monkeypatch.setattr(refine_runner.os, "open", guarded_open)
     started = time.monotonic()
 
-    with pytest.raises(RefineRunError) as raised:
-        RefineRunner(backend=backend, artifact_builder=builder).run(
-            request,
-            deadline=_deadline(),
-        )
+    result = RefineRunner(
+        backend=_FakeBackend(primary=_candidate()),
+        artifact_builder=_SwappingBuilder(),
+    ).run(request, deadline=_deadline())
 
-    assert time.monotonic() - started < 2.0
+    assert time.monotonic() - started < 5.0
+    published = next(
+        artifact for artifact in result.files if artifact.name == target_name
+    )
+    assert published.sha256 == hashlib.sha256(_ENGINE_PAYLOADS[target_name]).hexdigest()
+    assert (
+        os.pread(published.descriptor, published.size_bytes, 0)
+        == _ENGINE_PAYLOADS[target_name]
+    )
+
+
+def test_a_successful_run_never_opens_any_path(tmp_path, monkeypatch):
+    """The end state of the reopen removal, asserted as one property.
+
+    Frames and engine artifacts both arrive as borrowed descriptors now, so a
+    whole successful run has no reason to call ``open`` at all.  Making that
+    fatal is the only assertion that cannot rot as the internals move around.
+    """
+
+    request = _request(tmp_path)
+    builder = _FakeArtifactBuilder()
+    # The fake builder legitimately opens the artifacts it is handing over,
+    # exactly as a real materializer or native output sink would before the
+    # runner is entered.  Everything it opens lives under this one directory, so
+    # the exemption is a path allow-list.  It used to be "stop enforcing once
+    # the builder has been called at all", which silently left the whole
+    # post-builder half of a successful run unchecked.
+    builder_fixtures = f"{request.workspace_root / 'engine-artifacts'}{os.sep}"
+    opened: list[str] = []
+    real_open = refine_runner.os.open
+
+    def recording_open(path, *args, **kwargs):
+        try:
+            opened.append(os.fspath(path))
+        except TypeError:
+            opened.append(repr(path))
+        return real_open(path, *args, **kwargs)
+
+    monkeypatch.setattr(refine_runner.os, "open", recording_open)
+
+    result = RefineRunner(
+        backend=_FakeBackend(primary=_candidate()),
+        artifact_builder=builder,
+    ).run(request, deadline=_deadline())
+
+    assert [name for name in opened if not name.startswith(builder_fixtures)] == []
+    # If the builder ever stops opening its own fixtures the allow-list would
+    # be vacuous, and this assertion is what would say so.
+    assert opened
+    assert result.files[-1].name == REFINE_MANIFEST_NAME
+
+
+def test_a_frame_swapped_at_its_path_is_simply_not_consulted(tmp_path):
+    """The materializer's pinned descriptor now survives the whole run."""
+
+    request = _request(tmp_path)
+    first = request.frames[0]
+    engine_path = request.workspace_root / first.engine_relative_path
+    original = engine_path.read_bytes()
+    engine_path.unlink()
+    os.mkfifo(engine_path, 0o600)
+    started = time.monotonic()
+
+    result = RefineRunner(
+        backend=_FakeBackend(primary=_candidate()),
+        artifact_builder=_FakeArtifactBuilder(),
+    ).run(request, deadline=_deadline())
+
+    # A blocking reopen of that FIFO would never return.
+    assert time.monotonic() - started < 5.0
+    assert os.pread(first.engine_descriptor, len(original), 0) == original
+    assert result.frame_inputs[0].engine_descriptor == first.engine_descriptor
+
+
+def test_a_frame_descriptor_that_disagrees_with_its_ledger_is_refused(tmp_path):
+    request = _request(tmp_path)
+    corrupted = replace(request.frames[0], engine_sha256="0" * 64)
+    request = replace(request, frames=(corrupted, *request.frames[1:]))
+
+    with pytest.raises(RefineRunError) as raised:
+        RefineRunner(
+            backend=_FakeBackend(primary=_candidate()),
+            artifact_builder=_FakeArtifactBuilder(),
+        ).run(request, deadline=_deadline())
+
     assert raised.value.code is RefineFailureCode.INPUT_INVALID
-    assert raised.value.fatal is True
-    assert str(target) not in str(raised.value)
-    assert observed
-    if hasattr(os, "O_CLOEXEC"):
-        assert observed["flags"] & os.O_CLOEXEC
-    if hasattr(os, "O_NOFOLLOW"):
-        assert observed["flags"] & os.O_NOFOLLOW
-    if hasattr(os, "O_NONBLOCK"):
-        assert observed["flags"] & os.O_NONBLOCK
-    assert backend.calls == []
-    assert builder.calls == []
-    assert manifest_calls == []
+    assert "frame engine PPM sha256 does not match its ledger" in str(raised.value)
 
 
-@pytest.mark.parametrize("replacement_kind", ("fifo", "symlink"))
-def test_engine_artifact_hash_substitution_fails_before_manifest(
-    tmp_path,
-    monkeypatch,
-    replacement_kind,
-):
+def test_prepared_frames_carry_the_identity_the_runner_proved(tmp_path):
+    """The uniqueness check computed these and threw them away.
+
+    A descriptor NUMBER is a slot in a table.  Carrying the ``(st_dev, st_ino)``
+    the runner already proved is what lets the backend seam re-``fstat`` its
+    borrowed frames instead of arguing that an fd number cannot have been
+    recycled -- the same move the publisher now makes for engine artifacts.
+    """
+
     request = _request(tmp_path)
-    target = request.workspace_root / "engine-artifacts" / "database-v1.db"
-    observed = _install_open_substitution(
-        monkeypatch,
-        target=target,
-        replacement_kind=replacement_kind,
-        symlink_target=tmp_path / "outside-engine-artifact.bin",
-    )
-    backend = _FakeBackend(primary=_candidate())
-    builder = _FakeArtifactBuilder()
-    manifest_calls = []
 
-    def _manifest_trap(*args, **kwargs):
-        manifest_calls.append((args, kwargs))
-        raise AssertionError("manifest construction must not run")
+    result = RefineRunner(
+        backend=_FakeBackend(primary=_candidate()),
+        artifact_builder=_FakeArtifactBuilder(),
+    ).run(request, deadline=_deadline())
 
-    monkeypatch.setattr(refine_runner, "_inline_json", _manifest_trap)
-    started = time.monotonic()
-
-    with pytest.raises(RefineRunError) as raised:
-        RefineRunner(backend=backend, artifact_builder=builder).run(
-            request,
-            deadline=_deadline(),
-        )
-
-    assert time.monotonic() - started < 2.0
-    assert raised.value.code is RefineFailureCode.ARTIFACT_INVALID
-    assert raised.value.fatal is True
-    assert str(target) not in str(raised.value)
-    assert observed
-    if hasattr(os, "O_CLOEXEC"):
-        assert observed["flags"] & os.O_CLOEXEC
-    if hasattr(os, "O_NOFOLLOW"):
-        assert observed["flags"] & os.O_NOFOLLOW
-    if hasattr(os, "O_NONBLOCK"):
-        assert observed["flags"] & os.O_NONBLOCK
-    assert [name for name, _ in backend.calls] == [PRIMARY_ENGINE]
-    assert len(builder.calls) == 1
-    assert manifest_calls == []
+    identities = set()
+    for prepared in result.frame_inputs:
+        source = os.fstat(prepared.source_descriptor)
+        engine = os.fstat(prepared.engine_descriptor)
+        assert prepared.source_identity == (source.st_dev, source.st_ino)
+        assert prepared.engine_identity == (engine.st_dev, engine.st_ino)
+        identities.add(prepared.source_identity)
+        identities.add(prepared.engine_identity)
+    # The source HEIC and its materialized PPM are distinct objects by contract,
+    # so every frame contributes exactly two identities and none repeat.
+    assert len(identities) == 2 * len(result.frame_inputs)
 
 
-def test_frame_hash_fails_closed_before_open_when_nonblocking_is_unavailable(
+def test_a_frame_source_that_shrinks_while_it_is_hashed_is_refused(
     tmp_path,
     monkeypatch,
 ):
+    """The short-read guard is unreachable through the normal door, not dead.
+
+    ``_stable_descriptor_sha256`` refuses ``st_size != expected_size`` before it
+    reads a byte, so an ordinary file can never end early inside the hash loop
+    and deleting ``if not chunk: raise`` leaves the whole suite green.  A source
+    that shrinks AFTER that check is exactly what the guard is for -- and it is
+    the only bound on the loop, which would otherwise spin forever on a
+    zero-length read, so a missing guard here is a hang and not a wrong answer.
+    """
+
     request = _request(tmp_path)
-    backend = _FakeBackend(primary=_candidate())
-    builder = _FakeArtifactBuilder()
-    open_calls = []
-    manifest_calls = []
+    target = request.frames[0].source_descriptor
+    real_pread = os.pread
+    served: list[int] = []
 
-    def _open_trap(*args, **kwargs):
-        open_calls.append((args, kwargs))
-        raise AssertionError("os.open must not run without O_NONBLOCK")
+    def shrinking_pread(descriptor, size, offset):
+        if descriptor != target:
+            return real_pread(descriptor, size, offset)
+        if served:
+            # The source was truncated after the parent measured it.
+            return b""
+        served.append(offset)
+        return real_pread(descriptor, 1, offset)
 
-    def _manifest_trap(*args, **kwargs):
-        manifest_calls.append((args, kwargs))
-        raise AssertionError("manifest construction must not run")
-
-    monkeypatch.delattr(refine_runner.os, "O_NONBLOCK", raising=False)
-    monkeypatch.setattr(refine_runner.os, "open", _open_trap)
-    monkeypatch.setattr(refine_runner, "_inline_json", _manifest_trap)
-    started = time.monotonic()
+    monkeypatch.setattr(refine_runner.os, "pread", shrinking_pread)
 
     with pytest.raises(RefineRunError) as raised:
-        RefineRunner(backend=backend, artifact_builder=builder).run(
-            request,
-            deadline=_deadline(),
-        )
+        RefineRunner(
+            backend=_FakeBackend(primary=_candidate()),
+            artifact_builder=_FakeArtifactBuilder(),
+        ).run(request, deadline=_deadline())
 
-    assert time.monotonic() - started < 2.0
     assert raised.value.code is RefineFailureCode.INPUT_INVALID
-    assert raised.value.fatal is True
-    assert "nonblocking source opens are unavailable" in str(raised.value)
-    assert open_calls == []
-    assert backend.calls == []
-    assert builder.calls == []
-    assert manifest_calls == []
+    assert "source ended before its declared size" in str(raised.value)
 
 
-def test_engine_artifact_hash_fails_closed_before_open_when_nonblocking_is_unavailable(
-    tmp_path,
-    monkeypatch,
-):
+def test_a_frame_may_not_reuse_another_frames_inode(tmp_path):
     request = _request(tmp_path)
-    backend = _FakeBackend(primary=_candidate())
-    builder = _FakeArtifactBuilder()
-    real_stable_file_sha256 = refine_runner._stable_file_sha256
-    open_calls = []
-    manifest_calls = []
-
-    def _frame_hash_then_real_artifact_hash(path, *, deadline):
-        if "engine-artifacts" in path.parts:
-            return real_stable_file_sha256(path, deadline=deadline)
-        payload = path.read_bytes()
-        return hashlib.sha256(payload).hexdigest(), path.stat()
-
-    def _open_trap(*args, **kwargs):
-        open_calls.append((args, kwargs))
-        raise AssertionError("os.open must not run without O_NONBLOCK")
-
-    def _manifest_trap(*args, **kwargs):
-        manifest_calls.append((args, kwargs))
-        raise AssertionError("manifest construction must not run")
-
-    monkeypatch.delattr(refine_runner.os, "O_NONBLOCK", raising=False)
-    monkeypatch.setattr(refine_runner.os, "open", _open_trap)
-    monkeypatch.setattr(
-        refine_runner,
-        "_stable_file_sha256",
-        _frame_hash_then_real_artifact_hash,
+    first, second = request.frames[0], request.frames[1]
+    shared = replace(
+        second,
+        engine_descriptor=first.engine_descriptor,
+        engine_sha256=first.engine_sha256,
+        engine_size_bytes=first.engine_size_bytes,
     )
-    monkeypatch.setattr(refine_runner, "_inline_json", _manifest_trap)
-    started = time.monotonic()
+    request = replace(request, frames=(first, shared, *request.frames[2:]))
 
     with pytest.raises(RefineRunError) as raised:
-        RefineRunner(backend=backend, artifact_builder=builder).run(
-            request,
-            deadline=_deadline(),
-        )
+        RefineRunner(
+            backend=_FakeBackend(primary=_candidate()),
+            artifact_builder=_FakeArtifactBuilder(),
+        ).run(request, deadline=_deadline())
 
-    assert time.monotonic() - started < 2.0
-    assert raised.value.code is RefineFailureCode.ARTIFACT_INVALID
-    assert raised.value.fatal is True
-    assert "nonblocking source opens are unavailable" in str(raised.value)
-    assert open_calls == []
-    assert [name for name, _ in backend.calls] == [PRIMARY_ENGINE]
-    assert len(builder.calls) == 1
-    assert manifest_calls == []
+    assert raised.value.code is RefineFailureCode.INPUT_INVALID
+    assert "unique file identities" in str(raised.value)
 
 
-def test_stable_file_hash_uses_the_descriptor_opened_before_path_replacement(
-    tmp_path,
-    monkeypatch,
-):
+@pytest.mark.parametrize(
+    "descriptor",
+    (-1, "not-a-descriptor", None, 4096),
+)
+def test_a_frame_descriptor_must_be_a_usable_borrowed_handle(tmp_path, descriptor):
+    request = _request(tmp_path)
+    request = replace(
+        request,
+        frames=(
+            replace(request.frames[0], source_descriptor=descriptor),
+            *request.frames[1:],
+        ),
+    )
+
+    with pytest.raises(RefineRunError) as raised:
+        RefineRunner(
+            backend=_FakeBackend(primary=_candidate()),
+            artifact_builder=_FakeArtifactBuilder(),
+        ).run(request, deadline=_deadline())
+
+    assert raised.value.code in (
+        RefineFailureCode.INPUT_INVALID,
+        RefineFailureCode.INPUT_IO,
+    )
+
+
+def test_a_writable_frame_descriptor_is_refused(tmp_path):
+    request = _request(tmp_path)
+    first = request.frames[0]
+    writable = os.open(
+        request.workspace_root / first.relative_source_path,
+        os.O_RDWR,
+    )
+    _OPEN_ARTIFACT_DESCRIPTORS.append(writable)
+    request = replace(
+        request,
+        frames=(replace(first, source_descriptor=writable), *request.frames[1:]),
+    )
+
+    with pytest.raises(RefineRunError) as raised:
+        RefineRunner(
+            backend=_FakeBackend(primary=_candidate()),
+            artifact_builder=_FakeArtifactBuilder(),
+        ).run(request, deadline=_deadline())
+
+    assert raised.value.code is RefineFailureCode.INPUT_INVALID
+    assert "must be borrowed read-only" in str(raised.value)
+
+
+def test_the_descriptor_hasher_ignores_a_path_level_replacement(tmp_path):
     target = tmp_path / "source.bin"
     original = b"descriptor-bound-original\n"
-    replacement = b"path-level-replacement\n"
+    replacement = b"path-level-replacement!!!\n"
+    assert len(original) == len(replacement)
     target.write_bytes(original)
     original_stat = target.stat()
-    real_open = os.open
-    opened = False
+    descriptor = _borrowed_artifact_descriptor(target)
+    target.unlink()
+    target.write_bytes(replacement)
 
-    def _open_then_replace(path, flags, *args, **kwargs):
-        nonlocal opened
-        descriptor = real_open(path, flags, *args, **kwargs)
-        if os.fspath(path) == os.fspath(target) and not opened:
-            opened = True
-            target.unlink()
-            target.write_bytes(replacement)
-        return descriptor
-
-    monkeypatch.setattr(refine_runner.os, "open", _open_then_replace)
-
-    digest, stable_stat = refine_runner._stable_file_sha256(
-        target,
+    digest, stable_stat = refine_runner._stable_descriptor_sha256(
+        descriptor,
+        expected_size=len(original),
         deadline=_deadline(),
     )
 
-    assert opened is True
     assert digest == hashlib.sha256(original).hexdigest()
     assert (stable_stat.st_dev, stable_stat.st_ino) == (
         original_stat.st_dev,
@@ -1407,6 +1591,172 @@ def test_stable_file_hash_uses_the_descriptor_opened_before_path_replacement(
     )
     assert target.read_bytes() == replacement
     assert target.stat().st_ino != stable_stat.st_ino
+
+
+def test_a_directory_descriptor_is_not_a_frame(tmp_path):
+    request = _request(tmp_path)
+    directory = os.open(request.workspace_root, os.O_RDONLY)
+    _OPEN_ARTIFACT_DESCRIPTORS.append(directory)
+    request = replace(
+        request,
+        frames=(
+            replace(request.frames[0], source_descriptor=directory),
+            *request.frames[1:],
+        ),
+    )
+
+    with pytest.raises(RefineRunError) as raised:
+        RefineRunner(
+            backend=_FakeBackend(primary=_candidate()),
+            artifact_builder=_FakeArtifactBuilder(),
+        ).run(request, deadline=_deadline())
+
+    assert raised.value.code is RefineFailureCode.INPUT_INVALID
+    assert "frame source HEIC must be a regular file" in str(raised.value)
+
+
+def test_two_engine_artifacts_may_not_share_one_inode(tmp_path):
+    class _HardlinkingBuilder(_FakeArtifactBuilder):
+        def build_engine_artifacts(self, **kwargs):
+            artifacts = list(super().build_engine_artifacts(**kwargs))
+            directory = kwargs["request"].workspace_root / "engine-artifacts"
+            link = directory / "pairs-v2.txt"
+            link.unlink()
+            os.link(directory / "adapter-v2.json", link)
+            for index, artifact in enumerate(artifacts):
+                if artifact.name == "pairs-v2.txt":
+                    artifacts[index] = replace(
+                        artifact,
+                        descriptor=_borrowed_artifact_descriptor(link),
+                    )
+            return tuple(artifacts)
+
+    with pytest.raises(RefineRunError) as raised:
+        RefineRunner(
+            backend=_FakeBackend(primary=_candidate()),
+            artifact_builder=_HardlinkingBuilder(),
+        ).run(_request(tmp_path), deadline=_deadline())
+
+    assert raised.value.code is RefineFailureCode.ARTIFACT_INVALID
+    assert "engine artifacts must reference unique file identities" in str(
+        raised.value
+    )
+
+
+@pytest.mark.parametrize("display_path", ("", 12, b"/tmp/x"))
+def test_an_unusable_display_path_is_refused(tmp_path, display_path):
+    class _BadDisplayPathBuilder(_FakeArtifactBuilder):
+        def build_engine_artifacts(self, **kwargs):
+            artifacts = list(super().build_engine_artifacts(**kwargs))
+            artifacts[0] = replace(artifacts[0], display_path=display_path)
+            return tuple(artifacts)
+
+    with pytest.raises(RefineRunError) as raised:
+        RefineRunner(
+            backend=_FakeBackend(primary=_candidate()),
+            artifact_builder=_BadDisplayPathBuilder(),
+        ).run(_request(tmp_path), deadline=_deadline())
+
+    assert raised.value.code is RefineFailureCode.ARTIFACT_INVALID
+    assert "display path must be absent or a non-empty string" in str(raised.value)
+
+
+def test_the_descriptor_hasher_rejects_a_size_disagreement(tmp_path):
+    target = tmp_path / "source.bin"
+    target.write_bytes(b"seven!!")
+    descriptor = _borrowed_artifact_descriptor(target)
+
+    with pytest.raises(ValueError) as raised:
+        refine_runner._stable_descriptor_sha256(
+            descriptor,
+            expected_size=8,
+            deadline=_deadline(),
+        )
+
+    assert "size does not match its ledger" in str(raised.value)
+
+
+def test_the_descriptor_hasher_rejects_a_source_that_grew_mid_read(
+    tmp_path,
+    monkeypatch,
+):
+    """The trailing-byte probe, reached the only way it can be: a growth race."""
+
+    target = tmp_path / "source.bin"
+    payload = b"z" * 16
+    target.write_bytes(payload)
+    descriptor = _borrowed_artifact_descriptor(target)
+    real_pread = refine_runner.os.pread
+    grown = False
+
+    def grow_once(fd, size, offset):
+        nonlocal grown
+        chunk = real_pread(fd, size, offset)
+        if not grown:
+            grown = True
+            with target.open("ab") as handle:
+                handle.write(b"extra")
+        return chunk
+
+    monkeypatch.setattr(refine_runner.os, "pread", grow_once)
+
+    with pytest.raises(ValueError) as raised:
+        refine_runner._stable_descriptor_sha256(
+            descriptor,
+            expected_size=len(payload),
+            deadline=_deadline(),
+        )
+
+    assert grown is True
+    assert "exceeds its declared size" in str(raised.value)
+
+
+def test_the_descriptor_hasher_rejects_an_in_place_mutation(tmp_path, monkeypatch):
+    target = tmp_path / "source.bin"
+    payload = b"w" * 16
+    target.write_bytes(payload)
+    descriptor = _borrowed_artifact_descriptor(target)
+    real_pread = refine_runner.os.pread
+    mutated = False
+
+    def mutate_once(fd, size, offset):
+        nonlocal mutated
+        chunk = real_pread(fd, size, offset)
+        if not mutated and size > 1:
+            mutated = True
+            time.sleep(0.01)
+            with target.open("r+b") as handle:
+                handle.write(b"v" * len(payload))
+        return chunk
+
+    monkeypatch.setattr(refine_runner.os, "pread", mutate_once)
+
+    with pytest.raises(ValueError) as raised:
+        refine_runner._stable_descriptor_sha256(
+            descriptor,
+            expected_size=len(payload),
+            deadline=_deadline(),
+        )
+
+    assert mutated is True
+    assert "changed while it was hashed" in str(raised.value)
+
+
+def test_the_descriptor_hasher_leaves_the_borrowed_offset_alone(tmp_path):
+    target = tmp_path / "source.bin"
+    payload = b"y" * ((1 << 20) + 3)
+    target.write_bytes(payload)
+    descriptor = _borrowed_artifact_descriptor(target)
+    os.lseek(descriptor, 7, os.SEEK_SET)
+
+    digest, _ = refine_runner._stable_descriptor_sha256(
+        descriptor,
+        expected_size=len(payload),
+        deadline=_deadline(),
+    )
+
+    assert digest == hashlib.sha256(payload).hexdigest()
+    assert os.lseek(descriptor, 0, os.SEEK_CUR) == 7
 
 
 def test_engine_artifact_path_must_remain_inside_the_workspace(tmp_path):
@@ -1558,6 +1908,67 @@ def test_one_shot_artifact_builder_output_is_deterministically_invalid(tmp_path)
             AdapterError("materializer deadline expired", "REFINE_ENGINE_TIMEOUT"),
             RefineFailureCode.ENGINE_TIMEOUT,
             False,
+        ),
+        # A full workspace filesystem.  Before this case existed the code fell
+        # through the AdapterError handler to ARTIFACT_INVALID, whose fatality
+        # is True, so a disk that filled during the engine-output freeze killed
+        # the task permanently instead of leaving it to run again once an
+        # operator freed space.  ``expected_fatal is False`` is the half of this
+        # assertion that would have caught that; the code alone would not.
+        (
+            AdapterError(
+                "the freeze vault filesystem ran out of space mid-copy",
+                "REFINE_ENGINE_NO_SPACE",
+            ),
+            RefineFailureCode.ENGINE_NO_SPACE,
+            False,
+        ),
+        # The same defect shape, one audit later.  ``refine_native_process``
+        # raises this when it cannot provision its own private scratch -- the
+        # workspace lease or the engine-output freeze vault -- because the HOST
+        # refused a resource (no inodes, no descriptors, no configured scratch
+        # root, a run of colliding names).  Before it was named here it fell
+        # through to ARTIFACT_INVALID and a host that ran out of file
+        # descriptors for a minute killed the scan forever.  As with
+        # ENGINE_NO_SPACE, ``expected_fatal is False`` is the half of this row
+        # that would have caught it.
+        (
+            AdapterError(
+                "cannot create a unique native engine output freeze vault",
+                "REFINE_ENGINE_SCRATCH_UNAVAILABLE",
+            ),
+            RefineFailureCode.ENGINE_SCRATCH_UNAVAILABLE,
+            False,
+        ),
+        # The DETERMINISTIC half of the same audit, pinned as fatal on purpose.
+        # ``REFINE_ENGINE_FAILED`` is retryable in the taxonomy and still is not
+        # named by the handler, so it lands on the fatal default -- and that is
+        # the ruling, not an oversight: the overwhelming majority of the sites
+        # that mint it report facts that reproduce exactly ("this platform does
+        # not provide O_TMPFILE", "ledger is invalid", "does not match its
+        # requested tokens"), and retrying those burns a queue slot to reach the
+        # identical refusal.  Only the operational minority was reclassified,
+        # and it was given its own code rather than blanket-routing this one.
+        (
+            AdapterError(
+                "native engine outputs require O_TMPFILE anonymous files",
+                "REFINE_ENGINE_FAILED",
+            ),
+            RefineFailureCode.ARTIFACT_INVALID,
+            True,
+        ),
+        # The handler's FALLTHROUGH, which nothing exercised before.  Every
+        # ``ValueError`` case here is caught by the generic ``except Exception``
+        # arm instead, so changing the AdapterError default from
+        # ARTIFACT_INVALID to anything else was a mutation with zero red -- the
+        # exact blind spot that let REFINE_ENGINE_NO_SPACE land on a FATAL
+        # default unnoticed.  An unrecognised typed code must land here, and
+        # must land FATAL: the runner cannot know a code it has never been
+        # taught is safe to retry.
+        (
+            AdapterError("an adapter code this runner has never seen", "REFINE_WIDGET"),
+            RefineFailureCode.ARTIFACT_INVALID,
+            True,
         ),
         (
             ValueError("deterministic malformed model"),
@@ -1971,7 +2382,7 @@ def test_deadline_is_checked_periodically_while_hashing_large_inputs(tmp_path):
         def remaining_seconds(self, *, now_monotonic_s=None):
             del now_monotonic_s
             if any(
-                frame_info.function == "_stable_file_sha256"
+                frame_info.function == "_stable_descriptor_sha256"
                 for frame_info in inspect.stack()
             ):
                 type(self).hash_checks += 1
@@ -1992,6 +2403,7 @@ def test_deadline_is_checked_periodically_while_hashing_large_inputs(tmp_path):
         frames=(
             replace(
                 first,
+                source_descriptor=_borrowed_artifact_descriptor(first_path),
                 source_sha256=hashlib.sha256(payload).hexdigest(),
                 source_size_bytes=len(payload),
             ),
@@ -2154,12 +2566,87 @@ def test_backend_failure_taxonomy_is_stable_and_non_fallback(
     assert [name for name, _ in backend.calls] == [PRIMARY_ENGINE]
 
 
+def test_the_no_space_token_is_literally_the_one_the_native_boundary_raises():
+    """The seam the original defect lived in, pinned from both sides.
+
+    ``refine_native_process`` mints ``REFINE_ENGINE_NO_SPACE`` itself and hands
+    it up as an ``AdapterError``.  The runner's ``AdapterError`` handler names a
+    few codes and falls through to ``ARTIFACT_INVALID`` -- which is FATAL -- for
+    everything else, so a code that exists in one module and not the other is
+    silently converted from "retry once the disk has room" into "this task is
+    dead".  Comparing the two constants rather than restating the string means a
+    rename on either side fails here instead of in production.
+
+    NOTE what this does NOT claim: it is not an exhaustiveness check over every
+    code the native boundary can raise.  ``REFINE_ENGINE_FAILED`` is still
+    retryable in the taxonomy and still fatal once it falls through this
+    handler, and that is now a RULING rather than a residual: all 71
+    ``_FAILED_CODE`` sites in ``refine_native_process`` were audited, the
+    operational minority was moved to ``_SCRATCH_UNAVAILABLE_CODE`` (asserted
+    below), and everything left reports a deterministic fact that reproduces on
+    a retry.  The fallthrough is pinned as fatal by
+    ``test_artifact_builder_failures_have_stable_retryability`` so that changing
+    it stays a deliberate, visible act.
+    """
+
+    import patina_scan_worker.refine_native_process as native_process
+
+    assert native_process._NO_SPACE_CODE == RefineFailureCode.ENGINE_NO_SPACE.value
+    assert (
+        native_process._SCRATCH_UNAVAILABLE_CODE
+        == RefineFailureCode.ENGINE_SCRATCH_UNAVAILABLE.value
+    )
+
+
+def test_a_full_workspace_filesystem_is_retryable_not_a_dead_task():
+    """The fatality, stated on its own so a code-only assertion cannot cover it.
+
+    A retryable classification that is marked fatal is the same outage as no
+    classification at all.  ``fatal`` is what the queue reads.
+    """
+
+    assert REFINE_FAILURE_FATALITY[RefineFailureCode.ENGINE_NO_SPACE] is False
+    assert (
+        RefineRunError(RefineFailureCode.ENGINE_NO_SPACE, "vault filesystem full").fatal
+        is False
+    )
+    # And the fatal default it used to land on, for contrast -- so a mutation
+    # that flips the whole map to False does not leave this green.
+    assert REFINE_FAILURE_FATALITY[RefineFailureCode.ARTIFACT_INVALID] is True
+
+
+def test_an_unprovisionable_scratch_directory_is_retryable_not_a_dead_task():
+    """The fatality of the second reclassification, stated on its own.
+
+    Same argument as ``ENGINE_NO_SPACE``: the queue reads ``fatal``, so a code
+    that classifies correctly and is marked fatal is the same outage as no
+    classification at all.  Asserting only the code would leave a mutation that
+    flips this row to ``True`` completely green.
+    """
+
+    assert REFINE_FAILURE_FATALITY[RefineFailureCode.ENGINE_SCRATCH_UNAVAILABLE] is False
+    assert (
+        RefineRunError(
+            RefineFailureCode.ENGINE_SCRATCH_UNAVAILABLE,
+            "cannot create a unique native workspace lease",
+        ).fatal
+        is False
+    )
+    # The contrast, so flipping the whole map to False does not leave this
+    # green, and so the deliberate fatality of the DETERMINISTIC half of the
+    # audit is pinned next to the retryable half it was separated from.
+    assert REFINE_FAILURE_FATALITY[RefineFailureCode.ARTIFACT_INVALID] is True
+    assert REFINE_FAILURE_FATALITY[RefineFailureCode.ENGINE_CLEANUP_FAILED] is True
+
+
 def test_failure_taxonomy_is_closed_and_covers_every_public_failure_code():
     assert set(REFINE_FAILURE_FATALITY) == set(RefineFailureCode)
     assert REFINE_FAILURE_FATALITY == {
         RefineFailureCode.ENGINE_TIMEOUT: False,
         RefineFailureCode.ENGINE_FAILED: False,
         RefineFailureCode.INPUT_IO: False,
+        RefineFailureCode.ENGINE_NO_SPACE: False,
+        RefineFailureCode.ENGINE_SCRATCH_UNAVAILABLE: False,
         RefineFailureCode.GPU_DRIVER: False,
         RefineFailureCode.GPU_OOM: False,
         RefineFailureCode.ENGINE_VERSION_MISMATCH: True,
@@ -2183,6 +2670,10 @@ def test_runner_remains_independent_of_queue_storage_db_and_stage_registry():
     assert "from .storage" not in source
     assert "from .db" not in source
     assert "from .stages" not in source
-    assert "exact same open descriptor" in (RefineFileArtifact.__doc__ or "")
-    assert "do not make a path TOCTOU-safe" in (PreparedRefineFrame.__doc__ or "")
+    assert "BORROWED read-only descriptor" in (RefineFileArtifact.__doc__ or "")
+    assert "Nothing may open it" in (RefineFileArtifact.__doc__ or "")
+    assert "descriptor identity" in (
+        refine_runner._verified_frame_descriptor.__doc__ or ""
+    )
+    assert "The descriptors are borrowed" in (PreparedRefineFrame.__doc__ or "")
     assert get_handler("scan_pipeline.refine") is None

@@ -23,7 +23,7 @@ The deck (SC-12) describes the manifest only as *"device, session, anchors, pose
 | v3 `ScanManifest` field | Disposition in v1 capture bundle | Notes |
 |---|---|---|
 | `schemaVersion` (Int, =3) | **inherited** | On-disk bundle format version. Stays 3. |
-| `scanId` (UUID) | **inherited** | = `room_scans.id` server-side. |
+| `scanId` (UUID) | **inherited** | **A device-local CAPTURE-SESSION id, with no server-side counterpart.** Field mints it at `RoomPlanScanSession.scanSessionId = UUID()` when the capture session *opens*; `room_scans.id` is minted separately, later, at upload reservation (`SupabaseSiteScanService.reservation`), and no column in any migration stores the manifest's value. This row read "= `room_scans.id` server-side" until 2026-07-29 — the shipped app has never done that, and the divergence was measured on a real capture in **I104** (key `da3af6b7…` vs manifest `e3ea64a8…`) after it made a Storage-sourced Refine run impossible. Consumers MUST NOT equate it to a server identifier: manifest identity is anchored by the owner-asserted object key (`{userId}/{roomId}`, B-18) and by the artifact's `sha256`, not by this field. Treated as provenance — recorded, not matched (R122). |
 | `roomLocalId`, `roomName` | **inherited** | |
 | `createdAt`, `completedAt` | **inherited** | |
 | `device{model, osVersion, hasLidar, roomPlanVersion}` | **inherited** | Satisfies the deck's "device" + the package's "OS version" requirement. |

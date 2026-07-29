@@ -5,8 +5,10 @@ The adapter is deliberately queue-independent. It accepts one already-validated
 into the materializer-owned bounded descriptor sink. It never receives or
 opens a destination path.
 
-Every service-role read repeats the owner/scan guard before constructing an
-HTTP client. One carried ``RefineDeadline`` cancels the asynchronous request,
+Every service-role read repeats the owner/room guard before constructing an
+HTTP client -- ``{userId}`` at segment ``[1]`` and ``room_scans.room_id`` at
+``[2]``, the pair the 00077 storage RLS reads and the pair the shipped iOS
+uploader writes (B-18).  One carried ``RefineDeadline`` cancels the asynchronous request,
 body stream, and response cleanup and is checked immediately around every
 synchronous sink write. The only intended sink is the materializer-owned
 bounded private regular-file writer. A kernel-blocked regular-file write cannot
@@ -85,7 +87,16 @@ def _stable_identifier(value: object, label: str) -> str:
     return value
 
 
-def _validate_owner_key(object_key: object, user_id: str, scan_id: str) -> str:
+def _validate_owner_key(object_key: object, user_id: str, room_id: str) -> str:
+    """Re-check the two segments the 00077 storage RLS checks, before any I/O.
+
+    ``room_id`` at segment ``[2]``, not the scan: the private ``room-scans``
+    bucket is laid out ``{folder}/{userId}/{roomId}/{filename}`` (B-18), and this
+    adapter reads with the service role, which bypasses RLS -- so this call IS
+    the policy.  Feeding it ``room_scans.id`` (the shape before R122) made every
+    real bundle unreachable, because the app has never put that id in a key.
+    """
+
     if (
         not isinstance(object_key, str)
         or not object_key
@@ -102,7 +113,7 @@ def _validate_owner_key(object_key: object, user_id: str, scan_id: str) -> str:
     ):
         _fail(MaterializerFailureCode.OWNERSHIP, "unsafe Storage object key")
     try:
-        assert_owner_prefix(object_key, user_id, scan_id)
+        assert_owner_prefix(object_key, user_id, room_id)
     except OwnershipError as exc:
         _fail(MaterializerFailureCode.OWNERSHIP, exc)
     return object_key
@@ -112,7 +123,7 @@ def _validate_source(
     source: object,
     *,
     user_id: object,
-    scan_id: object,
+    room_id: object,
 ) -> RefineSourceArtifact:
     if type(source) is not RefineSourceArtifact:
         _fail(
@@ -120,8 +131,8 @@ def _validate_source(
             "source artifact has the wrong contract type",
         )
     owner = _stable_identifier(user_id, "user_id")
-    scan = _stable_identifier(scan_id, "scan_id")
-    _validate_owner_key(source.object_key, owner, scan)
+    room = _stable_identifier(room_id, "room_id")
+    _validate_owner_key(source.object_key, owner, room)
     if (
         not isinstance(source.sha256, str)
         or _SHA256.fullmatch(source.sha256) is None
@@ -301,7 +312,7 @@ class FieldStorageArtifactAcquirer:
         *,
         source: RefineSourceArtifact,
         user_id: str,
-        scan_id: str,
+        room_id: str,
         destination: RefineBoundedWriter,
         deadline: RefineDeadline,
     ) -> None:
@@ -313,7 +324,7 @@ class FieldStorageArtifactAcquirer:
         in-process adapter.
         """
 
-        validated = _validate_source(source, user_id=user_id, scan_id=scan_id)
+        validated = _validate_source(source, user_id=user_id, room_id=room_id)
         _remaining(deadline)
         try:
             asyncio.get_running_loop()
