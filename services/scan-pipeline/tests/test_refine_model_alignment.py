@@ -403,15 +403,32 @@ def _replace(proposal, **changes):
 # ===========================================================================
 # Posture
 # ===========================================================================
-def test_item_six_implements_the_capability_and_claims_nothing_more():
-    """Implemented is not qualified, and this module must not blur the two."""
+def test_item_six_is_composed_onto_a_real_engine_and_claims_nothing_more():
+    """R121 moved both flags, and each names one thing that actually happened.
 
+    Before R121 this asserted both were ``False`` with the reason "implemented
+    is not qualified".  Both conditions the two comments named as missing were
+    met on the qualified host: ``refine_lifecycle`` composes
+    ``verify_child_alignment_proposal`` onto the real native child, and a real
+    ``pycolmap==4.0.2`` writer produced the three archives it verified.
+
+    What is asserted alongside is the part that did NOT move, because that is
+    where a reader is most likely to over-read the flip: verification of the
+    aligned model says nothing about the primary path being qualified, and
+    ``PRIMARY_EXECUTION_QUALIFIED`` is still down because the run that produced
+    those archives was then refused by ``evaluate_refinement_evidence``.
+    """
+
+    from patina_scan_worker.refine_colmap_backend import (
+        PRIMARY_EXECUTION_QUALIFIED,
+    )
     from patina_scan_worker.refine_native_process import (
         NATIVE_ENGINE_OUTPUT_ALIGNMENT_VERIFIED_BY_PARENT,
     )
 
-    assert PARENT_ALIGNMENT_VERIFICATION_COMPOSED_INTO_REFINE is False
-    assert NATIVE_ENGINE_OUTPUT_ALIGNMENT_VERIFIED_BY_PARENT is False
+    assert PARENT_ALIGNMENT_VERIFICATION_COMPOSED_INTO_REFINE is True
+    assert NATIVE_ENGINE_OUTPUT_ALIGNMENT_VERIFIED_BY_PARENT is True
+    assert PRIMARY_EXECUTION_QUALIFIED is False
 
 
 #: The COMPLETE set of files inside ``patina_scan_worker`` that may import this
@@ -420,7 +437,18 @@ def test_item_six_implements_the_capability_and_claims_nothing_more():
 #: importer would mean a disabled stage had quietly acquired one, which is the
 #: drift this program keeps catching.  An unexpected edge reddens because the
 #: comparison is EQUALITY against this tuple, not membership in it.
-EXPECTED_IN_PACKAGE_IMPORTERS = ("refine_lifecycle.py",)
+#:
+#: R121 added the second edge.  The child now builds the aligned model, and it
+#: computes its declared Sim(3) and both pose digests by parsing its OWN
+#: archives through THIS module's parser and solver.  That is the point: the
+#: parent recomputes the same quantities from the same bytes, so agreement means
+#: the two sides read one archive the same way rather than that two independent
+#: implementations happened to converge.  The edge is therefore deliberate and
+#: named, not incidental.
+EXPECTED_IN_PACKAGE_IMPORTERS = (
+    "refine_colmap_backend.py",
+    "refine_lifecycle.py",
+)
 
 
 def test_exactly_the_composed_lifecycle_imports_this_module():

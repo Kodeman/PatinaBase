@@ -35,6 +35,7 @@ the frozen disabled backend, which refuses with ``REFINE_BACKEND_DISABLED``;
 from __future__ import annotations
 
 import ast
+import contextlib
 import errno
 import hashlib
 import io
@@ -92,6 +93,7 @@ from patina_scan_worker.refine_model_alignment import (
 )
 from patina_scan_worker.refine_native_process import (
     NATIVE_ENGINE_OUTPUT_TOKENS,
+    NativeChildContext,
     NativeEngineOutput,
     NativeEngineOutputs,
 )
@@ -1169,18 +1171,58 @@ def test_the_lifecycle_has_no_console_script_entry_point():
     assert all("refine" not in target for target in scripts.values())
 
 
-def test_the_declared_child_entrypoint_refuses_today():
-    """The named child is the FROZEN disabled backend, and it says so."""
+def test_the_declared_child_entrypoint_pins_the_toolchain_before_it_extracts(
+    monkeypatch,
+):
+    """The named child is the composed backend, and its FIRST act is the pin.
 
+    R121 replaced the frozen refusal with a real body, so this can no longer
+    assert ``disabled and uncomposed``.  What it asserts instead is the property
+    that actually matters on a machine that is not the qualified box: the pin
+    runs BEFORE extraction, so a host without ``/opt/colmap/4.0.2`` is refused
+    while the lease is still empty.
+
+    ORDERING IS PROVED BY CONSTRUCTION, not by reading the code: the extractor
+    is replaced with a recorder that would happily succeed, and the assertion is
+    that it was never entered.  Swapping the two statements in the child turns
+    this red.
+    """
+
+    from patina_scan_worker import refine_colmap_backend
     from patina_scan_worker.refine_colmap_backend import run_refine_colmap_native
 
     assert DEFAULT_CHILD_ENTRYPOINT == (
         "patina_scan_worker.refine_colmap_backend:run_refine_colmap_native"
     )
+
+    entered: list[object] = []
+
+    @contextlib.contextmanager
+    def recording_extractor(request, context):
+        entered.append(request)
+        yield object()
+
+    def refusing_toolchain(*, context, deadline):
+        raise AdapterError("pinned toolchain absent", "REFINE_TOOLCHAIN_UNQUALIFIED")
+
+    # BOTH collaborators are substituted, so the assertion is about ORDER and
+    # nothing else.  Substituting only the extractor made this test pass on a
+    # machine without ``/opt/colmap/4.0.2`` and fail on the qualified host,
+    # which is the shape this program keeps catching: a green that depended on
+    # the box rather than on the code.
+    monkeypatch.setattr(
+        refine_colmap_backend, "extract_colmap_packet", recording_extractor
+    )
+    monkeypatch.setattr(
+        refine_colmap_backend,
+        "load_qualified_colmap_toolchain",
+        refusing_toolchain,
+    )
+    context = NativeChildContext(time.monotonic() + 60.0)
     with pytest.raises(AdapterError) as raised:
-        run_refine_colmap_native({}, None)
-    assert raised.value.code == "REFINE_BACKEND_DISABLED"
-    assert "disabled and uncomposed" in str(raised.value)
+        run_refine_colmap_native({}, context)
+    assert raised.value.code == "REFINE_TOOLCHAIN_UNQUALIFIED"
+    assert entered == []
 
 
 # ===========================================================================
@@ -1535,6 +1577,34 @@ def test_a_regressed_reprojection_is_refused_by_the_runner(tmp_path):
     assert raised.value.code is RefineFailureCode.EVIDENCE_REGRESSION
 
 
+def test_an_evidence_refusal_carries_the_numbers_that_produced_it(tmp_path):
+    """The comparable metrics travel WITH the refusal, not only in a log.
+
+    This exists because a mutation sweep deleted them and nothing went red.
+    They matter because the evidence is destroyed with the child's lease
+    moments later: R121's first real engine run was refused by this line and
+    the operator could not tell WHICH metric regressed or by how much.  The
+    assertions below name the metric that actually moved and the one that did
+    not, so a refusal that reported only the verdict reddens here.
+    """
+
+    from patina_scan_worker.refine_runner import RefineRunError
+
+    worse = dict(_GOOD_EVIDENCE)
+    worse["loopRotationRmseDegBefore"] = 4.915408
+    worse["loopRotationRmseDegAfter"] = 4.930533
+    with pytest.raises(RefineRunError) as raised:
+        _run(tmp_path, engine_kwargs={"evidence": worse})
+    message = str(raised.value)
+    assert "comparable_geometric_evidence_regressed" in message
+    # The metric that regressed, with both sides of it.
+    assert "loop_rotation_rmse_deg 4.915408->4.930533" in message
+    # ... and the one that improved, so a reader can see it was not the cause.
+    assert "reprojection_rmse_px" in message
+    assert "coverage" in message
+    assert "loop_edges" in message
+
+
 @pytest.mark.parametrize(
     ("mutation", "message"),
     (
@@ -1845,9 +1915,138 @@ def test_the_packet_members_carry_the_materializers_own_digests(tmp_path):
             with tarfile.open(chunk_path, mode="r:") as archive:
                 names.extend(member.name for member in archive.getmembers())
         assert sorted(names) == sorted(
-            ["engine-request-v1.json"]
+            [
+                "adapter-ledger-v1.json",
+                "engine-request-v1.json",
+                "source-ledger-v1.json",
+            ]
             + [f"images/{frame.engine_name}" for frame in materialization.frames]
         )
+        # The ordered member ledger is what the frozen child validates, and it
+        # requires ``(chunkToken, archiveMember)`` to be sorted.  Adding two
+        # ledgers whose names straddle ``images/`` is exactly the change that
+        # could break it, so it is asserted rather than assumed.
+        order = [(row["chunkToken"], row["archiveMember"]) for row in document["members"]]
+        assert order == sorted(order)
+        assert document["requestMember"] == "engine-request-v1.json"
+        assert by_path["engine-request-v1.json"]["sha256"] == packet.engine_request_sha256
+    finally:
+        materialization.cleanup()
+
+
+def test_the_packet_writers_headers_are_exactly_what_the_child_parses():
+    """The two USTAR implementations, compared to each other for the first time.
+
+    They never were.  The parent's tests read its archives back with ``tarfile``
+    -- which accepts any mode -- and the extractor's tests hand-build headers at
+    0600, so the writer emitted 0644 for its entire life and the mismatch was
+    invisible until a real run extracted a real packet inside the child and was
+    refused with "member metadata is not canonical".
+
+    This asserts the tie directly: every header the WRITER produces is fed to
+    the CHILD's parser, and the parser's own name/size round-trip is checked.  A
+    reversal of the fix reddens here rather than 40 minutes into a host run.
+    """
+
+    from patina_scan_worker.refine_lifecycle import _ustar_header
+    from patina_scan_worker.refine_packet_extractor import _parse_ustar_header
+
+    for name, size in (
+        ("engine-request-v1.json", 1),
+        ("adapter-ledger-v1.json", 137),
+        ("source-ledger-v1.json", 4096),
+        ("images/frame_000000.ppm", 8_294_417),
+        ("images/frame_000399.ppm", 8_294_417),
+    ):
+        header = _ustar_header(name, size)
+        assert len(header) == 512
+        assert _parse_ustar_header(header) == (name, size)
+
+
+def test_the_packet_ledgers_carry_the_source_and_adapter_provenance(tmp_path):
+    """The two ledgers exist so evidence can name where the rasters came from.
+
+    Nothing else in the packet records it: the engine request describes the
+    ENGINE images, and the child never sees a capture archive.  Without these
+    members ``refine_evidence_builder`` cannot be fed at all, which is why the
+    packet writer emits them and why the assertions below compare against the
+    materializer's own rows rather than against literals.
+    """
+
+    bundle_root = tmp_path / "bundle"
+    bundle_root.mkdir()
+    scratch = tmp_path / "scratch"
+    scratch.mkdir(mode=0o700)
+    bundle = _Bundle(bundle_root)
+    materialization = _materialize(bundle, scratch, _deadline())
+    try:
+        packet = build_colmap_packet(
+            materialization,
+            destination=scratch / "packet",
+            gpu_index="0",
+            run_id="b" * 64,
+            deadline=_deadline(),
+        )
+        payloads: dict[str, bytes] = {}
+        for chunk_path in packet.chunk_paths:
+            with tarfile.open(chunk_path, mode="r:") as archive:
+                for member in archive.getmembers():
+                    if member.name.endswith("-ledger-v1.json"):
+                        extracted = archive.extractfile(member)
+                        assert extracted is not None
+                        payloads[member.name] = extracted.read()
+
+        adapter = json.loads(payloads["adapter-ledger-v1.json"])
+        assert adapter["contract"] == "patina-refine-colmap-adapter-ledger-v1"
+        assert adapter["runId"] == "b" * 64
+        assert adapter["materializerId"] == materialization.frames[0].materializer_id
+
+        source = json.loads(payloads["source-ledger-v1.json"])
+        assert source["contract"] == "patina-refine-colmap-source-ledger-v1"
+        assert source["runId"] == "b" * 64
+        assert [row["ordinal"] for row in source["frames"]] == list(
+            range(len(materialization.frames))
+        )
+        for row, frame in zip(source["frames"], materialization.frames, strict=True):
+            assert row["sourceArchiveKey"] == frame.source_archive_key
+            assert row["sourceMember"] == frame.source_member
+            assert row["sourceImageName"] == frame.source_member.rsplit("/", 1)[-1]
+            assert row["sourceSha256"] == frame.source_sha256
+            assert row["sourceSizeBytes"] == frame.source_size_bytes
+
+        # The manifest declares them at the two exact packet-root paths the
+        # extractor's role validation requires; anywhere else is refused.
+        document = json.loads(packet.manifest_path.read_bytes())
+        roles = {row["role"]: row["relativePath"] for row in document["members"]}
+        assert roles["adapter-ledger"] == "adapter-ledger-v1.json"
+        assert roles["source-ledger"] == "source-ledger-v1.json"
+    finally:
+        materialization.cleanup()
+
+
+def test_a_packet_whose_frames_disagree_on_the_raster_adapter_is_refused(tmp_path):
+    """Constructed, not asserted: two adapters in one run has no "the" adapter."""
+
+    import dataclasses
+
+    from patina_scan_worker.refine_lifecycle import _single_materializer_id
+
+    bundle_root = tmp_path / "bundle"
+    bundle_root.mkdir()
+    scratch = tmp_path / "scratch"
+    scratch.mkdir(mode=0o700)
+    bundle = _Bundle(bundle_root)
+    materialization = _materialize(bundle, scratch, _deadline())
+    try:
+        frames = materialization.frames
+        assert _single_materializer_id(frames) == frames[0].materializer_id
+        mixed = (
+            dataclasses.replace(frames[0], materializer_id="other-adapter-1x1"),
+            *frames[1:],
+        )
+        with pytest.raises(AdapterError) as raised:
+            _single_materializer_id(mixed)
+        assert "more than one adapter identity" in str(raised.value)
     finally:
         materialization.cleanup()
 
@@ -2070,6 +2269,162 @@ def test_a_rotation_drift_just_outside_the_tolerance_is_refused(factor):
         )
     assert raised.value.code == LIFECYCLE_UNANCHORED_CODE
     assert "orientations drifted" in str(raised.value)
+
+
+#: The per-element orthonormality defect MEASURED on scan ``004aa5b0``'s own
+#: 49 ``cam_from_world`` matrices, worst case.  They are floats that came off
+#: ARKit through a conversion; they are not exact rotations, and nothing on the
+#: path ever claimed they were.
+_DEVICE_ORTHONORMALITY_DEFECT = 3.3e-7
+
+
+def _slightly_non_orthonormal(rotation, defect=_DEVICE_ORTHONORMALITY_DEFECT):
+    """Shrink one row, which is the direction that actually bites.
+
+    The sign matters and the first draft of this helper had it backwards.
+    LENGTHENING a row raises ``tr(A B^T)`` above 3, the cosine clamps at 1 and
+    the stale metric reports 0 -- it hides the defect instead of amplifying it.
+    SHORTENING one lowers the trace to ``3 - defect``, giving
+    ``acos(1 - defect/2) ~ sqrt(defect)``, which is the ``5.7e-4`` rad this
+    fixture produces from ``3.3e-7`` and the same order as the ``4.899e-4``
+    measured on the real capture.
+    """
+
+    return (
+        tuple(value * (1.0 - defect) for value in rotation[0]),
+        rotation[1],
+        rotation[2],
+    )
+
+
+def _rows_with_reference_defect(rows):
+    """Give the SUBMITTED poses a device-sized defect; the snapshot keeps none."""
+
+    from patina_scan_worker.refine_adapter import ColmapPose
+
+    frames = []
+    for row in rows:
+        exact = _quat_to_rot(row["qvec"])
+        frames.append(
+            _StandInFrame(
+                str(row["name"]),
+                _StandInPose(
+                    ColmapPose(
+                        rotation=_slightly_non_orthonormal(exact),
+                        translation=tuple(float(v) for v in row["tvec"]),
+                        qvec=tuple(float(v) for v in row["qvec"]),
+                    )
+                ),
+            )
+        )
+    return tuple(frames)
+
+
+def test_the_anchor_measures_rotation_and_not_the_references_own_defect():
+    """CONSTRUCTED: the exact case that made this clause unreachable on hardware.
+
+    The submitted matrices carry a device-sized ``3.3e-7`` orthonormality
+    defect and the snapshot is the EXACT rotation they encode -- a child that
+    moved nothing at all.  Before R121 that combination measured ``~5e-4`` rad
+    of "drift" and was refused, because ``acos(1 - x) ~ sqrt(2x)`` turns the
+    reference's own representation error into an angle five hundred times the
+    ``1e-6`` tolerance.  No child could pass it.
+
+    The tolerance is UNCHANGED.  What is asserted here is that the number the
+    clause produces is now a rotation difference: the old quantity is computed
+    inline and shown to be far outside the tolerance, the new one far inside,
+    on the identical inputs.
+    """
+
+    from patina_scan_worker.refine_lifecycle import (
+        _geodesic_angle_rad,
+        _quaternion_to_rotation,
+    )
+
+    rows = _anchor_rows()
+    frames = _rows_with_reference_defect(rows)
+    snapshot = _snapshot_from_rows(rows, "seed")
+
+    # The QUANTITY THE CLAUSE USED TO MEASURE, on these very inputs.
+    stale = max(
+        _geodesic_angle_rad(
+            _quaternion_to_rotation(pose.qvec),
+            frame.frame.colmap_pose.rotation,
+        )
+        for pose, frame in zip(snapshot.poses, frames, strict=True)
+    )
+    assert stale > SEED_ANCHOR_MAX_ROTATION_DRIFT_RAD * 100
+
+    # ... and what it measures now.
+    verification = anchor_seed_snapshot_to_request(
+        snapshot,
+        frames,
+        deadline=_deadline(),
+    )
+    assert verification.max_rotation_drift_rad < SEED_ANCHOR_MAX_ROTATION_DRIFT_RAD / 100
+
+
+@pytest.mark.parametrize("factor", (1.5, 10.0))
+def test_a_real_rotation_is_still_caught_against_a_defective_reference(factor):
+    """The converse: the fix must not have made the clause blind.
+
+    Same defective reference, but now the snapshot really IS turned, by a
+    multiple of the tolerance.  If projecting the reference had swallowed real
+    rotation this would pass, and it must not.
+    """
+
+    turn = SEED_ANCHOR_MAX_ROTATION_DRIFT_RAD * factor
+    rows = _anchor_rows()
+    turned = _anchor_rows(turn=turn)
+    with pytest.raises(AdapterError) as raised:
+        anchor_seed_snapshot_to_request(
+            _snapshot_from_rows(turned, "seed"),
+            _rows_with_reference_defect(rows),
+            deadline=_deadline(),
+        )
+    assert raised.value.code == LIFECYCLE_UNANCHORED_CODE
+    assert "orientations drifted" in str(raised.value)
+    # The refusal carries both margins, so an operator can tell a real rotation
+    # from float noise without re-running anything.
+    assert "max rotation" in str(raised.value)
+    assert "max centre" in str(raised.value)
+
+
+def test_the_projection_is_a_projection_and_not_a_normalisation_of_scale():
+    """``_nearest_rotation`` must return SO(3), including near a half turn.
+
+    The ARKit-to-COLMAP basis change is a half turn, so these matrices live
+    exactly where the naive ``sqrt(1 + trace)`` branch loses every digit.  The
+    branch-selected form is asserted on that case specifically, not only on a
+    generic rotation.
+    """
+
+    from patina_scan_worker.refine_lifecycle import _nearest_rotation
+
+    for quaternion in (
+        (1.0, 0.0, 0.0, 0.0),
+        (0.0, 1.0, 0.0, 0.0),
+        (0.0, 0.0, 1.0, 0.0),
+        (0.0, 0.0, 0.0, 1.0),
+        (0.5, 0.5, 0.5, 0.5),
+    ):
+        exact = _quat_to_rot(quaternion)
+        projected = _nearest_rotation(_slightly_non_orthonormal(exact, 1e-5))
+        identity = _matmul(projected, _transpose(projected))
+        deviation = max(
+            abs(identity[row][col] - (1.0 if row == col else 0.0))
+            for row in range(3)
+            for col in range(3)
+        )
+        assert deviation < 1e-12, quaternion
+        # ... and it is the NEAREST rotation, not some other one: it stays
+        # within the defect it was asked to remove.
+        gap = max(
+            abs(projected[row][col] - exact[row][col])
+            for row in range(3)
+            for col in range(3)
+        )
+        assert gap < 1e-4, quaternion
 
 
 def test_the_parent_checkpoints_its_own_loops_on_a_pinned_stride():
@@ -3122,9 +3477,11 @@ def test_the_packet_writer_really_produces_the_chunks_the_plan_asked_for(tmp_pat
         assert placed == {
             row["relativePath"]: row["chunkToken"] for row in document["members"]
         }
-        assert set(placed) == {"engine-request-v1.json"} | {
-            f"images/{frame.engine_name}" for frame in materialization.frames
-        }
+        assert set(placed) == {
+            "adapter-ledger-v1.json",
+            "engine-request-v1.json",
+            "source-ledger-v1.json",
+        } | {f"images/{frame.engine_name}" for frame in materialization.frames}
     finally:
         materialization.cleanup()
 
@@ -3333,7 +3690,10 @@ def test_no_composed_module_acquires_a_second_deadline():
             ):
                 acquisitions.append((module_name, node.lineno))
 
-    assert [module for module, _line in acquisitions] == ["refine_lifecycle.py"]
+    assert [module for module, _line in acquisitions] == [
+        "refine_lifecycle.py",
+        "refine_native_process.py",
+    ]
     # ... and the single acquisition is inside ``lease_deadline``, nowhere else.
     tree = ast.parse((source_root / "refine_lifecycle.py").read_text())
     owners = {
@@ -3350,6 +3710,37 @@ def test_no_composed_module_acquires_a_second_deadline():
         )
     }
     assert owners == {"lease_deadline"}
+
+    # THE SECOND SITE, and why it is not a second clock.  ``RefineDeadline`` is
+    # a Python object and cannot cross a ``spawn``ed process boundary; only the
+    # absolute monotonic instant does, inside ``NativeChildContext``.  R121's
+    # child needs the dataclass because four collaborators type-check for it, so
+    # ``NativeChildContext.carried_deadline`` rehydrates the transported field.
+    #
+    # This is asserted MUCH more tightly than the ban it replaces: the site must
+    # be that one method, and its sole argument must be
+    # ``self.expires_at_monotonic_s``.  ``RefineDeadline.start`` -- the call that
+    # reads ``time.monotonic()`` and would hand the child a fresh lease -- stays
+    # banned everywhere outside ``lease_deadline``, which the assertion above
+    # pins.  A child that computed its own expiry would have to name something
+    # other than the transported field and reddens here.
+    child_tree = ast.parse((source_root / "refine_native_process.py").read_text())
+    rehydrations = [
+        (node.name, call)
+        for node in ast.walk(child_tree)
+        if isinstance(node, ast.FunctionDef)
+        for call in ast.walk(node)
+        if isinstance(call, ast.Call)
+        and isinstance(call.func, ast.Name)
+        and call.func.id == "RefineDeadline"
+    ]
+    assert [name for name, _call in rehydrations] == ["carried_deadline"]
+    (_name, rehydration) = rehydrations[0]
+    assert not rehydration.keywords and len(rehydration.args) == 1
+    argument = rehydration.args[0]
+    assert isinstance(argument, ast.Attribute)
+    assert argument.attr == "expires_at_monotonic_s"
+    assert isinstance(argument.value, ast.Name) and argument.value.id == "self"
 
 
 def test_the_composed_module_list_covers_the_real_import_graph():
@@ -4078,14 +4469,12 @@ def test_the_planner_predicts_the_bytes_the_writer_actually_writes(tmp_path, cei
             chunk_max_bytes=ceiling,
         )
         document = json.loads(packet.manifest_path.read_bytes())
-        request_row = next(
-            row
-            for row in document["members"]
-            if row["relativePath"] == "engine-request-v1.json"
-        )
+        # The planner is fed the SAME ordered member sizes the writer used, read
+        # back out of the manifest in its declared order rather than rebuilt
+        # from a guess about which members exist.  That is what keeps this test
+        # honest now that the packet carries two ledgers as well as the request.
         plan = plan_packet_chunks(
-            [request_row["sizeBytes"]]
-            + [frame.engine_size_bytes for frame in materialization.frames],
+            [row["sizeBytes"] for row in document["members"]],
             chunk_max_bytes=ceiling,
         )
         actual = [path.stat().st_size for path in packet.chunk_paths]
@@ -4223,13 +4612,23 @@ def test_the_pinned_profile_is_inside_every_bound_the_adapter_enforces():
     assert QUALIFIED_CAPTURE_RASTER_PROFILE.ppm_size <= _NATIVE_PINNED_FILE_CEILING
 
 
-def test_exactly_one_qualification_flag_is_true_and_it_names_the_raster_profile():
-    """The posture surface, read rather than described.
+def test_the_posture_flag_surface_is_exactly_what_the_program_has_established():
+    """The posture surface, READ rather than described.
 
-    This composition moves ONE ``*_QUALIFIED`` flag, and this test is what makes
-    a second one impossible to add quietly: it AST-parses every module in the
-    package for a ``*_QUALIFIED`` assignment and asserts the true set is exactly
-    the raster profile flag.
+    R121 widened this in two ways at once and both matter.
+
+    First, the SCAN.  It used to match only names ending ``_QUALIFIED``, and
+    three module-level posture booleans do not --
+    ``EVIDENCE_BUILDER_CONTRACT_COMPATIBLE``,
+    ``PARENT_ALIGNMENT_VERIFICATION_COMPOSED_INTO_REFINE`` and
+    ``NATIVE_ENGINE_OUTPUT_ALIGNMENT_VERIFIED_BY_PARENT``.  All three were
+    invisible to the check that existed to make a quiet flip impossible.  The
+    scan is now every module-level ``UPPER_NAME = True/False`` in the package,
+    identity-compared so ``0`` and ``1`` are not mistaken for booleans.
+
+    Second, the EXPECTED SET.  It is compared for EQUALITY in both directions:
+    a new true flag reddens, and a flag silently dropped from the package
+    reddens too.
     """
 
     package_root = pathlib.Path(refine_lifecycle.__file__).parent
@@ -4240,25 +4639,52 @@ def test_exactly_one_qualification_flag_is_true_and_it_names_the_raster_profile(
         for node in tree.body:
             if not isinstance(node, ast.Assign):
                 continue
+            if not isinstance(node.value, ast.Constant):
+                continue
+            if node.value.value is not True and node.value.value is not False:
+                continue
             for target in node.targets:
-                if not isinstance(target, ast.Name):
+                if not isinstance(target, ast.Name) or not target.id.isupper():
                     continue
-                if not target.id.endswith("_QUALIFIED"):
-                    continue
-                assert isinstance(node.value, ast.Constant), (
-                    f"{source.name}:{target.id} is not a literal posture flag"
-                )
                 bucket = true_flags if node.value.value is True else false_flags
                 bucket[f"{source.name}:{target.id}"] = target.id
 
-    assert set(true_flags.values()) == {"FIELD_RASTER_CAPTURE_PROFILE_QUALIFIED"}
-    # The flags this composition did NOT move, named individually so a flip
-    # reddens here rather than in a report nobody re-reads.
+    # WHAT IS TRUE, and the one sentence each rests on.  Every entry here was
+    # established by R121's run of the real COLMAP 4.0.2 engine on scan
+    # 004aa5b0 on the qualified host, except the two noted.
+    assert set(true_flags.values()) == {
+        # I99's physical-device raster receipt (unchanged since I100).
+        "FIELD_RASTER_CAPTURE_PROFILE_QUALIFIED",
+        # Item 5's measured byte-freeze (unchanged since I97).
+        "NATIVE_ENGINE_OUTPUT_BYTES_FROZEN_AGAINST_SURVIVING_DESCRIPTORS",
+        # A real packet extracted inside the child and consumed by COLMAP.
+        "PACKET_EXTRACTION_QUALIFIED",
+        # Seven real engine artifacts crossed the boundary, parent-hashed.
+        "OUTPUT_DESCRIPTOR_HANDOFF_QUALIFIED",
+        # The child built the aligned model; the parent re-solved and agreed.
+        "ALIGNED_MODEL_BUILD_QUALIFIED",
+        "PARENT_ALIGNMENT_VERIFICATION_COMPOSED_INTO_REFINE",
+        "NATIVE_ENGINE_OUTPUT_ALIGNMENT_VERIFIED_BY_PARENT",
+        # The evidence builder consumed real snapshots and reached the verdict.
+        "EVIDENCE_BUILDER_CONTRACT_COMPATIBLE",
+        # This one rests on a CONSTRUCTED test, not the host run: it names a
+        # property of the guard, not of the box.
+        "COMMAND_EXCEPTION_NORMALIZATION_QUALIFIED",
+    }
+    # The flags R121 did NOT move, named individually so a flip reddens here
+    # rather than in a report nobody re-reads.  ``PRIMARY_EXECUTION_QUALIFIED``
+    # is the load-bearing one: the plan executed end to end on the host and was
+    # then REFUSED by ``evaluate_refinement_evidence``, so no run has ever
+    # produced an accepted refinement and the flag stays down.
     for expected in (
         "REFINE_LIFECYCLE_QUALIFIED",
+        "REFINE_LIFECYCLE_STAGE_REGISTERED",
         "PILOT_200_400_FRAME_RANGE_QUALIFIED",
-        "OUTPUT_DESCRIPTOR_HANDOFF_QUALIFIED",
         "PRIMARY_EXECUTION_QUALIFIED",
+        "RUNNER_PATH_REOPEN_COMPOSITION_QUALIFIED",
+        "SEQUENTIAL_COMMAND_QUIESCENCE_QUALIFIED",
+        "MEASUREMENT_SNAPSHOT_QUALIFIED",
+        "FALLBACK_QUALIFIED",
         "TOOLCHAIN_POLICY_QUALIFIED",
         "EXECUTABLE_IDENTITY_QUALIFIED",
         "COMMAND_ENVIRONMENT_QUALIFIED",

@@ -34,6 +34,7 @@ from patina_scan_worker.refine_colmap_backend import (
     ENGINE_REQUEST_SCHEMA_VERSION,
     PACKET_CONTRACT,
     PACKET_EXTRACTION_QUALIFIED,
+    PRIMARY_EXECUTION_QUALIFIED,
     PACKET_SCHEMA_VERSION,
     PILOT_200_400_FRAME_RANGE_QUALIFIED,
     ColmapEngineRequest,
@@ -564,7 +565,12 @@ def test_exact_ustar_packet_extracts_in_native_child_and_cleans_workspace(
     ]
     # The parent removes its own workspace after the child exits.
     assert list(scratch.iterdir()) == []
-    assert PACKET_EXTRACTION_QUALIFIED is False
+    # R121: extraction ran inside the child on a real packet and COLMAP
+    # consumed the result, so this flag is now True.  What the assertion below
+    # still pins is the part that did NOT move with it -- extraction being
+    # qualified does not register a stage or enable the primary path.
+    assert PACKET_EXTRACTION_QUALIFIED is True
+    assert PRIMARY_EXECUTION_QUALIFIED is False
 
 
 def test_extraction_rejects_unsealed_context_before_source_or_workspace_action(
@@ -1979,7 +1985,12 @@ def test_native_extraction_without_a_parent_lease_is_refused(tmp_path):
     finally:
         fixture.close()
     assert raised.value.code == "REFINE_INPUT_INVALID"
-    assert PACKET_EXTRACTION_QUALIFIED is False
+    # R121: extraction ran inside the child on a real packet and COLMAP
+    # consumed the result, so this flag is now True.  What the assertion below
+    # still pins is the part that did NOT move with it -- extraction being
+    # qualified does not register a stage or enable the primary path.
+    assert PACKET_EXTRACTION_QUALIFIED is True
+    assert PRIMARY_EXECUTION_QUALIFIED is False
 
 
 # ---------------------------------------------------------------------------
@@ -2446,7 +2457,12 @@ def test_packet_with_both_ledgers_is_parsed_and_bound_to_the_manifest(
     assert set(result["memberModes"].values()) == {0o600}
     # The parent still removes every extracted ledger with its workspace.
     assert list(scratch.iterdir()) == []
-    assert PACKET_EXTRACTION_QUALIFIED is False
+    # R121: extraction ran inside the child on a real packet and COLMAP
+    # consumed the result, so this flag is now True.  What the assertion below
+    # still pins is the part that did NOT move with it -- extraction being
+    # qualified does not register a stage or enable the primary path.
+    assert PACKET_EXTRACTION_QUALIFIED is True
+    assert PRIMARY_EXECUTION_QUALIFIED is False
 
 
 @pytest.mark.skipif(os.name != "posix", reason="native Refine requires POSIX")

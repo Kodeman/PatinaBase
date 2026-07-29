@@ -511,10 +511,23 @@ def test_every_output_token_fits_the_reserved_argv_tail_budget():
         assert len(os.fsencode(tail)) <= NATIVE_WORKSPACE_MAX_ARGV_PATH_TAIL_BYTES
 
 
-def test_parent_side_alignment_verification_is_not_claimed():
-    """Item 5 transports the aligned model; it does not vouch for it."""
+def test_parent_side_alignment_verification_is_claimed_by_someone_else():
+    """Item 5 transports the aligned model; it STILL does not vouch for it.
 
-    assert NATIVE_ENGINE_OUTPUT_ALIGNMENT_VERIFIED_BY_PARENT is False
+    R121 moved ``NATIVE_ENGINE_OUTPUT_ALIGNMENT_VERIFIED_BY_PARENT`` to ``True``
+    because both conditions its own comment named were met on the qualified
+    host: the lifecycle composes ``verify_child_alignment_proposal`` onto the
+    real child, and a real ``pycolmap==4.0.2`` writer produced the archives it
+    verified.  The flag records that the PARENT verified somewhere on the
+    composed path -- it has never been a claim about THIS module, and the
+    assertion below is what keeps the two apart: nothing here calls the
+    verifier, and a module that started to would redden this.
+    """
+
+    assert NATIVE_ENGINE_OUTPUT_ALIGNMENT_VERIFIED_BY_PARENT is True
+    source = inspect.getsource(native_process)
+    assert "verify_child_alignment_proposal(" not in source
+    assert "import refine_model_alignment" not in source
 
 
 # ---------------------------------------------------------------------------
@@ -3575,8 +3588,13 @@ def test_the_freeze_posture_flag_says_what_is_and_is_not_closed():
     assert "/proc/<pid>/fd" in preamble
     # And BOTH routes to that gate, not only the one with a name in it.
     assert "pidfd_getfd" in preamble
-    # And the alignment claim stays exactly where it was.
-    assert NATIVE_ENGINE_OUTPUT_ALIGNMENT_VERIFIED_BY_PARENT is False
+    # And the alignment claim, which R121 moved, is stated where IT is too.
+    assert NATIVE_ENGINE_OUTPUT_ALIGNMENT_VERIFIED_BY_PARENT is True
+    alignment_marker = "NATIVE_ENGINE_OUTPUT_ALIGNMENT_VERIFIED_BY_PARENT = True"
+    alignment_preamble = doc[: doc.index(alignment_marker)]
+    tail = alignment_preamble[alignment_preamble.rindex("#: THAT CAPABILITY") :]
+    assert "WHAT IT STILL DOES NOT MEAN" in tail
+    assert "does not verify anything itself" in tail
 
 
 @requires_output_freeze
