@@ -123,13 +123,19 @@ export function MilestoneComposer({
               type="button"
               aria-pressed={selected}
               onClick={() => setKind(k.key)}
-              className={`min-h-11 rounded-[3px] border px-[0.5rem] py-[0.2rem] font-mono text-[0.58rem] uppercase tracking-[0.06em] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-clay)] ${
+              className={`group inline-flex min-h-11 min-w-11 items-center justify-center px-[0.5rem] py-[0.2rem] font-mono text-[0.58rem] uppercase tracking-[0.06em] transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-clay)] motion-reduce:transition-none ${
                 selected
-                  ? 'border-[var(--color-charcoal)] text-[var(--color-charcoal)]'
-                  : 'border-[var(--color-pearl)] text-[var(--color-aged-oak)]'
+                  ? 'text-[var(--color-charcoal)]'
+                  : 'text-[var(--color-aged-oak)] hover:text-[var(--color-charcoal)]'
               }`}
             >
-              {k.label}
+              <span
+                className={`da-score-hover group-hover:after:scale-x-100 group-focus-visible:after:scale-x-100 ${
+                  selected ? 'da-score-on' : ''
+                }`}
+              >
+                {k.label}
+              </span>
             </button>
           );
         })}

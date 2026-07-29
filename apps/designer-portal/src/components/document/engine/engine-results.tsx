@@ -188,18 +188,27 @@ export function EngineResults({
               no open project to place into
             </span>
           ) : (
+            /* The destination is chosen by scoring its name (I107) — charcoal
+               ink under a steady rule for the one picked, aged oak and an
+               unasked-for rule for the rest. No fill, so the row reads the same
+               on the Library's paper and on the ⌘K palette's ground; the 44px
+               box stays as invisible padding. */
             targets.map((t) => (
               <button
                 key={t.id}
                 type="button"
                 onClick={() => setPickedId(t.id)}
-                className={`min-h-11 min-w-11 rounded-[12px] border px-2.5 py-1 text-[0.66rem] transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-clay)] ${
+                className={`inline-flex min-h-11 min-w-11 items-center justify-center px-2.5 py-1 text-[0.66rem] transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-clay)] ${
                   pickedId === t.id
-                    ? 'border-[var(--color-clay)] bg-[var(--color-clay)] text-white'
-                    : 'border-[var(--color-pearl)] bg-white text-[var(--text-body)] hover:border-[var(--color-clay)]'
+                    ? 'text-[var(--color-charcoal)]'
+                    : 'text-[var(--color-aged-oak)] hover:text-[var(--color-charcoal)]'
                 }`}
               >
-                {t.name}
+                <span
+                  className={`da-score-hover ${pickedId === t.id ? 'da-score-on' : ''}`}
+                >
+                  {t.name}
+                </span>
               </button>
             ))
           )}

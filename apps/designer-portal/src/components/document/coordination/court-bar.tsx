@@ -8,9 +8,10 @@
  * designer's own court always shows, even at zero), each a Playfair count over
  * a mono two-line label ("in your court" / "waiting on <who>") fronted by the
  * court dot. The designer pill goes "hot" (clay border + faint clay wash) when
- * it carries any open item — the move the designer owns. A charcoal "+ New open
- * item" button closes the bar on the right and opens the composer (band-local
- * state). Clicking a pill smooth-scrolls to that court's group.
+ * it carries any open item — the move the designer owns. A scored "+ New open
+ * item" action (DocumentAction, secondary — I107 retired the filled charcoal
+ * plate) closes the bar on the right and opens the composer (band-local state).
+ * Clicking a pill smooth-scrolls to that court's group.
  *
  * Pure presentational: counts arrive pre-computed (useCourtSummary, a select
  * over the items query — no second fetch); the bar renders + forwards
@@ -22,6 +23,7 @@ import type { Court, CourtCount } from '@patina/supabase';
 import { isHotCourt } from '@/lib/document/coordination-derivation';
 import { courtToken } from './party';
 import { HelpGlyph } from '../overlays/doc-sheet';
+import { DocumentAction } from '../document-action';
 import { DOCUMENT_SURFACE_KEYS } from '@/lib/help-system/document-surface-keys';
 
 // ── court-bar.tsx — the ball-in-court summary pills + "+ New open item" ──
@@ -84,13 +86,18 @@ export function CourtBar({ summary, onNewItem, onJumpCourt }: CourtBarProps) {
         label="About coordination"
         className="ml-auto"
       />
-      <button
-        type="button"
+      {/* The Scored Ink (I107): the filled charcoal plate is retired — this is
+          the same add-affordance the margin already writes as "+ Decision" /
+          "+ Note", so it says its word the same way, secondary and scored. */}
+      <DocumentAction
+        actionKey="new-open-item"
+        surfaceKey="coordination"
+        regionKey="court-bar"
+        variant="secondary"
         onClick={onNewItem}
-        className="rounded-[6px] border-0 bg-[var(--color-charcoal)] px-3.5 py-2 font-mono text-[10px] font-semibold uppercase tracking-[0.06em] text-[var(--color-off-white)] transition-opacity hover:opacity-90"
       >
         + New open item
-      </button>
+      </DocumentAction>
     </div>
   );
 }

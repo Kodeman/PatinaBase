@@ -26,8 +26,14 @@ import { DocumentAction } from '../../document-action';
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type AnyVendor = any;
 
+// The 44px box lives here and stays invisible; the score belongs to the word
+// itself, so it rides an inner span (see the category line below). Scoring the
+// padded box would rule 17px under the word and as wide as the halo.
 const MONO_LINK =
-  'inline-flex min-h-11 min-w-11 items-center font-mono text-[9.5px] uppercase tracking-[0.1em] transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-clay)]';
+  'group inline-flex min-h-11 min-w-11 items-center font-mono text-[9.5px] uppercase tracking-[0.1em] transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-clay)] motion-reduce:transition-none';
+
+const MONO_SCORE =
+  'da-score-hover group-hover:after:scale-x-100 group-focus-visible:after:scale-x-100';
 
 /** Humanize a stored category token ("case_goods" → "case goods"). */
 const cat = (raw: unknown): string =>
@@ -134,11 +140,15 @@ export function MakersMarketplace({
             aria-current={category === null ? 'true' : undefined}
             className={`${MONO_LINK} ${
               category === null
-                ? 'text-[var(--color-clay)]'
+                ? 'text-[var(--color-charcoal)]'
                 : 'text-[var(--color-aged-oak)] hover:text-[var(--color-mocha)]'
             }`}
           >
-            everything
+            <span
+              className={`${MONO_SCORE}${category === null ? ' da-score-on' : ''}`}
+            >
+              everything
+            </span>
           </button>
           {categories.map((c) => (
             <button
@@ -148,11 +158,15 @@ export function MakersMarketplace({
               aria-current={category === c ? 'true' : undefined}
               className={`${MONO_LINK} ${
                 category === c
-                  ? 'text-[var(--color-clay)]'
+                  ? 'text-[var(--color-charcoal)]'
                   : 'text-[var(--color-aged-oak)] hover:text-[var(--color-mocha)]'
               }`}
             >
-              {c}
+              <span
+                className={`${MONO_SCORE}${category === c ? ' da-score-on' : ''}`}
+              >
+                {c}
+              </span>
             </button>
           ))}
         </p>

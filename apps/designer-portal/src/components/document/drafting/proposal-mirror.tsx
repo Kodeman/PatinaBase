@@ -273,16 +273,19 @@ function TierInstrument({
                 onClick={() => choose(t)}
                 disabled={update.isPending}
                 aria-pressed={active}
-                className="min-h-11 min-w-11 rounded-[3px] border px-2 py-0.5 font-mono text-[9px] uppercase tracking-[0.06em] transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-clay)] disabled:opacity-50"
-                style={{
-                  color: active ? 'var(--color-charcoal)' : 'var(--text-muted)',
-                  borderColor: active
-                    ? 'var(--color-clay)'
-                    : 'var(--doc-ink-border)',
-                  background: active ? 'rgba(196,165,123,0.12)' : 'transparent',
-                }}
+                className={`group inline-flex min-h-11 min-w-11 items-center justify-center px-2 py-0.5 font-mono text-[9px] uppercase tracking-[0.06em] transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-clay)] disabled:opacity-50 motion-reduce:transition-none ${
+                  active
+                    ? 'text-[var(--color-charcoal)]'
+                    : 'text-[var(--color-aged-oak)] hover:text-[var(--color-charcoal)]'
+                }`}
               >
-                {TIER_LABEL[t]}
+                <span
+                  className={`da-score-hover group-hover:after:scale-x-100 group-focus-visible:after:scale-x-100 ${
+                    active ? 'da-score-on' : ''
+                  }`}
+                >
+                  {TIER_LABEL[t]}
+                </span>
               </button>
             );
           },

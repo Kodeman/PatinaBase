@@ -535,6 +535,76 @@
   }
 }
 
+/* Scored Ink ad-hoc kit (I107 sweep) — score mechanics for non-DocumentAction controls.
+   DocumentAction owns the full grammar above; everywhere else a control still needs
+   to draw a hairline score under a hover or hold one steady when selected, and an
+   icon-only glyph still needs to darken without ever growing a box. Typography stays
+   whatever the call site already sets — this kit carries only the score and the
+   glyph state, nothing else. Ad-hoc controls take the standard 2px clay
+   focus-visible outline; the proofreader caret above stays DocumentAction-only. */
+
+/* ── da-score-hover · a hairline that draws in under a hover or a keyboard focus ──
+   the same underline the tertiary variant keeps above, on the same clock: unscored
+   until asked, scaleX(0) to scaleX(1), left-anchored so it opens like a rule drawn
+   under a word. ::after never touches layout — it's absolute, out of flow. ────── */
+.da-score-hover {
+  position: relative;
+}
+.da-score-hover::after {
+  content: '';
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: -3px;
+  height: 1px;
+  background-color: var(--color-aged-oak);
+  transform-origin: left center;
+  transform: scaleX(0);
+  transition: transform 300ms var(--ease-editorial);
+}
+.da-score-hover:hover::after,
+.da-score-hover:focus-visible::after {
+  transform: scaleX(1);
+}
+
+/* ── da-score-on · the same rule held down, in charcoal — for a picker or toggle
+   that's already selected. Same specificity as the hover state above, declared
+   after it, so a selected control reads scored even with the pointer elsewhere;
+   combine as className="da-score-hover da-score-on". ───────────────────────── */
+.da-score-on::after {
+  transform: scaleX(1);
+  background-color: var(--color-charcoal);
+}
+
+/* ── da-glyph-btn · an icon-only control (×, +) with no word to score — just a
+   glyph that darkens on request. No fill, no border, no shadow; the 44px target
+   is the element's own box, kept invisible until focus asks for it. ─────────── */
+.da-glyph-btn {
+  background: none;
+  border: 0;
+  color: var(--color-aged-oak);
+  cursor: pointer;
+  transition: color 150ms linear;
+}
+.da-glyph-btn:hover,
+.da-glyph-btn:focus-visible {
+  color: var(--color-charcoal);
+}
+.da-glyph-btn:focus-visible {
+  outline: 2px solid var(--color-clay);
+  outline-offset: 2px;
+}
+
+/* ── stilled · the same room by the other door — draws land instant, no ease ── */
+@media (prefers-reduced-motion: reduce) {
+  .da-score-hover::after {
+    transition: none;
+  }
+  .da-glyph-btn {
+    transition: none;
+  }
+}
+
 /* Typography: now provided by @patina/design-system/styles/typography.css.
    Font variable mappings set on body below in @layer base. */
 

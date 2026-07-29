@@ -270,13 +270,20 @@ export function AccountBand({
           <p className="mt-1.5 text-[11px] text-[var(--color-charcoal)]">
             Design fee {fmtUsd(data.designFeeCents)} · est. commissions{' '}
             {fmtUsd(data.estCommissionCents)}
-            <button
-              type="button"
+            {/* I107 — the clay underline is retired: a tertiary word takes its
+                rule on hover, and the ↗ rides outside the score as a glyph, so
+                the rule marks the word and not the doorway. */}
+            <DocumentAction
+              actionKey="open-accounts-ledger"
+              surfaceKey="accounts"
+              regionKey="designer-earnings"
+              variant="tertiary"
+              trailing="↗"
               onClick={() => openLedger('accounts')}
-              className="ml-2 min-h-11 rounded-[3px] font-mono text-[8.5px] uppercase tracking-[0.05em] text-[var(--color-clay)] underline underline-offset-4 hover:opacity-80 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-clay)]"
+              className="ml-2"
             >
-              → Accounts ↗
-            </button>
+              → Accounts
+            </DocumentAction>
           </p>
 
           {/* Payment milestones — inline trigger config (R26/R23). */}

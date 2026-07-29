@@ -1213,11 +1213,18 @@ function Colophon({ p }: { p: PieceProduct }) {
 
   return (
     <section className="mt-10 border-t border-[var(--doc-ink-border)] pt-5">
+      {/* The imprint opens on a word, not a plate (I107): the score draws in
+          under the label on hover/focus and stays down, in charcoal, for as
+          long as the colophon is open. The 44px target is padding only. */}
       <button
         type="button"
         onClick={() => setOpen((v) => !v)}
         aria-expanded={open}
-        className="flex min-h-11 min-w-11 items-center gap-2 font-mono text-[0.5rem] font-semibold uppercase tracking-[0.1em] text-[var(--color-aged-oak)] hover:text-[var(--color-mocha)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-clay)]"
+        className={`flex min-h-11 min-w-11 items-center gap-2 font-mono text-[0.5rem] font-semibold uppercase tracking-[0.1em] transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-clay)] ${
+          open
+            ? 'text-[var(--color-charcoal)]'
+            : 'text-[var(--color-aged-oak)] hover:text-[var(--color-charcoal)]'
+        }`}
       >
         <span
           aria-hidden
@@ -1225,7 +1232,9 @@ function Colophon({ p }: { p: PieceProduct }) {
         >
           ▸
         </span>
-        Colophon · provenance &amp; lifecycle
+        <span className={`da-score-hover ${open ? 'da-score-on' : ''}`}>
+          Colophon · provenance &amp; lifecycle
+        </span>
       </button>
       {open && (
         <dl className="mt-3 grid grid-cols-2 gap-x-8 gap-y-2 sm:grid-cols-3">

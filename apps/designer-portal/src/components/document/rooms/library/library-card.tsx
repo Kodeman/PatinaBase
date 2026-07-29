@@ -245,19 +245,27 @@ function InlineQuickTags({
       {isLoading ? (
         <StrataSweep size="sm" label="Loading styles" />
       ) : (
+        /* Character is chosen by scoring a word, not by filling a pill (I107):
+           the picked style takes charcoal ink and a steady rule, the rest sit in
+           aged oak and only draw their rule when asked. Each keeps its 44px box
+           as invisible padding. */
         <div className="flex flex-wrap gap-1.5">
           {styles.map((s) => (
             <button
               key={s.id}
               type="button"
               onClick={() => setPicked((p) => (p === s.id ? null : s.id))}
-              className={`min-h-11 min-w-11 rounded-[14px] border px-2.5 py-1 text-[0.66rem] transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-clay)] ${
+              className={`inline-flex min-h-11 min-w-11 items-center justify-center px-2.5 py-1 text-[0.66rem] transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-clay)] ${
                 picked === s.id
-                  ? 'border-[var(--color-clay)] bg-[var(--color-clay)] text-white'
-                  : 'border-[var(--color-pearl)] bg-white text-[var(--text-body)] hover:border-[var(--color-clay)]'
+                  ? 'text-[var(--color-charcoal)]'
+                  : 'text-[var(--color-aged-oak)] hover:text-[var(--color-charcoal)]'
               }`}
             >
-              {s.name}
+              <span
+                className={`da-score-hover ${picked === s.id ? 'da-score-on' : ''}`}
+              >
+                {s.name}
+              </span>
             </button>
           ))}
         </div>

@@ -447,7 +447,7 @@ export function ComposingPage() {
                     onClick={() =>
                       setImages((prev) => prev.filter((_, j) => j !== i))
                     }
-                    className="absolute right-0 top-0 inline-flex min-h-11 min-w-11 items-center justify-center bg-[rgba(44,41,38,0.6)] px-1 font-mono text-[9px] text-white focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-[var(--color-clay)]"
+                    className="da-glyph-btn absolute right-0 top-0 inline-flex min-h-11 min-w-11 items-center justify-center px-1 font-mono text-[9px]"
                   >
                     ✕
                   </button>
@@ -517,13 +517,18 @@ export function ComposingPage() {
                     key={s.id}
                     type="button"
                     onClick={() => toggleStyle(s.id)}
-                    className={`min-h-11 min-w-11 rounded-[16px] border px-2.5 py-1 text-[0.68rem] transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-clay)] ${
+                    className={`min-h-11 min-w-11 px-2.5 py-1 text-[0.68rem] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-clay)] ${
                       on
-                        ? 'border-[var(--color-clay)] bg-[var(--color-clay)] text-white'
-                        : 'border-[var(--color-pearl)] bg-[var(--doc-paper)] text-[var(--color-mocha)] hover:border-[var(--color-clay)]'
+                        ? 'text-[var(--color-charcoal)]'
+                        : 'text-[var(--color-aged-oak)]'
                     }`}
                   >
-                    {s.name}
+                    {/* taught = the word ruled under, never a filled pill (I107) */}
+                    <span
+                      className={`da-score-hover${on ? ' da-score-on' : ''}`}
+                    >
+                      {s.name}
+                    </span>
                   </button>
                 );
               })}

@@ -223,9 +223,11 @@ export function MarginRail({
             type="button"
             aria-expanded={draftsOpen}
             onClick={() => setDraftsOpen((v) => !v)}
-            className="mb-1 min-h-11 min-w-11 font-mono text-[9px] font-semibold uppercase tracking-[0.08em] text-[var(--text-muted)] hover:text-[var(--color-clay)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-clay)]"
+            className="group mb-1 inline-flex min-h-11 min-w-11 items-center font-mono text-[9px] font-semibold uppercase tracking-[0.08em] text-[var(--text-muted)] transition-colors hover:text-[var(--color-charcoal)] focus-visible:text-[var(--color-charcoal)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-clay)] motion-reduce:transition-none"
           >
-            Drafts · {draftItems.length} {draftsOpen ? '↑' : '↓'}
+            <span className="da-score-hover group-hover:after:scale-x-100 group-focus-visible:after:scale-x-100">
+              Drafts · {draftItems.length} {draftsOpen ? '↑' : '↓'}
+            </span>
           </button>
           {draftsOpen && (
             <div className="flex flex-col gap-1">
@@ -234,7 +236,7 @@ export function MarginRail({
                   key={d.id}
                   type="button"
                   onClick={() => setComposer({ mode: 'edit', item: d })}
-                  className="flex min-h-11 min-w-11 items-center gap-2 rounded-[5px] border border-dashed border-[var(--color-pearl)] bg-[var(--doc-paper)] px-2 py-1.5 text-left text-[11px] text-[var(--color-charcoal)] hover:border-[var(--color-clay)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-clay)]"
+                  className="group flex min-h-11 min-w-11 items-center gap-2 px-2 py-1.5 text-left text-[11px] text-[var(--color-charcoal)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-clay)]"
                 >
                   <span
                     className="inline-block rounded-[2px] border px-1 py-px font-mono text-[7.5px] font-semibold uppercase tracking-[0.04em] text-[var(--color-aged-oak)]"
@@ -245,7 +247,7 @@ export function MarginRail({
                   <span className="flex-1 truncate">
                     {d.title || 'Untitled draft'}
                   </span>
-                  <span className="font-mono text-[8px] uppercase tracking-[0.05em] text-[var(--text-muted)]">
+                  <span className="da-score-hover font-mono text-[8px] uppercase tracking-[0.05em] text-[var(--text-muted)] transition-colors group-hover:text-[var(--color-charcoal)] group-hover:after:scale-x-100 group-focus-visible:text-[var(--color-charcoal)] group-focus-visible:after:scale-x-100 motion-reduce:transition-none">
                     edit
                   </span>
                 </button>
@@ -327,9 +329,11 @@ export function MarginRail({
             type="button"
             aria-expanded={settledOpen}
             onClick={() => setSettledOpen((v) => !v)}
-            className="mb-1.5 min-h-11 min-w-11 font-mono text-[9px] font-semibold uppercase tracking-[0.08em] text-[var(--text-muted)] hover:text-[var(--color-clay)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-clay)]"
+            className="group mb-1.5 inline-flex min-h-11 min-w-11 items-center font-mono text-[9px] font-semibold uppercase tracking-[0.08em] text-[var(--text-muted)] transition-colors hover:text-[var(--color-charcoal)] focus-visible:text-[var(--color-charcoal)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-clay)] motion-reduce:transition-none"
           >
-            Settled · {settled.length} {settledOpen ? '↑' : '↓'}
+            <span className="da-score-hover group-hover:after:scale-x-100 group-focus-visible:after:scale-x-100">
+              Settled · {settled.length} {settledOpen ? '↑' : '↓'}
+            </span>
           </button>
           {settledOpen && settled.map(renderItem)}
         </div>

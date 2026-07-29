@@ -6609,3 +6609,33 @@ implementation. Supersedes I91’s visual prescription while keeping its protect
   separately so this ruling stays a primitive change.
 
 *Entries add: I107 · last id = I107*
+
+### I108 — Scored Ink sweep: the ad-hoc controls fall in line (2026-07-29)
+
+Follow-up sweep against I107’s grammar, executed off the audit in
+`docs/design/the-document/scored-ink-adhoc-punchlist-2026-07-29.md`.
+
+- The 38 class-A controls — Desk/doc/[id]’s direct sections, every walk-in
+  Room’s shared chrome via `room-shell.tsx`, People, the Library ask results,
+  and Coordination’s `court-bar.tsx` — are restyled to the I107 grammar. Where
+  a control was a real action it now renders through `DocumentAction` directly.
+  Where it was a bespoke picker, toggle, or icon-only glyph — chip pickers,
+  dashed-border rows, segmented kind-pickers, remove/dismiss glyphs, back-links,
+  disclosure toggles — it keeps its own markup but sheds the border/fill box
+  for a bare scored word or glyph, an invisible ≥44px hit target, and the new
+  ad-hoc score kit added to globals.css so it inks and scores like a native
+  DocumentAction without becoming one.
+- The 34 class-B overlay/sheet controls — everything architecturally mounted
+  inside `DocSheet`, `DocPaperSheet`, or `RoomSheet` (orders-book-vendors,
+  orders-ledger, item-composer, the overlay sheets, the feedback/account/
+  touchpoint sheets, the D13 mobile bottom sheets, and the rest of the B list)
+  — are deliberately deferred. Overlays are their own visual layer, laid over
+  a document rather than inside its typography, so they don’t carry the same
+  clash; folding them in now would widen a primitive sweep back into a design
+  pass.
+- One open ruling, left unresolved: `people/directory/ask-bar.tsx:78`’s filled
+  clay-circle “send” button is left as-is. It may be intentionally iconic — the
+  People-room analog of Library’s ask send button — rather than a plain clash
+  to fix on sight. Needs a design ruling before it’s touched either way.
+
+*Entries add: I108 · last id = I108*

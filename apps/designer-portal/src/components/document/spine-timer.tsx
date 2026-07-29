@@ -12,8 +12,13 @@ import { useDocumentTime } from '@/hooks/document-time-provider';
 import { ACTIVITIES, fmtElapsedQuiet } from '@/lib/document/time-derivation';
 import { DocumentAction, DocumentActionRow } from './document-action';
 
+/* The Scored Ink (I107) on a bespoke control: Pause/Resume stay hand-rolled —
+   they drive a live clock, not a document act — but they lose the box. The
+   button keeps its 44px target as invisible padding; the word inside carries
+   the hairline (.da-score-hover), and .da-glyph-btn supplies the bare-control
+   base: no fill, no border, aged-oak turning charcoal, clay focus ring. */
 const T_BTN =
-  'min-h-11 min-w-11 rounded-[3px] border border-[var(--color-pearl)] px-2 py-[3px] font-mono text-[8.5px] uppercase tracking-[0.06em] text-[var(--text-muted)] hover:border-[var(--color-clay)] hover:text-[var(--color-clay)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-clay)] disabled:opacity-50';
+  'da-glyph-btn inline-flex min-h-11 min-w-11 items-center justify-center font-mono text-[8.5px] uppercase tracking-[0.06em] disabled:opacity-50';
 
 export function SpineTimer() {
   const { heldProjectId, running, paused, elapsedSeconds, manualLog } =
@@ -61,12 +66,12 @@ export function SpineTimer() {
       <div className="flex flex-wrap gap-1.5">
         {running && (
           <button type="button" className={T_BTN} onClick={pause}>
-            Pause
+            <span className="da-score-hover block">Pause</span>
           </button>
         )}
         {paused && (
           <button type="button" className={T_BTN} onClick={resume}>
-            Resume
+            <span className="da-score-hover block">Resume</span>
           </button>
         )}
         <DocumentAction

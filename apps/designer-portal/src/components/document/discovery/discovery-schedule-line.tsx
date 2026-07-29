@@ -211,7 +211,7 @@ export function DiscoveryScheduleLine({
                       type="button"
                       onClick={() => removeSlot(s.key)}
                       aria-label="Remove this time"
-                      className="inline-flex min-h-11 min-w-11 shrink-0 items-center justify-center font-mono text-[11px] text-[var(--text-muted)] hover:text-[var(--color-terracotta)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-clay)]"
+                      className="da-glyph-btn inline-flex min-h-11 min-w-11 shrink-0 items-center justify-center font-mono text-[11px]"
                     >
                       ×
                     </button>
@@ -266,12 +266,18 @@ export function DiscoveryScheduleLine({
       {ceremony.thread_id && (
         <p className="mt-2 border-t border-dashed border-[var(--color-pearl)] pt-2 font-mono text-[9.5px] uppercase tracking-[0.08em] text-[var(--text-muted)]">
           The introduction ·{' '}
-          <a
+          {/* a real navigation, so it takes the action grammar: an unscored
+              whisper until asked, and the rule draws in under the word (I107) */}
+          <DocumentAction
+            actionKey="view-intro-thread"
+            surfaceKey="open-document"
+            regionKey="discovery-intro"
+            variant="tertiary"
             href={`/people?thread=${ceremony.thread_id}`}
-            className="inline-flex min-h-11 min-w-11 items-center text-[var(--color-mocha)] underline-offset-2 hover:underline focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-clay)]"
+            trailing="→"
           >
-            view the thread →
-          </a>
+            view the thread
+          </DocumentAction>
         </p>
       )}
     </div>

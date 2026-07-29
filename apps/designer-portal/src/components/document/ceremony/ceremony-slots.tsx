@@ -94,11 +94,13 @@ export function CeremonySlots({
           <span className="shrink-0 font-mono text-[9.5px] uppercase tracking-[0.1em] text-[var(--text-muted)]">
             {slot.duration_minutes} min
           </span>
+          {/* A bare glyph that darkens on request (I107) — no plate, no rounded
+              chrome; the 44px box stays, invisible, as the target. */}
           <button
             type="button"
             onClick={() => removeSlot(slot.id)}
             aria-label="Remove this time"
-            className="inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-[3px] font-mono text-[12px] leading-none text-[var(--text-muted)] hover:text-[var(--color-terracotta)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-clay)]"
+            className="da-glyph-btn inline-flex h-11 w-11 shrink-0 items-center justify-center font-mono text-[12px] leading-none"
           >
             ×
           </button>
