@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import dataclasses
 import hashlib
 import io
 import json
@@ -23,6 +24,7 @@ from patina_scan_worker.refine_adapter import (
     COLMAP_LOG_TAIL_BYTES,
     COLMAP_TARGET_VERSION,
     LEASE_COMPLETION_RESERVE_S,
+    MIN_CONNECTED_FRACTION,
     REFINE_STAGE_ENGINE_BUDGET_S,
     AdapterError,
     PinholeIntrinsics,
@@ -287,6 +289,286 @@ def test_improved_reprojection_and_verified_loop_consistency_support_refinement(
     # Internal geometric improvement still does not certify absolute accuracy.
     assert not verdict.absolute_accuracy_certified
     assert verdict.code is None
+
+
+# ===========================================================================
+# R123: THE TWO LOOP COMPARABLES ARE ADVISORY
+#
+# Every case below is CONSTRUCTED, and the base is not an invented shape: it is
+# the walkB / room-1 capture exactly as I103 measured it and as I105 re-measured
+# it bit-identically after R122 changed the candidate policy.  Reprojection
+# improves 32.94% while the loop rotation drifts UP 0.31% over four verified
+# edges.  That evidence was refused by this function on every run this program
+# ever made of it, and it is the evidence R123 ruled on.  Anchoring the battery
+# there means a test that passes against an unmodified subject is impossible for
+# the first case: before the edit, `_r123_evidence()` refused.
+# ===========================================================================
+
+
+def _r123_evidence(**overrides: object) -> RefinementEvidence:
+    base = RefinementEvidence(
+        input_images=49,
+        registered_images_before=49,
+        registered_images_after=49,
+        common_observations=42_587,
+        common_observation_set_sha256="a" * 64,
+        reprojection_rmse_px_before=2.015458,
+        reprojection_rmse_px_after=1.351599,
+        verified_loop_edges=4,
+        verified_loop_set_sha256="b" * 64,
+        loop_rotation_rmse_deg_before=4.915408,
+        loop_rotation_rmse_deg_after=4.930533,
+        loop_translation_direction_rmse_deg_before=17.165228,
+        loop_translation_direction_rmse_deg_after=17.080197,
+    )
+    return dataclasses.replace(base, **overrides)  # type: ignore[arg-type]
+
+
+def test_a_loop_rotation_regression_alone_no_longer_refuses():
+    """The real walkB numbers, which this function refused before R123.
+
+    Nothing else in this evidence is wrong: reprojection falls 32.94% on one
+    fixed track set, coverage is 1.0000 before and after, and the loop
+    translation improves.  The single thing that moved the wrong way is a
+    quantity bundle adjustment does not optimise.
+    """
+
+    verdict = evaluate_refinement_evidence(_r123_evidence())
+
+    assert verdict.refinement_evidenced is True
+    assert verdict.code is None
+    assert verdict.reason == (
+        "internal_geometric_refinement_evidenced_absolute_accuracy_unproven"
+    )
+    assert verdict.absolute_accuracy_certified is False
+
+
+def test_a_loop_translation_regression_alone_no_longer_refuses():
+    """The other half of the removed pair, isolated: only translation moves up."""
+
+    verdict = evaluate_refinement_evidence(
+        _r123_evidence(
+            loop_rotation_rmse_deg_after=4.900000,
+            loop_translation_direction_rmse_deg_after=17.400000,
+        )
+    )
+
+    assert verdict.refinement_evidenced is True
+    assert verdict.code is None
+
+
+def test_both_loop_comparables_regressing_together_no_longer_refuse():
+    """The pair was removed, not one of it.
+
+    walkC (the deliberate no-revisit sweep) produced exactly this shape: both
+    loop comparables worse, reprojection 32.78% better.
+    """
+
+    verdict = evaluate_refinement_evidence(
+        _r123_evidence(
+            loop_rotation_rmse_deg_after=5.018,
+            loop_translation_direction_rmse_deg_after=17.900000,
+        )
+    )
+
+    assert verdict.refinement_evidenced is True
+    assert verdict.code is None
+
+
+def test_a_reprojection_regression_still_refuses():
+    """The load-bearing gate, with BOTH loop comparables improving.
+
+    If the removal had been done by widening the refusal set's tolerance rather
+    than by deleting two of its clauses, this is where it would show.
+    """
+
+    verdict = evaluate_refinement_evidence(
+        _r123_evidence(
+            reprojection_rmse_px_after=2.500000,
+            loop_rotation_rmse_deg_after=1.000000,
+            loop_translation_direction_rmse_deg_after=2.000000,
+        )
+    )
+
+    assert verdict.refinement_evidenced is False
+    assert verdict.code == "REFINE_EVIDENCE_REGRESSION"
+    assert verdict.reason == "comparable_geometric_evidence_regressed"
+
+
+def test_registration_coverage_below_the_floor_still_refuses():
+    """The floor, isolated: coverage does not REGRESS here, it is simply low.
+
+    30/49 = 0.6122, under ``MIN_CONNECTED_FRACTION``, with before and after
+    equal so the regression clause cannot be what fires.
+    """
+
+    verdict = evaluate_refinement_evidence(
+        _r123_evidence(registered_images_before=30, registered_images_after=30)
+    )
+
+    assert verdict.refinement_evidenced is False
+    assert verdict.code == "REFINE_EVIDENCE_REGRESSION"
+    assert verdict.reason == "registration_coverage_regressed_or_below_floor"
+    assert verdict.registration_coverage_after == pytest.approx(30 / 49)
+
+
+def test_registration_coverage_regressing_above_the_floor_still_refuses():
+    """The regression check, isolated: 45/49 = 0.9184 clears the floor easily
+    and is still refused, because it is fewer registered images than before."""
+
+    verdict = evaluate_refinement_evidence(
+        _r123_evidence(registered_images_before=49, registered_images_after=45)
+    )
+
+    assert verdict.refinement_evidenced is False
+    assert verdict.code == "REFINE_EVIDENCE_REGRESSION"
+    assert verdict.reason == "registration_coverage_regressed_or_below_floor"
+    assert verdict.registration_coverage_after > MIN_CONNECTED_FRACTION
+
+
+def test_an_external_error_regression_still_refuses_and_its_mirror_passes():
+    """The external error is an ABSOLUTE-accuracy measure from an independent
+    source, so R123 left it a veto.  The mirrored pair proves the refusal comes
+    from the DIRECTION and not merely from external evidence being present."""
+
+    common = {
+        "external_evidence_kind": "tape_measure",
+        "external_evidence_ref": "p1-certificate-95266be1",
+    }
+    regressed = evaluate_refinement_evidence(
+        _r123_evidence(
+            external_error_m_before=0.020,
+            external_error_m_after=0.031,
+            **common,
+        )
+    )
+    assert regressed.refinement_evidenced is False
+    assert regressed.code == "REFINE_EVIDENCE_REGRESSION"
+    assert regressed.reason == "comparable_geometric_evidence_regressed"
+
+    improved = evaluate_refinement_evidence(
+        _r123_evidence(
+            external_error_m_before=0.031,
+            external_error_m_after=0.020,
+            **common,
+        )
+    )
+    assert improved.refinement_evidenced is True
+    # ... and still not certified: an improving tape residual is not a ratified
+    # absolute-accuracy threshold.
+    assert improved.absolute_accuracy_certified is False
+
+
+def test_a_run_with_no_verified_loop_evidence_still_refuses():
+    """UNTOUCHED BY R123 and asserted so.
+
+    "The loop evidence disagrees" and "there is no loop evidence" are different
+    conditions.  R123 removed a veto on a measurement; it did not remove the
+    requirement that the measurement exist.
+    """
+
+    verdict = evaluate_refinement_evidence(_r123_evidence(verified_loop_edges=0))
+
+    assert verdict.refinement_evidenced is False
+    assert verdict.code == "REFINE_LOW_OVERLAP"
+    assert verdict.reason == "no_verified_loop_evidence"
+
+
+def test_a_passing_verdict_reports_the_loop_disagreement_it_did_not_refuse():
+    """ADVISORY, NOT DELETED.
+
+    This is the property that distinguishes R123 from simply dropping the loop
+    comparables: the run passes, and the exact drift that used to refuse it is
+    legible on the verdict itself, with its direction, without opening an
+    artifact.  Both derived percentages are checked against the numbers, so a
+    renderer that printed the wrong pair or lost a sign reddens here.
+    """
+
+    verdict = evaluate_refinement_evidence(_r123_evidence())
+
+    assert verdict.refinement_evidenced is True
+    advisory = verdict.loop_consistency_advisory
+    assert advisory.startswith("advisory_not_gating_r123: ")
+    # (4.930533 - 4.915408) / 4.915408 = +0.3077%
+    assert "loop_rotation_rmse_deg 4.915408->4.930533 (+0.31%)" in advisory
+    # (17.080197 - 17.165228) / 17.165228 = -0.4954%
+    assert (
+        "loop_translation_direction_rmse_deg 17.165228->17.080197 (-0.50%)"
+        in advisory
+    )
+    assert "verified_loop_edges 4" in advisory
+
+
+def test_every_verdict_carries_the_advisory_including_the_refusals():
+    """A field that were only populated on the path the author was looking at
+    would be worse than no field, so all five exits are walked."""
+
+    cases = (
+        _r123_evidence(),
+        _r123_evidence(reprojection_rmse_px_after=2.5),
+        _r123_evidence(registered_images_after=30),
+        _r123_evidence(verified_loop_edges=0),
+        # Everything bit-identical before and after: the measurable-improvement
+        # floor, which R123 left byte-identical.
+        _r123_evidence(
+            reprojection_rmse_px_after=2.015458,
+            loop_rotation_rmse_deg_after=4.915408,
+            loop_translation_direction_rmse_deg_after=17.165228,
+        ),
+    )
+    reasons = set()
+    for evidence in cases:
+        verdict = evaluate_refinement_evidence(evidence)
+        reasons.add(verdict.reason)
+        assert verdict.loop_consistency_advisory.startswith(
+            "advisory_not_gating_r123: "
+        )
+        assert "loop_rotation_rmse_deg" in verdict.loop_consistency_advisory
+        assert "loop_translation_direction_rmse_deg" in verdict.loop_consistency_advisory
+        assert "verified_loop_edges" in verdict.loop_consistency_advisory
+    # Five distinct exits, so no case is quietly duplicating another.
+    assert reasons == {
+        "internal_geometric_refinement_evidenced_absolute_accuracy_unproven",
+        "comparable_geometric_evidence_regressed",
+        "registration_coverage_regressed_or_below_floor",
+        "no_verified_loop_evidence",
+        "unchanged_or_below_measurable_improvement_floor",
+    }
+
+
+def test_the_advisory_says_n_a_rather_than_inventing_a_percentage():
+    """A zero baseline has no percentage, and a renderer that divided anyway
+    would emit inf or a ZeroDivisionError inside a verdict."""
+
+    verdict = evaluate_refinement_evidence(
+        _r123_evidence(
+            loop_rotation_rmse_deg_before=0.0,
+            loop_rotation_rmse_deg_after=0.0,
+        )
+    )
+
+    assert verdict.refinement_evidenced is True
+    assert "loop_rotation_rmse_deg 0.000000->0.000000 (n/a)" in (
+        verdict.loop_consistency_advisory
+    )
+    # The other comparable still renders its real direction.
+    assert "(-0.50%)" in verdict.loop_consistency_advisory
+
+
+def test_the_loop_metrics_are_still_validated_after_r123():
+    """Advisory is not unvalidated.  A non-finite or negative loop value, or a
+    half-supplied external pair, is still a hard AdapterError -- the numbers are
+    published, so they still have to be numbers."""
+
+    for broken in (
+        {"loop_rotation_rmse_deg_after": float("nan")},
+        {"loop_rotation_rmse_deg_before": float("inf")},
+        {"loop_translation_direction_rmse_deg_after": -0.1},
+        {"loop_translation_direction_rmse_deg_before": float("nan")},
+    ):
+        with pytest.raises(AdapterError) as raised:
+            evaluate_refinement_evidence(_r123_evidence(**broken))
+        assert "finite and non-negative" in str(raised.value)
 
 
 def test_sim3_rebases_camera_orientation_and_preserves_projection_rays():

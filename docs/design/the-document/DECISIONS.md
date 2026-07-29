@@ -6364,3 +6364,178 @@ stay as built. `PRIMARY_EXECUTION_QUALIFIED` and
 relaxed gate is not a qualified path.
 
 *Entries add: R123 · last id = R123*
+
+### I106 · Field Capture P2 · the loop comparables become advisory; three of three real captures pass and publish — 2026-07-29
+
+R123 is built. **`evaluate_refinement_evidence` changed for the first time since
+it was written** — it had been byte-identical through R119, R121 and R122 on
+purpose, so that this ruling could be made on evidence rather than convenience.
+Two clauses left the refusal set. Nothing else about the rule moved: no
+tolerance was introduced, no threshold was invented, no floor was widened.
+
+**THE EDIT, IN FULL.** The `regressions` tuple went from four members to two:
+
+```
+    regressions = (
+        evidence.reprojection_rmse_px_after > evidence.reprojection_rmse_px_before,
+-       evidence.loop_rotation_rmse_deg_after > evidence.loop_rotation_rmse_deg_before,
+-       evidence.loop_translation_direction_rmse_deg_after
+-       > evidence.loop_translation_direction_rmse_deg_before,
+        external_pair[0] is not None and external_pair[1] > external_pair[0],
+    )
+```
+
+Everything else still gates and was checked by construction rather than by
+inspection: reprojection RMSE, the registration-coverage floor
+(`MIN_CONNECTED_FRACTION`), the coverage regression check, the optional external
+error, and `verified_loop_edges < 1`. The last of those is deliberately
+untouched — "the loop evidence disagrees" and "there is no loop evidence" are
+different conditions, and R123 removed a veto on a MEASUREMENT, not the
+requirement that the measurement exist. The measurable-improvement floor is also
+byte-identical, including its two loop terms; dropping them from there would
+newly refuse runs the ruling did not ask to refuse.
+
+**THE REASONING IS IN THE CODE, NOT ONLY IN THE LOG.** The refusal set now
+carries the argument: bundle adjustment minimises reprojection over tracks and
+never touches a two-view geometry, so after refinement the trajectory has moved
+to the reprojection optimum while COLMAP's image-only relative rotations stand
+exactly where matching left them. On the 0.25-0.5 m baselines these captures
+produce — where two-view geometry is weakest — a small positive drift is the
+EXPECTED behaviour of a successful refinement. The comment also states what is
+absent and why: no magnitude ceiling, no edge-count floor, and global
+consistency unguarded until an absolute bound can be derived honestly.
+
+**ADVISORY MEANS REPORTED, AND THAT NEEDED NEW SURFACE.** Before R123 a PASS
+implied "neither loop comparable regressed", so a passing verdict said nothing
+about them and did not need to. That implication is gone. `Refinement
+EvidenceVerdict` gains one field, `loop_consistency_advisory`, set on ALL FIVE
+exits, rendering both pairs with their direction and the verified edge count:
+
+```
+advisory_not_gating_r123: loop_rotation_rmse_deg 12.694556->12.721874 (+0.22%);
+loop_translation_direction_rmse_deg 14.824698->14.659653 (-1.11%);
+verified_loop_edges 90
+```
+
+It reaches three published surfaces — the evidence record
+(`refinement-evidence-v1.json`), the run manifest's `refinementEvidence` block,
+and the lifecycle run summary — and the publication validator checks it like
+everything else published: the manifest's copy must equal the verdict's, the key
+set is exact, and a blank or non-string advisory is refused. **No branch anywhere
+reads the string.** It exists to be read.
+
+**THE RE-RUN. Same host, same three bundles, same discipline as I105 — a
+root-owned release at `/opt/patina/scan-pipeline-r123` beside the live venv,
+`patina-scan-worker` never touched (`NRestarts=5`, unchanged, from the
+2026-07-29 01:04 host network blip and not from this work).**
+
+```
+                         BEFORE (I105, R122 policy)                AFTER (R123 rule)
+capture          frames  edges  reproj   looprot  looptrn  verdict edges  reproj   looprot  looptrn  verdict
+room 2, normal   100     90     -28.89%  +0.22%   -1.11%   REFUSED 90     -28.89%  +0.22%   -1.11%   PASS
+room 1           49       4     -32.94%  +0.31%   -0.50%   REFUSED  4     -32.94%  +0.31%   -0.50%   PASS
+single sweep     31      14     -32.78%  +2.10%   -1.03%   REFUSED 14     -32.78%  +2.10%   -1.03%   PASS
+```
+
+**EVERY MEASURED DIGIT IS IDENTICAL TO I105's.** Reprojection, both loop
+comparables, coverage (1.000 before and after on all three), observation counts,
+verified edges, and the candidate graph (walkA 1_236 pairs / 291 loop candidates
+/ 90 edges) all reproduce exactly. The evidence did not change; only the rule's
+reading of it did. That is the cleanest possible statement of what this ruling
+was: nothing about the reconstructions got better.
+
+**ALL THREE PUBLISHED, AND WALKB AND WALKC ARE THE FIRST OF THEIR KIND.** Only
+one run in this program's history had ever published (I104's, before R122
+re-measured it into a refusal). Each of the three now writes eleven artifacts
+under `.../v1/refine/`, and each published manifest carries its own loop
+disagreement in words. Room 1's says `+0.31%` over four edges; the sweep's says
+`+2.10%` over fourteen with a 39.3-degree translation disagreement — by far the
+worst of the three, which is what a pure sweep with no revisit should look like.
+**The control still looks like a control; it is simply no longer refused for
+looking like one.** Nothing was written to Storage or to any table.
+
+**CONSTRUCTED TESTS, ANCHORED ON REAL EVIDENCE.** The battery's base is the
+walkB capture exactly as I103 measured it and I105 re-measured it bit-identically
+— the evidence this function refused on every run it ever made of it — so the
+first case cannot pass against an unmodified subject: before the edit,
+`_r123_evidence()` refused. Seventeen new tests. A loop-rotation regression
+alone now passes; a loop-translation regression alone passes; both together
+pass. A reprojection regression still refuses WITH BOTH LOOP COMPARABLES
+IMPROVING, which is where a tolerance-widening non-fix would have shown. The
+coverage floor and the coverage regression check are refused separately, each
+isolated so the other cannot be what fires (30/49 with before equal to after;
+45/49 which clears the floor and is still refused). An external-error regression
+refuses and its mirror passes, so the refusal is shown to come from the
+direction rather than from external evidence merely being present. A run with
+zero verified loop edges still refuses. And the advisory property: a PASSING
+verdict carries `4.915408->4.930533 (+0.31%)`, both derived percentages are
+checked against their numbers, all five exits are walked for the advisory, the
+zero-baseline case renders `n/a` instead of dividing, and the loop metrics are
+still hard `AdapterError`s when non-finite or negative.
+
+**MUTATION SWEEP AGAINST THE FULL SUITE, control asserted 0 red before any count
+was read.** Nineteen clauses: each removed loop clause put BACK into the refusal
+set; the reprojection clause deleted; the external clause deleted; the coverage
+floor removed; the coverage regression check removed; the no-loop-evidence
+return removed; the loop metrics dropped from validation; the advisory reduced
+to its prefix, sign-inverted, stripped of its translation pair, stripped of its
+edge count, and detached from the PASS verdict; the zero-baseline guard removed;
+and the advisory dropped from each of the evidence record, the manifest and the
+run summary, plus the validator's equality and non-empty guards removed.
+**All nineteen were killed on the first sweep, and the control was clean before
+any count was read.** Two are worth recording. Detaching the advisory from the
+PASS verdict reddens 74 tests and dropping it from the published manifest
+reddens 70 — the publication validator refuses a manifest whose advisory
+disagrees with the verdict or is blank, so an advisory that silently stopped
+being produced cannot publish rather than publishing empty. And removing the
+zero-baseline guard reddens two PRE-EXISTING `test_refine_evidence_builder`
+cases, not only the constructed one: the builder really does produce a zero loop
+RMSE on an exactly-reproduced model, so an unguarded division was reachable from
+the suite that already existed.
+
+**VERIFICATION, both platforms, each against a base-commit control extracted
+from `93f7d56a` to a sibling directory and run on the same interpreter.**
+macOS: **2_131 passed, 16 failed, 85 skipped** against **2_114 passed, 16 failed, 85 skipped** — the identical 16, zero new, zero
+fixed. Qualified x86_64 host: **2_147 passed, 84 failed, 1 skipped** against
+**2_130 passed, 84 failed, 1 skipped** — the **identical 84**, zero new, zero
+fixed, **+17 passes, exactly the new test count**. The 84 are 82
+`test_install_script`, `test_packaging` and `test_validator_drift`: properties
+of running from a checkout rather than from `install.sh`. Both trees were
+extracted and mode-normalised identically, because I105 recorded that a
+group-writable extraction artifact can manufacture nine false control failures.
+
+**WHAT IS STILL NOT TRUE, STATED RATHER THAN GLOSSED.**
+
+**Global consistency is now unguarded.** Reprojection cannot see a
+self-consistent but globally wrong reconstruction — a drifted loop that closes
+onto itself minimises reprojection perfectly well — and loop closure was the
+only instrument in this rule that could. R123 accepted that exposure for a
+bounded period and deferred the replacement, an absolute magnitude bound, until
+enough captures across enough rooms exist to derive one honestly. Until then a
+grossly inconsistent trajectory whose reprojection improves and whose coverage
+holds will PASS, and the only thing standing between it and publication is the
+cheirality check, R119's movement and shape floors, and a reader looking at the
+advisory. **Nothing in the code will stop it.**
+
+**A loop comparable can still GRANT the measurable-improvement floor on its
+own.** That list was left byte-identical per the ruling's scope, so a run whose
+reprojection is flat and whose loop rotation improved 1% still clears the floor
+— an unforced quantity granting a pass. Reported, not acted on: removing it is
+a second change wearing the first one's clothes and would newly refuse runs.
+
+Three captures, one device, two rooms plus a sweep. No magnitude threshold was
+derived and none should be read out of the numbers above. The advisory string is
+a report with no consumer: nothing alerts on it, nothing trends it, and no
+operator has yet been asked to read one. No iOS build or device pass was run.
+The 200-400 frame band is untouched. Fuse, Splat and Present are not composed.
+
+**Posture unchanged and re-verified, not taken on report.** `DEFAULT_STAGES =
+"ingest,solve,drawings"`; `scan_pipeline.refine` unregistered; the raster pin
+exactly `FieldRasterProfile(1440, 1920)`; R119's movement and gauge-invariant
+shape floors byte-identical and cleared on every run.
+`PILOT_200_400_FRAME_RANGE_QUALIFIED` and `PRIMARY_EXECUTION_QUALIFIED` both
+still `False` — R123 says explicitly that a passing run under a relaxed gate is
+not a qualified path, and three passes bought under a removed veto are exactly
+that.
+
+*Entries add: I106 · last id = I106*

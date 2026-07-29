@@ -2095,6 +2095,11 @@ def _evidence_document(
         "absoluteAccuracyCertified": verdict.absolute_accuracy_certified,
         "verdictCode": verdict.code,
         "verdictReason": verdict.reason,
+        # R123: the loop comparables no longer refuse. The raw numbers are two
+        # keys up; this renders them with their direction so the record does not
+        # require the reader to do the arithmetic that decides whether a passing
+        # run's global consistency drifted.
+        "loopConsistencyAdvisory": verdict.loop_consistency_advisory,
     }
 
 
@@ -2840,6 +2845,7 @@ def validate_refine_result_for_publication(result: object) -> None:
                 "refinementEvidenced",
                 "absoluteAccuracyCertified",
                 "verdictReason",
+                "loopConsistencyAdvisory",
             }
         ),
         "refine manifest evidence",
@@ -2849,6 +2855,8 @@ def validate_refine_result_for_publication(result: object) -> None:
         or type(result.evidence_verdict.refinement_evidenced) is not bool
         or type(result.evidence_verdict.absolute_accuracy_certified) is not bool
         or type(result.evidence_verdict.reason) is not str
+        or type(result.evidence_verdict.loop_consistency_advisory) is not str
+        or not result.evidence_verdict.loop_consistency_advisory.strip()
     ):
         _publication_invalid("result evidence verdict has the wrong contract type")
     if (
@@ -2860,6 +2868,11 @@ def validate_refine_result_for_publication(result: object) -> None:
         or evidence["absoluteAccuracyCertified"]
         != result.evidence_verdict.absolute_accuracy_certified
         or evidence["verdictReason"] != result.evidence_verdict.reason
+        # R123: the advisory is published, so it is checked like everything else
+        # published. A manifest that carried a different advisory from the
+        # verdict would report a loop drift the run did not have.
+        or evidence["loopConsistencyAdvisory"]
+        != result.evidence_verdict.loop_consistency_advisory
     ):
         _publication_invalid("manifest evidence disagrees with the result")
 
@@ -3180,6 +3193,10 @@ class RefineRunner:
                 "refinementEvidenced": evidence_verdict.refinement_evidenced,
                 "absoluteAccuracyCertified": evidence_verdict.absolute_accuracy_certified,
                 "verdictReason": evidence_verdict.reason,
+                # R123. A published manifest that says only "refinementEvidenced
+                # true" no longer implies the loop comparables held, so it has to
+                # say what they did.
+                "loopConsistencyAdvisory": evidence_verdict.loop_consistency_advisory,
             },
             "engineTelemetry": _telemetry_document(candidate.telemetry),
             "engineOutputs": [

@@ -67,13 +67,32 @@ def _evidence(**overrides: object) -> RefinementEvidence:
 
 #: The exact shape I102 recorded: reprojection down a third, loop rotation up by
 #: 0.015 deg over four edges.  Used as a CASE, never as an expected number.
+#: R123 MADE THIS SHAPE A PASS -- the loop comparables no longer refuse -- so
+#: every harness case that needs a refusal now uses ``_REPROJECTION_REGRESSED``.
 _I102_SHAPED = _evidence(loop_rotation_rmse_deg_after=4.930533)
 
+#: A refusal that survives R123.  Reprojection is the load-bearing gate and it
+#: still vetoes; both loop comparables here IMPROVE, so a refusal built from
+#: this case cannot be blamed on them.
+_REPROJECTION_REGRESSED = _evidence(reprojection_rmse_px_after=2.5)
 
-def test_the_rule_refuses_the_i102_shaped_case_and_accepts_the_improving_one():
-    """The two directions the harness has to be able to tell apart."""
 
-    refused = evaluate_refinement_evidence(_I102_SHAPED)
+def test_the_rule_passes_the_i102_shape_after_r123_and_still_refuses_reprojection():
+    """The two directions the harness has to be able to tell apart.
+
+    Both halves moved for R123 and both are asserted: the I102 shape -- the only
+    thing wrong with it is a 0.015 deg loop-rotation drift over four edges --
+    now PASSES, and a reprojection regression still REFUSES with the same code
+    and reason it always did.
+    """
+
+    passing = evaluate_refinement_evidence(_I102_SHAPED)
+    assert passing.refinement_evidenced is True
+    assert passing.code is None
+    # ... and the drift that used to refuse it is still on the verdict, in words.
+    assert "4.915408->4.930533 (+0.31%)" in passing.loop_consistency_advisory
+
+    refused = evaluate_refinement_evidence(_REPROJECTION_REGRESSED)
     assert refused.refinement_evidenced is False
     assert refused.code == "REFINE_EVIDENCE_REGRESSION"
     assert refused.reason == "comparable_geometric_evidence_regressed"
@@ -114,16 +133,16 @@ def test_a_refused_run_still_produces_a_full_evidence_row():
     """The requirement the harness exists for: the refusal keeps its numbers."""
 
     observer = harness.EvidenceRuleObserver(evaluate_refinement_evidence)
-    verdict = observer(_I102_SHAPED)
+    verdict = observer(_REPROJECTION_REGRESSED)
     assert verdict.refinement_evidenced is False
 
     (call,) = observer.calls
     assert call["ruleError"] is None and call["recordError"] is None
     evidence = call["evidence"]
     assert evidence["reprojection_rmse_px_before"] == 2.015458
-    assert evidence["reprojection_rmse_px_after"] == 1.351599
+    assert evidence["reprojection_rmse_px_after"] == 2.5
     assert evidence["loop_rotation_rmse_deg_before"] == 4.915408
-    assert evidence["loop_rotation_rmse_deg_after"] == 4.930533
+    assert evidence["loop_rotation_rmse_deg_after"] == 4.800000
     assert evidence["loop_translation_direction_rmse_deg_before"] == 17.165228
     assert evidence["loop_translation_direction_rmse_deg_after"] == 17.080197
     assert evidence["common_observations"] == 42587
@@ -198,7 +217,7 @@ def test_installed_observer_records_through_the_runner_module_attribute():
     )
     recorder = harness.install_observers(runner_module=runner, lifecycle_module=lifecycle)
     try:
-        verdict = runner.evaluate_refinement_evidence(_I102_SHAPED)
+        verdict = runner.evaluate_refinement_evidence(_REPROJECTION_REGRESSED)
     finally:
         recorder.restore()
     assert verdict.refinement_evidenced is False
@@ -255,7 +274,7 @@ def test_one_failing_bundle_does_not_cost_the_others_their_rows():
 
 def test_rendered_table_carries_every_row_its_metrics_and_its_verdict():
     observer = harness.EvidenceRuleObserver(evaluate_refinement_evidence)
-    observer(_I102_SHAPED)
+    observer(_REPROJECTION_REGRESSED)
     refused = harness.build_row(
         bundle="004aa5b0",
         scan_id="scan-a",
@@ -267,7 +286,9 @@ def test_rendered_table_carries_every_row_its_metrics_and_its_verdict():
         graph={"frames": 49, "candidatePairs": 435},
     )
     accepting = harness.EvidenceRuleObserver(evaluate_refinement_evidence)
-    accepting(_evidence())
+    # R123: the I102 shape passes now, and its loop-rotation drift has to stay
+    # legible in the table of a PASSING row -- that is the whole advisory claim.
+    accepting(_I102_SHAPED)
     passed = harness.build_row(
         bundle="second",
         scan_id="scan-b",
@@ -429,7 +450,7 @@ def test_metric_drift_is_reported_per_metric_not_as_one_number():
 
 
 def test_a_changed_verdict_across_attempts_is_reported_as_two_verdicts():
-    refused = _row_with(_I102_SHAPED, attempt=1)
+    refused = _row_with(_REPROJECTION_REGRESSED, attempt=1)
     passed = _row_with(_evidence(), attempt=2)
     summary = harness.summarize_determinism([refused, passed])["capture"]
     assert summary["distinctVerdicts"] == 2

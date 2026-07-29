@@ -315,6 +315,14 @@ class RefinementEvidenceVerdict:
     reason: str
     registration_coverage_before: float
     registration_coverage_after: float
+    #: R123: the loop comparables no longer refuse, so they have to be READ.
+    #: Before R123 a PASS implied "neither loop comparable regressed" and there
+    #: was nothing to say; now a passing run can carry a positive loop drift and
+    #: the reader would otherwise have to open the evidence artifact to find it.
+    #: Rendered on EVERY verdict, refusal and pass alike, with no interpretation
+    #: beyond the direction of each change.  It is a report, not an input: no
+    #: branch anywhere reads this string.
+    loop_consistency_advisory: str
 
 
 @dataclass(frozen=True)
@@ -1089,6 +1097,39 @@ def _relative_gain(before: float, after: float) -> float:
     return (after - before) / before
 
 
+def _signed_percent(before: float, after: float) -> str:
+    """Direction of a before/after pair, or ``n/a`` when there is no baseline."""
+
+    if before <= 1e-12:
+        return "n/a"
+    return f"{100.0 * (after - before) / before:+.2f}%"
+
+
+def render_loop_consistency_advisory(evidence: RefinementEvidence) -> str:
+    """Render the loop comparables for a reader, on every verdict.
+
+    R123 removed these two from the refusal set; it did not remove them from the
+    record, and required them reported MORE prominently than before rather than
+    less.  A refusal already carried the numbers (``refine_runner`` renders them
+    beside the failure code), but a PASS carried none -- it did not need to,
+    because reaching a pass had already proven neither loop comparable
+    regressed.  That implication is gone, so the numbers ride on the verdict
+    itself.  Nothing reads this string; it exists to be read.
+    """
+
+    return (
+        "advisory_not_gating_r123: "
+        f"loop_rotation_rmse_deg {evidence.loop_rotation_rmse_deg_before:.6f}->"
+        f"{evidence.loop_rotation_rmse_deg_after:.6f} "
+        f"({_signed_percent(evidence.loop_rotation_rmse_deg_before, evidence.loop_rotation_rmse_deg_after)}); "
+        "loop_translation_direction_rmse_deg "
+        f"{evidence.loop_translation_direction_rmse_deg_before:.6f}->"
+        f"{evidence.loop_translation_direction_rmse_deg_after:.6f} "
+        f"({_signed_percent(evidence.loop_translation_direction_rmse_deg_before, evidence.loop_translation_direction_rmse_deg_after)}); "
+        f"verified_loop_edges {evidence.verified_loop_edges}"
+    )
+
+
 def evaluate_refinement_evidence(evidence: RefinementEvidence) -> RefinementEvidenceVerdict:
     """Evaluate comparable geometric evidence without claiming absolute accuracy.
 
@@ -1099,6 +1140,10 @@ def evaluate_refinement_evidence(evidence: RefinementEvidence) -> RefinementEvid
     function never sets ``absolute_accuracy_certified``. The separate trajectory
     shape-change diagnostic is intentionally not an input and cannot grant or
     veto this verdict.
+
+    THE TWO LOOP COMPARABLES ARE ADVISORY (R123). They are computed, validated
+    and reported, and they cannot refuse a run. See the comment on the refusal
+    set below for why.
     """
 
     integer_fields = {
@@ -1142,11 +1187,19 @@ def evaluate_refinement_evidence(evidence: RefinementEvidence) -> RefinementEvid
     elif any(not isinstance(value, str) or not value.strip() for value in external_metadata):
         raise AdapterError("external errors require evidence kind and provenance reference")
 
+    # Rendered once, from the same fields the validation above has just proven
+    # finite and non-negative, and carried by every verdict below.
+    advisory = render_loop_consistency_advisory(evidence)
+
     coverage_before = evidence.registered_images_before / evidence.input_images
     coverage_after = evidence.registered_images_after / evidence.input_images
     if evidence.verified_loop_edges < 1:
+        # UNTOUCHED BY R123.  "No loop evidence at all" is a different condition
+        # from "the loop evidence disagrees": this run produced nothing to be
+        # advisory about, and the ruling removed a veto on a MEASUREMENT, not
+        # the requirement that the measurement exist.
         return RefinementEvidenceVerdict(
-            False, False, "REFINE_LOW_OVERLAP", "no_verified_loop_evidence", coverage_before, coverage_after
+            False, False, "REFINE_LOW_OVERLAP", "no_verified_loop_evidence", coverage_before, coverage_after, advisory
         )
     if coverage_after < MIN_CONNECTED_FRACTION or coverage_after < coverage_before:
         return RefinementEvidenceVerdict(
@@ -1156,12 +1209,36 @@ def evaluate_refinement_evidence(evidence: RefinementEvidence) -> RefinementEvid
             "registration_coverage_regressed_or_below_floor",
             coverage_before,
             coverage_after,
+            advisory,
         )
+    # THE REFUSAL SET.  R123 removed the two loop comparables from this tuple
+    # and left everything else exactly as it was.
+    #
+    # Bundle adjustment minimises reprojection over tracks and NEVER TOUCHES A
+    # TWO-VIEW GEOMETRY.  The loop comparables measure the disagreement between
+    # COLMAP's image-only relative rotation -- estimated by matching, from
+    # ``TwoViewGeometry.cam2_from_cam1`` -- and the rotation implied by the
+    # trajectory.  After refinement the trajectory has moved to the reprojection
+    # optimum while the two-view estimates stand exactly where matching left
+    # them, so the two sides are no longer describing the same thing.  On the
+    # 0.25-0.5 m baselines these captures produce, which is where two-view
+    # geometry is weakest, a SMALL POSITIVE DRIFT IS THE EXPECTED BEHAVIOUR OF A
+    # SUCCESSFUL REFINEMENT.  The rule asked whether a quantity had decreased
+    # when nothing in the optimiser was trying to decrease it, and it refused
+    # three of three real captures while reprojection improved 28.9-32.9% --
+    # including the run with 90 verified loop edges, the healthiest loop
+    # evidence this program has produced.
+    #
+    # What is NOT here and is deliberate: no tolerance, no magnitude ceiling, no
+    # edge-count floor.  The meaningful replacement is an absolute bound ("is
+    # the refined trajectory GROSSLY inconsistent with the image evidence?"),
+    # and R123 defers it rather than fit it to the three captures in hand.
+    # Until then global consistency is unguarded: reprojection cannot see a
+    # self-consistent but globally wrong reconstruction, and loop closure was
+    # the only instrument here that could.  That exposure is accepted, bounded,
+    # and stated -- not hidden behind a number nobody derived.
     regressions = (
         evidence.reprojection_rmse_px_after > evidence.reprojection_rmse_px_before,
-        evidence.loop_rotation_rmse_deg_after > evidence.loop_rotation_rmse_deg_before,
-        evidence.loop_translation_direction_rmse_deg_after
-        > evidence.loop_translation_direction_rmse_deg_before,
         external_pair[0] is not None and external_pair[1] > external_pair[0],
     )
     if any(regressions):
@@ -1172,7 +1249,15 @@ def evaluate_refinement_evidence(evidence: RefinementEvidence) -> RefinementEvid
             "comparable_geometric_evidence_regressed",
             coverage_before,
             coverage_after,
+            advisory,
         )
+    # LEFT BYTE-IDENTICAL BY R123, INCLUDING THE TWO LOOP TERMS.  This is the
+    # "did anything measurably move" floor, not the refusal set; the ruling
+    # removed the loop comparables' power to REFUSE and nothing else.  Dropping
+    # them from here would newly refuse runs the ruling did not ask to refuse,
+    # which is a second change wearing the first one's clothes.  It does leave
+    # a loop comparable able to GRANT the floor on its own -- reported, not
+    # acted on, because the ruling did not authorise acting on it.
     improvements = [
         _relative_improvement(evidence.reprojection_rmse_px_before, evidence.reprojection_rmse_px_after),
         _relative_improvement(evidence.loop_rotation_rmse_deg_before, evidence.loop_rotation_rmse_deg_after),
@@ -1192,6 +1277,7 @@ def evaluate_refinement_evidence(evidence: RefinementEvidence) -> RefinementEvid
             "unchanged_or_below_measurable_improvement_floor",
             coverage_before,
             coverage_after,
+            advisory,
         )
     return RefinementEvidenceVerdict(
         True,
@@ -1200,6 +1286,7 @@ def evaluate_refinement_evidence(evidence: RefinementEvidence) -> RefinementEvid
         "internal_geometric_refinement_evidenced_absolute_accuracy_unproven",
         coverage_before,
         coverage_after,
+        advisory,
     )
 
 

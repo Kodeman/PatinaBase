@@ -484,6 +484,28 @@ def test_primary_success_builds_byte_deterministic_manifest_last_artifacts(tmp_p
     assert manifest["trajectoryShapeChange"]["certificationRole"] == "diagnostic-only"
     assert manifest["refinementEvidence"]["refinementEvidenced"] is True
     assert manifest["refinementEvidence"]["absoluteAccuracyCertified"] is False
+    # R123: `refinementEvidenced: true` no longer implies the loop comparables
+    # held, so the PUBLISHED manifest has to say what they did.  A manifest that
+    # dropped this key would be refused by the publication validator; a manifest
+    # that carried an empty one would sail through it, which is why the content
+    # is asserted and not merely the key.
+    published_advisory = manifest["refinementEvidence"]["loopConsistencyAdvisory"]
+    assert published_advisory.startswith("advisory_not_gating_r123: ")
+    assert "loop_rotation_rmse_deg 1.000000->0.900000 (-10.00%)" in published_advisory
+    assert (
+        "loop_translation_direction_rmse_deg 2.000000->1.800000 (-10.00%)"
+        in published_advisory
+    )
+    assert "verified_loop_edges 1" in published_advisory
+    # ... and the same string in the evidence record beside it.
+    evidence_artifact = json.loads(
+        next(
+            file for file in first.files if file.name == "refinement-evidence-v1.json"
+        ).payload
+    )
+    assert evidence_artifact["loopConsistencyAdvisory"] == published_advisory
+    assert evidence_artifact["loopRotationRmseDegBefore"] == 1.0
+    assert evidence_artifact["loopRotationRmseDegAfter"] == 0.9
     assert manifest["frameInputs"][0]["sourceHeic"] == {
         "archiveKey": "keyframes/user-1/room-1/keyframes.tar",
         "imageName": "frame_0000.heic",
@@ -572,6 +594,80 @@ def test_publication_validator_rejects_extra_manifest_keys(tmp_path):
         validate_refine_result_for_publication(
             _with_manifest_document(result, document)
         )
+
+    assert raised.value.code is RefineFailureCode.ARTIFACT_INVALID
+
+
+def test_publication_validator_rejects_a_rewritten_loop_advisory(tmp_path):
+    """R123: the advisory is PUBLISHED, so it is checked like everything else
+    published.  A manifest whose advisory disagreed with the verdict would tell
+    a reader the run's global consistency drifted less than it did -- and after
+    R123 nothing else in the manifest contradicts it, because the verdict no
+    longer refuses on it."""
+
+    result = RefineRunner(
+        backend=_FakeBackend(primary=_candidate()),
+        artifact_builder=_FakeArtifactBuilder(),
+    ).run(_request(tmp_path), deadline=_deadline())
+    document = json.loads(result.manifest.payload)
+    document["refinementEvidence"]["loopConsistencyAdvisory"] = (
+        "advisory_not_gating_r123: loop_rotation_rmse_deg 1.000000->0.100000 "
+        "(-90.00%); loop_translation_direction_rmse_deg 2.000000->0.200000 "
+        "(-90.00%); verified_loop_edges 1"
+    )
+
+    with pytest.raises(RefineRunError) as raised:
+        validate_refine_result_for_publication(
+            _with_manifest_document(result, document)
+        )
+
+    assert raised.value.code is RefineFailureCode.ARTIFACT_INVALID
+
+
+def test_publication_validator_rejects_a_missing_loop_advisory(tmp_path):
+    """Dropping the key is the other half: the validator's key set is exact, so
+    a producer that stopped emitting the advisory cannot publish."""
+
+    result = RefineRunner(
+        backend=_FakeBackend(primary=_candidate()),
+        artifact_builder=_FakeArtifactBuilder(),
+    ).run(_request(tmp_path), deadline=_deadline())
+    document = json.loads(result.manifest.payload)
+    del document["refinementEvidence"]["loopConsistencyAdvisory"]
+
+    with pytest.raises(RefineRunError) as raised:
+        validate_refine_result_for_publication(
+            _with_manifest_document(result, document)
+        )
+
+    assert raised.value.code is RefineFailureCode.ARTIFACT_INVALID
+
+
+@pytest.mark.parametrize("advisory", ("   ", 5))
+def test_publication_validator_rejects_a_blank_or_non_string_loop_advisory(
+    tmp_path, advisory
+):
+    """The failure a key-set check cannot see: the manifest and the verdict
+    AGREE, and what they agree on says nothing.  Both sides are set to the same
+    bad value so the disagreement clause cannot be what fires -- only the
+    verdict's own non-empty-string guard can be."""
+
+    result = RefineRunner(
+        backend=_FakeBackend(primary=_candidate()),
+        artifact_builder=_FakeArtifactBuilder(),
+    ).run(_request(tmp_path), deadline=_deadline())
+    document = json.loads(result.manifest.payload)
+    document["refinementEvidence"]["loopConsistencyAdvisory"] = advisory
+    blanked = _with_manifest_document(result, document)
+    blanked = replace(
+        blanked,
+        evidence_verdict=replace(
+            blanked.evidence_verdict, loop_consistency_advisory=advisory
+        ),
+    )
+
+    with pytest.raises(RefineRunError) as raised:
+        validate_refine_result_for_publication(blanked)
 
     assert raised.value.code is RefineFailureCode.ARTIFACT_INVALID
 

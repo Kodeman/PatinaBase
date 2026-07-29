@@ -2748,6 +2748,12 @@ class RefineLifecycleReport:
                     self.result.evidence_verdict.absolute_accuracy_certified
                 ),
                 "reason": self.result.evidence_verdict.reason,
+                # R123. The summary is what an operator reads first; a pass whose
+                # loop disagreement is only in an artifact is a pass nobody reads
+                # the disagreement of.
+                "loopConsistencyAdvisory": (
+                    self.result.evidence_verdict.loop_consistency_advisory
+                ),
             },
             "trajectoryShapeChange": {
                 "certificationRole": (

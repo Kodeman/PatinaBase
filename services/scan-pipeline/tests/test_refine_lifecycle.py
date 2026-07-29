@@ -1628,11 +1628,18 @@ def test_an_evidence_refusal_carries_the_numbers_that_produced_it(tmp_path):
     the operator could not tell WHICH metric regressed or by how much.  The
     assertions below name the metric that actually moved and the one that did
     not, so a refusal that reported only the verdict reddens here.
+
+    R123 RESHAPED THE CASE, NOT THE REQUIREMENT.  This used to move only the
+    loop rotation, which no longer refuses anything; the cause here is now a
+    reprojection regression.  The load-bearing assertion is unchanged and is the
+    one about the LOOP numbers: they are advisory, they did not cause this
+    refusal, and they must still travel with it.
     """
 
     from patina_scan_worker.refine_runner import RefineRunError
 
     worse = dict(_GOOD_EVIDENCE)
+    worse["reprojectionRmsePxAfter"] = 2.5
     worse["loopRotationRmseDegBefore"] = 4.915408
     worse["loopRotationRmseDegAfter"] = 4.930533
     with pytest.raises(RefineRunError) as raised:
@@ -1640,9 +1647,10 @@ def test_an_evidence_refusal_carries_the_numbers_that_produced_it(tmp_path):
     message = str(raised.value)
     assert "comparable_geometric_evidence_regressed" in message
     # The metric that regressed, with both sides of it.
+    assert "reprojection_rmse_px 1.900000->2.500000" in message
+    # ... and the advisory pair, which did NOT cause it and is reported anyway.
     assert "loop_rotation_rmse_deg 4.915408->4.930533" in message
-    # ... and the one that improved, so a reader can see it was not the cause.
-    assert "reprojection_rmse_px" in message
+    assert "loop_translation_rmse_deg" in message
     assert "coverage" in message
     assert "loop_edges" in message
 
@@ -1877,6 +1885,24 @@ def test_no_absolute_accuracy_is_ever_certified(tmp_path):
     assert report.result.evidence_verdict.absolute_accuracy_certified is False
     document = report.to_document()
     assert document["evidence"]["absoluteAccuracyCertified"] is False
+
+
+def test_the_run_summary_of_a_PASSING_run_carries_the_loop_advisory(tmp_path):
+    """R123.  ``_GOOD_EVIDENCE`` passes on every comparable, so nothing here is
+    disagreeing -- and the summary an operator reads first must state the loop
+    numbers anyway, because after R123 a pass no longer proves they held.  The
+    composed lifecycle is the shortest reachable path to that string, so this is
+    the test that reddens if the summary stops forwarding it."""
+
+    report, _engine, _sink, _scratch = _run(tmp_path)
+    assert report.result.evidence_verdict.refinement_evidenced is True
+    advisory = report.to_document()["evidence"]["loopConsistencyAdvisory"]
+    assert advisory.startswith("advisory_not_gating_r123: ")
+    assert "loop_rotation_rmse_deg 0.620000->0.280000 (-54.84%)" in advisory
+    assert (
+        "loop_translation_direction_rmse_deg 1.440000->0.830000 (-42.36%)" in advisory
+    )
+    assert advisory == report.result.evidence_verdict.loop_consistency_advisory
 
 
 # ===========================================================================
