@@ -31,6 +31,7 @@ import {
 } from '@patina/supabase';
 import { StrataSweep } from '@/components/ui/strata-sweep';
 import { usePlaceInDocument } from '@/hooks/use-place-in-document';
+import { DocumentAction } from '../document-action';
 
 export interface InDocument {
   projectId: string;
@@ -80,17 +81,23 @@ export function EngineResults({
   }, [query]);
 
   const targets = useMemo(() => {
-    if (inDocument) return [{ id: inDocument.projectId, name: inDocument.projectName }];
+    if (inDocument)
+      return [{ id: inDocument.projectId, name: inDocument.projectName }];
     const rows = (projects ?? []) as Array<Record<string, unknown>>;
     return rows
       .filter((p) => p.status === 'active')
       .slice(0, 5)
-      .map((p) => ({ id: p.id as string, name: (p.name as string) ?? 'Untitled' }));
+      .map((p) => ({
+        id: p.id as string,
+        name: (p.name as string) ?? 'Untitled',
+      }));
   }, [inDocument, projects]);
 
   const targetId = inDocument?.projectId ?? pickedId;
   const targetName =
-    inDocument?.projectName ?? targets.find((t) => t.id === targetId)?.name ?? 'the document';
+    inDocument?.projectName ??
+    targets.find((t) => t.id === targetId)?.name ??
+    'the document';
 
   const pieces = useMemo<EnginePiece[]>(() => {
     // The Engine's answer arrives ranked — keep its order.
@@ -99,10 +106,11 @@ export function EngineResults({
       // Keyword stand-in: proven first (studio), then the marketplace
       // (catalog), then raw captures — the pre-3C ordering.
       const d = fallback.data;
-      return [...d.byLayer.studio, ...d.byLayer.catalog, ...d.byLayer.personal].slice(
-        0,
-        RESULT_LIMIT,
-      );
+      return [
+        ...d.byLayer.studio,
+        ...d.byLayer.catalog,
+        ...d.byLayer.personal,
+      ].slice(0, RESULT_LIMIT);
     }
     return [];
   }, [ask.data, ask.isError, fallback.data]);
@@ -130,7 +138,9 @@ export function EngineResults({
     } catch {
       // RLS rejects placement into a project you don't lead, and any other
       // insert failure — surface it instead of leaking an unhandled rejection.
-      setPlaceError('Could not place into that document — you may not be its lead designer.');
+      setPlaceError(
+        'Could not place into that document — you may not be its lead designer.',
+      );
     }
   };
 
@@ -156,7 +166,8 @@ export function EngineResults({
       <div className="py-5">
         {restingNote}
         <p className="font-heading text-[13px] italic text-[var(--text-muted)]">
-          Nothing on your shelves answers that yet — teach more, and the Engine sees more.
+          Nothing on your shelves answers that yet — teach more, and the Engine
+          sees more.
         </p>
       </div>
     );
@@ -173,14 +184,16 @@ export function EngineResults({
             Place into
           </span>
           {targets.length === 0 ? (
-            <span className="text-[11px] italic text-[var(--text-muted)]">no open project to place into</span>
+            <span className="text-[11px] italic text-[var(--text-muted)]">
+              no open project to place into
+            </span>
           ) : (
             targets.map((t) => (
               <button
                 key={t.id}
                 type="button"
                 onClick={() => setPickedId(t.id)}
-                className={`rounded-[12px] border px-2.5 py-1 text-[0.66rem] transition-colors ${
+                className={`min-h-11 min-w-11 rounded-[12px] border px-2.5 py-1 text-[0.66rem] transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-clay)] ${
                   pickedId === t.id
                     ? 'border-[var(--color-clay)] bg-[var(--color-clay)] text-white'
                     : 'border-[var(--color-pearl)] bg-white text-[var(--text-body)] hover:border-[var(--color-clay)]'
@@ -194,7 +207,7 @@ export function EngineResults({
       )}
 
       <ul className="space-y-1.5">
-        {pieces.map((piece) => {
+        {pieces.map((piece, index) => {
           const placed = placedIds.has(piece.id);
           const img = piece.images?.[0] ?? null;
           return (
@@ -204,7 +217,12 @@ export function EngineResults({
             >
               <span className="flex h-11 w-11 shrink-0 items-center justify-center overflow-hidden rounded-[4px] bg-[var(--doc-sheet-2)]">
                 {img ? (
-                  <img src={img} alt="" className="h-full w-full object-cover" loading="lazy" />
+                  <img
+                    src={img}
+                    alt=""
+                    className="h-full w-full object-cover"
+                    loading="lazy"
+                  />
                 ) : (
                   <span className="font-mono text-[7px] uppercase tracking-[0.1em] text-[var(--color-aged-oak)] opacity-50">
                     {piece.category ?? 'piece'}
@@ -216,7 +234,8 @@ export function EngineResults({
                   {piece.name}
                 </span>
                 <span className="block truncate font-mono text-[9px] uppercase tracking-[0.05em] text-[var(--color-aged-oak)]">
-                  {piece.brand ?? piece.layer} · {LAYER_NOTE[piece.layer] ?? piece.layer}
+                  {piece.brand ?? piece.layer} ·{' '}
+                  {LAYER_NOTE[piece.layer] ?? piece.layer}
                   {matchNote(piece.matched_on)}
                 </span>
               </span>
@@ -225,14 +244,19 @@ export function EngineResults({
                   placed ✓
                 </span>
               ) : (
-                <button
-                  type="button"
+                <DocumentAction
+                  actionKey="place-engine-result"
+                  surfaceKey="engine"
+                  regionKey={`result-${index + 1}`}
+                  variant="primary"
                   disabled={!targetId || place.isPending}
+                  loading={place.isPending}
+                  loadingLabel="Placing…"
                   onClick={() => void doPlace(piece)}
-                  className="shrink-0 rounded-[4px] border border-[rgba(196,165,123,0.4)] px-2.5 py-1 font-mono text-[9px] font-semibold uppercase tracking-[0.06em] text-[var(--color-clay)] transition-colors hover:bg-[var(--color-clay)] hover:text-white disabled:opacity-40 disabled:hover:bg-transparent disabled:hover:text-[var(--color-clay)]"
+                  trailing="→"
                 >
-                  Place →
-                </button>
+                  Place
+                </DocumentAction>
               )}
             </li>
           );
@@ -240,7 +264,9 @@ export function EngineResults({
       </ul>
 
       {placeError && (
-        <p className="mt-2 text-[11px] text-[var(--color-terracotta)]">{placeError}</p>
+        <p className="mt-2 text-[11px] text-[var(--color-terracotta)]">
+          {placeError}
+        </p>
       )}
 
       <p className="mt-3 font-mono text-[9px] uppercase tracking-[0.06em] text-[var(--color-aged-oak)] opacity-70">
@@ -254,7 +280,9 @@ export function EngineResults({
  *  own read, the FTS leg is a plain keyword match). */
 function matchNote(matchedOn?: EngineAskMatchSource[]): string {
   if (!matchedOn || matchedOn.length === 0) return '';
-  return matchedOn.includes('vector') ? ' · the Engine’s read' : ' · keyword match';
+  return matchedOn.includes('vector')
+    ? ' · the Engine’s read'
+    : ' · keyword match';
 }
 
 const LAYER_NOTE: Record<string, string> = {

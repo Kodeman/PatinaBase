@@ -8,6 +8,7 @@
 
 import Foundation
 import SwiftUI
+import SwiftData
 
 @MainActor
 @Observable
@@ -150,6 +151,67 @@ public final class StyleConversationViewModel {
     private func advance() {
         currentQuestion = min(currentQuestion + 1, 5)
     }
+
+    // MARK: - Persist to SwiftData
+
+    /// Map a resolved profile plus the raw answers onto the shared taste-row
+    /// shape. Static so the mapping is exercisable without a `RoomScanSession`.
+    ///
+    /// `StyleProfileStore` keeps the engine's full response for the Reveal and
+    /// the Soft Landing; this is the durable row Home and Profile read, and it
+    /// is the same row the Style Quiz writes.
+    static func styleSnapshot(
+        profile: StyleProfileResponse,
+        responses: StyleResponseModel
+    ) -> StylePreferenceSnapshot {
+        // Score the answers with the same vector the engine used, so the two
+        // surfaces can never disagree about warmth/formality.
+        let vector = LocalAestheteEngine.computeVector(from: responses)
+
+        // keywords[0] is display-ready — the Profile badge renders it as-is.
+        var keywords = [profile.aestheticName]
+        keywords.append(contentsOf: responses.lifestyleFactors.map(\.rawValue))
+        if let priority = responses.priority {
+            keywords.append(priority.rawValue)
+        }
+
+        return StylePreferenceSnapshot(
+            keywords: keywords,
+            warmth: unitInterval(vector.warmth),
+            formality: unitInterval(vector.formality),
+            materials: responses.materialPreferences.map(\.rawValue),
+            eras: [],
+            confidence: Double(profile.confidence),
+            budgetRange: responses.investmentTier.flatMap(budgetRange(for:))
+        )
+    }
+
+    /// Write the resolved profile to SwiftData. Called from
+    /// `StyleConversationContainerView` on completion — the scan flow's
+    /// counterpart to `StyleQuizViewModel.persistToSwiftData`.
+    func persistToSwiftData(context: ModelContext, profile: StyleProfileResponse) {
+        StylePreferenceStore(context: context)
+            .upsert(Self.styleSnapshot(profile: profile, responses: responses))
+    }
+
+    /// `ImageAttributes` channels run -1...1; `StylePreferenceModel` is 0...1.
+    private static func unitInterval(_ value: Float) -> Double {
+        Double(min(1, max(-1, value)) + 1) / 2
+    }
+
+    /// Mirrors `StyleQuizViewModel.budgetRange(for:)` so a quiz-written and a
+    /// conversation-written row store the same dollar shape. "Let's Discuss"
+    /// names no range.
+    private static func budgetRange(for tier: InvestmentTier) -> String? {
+        switch tier {
+        case .budgetStarter:  return "500-2000"
+        case .budgetMid:      return "2000-5000"
+        case .budgetPremium:  return "5000-15000"
+        case .budgetDesigner: return nil
+        }
+    }
+
+    // MARK: - Completion
 
     private func finish() async {
         let total = Date().timeIntervalSince(startedAt)

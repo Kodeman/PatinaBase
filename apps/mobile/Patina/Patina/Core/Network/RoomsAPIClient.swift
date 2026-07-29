@@ -169,12 +169,23 @@ public actor RoomsAPIClient {
     }()
     private let decoder = JSONDecoder()
 
+    /// The SDK's `auth.session` reads the keychain, and a locked or corrupt
+    /// keychain makes it throw even while the user is signed in. That throw
+    /// used to strip the `Authorization` header outright — every request went
+    /// out as anon and came back RLS-denied, silently. `AuthService` holds the
+    /// session its auth-state listener published in memory, so fall back to it.
     private func authToken() async -> String? {
-        try? await SupabaseClientManager.shared.client.auth.session.accessToken
+        if let token = try? await SupabaseClientManager.shared.client.auth.session.accessToken {
+            return token
+        }
+        return await AuthService.shared.session?.accessToken
     }
 
     private func currentUserId() async -> String? {
-        try? await SupabaseClientManager.shared.client.auth.session.user.id.uuidString.lowercased()
+        if let id = try? await SupabaseClientManager.shared.client.auth.session.user.id.uuidString {
+            return id.lowercased()
+        }
+        return await AuthService.shared.currentUserId?.lowercased()
     }
 
     private func applyHeaders(to request: inout URLRequest, prefer: String? = nil) async {

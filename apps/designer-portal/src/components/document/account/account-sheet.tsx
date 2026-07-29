@@ -38,15 +38,24 @@ import { AccountNotificationsPage } from './account-notifications-page';
 import { AccountSecurityPage } from './account-security-page';
 import { AccountDevicesPage } from './account-devices-page';
 import { AccountStudioPage } from './account-studio-page';
+import { DocumentAction } from '../document-action';
 
-const STATUS_META: Record<AvailabilityStatus, { label: string; color: string }> = {
+const STATUS_META: Record<
+  AvailabilityStatus,
+  { label: string; color: string }
+> = {
   online: { label: 'Online', color: 'var(--color-sage)' },
   away: { label: 'Away', color: 'var(--color-golden-hour)' },
   busy: { label: 'Busy', color: 'var(--color-terracotta)' },
   offline: { label: 'Offline', color: 'var(--color-aged-oak)' },
 };
 
-type AccountPage = 'profile' | 'notifications' | 'security' | 'devices' | 'studio';
+type AccountPage =
+  | 'profile'
+  | 'notifications'
+  | 'security'
+  | 'devices'
+  | 'studio';
 
 const PAGES: { key: AccountPage; label: string }[] = [
   { key: 'profile', label: 'Profile' },
@@ -100,11 +109,16 @@ export function AccountSheet() {
     }
   }, [signOut]);
 
-  const name = profile?.display_name || profile?.full_name || user?.name || null;
+  const name =
+    profile?.display_name || profile?.full_name || user?.name || null;
   const email = user?.email ?? profile?.email ?? '';
   const studio = activeStudio(orgs);
-  const currentStatus: AvailabilityStatus = hydrated ? (status ?? 'online') : 'offline';
-  const pages = studioEnabled ? [...PAGES, { key: 'studio' as const, label: 'Studio' }] : PAGES;
+  const currentStatus: AvailabilityStatus = hydrated
+    ? (status ?? 'online')
+    : 'offline';
+  const pages = studioEnabled
+    ? [...PAGES, { key: 'studio' as const, label: 'Studio' }]
+    : PAGES;
 
   return (
     <DocSheet open={open} onClose={() => setOpen(false)} title="Account">
@@ -113,8 +127,11 @@ export function AccountSheet() {
         <div className="flex items-start gap-3.5">
           <span className="relative inline-flex h-12 w-12 shrink-0 items-center justify-center overflow-hidden rounded-full bg-[var(--color-pearl)] font-mono text-[13px] uppercase tracking-wider text-[var(--color-mocha)]">
             {profile?.avatar_url ? (
-              // eslint-disable-next-line @next/next/no-img-element
-              <img src={profile.avatar_url} alt="" className="h-full w-full object-cover" />
+              <img
+                src={profile.avatar_url}
+                alt=""
+                className="h-full w-full object-cover"
+              />
             ) : (
               monogramOf(name, email)
             )}
@@ -129,12 +146,17 @@ export function AccountSheet() {
               {name ?? email}
             </h2>
             {name && (
-              <p className="truncate text-[12px] text-[var(--color-aged-oak)]">{email}</p>
+              <p className="truncate text-[12px] text-[var(--color-aged-oak)]">
+                {email}
+              </p>
             )}
             {studio && (
               <p className="mt-0.5 font-mono text-[10px] uppercase tracking-[0.08em] text-[var(--color-clay)]">
                 {studio.name}
-                <span className="text-[var(--color-aged-oak)]"> · {studio.role}</span>
+                <span className="text-[var(--color-aged-oak)]">
+                  {' '}
+                  · {studio.role}
+                </span>
               </p>
             )}
           </div>
@@ -159,7 +181,7 @@ export function AccountSheet() {
                   role="radio"
                   aria-checked={selected}
                   onClick={() => setAvailability.mutate(value)}
-                  className={`flex items-center gap-1.5 rounded-[5px] border px-2.5 py-1 text-[11px] transition-colors ${
+                  className={`flex min-h-11 min-w-11 items-center justify-center gap-1.5 rounded-[5px] border px-2.5 py-1 text-[11px] transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-clay)] ${
                     selected
                       ? 'border-[rgba(196,165,123,0.45)] bg-[rgba(196,165,123,0.12)] text-[var(--color-charcoal)]'
                       : 'border-[var(--color-pearl)] text-[var(--color-mocha)] hover:border-[rgba(196,165,123,0.4)]'
@@ -185,7 +207,7 @@ export function AccountSheet() {
               type="button"
               onClick={() => setPage(p.key)}
               aria-current={page === p.key ? 'page' : undefined}
-              className={`font-mono text-[9.5px] uppercase tracking-[0.08em] transition-colors ${
+              className={`min-h-11 min-w-11 font-mono text-[9.5px] uppercase tracking-[0.08em] transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-clay)] ${
                 page === p.key
                   ? 'text-[var(--color-clay)]'
                   : 'text-[var(--color-aged-oak)] hover:text-[var(--color-charcoal)]'
@@ -204,14 +226,19 @@ export function AccountSheet() {
 
         {/* Sign out */}
         <div className="mt-7 border-t border-[var(--color-pearl)] pt-4">
-          <button
-            type="button"
+          <DocumentAction
+            actionKey="sign-out"
+            surfaceKey="account"
+            regionKey="account-session"
+            variant="tertiary"
             onClick={handleSignOut}
             disabled={isSigningOut}
-            className="font-mono text-[11px] uppercase tracking-[0.1em] text-[var(--color-terracotta)] transition-colors hover:text-[var(--color-charcoal)] disabled:opacity-60"
+            loading={isSigningOut}
+            loadingLabel="Signing out…"
+            className="text-[var(--color-terracotta)] decoration-[var(--color-terracotta)] hover:text-[var(--color-charcoal)]"
           >
-            {isSigningOut ? 'Signing out…' : '⏻ Sign out'}
-          </button>
+            ⏻ Sign out
+          </DocumentAction>
         </div>
       </div>
     </DocSheet>

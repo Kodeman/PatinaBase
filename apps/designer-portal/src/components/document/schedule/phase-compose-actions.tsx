@@ -12,15 +12,14 @@
  * all phases), so this only signals intent.
  */
 
+import { DocumentAction, DocumentActionGroup } from '../document-action';
+
 export interface PhaseComposeActionsProps {
   onAddItem: () => void;
   onAddMilestone: () => void;
   onEditDates: () => void;
   onDelete: () => void;
 }
-
-const actionCls =
-  'font-mono text-[0.58rem] uppercase tracking-[0.06em] text-[var(--color-clay)] hover:opacity-80';
 
 export function PhaseComposeActions({
   onAddItem,
@@ -29,23 +28,40 @@ export function PhaseComposeActions({
   onDelete,
 }: PhaseComposeActionsProps) {
   return (
-    <div className="flex flex-none items-center gap-[0.7rem]">
-      <button type="button" onClick={onAddItem} className={actionCls}>
-        + Item
-      </button>
-      <button type="button" onClick={onAddMilestone} className={actionCls}>
-        + Milestone
-      </button>
-      <button type="button" onClick={onEditDates} className={actionCls}>
+    <DocumentActionGroup
+      surfaceKey="schedule"
+      regionKey="phase-compose-actions"
+      className="flex-none"
+    >
+      <DocumentAction
+        actionKey="add-phase-item"
+        variant="secondary"
+        onClick={onAddItem}
+      >
+        Add item
+      </DocumentAction>
+      <DocumentAction
+        actionKey="add-phase-milestone"
+        variant="secondary"
+        onClick={onAddMilestone}
+      >
+        Add milestone
+      </DocumentAction>
+      <DocumentAction
+        actionKey="edit-phase-dates"
+        variant="secondary"
+        onClick={onEditDates}
+      >
         Edit dates
-      </button>
-      <button
-        type="button"
+      </DocumentAction>
+      <DocumentAction
+        actionKey="open-delete-phase"
+        variant="tertiary"
         onClick={onDelete}
-        className="font-mono text-[0.58rem] uppercase tracking-[0.06em] text-[var(--color-aged-oak)] hover:opacity-80"
+        className="text-[var(--color-terracotta)]"
       >
         Delete
-      </button>
-    </div>
+      </DocumentAction>
+    </DocumentActionGroup>
   );
 }

@@ -16,6 +16,7 @@ import {
 import { FeedbackLayer } from '@/components/document/feedback/feedback-layer';
 import { MobileShellProvider } from '@/components/document/mobile/mobile-shell';
 import { MobileBar } from '@/components/document/mobile/mobile-bar';
+import { MobileActionDock } from '@/components/document/mobile/mobile-action-dock';
 import { MobileSheets } from '@/components/document/mobile/mobile-sheets';
 import { DocumentTimeProvider } from '@/hooks/document-time-provider';
 import { DocumentGate } from './document-gate';
@@ -32,7 +33,11 @@ export const metadata: Metadata = {
  * DECISIONS, reverses the v1.1 §10 charcoal desk). The open document paints its
  * own --doc-paper background over this, so /doc/[id] is unaffected.
  */
-export default function DocumentLayout({ children }: { children: React.ReactNode }) {
+export default function DocumentLayout({
+  children,
+}: {
+  children: React.ReactNode;
+}) {
   return (
     <div className="min-h-screen bg-[var(--bg-primary)]">
       <DocumentGate>
@@ -71,6 +76,7 @@ export default function DocumentLayout({ children }: { children: React.ReactNode
                   <InvoiceOverlays />
                   {/* R85 — the ⌘K "draft a proposal" household-picker cold start. */}
                   <DraftProposalOverlay />
+                  <MobileActionDock />
                   <MobileBar />
                   <MobileSheets />
                   {/* The feedback layer (docs/ledger/patina-feedback-layer-prd.md):

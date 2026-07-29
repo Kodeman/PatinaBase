@@ -26,6 +26,7 @@ import {
 } from '@/hooks/use-folio';
 import { DocFileViewer } from './overlays/doc-file-viewer';
 import { fmtDay } from '@/lib/document/format';
+import { DocumentAction } from './document-action';
 
 const SECTION_LABELS: Record<string, string> = {
   brief: 'Brief',
@@ -70,7 +71,7 @@ function FileChip({
           <button
             type="button"
             onClick={() => onOpen(head)}
-            className="max-w-[180px] truncate text-[10.5px] text-[var(--color-charcoal)] hover:text-[var(--color-clay)]"
+            className="min-h-11 min-w-11 max-w-[180px] truncate text-[10.5px] text-[var(--color-charcoal)] hover:text-[var(--color-clay)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-clay)]"
             title={head.title}
           >
             {head.title}
@@ -80,8 +81,10 @@ function FileChip({
               type="button"
               onClick={() => setSlidOut((v) => !v)}
               aria-expanded={slidOut}
-              className="font-mono text-[8.5px] uppercase tracking-[0.05em] text-[var(--text-muted)] hover:text-[var(--color-clay)]"
-              title={slidOut ? 'Slide versions back' : 'Slide older versions out'}
+              className="min-h-11 min-w-11 font-mono text-[8.5px] uppercase tracking-[0.05em] text-[var(--text-muted)] hover:text-[var(--color-clay)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-clay)]"
+              title={
+                slidOut ? 'Slide versions back' : 'Slide older versions out'
+              }
             >
               v{versions.length + 1}
             </button>
@@ -89,8 +92,12 @@ function FileChip({
           <button
             type="button"
             onClick={() => onToggleVisibility(head)}
-            className="font-mono text-[8.5px] uppercase tracking-[0.05em]"
-            style={{ color: head.client_visible ? '#85947C' : 'var(--color-aged-oak, #8B7355)' }}
+            className="min-h-11 min-w-11 font-mono text-[8.5px] uppercase tracking-[0.05em] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-clay)]"
+            style={{
+              color: head.client_visible
+                ? '#85947C'
+                : 'var(--color-aged-oak, #8B7355)',
+            }}
             title={
               head.client_visible
                 ? 'Shared — the client mirror renders this file'
@@ -107,7 +114,7 @@ function FileChip({
             key={v.id}
             type="button"
             onClick={() => onOpen(v)}
-            className="rounded-[3px] border border-[var(--doc-ink-border)] bg-[var(--doc-sheet-2)] px-2 py-[3px] text-[10px] text-[var(--text-muted)] hover:text-[var(--color-charcoal)]"
+            className="min-h-11 min-w-11 rounded-[3px] border border-[var(--doc-ink-border)] bg-[var(--doc-sheet-2)] px-2 py-[3px] text-[10px] text-[var(--text-muted)] hover:text-[var(--color-charcoal)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-clay)]"
             title={`Superseded ${fmtDay(v.created_at)}`}
           >
             {fmtDay(v.created_at)}
@@ -150,7 +157,15 @@ export function FolioStrip({
   };
   const inputRef = useRef<HTMLInputElement>(null);
 
-  const chains = buildChains((files ?? []).filter((f) => matchesAnchor(f, anchor)));
+  const chains = buildChains(
+    (files ?? []).filter((f) => matchesAnchor(f, anchor)),
+  );
+  const actionRegion =
+    anchor.kind === 'section'
+      ? `folio-${anchor.sectionKey}`
+      : anchor.kind === 'line'
+        ? 'folio-line'
+        : 'folio-letterhead';
 
   // Drops caught by the whole section land on this strip (R24).
   useEffect(() => {
@@ -192,17 +207,24 @@ export function FolioStrip({
             chain={chain}
             onOpen={openFolioFile}
             onToggleVisibility={(f) =>
-              setVisibility.mutate({ fileId: f.id, clientVisible: !f.client_visible })
+              setVisibility.mutate({
+                fileId: f.id,
+                clientVisible: !f.client_visible,
+              })
             }
           />
         ))}
-        <button
-          type="button"
+        <DocumentAction
+          actionKey="upload-folio-file"
+          surfaceKey="open-document"
+          regionKey={actionRegion}
+          variant="primary"
           onClick={() => inputRef.current?.click()}
-          className="font-mono text-[8.5px] uppercase tracking-[0.05em] text-[var(--color-clay)] hover:opacity-80"
+          loading={upload.isPending}
+          loadingLabel="Clipping…"
         >
-          {catching ? 'drop to clip it here' : upload.isPending ? 'clipping…' : '+ file'}
-        </button>
+          {catching ? 'Drop to clip it here' : '+ File'}
+        </DocumentAction>
         <input
           ref={inputRef}
           type="file"
@@ -216,7 +238,9 @@ export function FolioStrip({
           }}
         />
       </div>
-      {viewing && <DocFileViewer file={viewing} onClose={() => setViewing(null)} />}
+      {viewing && (
+        <DocFileViewer file={viewing} onClose={() => setViewing(null)} />
+      )}
     </>
   );
 }
@@ -268,17 +292,24 @@ export function ProposalFolioStrip({ proposalId }: { proposalId: string }) {
             chain={chain}
             onOpen={setViewing}
             onToggleVisibility={(f) =>
-              setVisibility.mutate({ fileId: f.id, clientVisible: !f.client_visible })
+              setVisibility.mutate({
+                fileId: f.id,
+                clientVisible: !f.client_visible,
+              })
             }
           />
         ))}
-        <button
-          type="button"
+        <DocumentAction
+          actionKey="upload-proposal-folio-file"
+          surfaceKey="open-document"
+          regionKey="proposal-folio"
+          variant="primary"
           onClick={() => inputRef.current?.click()}
-          className="font-mono text-[8.5px] uppercase tracking-[0.05em] text-[var(--color-clay)] hover:opacity-80"
+          loading={upload.isPending}
+          loadingLabel="Clipping…"
         >
-          {dragOver ? 'drop to clip it here' : upload.isPending ? 'clipping…' : '+ file'}
-        </button>
+          {dragOver ? 'Drop to clip it here' : '+ File'}
+        </DocumentAction>
         <input
           ref={inputRef}
           type="file"
@@ -292,7 +323,9 @@ export function ProposalFolioStrip({ proposalId }: { proposalId: string }) {
           }}
         />
       </div>
-      {viewing && <DocFileViewer file={viewing} onClose={() => setViewing(null)} />}
+      {viewing && (
+        <DocFileViewer file={viewing} onClose={() => setViewing(null)} />
+      )}
     </>
   );
 }
@@ -329,7 +362,11 @@ export function FolioLetterhead({ projectId }: { projectId: string }) {
     groups.set(key, [...(groups.get(key) ?? []), chain]);
   }
   const groupLabel = (key: string) =>
-    key === 'lines' ? 'On the lines' : key === 'letterhead' ? 'The letterhead' : SECTION_LABELS[key] ?? key;
+    key === 'lines'
+      ? 'On the lines'
+      : key === 'letterhead'
+        ? 'The letterhead'
+        : (SECTION_LABELS[key] ?? key);
 
   return (
     <div className="mt-1">
@@ -337,14 +374,18 @@ export function FolioLetterhead({ projectId }: { projectId: string }) {
         type="button"
         onClick={() => setOpen((v) => !v)}
         aria-expanded={open}
-        className="font-mono text-[9px] uppercase tracking-[0.08em] text-[var(--text-muted)] hover:text-[var(--color-clay)]"
+        className="min-h-11 min-w-11 font-mono text-[9px] uppercase tracking-[0.08em] text-[var(--text-muted)] hover:text-[var(--color-clay)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-clay)]"
       >
-        The folio · {chains.length} {chains.length === 1 ? 'file' : 'files'} {open ? '↑' : '↓'}
+        The folio · {chains.length} {chains.length === 1 ? 'file' : 'files'}{' '}
+        {open ? '↑' : '↓'}
       </button>
       {open && (
         <div className="mt-1 border-t border-dashed border-[var(--color-pearl)] pt-1.5">
           {[...groups.entries()].map(([key, group]) => (
-            <div key={key} className="mb-1.5 flex flex-wrap items-baseline gap-2">
+            <div
+              key={key}
+              className="mb-1.5 flex flex-wrap items-baseline gap-2"
+            >
               <span className="w-20 font-mono text-[8.5px] uppercase tracking-[0.05em] text-[var(--text-muted)]">
                 {groupLabel(key)}
               </span>
@@ -354,7 +395,10 @@ export function FolioLetterhead({ projectId }: { projectId: string }) {
                   chain={chain}
                   onOpen={openFolioFile}
                   onToggleVisibility={(f) =>
-                    setVisibility.mutate({ fileId: f.id, clientVisible: !f.client_visible })
+                    setVisibility.mutate({
+                      fileId: f.id,
+                      clientVisible: !f.client_visible,
+                    })
                   }
                 />
               ))}
@@ -362,7 +406,9 @@ export function FolioLetterhead({ projectId }: { projectId: string }) {
           ))}
         </div>
       )}
-      {viewing && <DocFileViewer file={viewing} onClose={() => setViewing(null)} />}
+      {viewing && (
+        <DocFileViewer file={viewing} onClose={() => setViewing(null)} />
+      )}
     </div>
   );
 }

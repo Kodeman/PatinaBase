@@ -27,6 +27,12 @@
 // a dead worker; the scans stay queued for the next tick. A job_runs row records
 // every invocation (00300 shape).
 //
+// Billing guard (SWEEP MODE ONLY — a targeted { scanId } call keeps the old
+// probe-first behavior): the 15-min cron sweep runs a cheap existence check
+// against the sweep predicate above BEFORE the /healthz probe. No eligible
+// row means zero outbound HTTP — Cloudflare Containers bill wall-clock while
+// awake, so an empty queue must never wake the container.
+//
 // Env: SUPABASE_URL + SUPABASE_SERVICE_ROLE_KEY (runtime-injected),
 //      INFERENCE_URL, INFERENCE_TOKEN.
 
@@ -186,6 +192,36 @@ Deno.serve(async (req: Request) => {
       detail: { reason: 'inference_unconfigured' },
     });
     return json({ skipped: 'inference_unconfigured', converted: 0, failed: 0 }, 200);
+  }
+
+  // Billing guard — SWEEP MODE ONLY (see header). Cheap existence check on the
+  // sweep predicate BEFORE the /healthz probe: an empty queue must never wake
+  // the inference container (Cloudflare Containers bill wall-clock while
+  // awake). A targeted { scanId } call keeps the old probe-first flow — an
+  // operator asking for a specific scan expects the probe to run.
+  if (!body.scanId) {
+    const { data: pending, error: pendingErr } = await admin
+      .from('room_scans')
+      .select('id')
+      .eq('status', 'ready')
+      .not('model_url', 'is', null)
+      .is('model_url_gltf', null)
+      .lt('glb_convert_attempts', MAX_ATTEMPTS)
+      .limit(1);
+    if (pendingErr) {
+      // Fail OPEN on the check itself — an unreadable table is not proof
+      // there's no work; fall through to the normal probe/sweep path.
+      logLine('work_check_failed', { error: pendingErr.message });
+    } else if (!pending || pending.length === 0) {
+      logLine('no_work', {});
+      await admin.from('job_runs').insert({
+        job_name: FN,
+        status: 'skipped',
+        finished_at: new Date().toISOString(),
+        detail: { reason: 'no_work' },
+      });
+      return json({ skipped: 'no_work', converted: 0, failed: 0 }, 200);
+    }
   }
 
   // Probe before touching any scan so a dead/un-warmed worker (or one without

@@ -30,6 +30,7 @@ import {
 import { RevisionFeedback } from '@/components/portal/revision-feedback';
 import { proposalEvents } from '@/lib/analytics';
 import { DocSheet } from './doc-sheet';
+import { DocumentAction, DocumentActionGroup } from '../document-action';
 
 const labelCls =
   'font-mono text-[9px] font-semibold uppercase tracking-[0.08em] text-[var(--color-aged-oak)]';
@@ -84,7 +85,9 @@ export function ReviseSheet({
     } catch (err) {
       console.error('Failed to create revision:', err);
       setError(
-        err instanceof Error ? err.message : 'Could not open the revision. Please try again.',
+        err instanceof Error
+          ? err.message
+          : 'Could not open the revision. Please try again.',
       );
     }
   };
@@ -95,16 +98,22 @@ export function ReviseSheet({
     <DocSheet open={open} onClose={onClose} title="Revise proposal">
       <div className="mx-auto max-w-xl">
         <p className={labelCls}>
-          {proposal?.title ?? 'Proposal'} &middot; v{currentVersion}.0 &rarr; v{nextVersion}.0
+          {proposal?.title ?? 'Proposal'} &middot; v{currentVersion}.0 &rarr; v
+          {nextVersion}.0
         </p>
-        <h2 className="mt-1 font-heading text-xl text-[var(--color-charcoal)]">Revise proposal</h2>
+        <h2 className="mt-1 font-heading text-xl text-[var(--color-charcoal)]">
+          Revise proposal
+        </h2>
         <p className="mt-1 text-[12.5px] leading-relaxed text-[var(--color-mocha)]">
-          Open a new version as a draft. v{currentVersion}.0 stays in the client&rsquo;s hands until
-          you send v{nextVersion}.0 — sending the new version is what supersedes the old one.
+          Open a new version as a draft. v{currentVersion}.0 stays in the
+          client&rsquo;s hands until you send v{nextVersion}.0 — sending the new
+          version is what supersedes the old one.
         </p>
 
         {!proposal ? (
-          <p className="mt-6 text-[12.5px] italic text-[var(--color-aged-oak)]">Loading…</p>
+          <p className="mt-6 text-[12.5px] italic text-[var(--color-aged-oak)]">
+            Loading…
+          </p>
         ) : (
           <div className="mt-5 space-y-5">
             {/* Client feedback on v1 — RevisionFeedback carries its own (dark)
@@ -119,8 +128,8 @@ export function ReviseSheet({
               </div>
             ) : (
               <p className="text-[12.5px] italic text-[var(--color-aged-oak)]">
-                No client feedback on this version. You can still open a new version with your own
-                updates.
+                No client feedback on this version. You can still open a new
+                version with your own updates.
               </p>
             )}
 
@@ -150,25 +159,30 @@ export function ReviseSheet({
             )}
 
             {/* Actions */}
-            <div className="flex items-center gap-4 border-t border-[var(--color-pearl)] pt-5">
-              <button
-                type="button"
+            <DocumentActionGroup
+              surfaceKey="open-document"
+              regionKey="revise-proposal-sheet"
+              className="border-t border-[var(--color-pearl)] pt-5"
+              aria-label="Revision actions"
+            >
+              <DocumentAction
+                actionKey="open-revision"
+                variant="primary"
                 onClick={handleOpenRevision}
-                disabled={createRevision.isPending}
-                className="rounded-[4px] bg-[var(--color-clay)] px-4 py-2 text-[12px] font-medium text-[var(--color-charcoal)] transition-opacity disabled:opacity-40"
+                loading={createRevision.isPending}
+                loadingLabel="Opening…"
+                trailing="→"
               >
-                {createRevision.isPending
-                  ? 'Opening…'
-                  : `Open v${nextVersion}.0 →`}
-              </button>
-              <button
-                type="button"
+                Open v{nextVersion}.0
+              </DocumentAction>
+              <DocumentAction
+                actionKey="cancel-revision"
+                variant="tertiary"
                 onClick={onClose}
-                className="font-mono text-[9px] uppercase tracking-[0.06em] text-[var(--color-aged-oak)] hover:text-[var(--color-charcoal)]"
               >
                 Not now
-              </button>
-            </div>
+              </DocumentAction>
+            </DocumentActionGroup>
           </div>
         )}
       </div>

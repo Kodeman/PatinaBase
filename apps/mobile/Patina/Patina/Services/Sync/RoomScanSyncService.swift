@@ -9,7 +9,7 @@
 //  in `ArtifactUploader`, the network-monitor + in-memory queue state lives
 //  in `ScanSyncQueue`, and the Supabase payload DTOs live in `Sync/Models/`.
 //  This service composes those pieces and keeps the public API stable
-//  (consumed via `.shared` by WalkView, ScanUploadProgressView,
+//  (consumed via `.shared` by ScanUploadProgressView,
 //  BackgroundScanUploader).
 //
 

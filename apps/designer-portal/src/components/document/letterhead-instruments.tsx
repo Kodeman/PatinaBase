@@ -28,15 +28,33 @@ import {
 import { invalidateMarginSurfaces } from '@/hooks/use-margin-items';
 import { useSaveProjectVitals } from '@/hooks/use-project-lifecycle';
 import { familyLabel } from '@/lib/document/family-label';
+import { useMobilePrimaryAction } from './mobile/mobile-shell';
 import { ClientMirror } from './client-mirror';
+import {
+  DocumentAction,
+  DocumentActionGroup,
+  DocumentActionRow,
+} from './document-action';
 import { ProposalPreview } from './proposal-preview';
 
 /** The three tiers the mirror honors (00084 client_visibility_tier). Copy
  *  ported from the portal's ClientViewToggle. */
 const TIERS = [
-  { value: 'full', label: 'Full access', desc: 'They see daily progress, every update, photos as they happen.' },
-  { value: 'milestone', label: 'Milestones', desc: 'Phase-end updates and major decisions only.' },
-  { value: 'curated', label: 'Curated', desc: 'You publish specific updates; the reveal comes at completion.' },
+  {
+    value: 'full',
+    label: 'Full access',
+    desc: 'They see daily progress, every update, photos as they happen.',
+  },
+  {
+    value: 'milestone',
+    label: 'Milestones',
+    desc: 'Phase-end updates and major decisions only.',
+  },
+  {
+    value: 'curated',
+    label: 'Curated',
+    desc: 'You publish specific updates; the reveal comes at completion.',
+  },
 ] as const;
 
 const getSupabase = () => createBrowserClient() as any;
@@ -88,7 +106,9 @@ function useClientScans(clientProfileId: string | null) {
       // row" pick), then batch-sign every distinct storage path across all
       // up-to-5 scans in ONE call instead of up to 5 round-trips (I79).
       const heroes = scans.map((s) => resolveCoverPhoto(s.images ?? []));
-      const heroPaths = heroes.map((h) => (h ? publicUrlToPath(h.image_url) : null));
+      const heroPaths = heroes.map((h) =>
+        h ? publicUrlToPath(h.image_url) : null,
+      );
       const pathsToSign = Array.from(
         new Set(heroPaths.filter((p): p is string => Boolean(p))),
       );
@@ -100,7 +120,8 @@ function useClientScans(clientProfileId: string | null) {
           .createSignedUrls(pathsToSign, 3600);
         if (signError) throw signError;
         for (const entry of signedData ?? []) {
-          if (entry.path && !entry.error) signedByPath.set(entry.path, entry.signedUrl);
+          if (entry.path && !entry.error)
+            signedByPath.set(entry.path, entry.signedUrl);
         }
       }
 
@@ -111,7 +132,11 @@ function useClientScans(clientProfileId: string | null) {
         // signed map means that one signing call failed — unresolved, not a
         // throw. No path (but a hero exists) means the raw value was
         // already a usable URL — pass it through unchanged.
-        const image_url = !hero ? null : path ? (signedByPath.get(path) ?? null) : hero.image_url;
+        const image_url = !hero
+          ? null
+          : path
+            ? (signedByPath.get(path) ?? null)
+            : hero.image_url;
         return {
           id: s.id,
           name: s.name,
@@ -130,7 +155,10 @@ function useClientScans(clientProfileId: string | null) {
  * designer↔client 1:1 DIRECT thread keyed on the client's profile id
  * (rpc_start_direct_thread, 00103) — which needs no project_id.
  */
-function useSendDocumentNote(projectId: string | null, counterpartProfileId: string | null) {
+function useSendDocumentNote(
+  projectId: string | null,
+  counterpartProfileId: string | null,
+) {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: async (body: string) => {
@@ -189,7 +217,10 @@ export function LetterheadInstruments({
   const sendNote = useSendDocumentNote(projectId, clientProfileId);
   const { data: scans } = useClientScans(clientProfileId);
 
-  const scan = useMemo(() => (scans ?? []).find((s) => s.image_url) ?? null, [scans]);
+  const scan = useMemo(
+    () => (scans ?? []).find((s) => s.image_url) ?? null,
+    [scans],
+  );
   const family = familyLabel(clientName);
 
   // "View as the client" needs a mirror to open: the full project mirror when
@@ -200,38 +231,55 @@ export function LetterheadInstruments({
   // a direct thread to the client's profile. A profile-less lead has neither.
   const canSendNote = Boolean(projectId || clientProfileId);
 
+  useMobilePrimaryAction(
+    canSendNote
+      ? {
+          actionKey: 'message-family',
+          surfaceKey: 'open-document',
+          regionKey: 'letterhead-actions',
+          label: `Message ${family}`,
+          target: { kind: 'press', onPress: () => setComposing((v) => !v) },
+        }
+      : null,
+  );
+
   return (
     <>
-      <div className="mt-1 flex flex-wrap items-baseline gap-x-4 gap-y-1">
-        {canMirror && (
-          <button
-            type="button"
-            onClick={() => setMirrorOpen(true)}
-            className="font-mono text-[9px] uppercase tracking-[0.08em] text-[var(--text-muted)] hover:text-[var(--color-clay)]"
-          >
-            Preview as {family}
-          </button>
-        )}
+      <DocumentActionGroup
+        surfaceKey="open-document"
+        regionKey="letterhead-actions"
+        className="mt-1"
+        aria-label="Document letterhead actions"
+      >
         {canSendNote && (
-          <button
-            type="button"
+          <DocumentAction
+            actionKey="message-family"
+            variant="primary"
             onClick={() => setComposing((v) => !v)}
-            className="font-mono text-[9px] uppercase tracking-[0.08em] text-[var(--text-muted)] hover:text-[var(--color-clay)]"
           >
             Message {family}
-          </button>
+          </DocumentAction>
+        )}
+        {canMirror && (
+          <DocumentAction
+            actionKey="preview-as-client"
+            variant="secondary"
+            onClick={() => setMirrorOpen(true)}
+          >
+            Preview as {family}
+          </DocumentAction>
         )}
         {scan && (
-          <button
-            type="button"
+          <DocumentAction
+            actionKey="open-client-scan"
+            variant="tertiary"
             onClick={() => router.push(`/room/${scan.id}?from=document`)}
-            className="font-mono text-[9px] uppercase tracking-[0.08em] text-[var(--text-muted)] hover:text-[var(--color-clay)]"
           >
             The scan
-          </button>
+          </DocumentAction>
         )}
         {projectId && <SharingTierInstrument projectId={projectId} />}
-      </div>
+      </DocumentActionGroup>
 
       {composing && (
         <div
@@ -244,8 +292,8 @@ export function LetterheadInstruments({
           }}
         >
           <p className="mb-1.5 text-[10px] italic text-[var(--text-muted)]">
-            The Pulse handles Fridays; this is for now. It lands in {clientName}&rsquo;s portal
-            messages.
+            The Pulse handles Fridays; this is for now. It lands in {clientName}
+            &rsquo;s portal messages.
           </p>
           <textarea
             autoFocus
@@ -255,27 +303,34 @@ export function LetterheadInstruments({
             placeholder={`A quick note to ${clientName}…`}
             className="w-full resize-y bg-transparent text-[12px] text-[var(--color-charcoal)] outline-none placeholder:italic placeholder:text-[var(--text-muted)]"
           />
-          <div className="mt-1 flex items-baseline gap-3">
-            <button
-              type="button"
-              disabled={!noteBody.trim() || sendNote.isPending}
+          <DocumentActionRow
+            surfaceKey="open-document"
+            regionKey="letterhead-message"
+            className="mt-1"
+            aria-label="Message actions"
+          >
+            <DocumentAction
+              actionKey="send-message"
+              variant="primary"
+              disabled={!noteBody.trim()}
+              loading={sendNote.isPending}
+              loadingLabel="Sending…"
               onClick={() => {
                 sendNote.mutate(noteBody.trim());
                 setNoteBody('');
                 setComposing(false);
               }}
-              className="font-mono text-[9px] uppercase tracking-[0.05em] text-[var(--color-clay)] disabled:opacity-40"
             >
-              {sendNote.isPending ? 'Sending…' : 'Send'}
-            </button>
-            <button
-              type="button"
+              Send
+            </DocumentAction>
+            <DocumentAction
+              actionKey="cancel-message"
+              variant="tertiary"
               onClick={() => setComposing(false)}
-              className="font-mono text-[9px] uppercase tracking-[0.05em] text-[var(--text-muted)]"
             >
               Cancel
-            </button>
-          </div>
+            </DocumentAction>
+          </DocumentActionRow>
         </div>
       )}
 
@@ -307,13 +362,13 @@ export function LetterheadInstruments({
  * the vitals save channel and folds the panel; failures read inline (R83).
  */
 function SharingTierInstrument({ projectId }: { projectId: string }) {
-   
   const { data: project } = useProjectV2(projectId) as { data: any };
   const save = useSaveProjectVitals(projectId);
   const [open, setOpen] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const current = (project?.client_visibility_tier ?? 'milestone') as (typeof TIERS)[number]['value'];
+  const current = (project?.client_visibility_tier ??
+    'milestone') as (typeof TIERS)[number]['value'];
   const currentLabel = TIERS.find((t) => t.value === current)?.label ?? current;
 
   const choose = (tier: (typeof TIERS)[number]['value']) => {
@@ -327,21 +382,25 @@ function SharingTierInstrument({ projectId }: { projectId: string }) {
       {
         onSuccess: () => setOpen(false),
         onError: (err) =>
-          setError(err instanceof Error ? err.message : 'Could not change the tier. Try again.'),
+          setError(
+            err instanceof Error
+              ? err.message
+              : 'Could not change the tier. Try again.',
+          ),
       },
     );
   };
 
   return (
     <span className="relative">
-      <button
-        type="button"
+      <DocumentAction
+        actionKey="sharing-settings"
+        variant="tertiary"
         aria-expanded={open}
         onClick={() => setOpen((v) => !v)}
-        className="font-mono text-[9px] uppercase tracking-[0.08em] text-[var(--text-muted)] hover:text-[var(--color-clay)]"
       >
         Sharing · {currentLabel}
-      </button>
+      </DocumentAction>
       {open && (
         <span
           className="absolute left-0 top-full z-20 mt-1.5 block w-64 rounded-[4px] border border-[var(--doc-ink-border)] bg-[var(--doc-paper)] p-1.5"
@@ -372,7 +431,10 @@ function SharingTierInstrument({ projectId }: { projectId: string }) {
             </button>
           ))}
           {error && (
-            <span role="alert" className="block px-2 pb-1 pt-0.5 text-[10px] text-[var(--color-terracotta)]">
+            <span
+              role="alert"
+              className="block px-2 pb-1 pt-0.5 text-[10px] text-[var(--color-terracotta)]"
+            >
               {error}
             </span>
           )}

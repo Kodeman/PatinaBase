@@ -21,21 +21,41 @@ import {
   useAudienceSegments,
 } from '@patina/supabase';
 import type { Campaign } from '@patina/shared/types';
-import { StatGrid, CampRow, CampBadge, OutreachButton, ListHeader, QuietNote } from './outreach-bits';
+import {
+  StatGrid,
+  CampRow,
+  CampBadge,
+  OutreachButton,
+  ListHeader,
+  QuietNote,
+} from './outreach-bits';
 
 function campaignStat(c: Campaign): string {
   if (c.status === 'sent') {
     const recipients = c.total_recipients || c.sent_count || 0;
     const opened = c.open_count || c.campaign_analytics?.opened || 0;
     const rate = recipients > 0 ? Math.round((opened / recipients) * 100) : 0;
-    const when = c.sent_at ? new Date(c.sent_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) : null;
-    return [when ? `Sent · ${when}` : 'Sent', `${recipients} recipients`, `${rate}% opened`].join(' · ');
+    const when = c.sent_at
+      ? new Date(c.sent_at).toLocaleDateString('en-US', {
+          month: 'short',
+          day: 'numeric',
+        })
+      : null;
+    return [
+      when ? `Sent · ${when}` : 'Sent',
+      `${recipients} recipients`,
+      `${rate}% opened`,
+    ].join(' · ');
   }
   if (c.status === 'scheduled' && c.scheduled_for) {
-    const when = new Date(c.scheduled_for).toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+    const when = new Date(c.scheduled_for).toLocaleDateString('en-US', {
+      month: 'short',
+      day: 'numeric',
+    });
     return `Scheduled · ${when} · ${c.total_recipients || 0} recipients`;
   }
-  if (c.status === 'sending') return `Sending · ${c.sent_count || 0} of ${c.total_recipients || 0}`;
+  if (c.status === 'sending')
+    return `Sending · ${c.sent_count || 0} of ${c.total_recipients || 0}`;
   return 'Draft';
 }
 
@@ -56,7 +76,10 @@ export function CampaignsTab({ notify }: { notify: (m: string) => void }) {
   const [segmentId, setSegmentId] = useState('');
 
   const stats = [
-    { n: dash ? dash.stats.totalSent.toLocaleString('en-US') : '—', label: 'sent · 30 days' },
+    {
+      n: dash ? dash.stats.totalSent.toLocaleString('en-US') : '—',
+      label: 'sent · 30 days',
+    },
     { n: dash ? `${dash.stats.openRate}%` : '—', label: 'avg. open rate' },
     {
       n: campaigns ? campaigns.filter((c) => c.status === 'sent').length : '—',
@@ -64,7 +87,8 @@ export function CampaignsTab({ notify }: { notify: (m: string) => void }) {
     },
   ];
 
-  const canSubmit = name.trim() && subject.trim() && templateId && !createCampaign.isPending;
+  const canSubmit =
+    name.trim() && subject.trim() && templateId && !createCampaign.isPending;
 
   const submit = () => {
     if (!canSubmit) return;
@@ -85,7 +109,10 @@ export function CampaignsTab({ notify }: { notify: (m: string) => void }) {
           setTemplateId('');
           setSegmentId('');
         },
-        onError: (e) => notify(e instanceof Error ? e.message : 'Could not draft the campaign.'),
+        onError: (e) =>
+          notify(
+            e instanceof Error ? e.message : 'Could not draft the campaign.',
+          ),
       },
     );
   };
@@ -97,7 +124,11 @@ export function CampaignsTab({ notify }: { notify: (m: string) => void }) {
       <ListHeader
         label="Campaigns"
         action={
-          <OutreachButton tone="primary" onClick={() => setComposing((v) => !v)}>
+          <OutreachButton
+            actionKey="new-campaign"
+            tone="primary"
+            onClick={() => setComposing((v) => !v)}
+          >
             {composing ? 'Close' : '+ New campaign'}
           </OutreachButton>
         }
@@ -152,7 +183,12 @@ export function CampaignsTab({ notify }: { notify: (m: string) => void }) {
             </Field>
           </div>
           <div className="mt-3 flex justify-end">
-            <OutreachButton tone="primary" onClick={submit} disabled={!canSubmit}>
+            <OutreachButton
+              actionKey="draft-campaign"
+              tone="primary"
+              onClick={submit}
+              disabled={!canSubmit}
+            >
               {createCampaign.isPending ? 'Drafting…' : 'Draft campaign'}
             </OutreachButton>
           </div>
@@ -160,11 +196,13 @@ export function CampaignsTab({ notify }: { notify: (m: string) => void }) {
       )}
 
       {isLoading ? (
-        <p className="px-1 py-5 text-[0.74rem] text-[var(--color-aged-oak)]">Reading your sends…</p>
+        <p className="px-1 py-5 text-[0.74rem] text-[var(--color-aged-oak)]">
+          Reading your sends…
+        </p>
       ) : !campaigns || campaigns.length === 0 ? (
         <QuietNote>
-          No campaigns yet. Compose one above — it drafts from a template and a directory audience,
-          then waits for your hand to send.
+          No campaigns yet. Compose one above — it drafts from a template and a
+          directory audience, then waits for your hand to send.
         </QuietNote>
       ) : (
         campaigns.map((c) => (
@@ -178,11 +216,16 @@ export function CampaignsTab({ notify }: { notify: (m: string) => void }) {
                 {c.status === 'draft' && (
                   <>
                     <OutreachButton
+                      actionKey="send-campaign"
                       onClick={() =>
                         sendCampaign.mutate(c.id, {
                           onSuccess: () => notify(`“${c.name}” is on its way.`),
                           onError: (e) =>
-                            notify(e instanceof Error ? e.message : 'Could not send the campaign.'),
+                            notify(
+                              e instanceof Error
+                                ? e.message
+                                : 'Could not send the campaign.',
+                            ),
                         })
                       }
                       disabled={sendCampaign.isPending}
@@ -190,12 +233,17 @@ export function CampaignsTab({ notify }: { notify: (m: string) => void }) {
                       Send
                     </OutreachButton>
                     <OutreachButton
+                      actionKey="discard-campaign"
                       tone="quiet"
                       onClick={() =>
                         deleteCampaign.mutate(c.id, {
                           onSuccess: () => notify('Draft discarded.'),
                           onError: (e) =>
-                            notify(e instanceof Error ? e.message : 'Could not discard the draft.'),
+                            notify(
+                              e instanceof Error
+                                ? e.message
+                                : 'Could not discard the draft.',
+                            ),
                         })
                       }
                       disabled={deleteCampaign.isPending}
@@ -213,7 +261,13 @@ export function CampaignsTab({ notify }: { notify: (m: string) => void }) {
   );
 }
 
-function Field({ label, children }: { label: string; children: React.ReactNode }) {
+function Field({
+  label,
+  children,
+}: {
+  label: string;
+  children: React.ReactNode;
+}) {
   return (
     <label className="block">
       <span className="mb-1 block font-mono text-[0.44rem] font-semibold uppercase tracking-[0.07em] text-[var(--color-aged-oak)]">

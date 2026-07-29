@@ -32,16 +32,22 @@ import { monogramOf } from '@/lib/document/account-identity';
 import { StudioInviteModal } from './studio-invite-modal';
 import { StudioLogoUploadField } from './studio-logo-upload-field';
 import { studioEvents } from '@/lib/analytics/studio-events';
+import { DocumentAction, DocumentActionGroup } from '../document-action';
 
 /** Map studio DB error codes to friendly copy (see 00319 guard + RPCs). */
 function friendlyStudioError(err: unknown, fallback: string): string {
   const msg = err instanceof Error ? err.message : String(err ?? '');
-  if (msg.includes('last_owner_protected')) return 'Transfer ownership to another member first.';
+  if (msg.includes('last_owner_protected'))
+    return 'Transfer ownership to another member first.';
   if (msg.includes('not_owner')) return 'Only the studio owner can do this.';
-  if (msg.includes('target_not_active_member')) return 'That teammate must be an active studio member.';
-  if (msg.includes('owner_change_requires_owner')) return 'Only an owner can change owner roles.';
-  if (msg.includes('owner_promotion_requires_owner')) return 'Only an owner can promote a member to owner.';
-  if (msg.includes('owner_insert_requires_owner')) return 'Only an owner can add another owner.';
+  if (msg.includes('target_not_active_member'))
+    return 'That teammate must be an active studio member.';
+  if (msg.includes('owner_change_requires_owner'))
+    return 'Only an owner can change owner roles.';
+  if (msg.includes('owner_promotion_requires_owner'))
+    return 'Only an owner can promote a member to owner.';
+  if (msg.includes('owner_insert_requires_owner'))
+    return 'Only an owner can add another owner.';
   return msg || fallback;
 }
 
@@ -50,16 +56,11 @@ const FIELD =
 const LABEL =
   'mb-1 block font-mono text-[9px] font-semibold uppercase tracking-[0.1em] text-[var(--color-aged-oak)]';
 const HELP = 'mt-1 text-[11px] leading-relaxed text-[var(--color-aged-oak)]';
-const PRIMARY =
-  'rounded-[5px] border border-[var(--color-clay)] bg-[var(--color-clay)] px-3.5 py-1.5 text-[12px] font-medium text-[var(--color-charcoal)] transition-colors hover:bg-[var(--color-aged-oak)] hover:border-[var(--color-aged-oak)] disabled:opacity-50';
-const GHOST =
-  'rounded-[5px] border border-[var(--color-pearl)] px-3.5 py-1.5 text-[12px] font-medium text-[var(--color-mocha)] transition-colors hover:border-[var(--color-clay)] disabled:opacity-50';
-const LINK =
-  'font-mono text-[10px] uppercase tracking-[0.08em] text-[var(--color-aged-oak)] transition-colors hover:text-[var(--color-charcoal)] disabled:opacity-50';
-const LINK_DANGER =
-  'font-mono text-[11px] uppercase tracking-[0.1em] text-[var(--color-terracotta)] transition-colors hover:text-[var(--color-charcoal)] disabled:opacity-60';
 
-const STATUS_TONE: Record<string, StatusTone> = { active: 'success', invited: 'warning' };
+const STATUS_TONE: Record<string, StatusTone> = {
+  active: 'success',
+  invited: 'warning',
+};
 
 export function AccountStudioPage() {
   const { user } = useAuth();
@@ -121,7 +122,9 @@ export function AccountStudioPage() {
   const myRole = studio?.membership.role ?? null;
   const canManage = myRole === 'owner' || myRole === 'admin';
   const ownerCount = useMemo(
-    () => (members ?? []).filter((m) => m.role === 'owner' && m.status === 'active').length,
+    () =>
+      (members ?? []).filter((m) => m.role === 'owner' && m.status === 'active')
+        .length,
     [members],
   );
 
@@ -152,7 +155,10 @@ export function AccountStudioPage() {
       setIsRenaming(false);
       return;
     }
-    updateOrg.mutate({ id: studio.id, name }, { onSuccess: () => setIsRenaming(false) });
+    updateOrg.mutate(
+      { id: studio.id, name },
+      { onSuccess: () => setIsRenaming(false) },
+    );
   };
 
   const handleRoleChange = (memberId: string, role: MemberRole) => {
@@ -166,7 +172,12 @@ export function AccountStudioPage() {
 
   const handleLeave = () => {
     if (!studio) return;
-    if (!confirm(`Leave ${studio.name}? You'll lose access to its projects and clients.`)) return;
+    if (
+      !confirm(
+        `Leave ${studio.name}? You'll lose access to its projects and clients.`,
+      )
+    )
+      return;
     leaveOrg.mutate(studio.id);
   };
 
@@ -205,8 +216,8 @@ export function AccountStudioPage() {
     return (
       <div className="pt-1">
         <p className={HELP}>
-          Create a studio to invite designers and collaborators, assign roles, and share
-          projects across your team.
+          Create a studio to invite designers and collaborators, assign roles,
+          and share projects across your team.
         </p>
         <div className="mt-4">
           <label htmlFor="studio-new-name" className={LABEL}>
@@ -224,14 +235,19 @@ export function AccountStudioPage() {
             className={FIELD}
           />
         </div>
-        <button
-          type="button"
+        <DocumentAction
+          actionKey="create-studio"
+          surfaceKey="account"
+          regionKey="studio-creation"
+          variant="primary"
           onClick={handleCreateStudio}
           disabled={!newStudioName.trim() || createOrg.isPending}
-          className={`${PRIMARY} mt-3`}
+          loading={createOrg.isPending}
+          loadingLabel="Creating…"
+          className="mt-3"
         >
-          {createOrg.isPending ? 'Creating…' : 'Create studio'}
-        </button>
+          Create studio
+        </DocumentAction>
         {createOrg.isError && (
           <p
             role="alert"
@@ -269,7 +285,11 @@ export function AccountStudioPage() {
   const addressLines = [
     asStr(currentAddress.line1),
     asStr(currentAddress.line2),
-    [asStr(currentAddress.city), asStr(currentAddress.state), asStr(currentAddress.zip)]
+    [
+      asStr(currentAddress.city),
+      asStr(currentAddress.state),
+      asStr(currentAddress.zip),
+    ]
       .filter(Boolean)
       .join(', '),
   ].filter((l) => l.trim().length > 0);
@@ -295,19 +315,29 @@ export function AccountStudioPage() {
               }}
               className={FIELD}
             />
-            <div className="mt-2 flex gap-3">
-              <button
-                type="button"
+            <DocumentActionGroup
+              surfaceKey="account"
+              regionKey="studio-rename"
+              className="mt-2"
+            >
+              <DocumentAction
+                actionKey="save-studio-name"
+                variant="primary"
                 onClick={handleSaveRename}
                 disabled={updateOrg.isPending}
-                className={PRIMARY}
+                loading={updateOrg.isPending}
+                loadingLabel="Saving…"
               >
-                {updateOrg.isPending ? 'Saving…' : 'Save'}
-              </button>
-              <button type="button" onClick={() => setIsRenaming(false)} className={GHOST}>
+                Save
+              </DocumentAction>
+              <DocumentAction
+                actionKey="cancel-studio-rename"
+                variant="tertiary"
+                onClick={() => setIsRenaming(false)}
+              >
                 Cancel
-              </button>
-            </div>
+              </DocumentAction>
+            </DocumentActionGroup>
           </div>
         ) : (
           <div className="flex items-start justify-between gap-4">
@@ -320,15 +350,27 @@ export function AccountStudioPage() {
               </p>
             </div>
             {canManage && (
-              <button type="button" onClick={startRename} className={`${LINK} shrink-0`}>
+              <DocumentAction
+                actionKey="rename-studio"
+                surfaceKey="account"
+                regionKey="studio-name"
+                variant="tertiary"
+                onClick={startRename}
+                className="shrink-0"
+              >
                 Rename
-              </button>
+              </DocumentAction>
             )}
           </div>
         )}
         {isRenaming && updateOrg.isError && (
-          <p role="alert" className="mt-2 text-[12px] text-[var(--color-terracotta)]">
-            {updateOrg.error instanceof Error ? updateOrg.error.message : 'Failed to save.'}
+          <p
+            role="alert"
+            className="mt-2 text-[12px] text-[var(--color-terracotta)]"
+          >
+            {updateOrg.error instanceof Error
+              ? updateOrg.error.message
+              : 'Failed to save.'}
           </p>
         )}
       </div>
@@ -337,8 +379,8 @@ export function AccountStudioPage() {
       <div className="mb-6 border-t border-[var(--color-pearl)] pt-5">
         <h3 className={`${LABEL} mb-3`}>Branding</h3>
         <p className={`${HELP} mb-4 mt-0`}>
-          Your studio&rsquo;s logo and contact details appear on invoices, client-facing
-          emails, and the client app.
+          Your studio&rsquo;s logo and contact details appear on invoices,
+          client-facing emails, and the client app.
         </p>
 
         {/* Logo */}
@@ -374,7 +416,9 @@ export function AccountStudioPage() {
                 id="studio-website"
                 type="url"
                 value={branding.website}
-                onChange={(e) => setBranding((b) => ({ ...b, website: e.target.value }))}
+                onChange={(e) =>
+                  setBranding((b) => ({ ...b, website: e.target.value }))
+                }
                 placeholder="https://your-studio.com"
                 className={FIELD}
               />
@@ -387,7 +431,9 @@ export function AccountStudioPage() {
                 id="studio-email"
                 type="email"
                 value={branding.email}
-                onChange={(e) => setBranding((b) => ({ ...b, email: e.target.value }))}
+                onChange={(e) =>
+                  setBranding((b) => ({ ...b, email: e.target.value }))
+                }
                 placeholder="hello@your-studio.com"
                 className={FIELD}
               />
@@ -400,7 +446,9 @@ export function AccountStudioPage() {
                 id="studio-phone"
                 type="tel"
                 value={branding.phone}
-                onChange={(e) => setBranding((b) => ({ ...b, phone: e.target.value }))}
+                onChange={(e) =>
+                  setBranding((b) => ({ ...b, phone: e.target.value }))
+                }
                 placeholder="(555) 555-5555"
                 className={FIELD}
               />
@@ -412,7 +460,9 @@ export function AccountStudioPage() {
                 aria-label="Address line 1"
                 type="text"
                 value={branding.line1}
-                onChange={(e) => setBranding((b) => ({ ...b, line1: e.target.value }))}
+                onChange={(e) =>
+                  setBranding((b) => ({ ...b, line1: e.target.value }))
+                }
                 placeholder="Street address"
                 className={FIELD}
               />
@@ -420,7 +470,9 @@ export function AccountStudioPage() {
                 aria-label="Address line 2"
                 type="text"
                 value={branding.line2}
-                onChange={(e) => setBranding((b) => ({ ...b, line2: e.target.value }))}
+                onChange={(e) =>
+                  setBranding((b) => ({ ...b, line2: e.target.value }))
+                }
                 placeholder="Suite, unit, etc. (optional)"
                 className={FIELD}
               />
@@ -429,7 +481,9 @@ export function AccountStudioPage() {
                   aria-label="City"
                   type="text"
                   value={branding.city}
-                  onChange={(e) => setBranding((b) => ({ ...b, city: e.target.value }))}
+                  onChange={(e) =>
+                    setBranding((b) => ({ ...b, city: e.target.value }))
+                  }
                   placeholder="City"
                   className={`${FIELD} col-span-2`}
                 />
@@ -437,7 +491,9 @@ export function AccountStudioPage() {
                   aria-label="State"
                   type="text"
                   value={branding.state}
-                  onChange={(e) => setBranding((b) => ({ ...b, state: e.target.value }))}
+                  onChange={(e) =>
+                    setBranding((b) => ({ ...b, state: e.target.value }))
+                  }
                   placeholder="State"
                   className={FIELD}
                 />
@@ -445,31 +501,45 @@ export function AccountStudioPage() {
                   aria-label="ZIP"
                   type="text"
                   value={branding.zip}
-                  onChange={(e) => setBranding((b) => ({ ...b, zip: e.target.value }))}
+                  onChange={(e) =>
+                    setBranding((b) => ({ ...b, zip: e.target.value }))
+                  }
                   placeholder="ZIP"
                   className={FIELD}
                 />
               </div>
             </div>
 
-            <div className="mt-4 flex items-center gap-3">
-              <button
-                type="button"
+            <DocumentActionGroup
+              surfaceKey="account"
+              regionKey="studio-branding"
+              className="mt-4 items-center"
+            >
+              <DocumentAction
+                actionKey="save-studio-branding"
+                variant="primary"
                 onClick={handleSaveBranding}
                 disabled={!brandingDirty || updateOrg.isPending}
-                className={PRIMARY}
+                loading={updateOrg.isPending}
+                loadingLabel="Saving…"
               >
-                {updateOrg.isPending ? 'Saving…' : 'Save branding'}
-              </button>
+                Save branding
+              </DocumentAction>
               {!brandingDirty && !updateOrg.isPending && (
                 <span className="font-mono text-[10px] uppercase tracking-[0.08em] text-[var(--color-aged-oak)]">
                   Saved
                 </span>
               )}
-            </div>
+            </DocumentActionGroup>
             {!isRenaming && updateOrg.isError && (
-              <p role="alert" className="mt-2 text-[12px] text-[var(--color-terracotta)]">
-                {friendlyStudioError(updateOrg.error, 'Failed to save branding.')}
+              <p
+                role="alert"
+                className="mt-2 text-[12px] text-[var(--color-terracotta)]"
+              >
+                {friendlyStudioError(
+                  updateOrg.error,
+                  'Failed to save branding.',
+                )}
               </p>
             )}
           </div>
@@ -478,19 +548,25 @@ export function AccountStudioPage() {
             <div>
               <dt className={LABEL}>Website</dt>
               <dd className="text-[13px] text-[var(--color-charcoal)]">
-                {studio.website || <span className="text-[var(--color-aged-oak)]">Not set</span>}
+                {studio.website || (
+                  <span className="text-[var(--color-aged-oak)]">Not set</span>
+                )}
               </dd>
             </div>
             <div>
               <dt className={LABEL}>Contact email</dt>
               <dd className="text-[13px] text-[var(--color-charcoal)]">
-                {studio.email || <span className="text-[var(--color-aged-oak)]">Not set</span>}
+                {studio.email || (
+                  <span className="text-[var(--color-aged-oak)]">Not set</span>
+                )}
               </dd>
             </div>
             <div>
               <dt className={LABEL}>Phone</dt>
               <dd className="text-[13px] text-[var(--color-charcoal)]">
-                {studio.phone || <span className="text-[var(--color-aged-oak)]">Not set</span>}
+                {studio.phone || (
+                  <span className="text-[var(--color-aged-oak)]">Not set</span>
+                )}
               </dd>
             </div>
             <div>
@@ -511,9 +587,15 @@ export function AccountStudioPage() {
       <div className="mb-2 flex items-center justify-between">
         <h3 className={LABEL}>Members</h3>
         {canManage && (
-          <button type="button" onClick={() => setInviteOpen(true)} className={LINK}>
-            + Invite teammate
-          </button>
+          <DocumentAction
+            actionKey="invite-studio-teammate"
+            surfaceKey="account"
+            regionKey="studio-members"
+            variant="primary"
+            onClick={() => setInviteOpen(true)}
+          >
+            Invite teammate
+          </DocumentAction>
         )}
       </div>
 
@@ -524,7 +606,10 @@ export function AccountStudioPage() {
       ) : (
         <ul>
           {members.map((m) => {
-            const label = m.profiles?.display_name || m.profiles?.email || 'Invited teammate';
+            const label =
+              m.profiles?.display_name ||
+              m.profiles?.email ||
+              'Invited teammate';
             const isSelf = m.user_id === user?.id;
             const isLastOwner = m.role === 'owner' && ownerCount <= 1;
             const showControls = canManage && !isSelf && !isLastOwner;
@@ -536,12 +621,20 @@ export function AccountStudioPage() {
               >
                 <div className="flex min-w-0 items-center gap-3">
                   <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-[var(--color-pearl)] font-mono text-[11px] uppercase tracking-wider text-[var(--color-mocha)]">
-                    {monogramOf(m.profiles?.display_name, m.profiles?.email ?? '')}
+                    {monogramOf(
+                      m.profiles?.display_name,
+                      m.profiles?.email ?? '',
+                    )}
                   </span>
                   <div className="min-w-0">
                     <p className="truncate text-[13px] text-[var(--color-charcoal)]">
                       {label}
-                      {isSelf && <span className="text-[var(--color-aged-oak)]"> (you)</span>}
+                      {isSelf && (
+                        <span className="text-[var(--color-aged-oak)]">
+                          {' '}
+                          (you)
+                        </span>
+                      )}
                     </p>
                     {m.profiles?.display_name && m.profiles?.email && (
                       <p className="truncate text-[11px] text-[var(--color-aged-oak)]">
@@ -559,7 +652,9 @@ export function AccountStudioPage() {
                       <Select
                         aria-label={`Role for ${label}`}
                         value={m.role}
-                        onChange={(e) => handleRoleChange(m.id, e.target.value as MemberRole)}
+                        onChange={(e) =>
+                          handleRoleChange(m.id, e.target.value as MemberRole)
+                        }
                         disabled={updateRole.isPending}
                         wrapperClassName="w-28"
                       >
@@ -567,24 +662,31 @@ export function AccountStudioPage() {
                         <option value="admin">Admin</option>
                         <option value="member">Member</option>
                       </Select>
-                      {myRole === 'owner' && m.status === 'active' && m.role !== 'owner' && (
-                        <button
-                          type="button"
-                          onClick={() => handleTransfer(m.user_id, label)}
-                          disabled={transferOwner.isPending}
-                          className={LINK}
-                        >
-                          Make owner
-                        </button>
-                      )}
-                      <button
-                        type="button"
+                      {myRole === 'owner' &&
+                        m.status === 'active' &&
+                        m.role !== 'owner' && (
+                          <DocumentAction
+                            actionKey="make-studio-owner"
+                            surfaceKey="account"
+                            regionKey="studio-member-row"
+                            variant="secondary"
+                            onClick={() => handleTransfer(m.user_id, label)}
+                            disabled={transferOwner.isPending}
+                          >
+                            Make owner
+                          </DocumentAction>
+                        )}
+                      <DocumentAction
+                        actionKey="remove-studio-member"
+                        surfaceKey="account"
+                        regionKey="studio-member-row"
+                        variant="tertiary"
                         onClick={() => handleRemove(m.id, label)}
                         disabled={removeMember.isPending}
-                        className={LINK}
+                        className="text-[var(--color-terracotta)]"
                       >
                         Remove
-                      </button>
+                      </DocumentAction>
                     </>
                   ) : (
                     <span className="font-mono text-[9.5px] uppercase tracking-[0.06em] text-[var(--color-aged-oak)]">
@@ -599,24 +701,38 @@ export function AccountStudioPage() {
       )}
 
       {transferOwner.isError && (
-        <p role="alert" className="mt-3 text-[12px] text-[var(--color-terracotta)]">
-          {friendlyStudioError(transferOwner.error, 'Failed to transfer ownership.')}
+        <p
+          role="alert"
+          className="mt-3 text-[12px] text-[var(--color-terracotta)]"
+        >
+          {friendlyStudioError(
+            transferOwner.error,
+            'Failed to transfer ownership.',
+          )}
         </p>
       )}
 
       {/* Leave studio. The last owner is blocked by the DB guard (00319) — they
           must transfer ownership first; the error copy below tells them so. */}
       <div className="mt-6 border-t border-[var(--color-pearl)] pt-4">
-        <button
-          type="button"
+        <DocumentAction
+          actionKey="leave-studio"
+          surfaceKey="account"
+          regionKey="studio-membership"
+          variant="tertiary"
           onClick={handleLeave}
           disabled={leaveOrg.isPending}
-          className={LINK_DANGER}
+          loading={leaveOrg.isPending}
+          loadingLabel="Leaving…"
+          className="text-[var(--color-terracotta)]"
         >
-          {leaveOrg.isPending ? 'Leaving…' : 'Leave studio'}
-        </button>
+          Leave studio
+        </DocumentAction>
         {leaveOrg.isError && (
-          <p role="alert" className="mt-2 text-[12px] text-[var(--color-terracotta)]">
+          <p
+            role="alert"
+            className="mt-2 text-[12px] text-[var(--color-terracotta)]"
+          >
             {friendlyStudioError(leaveOrg.error, 'Failed to leave the studio.')}
           </p>
         )}

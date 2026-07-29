@@ -27,10 +27,17 @@ import { ClientPicker } from '@/components/portal/client-picker';
 import { useOpenProjectDirect } from '@/hooks/use-project-lifecycle';
 import { dollarsToCents } from '@/lib/document/closure-derivation';
 import { DocSheet } from './doc-sheet';
+import { DocumentAction, DocumentActionGroup } from '../document-action';
 
 const todayYmd = () => new Date().toISOString().slice(0, 10);
 
-export function OpenProjectSheet({ open, onClose }: { open: boolean; onClose: () => void }) {
+export function OpenProjectSheet({
+  open,
+  onClose,
+}: {
+  open: boolean;
+  onClose: () => void;
+}) {
   const router = useRouter();
   const openProject = useOpenProjectDirect();
 
@@ -63,7 +70,9 @@ export function OpenProjectSheet({ open, onClose }: { open: boolean; onClose: ()
     const min = dollarsToCents(bandMin);
     const max = dollarsToCents(bandMax);
     if (min != null && max != null && min > max) {
-      setError('The budget band reads backwards — the floor is above the ceiling.');
+      setError(
+        'The budget band reads backwards — the floor is above the ceiling.',
+      );
       return;
     }
 
@@ -98,8 +107,8 @@ export function OpenProjectSheet({ open, onClose }: { open: boolean; onClose: ()
           What are you opening?
         </h2>
         <p className="mt-1.5 text-[13px] leading-relaxed text-[var(--color-aged-oak)]">
-          Essentials only — the document fills in as you compose. Everything here can change from
-          the letterhead later.
+          Essentials only — the document fills in as you compose. Everything
+          here can change from the letterhead later.
         </p>
 
         <div className="mt-7 space-y-5">
@@ -126,10 +135,24 @@ export function OpenProjectSheet({ open, onClose }: { open: boolean; onClose: ()
           <div className="grid grid-cols-1 gap-5 sm:grid-cols-2">
             <Field label="Budget band">
               <div className="flex items-baseline gap-2">
-                <span className="text-[13px] text-[var(--color-aged-oak)]">$</span>
-                <Input value={bandMin} onChange={setBandMin} placeholder="from" inputMode="decimal" />
-                <span className="text-[13px] text-[var(--color-aged-oak)]">–</span>
-                <Input value={bandMax} onChange={setBandMax} placeholder="to" inputMode="decimal" />
+                <span className="text-[13px] text-[var(--color-aged-oak)]">
+                  $
+                </span>
+                <Input
+                  value={bandMin}
+                  onChange={setBandMin}
+                  placeholder="from"
+                  inputMode="decimal"
+                />
+                <span className="text-[13px] text-[var(--color-aged-oak)]">
+                  –
+                </span>
+                <Input
+                  value={bandMax}
+                  onChange={setBandMax}
+                  placeholder="to"
+                  inputMode="decimal"
+                />
               </div>
             </Field>
             <Field label="Start date">
@@ -144,36 +167,54 @@ export function OpenProjectSheet({ open, onClose }: { open: boolean; onClose: ()
         </div>
 
         {error && (
-          <p className="mt-5 text-[12px] text-[var(--color-terracotta)]" role="alert">
+          <p
+            className="mt-5 text-[12px] text-[var(--color-terracotta)]"
+            role="alert"
+          >
             {error}
           </p>
         )}
 
-        <div className="mt-8 flex items-center gap-4">
-          <button
+        <DocumentActionGroup
+          surfaceKey="desk"
+          regionKey="open-project-sheet"
+          className="mt-8"
+          aria-label="Open project actions"
+        >
+          <DocumentAction
+            actionKey="create-project"
+            variant="primary"
             type="submit"
-            disabled={!title.trim() || openProject.isPending}
-            className="rounded-[4px] bg-[var(--color-clay)] px-4 py-2 font-mono text-[11px] font-semibold uppercase tracking-[0.08em] text-[var(--color-charcoal)] transition-colors hover:bg-[var(--color-aged-oak)] disabled:opacity-50"
+            disabled={!title.trim()}
+            loading={openProject.isPending}
+            loadingLabel="Opening…"
+            trailing="→"
           >
-            {openProject.isPending ? 'Opening…' : 'Open the project →'}
-          </button>
-          <button
-            type="button"
+            Open the project
+          </DocumentAction>
+          <DocumentAction
+            actionKey="cancel-open-project"
+            variant="tertiary"
             onClick={onClose}
-            className="font-mono text-[11px] uppercase tracking-[0.08em] text-[var(--color-aged-oak)] hover:text-[var(--color-charcoal)]"
           >
             Cancel
-          </button>
+          </DocumentAction>
           <span className="ml-auto font-mono text-[9px] uppercase tracking-[0.06em] text-[var(--color-aged-oak)]">
             opens the document
           </span>
-        </div>
+        </DocumentActionGroup>
       </form>
     </DocSheet>
   );
 }
 
-function Field({ label, children }: { label: string; children: React.ReactNode }) {
+function Field({
+  label,
+  children,
+}: {
+  label: string;
+  children: React.ReactNode;
+}) {
   return (
     <label className="block">
       <span className="mb-1.5 block font-mono text-[10px] uppercase tracking-[0.1em] text-[var(--color-aged-oak)]">

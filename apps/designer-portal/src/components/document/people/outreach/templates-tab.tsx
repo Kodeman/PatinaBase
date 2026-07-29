@@ -10,9 +10,21 @@
  */
 
 import { useState } from 'react';
-import { useTemplates, useCreateTemplate, useDeleteTemplate } from '@patina/supabase';
-import type { EmailTemplate, EmailTemplateCategory } from '@patina/shared/types';
-import { CampRow, OutreachButton, ListHeader, QuietNote } from './outreach-bits';
+import {
+  useTemplates,
+  useCreateTemplate,
+  useDeleteTemplate,
+} from '@patina/supabase';
+import type {
+  EmailTemplate,
+  EmailTemplateCategory,
+} from '@patina/shared/types';
+import {
+  CampRow,
+  OutreachButton,
+  ListHeader,
+  QuietNote,
+} from './outreach-bits';
 
 const CATEGORY_LABEL: Record<EmailTemplateCategory, string> = {
   transactional: 'Transactional',
@@ -21,7 +33,12 @@ const CATEGORY_LABEL: Record<EmailTemplateCategory, string> = {
   sequence: 'Sequence',
 };
 
-const CATEGORIES: EmailTemplateCategory[] = ['campaign', 'engagement', 'sequence', 'transactional'];
+const CATEGORIES: EmailTemplateCategory[] = [
+  'campaign',
+  'engagement',
+  'sequence',
+  'transactional',
+];
 
 function templateStat(t: EmailTemplate): string {
   const cat = CATEGORY_LABEL[t.category] ?? t.category;
@@ -58,7 +75,10 @@ export function TemplatesTab({ notify }: { notify: (m: string) => void }) {
           setSubject('');
           setCategory('campaign');
         },
-        onError: (e) => notify(e instanceof Error ? e.message : 'Could not create the template.'),
+        onError: (e) =>
+          notify(
+            e instanceof Error ? e.message : 'Could not create the template.',
+          ),
       },
     );
   };
@@ -68,7 +88,11 @@ export function TemplatesTab({ notify }: { notify: (m: string) => void }) {
       <ListHeader
         label="Template library"
         action={
-          <OutreachButton tone="primary" onClick={() => setComposing((v) => !v)}>
+          <OutreachButton
+            actionKey="new-template"
+            tone="primary"
+            onClick={() => setComposing((v) => !v)}
+          >
             {composing ? 'Close' : '+ New template'}
           </OutreachButton>
         }
@@ -105,7 +129,9 @@ export function TemplatesTab({ notify }: { notify: (m: string) => void }) {
               </span>
               <select
                 value={category}
-                onChange={(e) => setCategory(e.target.value as EmailTemplateCategory)}
+                onChange={(e) =>
+                  setCategory(e.target.value as EmailTemplateCategory)
+                }
                 className="w-full rounded-[6px] border border-[var(--color-pearl)] bg-white px-2.5 py-1.5 text-[0.8rem] text-[var(--color-charcoal)] outline-none focus:border-[var(--color-clay)]"
               >
                 {CATEGORIES.map((c) => (
@@ -117,7 +143,12 @@ export function TemplatesTab({ notify }: { notify: (m: string) => void }) {
             </label>
           </div>
           <div className="mt-3 flex justify-end">
-            <OutreachButton tone="primary" onClick={submit} disabled={!canSubmit}>
+            <OutreachButton
+              actionKey="create-template"
+              tone="primary"
+              onClick={submit}
+              disabled={!canSubmit}
+            >
               {createTemplate.isPending ? 'Creating…' : 'Create template'}
             </OutreachButton>
           </div>
@@ -125,11 +156,14 @@ export function TemplatesTab({ notify }: { notify: (m: string) => void }) {
       )}
 
       {isLoading ? (
-        <p className="px-1 py-5 text-[0.74rem] text-[var(--color-aged-oak)]">Reading the library…</p>
+        <p className="px-1 py-5 text-[0.74rem] text-[var(--color-aged-oak)]">
+          Reading the library…
+        </p>
       ) : !templates || templates.length === 0 ? (
         <QuietNote>
-          No templates yet. Author one above — the welcome note, the proposal follow-up, the
-          project-complete review ask. They become the body of your campaigns.
+          No templates yet. Author one above — the welcome note, the proposal
+          follow-up, the project-complete review ask. They become the body of
+          your campaigns.
         </QuietNote>
       ) : (
         templates.map((t) => (
@@ -139,12 +173,18 @@ export function TemplatesTab({ notify }: { notify: (m: string) => void }) {
             stat={templateStat(t)}
             right={
               <OutreachButton
+                actionKey="delete-template"
                 tone="quiet"
                 onClick={() =>
                   deleteTemplate.mutate(t.id, {
-                    onSuccess: () => notify(`“${t.name}” removed from the library.`),
+                    onSuccess: () =>
+                      notify(`“${t.name}” removed from the library.`),
                     onError: (e) =>
-                      notify(e instanceof Error ? e.message : 'Could not remove the template.'),
+                      notify(
+                        e instanceof Error
+                          ? e.message
+                          : 'Could not remove the template.',
+                      ),
                   })
                 }
                 disabled={deleteTemplate.isPending}

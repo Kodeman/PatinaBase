@@ -20,15 +20,20 @@ import {
   useVendors,
 } from '@patina/supabase';
 import { Avatar } from '../person-bits';
+import { DocumentAction } from '../../document-action';
 
 // The vendors hook predates generated types for this table (see use-vendors.ts).
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type AnyVendor = any;
 
-const MONO_LINK = 'font-mono text-[9.5px] uppercase tracking-[0.1em] transition-colors';
+const MONO_LINK =
+  'inline-flex min-h-11 min-w-11 items-center font-mono text-[9.5px] uppercase tracking-[0.1em] transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-clay)]';
 
 /** Humanize a stored category token ("case_goods" → "case goods"). */
-const cat = (raw: unknown): string => String(raw ?? '').replace(/_/g, ' ').trim();
+const cat = (raw: unknown): string =>
+  String(raw ?? '')
+    .replace(/_/g, ' ')
+    .trim();
 
 export function MakersMarketplace({
   onOpenMaker,
@@ -39,7 +44,10 @@ export function MakersMarketplace({
   // The whole book, once — the marketplace is a book to leaf through, not a
   // feed (same read the Orders ledger takes). Search + category narrow it
   // in memory, the way the directory's own search works.
-  const { data: vendorsPage, isLoading } = useVendors(undefined, { page: 1, pageSize: 200 }) as {
+  const { data: vendorsPage, isLoading } = useVendors(undefined, {
+    page: 1,
+    pageSize: 200,
+  }) as {
     data: { data: AnyVendor[] } | undefined;
     isLoading: boolean;
   };
@@ -50,7 +58,9 @@ export function MakersMarketplace({
 
   const toggleSave = useToggleVendorSave({ errorSurface: 'inline' });
   const [savingId, setSavingId] = useState<string | null>(null);
-  const [rowError, setRowError] = useState<{ id: string; text: string } | null>(null);
+  const [rowError, setRowError] = useState<{ id: string; text: string } | null>(
+    null,
+  );
 
   const [search, setSearch] = useState('');
   const [category, setCategory] = useState<string | null>(null);
@@ -73,8 +83,12 @@ export function MakersMarketplace({
         if (category && cat(v.primary_category) !== category) return false;
         if (!q) return true;
         return (
-          String(v.name ?? '').toLowerCase().includes(q) ||
-          String(v.trade_name ?? '').toLowerCase().includes(q)
+          String(v.name ?? '')
+            .toLowerCase()
+            .includes(q) ||
+          String(v.trade_name ?? '')
+            .toLowerCase()
+            .includes(q)
         );
       })
       .sort((a, b) => String(a.name ?? '').localeCompare(String(b.name ?? '')));
@@ -89,7 +103,10 @@ export function MakersMarketplace({
     } catch (e) {
       setRowError({
         id: vendor.id,
-        text: e instanceof Error ? e.message : 'Could not save them just now — try again.',
+        text:
+          e instanceof Error
+            ? e.message
+            : 'Could not save them just now — try again.',
       });
     } finally {
       setSavingId(null);
@@ -155,12 +172,15 @@ export function MakersMarketplace({
         </div>
       ) : (
         <ul className="space-y-1.5">
-          {rows.map((v) => {
+          {rows.map((v, index) => {
             const isSaved = saved.has(v.id);
             const line = [
               cat(v.primary_category) || null,
-              v.market_position ? String(v.market_position).replace(/-/g, ' ') : null,
-              typeof v.designer_rating_avg === 'number' && v.designer_rating_avg > 0
+              v.market_position
+                ? String(v.market_position).replace(/-/g, ' ')
+                : null,
+              typeof v.designer_rating_avg === 'number' &&
+              v.designer_rating_avg > 0
                 ? `${Number(v.designer_rating_avg).toFixed(1)}★`
                 : null,
             ]
@@ -172,7 +192,7 @@ export function MakersMarketplace({
                   <button
                     type="button"
                     onClick={() => onOpenMaker(v.id)}
-                    className="flex min-w-0 flex-1 items-center gap-3.5 text-left"
+                    className="flex min-h-11 min-w-11 flex-1 items-center gap-3.5 text-left focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-clay)]"
                   >
                     <Avatar name={String(v.name ?? 'Maker')} role="maker" />
                     <span className="min-w-0 flex-1">
@@ -195,14 +215,17 @@ export function MakersMarketplace({
                       On your roster
                     </span>
                   ) : (
-                    <button
-                      type="button"
-                      disabled={savingId === v.id}
+                    <DocumentAction
+                      actionKey="save-maker-to-roster"
+                      surfaceKey="people"
+                      regionKey={`maker-marketplace-row-${index + 1}`}
+                      variant="primary"
+                      loading={savingId === v.id}
+                      loadingLabel="Saving…"
                       onClick={() => void admit(v)}
-                      className="shrink-0 whitespace-nowrap font-mono text-[9.5px] font-semibold uppercase tracking-[0.08em] text-[var(--color-clay)] transition-colors hover:text-[var(--color-aged-oak)] disabled:opacity-40"
                     >
-                      {savingId === v.id ? 'saving…' : 'save →'}
-                    </button>
+                      Save
+                    </DocumentAction>
                   )}
                 </div>
               </li>

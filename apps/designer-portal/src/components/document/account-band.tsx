@@ -25,6 +25,7 @@ import { fmtDay, fmtUsd } from '@/lib/document/format';
 import { openLedger } from './command-bar';
 import { openInvoiceComposer } from './accounts/invoice-overlays';
 import { AmendmentSheet } from './overlays/amendment-sheet';
+import { DocumentAction, DocumentActionGroup } from './document-action';
 
 const SAGE_INK = '#85947C';
 const TERRACOTTA_INK = '#C4836F';
@@ -38,13 +39,21 @@ const TRIGGER_LABELS: Record<string, string> = {
 
 const GATE_SECTIONS: SectionKey[] = ['project', 'install', 'care'];
 
-function MilestoneRow({ m, projectId }: { m: AccountMilestone; projectId: string }) {
+function MilestoneRow({
+  m,
+  projectId,
+}: {
+  m: AccountMilestone;
+  projectId: string;
+}) {
   const updateTrigger = useUpdateMilestoneTrigger(projectId);
   const generate = useGenerateMilestoneInvoice(projectId);
 
   return (
     <div className="grid grid-cols-[1fr_auto] items-baseline gap-2 border-b border-dashed border-[var(--color-pearl)] py-1.5 min-[700px]:grid-cols-[minmax(0,1.2fr)_auto_auto_minmax(0,1.4fr)_auto]">
-      <span className="text-[11.5px] text-[var(--color-charcoal)]">{m.label}</span>
+      <span className="text-[11.5px] text-[var(--color-charcoal)]">
+        {m.label}
+      </span>
       <span className="font-mono text-[10px] text-[var(--color-charcoal)]">
         {fmtUsd(m.amount_cents)}
       </span>
@@ -57,7 +66,8 @@ function MilestoneRow({ m, projectId }: { m: AccountMilestone; projectId: string
           onChange={(e) =>
             updateTrigger.mutate({
               milestoneId: m.id,
-              triggerKind: (e.target.value || null) as AccountMilestone['trigger_kind'],
+              triggerKind: (e.target.value ||
+                null) as AccountMilestone['trigger_kind'],
               triggerSectionKey: m.trigger_section_key,
               dueDate: m.due_date,
             })
@@ -80,7 +90,8 @@ function MilestoneRow({ m, projectId }: { m: AccountMilestone; projectId: string
               updateTrigger.mutate({
                 milestoneId: m.id,
                 triggerKind: 'on_section_settled',
-                triggerSectionKey: (e.target.value || null) as SectionKey | null,
+                triggerSectionKey: (e.target.value ||
+                  null) as SectionKey | null,
               })
             }
             aria-label={`${m.label} section`}
@@ -111,18 +122,26 @@ function MilestoneRow({ m, projectId }: { m: AccountMilestone; projectId: string
         )}
       </span>
       {m.invoice_id ? (
-        <span className="font-mono text-[8.5px] uppercase tracking-[0.05em]" style={{ color: SAGE_INK }}>
+        <span
+          className="font-mono text-[8.5px] uppercase tracking-[0.05em]"
+          style={{ color: SAGE_INK }}
+        >
           invoice drafted
         </span>
       ) : (
-        <button
-          type="button"
+        <DocumentAction
+          actionKey="generate-milestone-invoice"
+          surfaceKey="accounts"
+          regionKey="payment-milestone"
+          variant="primary"
           disabled={generate.isPending}
+          loading={generate.isPending}
+          loadingLabel="Generating…"
           onClick={() => generate.mutate(m.id)}
-          className="text-left font-mono text-[8.5px] uppercase tracking-[0.05em] text-[var(--color-clay)] hover:opacity-80 disabled:opacity-40"
+          className="text-left"
         >
           Generate invoice
-        </button>
+        </DocumentAction>
       )}
     </div>
   );
@@ -190,9 +209,14 @@ export function AccountBand({
             </span>
           </div>
           {data.rooms.map((r) => (
-            <div key={r.roomId ?? 'throughout'} className="border-b border-dashed border-[var(--color-pearl)] py-1">
+            <div
+              key={r.roomId ?? 'throughout'}
+              className="border-b border-dashed border-[var(--color-pearl)] py-1"
+            >
               <div className="grid grid-cols-[1fr_auto_auto_auto] gap-x-4">
-                <span className="text-[11.5px] text-[var(--color-charcoal)]">{r.roomName}</span>
+                <span className="text-[11.5px] text-[var(--color-charcoal)]">
+                  {r.roomName}
+                </span>
                 <span className="text-right font-mono text-[10px] text-[var(--color-charcoal)]">
                   {r.allocatedCents > 0 ? fmtUsd(r.allocatedCents) : '—'}
                 </span>
@@ -201,15 +225,22 @@ export function AccountBand({
                 </span>
                 <span
                   className="text-right font-mono text-[10px]"
-                  style={{ color: r.varianceCents >= 0 ? SAGE_INK : TERRACOTTA_INK }}
+                  style={{
+                    color: r.varianceCents >= 0 ? SAGE_INK : TERRACOTTA_INK,
+                  }}
                 >
-                  {r.varianceCents >= 0 ? fmtUsd(r.varianceCents) + ' under' : fmtUsd(-r.varianceCents) + ' over'}
+                  {r.varianceCents >= 0
+                    ? fmtUsd(r.varianceCents) + ' under'
+                    : fmtUsd(-r.varianceCents) + ' over'}
                 </span>
               </div>
               {r.categories.length > 0 && (
                 <p className="mt-px font-mono text-[8.5px] lowercase tracking-[0.03em] text-[var(--text-muted)]">
                   {r.categories
-                    .map((c) => `${c.name.replace(/_/g, ' ')} ${fmtUsd(c.committedCents)}`)
+                    .map(
+                      (c) =>
+                        `${c.name.replace(/_/g, ' ')} ${fmtUsd(c.committedCents)}`,
+                    )
                     .join(' · ')}
                 </p>
               )}
@@ -220,24 +251,29 @@ export function AccountBand({
           <p className="mt-2 text-[11px] text-[var(--color-charcoal)]">
             {data.marginPct != null ? (
               <>
-                Trade {fmtUsd(data.tradeCostCents)} → client {fmtUsd(data.clientValueCents)} ·{' '}
-                <span style={{ color: SAGE_INK }}>{data.marginPct}% margin</span>
+                Trade {fmtUsd(data.tradeCostCents)} → client{' '}
+                {fmtUsd(data.clientValueCents)} ·{' '}
+                <span style={{ color: SAGE_INK }}>
+                  {data.marginPct}% margin
+                </span>
               </>
             ) : (
               'No trade pricing on committed lines yet.'
             )}
             <span className="ml-2 font-mono text-[8.5px] uppercase tracking-[0.05em] text-[var(--text-muted)]">
-              trade cost on {data.tradeCoverage.withTrade} of {data.tradeCoverage.total} committed lines
+              trade cost on {data.tradeCoverage.withTrade} of{' '}
+              {data.tradeCoverage.total} committed lines
             </span>
           </p>
 
           {/* The designer-earnings block → Accounts (stub target OK, R26). */}
           <p className="mt-1.5 text-[11px] text-[var(--color-charcoal)]">
-            Design fee {fmtUsd(data.designFeeCents)} · est. commissions {fmtUsd(data.estCommissionCents)}
+            Design fee {fmtUsd(data.designFeeCents)} · est. commissions{' '}
+            {fmtUsd(data.estCommissionCents)}
             <button
               type="button"
               onClick={() => openLedger('accounts')}
-              className="ml-2 font-mono text-[8.5px] uppercase tracking-[0.05em] text-[var(--color-clay)] hover:opacity-80"
+              className="ml-2 min-h-11 rounded-[3px] font-mono text-[8.5px] uppercase tracking-[0.05em] text-[var(--color-clay)] underline underline-offset-4 hover:opacity-80 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-clay)]"
             >
               → Accounts ↗
             </button>
@@ -255,50 +291,56 @@ export function AccountBand({
             </div>
           )}
 
-          <div className="mt-2.5 flex flex-wrap items-baseline gap-4">
+          <DocumentActionGroup
+            surfaceKey="accounts"
+            regionKey="project-account"
+            className="mt-2.5 items-center"
+          >
             {/* R74b — draw an invoice for THIS engagement: the anti-wizard
                 composer, milestones/time/FF&E pulled through pre-scoped. */}
-            <button
-              type="button"
+            <DocumentAction
+              actionKey="draw-project-invoice"
+              variant="primary"
               onClick={() => openInvoiceComposer({ projectId })}
-              className="rounded-[3px] border border-[rgba(196,165,123,0.5)] px-2 py-0.5 font-mono text-[9px] font-semibold uppercase tracking-[0.05em] text-[var(--color-clay)] transition-colors hover:bg-[var(--color-clay)] hover:text-white"
             >
-              Draw an invoice →
-            </button>
+              Draw an invoice
+            </DocumentAction>
             {/* R77 — the per-document Hours lens (the drawer pre-addresses
                 the ledger with this project once wired through). */}
-            <button
-              type="button"
+            <DocumentAction
+              actionKey="open-project-hours"
+              variant="tertiary"
               onClick={() => openLedger('hours', { projectId })}
-              className="font-mono text-[9px] uppercase tracking-[0.05em] text-[var(--color-clay)] hover:opacity-80"
             >
               Hours · this project ↗
-            </button>
-            <button
-              type="button"
+            </DocumentAction>
+            <DocumentAction
+              actionKey="export-project-qbo"
+              variant="secondary"
               onClick={() => {
                 setExportNote('exporting…');
                 void exportAccountsQbo(projectId).then((r) =>
                   setExportNote(r.ok ? 'exported ✓' : r.message),
                 );
               }}
-              className="font-mono text-[9px] uppercase tracking-[0.05em] text-[var(--color-clay)] hover:opacity-80"
             >
               Export · QBO
-            </button>
+            </DocumentAction>
             {/* R81 — the Amendment: scope changes composed from the money
                 band (the margin escalation is the other doorway). */}
-            <button
-              type="button"
+            <DocumentAction
+              actionKey="compose-project-amendment"
+              variant="secondary"
               onClick={() => setAmendmentOpen(true)}
-              className="font-mono text-[9px] uppercase tracking-[0.05em] text-[var(--color-clay)] hover:opacity-80"
             >
-              Amendment →
-            </button>
+              Amendment
+            </DocumentAction>
             {exportNote && (
-              <span className="font-mono text-[8.5px] text-[var(--text-muted)]">{exportNote}</span>
+              <span className="font-mono text-[8.5px] text-[var(--text-muted)]">
+                {exportNote}
+              </span>
             )}
-          </div>
+          </DocumentActionGroup>
         </div>
       )}
       <AmendmentSheet

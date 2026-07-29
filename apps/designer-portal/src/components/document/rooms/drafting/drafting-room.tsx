@@ -61,6 +61,8 @@ import { TermsAgreementBody } from './terms-agreement-body';
 import { ScheduleLineUnfold } from './schedule-line-unfold';
 import type { ComposeDecisionRequest } from '@/lib/document/compose-decision';
 import { ComposeDecisionSheet } from '@/components/document/coordination/compose-decision-sheet';
+import { DocumentAction, DocumentActionGroup } from '../../document-action';
+import { useMobilePrimaryAction } from '../../mobile/mobile-shell';
 
 const STATE_TONE: Record<string, { color: string; bg: string }> = {
   Outline: { color: 'var(--color-aged-oak)', bg: 'transparent' },
@@ -74,15 +76,29 @@ const MOVEMENT = {
   vision: 'var(--color-dusty-blue)',
 };
 
-const num = (n: unknown) => (typeof n === 'number' && Number.isFinite(n) ? n : 0);
+const num = (n: unknown) =>
+  typeof n === 'number' && Number.isFinite(n) ? n : 0;
 
 // Cycle order for the FF&E type chip (R42): fixed → allowance → tbd → fixed.
 const TYPE_ORDER: ProposalItemType[] = ['fixed', 'allowance', 'tbd'];
-const TYPE_CHIP: Record<string, { label: string; color: string; bg: string }> = {
-  fixed: { label: 'Fixed', color: 'var(--color-sage)', bg: 'rgba(122, 155, 118, 0.10)' },
-  allowance: { label: 'Allowance', color: 'var(--color-golden-hour)', bg: 'rgba(232, 197, 71, 0.12)' },
-  tbd: { label: 'TBD', color: 'var(--text-muted)', bg: 'rgba(139, 115, 85, 0.08)' },
-};
+const TYPE_CHIP: Record<string, { label: string; color: string; bg: string }> =
+  {
+    fixed: {
+      label: 'Fixed',
+      color: 'var(--color-sage)',
+      bg: 'rgba(122, 155, 118, 0.10)',
+    },
+    allowance: {
+      label: 'Allowance',
+      color: 'var(--color-golden-hour)',
+      bg: 'rgba(232, 197, 71, 0.12)',
+    },
+    tbd: {
+      label: 'TBD',
+      color: 'var(--text-muted)',
+      bg: 'rgba(139, 115, 85, 0.08)',
+    },
+  };
 
 export function DraftingRoom({ proposalId }: { proposalId: string }) {
   useDocumentSurface(DOCUMENT_SURFACE_KEYS.drafting); // R89 — scope help to the Drafting Room
@@ -92,7 +108,15 @@ export function DraftingRoom({ proposalId }: { proposalId: string }) {
   const { data: summary } = useScopeBuilderSummary(proposalId);
   // The shared drafting state — the SAME ['drafting-facets', id] read the open
   // document's proposal instruments echo, so "what's written" agrees everywhere.
-  const { facets, summary: s, items, fill, pct, state, gaps } = useDraftingState(proposalId);
+  const {
+    facets,
+    summary: s,
+    items,
+    fill,
+    pct,
+    state,
+    gaps,
+  } = useDraftingState(proposalId);
   const updateItem = useUpdateProposalItem();
   const queryClient = useQueryClient();
 
@@ -108,20 +132,28 @@ export function DraftingRoom({ proposalId }: { proposalId: string }) {
   const composeProjectId = (proposal?.project_id as string | null) ?? null;
   const composeClientUserId = (proposal?.client_id as string | null) ?? null;
   const canComposeDecision = Boolean(composeProjectId && composeClientUserId);
-  const [composeRequest, setComposeRequest] = useState<ComposeDecisionRequest | null>(null);
+  const [composeRequest, setComposeRequest] =
+    useState<ComposeDecisionRequest | null>(null);
 
   // A1 — the Desk "N lines flagged" walk-in arrives at /drafting/<id>?flagged=1.
   // Read it client-side (no useSearchParams → no Suspense boundary needed) and
   // auto-open the oldest unresolved flag's line, its Alternatives band showing.
   const [arrivingFlagged, setArrivingFlagged] = useState(false);
   useEffect(() => {
-    setArrivingFlagged(new URLSearchParams(window.location.search).get('flagged') === '1');
+    setArrivingFlagged(
+      new URLSearchParams(window.location.search).get('flagged') === '1',
+    );
   }, []);
   const firstFlaggedItemId = useMemo(() => {
     if (!arrivingFlagged) return undefined;
-    const open = feedback.filter((f) => f.verdict === 'rejected' && !f.resolved_at && f.proposal_item_id);
+    const open = feedback.filter(
+      (f) => f.verdict === 'rejected' && !f.resolved_at && f.proposal_item_id,
+    );
     if (open.length === 0) return undefined;
-    return open.reduce((a, b) => (a.created_at <= b.created_at ? a : b)).proposal_item_id ?? undefined;
+    return (
+      open.reduce((a, b) => (a.created_at <= b.created_at ? a : b))
+        .proposal_item_id ?? undefined
+    );
   }, [arrivingFlagged, feedback]);
   const latestVerdict = useMemo(
     () =>
@@ -144,7 +176,8 @@ export function DraftingRoom({ proposalId }: { proposalId: string }) {
 
   // Payments needs the running total (Σ FF&E estimate + Σ design fees), like the
   // legacy shell computed for the milestone allocator.
-  const totalProjectCents = num(summary?.totalFFEEstimateCents) + num(summary?.totalDesignFeeCents);
+  const totalProjectCents =
+    num(summary?.totalFFEEstimateCents) + num(summary?.totalDesignFeeCents);
 
   const tone = STATE_TONE[state];
 
@@ -177,12 +210,20 @@ export function DraftingRoom({ proposalId }: { proposalId: string }) {
   const cycleType = async (id: string, current: ProposalItemType | null) => {
     const idx = TYPE_ORDER.indexOf((current ?? 'fixed') as ProposalItemType);
     const next = TYPE_ORDER[(idx + 1) % TYPE_ORDER.length];
-    await updateItem.mutateAsync({ itemId: id, proposalId, updates: { item_type: next } });
+    await updateItem.mutateAsync({
+      itemId: id,
+      proposalId,
+      updates: { item_type: next },
+    });
     await Promise.all([
-      queryClient.invalidateQueries({ queryKey: ['drafting-facets', proposalId] }),
+      queryClient.invalidateQueries({
+        queryKey: ['drafting-facets', proposalId],
+      }),
       // Flip to/from TBD changes what the client sees (R43) — refresh the live
       // preview immediately rather than waiting for its poll tick.
-      queryClient.invalidateQueries({ queryKey: ['proposal-mirror', proposalId] }),
+      queryClient.invalidateQueries({
+        queryKey: ['proposal-mirror', proposalId],
+      }),
     ]);
   };
 
@@ -199,21 +240,36 @@ export function DraftingRoom({ proposalId }: { proposalId: string }) {
   // filled clay once fully drafted, a quiet outline ("send as-is") while still
   // composing (sending is never blocked, only weighted — mirrors the document's
   // non-hard-gate). Hidden at 0% — there's nothing to send yet.
-  const clientLabel = proposal?.client_name ? familyLabel(proposal.client_name) : null;
+  const clientLabel = proposal?.client_name
+    ? familyLabel(proposal.client_name)
+    : null;
   const readyToSend = state === 'Ready to send';
+  const sendLabel = readyToSend
+    ? `Send to ${clientLabel ?? 'the client'}`
+    : 'Send as-is';
+
+  useMobilePrimaryAction(
+    pct > 0
+      ? {
+          actionKey: 'send-proposal',
+          surfaceKey: 'drafting',
+          regionKey: 'room-head',
+          label: sendLabel,
+          target: { kind: 'press', onPress: () => setSendOpen(true) },
+        }
+      : null,
+  );
+
   const sendAction =
     pct > 0 ? (
-      <button
-        type="button"
+      <DocumentAction
+        actionKey="send-proposal"
+        variant="primary"
+        trailing="→"
         onClick={() => setSendOpen(true)}
-        className={
-          readyToSend
-            ? 'rounded-[4px] bg-[var(--color-clay)] px-3.5 py-1.5 font-mono text-[10px] uppercase tracking-[0.08em] text-[var(--color-charcoal)] transition-opacity hover:opacity-90'
-            : 'rounded-[4px] border border-[var(--color-clay)] px-3.5 py-1.5 font-mono text-[10px] uppercase tracking-[0.08em] text-[var(--color-clay)] transition-colors hover:bg-[rgba(196,165,123,0.08)]'
-        }
       >
-        {readyToSend ? `Send to ${clientLabel ?? 'the client'} →` : 'Send as-is →'}
-      </button>
+        {sendLabel}
+      </DocumentAction>
     ) : undefined;
 
   return (
@@ -224,10 +280,17 @@ export function DraftingRoom({ proposalId }: { proposalId: string }) {
       // mono doorway into the tokenized share-link sheet (view-only client copy),
       // seeded from the proposal's client-visibility tier.
       action={
-        <div className="flex items-center gap-4">
-          <ProposalShareInstrument proposalId={proposalId} tier={proposal?.client_visibility_tier} />
+        <DocumentActionGroup
+          surfaceKey="drafting"
+          regionKey="room-head"
+          aria-label="Drafting actions"
+        >
           {sendAction}
-        </div>
+          <ProposalShareInstrument
+            proposalId={proposalId}
+            tier={proposal?.client_visibility_tier}
+          />
+        </DocumentActionGroup>
       }
       // S10: no backTo — leaving returns to the stashed origin (the document the
       // designer walked in from, "← the document"), not the legacy proposals route.
@@ -239,14 +302,23 @@ export function DraftingRoom({ proposalId }: { proposalId: string }) {
             {/* The ONE Strata Mark — three movements map to the three lines. */}
             <StrataMark size="lg" fill={fill} />
             <div className="min-w-0 flex-1">
-              <p className="font-heading text-[1.5rem] leading-tight text-[var(--color-charcoal)]">{title}</p>
+              <p className="font-heading text-[1.5rem] leading-tight text-[var(--color-charcoal)]">
+                {title}
+              </p>
               <div className="mt-1 flex flex-wrap items-center gap-3">
                 <span className="font-mono text-[0.6rem] tracking-[0.04em] text-[var(--color-aged-oak)]">
-                  <b className="font-heading text-[0.95rem] text-[var(--color-charcoal)]">{pct}</b>% drafted
+                  <b className="font-heading text-[0.95rem] text-[var(--color-charcoal)]">
+                    {pct}
+                  </b>
+                  % drafted
                 </span>
                 <span
                   className="rounded-[3px] border px-2 py-0.5 font-mono text-[0.5rem] uppercase tracking-[0.1em]"
-                  style={{ color: tone.color, borderColor: tone.color, background: tone.bg }}
+                  style={{
+                    color: tone.color,
+                    borderColor: tone.color,
+                    background: tone.bg,
+                  }}
                 >
                   {state}
                 </span>
@@ -267,13 +339,21 @@ export function DraftingRoom({ proposalId }: { proposalId: string }) {
           {/* ── The facets — eight, in order, no tab strip, no stepper. ── */}
           <div>
             {/* Movement 1 · Scope */}
-            <MovementRule name="Scope" meta="Line 1 · the rooms & what fills them" hue={MOVEMENT.scope} />
+            <MovementRule
+              name="Scope"
+              meta="Line 1 · the rooms & what fills them"
+              hue={MOVEMENT.scope}
+            />
 
             <FacetSection
               name="Rooms"
               accent={MOVEMENT.scope}
               done={facets.rooms}
-              status={facets.rooms ? `${s?.rooms} room${s?.rooms === 1 ? '' : 's'} in scope` : 'not yet written'}
+              status={
+                facets.rooms
+                  ? `${s?.rooms} room${s?.rooms === 1 ? '' : 's'} in scope`
+                  : 'not yet written'
+              }
               open={open.has('rooms')}
               onToggle={() => toggle('rooms')}
             >
@@ -284,7 +364,11 @@ export function DraftingRoom({ proposalId }: { proposalId: string }) {
               name="FF&E"
               accent={MOVEMENT.scope}
               done={facets.ffe}
-              status={facets.ffe ? `${s?.ffe} piece${s?.ffe === 1 ? '' : 's'} scheduled` : 'no schedule yet'}
+              status={
+                facets.ffe
+                  ? `${s?.ffe} piece${s?.ffe === 1 ? '' : 's'} scheduled`
+                  : 'no schedule yet'
+              }
               open={open.has('ffe')}
               onToggle={() => toggle('ffe')}
             >
@@ -314,7 +398,11 @@ export function DraftingRoom({ proposalId }: { proposalId: string }) {
                             disabled={updateItem.isPending}
                             aria-label={`Cycle ${it.name} type — currently ${chip.label}`}
                             className="shrink-0 rounded-[12px] border px-2.5 py-0.5 font-mono text-[0.56rem] uppercase tracking-[0.06em] transition-opacity hover:opacity-80 disabled:opacity-50"
-                            style={{ color: chip.color, borderColor: chip.color, background: chip.bg }}
+                            style={{
+                              color: chip.color,
+                              borderColor: chip.color,
+                              background: chip.bg,
+                            }}
                           >
                             {chip.label} ⟳
                           </button>
@@ -350,7 +438,11 @@ export function DraftingRoom({ proposalId }: { proposalId: string }) {
             {/* Movement 3 · The Vision (palette + boards) — placed before the
                 offer so the page reads scope → vision → commerce, but the lines
                 still map by facet, not by order. */}
-            <MovementRule name="The Vision" meta="Line 3 · palette & boards" hue={MOVEMENT.vision} />
+            <MovementRule
+              name="The Vision"
+              meta="Line 3 · palette & boards"
+              hue={MOVEMENT.vision}
+            />
 
             <FacetSection
               name="Palette"
@@ -373,7 +465,11 @@ export function DraftingRoom({ proposalId }: { proposalId: string }) {
               name="Boards"
               accent={MOVEMENT.vision}
               done={facets.boards}
-              status={facets.boards ? `${s?.boards} board${s?.boards === 1 ? '' : 's'} with pieces` : 'no boards yet'}
+              status={
+                facets.boards
+                  ? `${s?.boards} board${s?.boards === 1 ? '' : 's'} with pieces`
+                  : 'no boards yet'
+              }
               open={open.has('boards')}
               onToggle={() => toggle('boards')}
             >
@@ -381,13 +477,21 @@ export function DraftingRoom({ proposalId }: { proposalId: string }) {
             </FacetSection>
 
             {/* Movement 2 · The Offer (commerce) */}
-            <MovementRule name="The Offer" meta="Line 2 · phases, exclusions, payments, terms" hue={MOVEMENT.offer} />
+            <MovementRule
+              name="The Offer"
+              meta="Line 2 · phases, exclusions, payments, terms"
+              hue={MOVEMENT.offer}
+            />
 
             <FacetSection
               name="Phases"
               accent={MOVEMENT.offer}
               done={facets.phases}
-              status={facets.phases ? `${s?.phases} phase${s?.phases === 1 ? '' : 's'} & fees` : 'no phases yet'}
+              status={
+                facets.phases
+                  ? `${s?.phases} phase${s?.phases === 1 ? '' : 's'} & fees`
+                  : 'no phases yet'
+              }
               open={open.has('phases')}
               onToggle={() => toggle('phases')}
             >
@@ -398,7 +502,9 @@ export function DraftingRoom({ proposalId }: { proposalId: string }) {
               name="Exclusions"
               accent={MOVEMENT.offer}
               done={facets.exclusions}
-              status={facets.exclusions ? `${s?.exclusions} stated` : 'none stated'}
+              status={
+                facets.exclusions ? `${s?.exclusions} stated` : 'none stated'
+              }
               open={open.has('exclusions')}
               onToggle={() => toggle('exclusions')}
             >
@@ -409,18 +515,27 @@ export function DraftingRoom({ proposalId }: { proposalId: string }) {
               name="Payments"
               accent={MOVEMENT.offer}
               done={facets.payments}
-              status={facets.payments ? `${s?.payments} milestone${s?.payments === 1 ? '' : 's'}` : 'no schedule yet'}
+              status={
+                facets.payments
+                  ? `${s?.payments} milestone${s?.payments === 1 ? '' : 's'}`
+                  : 'no schedule yet'
+              }
               open={open.has('payments')}
               onToggle={() => toggle('payments')}
             >
-              <PaymentMilestonesBuilder proposalId={proposalId} totalCents={totalProjectCents} />
+              <PaymentMilestonesBuilder
+                proposalId={proposalId}
+                totalCents={totalProjectCents}
+              />
             </FacetSection>
 
             <FacetSection
               name="Terms"
               accent={MOVEMENT.offer}
               done={facets.terms}
-              status={facets.terms ? 'change-order terms written' : 'not yet written'}
+              status={
+                facets.terms ? 'change-order terms written' : 'not yet written'
+              }
               open={open.has('terms')}
               onToggle={() => toggle('terms')}
             >
@@ -432,8 +547,10 @@ export function DraftingRoom({ proposalId }: { proposalId: string }) {
             </FacetSection>
 
             <p className="mx-auto mt-8 max-w-[620px] border-t border-[var(--doc-ink-border)] py-5 text-center text-[0.72rem] italic text-[var(--color-aged-oak)]">
-              No Next. No Back. No Step 3 of 8. The facets fill in any order, each saves itself, and the proposal is
-              a real, sendable draft at every percent. The Strata Mark is the only progress indicator there is.
+              No Next. No Back. No Step 3 of 8. The facets fill in any order,
+              each saves itself, and the proposal is a real, sendable draft at
+              every percent. The Strata Mark is the only progress indicator
+              there is.
             </p>
           </div>
 
@@ -444,7 +561,10 @@ export function DraftingRoom({ proposalId }: { proposalId: string }) {
                 The client&apos;s copy · live
               </p>
               <div className="rounded-[10px] border border-[var(--doc-ink-border)] bg-white px-5 py-5">
-                <ProposalPreviewRail proposalId={proposalId} clientName={proposal?.client_name ?? undefined} />
+                <ProposalPreviewRail
+                  proposalId={proposalId}
+                  clientName={proposal?.client_name ?? undefined}
+                />
               </div>
             </div>
           </aside>
@@ -475,12 +595,26 @@ export function DraftingRoom({ proposalId }: { proposalId: string }) {
   );
 }
 
-function MovementRule({ name, meta, hue }: { name: string; meta: string; hue: string }) {
+function MovementRule({
+  name,
+  meta,
+  hue,
+}: {
+  name: string;
+  meta: string;
+  hue: string;
+}) {
   return (
     <section className="pb-1 pt-8 first:pt-2">
       <div className="mb-1 flex items-baseline gap-3">
-        <span aria-hidden className="h-[4px] w-[34px] shrink-0 self-center rounded-[2px]" style={{ background: hue }} />
-        <h2 className="font-heading text-[1.2rem] font-medium italic text-[var(--color-charcoal)]">{name}</h2>
+        <span
+          aria-hidden
+          className="h-[4px] w-[34px] shrink-0 self-center rounded-[2px]"
+          style={{ background: hue }}
+        />
+        <h2 className="font-heading text-[1.2rem] font-medium italic text-[var(--color-charcoal)]">
+          {name}
+        </h2>
         <span className="ml-auto font-mono text-[0.5rem] uppercase tracking-[0.06em] text-[var(--color-aged-oak)]">
           {meta}
         </span>

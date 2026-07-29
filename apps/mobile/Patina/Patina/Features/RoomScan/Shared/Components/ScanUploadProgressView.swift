@@ -13,12 +13,12 @@ import Observation
 import SwiftUI
 import SwiftData
 
-// MARK: - Per-scan progress pills
+// MARK: - Per-scan upload progress
 
-/// Renders one status pill per `ArtifactKind` in `package.artifactState`,
-/// plus a photo-progress line underneath. Observes the package directly so
-/// SwiftData change notifications drive re-renders as `RoomScanSyncService`
-/// ticks artifact state forward.
+/// Renders a single human-readable upload-progress line for
+/// `package.artifactState`, plus a photo-progress line underneath. Observes
+/// the package directly so SwiftData change notifications drive re-renders
+/// as `RoomScanSyncService` ticks artifact state forward.
 public struct ScanUploadProgressView: View {
 
     @Bindable public var package: RoomScanPackage
@@ -45,15 +45,13 @@ public struct ScanUploadProgressView: View {
                 }
             }
 
+            // U11: one human line replaces the per-artifact pill grid — the
+            // reader doesn't need to know what a "world map" or "depth
+            // index" is, only that their scan is on its way.
             if !state.artifacts.isEmpty {
-                ScrollView(.horizontal, showsIndicators: false) {
-                    HStack(spacing: 6) {
-                        ForEach(state.artifacts, id: \.kind) { artifact in
-                            pill(for: artifact)
-                        }
-                    }
-                    .padding(.horizontal, 1)
-                }
+                Text("Sending your scan — \(uploadedArtifactCount(in: state)) of \(state.artifacts.count)")
+                    .font(PatinaTypography.caption)
+                    .foregroundStyle(.secondary)
             }
 
             if let err = package.lastError, !err.isEmpty,
@@ -102,59 +100,10 @@ public struct ScanUploadProgressView: View {
         }
     }
 
-    @ViewBuilder
-    private func pill(for artifact: ArtifactUploadState) -> some View {
-        let color = pillColor(for: artifact.status)
-        HStack(spacing: 4) {
-            Image(systemName: pillIcon(for: artifact.status))
-                .font(.system(size: 9, weight: .bold))
-            Text(shortLabel(for: artifact.kind))
-                .font(PatinaTypography.caption)
-        }
-        .foregroundStyle(color)
-        .padding(.horizontal, 8)
-        .padding(.vertical, 4)
-        .background(
-            Capsule().fill(color.opacity(0.12))
-        )
-    }
-
-    private func pillColor(for status: ArtifactUploadState.Status) -> Color {
-        switch status {
-        case .pending:   return .secondary
-        case .uploading: return .accentColor
-        case .uploaded:  return .green
-        case .failed:    return .orange
-        case .skipped:   return .secondary
-        }
-    }
-
-    private func pillIcon(for status: ArtifactUploadState.Status) -> String {
-        switch status {
-        case .pending:   return "circle"
-        case .uploading: return "arrow.up"
-        case .uploaded:  return "checkmark"
-        case .failed:    return "xmark"
-        case .skipped:   return "minus"
-        }
-    }
-
-    private func shortLabel(for kind: ScanManifest.ArtifactKind) -> String {
-        switch kind {
-        case .usdz:             return "USDZ"
-        case .capturedRoomJson: return "Room"
-        case .worldMap:         return "World"
-        case .mesh:             return "Mesh"
-        case .depthArchive:     return "Depth"
-        case .heroThumbnail:    return "Hero"
-        case .bundleArchive:    return "Bundle"
-        case .coverageHeatmap:  return "Cov"
-        case .depthIndex:       return "Depth Idx"
-        case .photoThumbnails:  return "Thumbs"
-        case .annotations:      return "Notes"
-        case .bundleManifest:   return "Manifest"
-        case .photosManifest:   return "Photos"
-        }
+    /// U11: count of artifacts that have finished uploading, for the "n of
+    /// m" human-readable progress line.
+    private func uploadedArtifactCount(in state: ScanPackageArtifactState) -> Int {
+        state.artifacts.filter { $0.status == .uploaded }.count
     }
 }
 

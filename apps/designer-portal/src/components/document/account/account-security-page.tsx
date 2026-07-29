@@ -14,6 +14,7 @@ import {
   useUnenrollMfa,
   type MfaFactor,
 } from '@patina/supabase';
+import { DocumentAction, DocumentActionGroup } from '../document-action';
 import { StrataMark } from '../strata-mark';
 
 interface EnrollState {
@@ -22,11 +23,6 @@ interface EnrollState {
   secret: string;
   uri: string;
 }
-
-const PRIMARY =
-  'rounded-[5px] border border-[var(--color-clay)] bg-[var(--color-clay)] px-3.5 py-1.5 text-[12px] font-medium text-[var(--color-charcoal)] transition-colors hover:bg-[var(--color-aged-oak)] hover:border-[var(--color-aged-oak)] disabled:opacity-50';
-const GHOST =
-  'rounded-[5px] border border-[var(--color-pearl)] px-3.5 py-1.5 text-[12px] font-medium text-[var(--color-mocha)] transition-colors hover:border-[var(--color-clay)] disabled:opacity-50';
 
 export function AccountSecurityPage() {
   const { factors, isLoading } = useMfaFactors();
@@ -52,7 +48,9 @@ export function AccountSecurityPage() {
       });
       setEnroll(result);
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to start enrollment.');
+      setError(
+        err instanceof Error ? err.message : 'Failed to start enrollment.',
+      );
     }
   };
 
@@ -65,7 +63,9 @@ export function AccountSecurityPage() {
       setEnroll(null);
       setCode('');
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Invalid code. Please try again.');
+      setError(
+        err instanceof Error ? err.message : 'Invalid code. Please try again.',
+      );
       setCode('');
     }
   };
@@ -94,15 +94,17 @@ export function AccountSecurityPage() {
 
   if (isLoading) {
     return (
-      <p className="py-3 text-[12px] italic text-[var(--color-aged-oak)]">Reading your factors…</p>
+      <p className="py-3 text-[12px] italic text-[var(--color-aged-oak)]">
+        Reading your factors…
+      </p>
     );
   }
 
   return (
     <div className="pt-1">
       <p className="mb-5 text-[12px] leading-relaxed text-[var(--color-aged-oak)]">
-        Add a one-time code from an authenticator app (1Password, Google Authenticator, Authy) on
-        top of your password.
+        Add a one-time code from an authenticator app (1Password, Google
+        Authenticator, Authy) on top of your password.
       </p>
 
       {error && (
@@ -144,14 +146,17 @@ export function AccountSecurityPage() {
                     : ''}
                 </span>
               </span>
-              <button
-                type="button"
+              <DocumentAction
+                actionKey="remove-authenticator"
+                surfaceKey="account"
+                regionKey="mfa-factor"
+                variant="tertiary"
                 onClick={() => handleUnenroll(factor)}
                 disabled={unenrollMfa.isPending}
-                className="font-mono text-[10px] uppercase tracking-[0.08em] text-[var(--color-aged-oak)] hover:text-[var(--color-terracotta)] disabled:opacity-50"
+                className="text-[var(--color-terracotta)]"
               >
                 Remove
-              </button>
+              </DocumentAction>
             </li>
           ))}
         </ul>
@@ -167,25 +172,28 @@ export function AccountSecurityPage() {
 
       {/* Enrollment wizard */}
       {!enroll ? (
-        <button
-          type="button"
+        <DocumentAction
+          actionKey="enable-two-factor"
+          surfaceKey="account"
+          regionKey="mfa-enrollment"
+          variant="primary"
           onClick={handleStartEnroll}
           disabled={enrollMfa.isPending}
-          className={PRIMARY}
+          loading={enrollMfa.isPending}
+          loadingLabel="Starting…"
         >
-          {enrollMfa.isPending
-            ? 'Starting…'
-            : hasMfa
-              ? 'Add another authenticator'
-              : 'Enable two-factor authentication'}
-        </button>
+          {hasMfa
+            ? 'Add another authenticator'
+            : 'Enable two-factor authentication'}
+        </DocumentAction>
       ) : (
         <div className="max-w-md">
           <h3 className="mb-2 font-heading text-[15px] text-[var(--color-charcoal)]">
             Scan the QR code
           </h3>
           <p className="mb-4 text-[12px] text-[var(--color-aged-oak)]">
-            Scan this with your authenticator app, then enter the 6-digit code it shows.
+            Scan this with your authenticator app, then enter the 6-digit code
+            it shows.
           </p>
 
           {enroll.qrCode && (
@@ -219,7 +227,9 @@ export function AccountSecurityPage() {
             inputMode="numeric"
             autoComplete="one-time-code"
             value={code}
-            onChange={(e) => setCode(e.target.value.replace(/\D/g, '').slice(0, 6))}
+            onChange={(e) =>
+              setCode(e.target.value.replace(/\D/g, '').slice(0, 6))
+            }
             onKeyDown={(e) => {
               if (e.key === 'Enter' && code.length === 6) handleVerify();
             }}
@@ -228,24 +238,29 @@ export function AccountSecurityPage() {
             className="mb-4 w-40 border-0 border-b border-[var(--color-pearl)] bg-transparent py-2 font-mono text-[18px] tracking-[0.4em] text-[var(--color-charcoal)] outline-none placeholder:text-[var(--text-faint)] focus:border-[var(--color-clay)]"
           />
 
-          <div className="flex gap-3">
-            <button
-              type="button"
+          <DocumentActionGroup
+            surfaceKey="account"
+            regionKey="mfa-verification"
+          >
+            <DocumentAction
+              actionKey="verify-two-factor"
+              variant="primary"
               onClick={handleVerify}
               disabled={code.length !== 6 || verifyEnrollment.isPending}
-              className={PRIMARY}
+              loading={verifyEnrollment.isPending}
+              loadingLabel="Verifying…"
             >
-              {verifyEnrollment.isPending ? 'Verifying…' : 'Verify & enable'}
-            </button>
-            <button
-              type="button"
+              Verify &amp; enable
+            </DocumentAction>
+            <DocumentAction
+              actionKey="cancel-two-factor"
+              variant="tertiary"
               onClick={handleCancelEnroll}
               disabled={verifyEnrollment.isPending}
-              className={GHOST}
             >
               Cancel
-            </button>
-          </div>
+            </DocumentAction>
+          </DocumentActionGroup>
         </div>
       )}
     </div>

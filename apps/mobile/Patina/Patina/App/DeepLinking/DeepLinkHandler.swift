@@ -172,7 +172,7 @@ public final class DeepLinkHandler {
             return false
         }
 
-        coordinator?.navigate(to: .roomDetail(roomId: roomId))
+        coordinator?.navigate(to: .roomProject(roomId: roomId))
         return true
     }
 

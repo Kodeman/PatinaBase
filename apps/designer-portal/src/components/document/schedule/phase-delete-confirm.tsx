@@ -13,6 +13,8 @@
  * the sentence never reads "0 milestones go with it".
  */
 
+import { DocumentAction, DocumentActionGroup } from '../document-action';
+
 export interface PhaseDeleteConfirmProps {
   name: string;
   /** Milestones under this phase — they CASCADE-delete with it. */
@@ -45,7 +47,8 @@ export function PhaseDeleteConfirm({
   errorText = null,
 }: PhaseDeleteConfirmProps) {
   const segments: string[] = [];
-  if (milestoneCount > 0) segments.push(`${plural(milestoneCount, 'milestone')} go with it`);
+  if (milestoneCount > 0)
+    segments.push(`${plural(milestoneCount, 'milestone')} go with it`);
   if (followerCount > 0) {
     segments.push(
       predecessorName
@@ -61,23 +64,28 @@ export function PhaseDeleteConfirm({
         <span className="font-mono text-[0.6rem] uppercase tracking-[0.06em] text-[var(--color-charcoal)]">
           Delete “{name}”?{detail}
         </span>
-        <span className="flex items-center gap-[0.7rem]">
-          <button
-            type="button"
+        <DocumentActionGroup
+          surfaceKey="schedule"
+          regionKey="phase-delete-confirmation"
+        >
+          <DocumentAction
+            actionKey="confirm-delete-phase"
+            variant="danger"
             onClick={onConfirm}
             disabled={busy}
-            className="font-mono text-[0.6rem] uppercase tracking-[0.07em] text-[var(--color-terracotta)] disabled:opacity-50"
+            loading={busy}
+            loadingLabel="Deleting…"
           >
             Delete
-          </button>
-          <button
-            type="button"
+          </DocumentAction>
+          <DocumentAction
+            actionKey="cancel-delete-phase"
+            variant="tertiary"
             onClick={onCancel}
-            className="font-mono text-[0.6rem] uppercase tracking-[0.07em] text-[var(--color-aged-oak)]"
           >
             Cancel
-          </button>
-        </span>
+          </DocumentAction>
+        </DocumentActionGroup>
       </div>
       {errorText && (
         <div className="mt-[0.35rem] font-mono text-[0.58rem] uppercase tracking-[0.06em] text-[var(--color-terracotta)]">

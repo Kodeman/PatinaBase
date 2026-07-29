@@ -6,9 +6,6 @@
 //  user continues into recommendations.
 //  Per PRD §4.9.
 //
-//  Named with the `Scan` prefix to avoid clashing with the existing
-//  Features/Walk/Views/FloorPlanPreviewView.swift.
-//
 
 import SwiftUI
 

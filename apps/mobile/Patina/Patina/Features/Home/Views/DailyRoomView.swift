@@ -6,6 +6,7 @@
 //
 
 import SwiftUI
+import SwiftData
 
 struct DailyRoomView: View {
     @Environment(\.appCoordinator) private var coordinator
@@ -37,13 +38,26 @@ struct DailyRoomView: View {
 
     var body: some View {
         // First-launch tour wraps the entire screen so the three coachmark
-        // anchors (greeting header / saved heart / profile monogram) all
-        // receive the orchestrator via SwiftUI environment. The orchestrator
-        // auto-starts the 3-step sequence on the first launch and persists
-        // resolution state so subsequent launches DO NOT re-trigger.
-        FirstLaunchTour {
+        // anchors (greeting header / + Add / profile monogram) all receive the
+        // orchestrator via SwiftUI environment. The orchestrator auto-starts
+        // the 3-step sequence on the first launch and persists resolution
+        // state so subsequent launches DO NOT re-trigger.
+        //
+        // `canAutoStart` gates that one-shot on Home actually being visible:
+        // post-onboarding we land here with `.emergence` already pushed, and
+        // firing the tour under that cover would spend it on a screen nobody
+        // sees. Tour fires on first visible Home, by design.
+        FirstLaunchTour(canAutoStart: coordinator.navigationPath.isEmpty) {
             screenBody
         }
+    }
+
+    /// U05: the toast's "View" opens the room the piece was just added to.
+    /// Nil when no room is resolvable, which drops the button rather than
+    /// leaving a control that does nothing.
+    private var toastViewAction: (() -> Void)? {
+        guard let roomId = viewModel.toastRoomID else { return nil }
+        return { coordinator.navigate(to: .roomProject(roomId: roomId)) }
     }
 
     /// R07: the story/product detail "overlays" are conditional siblings in
@@ -71,9 +85,10 @@ struct DailyRoomView: View {
                 content
 
                 if let toast = viewModel.toastMessage, expandedRecommendation == nil {
-                    AddedToRoomToast(message: toast) {
-                        // No-op for now; could navigate to room project view.
-                    }
+                    // U05: "View" opens the room the piece just landed in.
+                    // The button is dropped entirely rather than rendered
+                    // inert when the room id is somehow unavailable.
+                    AddedToRoomToast(message: toast, onView: toastViewAction)
                     .padding(.bottom, 90)
                     .transition(.move(edge: .bottom).combined(with: .opacity))
                 }
@@ -177,12 +192,14 @@ struct DailyRoomView: View {
         // services that drive it (design-request status + badge counts); the
         // reads register as SwiftUI dependencies and the home re-renders as the
         // client progresses from marketplace → engaged → active project.
-        let tier = EngagementTier.current
+        let tierState = EngagementTier.currentState
         return ScrollView(showsIndicators: false) {
             VStack(spacing: 0) {
                 DailyGreetingHeader(
                     dateString: viewModel.greetingDate.uppercased(),
-                    monogram: "K",
+                    // U01: the real client's initial. This was a hardcoded
+                    // letter — every user got the developer's monogram.
+                    monogram: UserIdentity.initial,
                     onHelpTap: { isHelpPanelPresented = true },
                     // PT-0-6: monogram is now the Profile entry point.
                     onMonogramTap: { coordinator.navigate(to: .profile) },
@@ -262,6 +279,10 @@ struct DailyRoomView: View {
                         )
                     }
                     .buttonStyle(.plain)
+                } else if viewModel.storyLoadFailed {
+                    // U29: a failed story fetch used to leave the slot silently
+                    // empty, indistinguishable from "no story today".
+                    HomeStoryRetryRow(onRetry: { viewModel.refreshTodaysStory() })
                 }
 
                 // R31: no rooms → no chip rail, no feed. One inviting scan
@@ -287,38 +308,19 @@ struct DailyRoomView: View {
                     roomFeed
                 }
 
-                // Progressive disclosure. At `.discovering` the home shows a
-                // single soft "Work with a designer" CTA (marketplace-first);
-                // once the client engages a designer the Studio hub grows in
-                // below the editorial hero, revealing more as the relationship
-                // deepens.
-                bottomSection(tier: tier)
+                // Progressive disclosure, honestly: `.discovering` gets the
+                // designer bridge + what it opens; a resolved tier gets the
+                // Studio hub + the marketplace; an unresolved tier gets a
+                // skeleton or a retry, never the pitch (U19/U24/U45).
+                HomeStudioBlock(
+                    state: tierState,
+                    unreadNotifications: notificationsViewModel.notifications
+                        .filter { !$0.isRead }.count,
+                    roomCount: viewModel.rooms.count
+                )
 
                 Spacer().frame(height: 120)
             }
-        }
-    }
-
-    /// The tier-gated bottom of the home surface. Discovering-tier users see
-    /// only the designer bridge + discovery links; engaged/active users get the
-    /// `StudioHubSection`, which itself filters its rows by tier.
-    @ViewBuilder
-    private func bottomSection(tier: EngagementTier) -> some View {
-        if tier == .discovering {
-            WorkWithDesignerCTA(
-                onWorkWithDesigner: { coordinator.navigate(to: .designerConsultation) },
-                onBrowse: { coordinator.navigate(to: .emergence(pieceId: nil)) },
-                onSaved: { coordinator.navigate(to: .table) }
-            )
-            .padding(.horizontal, 20)
-            .padding(.top, 20)
-        } else {
-            StudioHubSection(
-                unreadNotifications: notificationsViewModel.notifications
-                    .filter { !$0.isRead }.count,
-                roomCount: viewModel.rooms.count,
-                tier: tier
-            )
         }
     }
 
@@ -330,20 +332,38 @@ struct DailyRoomView: View {
                 RoomChipRail(
                     rooms: viewModel.rooms,
                     selectedID: viewModel.selectedRoomID,
-                    onSelect: { viewModel.selectRoom($0) }
+                    onSelect: { viewModel.selectRoom($0) },
+                    // U23: the rail switches rooms; this is the only door on
+                    // the home to the full gallery.
+                    onAllRooms: { coordinator.navigate(to: .yourSpaces) }
                 )
 
+                // U29: a failed feed request is not an empty room. It gets a
+                // message and a retry, ahead of every empty-state branch.
+                if let feedError = viewModel.feedError {
+                    PatinaErrorState(
+                        message: feedError,
+                        action: { viewModel.refreshFeedForSelectedRoom() }
+                    )
+                    .padding(.horizontal, 20)
+                    .padding(.top, 24)
+                }
                 // Theme V: when the recommendations rail is empty the filter
                 // chips have nothing to filter — so the chips + void are
                 // replaced by ONE editorial module (quiz prompt when no style
                 // profile exists, otherwise a scan/browse prompt). While the
                 // feed request is still in flight we render neither, so the
                 // module doesn't flash before the first response lands.
-                if viewModel.allRecommendations.isEmpty {
+                else if viewModel.allRecommendations.isEmpty {
                     if !viewModel.isFeedLoading {
                         DailyFeedEmptyModule(
                             roomName: viewModel.selectedRoom?.name,
                             roomHasItems: (viewModel.selectedRoom?.itemCount ?? 0) > 0,
+                            // No remote id means the room never reached
+                            // PostgREST, so the feed RPC has nothing to run
+                            // against — no picks are on their way.
+                            roomIsLocalOnly: viewModel.selectedRoom
+                                .map { viewModel.remoteIdByLocal[$0.id] == nil } ?? false,
                             hasStyleProfile: viewModel.hasStyleProfile,
                             onTakeQuiz: { coordinator.navigate(to: .styleQuiz) },
                             onScanRoom: { coordinator.navigate(to: .scanFlow(reason: .fresh)) },
@@ -367,6 +387,17 @@ struct DailyRoomView: View {
                         }
                     )
 
+                    // U03: the feed has items but the active filter matches
+                    // none of them — previously an unexplained void under
+                    // live chips. The chips stay put so the way out is where
+                    // the user already is.
+                    if viewModel.recommendations.isEmpty {
+                        HomeFilteredFeedEmpty(
+                            filterLabel: viewModel.activeFilterLabel,
+                            onShowAll: { viewModel.showAllCategories() }
+                        )
+                    }
+
                     LazyVStack(spacing: 0) {
                         ForEach(Array(viewModel.recommendations.enumerated()), id: \.element.id) { index, rec in
                             let card = DailyProductCard(
@@ -386,11 +417,11 @@ struct DailyRoomView: View {
                             if index == 0 {
                                 // First-launch tour anchor — Step 2's popover
                                 // attaches to the topmost daily product card, the
-                                // surface that carries the heart/save affordance
-                                // the step describes. Only the first card carries
+                                // surface that carries the "+ Add" control the
+                                // step describes. Only the first card carries
                                 // the anchor so the popover doesn't render
                                 // multiple times for users with a long feed.
-                                card.firstLaunchTourAnchor(.savedHeart)
+                                card.firstLaunchTourAnchor(.addToRoom)
                             } else {
                                 card
                             }
@@ -401,11 +432,17 @@ struct DailyRoomView: View {
                 }
     }
 
+}
+
+// MARK: - Saved-scan intents
+
+private extension DailyRoomView {
+
     /// PT-4-9: resume the saved in-progress scan. Routes into the Quiet
     /// Conversation flow (the host re-bootstraps capture). Captures an event
     /// so resume-rate can be measured against the "Save & continue later"
     /// affordance that produced the saved bundle.
-    private func continueSavedScan() {
+    func continueSavedScan() {
         guard let resumableScan else { return }
         HapticManager.shared.impact(.medium)
         PostHogService.shared.capture("scan_resume_tapped", properties: [
@@ -418,7 +455,7 @@ struct DailyRoomView: View {
 
     /// PT-4-9: dismiss the resume card and permanently discard the saved
     /// bundle so it doesn't keep reappearing.
-    private func dismissSavedScan() {
+    func dismissSavedScan() {
         guard let candidate = resumableScan else { return }
         HapticManager.shared.impact(.light)
         let ctx = modelContext

@@ -48,14 +48,35 @@ public struct CompanionContext: Equatable {
     /// Number of rooms scanned
     public var roomCount: Int
 
+    // MARK: - Style
+
+    /// Whether the user has completed the style quiz. Derived fresh from
+    /// `StyleProfileStore` where the actions are computed — the quiz writes
+    /// UserDefaults, not the coordinator, so nothing pushes this in. Rows that
+    /// used to infer "hasn't taken the quiz" from `roomCount` read this instead.
+    public var hasStyleProfile: Bool
+
     // MARK: - Design Request
 
     /// The homeowner's promoted (visible) design request, if any. Session-scoped
     /// and derived fresh from `DesignRequestStatusService.promotedRequest` where
     /// the Companion actions are computed — the provider stays a pure function of
-    /// `(route, context, isAuthenticated)`. When present, every "Ask a designer"
+    /// `(route, context, isAuthenticated)`. When present, every "Get design help"
     /// row renders instead as "Your design request".
     public var activeDesignRequest: ActiveDesignRequestContext?
+
+    // MARK: - Engagement Tier
+
+    /// The client's progressive-disclosure tier, resolved at the same enrichment
+    /// seam as `activeDesignRequest` — so the action provider stays a pure
+    /// function of its inputs. `nil` means no tier was supplied and MUST be read
+    /// as not-yet-engaged; a tier-gated door may never open on a guess.
+    ///
+    /// Deliberately neither `public` nor a parameter of the memberwise
+    /// initializer below: `EngagementTier` is internal, and Swift forbids a
+    /// public declaration whose signature uses an internal type. Assign it
+    /// after construction.
+    var engagementTier: EngagementTier?
 
     // MARK: - Initialization
 
@@ -68,6 +89,7 @@ public struct CompanionContext: Equatable {
         recentMessages: [CompanionContextMessage] = [],
         tableItemCount: Int = 0,
         roomCount: Int = 0,
+        hasStyleProfile: Bool = false,
         activeDesignRequest: ActiveDesignRequestContext? = nil
     ) {
         self.currentScreen = currentScreen
@@ -78,6 +100,7 @@ public struct CompanionContext: Equatable {
         self.recentMessages = recentMessages
         self.tableItemCount = tableItemCount
         self.roomCount = roomCount
+        self.hasStyleProfile = hasStyleProfile
         self.activeDesignRequest = activeDesignRequest
     }
 
@@ -91,8 +114,6 @@ public struct CompanionContext: Equatable {
                 return room.name
             }
             return "Your Space"
-        case .roomList:
-            return "Your Rooms: \(roomCount) spaces"
         case .scanFlow(let reason):
             switch reason {
             case .rescan:
@@ -119,11 +140,6 @@ public struct CompanionContext: Equatable {
             return "Piece details"
         case .table:
             return "Your Table: \(tableItemCount) pieces gathering"
-        case .roomDetail:
-            if let room = activeRoom {
-                return "Viewing: \(room.name)"
-            }
-            return "Room details"
         case .roomSavedItems:
             if let room = activeRoom {
                 return "Saved items in \(room.name)"
@@ -135,8 +151,6 @@ public struct CompanionContext: Equatable {
             return "Your style profile"
         case .arPlacement:
             return "Placing furniture"
-        case .preScanChecklist:
-            return "Preparing to scan"
         case .profile:
             return "Your profile"
         case .notifications:
@@ -188,8 +202,6 @@ public struct CompanionContext: Equatable {
         switch currentScreen {
         case .heroFrame:
             return "photo"
-        case .roomList:
-            return "house"
         case .scanFlow:
             return "figure.walk"
         case .emergence, .roomEmergence:
@@ -198,8 +210,6 @@ public struct CompanionContext: Equatable {
             return "chair.lounge"
         case .table:
             return "rectangle.stack"
-        case .roomDetail:
-            return "square.split.bottomrightquarter"
         case .roomSavedItems:
             return "bookmark.fill"
         case .styleQuiz:
@@ -208,8 +218,6 @@ public struct CompanionContext: Equatable {
             return "star.circle"
         case .arPlacement:
             return "arkit"
-        case .preScanChecklist:
-            return "checklist"
         case .profile:
             return "person.circle"
         case .notifications:

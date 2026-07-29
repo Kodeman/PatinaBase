@@ -36,6 +36,12 @@
 // dead worker; rows stay queued for the next tick. A job_runs row records every
 // invocation (00300 shape).
 //
+// Billing guard (SWEEP MODE ONLY — targeted { imageId }/{ scanId } calls keep
+// the old probe-first behavior): the 5-min cron sweep runs a cheap existence
+// check against the sweep predicate above BEFORE the /healthz probe. No
+// eligible row means zero outbound HTTP — Cloudflare Containers bill
+// wall-clock while awake, so an empty outbox must never wake the container.
+//
 // Env: SUPABASE_URL + SUPABASE_SERVICE_ROLE_KEY (runtime-injected),
 //      INFERENCE_URL, INFERENCE_TOKEN.
 
@@ -248,6 +254,35 @@ Deno.serve(async (req: Request) => {
       detail: { reason: 'inference_unconfigured' },
     });
     return json({ skipped: 'inference_unconfigured', derived: 0, copied: 0, failed: 0 }, 200);
+  }
+
+  // Billing guard — SWEEP MODE ONLY (see header). Cheap existence check on the
+  // sweep predicate BEFORE the /healthz probe: an empty outbox must never wake
+  // the inference container (Cloudflare Containers bill wall-clock while
+  // awake). Targeted { imageId }/{ scanId } calls keep the old probe-first
+  // flow — an operator asking for a specific row expects the probe to run.
+  if (!body.imageId && !body.scanId) {
+    const { data: pending, error: pendingErr } = await admin
+      .from('room_scan_images')
+      .select('id')
+      .is('thumbnail_url', null)
+      .eq('mime_type', 'image/heic')
+      .lt('derive_attempts', MAX_ATTEMPTS)
+      .limit(1);
+    if (pendingErr) {
+      // Fail OPEN on the check itself — an unreadable table is not proof
+      // there's no work; fall through to the normal probe/sweep path.
+      logLine('work_check_failed', { error: pendingErr.message });
+    } else if (!pending || pending.length === 0) {
+      logLine('no_work', {});
+      await admin.from('job_runs').insert({
+        job_name: FN,
+        status: 'skipped',
+        finished_at: new Date().toISOString(),
+        detail: { reason: 'no_work' },
+      });
+      return json({ skipped: 'no_work', derived: 0, copied: 0, failed: 0 }, 200);
+    }
   }
 
   // Probe before touching any row so a dead/un-warmed worker (or one without the

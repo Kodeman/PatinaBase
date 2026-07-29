@@ -101,6 +101,8 @@ struct ContentView: View {
             SettingsView()
         case .qr:
             QRScannerView()
+        case .auth:
+            AuthSheet()
         case .designServices(let roomId, let preselectedScanIds):
             DesignRequestFlowView(
                 preselectedScanIds: preselectedScanIds,
@@ -151,6 +153,12 @@ struct ContentView: View {
                     // for the whole stack (guarded to never fire at root).
                     .interactivePopGestureEnabled()
             }
+            // The expanded Companion is a modal panel drawn over this stack,
+            // but nothing told the accessibility tree that: VoiceOver walked
+            // straight past the open panel into the content behind it (device-
+            // confirmed on the manual-room form). `isCompanionExpanded` is the
+            // coordinator flag CompanionOverlay already sets on expand/collapse.
+            .accessibilityHidden(coordinator.isCompanionExpanded)
 
             // Companion is always present in the `.main` phase. The
             // `.auth` and `.onboarding` phases live in their own root
@@ -176,39 +184,65 @@ struct ContentView: View {
 
     // MARK: - Navigation Destinations
 
+    // Split into one dispatcher + 4 grouped helpers (U18 chrome-cleanup
+    // pushed the single switch over SwiftLint's function_body_length /
+    // cyclomatic_complexity thresholds). Same exhaustive case coverage as
+    // before, just delegated by group — no behavior change.
     @ViewBuilder
     private func destinationView(for route: AppRoute) -> some View {
         switch route {
-        case .heroFrame:
-            // `.heroFrame` is a root-reset (it clears the nav path); it is
-            // never pushed as a destination, so this arm is unreachable.
-            // The home surface is rendered by `mainHomeView`.
-            EmptyView()
+        // `.heroFrame` is a root-reset (it clears the nav path); it is never
+        // pushed as a destination, so it falls through to the group's
+        // EmptyView. The home surface is rendered by `mainHomeView`.
+        case .heroFrame, .yourSpaces, .roomProject,
+             .roomSettings, .crossRoom, .manualRoomEntry, .roomSavedItems:
+            roomsDestination(for: route)
 
-        case .roomList, .yourSpaces:
+        case .scanFlow, .emergence, .roomEmergence, .table, .pieceDetail:
+            discoveryDestination(for: route)
+
+        case .styleQuiz, .styleResult, .arPlacement:
+            styleDestination(for: route)
+
+        case .profile, .notifications, .designerConsultation, .designRequests,
+             .projectList, .projectDetail, .decisionList, .decisionDetail:
+            workCoreDestination(for: route)
+
+        case .threadList, .threadDetail, .proposalList, .proposalDetail,
+             .invoiceList, .invoiceDetail, .budget, .documentList:
+            workDocumentsDestination(for: route)
+        }
+    }
+
+    @ViewBuilder
+    private func roomsDestination(for route: AppRoute) -> some View {
+        switch route {
+        case .yourSpaces:
             YourSpacesView()
-                .toolbar(.hidden, for: .navigationBar)
 
-        case .roomDetail(let roomId), .roomProject(let roomId):
+        case .roomProject(let roomId):
             RoomProjectView(roomId: roomId)
-                .toolbar(.hidden, for: .navigationBar)
 
         case .roomSettings(let roomId):
             RoomSettingsView(roomId: roomId)
-                .toolbarTitleDisplayMode(.inline)
 
         case .crossRoom:
             CrossRoomView()
-                .toolbar(.hidden, for: .navigationBar)
 
         case .manualRoomEntry:
             ManualRoomEntryView()
-                .toolbar(.hidden, for: .navigationBar)
 
-        case .roomSavedItems:
-            CollectionsView()
-                .toolbarTitleDisplayMode(.inline)
+        case .roomSavedItems(let roomId):
+            CollectionsView(roomId: roomId)
 
+        default:
+            EmptyView() // unreachable — dispatched only for the cases above
+        }
+    }
+
+    @ViewBuilder
+    private func discoveryDestination(for route: AppRoute) -> some View {
+        switch route {
         case .scanFlow:
             // The single Quiet Conversation entry. The host owns the entire
             // internal step sequence (threshold → walk → review → … →
@@ -223,102 +257,110 @@ struct ContentView: View {
                     .toolbar(.hidden, for: .navigationBar)
             } else {
                 RecommendationsView()
-                    .toolbarTitleDisplayMode(.inline)
             }
 
-        case .roomEmergence:
-            RecommendationsView()
-                .toolbarTitleDisplayMode(.inline)
+        case .roomEmergence(let roomId):
+            // U06/U07: `roomId` here is the LOCAL SwiftData `RoomModel.id`
+            // (this case's payload type, per Coordinator.swift) — NOT the
+            // remote id the `get_recommendations` RPC and the
+            // `saved_items.room_id` FK expect. RecommendationsView resolves
+            // it to `RoomModel.remoteId` itself before either is used,
+            // falling back to the unscoped marketplace if the room hasn't
+            // synced yet.
+            RecommendationsView(roomId: roomId.uuidString)
 
         case .table:
             CollectionsView()
-                .toolbarTitleDisplayMode(.inline)
 
         case .pieceDetail(let pieceId):
             ProductDetailView(productId: pieceId)
                 .toolbar(.hidden, for: .navigationBar)
 
+        default:
+            EmptyView() // unreachable — dispatched only for the cases above
+        }
+    }
+
+    @ViewBuilder
+    private func styleDestination(for route: AppRoute) -> some View {
+        switch route {
         case .styleQuiz:
             StyleQuizView()
                 .toolbar(.hidden, for: .navigationBar)
 
         case .styleResult(let result):
-            StyleResultView(result: result)
-                .toolbar(.hidden, for: .navigationBar)
+            StyleResultView(result: result, showsChrome: true)
 
         case .arPlacement(let productId, let roomRemoteId):
             ARPlacementView(productId: productId, roomRemoteId: roomRemoteId)
                 .toolbar(.hidden, for: .navigationBar)
 
-        case .preScanChecklist:
-            PreScanChecklistView {
-                coordinator.navigate(to: .scanFlow(reason: .fresh))
-            }
-            .toolbar(.hidden, for: .navigationBar)
+        default:
+            EmptyView() // unreachable — dispatched only for the cases above
+        }
+    }
 
+    @ViewBuilder
+    private func workCoreDestination(for route: AppRoute) -> some View {
+        switch route {
         case .profile:
             ProfileView()
-                .toolbarTitleDisplayMode(.inline)
 
         case .notifications:
             NotificationFeedView()
-                .toolbarTitleDisplayMode(.inline)
 
         case .designerConsultation:
             DesignerConsultationView()
-                .toolbar(.hidden, for: .navigationBar)
 
         case .designRequests(let focusLeadId):
             DesignRequestStatusView(focusLeadId: focusLeadId)
-                .toolbar(.hidden, for: .navigationBar)
 
         case .projectList:
             ProjectListView()
-                .toolbar(.hidden, for: .navigationBar)
 
         case .projectDetail(let projectId):
             ProjectDetailView(projectId: projectId)
-                .toolbar(.hidden, for: .navigationBar)
 
         case .decisionList:
             DecisionListView()
-                .toolbar(.hidden, for: .navigationBar)
 
         case .decisionDetail(let decisionId):
             DecisionDetailView(decisionId: decisionId)
-                .toolbar(.hidden, for: .navigationBar)
 
+        default:
+            EmptyView() // unreachable — dispatched only for the cases above
+        }
+    }
+
+    @ViewBuilder
+    private func workDocumentsDestination(for route: AppRoute) -> some View {
+        switch route {
         case .threadList:
             ThreadListView()
-                .toolbar(.hidden, for: .navigationBar)
 
         case .threadDetail(let threadId):
             ThreadDetailView(threadId: threadId)
-                .toolbarTitleDisplayMode(.inline)
 
         case .proposalList:
             ProposalListView()
-                .toolbar(.hidden, for: .navigationBar)
 
         case .proposalDetail(let proposalId):
             ProposalDetailView(proposalId: proposalId)
-                .toolbar(.hidden, for: .navigationBar)
 
         case .invoiceList:
             InvoiceListView()
-                .toolbar(.hidden, for: .navigationBar)
 
         case .invoiceDetail(let invoiceId):
             InvoiceDetailView(invoiceId: invoiceId)
-                .toolbar(.hidden, for: .navigationBar)
 
         case .budget:
             BudgetView()
-                .toolbar(.hidden, for: .navigationBar)
 
         case .documentList:
             DocumentListView()
-                .toolbar(.hidden, for: .navigationBar)
+
+        default:
+            EmptyView() // unreachable — dispatched only for the cases above
         }
     }
 }

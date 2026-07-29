@@ -1,0 +1,1790 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Patina iOS · UX Review — July 2026</title>
+<style>
+/* ============================================================
+   Patina iOS · UX Review — July 2026
+   Third in the series. Typeset in the platform's own faces:
+   New York (ui-serif), SF Pro (-apple-system), SF Mono (ui-monospace).
+   Ground colours sampled from the captures themselves.
+   ============================================================ */
+
+:root{
+  /* --- palette (fixed hues) --- */
+  --clay:#A8674A;      --clay-lift:#C4805F;
+  --verdigris:#5F7F71; --verdigris-lift:#8FB0A2;
+  --oxide:#9C3D2E;     --oxide-lift:#D3705A;
+  --brass:#8A6C24;     --brass-lift:#C0A052;
+
+  /* --- evidence register (the app's own ground) --- */
+  --ev-bg:#211E1B;  --ev-bg2:#2A2724;  --ev-bg3:#171513;
+  --ev-ink:#F2EDE6; --ev-soft:#B5AA9C; --ev-mute:#877C6E;
+  --ev-hair:rgba(242,237,230,.15);
+  --ev-accent:var(--clay-lift); --ev-struct:var(--verdigris-lift);
+
+  /* --- analysis register (paper) --- */
+  --an-bg:#F2EDE6;  --an-bg2:#FAF7F1;  --an-bg3:#E8E1D6;
+  --an-ink:#211E1B; --an-soft:#57503F; --an-mute:#877C6E;
+  --an-hair:rgba(33,30,27,.16);
+  --an-accent:var(--clay); --an-struct:var(--verdigris);
+
+  /* --- severity (semantic, independent of accent) --- */
+  --sev0:#9C3D2E; --sev1:#8A6C24; --sev2:#6E7466;
+
+  --serif:ui-serif,"New York","Playfair Display",Georgia,"Times New Roman",serif;
+  --sans:-apple-system,BlinkMacSystemFont,"SF Pro Text","Segoe UI",Roboto,system-ui,sans-serif;
+  --mono:ui-monospace,"SF Mono","DM Mono",Menlo,Consolas,monospace;
+
+  --col:1220px;
+  --pad:clamp(20px,5vw,52px);
+}
+
+/* dark viewing: the paper half becomes a lighter charcoal, the
+   evidence half goes deeper. The fold survives in both themes. */
+@media (prefers-color-scheme:dark){
+  :root:not([data-theme="light"]){
+    --an-bg:#1B1815; --an-bg2:#242019; --an-bg3:#13110F;
+    --an-ink:#EDE7DD; --an-soft:#A99E8F; --an-mute:#7E7466;
+    --an-hair:rgba(237,231,221,.14);
+    --an-accent:var(--clay-lift); --an-struct:var(--verdigris-lift);
+    --ev-bg:#121110; --ev-bg2:#1B1917; --ev-bg3:#0C0B0A;
+    --sev0:#D3705A; --sev1:#C0A052; --sev2:#94998B;
+  }
+}
+:root[data-theme="dark"]{
+  --an-bg:#1B1815; --an-bg2:#242019; --an-bg3:#13110F;
+  --an-ink:#EDE7DD; --an-soft:#A99E8F; --an-mute:#7E7466;
+  --an-hair:rgba(237,231,221,.14);
+  --an-accent:var(--clay-lift); --an-struct:var(--verdigris-lift);
+  --ev-bg:#121110; --ev-bg2:#1B1917; --ev-bg3:#0C0B0A;
+  --sev0:#D3705A; --sev1:#C0A052; --sev2:#94998B;
+}
+
+/* ---- registers: components read only these ---- */
+.reg{
+  background:var(--bg); color:var(--ink);
+  --bg:var(--an-bg); --bg2:var(--an-bg2); --bg3:var(--an-bg3);
+  --ink:var(--an-ink); --soft:var(--an-soft); --mute:var(--an-mute);
+  --hair:var(--an-hair); --accent:var(--an-accent); --struct:var(--an-struct);
+}
+.reg-ev{
+  --bg:var(--ev-bg); --bg2:var(--ev-bg2); --bg3:var(--ev-bg3);
+  --ink:var(--ev-ink); --soft:var(--ev-soft); --mute:var(--ev-mute);
+  --hair:var(--ev-hair); --accent:var(--ev-accent); --struct:var(--ev-struct);
+}
+
+*{margin:0;padding:0;box-sizing:border-box}
+html{scroll-behavior:smooth;-webkit-text-size-adjust:100%}
+body{
+  font-family:var(--sans); font-size:16.5px; line-height:1.62;
+  background:var(--ev-bg); color:var(--ev-ink);
+  -webkit-font-smoothing:antialiased; text-rendering:optimizeLegibility;
+  overflow-x:hidden;
+}
+img{max-width:100%;display:block}
+a{color:inherit}
+::selection{background:var(--clay);color:#F2EDE6}
+:focus-visible{outline:2px solid var(--accent);outline-offset:3px;border-radius:2px}
+
+/* ---------- shared primitives ---------- */
+.wrap{max-width:var(--col);margin:0 auto;padding-left:var(--pad);padding-right:var(--pad)}
+.reg{padding-block:clamp(72px,9vw,124px)}
+.reg + .reg{padding-top:clamp(72px,9vw,124px)}
+
+.eyebrow{
+  font-family:var(--mono); font-size:11px; letter-spacing:.26em; text-transform:uppercase;
+  color:var(--struct); display:flex; align-items:baseline; gap:14px; margin-bottom:20px;
+}
+.eyebrow::after{content:"";flex:1;height:1px;background:var(--hair);transform:translateY(-4px)}
+.eyebrow .n{color:var(--mute)}
+
+h2{
+  font-family:var(--serif); font-weight:500; font-size:clamp(31px,4.4vw,52px);
+  line-height:1.08; letter-spacing:-.015em; max-width:19ch; text-wrap:balance;
+}
+h2 em{font-style:italic;color:var(--accent)}
+h3{font-family:var(--serif);font-weight:500;font-size:clamp(23px,2.9vw,32px);line-height:1.14;letter-spacing:-.01em;text-wrap:balance}
+.lede{font-size:18px;line-height:1.58;color:var(--soft);max-width:62ch;margin-top:22px}
+.lede b,.lede strong{color:var(--ink);font-weight:600}
+p{max-width:66ch}
+.note{font-size:14px;color:var(--mute);max-width:62ch}
+code,.m{font-family:var(--mono);font-size:.855em;letter-spacing:-.01em}
+code{color:var(--struct);word-break:break-word}
+
+/* ---------- top chrome ---------- */
+#bar{position:fixed;inset:0 auto auto 0;height:2px;width:0;background:var(--clay);z-index:1000}
+nav{
+  position:fixed; inset:0 0 auto 0; z-index:900;
+  display:flex; justify-content:space-between; align-items:center; gap:20px;
+  padding:12px var(--pad);
+  background:color-mix(in srgb,var(--ev-bg) 86%,transparent);
+  backdrop-filter:saturate(1.4) blur(14px);
+  border-bottom:1px solid var(--ev-hair);
+  transition:background .4s ease,border-color .4s ease,color .4s ease;
+  color:var(--ev-ink);
+}
+nav.on-paper{background:color-mix(in srgb,var(--an-bg) 88%,transparent);border-bottom-color:var(--an-hair);color:var(--an-ink)}
+nav .mark{font-family:var(--mono);font-size:11px;letter-spacing:.2em;text-transform:uppercase;opacity:.82;white-space:nowrap}
+nav .mark b{font-weight:500;color:var(--clay-lift)}
+nav.on-paper .mark b{color:var(--clay)}
+nav ul{display:flex;gap:20px;list-style:none}
+nav a{
+  font-family:var(--mono);font-size:10.5px;letter-spacing:.13em;text-transform:uppercase;
+  text-decoration:none;opacity:.75;transition:opacity .2s,color .2s;white-space:nowrap;
+}
+nav a:hover,nav a:focus-visible{opacity:1;color:var(--clay-lift)}
+nav.on-paper a:hover,nav.on-paper a:focus-visible{color:var(--clay)}
+@media(max-width:1080px){nav ul{display:none}}
+
+/* ---------- cover ---------- */
+.cover{
+  min-height:100svh; display:flex; flex-direction:column; justify-content:center;
+  position:relative; overflow:hidden; padding-block:120px 60px;
+}
+/* patina strata — oxidising copper bands, the thing the brand is named for */
+.strata{position:absolute;right:-16%;top:50%;translate:0 -50%;width:min(680px,72vw);aspect-ratio:1;pointer-events:none;opacity:.9}
+.strata i{position:absolute;left:0;right:0;border-radius:999px;filter:blur(.4px)}
+.strata .a{top:10%;height:9%;background:linear-gradient(102deg,#3C4B45,#5F7F71 58%,#7FA091);rotate:-9deg}
+.strata .b{top:30%;height:13%;background:linear-gradient(102deg,#B5734F,#A8674A 55%,#7C452F);rotate:-9deg;translate:34px}
+.strata .c{top:56%;height:7%;background:linear-gradient(102deg,#8C7B5E,#C9A87C 60%,#9C8862);rotate:-9deg;translate:-26px}
+.strata .d{top:72%;height:11%;background:linear-gradient(102deg,#2A2724,#211E1B);rotate:-9deg;translate:12px}
+@media(max-width:1000px){.strata{opacity:.2;right:-30%}}
+
+.cover .kicker{font-family:var(--mono);font-size:11.5px;letter-spacing:.32em;text-transform:uppercase;color:var(--ev-mute);margin-bottom:28px}
+.cover h1{
+  font-family:var(--serif);font-weight:500;font-size:clamp(50px,9vw,116px);
+  line-height:.98;letter-spacing:-.028em;max-width:13ch;position:relative;
+}
+.cover h1 em{font-style:italic;color:var(--clay-lift)}
+.cover .thesis{
+  margin-top:34px;font-family:var(--serif);font-style:italic;font-size:clamp(21px,2.7vw,30px);
+  line-height:1.32;color:var(--ev-ink);max-width:23ch;position:relative;
+  padding-left:22px;border-left:2px solid var(--clay);
+}
+.cover .series{margin-top:44px;max-width:56ch;font-size:15px;color:var(--ev-soft);position:relative}
+.cover .series b{color:var(--ev-ink);font-weight:600}
+.cover .meta{margin-top:52px;display:flex;flex-wrap:wrap;gap:38px;position:relative}
+.cover .meta div{font-family:var(--mono);font-size:10.5px;letter-spacing:.16em;text-transform:uppercase;color:var(--ev-mute)}
+.cover .meta b{display:block;margin-top:6px;font-size:12.5px;font-weight:500;color:var(--ev-ink);letter-spacing:.05em}
+
+/* ---------- stat strip ---------- */
+.stats{
+  margin-top:56px;display:grid;grid-template-columns:repeat(auto-fit,minmax(168px,1fr));
+  gap:1px;background:var(--bg);border-block:1px solid var(--hair);
+}
+/* cells draw the hairlines; the 1px spread meets the 1px gap as one rule */
+.stats > *,.rulings > *,.cover-list > *,.dead > *,.method > *{box-shadow:0 0 0 1px var(--hair)}
+.stats div{background:var(--bg);padding:24px 22px 26px}
+.stats .fig{font-family:var(--serif);font-size:clamp(34px,4.6vw,50px);line-height:1;font-variant-numeric:tabular-nums;letter-spacing:-.02em}
+.stats .fig.hot{color:var(--sev0)}
+.stats .lab{margin-top:11px;font-family:var(--mono);font-size:10.5px;letter-spacing:.15em;text-transform:uppercase;color:var(--mute);line-height:1.6}
+
+/* ---------- laws ---------- */
+.laws{margin-top:60px;display:grid;grid-template-columns:repeat(auto-fit,minmax(258px,1fr));gap:0}
+.law{padding:26px 28px 30px;border-top:2px solid var(--accent)}
+.law + .law{border-left:1px solid var(--hair)}
+@media(max-width:820px){.law + .law{border-left:0}}
+.law .k{font-family:var(--mono);font-size:10.5px;letter-spacing:.2em;text-transform:uppercase;color:var(--mute)}
+.law h4{font-family:var(--serif);font-weight:500;font-size:25px;margin:10px 0 9px;letter-spacing:-.01em}
+.law p{font-size:14.5px;color:var(--soft);max-width:38ch}
+
+/* ---------- device plates & filmstrips ---------- */
+.strip{
+  display:flex;gap:20px;overflow-x:auto;overflow-y:hidden;
+  padding:6px 2px 20px;scroll-snap-type:x proximity;
+  scrollbar-color:var(--mute) transparent;
+}
+.strip::-webkit-scrollbar{height:5px}
+.strip::-webkit-scrollbar-track{background:var(--hair)}
+.strip::-webkit-scrollbar-thumb{background:var(--mute);border-radius:99px}
+.plate{flex:0 0 auto;scroll-snap-align:start;width:min(206px,58vw)}
+.plate.wide{width:min(238px,64vw)}
+.frame{
+  border-radius:24px;overflow:hidden;background:#0B0A09;padding:5px;
+  border:1px solid var(--hair);
+  box-shadow:0 20px 44px -22px rgba(0,0,0,.7), 0 2px 6px rgba(0,0,0,.22);
+  transition:transform .32s ease, box-shadow .32s ease;
+}
+.plate:hover .frame{transform:translateY(-5px);box-shadow:0 30px 58px -22px rgba(0,0,0,.8)}
+.frame img{border-radius:20px;width:100%;height:auto;aspect-ratio:1206/2622;object-fit:cover;background:#0B0A09}
+.plate figcaption{margin-top:12px;font-size:12.8px;line-height:1.5;color:var(--soft)}
+.plate .sn{font-family:var(--mono);font-size:10px;letter-spacing:.16em;text-transform:uppercase;color:var(--mute);display:block;margin-bottom:5px}
+.plate figcaption b{color:var(--ink);font-weight:600}
+.tags{display:flex;flex-wrap:wrap;gap:5px;margin-top:8px}
+.tag{
+  font-family:var(--mono);font-size:9.5px;letter-spacing:.09em;padding:2.5px 7px;border-radius:3px;
+  border:1px solid currentColor;opacity:.9;white-space:nowrap;
+}
+.tag.p0{color:var(--sev0)} .tag.p1{color:var(--sev1)} .tag.p2{color:var(--sev2)}
+.tag.ok{color:var(--struct)}
+
+/* ---------- THE SEVERED RULE (signature) ---------- */
+.chain{position:relative}
+.chain .strip{padding-top:34px}
+/* the strip runs past the fold on every screen — say so, and fade the edge */
+.chain .strip{
+  -webkit-mask-image:linear-gradient(to right,#000 calc(100% - 76px),transparent);
+          mask-image:linear-gradient(to right,#000 calc(100% - 76px),transparent);
+}
+.chain .strip.at-end{-webkit-mask-image:none;mask-image:none}
+.strip-hint{
+  font-family:var(--mono);font-size:10px;letter-spacing:.18em;text-transform:uppercase;
+  color:var(--accent);display:inline-flex;align-items:center;gap:7px;margin-left:14px;
+}
+.strip-hint::after{content:"→";font-size:12px;translate:0 -.5px}
+.chain .plate{position:relative}
+/* connector between frames in the funnel sequence */
+.chain .plate:not(:last-child) .frame::after{content:none}
+.link{
+  flex:0 0 auto;align-self:flex-start;margin-top:clamp(96px,26vw,214px);
+  width:34px;height:1px;background:var(--struct);position:relative;opacity:.85;
+}
+.link::after{
+  content:"";position:absolute;right:-1px;top:-3px;width:7px;height:7px;
+  border-top:1px solid var(--struct);border-right:1px solid var(--struct);rotate:45deg;
+}
+.link.dash{background:none;border-top:1px dashed var(--sev0);opacity:1}
+.link.dash::after{border-color:var(--sev0)}
+.sever{
+  flex:0 0 auto;align-self:flex-start;margin-top:clamp(60px,17vw,138px);
+  width:min(216px,60vw);padding-left:20px;border-left:2px solid var(--sev0);
+}
+.sever .glyph{
+  font-family:var(--mono);font-size:26px;line-height:1;color:var(--sev0);letter-spacing:-.06em;
+}
+.sever h5{font-family:var(--serif);font-weight:500;font-size:21px;line-height:1.2;margin:12px 0 8px;color:var(--ink)}
+.sever p{font-size:13px;line-height:1.55;color:var(--soft)}
+.sever .m{display:block;margin-top:10px;font-size:10.5px;letter-spacing:.14em;text-transform:uppercase;color:var(--sev0)}
+
+/* compound callout */
+.compound{
+  margin-top:44px;padding:30px clamp(22px,3.4vw,38px);
+  background:var(--bg2);border:1px solid var(--hair);border-left:3px solid var(--sev0);
+  display:grid;grid-template-columns:minmax(0,1fr) minmax(0,190px);gap:clamp(24px,3vw,44px);align-items:center;
+}
+@media(max-width:760px){.compound{grid-template-columns:1fr}}
+.compound h4{font-family:var(--serif);font-weight:500;font-size:clamp(21px,2.5vw,28px);line-height:1.2;margin-bottom:12px}
+.compound p{font-size:15px;color:var(--soft)}
+.compound .frame{max-width:170px}
+
+/* ---------- findings ---------- */
+.theme{margin-top:clamp(60px,7vw,92px);padding-top:34px;border-top:1px solid var(--ink)}
+.theme:first-of-type{margin-top:56px}
+.theme-head{display:grid;grid-template-columns:minmax(0,1.05fr) minmax(0,.95fr);gap:clamp(26px,4vw,56px);align-items:end}
+@media(max-width:900px){.theme-head{grid-template-columns:1fr;align-items:start}}
+.theme-head .tn{font-family:var(--mono);font-size:10.5px;letter-spacing:.24em;text-transform:uppercase;color:var(--accent);display:block;margin-bottom:12px}
+.thesis-p{font-size:15px;line-height:1.62;color:var(--soft);border-left:2px solid var(--struct);padding-left:20px;max-width:52ch}
+.thesis-p b{color:var(--ink);font-weight:600}
+
+.findings{margin-top:38px;border-top:1px solid var(--hair)}
+.f{
+  display:grid;grid-template-columns:124px minmax(0,1fr);gap:clamp(18px,2.6vw,36px);
+  padding:26px 4px 28px;border-bottom:1px solid var(--hair);
+}
+.f:target{background:var(--bg2)}
+@media(max-width:720px){.f{grid-template-columns:1fr;gap:14px}}
+.f-id{display:flex;flex-direction:column;align-items:flex-start;gap:8px}
+@media(max-width:720px){.f-id{flex-direction:row;align-items:center;flex-wrap:wrap;gap:9px}}
+.f-id .u{
+  font-family:var(--mono);font-size:19px;font-weight:500;letter-spacing:.01em;color:var(--ink);
+  font-variant-numeric:tabular-nums;text-decoration:none;
+}
+.f-id .u:hover{color:var(--accent)}
+.chip{
+  font-family:var(--mono);font-size:10px;letter-spacing:.12em;text-transform:uppercase;
+  padding:3px 8px;border-radius:3px;white-space:nowrap;
+}
+.chip.p0{background:color-mix(in srgb,var(--sev0) 16%,transparent);color:var(--sev0);font-weight:600}
+.chip.p1{background:color-mix(in srgb,var(--sev1) 16%,transparent);color:var(--sev1)}
+.chip.p2{background:color-mix(in srgb,var(--sev2) 18%,transparent);color:var(--sev2)}
+.chip.none{background:color-mix(in srgb,var(--mute) 14%,transparent);color:var(--mute)}
+.meta-line{font-family:var(--mono);font-size:10px;letter-spacing:.1em;text-transform:uppercase;color:var(--mute);white-space:nowrap}
+.ev{font-family:var(--mono);font-size:9.5px;letter-spacing:.09em;text-transform:uppercase;padding:2.5px 7px;border:1px solid currentColor;border-radius:3px;white-space:nowrap}
+.ev.live{color:var(--sev0)}
+.ev.code{color:var(--struct)}
+.ev.both{color:var(--accent)}
+.ev.carry{color:var(--mute)}
+
+.f-body h4{font-family:var(--sans);font-size:16.5px;font-weight:600;line-height:1.42;letter-spacing:-.005em;margin-bottom:9px;max-width:62ch;text-wrap:balance}
+.f-body > p{font-size:14.8px;line-height:1.6;color:var(--soft)}
+.f-body > p + p{margin-top:9px}
+.f-body strong{color:var(--ink);font-weight:600}
+.kv{margin-top:14px;display:grid;gap:8px}
+.kv > div{display:grid;grid-template-columns:78px minmax(0,1fr);gap:14px;align-items:baseline}
+@media(max-width:560px){.kv > div{grid-template-columns:1fr;gap:3px}}
+.kv dt{font-family:var(--mono);font-size:9.5px;letter-spacing:.17em;text-transform:uppercase;color:var(--mute);padding-top:2px}
+.kv dd{font-size:13.6px;line-height:1.56;color:var(--soft)}
+.kv dd.fix{color:var(--ink)}
+.kv dd.fix::before{content:"→ ";color:var(--struct);font-family:var(--mono)}
+
+/* inline evidence plates inside a theme */
+.plates{margin:30px 0 4px}
+.plates .cap{font-family:var(--mono);font-size:10px;letter-spacing:.18em;text-transform:uppercase;color:var(--mute);margin-bottom:14px}
+
+/* ---------- journey legs ---------- */
+.leg{padding-top:clamp(40px,5vw,62px);border-top:1px solid var(--hair);margin-top:clamp(40px,5vw,62px)}
+.leg:first-of-type{margin-top:48px}
+.leg-head{display:flex;align-items:baseline;gap:18px;flex-wrap:wrap;margin-bottom:8px}
+.leg-head .range{font-family:var(--mono);font-size:11px;letter-spacing:.18em;color:var(--accent);white-space:nowrap;font-variant-numeric:tabular-nums}
+.leg-head h4{font-family:var(--serif);font-weight:500;font-size:clamp(21px,2.5vw,28px);line-height:1.16;letter-spacing:-.01em}
+.leg > p{font-size:15px;color:var(--soft);max-width:64ch}
+.leg > p b{color:var(--ink);font-weight:600}
+.leg .strip{margin-top:26px}
+
+/* ---------- roadmap ---------- */
+.road{margin-top:52px;display:grid;gap:0;border-top:1px solid var(--ink)}
+.phase{
+  display:grid;grid-template-columns:190px minmax(0,1fr);gap:clamp(20px,3vw,44px);
+  padding:30px 4px 32px;border-bottom:1px solid var(--hair);
+}
+@media(max-width:820px){.phase{grid-template-columns:1fr;gap:16px}}
+.phase-when{display:flex;flex-direction:column;gap:9px}
+.phase-when .w{font-family:var(--serif);font-size:27px;font-weight:500;line-height:1.1;letter-spacing:-.01em}
+.phase-when .c{font-family:var(--mono);font-size:10.5px;letter-spacing:.15em;text-transform:uppercase;color:var(--mute)}
+.phase.gate .phase-when .w{color:var(--sev0)}
+.phase.gate{background:color-mix(in srgb,var(--sev0) 6%,transparent)}
+.phase-what > p{font-size:15px;color:var(--soft);margin-bottom:16px}
+.ids{display:flex;flex-wrap:wrap;gap:7px}
+.id{
+  font-family:var(--mono);font-size:11.5px;letter-spacing:.03em;padding:5px 10px;border-radius:3px;
+  border:1px solid var(--hair);background:var(--bg2);color:var(--ink);text-decoration:none;
+  font-variant-numeric:tabular-nums;transition:border-color .18s,color .18s;
+}
+.id:hover,.id:focus-visible{border-color:var(--accent);color:var(--accent)}
+.id.p0{border-color:color-mix(in srgb,var(--sev0) 55%,transparent);color:var(--sev0)}
+.id em{font-style:normal;color:var(--mute);margin-left:6px;font-size:10.5px}
+
+/* ---------- rulings ---------- */
+.rulings{margin-top:48px;display:grid;grid-template-columns:repeat(auto-fit,minmax(272px,1fr));gap:1px;background:var(--bg)}
+.ruling{background:var(--bg);padding:26px 24px 28px;display:flex;flex-direction:column;gap:10px}
+.ruling .r{font-family:var(--mono);font-size:11px;letter-spacing:.16em;text-transform:uppercase;color:var(--struct)}
+.ruling h4{font-family:var(--serif);font-weight:500;font-size:20px;line-height:1.22;letter-spacing:-.005em}
+.ruling p{font-size:13.8px;color:var(--soft);line-height:1.56}
+.ruling .stance{margin-top:auto;padding-top:12px;font-family:var(--mono);font-size:10px;letter-spacing:.16em;text-transform:uppercase;color:var(--mute);border-top:1px solid var(--hair)}
+
+/* ---------- appendix ---------- */
+.app-block{margin-top:clamp(48px,5.5vw,72px);padding-top:32px;border-top:1px solid var(--hair)}
+.app-block:first-of-type{border-top:1px solid var(--ink)}
+.app-block h3{margin-bottom:16px}
+.app-block > p{font-size:15px;color:var(--soft)}
+.cover-list{margin-top:22px;display:grid;gap:1px;background:var(--bg)}
+.cover-list > div{background:var(--bg);padding:20px 22px;display:grid;grid-template-columns:150px minmax(0,1fr);gap:22px}
+@media(max-width:680px){.cover-list > div{grid-template-columns:1fr;gap:7px}}
+.cover-list dt{font-family:var(--mono);font-size:10px;letter-spacing:.15em;text-transform:uppercase;padding-top:3px}
+.cover-list .yes dt{color:var(--struct)} .cover-list .no dt{color:var(--sev1)} .cover-list .ret dt{color:var(--sev0)}
+.cover-list dd{font-size:14.3px;line-height:1.58;color:var(--soft)}
+.cover-list dd b{color:var(--ink);font-weight:600}
+
+.dead{margin-top:22px;display:grid;grid-template-columns:repeat(auto-fill,minmax(268px,1fr));gap:1px;background:var(--bg)}
+.dead li{background:var(--bg);padding:16px 18px;list-style:none;font-size:13.7px;line-height:1.5;color:var(--soft)}
+.dead li b{display:block;color:var(--ink);font-weight:600;font-size:14px;margin-bottom:3px}
+.dead li.keep{border-left:2px solid var(--sev1)}
+
+.method{margin-top:22px;display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:1px;background:var(--bg)}
+.method div{background:var(--bg);padding:20px 20px 22px}
+.method dt{font-family:var(--mono);font-size:10px;letter-spacing:.16em;text-transform:uppercase;color:var(--mute);margin-bottom:7px}
+.method dd{font-size:14px;line-height:1.5;color:var(--ink)}
+
+footer{padding:56px var(--pad) 72px;border-top:1px solid var(--hair);background:var(--an-bg);color:var(--an-mute)}
+footer .wrap{display:flex;justify-content:space-between;gap:24px;flex-wrap:wrap;font-family:var(--mono);font-size:10.5px;letter-spacing:.15em;text-transform:uppercase}
+
+/* ---------- reveal ---------- */
+.rv{opacity:0;transform:translateY(20px);transition:opacity .66s ease,transform .66s ease}
+.rv.on{opacity:1;transform:none}
+@media(prefers-reduced-motion:reduce){
+  html{scroll-behavior:auto}
+  .rv{opacity:1;transform:none;transition:none}
+  .plate:hover .frame{transform:none}
+}
+</style>
+</head>
+<body>
+
+<div id="bar"></div>
+<nav id="nav">
+  <span class="mark">Patina iOS <b>·</b> UX Review <b>·</b> Jul 2026</span>
+  <ul>
+    <li><a href="#summary">Summary</a></li>
+    <li><a href="#breaks">Funnel breaks</a></li>
+    <li><a href="#journey">The walk</a></li>
+    <li><a href="#themes">Themes</a></li>
+    <li><a href="#roadmap">Roadmap</a></li>
+    <li><a href="#rulings">Not reopened</a></li>
+    <li><a href="#appendix">Appendix</a></li>
+  </ul>
+</nav>
+
+<!-- ============================ COVER ============================ -->
+<header class="reg reg-ev cover">
+  <div class="strata" aria-hidden="true"><i class="a"></i><i class="b"></i><i class="c"></i><i class="d"></i></div>
+  <div class="wrap">
+    <p class="kicker">Patina iOS · Client app · July 2026</p>
+    <h1>UX&nbsp;Review<em>.</em></h1>
+    <p class="thesis">Users should know what to do without hunting.</p>
+    <p class="series">Third in the series, after the <b>June master plan</b> (R01–R26, shipped) and the
+      <b>July alignment program</b> (R27–R33, ratified). Findings here are net-new — cross-checked
+      against the June appendix and the Track&nbsp;E debt commits. No regressions found on R01–R26.</p>
+    <div class="meta">
+      <div>Method<b>Simulator walk + source audit</b></div>
+      <div>Device<b>iPhone 17 Pro · iOS 26.5</b></div>
+      <div>Tree<b>af0f6754</b></div>
+      <div>Captures<b>45</b></div>
+    </div>
+  </div>
+</header>
+
+<!-- ============================ SUMMARY ============================ -->
+<section class="reg reg-ev" id="summary">
+  <div class="wrap">
+    <p class="eyebrow rv"><span class="n">Section</span> The diagnosis</p>
+    <h2 class="rv">The bones are right. The <em>surface</em> keeps breaking trust in them.</h2>
+    <p class="lede rv">One calm home, a marketplace-first funnel, progressive disclosure as the relationship
+      deepens — the structure is sound. But the surface constantly breaks the user's trust in it:
+      <b>controls that lie</b> (dead buttons, fake data, wrong tour copy), <b>actions that hide</b>
+      (gesture-only, tier-hidden, Companion-only), and <b>a dozen names for the same few concepts</b>.
+      Users hunt because the app keeps changing its story.</p>
+
+    <div class="stats rv">
+      <div><p class="fig">45</p><p class="lab">Live captures<br>from the walk</p></div>
+      <div><p class="fig">46</p><p class="lab">Findings<br>U01 – U46</p></div>
+      <div><p class="fig hot">3</p><p class="lab">Release-gating<br>U38 · U39 · U40</p></div>
+      <div><p class="fig">9</p><p class="lab">Themes<br>numbered 0 – 8</p></div>
+    </div>
+
+    <div class="laws rv">
+      <div class="law">
+        <p class="k">Law one</p>
+        <h4>Never lie.</h4>
+        <p>Every control does what it looks like it does; every number is real; every promise
+          ("we'll ask for camera access") is kept.</p>
+      </div>
+      <div class="law">
+        <p class="k">Law two</p>
+        <h4>The next action is visible.</h4>
+        <p>On every screen, the one thing a user most likely wants next is a button they can see —
+          not a gesture, not a buried menu row, not a Companion-only intent.</p>
+      </div>
+      <div class="law">
+        <p class="k">Law three</p>
+        <h4>One name per concept.</h4>
+        <p>A concept keeps its name across every surface it appears on.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============================ THEME 0 ============================ -->
+<section class="reg reg-ev" id="breaks">
+  <div class="wrap">
+    <p class="eyebrow rv"><span class="n">Theme 0</span> The two funnel breaks</p>
+    <h2 class="rv">Two of the product's core promises don't <em>survive</em> the walk.</h2>
+    <p class="lede rv">These were found by walking the running app, then verified against source. They outrank
+      everything else because they break "scan your room" and "see pieces for your space" outright —
+      not merely their discoverability.</p>
+
+    <!-- THE SEVERED RULE -->
+    <div class="chain rv" style="margin-top:56px">
+      <p class="plates cap" style="margin:0 0 4px">The non-LiDAR room funnel, walked end to end — shots 20 → 25<span class="strip-hint">scroll to the dead end</span></p>
+      <div class="strip">
+        <figure class="plate">
+          <div class="frame"><img src="screenshots/web/20-manual-room-entry.jpg" alt="Room details form asking what kind of room, dimensions, windows and doors" loading="lazy" width="1206" height="2622"></div>
+          <figcaption><span class="sn">Shot 20</span><b>Room details.</b> "Start a scan" opens a form, not a camera.</figcaption>
+        </figure>
+        <span class="link" aria-hidden="true"></span>
+        <figure class="plate">
+          <div class="frame"><img src="screenshots/web/21-room-style-discovery.jpg" alt="Per-room style question: which room speaks to you" loading="lazy" width="1206" height="2622"></div>
+          <figcaption><span class="sn">Shot 21</span><b>Style, question 1.</b> A full five-question conversation begins.</figcaption>
+        </figure>
+        <span class="link" aria-hidden="true"></span>
+        <figure class="plate">
+          <div class="frame"><img src="screenshots/web/22-room-lifestyle-quiz.jpg" alt="Per-room lifestyle quiz with multi-select options" loading="lazy" width="1206" height="2622"></div>
+          <figcaption><span class="sn">Shot 22</span><b>Lifestyle.</b> Multi-select; more of the user's work banked.</figcaption>
+        </figure>
+        <span class="link" aria-hidden="true"></span>
+        <figure class="plate">
+          <div class="frame"><img src="screenshots/web/23-aesthete-engine-result.jpg" alt="The Aesthete Engine result card reading Modern Warmth" loading="lazy" width="1206" height="2622"></div>
+          <figcaption><span class="sn">Shot 23</span><b>The reveal.</b> "Modern Warmth" — a real result, about to be thrown away.</figcaption>
+        </figure>
+        <span class="link" aria-hidden="true"></span>
+        <figure class="plate">
+          <div class="frame"><img src="screenshots/web/24-room-plan-review.jpg" alt="Floor plan review titled Here's what I see, 252 square feet, with Rescan and This Looks Right" loading="lazy" width="1206" height="2622"></div>
+          <figcaption><span class="sn">Shot 24</span><b>"Here's what I see."</b> 252 sq ft. The user taps <b>This Looks Right</b>.</figcaption>
+        </figure>
+        <span class="link dash" aria-hidden="true"></span>
+        <figure class="plate">
+          <div class="frame"><img src="screenshots/web/25-room-canvas-blank.jpg" alt="A blank dark screen after confirming the floor plan" loading="lazy" width="1206" height="2622"></div>
+          <figcaption><span class="sn">Shot 25</span><b>Nothing.</b> A blank screen, and home is back to "Scan your first room".
+            <span class="tags"><span class="tag p0">U40</span><span class="tag p0">U39</span></span></figcaption>
+        </figure>
+        <div class="sever">
+          <p class="glyph" aria-hidden="true">──╱&nbsp;&nbsp;·</p>
+          <h5>The chain never reaches the save path.</h5>
+          <p>The fallback flow runs <code>.fallback → .conversation → … → .floorPlan</code> and then calls
+            <code>dismiss()</code>. There is no <code>RoomStore</code> write anywhere along it.</p>
+          <span class="m">No room persisted</span>
+        </div>
+      </div>
+    </div>
+
+    <div class="compound rv">
+      <div>
+        <h4>And it dead-ends <em>into</em> the other break.</h4>
+        <p>Shot 25 is blank for a second, independent reason: the marketplace decoder had already
+          thrown. So the user finishes a five-question room conversation, confirms a floor plan,
+          loses the room — and lands on an empty grid that reads <b>"0 pieces curated for your
+          space"</b> while the backend is holding 16 products. Two failures, one screen, no
+          explanation of either.</p>
+      </div>
+      <figure class="frame"><img src="screenshots/web/15-recommendations-grid.jpg" alt="Recommendations screen titled Perfect for your space showing zero pieces curated over a blank grid" loading="lazy" width="1206" height="2622"></figure>
+    </div>
+
+    <div class="findings rv" style="margin-top:52px;border-top:1px solid var(--ink)">
+
+      <article class="f" id="U40">
+        <div class="f-id">
+          <a class="u" href="#U40">U40</a>
+          <span class="chip p0">P0 · broken promise</span>
+          <span class="meta-line">Effort M</span>
+          <span class="ev both">live + code</span>
+        </div>
+        <div class="f-body">
+          <h4>The non-LiDAR room funnel silently discards all the user's work.</h4>
+          <p>"Start a scan" → scanFlow forks to the fallback on any device without RoomPlan support
+            (= every non-Pro iPhone, since <code>RoomCaptureService.isSupported</code> =
+            <code>RoomCaptureSession.isSupported</code>): room-details form → full 5-question style
+            conversation → Aesthete reveal → floor-plan review → "This Looks Right" →
+            <code>dismiss()</code> + navigate to marketplace. <strong>No room is ever persisted</strong> —
+            the fallback chain never reaches the save path; home reverts to "Scan your first room"
+            zero-state. Reproduced twice in sim; code-verified. Meanwhile the <em>other</em> manual path
+            (<code>NewRoomSheet</code> → <code>ManualRoomEntryView</code>) saves correctly via
+            <code>RoomStore</code>.</p>
+          <dl class="kv">
+            <div><dt>Evidence</dt><dd>walk shots 19–26; <code>QuietConversationFlowHost.swift:190, 285–295</code>; no save anywhere in <code>ScanFallbackEntryView</code></dd></div>
+            <div><dt>Fix</dt><dd class="fix">Fallback flow persists the room through the same <code>RoomStore</code> path as <code>ManualRoomEntryView</code>, then lands the user <strong>on their new room</strong>, not the marketplace</dd></div>
+          </dl>
+        </div>
+      </article>
+
+      <article class="f" id="U39">
+        <div class="f-id">
+          <a class="u" href="#U39">U39</a>
+          <span class="chip p0">P0 · broken promise</span>
+          <span class="meta-line">Effort S</span>
+          <span class="ev both">live + code</span>
+        </div>
+        <div class="f-body">
+          <h4>The marketplace can blank itself silently.</h4>
+          <p><code>fetchRecommendations</code> decodes the RPC response as an all-or-nothing
+            <code>[Product]</code> array; <code>products.category</code> is unconstrained vocabulary
+            (local rows carry <code>chair</code>/<code>table</code>/<code>sofa</code> vs the app enum
+            <code>seating/tables/…</code>), one unrecognized value throws, the catch sets
+            <code>error</code> — and the view never renders it. Result observed live:
+            <strong>"0 pieces curated for your space" over a blank grid while the backend returned 16
+            products.</strong> Latent in prod (today's 3 products don't trip it; nothing prevents the
+            next one from doing so). Compounds U40: the screen the room funnel dead-ends into was
+            itself blank.</p>
+          <dl class="kv">
+            <div><dt>Evidence</dt><dd>walk shots 15–16, 25; <code>ProductAPIClient.fetchRecommendations (:67)</code>, <code>RecommendationsViewModel.swift:49–58</code>, <code>ProductModel.swift:59, 124</code></dd></div>
+            <div><dt>Fix</dt><dd class="fix">Per-row tolerant decode (skip bad rows, keep the rest); render the already-set error with retry; align and enforce category vocabulary at the API boundary</dd></div>
+          </dl>
+        </div>
+      </article>
+
+      <article class="f" id="U38">
+        <div class="f-id">
+          <a class="u" href="#U38">U38</a>
+          <span class="chip p0">P0 · broken promise</span>
+          <span class="meta-line">Effort XS</span>
+          <span class="ev live">live capture</span>
+        </div>
+        <div class="f-body">
+          <h4>Quiz result CTA "View Recommendations" doesn't go to recommendations — it lands on Home.</h4>
+          <dl class="kv">
+            <div><dt>Evidence</dt><dd>walk shot 09 → 10</dd></div>
+            <div><dt>Fix</dt><dd class="fix">Route it to <code>.emergence</code> — and after U39, that screen will actually show pieces</dd></div>
+          </dl>
+        </div>
+      </article>
+
+    </div>
+
+    <div class="plates rv" style="margin-top:44px">
+      <p class="cap">Supporting captures</p>
+      <div class="strip">
+        <figure class="plate">
+          <div class="frame"><img src="screenshots/web/16-recommendations-seating-empty.jpg" alt="Recommendations with the Seating filter applied, still showing zero results and no message" loading="lazy" width="1206" height="2622"></div>
+          <figcaption><span class="sn">Shot 16</span>Seating filter — still zero, still no message.<span class="tags"><span class="tag p0">U39</span><span class="tag p1">U31</span></span></figcaption>
+        </figure>
+        <figure class="plate">
+          <div class="frame"><img src="screenshots/web/26-start-scan-is-manual-form.jpg" alt="Home Start a scan CTA landing on the same manual room form" loading="lazy" width="1206" height="2622"></div>
+          <figcaption><span class="sn">Shot 26</span>The home "Start a scan" CTA lands on the same form. No camera ever opens.<span class="tags"><span class="tag p0">U40</span></span></figcaption>
+        </figure>
+        <figure class="plate">
+          <div class="frame"><img src="screenshots/web/09-quiz-result.jpg" alt="Quiz result Warm Modern with 47 percent style confidence and a View Recommendations button" loading="lazy" width="1206" height="2622"></div>
+          <figcaption><span class="sn">Shot 09</span>"View Recommendations" — the button that goes home instead.<span class="tags"><span class="tag p0">U38</span><span class="tag p2">U43</span></span></figcaption>
+        </figure>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============================ JOURNEY ============================ -->
+<section class="reg reg-ev" id="journey">
+  <div class="wrap">
+    <p class="eyebrow rv"><span class="n">The walk</span> How users get lost</p>
+    <h2 class="rv">A first run, in the order it <em>actually</em> happened.</h2>
+    <p class="lede rv">Cold install to signed-in account, captured shot by shot. The markers below are the
+      capture numbers from the walk, not a narrative device — this is the sequence a new user meets.</p>
+
+    <div class="leg rv">
+      <div class="leg-head"><span class="range">01 — 06</span><h4>The cold start, and the first promise</h4></div>
+      <p>Splash, welcome, three onboarding cards. The third card says <b>"We'll need your camera"</b> and
+        the button says <b>"Let's Begin"</b> — but the quiz-first path never asks for camera access.
+        The app breaks a promise before it has started.</p>
+      <div class="strip">
+        <figure class="plate"><div class="frame"><img src="screenshots/web/01-splash.jpg" alt="Cold start splash with the PATINA wordmark fading in on a dark gradient" loading="lazy" width="1206" height="2622"></div><figcaption><span class="sn">Shot 01</span>Splash — wordmark fade-in.</figcaption></figure>
+        <figure class="plate"><div class="frame"><img src="screenshots/web/02-auth-welcome.jpg" alt="Welcome screen offering Apple, Google, email, look around first, and have a password sign in" loading="lazy" width="1206" height="2622"></div><figcaption><span class="sn">Shot 02</span>Welcome. "Look around first →" is the guest door.</figcaption></figure>
+        <figure class="plate"><div class="frame"><img src="screenshots/web/04-onboarding-1.jpg" alt="Onboarding card one of three, Every room tells a story, with a Start Your Journey button" loading="lazy" width="1206" height="2622"></div><figcaption><span class="sn">Shot 04</span>"Every room tells a story."</figcaption></figure>
+        <figure class="plate"><div class="frame"><img src="screenshots/web/05-onboarding-2.jpg" alt="Onboarding card two of three, See it in your space" loading="lazy" width="1206" height="2622"></div><figcaption><span class="sn">Shot 05</span>"See it in your space."</figcaption></figure>
+        <figure class="plate"><div class="frame"><img src="screenshots/web/06-onboarding-3.jpg" alt="Onboarding card three of three, We'll need your camera, with a Your room stays private badge" loading="lazy" width="1206" height="2622"></div><figcaption><span class="sn">Shot 06</span><b>"We'll need your camera."</b> It never asks.<span class="tags"><span class="tag p1">U33</span></span></figcaption>
+        </figure>
+      </div>
+    </div>
+
+    <div class="leg rv">
+      <div class="leg-head"><span class="range">07 — 09</span><h4>Five questions, then a number nobody asked for</h4></div>
+      <p>The style quiz is the strongest thing in the first run — clear, quick, visual. It ends on
+        <b>"47% Style Confidence"</b>, internal model telemetry printed as user copy, at a value low
+        enough to read as "this didn't work." The result screen also carries a dead "Refine your
+        style →" link and a CTA that goes to the wrong place.</p>
+      <div class="strip">
+        <figure class="plate"><div class="frame"><img src="screenshots/web/07-quiz-q1.jpg" alt="Style quiz question one of five, which palette feels like home, shown as a two by two tile grid" loading="lazy" width="1206" height="2622"></div><figcaption><span class="sn">Shot 07</span>Q1/5 — "Which palette feels like home?"</figcaption></figure>
+        <figure class="plate"><div class="frame"><img src="screenshots/web/08-quiz-q2.jpg" alt="Style quiz question two of five, how do you actually live in your space" loading="lazy" width="1206" height="2622"></div><figcaption><span class="sn">Shot 08</span>Q2/5 — plain language, good pacing.</figcaption></figure>
+        <figure class="plate"><div class="frame"><img src="screenshots/web/09-quiz-result.jpg" alt="Quiz result Warm Modern with 47 percent style confidence" loading="lazy" width="1206" height="2622"></div><figcaption><span class="sn">Shot 09</span>"Warm Modern" — and <b>47% confidence</b>.<span class="tags"><span class="tag p2">U43</span><span class="tag p0">U38</span><span class="tag p0">U05</span></span></figcaption>
+        </figure>
+      </div>
+    </div>
+
+    <div class="leg rv">
+      <div class="leg-head"><span class="range">10 — 14</span><h4>Landing on a home that teaches the wrong app</h4></div>
+      <p>The first-launch tour describes tabs the app does not have ("Today is what's pinned, Saved is
+        the heart, Profile is settings"), then <b>silently collapses to one step</b> because its
+        anchors never mount in the zero-room state. The Companion wakes up next — and its panel still
+        offers "Style quiz — Discover your style" and "Your recommendations — Take the quiz first",
+        moments after the quiz was completed.</p>
+      <div class="strip">
+        <figure class="plate"><div class="frame"><img src="screenshots/web/10-home-tour-step1.jpg" alt="Home with a tour popover reading Step 1 of 3 Welcome to Patina" loading="lazy" width="1206" height="2622"></div><figcaption><span class="sn">Shot 10</span>"Step 1 of 3" — steps 2 and 3 never appear.<span class="tags"><span class="tag p0">U32</span></span></figcaption></figure>
+        <figure class="plate"><div class="frame"><img src="screenshots/web/11-companion-intro.jpg" alt="Companion wake-up bubble introducing itself with Show me and Later options" loading="lazy" width="1206" height="2622"></div><figcaption><span class="sn">Shot 11</span>The Companion introduces itself. Good moment.<span class="tags"><span class="tag ok">U34 ctx</span></span></figcaption></figure>
+        <figure class="plate"><div class="frame"><img src="screenshots/web/12-home-empty-discovering.jpg" alt="Home zero-room state with low contrast footer links Browse all pieces and Saved at the bottom edge" loading="lazy" width="1206" height="2622"></div><figcaption><span class="sn">Shot 12</span>Zero-room home. "Browse all pieces →" and "Saved" hide at the safe-area edge.<span class="tags"><span class="tag p1">U24</span><span class="tag p2">U44</span></span></figcaption></figure>
+        <figure class="plate"><div class="frame"><img src="screenshots/web/13-companion-panel.jpg" alt="Expanded Companion panel titled Where to begin, still offering the style quiz after it was completed" loading="lazy" width="1206" height="2622"></div><figcaption><span class="sn">Shot 13</span>"Take the quiz first" — <b>after</b> the quiz.<span class="tags"><span class="tag p1">U42</span><span class="tag p1">U20</span></span></figcaption></figure>
+        <figure class="plate"><div class="frame"><img src="screenshots/web/14-home-designer-cta.jpg" alt="Home card asking Ready to bring in a designer" loading="lazy" width="1206" height="2622"></div><figcaption><span class="sn">Shot 14</span>The designer pitch — one of twelve names for this flow.<span class="tags"><span class="tag p1">U08</span></span></figcaption></figure>
+      </div>
+    </div>
+
+    <div class="leg rv">
+      <div class="leg-head"><span class="range">15 — 18</span><h4>The front door, empty</h4></div>
+      <p>The marketplace is the product's front door, and it is blank (U39). Its title, "Perfect for
+        your space", doesn't match the link that got the user here ("Browse all pieces →"). The link
+        labelled <b>Saved</b> opens a screen titled <b>Collections</b> whose first tab is <b>Boards</b>.
+        Three names, one concept, in two taps.</p>
+      <div class="strip">
+        <figure class="plate"><div class="frame"><img src="screenshots/web/15-recommendations-grid.jpg" alt="Perfect for your space showing zero pieces curated over a blank grid" loading="lazy" width="1206" height="2622"></div><figcaption><span class="sn">Shot 15</span>"0 pieces curated" — with 16 products in the backend.<span class="tags"><span class="tag p0">U39</span><span class="tag p1">U09</span><span class="tag p1">U31</span></span></figcaption></figure>
+        <figure class="plate"><div class="frame"><img src="screenshots/web/17-collections-empty.jpg" alt="Collections screen on the Boards tab reading No boards yet" loading="lazy" width="1206" height="2622"></div><figcaption><span class="sn">Shot 17</span>Reached from a link labelled "Saved".<span class="tags"><span class="tag p1">U09</span></span></figcaption></figure>
+        <figure class="plate"><div class="frame"><img src="screenshots/web/18-collections-all-items.jpg" alt="All Items tab reading No saved items yet with no call to action" loading="lazy" width="1206" height="2622"></div><figcaption><span class="sn">Shot 18</span>"No saved items yet" — and no way to go get one.<span class="tags"><span class="tag p1">U31</span></span></figcaption></figure>
+      </div>
+    </div>
+
+    <div class="leg rv">
+      <div class="leg-head"><span class="range">19 — 26</span><h4>Trying to add a room</h4></div>
+      <p>The Companion auto-popped a "Keep scanning?" nudge <b>over the form's own Continue button</b>.
+        A tap aimed at the Companion's menu row passed straight through and submitted the form
+        underneath — reproduced twice at identical coordinates, and its ✕ was unresponsive on this
+        variant. That misfire is how the walk entered the funnel documented in Theme 0.</p>
+      <div class="strip">
+        <figure class="plate"><div class="frame"><img src="screenshots/web/19-addspace-companion-interrupt.jpg" alt="Companion Keep scanning nudge auto-popped over the room form's Continue button" loading="lazy" width="1206" height="2622"></div><figcaption><span class="sn">Shot 19</span>The nudge sits on the Continue button. Taps pass through it.<span class="tags"><span class="tag p1">U41</span></span></figcaption></figure>
+        <figure class="plate"><div class="frame"><img src="screenshots/web/20-manual-room-entry.jpg" alt="Manual room entry form asking what kind of room" loading="lazy" width="1206" height="2622"></div><figcaption><span class="sn">Shot 20</span>The funnel begins. <a href="#breaks" style="color:var(--ev-accent)">See Theme 0 →</a><span class="tags"><span class="tag p0">U40</span></span></figcaption></figure>
+      </div>
+    </div>
+
+    <div class="leg rv">
+      <div class="leg-head"><span class="range">27 — 34</span><h4>Asking for a designer instead</h4></div>
+      <p>The guest notifications screen is <b>the one genuinely good gated empty state in the app</b> —
+        it says what's missing and offers the action that fixes it. The design-request flow that
+        follows is well-paced until Review, which prints Scans, Help and Timeline and
+        <b>silently drops the Budget and Vision the user just typed</b>. Then Send raises an in-flow
+        auth sheet, an OTP screen, and a failure with the same generic sentence on every retry.</p>
+      <div class="strip">
+        <figure class="plate"><div class="frame"><img src="screenshots/web/27-notifications-guest.jpg" alt="Guest notifications reading Nothing yet, sign in to stay in the loop, with a sign in button" loading="lazy" width="1206" height="2622"></div><figcaption><span class="sn">Shot 27</span>The good one: names what's missing, offers the fix.<span class="tags"><span class="tag ok">exemplar</span></span></figcaption></figure>
+        <figure class="plate"><div class="frame"><img src="screenshots/web/28-designer-consultation.jpg" alt="Dark Work with a designer landing page with a matched designer card and a Start a request button" loading="lazy" width="1206" height="2622"></div><figcaption><span class="sn">Shot 28</span>"Start a request" — name number two of twelve.<span class="tags"><span class="tag p1">U08</span></span></figcaption></figure>
+        <figure class="plate"><div class="frame"><img src="screenshots/web/29-request-scans-empty.jpg" alt="Choose scans step reading No scans on this phone yet with a Request without a scan option" loading="lazy" width="1206" height="2622"></div><figcaption><span class="sn">Shot 29</span>Empty state with an exit. Correct.</figcaption></figure>
+        <figure class="plate"><div class="frame"><img src="screenshots/web/30-request-details.jpg" alt="Request details step with help type pills, budget, timeline and a vision text area filled in" loading="lazy" width="1206" height="2622"></div><figcaption><span class="sn">Shot 30</span>Budget and Vision, filled in during the walk.</figcaption></figure>
+        <figure class="plate"><div class="frame"><img src="screenshots/web/31-request-review.jpg" alt="Review step listing only scans, help type and timeline" loading="lazy" width="1206" height="2622"></div><figcaption><span class="sn">Shot 31</span><b>Budget and Vision are gone.</b><span class="tags"><span class="tag p1">U46</span></span></figcaption></figure>
+        <figure class="plate"><div class="frame"><img src="screenshots/web/32-inflow-auth.jpg" alt="In-flow auth sheet offering Apple, Google and email after tapping Send" loading="lazy" width="1206" height="2622"></div><figcaption><span class="sn">Shot 32</span>Send → auth, in context. This part works.<span class="tags"><span class="tag p1">U21 ctx</span></span></figcaption></figure>
+        <figure class="plate"><div class="frame"><img src="screenshots/web/33-otp-entry.jpg" alt="Six digit sign-in code entry screen" loading="lazy" width="1206" height="2622"></div><figcaption><span class="sn">Shot 33</span>Six-digit code.</figcaption></figure>
+        <figure class="plate"><div class="frame"><img src="screenshots/web/34-request-sending-or-success.jpg" alt="Sending your request followed by Failed to submit please try again" loading="lazy" width="1206" height="2622"></div><figcaption><span class="sn">Shot 34</span>"Failed to submit. Please try again." — identical on every retry.<span class="tags"><span class="tag p1">U29</span><span class="tag p2">U30</span></span></figcaption></figure>
+      </div>
+    </div>
+
+    <div class="leg rv">
+      <div class="leg-head"><span class="range">36 — 39</span><h4>Coming back</h4></div>
+      <p>The home resume banner's tap target and its dismiss target nearly coincide, and a dismissed
+        banner can't be recovered in place. Then, signed in as a seeded <b>active</b> client against a
+        degraded backend, the home rendered the guest-style discovering layout — Studio gone, sales
+        pitch shown — with no indication anything was wrong.</p>
+      <div class="strip">
+        <figure class="plate"><div class="frame"><img src="screenshots/web/36-home-engaged.jpg" alt="Home with a your design request is almost ready resume banner" loading="lazy" width="1206" height="2622"></div><figcaption><span class="sn">Shot 36</span>Tap and dismiss, a few points apart.<span class="tags"><span class="tag p1">U12</span></span></figcaption></figure>
+        <figure class="plate"><div class="frame"><img src="screenshots/web/37-auth-email-sheet.jpg" alt="Continue with email sheet" loading="lazy" width="1206" height="2622"></div><figcaption><span class="sn">Shot 37</span>"Continue with email".</figcaption></figure>
+        <figure class="plate"><div class="frame"><img src="screenshots/web/38-password-signin.jpg" alt="Password sign-in form" loading="lazy" width="1206" height="2622"></div><figcaption><span class="sn">Shot 38</span>Password sign-in.</figcaption></figure>
+        <figure class="plate"><div class="frame"><img src="screenshots/web/39-home-activeproject.jpg" alt="Home showing the discovering tier layout while signed in as an active client" loading="lazy" width="1206" height="2622"></div><figcaption><span class="sn">Shot 39</span><b>An active client, shown the beginner's app.</b><span class="tags"><span class="tag p1">U45</span></span></figcaption></figure>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ==================== THE FOLD → analysis on paper ==================== -->
+
+<!-- ============================ THEMES ============================ -->
+<section class="reg" id="themes">
+  <div class="wrap">
+    <p class="eyebrow rv"><span class="n">Themes 1 — 7</span> The findings · live-walk additions U41–U46 · Theme 8 in the appendix</p>
+    <h2 class="rv">Forty-three more, grouped by the <em>habit</em> that causes them.</h2>
+    <p class="lede rv">Every finding keeps its number, its severity, its effort estimate, and its evidence —
+      labelled <span class="ev live">live capture</span>, <span class="ev code">code-verified</span> or
+      <span class="ev both">live + code</span> so the strength of each claim is visible.
+      <b>P0</b> = broken promise · <b>P1</b> = discoverability · <b>P2</b> = polish.</p>
+
+    <!-- THEME 1 -->
+    <div class="theme rv" id="t1">
+      <div class="theme-head">
+        <h3><span class="tn">Theme 1 · P0 cluster</span>Honest chrome: the UI must not lie</h3>
+        <p class="thesis-p">The single fastest way to make users "just know what to do" is to make every
+          visible affordance truthful. <b>Today the home screen alone contains four fabrications.</b></p>
+      </div>
+
+      <div class="findings">
+        <article class="f" id="U01">
+          <div class="f-id"><a class="u" href="#U01">U01</a><span class="chip p0">P0</span><span class="meta-line">Effort S</span><span class="ev both">live + code</span></div>
+          <div class="f-body">
+            <h4>The user's identity is a placeholder everywhere.</h4>
+            <p>Home avatar monogram is hardcoded "K" (<code>DailyRoomView.swift:186</code>); Profile's name is
+              hardcoded <code>"Kody"</code> (<code>ProfileViewModel.swift:25</code> — <strong>every user sees
+              "Kody"</strong>, live-confirmed while signed in as client@patina.dev, walk shot 54);
+              "Member since" renders the <strong>current date</strong> for everyone
+              (<code>ProfileViewModel.swift:32–36</code>). Only the Account screen shows the real email.</p>
+            <dl class="kv">
+              <div><dt>Evidence</dt><dd>files cited; shots 54 vs 56</dd></div>
+              <div><dt>Fix</dt><dd class="fix">Wire name, initial and join-date from the Supabase profile; guest fallback glyph</dd></div>
+            </dl>
+          </div>
+        </article>
+
+        <article class="f" id="U02">
+          <div class="f-id"><a class="u" href="#U02">U02</a><span class="chip p0">P0</span><span class="meta-line">Effort S</span><span class="ev code">code-verified</span></div>
+          <div class="f-body">
+            <h4>Every product card claims "80% match" — a hardcoded score.</h4>
+            <dl class="kv">
+              <div><dt>Evidence</dt><dd><code>DailyRoomViewModel</code> (<code>matchScore: 80</code>, <code>category: .decor</code>)</dd></div>
+              <div><dt>Fix</dt><dd class="fix">Hide the pill until real scores flow; never show fabricated precision</dd></div>
+            </dl>
+          </div>
+        </article>
+
+        <article class="f" id="U03">
+          <div class="f-id"><a class="u" href="#U03">U03</a><span class="chip p0">P0</span><span class="meta-line">Effort S</span><span class="ev code">code-verified</span></div>
+          <div class="f-body">
+            <h4>Home filter chips (Seating / Tables) always return a silent blank.</h4>
+            <p>Category is hardcoded <code>.decor</code>, and the empty-module check runs against the
+              <em>unfiltered</em> list — so the chip filters everything out and nothing says so.</p>
+            <dl class="kv">
+              <div><dt>Evidence</dt><dd><code>DailyRoomViewModel.recommendation(from:)</code>; <code>DailyRoomView</code> empty-branch condition</dd></div>
+              <div><dt>Fix</dt><dd class="fix">Wire real categories or remove the chips; empty-check the <em>filtered</em> list</dd></div>
+            </dl>
+          </div>
+        </article>
+
+        <article class="f" id="U04">
+          <div class="f-id"><a class="u" href="#U04">U04</a><span class="chip p0">P0</span><span class="meta-line">Effort XS</span><span class="ev code">code-verified</span></div>
+          <div class="f-body">
+            <h4>"Suggested Next" is a hardcoded sentence shown for every room.</h4>
+            <p>"A rug would ground the arrangement" — regardless of the room, its contents, or whether it
+              has a rug.</p>
+            <dl class="kv">
+              <div><dt>Evidence</dt><dd><code>RoomProjectView</code></dd></div>
+              <div><dt>Fix</dt><dd class="fix">Remove until a real signal exists</dd></div>
+            </dl>
+          </div>
+        </article>
+
+        <article class="f" id="U05">
+          <div class="f-id"><a class="u" href="#U05">U05</a><span class="chip p0">P0</span><span class="meta-line">Effort S</span><span class="ev code">code-verified</span></div>
+          <div class="f-body">
+            <h4>Dead controls presented as live.</h4>
+            <p>"Refine your style →" (<code>StyleResultView.swift:88</code>), "View in AR →" and "See all →"
+              (inert Text, <code>RoomProjectView.swift:243, 288</code>), the scan <code>?</code>
+              (documented no-op, <code>ScanWalkView.swift:44</code>), the toast "View"
+              (<code>DailyRoomView.swift:76</code>), the "Get Patina Field" row, and the Terms/Privacy
+              footer non-links in <code>AuthScreenView</code>.</p>
+            <dl class="kv">
+              <div><dt>Evidence</dt><dd>per file, as cited</dd></div>
+              <div><dt>Fix</dt><dd class="fix">Wire each or remove it — a dead control is a lesson that controls can't be trusted</dd></div>
+            </dl>
+          </div>
+        </article>
+
+        <article class="f" id="U06">
+          <div class="f-id"><a class="u" href="#U06">U06</a><span class="chip p0">P0</span><span class="meta-line">Effort S</span><span class="ev code">code-verified</span></div>
+          <div class="f-body">
+            <h4>Companion room rows silently drop the room.</h4>
+            <p>"Saved in this room" and "See recommendations for this room" land on the global screens:
+              <code>.roomSavedItems</code> / <code>.roomEmergence</code> discard <code>roomId</code> in
+              <code>ContentView.destinationView</code>.</p>
+            <dl class="kv">
+              <div><dt>Evidence</dt><dd><code>ContentView.destinationView</code></dd></div>
+              <div><dt>Fix</dt><dd class="fix">Honor the roomId, or relabel the rows ("All saved items")</dd></div>
+            </dl>
+          </div>
+        </article>
+
+        <article class="f" id="U07">
+          <div class="f-id"><a class="u" href="#U07">U07</a><span class="chip p0">P0</span><span class="meta-line">Effort S</span><span class="ev code">code-verified</span></div>
+          <div class="f-body">
+            <h4>"Browse Picks for This Room" performs a root reset to Home.</h4>
+            <p>The user loses the room context they were just promised picks for.</p>
+            <dl class="kv">
+              <div><dt>Evidence</dt><dd><code>RoomProjectView</code> empty state → <code>.heroFrame</code></dd></div>
+              <div><dt>Fix</dt><dd class="fix">Route to room-scoped recommendations — fixing U06 gives this a real destination</dd></div>
+            </dl>
+          </div>
+        </article>
+      </div>
+
+      <div class="plates">
+        <p class="cap">Evidence · the identity placeholder</p>
+        <div class="strip">
+          <figure class="plate"><div class="frame"><img src="screenshots/web/54-profile.jpg" alt="Profile screen showing the name Kody and a K monogram while signed in as a different account" loading="lazy" width="1206" height="2622"></div><figcaption><span class="sn">Shot 54</span>Profile says <b>"Kody"</b>, monogram <b>K</b> — signed in as client@patina.dev.<span class="tags"><span class="tag p0">U01</span></span></figcaption></figure>
+          <figure class="plate"><div class="frame"><img src="screenshots/web/56-account.jpg" alt="Account screen showing the real email client at patina dot dev and a member since date" loading="lazy" width="1206" height="2622"></div><figcaption><span class="sn">Shot 56</span>Account, one screen away, knows the truth.<span class="tags"><span class="tag p0">U01</span><span class="tag p2">U10</span></span></figcaption></figure>
+        </div>
+      </div>
+    </div>
+
+    <!-- THEME 2 -->
+    <div class="theme rv" id="t2">
+      <div class="theme-head">
+        <h3><span class="tn">Theme 2</span>One name per concept</h3>
+        <p class="thesis-p">A returning user builds a map from names. When the same destination has five of
+          them, <b>no map forms</b> — and the app feels bigger and stranger than it is.</p>
+      </div>
+
+      <div class="findings">
+        <article class="f" id="U08">
+          <div class="f-id"><a class="u" href="#U08">U08</a><span class="chip p1">P1</span><span class="meta-line">Effort M</span><span class="ev code">code-verified</span></div>
+          <div class="f-body">
+            <h4>Twelve labels open the same design-request flow.</h4>
+            <p>"Explore design services", "Start a request", "Work with a Designer on This Room", "Send to a
+              designer", "Share with Designer", "Get design help", "Ask a designer", "Work with a
+              Designer", "Start a new request"…</p>
+            <dl class="kv">
+              <div><dt>Evidence</dt><dd>label table in the audit; 12 files</dd></div>
+              <div><dt>Fix</dt><dd class="fix">Two canonical strings: entry CTA <strong>"Get design help"</strong> everywhere; flow title <strong>"Your design request"</strong>. Room-scoped variants add context, not new verbs ("Get design help with this room")</dd></div>
+            </dl>
+          </div>
+        </article>
+
+        <article class="f" id="U09">
+          <div class="f-id"><a class="u" href="#U09">U09</a><span class="chip p1">P1</span><span class="meta-line">Effort S</span><span class="ev code">code-verified</span></div>
+          <div class="f-body">
+            <h4>Saved things have five names.</h4>
+            <p>Saved / Collections / boards / favorites / "The Table" (the route). And the screen reached
+              from "Browse all pieces →" is titled "Perfect for your space".</p>
+            <dl class="kv">
+              <div><dt>Evidence</dt><dd><code>CollectionsView</code>, <code>RecommendationsView</code>, <code>WorkWithDesignerCTA</code></dd></div>
+              <div><dt>Fix</dt><dd class="fix"><strong>"Saved"</strong> is the surface — nav title and every entry label; "Boards" survives only as the organizer tab inside it. The browse screen title matches its entry: <strong>"Browse pieces"</strong></dd></div>
+            </dl>
+          </div>
+        </article>
+
+        <article class="f" id="U10">
+          <div class="f-id"><a class="u" href="#U10">U10</a><span class="chip p2">P2</span><span class="meta-line">Effort XS</span><span class="ev code">code-verified</span></div>
+          <div class="f-body">
+            <h4>The same QR feature is "Connected Portals" in Settings and "Sign in to Web" in Account.</h4>
+            <dl class="kv">
+              <div><dt>Evidence</dt><dd><code>SettingsView</code>, <code>AccountView</code></dd></div>
+              <div><dt>Fix</dt><dd class="fix">One label: "Sign in on the web"</dd></div>
+            </dl>
+          </div>
+        </article>
+
+        <article class="f" id="U11">
+          <div class="f-id"><a class="u" href="#U11">U11</a><span class="chip p1">P1</span><span class="meta-line">Effort S</span><span class="ev code">code-verified</span></div>
+          <div class="f-body">
+            <h4>Engineering vocabulary shown to homeowners.</h4>
+            <p>"THE AESTHETE ENGINE" as a reveal header; upload pills reading "USDZ / Mesh / World / Depth
+              Idx / Cov / Manifest"; "Avg Match" and "AR Ready" stat cells; "full spatial intelligence".</p>
+            <dl class="kv">
+              <div><dt>Evidence</dt><dd><code>RevealView</code>, <code>ScanUploadProgressView</code>, <code>RoomProjectView</code>, <code>NewRoomSheet</code></dd></div>
+              <div><dt>Fix</dt><dd class="fix">Reveal: "Your style, found." Upload: one human line ("Sending your scan — 4 of 13"). Stats: "Match" / "View in AR". Sheet copy in plain language</dd></div>
+            </dl>
+          </div>
+        </article>
+      </div>
+
+      <div class="plates">
+        <p class="cap">Evidence · one concept, three names</p>
+        <div class="strip">
+          <figure class="plate"><div class="frame"><img src="screenshots/web/17-collections-empty.jpg" alt="Collections screen on the Boards tab reading no boards yet" loading="lazy" width="1206" height="2622"></div><figcaption><span class="sn">Shot 17</span>Link says "Saved". Title says "Collections". Tab says "Boards".<span class="tags"><span class="tag p1">U09</span></span></figcaption></figure>
+          <figure class="plate"><div class="frame"><img src="screenshots/web/23-aesthete-engine-result.jpg" alt="Result card headed THE AESTHETE ENGINE reading Modern Warmth" loading="lazy" width="1206" height="2622"></div><figcaption><span class="sn">Shot 23</span>"THE AESTHETE ENGINE" — the internal name, shown to a homeowner.<span class="tags"><span class="tag p1">U11</span></span></figcaption></figure>
+          <figure class="plate"><div class="frame"><img src="screenshots/web/55-settings.jpg" alt="Settings sheet listing Account, Connected Portals, preferences and support links" loading="lazy" width="1206" height="2622"></div><figcaption><span class="sn">Shot 55</span>"Connected Portals" here; "Sign in to Web" one screen over.<span class="tags"><span class="tag p2">U10</span></span></figcaption></figure>
+        </div>
+      </div>
+    </div>
+
+    <!-- THEME 3 -->
+    <div class="theme rv" id="t3">
+      <div class="theme-head">
+        <h3><span class="tn">Theme 3</span>Buttons look like buttons</h3>
+        <p class="thesis-p">Across the app the primary action is frequently a bare tap gesture on a card,
+          a long-press menu, or a swipe with no affordance. <b>Gestures are accelerators, never the only
+          path.</b></p>
+      </div>
+
+      <div class="findings">
+        <article class="f" id="U12">
+          <div class="f-id"><a class="u" href="#U12">U12</a><span class="chip p1">P1</span><span class="meta-line">Effort M</span><span class="ev code">code-verified</span></div>
+          <div class="f-body">
+            <h4>Whole-card <code>.onTapGesture</code> with zero button chrome.</h4>
+            <p>ContinueScanCard, DesignRequestStatusCard, DesignRequestResumeBanner, notification rows,
+              profile room cards, recommendation cards — on several, <strong>the only thing that looks
+              tappable is the dismiss ✕</strong>.</p>
+            <dl class="kv">
+              <div><dt>Evidence</dt><dd>per-file audit §11.7</dd></div>
+              <div><dt>Fix</dt><dd class="fix">Every tappable card gets a visible affordance — a chevron or a labeled button ("Continue scan", "Review request"); convert to real Buttons for accessibility</dd></div>
+            </dl>
+          </div>
+        </article>
+
+        <article class="f" id="U13">
+          <div class="f-id"><a class="u" href="#U13">U13</a><span class="chip p1">P1</span><span class="meta-line">Effort S</span><span class="ev code">code-verified</span></div>
+          <div class="f-body">
+            <h4>Opening a room from home hides behind metadata text.</h4>
+            <p>"18 sq ft · south · 2 windows" plus a tiny chevron is the entire affordance.</p>
+            <dl class="kv">
+              <div><dt>Evidence</dt><dd><code>RoomContextBar.contextText</code></dd></div>
+              <div><dt>Fix</dt><dd class="fix">An explicit "Open room →" control on the context bar</dd></div>
+            </dl>
+          </div>
+        </article>
+
+        <article class="f" id="U14">
+          <div class="f-id"><a class="u" href="#U14">U14</a><span class="chip p1">P1</span><span class="meta-line">Effort M</span><span class="ev code">code-verified</span></div>
+          <div class="f-body">
+            <h4>Swipe-left to skip a recommendation, with no visible affordance anywhere.</h4>
+            <p>Swipe-up is a dead branch. Save, Share and Details also hide in long-press menus.</p>
+            <dl class="kv">
+              <div><dt>Evidence</dt><dd><code>RecommendationsView.swift:172–191</code>, <code>ProductCard.swift:185</code></dd></div>
+              <div><dt>Fix</dt><dd class="fix">A visible "Not for me" via an explicit control (e.g. a ⋯ menu on the card); keep gestures as accelerators only, never the sole path</dd></div>
+            </dl>
+          </div>
+        </article>
+
+        <article class="f" id="U15">
+          <div class="f-id"><a class="u" href="#U15">U15</a><span class="chip p1">P1</span><span class="meta-line">Effort M</span><span class="ev code">code-verified</span></div>
+          <div class="f-body">
+            <h4>Ending a scan requires finding the small pause glyph, or standing still for 30 seconds.</h4>
+            <dl class="kv">
+              <div><dt>Evidence</dt><dd><code>ScanWalkView</code>, <code>PauseMenuView</code></dd></div>
+              <div><dt>Fix</dt><dd class="fix">A persistent "Finish" control on the scan HUD — disabled until minimum coverage, carrying the existing "walk a little more first" caption</dd></div>
+            </dl>
+          </div>
+        </article>
+
+        <article class="f" id="U16">
+          <div class="f-id"><a class="u" href="#U16">U16</a><span class="chip p1">P1</span><span class="meta-line">Effort S</span><span class="ev code">code-verified</span></div>
+          <div class="f-body">
+            <h4>CrossRoom rows: tap opens Move/Copy — the only list in the app where tap ≠ detail.</h4>
+            <dl class="kv">
+              <div><dt>Evidence</dt><dd><code>CrossRoomView</code> (~:101)</dd></div>
+              <div><dt>Fix</dt><dd class="fix">Tap → product detail; move and copy behind ⋯</dd></div>
+            </dl>
+          </div>
+        </article>
+
+        <article class="f" id="U17">
+          <div class="f-id"><a class="u" href="#U17">U17</a><span class="chip p2">P2</span><span class="meta-line">Effort XS</span><span class="ev code">code-verified</span></div>
+          <div class="f-body">
+            <h4>Dead swipe-to-remove on room items.</h4>
+            <p><code>.swipeActions</code> inside a ScrollView is a no-op.</p>
+            <dl class="kv">
+              <div><dt>Evidence</dt><dd><code>RoomProjectView.swift:263–268</code></dd></div>
+              <div><dt>Fix</dt><dd class="fix">Delete the dead code — removal already lives in ⋯</dd></div>
+            </dl>
+          </div>
+        </article>
+
+        <article class="f" id="U18">
+          <div class="f-id"><a class="u" href="#U18">U18</a><span class="chip p2">P2</span><span class="meta-line">Effort M</span><span class="ev code">code-verified</span></div>
+          <div class="f-body">
+            <h4>Back-button chrome varies across the app.</h4>
+            <p>Roughly 12 screens hide the nav bar and hand-roll a pinned chevron; roughly 6 keep the
+              system bar inline.</p>
+            <dl class="kv">
+              <div><dt>Evidence</dt><dd>audit §0</dd></div>
+              <div><dt>Fix</dt><dd class="fix">One shared screen-chrome component, placed consistently everywhere</dd></div>
+            </dl>
+          </div>
+        </article>
+      </div>
+
+      <div class="plates">
+        <p class="cap">Evidence · the card that is a button, and doesn't say so</p>
+        <div class="strip">
+          <figure class="plate wide"><div class="frame"><img src="screenshots/web/36-home-engaged.jpg" alt="Home with a your design request is almost ready resume banner whose tap and dismiss targets nearly coincide" loading="lazy" width="1206" height="2622"></div><figcaption><span class="sn">Shot 36</span>The resume banner: whole-card tap, coincident dismiss, unrecoverable once dismissed.<span class="tags"><span class="tag p1">U12</span></span></figcaption></figure>
+        </div>
+      </div>
+    </div>
+
+    <!-- THEME 4 -->
+    <div class="theme rv" id="t4">
+      <div class="theme-head">
+        <h3><span class="tn">Theme 4</span>Tell users why things are missing</h3>
+        <p class="thesis-p">EngagementTier is the right model — ruled, and kept. What's missing is the
+          <b>narration</b>: the app morphs silently, so returning users can't form a stable map of it.</p>
+      </div>
+
+      <div class="findings">
+        <article class="f" id="U19">
+          <div class="f-id"><a class="u" href="#U19">U19</a><span class="chip p1">P1</span><span class="meta-line">Effort M</span><span class="ev code">code-verified</span></div>
+          <div class="f-body">
+            <h4>At <code>.discovering</code>, the entire Studio section is <code>EmptyView()</code>.</h4>
+            <p>The whole post-engagement world is invisible and unexplained — then appears after
+              engagement as 3–10 unexplained new rows.</p>
+            <dl class="kv">
+              <div><dt>Evidence</dt><dd><code>StudioHubSection.swift:252</code></dd></div>
+              <div><dt>Fix</dt><dd class="fix">One quiet locked-state line under the designer CTA: "Your Studio — projects, messages, invoices — opens when you start with a designer." At <code>.engaged</code>, show remaining locked rows greyed with "opens with your first project"</dd></div>
+            </dl>
+          </div>
+        </article>
+
+        <article class="f" id="U20">
+          <div class="f-id"><a class="u" href="#U20">U20</a><span class="chip p1">P1</span><span class="meta-line">Effort S</span><span class="ev code">code-verified</span></div>
+          <div class="f-body">
+            <h4>Companion gating contradicts home gating.</h4>
+            <p>It gates on <code>roomCount</code> and auth rather than tier — so it offers "Your studio" to
+              <code>.discovering</code> users that the home is actively hiding it from.</p>
+            <dl class="kv">
+              <div><dt>Evidence</dt><dd><code>CompanionAreaBuilders.homeItems</code></dd></div>
+              <div><dt>Fix</dt><dd class="fix">Drive Companion rows off the same <code>EngagementTier</code></dd></div>
+            </dl>
+          </div>
+        </article>
+
+        <article class="f" id="U21">
+          <div class="f-id"><a class="u" href="#U21">U21</a><span class="chip p1">P1</span><span class="meta-line">Effort M</span><span class="ev code">code-verified</span></div>
+          <div class="f-body">
+            <h4>A guest tapping any "Sign in to…" row is ejected to the auth phase root.</h4>
+            <p>Context is destroyed: <code>guestModeOptIn = false</code> flips the whole app phase.</p>
+            <dl class="kv">
+              <div><dt>Evidence</dt><dd><code>AppCoordinator.swift:262–265</code></dd></div>
+              <div><dt>Fix</dt><dd class="fix">Present auth as a sheet over context; on success, stay put — reuse the existing <code>pendingReturnRoute</code> mechanism</dd></div>
+            </dl>
+          </div>
+        </article>
+
+        <article class="f" id="U22">
+          <div class="f-id"><a class="u" href="#U22">U22</a><span class="chip p1">P1</span><span class="meta-line">Effort S</span><span class="ev code">code-verified</span></div>
+          <div class="f-body">
+            <h4>All eight Studio empty states are terminal.</h4>
+            <p>No CTA, and no "what makes this fill" beyond Documents, Invoices and Proposals. Messages
+              says "Start a project to begin messaging" with no link to do that.</p>
+            <dl class="kv">
+              <div><dt>Evidence</dt><dd>audit §10 table</dd></div>
+              <div><dt>Fix</dt><dd class="fix">Every empty state names its trigger and links to the action that causes it ("Your designer's proposals will land here — track your request →")</dd></div>
+            </dl>
+          </div>
+        </article>
+
+        <article class="f" id="U23">
+          <div class="f-id"><a class="u" href="#U23">U23</a><span class="chip p1">P1</span><span class="meta-line">Effort S</span><span class="ev code">code-verified</span></div>
+          <div class="f-body">
+            <h4><code>.discovering</code> users have no home-surface path to the Your Spaces overview.</h4>
+            <p>It exists only in the Companion and on Profile.</p>
+            <dl class="kv">
+              <div><dt>Evidence</dt><dd>audit §4</dd></div>
+              <div><dt>Fix</dt><dd class="fix">"Your rooms" always reachable from home — e.g. a trailing "All rooms" chip on the rail, or a row above the designer CTA once rooms exist</dd></div>
+            </dl>
+          </div>
+        </article>
+      </div>
+
+      <div class="plates">
+        <p class="cap">Evidence · terminal vs. exemplary empty states</p>
+        <div class="strip">
+          <figure class="plate"><div class="frame"><img src="screenshots/web/49-messages.jpg" alt="Messages screen reading no conversations yet and couldn't load conversations" loading="lazy" width="1206" height="2622"></div><figcaption><span class="sn">Shot 49</span>Messages: terminal. Nothing to tap, nothing to learn.<span class="tags"><span class="tag p1">U22</span></span></figcaption></figure>
+          <figure class="plate"><div class="frame"><img src="screenshots/web/27-notifications-guest.jpg" alt="Guest notifications reading nothing yet, sign in to stay in the loop, with a sign in button" loading="lazy" width="1206" height="2622"></div><figcaption><span class="sn">Shot 27</span>The exemplar: names the trigger, offers the action. Copy the pattern.<span class="tags"><span class="tag ok">exemplar</span></span></figcaption></figure>
+        </div>
+      </div>
+    </div>
+
+    <!-- THEME 5 -->
+    <div class="theme rv" id="t5">
+      <div class="theme-head">
+        <h3><span class="tn">Theme 5</span>Saved and Browse need a permanent home</h3>
+        <p class="thesis-p">The marketplace is the product's front door. <b>It cannot be tier-gated away</b> —
+          and today the one text link to it disappears exactly when the user becomes more valuable.</p>
+      </div>
+
+      <div class="findings">
+        <article class="f" id="U24">
+          <div class="f-id"><a class="u" href="#U24">U24</a><span class="chip p1">P1</span><span class="meta-line">Effort M</span><span class="ev code">code-verified</span></div>
+          <div class="f-body">
+            <h4>Saved is reachable only via a small text link that disappears when the user engages.</h4>
+            <p>Its three entrances are a text link inside the discovering-tier CTA card, the Companion, or
+              a product's board — and <strong>the text link vanishes at <code>.engaged</code></strong>
+              (WorkWithDesignerCTA unmounts; the Studio rail has no Saved or Browse row).</p>
+            <dl class="kv">
+              <div><dt>Evidence</dt><dd><code>WorkWithDesignerCTA</code>, <code>StudioHubSection</code> row list</dd></div>
+              <div><dt>Fix</dt><dd class="fix">Add <strong>Saved</strong> and <strong>Browse pieces</strong> as permanent rows or affordances at every tier — Studio rail rows, or persistent header affordances</dd></div>
+            </dl>
+          </div>
+        </article>
+
+        <article class="f" id="U25">
+          <div class="f-id"><a class="u" href="#U25">U25</a><span class="chip none">evidence carry</span><span class="meta-line">No action now</span><span class="ev carry">rulings map</span></div>
+          <div class="f-body">
+            <h4>Evidence for the R29 post-Track-D clause — recorded, not re-litigated.</h4>
+            <p>The two most-used retail destinations (Browse, Saved) and the home are exactly the three
+              stable destinations a tab bar would pin. <strong>This walk's data should be tabled when the
+              Track D review happens.</strong> Nothing in this review proposes changing the ruled
+              navigation model.</p>
+            <dl class="kv">
+              <div><dt>Evidence</dt><dd>rulings map</dd></div>
+              <div><dt>Fix</dt><dd class="fix">No action now; carry as evidence into the already-scheduled tab-bar re-evaluation</dd></div>
+            </dl>
+          </div>
+        </article>
+      </div>
+
+      <div class="plates">
+        <p class="cap">Evidence · the front door, at the bottom edge</p>
+        <div class="strip">
+          <figure class="plate wide"><div class="frame"><img src="screenshots/web/12-home-empty-discovering.jpg" alt="Home zero-room state with low contrast Browse all pieces and Saved links at the very bottom safe area edge" loading="lazy" width="1206" height="2622"></div><figcaption><span class="sn">Shot 12</span>"Browse all pieces →" and "Saved" — low contrast, at the safe-area edge, and gone entirely one tier later.<span class="tags"><span class="tag p1">U24</span><span class="tag p2">U44</span></span></figcaption></figure>
+        </div>
+      </div>
+    </div>
+
+    <!-- THEME 6 -->
+    <div class="theme rv" id="t6">
+      <div class="theme-head">
+        <h3><span class="tn">Theme 6</span>Every wait and failure speaks</h3>
+        <p class="thesis-p">Several errors in this app are <b>set on a property the view never reads</b>.
+          The user taps, nothing happens, and there is no way to tell a slow network from a lost edit.</p>
+      </div>
+
+      <div class="findings">
+        <article class="f" id="U26">
+          <div class="f-id"><a class="u" href="#U26">U26</a><span class="chip p0">P0</span><span class="meta-line">Effort S</span><span class="ev code">code-verified</span></div>
+          <div class="f-body">
+            <h4>Scan-review save failure is invisible.</h4>
+            <p>The error is set on a branch the body never renders once a manifest is loaded — the user
+              taps "Save room" and nothing happens.</p>
+            <dl class="kv">
+              <div><dt>Evidence</dt><dd><code>ScanReviewView.submit (:641)</code> sets <code>loadError</code>; body renders <code>errorState</code> only when <code>manifest == nil</code></dd></div>
+              <div><dt>Fix</dt><dd class="fix">Render save errors as an inline banner on the loaded state; keep the CTA enabled for retry</dd></div>
+            </dl>
+          </div>
+        </article>
+
+        <article class="f" id="U27">
+          <div class="f-id"><a class="u" href="#U27">U27</a><span class="chip p0">P0</span><span class="meta-line">Effort S</span><span class="ev code">code-verified</span></div>
+          <div class="f-body">
+            <h4>Room rename is silently discarded on back-out.</h4>
+            <p>The save only fires on <code>.onSubmit</code> or via other buttons; no Save button exists.</p>
+            <dl class="kv">
+              <div><dt>Evidence</dt><dd><code>RoomSettingsView.saveIfChanged</code></dd></div>
+              <div><dt>Fix</dt><dd class="fix">Auto-save on change or on disappear; match the delete row's explicitness</dd></div>
+            </dl>
+          </div>
+        </article>
+
+        <article class="f" id="U28">
+          <div class="f-id"><a class="u" href="#U28">U28</a><span class="chip p0">P0</span><span class="meta-line">Effort XS</span><span class="ev code">code-verified</span></div>
+          <div class="f-body">
+            <h4>"Save without notes" silently drops the hero pick and the photo reordering.</h4>
+            <dl class="kv">
+              <div><dt>Evidence</dt><dd><code>ScanReviewView</code> (<code>heroId = nil, reorderedIds = []</code>)</dd></div>
+              <div><dt>Fix</dt><dd class="fix">Preserve the curation — the button only skips notes, so make the behavior match the label</dd></div>
+            </dl>
+          </div>
+        </article>
+
+        <article class="f" id="U29">
+          <div class="f-id"><a class="u" href="#U29">U29</a><span class="chip p1">P1</span><span class="meta-line">Effort S</span><span class="ev code">code-verified</span></div>
+          <div class="f-body">
+            <h4>Errors that are set but never rendered.</h4>
+            <p>Recommendations (<code>viewModel.error</code> unread → silent empty grid), story fetch, feed
+              fetch, the help panel (error → "No help articles yet"), and the saved-item remote mirror.</p>
+            <dl class="kv">
+              <div><dt>Evidence</dt><dd>per-file audit, "silent failures"</dd></div>
+              <div><dt>Fix</dt><dd class="fix">Render every set error with the app's existing "Let's try that again" pattern</dd></div>
+            </dl>
+          </div>
+        </article>
+
+        <article class="f" id="U30">
+          <div class="f-id"><a class="u" href="#U30">U30</a><span class="chip p2">P2</span><span class="meta-line">Effort S</span><span class="ev code">code-verified</span></div>
+          <div class="f-body">
+            <h4>Ten-plus bare <code>ProgressView()</code>s, and two retry labels.</h4>
+            <p>Product detail, all eight Studio lists, the help panel and the send fall-through spin
+              unlabeled; "Let's try that again" and "Try Again" coexist.</p>
+            <dl class="kv">
+              <div><dt>Evidence</dt><dd>audit, "bare spinners"</dd></div>
+              <div><dt>Fix</dt><dd class="fix">One labeled loading component and one retry component, used everywhere</dd></div>
+            </dl>
+          </div>
+        </article>
+
+        <article class="f" id="U31">
+          <div class="f-id"><a class="u" href="#U31">U31</a><span class="chip p1">P1</span><span class="meta-line">Effort S</span><span class="ev code">code-verified</span></div>
+          <div class="f-body">
+            <h4>Empty states that dead-end.</h4>
+            <p>Recommendations has none at all ("0 pieces curated" over a blank grid), Collections
+              All-Items has no CTA, CrossRoom has none, "Room not found" is bare text, and a board shows
+              a grey "Empty board" rectangle.</p>
+            <dl class="kv">
+              <div><dt>Evidence</dt><dd>per file</dd></div>
+              <div><dt>Fix</dt><dd class="fix">Every empty state: what this is, and the one action that fills it</dd></div>
+            </dl>
+          </div>
+        </article>
+      </div>
+
+      <div class="plates">
+        <p class="cap">Evidence · five Studio surfaces, five identical dead ends</p>
+        <div class="strip">
+          <figure class="plate"><div class="frame"><img src="screenshots/web/42-projects-list.jpg" alt="Projects list reading no projects yet and couldn't load projects, let's try that again" loading="lazy" width="1206" height="2622"></div><figcaption><span class="sn">Shot 42</span>Projects.<span class="tags"><span class="tag p1">U22</span><span class="tag p1">U31</span></span></figcaption></figure>
+          <figure class="plate"><div class="frame"><img src="screenshots/web/47-decisions-list.jpg" alt="Decisions list reading nothing waiting on you and couldn't load decisions" loading="lazy" width="1206" height="2622"></div><figcaption><span class="sn">Shot 47</span>Decisions.<span class="tags"><span class="tag p1">U31</span></span></figcaption></figure>
+          <figure class="plate"><div class="frame"><img src="screenshots/web/51-budget.jpg" alt="Budget screen reading couldn't load your budget" loading="lazy" width="1206" height="2622"></div><figcaption><span class="sn">Shot 51</span>Budget.<span class="tags"><span class="tag p2">U30</span></span></figcaption></figure>
+          <figure class="plate"><div class="frame"><img src="screenshots/web/53-notifications-signed-in.jpg" alt="Notifications reading couldn't load notifications" loading="lazy" width="1206" height="2622"></div><figcaption><span class="sn">Shot 53</span>Notifications — compare with shot 27, the guest version that does this well.<span class="tags"><span class="tag p1">U29</span></span></figcaption></figure>
+          <figure class="plate"><div class="frame"><img src="screenshots/web/18-collections-all-items.jpg" alt="All Items tab reading no saved items yet with no call to action" loading="lazy" width="1206" height="2622"></div><figcaption><span class="sn">Shot 18</span>All Items — no CTA.<span class="tags"><span class="tag p1">U31</span></span></figcaption></figure>
+          <figure class="plate"><div class="frame"><img src="screenshots/web/34-request-sending-or-success.jpg" alt="Failed to submit please try again message after sending a design request" loading="lazy" width="1206" height="2622"></div><figcaption><span class="sn">Shot 34</span>The same sentence on every retry, with no escalation.<span class="tags"><span class="tag p1">U29</span><span class="tag p2">U30</span></span></figcaption></figure>
+        </div>
+      </div>
+    </div>
+
+    <!-- THEME 7 -->
+    <div class="theme rv" id="t7">
+      <div class="theme-head">
+        <h3><span class="tn">Theme 7</span>Fix the first five minutes</h3>
+        <p class="thesis-p">The onboarding promises a camera it never opens, and the tour teaches a
+          tab-based UI that does not exist. <b>The app's first two teaching moments are both wrong.</b></p>
+      </div>
+
+      <div class="findings">
+        <article class="f" id="U32">
+          <div class="f-id"><a class="u" href="#U32">U32</a><span class="chip p0">P0</span><span class="meta-line">Effort S</span><span class="ev code">code-verified</span></div>
+          <div class="f-body">
+            <h4>First-launch tour teaches a UI that doesn't exist.</h4>
+            <p>"Today is what's pinned, Saved is the heart, Profile is settings" — no tabs exist. Step 2
+              anchors a "tap the heart" tip on a card with <strong>no heart</strong> (only "+ Add"), and
+              steps silently vanish when their anchors don't mount. Live-confirmed: only step 1 showed in
+              the zero-room state.</p>
+            <dl class="kv">
+              <div><dt>Evidence</dt><dd><code>FirstLaunchTour.swift</code> fallback copy; <code>DailyProductCard.swift:136</code>; walk shot 10</dd></div>
+              <div><dt>Fix</dt><dd class="fix">Rewrite the three steps around the real model: (1) your Daily Room, (2) the Companion is how you move, (3) save with + Add. Never skip silently — collapse to fewer, valid steps</dd></div>
+            </dl>
+          </div>
+        </article>
+
+        <article class="f" id="U33">
+          <div class="f-id"><a class="u" href="#U33">U33</a><span class="chip p1">P1</span><span class="meta-line">Effort S</span><span class="ev code">code-verified</span></div>
+          <div class="f-body">
+            <h4>Onboarding page 3 promises a permission ask that quiz-first never makes.</h4>
+            <p>"We'll need your camera" / "Let's Begin" — the first broken promise, before the app has
+              started.</p>
+            <dl class="kv">
+              <div><dt>Evidence</dt><dd><code>OnboardingFlowView</code> page 3 vs the quiz-first flow; walk shot 06</dd></div>
+              <div><dt>Fix</dt><dd class="fix">Re-copy page 3 for the quiz path ("Let's find your style first"), or defer the camera page to the walk-first variant only</dd></div>
+            </dl>
+          </div>
+        </article>
+
+        <article class="f" id="U34">
+          <div class="f-id"><a class="u" href="#U34">U34</a><span class="chip p1">P1</span><span class="meta-line">Effort M</span><span class="ev code">code-verified</span></div>
+          <div class="f-body">
+            <h4>The app's sole navigation surface is an unlabeled abstract glyph.</h4>
+            <p>The design already concedes the discovery failure — there is a 20-second stuck-user
+              escalation poll. <strong>Within the R29 ruling: make the chosen model legible, don't replace
+              it.</strong></p>
+            <dl class="kv">
+              <div><dt>Evidence</dt><dd><code>CompanionOverlay.swift</code>, <code>runUnusedCompanionEscalation</code></dd></div>
+              <div><dt>Fix</dt><dd class="fix">Until the <code>.learned</code> phase, show a small text label under the mark ("Next steps"); keep the intro; drop the escalation loop once the label exists</dd></div>
+            </dl>
+          </div>
+        </article>
+
+        <article class="f" id="U35">
+          <div class="f-id"><a class="u" href="#U35">U35</a><span class="chip p2">P2</span><span class="meta-line">Effort XS</span><span class="ev code">code-verified</span></div>
+          <div class="f-body">
+            <h4>Scan start: five seconds of dark camera and a whisper.</h4>
+            <p>Start-on-movement, and the tap-to-start cue appears only after the delay.</p>
+            <dl class="kv">
+              <div><dt>Evidence</dt><dd><code>ScanThresholdView</code></dd></div>
+              <div><dt>Fix</dt><dd class="fix">Show "Begin walking — or tap to start" from second zero</dd></div>
+            </dl>
+          </div>
+        </article>
+
+        <article class="f" id="U36">
+          <div class="f-id"><a class="u" href="#U36">U36</a><span class="chip p2">P2</span><span class="meta-line">Effort XS</span><span class="ev code">code-verified</span></div>
+          <div class="f-body">
+            <h4>Post-scan confirmation has no hierarchy.</h4>
+            <p>"Done" (exit) and "Set my style" (the intended next step) are visually identical muted texts
+              under the primary.</p>
+            <dl class="kv">
+              <div><dt>Evidence</dt><dd><code>ScanSavedConfirmationView</code></dd></div>
+              <div><dt>Fix</dt><dd class="fix">Clear hierarchy: primary "Get design help", secondary button "Set my style", tertiary text "Done"</dd></div>
+            </dl>
+          </div>
+        </article>
+
+        <article class="f" id="U37">
+          <div class="f-id"><a class="u" href="#U37">U37</a><span class="chip p2">P2</span><span class="meta-line">Effort XS</span><span class="ev code">code-verified</span></div>
+          <div class="f-body">
+            <h4>The reveal screen's secondary CTA routes to the same place as the primary.</h4>
+            <p>"or explore your style profile" leads exactly where the primary button leads.</p>
+            <dl class="kv">
+              <div><dt>Evidence</dt><dd><code>RevealView</code></dd></div>
+              <div><dt>Fix</dt><dd class="fix">Differentiate it, or drop it</dd></div>
+            </dl>
+          </div>
+        </article>
+      </div>
+
+      <div class="plates">
+        <p class="cap">Evidence · the first two teaching moments</p>
+        <div class="strip">
+          <figure class="plate"><div class="frame"><img src="screenshots/web/06-onboarding-3.jpg" alt="Onboarding card three reading we'll need your camera with a your room stays private badge" loading="lazy" width="1206" height="2622"></div><figcaption><span class="sn">Shot 06</span>The camera promise the quiz-first path never keeps.<span class="tags"><span class="tag p1">U33</span></span></figcaption></figure>
+          <figure class="plate"><div class="frame"><img src="screenshots/web/10-home-tour-step1.jpg" alt="Home with a tour popover reading step 1 of 3 welcome to Patina" loading="lazy" width="1206" height="2622"></div><figcaption><span class="sn">Shot 10</span>"Step 1 of 3", then silence — steps 2 and 3 never mounted.<span class="tags"><span class="tag p0">U32</span></span></figcaption></figure>
+          <figure class="plate"><div class="frame"><img src="screenshots/web/11-companion-intro.jpg" alt="Companion wake-up bubble introducing itself" loading="lazy" width="1206" height="2622"></div><figcaption><span class="sn">Shot 11</span>The Companion introduces itself well — then goes back to being an unlabeled mark.<span class="tags"><span class="tag p1">U34</span></span></figcaption></figure>
+        </div>
+      </div>
+    </div>
+
+    <!-- LIVE WALK ADDITIONS -->
+    <div class="theme rv" id="live">
+      <div class="theme-head">
+        <h3><span class="tn">Live-walk additions · U41 — U46</span>Only findable by using it</h3>
+        <p class="thesis-p">These six came out of the running app, not the source tree. Two of them —
+          a touch-through bug and a silent tier demotion — <b>no amount of code reading would have
+          surfaced</b>.</p>
+      </div>
+
+      <div class="findings">
+        <article class="f" id="U41">
+          <div class="f-id"><a class="u" href="#U41">U41</a><span class="chip p1">P1</span><span class="meta-line">Effort S</span><span class="ev live">live capture</span></div>
+          <div class="f-body">
+            <h4>Companion nudge touch-through and z-order bug.</h4>
+            <p>The auto-popped "Keep scanning?" nudge overlaps bottom-area content CTAs (~y 670–730). A tap
+              aimed at the Companion's own menu row <strong>passed through and submitted the form
+              underneath</strong>. Its ✕ was unresponsive on this variant (fine on "Where to begin?").
+              Reproduced twice at identical coordinates.</p>
+            <dl class="kv">
+              <div><dt>Evidence</dt><dd>walk shot 19</dd></div>
+              <div><dt>Fix</dt><dd class="fix">Companion surfaces must consume their own hits (proper hit-testing and z-order); never auto-pop a nudge overlapping an active CTA</dd></div>
+            </dl>
+          </div>
+        </article>
+
+        <article class="f" id="U42">
+          <div class="f-id"><a class="u" href="#U42">U42</a><span class="chip p1">P1</span><span class="meta-line">Effort S</span><span class="ev live">live capture</span></div>
+          <div class="f-body">
+            <h4>Companion context is stale.</h4>
+            <p>Immediately after completing the style quiz, the panel still offers "Style quiz — Discover
+              your style" and "Your recommendations — Take the quiz first".</p>
+            <dl class="kv">
+              <div><dt>Evidence</dt><dd>walk shot 13</dd></div>
+              <div><dt>Fix</dt><dd class="fix">Recompute panel rows from live state on every open</dd></div>
+            </dl>
+          </div>
+        </article>
+
+        <article class="f" id="U43">
+          <div class="f-id"><a class="u" href="#U43">U43</a><span class="chip p2">P2</span><span class="meta-line">Effort XS</span><span class="ev live">live capture</span></div>
+          <div class="f-body">
+            <h4>"47% Style Confidence" on the quiz result.</h4>
+            <p>Internal model telemetry surfaced as user copy — and a number that low reads as "this
+              didn't work".</p>
+            <dl class="kv">
+              <div><dt>Evidence</dt><dd>walk shot 09</dd></div>
+              <div><dt>Fix</dt><dd class="fix">Drop the percentage; express confidence qualitatively if at all ("A starting point — refine it any time")</dd></div>
+            </dl>
+          </div>
+        </article>
+
+        <article class="f" id="U44">
+          <div class="f-id"><a class="u" href="#U44">U44</a><span class="chip p2">P2</span><span class="meta-line">Effort — </span><span class="ev live">live capture</span></div>
+          <div class="f-body">
+            <h4>Home footer links render low-contrast at the very bottom safe-area edge.</h4>
+            <p>"Browse all pieces →" and "Saved" are easy to miss. Compounds U24's structural burial of
+              both destinations.</p>
+            <dl class="kv">
+              <div><dt>Evidence</dt><dd>walk shot 12</dd></div>
+              <div><dt>Fix</dt><dd class="fix">Covered by U24's permanent-placement fix</dd></div>
+            </dl>
+          </div>
+        </article>
+
+        <article class="f" id="U45">
+          <div class="f-id"><a class="u" href="#U45">U45</a><span class="chip p1">P1</span><span class="meta-line">Effort S</span><span class="ev both">live + code</span></div>
+          <div class="f-body">
+            <h4>Backend failure silently demotes the home.</h4>
+            <p><code>EngagementTier.current</code> reads live badge counts with no loading or error
+              distinction; on a cold launch counts start at 0 and <code>resolve()</code> returns
+              <code>.discovering</code> until fetches succeed. Live-captured: signed in as the seeded
+              active client with the local backend degraded, <strong>home rendered the guest-style
+              discovering layout — Studio gone, "Ready to bring in a designer?" pitch shown — with zero
+              indication of a problem</strong>. (BadgeCountService keeps stale counts only within a
+              process lifetime.)</p>
+            <dl class="kv">
+              <div><dt>Evidence</dt><dd>walk shot 39; <code>EngagementTier.swift:44–58, 68–82</code>; <code>BadgeCountService.swift:60–105</code></dd></div>
+              <div><dt>Fix</dt><dd class="fix">Gate <code>bottomSection</code> on <code>BadgeCountService.hasLoaded</code>: skeleton until known, error state and retry on failure — never a silent demotion to the sales pitch</dd></div>
+            </dl>
+          </div>
+        </article>
+
+        <article class="f" id="U46">
+          <div class="f-id"><a class="u" href="#U46">U46</a><span class="chip p1">P1</span><span class="meta-line">Effort XS</span><span class="ev both">live + code</span></div>
+          <div class="f-body">
+            <h4>The design-request Review step omits what the user wrote.</h4>
+            <p>The summary shows Scans, Help and Timeline but silently drops <strong>Budget and
+              Vision</strong> — the user cannot confirm their own words before sending.</p>
+            <dl class="kv">
+              <div><dt>Evidence</dt><dd>walk shots 30–31; <code>DesignRequestFlowView+Steps.swift</code> review step</dd></div>
+              <div><dt>Fix</dt><dd class="fix">Review shows every field being sent, verbatim</dd></div>
+            </dl>
+          </div>
+        </article>
+      </div>
+
+      <div class="plates">
+        <p class="cap">Evidence · what the walk added</p>
+        <div class="strip">
+          <figure class="plate"><div class="frame"><img src="screenshots/web/19-addspace-companion-interrupt.jpg" alt="Companion keep scanning nudge popped over the form's continue button" loading="lazy" width="1206" height="2622"></div><figcaption><span class="sn">Shot 19</span>The nudge over the Continue button.<span class="tags"><span class="tag p1">U41</span></span></figcaption></figure>
+          <figure class="plate"><div class="frame"><img src="screenshots/web/13-companion-panel.jpg" alt="Companion panel still offering the style quiz after it was completed" loading="lazy" width="1206" height="2622"></div><figcaption><span class="sn">Shot 13</span>Stale rows, seconds after the quiz.<span class="tags"><span class="tag p1">U42</span></span></figcaption></figure>
+          <figure class="plate"><div class="frame"><img src="screenshots/web/30-request-details.jpg" alt="Request details step with budget and vision filled in" loading="lazy" width="1206" height="2622"></div><figcaption><span class="sn">Shot 30</span>Budget and Vision, entered.<span class="tags"><span class="tag p1">U46</span></span></figcaption></figure>
+          <figure class="plate"><div class="frame"><img src="screenshots/web/31-request-review.jpg" alt="Review step showing only scans, help and timeline" loading="lazy" width="1206" height="2622"></div><figcaption><span class="sn">Shot 31</span>Review. Both are gone.<span class="tags"><span class="tag p1">U46</span></span></figcaption></figure>
+          <figure class="plate"><div class="frame"><img src="screenshots/web/39-home-activeproject.jpg" alt="Home showing the discovering tier layout while signed in as an active client with a degraded backend" loading="lazy" width="1206" height="2622"></div><figcaption><span class="sn">Shot 39</span>An active client, silently demoted to the beginner's home.<span class="tags"><span class="tag p1">U45</span></span></figcaption></figure>
+        </div>
+      </div>
+
+      <p class="note" style="margin-top:32px">
+        <strong style="color:var(--ink)">The walk also confirmed four code-audit items live:</strong>
+        the first-launch tour did silently collapse (only step 1 showed in the zero-room state — U32);
+        "Start a scan" leads to a form, never a camera, on all non-LiDAR hardware (folds into U40's fix —
+        the CTA label must match what the device will actually do); repeated design-request send failures
+        show identical generic copy with no escalation (supports U29 and U30); and the home resume
+        banner's tap and dismiss are near-coincident targets, with a dismissed banner unrecoverable in
+        place (supports U12).
+      </p>
+    </div>
+
+  </div>
+</section>
+
+<!-- ============================ ROADMAP ============================ -->
+<section class="reg" id="roadmap">
+  <div class="wrap">
+    <p class="eyebrow rv"><span class="n">Plan</span> The order to fix them in</p>
+    <h2 class="rv">Three release gates, then eleven days of <em>not lying</em>.</h2>
+    <p class="lede rv">Sequenced by what each phase buys: first the product working at all, then trust, then
+      visibility, then legibility. Every identifier links to its finding.</p>
+
+    <div class="road rv">
+
+      <div class="phase gate">
+        <div class="phase-when"><p class="w">Now</p><p class="c">Release-gating</p></div>
+        <div class="phase-what">
+          <p><strong>The funnel breaks.</strong> The product does not work on non-Pro iPhones without U40.
+            These three ship before anything else in this document.</p>
+          <div class="ids">
+            <a class="id p0" href="#U40">U40 <em>fallback room persistence</em></a>
+            <a class="id p0" href="#U39">U39 <em>tolerant decode + rendered error</em></a>
+            <a class="id p0" href="#U38">U38 <em>quiz CTA routing</em></a>
+          </div>
+        </div>
+      </div>
+
+      <div class="phase">
+        <div class="phase-when"><p class="w">Week 1</p><p class="c">All XS / S</p></div>
+        <div class="phase-what">
+          <p><strong>Stop lying.</strong> Eleven fixes, each a day or less, every one of which removes a
+            trust break.</p>
+          <div class="ids">
+            <a class="id" href="#U01">U01 <em>monogram</em></a>
+            <a class="id" href="#U02">U02 <em>fake match %</em></a>
+            <a class="id" href="#U03">U03 <em>filter blank</em></a>
+            <a class="id" href="#U04">U04 <em>fake insight</em></a>
+            <a class="id" href="#U05">U05 <em>dead controls</em></a>
+            <a class="id" href="#U26">U26 <em>scan-save error</em></a>
+            <a class="id" href="#U27">U27 <em>rename loss</em></a>
+            <a class="id" href="#U28">U28 <em>save without notes</em></a>
+            <a class="id" href="#U32">U32 <em>tour rewrite</em></a>
+            <a class="id" href="#U41">U41 <em>Companion touch-through</em></a>
+            <a class="id" href="#U42">U42 <em>stale Companion rows</em></a>
+          </div>
+        </div>
+      </div>
+
+      <div class="phase">
+        <div class="phase-when"><p class="w">Weeks 2–3</p><p class="c">Law two</p></div>
+        <div class="phase-what">
+          <p><strong>Make actions visible.</strong> Affordances, terminology, and states that name their
+            own next step.</p>
+          <div class="ids">
+            <a class="id" href="#U12">U12 <em>card affordances</em></a>
+            <a class="id" href="#U13">U13 <em>open room</em></a>
+            <a class="id" href="#U14">U14 <em>skip affordance</em></a>
+            <a class="id" href="#U15">U15 <em>scan finish</em></a>
+            <a class="id" href="#U16">U16 <em>CrossRoom tap</em></a>
+            <a class="id" href="#U08">U08 <em>terminology sweep</em></a>
+            <a class="id" href="#U09">U09 <em>terminology sweep</em></a>
+            <a class="id" href="#U22">U22 <em>empty-state CTAs</em></a>
+            <a class="id" href="#U29">U29 <em>render errors</em></a>
+            <a class="id" href="#U31">U31 <em>dead-end empties</em></a>
+            <a class="id" href="#U33">U33 <em>onboarding promise</em></a>
+          </div>
+        </div>
+      </div>
+
+      <div class="phase">
+        <div class="phase-when"><p class="w">Weeks 3–4</p><p class="c">Law three</p></div>
+        <div class="phase-what">
+          <p><strong>Make the morph legible.</strong> Narrate the tier model rather than flatten it, and
+            give Saved and Browse a permanent home.</p>
+          <div class="ids">
+            <a class="id" href="#U19">U19 <em>locked-Studio narration</em></a>
+            <a class="id" href="#U20">U20 <em>Companion / tier reconciliation</em></a>
+            <a class="id" href="#U21">U21 <em>guest auth in context</em></a>
+            <a class="id" href="#U23">U23 <em>rooms reachable</em></a>
+            <a class="id" href="#U24">U24 <em>permanent Saved / Browse</em></a>
+            <a class="id" href="#U34">U34 <em>Companion label</em></a>
+            <a class="id" href="#U10">U10 <em>naming polish</em></a>
+            <a class="id" href="#U11">U11 <em>naming polish</em></a>
+            <a class="id" href="#U30">U30 <em>loading / retry components</em></a>
+          </div>
+        </div>
+      </div>
+
+      <div class="phase">
+        <div class="phase-when"><p class="w">Anytime</p><p class="c">Hygiene</p></div>
+        <div class="phase-what">
+          <p><strong>Dead weight and polish.</strong> No user-visible risk; each deletion removes a future
+            regression.</p>
+          <div class="ids">
+            <a class="id" href="#deadweight">Theme 8 <em>deletions</em></a>
+            <a class="id" href="#U17">U17 <em>dead swipe</em></a>
+            <a class="id" href="#U18">U18 <em>chrome unification</em></a>
+            <a class="id" href="#U35">U35 <em>scan start cue</em></a>
+            <a class="id" href="#U36">U36 <em>post-scan hierarchy</em></a>
+            <a class="id" href="#U37">U37 <em>reveal secondary CTA</em></a>
+          </div>
+        </div>
+      </div>
+
+    </div>
+  </div>
+</section>
+
+<!-- ============================ RULINGS ============================ -->
+<section class="reg" id="rulings">
+  <div class="wrap">
+    <p class="eyebrow rv"><span class="n">Scope</span> What this review does not reopen</p>
+    <h2 class="rv">Settled rulings stay <em>settled</em>.</h2>
+    <p class="lede rv">Every finding above sits inside the decisions already made. Where a ruling constrains
+      the fix, the fix was written to fit the ruling — not the other way round.</p>
+
+    <div class="rulings rv">
+      <div class="ruling">
+        <p class="r">R29</p>
+        <h4>Studio rail / no tab bar</h4>
+        <p>Respected. U24, U25 and U34 make the ruled model legible and table evidence for the
+          already-scheduled re-evaluation. Nothing here proposes adding a tab bar.</p>
+        <p class="stance">Respected · evidence tabled</p>
+      </div>
+      <div class="ruling">
+        <p class="r">EngagementTier</p>
+        <h4>Progressive disclosure</h4>
+        <p>Respected. U19–U23 narrate the tier model rather than flatten it — the morph stays, the silence
+          around it goes.</p>
+        <p class="stance">Respected · narrated</p>
+      </div>
+      <div class="ruling">
+        <p class="r">R32</p>
+        <h4>Deferred backlog</h4>
+        <p>Reviews surface, scope changes, buy-now, GDPR, board fidelity, companion mock removal —
+          untouched by this review.</p>
+        <p class="stance">Untouched</p>
+      </div>
+      <div class="ruling">
+        <p class="r">R106 · clause 6</p>
+        <h4>Arrival Arc</h4>
+        <p>The match ceremony, and the absence of a cancel action on requests — untouched.</p>
+        <p class="stance">Untouched</p>
+      </div>
+      <div class="ruling">
+        <p class="r">R01 — R26</p>
+        <h4>June master plan</h4>
+        <p>All shipped. This review found <strong>no regressions</strong> on those items. The findings here
+          are net-new, not re-finds — cross-checked against the June appendix and the Track E debt
+          commits.</p>
+        <p class="stance">Shipped · clean</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============================ APPENDIX ============================ -->
+<section class="reg" id="appendix">
+  <div class="wrap">
+    <p class="eyebrow rv"><span class="n">Appendix</span> Coverage, method, dead weight</p>
+    <h2 class="rv">What we saw, what we read, and what we <em>didn't</em>.</h2>
+
+    <!-- COVERAGE -->
+    <div class="app-block rv" id="coverage">
+      <h3>Walk coverage — stated honestly</h3>
+      <p>Not every finding in this document was witnessed. The evidence chip on each finding says which
+        kind of claim it is; this is the whole picture behind those chips.</p>
+      <div class="cover-list">
+        <div class="yes">
+          <dt>Captured live</dt>
+          <dd>The full guest and first-run journey, the quiz, the Companion, the marketplace (empty via
+            U39), the scan-fallback funnel, the design-request flow through in-flow auth, OTP and submit
+            failure, sign-out and sign-in, Profile / Settings / Account, Studio list <b>error</b> states,
+            and the tier-demotion home (U45).</dd>
+        </div>
+        <div class="no">
+          <dt>Not captured</dt>
+          <dd><b>Described from code in this deck.</b> The LiDAR scan HUD, review and saved-confirmation
+            screens — the Simulator has no RoomPlan, so it renders the fallback path instead. The
+            populated engaged-tier home and request-status screen — the local edge function for lead
+            submit was absent, and <code>--uitesting</code> resets the auth session on each relaunch. The
+            populated activeProject Studio surfaces — the local Supabase stack degraded mid-walk with
+            Docker daemon I/O errors; that failure produced U45's capture instead.</dd>
+        </div>
+        <div class="no">
+          <dt>Code only</dt>
+          <dd>Flag-gated variants — the walk-first onboarding path — were reviewed from source. Flags fail
+            closed under <code>--uitesting</code>, so the walk always ran quiz-first.</dd>
+        </div>
+        <div class="ret">
+          <dt>Retracted</dt>
+          <dd>The walk agent's claim that <b>"Profile has no Settings row"</b> was checked and is
+            <b>false</b> — the row exists at <code>ProfileView.swift:183</code>. It is not a finding and
+            appears nowhere in this document.</dd>
+        </div>
+      </div>
+    </div>
+
+    <!-- METHOD -->
+    <div class="app-block rv" id="method">
+      <h3>Method</h3>
+      <dl class="method">
+        <div><dt>Device</dt><dd>iPhone 17 Pro Simulator</dd></div>
+        <div><dt>OS</dt><dd>iOS 26.5</dd></div>
+        <div><dt>Backend</dt><dd>Local Supabase stack</dd></div>
+        <div><dt>Flags</dt><dd>Failed closed → quiz-first</dd></div>
+        <div><dt>Captures</dt><dd>45 PNG · 1206 × 2622</dd></div>
+        <div><dt>Source tree</dt><dd><code>af0f6754</code></dd></div>
+      </dl>
+      <p class="note" style="margin-top:18px">Every <code>file:line</code> reference in this document was
+        verified by exploration agents against the working tree at <code>af0f6754</code>. Findings marked
+        <span class="ev live">live capture</span> rest on the walk alone; <span class="ev code">code-verified</span>
+        on source alone; <span class="ev both">live + code</span> on both.</p>
+    </div>
+
+    <!-- THEME 8 -->
+    <div class="app-block rv" id="deadweight">
+      <h3>Theme 8 — ship less dead weight</h3>
+      <p>Not user-visible, but every dead path is a future regression and a false map for anyone reading
+        the tree. <span class="chip p2" style="margin-left:4px">P2</span>
+        <span class="meta-line" style="margin-left:6px">Effort M total</span></p>
+      <ul class="dead">
+        <li><b>The conversational-Companion set</b>CompanionSheet, CompanionConversationView, QuickActionsBar, ContextBar, InputBar, CompanionAuthPanel</li>
+        <li><b>The WalkView v1 stack</b>11 files. Services and Models stay — they power RoomScan</li>
+        <li><b>HelpWelcomeModal + HelpCoachmark</b>Superseded by the desk-native help system</li>
+        <li><b>PreScanChecklistView</b>Plus its route and Companion menu entry — it shows fake hardcoded green ticks</li>
+        <li><b>The <code>.heroFrame</code> EmptyView arm</b>A route that renders nothing</li>
+        <li><b>Duplicate route aliases</b><code>.roomList</code> / <code>.roomDetail</code> / <code>.table</code> and their scoped variants — after U06 lands</li>
+        <li><b>ItemActionMenu "Find Similar"</b>Routes to the same place as "View Product Detail"</li>
+        <li class="keep"><b>WalkErrorOverlay — salvage first</b>The best error copy in the app. Move the copy into the live tracking-loss modal <em>before</em> deleting the file</li>
+        <li><b>Glyph-character icons in ItemActionMenu</b>Replace with SF Symbols</li>
+        <li><b>Stacked duplicate CTAs in RoomProjectView</b>"Work with a Designer on This Room" + "Send to a designer" → one</li>
+        <li><b><code>ScanReviewView.InternalFlowStep.review</code></b>A documented-dead enum case</li>
+        <li><b><code>Features/Conversation/Models</code></b>Models with no view layer</li>
+      </ul>
+      <p class="note" style="margin-top:20px">Cross-reference: <code>docs/maintenance/stale-files-audit.md</code>
+        §mobile-ios already catalogues most of this. This review seconds it.</p>
+    </div>
+
+  </div>
+</section>
+
+<footer>
+  <div class="wrap">
+    <span>Patina iOS · UX Review · July 2026</span>
+    <span>46 findings · U01 — U46</span>
+    <span>docs/design/ios-ux-review-2026-07</span>
+  </div>
+</footer>
+
+<script>
+(function(){
+  var bar = document.getElementById('bar');
+  var nav = document.getElementById('nav');
+  var themes = document.getElementById('themes');
+
+  function frame(){
+    var h = document.documentElement.scrollHeight - window.innerHeight;
+    bar.style.width = (h > 0 ? (window.scrollY / h) * 100 : 0) + '%';
+    // the nav follows the fold: dark over the evidence half, paper over the analysis half
+    nav.classList.toggle('on-paper', themes.getBoundingClientRect().top <= 48);
+  }
+  var ticking = false;
+  addEventListener('scroll', function(){
+    if (ticking) return;
+    ticking = true;
+    requestAnimationFrame(function(){ frame(); ticking = false; });
+  }, {passive:true});
+  addEventListener('resize', frame, {passive:true});
+  frame();
+
+  // the funnel strip fades at its right edge until the dead end is in view
+  document.querySelectorAll('.chain .strip').forEach(function(strip){
+    function edge(){
+      var atEnd = strip.scrollLeft + strip.clientWidth >= strip.scrollWidth - 4;
+      strip.classList.toggle('at-end', atEnd);
+    }
+    strip.addEventListener('scroll', edge, {passive:true});
+    addEventListener('resize', edge, {passive:true});
+    edge();
+  });
+
+  var reduce = matchMedia('(prefers-reduced-motion: reduce)').matches;
+  var targets = document.querySelectorAll('.rv');
+  if (reduce || !('IntersectionObserver' in window)) {
+    targets.forEach(function(el){ el.classList.add('on'); });
+  } else {
+    var io = new IntersectionObserver(function(entries){
+      entries.forEach(function(e){
+        if (e.isIntersecting){ e.target.classList.add('on'); io.unobserve(e.target); }
+      });
+    }, {rootMargin:'0px 0px -8% 0px', threshold:0.04});
+    targets.forEach(function(el){ io.observe(el); });
+  }
+})();
+</script>
+
+</body>
+</html>

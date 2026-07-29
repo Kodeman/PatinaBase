@@ -104,6 +104,28 @@ export type NeedKind =
   | 'po_unacknowledged'
   | 'pulse_due';
 
+/** The visible next act printed in each Desk folio footer. Triage-owned lead
+ * needs intentionally have no footer act: their TriageBar carries the choices. */
+export const NEED_ACTION_LABELS: Record<NeedKind, string | null> = {
+  overdue_decision: 'Review decisions',
+  overdue_invoice: 'Send reminder',
+  proposal_signed: 'Open the project',
+  damage_claim: 'Review the claim',
+  proposal_declined: 'Follow up',
+  proposal_expired: 'Revise proposal',
+  lines_flagged: 'Review flagged lines',
+  new_lead: null,
+  ceremony_pending: 'Continue the introduction',
+  reconnect_due: null,
+  hesitating_proposal: 'Follow up',
+  awaiting_inspection: 'Inspect the delivery',
+  schedule_conflict: 'Resolve the schedule',
+  task_due: 'Open the task',
+  po_unsent: 'Review the purchase order',
+  po_unacknowledged: 'Follow up with the maker',
+  pulse_due: 'Review and send',
+};
+
 /** R28 conflict inputs (built client-side from delivery_events by
  *  lib/document/desk-conflicts.ts — the Wave 2.1 precedent). Collision tier
  *  rises as the folder's need line; drift tier rides an in-motion chip. */
@@ -155,7 +177,11 @@ export interface DeskCeremonySignal {
   id: string;
   state: 'draft' | 'sent' | 'picked';
   introText: string | null;
-  offeredSlots: ReadonlyArray<{ id: string; starts_at: string; duration_minutes: number }> | null;
+  offeredSlots: ReadonlyArray<{
+    id: string;
+    starts_at: string;
+    duration_minutes: number;
+  }> | null;
   offeredAt: string | null;
   pickedSlotStartsAt: string | null;
   timezone: string | null;
@@ -165,6 +191,9 @@ export interface DeskCeremonySignal {
 export interface NeedLine {
   kind: NeedKind;
   text: string;
+  /** Explicit, non-PII next-act copy printed on the whole-card folio footer.
+   *  `null` means the card owns a visible TriageBar instead. */
+  actionLabel: string | null;
   /** `color` is the stamp border; `ink` (optional) darkens the text for
    *  contrast on paper, per the prototype's stamp treatment. */
   stamp: { label: string; color: string; ink?: string };
@@ -173,7 +202,10 @@ export interface NeedLine {
    *  need opens the Accounts book onto Receivables) rather than the document.
    *  Typed structurally to keep this module dependency-free (no command-bar
    *  import); folder-card maps it onto openLedger(). */
-  ledger?: { name: string; context?: { page?: string; invoiceId?: string; projectId?: string } };
+  ledger?: {
+    name: string;
+    context?: { page?: string; invoiceId?: string; projectId?: string };
+  };
   /** When set, the folder's act follows this href instead of /doc/[engagement_id].
    *  The lines_flagged walk-in points at the Drafting Room (?flagged=1), where the
    *  flagged line's Alternatives band lives. Typed structurally; folder-card maps it. */
@@ -398,7 +430,10 @@ function firstName(name: string | null | undefined, fallback = 'them'): string {
 function fmtDayTime(iso: string, timezone: string | null): string {
   const d = new Date(iso);
   const tz = timezone || 'UTC';
-  const day = new Intl.DateTimeFormat('en-US', { weekday: 'short', timeZone: tz }).format(d);
+  const day = new Intl.DateTimeFormat('en-US', {
+    weekday: 'short',
+    timeZone: tz,
+  }).format(d);
   const time = new Intl.DateTimeFormat('en-US', {
     hour: 'numeric',
     minute: '2-digit',
@@ -422,7 +457,9 @@ const ROLE_NOUNS = new Set(['client', 'user']);
 
 /** Folder-tab text (R1: the family name; R16 fallback: when no surname
  *  resolves, the first word of the document title — never a role noun). */
-export function folderTab(row: Pick<DocumentStateRow, 'client_name' | 'title'>): string {
+export function folderTab(
+  row: Pick<DocumentStateRow, 'client_name' | 'title'>,
+): string {
   const parts = (row.client_name ?? '').trim().split(/\s+/).filter(Boolean);
   const last = parts[parts.length - 1] ?? '';
   if (last && !ROLE_NOUNS.has(last.toLowerCase())) return last;
@@ -442,11 +479,17 @@ export function deriveNeed(
   if (row.is_archived || row.is_paused) return null;
 
   if (row.overdue_decision_count > 0) {
-    const oldest = row.earliest_overdue_due ? ` — oldest due ${fmtDay(row.earliest_overdue_due)}` : '';
+    const oldest = row.earliest_overdue_due
+      ? ` — oldest due ${fmtDay(row.earliest_overdue_due)}`
+      : '';
     const n = row.overdue_decision_count;
     return {
       kind: 'overdue_decision',
-      text: n === 1 ? `1 decision overdue${oldest}` : `${n} decisions overdue${oldest}`,
+      text:
+        n === 1
+          ? `1 decision overdue${oldest}`
+          : `${n} decisions overdue${oldest}`,
+      actionLabel: NEED_ACTION_LABELS.overdue_decision,
       stamp: { label: 'DECISION DUE', ...STAMP.due },
       urgent: true,
     };
@@ -459,7 +502,9 @@ export function deriveNeed(
   // stamps ar_last_chased_at; on the next read this signal is gone and the
   // folder clears — the same R22 awareness tier as the send weave.
   if (receivable) {
-    const oldest = receivable.oldestDue ? ` — oldest due ${fmtDay(receivable.oldestDue)}` : '';
+    const oldest = receivable.oldestDue
+      ? ` — oldest due ${fmtDay(receivable.oldestDue)}`
+      : '';
     const n = receivable.count;
     return {
       kind: 'overdue_invoice',
@@ -467,6 +512,7 @@ export function deriveNeed(
         n === 1
           ? `${receivable.invoiceLabel} overdue${oldest} — send a reminder`
           : `${n} invoices overdue${oldest} — send a reminder`,
+      actionLabel: NEED_ACTION_LABELS.overdue_invoice,
       stamp: { label: 'PAST DUE', ...STAMP.terracotta },
       urgent: false,
       ledger: {
@@ -483,6 +529,7 @@ export function deriveNeed(
       return {
         kind: 'proposal_signed',
         text: 'Signed — open the project',
+        actionLabel: NEED_ACTION_LABELS.proposal_signed,
         stamp: { label: 'SIGNED', ...STAMP.sage },
         urgent: false,
       };
@@ -491,6 +538,7 @@ export function deriveNeed(
       return {
         kind: 'proposal_declined',
         text: 'Proposal declined — follow up',
+        actionLabel: NEED_ACTION_LABELS.proposal_declined,
         stamp: { label: 'DECLINED', ...STAMP.terracotta },
         urgent: false,
       };
@@ -499,6 +547,7 @@ export function deriveNeed(
       return {
         kind: 'proposal_expired',
         text: 'Proposal expired — revise or follow up',
+        actionLabel: NEED_ACTION_LABELS.proposal_expired,
         stamp: { label: 'EXPIRED', ...STAMP.terracotta },
         urgent: false,
       };
@@ -516,12 +565,17 @@ export function deriveNeed(
           n === 1
             ? `1 line flagged on ${flagged.docTitle}`
             : `${n} lines flagged on ${flagged.docTitle}`,
+        actionLabel: NEED_ACTION_LABELS.lines_flagged,
         stamp: { label: 'FLAGGED', color: 'var(--color-clay)' },
         urgent: false,
         deepLink: `/drafting/${flagged.proposalId}?flagged=1`,
       };
     }
-    if (row.proposal_status === 'sent' && row.proposal_sent_at && !row.proposal_viewed_at) {
+    if (
+      row.proposal_status === 'sent' &&
+      row.proposal_sent_at &&
+      !row.proposal_viewed_at
+    ) {
       const days = daysBetween(row.proposal_sent_at, now);
       // R22: a folder only once waiting is no longer the only act (≥2 days
       // unopened = follow up). Day 1 lives as an In-motion chip (deriveMotion).
@@ -529,6 +583,7 @@ export function deriveNeed(
         return {
           kind: 'hesitating_proposal',
           text: `Sent ${fmtDay(row.proposal_sent_at)} — not yet opened`,
+          actionLabel: NEED_ACTION_LABELS.hesitating_proposal,
           stamp: { label: 'SENT', ...STAMP.dustyBlue },
           urgent: false,
         };
@@ -549,6 +604,7 @@ export function deriveNeed(
         return {
           kind: 'hesitating_proposal',
           text,
+          actionLabel: NEED_ACTION_LABELS.hesitating_proposal,
           stamp: { label: 'VIEWED', ...STAMP.dustyBlue },
           urgent: false,
         };
@@ -569,10 +625,13 @@ export function deriveNeed(
       return {
         kind: 'ceremony_pending',
         text: `Introduce yourself to ${firstName(row.client_name)}`,
+        actionLabel: NEED_ACTION_LABELS.ceremony_pending,
         stamp: { label: 'CLAIMED · CEREMONY WAITING', ...STAMP.clay },
         urgent: false,
         deepLink: `/ceremony/${row.lead_id}`,
-        sub: draftText ? `Your draft is held — "${truncateWords(draftText, 60)}"` : undefined,
+        sub: draftText
+          ? `Your draft is held — "${truncateWords(draftText, 60)}"`
+          : undefined,
       };
     }
 
@@ -588,6 +647,7 @@ export function deriveNeed(
         return {
           kind: 'reconnect_due',
           text: `Reconnect — touchpoint due ${fmtDay(reconnectAt)}`,
+          actionLabel: NEED_ACTION_LABELS.reconnect_due,
           stamp: { label: 'RECONNECT', ...STAMP.dustyBlue },
           urgent: false,
         };
@@ -602,7 +662,9 @@ export function deriveNeed(
     if (row.lead_status !== 'new' && row.lead_status !== 'viewed') return null;
 
     const deadline = row.lead_response_deadline;
-    const msLeft = deadline ? new Date(deadline).getTime() - now.getTime() : null;
+    const msLeft = deadline
+      ? new Date(deadline).getTime() - now.getTime()
+      : null;
     const closing = msLeft !== null && msLeft < LEAD_URGENT_WINDOW_MS;
     const text =
       deadline === null
@@ -615,6 +677,7 @@ export function deriveNeed(
     return {
       kind: 'new_lead',
       text,
+      actionLabel: NEED_ACTION_LABELS.new_lead,
       stamp: { label: 'NEW LEAD', ...STAMP.clay },
       urgent: closing,
     };
@@ -630,6 +693,7 @@ export function deriveNeed(
         n === 1
           ? `${row.open_claim_po ?? 'A delivery'} has an open damage claim`
           : `${n} open damage claims — review receiving`,
+      actionLabel: NEED_ACTION_LABELS.damage_claim,
       stamp: { label: 'CLAIM OPEN', ...STAMP.terracotta },
       urgent: false,
     };
@@ -643,6 +707,7 @@ export function deriveNeed(
         n === 1
           ? '1 piece delivered — awaiting inspection'
           : `${n} pieces delivered — awaiting inspection`,
+      actionLabel: NEED_ACTION_LABELS.awaiting_inspection,
       stamp: { label: 'DELIVERED', ...STAMP.sage },
       urgent: false,
     };
@@ -655,6 +720,7 @@ export function deriveNeed(
     return {
       kind: 'schedule_conflict',
       text: conflict.collision.text,
+      actionLabel: NEED_ACTION_LABELS.schedule_conflict,
       stamp: { label: conflict.collision.label, ...STAMP.terracotta },
       urgent: false,
     };
@@ -670,6 +736,7 @@ export function deriveNeed(
         n === 1
           ? `Task due — ${row.due_task_title ?? 'one line in the work'}`
           : `${n} tasks due — oldest ${fmtDay(row.earliest_task_due)}`,
+      actionLabel: NEED_ACTION_LABELS.task_due,
       stamp: { label: 'TASK DUE', ...STAMP.clay },
       urgent: false,
     };
@@ -688,6 +755,7 @@ export function deriveNeed(
           n === 1
             ? `${row.draft_po_label ?? 'A purchase order'} drafted — not yet sent`
             : `${n} POs drafted — not yet sent`,
+        actionLabel: NEED_ACTION_LABELS.po_unsent,
         stamp: { label: 'UNSENT', ...STAMP.clay },
         urgent: false,
       };
@@ -704,6 +772,7 @@ export function deriveNeed(
           n === 1
             ? `${row.unacked_po_label ?? 'A purchase order'} sent — no acknowledgment`
             : `${n} POs sent — no acknowledgment`,
+        actionLabel: NEED_ACTION_LABELS.po_unacknowledged,
         stamp: { label: 'NO ACK', ...STAMP.dustyBlue },
         urgent: false,
       };
@@ -718,6 +787,7 @@ export function deriveNeed(
       return {
         kind: 'pulse_due',
         text: 'Friday Pulse drafted — review & send',
+        actionLabel: NEED_ACTION_LABELS.pulse_due,
         stamp: { label: 'PULSE', ...STAMP.sage },
         urgent: false,
       };
@@ -734,7 +804,12 @@ export function deriveMotion(
   now: Date,
   conflict?: DeskConflictInput | null,
   ceremony?: DeskCeremonySignal | null,
-): { kind: MotionKind; text: string; href?: string; ceremonyId?: string } | null {
+): {
+  kind: MotionKind;
+  text: string;
+  href?: string;
+  ceremonyId?: string;
+} | null {
   if (row.is_archived) return null;
   if (row.is_paused) return { kind: 'paused', text: 'Paused' };
 
@@ -751,17 +826,26 @@ export function deriveMotion(
       }
       return null;
     }
-    if (row.proposal_status === 'sent' && row.proposal_sent_at && !row.proposal_viewed_at) {
+    if (
+      row.proposal_status === 'sent' &&
+      row.proposal_sent_at &&
+      !row.proposal_viewed_at
+    ) {
       const days = daysBetween(row.proposal_sent_at, now);
       // R22: the awareness tier — state carried, never a nag. (Promotes to a
       // folder at SENT_UNOPENED_PROMOTE_DAYS, where deriveNeed takes over.)
       if (days >= SENT_UNOPENED_CHIP_DAYS) {
         return { kind: 'sent_unopened', text: `sent, unopened ${days}d` };
       }
-      return { kind: 'with_client', text: `With client since ${fmtDay(row.proposal_sent_at)}` };
+      return {
+        kind: 'with_client',
+        text: `With client since ${fmtDay(row.proposal_sent_at)}`,
+      };
     }
     if (row.proposal_status === 'sent' || row.proposal_status === 'viewed') {
-      const since = row.proposal_sent_at ? ` since ${fmtDay(row.proposal_sent_at)}` : '';
+      const since = row.proposal_sent_at
+        ? ` since ${fmtDay(row.proposal_sent_at)}`
+        : '';
       // R71: a fresh viewed proposal that's come back more than once carries the
       // count quietly (still an awareness chip, never a nag).
       const opens = row.proposal_open_count ?? 0;
@@ -799,7 +883,8 @@ export function deriveMotion(
       if (ceremony.state === 'sent') {
         const slots = ceremony.offeredSlots ?? [];
         const allStale =
-          slots.length > 0 && slots.every((s) => new Date(s.starts_at).getTime() < now.getTime());
+          slots.length > 0 &&
+          slots.every((s) => new Date(s.starts_at).getTime() < now.getTime());
         if (allStale) {
           return {
             kind: 'slots_stale',
@@ -808,15 +893,20 @@ export function deriveMotion(
             ceremonyId: ceremony.id,
           };
         }
-        const offeredAtMs = ceremony.offeredAt ? new Date(ceremony.offeredAt).getTime() : null;
-        const quiet48h = offeredAtMs !== null && now.getTime() - offeredAtMs >= 48 * 3_600_000;
+        const offeredAtMs = ceremony.offeredAt
+          ? new Date(ceremony.offeredAt).getTime()
+          : null;
+        const quiet48h =
+          offeredAtMs !== null && now.getTime() - offeredAtMs >= 48 * 3_600_000;
         if (quiet48h) {
           return {
             kind: 'intro_nudge',
             // Scene 04's exact register: "quiet 48h — nudge, or offer fresh
             // times". State carried, but an act exists again at 48h (R22).
             text: 'quiet 48h — nudge, or offer fresh times',
-            href: ceremony.threadId ? `/people?thread=${ceremony.threadId}` : `/doc/${row.engagement_id}`,
+            href: ceremony.threadId
+              ? `/people?thread=${ceremony.threadId}`
+              : `/doc/${row.engagement_id}`,
             ceremonyId: ceremony.id,
           };
         }
@@ -836,7 +926,10 @@ export function deriveMotion(
 
   if (row.in_flight_count > 0) {
     const n = row.in_flight_count;
-    return { kind: 'in_flight', text: n === 1 ? '1 piece on the way' : `${n} pieces on the way` };
+    return {
+      kind: 'in_flight',
+      text: n === 1 ? '1 piece on the way' : `${n} pieces on the way`,
+    };
   }
 
   return null;
@@ -882,11 +975,17 @@ export function partitionDesk(
 
   for (const row of rows) {
     if (row.is_archived) continue;
-    const conflict = row.project_id ? (conflicts?.get(row.project_id) ?? null) : null;
-    const receivable = row.project_id ? (receivables?.get(row.project_id) ?? null) : null;
+    const conflict = row.project_id
+      ? (conflicts?.get(row.project_id) ?? null)
+      : null;
+    const receivable = row.project_id
+      ? (receivables?.get(row.project_id) ?? null)
+      : null;
     // C4: flagged lines are keyed by proposal_id (a proposal engagement carries
     // proposal_id, project_id null).
-    const flagged = row.proposal_id ? (flaggedLines?.get(row.proposal_id) ?? null) : null;
+    const flagged = row.proposal_id
+      ? (flaggedLines?.get(row.proposal_id) ?? null)
+      : null;
     // R106: a lead row's ceremony is found by lead_id; a relationship row's by
     // its own engagement_id (== designer_clients.id == designer_client_id).
     const ceremony =

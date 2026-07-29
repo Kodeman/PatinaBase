@@ -12,6 +12,7 @@
 import { useRef, useState } from 'react';
 import { createBrowserClient } from '@patina/supabase';
 import { usePieceField } from '@/hooks/use-piece-field';
+import { DocumentAction, DocumentActionRow } from '../../document-action';
 
 export function PieceFolio({
   productId,
@@ -34,7 +35,11 @@ export function PieceFolio({
 
   const persist = (next: string[]) => {
     setErr(null);
-    save.mutateAsync({ images: next }).catch((e) => setErr(e instanceof Error ? e.message : 'Could not save the folio.'));
+    save
+      .mutateAsync({ images: next })
+      .catch((e) =>
+        setErr(e instanceof Error ? e.message : 'Could not save the folio.'),
+      );
   };
 
   // ── Read-only gallery ─────────────────────────────────────────────────────
@@ -52,7 +57,11 @@ export function PieceFolio({
       <div>
         <div className="overflow-hidden rounded-[10px] border border-[var(--doc-ink-border)] bg-[var(--doc-sheet-2)]">
           {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img src={list[heroIdx]} alt="" className="h-[360px] w-full object-cover" />
+          <img
+            src={list[heroIdx]}
+            alt=""
+            className="h-[360px] w-full object-cover"
+          />
         </div>
         {list.length > 1 && (
           <div className="mt-2 flex flex-wrap gap-2">
@@ -62,7 +71,9 @@ export function PieceFolio({
                 type="button"
                 onClick={() => setHero(i)}
                 className={`h-[60px] w-[60px] overflow-hidden rounded-[6px] border ${
-                  i === heroIdx ? 'border-[var(--color-clay)]' : 'border-[var(--doc-ink-border)]'
+                  i === heroIdx
+                    ? 'border-[var(--color-clay)]'
+                    : 'border-[var(--doc-ink-border)]'
                 }`}
               >
                 {/* eslint-disable-next-line @next/next/no-img-element */}
@@ -102,10 +113,16 @@ export function PieceFolio({
     setErr(null);
     try {
       const supabase = createBrowserClient() as unknown as {
-        auth: { getUser: () => Promise<{ data: { user: { id: string } | null } }> };
+        auth: {
+          getUser: () => Promise<{ data: { user: { id: string } | null } }>;
+        };
         storage: {
           from: (b: string) => {
-            upload: (p: string, f: File, o?: { upsert?: boolean }) => Promise<{ error: { message: string } | null }>;
+            upload: (
+              p: string,
+              f: File,
+              o?: { upsert?: boolean },
+            ) => Promise<{ error: { message: string } | null }>;
             getPublicUrl: (p: string) => { data: { publicUrl: string } };
           };
         };
@@ -116,9 +133,13 @@ export function PieceFolio({
       if (!user) throw new Error('Not signed in.');
       const ext = (file.name.split('.').pop() || 'jpg').toLowerCase();
       const path = `${user.id}/${Date.now()}-${Math.random().toString(36).slice(2)}.${ext}`;
-      const { error } = await supabase.storage.from('product-images').upload(path, file, { upsert: false });
+      const { error } = await supabase.storage
+        .from('product-images')
+        .upload(path, file, { upsert: false });
       if (error) throw new Error(error.message);
-      const { data } = supabase.storage.from('product-images').getPublicUrl(path);
+      const { data } = supabase.storage
+        .from('product-images')
+        .getPublicUrl(path);
       persist([...list, data.publicUrl]);
     } catch (e) {
       setErr(e instanceof Error ? e.message : 'Upload failed.');
@@ -133,7 +154,11 @@ export function PieceFolio({
       {list.length > 0 ? (
         <div className="overflow-hidden rounded-[10px] border border-[var(--doc-ink-border)] bg-[var(--doc-sheet-2)]">
           {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img src={list[heroIdx]} alt="" className="h-[320px] w-full object-cover" />
+          <img
+            src={list[heroIdx]}
+            alt=""
+            className="h-[320px] w-full object-cover"
+          />
         </div>
       ) : (
         <div className="flex h-[220px] items-center justify-center rounded-[10px] border border-dashed border-[var(--doc-ink-border)] bg-[var(--doc-sheet-2)]">
@@ -150,7 +175,9 @@ export function PieceFolio({
             <div
               key={`${src}-${i}`}
               className={`relative h-[72px] w-[72px] overflow-hidden rounded-[6px] border ${
-                i === 0 ? 'border-[var(--color-clay)]' : 'border-[var(--doc-ink-border)]'
+                i === 0
+                  ? 'border-[var(--color-clay)]'
+                  : 'border-[var(--doc-ink-border)]'
               }`}
             >
               <button
@@ -211,7 +238,12 @@ export function PieceFolio({
       )}
 
       {/* Add row */}
-      <div className="mt-3 flex gap-2">
+      <DocumentActionRow
+        surfaceKey="piece"
+        regionKey="piece-folio-add"
+        className="mt-3"
+        aria-label="Piece folio actions"
+      >
         <input
           value={draft}
           onChange={(e) => setDraft(e.target.value)}
@@ -219,21 +251,23 @@ export function PieceFolio({
           placeholder="paste an image URL (or a cut sheet)"
           className="flex-1 rounded-[6px] border border-[var(--color-pearl)] bg-[var(--doc-paper)] px-3 py-2 text-[0.8rem] text-[var(--color-charcoal)] focus:border-[var(--color-clay)] focus:bg-white focus:outline-none"
         />
-        <button
-          type="button"
+        <DocumentAction
+          actionKey="add-image-url"
+          variant="secondary"
           onClick={addUrl}
-          className="rounded-[6px] border border-[var(--color-clay)] px-3 py-2 font-mono text-[9px] font-semibold uppercase tracking-[0.06em] text-[var(--color-clay)] hover:bg-[var(--color-clay)] hover:text-white"
+          disabled={!draft.trim()}
         >
           + add
-        </button>
-        <button
-          type="button"
+        </DocumentAction>
+        <DocumentAction
+          actionKey="upload-piece-image"
+          variant="primary"
           onClick={() => fileRef.current?.click()}
-          disabled={uploading}
-          className="rounded-[6px] border border-[var(--color-pearl)] px-3 py-2 font-mono text-[9px] font-semibold uppercase tracking-[0.06em] text-[var(--color-aged-oak)] hover:border-[var(--color-aged-oak)] hover:text-[var(--color-mocha)] disabled:opacity-50"
+          loading={uploading}
+          loadingLabel="Uploading…"
         >
-          {uploading ? 'uploading…' : 'upload'}
-        </button>
+          Upload
+        </DocumentAction>
         <input
           ref={fileRef}
           type="file"
@@ -245,8 +279,12 @@ export function PieceFolio({
             e.target.value = '';
           }}
         />
-      </div>
-      {err && <p className="mt-2 text-[0.7rem] text-[var(--color-terracotta)]">{err}</p>}
+      </DocumentActionRow>
+      {err && (
+        <p className="mt-2 text-[0.7rem] text-[var(--color-terracotta)]">
+          {err}
+        </p>
+      )}
     </div>
   );
 }

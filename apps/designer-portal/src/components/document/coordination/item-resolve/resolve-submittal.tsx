@@ -39,7 +39,11 @@ const REV_STATUS_LABEL: Record<string, string> = {
   revise_resubmit: 'Revise & resubmit',
 };
 
-export function ResolveSubmittal({ item, projectId, onResolved }: ResolvePanelProps) {
+export function ResolveSubmittal({
+  item,
+  projectId,
+  onResolved,
+}: ResolvePanelProps) {
   const { data: revisions } = useItemRevisions(item.id);
   const resolve = useResolveCoordinationItem(projectId);
   const revise = useSubmitCoordinationRevision(projectId);
@@ -56,7 +60,9 @@ export function ResolveSubmittal({ item, projectId, onResolved }: ResolvePanelPr
       { itemId: item.id, revisionId: latestRev?.id ?? null },
       {
         onSuccess: () => {
-          setConfirm('Approved — millwork released to the shop. The vendor is unblocked.');
+          setConfirm(
+            'Approved — millwork released to the shop. The vendor is unblocked.',
+          );
           window.setTimeout(onResolved, 900);
         },
       },
@@ -98,7 +104,11 @@ export function ResolveSubmittal({ item, projectId, onResolved }: ResolvePanelPr
                 <span className="font-mono text-[0.46rem] uppercase tracking-[0.04em] text-[var(--text-muted)]">
                   {REV_STATUS_LABEL[r.status] ?? r.status}
                 </span>
-                {r.note && <span className="min-w-0 flex-1 truncate italic">“{r.note}”</span>}
+                {r.note && (
+                  <span className="min-w-0 flex-1 truncate italic">
+                    “{r.note}”
+                  </span>
+                )}
                 <span className="ml-auto whitespace-nowrap font-mono text-[0.46rem] text-[var(--text-muted)]">
                   {fmtDay(r.created_at)}
                 </span>
@@ -125,20 +135,41 @@ export function ResolveSubmittal({ item, projectId, onResolved }: ResolvePanelPr
             />
           </Field>
           <ButtonRow>
-            <ResolveButton tone="gold" onClick={sendBack} disabled={busy}>
+            <ResolveButton
+              actionKey="send-submittal-back"
+              tone="gold"
+              onClick={sendBack}
+              disabled={busy}
+            >
               {revise.isPending ? 'Sending…' : 'Send back — revise & resubmit'}
             </ResolveButton>
-            <ResolveButton tone="plain" onClick={() => setRevising(false)} disabled={busy}>
+            <ResolveButton
+              actionKey="cancel-submittal-revision"
+              tone="plain"
+              variant="tertiary"
+              onClick={() => setRevising(false)}
+              disabled={busy}
+            >
               Cancel
             </ResolveButton>
           </ButtonRow>
         </>
       ) : (
         <ButtonRow>
-          <ResolveButton tone="sage" onClick={approve} disabled={busy}>
+          <ResolveButton
+            actionKey="approve-submittal"
+            tone="sage"
+            onClick={approve}
+            disabled={busy}
+          >
             {resolve.isPending ? 'Approving…' : 'Approve'}
           </ResolveButton>
-          <ResolveButton tone="plain" onClick={() => setRevising(true)} disabled={busy}>
+          <ResolveButton
+            actionKey="revise-submittal"
+            tone="plain"
+            onClick={() => setRevising(true)}
+            disabled={busy}
+          >
             Revise & resubmit
           </ResolveButton>
         </ButtonRow>

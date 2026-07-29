@@ -403,8 +403,7 @@ struct ProductDetailView: View {
     private var loadingView: some View {
         VStack {
             Spacer()
-            ProgressView()
-                .tint(PatinaColors.Text.interactive)
+            PatinaLoadingState(label: "Loading this piece…")
             Spacer()
         }
         .frame(maxWidth: .infinity)
@@ -413,22 +412,18 @@ struct ProductDetailView: View {
     // MARK: - Error
 
     private var errorView: some View {
-        VStack(spacing: 12) {
+        // Retry only makes sense when there's a productId to reload — a
+        // roomless/no-id entry has nothing to retry, so no action is passed
+        // and PatinaErrorState omits the button entirely.
+        let retry: (() -> Void)? = productId.map { id in
+            { Task { await viewModel.loadProduct(id: id) } }
+        }
+        return VStack {
             Spacer()
-            Image(systemName: "exclamationmark.triangle")
-                .font(.system(size: 28))
-                .foregroundStyle(PatinaColors.Text.muted)
-            Text(viewModel.error ?? "Couldn't load this piece")
-                .font(PatinaTypography.bodySmall)
-                .foregroundStyle(PatinaColors.Text.secondary)
-                .multilineTextAlignment(.center)
-            if let productId {
-                Button("Let's try that again") {
-                    Task { await viewModel.loadProduct(id: productId) }
-                }
-                .font(PatinaTypography.bodySmallMedium)
-                .foregroundStyle(PatinaColors.Text.interactive)
-            }
+            PatinaErrorState(
+                message: viewModel.error ?? "Couldn't load this piece",
+                action: retry
+            )
             Spacer()
         }
         .padding(.horizontal, 32)

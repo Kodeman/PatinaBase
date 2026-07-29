@@ -234,54 +234,11 @@ public final class CompanionAnalytics {
         )
     }
 
-    // MARK: - Stuck Detection Events
+    // MARK: - Help Events
 
-    /// Track when user appears stuck
-    public func trackUserStuck(
-        screen: String,
-        reason: SessionMetricsService.StuckReason,
-        dwellTime: TimeInterval,
-        interactionCount: Int
-    ) {
-        let reasonString: String
-        switch reason {
-        case .none: return // Don't track if not stuck
-        case .longDwellNoInteraction: reasonString = "long_dwell"
-        case .indecisiveScrolling: reasonString = "indecisive_scrolling"
-        case .both: reasonString = "both"
-        }
-
-        postHog.capture(
-            CompanionEvent.userStuck.rawValue,
-            properties: [
-                "screen": screen,
-                "reason": reasonString,
-                "dwell_time_seconds": dwellTime,
-                "interaction_count": interactionCount,
-                "session_id": sessionMetrics.sessionId
-            ]
-        )
-    }
-
-    /// Track help offered to stuck user
-    public func trackHelpOffered(screen: String, reason: SessionMetricsService.StuckReason) {
-        let reasonString: String
-        switch reason {
-        case .none: reasonString = "proactive"
-        case .longDwellNoInteraction: reasonString = "long_dwell"
-        case .indecisiveScrolling: reasonString = "indecisive_scrolling"
-        case .both: reasonString = "both"
-        }
-
-        postHog.capture(
-            CompanionEvent.helpOffered.rawValue,
-            properties: [
-                "screen": screen,
-                "reason": reasonString,
-                "session_id": sessionMetrics.sessionId
-            ]
-        )
-    }
+    // `trackUserStuck` / `trackHelpOffered` were removed with the timed
+    // unused-companion escalation they served (U34) — nothing offers help
+    // unprompted any more, so there is no "stuck" moment left to report.
 
     /// Track help accepted by user
     public func trackHelpAccepted(screen: String, actionTaken: String) {

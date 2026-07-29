@@ -25,7 +25,11 @@ import {
   useUpdateClientContact,
 } from '@patina/supabase';
 import { ClientPicker } from '@/components/portal/client-picker';
-import { useAttachDocumentClient, type AttachEngagementKind } from '@/hooks/use-attach-client';
+import {
+  useAttachDocumentClient,
+  type AttachEngagementKind,
+} from '@/hooks/use-attach-client';
+import { DocumentAction, DocumentActionGroup } from '../document-action';
 import { DocSheet } from './doc-sheet';
 
 const labelCls =
@@ -33,7 +37,8 @@ const labelCls =
 const fieldCls =
   'w-full rounded-[4px] border border-[var(--color-pearl)] bg-white px-3 py-2 text-[13px] text-[var(--color-charcoal)] outline-none transition-colors placeholder:italic placeholder:text-[var(--text-faint)] focus:border-[var(--color-clay)]';
 
-const pretty = (s: string) => s.replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase());
+const pretty = (s: string) =>
+  s.replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase());
 
 export interface HouseholdSheetProps {
   open: boolean;
@@ -57,7 +62,9 @@ export function HouseholdSheet({
   clientName,
   proposalStatus,
 }: HouseholdSheetProps) {
-  const { data: rel } = useDesignerClientForClientUser(clientProfileId ?? undefined);
+  const { data: rel } = useDesignerClientForClientUser(
+    clientProfileId ?? undefined,
+  );
   const { data: client } = useClient(rel?.id ?? '');
   const attach = useAttachDocumentClient();
   const updateContact = useUpdateClientContact();
@@ -69,7 +76,10 @@ export function HouseholdSheet({
   const status = client?.status ?? null;
 
   // Where an attach/change writes — only proposals & projects carry a client_id.
-  const attachTarget: { engagementKind: AttachEngagementKind; targetId: string } | null =
+  const attachTarget: {
+    engagementKind: AttachEngagementKind;
+    targetId: string;
+  } | null =
     engagementKind === 'project' && projectId
       ? { engagementKind: 'project', targetId: projectId }
       : engagementKind === 'proposal' && proposalId
@@ -78,7 +88,9 @@ export function HouseholdSheet({
 
   // A sent/accepted proposal keeps its client — re-pointing would mis-attribute it.
   const proposalLocked =
-    engagementKind === 'proposal' && !!proposalStatus && proposalStatus !== 'draft';
+    engagementKind === 'proposal' &&
+    !!proposalStatus &&
+    proposalStatus !== 'draft';
   const canChange = !!attachTarget && !proposalLocked;
 
   const [editing, setEditing] = useState(false);
@@ -147,8 +159,8 @@ export function HouseholdSheet({
           </div>
         ) : (
           <p className="mt-3 text-[12.5px] leading-relaxed text-[var(--color-mocha)]">
-            This document isn&rsquo;t linked to a client yet. Choose who it belongs to so they
-            receive the proposal and can sign it.
+            This document isn&rsquo;t linked to a client yet. Choose who it
+            belongs to so they receive the proposal and can sign it.
           </p>
         )}
 
@@ -163,19 +175,24 @@ export function HouseholdSheet({
                 <ClientPicker
                   value={clientProfileId}
                   onChange={onPick}
-                  placeholder={clientProfileId ? 'Change client…' : 'Link a client…'}
+                  placeholder={
+                    clientProfileId ? 'Change client…' : 'Link a client…'
+                  }
                   disabled={attach.isPending}
                 />
                 {attach.isError && (
                   <p className="mt-2 text-[12px] text-[var(--color-clay)]">
-                    {attach.error instanceof Error ? attach.error.message : 'Could not update the client.'}
+                    {attach.error instanceof Error
+                      ? attach.error.message
+                      : 'Could not update the client.'}
                   </p>
                 )}
               </div>
             ) : (
               <p className="text-[12.5px] italic leading-relaxed text-[var(--color-aged-oak)]">
-                This proposal has already been sent — its client is locked so a signature can&rsquo;t be
-                mis-attributed. Revise the proposal to send a new version to a different client.
+                This proposal has already been sent — its client is locked so a
+                signature can&rsquo;t be mis-attributed. Revise the proposal to
+                send a new version to a different client.
               </p>
             )}
           </div>
@@ -186,19 +203,21 @@ export function HouseholdSheet({
         {client && (
           <div className="mt-6 border-t border-[var(--color-pearl)] pt-4">
             {!editing ? (
-              <button
-                type="button"
+              <DocumentAction
+                actionKey="edit-household-details"
+                surfaceKey="household"
+                regionKey="details"
+                variant="secondary"
                 onClick={() => setEditing(true)}
-                className="font-mono text-[9px] uppercase tracking-[0.06em] text-[var(--color-aged-oak)] hover:text-[var(--color-clay)]"
               >
                 Edit details
-              </button>
+              </DocumentAction>
             ) : (
               <div className="space-y-4">
                 {hasProfile ? (
                   <p className="text-[11.5px] italic leading-relaxed text-[var(--color-aged-oak)]">
-                    {name}&rsquo;s name, email, and phone are managed in their Patina account. You can
-                    keep your own notes here.
+                    {name}&rsquo;s name, email, and phone are managed in their
+                    Patina account. You can keep your own notes here.
                   </p>
                 ) : (
                   <>
@@ -209,7 +228,9 @@ export function HouseholdSheet({
                       <input
                         id="household-name"
                         value={form.name}
-                        onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))}
+                        onChange={(e) =>
+                          setForm((f) => ({ ...f, name: e.target.value }))
+                        }
                         placeholder="The Reyeses"
                         className={fieldCls}
                       />
@@ -222,7 +243,9 @@ export function HouseholdSheet({
                         id="household-email"
                         type="email"
                         value={form.email}
-                        onChange={(e) => setForm((f) => ({ ...f, email: e.target.value }))}
+                        onChange={(e) =>
+                          setForm((f) => ({ ...f, email: e.target.value }))
+                        }
                         placeholder="client@email.com"
                         className={fieldCls}
                       />
@@ -237,28 +260,35 @@ export function HouseholdSheet({
                     id="household-notes"
                     rows={3}
                     value={form.notes}
-                    onChange={(e) => setForm((f) => ({ ...f, notes: e.target.value }))}
+                    onChange={(e) =>
+                      setForm((f) => ({ ...f, notes: e.target.value }))
+                    }
                     placeholder="Anything worth remembering about this household…"
                     className={`${fieldCls} resize-y`}
                   />
                 </div>
-                <div className="flex items-center gap-4">
-                  <button
-                    type="button"
+                <DocumentActionGroup
+                  surfaceKey="household"
+                  regionKey="details-editor"
+                >
+                  <DocumentAction
+                    actionKey="save-household-details"
+                    variant="primary"
                     onClick={saveDetails}
                     disabled={updateContact.isPending}
-                    className="rounded-[4px] bg-[var(--color-clay)] px-4 py-2 text-[12px] font-medium text-[var(--color-charcoal)] transition-opacity disabled:opacity-40"
+                    loading={updateContact.isPending}
+                    loadingLabel="Saving…"
                   >
-                    {updateContact.isPending ? 'Saving…' : 'Save'}
-                  </button>
-                  <button
-                    type="button"
+                    Save
+                  </DocumentAction>
+                  <DocumentAction
+                    actionKey="cancel-household-details"
+                    variant="tertiary"
                     onClick={() => setEditing(false)}
-                    className="font-mono text-[9px] uppercase tracking-[0.06em] text-[var(--color-aged-oak)] hover:text-[var(--color-charcoal)]"
                   >
                     Cancel
-                  </button>
-                </div>
+                  </DocumentAction>
+                </DocumentActionGroup>
               </div>
             )}
           </div>

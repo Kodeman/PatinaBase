@@ -46,6 +46,7 @@ import {
 } from './editors';
 import { DiscoveryCallSheet } from './discovery-call-sheet';
 import { DiscoveryScheduleLine } from './discovery-schedule-line';
+import { DocumentAction, DocumentActionGroup } from '../document-action';
 
 const EMPTY_DRAFT: DiscoveryDraft = {
   project_type: null,
@@ -111,9 +112,15 @@ function statusFor(block: BlockKey, d: DiscoveryDraft): string {
         ? `${d.keep_items.length} keep · ${d.avoid_items.length} avoid`
         : 'optional';
     case 'deciders':
-      return d.decision_makers.length ? `${d.decision_makers.length} named` : 'optional';
+      return d.decision_makers.length
+        ? `${d.decision_makers.length} named`
+        : 'optional';
     case 'site_scan':
-      return d.room_scan_id ? 'scan attached' : d.site_notes ? 'noted' : 'optional';
+      return d.room_scan_id
+        ? 'scan attached'
+        : d.site_notes
+          ? 'noted'
+          : 'optional';
   }
 }
 
@@ -132,9 +139,13 @@ export function DiscoverySection({
   const { data: read } = useDiscovery(engagementId);
   const upsert = useUpsertDiscovery();
   const beginDirection = useBeginDirection();
-  const { data: styles } = useStyles() as { data: { id: string; name: string }[] | undefined };
+  const { data: styles } = useStyles() as {
+    data: { id: string; name: string }[] | undefined;
+  };
   const { data: scans } = useClientRoomScans(clientProfileId ?? '') as {
-    data: { id: string; name?: string | null; created_at?: string }[] | undefined;
+    data:
+      | { id: string; name?: string | null; created_at?: string }[]
+      | undefined;
   };
 
   const [draft, setDraft] = useState<DiscoveryDraft>(EMPTY_DRAFT);
@@ -169,12 +180,17 @@ export function DiscoverySection({
     // F5: content-empty rows never persist — they don't count toward the
     // essentials, and the seed RPC would otherwise turn a stray "+ Add a room"
     // click into a phantom "Room" in the proposal's scope.
-    if (patch.rooms) patch.rooms = capturedRooms(patch.rooms) as DiscoveryDraft['rooms'];
+    if (patch.rooms)
+      patch.rooms = capturedRooms(patch.rooms) as DiscoveryDraft['rooms'];
     if (patch.lifestyle)
-      patch.lifestyle = capturedLifestyle(patch.lifestyle) as DiscoveryDraft['lifestyle'];
+      patch.lifestyle = capturedLifestyle(
+        patch.lifestyle,
+      ) as DiscoveryDraft['lifestyle'];
     chain.current = chain.current
       .catch(() => undefined) // an earlier failed write must not wedge the chain
-      .then(() => upsertAsync({ designerClientId: engagementId, designerId, patch }))
+      .then(() =>
+        upsertAsync({ designerClientId: engagementId, designerId, patch }),
+      )
       .catch(() => undefined); // surfaced by the mutation's own error handling
     return chain.current;
   }, [engagementId, designerId, upsertAsync]);
@@ -192,7 +208,7 @@ export function DiscoverySection({
     // facts on first render so the shown values exist in client_discovery.
     if (!read.row && read.prefill) {
       const seeded = Object.fromEntries(
-        Object.entries(read.prefill).filter(([, v]) => v != null)
+        Object.entries(read.prefill).filter(([, v]) => v != null),
       ) as Partial<DiscoveryDraft>;
       if (Object.keys(seeded).length > 0) {
         pending.current = { ...seeded, ...pending.current };
@@ -208,7 +224,7 @@ export function DiscoverySection({
       if (timer.current) clearTimeout(timer.current);
       timer.current = setTimeout(flush, 600);
     },
-    [flush]
+    [flush],
   );
 
   // Flush any pending edit on TRUE unmount so nothing is lost (via a ref —
@@ -219,13 +235,18 @@ export function DiscoverySection({
     () => () => {
       void flushRef.current();
     },
-    []
+    [],
   );
 
-  const { done, essentialsDone, ready, fill } = deriveDiscoveryReadiness(toFacts(draft));
+  const { done, essentialsDone, ready, fill } = deriveDiscoveryReadiness(
+    toFacts(draft),
+  );
   const alreadySeeded = Boolean(read?.row?.seeded_proposal_id);
 
-  const styleOptions: Option[] = (styles ?? []).map((s) => ({ value: s.id, label: s.name }));
+  const styleOptions: Option[] = (styles ?? []).map((s) => ({
+    value: s.id,
+    label: s.name,
+  }));
   const scanOptions: Option[] = (scans ?? []).map((s) => ({
     value: s.id,
     label: s.name || `Scan ${s.created_at?.slice(0, 10) ?? ''}`.trim(),
@@ -255,16 +276,30 @@ export function DiscoverySection({
           // rejects with a PostgrestError (message-shaped, not always an
           // instanceof Error) — read .message off whatever arrived.
           const message = (err as { message?: string } | null)?.message;
-          setBeginError(message || 'Something went wrong beginning the Direction.');
+          setBeginError(
+            message || 'Something went wrong beginning the Direction.',
+          );
         },
-      }
+      },
     );
   };
 
   const essentials: { key: BlockKey; name: string; node: React.ReactNode }[] = [
-    { key: 'scope', name: 'Scope & rooms', node: <ScopeEditor draft={draft} commit={commit} /> },
-    { key: 'budget', name: 'Budget comfort', node: <BudgetEditor draft={draft} commit={commit} /> },
-    { key: 'timeline', name: 'Timeline', node: <TimelineEditor draft={draft} commit={commit} /> },
+    {
+      key: 'scope',
+      name: 'Scope & rooms',
+      node: <ScopeEditor draft={draft} commit={commit} />,
+    },
+    {
+      key: 'budget',
+      name: 'Budget comfort',
+      node: <BudgetEditor draft={draft} commit={commit} />,
+    },
+    {
+      key: 'timeline',
+      name: 'Timeline',
+      node: <TimelineEditor draft={draft} commit={commit} />,
+    },
     {
       key: 'style',
       name: 'Style & inspiration',
@@ -277,15 +312,33 @@ export function DiscoverySection({
         />
       ),
     },
-    { key: 'lifestyle', name: 'How they live', node: <LifestyleEditor draft={draft} commit={commit} /> },
+    {
+      key: 'lifestyle',
+      name: 'How they live',
+      node: <LifestyleEditor draft={draft} commit={commit} />,
+    },
   ];
   const deepening: { key: BlockKey; name: string; node: React.ReactNode }[] = [
-    { key: 'keep_avoid', name: 'Keep & avoid', node: <KeepAvoidEditor draft={draft} commit={commit} /> },
-    { key: 'deciders', name: 'Decision-makers', node: <DecidersEditor draft={draft} commit={commit} /> },
+    {
+      key: 'keep_avoid',
+      name: 'Keep & avoid',
+      node: <KeepAvoidEditor draft={draft} commit={commit} />,
+    },
+    {
+      key: 'deciders',
+      name: 'Decision-makers',
+      node: <DecidersEditor draft={draft} commit={commit} />,
+    },
     {
       key: 'site_scan',
       name: 'The site & scan',
-      node: <SiteScanEditor draft={draft} commit={commit} scanOptions={scanOptions} />,
+      node: (
+        <SiteScanEditor
+          draft={draft}
+          commit={commit}
+          scanOptions={scanOptions}
+        />
+      ),
     },
   ];
 
@@ -310,7 +363,10 @@ export function DiscoverySection({
       {/* Arrival Arc (R106 §5 / build-plan 2.5): the arc-born engagement's
           first honest fact — what was offered, or what was booked — plus the
           intro-thread reference. Renders nothing for a non-arc engagement. */}
-      <DiscoveryScheduleLine designerClientId={engagementId} clientName={clientName} />
+      <DiscoveryScheduleLine
+        designerClientId={engagementId}
+        clientName={clientName}
+      />
 
       {/* Readiness header — the Strata Mark fills toward Ready (R66). */}
       <div
@@ -335,22 +391,19 @@ export function DiscoverySection({
             )}
           </p>
         </div>
-        <button
-          type="button"
+        <DocumentAction
+          actionKey={alreadySeeded ? 'open-direction' : 'begin-direction'}
+          surfaceKey="discovery"
+          regionKey="readiness"
+          variant="primary"
           onClick={() => void begin()}
           disabled={!ready || beginDirection.isPending}
-          className={`shrink-0 rounded-[3px] border px-3.5 py-2 font-mono text-[11px] tracking-[0.03em] transition-colors ${
-            ready
-              ? 'border-[var(--color-mocha)] bg-white text-[var(--color-mocha)] hover:bg-[var(--color-mocha)] hover:text-[#f6efe2]'
-              : 'cursor-not-allowed border-[var(--color-pearl)] text-[var(--text-muted)]'
-          }`}
+          loading={beginDirection.isPending}
+          loadingLabel="Opening…"
+          className="shrink-0"
         >
-          {beginDirection.isPending
-            ? 'Opening…'
-            : alreadySeeded
-              ? 'Open the Direction →'
-              : 'Begin the Direction →'}
-        </button>
+          {alreadySeeded ? 'Open the Direction' : 'Begin the Direction'}
+        </DocumentAction>
       </div>
 
       {/* R83 (F2): the act's failure, inline AT the act — a quiet terracotta
@@ -363,52 +416,60 @@ export function DiscoverySection({
           <span className="text-[12px] leading-snug text-[var(--color-charcoal)]">
             {beginError}
           </span>
-          <button
-            type="button"
+          <DocumentAction
+            actionKey="retry-begin-direction"
+            surfaceKey="discovery"
+            regionKey="readiness-error"
+            variant="primary"
             onClick={() => void begin()}
-            className="font-mono text-[9px] font-semibold uppercase tracking-[0.08em] text-[var(--color-clay)] underline-offset-2 transition-colors hover:text-[var(--color-mocha)] hover:underline"
           >
-            Try again →
-          </button>
+            Try again
+          </DocumentAction>
         </div>
       )}
 
       {/* Toolrow — the call checklist + the two clip-ins. */}
-      <div className="mb-5 flex flex-wrap items-center gap-2.5">
-        <button
-          type="button"
+      <DocumentActionGroup
+        surfaceKey="discovery"
+        regionKey="tools"
+        className="mb-5"
+      >
+        <DocumentAction
+          actionKey="run-discovery-call"
+          variant="secondary"
           onClick={() => setCallOpen(true)}
-          className="rounded-[3px] border border-[var(--color-pearl)] px-3 py-1.5 font-mono text-[11px] text-[var(--color-charcoal)] transition-colors hover:border-[var(--color-clay)]"
         >
-          ▶ Run the discovery call
-        </button>
-        <button
-          type="button"
+          Run the discovery call
+        </DocumentAction>
+        <DocumentAction
+          actionKey="attach-room-scan"
+          variant="secondary"
           onClick={() => openBlock('site_scan')}
-          className="rounded-[3px] border border-[var(--color-pearl)] px-3 py-1.5 font-mono text-[11px] text-[var(--color-charcoal)] transition-colors hover:border-[var(--color-clay)]"
         >
-          ＋ Attach the room scan
-        </button>
+          Attach the room scan
+        </DocumentAction>
         {/* I74a — the scan door opens the Room View (`/room/[id]`), not the
             in-page 3D sheet; ?from=document is the room-origin/telemetry-attribution
             marker (room_opened origin=document lands with W3-T7). */}
         {draft.room_scan_id && (
-          <button
-            type="button"
-            onClick={() => router.push(`/room/${draft.room_scan_id}?from=document`)}
-            className="rounded-[3px] border border-[var(--color-clay)] px-3 py-1.5 font-mono text-[11px] text-[var(--color-clay)] transition-colors hover:bg-[rgba(196,165,123,0.08)]"
+          <DocumentAction
+            actionKey="view-room-scan"
+            variant="tertiary"
+            onClick={() =>
+              router.push(`/room/${draft.room_scan_id}?from=document`)
+            }
           >
-            View the scan →
-          </button>
+            View the scan
+          </DocumentAction>
         )}
-        <button
-          type="button"
+        <DocumentAction
+          actionKey="add-inspiration"
+          variant="secondary"
           onClick={() => openBlock('style')}
-          className="rounded-[3px] border border-[var(--color-pearl)] px-3 py-1.5 font-mono text-[11px] text-[var(--color-charcoal)] transition-colors hover:border-[var(--color-clay)]"
         >
-          ＋ Add inspiration
-        </button>
-      </div>
+          Add inspiration
+        </DocumentAction>
+      </DocumentActionGroup>
 
       <p className="mb-2 flex items-center gap-2.5 font-mono text-[10px] uppercase tracking-[0.1em] text-[var(--text-muted)]">
         The essentials — structured · they open &amp; seed the proposal

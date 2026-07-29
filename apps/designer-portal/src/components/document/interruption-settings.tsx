@@ -18,10 +18,22 @@ import {
 import { marginAccent } from '@/lib/document/margin-derivation';
 
 const KINDS: { key: InterruptionKind; label: string; blurb: string }[] = [
-  { key: 'decision', label: 'Decisions', blurb: 'An overdue decision breaks through.' },
-  { key: 'message', label: 'Messages', blurb: 'A new client message breaks through.' },
+  {
+    key: 'decision',
+    label: 'Decisions',
+    blurb: 'An overdue decision breaks through.',
+  },
+  {
+    key: 'message',
+    label: 'Messages',
+    blurb: 'A new client message breaks through.',
+  },
   { key: 'invoice', label: 'Money', blurb: 'A payment event breaks through.' },
-  { key: 'pulse', label: 'The Pulse', blurb: 'The Friday Pulse breaks through.' },
+  {
+    key: 'pulse',
+    label: 'The Pulse',
+    blurb: 'The Friday Pulse breaks through.',
+  },
   { key: 'time', label: 'Time', blurb: 'Time summaries break through.' },
   { key: 'note', label: 'Notes', blurb: 'A dued note breaks through.' },
 ];
@@ -34,17 +46,20 @@ export function InterruptionSettings() {
   useEffect(() => {
     const onOpen = () => setOpen(true);
     window.addEventListener('document:open-interruptions', onOpen);
-    return () => window.removeEventListener('document:open-interruptions', onOpen);
+    return () =>
+      window.removeEventListener('document:open-interruptions', onOpen);
   }, []);
 
   return (
     <DocSheet open={open} onClose={() => setOpen(false)} title="Interruptions">
       <div className="mx-auto max-w-xl">
-        <h2 className="font-heading text-xl text-[var(--color-charcoal)]">Interruptions</h2>
+        <h2 className="font-heading text-xl text-[var(--color-charcoal)]">
+          Interruptions
+        </h2>
         <p className="mt-1 text-[12.5px] leading-relaxed text-[var(--color-mocha)]">
-          The margin is the notification model — nothing breaks through unless you say so. Turn a
-          kind on and it will surface louder than the quiet margin; everything stays off until you
-          choose.
+          The margin is the notification model — nothing breaks through unless
+          you say so. Turn a kind on and it will surface louder than the quiet
+          margin; everything stays off until you choose.
         </p>
 
         <ul className="mt-5">
@@ -64,7 +79,9 @@ export function InterruptionSettings() {
                   <span className="block text-[13px] font-medium text-[var(--color-charcoal)]">
                     {label}
                   </span>
-                  <span className="block text-[11px] text-[var(--color-aged-oak)]">{blurb}</span>
+                  <span className="block text-[11px] text-[var(--color-aged-oak)]">
+                    {blurb}
+                  </span>
                 </span>
                 <button
                   type="button"
@@ -72,19 +89,25 @@ export function InterruptionSettings() {
                   aria-checked={enabled}
                   aria-label={`${label} interruptions`}
                   disabled={setRule.isPending}
-                  onClick={() => setRule.mutate({ kind: key, enabled: !enabled })}
-                  className={`relative h-[20px] w-[36px] shrink-0 rounded-full border transition-colors ${
-                    enabled
-                      ? 'border-[var(--color-clay)] bg-[var(--color-clay)]'
-                      : 'border-[var(--color-aged-oak)] bg-transparent'
-                  }`}
+                  onClick={() =>
+                    setRule.mutate({ kind: key, enabled: !enabled })
+                  }
+                  className="inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-[4px] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-clay)] disabled:opacity-50"
                 >
                   <span
-                    className={`absolute top-[2px] h-[14px] w-[14px] rounded-full transition-all ${
-                      enabled ? 'bg-white' : 'bg-[var(--color-aged-oak)]'
+                    className={`relative h-[20px] w-[36px] rounded-full border transition-colors ${
+                      enabled
+                        ? 'border-[var(--color-clay)] bg-[var(--color-clay)]'
+                        : 'border-[var(--color-aged-oak)] bg-transparent'
                     }`}
-                    style={{ left: enabled ? 18 : 2 }}
-                  />
+                  >
+                    <span
+                      className={`absolute top-[2px] h-[14px] w-[14px] rounded-full transition-all ${
+                        enabled ? 'bg-white' : 'bg-[var(--color-aged-oak)]'
+                      }`}
+                      style={{ left: enabled ? 18 : 2 }}
+                    />
+                  </span>
                 </button>
               </li>
             );

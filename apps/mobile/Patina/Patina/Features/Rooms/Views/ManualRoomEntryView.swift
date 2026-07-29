@@ -97,22 +97,19 @@ struct ManualRoomEntryView: View {
             .padding(20)
         }
         .background(PatinaColors.Background.primary.ignoresSafeArea())
-        .toolbar(.hidden, for: .navigationBar)
+        // U18: standard pushed-screen chrome — the header below carries
+        // the title, so the chrome adds only the back chevron.
+        .patinaScreen(title: nil)
     }
 
     // MARK: - Pieces
 
     private var header: some View {
         VStack(alignment: .leading, spacing: 2) {
-            HStack {
-                BackChevronButton(style: .light) { coordinator.goBack() }
-                Spacer()
-            }
-            .padding(.top, 20)
             Text("Room details")
                 .font(PatinaTypography.h4)
                 .foregroundStyle(PatinaColors.Text.primary)
-                .padding(.top, 12)
+                .padding(.top, 56)
             Text("Help us understand your space")
                 .font(PatinaTypography.monoSmall)
                 .tracking(0.4)
@@ -165,34 +162,19 @@ struct ManualRoomEntryView: View {
         let finalName = name.isEmpty ? defaultName(for: roomType) : name
 
         Task { @MainActor in
-            do {
-                _ = try await coord.createManualRoom(
-                    name: finalName,
-                    roomType: roomType,
-                    widthFeet: Double(widthFeet),
-                    lengthFeet: Double(lengthFeet),
-                    ceilingHeightFeet: ceilingHeightFeetValue,
-                    orientationRaw: orientationRaw,
-                    windowCount: Int(windowCountRaw) ?? 0,
-                    doorCount: 1
-                )
-            } catch {
-                // Fallback: local-only create so the user isn't blocked offline.
-                _ = store.createRoom(
-                    name: finalName,
-                    roomType: roomType,
-                    widthFeet: Double(widthFeet),
-                    lengthFeet: Double(lengthFeet),
-                    ceilingHeightFeet: ceilingHeightFeetValue,
-                    orientationRaw: orientationRaw,
-                    windowCount: Int(windowCountRaw) ?? 0,
-                    doorCount: 1,
-                    manualEntry: true
-                )
-                #if DEBUG
-                PatinaLog.scan.error("[ManualRoomEntry] remote sync failed, created locally only: \(error)")
-                #endif
-            }
+            // One insert per save. The coordinator keeps its local room and
+            // reports `isLocalOnly` when the remote write fails, so there is
+            // no offline branch here that could add a second room.
+            await coord.createManualRoom(
+                name: finalName,
+                roomType: roomType,
+                widthFeet: Double(widthFeet),
+                lengthFeet: Double(lengthFeet),
+                ceilingHeightFeet: ceilingHeightFeetValue,
+                orientationRaw: orientationRaw,
+                windowCount: Int(windowCountRaw) ?? 0,
+                doorCount: 1
+            )
             coordinator.goBack()
         }
     }

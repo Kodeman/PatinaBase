@@ -23,13 +23,20 @@
  * unfold — Track 11-M's surface — wired post-merge.)
  */
 
-import { useFfeInvoiceCoverage, useProjectFFEItems, type FfeItemCoverage } from '@patina/supabase';
+import {
+  useFfeInvoiceCoverage,
+  useProjectFFEItems,
+  type FfeItemCoverage,
+} from '@patina/supabase';
 import { openInvoiceComposer } from './accounts/invoice-overlays';
 import { MobileMarginChips } from './mobile/mobile-margin-chips';
 import { STAGE_CONFIG } from '@/components/portal/ffe/stages';
 import type { FFEStageKey } from '@patina/types';
 import { useState } from 'react';
-import { deriveLineStamp, type LineStamp } from '@/lib/document/stamp-derivation';
+import {
+  deriveLineStamp,
+  type LineStamp,
+} from '@/lib/document/stamp-derivation';
 import { fmtDay, fmtUsd } from '@/lib/document/format';
 import { Stamp } from './stamp';
 import { LineUnfold } from './line-unfold';
@@ -37,8 +44,12 @@ import { StrataMark } from './strata-mark';
 import { StrataMiniRule } from './strata-mini-rule';
 import { WorkBlock } from './work-block';
 import { FolioStrip } from './folio-strip';
-import { useAddDocumentRoom, useDocumentRooms } from '@/hooks/use-document-rooms';
+import {
+  useAddDocumentRoom,
+  useDocumentRooms,
+} from '@/hooks/use-document-rooms';
 import type { SectionKey } from '@/lib/document/desk-derivation';
+import { DocumentAction } from './document-action';
 
 /** Warm borders need darker text ink on paper (prototype stamp treatment). */
 const STAGE_INK: Partial<Record<FFEStageKey, string>> = {
@@ -49,11 +60,17 @@ const STAGE_INK: Partial<Record<FFEStageKey, string>> = {
   installed: '#85947C',
 };
 
-function stampProps(stamp: LineStamp): { label: string; color: string; ink?: string } {
+function stampProps(stamp: LineStamp): {
+  label: string;
+  color: string;
+  ink?: string;
+} {
   switch (stamp.kind) {
     case 'decision_due':
       return {
-        label: stamp.dueDate ? `Decision due · ${fmtDay(stamp.dueDate)}` : 'Decision due',
+        label: stamp.dueDate
+          ? `Decision due · ${fmtDay(stamp.dueDate)}`
+          : 'Decision due',
         color: 'var(--color-terracotta)',
         ink: '#C4836F',
       };
@@ -62,10 +79,18 @@ function stampProps(stamp: LineStamp): { label: string; color: string; ink?: str
     case 'partial':
       // R18: the W5-T2 short receipt, surfaced — golden hour like the
       // inspection outcome it derives from.
-      return { label: 'Partial', color: 'var(--color-golden-hour)', ink: '#B89A2E' };
+      return {
+        label: 'Partial',
+        color: 'var(--color-golden-hour)',
+        ink: '#B89A2E',
+      };
     case 'damaged':
       // Item-grain truth only (00196): an open claim attributed to THIS line.
-      return { label: 'Damaged', color: 'var(--color-terracotta)', ink: '#C4836F' };
+      return {
+        label: 'Damaged',
+        color: 'var(--color-terracotta)',
+        ink: '#C4836F',
+      };
     default: {
       const cfg = STAGE_CONFIG[stamp.kind];
       return { label: cfg.label, color: cfg.color, ink: STAGE_INK[stamp.kind] };
@@ -73,7 +98,15 @@ function stampProps(stamp: LineStamp): { label: string; color: string; ink?: str
   }
 }
 
-const UNDERWAY = new Set(['ordered', 'production', 'shipped', 'delivered', 'received', 'partial', 'installed']);
+const UNDERWAY = new Set([
+  'ordered',
+  'production',
+  'shipped',
+  'delivered',
+  'received',
+  'partial',
+  'installed',
+]);
 const COMMITTED = UNDERWAY;
 
 type FFERow = any; // row from useProjectFFEItems (untyped hook, view-shaped)
@@ -86,7 +119,9 @@ function vendorLine(item: FFERow, stamp: LineStamp, showRoom = false): string {
   if (stamp.kind === 'delivered') parts.push('awaiting inspection');
   else if (
     item.eta &&
-    (stamp.kind === 'ordered' || stamp.kind === 'production' || stamp.kind === 'shipped')
+    (stamp.kind === 'ordered' ||
+      stamp.kind === 'production' ||
+      stamp.kind === 'shipped')
   )
     parts.push(`arrives ~${fmtDay(item.eta)}`);
   return parts.join(' · ');
@@ -103,10 +138,13 @@ function coverageNote(
   item: FFERow,
   coverage: FfeItemCoverage | undefined,
 ): { text: string; color: string } | null {
-  if (coverage && coverage.coverage === 'paid') return { text: 'paid', color: '#85947C' };
+  if (coverage && coverage.coverage === 'paid')
+    return { text: 'paid', color: '#85947C' };
   if (coverage && coverage.coverage === 'invoiced')
     return {
-      text: coverage.invoiceNumber ? `invoiced · ${coverage.invoiceNumber}` : 'invoiced',
+      text: coverage.invoiceNumber
+        ? `invoiced · ${coverage.invoiceNumber}`
+        : 'invoiced',
       color: '#7E8FA6',
     };
   if (item.unit_price_cents === null || item.unit_price_cents === undefined)
@@ -157,7 +195,11 @@ function FFELine({
             {item.name}
             {item.quantity > 1 ? ` · ×${item.quantity}` : ''}
           </p>
-          {line && <p className="mt-px text-[10.5px] text-[var(--text-muted)]">{line}</p>}
+          {line && (
+            <p className="mt-px text-[10.5px] text-[var(--text-muted)]">
+              {line}
+            </p>
+          )}
           {/* R76: the coverage stamp — the 00187 bridge's per-line truth. */}
           {billing && (
             <p
@@ -219,19 +261,28 @@ function RoomHeading({
   const installed = rows.filter((r) => r.stamp.kind === 'installed').length;
   const underway = rows.filter((r) => UNDERWAY.has(r.stamp.kind)).length;
   const state: 'settled' | 'active' | 'future' =
-    rows.length > 0 && installed === rows.length ? 'settled' : rows.length > 0 ? 'active' : 'future';
+    rows.length > 0 && installed === rows.length
+      ? 'settled'
+      : rows.length > 0
+        ? 'active'
+        : 'future';
 
   // R33 F5 — one schedule, one vocabulary: rooms speak the section's word.
   // "Placed" retires until it can truthfully mean installed.
   const meta = [
-    budgetCents > 0 ? `committed ${fmtUsd(committed)} of ${fmtUsd(budgetCents)}` : null,
+    budgetCents > 0
+      ? `committed ${fmtUsd(committed)} of ${fmtUsd(budgetCents)}`
+      : null,
     rows.length > 0 ? `${underway} of ${rows.length} underway` : 'no lines yet',
   ]
     .filter(Boolean)
     .join(' · ');
 
   return (
-    <div id={roomId ? `doc-room-${roomId}` : undefined} className="mt-4 scroll-mt-16">
+    <div
+      id={roomId ? `doc-room-${roomId}` : undefined}
+      className="mt-4 scroll-mt-16"
+    >
       <div className="flex items-baseline gap-2.5 pb-1">
         <StrataMark size="sm" state={state} />
         <h3 className="font-heading text-[13.5px] font-medium italic text-[var(--color-charcoal)]">
@@ -255,21 +306,29 @@ function AddRoomInline({ projectId }: { projectId: string }) {
 
   if (!open) {
     return (
-      <button
-        type="button"
+      <DocumentAction
+        actionKey="open-add-project-room"
+        surfaceKey="project"
+        regionKey="room-list"
+        variant="secondary"
         onClick={() => setOpen(true)}
-        className="mt-3 font-mono text-[9px] uppercase tracking-[0.05em] text-[var(--color-clay)] hover:opacity-80"
+        className="mt-3"
       >
-        + Room
-      </button>
+        Add room
+      </DocumentAction>
     );
   }
 
   const save = () => {
     const trimmed = name.trim();
     if (!trimmed) return;
-    const cents = budget ? Math.round(parseFloat(budget.replace(/[^0-9.]/g, '')) * 100) : null;
-    addRoom.mutate({ name: trimmed, budgetCents: cents && cents > 0 ? cents : 0 });
+    const cents = budget
+      ? Math.round(parseFloat(budget.replace(/[^0-9.]/g, '')) * 100)
+      : null;
+    addRoom.mutate({
+      name: trimmed,
+      budgetCents: cents && cents > 0 ? cents : 0,
+    });
     setName('');
     setBudget('');
     setOpen(false);
@@ -300,14 +359,16 @@ function AddRoomInline({ projectId }: { projectId: string }) {
         aria-label="Budget allocation (dollars)"
         className="w-24 bg-transparent text-right font-mono text-[9.5px] text-[var(--text-muted)] outline-none placeholder:text-[var(--text-muted)]"
       />
-      <button
-        type="button"
+      <DocumentAction
+        actionKey="add-project-room"
+        surfaceKey="project"
+        regionKey="room-capture"
+        variant="primary"
         onClick={save}
         disabled={!name.trim()}
-        className="font-mono text-[9px] uppercase tracking-[0.05em] text-[var(--color-clay)] disabled:opacity-40"
       >
         Add
-      </button>
+      </DocumentAction>
     </div>
   );
 }
@@ -347,12 +408,17 @@ export function FFESection({
     data: FFERow[] | undefined;
     isLoading: boolean;
   };
-  const { data: rooms } = useDocumentRooms(mode === 'project' ? projectId : null);
+  const { data: rooms } = useDocumentRooms(
+    mode === 'project' ? projectId : null,
+  );
   // R76 — per-line billing truth (00187 bridge). Invalidated by every invoice
   // mutation that moves money, so the stamps stay honest without a poll.
   const { data: coverage } = useFfeInvoiceCoverage(projectId);
 
-  const rows: LineRow[] = (items ?? []).map((item) => ({ item, stamp: deriveLineStamp(item) }));
+  const rows: LineRow[] = (items ?? []).map((item) => ({
+    item,
+    stamp: deriveLineStamp(item),
+  }));
   const total = rows.length;
   const underway = rows.filter((r) => UNDERWAY.has(r.stamp.kind)).length;
   const installed = rows.filter((r) => r.stamp.kind === 'installed').length;
@@ -360,7 +426,8 @@ export function FFESection({
   // R76 — what the section-level Bill act would carry: priced lines not yet
   // on a live invoice (the composer re-partitions; this is the offer).
   const billableUninvoiced = (items ?? []).filter((it) => {
-    if (it.unit_price_cents === null || it.unit_price_cents === undefined) return false;
+    if (it.unit_price_cents === null || it.unit_price_cents === undefined)
+      return false;
     const cov = coverage?.[it.id];
     return !cov || cov.coverage === 'uninvoiced';
   });
@@ -386,7 +453,8 @@ export function FFESection({
     projectName,
     highlightId,
     unfolded: openLineId === row.item.id,
-    onToggle: () => setOpenLineId(openLineId === row.item.id ? null : row.item.id),
+    onToggle: () =>
+      setOpenLineId(openLineId === row.item.id ? null : row.item.id),
     onAddNote,
     showRoom: !groupByRoom,
     coverage: coverage?.[row.item.id],
@@ -401,7 +469,11 @@ export function FFESection({
       }))
     : [];
   const unassigned = groupByRoom
-    ? rows.filter((r) => !r.item.project_room_id || !(rooms ?? []).some((rm) => rm.id === r.item.project_room_id))
+    ? rows.filter(
+        (r) =>
+          !r.item.project_room_id ||
+          !(rooms ?? []).some((rm) => rm.id === r.item.project_room_id),
+      )
     : rows;
 
   return (
@@ -419,18 +491,22 @@ export function FFESection({
           {/* R76 — bill the schedule: the composer opens FF&E-prefilled with
               every uninvoiced priced line ticked (untick there to narrow). */}
           {billableUninvoiced.length > 0 && (
-            <button
-              type="button"
+            <DocumentAction
+              actionKey="bill-project-ffe"
+              surfaceKey="project"
+              regionKey="ffe-head"
+              variant="primary"
               onClick={() =>
                 openInvoiceComposer({
                   projectId,
-                  initialFfeItemIds: billableUninvoiced.map((it) => it.id as string),
+                  initialFfeItemIds: billableUninvoiced.map(
+                    (it) => it.id as string,
+                  ),
                 })
               }
-              className="whitespace-nowrap font-mono text-[9px] font-semibold uppercase tracking-[0.05em] text-[var(--color-clay)] hover:opacity-80"
             >
-              Bill {billableUninvoiced.length} uninvoiced →
-            </button>
+              Bill {billableUninvoiced.length} uninvoiced
+            </DocumentAction>
           )}
         </span>
       </div>
@@ -458,7 +534,9 @@ export function FFESection({
       )}
 
       {isLoading && (
-        <p className="py-3 text-[11.5px] italic text-[var(--text-muted)]">Reading the schedule…</p>
+        <p className="py-3 text-[11.5px] italic text-[var(--text-muted)]">
+          Reading the schedule…
+        </p>
       )}
 
       {!isLoading && total === 0 && (
@@ -486,7 +564,11 @@ export function FFESection({
           ))}
           {unassigned.length > 0 && (
             <div>
-              <RoomHeading name="Throughout · unassigned" budgetCents={0} rows={unassigned} />
+              <RoomHeading
+                name="Throughout · unassigned"
+                budgetCents={0}
+                rows={unassigned}
+              />
               <ul>
                 {unassigned.map((row) => (
                   <FFELine key={row.item.id} {...lineProps(row)} />

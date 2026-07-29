@@ -12,6 +12,7 @@
  */
 
 import type { Invoice } from '@patina/supabase';
+import { DocumentAction, DocumentActionGroup } from '../document-action';
 import { Stamp } from '../stamp';
 import { fmtDay, fmtUsd } from '@/lib/document/format';
 import { invoiceBalanceCents } from '@/lib/document/account-summary';
@@ -20,10 +21,17 @@ import { openInvoiceComposer, openInvoiceFolio } from './invoice-overlays';
 // Laid-paper palette (R96) — matches the Invoice folio's re-inked stamps
 // (accounts/invoice-folio.tsx FOLIO_STAMP), so the same invoice reads the
 // same ink whichever surface shows it.
-const INVOICE_STAMP: Record<string, { label: string; color: string; ink?: string }> = {
+const INVOICE_STAMP: Record<
+  string,
+  { label: string; color: string; ink?: string }
+> = {
   draft: { label: 'draft', color: '#C9C2B6', ink: 'var(--text-muted)' },
   sent: { label: 'sent', color: 'var(--color-dusty-blue)', ink: '#7E8FA6' },
-  partially_paid: { label: 'part paid', color: 'var(--color-golden-hour)', ink: '#B89A2E' },
+  partially_paid: {
+    label: 'part paid',
+    color: 'var(--color-golden-hour)',
+    ink: '#B89A2E',
+  },
   paid: { label: 'paid', color: 'var(--color-sage)', ink: '#85947C' },
   void: { label: 'void', color: 'var(--color-terracotta)', ink: '#C4836F' },
 };
@@ -38,15 +46,19 @@ export function AccountsLedgerPage({
   return (
     <div>
       {/* R74b — the book learns to write: draw an invoice from the page head. */}
-      <div className="mb-2 flex items-baseline justify-end">
-        <button
-          type="button"
+      <DocumentActionGroup
+        surfaceKey="accounts"
+        regionKey="ledger-head"
+        className="mb-2 justify-end"
+      >
+        <DocumentAction
+          actionKey="draw-invoice"
+          variant="primary"
           onClick={() => openInvoiceComposer()}
-          className="whitespace-nowrap rounded-[4px] border border-[rgba(196,165,123,0.4)] px-2.5 py-1 font-mono text-[9px] font-semibold uppercase tracking-[0.06em] text-[var(--color-clay)] transition-colors hover:bg-[var(--color-clay)] hover:text-white"
         >
-          Draw an invoice →
-        </button>
-      </div>
+          Draw an invoice
+        </DocumentAction>
+      </DocumentActionGroup>
 
       {invoices.length === 0 ? (
         /* The zero-invoice state (help-desk Wave 1, copy §E.3) — the old
@@ -56,8 +68,9 @@ export function AccountsLedgerPage({
             No invoices drawn yet
           </p>
           <p className="mt-1.5 max-w-[52ch] text-[12px] leading-relaxed text-[var(--color-aged-oak)]">
-            Draw from a milestone, tracked time, FF&amp;E, or an ad-hoc line and it appears
-            here. Your client pays in their portal; paid and overdue both show here.
+            Draw from a milestone, tracked time, FF&amp;E, or an ad-hoc line and
+            it appears here. Your client pays in their portal; paid and overdue
+            both show here.
           </p>
         </div>
       ) : (
@@ -81,7 +94,8 @@ function InvoiceRows({
         const balance = invoiceBalanceCents(inv);
         // "Owed" only reads true for an issued receivable — a draft isn't owed
         // yet (it's not been sent), so it shows nothing on the tail.
-        const owedNow = inv.status === 'sent' || inv.status === 'partially_paid';
+        const owedNow =
+          inv.status === 'sent' || inv.status === 'partially_paid';
         const tail =
           inv.status === 'paid'
             ? inv.paid_at
@@ -105,7 +119,9 @@ function InvoiceRows({
               className="min-w-0 rounded-[3px] text-left hover:bg-[rgba(196,165,123,0.06)]"
             >
               <p className="truncate text-[12.5px] font-medium text-[var(--color-charcoal)]">
-                {inv.invoice_number ? `Invoice ${inv.invoice_number}` : 'Draft invoice'}
+                {inv.invoice_number
+                  ? `Invoice ${inv.invoice_number}`
+                  : 'Draft invoice'}
                 <span className="ml-2 font-mono text-[9px] uppercase tracking-[0.05em] text-[var(--color-clay)]">
                   folio →
                 </span>

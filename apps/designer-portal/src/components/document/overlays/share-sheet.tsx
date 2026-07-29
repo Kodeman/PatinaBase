@@ -32,6 +32,7 @@ import {
   type ClientVisibilityTier,
 } from '@patina/utils';
 import { DocSheet } from './doc-sheet';
+import { DocumentAction, DocumentActionGroup } from '../document-action';
 
 const labelCls =
   'font-mono text-[9px] font-semibold uppercase tracking-[0.08em] text-[var(--color-aged-oak)]';
@@ -41,10 +42,14 @@ const fieldCls =
 
 // Guests are always view-only, so the feedback toggle is meaningless on a share
 // link (it is forced off for tokenized guests). Omit it from the matrix.
-const MATRIX_FIELDS = SHARE_VISIBILITY_FIELDS.filter((f) => f.key !== 'feedbackEnabled');
+const MATRIX_FIELDS = SHARE_VISIBILITY_FIELDS.filter(
+  (f) => f.key !== 'feedbackEnabled',
+);
 
 const fmtDate = (iso: string) =>
-  new Intl.DateTimeFormat('en-US', { month: 'short', day: 'numeric' }).format(new Date(iso));
+  new Intl.DateTimeFormat('en-US', { month: 'short', day: 'numeric' }).format(
+    new Date(iso),
+  );
 
 export function ShareSheet({
   proposalId,
@@ -61,7 +66,9 @@ export function ShareSheet({
   const createShare = useCreateShare();
   const revokeShare = useRevokeShare();
 
-  const [visibility, setVisibility] = useState<ShareVisibility>(() => shareVisibilityForTier(tier));
+  const [visibility, setVisibility] = useState<ShareVisibility>(() =>
+    shareVisibilityForTier(tier),
+  );
   const [label, setLabel] = useState('');
   const [created, setCreated] = useState<{ url: string } | null>(null);
   const [copied, setCopied] = useState(false);
@@ -101,7 +108,9 @@ export function ShareSheet({
       setLabel('');
     } catch (err) {
       setError(
-        err instanceof Error ? err.message : 'Could not create the share link. Please try again.',
+        err instanceof Error
+          ? err.message
+          : 'Could not create the share link. Please try again.',
       );
     }
   };
@@ -112,7 +121,9 @@ export function ShareSheet({
       await navigator.clipboard.writeText(created.url);
       setCopied(true);
     } catch {
-      setError('Could not copy automatically — select the link above and copy it manually.');
+      setError(
+        'Could not copy automatically — select the link above and copy it manually.',
+      );
     }
   };
 
@@ -121,7 +132,11 @@ export function ShareSheet({
     try {
       await revokeShare.mutateAsync({ shareId: share.id, proposalId });
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Could not revoke the link. Please try again.');
+      setError(
+        err instanceof Error
+          ? err.message
+          : 'Could not revoke the link. Please try again.',
+      );
     }
   };
 
@@ -129,10 +144,13 @@ export function ShareSheet({
     <DocSheet open={open} onClose={onClose} title="Share links">
       <div className="mx-auto max-w-xl">
         <p className={labelCls}>Share links</p>
-        <h2 className="mt-1 font-heading text-xl text-[var(--color-charcoal)]">Share this proposal</h2>
+        <h2 className="mt-1 font-heading text-xl text-[var(--color-charcoal)]">
+          Share this proposal
+        </h2>
         <p className="mt-1 text-[12.5px] leading-relaxed text-[var(--color-mocha)]">
-          A share link opens a <b>view-only</b> copy of this proposal for anyone who has it — no
-          account needed. Choose what the link reveals; feedback stays off on shared links.
+          A share link opens a <b>view-only</b> copy of this proposal for anyone
+          who has it — no account needed. Choose what the link reveals; feedback
+          stays off on shared links.
         </p>
 
         {/* ── The just-created link — shown ONCE ── */}
@@ -142,7 +160,8 @@ export function ShareSheet({
               Link created
             </p>
             <p className="mb-2 text-[12px] leading-relaxed text-[var(--color-mocha)]">
-              Copy this link now — it is shown only once and can&rsquo;t be retrieved later.
+              Copy this link now — it is shown only once and can&rsquo;t be
+              retrieved later.
             </p>
             <div className="flex items-center gap-2">
               <input
@@ -152,13 +171,15 @@ export function ShareSheet({
                 aria-label="Share link"
                 className={`${fieldCls} font-mono !text-[11px]`}
               />
-              <button
-                type="button"
+              <DocumentAction
+                actionKey="copy-share-link"
+                surfaceKey="open-document"
+                regionKey="share-link-created"
+                variant="secondary"
                 onClick={handleCopy}
-                className="shrink-0 rounded-[4px] bg-[var(--color-clay)] px-3 py-2 text-[11px] font-medium text-[var(--color-charcoal)] transition-opacity hover:opacity-90"
               >
                 {copied ? 'Copied' : 'Copy'}
-              </button>
+              </DocumentAction>
             </div>
           </div>
         )}
@@ -189,19 +210,26 @@ export function ShareSheet({
                         )}
                       </p>
                       <p className="mt-0.5 font-mono text-[9.5px] uppercase tracking-[0.04em] text-[var(--color-aged-oak)]">
-                        {fmtDate(s.created_at)} · {s.view_count} view{s.view_count === 1 ? '' : 's'}
-                        {s.last_viewed_at ? ` · last ${fmtDate(s.last_viewed_at)}` : ''}
+                        {fmtDate(s.created_at)} · {s.view_count} view
+                        {s.view_count === 1 ? '' : 's'}
+                        {s.last_viewed_at
+                          ? ` · last ${fmtDate(s.last_viewed_at)}`
+                          : ''}
                       </p>
                     </div>
                     {!revoked && (
-                      <button
-                        type="button"
+                      <DocumentAction
+                        actionKey="revoke-share-link"
+                        surfaceKey="open-document"
+                        regionKey="existing-share-links"
+                        variant="tertiary"
                         onClick={() => handleRevoke(s)}
-                        disabled={revokeShare.isPending}
-                        className="shrink-0 self-center font-mono text-[9px] uppercase tracking-[0.06em] text-[var(--color-aged-oak)] transition-colors hover:text-[var(--color-terracotta)] disabled:opacity-40"
+                        loading={revokeShare.isPending}
+                        loadingLabel="Revoking…"
+                        className="shrink-0 self-center text-[var(--color-terracotta)] decoration-[var(--color-terracotta)]"
                       >
                         Revoke
-                      </button>
+                      </DocumentAction>
                     )}
                   </li>
                 );
@@ -210,8 +238,9 @@ export function ShareSheet({
           )}
           {activeShares.length > 0 && (
             <p className="mt-2 text-[11px] leading-relaxed text-[var(--color-aged-oak)]">
-              An existing link&rsquo;s URL can&rsquo;t be shown again (only its hash is stored). To
-              regenerate one, revoke it and create a new link — the old URL stops working at once.
+              An existing link&rsquo;s URL can&rsquo;t be shown again (only its
+              hash is stored). To regenerate one, revoke it and create a new
+              link — the old URL stops working at once.
             </p>
           )}
         </div>
@@ -227,7 +256,9 @@ export function ShareSheet({
                   key={f.key}
                   type="button"
                   aria-pressed={on}
-                  onClick={() => setVisibility((v) => ({ ...v, [f.key]: !v[f.key] }))}
+                  onClick={() =>
+                    setVisibility((v) => ({ ...v, [f.key]: !v[f.key] }))
+                  }
                   className="flex w-full items-start justify-between gap-3 rounded-[4px] border border-[var(--color-pearl)] px-3 py-2 text-left transition-colors hover:border-[var(--color-clay)]"
                 >
                   <span className="min-w-0">
@@ -240,7 +271,9 @@ export function ShareSheet({
                   </span>
                   <span
                     className={`shrink-0 self-center font-mono text-[9px] uppercase tracking-[0.08em] ${
-                      on ? 'text-[var(--color-clay)]' : 'text-[var(--color-aged-oak)]'
+                      on
+                        ? 'text-[var(--color-clay)]'
+                        : 'text-[var(--color-aged-oak)]'
                     }`}
                   >
                     {on ? 'Shown' : 'Hidden'}
@@ -273,23 +306,30 @@ export function ShareSheet({
             </div>
           )}
 
-          <div className="mt-4 flex items-center gap-4">
-            <button
-              type="button"
+          <DocumentActionGroup
+            surfaceKey="open-document"
+            regionKey="create-share-link"
+            className="mt-4"
+            aria-label="Share link actions"
+          >
+            <DocumentAction
+              actionKey="create-share-link"
+              variant="primary"
               onClick={handleCreate}
-              disabled={createShare.isPending}
-              className="rounded-[4px] bg-[var(--color-clay)] px-4 py-2 text-[12px] font-medium text-[var(--color-charcoal)] transition-opacity disabled:opacity-40"
+              loading={createShare.isPending}
+              loadingLabel="Creating…"
+              trailing="→"
             >
-              {createShare.isPending ? 'Creating…' : 'Create link →'}
-            </button>
-            <button
-              type="button"
+              Create link
+            </DocumentAction>
+            <DocumentAction
+              actionKey="close-share-links"
+              variant="tertiary"
               onClick={onClose}
-              className="font-mono text-[9px] uppercase tracking-[0.06em] text-[var(--color-aged-oak)] hover:text-[var(--color-charcoal)]"
             >
               Done
-            </button>
-          </div>
+            </DocumentAction>
+          </DocumentActionGroup>
         </div>
       </div>
     </DocSheet>

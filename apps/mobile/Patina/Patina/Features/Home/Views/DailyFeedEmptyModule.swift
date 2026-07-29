@@ -18,6 +18,10 @@ struct DailyFeedEmptyModule: View {
     let roomName: String?
     /// Whether the selected room has any saved items.
     let roomHasItems: Bool
+    /// Whether the selected room exists only on this device (no remote id).
+    /// The feed RPC is keyed on the remote id, so nothing is being computed
+    /// for such a room and the module must not promise otherwise.
+    let roomIsLocalOnly: Bool
     /// Whether a style profile (quiz / teaching output) exists.
     let hasStyleProfile: Bool
 
@@ -68,11 +72,14 @@ struct DailyFeedEmptyModule: View {
                 + "Scan another room to widen the net, or browse the full collection.",
             primaryTitle: "Scan Another Room",
             primaryAction: onScanRoom,
-            secondary: ("Browse all pieces →", onBrowse)
+            secondary: ("Browse pieces →", onBrowse)
         )
     }
 
     private var headlineForScanPrompt: String {
+        if roomIsLocalOnly {
+            return "This room is saved on this phone — picks arrive once it syncs to your account."
+        }
         if let roomName {
             return "Picks for \(roomName) are on their way"
         }
@@ -159,6 +166,7 @@ struct DailyFeedEmptyModule: View {
     DailyFeedEmptyModule(
         roomName: "Kitchen",
         roomHasItems: false,
+        roomIsLocalOnly: false,
         hasStyleProfile: false,
         onTakeQuiz: {},
         onScanRoom: {},
@@ -172,6 +180,21 @@ struct DailyFeedEmptyModule: View {
     DailyFeedEmptyModule(
         roomName: "Living Room",
         roomHasItems: true,
+        roomIsLocalOnly: false,
+        hasStyleProfile: true,
+        onTakeQuiz: {},
+        onScanRoom: {},
+        onBrowse: {}
+    )
+    .padding(20)
+    .background(PatinaColors.Background.primary)
+}
+
+#Preview("Local-only room") {
+    DailyFeedEmptyModule(
+        roomName: "Living Room",
+        roomHasItems: false,
+        roomIsLocalOnly: true,
         hasStyleProfile: true,
         onTakeQuiz: {},
         onScanRoom: {},

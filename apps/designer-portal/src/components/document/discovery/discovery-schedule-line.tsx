@@ -11,12 +11,20 @@
  */
 
 import { useState } from 'react';
-import { useCeremonyForRelationship, useRefreshOfferedSlots } from '@patina/supabase';
+import {
+  useCeremonyForRelationship,
+  useRefreshOfferedSlots,
+} from '@patina/supabase';
 import {
   deriveCeremonyScheduleState,
   firstNameOf,
   fmtCeremonySlot,
 } from '@/lib/document/ceremony-schedule';
+import {
+  DocumentAction,
+  DocumentActionGroup,
+  DocumentActionRow,
+} from '../document-action';
 
 const SLOT_DURATION_MINUTES = 45;
 const MIN_SLOTS = 2;
@@ -33,7 +41,9 @@ function toLocalInputValue(iso: string): string {
 /** A fresh default: 10:00 AM the day after the latest slot (or tomorrow). */
 function nextDefaultStart(existing: { starts_at: string }[]): string {
   const base = existing.length
-    ? new Date(Math.max(...existing.map((s) => new Date(s.starts_at).getTime())))
+    ? new Date(
+        Math.max(...existing.map((s) => new Date(s.starts_at).getTime())),
+      )
     : new Date();
   const d = new Date(base);
   d.setDate(d.getDate() + 1);
@@ -69,7 +79,8 @@ export function DiscoveryScheduleLine({
   designerClientId: string;
   clientName: string;
 }) {
-  const { data: ceremony, isLoading } = useCeremonyForRelationship(designerClientId);
+  const { data: ceremony, isLoading } =
+    useCeremonyForRelationship(designerClientId);
   const refresh = useRefreshOfferedSlots();
   const [reofferOpen, setReofferOpen] = useState(false);
   const [draft, setDraft] = useState<DraftSlot[]>(() => freshDraft());
@@ -84,16 +95,24 @@ export function DiscoveryScheduleLine({
   const editSlot = (key: string, localValue: string) => {
     const parsed = new Date(localValue);
     if (Number.isNaN(parsed.getTime())) return; // ignore a half-typed value
-    setDraft((d) => d.map((s) => (s.key === key ? { ...s, starts_at: parsed.toISOString() } : s)));
+    setDraft((d) =>
+      d.map((s) =>
+        s.key === key ? { ...s, starts_at: parsed.toISOString() } : s,
+      ),
+    );
   };
   const addSlot = () => {
     if (draft.length >= MAX_SLOTS) return;
     setDraft((d) => [
       ...d,
-      { key: `s${d.length}-${Date.now()}`, starts_at: nextDefaultStart(d.map((s) => ({ starts_at: s.starts_at }))) },
+      {
+        key: `s${d.length}-${Date.now()}`,
+        starts_at: nextDefaultStart(d.map((s) => ({ starts_at: s.starts_at }))),
+      },
     ]);
   };
-  const removeSlot = (key: string) => setDraft((d) => d.filter((s) => s.key !== key));
+  const removeSlot = (key: string) =>
+    setDraft((d) => d.filter((s) => s.key !== key));
 
   const submitReoffer = () => {
     if (draft.length < MIN_SLOTS) return;
@@ -101,7 +120,10 @@ export function DiscoveryScheduleLine({
       {
         ceremonyId: ceremony.id,
         designerClientId,
-        slots: draft.map((s) => ({ starts_at: s.starts_at, duration_minutes: SLOT_DURATION_MINUTES })),
+        slots: draft.map((s) => ({
+          starts_at: s.starts_at,
+          duration_minutes: SLOT_DURATION_MINUTES,
+        })),
       },
       { onSuccess: () => setReofferOpen(false) },
     );
@@ -114,7 +136,11 @@ export function DiscoveryScheduleLine({
       {state.kind === 'picked' && (
         <p className="text-[13.5px] text-[var(--color-charcoal)]">
           {dot('var(--color-clay)')}
-          Discovery call · {fmtCeremonySlot(state.startsAt, ceremony.timezone)} · booked
+          Discovery call · {fmtCeremonySlot(
+            state.startsAt,
+            ceremony.timezone,
+          )}{' '}
+          · booked
         </p>
       )}
 
@@ -122,12 +148,15 @@ export function DiscoveryScheduleLine({
         <div>
           <p className="text-[13.5px] text-[var(--color-charcoal)]">
             {dot('var(--color-clay)')}
-            Times offered · {state.slots.length} slot{state.slots.length === 1 ? '' : 's'} · awaiting{' '}
-            {name}&rsquo;s pick
+            Times offered · {state.slots.length} slot
+            {state.slots.length === 1 ? '' : 's'} · awaiting {name}&rsquo;s pick
           </p>
           <ul className="mt-1.5 flex flex-wrap gap-x-4 gap-y-0.5 pl-[19px]">
             {state.slots.map((s) => (
-              <li key={s.id} className="font-mono text-[10.5px] text-[var(--text-muted)]">
+              <li
+                key={s.id}
+                className="font-mono text-[10.5px] text-[var(--text-muted)]"
+              >
                 {fmtCeremonySlot(s.starts_at, ceremony.timezone)}
               </li>
             ))}
@@ -142,16 +171,24 @@ export function DiscoveryScheduleLine({
             The offered times went by
           </p>
           {!reofferOpen ? (
-            <button
-              type="button"
-              onClick={() => {
-                setDraft(freshDraft());
-                setReofferOpen(true);
-              }}
-              className="mt-1.5 ml-[19px] font-mono text-[10px] uppercase tracking-[0.08em] text-[var(--color-clay)] underline-offset-2 hover:underline"
+            <DocumentActionGroup
+              surfaceKey="open-document"
+              regionKey="discovery-reoffer"
+              className="mt-1.5 ml-[19px]"
+              aria-label="Discovery scheduling actions"
             >
-              Offer fresh times →
-            </button>
+              <DocumentAction
+                actionKey="offer-fresh-times"
+                variant="primary"
+                onClick={() => {
+                  setDraft(freshDraft());
+                  setReofferOpen(true);
+                }}
+                trailing="→"
+              >
+                Offer fresh times
+              </DocumentAction>
+            </DocumentActionGroup>
           ) : (
             <div className="mt-2.5 ml-[19px]">
               {draft.map((s) => (
@@ -174,42 +211,51 @@ export function DiscoveryScheduleLine({
                       type="button"
                       onClick={() => removeSlot(s.key)}
                       aria-label="Remove this time"
-                      className="shrink-0 font-mono text-[11px] text-[var(--text-muted)] hover:text-[var(--color-terracotta)]"
+                      className="inline-flex min-h-11 min-w-11 shrink-0 items-center justify-center font-mono text-[11px] text-[var(--text-muted)] hover:text-[var(--color-terracotta)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-clay)]"
                     >
                       ×
                     </button>
                   )}
                 </div>
               ))}
-              <div className="mt-1.5 flex items-center gap-3">
+              <DocumentActionRow
+                surfaceKey="open-document"
+                regionKey="discovery-reoffer"
+                className="mt-1.5"
+                aria-label="Fresh discovery times"
+              >
                 {draft.length < MAX_SLOTS && (
-                  <button
-                    type="button"
+                  <DocumentAction
+                    actionKey="add-discovery-time"
+                    variant="secondary"
                     onClick={addSlot}
-                    className="rounded-full border border-[var(--color-pearl)] px-3 py-1 font-mono text-[9.5px] uppercase tracking-[0.08em] text-[var(--color-mocha)] hover:border-[var(--color-clay)]"
                   >
                     ＋ Add a time
-                  </button>
+                  </DocumentAction>
                 )}
-                <button
-                  type="button"
+                <DocumentAction
+                  actionKey="send-fresh-times"
+                  variant="primary"
                   onClick={submitReoffer}
                   disabled={draft.length < MIN_SLOTS || refresh.isPending}
-                  className="rounded-[3px] border border-[var(--color-mocha)] bg-white px-3 py-1 font-mono text-[10px] uppercase tracking-[0.08em] text-[var(--color-mocha)] transition-colors hover:bg-[var(--color-mocha)] hover:text-[#f6efe2] disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:bg-white disabled:hover:text-[var(--color-mocha)]"
+                  loading={refresh.isPending}
+                  loadingLabel="Sending…"
+                  trailing="→"
                 >
-                  {refresh.isPending ? 'Sending…' : 'Send fresh times →'}
-                </button>
-                <button
-                  type="button"
+                  Send fresh times
+                </DocumentAction>
+                <DocumentAction
+                  actionKey="cancel-fresh-times"
+                  variant="tertiary"
                   onClick={() => setReofferOpen(false)}
-                  className="font-mono text-[9.5px] uppercase tracking-[0.08em] text-[var(--text-muted)] hover:text-[var(--color-charcoal)]"
                 >
                   Cancel
-                </button>
-              </div>
+                </DocumentAction>
+              </DocumentActionRow>
               {refresh.isError && (
                 <p className="mt-1.5 text-[11px] text-[var(--color-terracotta)]">
-                  {(refresh.error as { message?: string } | null)?.message || 'Could not send fresh times.'}
+                  {(refresh.error as { message?: string } | null)?.message ||
+                    'Could not send fresh times.'}
                 </p>
               )}
             </div>
@@ -222,7 +268,7 @@ export function DiscoveryScheduleLine({
           The introduction ·{' '}
           <a
             href={`/people?thread=${ceremony.thread_id}`}
-            className="text-[var(--color-mocha)] underline-offset-2 hover:underline"
+            className="inline-flex min-h-11 min-w-11 items-center text-[var(--color-mocha)] underline-offset-2 hover:underline focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-clay)]"
           >
             view the thread →
           </a>

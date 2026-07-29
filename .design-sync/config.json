@@ -2,6 +2,7 @@
   "projectId": "d9a36b31-23c0-4190-866f-e5f77bc9b486",
   "pkg": "@patina/design-system",
   "shape": "storybook",
+  "entry": "packages/patina-design-system/dist/index.js",
   "storybookStatic": ".design-sync/sb-reference",
   "storybookConfigDir": "packages/patina-design-system/.storybook",
   "buildCmd": "pnpm -F \"@patina/design-system...\" build",

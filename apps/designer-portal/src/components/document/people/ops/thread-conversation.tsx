@@ -22,8 +22,13 @@ import {
   type CommsMessage,
 } from '@patina/supabase';
 import { useAuth } from '@/hooks/use-auth';
+import { DocumentAction } from '../../document-action';
 import { Avatar } from '../person-bits';
-import { threadCounterpart, scopeLabel, participantPartyRole } from './thread-bits';
+import {
+  threadCounterpart,
+  scopeLabel,
+  participantPartyRole,
+} from './thread-bits';
 
 function dayStamp(iso: string): string {
   const d = new Date(iso);
@@ -95,7 +100,9 @@ export function ThreadConversation({
       {
         onSuccess: () => {
           setBody('');
-          notify('Sent. One conversation, every surface — it lives here and on their document.');
+          notify(
+            'Sent. One conversation, every surface — it lives here and on their document.',
+          );
         },
       },
     );
@@ -114,7 +121,9 @@ export function ThreadConversation({
       <div className="overflow-hidden rounded-[10px] border border-[var(--color-pearl)] bg-white">
         {/* Conversation head — who + scope. */}
         <div className="flex items-center gap-2.5 border-b border-[var(--doc-ink-border)]/40 px-4 py-3">
-          {counterpart && <Avatar name={counterpart.name} role={counterpart.role} size={34} />}
+          {counterpart && (
+            <Avatar name={counterpart.name} role={counterpart.role} size={34} />
+          )}
           <div className="min-w-0">
             <div className="truncate text-[0.88rem] font-semibold text-[var(--color-charcoal)]">
               {counterpart?.name ?? 'Conversation'}
@@ -133,7 +142,9 @@ export function ThreadConversation({
           className="flex max-h-[360px] flex-col gap-3 overflow-y-auto px-4 py-4"
         >
           {isLoading ? (
-            <p className="text-[0.74rem] italic text-[var(--text-muted)]">Reading the thread…</p>
+            <p className="text-[0.74rem] italic text-[var(--text-muted)]">
+              Reading the thread…
+            </p>
           ) : messages.length === 0 ? (
             <p className="text-[0.74rem] italic text-[var(--text-muted)]">
               No messages yet — write the first below.
@@ -149,7 +160,11 @@ export function ThreadConversation({
                   key={m.id}
                   className={`flex max-w-[85%] gap-2.5 ${mine ? 'flex-row-reverse self-end' : 'self-start'}`}
                 >
-                  <Avatar name={name} role={mine ? 'team' : senderRole(m)} size={26} />
+                  <Avatar
+                    name={name}
+                    role={mine ? 'team' : senderRole(m)}
+                    size={26}
+                  />
                   <div className={mine ? 'text-right' : ''}>
                     <span
                       className={`inline-block rounded-[10px] px-3 py-2 text-[0.78rem] leading-relaxed ${
@@ -159,7 +174,9 @@ export function ThreadConversation({
                       }`}
                     >
                       {m.deleted_at ? (
-                        <span className="italic opacity-70">Message removed.</span>
+                        <span className="italic opacity-70">
+                          Message removed.
+                        </span>
                       ) : (
                         m.body
                       )}
@@ -190,19 +207,25 @@ export function ThreadConversation({
             placeholder="Write a reply…"
             className="flex-1 rounded-[20px] border border-[var(--color-pearl)] bg-white px-3.5 py-2 text-[0.78rem] text-[var(--color-charcoal)] outline-none focus:border-[var(--color-clay)]"
           />
-          <button
-            type="button"
+          <DocumentAction
+            actionKey="send-thread-reply"
+            surfaceKey="people"
+            regionKey="thread-reply"
+            variant="primary"
             onClick={reply}
             disabled={!body.trim() || send.isPending}
-            className="rounded-[6px] border border-[var(--color-clay)] bg-[var(--color-clay)] px-3.5 py-2 font-mono text-[0.5rem] font-semibold uppercase tracking-[0.06em] text-white transition-opacity hover:opacity-90 disabled:opacity-50"
+            loading={send.isPending}
+            loadingLabel="Sending…"
           >
-            {send.isPending ? 'Sending…' : 'Send'}
-          </button>
+            Send
+          </DocumentAction>
         </div>
       </div>
       {send.isError && (
         <p className="mt-2 text-[0.7rem] text-[#C77B6E]">
-          {send.error instanceof Error ? send.error.message : 'Send failed — try again.'}
+          {send.error instanceof Error
+            ? send.error.message
+            : 'Send failed — try again.'}
         </p>
       )}
     </div>

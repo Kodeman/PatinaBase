@@ -13,6 +13,7 @@
 import { useMemo, useState } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import { UploadZone } from '@/components/portal';
+import { DocumentAction, DocumentActionGroup } from '../../document-action';
 import { RoomSheet } from '../room-sheet';
 import {
   PRODUCT_FIELDS,
@@ -42,7 +43,10 @@ export function ImportSheet({
   const [mapping, setMapping] = useState<ProductField[]>([]);
   const [parseError, setParseError] = useState<string | null>(null);
   const [importError, setImportError] = useState<string | null>(null);
-  const [landed, setLanded] = useState<{ count: number; skipped: number } | null>(null);
+  const [landed, setLanded] = useState<{
+    count: number;
+    skipped: number;
+  } | null>(null);
 
   const reset = () => {
     setStep('upload');
@@ -61,7 +65,10 @@ export function ImportSheet({
     setTimeout(reset, 250);
   };
 
-  const built = useMemo(() => buildImportRows(dataRows, mapping), [dataRows, mapping]);
+  const built = useMemo(
+    () => buildImportRows(dataRows, mapping),
+    [dataRows, mapping],
+  );
   const hasName = mapping.includes('name');
 
   const handleFiles = async (files: File[]) => {
@@ -72,7 +79,9 @@ export function ImportSheet({
 
     const finish = (parsed: string[][]) => {
       if (parsed.length < 2) {
-        setParseError('This file has no data rows — a header row plus at least one piece.');
+        setParseError(
+          'This file has no data rows — a header row plus at least one piece.',
+        );
         return;
       }
       const [hdr, ...rest] = parsed;
@@ -90,7 +99,11 @@ export function ImportSheet({
         const wb = XLSX.read(await picked.arrayBuffer(), { type: 'array' });
         const sheet = wb.Sheets[wb.SheetNames[0]];
         const rows = (
-          XLSX.utils.sheet_to_json(sheet, { header: 1, blankrows: false, defval: '' }) as unknown[][]
+          XLSX.utils.sheet_to_json(sheet, {
+            header: 1,
+            blankrows: false,
+            defval: '',
+          }) as unknown[][]
         ).map((r) => r.map((cell) => (cell == null ? '' : String(cell))));
         finish(rows);
       } else {
@@ -147,8 +160,9 @@ export function ImportSheet({
         Bring a spreadsheet in
       </h2>
       <p className="mb-5 mt-1 text-[0.74rem] text-[var(--color-aged-oak)]">
-        A CSV or Excel export from a maker. Every piece lands on your shelf raw — a draft, queued
-        for teaching — exactly like a capture. Up to 5,000 at a time.
+        A CSV or Excel export from a maker. Every piece lands on your shelf raw
+        — a draft, queued for teaching — exactly like a capture. Up to 5,000 at
+        a time.
       </p>
 
       {/* Step 1 — the file */}
@@ -164,11 +178,14 @@ export function ImportSheet({
             className="min-h-[168px]"
           />
           {parseError && (
-            <p className="mt-3 text-[0.72rem] text-[var(--color-terracotta)]">{parseError}</p>
+            <p className="mt-3 text-[0.72rem] text-[var(--color-terracotta)]">
+              {parseError}
+            </p>
           )}
           <p className="mt-4 border-l-2 border-[var(--color-clay)] pl-2.5 text-[0.7rem] italic text-[var(--color-aged-oak)]">
-            Columns we read: Name, Maker, Category, Price, Description, Material, Dimensions, SKU,
-            Vendor. Anything unmapped simply doesn&apos;t travel.
+            Columns we read: Name, Maker, Category, Price, Description,
+            Material, Dimensions, SKU, Vendor. Anything unmapped simply
+            doesn&apos;t travel.
           </p>
         </>
       )}
@@ -178,10 +195,14 @@ export function ImportSheet({
         <div>
           <div className="mb-4 flex items-center justify-between gap-3">
             <span className="font-mono text-[9px] uppercase tracking-[0.08em] text-[var(--color-aged-oak)]">
-              {fileName} · {dataRows.length} row{dataRows.length === 1 ? '' : 's'}
+              {fileName} · {dataRows.length} row
+              {dataRows.length === 1 ? '' : 's'}
             </span>
-            <button
-              type="button"
+            <DocumentAction
+              actionKey="change-import-file"
+              surfaceKey="library"
+              regionKey="import-file"
+              variant="tertiary"
               onClick={() => {
                 setStep('upload');
                 setHeaders([]);
@@ -189,10 +210,10 @@ export function ImportSheet({
                 setMapping([]);
               }}
               disabled={step === 'importing'}
-              className="font-mono text-[9px] font-semibold uppercase tracking-[0.06em] text-[var(--color-clay)] hover:text-[var(--color-aged-oak)] disabled:opacity-40"
+              className="min-h-11 px-0"
             >
               Change file
-            </button>
+            </DocumentAction>
           </div>
 
           <p className="mb-3 text-[0.72rem] text-[var(--color-aged-oak)]">
@@ -201,7 +222,10 @@ export function ImportSheet({
 
           <div className="flex flex-col divide-y divide-[var(--color-pearl)] border-y border-[var(--color-pearl)]">
             {headers.map((header, idx) => (
-              <div key={`${header}-${idx}`} className="flex items-center gap-3 py-2">
+              <div
+                key={`${header}-${idx}`}
+                className="flex items-center gap-3 py-2"
+              >
                 <span className="w-1/2 truncate font-mono text-[0.72rem] text-[var(--color-charcoal)]">
                   {header || `Column ${idx + 1}`}
                 </span>
@@ -230,39 +254,50 @@ export function ImportSheet({
 
           {!hasName && (
             <p className="mt-3 text-[0.72rem] text-[var(--color-terracotta)]">
-              Map one column to <strong>Name</strong> — a piece needs a name to land.
+              Map one column to <strong>Name</strong> — a piece needs a name to
+              land.
             </p>
           )}
 
           <p className="mt-3 font-mono text-[9px] uppercase tracking-[0.08em] text-[var(--color-aged-oak)]">
             {built.validCount} will land
-            {built.invalidCount > 0 ? ` · ${built.invalidCount} skipped (no name or bad price)` : ''}
+            {built.invalidCount > 0
+              ? ` · ${built.invalidCount} skipped (no name or bad price)`
+              : ''}
           </p>
 
           {importError && (
-            <p className="mt-2 text-[0.72rem] text-[var(--color-terracotta)]">{importError}</p>
+            <p className="mt-2 text-[0.72rem] text-[var(--color-terracotta)]">
+              {importError}
+            </p>
           )}
 
-          <div className="mt-5 flex items-center gap-2.5 border-t border-[var(--color-pearl)] pt-4">
-            <button
-              type="button"
-              disabled={!hasName || built.validCount === 0 || step === 'importing'}
+          <DocumentActionGroup
+            surfaceKey="library"
+            regionKey="import-sheet"
+            className="mt-5 border-t border-[var(--color-pearl)] pt-4"
+          >
+            <DocumentAction
+              actionKey="import-pieces"
+              variant="primary"
+              disabled={
+                !hasName || built.validCount === 0 || step === 'importing'
+              }
+              loading={step === 'importing'}
+              loadingLabel="Bringing them in…"
               onClick={() => void doImport()}
-              className="rounded-[5px] bg-[var(--color-charcoal)] px-4 py-2 font-mono text-[10px] font-semibold uppercase tracking-[0.06em] text-[var(--color-off-white)] disabled:opacity-50"
             >
-              {step === 'importing'
-                ? 'Bringing them in…'
-                : `Bring ${built.validCount} onto the shelf`}
-            </button>
-            <button
-              type="button"
+              Bring {built.validCount} onto the shelf
+            </DocumentAction>
+            <DocumentAction
+              actionKey="cancel-import"
+              variant="tertiary"
               onClick={close}
               disabled={step === 'importing'}
-              className="rounded-[5px] border border-[var(--color-pearl)] px-4 py-2 font-mono text-[10px] font-semibold uppercase tracking-[0.06em] text-[var(--color-charcoal)] disabled:opacity-40"
             >
               Cancel
-            </button>
-          </div>
+            </DocumentAction>
+          </DocumentActionGroup>
         </div>
       )}
 
@@ -270,8 +305,8 @@ export function ImportSheet({
       {step === 'done' && landed && (
         <div>
           <p className="border-l-2 border-[var(--color-clay)] pl-3 text-[0.86rem] text-[var(--color-charcoal)]">
-            {landed.count} piece{landed.count === 1 ? '' : 's'} landed in My Library — raw, ready to
-            teach.
+            {landed.count} piece{landed.count === 1 ? '' : 's'} landed in My
+            Library — raw, ready to teach.
             {landed.skipped > 0 ? (
               <span className="text-[var(--color-aged-oak)]">
                 {' '}
@@ -279,22 +314,26 @@ export function ImportSheet({
               </span>
             ) : null}
           </p>
-          <div className="mt-5 flex items-center gap-2.5 border-t border-[var(--color-pearl)] pt-4">
-            <button
-              type="button"
+          <DocumentActionGroup
+            surfaceKey="library"
+            regionKey="import-complete"
+            className="mt-5 border-t border-[var(--color-pearl)] pt-4"
+          >
+            <DocumentAction
+              actionKey="back-to-shelves"
+              variant="tertiary"
               onClick={close}
-              className="rounded-[5px] bg-[var(--color-charcoal)] px-4 py-2 font-mono text-[10px] font-semibold uppercase tracking-[0.06em] text-[var(--color-off-white)]"
             >
               Back to the shelves
-            </button>
-            <button
-              type="button"
+            </DocumentAction>
+            <DocumentAction
+              actionKey="import-another"
+              variant="secondary"
               onClick={reset}
-              className="rounded-[5px] border border-[var(--color-pearl)] px-4 py-2 font-mono text-[10px] font-semibold uppercase tracking-[0.06em] text-[var(--color-charcoal)]"
             >
               Import another
-            </button>
-          </div>
+            </DocumentAction>
+          </DocumentActionGroup>
         </div>
       )}
     </RoomSheet>

@@ -2,7 +2,13 @@
 //  OnboardingFlowView.swift
 //  Patina
 //
-//  3-screen onboarding flow: Philosophy → Promise → Permission
+//  3-screen onboarding flow: Philosophy → Promise → what happens next.
+//
+//  U33 — the third page tells the truth about the variant the user is in.
+//  Quiz-first (the shipped default) never asks for the camera during
+//  onboarding, so it must not close on a camera-permission promise; the
+//  camera page belongs to walk-first, which really does ask next.
+//  `OnboardingFlowHost` resolves the variant and threads it in.
 //
 
 import SwiftUI
@@ -10,29 +16,47 @@ import SwiftUI
 struct OnboardingFlowView: View {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var currentPage = 0
+    /// PT-4-7 variant signal, resolved by `OnboardingFlowHost`. Only the third
+    /// page differs — walk-first heads into a camera ask, quiz-first into the
+    /// style quiz.
+    var isWalkFirst: Bool = false
     var onComplete: () -> Void
     var onSkip: () -> Void
 
-    private let pages: [OnboardingPage] = [
-        OnboardingPage(
-            title: "Every room tells a story",
-            body: "Let's discover yours. Walk your space, uncover your style, and find pieces that grow more beautiful with time.",
-            ctaText: "Start Your Journey",
-            gradient: PatinaGradients.warm
-        ),
-        OnboardingPage(
-            title: "See it in your space",
-            body: "Walk your room. Our camera captures every corner. Then watch as perfectly matched furniture appears right where it belongs.",
-            ctaText: "Continue",
-            gradient: PatinaGradients.sageGradient
-        ),
-        OnboardingPage(
-            title: "We'll need your camera",
-            body: "To see your space and place furniture in it. Nothing leaves your device until you choose to share.",
-            ctaText: "Let's Begin",
-            gradient: PatinaGradients.linen
-        ),
-    ]
+    private var pages: [OnboardingPage] {
+        [
+            OnboardingPage(
+                title: "Every room tells a story",
+                body: "Let's discover yours. Walk your space, uncover your style, and find pieces that grow more beautiful with time.",
+                ctaText: "Start Your Journey",
+                gradient: PatinaGradients.warm
+            ),
+            OnboardingPage(
+                title: "See it in your space",
+                body: "Walk your room. Our camera captures every corner. Then watch as perfectly matched furniture appears right where it belongs.",
+                ctaText: "Continue",
+                gradient: PatinaGradients.sageGradient
+            ),
+            isWalkFirst ? Self.cameraPage : Self.quizPage,
+        ]
+    }
+
+    /// Walk-first close — the very next screen is the camera primer.
+    private static let cameraPage = OnboardingPage(
+        title: "We'll need your camera",
+        body: "To see your space and place furniture in it. Nothing leaves your device until you choose to share.",
+        ctaText: "Let's Begin",
+        gradient: PatinaGradients.linen
+    )
+
+    /// Quiz-first close — the very next screen is the style quiz. The camera
+    /// is named only as a later, opt-in step, which is what actually happens.
+    private static let quizPage = OnboardingPage(
+        title: "Find your style first",
+        body: "Five quick questions, then we'll show you pieces that fit. Your camera comes later — only when you choose to scan a room.",
+        ctaText: "Let's begin",
+        gradient: PatinaGradients.linen
+    )
 
     var body: some View {
         ZStack {
@@ -80,9 +104,13 @@ struct OnboardingFlowView: View {
                 } else if index == 1 {
                     // Phone illustration placeholder
                     phoneIllustration
-                } else {
+                } else if isWalkFirst {
                     // Camera permission illustration
                     cameraIllustration
+                } else {
+                    // Quiz-first never asks for the camera during onboarding —
+                    // a camera glyph here would promise an ask that doesn't come.
+                    styleIllustration
                 }
             }
             .frame(maxWidth: .infinity)
@@ -183,6 +211,34 @@ struct OnboardingFlowView: View {
         }
     }
 
+    private var styleIllustration: some View {
+        VStack(spacing: 12) {
+            ZStack {
+                RoundedRectangle(cornerRadius: 20)
+                    .fill(PatinaColors.clay.opacity(0.2))
+                    .frame(width: 80, height: 80)
+
+                Image(systemName: "square.grid.2x2")
+                    .font(.system(size: 32))
+                    .foregroundStyle(PatinaColors.mocha.opacity(0.6))
+            }
+
+            HStack(spacing: 6) {
+                Image(systemName: "sparkles")
+                    .font(.system(size: 12))
+                    .foregroundStyle(PatinaColors.mocha)
+
+                Text("Five quick questions")
+                    .font(PatinaTypography.caption)
+                    .foregroundStyle(PatinaColors.mocha)
+            }
+            .padding(.horizontal, 14)
+            .padding(.vertical, 6)
+            .background(PatinaColors.offWhite)
+            .clipShape(Capsule())
+        }
+    }
+
     private var cameraIllustration: some View {
         VStack(spacing: 12) {
             ZStack {
@@ -221,6 +277,10 @@ private struct OnboardingPage {
     let gradient: LinearGradient
 }
 
-#Preview {
+#Preview("Quiz-first (default)") {
     OnboardingFlowView(onComplete: {}, onSkip: {})
+}
+
+#Preview("Walk-first") {
+    OnboardingFlowView(isWalkFirst: true, onComplete: {}, onSkip: {})
 }

@@ -40,8 +40,8 @@ import {
 import { dollarsToCents } from '@/lib/document/closure-derivation';
 import { familyLabel } from '@/lib/document/family-label';
 import { fmtDay } from '@/lib/document/format';
+import { DocumentAction, DocumentActionGroup } from '../document-action';
 import { DocSheet } from './doc-sheet';
-
 
 type AnyRecord = any;
 
@@ -51,10 +51,9 @@ const fieldCls =
   'w-full rounded-[4px] border border-[var(--color-pearl)] bg-white px-3 py-2 text-[13px] text-[var(--color-charcoal)] outline-none transition-colors placeholder:italic placeholder:text-[var(--text-faint)] focus:border-[var(--color-clay)]';
 const quietBtnCls =
   'font-mono text-[9px] uppercase tracking-[0.06em] text-[var(--color-aged-oak)] hover:text-[var(--color-charcoal)]';
-const solidBtnCls =
-  'rounded-[4px] bg-[var(--color-clay)] px-4 py-2 text-[12px] font-medium text-[var(--color-charcoal)] transition-opacity hover:opacity-90 disabled:opacity-40';
 
-const fmtMoney = (cents: number) => `$${Math.round(cents / 100).toLocaleString('en-US')}`;
+const fmtMoney = (cents: number) =>
+  `$${Math.round(cents / 100).toLocaleString('en-US')}`;
 
 export interface AmendmentSeed {
   title?: string;
@@ -95,7 +94,9 @@ export function AmendmentSheet({
   const [weeks, setWeeks] = useState('');
   const [roomName, setRoomName] = useState('');
   const [roomBudget, setRoomBudget] = useState('');
-  const [rooms, setRooms] = useState<Array<{ name: string; budgetCents: number }>>([]);
+  const [rooms, setRooms] = useState<
+    Array<{ name: string; budgetCents: number }>
+  >([]);
   const [error, setError] = useState<string | null>(null);
   // R51 — the quiet inline confirmations.
   const [confirmation, setConfirmation] = useState<string | null>(null);
@@ -128,12 +129,18 @@ export function AmendmentSheet({
     additionalFeeCents: dollarsToCents(feeDollars) ?? 0,
     timelineWeeks: parseInt(weeks, 10) || 0,
   };
-  const { currentCents, newTotalCents } = computeAmendmentTotals(project, impacts);
+  const { currentCents, newTotalCents } = computeAmendmentTotals(
+    project,
+    impacts,
+  );
 
   const addRoom = () => {
     const name = roomName.trim();
     if (!name) return;
-    setRooms((prev) => [...prev, { name, budgetCents: dollarsToCents(roomBudget) ?? 0 }]);
+    setRooms((prev) => [
+      ...prev,
+      { name, budgetCents: dollarsToCents(roomBudget) ?? 0 },
+    ]);
     setRoomName('');
     setRoomBudget('');
   };
@@ -164,7 +171,9 @@ export function AmendmentSheet({
         },
         onError: (err) =>
           setError(
-            err instanceof Error ? err.message : 'Could not compose the amendment. Try again.',
+            err instanceof Error
+              ? err.message
+              : 'Could not compose the amendment. Try again.',
           ),
       },
     );
@@ -200,7 +209,10 @@ export function AmendmentSheet({
             <dl className="space-y-1 border-t border-[var(--color-pearl)] pt-3 text-[12px]">
               <Row k="Impact" v={amendmentImpactLine(reviewing)} />
               {(reviewing.new_total_budget_cents ?? 0) > 0 && (
-                <Row k="New total" v={fmtMoney(reviewing.new_total_budget_cents)} />
+                <Row
+                  k="New total"
+                  v={fmtMoney(reviewing.new_total_budget_cents)}
+                />
               )}
               {(reviewing.new_rooms ?? []).length > 0 && (
                 <Row
@@ -211,7 +223,9 @@ export function AmendmentSheet({
                     .join(', ')}
                 />
               )}
-              {reviewing.sent_at && <Row k="Sent" v={fmtDay(reviewing.sent_at)} />}
+              {reviewing.sent_at && (
+                <Row k="Sent" v={fmtDay(reviewing.sent_at)} />
+              )}
               {reviewing.approved_at && (
                 <Row
                   k="Approved"
@@ -224,26 +238,38 @@ export function AmendmentSheet({
                   v={`${fmtDay(reviewing.declined_at)}${reviewing.decline_reason ? ` — “${reviewing.decline_reason}”` : ''}`}
                 />
               )}
-              {reviewing.applied_at && <Row k="Applied" v={fmtDay(reviewing.applied_at)} />}
+              {reviewing.applied_at && (
+                <Row k="Applied" v={fmtDay(reviewing.applied_at)} />
+              )}
             </dl>
 
             {confirmation && (
-              <p className="text-[12px] text-[rgba(168,181,160,0.9)]">{confirmation}</p>
+              <p className="text-[12px] text-[rgba(168,181,160,0.9)]">
+                {confirmation}
+              </p>
             )}
             {error && (
               <div
                 role="alert"
                 className="rounded-[4px] border border-[rgba(196,124,92,0.4)] bg-[rgba(196,124,92,0.08)] p-3 text-[12.5px] text-[var(--color-clay)]"
               >
-                {error} <span className="opacity-80">The act is safe to retry.</span>
+                {error}{' '}
+                <span className="opacity-80">The act is safe to retry.</span>
               </div>
             )}
 
-            <div className="flex items-center gap-4 border-t border-[var(--color-pearl)] pt-4">
+            <DocumentActionGroup
+              surfaceKey="amendment"
+              regionKey="amendment-review"
+              className="border-t border-[var(--color-pearl)] pt-4"
+            >
               {reviewing.status === 'draft' && (
-                <button
-                  type="button"
+                <DocumentAction
+                  actionKey="send-amendment"
+                  variant="primary"
                   disabled={sendAmendment.isPending}
+                  loading={sendAmendment.isPending}
+                  loadingLabel="Sending…"
                   onClick={() => {
                     setError(null);
                     setConfirmation(null);
@@ -251,21 +277,29 @@ export function AmendmentSheet({
                       { requestId: reviewing.id, projectId },
                       {
                         onSuccess: () =>
-                          setConfirmation(`Sent to ${family} — it settles here when they answer.`),
+                          setConfirmation(
+                            `Sent to ${family} — it settles here when they answer.`,
+                          ),
                         onError: (err) =>
-                          setError(err instanceof Error ? err.message : 'Could not send it.'),
+                          setError(
+                            err instanceof Error
+                              ? err.message
+                              : 'Could not send it.',
+                          ),
                       },
                     );
                   }}
-                  className={solidBtnCls}
                 >
-                  {sendAmendment.isPending ? 'Sending…' : `Send to ${family} →`}
-                </button>
+                  Send to {family}
+                </DocumentAction>
               )}
               {reviewing.status === 'approved' && !reviewing.applied_at && (
-                <button
-                  type="button"
+                <DocumentAction
+                  actionKey="apply-amendment"
+                  variant="primary"
                   disabled={applyAmendment.isPending}
+                  loading={applyAmendment.isPending}
+                  loadingLabel="Applying…"
                   onClick={() => {
                     setError(null);
                     setConfirmation(null);
@@ -277,34 +311,48 @@ export function AmendmentSheet({
                             'Applied — budget, timeline, and any new rooms landed on the project.',
                           ),
                         onError: (err) =>
-                          setError(err instanceof Error ? err.message : 'Could not apply it.'),
+                          setError(
+                            err instanceof Error
+                              ? err.message
+                              : 'Could not apply it.',
+                          ),
                       },
                     );
                   }}
-                  className={solidBtnCls}
                 >
-                  {applyAmendment.isPending ? 'Applying…' : 'Apply to the project →'}
-                </button>
+                  Apply to the project
+                </DocumentAction>
               )}
-              {(reviewing.status === 'sent' || reviewing.status === 'viewed') && (
+              {(reviewing.status === 'sent' ||
+                reviewing.status === 'viewed') && (
                 <span className="text-[12px] italic text-[var(--color-aged-oak)]">
                   With {family} — it settles here when they answer.
                 </span>
               )}
-              <button type="button" onClick={() => setReviewingId(null)} className={quietBtnCls}>
-                ← Compose another
-              </button>
-              <button type="button" onClick={onClose} className={`${quietBtnCls} ml-auto`}>
+              <DocumentAction
+                actionKey="compose-another-amendment"
+                variant="secondary"
+                onClick={() => setReviewingId(null)}
+              >
+                Compose another
+              </DocumentAction>
+              <DocumentAction
+                actionKey="close-amendment-review"
+                variant="tertiary"
+                onClick={onClose}
+                className="ml-auto"
+              >
                 Done
-              </button>
-            </div>
+              </DocumentAction>
+            </DocumentActionGroup>
           </div>
         ) : (
           /* ── COMPOSE a new amendment ──────────────────────────────────── */
           <div className="mt-1 space-y-5">
             <p className="text-[12.5px] leading-relaxed text-[var(--color-mocha)]">
-              A scope change with its fee and timeline impacts — {family} approve it in their
-              portal, then one act applies it to the project.
+              A scope change with its fee and timeline impacts — {family}{' '}
+              approve it in their portal, then one act applies it to the
+              project.
             </p>
 
             <div className="flex flex-col gap-1.5">
@@ -379,7 +427,9 @@ export function AmendmentSheet({
                   id="amendment-weeks"
                   inputMode="numeric"
                   value={weeks}
-                  onChange={(e) => setWeeks(e.target.value.replace(/[^0-9-]/g, ''))}
+                  onChange={(e) =>
+                    setWeeks(e.target.value.replace(/[^0-9-]/g, ''))
+                  }
                   placeholder="+0"
                   className={fieldCls}
                 />
@@ -412,7 +462,9 @@ export function AmendmentSheet({
                   <button
                     type="button"
                     aria-label={`Remove ${room.name}`}
-                    onClick={() => setRooms((prev) => prev.filter((_, idx) => idx !== i))}
+                    onClick={() =>
+                      setRooms((prev) => prev.filter((_, idx) => idx !== i))
+                    }
                     className={quietBtnCls}
                   >
                     ✕
@@ -446,14 +498,16 @@ export function AmendmentSheet({
                     className={`${fieldCls} pl-7`}
                   />
                 </div>
-                <button
-                  type="button"
+                <DocumentAction
+                  actionKey="add-amendment-room"
+                  surfaceKey="amendment"
+                  regionKey="new-room"
+                  variant="secondary"
                   onClick={addRoom}
                   disabled={!roomName.trim()}
-                  className="rounded-[4px] border border-[var(--color-pearl)] px-3 py-2 font-mono text-[10px] uppercase tracking-[0.06em] text-[var(--color-aged-oak)] hover:border-[var(--color-clay)] disabled:opacity-40"
                 >
                   Add
-                </button>
+                </DocumentAction>
               </div>
             </div>
 
@@ -462,31 +516,45 @@ export function AmendmentSheet({
                 role="alert"
                 className="rounded-[4px] border border-[rgba(196,124,92,0.4)] bg-[rgba(196,124,92,0.08)] p-3 text-[12.5px] text-[var(--color-clay)]"
               >
-                {error} <span className="opacity-80">The act is safe to retry.</span>
+                {error}{' '}
+                <span className="opacity-80">The act is safe to retry.</span>
               </div>
             )}
 
-            <div className="flex items-center gap-4 border-t border-[var(--color-pearl)] pt-5">
-              <button
-                type="button"
-                disabled={!title.trim() || !description.trim() || compose.isPending}
+            <DocumentActionGroup
+              surfaceKey="amendment"
+              regionKey="amendment-composer"
+              className="border-t border-[var(--color-pearl)] pt-5"
+            >
+              <DocumentAction
+                actionKey="compose-and-send-amendment"
+                variant="primary"
+                disabled={
+                  !title.trim() || !description.trim() || compose.isPending
+                }
+                loading={compose.isPending}
+                loadingLabel="Composing…"
                 onClick={() => submit(true)}
-                className={solidBtnCls}
               >
-                {compose.isPending ? 'Composing…' : `Send to ${family} →`}
-              </button>
-              <button
-                type="button"
+                Send to {family}
+              </DocumentAction>
+              <DocumentAction
+                actionKey="save-amendment-draft"
+                variant="secondary"
                 disabled={!title.trim() || compose.isPending}
                 onClick={() => submit(false)}
-                className={`${quietBtnCls} disabled:opacity-40`}
               >
                 Save as draft
-              </button>
-              <button type="button" onClick={onClose} className={`${quietBtnCls} ml-auto`}>
+              </DocumentAction>
+              <DocumentAction
+                actionKey="cancel-amendment"
+                variant="tertiary"
+                onClick={onClose}
+                className="ml-auto"
+              >
                 Not now
-              </button>
-            </div>
+              </DocumentAction>
+            </DocumentActionGroup>
 
             {/* The quiet ledger strip — every amendment on this project, so an
                 approved one has its apply door here (no list page, R81). */}
@@ -541,7 +609,9 @@ function Row({ k, v }: { k: string; v: string }) {
       <dt className="font-mono text-[9px] uppercase tracking-[0.06em] text-[var(--color-aged-oak)]">
         {k}
       </dt>
-      <dd className="text-right text-[12px] text-[var(--color-charcoal)]">{v}</dd>
+      <dd className="text-right text-[12px] text-[var(--color-charcoal)]">
+        {v}
+      </dd>
     </div>
   );
 }

@@ -7,6 +7,7 @@
  */
 
 import type { ReactNode } from 'react';
+import { DocumentAction } from '../../document-action';
 import { EmptyTeach } from '../view-shell';
 
 /** The `.subnav` underline tabs (D1: sub-tabs underline, not nav chrome). */
@@ -35,7 +36,9 @@ export function SubNav<T extends string>({
             aria-selected={on}
             onClick={() => onSelect(key)}
             className={`relative pb-1.5 font-mono text-[0.54rem] font-semibold uppercase tracking-[0.06em] transition-colors ${
-              on ? 'text-[var(--color-charcoal)]' : 'text-[var(--color-aged-oak)] hover:text-[var(--color-charcoal)]'
+              on
+                ? 'text-[var(--color-charcoal)]'
+                : 'text-[var(--color-aged-oak)] hover:text-[var(--color-charcoal)]'
             }`}
           >
             {label}
@@ -53,7 +56,11 @@ export function SubNav<T extends string>({
 }
 
 /** The `.statgrid` — three quiet figures over the campaigns list. */
-export function StatGrid({ stats }: { stats: ReadonlyArray<{ n: ReactNode; label: string }> }) {
+export function StatGrid({
+  stats,
+}: {
+  stats: ReadonlyArray<{ n: ReactNode; label: string }>;
+}) {
   return (
     <div className="mb-5 grid grid-cols-3 gap-3">
       {stats.map((s, i) => (
@@ -86,8 +93,12 @@ export function CampRow({
   return (
     <div className="mb-2 flex items-center gap-3.5 rounded-[9px] border border-[var(--color-pearl)] bg-white px-3.5 py-2.5">
       <div className="min-w-0 flex-1">
-        <div className="truncate text-[0.82rem] font-semibold text-[var(--color-charcoal)]">{name}</div>
-        <div className="mt-0.5 text-[0.66rem] text-[var(--color-aged-oak)]">{stat}</div>
+        <div className="truncate text-[0.82rem] font-semibold text-[var(--color-charcoal)]">
+          {name}
+        </div>
+        <div className="mt-0.5 text-[0.66rem] text-[var(--color-aged-oak)]">
+          {stat}
+        </div>
       </div>
       {right}
     </div>
@@ -97,7 +108,10 @@ export function CampRow({
 const BADGE_TONE: Record<string, { color: string; border: string }> = {
   sent: { color: 'var(--color-sage)', border: 'var(--color-sage)' },
   draft: { color: 'var(--color-aged-oak)', border: '#cbb48f' },
-  scheduled: { color: 'var(--color-dusty-blue)', border: 'var(--color-dusty-blue)' },
+  scheduled: {
+    color: 'var(--color-dusty-blue)',
+    border: 'var(--color-dusty-blue)',
+  },
   sending: { color: 'var(--color-clay)', border: 'var(--color-clay)' },
   cancelled: { color: 'var(--color-aged-oak)', border: 'var(--color-pearl)' },
   archived: { color: 'var(--color-aged-oak)', border: 'var(--color-pearl)' },
@@ -119,37 +133,49 @@ export function CampBadge({ status }: { status: string }) {
 /** A quiet small button (the `.btn.sm` in the prototype). Used for + New / Edit /
  *  View / Send. Zero shadows; clay-on-hover hairline. */
 export function OutreachButton({
+  actionKey,
   children,
   onClick,
   disabled,
   tone = 'default',
   type = 'button',
 }: {
+  actionKey: string;
   children: ReactNode;
   onClick?: () => void;
   disabled?: boolean;
   tone?: 'default' | 'primary' | 'quiet';
   type?: 'button' | 'submit';
 }) {
-  const base =
-    'inline-flex shrink-0 items-center gap-1.5 rounded-[5px] border px-2.5 py-1.5 font-mono text-[0.5rem] font-semibold uppercase tracking-[0.06em] transition-colors disabled:cursor-not-allowed disabled:opacity-45';
-  const tones: Record<string, string> = {
-    default:
-      'border-[var(--color-pearl)] bg-white text-[var(--color-charcoal)] hover:border-[var(--color-clay)]',
-    primary:
-      'border-[var(--color-clay)] bg-[var(--color-clay)] text-white hover:border-[var(--color-aged-oak)] hover:bg-[var(--color-aged-oak)]',
-    quiet:
-      'border-transparent bg-transparent text-[var(--color-aged-oak)] hover:text-[var(--color-charcoal)]',
-  };
   return (
-    <button type={type} onClick={onClick} disabled={disabled} className={`${base} ${tones[tone]}`}>
+    <DocumentAction
+      actionKey={actionKey}
+      surfaceKey="people"
+      regionKey="outreach"
+      variant={
+        tone === 'primary'
+          ? 'primary'
+          : tone === 'quiet'
+            ? 'tertiary'
+            : 'secondary'
+      }
+      type={type}
+      onClick={onClick}
+      disabled={disabled}
+    >
       {children}
-    </button>
+    </DocumentAction>
   );
 }
 
 /** A quiet "+ New …" header row above a list. */
-export function ListHeader({ label, action }: { label: string; action: ReactNode }) {
+export function ListHeader({
+  label,
+  action,
+}: {
+  label: string;
+  action: ReactNode;
+}) {
   return (
     <div className="mb-3 flex items-center justify-between">
       <h2 className="font-mono text-[0.5rem] font-semibold uppercase tracking-[0.08em] text-[var(--color-aged-oak)]">

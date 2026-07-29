@@ -68,7 +68,7 @@ struct DailyRecommendation: Identifiable, Hashable {
 #if DEBUG
 extension DailyRecommendation {
     /// SwiftUI preview-only sample. Never read at runtime — production content
-    /// comes from `FeedAPIClient`/`ProductAPIClient` recommendations.
+    /// comes from `ProductAPIClient` recommendations.
     static let previewAll: [DailyRecommendation] = [
         DailyRecommendation(
             product: Product.previewProducts[0],

@@ -22,10 +22,19 @@ import type { SectionKey } from '@/lib/document/desk-derivation';
 import { fmtDay } from '@/lib/document/format';
 import { useToggleSectionTask } from '@/hooks/use-section-work';
 import { Stamp } from './stamp';
+import {
+  DocumentAction,
+  DocumentActionGroup,
+  DocumentActionRow,
+} from './document-action';
 
 // The gate's Golden-Hour stamp (HTML §1 .stamp.st-gh) — a gate IS a decision,
 // and the section's closing line wears the stamp the client will grant.
-const GATE_STAMP = { label: 'Gate', color: 'var(--color-golden-hour)', ink: '#B89A2E' } as const;
+const GATE_STAMP = {
+  label: 'Gate',
+  color: 'var(--color-golden-hour)',
+  ink: '#B89A2E',
+} as const;
 // The .gate row treatment: a faint golden wash over a golden top rule.
 const GATE_ROW =
   'flex items-center gap-2.5 border-t border-[rgba(207,174,52,0.35)] bg-[rgba(232,197,71,0.06)] px-3 py-2';
@@ -58,8 +67,13 @@ export function WorkBlock({
 }) {
   const { data: tasks } = useSectionTasks(projectId);
   const { data: gates } = useSectionGates(projectId);
-  const { data: loggedMinutes } = useSectionLoggedMinutes(projectId, sectionKey);
-  const { data: designerClient } = useDesignerClientForClientUser(clientUserId ?? '') as {
+  const { data: loggedMinutes } = useSectionLoggedMinutes(
+    projectId,
+    sectionKey,
+  );
+  const { data: designerClient } = useDesignerClientForClientUser(
+    clientUserId ?? '',
+  ) as {
     data: any;
   };
   const createTask = useCreateSectionTask(projectId);
@@ -82,7 +96,10 @@ export function WorkBlock({
     [gates, sectionKey],
   );
 
-  const estTotal = sectionTasks.reduce((s, t) => s + (t.estimate_minutes ?? 0), 0);
+  const estTotal = sectionTasks.reduce(
+    (s, t) => s + (t.estimate_minutes ?? 0),
+    0,
+  );
   const total = sectionTasks.length;
   const doneCount = sectionTasks.filter((t) => t.status === 'done').length;
 
@@ -105,27 +122,32 @@ export function WorkBlock({
   if (sectionTasks.length === 0 && !gate && !capturing && !gateAsking) {
     // Empty state stays one quiet line — the block earns its space.
     return (
-      <div className="mb-1 mt-4 flex items-baseline gap-4">
+      <DocumentActionGroup
+        surfaceKey="open-document"
+        regionKey={`${sectionKey}-work-empty`}
+        className="mb-1 mt-4"
+        aria-label={`${sectionLabel} work actions`}
+      >
         <span className="font-mono text-[9px] uppercase tracking-[0.08em] text-[var(--text-muted)]">
           The work
         </span>
-        <button
-          type="button"
-          onClick={() => setCapturing(true)}
-          className="font-mono text-[9px] uppercase tracking-[0.05em] text-[var(--color-clay)] hover:opacity-80"
-        >
-          + Task
-        </button>
         {clientUserId && (
-          <button
-            type="button"
+          <DocumentAction
+            actionKey="request-signoff"
+            variant="primary"
             onClick={() => setGateAsking(true)}
-            className="font-mono text-[9px] uppercase tracking-[0.05em] text-[var(--text-muted)] hover:text-[var(--color-clay)]"
           >
             Request sign-off
-          </button>
+          </DocumentAction>
         )}
-      </div>
+        <DocumentAction
+          actionKey="add-task"
+          variant="secondary"
+          onClick={() => setCapturing(true)}
+        >
+          + Task
+        </DocumentAction>
+      </DocumentActionGroup>
     );
   }
 
@@ -147,7 +169,10 @@ export function WorkBlock({
           const done = t.status === 'done';
           const overdue = !done && t.due_date && t.due_date <= todayYmd();
           return (
-            <li key={t.id} className="border-b border-dashed border-[var(--color-pearl)]">
+            <li
+              key={t.id}
+              className="border-b border-dashed border-[var(--color-pearl)]"
+            >
               <button
                 type="button"
                 onClick={() => toggleTask.mutate(t)}
@@ -159,7 +184,9 @@ export function WorkBlock({
                   aria-hidden
                   className="relative top-px inline-flex h-[13px] w-[13px] items-center justify-center rounded-[3px] border-[1.5px] text-[8px] font-bold leading-none"
                   style={{
-                    borderColor: done ? 'var(--color-sage)' : 'var(--doc-ink-border)',
+                    borderColor: done
+                      ? 'var(--color-sage)'
+                      : 'var(--doc-ink-border)',
                     background: done ? 'rgba(168,181,160,0.15)' : 'transparent',
                     color: 'var(--color-sage)',
                   }}
@@ -168,7 +195,9 @@ export function WorkBlock({
                 </span>
                 <span
                   className={`text-[12px] leading-snug ${
-                    done ? 'text-[var(--text-muted)]' : 'text-[var(--color-charcoal)]'
+                    done
+                      ? 'text-[var(--text-muted)]'
+                      : 'text-[var(--color-charcoal)]'
                   }`}
                 >
                   {t.title}
@@ -184,7 +213,9 @@ export function WorkBlock({
                     : t.due_date
                       ? `due ${fmtDay(t.due_date)}`
                       : ''}
-                  {!done && t.estimate_minutes ? ` · ${fmtHours(t.estimate_minutes)}` : ''}
+                  {!done && t.estimate_minutes
+                    ? ` · ${fmtHours(t.estimate_minutes)}`
+                    : ''}
                 </span>
               </button>
             </li>
@@ -224,48 +255,62 @@ export function WorkBlock({
           />
           <input
             value={estimateH}
-            onChange={(e) => setEstimateH(e.target.value.replace(/[^0-9.]/g, ''))}
+            onChange={(e) =>
+              setEstimateH(e.target.value.replace(/[^0-9.]/g, ''))
+            }
             placeholder="est h"
             aria-label="Estimate (hours)"
             className="w-10 bg-transparent text-right font-mono text-[9.5px] text-[var(--text-muted)] outline-none placeholder:text-[var(--text-muted)]"
           />
-          <button
-            type="button"
+          <DocumentAction
+            actionKey="create-task"
+            surfaceKey="open-document"
+            regionKey={`${sectionKey}-task-capture`}
+            variant="primary"
             onClick={save}
             disabled={!title.trim()}
-            className="font-mono text-[9px] uppercase tracking-[0.05em] text-[var(--color-clay)] disabled:opacity-40"
           >
             Add
-          </button>
+          </DocumentAction>
         </div>
       ) : (
-        <div className="flex items-baseline gap-4 px-1 py-1.5">
-          <button
-            type="button"
-            onClick={() => setCapturing(true)}
-            className="font-mono text-[9px] uppercase tracking-[0.05em] text-[var(--color-clay)] hover:opacity-80"
-          >
-            + Task
-          </button>
+        <DocumentActionRow
+          surfaceKey="open-document"
+          regionKey={`${sectionKey}-work-actions`}
+          className="px-1 py-1.5"
+          aria-label={`${sectionLabel} work actions`}
+        >
           {!gate && clientUserId && !gateAsking && (
-            <button
-              type="button"
+            <DocumentAction
+              actionKey="request-signoff"
+              variant="primary"
               onClick={() => setGateAsking(true)}
-              className="font-mono text-[9px] uppercase tracking-[0.05em] text-[var(--text-muted)] hover:text-[var(--color-clay)]"
             >
               Request sign-off
-            </button>
+            </DocumentAction>
           )}
-        </div>
+          <DocumentAction
+            actionKey="add-task"
+            variant="secondary"
+            onClick={() => setCapturing(true)}
+          >
+            + Task
+          </DocumentAction>
+        </DocumentActionRow>
       )}
 
       {/* The gate line (R23): an approval gate IS a client decision — the
           section's closing line, wearing the Gate stamp the client grants. */}
       {gateAsking && !gate && (
         <div className={GATE_ROW}>
-          <Stamp label={GATE_STAMP.label} color={GATE_STAMP.color} ink={GATE_STAMP.ink} />
+          <Stamp
+            label={GATE_STAMP.label}
+            color={GATE_STAMP.color}
+            ink={GATE_STAMP.ink}
+          />
           <span className="text-[11px] text-[var(--color-charcoal)]">
-            Ask <strong className="font-medium">{clientName}</strong> to sign off on {sectionLabel} — settles this section when they approve.
+            Ask <strong className="font-medium">{clientName}</strong> to sign
+            off on {sectionLabel} — settles this section when they approve.
           </span>
           <input
             type="date"
@@ -274,9 +319,14 @@ export function WorkBlock({
             aria-label="Approval due"
             className="bg-transparent font-mono text-[9.5px] text-[var(--text-muted)] outline-none"
           />
-          <button
-            type="button"
-            disabled={!designerClient?.id || requestGate.isPending}
+          <DocumentAction
+            actionKey="submit-signoff-request"
+            surfaceKey="open-document"
+            regionKey={`${sectionKey}-signoff-request`}
+            variant="primary"
+            disabled={!designerClient?.id}
+            loading={requestGate.isPending}
+            loadingLabel="Requesting…"
             onClick={() => {
               if (!designerClient?.id) return;
               requestGate.mutate({
@@ -287,23 +337,29 @@ export function WorkBlock({
               });
               setGateAsking(false);
             }}
-            className="ml-auto font-mono text-[9px] uppercase tracking-[0.05em] text-[var(--color-clay)] disabled:opacity-40"
+            className="ml-auto"
           >
             Request sign-off
-          </button>
-          <button
-            type="button"
+          </DocumentAction>
+          <DocumentAction
+            actionKey="cancel-signoff-request"
+            surfaceKey="open-document"
+            regionKey={`${sectionKey}-signoff-request`}
+            variant="tertiary"
             onClick={() => setGateAsking(false)}
-            className="font-mono text-[9px] uppercase tracking-[0.05em] text-[var(--text-muted)]"
           >
             Cancel
-          </button>
+          </DocumentAction>
         </div>
       )}
 
       {gate && (
         <div className={GATE_ROW}>
-          <Stamp label={GATE_STAMP.label} color={GATE_STAMP.color} ink={GATE_STAMP.ink} />
+          <Stamp
+            label={GATE_STAMP.label}
+            color={GATE_STAMP.color}
+            ink={GATE_STAMP.ink}
+          />
           {gateState(gate) === 'requested' && (
             <span className="text-[11px] italic text-[var(--text-muted)]">
               {sectionLabel} sign-off requested · awaiting {clientName}
@@ -319,9 +375,14 @@ export function WorkBlock({
                   : ''}
               </span>
               {clientUserId && (
-                <button
-                  type="button"
-                  disabled={!designerClient?.id || requestGate.isPending}
+                <DocumentAction
+                  actionKey="request-signoff-again"
+                  surfaceKey="open-document"
+                  regionKey={`${sectionKey}-declined-signoff`}
+                  variant="primary"
+                  disabled={!designerClient?.id}
+                  loading={requestGate.isPending}
+                  loadingLabel="Requesting…"
                   onClick={() => {
                     if (!designerClient?.id) return;
                     requestGate.mutate({
@@ -331,10 +392,10 @@ export function WorkBlock({
                       dueDate: plusDaysYmd(7),
                     });
                   }}
-                  className="ml-auto font-mono text-[9px] uppercase tracking-[0.05em] text-[var(--color-clay)] disabled:opacity-40"
+                  className="ml-auto"
                 >
                   Request again
-                </button>
+                </DocumentAction>
               )}
             </>
           )}

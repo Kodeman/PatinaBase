@@ -15,6 +15,7 @@ import { useState } from 'react';
 import { useReviewSmsMessage, type SmsReviewMessage } from '@patina/supabase';
 import { getFieldTradeLabel } from '@patina/types';
 import { describeFieldEffect, isDelayEffect } from '@/lib/document/field-sms';
+import { DocumentAction, DocumentActionGroup } from '../document-action';
 
 export function SmsReviewCard({ message }: { message: SmsReviewMessage }) {
   const review = useReviewSmsMessage();
@@ -35,7 +36,9 @@ export function SmsReviewCard({ message }: { message: SmsReviewMessage }) {
     // A delay with an edited date carries the adjusted effect; otherwise apply
     // exactly what was parsed.
     const effect =
-      delay && editedDate ? { ...(parsed ?? {}), new_date: editedDate } : undefined;
+      delay && editedDate
+        ? { ...(parsed ?? {}), new_date: editedDate }
+        : undefined;
     review.mutate({
       messageId: message.id,
       action: 'apply',
@@ -45,7 +48,11 @@ export function SmsReviewCard({ message }: { message: SmsReviewMessage }) {
   };
 
   const dismiss = () => {
-    review.mutate({ messageId: message.id, action: 'dismiss', projectId: message.project_id });
+    review.mutate({
+      messageId: message.id,
+      action: 'dismiss',
+      projectId: message.project_id,
+    });
   };
 
   return (
@@ -72,7 +79,9 @@ export function SmsReviewCard({ message }: { message: SmsReviewMessage }) {
             <p className="font-mono text-[9px] uppercase tracking-[0.07em] text-[var(--text-muted)]">
               Proposed
             </p>
-            <p className="mt-1 text-[13px] leading-relaxed text-[var(--text-body)]">{effectLine}</p>
+            <p className="mt-1 text-[13px] leading-relaxed text-[var(--text-body)]">
+              {effectLine}
+            </p>
 
             {/* Minimal edit: a delay lets the designer adjust the date. */}
             {delay && (
@@ -90,23 +99,30 @@ export function SmsReviewCard({ message }: { message: SmsReviewMessage }) {
           </div>
         )}
 
-        <div className="mt-4 flex items-center gap-2.5">
-          <button
-            type="button"
+        <DocumentActionGroup
+          surfaceKey="desk"
+          regionKey="field-sms-review"
+          className="mt-4"
+          aria-label="Field text review actions"
+        >
+          <DocumentAction
+            actionKey="apply-field-text"
+            variant="primary"
             onClick={apply}
             disabled={!canApply || review.isPending}
-            className="rounded-[5px] bg-[var(--color-charcoal)] px-3.5 py-1.5 font-mono text-[10px] font-semibold uppercase tracking-[0.06em] text-[var(--color-off-white)] disabled:opacity-50"
+            loading={review.isPending && review.variables?.action === 'apply'}
+            loadingLabel="Applying…"
           >
-            {review.isPending && review.variables?.action === 'apply' ? 'Applying…' : 'Apply'}
-          </button>
-          <button
-            type="button"
+            Apply
+          </DocumentAction>
+          <DocumentAction
+            actionKey="dismiss-field-text"
+            variant="tertiary"
             onClick={dismiss}
             disabled={review.isPending}
-            className="rounded-[5px] border border-[var(--border-default)] px-3.5 py-1.5 font-mono text-[10px] font-semibold uppercase tracking-[0.06em] text-[var(--text-body)] hover:border-[var(--color-clay)] disabled:opacity-50"
           >
             Dismiss
-          </button>
+          </DocumentAction>
           {!canApply && (
             <span className="text-[11px] text-[var(--text-muted)]">
               No effect to apply — dismiss, or reply by text.
@@ -117,7 +133,7 @@ export function SmsReviewCard({ message }: { message: SmsReviewMessage }) {
               Couldn’t save — try again.
             </span>
           )}
-        </div>
+        </DocumentActionGroup>
       </div>
     </div>
   );

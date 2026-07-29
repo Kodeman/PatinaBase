@@ -32,8 +32,12 @@ import {
   useProjects,
 } from '@patina/supabase';
 import { computeInvoiceTotals, formatCurrency } from '@patina/shared';
-import { useClaimTimeEntries, useUnbilledTime } from '@/hooks/use-time-tracking';
+import {
+  useClaimTimeEntries,
+  useUnbilledTime,
+} from '@/hooks/use-time-tracking';
 import { formatHoursLabel } from '@/lib/time-billing';
+import { DocumentAction, DocumentActionGroup } from '../document-action';
 import {
   EMPTY_ADHOC,
   buildComposerLines,
@@ -48,11 +52,10 @@ import type { InvoiceComposerContext } from './invoice-overlays';
 
 const TERRACOTTA_INK = '#C4836F';
 
-const LABEL = 'font-mono text-[8px] uppercase tracking-[0.08em] text-[var(--text-muted)]';
+const LABEL =
+  'font-mono text-[8px] uppercase tracking-[0.08em] text-[var(--text-muted)]';
 const INPUT =
   'rounded-[3px] border border-[var(--color-pearl)] bg-transparent px-2 py-1.5 text-[11.5px] text-[var(--color-charcoal)] focus:border-[var(--color-clay)] focus:outline-none';
-const ACT =
-  'whitespace-nowrap rounded-[4px] border border-[rgba(196,165,123,0.5)] px-3 py-1.5 font-mono text-[9.5px] font-semibold uppercase tracking-[0.06em] text-[var(--color-clay)] transition-colors hover:bg-[var(--color-clay)] hover:text-white disabled:opacity-40 disabled:hover:bg-transparent disabled:hover:text-[var(--color-clay)]';
 const CHECK = 'relative top-[1px] accent-[var(--color-clay)]';
 const ROW =
   'flex cursor-pointer items-baseline gap-2.5 border-b border-dashed border-[var(--color-pearl)] py-1.5';
@@ -73,20 +76,32 @@ export function InvoiceComposer({
   const { data: projects } = useProjects();
   const { data: milestones } = useProjectPaymentMilestones(projectId);
   const { data: projectInvoices } = useProjectInvoices(projectId || null);
-  const { data: unbilledTime, isLoading: timeLoading } = useUnbilledTime(projectId || null);
-  const { data: ffeItems, isLoading: ffeLoading } = useProjectFFEItems(projectId);
-  const { data: coverage, isLoading: coverageLoading } = useFfeInvoiceCoverage(projectId, {
-    enabled: !!projectId,
-  });
+  const { data: unbilledTime, isLoading: timeLoading } = useUnbilledTime(
+    projectId || null,
+  );
+  const { data: ffeItems, isLoading: ffeLoading } =
+    useProjectFFEItems(projectId);
+  const { data: coverage, isLoading: coverageLoading } = useFfeInvoiceCoverage(
+    projectId,
+    {
+      enabled: !!projectId,
+    },
+  );
 
   const createDraft = useCreateDraftInvoice({ errorSurface: 'inline' });
   const deleteDraft = useDeleteDraftInvoice({ errorSurface: 'inline' });
   const claimTime = useClaimTimeEntries({ errorSurface: 'inline' });
 
   // ── Selections ────────────────────────────────────────────────────────────
-  const [tickedMilestoneIds, setTickedMilestoneIds] = useState<Set<string>>(() => new Set());
-  const [tickedTimeIds, setTickedTimeIds] = useState<Set<string>>(() => new Set());
-  const [tickedFfeIds, setTickedFfeIds] = useState<Set<string>>(() => new Set());
+  const [tickedMilestoneIds, setTickedMilestoneIds] = useState<Set<string>>(
+    () => new Set(),
+  );
+  const [tickedTimeIds, setTickedTimeIds] = useState<Set<string>>(
+    () => new Set(),
+  );
+  const [tickedFfeIds, setTickedFfeIds] = useState<Set<string>>(
+    () => new Set(),
+  );
   const [adhoc, setAdhoc] = useState<ComposerAdhocRow[]>([{ ...EMPTY_ADHOC }]);
   const [taxRatePercent, setTaxRatePercent] = useState('0');
   const [termsDays, setTermsDays] = useState('15');
@@ -109,7 +124,7 @@ export function InvoiceComposer({
   const offerableMilestones = useMemo(
     () =>
       unbilledMilestones(
-        ((milestones ?? []) as ComposerMilestone[]),
+        (milestones ?? []) as ComposerMilestone[],
         (projectInvoices ?? []) as AnyRecord[],
       ),
     [milestones, projectInvoices],
@@ -120,13 +135,16 @@ export function InvoiceComposer({
   const ffePartition = useMemo(
     () =>
       partitionFfeBillable(
-        ((ffeItems ?? []) as Array<ComposerFfeItem & AnyRecord>),
+        (ffeItems ?? []) as Array<ComposerFfeItem & AnyRecord>,
         ffeSettled ? coverage : undefined,
       ),
     [ffeItems, coverage, ffeSettled],
   );
 
-  const unbilledEntries = useMemo(() => unbilledTime?.entries ?? [], [unbilledTime]);
+  const unbilledEntries = useMemo(
+    () => unbilledTime?.entries ?? [],
+    [unbilledTime],
+  );
 
   // ── Prefill seeding — once per project, after the section queries settle ──
   // (An intersection seed, not a blind copy: covered FF&E items and
@@ -142,13 +160,17 @@ export function InvoiceComposer({
     if (wantsFfe) {
       const billableIds = new Set(ffePartition.billable.map((i) => i.id));
       setTickedFfeIds(
-        new Set((context.initialFfeItemIds ?? []).filter((id) => billableIds.has(id))),
+        new Set(
+          (context.initialFfeItemIds ?? []).filter((id) => billableIds.has(id)),
+        ),
       );
     }
     if (wantsTime) {
       const entryIds = new Set(unbilledEntries.map((e) => e.id));
       setTickedTimeIds(
-        new Set((context.initialTimeEntryIds ?? []).filter((id) => entryIds.has(id))),
+        new Set(
+          (context.initialTimeEntryIds ?? []).filter((id) => entryIds.has(id)),
+        ),
       );
     }
     setSeededFor(projectId);
@@ -183,30 +205,46 @@ export function InvoiceComposer({
 
   const selection = useMemo(
     () => ({
-      milestones: offerableMilestones.filter((m) => tickedMilestoneIds.has(m.id)),
+      milestones: offerableMilestones.filter((m) =>
+        tickedMilestoneIds.has(m.id),
+      ),
       ffeItems: ffePartition.billable.filter((i) => tickedFfeIds.has(i.id)),
       timeEntries: unbilledEntries.filter((e) => tickedTimeIds.has(e.id)),
       adhoc,
     }),
-    [offerableMilestones, tickedMilestoneIds, ffePartition, tickedFfeIds, unbilledEntries, tickedTimeIds, adhoc],
+    [
+      offerableMilestones,
+      tickedMilestoneIds,
+      ffePartition,
+      tickedFfeIds,
+      unbilledEntries,
+      tickedTimeIds,
+      adhoc,
+    ],
   );
   const lines = useMemo(() => buildComposerLines(selection), [selection]);
   const totals = useMemo(
     () =>
       computeInvoiceTotals(
-        lines.map((l) => ({ quantity: l.quantity, unit_amount_cents: l.unitAmountCents })),
+        lines.map((l) => ({
+          quantity: l.quantity,
+          unit_amount_cents: l.unitAmountCents,
+        })),
         taxRate,
       ),
     [lines, taxRate],
   );
 
-  const creating = createDraft.isPending || claimTime.isPending || deleteDraft.isPending;
+  const creating =
+    createDraft.isPending || claimTime.isPending || deleteDraft.isPending;
   // Block drafting while a prefilled section is still resolving — otherwise a
   // draft could land moments before its prefill arrives, silently dropping it.
   const prefillPending =
     seededFor !== projectId &&
-    ((context.initialFfeItemIds ?? []).length > 0 || (context.initialTimeEntryIds ?? []).length > 0);
-  const canDraft = !!projectId && lines.length > 0 && !creating && !prefillPending;
+    ((context.initialFfeItemIds ?? []).length > 0 ||
+      (context.initialTimeEntryIds ?? []).length > 0);
+  const canDraft =
+    !!projectId && lines.length > 0 && !creating && !prefillPending;
 
   const draft = async () => {
     setError(null);
@@ -217,7 +255,8 @@ export function InvoiceComposer({
         projectId,
         clientId: selectedProject?.client_id ?? null,
         taxRate,
-        paymentTermsDays: parseInt(termsDays, 10) >= 0 ? parseInt(termsDays, 10) : 15,
+        paymentTermsDays:
+          parseInt(termsDays, 10) >= 0 ? parseInt(termsDays, 10) : 15,
         memo: memo.trim() || undefined,
         lines,
       });
@@ -227,16 +266,24 @@ export function InvoiceComposer({
     }
 
     if (timeLine) {
-      const entryIds = (timeLine.metadata as { time_entry_ids?: string[] })?.time_entry_ids ?? [];
+      const entryIds =
+        (timeLine.metadata as { time_entry_ids?: string[] })?.time_entry_ids ??
+        [];
       try {
-        await claimTime.mutateAsync({ invoiceId: invoice.id, projectId, entryIds });
+        await claimTime.mutateAsync({
+          invoiceId: invoice.id,
+          projectId,
+          entryIds,
+        });
       } catch (e) {
         try {
           await deleteDraft.mutateAsync({ invoiceId: invoice.id, projectId });
         } catch {
           /* the draft survives with an unclaimed time line — voidable */
         }
-        setError(e instanceof Error ? e.message : 'Could not attach the time entries');
+        setError(
+          e instanceof Error ? e.message : 'Could not attach the time entries',
+        );
         return;
       }
     }
@@ -265,8 +312,8 @@ export function InvoiceComposer({
         </span>
       </div>
       <p className="mt-0.5 text-[11px] text-[var(--text-muted)]">
-        Everything billable pulls through below — tick what this invoice should carry, in any
-        order. The draft opens as the folio to issue &amp; send.
+        Everything billable pulls through below — tick what this invoice should
+        carry, in any order. The draft opens as the folio to issue &amp; send.
       </p>
 
       {/* ── The document it bills ──────────────────────────────────────── */}
@@ -348,12 +395,16 @@ export function InvoiceComposer({
                   }
                   className="ml-2 font-mono text-[8px] uppercase tracking-[0.05em] text-[var(--color-clay)] hover:opacity-80"
                 >
-                  {tickedTimeIds.size === unbilledEntries.length ? 'clear all' : 'tick all'}
+                  {tickedTimeIds.size === unbilledEntries.length
+                    ? 'clear all'
+                    : 'tick all'}
                 </button>
               )}
             </p>
             {timeLoading ? (
-              <p className="py-1 text-[11px] italic text-[var(--text-muted)]">Reading the hours…</p>
+              <p className="py-1 text-[11px] italic text-[var(--text-muted)]">
+                Reading the hours…
+              </p>
             ) : unbilledEntries.length > 0 ? (
               <>
                 {unbilledEntries.map((entry) => (
@@ -374,7 +425,9 @@ export function InvoiceComposer({
                     <span className="min-w-0 flex-1 truncate text-[11.5px] text-[var(--color-charcoal)]">
                       {fmtDay(entry.started_at)}
                       {entry.notes && (
-                        <span className="ml-1.5 text-[var(--text-muted)]">{entry.notes}</span>
+                        <span className="ml-1.5 text-[var(--text-muted)]">
+                          {entry.notes}
+                        </span>
                       )}
                     </span>
                     <span className="font-mono text-[8.5px] uppercase tracking-[0.05em] text-[var(--text-muted)]">
@@ -387,7 +440,8 @@ export function InvoiceComposer({
                   </label>
                 ))}
                 <p className="mt-1 font-mono text-[8px] uppercase tracking-[0.05em] text-[var(--text-muted)]">
-                  ticked entries bill as one line and lock to the draft · voiding releases them
+                  ticked entries bill as one line and lock to the draft ·
+                  voiding releases them
                 </p>
               </>
             ) : (
@@ -423,14 +477,18 @@ export function InvoiceComposer({
                   <span className="min-w-0 flex-1 truncate text-[11.5px] text-[var(--color-charcoal)]">
                     {it.name}
                     {it.room?.name && (
-                      <span className="ml-1.5 text-[var(--text-muted)]">{it.room.name}</span>
+                      <span className="ml-1.5 text-[var(--text-muted)]">
+                        {it.room.name}
+                      </span>
                     )}
                   </span>
                   <span className="font-mono text-[8.5px] uppercase tracking-[0.05em] text-[var(--text-muted)]">
                     ×{it.quantity ?? 1}
                   </span>
                   <span className="font-mono text-[10.5px] text-[var(--color-charcoal)]">
-                    {formatCurrency((it.quantity ?? 1) * (it.unit_price_cents ?? 0))}
+                    {formatCurrency(
+                      (it.quantity ?? 1) * (it.unit_price_cents ?? 0),
+                    )}
                   </span>
                 </label>
               ))
@@ -439,7 +497,9 @@ export function InvoiceComposer({
                 Nothing uninvoiced — every priced line is billed.
               </p>
             )}
-            {(skippedFfe.covered > 0 || skippedFfe.unpriced > 0 || ffePartition.unpriced.length > 0) && (
+            {(skippedFfe.covered > 0 ||
+              skippedFfe.unpriced > 0 ||
+              ffePartition.unpriced.length > 0) && (
               <p className="mt-1 font-mono text-[8px] uppercase tracking-[0.05em] text-[var(--text-muted)]">
                 {[
                   skippedFfe.covered > 0
@@ -459,14 +519,19 @@ export function InvoiceComposer({
           <div className="mt-4">
             <p className={`${LABEL} mb-1`}>ad-hoc lines</p>
             {adhoc.map((line, i) => (
-              <div key={i} className="mb-1.5 grid grid-cols-[1fr_56px_96px_24px] items-center gap-2">
+              <div
+                key={i}
+                className="mb-1.5 grid grid-cols-[1fr_56px_96px_24px] items-center gap-2"
+              >
                 <input
                   placeholder="Description — e.g. design consultation"
                   aria-label="Line description"
                   value={line.description}
                   onChange={(e) =>
                     setAdhoc((prev) =>
-                      prev.map((l, j) => (j === i ? { ...l, description: e.target.value } : l)),
+                      prev.map((l, j) =>
+                        j === i ? { ...l, description: e.target.value } : l,
+                      ),
                     )
                   }
                   className={INPUT}
@@ -478,7 +543,9 @@ export function InvoiceComposer({
                   value={line.quantity}
                   onChange={(e) =>
                     setAdhoc((prev) =>
-                      prev.map((l, j) => (j === i ? { ...l, quantity: e.target.value } : l)),
+                      prev.map((l, j) =>
+                        j === i ? { ...l, quantity: e.target.value } : l,
+                      ),
                     )
                   }
                   className={`${INPUT} text-right`}
@@ -490,7 +557,9 @@ export function InvoiceComposer({
                   value={line.unitDollars}
                   onChange={(e) =>
                     setAdhoc((prev) =>
-                      prev.map((l, j) => (j === i ? { ...l, unitDollars: e.target.value } : l)),
+                      prev.map((l, j) =>
+                        j === i ? { ...l, unitDollars: e.target.value } : l,
+                      ),
                     )
                   }
                   className={`${INPUT} text-right`}
@@ -498,20 +567,25 @@ export function InvoiceComposer({
                 <button
                   type="button"
                   aria-label="Remove line"
-                  onClick={() => setAdhoc((prev) => prev.filter((_, j) => j !== i))}
+                  onClick={() =>
+                    setAdhoc((prev) => prev.filter((_, j) => j !== i))
+                  }
                   className="text-[13px] text-[var(--text-muted)] hover:text-[#C4836F]"
                 >
                   ×
                 </button>
               </div>
             ))}
-            <button
-              type="button"
+            <DocumentAction
+              actionKey="add-invoice-line"
+              surfaceKey="accounts"
+              regionKey="invoice-lines"
+              variant="secondary"
               onClick={() => setAdhoc((prev) => [...prev, { ...EMPTY_ADHOC }])}
-              className="font-mono text-[9px] uppercase tracking-[0.05em] text-[var(--color-clay)] hover:opacity-80"
+              className="mt-1"
             >
-              + line
-            </button>
+              Add line
+            </DocumentAction>
           </div>
 
           {/* ── Terms ──────────────────────────────────────────────────── */}
@@ -571,22 +645,41 @@ export function InvoiceComposer({
                 {lines.length} line{lines.length === 1 ? '' : 's'}
               </span>
             </div>
-            <button type="button" disabled={!canDraft} onClick={() => void draft()} className={ACT}>
-              {creating ? 'drafting…' : 'Draft the invoice →'}
-            </button>
+            <DocumentAction
+              actionKey="draft-invoice"
+              surfaceKey="accounts"
+              regionKey="invoice-composer"
+              variant="primary"
+              disabled={!canDraft}
+              loading={creating}
+              loadingLabel="Drafting…"
+              onClick={() => void draft()}
+            >
+              Draft the invoice
+            </DocumentAction>
           </div>
 
           {/* R83 — the inline failure band, at the act site. */}
           {error && (
-            <p
+            <div
               className="mt-2 rounded-[3px] border border-[rgba(196,131,111,0.4)] px-2 py-1.5 font-mono text-[9px] uppercase tracking-[0.05em]"
               style={{ color: TERRACOTTA_INK }}
             >
-              {error} —{' '}
-              <button type="button" onClick={() => void draft()} className="underline">
-                try again
-              </button>
-            </p>
+              {error}
+              <DocumentActionGroup
+                surfaceKey="accounts"
+                regionKey="invoice-draft-error"
+                className="mt-2"
+              >
+                <DocumentAction
+                  actionKey="retry-draft-invoice"
+                  variant="primary"
+                  onClick={() => void draft()}
+                >
+                  Try again
+                </DocumentAction>
+              </DocumentActionGroup>
+            </div>
           )}
         </>
       )}

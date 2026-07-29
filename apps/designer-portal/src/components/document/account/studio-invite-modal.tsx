@@ -16,9 +16,10 @@
  */
 
 import { useState, type FormEvent } from 'react';
-import { Button, Input, Select } from '@/components/ui/controls';
+import { Input, Select } from '@/components/ui/controls';
 import { useInviteMember, type MemberRole } from '@patina/supabase';
 import { studioEvents } from '@/lib/analytics/studio-events';
+import { DocumentAction, DocumentActionGroup } from '../document-action';
 import { DocSheet } from '../overlays/doc-sheet';
 
 export interface StudioInviteModalProps {
@@ -34,7 +35,11 @@ type InvitableRole = Extract<MemberRole, 'member' | 'admin'>;
 const LABEL = 'mb-1 block text-[12px] font-medium text-[var(--text-primary)]';
 const HELP = 'text-[12px] leading-relaxed text-[var(--color-aged-oak)]';
 
-export function StudioInviteModal({ open, onOpenChange, organizationId }: StudioInviteModalProps) {
+export function StudioInviteModal({
+  open,
+  onOpenChange,
+  organizationId,
+}: StudioInviteModalProps) {
   const [email, setEmail] = useState('');
   const [name, setName] = useState('');
   const [role, setRole] = useState<InvitableRole>('member');
@@ -88,32 +93,43 @@ export function StudioInviteModal({ open, onOpenChange, organizationId }: Studio
   };
 
   return (
-    <DocSheet open={open} onClose={() => handleOpenChange(false)} title="Invite teammate">
+    <DocSheet
+      open={open}
+      onClose={() => handleOpenChange(false)}
+      title="Invite teammate"
+    >
       <div className="mx-auto max-w-sm">
         <p className={HELP}>
-          Bring a designer or collaborator into your studio. They&apos;ll get an email with a
-          link to join.
+          Bring a designer or collaborator into your studio. They&apos;ll get an
+          email with a link to join.
         </p>
 
         {invitedEmail ? (
           <div className="mt-4 space-y-4">
             <p role="status" className="text-sm text-[var(--color-charcoal)]">
-              Invited <span className="font-medium">{invitedEmail}</span> — they&apos;ll get an
-              email.
+              Invited <span className="font-medium">{invitedEmail}</span> —
+              they&apos;ll get an email.
             </p>
-            <div className="flex items-center justify-end gap-3">
-              <Button type="button" variant="secondary" size="sm" onClick={handleInviteAnother}>
+            <DocumentActionGroup
+              surfaceKey="account"
+              regionKey="studio-invite-complete"
+              className="justify-end"
+            >
+              <DocumentAction
+                actionKey="invite-another-teammate"
+                variant="secondary"
+                onClick={handleInviteAnother}
+              >
                 Invite another
-              </Button>
-              <Button
-                type="button"
-                variant="primary"
-                size="sm"
+              </DocumentAction>
+              <DocumentAction
+                actionKey="finish-studio-invite"
+                variant="tertiary"
                 onClick={() => handleOpenChange(false)}
               >
                 Done
-              </Button>
-            </div>
+              </DocumentAction>
+            </DocumentActionGroup>
           </div>
         ) : (
           <form onSubmit={handleSubmit} className="mt-4 space-y-4">
@@ -134,7 +150,10 @@ export function StudioInviteModal({ open, onOpenChange, organizationId }: Studio
 
             <div>
               <label htmlFor="studio-invite-name" className={LABEL}>
-                Name <span className="font-normal text-[var(--text-muted)]">(optional)</span>
+                Name{' '}
+                <span className="font-normal text-[var(--text-muted)]">
+                  (optional)
+                </span>
               </label>
               <Input
                 id="studio-invite-name"
@@ -152,7 +171,9 @@ export function StudioInviteModal({ open, onOpenChange, organizationId }: Studio
               <Select
                 id="studio-invite-teammate-type"
                 value={teammateType}
-                onChange={(e) => setTeammateType(e.target.value as TeammateType)}
+                onChange={(e) =>
+                  setTeammateType(e.target.value as TeammateType)
+                }
               >
                 <option value="designer">Designer</option>
                 <option value="member">Collaborator</option>
@@ -181,26 +202,31 @@ export function StudioInviteModal({ open, onOpenChange, organizationId }: Studio
               </p>
             )}
 
-            <div className="flex items-center justify-end gap-3 pt-1">
-              <Button
+            <DocumentActionGroup
+              surfaceKey="account"
+              regionKey="studio-invite-form"
+              className="justify-end pt-1"
+            >
+              <DocumentAction
+                actionKey="cancel-studio-invite"
+                variant="tertiary"
                 type="button"
-                variant="secondary"
-                size="sm"
                 onClick={() => handleOpenChange(false)}
                 disabled={inviteMember.isPending}
               >
                 Cancel
-              </Button>
-              <Button
-                type="submit"
+              </DocumentAction>
+              <DocumentAction
+                actionKey="send-studio-invite"
                 variant="primary"
-                size="sm"
+                type="submit"
                 loading={inviteMember.isPending}
+                loadingLabel="Sending…"
                 disabled={!email.trim() || inviteMember.isPending}
               >
-                {inviteMember.isPending ? 'Sending…' : 'Send invite'}
-              </Button>
-            </div>
+                Send invite
+              </DocumentAction>
+            </DocumentActionGroup>
           </form>
         )}
       </div>

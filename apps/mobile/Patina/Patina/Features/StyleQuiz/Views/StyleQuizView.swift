@@ -6,10 +6,14 @@
 //
 
 import SwiftUI
+import SwiftData
 
 struct StyleQuizView: View {
     @Environment(\.dismiss) private var dismiss
     @Environment(\.appCoordinator) private var coordinator
+    /// Writes the completed quiz to `StylePreferenceModel` — the row Home and
+    /// Profile read to decide whether a style profile exists.
+    @Environment(\.modelContext) private var modelContext
     /// R26: selection/progress springs respect Reduce Motion.
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var viewModel = StyleQuizViewModel()
@@ -86,6 +90,10 @@ struct StyleQuizView: View {
         }
         .onChange(of: viewModel.isComplete) { _, complete in
             if complete, let result = viewModel.result {
+                // Persist before routing: both mounts leave through this one
+                // seam, so this is where a finished quiz becomes a style
+                // profile the rest of the app can see.
+                viewModel.persistToSwiftData(context: modelContext)
                 if let onComplete {
                     onComplete(result)
                 } else {

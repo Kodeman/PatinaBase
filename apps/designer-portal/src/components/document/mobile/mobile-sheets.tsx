@@ -25,6 +25,7 @@ import { fillStateAtSection } from '@/lib/document/fill-state';
 import { openLedger } from '../command-bar';
 import { openAccount } from '../account/account-sheet';
 import { MobileAccountHeader } from '../account/mobile-account-header';
+import { DocumentAction, DocumentActionRow } from '../document-action';
 import { useMobileShell } from './mobile-shell';
 
 const LEDGERS: {
@@ -37,12 +38,48 @@ const LEDGERS: {
   // D14: Library, People, and Rooms are Rooms (walk in); the rest are Sheets
   // (pulled over). `name` must lowercase to the registry key — openLedger()
   // dispatches `name.toLowerCase()` and the drawer matches on `key`.
-  { key: 'library', name: 'Library', spine: 'var(--color-clay)', count: 'a room · walk in', weight: 'room' },
-  { key: 'orders', name: 'Orders', spine: 'var(--color-dusty-blue)', count: 'cross-engagement POs', weight: 'sheet' },
-  { key: 'accounts', name: 'Accounts', spine: 'var(--color-sage)', count: 'revenue · A/R', weight: 'sheet' },
-  { key: 'people', name: 'People', spine: 'var(--color-terracotta)', count: 'a room · walk in', weight: 'room' },
-  { key: 'rooms', name: 'Rooms', spine: 'var(--color-aged-oak)', count: 'a room · walk in', weight: 'room' },
-  { key: 'hours', name: 'Hours', spine: 'var(--color-mocha)', count: 'this week', weight: 'sheet' },
+  {
+    key: 'library',
+    name: 'Library',
+    spine: 'var(--color-clay)',
+    count: 'a room · walk in',
+    weight: 'room',
+  },
+  {
+    key: 'orders',
+    name: 'Orders',
+    spine: 'var(--color-dusty-blue)',
+    count: 'cross-engagement POs',
+    weight: 'sheet',
+  },
+  {
+    key: 'accounts',
+    name: 'Accounts',
+    spine: 'var(--color-sage)',
+    count: 'revenue · A/R',
+    weight: 'sheet',
+  },
+  {
+    key: 'people',
+    name: 'People',
+    spine: 'var(--color-terracotta)',
+    count: 'a room · walk in',
+    weight: 'room',
+  },
+  {
+    key: 'rooms',
+    name: 'Rooms',
+    spine: 'var(--color-aged-oak)',
+    count: 'a room · walk in',
+    weight: 'room',
+  },
+  {
+    key: 'hours',
+    name: 'Hours',
+    spine: 'var(--color-mocha)',
+    count: 'this week',
+    weight: 'sheet',
+  },
 ];
 
 function Sheet({
@@ -55,7 +92,11 @@ function Sheet({
   children: React.ReactNode;
 }) {
   return (
-    <div className="fixed inset-0 z-[58] min-[980px]:hidden" role="dialog" aria-modal="true">
+    <div
+      className="fixed inset-0 z-[58] min-[980px]:hidden"
+      role="dialog"
+      aria-modal="true"
+    >
       <button
         type="button"
         aria-label="Dismiss"
@@ -71,7 +112,9 @@ function Sheet({
       >
         <div
           className={`mx-auto mb-1 mt-[9px] h-[4px] w-[36px] rounded-full ${
-            tone === 'paper' ? 'bg-[var(--color-pearl)]' : 'bg-[rgba(250,247,242,0.2)]'
+            tone === 'paper'
+              ? 'bg-[var(--color-pearl)]'
+              : 'bg-[rgba(250,247,242,0.2)]'
           }`}
         />
         <div className="px-[1.1rem] pb-2 pt-1">{children}</div>
@@ -81,7 +124,8 @@ function Sheet({
 }
 
 export function MobileSheets() {
-  const { sheet, activeDoc, closeSheet, openMarginItem, openSpine } = useMobileShell();
+  const { sheet, activeDoc, closeSheet, openMarginItem, openSpine } =
+    useMobileShell();
   const router = useRouter();
   const projectId = activeDoc?.projectId ?? null;
   const proposalId = activeDoc?.proposalId ?? null;
@@ -109,7 +153,8 @@ export function MobileSheets() {
           }}
         />
         <h2 className="mt-3 font-heading text-[1.05rem] text-[var(--color-pearl)]">
-          The drawer <em className="italic text-[var(--color-clay)]">· six books</em>
+          The drawer{' '}
+          <em className="italic text-[var(--color-clay)]">· six books</em>
         </h2>
         <p className="mt-0.5 text-[11.5px] text-[rgba(250,247,242,0.45)]">
           Pulled over whatever you&apos;re holding. Put back when done.
@@ -126,7 +171,10 @@ export function MobileSheets() {
                 className="flex w-full items-center gap-3 border-b border-[rgba(250,247,242,0.08)] py-2.5 text-left"
               >
                 {l.weight === 'room' ? (
-                  <span aria-hidden className="flex shrink-0 flex-col gap-[2px]">
+                  <span
+                    aria-hidden
+                    className="flex shrink-0 flex-col gap-[2px]"
+                  >
                     <i className="block h-[2px] w-[15px] rounded-[1px] bg-[var(--color-clay)]" />
                     <i className="block h-[2px] w-[11px] rounded-[1px] bg-[var(--color-clay)] opacity-60" />
                     <i className="block h-[2px] w-[7px] rounded-[1px] bg-[var(--color-clay)] opacity-30" />
@@ -142,7 +190,10 @@ export function MobileSheets() {
                   <span className="block font-heading text-[13px] font-medium text-[rgba(250,247,242,0.9)]">
                     {l.name}
                     {l.weight === 'room' && (
-                      <span aria-hidden className="ml-1.5 font-mono text-[11px] text-[var(--color-clay)] opacity-70">
+                      <span
+                        aria-hidden
+                        className="ml-1.5 font-mono text-[11px] text-[var(--color-clay)] opacity-70"
+                      >
                         ↗
                       </span>
                     )}
@@ -187,7 +238,11 @@ export function MobileSheets() {
           {(activeDoc?.sections ?? []).map((s) => {
             const inner = (
               <>
-                <StrataMark size="sm" fill={fillStateAtSection(s.key)} breathing={s.state === 'active'} />
+                <StrataMark
+                  size="sm"
+                  fill={fillStateAtSection(s.key)}
+                  breathing={s.state === 'active'}
+                />
                 <span className={s.state === 'future' ? 'opacity-45' : ''}>
                   <span
                     className={`block text-[13px] ${
@@ -218,7 +273,9 @@ export function MobileSheets() {
                     onClick={() => {
                       closeSheet();
                       window.dispatchEvent(
-                        new CustomEvent('document:open-section', { detail: s.key }),
+                        new CustomEvent('document:open-section', {
+                          detail: s.key,
+                        }),
                       );
                     }}
                     className="flex w-full items-center gap-2.5 py-2 text-left"
@@ -246,7 +303,10 @@ export function MobileSheets() {
                       closeSheet();
                       document
                         .getElementById(`doc-room-${r.id}`)
-                        ?.scrollIntoView({ block: 'start', behavior: 'smooth' });
+                        ?.scrollIntoView({
+                          block: 'start',
+                          behavior: 'smooth',
+                        });
                     }}
                     className="block w-full py-1.5 text-left font-heading text-[13px] italic text-[var(--color-charcoal)]"
                   >
@@ -273,7 +333,9 @@ export function MobileSheets() {
                   type="button"
                   onClick={() => openMarginItem(row.item_id)}
                   className="mb-1.5 flex w-full items-start gap-2 rounded-[4px] border border-[var(--color-pearl)] bg-[var(--doc-paper)] px-2.5 py-2 text-left"
-                  style={{ borderLeft: `2.5px solid ${marginAccent(row.kind).border}` }}
+                  style={{
+                    borderLeft: `2.5px solid ${marginAccent(row.kind).border}`,
+                  }}
                 >
                   <span
                     className="mt-px shrink-0 font-mono text-[8px] font-semibold uppercase tracking-[0.06em]"
@@ -330,8 +392,15 @@ export function MobileSheets() {
 }
 
 function MobileTimerSheet() {
-  const { heldProjectId, running, paused, elapsedSeconds, pause, resume, manualLog } =
-    useDocumentTime();
+  const {
+    heldProjectId,
+    running,
+    paused,
+    elapsedSeconds,
+    pause,
+    resume,
+    manualLog,
+  } = useDocumentTime();
   const [minutes, setMinutes] = useState('');
   const [activity, setActivity] = useState('design');
   const [formOpen, setFormOpen] = useState(false);
@@ -354,18 +423,32 @@ function MobileTimerSheet() {
       </p>
       <div className="flex flex-wrap gap-2">
         {running && (
-          <button type="button" onClick={pause} className={BTN}>
+          <button
+            type="button"
+            onClick={pause}
+            className={`${BTN} min-h-11 min-w-11 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-clay)]`}
+          >
             Pause
           </button>
         )}
         {paused && (
-          <button type="button" onClick={resume} className={BTN}>
+          <button
+            type="button"
+            onClick={resume}
+            className={`${BTN} min-h-11 min-w-11 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-clay)]`}
+          >
             Resume
           </button>
         )}
-        <button type="button" onClick={() => setFormOpen((v) => !v)} className={BTN}>
+        <DocumentAction
+          actionKey="open-manual-time-entry"
+          surfaceKey="mobile-timer"
+          regionKey="timer-controls"
+          variant="secondary"
+          onClick={() => setFormOpen((v) => !v)}
+        >
           + Log manually
-        </button>
+        </DocumentAction>
       </div>
       {formOpen && (
         <div className="mt-3 space-y-2">
@@ -390,27 +473,36 @@ function MobileTimerSheet() {
               </option>
             ))}
           </select>
-          <button
-            type="button"
-            disabled={!valid || busy}
-            onClick={async () => {
-              setBusy(true);
-              try {
-                await manualLog(parsed, activity);
-                setMinutes('');
-                setFormOpen(false);
-              } finally {
-                setBusy(false);
-              }
-            }}
-            className="rounded-[5px] border border-[var(--color-clay)] bg-[var(--color-clay)] px-3 py-1.5 text-[12px] font-medium text-white disabled:opacity-50"
+          <DocumentActionRow
+            surfaceKey="mobile-timer"
+            regionKey="manual-time-entry"
+            aria-label="Manual time entry actions"
           >
-            Add entry
-          </button>
+            <DocumentAction
+              actionKey="add-manual-time-entry"
+              variant="primary"
+              disabled={!valid || busy}
+              loading={busy}
+              loadingLabel="Adding…"
+              onClick={async () => {
+                setBusy(true);
+                try {
+                  await manualLog(parsed, activity);
+                  setMinutes('');
+                  setFormOpen(false);
+                } finally {
+                  setBusy(false);
+                }
+              }}
+            >
+              Add entry
+            </DocumentAction>
+          </DocumentActionRow>
         </div>
       )}
       <p className="mt-3 text-[11px] italic text-[var(--text-muted)]">
-        Pick up = clock in. Put down = you decide what logs. Nothing bills itself.
+        Pick up = clock in. Put down = you decide what logs. Nothing bills
+        itself.
       </p>
     </div>
   );

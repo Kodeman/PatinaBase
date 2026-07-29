@@ -30,7 +30,10 @@ import {
 } from '@patina/supabase';
 import { describeFieldEffect } from '@/lib/document/field-sms';
 import { useAuth } from '@/hooks/use-auth';
-import { invalidateMarginSurfaces, useSendWeeklyPulse } from '@/hooks/use-margin-items';
+import {
+  invalidateMarginSurfaces,
+  useSendWeeklyPulse,
+} from '@/hooks/use-margin-items';
 import { useEscalateNoteToDecision } from '@/hooks/use-margin-notes';
 import { AmendmentSheet } from '@/components/document/overlays/amendment-sheet';
 import type { MarginItemRow } from '@/lib/document/margin-derivation';
@@ -38,19 +41,23 @@ import { extendRevivesDecision } from '@/lib/document/decision-edges';
 import { composePulseDraft } from '@/lib/document/compose-pulse-draft';
 import { fmtDay, fmtUsd, todayYmd } from '@/lib/document/format';
 import { openInvoiceFolio } from './accounts/invoice-overlays';
-
+import {
+  DocumentAction,
+  DocumentActionGroup,
+  DocumentActionRow,
+} from './document-action';
 
 type AnyRecord = any;
 
-const BTN =
-  'rounded-[4px] border border-[var(--color-pearl)] px-2.5 py-1.5 text-[10.5px] font-medium text-[var(--color-charcoal)] hover:border-[var(--color-clay)] disabled:opacity-50';
-const BTN_CLAY =
-  'rounded-[4px] border border-[var(--color-clay)] bg-[var(--color-clay)] px-2.5 py-1.5 text-[10.5px] font-medium text-white hover:opacity-90 disabled:opacity-50';
 const INPUT =
   'rounded-[4px] border border-[var(--color-pearl)] bg-[var(--doc-paper)] px-2 py-1.5 text-[11px] text-[var(--color-charcoal)] focus:border-[var(--color-clay)] focus:outline-none';
 
 function Quiet({ children }: { children: React.ReactNode }) {
-  return <p className="py-1 text-[10.5px] italic text-[var(--text-muted)]">{children}</p>;
+  return (
+    <p className="py-1 text-[10.5px] italic text-[var(--text-muted)]">
+      {children}
+    </p>
+  );
 }
 
 // ── decision ────────────────────────────────────────────────────────────────
@@ -103,7 +110,10 @@ function statusWord(state: string): string {
 
 /** "in 3 days" style elapsed between sent and responded — the resolution-record
  *  response time (ported from the /portal detail page). */
-function responseDays(sentAt: string | null, respondedAt: string | null): string | null {
+function responseDays(
+  sentAt: string | null,
+  respondedAt: string | null,
+): string | null {
   if (!sentAt || !respondedAt) return null;
   const ms = new Date(respondedAt).getTime() - new Date(sentAt).getTime();
   if (Number.isNaN(ms)) return null;
@@ -128,7 +138,9 @@ export function DecisionBody({
   const { data: decision } = useDecision(row.item_id) as { data: AnyRecord };
   // R56: the full resolution audit trail (choice / recorded-by / method /
   // evidence / timestamp) — previously a date-only "Resolved · date" line.
-  const { data: overrides } = useDecisionOverrides(row.item_id) as { data: AnyRecord[] | undefined };
+  const { data: overrides } = useDecisionOverrides(row.item_id) as {
+    data: AnyRecord[] | undefined;
+  };
   const reminder = useSendDecisionReminder();
   // R83: the margin's quiet grammar — failures render inline at the act, never
   // as the global toast (errorSurface:'inline').
@@ -148,8 +160,12 @@ export function DecisionBody({
   const [evidence, setEvidence] = useState('');
 
   if (!decision) return <Quiet>Opening the decision…</Quiet>;
-  const options: AnyRecord[] = decision.options ?? decision.client_decision_options ?? [];
-  const actionable = row.state === 'overdue' || row.state === 'pending' || row.state === 'expired';
+  const options: AnyRecord[] =
+    decision.options ?? decision.client_decision_options ?? [];
+  const actionable =
+    row.state === 'overdue' ||
+    row.state === 'pending' ||
+    row.state === 'expired';
 
   // A plain selection carries options + the override-consent record. The other
   // four Track-5 shapes (rfi/submittal/signoff/punch) resolve in coordination —
@@ -159,7 +175,8 @@ export function DecisionBody({
 
   // The kind-line: the subject (decision_type) · the shape+court when not a
   // plain client selection · the approval-gate note.
-  const subjectLabel = DECISION_TYPE_LABEL[decision.decision_type as string] ?? null;
+  const subjectLabel =
+    DECISION_TYPE_LABEL[decision.decision_type as string] ?? null;
   const showShape = !(isSelection && (decision.court ?? 'client') === 'client');
   const kindParts = [
     subjectLabel,
@@ -195,7 +212,11 @@ export function DecisionBody({
         });
       }
       invalidateMarginSurfaces(qc, projectId);
-      setExtendNote(isExpired ? 'Reopened — the client can respond again' : 'Deadline moved');
+      setExtendNote(
+        isExpired
+          ? 'Reopened — the client can respond again'
+          : 'Deadline moved',
+      );
     } catch (e) {
       setExtendNote(
         `Couldn't extend — ${e instanceof Error ? e.message : 'try again'}`,
@@ -233,7 +254,6 @@ export function DecisionBody({
             return (
               <li key={o.id} className="flex items-start gap-2 text-[10.5px]">
                 {o.image_url ? (
-                   
                   <img
                     src={o.image_url}
                     alt=""
@@ -244,7 +264,13 @@ export function DecisionBody({
                 )}
                 <span className="min-w-0 flex-1">
                   <span className="flex flex-wrap items-baseline gap-x-1.5 gap-y-0">
-                    <span className={o.selected ? 'font-semibold text-[var(--color-charcoal)]' : 'text-[var(--text-body)]'}>
+                    <span
+                      className={
+                        o.selected
+                          ? 'font-semibold text-[var(--color-charcoal)]'
+                          : 'text-[var(--text-body)]'
+                      }
+                    >
                       {o.name}
                     </span>
                     {val != null && (
@@ -254,10 +280,14 @@ export function DecisionBody({
                       </span>
                     )}
                     {o.is_recommended && (
-                      <span className="font-mono text-[8px] uppercase text-[var(--color-clay)]">your pick</span>
+                      <span className="font-mono text-[8px] uppercase text-[var(--color-clay)]">
+                        your pick
+                      </span>
                     )}
                     {o.selected && (
-                      <span className="font-mono text-[8px] uppercase text-[#85947C]">chosen</span>
+                      <span className="font-mono text-[8px] uppercase text-[#85947C]">
+                        chosen
+                      </span>
                     )}
                   </span>
                   {o.designer_note && (
@@ -277,20 +307,31 @@ export function DecisionBody({
       {!isSelection && (
         <div className="mb-2.5">
           {decision.answer ? (
-            <p className="text-[11px] leading-relaxed text-[var(--text-body)]">{decision.answer}</p>
+            <p className="text-[11px] leading-relaxed text-[var(--text-body)]">
+              {decision.answer}
+            </p>
           ) : (
-            <Quiet>Resolves in coordination — {COURT_LABEL[decision.court as string] ?? 'in court'}.</Quiet>
+            <Quiet>
+              Resolves in coordination —{' '}
+              {COURT_LABEL[decision.court as string] ?? 'in court'}.
+            </Quiet>
           )}
         </div>
       )}
 
       {isSelection && actionable && (
         <div className="space-y-2">
-          <div className="flex flex-wrap items-center gap-1.5">
-            <button
-              type="button"
-              className={BTN}
+          <DocumentActionRow
+            surfaceKey="open-document"
+            regionKey="margin-decision-followup"
+            aria-label="Decision follow-up actions"
+          >
+            <DocumentAction
+              actionKey="send-decision-nudge"
+              variant="secondary"
               disabled={reminder.isPending}
+              loading={reminder.isPending}
+              loadingLabel="Sending…"
               onClick={() =>
                 reminder.mutate(
                   { decisionId: row.item_id },
@@ -299,7 +340,7 @@ export function DecisionBody({
               }
             >
               {row.payload.reminder_sent_at ? 'Nudge again' : 'Send a nudge'}
-            </button>
+            </DocumentAction>
             <input
               type="date"
               aria-label="Extend due date to"
@@ -307,17 +348,19 @@ export function DecisionBody({
               value={extendTo}
               onChange={(e) => setExtendTo(e.target.value)}
             />
-            <button
-              type="button"
-              className={BTN}
+            <DocumentAction
+              actionKey="extend-decision"
+              variant="secondary"
               disabled={!extendTo || extendBusy}
+              loading={extendBusy}
+              loadingLabel="Extending…"
               onClick={handleExtend}
             >
               {/* R87: on an expired decision the act revives it, so it reads as
                   a reopen; on a live one it just moves the date. */}
               {isExpired ? 'Extend & reopen' : 'Extend'}
-            </button>
-          </div>
+            </DocumentAction>
+          </DocumentActionRow>
 
           {/* R51/R83 quiet confirmation / inline failure — at the act, no toast. */}
           {extendNote && (
@@ -327,13 +370,22 @@ export function DecisionBody({
                   ? 'rounded-[3px] border border-[rgba(196,131,111,0.4)] px-2 py-1 font-mono text-[9px] uppercase tracking-[0.05em]'
                   : 'font-mono text-[9px] uppercase tracking-[0.05em]'
               }
-              style={{ color: extendNote.startsWith("Couldn't") ? '#C4836F' : '#85947C' }}
+              style={{
+                color: extendNote.startsWith("Couldn't")
+                  ? '#C4836F'
+                  : '#85947C',
+              }}
             >
               {extendNote}
             </p>
           )}
 
-          <div className="flex flex-wrap items-center gap-1.5 border-t border-dashed border-[var(--color-pearl)] pt-2">
+          <DocumentActionRow
+            surfaceKey="open-document"
+            regionKey="margin-decision-record"
+            className="border-t border-dashed border-[var(--color-pearl)] pt-2"
+            aria-label="Record client decision"
+          >
             <select
               aria-label="Client's pick"
               className={INPUT}
@@ -366,10 +418,12 @@ export function DecisionBody({
               value={evidence}
               onChange={(e) => setEvidence(e.target.value)}
             />
-            <button
-              type="button"
-              className={BTN_CLAY}
+            <DocumentAction
+              actionKey="record-client-pick"
+              variant="primary"
               disabled={!pickId || !evidence.trim() || override.isPending}
+              loading={override.isPending}
+              loadingLabel="Recording…"
               onClick={() =>
                 override.mutate(
                   {
@@ -382,9 +436,11 @@ export function DecisionBody({
                 )
               }
             >
-              {clientFirstName ? `Record ${clientFirstName}'s pick` : 'Record the pick'}
-            </button>
-          </div>
+              {clientFirstName
+                ? `Record ${clientFirstName}'s pick`
+                : 'Record the pick'}
+            </DocumentAction>
+          </DocumentActionRow>
         </div>
       )}
 
@@ -399,8 +455,12 @@ export function DecisionBody({
             {selectedOption && (
               <p>
                 <span className="text-[var(--text-muted)]">Chosen: </span>
-                <span className="font-medium text-[var(--color-charcoal)]">{selectedOption.name}</span>
-                {optionValue(selectedOption) != null ? ` · ${fmtUsd(optionValue(selectedOption)!)}` : ''}
+                <span className="font-medium text-[var(--color-charcoal)]">
+                  {selectedOption.name}
+                </span>
+                {optionValue(selectedOption) != null
+                  ? ` · ${fmtUsd(optionValue(selectedOption)!)}`
+                  : ''}
               </p>
             )}
             {decision.answer && !selectedOption && (
@@ -427,10 +487,13 @@ export function DecisionBody({
             >
               <div className="flex items-baseline justify-between gap-2">
                 <span className="font-mono text-[8px] uppercase tracking-[0.05em] text-[var(--color-charcoal)]">
-                  {user && ov.acted_by === user.id ? 'You recorded' : 'Recorded'}
+                  {user && ov.acted_by === user.id
+                    ? 'You recorded'
+                    : 'Recorded'}
                 </span>
                 <span className="font-mono text-[8px] uppercase tracking-[0.05em] text-[var(--text-muted)]">
-                  {String(ov.consent_method).replace('_', ' ')} · {fmtDay(ov.created_at)}
+                  {String(ov.consent_method).replace('_', ' ')} ·{' '}
+                  {fmtDay(ov.created_at)}
                 </span>
               </div>
               {ov.consent_evidence && (
@@ -448,7 +511,13 @@ export function DecisionBody({
 
 // ── message ─────────────────────────────────────────────────────────────────
 
-export function MessageBody({ row, projectId }: { row: MarginItemRow; projectId: string | null }) {
+export function MessageBody({
+  row,
+  projectId,
+}: {
+  row: MarginItemRow;
+  projectId: string | null;
+}) {
   const qc = useQueryClient();
   const threadId = row.item_id;
   const { data: pages } = useThreadMessages(threadId) as { data: AnyRecord };
@@ -460,7 +529,7 @@ export function MessageBody({ row, projectId }: { row: MarginItemRow; projectId:
   useEffect(() => {
     if (markedRef.current) return;
     markedRef.current = true;
-     
+
     const supabase = createBrowserClient() as any;
     void supabase
       .rpc('rpc_mark_thread_read', { p_thread_id: threadId })
@@ -476,7 +545,10 @@ export function MessageBody({ row, projectId }: { row: MarginItemRow; projectId:
     <div className="border-t border-[var(--color-pearl)] pt-2.5">
       <ul className="mb-2 space-y-1.5">
         {messages.map((m) => (
-          <li key={m.id} className="text-[10.5px] leading-relaxed text-[var(--text-body)]">
+          <li
+            key={m.id}
+            className="text-[10.5px] leading-relaxed text-[var(--text-body)]"
+          >
             <span className="font-semibold text-[var(--color-charcoal)]">
               {m.sender?.full_name ?? 'Message'}
             </span>{' '}
@@ -494,11 +566,18 @@ export function MessageBody({ row, projectId }: { row: MarginItemRow; projectId:
         value={body}
         onChange={(e) => setBody(e.target.value)}
       />
-      <div className="mt-1.5">
-        <button
-          type="button"
-          className={BTN_CLAY}
+      <DocumentActionRow
+        surfaceKey="open-document"
+        regionKey="margin-message-reply"
+        className="mt-1.5"
+        aria-label="Message reply actions"
+      >
+        <DocumentAction
+          actionKey="send-margin-reply"
+          variant="primary"
           disabled={!body.trim() || send.isPending}
+          loading={send.isPending}
+          loadingLabel="Sending…"
           onClick={() =>
             send.mutate(
               { threadId, body: body.trim() },
@@ -512,15 +591,21 @@ export function MessageBody({ row, projectId }: { row: MarginItemRow; projectId:
           }
         >
           Send
-        </button>
-      </div>
+        </DocumentAction>
+      </DocumentActionRow>
     </div>
   );
 }
 
 // ── invoice ─────────────────────────────────────────────────────────────────
 
-export function InvoiceBody({ row, projectId }: { row: MarginItemRow; projectId: string | null }) {
+export function InvoiceBody({
+  row,
+  projectId,
+}: {
+  row: MarginItemRow;
+  projectId: string | null;
+}) {
   const qc = useQueryClient();
   const { data: invoice } = useInvoice(row.item_id) as { data: AnyRecord };
   const issue = useIssueInvoice({ errorSurface: 'inline' });
@@ -554,7 +639,10 @@ export function InvoiceBody({ row, projectId }: { row: MarginItemRow; projectId:
     <div className="border-t border-[var(--color-pearl)] pt-2.5">
       <ul className="mb-2 space-y-0.5">
         {lines.slice(0, 5).map((l) => (
-          <li key={l.id} className="flex justify-between gap-2 text-[10.5px] text-[var(--text-body)]">
+          <li
+            key={l.id}
+            className="flex justify-between gap-2 text-[10.5px] text-[var(--text-body)]"
+          >
             <span>{l.description}</span>
             <span className="whitespace-nowrap">{fmtUsd(l.amount_cents)}</span>
           </li>
@@ -564,25 +652,37 @@ export function InvoiceBody({ row, projectId }: { row: MarginItemRow; projectId:
           <span>{fmtUsd(invoice.total_cents ?? 0)}</span>
         </li>
       </ul>
-      <div className="flex flex-wrap items-baseline gap-3">
+      <DocumentActionRow
+        surfaceKey="open-document"
+        regionKey="margin-invoice"
+        aria-label="Invoice actions"
+      >
         {row.state === 'draft' && (
-          <button type="button" className={BTN_CLAY} disabled={sending} onClick={reviewAndSend}>
-            {sending ? 'Sending…' : 'Review & send invoice'}
-          </button>
+          <DocumentAction
+            actionKey="review-and-send-invoice"
+            variant="primary"
+            loading={sending}
+            loadingLabel="Sending…"
+            onClick={reviewAndSend}
+          >
+            Review & send invoice
+          </DocumentAction>
         )}
         {/* R74a — the folio is where the full invoice lives (record payment,
             resend, void, print); the margin keeps the one-glance narration. */}
-        <button
-          type="button"
+        <DocumentAction
+          actionKey="open-invoice-folio"
+          variant="tertiary"
           onClick={() => openInvoiceFolio(row.item_id)}
-          className="font-mono text-[9px] uppercase tracking-[0.05em] text-[var(--color-clay)] hover:opacity-80"
+          trailing="→"
         >
-          open the folio →
-        </button>
-      </div>
+          Open the folio
+        </DocumentAction>
+      </DocumentActionRow>
       {row.state !== 'draft' && (
         <Quiet>
-          Sent{invoice.sent_at ? ` · ${fmtDay(invoice.sent_at)}` : ''} · awaiting payment
+          Sent{invoice.sent_at ? ` · ${fmtDay(invoice.sent_at)}` : ''} ·
+          awaiting payment
         </Quiet>
       )}
       {error && <p className="mt-1 text-[10px] text-[#C77B6E]">{error}</p>}
@@ -600,7 +700,8 @@ export function PoPaymentBody({ row }: { row: MarginItemRow }) {
   return (
     <div className="border-t border-[var(--color-pearl)] pt-2.5">
       <p className="text-[11.5px] text-[var(--text-body)]">
-        {amount != null ? fmtUsd(amount) : 'A payment'} to {vendor ?? 'the vendor'}
+        {amount != null ? fmtUsd(amount) : 'A payment'} to{' '}
+        {vendor ?? 'the vendor'}
         {poLabel ? ` on ${poLabel}` : ''}
         {due ? ` — due ${fmtDay(due)}` : ''}.
       </p>
@@ -622,7 +723,9 @@ export function PulseBody({
   clientName: string;
   decisionRows: MarginItemRow[];
 }) {
-  const { data: ffeItems } = useProjectFFEItems(projectId ?? '') as { data: AnyRecord[] | undefined };
+  const { data: ffeItems } = useProjectFFEItems(projectId ?? '') as {
+    data: AnyRecord[] | undefined;
+  };
   const sendPulse = useSendWeeklyPulse(projectId);
 
   const defaultBody = useMemo(() => {
@@ -631,12 +734,18 @@ export function PulseBody({
     const monday = weekOf ? new Date(`${weekOf}T00:00:00`).getTime() : 0;
     const moved = (ffeItems ?? [])
       .filter((i) => new Date(i.updated_at).getTime() >= monday)
-      .filter((i) => ['ordered', 'production', 'shipped', 'delivered', 'installed'].includes(i.status))
+      .filter((i) =>
+        ['ordered', 'production', 'shipped', 'delivered', 'installed'].includes(
+          i.status,
+        ),
+      )
       .map((i) => ({ name: i.name as string, state: i.status as string }));
     return composePulseDraft({
       clientFirstName: clientName.trim().split(/\s+/)[0] ?? null,
       moved,
-      resolved: decisionRows.filter((d) => d.state === 'responded').map((d) => d.title),
+      resolved: decisionRows
+        .filter((d) => d.state === 'responded')
+        .map((d) => d.title),
       pending: decisionRows
         .filter((d) => d.state === 'pending' || d.state === 'overdue')
         .map((d) => d.title),
@@ -649,8 +758,11 @@ export function PulseBody({
   if (row.state === 'sent') {
     return (
       <Quiet>
-        Sent{row.payload.sent_at ? ` · ${fmtDay(row.payload.sent_at as string)}` : ''} — archived
-        here in the margin.
+        Sent
+        {row.payload.sent_at
+          ? ` · ${fmtDay(row.payload.sent_at as string)}`
+          : ''}{' '}
+        — archived here in the margin.
       </Quiet>
     );
   }
@@ -667,19 +779,30 @@ export function PulseBody({
         value={body}
         onChange={(e) => setBody(e.target.value)}
       />
-      <div className="mt-1.5">
-        <button
-          type="button"
-          className={BTN_CLAY}
+      <DocumentActionRow
+        surfaceKey="open-document"
+        regionKey="margin-pulse"
+        className="mt-1.5"
+        aria-label="Pulse actions"
+      >
+        <DocumentAction
+          actionKey="send-friday-pulse"
+          variant="primary"
           disabled={!body.trim() || sendPulse.isPending}
-          onClick={() => sendPulse.mutate({ pulseId: row.item_id, body: body.trim() })}
+          loading={sendPulse.isPending}
+          loadingLabel="Sending…"
+          onClick={() =>
+            sendPulse.mutate({ pulseId: row.item_id, body: body.trim() })
+          }
         >
-          {sendPulse.isPending ? 'Sending…' : 'Send Pulse'}
-        </button>
-      </div>
+          Send Pulse
+        </DocumentAction>
+      </DocumentActionRow>
       {sendPulse.isError && (
         <p className="mt-1 text-[10px] text-[#C77B6E]">
-          {sendPulse.error instanceof Error ? sendPulse.error.message : 'Send failed'}
+          {sendPulse.error instanceof Error
+            ? sendPulse.error.message
+            : 'Send failed'}
         </p>
       )}
     </div>
@@ -705,34 +828,53 @@ export function NoteBody({
   const busy = toDecision.isPending;
 
   if (row.state === 'escalated') {
-    const became = row.payload.escalated_to_decision_id ? 'a client decision' : 'an amendment';
+    const became = row.payload.escalated_to_decision_id
+      ? 'a client decision'
+      : 'an amendment';
     return <Quiet>Escalated — now {became}. The note rests here.</Quiet>;
   }
 
   return (
     <div className="border-t border-[var(--color-pearl)] pt-2.5">
       {row.payload.author_name ? (
-        <p className="mb-2 text-[10px] text-[var(--text-muted)]">{String(row.payload.author_name)}</p>
+        <p className="mb-2 text-[10px] text-[var(--text-muted)]">
+          {String(row.payload.author_name)}
+        </p>
       ) : null}
       {projectId && (
-        <div className="flex flex-wrap gap-1.5">
-          <button
-            type="button"
-            className={BTN}
+        <DocumentActionGroup
+          surfaceKey="open-document"
+          regionKey="margin-note-escalation"
+          aria-label="Escalate note"
+        >
+          <DocumentAction
+            actionKey="escalate-note-to-decision"
+            variant="secondary"
             disabled={busy}
             onClick={() =>
-              toDecision.mutate({ noteId: row.item_id, projectId, body: row.title })
+              toDecision.mutate({
+                noteId: row.item_id,
+                projectId,
+                body: row.title,
+              })
             }
           >
             → Client decision
-          </button>
-          <button type="button" className={BTN} disabled={busy} onClick={() => setAmending(true)}>
+          </DocumentAction>
+          <DocumentAction
+            actionKey="escalate-note-to-amendment"
+            variant="secondary"
+            disabled={busy}
+            onClick={() => setAmending(true)}
+          >
             → Amendment
-          </button>
-        </div>
+          </DocumentAction>
+        </DocumentActionGroup>
       )}
       {toDecision.isError && (
-        <p className="mt-1 text-[10px] text-[#C77B6E]">Escalation failed — try again.</p>
+        <p className="mt-1 text-[10px] text-[#C77B6E]">
+          Escalation failed — try again.
+        </p>
       )}
       {projectId && (
         <AmendmentSheet
@@ -741,7 +883,8 @@ export function NoteBody({
           open={amending}
           onClose={() => setAmending(false)}
           seed={{
-            title: row.title.length > 70 ? `${row.title.slice(0, 67)}…` : row.title,
+            title:
+              row.title.length > 70 ? `${row.title.slice(0, 67)}…` : row.title,
             description: row.title,
             noteId: row.item_id,
           }}
@@ -759,14 +902,18 @@ export function FieldSmsBody({ row }: { row: MarginItemRow }) {
   const partyId = p.party_id as string | undefined;
   const partyKind = (p.party_kind as string | undefined) ?? 'sub';
   const parsed = (p.parsed_intent ?? null) as FieldParsedIntent | null;
-  const applied = (p.applied_effect ?? null) as { summary_text?: string } | null;
+  const applied = (p.applied_effect ?? null) as {
+    summary_text?: string;
+  } | null;
 
   // Needs-review shows the proposed effect (the act is on the Desk triage card);
   // an applied text shows what it did.
   const effectLine = needsReview
     ? describeFieldEffect(parsed, null)
     : (applied?.summary_text ?? null);
-  const threadHref = partyId ? `/people?person=${partyId}&role=${partyKind}` : null;
+  const threadHref = partyId
+    ? `/people?person=${partyId}&role=${partyKind}`
+    : null;
 
   return (
     <div className="border-t border-[var(--color-pearl)] pt-2.5">
@@ -819,7 +966,9 @@ export function MarginItemBody({
 }) {
   switch (row.kind) {
     case 'decision':
-      return <DecisionBody row={row} projectId={projectId} clientName={clientName} />;
+      return (
+        <DecisionBody row={row} projectId={projectId} clientName={clientName} />
+      );
     case 'message':
       return <MessageBody row={row} projectId={projectId} />;
     case 'invoice':
@@ -837,7 +986,9 @@ export function MarginItemBody({
     case 'time':
       return null;
     case 'note':
-      return <NoteBody row={row} projectId={projectId} clientName={clientName} />;
+      return (
+        <NoteBody row={row} projectId={projectId} clientName={clientName} />
+      );
     case 'field_sms':
       return <FieldSmsBody row={row} />;
     default:

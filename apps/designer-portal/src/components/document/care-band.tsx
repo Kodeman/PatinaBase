@@ -33,7 +33,7 @@ import {
   type ClosureItem,
 } from '@/lib/document/closure-derivation';
 import { StrataMark } from './strata-mark';
-
+import { DocumentAction } from './document-action';
 
 type AnyRecord = any;
 
@@ -47,7 +47,8 @@ export function CareBand({ projectId }: { projectId: string }) {
   const closeProject = useCloseProject();
 
   const nearClose =
-    project?.current_phase === 'installation' || project?.current_phase === 'final_walkthrough';
+    project?.current_phase === 'installation' ||
+    project?.current_phase === 'final_walkthrough';
 
   const [unfolded, setUnfolded] = useState(false);
   const [items, setItems] = useState<ClosureItem[]>(defaultClosureItems);
@@ -84,13 +85,15 @@ export function CareBand({ projectId }: { projectId: string }) {
   if (!open) {
     return (
       <div className="mt-8">
-        <button
-          type="button"
+        <DocumentAction
+          actionKey="open-project-closure"
+          surfaceKey="care"
+          regionKey="closure-fold"
+          variant="secondary"
           onClick={() => setUnfolded(true)}
-          className="font-mono text-[9px] uppercase tracking-[0.08em] text-[var(--text-muted)] hover:text-[var(--color-clay)]"
         >
           Close the book…
-        </button>
+        </DocumentAction>
       </div>
     );
   }
@@ -105,7 +108,9 @@ export function CareBand({ projectId }: { projectId: string }) {
           headline: headline.trim(),
           description: description.trim(),
           value_cents:
-            valueDollars === null ? seed.value_cents : dollarsToCents(valueDollars),
+            valueDollars === null
+              ? seed.value_cents
+              : dollarsToCents(valueDollars),
           duration: (duration ?? seed.duration).trim(),
           rooms: rooms.trim(),
         },
@@ -113,7 +118,11 @@ export function CareBand({ projectId }: { projectId: string }) {
       {
         onSuccess: () => setClosed(true),
         onError: (err) =>
-          setError(err instanceof Error ? err.message : 'Could not close the book. Try again.'),
+          setError(
+            err instanceof Error
+              ? err.message
+              : 'Could not close the book. Try again.',
+          ),
       },
     );
   };
@@ -130,41 +139,59 @@ export function CareBand({ projectId }: { projectId: string }) {
           <p className="mt-0.5 text-[14px] leading-snug text-[var(--color-charcoal)]">
             {ready ? (
               <>
-                <b>Everything is settled</b> — close the book when you&rsquo;re ready
+                <b>Everything is settled</b> — close the book when you&rsquo;re
+                ready
               </>
             ) : (
               <>
-                <b>{done} of {items.length} closed out</b> · the checklist settles this project
+                <b>
+                  {done} of {items.length} closed out
+                </b>{' '}
+                · the checklist settles this project
               </>
             )}
           </p>
         </div>
-        <button
-          type="button"
+        <DocumentAction
+          actionKey="close-project"
+          surfaceKey="care"
+          regionKey="closure"
+          variant="primary"
           disabled={!ready || closeProject.isPending}
+          loading={closeProject.isPending}
+          loadingLabel="Closing…"
           onClick={submit}
-          className="shrink-0 rounded-[4px] bg-[var(--color-clay)] px-4 py-2 text-[12px] font-medium text-[var(--color-charcoal)] transition-opacity hover:opacity-90 disabled:opacity-40"
+          className="shrink-0"
         >
-          {closeProject.isPending ? 'Closing…' : 'Close the book →'}
-        </button>
+          Close the book
+        </DocumentAction>
       </div>
 
       {/* The closure checklist — square ticks that fill sage (the Work
           block's stamp grammar, not a SaaS checkbox). */}
       <ul className="mt-3 border-t border-[rgba(139,115,85,0.14)] pt-2">
         {items.map((item) => (
-          <li key={item.key} className="border-b border-dashed border-[rgba(139,115,85,0.14)]">
+          <li
+            key={item.key}
+            className="border-b border-dashed border-[rgba(139,115,85,0.14)]"
+          >
             <button
               type="button"
-              onClick={() => setItems((prev) => toggleClosureItem(prev, item.key))}
+              onClick={() =>
+                setItems((prev) => toggleClosureItem(prev, item.key))
+              }
               className="grid w-full grid-cols-[auto_1fr] items-baseline gap-2.5 px-1 py-1.5 text-left hover:bg-[rgba(196,165,123,0.06)]"
             >
               <span
                 aria-hidden
                 className="relative top-px inline-flex h-[13px] w-[13px] items-center justify-center rounded-[3px] border-[1.5px] text-[8px] font-bold leading-none"
                 style={{
-                  borderColor: item.completed ? 'var(--color-sage)' : 'var(--doc-ink-border)',
-                  background: item.completed ? 'rgba(168,181,160,0.15)' : 'transparent',
+                  borderColor: item.completed
+                    ? 'var(--color-sage)'
+                    : 'var(--doc-ink-border)',
+                  background: item.completed
+                    ? 'rgba(168,181,160,0.15)'
+                    : 'transparent',
                   color: 'var(--color-sage)',
                 }}
               >
@@ -172,7 +199,9 @@ export function CareBand({ projectId }: { projectId: string }) {
               </span>
               <span
                 className={`text-[12px] leading-snug ${
-                  item.completed ? 'text-[var(--text-muted)]' : 'text-[var(--color-charcoal)]'
+                  item.completed
+                    ? 'text-[var(--text-muted)]'
+                    : 'text-[var(--color-charcoal)]'
                 }`}
               >
                 {item.label}
@@ -244,20 +273,25 @@ export function CareBand({ projectId }: { projectId: string }) {
       </div>
 
       {error && (
-        <p role="alert" className="mt-3 text-[11.5px] text-[var(--color-terracotta)]">
+        <p
+          role="alert"
+          className="mt-3 text-[11.5px] text-[var(--color-terracotta)]"
+        >
           {error} <span className="opacity-80">The act is safe to retry.</span>
         </p>
       )}
 
       {!nearClose && (
         <div className="mt-3">
-          <button
-            type="button"
+          <DocumentAction
+            actionKey="fold-project-closure"
+            surfaceKey="care"
+            regionKey="closure"
+            variant="tertiary"
             onClick={() => setUnfolded(false)}
-            className="font-mono text-[9px] uppercase tracking-[0.06em] text-[var(--text-muted)] hover:text-[var(--color-clay)]"
           >
             Not yet — fold it away
-          </button>
+          </DocumentAction>
         </div>
       )}
     </div>

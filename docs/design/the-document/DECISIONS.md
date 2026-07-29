@@ -4829,7 +4829,48 @@ queue stage remain hard gates.
 
 *Entries add: I96 · last id = I96*
 
-### I97 · Field Capture P2 item 4 · parent-owned lease, pinned toolchain, packet ledgers, and the frozen output handoff — 2026-07-27
+### I97 · Inked Instruments — one legible next action across The Document — 2026-07-26
+
+All modern surfaces in the `(document)` route group now share one productive
+action grammar. Each meaningful action region may carry at most one primary
+act: charcoal ink, off-white type, and a slim inset clay rule. Alternate
+productive acts use paper and an aged-oak border; tertiary acts remain
+underlined text. Terracotta danger is reserved for an irreversible act inside
+its confirmation region. Labels are never smaller than 12px, pointer targets
+are at least 44px, focus remains visible, and none of these actions cast a
+shadow. This supersedes R27's typography-only implication for letterhead
+instruments and any earlier “no button fill” reading of the instrument rule;
+R27's placement and workflow meanings still stand.
+
+The hierarchy is regional, not one-primary-per-page. Desk folios name their
+next act in the card footer without nesting another interactive control.
+Forward save, send, create, confirm, upload, apply, approval, or sign-off acts
+lead their own work region; alternatives step back. Navigation tabs, section
+doors, disclosures, back and close controls, checkboxes, switches, drag
+handles, card containers, and the bottom navigation bar do not impersonate a
+primary CTA. They keep their existing editorial and spatial physics while
+receiving touch-sized targets and visible keyboard focus where applicable.
+
+On viewports below the existing 980px Document breakpoint, the active Desk,
+lifecycle phase, or Room may register its current primary act in a separate
+full-width action dock immediately above the bottom navigation bar. The dock
+clears the bar and safe area, updates with readiness/state changes, disappears
+when no phase primary exists, and falls back to letterhead messaging only when
+available. It is suppressed while a mobile shell sheet is open and remains
+behind modal scrims; sheets and dialogs retain their own submit controls. The
+navigation bar itself is unchanged.
+
+Action impressions and selections use the guarded
+`document_action_shown`/`document_action_selected` events with only
+`surface_key`, `region_key`, `action_key`, `variant`, and `presentation`
+(`inline` or `mobile_dock`). Labels, household names, record ids, and other PII
+never enter the event. Impressions deduplicate per mounted presentation and
+disabled actions do not emit selections. The change rides the existing
+`the-document-pilot` audience with no additional flag.
+
+*Entries add: I97 · last id = I97*
+
+### I97 (Field Capture P2) · item 4 · parent-owned lease, pinned toolchain, packet ledgers, and the frozen output handoff — 2026-07-27
 
 The ordered next-work packet's items 1, 2, 3, and 5 are integrated on
 `field-capture/refine-i97-final` through code tip `2887dd0e`, and item 4's

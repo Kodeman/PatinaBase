@@ -75,8 +75,12 @@ export function ResolveSelection({
                 disabled={resolve.isPending || done}
                 className="mb-1.5 flex w-full items-center gap-2.5 rounded-[7px] border px-2.5 py-2 text-left transition-all"
                 style={{
-                  borderColor: isPicked ? 'var(--color-sage)' : 'var(--color-pearl)',
-                  background: isPicked ? 'rgba(168,181,160,0.08)' : 'var(--doc-paper)',
+                  borderColor: isPicked
+                    ? 'var(--color-sage)'
+                    : 'var(--color-pearl)',
+                  background: isPicked
+                    ? 'rgba(168,181,160,0.08)'
+                    : 'var(--doc-paper)',
                 }}
               >
                 <span
@@ -86,7 +90,11 @@ export function ResolveSelection({
                 >
                   {o.image_url ? (
                     /* eslint-disable-next-line @next/next/no-img-element */
-                    <img src={o.image_url} alt="" className="h-full w-full object-cover" />
+                    <img
+                      src={o.image_url}
+                      alt=""
+                      className="h-full w-full object-cover"
+                    />
                   ) : null}
                 </span>
                 <span className="min-w-0 flex-1">
@@ -95,7 +103,11 @@ export function ResolveSelection({
                   </span>
                   <span className="block text-[0.62rem] text-[var(--color-aged-oak)]">
                     {o.price != null ? fmtUsd(o.price) : ''}
-                    {o.is_recommended ? (o.price != null ? ' · my pick' : 'my pick') : ''}
+                    {o.is_recommended
+                      ? o.price != null
+                        ? ' · my pick'
+                        : 'my pick'
+                      : ''}
                   </span>
                 </span>
                 {isPicked && (
@@ -111,18 +123,29 @@ export function ResolveSelection({
 
       <ButtonRow>
         <ResolveButton
+          actionKey="record-selection"
           tone="gold"
           onClick={record}
           disabled={!picked || resolve.isPending || done}
         >
           {resolve.isPending ? 'Recording…' : 'Record the selection →'}
         </ResolveButton>
-        <ResolveButton tone="plain" onClick={onResolved} disabled={resolve.isPending}>
+        <ResolveButton
+          actionKey="close-selection-for-later"
+          tone="plain"
+          variant="tertiary"
+          onClick={onResolved}
+          disabled={resolve.isPending}
+        >
           Later
         </ResolveButton>
       </ButtonRow>
 
-      {done && <QuietConfirm>Recorded — the pick becomes the order. The FF&E line re-sorts.</QuietConfirm>}
+      {done && (
+        <QuietConfirm>
+          Recorded — the pick becomes the order. The FF&E line re-sorts.
+        </QuietConfirm>
+      )}
     </ResolveShell>
   );
 }

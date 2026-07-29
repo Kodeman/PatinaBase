@@ -40,11 +40,9 @@ import {
   useAcceptDesignRequest,
 } from '@patina/supabase';
 import { useFeatureFlag } from '@/hooks/use-feature-flag';
+import { DocumentAction, DocumentActionGroup } from './document-action';
 
 type Variant = 'desk' | 'brief';
-
-const BASE_BTN =
-  'flex-1 rounded-[2px] border bg-transparent px-0 py-[7px] text-center font-mono text-[10.5px] tracking-[0.04em] transition-colors disabled:cursor-default disabled:opacity-45';
 
 /** R65 reconnect presets — a dated touchpoint, computed at click time. */
 const RECONNECT_PRESETS: ReadonlyArray<{ label: string; at: () => string }> = [
@@ -80,14 +78,18 @@ export function TriageBar({
   // Ceremony (`accept_design_request` is idempotent for a lead the caller
   // already owns — `already_yours`). Fail-closed: while the flag resolves
   // (or off) the useBeginDiscovery path below stays exactly as-is.
-  const { value: arrivalArc, isLoading: arcLoading } = useFeatureFlag('arrival-arc');
+  const { value: arrivalArc, isLoading: arcLoading } =
+    useFeatureFlag('arrival-arc');
   const acceptRequest = useAcceptDesignRequest();
 
   // When true the bar shows the reconnect-date presets instead of the verbs.
   const [pickingDate, setPickingDate] = useState(false);
 
   const busy =
-    beginDiscovery.isPending || nurture.isPending || decline.isPending || acceptRequest.isPending;
+    beginDiscovery.isPending ||
+    nurture.isPending ||
+    decline.isPending ||
+    acceptRequest.isPending;
 
   // One-act-many-surfaces: the Desk re-derives without a reload (the mutation
   // hooks own ['leads']/['designer-clients']; the desk key is added here).
@@ -142,57 +144,72 @@ export function TriageBar({
         <p className="mb-2 font-mono text-[9px] uppercase tracking-[0.08em] text-[var(--text-muted)]">
           Reconnect…
         </p>
-        <div className="flex gap-2">
+        <DocumentActionGroup
+          surfaceKey={variant === 'desk' ? 'desk' : 'open-document'}
+          regionKey="lead-reconnect-date"
+          className="gap-2"
+          aria-label="Choose a reconnect date"
+        >
           {RECONNECT_PRESETS.map((p) => (
-            <button
+            <DocumentAction
               key={p.label}
-              type="button"
+              actionKey={`reconnect-${p.label.toLowerCase().replaceAll(' ', '-')}`}
+              variant="secondary"
               disabled={busy}
               onClick={guard(() => onReconnect(p.at()))}
-              className={`${BASE_BTN} border-[var(--doc-ink-border)] text-[var(--text-muted)] enabled:hover:border-[#C2CDD6] enabled:hover:text-[var(--color-dusty-blue)]`}
             >
               {p.label}
-            </button>
+            </DocumentAction>
           ))}
-          <button
-            type="button"
+          <DocumentAction
+            actionKey="cancel-reconnect"
+            variant="tertiary"
             disabled={busy}
             onClick={guard(() => setPickingDate(false))}
-            className="shrink-0 px-2 font-mono text-[10px] uppercase tracking-[0.04em] text-[var(--text-muted)] enabled:hover:text-[var(--color-charcoal)]"
           >
             Cancel
-          </button>
-        </div>
+          </DocumentAction>
+        </DocumentActionGroup>
       </div>
     );
   }
 
   return (
-    <div className={`${wrapClass} flex gap-2`}>
-      <button
-        type="button"
-        disabled={busy}
+    <DocumentActionGroup
+      surfaceKey={variant === 'desk' ? 'desk' : 'open-document'}
+      regionKey="lead-triage"
+      className={`${wrapClass} gap-2`}
+      aria-label="Lead triage"
+    >
+      <DocumentAction
+        actionKey="accept-lead"
+        variant="primary"
+        disabled={busy && !beginDiscovery.isPending && !acceptRequest.isPending}
+        loading={beginDiscovery.isPending || acceptRequest.isPending}
+        loadingLabel="Beginning…"
         onClick={guard(onAccept)}
-        className={`${BASE_BTN} border-[#CBAE86] text-[var(--color-mocha)] enabled:hover:bg-[#F0E7D6]`}
       >
         Accept · begin
-      </button>
-      <button
-        type="button"
+      </DocumentAction>
+      <DocumentAction
+        actionKey="nurture-lead"
+        variant="secondary"
         disabled={busy}
         onClick={guard(() => setPickingDate(true))}
-        className={`${BASE_BTN} border-[var(--doc-ink-border)] text-[var(--text-muted)] enabled:hover:border-[#C2CDD6] enabled:hover:text-[var(--color-dusty-blue)]`}
       >
         Nurture
-      </button>
-      <button
-        type="button"
-        disabled={busy}
+      </DocumentAction>
+      <DocumentAction
+        actionKey="decline-lead"
+        variant="tertiary"
+        disabled={busy && !decline.isPending}
+        loading={decline.isPending}
+        loadingLabel="Passing…"
         onClick={guard(onPass)}
-        className={`${BASE_BTN} border-[var(--doc-ink-border)] text-[var(--text-muted)] enabled:hover:border-[#E3C3B4] enabled:hover:text-[var(--color-terracotta)]`}
+        className="text-[var(--color-terracotta)] decoration-[var(--color-terracotta)] hover:text-[var(--color-charcoal)]"
       >
         Pass
-      </button>
-    </div>
+      </DocumentAction>
+    </DocumentActionGroup>
   );
 }

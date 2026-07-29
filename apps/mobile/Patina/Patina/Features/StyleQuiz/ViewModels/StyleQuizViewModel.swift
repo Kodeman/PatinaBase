@@ -248,41 +248,44 @@ final class StyleQuizViewModel {
 
     // MARK: - Persist to SwiftData
 
-    func persistToSwiftData(context: ModelContext) {
-        guard let result = result else { return }
+    /// The completed quiz as the shared taste-row shape. Nil until the quiz
+    /// has produced a result.
+    func styleSnapshot() -> StylePreferenceSnapshot? {
+        guard let result else { return nil }
 
         // Build materials list from Q3 selection
         let q3Selection = selections[2]?.first ?? 0
         let materialKey = questions[2].type.options[q3Selection].key
 
-        // Build keywords from Q2 (lifestyle) and Q5 (catalyst)
-        var keywords: [String] = []
-        if let q2Selections = selections[1] {
-            for idx in q2Selections {
-                keywords.append(questions[1].type.options[idx].key)
-            }
+        // keywords[0] is display-ready — the Profile badge renders it as-is.
+        // Q2 (lifestyle) and Q5 (catalyst) follow as machine keys, in a stable
+        // order (`selections` is a Set).
+        var keywords: [String] = [result.displayName]
+        for idx in (selections[1] ?? []).sorted() {
+            keywords.append(questions[1].type.options[idx].key)
         }
         if let q5Selection = selections[4]?.first {
             keywords.append(questions[4].type.options[q5Selection].key)
         }
 
-        let warmthValue: Double = result.paletteWarmth == "Warm" ? 0.75 : 0.3
-
-        let profile = StylePreferenceModel(
-            warmth: warmthValue,
+        return StylePreferenceSnapshot(
+            keywords: keywords,
+            warmth: result.paletteWarmth == "Warm" ? 0.75 : 0.3,
             formality: 0.5,
             materials: [materialKey],
             eras: [],
-            primaryColors: [],
-            accentColors: [],
-            patternPreference: 0.3,
-            scalePreference: 0.5,
-            keywords: keywords,
             confidence: result.confidence,
             budgetRange: "\(result.budgetMin)-\(result.budgetMax)"
         )
+    }
 
-        context.insert(profile)
+    /// Write the completed quiz to SwiftData. Called from `StyleQuizView` the
+    /// moment the quiz completes, so both mounts — the coordinator push and
+    /// `OnboardingFlowHost` — persist through one seam.
+    @MainActor
+    func persistToSwiftData(context: ModelContext) {
+        guard let snapshot = styleSnapshot() else { return }
+        StylePreferenceStore(context: context).upsert(snapshot)
     }
 
     /// Build API submission payload

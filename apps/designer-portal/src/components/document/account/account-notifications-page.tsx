@@ -13,13 +13,21 @@ import { useEffect, useState } from 'react';
 type Prefs = Record<string, boolean>;
 
 const PREFERENCES: { key: string; label: string; blurb: string }[] = [
-  { key: 'type_new_lead', label: 'New leads', blurb: 'A prospect reaches out or a lead is captured.' },
+  {
+    key: 'type_new_lead',
+    label: 'New leads',
+    blurb: 'A prospect reaches out or a lead is captured.',
+  },
   {
     key: 'type_project_milestone',
     label: 'Project updates',
     blurb: 'A project crosses a milestone or changes stage.',
   },
-  { key: 'type_client_message', label: 'Client messages', blurb: 'A client replies in a thread.' },
+  {
+    key: 'type_client_message',
+    label: 'Client messages',
+    blurb: 'A client replies in a thread.',
+  },
   {
     key: 'type_commission_earned',
     label: 'Earnings',
@@ -63,8 +71,9 @@ export function AccountNotificationsPage() {
   return (
     <div className="pt-1">
       <p className="mb-5 text-[12px] leading-relaxed text-[var(--color-aged-oak)]">
-        Which Patina events reach your inbox. Mute any channel without affecting the others — this is
-        email only; what breaks through the margin is set in ⌘K → Interruptions.
+        Which Patina events reach your inbox. Mute any channel without affecting
+        the others — this is email only; what breaks through the margin is set
+        in ⌘K → Interruptions.
       </p>
       <ul>
         {PREFERENCES.map((pref) => {
@@ -89,18 +98,22 @@ export function AccountNotificationsPage() {
                 aria-checked={enabled}
                 aria-label={`${pref.label} email notifications`}
                 onClick={() => toggle(pref.key, !enabled)}
-                className={`relative h-[20px] w-[36px] shrink-0 rounded-full border transition-colors ${
-                  enabled
-                    ? 'border-[var(--color-clay)] bg-[var(--color-clay)]'
-                    : 'border-[var(--color-aged-oak)] bg-transparent'
-                }`}
+                className="inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-[4px] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-clay)]"
               >
                 <span
-                  className={`absolute top-[2px] h-[14px] w-[14px] rounded-full transition-all ${
-                    enabled ? 'bg-white' : 'bg-[var(--color-aged-oak)]'
+                  className={`relative h-[20px] w-[36px] rounded-full border transition-colors ${
+                    enabled
+                      ? 'border-[var(--color-clay)] bg-[var(--color-clay)]'
+                      : 'border-[var(--color-aged-oak)] bg-transparent'
                   }`}
-                  style={{ left: enabled ? 18 : 2 }}
-                />
+                >
+                  <span
+                    className={`absolute top-[2px] h-[14px] w-[14px] rounded-full transition-all ${
+                      enabled ? 'bg-white' : 'bg-[var(--color-aged-oak)]'
+                    }`}
+                    style={{ left: enabled ? 18 : 2 }}
+                  />
+                </span>
               </button>
             </li>
           );

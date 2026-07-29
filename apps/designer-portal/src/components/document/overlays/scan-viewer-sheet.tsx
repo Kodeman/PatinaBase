@@ -30,7 +30,11 @@
 
 import { useEffect, useRef } from 'react';
 import dynamic from 'next/dynamic';
-import { useRoomScan, useSignedScanModelUrl, type RoomScan } from '@patina/supabase';
+import {
+  useRoomScan,
+  useSignedScanModelUrl,
+  type RoomScan,
+} from '@patina/supabase';
 import { ErrorBoundary } from '@patina/design-system';
 
 // The 3D viewer pulls @react-three/fiber (a WebGL/three stack). Load it ONLY
@@ -55,7 +59,8 @@ export function ScanViewerSheet({
   const { data: scan, isError } = useRoomScan(scanId);
   // Signed model URL — enabled only once the scan itself is loaded (null-safe
   // when disabled/no model). See the file header for why this swap happens here.
-  const { data: signedModelUrl, isLoading: signingModel } = useSignedScanModelUrl(scan);
+  const { data: signedModelUrl, isLoading: signingModel } =
+    useSignedScanModelUrl(scan);
   const restoreRef = useRef<HTMLElement | null>(null);
 
   // Esc / focus-restore — the doc-file-viewer sheet grammar. Capture-phase so
@@ -96,7 +101,7 @@ export function ScanViewerSheet({
               <button
                 type="button"
                 onClick={onClose}
-                className="font-mono text-[10px] uppercase tracking-[0.08em] text-[var(--color-clay)] hover:opacity-80"
+                className="min-h-11 rounded-[3px] font-mono text-[10px] uppercase tracking-[0.08em] text-[var(--color-clay)] underline underline-offset-4 hover:opacity-80 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-clay)]"
               >
                 ← Back to the document
               </button>
@@ -130,7 +135,7 @@ export function ScanViewerSheet({
             <button
               type="button"
               onClick={onClose}
-              className="font-mono text-[10px] uppercase tracking-[0.08em] text-[var(--color-clay)] hover:opacity-80"
+              className="min-h-11 rounded-[3px] font-mono text-[10px] uppercase tracking-[0.08em] text-[var(--color-clay)] underline underline-offset-4 hover:opacity-80 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-clay)]"
             >
               ← Back to the document
             </button>
@@ -150,7 +155,9 @@ export function ScanViewerSheet({
 function ViewerLoading() {
   return (
     <div className="flex min-h-0 flex-1 items-center justify-center p-6">
-      <p className="text-[12px] italic text-[var(--text-muted)]">Opening the 3D scan…</p>
+      <p className="text-[12px] italic text-[var(--text-muted)]">
+        Opening the 3D scan…
+      </p>
     </div>
   );
 }
@@ -171,7 +178,7 @@ function ScanStill({ scan, onClose }: { scan: RoomScan; onClose: () => void }) {
         <button
           type="button"
           onClick={onClose}
-          className="font-mono text-[10px] uppercase tracking-[0.08em] text-[var(--color-clay)] hover:opacity-80"
+          className="min-h-11 rounded-[3px] font-mono text-[10px] uppercase tracking-[0.08em] text-[var(--color-clay)] underline underline-offset-4 hover:opacity-80 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-clay)]"
         >
           ← Back to the document
         </button>
@@ -185,7 +192,9 @@ function ScanStill({ scan, onClose }: { scan: RoomScan; onClose: () => void }) {
             className="max-h-full max-w-full object-contain"
           />
         ) : (
-          <p className="text-[12px] italic text-[var(--text-muted)]">No preview image for this scan.</p>
+          <p className="text-[12px] italic text-[var(--text-muted)]">
+            No preview image for this scan.
+          </p>
         )}
         <p className="font-mono text-[9px] uppercase tracking-[0.08em] text-[var(--text-muted)]">
           The interactive 3D preview is being updated.

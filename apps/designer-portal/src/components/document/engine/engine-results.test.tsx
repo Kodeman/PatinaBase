@@ -86,7 +86,9 @@ describe('EngineResults', () => {
     expect(screen.getByText('Piece a')).toBeInTheDocument();
     expect(screen.getByText(/the Engine’s read/)).toBeInTheDocument();
     expect(screen.getByText(/keyword match/)).toBeInTheDocument();
-    expect(screen.queryByText(/the Engine is resting/i)).not.toBeInTheDocument();
+    expect(
+      screen.queryByText(/the Engine is resting/i),
+    ).not.toBeInTheDocument();
     // Copy law: nothing user-facing says "AI".
     expect(screen.queryByText(/\bAI\b/)).not.toBeInTheDocument();
     // Ask path healthy → keyword fallback stays disabled.
@@ -148,11 +150,20 @@ describe('EngineResults', () => {
       />,
     );
 
-    fireEvent.click(screen.getByRole('button', { name: 'Place →' }));
-    await waitFor(() => expect(onPlaced).toHaveBeenCalledWith('Piece a', 'Aspen House'));
+    const place = screen.getByRole('button', { name: 'Place' });
+    expect(place).toHaveTextContent(/Place\s*→/);
+    fireEvent.click(place);
+    await waitFor(() =>
+      expect(onPlaced).toHaveBeenCalledWith('Piece a', 'Aspen House'),
+    );
     expect(mutateAsync).toHaveBeenCalledWith({
       projectId: 'proj-1',
-      piece: { id: 'a', name: 'Piece a', price_trade: 90000, price_retail: 120000 },
+      piece: {
+        id: 'a',
+        name: 'Piece a',
+        price_trade: 90000,
+        price_retail: 120000,
+      },
     });
     expect(screen.getByText('placed ✓')).toBeInTheDocument();
   });

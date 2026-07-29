@@ -34,6 +34,7 @@ import { useCommitScheduleEdit } from '@patina/supabase';
 import { rippleSentence } from '@/lib/document/schedule-ripple-derivation';
 import { scheduleEvents } from '@/lib/analytics/schedule-events';
 import { useRippleSession } from './schedule-ripple-context';
+import { DocumentAction, DocumentActionGroup } from '../document-action';
 
 export interface ScheduleConfirmStripProps {
   projectId: string;
@@ -45,7 +46,10 @@ export function ScheduleConfirmStrip({ projectId }: ScheduleConfirmStripProps) {
 
   // The ripple's one honest sentence — memoized so the reason field can follow
   // `plain` across drag frames without recomputing it twice. null when no diff.
-  const sentence = useMemo(() => (diff != null ? rippleSentence(diff) : null), [diff]);
+  const sentence = useMemo(
+    () => (diff != null ? rippleSentence(diff) : null),
+    [diff],
+  );
 
   // The editable revision reason (R100 "Memory") — a quiet DM-mono echo of the
   // sentence. Prefilled with `sentence.plain` and kept in sync with it WHILE the
@@ -86,7 +90,11 @@ export function ScheduleConfirmStrip({ projectId }: ScheduleConfirmStripProps) {
       // prior state, and mid-flight it can't. Mirrors the Revert button's
       // disabled state; the strip stays until the mutation settles.
       if (commit.isPending) return;
-      if (typeof document !== 'undefined' && document.querySelector('[role="dialog"]')) return;
+      if (
+        typeof document !== 'undefined' &&
+        document.querySelector('[role="dialog"]')
+      )
+        return;
       e.stopPropagation();
       clear();
     };
@@ -98,9 +106,11 @@ export function ScheduleConfirmStrip({ projectId }: ScheduleConfirmStripProps) {
 
   // The non-conflict clauses ride the charcoal ink; the conflict clause is inked
   // terracotta separately (it never joins this list).
-  const clauses = [sentence.followClause, sentence.holdClause, sentence.slackClause].filter(
-    (c): c is string => c != null && c !== '',
-  );
+  const clauses = [
+    sentence.followClause,
+    sentence.holdClause,
+    sentence.slackClause,
+  ].filter((c): c is string => c != null && c !== '');
 
   const handleCommit = () => {
     // Re-guard: the button is disabled on a violation, but a force-enabled
@@ -109,7 +119,11 @@ export function ScheduleConfirmStrip({ projectId }: ScheduleConfirmStripProps) {
     commit.mutate(
       // The designer's edited reason; falls back to the sentence when blanked so
       // the ledger never records an empty revision.
-      { projectId, edits: [session.edit], reason: reason.trim() || sentence.plain },
+      {
+        projectId,
+        edits: [session.edit],
+        reason: reason.trim() || sentence.plain,
+      },
       {
         onSuccess: (newRevisionV) => {
           scheduleEvents.scheduleEditCommitted({
@@ -190,33 +204,33 @@ export function ScheduleConfirmStrip({ projectId }: ScheduleConfirmStripProps) {
         )}
       </div>
 
-      <div className="flex shrink-0 items-center gap-3">
+      <DocumentActionGroup
+        surfaceKey="schedule"
+        regionKey="ripple-confirmation"
+        className="shrink-0"
+      >
         {/* Disabled while the commit is on the wire — same reason as the Esc
             guard above: mid-flight, a revert can no longer restore the prior
             state (the write completes regardless). */}
-        <button
-          type="button"
+        <DocumentAction
+          actionKey="revert-schedule-change"
+          variant="tertiary"
           onClick={clear}
           disabled={commit.isPending}
-          className={`font-mono text-[0.58rem] uppercase tracking-[0.06em] text-[var(--text-muted)] ${
-            commit.isPending ? 'cursor-not-allowed opacity-50' : 'hover:opacity-80'
-          }`}
         >
           Esc · Revert
-        </button>
-        <button
-          type="button"
+        </DocumentAction>
+        <DocumentAction
+          actionKey="commit-schedule-change"
+          variant="primary"
           onClick={handleCommit}
           disabled={commitDisabled}
-          className={`border px-2.5 py-1 font-mono text-[0.58rem] uppercase tracking-[0.06em] ${
-            commitDisabled
-              ? 'cursor-not-allowed border-[var(--color-pearl)] text-[var(--text-muted)]'
-              : 'border-[var(--color-terracotta)] text-[var(--color-terracotta)] hover:bg-[var(--color-terracotta)] hover:text-[var(--color-off-white)]'
-          }`}
+          loading={commit.isPending}
+          loadingLabel="Committing…"
         >
           Commit the change
-        </button>
-      </div>
+        </DocumentAction>
+      </DocumentActionGroup>
     </div>
   );
 }

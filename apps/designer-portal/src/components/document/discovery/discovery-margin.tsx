@@ -12,8 +12,13 @@ import { useState } from 'react';
 import { useDiscoveryMarginNotes } from '@/hooks/use-discovery-margin';
 import { useCreateMarginNote } from '@/hooks/use-margin-notes';
 import { MarginItem } from '../margin-item';
+import { DocumentAction, DocumentActionRow } from '../document-action';
 
-export function DiscoveryMargin({ designerClientId }: { designerClientId: string }) {
+export function DiscoveryMargin({
+  designerClientId,
+}: {
+  designerClientId: string;
+}) {
   const { data: notes } = useDiscoveryMarginNotes(designerClientId);
   const createNote = useCreateMarginNote();
   const [composing, setComposing] = useState(false);
@@ -23,13 +28,19 @@ export function DiscoveryMargin({ designerClientId }: { designerClientId: string
     const text = body.trim();
     if (!text) return;
     createNote.mutate(
-      { projectId: null, proposalId: null, designerClientId, body: text, anchorKind: 'letterhead' },
+      {
+        projectId: null,
+        proposalId: null,
+        designerClientId,
+        body: text,
+        anchorKind: 'letterhead',
+      },
       {
         onSuccess: () => {
           setBody('');
           setComposing(false);
         },
-      }
+      },
     );
   };
 
@@ -40,13 +51,15 @@ export function DiscoveryMargin({ designerClientId }: { designerClientId: string
           In the margin
         </span>
         {!composing && (
-          <button
-            type="button"
+          <DocumentAction
+            actionKey="open-discovery-note"
+            surfaceKey="open-document"
+            regionKey="discovery-margin"
+            variant="secondary"
             onClick={() => setComposing(true)}
-            className="font-mono text-[10px] uppercase tracking-[0.05em] text-[var(--color-aged-oak)] transition-colors hover:text-[var(--color-charcoal)]"
           >
             ＋ Note
-          </button>
+          </DocumentAction>
         )}
       </div>
 
@@ -60,26 +73,33 @@ export function DiscoveryMargin({ designerClientId }: { designerClientId: string
             placeholder="The call's tone, a hesitation, your read…"
             className="w-full resize-none rounded-[4px] border border-[var(--color-pearl)] bg-white px-2.5 py-1.5 text-[12.5px] text-[var(--color-charcoal)] outline-none focus:border-[var(--color-clay)]"
           />
-          <div className="mt-2 flex items-center gap-2">
-            <button
-              type="button"
+          <DocumentActionRow
+            surfaceKey="open-document"
+            regionKey="discovery-margin-note"
+            className="mt-2"
+            aria-label="Discovery note actions"
+          >
+            <DocumentAction
+              actionKey="save-discovery-note"
+              variant="primary"
               onClick={save}
               disabled={!body.trim() || createNote.isPending}
-              className="rounded-[3px] border border-[var(--color-mocha)] bg-[var(--color-mocha)] px-3 py-1 font-mono text-[10.5px] uppercase tracking-[0.05em] text-[#f6efe2] disabled:opacity-50"
+              loading={createNote.isPending}
+              loadingLabel="Saving…"
             >
               Save
-            </button>
-            <button
-              type="button"
+            </DocumentAction>
+            <DocumentAction
+              actionKey="discard-discovery-note"
+              variant="tertiary"
               onClick={() => {
                 setComposing(false);
                 setBody('');
               }}
-              className="font-mono text-[10.5px] uppercase tracking-[0.05em] text-[var(--text-muted)]"
             >
               Discard
-            </button>
-          </div>
+            </DocumentAction>
+          </DocumentActionRow>
         </div>
       )}
 
@@ -88,8 +108,8 @@ export function DiscoveryMargin({ designerClientId }: { designerClientId: string
       ))}
 
       <p className="mt-4 font-mono text-[10px] leading-relaxed text-[var(--color-aged-oak)]">
-        Notes only — the call&apos;s read. The structured facts live in the blocks and seed the
-        proposal.
+        Notes only — the call&apos;s read. The structured facts live in the
+        blocks and seed the proposal.
       </p>
     </div>
   );

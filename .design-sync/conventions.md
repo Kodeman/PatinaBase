@@ -6,7 +6,7 @@ Patina is a warm, editorial design system for a custom-furnishing platform: a cl
 Components are plain React and render correctly as soon as `styles.css` is bound (it is). There is **no ThemeProvider/context to wrap** — just render `<Card>`, `<Badge>`, etc. `styles.css` `@import`s the brand fonts (Playfair Display, Inter, DM Mono) from Google Fonts and pulls in `_ds_bundle.css`, which defines every design token in `:root` and every utility class. The system is **light-mode only** (a `.dark` token set exists but is not the shipped default). Every component is a real export on `window.PatinaDesignSystem.<Name>` (75 total).
 
 ### Styling idiom — Tailwind v3 utilities over oklch semantic tokens
-Style with semantic utility classes, never raw hex. Each color family works as `bg-*`, `text-*`, and `border-*`, pairs with an on-color `*-foreground`, and accepts opacity modifiers (`bg-primary/10`, `text-foreground/50`):
+Style with semantic utility classes, never raw hex. Every family ships `bg-*`, its on-color `text-*-foreground` pair, and opacity modifiers (`bg-primary/10`, `text-foreground/50`); the **full** `bg/text/border` trio exists only for `primary` and `destructive` — for other combos (`border-accent`, `text-card`, …) check the compiled CSS first:
 
 | Family | Use | On-color text |
 |---|---|---|
@@ -17,12 +17,14 @@ Style with semantic utility classes, never raw hex. Each color family works as `
 | `destructive` | errors / danger | `text-destructive-foreground` |
 | `border` / `input` / `ring` | hairlines, field borders, focus ring | — |
 
-Other idiomatic bits: radii `rounded-lg | rounded-md | rounded-sm` (driven by `--radius: 0.75rem`); focus `ring-2 ring-ring ring-offset-2 ring-offset-background`; fonts `font-heading` (Playfair Display serif) and `font-mono` (DM Mono), with Inter as the body default.
+Other idiomatic bits: radii `rounded-lg | rounded-md | rounded-sm` (driven by `--radius: 0.75rem`); focus `ring-2 ring-ring ring-offset-2 ring-offset-background`; fonts `font-heading` (Playfair Display serif) with Inter as the body default. ⚠ `font-mono` is only the generic system monospace stack — for DM Mono use the `type-meta` / `type-meta-small` / `type-btn-text` classes, or `style={{fontFamily: 'var(--font-mono)'}}`.
+
+⚠ **The compiled CSS is fixed — there is no live Tailwind JIT.** Only classes already present in `_ds_bundle.css` exist; arbitrary-value classes you invent (`text-[10px]`, `translate-x-[10px]`) will silently not compile, and fractional spacing (`px-3.5`, `p-7`) is absent. For one-off pixel values use inline `style`; grep the stylesheet before leaning on an uncommon utility.
 
 **Editorial typography classes** bake in font + size + weight + color — prefer them for prose/labels over ad-hoc `text-*`: `type-page-title`, `type-section-head`, `type-item-name`, `type-data-large`, `type-data-unit`, `type-body`, `type-body-small`, `type-label`, `type-label-secondary`, `type-meta`, `type-meta-small`, `type-btn-text`.
 
 ### Where the truth lives
-Read the bound `styles.css` (and its `_ds_bundle.css` closure) for the full token + utility set before styling. Per component, read its `<Name>.prompt.md` (variants + usage) and `<Name>.d.ts` (props) — e.g. `Badge` takes `variant` (`solid|subtle|outline|dot`) plus `color` (`primary|success|warning|error|info|neutral`); `Heading` takes `as` (`h1`–`h6`), `size` (`xs`–`9xl`), and `weight`; `Card` takes `variant`/`interactive`.
+Read the bound `styles.css` (and its `_ds_bundle.css` closure) for the full token + utility set before styling. Per component, read its `<Name>.prompt.md` (variants + usage) and `<Name>.d.ts` (props) — e.g. `Badge` takes `variant` (`solid|subtle|outline|dot`) plus `color` (`primary|success|warning|error|info|neutral`); `Heading` takes `as` (`h1`–`h6`), `size` (`xs`–`9xl`), and `weight`; `Card` takes `variant` (`default|outlined|elevated`) plus `hoverable`/`clickable`.
 
 ### Idiomatic snippet
 ```jsx
@@ -52,28 +54,35 @@ Patina's designer workspace is not a dashboard — it is an editorial **document
 **The five laws**
 1. **Document, not dashboard.** No zones, tabs, sidebars, badges-as-nav, or metric tiles. A surface is paper with a letterhead, a body, and a margin; hierarchy comes from type, not chrome.
 2. **Zero shadows.** Never `shadow-*`, `drop-shadow`, or CSS box-shadow on a Desk surface. Convey depth with **flat stacked edges + value contrast + a tab**: render 1–2 offset sheets behind a paper face using `border-border` + a darker `bg-*` tint (`bg-muted`, `bg-secondary`), translated a few px down/right. (The kit's `Dialog`/`Popover` ship shadows for generic use — don't use them here.)
-3. **Typography-first.** Titles in `font-heading` (Playfair serif); prose/labels via the `type-*` classes; uppercase `font-mono` (DM Mono) micro-labels for tabs/stamps. Never nested cards or tab bars for hierarchy.
+3. **Typography-first.** Titles in `font-heading` (Playfair serif); prose/labels via the `type-*` classes; uppercase DM Mono micro-labels for tabs/stamps via `type-meta-small` or inline `var(--font-mono)` (not `font-mono` — see the styling caveat above). Never nested cards or tab bars for hierarchy.
 4. **Truthful need-lines.** Every folder/section states the one true thing that needs the person now, in plain prose from real data ("Sarah approved the sofa — 3 items ready to order"), not a bare count or status word.
 5. **One progress language: Strata Mark.** `<StrataMark />` (the three-line cascade) is the only section/progress device. No decorative progress bars, no step dots. It inherits `currentColor`, so tint via `className="text-primary"`.
 
 **The paper folder — the signature object.** A pickup-able job document: a status-colored **tab** over a white **paper face**, with tinted sheets stacked behind for depth-without-shadow.
+One-off pixel values ride inline `style` (no live JIT — see the styling caveat); everything else is the shipped vocabulary.
 ```jsx
 const { StrataMark, Badge } = window.PatinaDesignSystem;
+
+const sheet = { transform: 'translate(10px, 10px)', borderRadius: '0 8px 8px 8px' };
+const paperRadius = { borderRadius: '0 8px 8px 8px' };
 
 export function DeskFolder() {
   return (
     <div className="relative mt-6 w-full max-w-md">
       {/* depth = stacked sheets, NOT shadow */}
-      <div aria-hidden className="absolute inset-0 translate-x-[10px] translate-y-[10px] rounded-[0_8px_8px_8px] border border-border bg-muted" />
-      <div aria-hidden className="absolute inset-0 translate-x-[5px] translate-y-[5px] rounded-[0_8px_8px_8px] border border-border bg-secondary" />
+      <div aria-hidden className="absolute inset-0 border border-border bg-muted" style={sheet} />
+      <div aria-hidden className="absolute inset-0 border border-border bg-secondary" style={{ ...sheet, transform: 'translate(5px, 5px)' }} />
       <div className="relative">
-        <div className="absolute -top-[26px] left-0 flex h-[26px] items-center rounded-t-[7px] bg-primary px-3.5 font-mono text-[10px] font-semibold uppercase tracking-[0.08em] text-primary-foreground">
+        <div
+          className="absolute left-0 flex items-center bg-primary font-semibold uppercase text-primary-foreground"
+          style={{ top: -26, height: 26, padding: '0 14px', borderRadius: '7px 7px 0 0', fontFamily: 'var(--font-mono)', fontSize: 10, letterSpacing: '0.08em' }}
+        >
           Proposal · Sent
         </div>
-        <div className="rounded-[0_8px_8px_8px] border border-border bg-card p-7">
-          <h3 className="font-heading text-[1.6rem] font-medium leading-tight text-foreground">Living Room Refresh</h3>
-          <p className="mt-1 text-[12px] text-muted-foreground">Proposal · Design Refinement</p>
-          <div className="mt-4 flex items-start justify-between gap-3 border-t border-border pt-3.5">
+        <div className="border border-border bg-card p-6" style={paperRadius}>
+          <h3 className="font-heading font-medium leading-tight text-foreground" style={{ fontSize: '1.6rem' }}>Living Room Refresh</h3>
+          <p className="mt-1 text-muted-foreground" style={{ fontSize: 12 }}>Proposal · Design Refinement</p>
+          <div className="mt-4 flex items-start justify-between gap-3 border-t border-border pt-3">
             <p className="type-body flex-1 text-foreground">Sarah opened the proposal twice — a nudge is due.</p>
             <Badge color="warning" variant="subtle">Awaiting</Badge>
           </div>
@@ -85,7 +94,7 @@ export function DeskFolder() {
 ```
 
 **Vocabulary of the document**
-- **Letterhead** — the head of an open document: title in `font-heading`, live vitals as `font-mono` micro-labels.
+- **Letterhead** — the head of an open document: title in `font-heading`, live vitals as `type-meta` micro-labels.
 - **Margin** — decisions/needs sit in a right-margin rail as bordered rows (hairline `border-border`), never a modal.
 - **Ledgers** — Orders, Hours, Accounts, Library, People render as quiet ruled tables (`Table`/`List` + `Stat`), each with front-matter.
 - **Client-facing moments** — for the client's copy use the kit's narrative components: `ApprovalTheater` (proposal sign-off), `MilestoneCard`/`ImmersiveTimeline` (progress), `CostVisualizer` (budget), `BoardStatic` (mood board).

@@ -28,7 +28,10 @@
 
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { createBrowserClient, useUpdateProposal } from '@patina/supabase';
-import { proposalTierVisibility, type ClientVisibilityTier } from '@patina/utils';
+import {
+  proposalTierVisibility,
+  type ClientVisibilityTier,
+} from '@patina/utils';
 import {
   LineItemsBlock,
   PaymentScheduleBlock,
@@ -95,7 +98,9 @@ export function useProposalMirrorData(proposalId: string) {
         // Palette — swatch NAMES + COLORS only.
         supabase
           .from('proposal_palettes')
-          .select('id, name, sort_order, swatches:palette_swatches(id, name, hex, sort_order)')
+          .select(
+            'id, name, sort_order, swatches:palette_swatches(id, name, hex, sort_order)',
+          )
           .eq('proposal_id', proposalId)
           .order('sort_order', { ascending: true }),
         supabase
@@ -106,7 +111,9 @@ export function useProposalMirrorData(proposalId: string) {
         // Payment schedule — label / percentage / amount / trigger (client-facing).
         supabase
           .from('proposal_payment_milestones')
-          .select('label, percentage, amount_cents, trigger_condition, sort_order')
+          .select(
+            'label, percentage, amount_cents, trigger_condition, sort_order',
+          )
           .eq('proposal_id', proposalId)
           .order('sort_order', { ascending: true }),
         // Timeline phases — name + duration only.
@@ -128,7 +135,10 @@ export function useProposalMirrorData(proposalId: string) {
           .eq('status', 'active')
           .order('sort_order', { ascending: true })
           .order('created_at', { ascending: true })
-          .order('z_index', { ascending: true, referencedTable: 'proposal_board_items' }),
+          .order('z_index', {
+            ascending: true,
+            referencedTable: 'proposal_board_items',
+          }),
       ]);
 
       const roomNameById = new Map<string, string>(
@@ -137,7 +147,9 @@ export function useProposalMirrorData(proposalId: string) {
 
       // The client never sees a `tbd` placeholder piece (R43) — filter them from
       // both the itemized list and the name list at the projection.
-      const nonTbd = ((rawPieces ?? []) as AnyRow[]).filter((p) => p.item_type !== 'tbd');
+      const nonTbd = ((rawPieces ?? []) as AnyRow[]).filter(
+        (p) => p.item_type !== 'tbd',
+      );
 
       // The itemized LineItemsBlock shape (client-facing sell figures only).
       const lineItems = nonTbd.map((p) => ({
@@ -155,7 +167,9 @@ export function useProposalMirrorData(proposalId: string) {
         id: p.id,
         name: p.name,
         category: p.ffe_category || p.category || null,
-        room: p.scope_room_id ? roomNameById.get(p.scope_room_id) ?? null : null,
+        room: p.scope_room_id
+          ? (roomNameById.get(p.scope_room_id) ?? null)
+          : null,
       }));
 
       const palette = ((palettes ?? []) as AnyRow[]).map((pal) => ({
@@ -164,7 +178,11 @@ export function useProposalMirrorData(proposalId: string) {
         swatches: ((pal.swatches ?? []) as AnyRow[])
           .slice()
           .sort((a, b) => (a.sort_order ?? 0) - (b.sort_order ?? 0))
-          .map((s) => ({ id: s.id, name: s.name as string | null, hex: s.hex as string })),
+          .map((s) => ({
+            id: s.id,
+            name: s.name as string | null,
+            hex: s.hex as string,
+          })),
       }));
 
       // Boards → the shared BoardComposition shape (items inlined, z-ordered).
@@ -179,7 +197,8 @@ export function useProposalMirrorData(proposalId: string) {
 
       return {
         proposal,
-        tier: ((proposal as AnyRow)?.client_visibility_tier ?? 'milestone') as ClientVisibilityTier,
+        tier: ((proposal as AnyRow)?.client_visibility_tier ??
+          'milestone') as ClientVisibilityTier,
         rooms: (rooms ?? []) as AnyRow[],
         lineItems,
         pieces,
@@ -230,7 +249,9 @@ function TierInstrument({
       {
         onSuccess: () => {
           // Reflow the preview immediately rather than waiting for its poll tick.
-          void qc.invalidateQueries({ queryKey: ['proposal-mirror', proposalId] });
+          void qc.invalidateQueries({
+            queryKey: ['proposal-mirror', proposalId],
+          });
         },
       },
     );
@@ -242,26 +263,30 @@ function TierInstrument({
         What the client sees
       </p>
       <div className="flex flex-wrap gap-1">
-        {(['full', 'milestone', 'curated'] as ClientVisibilityTier[]).map((t) => {
-          const active = t === tier;
-          return (
-            <button
-              key={t}
-              type="button"
-              onClick={() => choose(t)}
-              disabled={update.isPending}
-              aria-pressed={active}
-              className="rounded-[3px] border px-2 py-0.5 font-mono text-[9px] uppercase tracking-[0.06em] transition-colors disabled:opacity-50"
-              style={{
-                color: active ? 'var(--color-charcoal)' : 'var(--text-muted)',
-                borderColor: active ? 'var(--color-clay)' : 'var(--doc-ink-border)',
-                background: active ? 'rgba(196,165,123,0.12)' : 'transparent',
-              }}
-            >
-              {TIER_LABEL[t]}
-            </button>
-          );
-        })}
+        {(['full', 'milestone', 'curated'] as ClientVisibilityTier[]).map(
+          (t) => {
+            const active = t === tier;
+            return (
+              <button
+                key={t}
+                type="button"
+                onClick={() => choose(t)}
+                disabled={update.isPending}
+                aria-pressed={active}
+                className="min-h-11 min-w-11 rounded-[3px] border px-2 py-0.5 font-mono text-[9px] uppercase tracking-[0.06em] transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-clay)] disabled:opacity-50"
+                style={{
+                  color: active ? 'var(--color-charcoal)' : 'var(--text-muted)',
+                  borderColor: active
+                    ? 'var(--color-clay)'
+                    : 'var(--doc-ink-border)',
+                  background: active ? 'rgba(196,165,123,0.12)' : 'transparent',
+                }}
+              >
+                {TIER_LABEL[t]}
+              </button>
+            );
+          },
+        )}
       </div>
     </div>
   );
@@ -292,7 +317,9 @@ export function ProposalPreviewRail({
     <div
       className="mx-auto max-w-[680px]"
       data-testid="proposal-preview-rail"
-      aria-label={clientName ? `What ${clientName} sees` : 'What the client sees'}
+      aria-label={
+        clientName ? `What ${clientName} sees` : 'What the client sees'
+      }
     >
       <TierInstrument proposalId={proposalId} tier={data.tier} />
 
@@ -322,7 +349,9 @@ export function ProposalPreviewRail({
                 key={r.id}
                 className="flex items-baseline justify-between border-b border-dashed border-[var(--color-pearl)] py-1.5"
               >
-                <span className="text-[12px] text-[var(--color-charcoal)]">{r.name}</span>
+                <span className="text-[12px] text-[var(--color-charcoal)]">
+                  {r.name}
+                </span>
                 {r.room_type && (
                   <span className="font-mono text-[8.5px] uppercase tracking-[0.05em] text-[var(--text-muted)]">
                     {r.room_type}
@@ -341,7 +370,11 @@ export function ProposalPreviewRail({
             .filter((pal) => pal.swatches.length > 0)
             .map((pal) => (
               <div key={pal.id} className="mb-3 last:mb-0">
-                {pal.name && <p className="mb-1 text-[10.5px] text-[var(--text-muted)]">{pal.name}</p>}
+                {pal.name && (
+                  <p className="mb-1 text-[10.5px] text-[var(--text-muted)]">
+                    {pal.name}
+                  </p>
+                )}
                 <div className="flex flex-wrap gap-x-4 gap-y-2">
                   {pal.swatches.map((s) => (
                     <div key={s.id} className="flex items-center gap-1.5">
@@ -350,7 +383,9 @@ export function ProposalPreviewRail({
                         className="h-3.5 w-3.5 rounded-full border border-[var(--color-pearl)]"
                         style={{ backgroundColor: s.hex }}
                       />
-                      <span className="text-[11px] text-[var(--color-charcoal)]">{s.name ?? s.hex}</span>
+                      <span className="text-[11px] text-[var(--color-charcoal)]">
+                        {s.name ?? s.hex}
+                      </span>
                     </div>
                   ))}
                 </div>
@@ -368,7 +403,11 @@ export function ProposalPreviewRail({
           {data.boards
             .filter((b) => b.items.length > 0)
             .map((b) => (
-              <BoardComposition key={b.id} board={b} className="mb-4 last:mb-0" />
+              <BoardComposition
+                key={b.id}
+                board={b}
+                className="mb-4 last:mb-0"
+              />
             ))}
         </section>
       )}
@@ -378,7 +417,10 @@ export function ProposalPreviewRail({
           renders the single rolled-up Total row (preview = truth). */}
       <section className="mb-6">
         <MirrorSectionLabel>Investment</MirrorSectionLabel>
-        <LineItemsBlock items={gate.lineItems ? data.lineItems : []} totalCents={data.totalCents} />
+        <LineItemsBlock
+          items={gate.lineItems ? data.lineItems : []}
+          totalCents={data.totalCents}
+        />
       </section>
 
       {gate.paymentSchedule && data.milestones.length > 0 && (

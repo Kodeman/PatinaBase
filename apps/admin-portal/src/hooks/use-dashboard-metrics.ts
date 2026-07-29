@@ -3,8 +3,6 @@ import { useCommsDashboard } from '@patina/supabase/hooks';
 import { usePipelineMetrics } from '@/hooks/use-pipeline';
 import type { ApplicationsMetrics } from '@/app/api/admin/applications-metrics/route';
 
-const POLL_INTERVAL_MS = 5 * 60 * 1000;
-
 async function fetchApplicationsMetrics(): Promise<ApplicationsMetrics> {
   const res = await fetch('/api/admin/applications-metrics', { cache: 'no-store' });
   if (!res.ok) {
@@ -33,11 +31,13 @@ async function fetchOrdersTotal(): Promise<number | null> {
   }
 }
 
+// No background refetchInterval — mount + window-focus refetch only. This
+// data backs the dashboard landing page; a 5-minute poll kept fetching in
+// every open admin-portal tab regardless of whether anyone was looking.
 export function useApplicationsMetrics() {
   return useQuery({
     queryKey: ['applications-metrics'],
     queryFn: fetchApplicationsMetrics,
-    refetchInterval: POLL_INTERVAL_MS,
     staleTime: 60_000,
   });
 }
@@ -46,7 +46,6 @@ export function useOrdersTotal() {
   return useQuery({
     queryKey: ['orders-total'],
     queryFn: fetchOrdersTotal,
-    refetchInterval: POLL_INTERVAL_MS,
     staleTime: 60_000,
   });
 }

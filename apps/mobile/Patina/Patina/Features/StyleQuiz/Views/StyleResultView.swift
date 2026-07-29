@@ -12,9 +12,21 @@ struct StyleResultView: View {
     let result: StyleProfileResult
     /// Optional callback for onboarding flow; if nil, uses coordinator navigation
     var onViewRecommendations: (() -> Void)? = nil
+    /// U18: true only for the pushed-nav mount (route `.styleResult`), which
+    /// gets the standard chrome + back chevron. The onboarding mount (no
+    /// enclosing NavigationStack, its own step sequence) stays chromeless.
+    var showsChrome: Bool = false
     @Environment(\.appCoordinator) private var coordinator
 
     var body: some View {
+        if showsChrome {
+            content.patinaScreen(title: nil)
+        } else {
+            content
+        }
+    }
+
+    private var content: some View {
         VStack(spacing: 0) {
             Spacer()
 
@@ -66,7 +78,7 @@ struct StyleResultView: View {
                 }
                 .frame(width: 200, height: 6)
 
-                MonoLabel(text: "\(result.confidencePercent)% Style Confidence")
+                MonoLabel(text: "A starting point — refine it any time.")
             }
             .padding(.bottom, 32)
 
@@ -75,7 +87,7 @@ struct StyleResultView: View {
                 if let onViewRecommendations {
                     onViewRecommendations()
                 } else {
-                    coordinator.navigate(to: .heroFrame)
+                    coordinator.navigate(to: .emergence(pieceId: nil))
                 }
             } label: {
                 Text("View Recommendations")
@@ -88,21 +100,10 @@ struct StyleResultView: View {
             }
             .padding(.horizontal, 28)
 
-            // Secondary CTA
-            Button {
-                // Future: navigate to refine style flow
-            } label: {
-                Text("Refine your style →")
-                    .font(PatinaTypography.bodySmall)
-                    .foregroundStyle(PatinaColors.Text.interactive)
-            }
-            .padding(.top, 12)
-
             Spacer()
         }
         .padding(.horizontal, 28)
         .background(PatinaColors.Background.primary)
-        .toolbar(.hidden, for: .navigationBar)
     }
 
     // MARK: - Attribute Column
