@@ -196,7 +196,7 @@ serve(async (req) => {
   const clientHost = Deno.env.get("CLIENT_PORTAL_URL") || "https://client.patina.cloud";
   const deepLinkFor = (role: string): string => {
     if (role === "designer" || role === "admin") {
-      return `${designerHost}/portal/messages/${msg.thread_id}`;
+      return `${designerHost}/people?thread=${msg.thread_id}`;
     }
     return `${clientHost}/messages/${msg.thread_id}`;
   };

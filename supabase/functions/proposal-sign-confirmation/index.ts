@@ -165,7 +165,7 @@ Deno.serve(async (req: Request) => {
   }
 
   if (proposal.designer?.email) {
-    const link = `${DESIGNER_PORTAL_URL}/portal/proposals/${proposal.id}/signed`;
+    const link = `${DESIGNER_PORTAL_URL}/doc/${proposal.id}`;
     const html = renderBrandedShell({
       title: `Signed: "${proposal.title}"`,
       preview: `${signerName} just signed ${proposal.title}.`,

@@ -7,8 +7,8 @@
  * pathname-driven fallback so the `<ContextualHelpPanel />` can fetch help
  * articles relevant to the page the homeowner is on.
  *
- * Unlike the designer portal (which lives under a `/portal` route prefix),
- * the client-portal mounts its routes at the host root — there is no prefix
+ * Like the designer portal (whose routes now mount at the host root too, post
+ * R21), the client-portal mounts its routes at the host root — there is no prefix
  * to strip. The bare `/` is a redirect to `/projects`, and `/today` is the
  * dashboard a homeowner lands on day-to-day. Both map to the single
  * registered client surface key today (`client-portal/home`); other routes

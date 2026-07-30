@@ -136,7 +136,7 @@ export interface UserStatusMenuProps {
 
   /**
    * Base path prefix for default menu item hrefs (Profile, Settings).
-   * e.g. '/portal' results in '/portal/profile' and '/portal/settings'
+   * e.g. '/account' results in '/account/profile' and '/account/settings'
    * @default ''
    */
   basePath?: string

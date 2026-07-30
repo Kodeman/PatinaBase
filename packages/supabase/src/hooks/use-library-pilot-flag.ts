@@ -19,9 +19,10 @@ const FLAG_KEY = 'three_layer_catalog_enabled';
  * if any of their orgs is in the pilot.
  *
  * Default: false (i.e. flag absent or false ⇒ no pilot access). The
- * ProductsZone routes can opt in via this hook; default-off keeps
- * non-pilot designers on the existing /portal/catalog single-tier
- * surface until Kody flips the flag globally.
+ * Library routes can opt in via this hook; default-off keeps non-pilot
+ * designers on the single-tier catalog surface until Kody flips the flag
+ * globally. (Post-dissolve the off-branch destination no longer exists as
+ * its own route — see R21; revisit whether this flag is still live.)
  *
  * Operations
  * ──────────

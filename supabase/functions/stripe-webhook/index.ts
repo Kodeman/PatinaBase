@@ -359,7 +359,7 @@ async function sendSuccessSideEffects(
         paid_in_full: paidInFull,
         subject,
         message: `${projectName}: ${subject.toLowerCase()}${paidInFull ? '' : ` (balance ${formatInvoiceCurrency(balanceCents, invoice.currency)})`}.`,
-        deep_link: `/portal/billing/invoices/${invoice.id}`,
+        deep_link: `/desk?book=accounts&page=ledger&invoiceId=${invoice.id}`,
       },
     });
     if (notifyErr) {
@@ -442,7 +442,7 @@ async function sendFailureSideEffects(
         amount_cents: row.amount_cents,
         subject,
         message: `${projectName}: the client's bank transfer of ${amountLabel} on ${invoiceNumber} failed. They've been asked to try again.`,
-        deep_link: `/portal/billing/invoices/${invoice.id}`,
+        deep_link: `/desk?book=accounts&page=ledger&invoiceId=${invoice.id}`,
       },
     });
     if (notifyErr) {
@@ -1382,7 +1382,7 @@ async function sendInvoiceRefundSideEffects(
     const invoiceNumber = invoice.invoice_number ?? 'Invoice';
     const projectName = invoice.project?.name ?? 'your project';
     const designerName = designerDisplayName(invoice);
-    const portalUrl = `${DESIGNER_PORTAL_URL}/portal/billing/invoices/${invoice.id}`;
+    const portalUrl = `${DESIGNER_PORTAL_URL}/desk?book=accounts&page=ledger&invoiceId=${invoice.id}`;
     const refundLabel = formatInvoiceCurrency(opts.refundedAmount, invoice.currency);
 
     // Designer-facing email (this is the designer's money, not the client's).
@@ -1420,7 +1420,7 @@ async function sendInvoiceRefundSideEffects(
           partial: opts.partial,
           subject: rendered.subject,
           message: `${refundLabel} refunded on ${invoiceNumber}.`,
-          deep_link: `/portal/billing/invoices/${invoice.id}`,
+          deep_link: `/desk?book=accounts&page=ledger&invoiceId=${invoice.id}`,
         },
       });
       if (!sendResult.success && !sendResult.suppressed) {
@@ -1450,7 +1450,7 @@ async function sendInvoiceRefundSideEffects(
         message: opts.partial
           ? `${projectName}: partial refund of ${refundLabel} on ${invoiceNumber} — reconcile in Stripe (balance unchanged).`
           : `${projectName}: ${refundLabel} refunded on ${invoiceNumber} — the invoice has been reopened and earnings reversed.`,
-        deep_link: `/portal/billing/invoices/${invoice.id}`,
+        deep_link: `/desk?book=accounts&page=ledger&invoiceId=${invoice.id}`,
       },
     });
     if (notifyErr) {
