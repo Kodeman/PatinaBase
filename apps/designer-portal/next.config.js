@@ -247,8 +247,17 @@ const nextConfig = {
    * Rules of the table:
    *   · FIRST MATCH WINS. Specific before general; `/portal` exact sits first
    *     (`/portal/:path*` would otherwise swallow it), the catchall sits last.
+   *   · A STATIC segment is never left to an `:id` rule. `new`, `saved`,
+   *     `import`, `categories`, `collections`, `calendar` are all named ahead of
+   *     the id pattern in the same family, on BOTH trees — otherwise
+   *     /projects/new resolves to /doc/new, which the resolver can only answer
+   *     with "missing".
    *   · Query strings ride along untouched — which is how
    *     /portal/preferences?token=… keeps its unsubscribe token.
+   *   · A destination may carry a SECTION ANCHOR. A project sub-route collapses
+   *     onto the one document, but `#doc-section-<key>` (the ids from
+   *     lib/document/section-anchor.ts) lands it on the section that held the
+   *     old page's work instead of at the top of the paper.
    *   · ROOM id ≠ SCAN id. /portal/rooms/:id speaks `rooms`; /room/:id speaks
    *     `room_scans`. Never map one to the other — land on the /rooms roster.
    *   · A decision id, a lead id and a proposal id all resolve through
@@ -263,9 +272,17 @@ const nextConfig = {
       { source: '/portal/projects/new', destination: '/desk', permanent: true },
       // The Room File was never project-keyed (room_files is UNIQUE(scan_id, version)).
       { source: '/portal/projects/:id/room-file/:scanId', destination: '/room/:scanId/file', permanent: true },
-      { source: '/portal/projects/:id', destination: '/doc/:id', permanent: true },
-      // /time /complete /ffe /financials /decisions /edit /phase/* /scope-change*
+      // The ruled section anchors: a project sub-route collapses onto the ONE
+      // document, but it lands on the section that held the old page's work
+      // rather than at the top of the paper. The ids come from
+      // lib/document/section-anchor.ts (`doc-section-${SectionKey}`).
+      { source: '/portal/projects/:id/complete', destination: '/doc/:id#doc-section-care', permanent: true },
+      { source: '/portal/projects/:id/ffe', destination: '/doc/:id#doc-section-project', permanent: true },
+      { source: '/portal/projects/:id/financials', destination: '/doc/:id#doc-section-project', permanent: true },
+      { source: '/portal/projects/:id/phase/:path*', destination: '/doc/:id#doc-section-project', permanent: true },
+      // /time /decisions /edit /scope-change* — the rest of the sub-tree.
       { source: '/portal/projects/:id/:path*', destination: '/doc/:id', permanent: true },
+      { source: '/portal/projects/:id', destination: '/doc/:id', permanent: true },
       { source: '/portal/projects', destination: '/desk', permanent: true },
 
       { source: '/portal/proposals/new', destination: '/desk', permanent: true },
@@ -314,7 +331,8 @@ const nextConfig = {
       { source: '/portal/library/:path*', destination: '/library', permanent: true },
 
       // Static catalog segments first — otherwise `new` reads as a product id.
-      { source: '/portal/catalog/new', destination: '/library', permanent: true },
+      // R40: the Composing Page IS the "new piece" surface, and it has a route.
+      { source: '/portal/catalog/new', destination: '/compose', permanent: true },
       { source: '/portal/catalog/import', destination: '/library', permanent: true },
       { source: '/portal/catalog/categories', destination: '/library', permanent: true },
       { source: '/portal/catalog/collections', destination: '/library', permanent: true },
@@ -329,12 +347,17 @@ const nextConfig = {
       { source: '/portal/teaching/product/:id', destination: '/library/:id', permanent: true },
       { source: '/portal/teaching', destination: '/library', permanent: true },
       { source: '/portal/teaching/:path*', destination: '/library', permanent: true },
-      { source: '/portal/companion', destination: '/desk', permanent: true },
+      // The companion's successor is the Library's own asking surface
+      // (LibrarianBar + EngineResults) — not the Desk.
+      { source: '/portal/companion', destination: '/library', permanent: true },
 
       // ─── The Orders book (doorway) ─────────────────────────────────────────
       { source: '/portal/procurement/receiving', destination: '/desk?book=orders&page=receiving', permanent: true },
       { source: '/portal/procurement/by-vendor', destination: '/desk?book=orders&page=vendors', permanent: true },
       { source: '/portal/procurement/expediting', destination: '/desk?book=orders&page=week', permanent: true },
+      // The delivery calendar became the Orders book's week page (same truth:
+      // what lands when) — never the plain ledger.
+      { source: '/portal/procurement/calendar', destination: '/desk?book=orders&page=week', permanent: true },
       { source: '/portal/procurement', destination: '/desk?book=orders', permanent: true },
       { source: '/portal/procurement/:path*', destination: '/desk?book=orders', permanent: true },
 
@@ -379,7 +402,14 @@ const nextConfig = {
 
       // ─── The pre-dissolve bare paths ───────────────────────────────────────
       // These predate the zone tree and used to hop through /portal/*. They now
-      // name their final destination directly — no redirect chains.
+      // name their final destination directly — no redirect chains. The `:path*`
+      // catchalls at the foot of each family mirror the /portal tree's coverage:
+      // main funnelled a deep bare path (/catalog/foo/bar) through /portal and
+      // let the /portal catchall answer, so without them those URLs would 404.
+      // `new` is a STATIC segment, not a project id — it must be named before
+      // any /projects/:id rule can eat it (it would otherwise resolve to
+      // /doc/new, which the resolver can only answer with "missing").
+      { source: '/projects/new', destination: '/desk', permanent: true },
       { source: '/projects/:id/:path*', destination: '/doc/:id', permanent: true },
       { source: '/projects/:id', destination: '/doc/:id', permanent: true },
       { source: '/projects', destination: '/desk', permanent: true },
@@ -391,18 +421,23 @@ const nextConfig = {
       { source: '/proposals', destination: '/desk', permanent: true },
       { source: '/leads/:id', destination: '/doc/:id', permanent: true },
       { source: '/leads', destination: '/desk', permanent: true },
+      { source: '/leads/:path*', destination: '/desk', permanent: true },
+      // The nav's old "+ Add Client" quick action, bare twin.
+      { source: '/clients', has: [{ type: 'query', key: 'add' }], destination: '/people?role=client&add=client', permanent: true },
       { source: '/clients/:id/:path*', destination: '/people?person=:id&role=client', permanent: true },
       { source: '/clients/:id', destination: '/people?person=:id&role=client', permanent: true },
       { source: '/clients', destination: '/people?role=client', permanent: true },
+      { source: '/clients/:path*', destination: '/people?role=client', permanent: true },
       { source: '/vendors/new', destination: '/people?add=maker', permanent: true },
       { source: '/vendors/saved', destination: '/people?role=maker', permanent: true },
       { source: '/vendors/:id', destination: '/people?person=:id&role=maker', permanent: true },
       { source: '/vendors', destination: '/people?role=maker', permanent: true },
+      { source: '/vendors/:path*', destination: '/people?role=maker', permanent: true },
       { source: '/messages/:id', destination: '/people?thread=:id', permanent: true },
       { source: '/messages', destination: '/people?view=threads', permanent: true },
       { source: '/communications', destination: '/people?view=outreach', permanent: true },
       { source: '/communications/:path*', destination: '/people?view=outreach', permanent: true },
-      { source: '/catalog/new', destination: '/library', permanent: true },
+      { source: '/catalog/new', destination: '/compose', permanent: true },
       { source: '/catalog/import', destination: '/library', permanent: true },
       { source: '/catalog/categories', destination: '/library', permanent: true },
       { source: '/catalog/collections', destination: '/library', permanent: true },
@@ -410,6 +445,7 @@ const nextConfig = {
       { source: '/catalog/:id/edit', destination: '/library/:id', permanent: true },
       { source: '/catalog/:id', destination: '/library/:id', permanent: true },
       { source: '/catalog', destination: '/library', permanent: true },
+      { source: '/catalog/:path*', destination: '/library', permanent: true },
       { source: '/teaching/judgments', destination: '/library/judgments', permanent: true },
       { source: '/teaching/your-eye', destination: '/people?view=your-eye', permanent: true },
       { source: '/teaching/product/:id', destination: '/library/:id', permanent: true },
@@ -422,7 +458,7 @@ const nextConfig = {
       { source: '/settings', destination: '/desk?account=profile', permanent: true },
       { source: '/settings/:path*', destination: '/desk?account=profile', permanent: true },
       { source: '/profile', destination: '/desk?account=profile', permanent: true },
-      { source: '/companion', destination: '/desk', permanent: true },
+      { source: '/companion', destination: '/library', permanent: true },
       { source: '/insights', destination: '/desk', permanent: true },
     ];
   },
