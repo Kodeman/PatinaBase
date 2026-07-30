@@ -19,6 +19,8 @@ struct S1AssignVenueScreen: View {
     let store: CaptureStore
     let location: any LocationService
     let session: any SessionProviding
+    let projects: any ProjectsService
+    let specBookPilot: any SpecBookPilotGate
     let coordinator: CaptureCoordinator
     let analytics: any CaptureAnalytics
 
@@ -27,7 +29,9 @@ struct S1AssignVenueScreen: View {
             if let specimen {
                 S1Content(
                     specimen: specimen, store: store, location: location,
-                    session: session, coordinator: coordinator)
+                    session: session, projectsService: projects,
+                    specBookPilot: specBookPilot, coordinator: coordinator,
+                    analytics: analytics)
             } else {
                 RouteMissingSpecimen()
             }
@@ -45,14 +49,23 @@ private struct S1Content: View {
     let store: CaptureStore
     let location: any LocationService
     let session: any SessionProviding
+    let projectsService: any ProjectsService
+    let specBookPilot: any SpecBookPilotGate
     let coordinator: CaptureCoordinator
+    let analytics: any CaptureAnalytics
 
     @AppStorage("capture.routingSpecimenId") private var routingSpecimenId = ""
     private let sessionContext = CaptureSessionContextStore.shared
 
-    @State private var projects: [CaptureProjectRef] = []
+    @State private var projects: [RoutingProjectOption] = []
     @State private var selectedProjectId = ""
     @State private var projectName = ""
+    @State private var selectedProjectRoomId = ""
+    @State private var projectDetail: FieldProjectDetail?
+    @State private var placementChoice: PlacementChoice = .none
+    @State private var pilotEnabled = false
+    @State private var projectLoadError: String?
+    @State private var isLoadingProject = false
     @State private var room = ""
     @State private var shelf = ""
     @State private var venueName = ""
@@ -72,10 +85,15 @@ private struct S1Content: View {
 
                 VStack(spacing: 0) {
                     projectField
-                    RouteFieldShell(label: "Room") {
-                        TextField("Add a room", text: $room)
-                            .font(CaptureType.body)
-                            .foregroundStyle(CaptureColor.ink)
+                    if pilotEnabled {
+                        projectRoomField
+                        placementField
+                    } else {
+                        RouteFieldShell(label: "Room") {
+                            TextField("Add a room", text: $room)
+                                .font(CaptureType.body)
+                                .foregroundStyle(CaptureColor.ink)
+                        }
                     }
                     RouteFieldShell(label: "Shelf") {
                         TextField("Seating · “maybe”", text: $shelf)
@@ -84,6 +102,12 @@ private struct S1Content: View {
                     }
                 }
                 .routeCard()
+
+                if let projectLoadError, pilotEnabled {
+                    Label(projectLoadError, systemImage: "wifi.exclamationmark")
+                        .font(CaptureType.footnote)
+                        .foregroundStyle(CaptureColor.warning)
+                }
 
                 Spacer(minLength: 8)
 
@@ -98,7 +122,10 @@ private struct S1Content: View {
             .padding(20)
         }
         .scrollDismissesKeyboard(.interactively)
-        .onAppear { load() }
+        .task {
+            loadLocalContext()
+            await loadPilotContext()
+        }
     }
 
     private var venueChip: some View {
@@ -131,7 +158,9 @@ private struct S1Content: View {
         RouteFieldShell(label: "Project") {
             Menu {
                 ForEach(projects, id: \.id) { project in
-                    Button(project.name) { select(project) }
+                    Button(project.name) {
+                        Task { await select(project) }
+                    }
                 }
                 if !projects.isEmpty { Divider() }
                 Button {
@@ -154,11 +183,80 @@ private struct S1Content: View {
         }
     }
 
+    @ViewBuilder
+    private var projectRoomField: some View {
+        RouteFieldShell(label: "Project room") {
+            Menu {
+                Button("Unassigned") { selectRoom(nil) }
+                ForEach(projectDetail?.specRooms ?? []) { projectRoom in
+                    Button(projectRoom.name) { selectRoom(projectRoom) }
+                }
+            } label: {
+                HStack {
+                    Text(room.isEmpty ? "Choose a project room" : room)
+                        .font(CaptureType.body)
+                        .foregroundStyle(room.isEmpty ? CaptureColor.inkSoft : CaptureColor.ink)
+                    Spacer()
+                    if isLoadingProject {
+                        ProgressView().tint(CaptureColor.verdigris)
+                    } else {
+                        Image(systemName: "chevron.down")
+                            .font(CaptureType.footnote)
+                            .foregroundStyle(CaptureColor.inkSoft)
+                    }
+                }
+            }
+            .disabled(selectedProjectId.isEmpty || isLoadingProject)
+        }
+    }
+
+    @ViewBuilder
+    private var placementField: some View {
+        RouteFieldShell(label: "FF&E schedule") {
+            Menu {
+                Button("No FF&E line — Library or project inbox") {
+                    placementChoice = .none
+                }
+                Button("Create a new line") {
+                    placementChoice = .createLine
+                }
+                if !availableSlots.isEmpty {
+                    Divider()
+                    Section("Fill an empty slot") {
+                        ForEach(availableSlots) { slot in
+                            Button(slot.name) {
+                                placementChoice = .slot(slot.id)
+                            }
+                        }
+                    }
+                }
+            } label: {
+                HStack {
+                    Text(placementLabel)
+                        .font(CaptureType.body)
+                        .foregroundStyle(
+                            placementChoice == .none
+                                ? CaptureColor.inkSoft
+                                : CaptureColor.ink)
+                    Spacer()
+                    Image(systemName: "chevron.down")
+                        .font(CaptureType.footnote)
+                        .foregroundStyle(CaptureColor.inkSoft)
+                }
+            }
+            .disabled(
+                selectedProjectId.isEmpty
+                    || selectedProjectRoomId.isEmpty
+                    || isLoadingProject)
+        }
+    }
+
     // MARK: Behaviour
 
-    private func load() {
+    private func loadLocalContext() {
         routingSpecimenId = specimen.id.uuidString
 
+        let localProjects: [CaptureProjectRef]
         if AppConfiguration.runsRealServices {
             if let owner = session.ownerIdentity {
                 let ownerUserID = owner.userID
@@ -170,31 +268,90 @@ private struct S1Content: View {
                     },
                     sortBy: [SortDescriptor(\.createdAt, order: .reverse)]
                 )
-                projects = (try? store.context.fetch(descriptor)) ?? []
+                localProjects = (try? store.context.fetch(descriptor)) ?? []
             } else {
-                projects = []
+                localProjects = []
             }
         } else {
             let descriptor = FetchDescriptor<CaptureProjectRef>(
                 sortBy: [SortDescriptor(\.createdAt, order: .reverse)]
             )
-            projects = (try? store.context.fetch(descriptor)) ?? []
+            localProjects = (try? store.context.fetch(descriptor)) ?? []
+        }
+        projects = localProjects.map {
+            RoutingProjectOption(
+                id: $0.remoteId ?? $0.id.uuidString,
+                name: $0.name)
         }
 
         let venue = specimen.venue
         let remembered = sessionContext.current(identity: identity).routing
         projectName = venue?.projectName ?? remembered.projectName ?? ""
         selectedProjectId = venue?.projectId ?? remembered.projectID ?? ""
+        selectedProjectRoomId = venue?.projectRoomId
+            ?? specimen.placementRoomId
+            ?? remembered.projectRoomID
+            ?? ""
         room = venue?.room ?? remembered.room ?? ""
         shelf = venue?.shelf ?? remembered.shelf ?? ""
         venueName = venue?.placemarkName ?? ""
+        if let slotID = specimen.placementSlotId {
+            placementChoice = .slot(slotID)
+        } else if specimen.placementProjectId != nil {
+            placementChoice = .createLine
+        }
 
         if venueName.isEmpty { Task { await stampVenue() } }
     }
 
-    private func select(_ project: CaptureProjectRef) {
-        selectedProjectId = project.remoteId ?? project.id.uuidString
+    private func loadPilotContext() async {
+        let enabled = await specBookPilot.isEnabled()
+        pilotEnabled = enabled
+        guard enabled else { return }
+        do {
+            let remoteProjects = try await projectsService.listProjects()
+                .map { RoutingProjectOption(id: $0.id, name: $0.name) }
+            projects = merge(remoteProjects, projects)
+            if !selectedProjectId.isEmpty {
+                await loadProjectDetail(selectedProjectId)
+            }
+        } catch {
+            projectLoadError =
+                "Project rooms are unavailable offline. This capture can still go to Library or Inbox."
+        }
+    }
+
+    private func select(_ project: RoutingProjectOption) async {
+        selectedProjectId = project.id
         projectName = project.name
+        selectedProjectRoomId = ""
+        room = ""
+        placementChoice = .none
+        await loadProjectDetail(project.id)
+    }
+
+    private func loadProjectDetail(_ projectID: String) async {
+        isLoadingProject = true
+        projectLoadError = nil
+        defer { isLoadingProject = false }
+        do {
+            projectDetail = try await projectsService.projectDetail(id: projectID)
+            if let selected = projectDetail?.specRooms.first(where: {
+                $0.id == selectedProjectRoomId
+            }) {
+                room = selected.name
+            }
+        } catch {
+            projectDetail = nil
+            projectLoadError =
+                "Project rooms are unavailable offline. This capture can still go to Library or Inbox."
+        }
+    }
+
+    private func selectRoom(_ projectRoom: FieldProjectRoom?) {
+        selectedProjectRoomId = projectRoom?.id ?? ""
+        room = projectRoom?.name ?? ""
+        placementChoice = .none
     }
 
     private func stampVenue() async {
@@ -224,9 +381,40 @@ private struct S1Content: View {
         if !trimmedName.isEmpty { venue.placemarkName = trimmedName }
         venue.projectId = selectedProjectId.isEmpty ? nil : selectedProjectId
         venue.projectName = projectName.isEmpty ? nil : projectName
+        if pilotEnabled {
+            venue.projectRoomId = selectedProjectRoomId.isEmpty
+                ? nil
+                : selectedProjectRoomId
+        }
         venue.room = room.isEmpty ? nil : room
         venue.shelf = shelf.isEmpty ? nil : shelf
         specimen.venue = venue
+        if pilotEnabled, !selectedProjectId.isEmpty {
+            switch placementChoice {
+            case .none:
+                specimen.clearProjectPlacement()
+            case .createLine:
+                specimen.configureProjectPlacement(
+                    projectID: selectedProjectId,
+                    roomID: selectedProjectRoomId.isEmpty
+                        ? nil
+                        : selectedProjectRoomId,
+                    slotID: nil,
+                    category: placementCategory)
+            case .slot(let slotID):
+                specimen.configureProjectPlacement(
+                    projectID: selectedProjectId,
+                    roomID: selectedProjectRoomId.isEmpty
+                        ? nil
+                        : selectedProjectRoomId,
+                    slotID: slotID,
+                    category: placementCategory)
+            }
+            analytics.event("spec_book.capture_route_selected", [
+                "placement": placementChoice.analyticsValue,
+                "has_room": selectedProjectRoomId.isEmpty ? "false" : "true"
+            ])
+        }
         specimen.touch()
         try? store.save()
 
@@ -237,7 +425,10 @@ private struct S1Content: View {
                 projectID: selectedProjectId.isEmpty ? nil : selectedProjectId,
                 projectName: projectName.isEmpty ? nil : projectName,
                 room: room.isEmpty ? nil : room,
-                shelf: shelf.isEmpty ? nil : shelf),
+                shelf: shelf.isEmpty ? nil : shelf,
+                projectRoomID: selectedProjectRoomId.isEmpty
+                    ? nil
+                    : selectedProjectRoomId),
             identity: identity)
     }
 
@@ -245,6 +436,56 @@ private struct S1Content: View {
         CaptureSessionIdentity(
             userID: session.userID,
             workspaceID: session.workspaceID)
+    }
+
+    private var placementCategory: String? {
+        specimen.category == .unknown ? nil : specimen.category.rawValue
+    }
+
+    private var availableSlots: [FieldFFEItem] {
+        (projectDetail?.ffeItems ?? []).filter {
+            $0.isEmptySlot
+                && $0.projectRoomID == selectedProjectRoomId
+        }
+    }
+
+    private var placementLabel: String {
+        switch placementChoice {
+        case .none:
+            return "No FF&E line"
+        case .createLine:
+            return "Create a new line"
+        case .slot(let id):
+            return availableSlots.first(where: { $0.id == id })?.name
+                ?? "Fill selected slot"
+        }
+    }
+
+    private func merge(
+        _ preferred: [RoutingProjectOption],
+        _ fallback: [RoutingProjectOption]
+    ) -> [RoutingProjectOption] {
+        var seen: Set<String> = []
+        return (preferred + fallback).filter { seen.insert($0.id).inserted }
+    }
+}
+
+private struct RoutingProjectOption: Identifiable {
+    let id: String
+    let name: String
+}
+
+private enum PlacementChoice: Equatable {
+    case none
+    case createLine
+    case slot(String)
+
+    var analyticsValue: String {
+        switch self {
+        case .none: return "none"
+        case .createLine: return "create_line"
+        case .slot: return "fill_slot"
+        }
     }
 }
 
@@ -256,6 +497,8 @@ private struct S1Content: View {
         store: demo.store,
         location: MockLocationService(),
         session: MockSessionProviding(),
+        projects: MockProjectsService(),
+        specBookPilot: LaunchArgumentSpecBookPilotGate(),
         coordinator: CaptureCoordinator(),
         analytics: MockCaptureAnalytics()
     )

@@ -31,7 +31,7 @@ struct CaptureRoutingContext {
     }
 }
 
-struct SupabaseCaptureGateway {
+struct SupabaseCaptureGateway: ProjectPlacementGateway {
     let client: SupabaseClient
     let bucket: String
 
@@ -64,6 +64,45 @@ struct SupabaseCaptureGateway {
             captureID: captureID, projectID: routing.projectID,
             projectRoomID: routing.projectRoomID, shelf: routing.shelf)
         return try await client.rpc("route_field_capture", params: params).execute().value
+    }
+
+    /// A response-loss-safe replay check. `captureId` is the specimen's stable
+    /// client token, written into `project_ffe_specs.routing_source` by the
+    /// placement RPC.
+    func existingPlacement(
+        for request: ProjectPlacementRequest
+    ) async throws -> ProjectPlacementReceipt? {
+        guard let routingKey = request.captureRoutingKey else { return nil }
+        let rows: [ExistingPlacementRow] = try await client
+            .from("project_ffe_specs")
+            .select(
+                "id, ffe_item_id, "
+                    + "ffe_item:project_ffe_items!inner(project_id, project_room_id, product_id)"
+            )
+            .eq("routing_source->>captureId", value: routingKey)
+            .eq("ffe_item.project_id", value: request.projectID)
+            .eq("ffe_item.product_id", value: request.productID)
+            .limit(1)
+            .execute()
+            .value
+        guard let row = rows.first else { return nil }
+        return ProjectPlacementReceipt(
+            projectID: request.projectID,
+            ffeItemID: row.ffeItemID,
+            specID: row.id,
+            productID: request.productID,
+            roomID: row.ffeItem.projectRoomID,
+            placement: request.slotID == nil ? "created_line" : "filled_slot"
+        )
+    }
+
+    func placeProduct(
+        _ request: ProjectPlacementRequest
+    ) async throws -> ProjectPlacementReceipt {
+        try await client
+            .rpc("place_product_in_project", params: request)
+            .execute()
+            .value
     }
 }
 
@@ -112,5 +151,25 @@ struct CaptureCommitResult: Decodable, Sendable {
         case productID = "product_id"
         case status
         case created
+    }
+}
+
+private struct ExistingPlacementRow: Decodable {
+    let id: UUID
+    let ffeItemID: UUID
+    let ffeItem: ExistingPlacementFFEItem
+
+    enum CodingKeys: String, CodingKey {
+        case id
+        case ffeItemID = "ffe_item_id"
+        case ffeItem = "ffe_item"
+    }
+}
+
+private struct ExistingPlacementFFEItem: Decodable {
+    let projectRoomID: UUID?
+
+    enum CodingKeys: String, CodingKey {
+        case projectRoomID = "project_room_id"
     }
 }

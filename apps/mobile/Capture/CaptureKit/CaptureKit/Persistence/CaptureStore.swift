@@ -440,6 +440,7 @@ public final class CaptureStore {
         let records = (try? context.fetch(descriptor)) ?? []
         return records.filter {
             guard $0.statusRaw == committed else { return true }
+            if $0.needsProjectPlacement { return true }
             return ($0.remoteId ?? "")
                 .trimmingCharacters(in: .whitespacesAndNewlines)
                 .isEmpty

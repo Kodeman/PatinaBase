@@ -23,6 +23,7 @@ public struct CaptureRoutingMemory: Codable, Equatable, Sendable {
     public var destination: CaptureDestination
     public var projectID: String?
     public var projectName: String?
+    public var projectRoomID: String?
     public var room: String?
     public var shelf: String?
 
@@ -30,12 +31,14 @@ public struct CaptureRoutingMemory: Codable, Equatable, Sendable {
         destination: CaptureDestination = .undecided,
         projectID: String? = nil,
         projectName: String? = nil,
+        projectRoomID: String? = nil,
         room: String? = nil,
         shelf: String? = nil
     ) {
         self.destination = destination
         self.projectID = projectID
         self.projectName = projectName
+        self.projectRoomID = projectRoomID
         self.room = room
         self.shelf = shelf
     }

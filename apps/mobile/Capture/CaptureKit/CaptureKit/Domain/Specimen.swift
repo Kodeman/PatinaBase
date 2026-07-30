@@ -105,6 +105,19 @@ public final class Specimen {
     public var retryCount: Int
     public var uploadProgress: Int       // 0...100
 
+    // ── Optional Spec Book / FF&E placement (additive, nullable migration) ──
+    // A committed capture and Product remain durable while this independently
+    // retryable step is pending or failed. No second outbox is introduced.
+    public var placementProjectId: String?
+    public var placementRoomId: String?
+    public var placementSlotId: String?
+    public var placementCategory: String?
+    public var placementStateRaw: String?
+    public var placementFFEItemId: String?
+    public var placementSpecId: String?
+    public var placementLastError: String?
+    public var placementRetryCount: Int?
+
     public init(
         id: UUID = UUID(),
         clientToken: UUID = UUID(),
