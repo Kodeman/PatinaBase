@@ -378,8 +378,12 @@ RETURNS trigger
 LANGUAGE plpgsql
 SET search_path = public
 AS $$
+DECLARE
+  v_expected integer;
+  v_ready integer;
 BEGIN
-  IF OLD.spec_book_id       IS DISTINCT FROM NEW.spec_book_id
+  IF OLD.id                 IS DISTINCT FROM NEW.id
+     OR OLD.spec_book_id       IS DISTINCT FROM NEW.spec_book_id
      OR OLD.revision_number IS DISTINCT FROM NEW.revision_number
      OR OLD.idempotency_key IS DISTINCT FROM NEW.idempotency_key
      OR OLD.issue_type      IS DISTINCT FROM NEW.issue_type
@@ -396,11 +400,107 @@ BEGIN
     RAISE EXCEPTION 'revision snapshot/header is immutable'
       USING errcode = 'object_not_in_prerequisite_state';
   END IF;
-  IF NOT (OLD.status = 'pending' AND NEW.status = 'issued')
-     AND OLD.status IS DISTINCT FROM NEW.status THEN
+
+  IF OLD.status = 'pending' AND NEW.status = 'issued' THEN
+    IF OLD.issued_at IS NOT NULL OR NEW.issued_at IS NULL THEN
+      RAISE EXCEPTION 'issued revision requires one finalization timestamp'
+        USING errcode = 'object_not_in_prerequisite_state';
+    END IF;
+    v_expected := cardinality(OLD.requested_audiences);
+    SELECT count(*) INTO v_ready
+    FROM public.spec_book_artifacts a
+    JOIN public.project_documents d ON d.id = a.project_document_id
+    WHERE a.revision_id = OLD.id
+      AND a.status = 'ready'
+      AND a.audience = ANY(OLD.requested_audiences)
+      AND a.format = 'pdf'
+      AND a.checksum_sha256 IS NOT NULL
+      AND a.storage_path IS NOT NULL
+      AND d.status = 'ready'
+      AND d.storage_path = a.storage_path;
+    IF v_ready <> v_expected OR (
+      SELECT count(*) FROM public.spec_book_artifacts WHERE revision_id = OLD.id
+    ) <> v_expected THEN
+      RAISE EXCEPTION 'revision cannot issue before every artifact is durable'
+        USING errcode = 'object_not_in_prerequisite_state';
+    END IF;
+  ELSIF OLD.status IS DISTINCT FROM NEW.status THEN
     RAISE EXCEPTION 'invalid revision status transition'
       USING errcode = 'object_not_in_prerequisite_state';
+  ELSIF OLD.issued_at IS DISTINCT FROM NEW.issued_at THEN
+    RAISE EXCEPTION 'revision issued timestamp is immutable'
+      USING errcode = 'object_not_in_prerequisite_state';
   END IF;
+  RETURN NEW;
+END;
+$$;
+
+CREATE OR REPLACE FUNCTION public.spec_book_guard_artifact_update()
+RETURNS trigger
+LANGUAGE plpgsql
+SET search_path = public
+AS $$
+BEGIN
+  IF OLD.id          IS DISTINCT FROM NEW.id
+     OR OLD.revision_id IS DISTINCT FROM NEW.revision_id
+     OR OLD.audience    IS DISTINCT FROM NEW.audience
+     OR OLD.format      IS DISTINCT FROM NEW.format
+     OR OLD.created_at  IS DISTINCT FROM NEW.created_at THEN
+    RAISE EXCEPTION 'artifact identity is immutable'
+      USING errcode = 'object_not_in_prerequisite_state';
+  END IF;
+
+  IF OLD.status = 'ready' THEN
+    RAISE EXCEPTION 'ready artifact is immutable'
+      USING errcode = 'object_not_in_prerequisite_state';
+  END IF;
+
+  IF NOT (
+    (OLD.status IN ('pending','failed','rendering') AND NEW.status = 'rendering')
+    OR (OLD.status = 'rendering' AND NEW.status IN ('failed','ready'))
+  ) THEN
+    RAISE EXCEPTION 'invalid artifact status transition'
+      USING errcode = 'object_not_in_prerequisite_state';
+  END IF;
+
+  IF NEW.status = 'rendering' THEN
+    IF NEW.attempt_count <> OLD.attempt_count + 1
+       OR NEW.render_started_at IS NULL
+       OR NEW.rendered_at IS NOT NULL
+       OR NEW.error_code IS NOT NULL
+       OR NEW.error_message IS NOT NULL
+       OR OLD.project_document_id IS DISTINCT FROM NEW.project_document_id
+       OR OLD.storage_bucket IS DISTINCT FROM NEW.storage_bucket
+       OR OLD.storage_path IS DISTINCT FROM NEW.storage_path
+       OR OLD.checksum_sha256 IS DISTINCT FROM NEW.checksum_sha256
+       OR OLD.size_bytes IS DISTINCT FROM NEW.size_bytes THEN
+      RAISE EXCEPTION 'invalid artifact render claim'
+        USING errcode = 'object_not_in_prerequisite_state';
+    END IF;
+  ELSIF NEW.status = 'failed' THEN
+    IF NEW.attempt_count IS DISTINCT FROM OLD.attempt_count
+       OR NEW.render_started_at IS DISTINCT FROM OLD.render_started_at
+       OR NEW.rendered_at IS NOT NULL
+       OR length(btrim(COALESCE(NEW.error_code, ''))) = 0
+       OR length(btrim(COALESCE(NEW.error_message, ''))) = 0
+       OR OLD.project_document_id IS DISTINCT FROM NEW.project_document_id
+       OR OLD.storage_bucket IS DISTINCT FROM NEW.storage_bucket
+       OR OLD.storage_path IS DISTINCT FROM NEW.storage_path
+       OR OLD.checksum_sha256 IS DISTINCT FROM NEW.checksum_sha256
+       OR OLD.size_bytes IS DISTINCT FROM NEW.size_bytes THEN
+      RAISE EXCEPTION 'invalid artifact failure transition'
+        USING errcode = 'object_not_in_prerequisite_state';
+    END IF;
+  ELSIF NEW.status = 'ready' THEN
+    IF NEW.attempt_count IS DISTINCT FROM OLD.attempt_count
+       OR NEW.render_started_at IS DISTINCT FROM OLD.render_started_at
+       OR NEW.error_code IS NOT NULL
+       OR NEW.error_message IS NOT NULL THEN
+      RAISE EXCEPTION 'invalid artifact ready transition'
+        USING errcode = 'object_not_in_prerequisite_state';
+    END IF;
+  END IF;
+
   RETURN NEW;
 END;
 $$;
@@ -421,6 +521,10 @@ DROP TRIGGER IF EXISTS trg_spec_book_revisions_guard_update ON public.spec_book_
 CREATE TRIGGER trg_spec_book_revisions_guard_update
   BEFORE UPDATE ON public.spec_book_revisions
   FOR EACH ROW EXECUTE FUNCTION public.spec_book_guard_revision_update();
+DROP TRIGGER IF EXISTS trg_spec_book_artifacts_guard_update ON public.spec_book_artifacts;
+CREATE TRIGGER trg_spec_book_artifacts_guard_update
+  BEFORE UPDATE ON public.spec_book_artifacts
+  FOR EACH ROW EXECUTE FUNCTION public.spec_book_guard_artifact_update();
 
 CREATE OR REPLACE FUNCTION public.spec_book_set_updated_at()
 RETURNS trigger
@@ -1361,6 +1465,12 @@ BEGIN
          AND NOT COALESCE((v_item.item_snapshot#>>'{selection,exactLocation,na}')::boolean, false) THEN
         v_blockers := v_blockers || jsonb_build_array(jsonb_build_object(
           'code','missing_install_location','ffeItemId',v_item.ffe_item_id
+        ));
+      END IF;
+      IF 'installer' = ANY(v_audiences)
+         AND length(btrim(COALESCE(v_item.item_snapshot#>>'{notes,install}', ''))) = 0 THEN
+        v_blockers := v_blockers || jsonb_build_array(jsonb_build_object(
+          'code','missing_install_notes','ffeItemId',v_item.ffe_item_id
         ));
       END IF;
     END IF;
