@@ -128,8 +128,13 @@ function PreferencesPageInner() {
     | { kind: 'error'; message: string }
   >({ kind: 'idle' });
 
+  // Held back until there is a session. The query function throws
+  // `Not authenticated` with no user, and a thrown query error lands in the
+  // app's global QueryCache error handler — i.e. an error toast on the one page
+  // that is REQUIRED to answer signed-out visitors (R91). Disabled, it costs
+  // nothing and reports nothing; the signed-out gate below renders instead.
   const { data: prefs, isLoading: prefsLoading, error: prefsError } =
-    useNotificationPreferences();
+    useNotificationPreferences({ enabled: isAuthenticated });
   const updateMutation = useUpdateNotificationPreferences();
 
   const [savedAt, setSavedAt] = useState<Date | null>(null);
@@ -191,21 +196,29 @@ function PreferencesPageInner() {
   if (!isAuthenticated) {
     return (
       <main className="min-h-screen flex items-center justify-center bg-[var(--bg-subtle)] p-6">
-        <div className="max-w-md text-center">
-          <h1 className="font-serif text-2xl font-semibold text-[var(--color-charcoal)] mb-3">
-            Sign in to manage preferences
-          </h1>
-          <p className="text-[var(--color-bark)] text-[15px] mb-6">
-            {tokenStatus.kind === 'applied'
-              ? 'Your unsubscribe was applied. Sign in to manage other preferences.'
-              : 'Sign in to view and update your notification preferences.'}
-          </p>
-          <a
-            href="/auth/signin?callbackUrl=/preferences"
-            className="inline-block bg-[var(--color-taupe)] text-white px-9 py-3.5 rounded-full font-semibold text-sm"
-          >
-            Sign in
-          </a>
+        <div className="max-w-md">
+          {/* The token's outcome is reported HERE, not only on the signed-in
+              page — the emailed footer link is followed by people who are not
+              signed in, and R91's contract is that the page renders and says
+              what happened. An applied token shows its confirmation; a bad or
+              expired one says so plainly instead of failing silently. */}
+          <TokenStatusBanner status={tokenStatus} />
+          <div className="text-center">
+            <h1 className="font-serif text-2xl font-semibold text-[var(--color-charcoal)] mb-3">
+              Sign in to manage preferences
+            </h1>
+            <p className="text-[var(--color-bark)] text-[15px] mb-6">
+              {tokenStatus.kind === 'applied'
+                ? 'Sign in to manage the rest of your preferences.'
+                : 'Sign in to view and update your notification preferences.'}
+            </p>
+            <a
+              href="/auth/signin?callbackUrl=/preferences"
+              className="inline-block bg-[var(--color-taupe)] text-white px-9 py-3.5 rounded-full font-semibold text-sm"
+            >
+              Sign in
+            </a>
+          </div>
         </div>
       </main>
     );

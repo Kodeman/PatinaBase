@@ -43,10 +43,17 @@ const DEFAULT_PREFERENCES: Omit<NotificationPreferences, 'id' | 'user_id' | 'cre
 /**
  * Fetch the current user's notification preferences.
  * Returns defaults if no row exists yet.
+ *
+ * `options.enabled` (default `true`, so existing callers are unchanged) lets a
+ * surface that also answers signed-out hold the query back. The query function
+ * throws `Not authenticated` with no session, and a thrown query error reaches
+ * the app's global QueryCache error handler — an error toast on a page that is
+ * SUPPOSED to render for a signed-out recipient (R91, `/preferences`).
  */
-export function useNotificationPreferences() {
+export function useNotificationPreferences(options?: { enabled?: boolean }) {
   return useQuery({
     queryKey: ['notification-preferences'],
+    enabled: options?.enabled ?? true,
     queryFn: async () => {
       const supabase = getSupabase();
       const { data: { user } } = await supabase.auth.getUser();
