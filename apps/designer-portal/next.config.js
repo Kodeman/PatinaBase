@@ -280,9 +280,12 @@ const nextConfig = {
       { source: '/portal/projects/:id/ffe', destination: '/doc/:id#doc-section-project', permanent: true },
       { source: '/portal/projects/:id/financials', destination: '/doc/:id#doc-section-project', permanent: true },
       { source: '/portal/projects/:id/phase/:path*', destination: '/doc/:id#doc-section-project', permanent: true },
+      // Specific before general, per this table's own ordering law. The bare
+      // project would also be caught by the catchall below (`:path*` matches zero
+      // segments) and land on the same /doc/:id, so this is form, not a fix.
+      { source: '/portal/projects/:id', destination: '/doc/:id', permanent: true },
       // /time /decisions /edit /scope-change* — the rest of the sub-tree.
       { source: '/portal/projects/:id/:path*', destination: '/doc/:id', permanent: true },
-      { source: '/portal/projects/:id', destination: '/doc/:id', permanent: true },
       { source: '/portal/projects', destination: '/desk', permanent: true },
 
       { source: '/portal/proposals/new', destination: '/desk', permanent: true },
@@ -309,8 +312,8 @@ const nextConfig = {
       // ─── People (clients · makers · threads · outreach) ────────────────────
       // The nav's old "+ Add Client" quick action was /portal/clients?add=1.
       { source: '/portal/clients', has: [{ type: 'query', key: 'add' }], destination: '/people?role=client&add=client', permanent: true },
-      { source: '/portal/clients/:id/:path*', destination: '/people?person=:id&role=client', permanent: true },
       { source: '/portal/clients/:id', destination: '/people?person=:id&role=client', permanent: true },
+      { source: '/portal/clients/:id/:path*', destination: '/people?person=:id&role=client', permanent: true },
       { source: '/portal/clients', destination: '/people?role=client', permanent: true },
 
       { source: '/portal/vendors/new', destination: '/people?add=maker', permanent: true },
@@ -424,10 +427,15 @@ const nextConfig = {
       { source: '/leads/:path*', destination: '/desk', permanent: true },
       // The nav's old "+ Add Client" quick action, bare twin.
       { source: '/clients', has: [{ type: 'query', key: 'add' }], destination: '/people?role=client&add=client', permanent: true },
-      { source: '/clients/:id/:path*', destination: '/people?person=:id&role=client', permanent: true },
       { source: '/clients/:id', destination: '/people?person=:id&role=client', permanent: true },
+      { source: '/clients/:id/:path*', destination: '/people?person=:id&role=client', permanent: true },
       { source: '/clients', destination: '/people?role=client', permanent: true },
-      { source: '/clients/:path*', destination: '/people?role=client', permanent: true },
+      // No `/clients/:path*` catchall: `/clients/:id/:path*` above already
+      // answers the whole family (`:path*` matches zero segments, so it takes
+      // `/clients/:id` too), which made the catchall unreachable. The /leads and
+      // /vendors catchalls below are NOT the same case — neither has an
+      // `/:id/:path*` rule, so their catchall is the only thing answering a
+      // two-segment path.
       { source: '/vendors/new', destination: '/people?add=maker', permanent: true },
       { source: '/vendors/saved', destination: '/people?role=maker', permanent: true },
       { source: '/vendors/:id', destination: '/people?person=:id&role=maker', permanent: true },

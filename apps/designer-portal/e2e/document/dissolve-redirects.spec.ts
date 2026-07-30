@@ -32,8 +32,12 @@ async function hop(
   return { status: res.status(), location: res.headers()['location'] ?? '' };
 }
 
-/** Location as a path + a param bag, so an appended param can't fail a case
- *  that is otherwise correct (Next appends unconsumed path params as query). */
+/** Location as a path + a param bag: several rules carry a query of their own
+ *  (`?book=`, `?person=`), so comparing paths and params separately keeps each
+ *  assertion about the thing it means to assert. (Next does NOT append unmatched
+ *  params to a redirect destination — `appendParamsToQuery` is false for
+ *  redirects, true only for rewrites — so every param seen here was written into
+ *  the rule on purpose.) */
 function parse(location: string): { pathname: string; params: URLSearchParams } {
   const url = new URL(location, 'http://localhost:3000');
   return { pathname: url.pathname, params: url.searchParams };
@@ -168,6 +172,24 @@ test.describe('R21 dissolve — the permanent redirect table', () => {
     const addMaker = parse((await hop(request, '/portal/vendors/new')).location);
     expect(addMaker.pathname).toBe('/people');
     expect(addMaker.params.get('add')).toBe('maker');
+  });
+
+  test('a deep client sub-path keeps the person, it does not fall back to the roster', async ({
+    request,
+  }) => {
+    // The bare `/clients` family (no `/portal` prefix) had BOTH an
+    // `/:id/:path*` rule and a `/:path*` catchall. The catchall could never
+    // fire — `:path*` matches zero segments, so `/clients/:id/:path*` answers
+    // one- and many-segment paths alike — and it has been removed. This pins
+    // what actually answers, so a future edit that reorders the family (or
+    // re-adds the catchall above the specific rule) fails here: the person
+    // survives, rather than being dropped for a plain role lens.
+    const deep = await hop(request, `/clients/${PROJECT_ID}/notes`);
+    expect(deep.status).toBe(308);
+    const d = parse(deep.location);
+    expect(d.pathname).toBe('/people');
+    expect(d.params.get('person')).toBe(PROJECT_ID);
+    expect(d.params.get('role')).toBe('client');
   });
 
   test('the People lens params carry the retired list zones', async ({ request }) => {

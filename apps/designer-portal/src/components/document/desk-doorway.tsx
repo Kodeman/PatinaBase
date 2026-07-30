@@ -40,10 +40,16 @@
  *    lands the designer on a plain Desk rather than an error.
  *  · Stripping is TOTAL, not surgical: the URL is reduced to /desk (keeping only
  *    `tour`, the walkthrough replay param, which is not a doorway and belongs to
- *    the Desk itself). The checkout return's `po` / `checkout` / `session_id`
- *    are consumed here — nothing downstream reads them — and the catchall
- *    redirect can append unconsumed path segments as query junk, which has no
- *    business surviving on the Desk's address.
+ *    the Desk itself). Every other param on a doorway URL has already been read
+ *    by the time we get here — including the checkout return's `checkout` /
+ *    `session_id` / `po`, which nothing downstream reads at all. The reason to
+ *    take the whole query rather than delete known keys is address hygiene: a
+ *    doorway is a one-shot instruction, and once it has been carried out the
+ *    Desk's address should read `/desk`, so a refresh, a bookmark, or a shared
+ *    link shows the Desk's own state instead of re-firing someone else's
+ *    arrival. (Next's `redirects()` does NOT append unmatched params to the
+ *    destination — `appendParamsToQuery` is false for redirects, true only for
+ *    rewrites — so there is no redirect-appended junk to defend against.)
  */
 
 import { Suspense, useEffect, useRef } from 'react';
@@ -55,6 +61,7 @@ import {
   type AccountPage,
 } from './account/account-sheet';
 import { openPost } from './overlays/post-sheet';
+import { DESK_WALKTHROUGH_REPLAY_PARAM } from './help/desk-walkthrough-gate';
 
 /** The books a doorway can open, with the page set each one validates. The
  *  Library, People and Rooms are ROOMS with real routes — they are never
@@ -84,9 +91,9 @@ const DOORWAY_KEYS = [
 ] as const;
 
 /** The only param the Desk keeps after a doorway fires: the walkthrough replay
- *  key (desk-walkthrough-gate.ts's DESK_WALKTHROUGH_REPLAY_PARAM), which is the
- *  Desk's own address, not a doorway. */
-const KEPT_KEYS = ['tour'] as const;
+ *  key, which is the Desk's own address, not a doorway. Imported from the gate
+ *  that reads it, so the two cannot drift apart. */
+const KEPT_KEYS = [DESK_WALKTHROUGH_REPLAY_PARAM] as const;
 
 function DeskDoorwayInner() {
   const router = useRouter();
@@ -162,8 +169,8 @@ function DeskDoorwayInner() {
     }
 
     // Strip the address back down to /desk. Only `tour` survives — every other
-    // param on a doorway URL was either consumed above or is junk the catchall
-    // appended, and neither belongs in the designer's address bar or history.
+    // param on a doorway URL was consumed above, and a spent instruction has no
+    // business in the designer's address bar or history.
     const rest = new URLSearchParams();
     for (const k of KEPT_KEYS) {
       const value = params.get(k);
