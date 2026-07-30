@@ -40,7 +40,21 @@ export async function middleware(req: NextRequest) {
   const { data: { user } } = await supabase.auth.getUser();
 
   const isAuthPage = req.nextUrl.pathname.startsWith('/auth') || req.nextUrl.pathname.startsWith('/login');
-  const isPublicPage = req.nextUrl.pathname === '/';
+  // The landing page is the ONLY page an authenticated designer gets bounced
+  // off (into /desk). Kept separate from `isPublicPage` below, which is the
+  // wider "reachable while signed out" set.
+  const isLandingPage = req.nextUrl.pathname === '/';
+  // R91 (via the R21 dissolve): /preferences and /preferences/unsubscribe are
+  // REAL pages that must answer while signed OUT — the emailed unsubscribe link
+  // carries a one-time token and the page's own apply flow validates it. A
+  // signed-out bounce to /auth/signin would break the contract printed in every
+  // email footer. They stay reachable signed IN too (a designer editing their
+  // own notification preferences), so they are public-not-landing: no /desk
+  // bounce, and no designer-role gate.
+  const isPreferencesPage =
+    req.nextUrl.pathname === '/preferences' ||
+    req.nextUrl.pathname === '/preferences/unsubscribe';
+  const isPublicPage = isLandingPage || isPreferencesPage;
   const isApiRoute = req.nextUrl.pathname.startsWith('/api');
   const isUnauthorizedPage = req.nextUrl.pathname === '/unauthorized';
   const isAuthenticated = !!user;
@@ -94,6 +108,25 @@ export async function middleware(req: NextRequest) {
     return redirect;
   };
 
+  // A callbackUrl is only ever minted by this middleware, and it is always a
+  // path + query on THIS origin. Anything else — an absolute URL, a
+  // protocol-relative `//evil.example`, a backslash-smuggled variant — is an
+  // open-redirect attempt (or junk) and is dropped in favour of /desk. Resolved
+  // relative to baseUrl, so the round-trip preserves ?account= / ?book= /
+  // ?token= doorway queries without ever leaving the portal.
+  const safeCallbackUrl = (raw: string | null): URL | null => {
+    if (!raw) return null;
+    const value = raw.replace(/\\/g, '/');
+    if (!value.startsWith('/') || value.startsWith('//')) return null;
+    try {
+      const url = new URL(value, baseUrl);
+      if (url.origin !== new URL(baseUrl).origin) return null;
+      return url;
+    } catch {
+      return null;
+    }
+  };
+
   // Authenticated user on an auth page: send them home (or to callbackUrl),
   // but first verify they belong on this portal. Without this gate, a user
   // with no designer/admin role would be redirected to `/`, then bounced back
@@ -103,9 +136,11 @@ export async function middleware(req: NextRequest) {
     if (!(await userHasDesignerPortalRole(user!.id))) {
       return redirectWithCookies(new URL('/unauthorized', baseUrl));
     }
-    const callbackUrl = req.nextUrl.searchParams.get('callbackUrl');
+    const callbackUrl = safeCallbackUrl(
+      req.nextUrl.searchParams.get('callbackUrl'),
+    );
     if (callbackUrl) {
-      return redirectWithCookies(new URL(callbackUrl, baseUrl));
+      return redirectWithCookies(callbackUrl);
     }
     return redirectWithCookies(new URL('/desk', baseUrl));
   }
@@ -113,17 +148,24 @@ export async function middleware(req: NextRequest) {
   // Authenticated user on the public landing page: send them into the app.
   // Mirror the auth-page role gate so a user without a designer/admin role
   // doesn't bounce `/` -> `/desk` -> `/unauthorized` (one redirect, not two).
-  if (isAuthenticated && isPublicPage) {
+  if (isAuthenticated && isLandingPage) {
     if (!(await userHasDesignerPortalRole(user!.id))) {
       return redirectWithCookies(new URL('/unauthorized', baseUrl));
     }
     return redirectWithCookies(new URL('/desk', baseUrl));
   }
 
-  // Redirect unauthenticated users to login
+  // Redirect unauthenticated users to login. The callbackUrl carries the SEARCH
+  // as well as the path: every desk doorway is addressed by query
+  // (/desk?book=orders&po=…, /desk?account=notifications) and the R21 permanent
+  // redirect table lands cold links there, so dropping the query would turn a
+  // signed-out click on an emailed invoice link into a plain Desk.
   if (!isAuthenticated && !isAuthPage && !isPublicPage) {
     const loginUrl = new URL('/auth/signin', baseUrl);
-    loginUrl.searchParams.set('callbackUrl', req.nextUrl.pathname);
+    loginUrl.searchParams.set(
+      'callbackUrl',
+      `${req.nextUrl.pathname}${req.nextUrl.search}`,
+    );
     return redirectWithCookies(loginUrl);
   }
 
