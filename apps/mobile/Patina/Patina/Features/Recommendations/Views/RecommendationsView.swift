@@ -290,7 +290,7 @@ struct RecommendationsView: View {
             }
         }
         ShareLink(
-            item: PatinaPortalLinks.productURL(forProductId: product.id),
+            item: PatinaDeepLinks.productURL(forProductId: product.id),
             subject: Text(product.name),
             message: Text("\(product.name) by \(product.makerName) on Patina")
         ) {

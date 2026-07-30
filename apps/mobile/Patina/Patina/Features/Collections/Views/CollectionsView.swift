@@ -282,7 +282,7 @@ struct CollectionsView: View {
                     ProductCard(
                         data: ProductCardData(tableItem: item),
                         style: .list,
-                        shareURL: item.productId.map { PatinaPortalLinks.productURL(forProductId: $0) },
+                        shareURL: item.productId.map { PatinaDeepLinks.productURL(forProductId: $0) },
                         onRemove: {
                             viewModel.removeSavedItem(item, context: modelContext)
                         }
