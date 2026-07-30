@@ -69,9 +69,12 @@ const TOGGLE_GROUPS: Array<{
     title: 'Account',
     description: 'Receipts and security. Critical alerts may bypass these toggles.',
     rows: [
-      { key: 'type_account_security', label: 'Account & security', help: 'Always on' },
-      { key: 'type_order_confirmation', label: 'Order confirmations', help: 'Always on' },
-      { key: 'type_payment_receipt', label: 'Payment receipts', help: 'Always on' },
+      // `alwaysOn` is the honest rendering of "Always on": the row shows as
+      // checked and refuses the click, rather than offering a switch that the
+      // delivery side will override anyway.
+      { key: 'type_account_security', label: 'Account & security', help: 'Always on', alwaysOn: true },
+      { key: 'type_order_confirmation', label: 'Order confirmations', help: 'Always on', alwaysOn: true },
+      { key: 'type_payment_receipt', label: 'Payment receipts', help: 'Always on', alwaysOn: true },
     ],
   },
 ];
@@ -262,8 +265,13 @@ function PreferencesPageInner() {
                 key={String(row.key)}
                 label={row.label}
                 help={row.help}
-                checked={!!prefs[row.key]}
-                onChange={(v) => update({ [row.key]: v } as Partial<NotificationPreferences>)}
+                checked={row.alwaysOn ? true : !!prefs[row.key]}
+                disabled={row.alwaysOn}
+                onChange={
+                  row.alwaysOn
+                    ? undefined
+                    : (v) => update({ [row.key]: v } as Partial<NotificationPreferences>)
+                }
               />
             ))}
           </Section>

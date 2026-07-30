@@ -14,9 +14,10 @@
  *     and shape C excludes status 'accepted'), so pre-accept links survive
  *     the intake moment the same way.
  *   · R21 (the dissolve) — a client_decision's id resolves to a redirect to
- *     `/doc/[projectId]`: the decision never had a document of its own, it is a
- *     margin item in the project's. /portal/decisions/[id]'s permanent redirect
- *     rides this leg.
+ *     `/doc/[projectId]`, or to `/doc/[designerClientId]` when the decision has
+ *     no project yet: the decision never had a document of its own, it is a
+ *     margin item in the document it belongs to.
+ *     /portal/decisions/[id]'s permanent redirect rides this leg.
  */
 
 import { useQuery } from '@tanstack/react-query';
@@ -89,20 +90,26 @@ export function useDocumentEngagement(id: string) {
       // that shape too — third miss-path leg, same style as R6/F1: one lookup,
       // only when nothing else answered.
       //
-      // NOTE: `client_decisions.project_id` is nullable. A decision recorded
-      // against the client relationship before a project exists resolves to
-      // nothing here and falls through to 'missing' — per the R21 URL contract,
-      // which names project_id as the only hop. If those turn out to be reachable
-      // in the wild, the honest next hop is designer_client_id (the shape-D
-      // document identity), and that needs a ruling, not a guess.
+      // NOTE: `client_decisions.project_id` is NULLABLE — a decision recorded
+      // against the client relationship before a project exists carries none.
+      // `designer_client_id` is NOT NULL, and it IS the shape-D document
+      // identity (the same id F1 above redirects an accepted lead to), so a
+      // project-less decision hops there rather than dead-ending. Preference
+      // order matters: the project document is the closer home when it exists.
+      // Either way the target goes back through this resolver, whose shape-D /
+      // miss legs handle it — a stale relationship id lands on 'missing'
+      // gracefully instead of a blank.
       const { data: decision, error: decisionError } = await supabase
         .from('client_decisions')
-        .select('project_id')
+        .select('project_id, designer_client_id')
         .eq('id', id)
         .maybeSingle();
       if (decisionError) throw decisionError;
       if (decision?.project_id) {
         return { kind: 'redirect', projectId: decision.project_id };
+      }
+      if (decision?.designer_client_id) {
+        return { kind: 'redirect', projectId: decision.designer_client_id };
       }
 
       return { kind: 'missing' };

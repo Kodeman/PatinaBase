@@ -20,6 +20,11 @@
  * server-side; due probes are served FIRST and rendered exactly like any other
  * pair — no special copy, ever (de-gamified law R32/R37: no "consistency
  * check", no streaks, no scores, no goals). Zero shadows (D4).
+ *
+ * One behavioural change from the portal page: a failed write reports through a
+ * quiet inline band above the pair, not a toast. R83 removed the toast layer from
+ * (document) surfaces entirely, so the old `toast()` call here would have
+ * no-oped in silence — a lost judgment with nothing said about it.
  */
 
 import { useEffect, useRef, useState } from 'react';
@@ -35,7 +40,6 @@ import {
 } from '@patina/supabase';
 import { Button } from '@/components/ui/controls';
 import { LoadingStrata } from '@/components/portal/loading-strata';
-import { useToast } from '@/components/portal/toast-provider';
 import { useHydrated } from '@/hooks/use-hydrated';
 import { RoomShell } from '@/components/document/rooms/room-shell';
 
@@ -44,7 +48,10 @@ export default function JudgmentsPage() {
   const { data: probes, isLoading: probesLoading } = useDueTasteProbes();
   const { data: pool, isLoading: poolLoading } = useJudgmentPool();
   const submit = useSubmitTasteJudgment();
-  const { toast } = useToast();
+  // R83 — no toast layer on (document) surfaces. A write that fails says so
+  // quietly, in place, above the pair the designer is looking at. Cleared on the
+  // next pick so a stale complaint can't sit under a fresh question.
+  const [writeError, setWriteError] = useState<string | null>(null);
 
   // The deck is FROZEN once built for the sitting — submitting answers
   // invalidates the probe query, and a live rebuild would reshuffle pairs
@@ -70,6 +77,7 @@ export default function JudgmentsPage() {
 
   const choose = (choice: JudgmentChoice) => {
     if (!pair || submit.isPending) return;
+    setWriteError(null);
     const latencyMs = Math.max(0, Math.round(Date.now() - shownAtRef.current));
     submit.mutate(
       {
@@ -81,9 +89,8 @@ export default function JudgmentsPage() {
       },
       {
         onError: (err) =>
-          toast(
+          setWriteError(
             err instanceof Error ? err.message : 'Could not record that.',
-            'error',
           ),
       },
     );
@@ -93,6 +100,7 @@ export default function JudgmentsPage() {
   };
 
   const anotherRound = () => {
+    setWriteError(null);
     setDeck(buildJudgmentDeck(probes ?? [], pool ?? []));
     setIndex(0);
     shownAtRef.current = Date.now();
@@ -116,6 +124,19 @@ export default function JudgmentsPage() {
               Which is more you? Go on instinct — the Engine learns your eye
               from every pair.
             </p>
+
+            {writeError && (
+              <p
+                role="alert"
+                className="mb-4 max-w-[560px] text-[11px] leading-snug text-[var(--color-terracotta)]"
+              >
+                {writeError}{' '}
+                <span className="opacity-80">
+                  That pair wasn&apos;t recorded. Keep going — it&apos;ll come
+                  round again.
+                </span>
+              </p>
+            )}
 
             {pair ? (
               <div className="max-w-[860px]">

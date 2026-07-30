@@ -98,7 +98,8 @@ export function AccountSheet() {
   // Flag hook stays above every early return / conditional branch below
   // (hook-order stability) even though this component has no early return
   // today — matches the fail-closed convention in open-requests-strip.tsx.
-  const { value: studioEnabled } = useFeatureFlag('studio-workspaces');
+  const { value: studioEnabled, isLoading: studioFlagLoading } =
+    useFeatureFlag('studio-workspaces');
 
   const { user, signOut } = useAuth();
   const { data: profile } = useProfile();
@@ -124,6 +125,19 @@ export function AccountSheet() {
     window.addEventListener('document:open-account', onOpen);
     return () => window.removeEventListener('document:open-account', onOpen);
   }, []);
+
+  // The Studio page only exists behind `studio-workspaces`. A request for it
+  // with the flag OFF (the /desk?account=studio doorway, ⌘K, an old link) would
+  // otherwise open the sheet onto a page with no tab and no body — a blank.
+  // Reconciled here rather than in the listener so it also covers the race where
+  // the doorway fires before PostHog has answered: the fallback waits for the
+  // flag to actually resolve (`isLoading` false) before it moves the designer.
+  useEffect(() => {
+    if (page !== 'studio') return;
+    if (studioFlagLoading) return;
+    if (studioEnabled) return;
+    setPage('profile');
+  }, [page, studioEnabled, studioFlagLoading]);
 
   const handleSignOut = useCallback(async () => {
     setIsSigningOut(true);

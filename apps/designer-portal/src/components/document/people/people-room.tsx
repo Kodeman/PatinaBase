@@ -150,10 +150,22 @@ export function PeopleRoom() {
   // Room is client-only; no Suspense-bound useSearchParams needed) —
   // `deepLinkHandledRef` keeps this from re-firing (and re-opening a profile
   // the designer already closed) once `all` finishes loading or refetches.
+  //
+  // Params the Room has ANSWERED are erased from the address (`view`, `role`,
+  // `add` — the ones that only describe an opening state). `person` and `thread`
+  // stay: they name what is on screen, so they keep their share/refresh
+  // semantics exactly as they were.
   const deepLinkHandledRef = useRef(false);
   useEffect(() => {
     if (deepLinkHandledRef.current) return;
     const params = new URLSearchParams(window.location.search);
+    const stripHandledParams = (keys: string[]) => {
+      if (!keys.some((k) => params.get(k) !== null)) return;
+      const rest = new URLSearchParams(params.toString());
+      for (const k of keys) rest.delete(k);
+      const qs = rest.toString();
+      router.replace(qs ? `/people?${qs}` : '/people', { scroll: false });
+    };
     const person = params.get('person');
     const roleParam = params.get('role');
     const thread = params.get('thread');
@@ -212,8 +224,18 @@ export function PeopleRoom() {
     } else if (add === 'maker' || add === 'client') {
       // R78 — ⌘K "Add a maker" lands here and cold-starts the add sheet.
       deepLinkHandledRef.current = true;
+      // The dissolve's add-quick-action redirect emits BOTH keys
+      // (/portal/clients?add=1 → /people?role=client&add=client), so the roster
+      // behind the sheet has to be filtered too — closing the sheet should leave
+      // the designer on the Clients tab they asked for, not under "All".
+      const wantedRole =
+        roleParam && (DIRECTORY_ROLES as readonly string[]).includes(roleParam)
+          ? (roleParam as DirectoryRole)
+          : null;
+      if (wantedRole) setRoleFilter(wantedRole);
       setAddKind(add);
       setAddOpen(true);
+      stripHandledParams(['add', 'role', 'view']);
     } else {
       deepLinkHandledRef.current = true;
       // R21 dissolve — the rail and the Directory's role filter are addressable
@@ -232,6 +254,7 @@ export function PeopleRoom() {
       if (wantedRole) setRoleFilter(wantedRole);
       if (wantedView) setView(wantedView);
       else if (wantedRole) setView('directory');
+      stripHandledParams(['view', 'role']);
     }
   }, [all]);
 
