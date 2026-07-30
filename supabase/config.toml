@@ -477,6 +477,13 @@ verify_jwt = true
 [functions.apns-send]
 verify_jwt = true
 
+# Immutable Spec Book artifact renderer. Browser and server callers must carry
+# a Supabase JWT; the function additionally performs a caller-scoped artifact
+# read through RLS before using service-role access to render the frozen
+# revision snapshot and archive the private PDF.
+[functions.spec-book-render]
+verify_jwt = true
+
 [analytics]
 enabled = true
 port = 54327
