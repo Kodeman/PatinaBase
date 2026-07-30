@@ -39,7 +39,7 @@ export const TAGLINE = 'A workshop for interior designers and the makers they tr
 export const URLS = {
   dashboard: 'https://app.patina.cloud',
   help: 'https://app.patina.cloud/help',
-  prefs: 'https://app.patina.cloud/portal/settings/notifications',
+  prefs: 'https://app.patina.cloud/desk?account=notifications',
 } as const;
 
 /** Google Fonts stylesheet URL for Fraunces + Hanken Grotesk + IBM Plex Mono. */
