@@ -7,21 +7,10 @@
 //  artifact files from exporters, appends photo records as they arrive,
 //  and finalizes by recomputing sizes + (optionally) sha256s.
 //
-//  The bundle layout:
-//
-//    Scans/{scanId}/
-//      manifest.json
-//      scan.usdz
-//      captured_room.json
-//      world_map.arworldmap
-//      mesh.ply
-//      depth.zip                           (optional)
-//      photos/
-//        photos_metadata.ndjson            (appended live during scan)
-//        hero.heic
-//        auto_{timestamp}.heic
-//        user_{timestamp}.heic
-//      bundle.zip                          (optional, created on finalize)
+//  Layout: `Scans/{scanId}/` holds manifest.json plus one file per registered
+//  artifact — `defaultFileName(for:)` is the authoritative list — with posed
+//  photos and their NDJSON sidecars under `photos/` and per-frame depth under
+//  `depth/`.
 //
 
 import Foundation
@@ -105,12 +94,11 @@ public final class ScanBundleWriter {
     }
 
     public static func deviceHasLidar() -> Bool {
-        // RoomCaptureSession.isSupported is effectively a LiDAR + iOS check.
-        // We avoid importing RoomPlan here to keep this file framework-light.
-        // The capture service will override via `manifest.device.hasLidar` if
-        // it has more specific info.
+        // RoomCaptureSession.isSupported is effectively a LiDAR + iOS check; we
+        // avoid importing RoomPlan here to keep this file framework-light, and
+        // the capture service overrides `manifest.device.hasLidar` when it knows
+        // better. supportsFrameSemantics(.sceneDepth) is LiDAR-only.
         if #available(iOS 14.0, *) {
-            // ARWorldTrackingConfiguration.supportsFrameSemantics(.sceneDepth) is true only on LiDAR devices.
             return true
         }
         return false
@@ -311,8 +299,9 @@ public final class ScanBundleWriter {
 
     // MARK: - Finalize
 
-    /// Close out the bundle. Recomputes sizes, stamps `completedAt`, and
-    /// writes the final manifest. Call from `didEndWith`.
+    /// Close out the bundle. Recomputes sizes, stamps `completedAt`, registers
+    /// the manifest's self-pointer, and writes the final manifest. Call from
+    /// `didEndWith`.
     @discardableResult
     public func finalize(
         completedAt: Date = Date(),
@@ -320,9 +309,12 @@ public final class ScanBundleWriter {
     ) throws -> ScanManifest {
         manifest.completedAt = completedAt
 
-        // Recompute artifact sizes (files may have been rewritten in place)
+        // Recompute artifact sizes (files may have been rewritten in place).
+        // `.bundleManifest` is excluded and re-registered below: it points at
+        // manifest.json, the file this method is about to rewrite, so any size
+        // or hash measured here would describe the PREVIOUS write.
         var refreshed: [ScanManifest.Artifact] = []
-        for artifact in manifest.artifacts {
+        for artifact in manifest.artifacts where artifact.kind != .bundleManifest {
             let url = bundleURL.appendingPathComponent(artifact.relativePath)
             let attrs = try? fileManager.attributesOfItem(atPath: url.path)
             var copy = artifact
@@ -333,7 +325,9 @@ public final class ScanBundleWriter {
             refreshed.append(copy)
         }
         manifest.artifacts = refreshed
-        try writeManifest()
+
+        // Must be last — it writes the manifest, repeatedly.
+        try registerBundleManifestPointer()
         return manifest
     }
 
@@ -407,6 +401,77 @@ public final class ScanBundleWriter {
     private func sha256Hex(_ data: Data) -> String {
         let digest = SHA256.hash(data: data)
         return digest.map { String(format: "%02x", $0) }.joined()
+    }
+}
+
+/// The two artifacts whose file IS a manifest. Both were declared as
+/// `ArtifactKind` cases with `room_scans` columns waiting for them (00082) but
+/// had no producer, so `photos_manifest_url` and `bundle_manifest_url` were NULL
+/// on every row. Rationale: `ScanBundleManifestProducerTests`.
+extension ScanBundleWriter {
+
+    /// Rewrite `photos/photos_metadata.ndjson` from the sealed photo list and
+    /// register it as `.photosManifest` — "one line per posed photo with pose +
+    /// intrinsics" (00082). `appendPhoto` also appends here live for crash
+    /// safety, but that tail predates the review step and can disagree on
+    /// hero/order/caption; the line COUNT is the same either way, and that is
+    /// what `confirm-scan-bundle` cross-checks against `room_scan_images`.
+    public func registerPhotosManifest() throws {
+        guard !manifest.photos.isEmpty else { return }
+        let encoder = JSONEncoder()
+        encoder.dateEncodingStrategy = .iso8601
+        encoder.outputFormatting = [.sortedKeys]
+        var buffer = Data()
+        for photo in manifest.photos {
+            buffer.append(try encoder.encode(photo))
+            buffer.append(Data("\n".utf8))
+        }
+        try fileManager.createDirectory(at: photosURL, withIntermediateDirectories: true)
+        try buffer.write(to: photosMetadataURL, options: .atomic)
+        upsertArtifact(
+            ScanManifest.Artifact(
+                kind: .photosManifest,
+                relativePath: "photos/photos_metadata.ndjson",
+                sizeBytes: buffer.count,
+                sha256: sha256Hex(buffer),
+                mimeType: "application/x-ndjson"
+            )
+        )
+        try writeManifest()
+    }
+
+    /// Register manifest.json as `.bundleManifest` — the "authoritative
+    /// artifact inventory" `bundle_manifest_url` points at (00082), and the only
+    /// vehicle carrying the review-step `annotations` and the per-photo
+    /// thumbnail fields to the server, both being fields of this file rather
+    /// than artifacts of their own.
+    ///
+    /// A manifest cannot describe itself without a fixed point, so `sizeBytes`
+    /// is CONVERGED — write, measure, restate, until the size the file states is
+    /// the size the file is (one integer's digits change per pass; the cap only
+    /// guards oscillation, and taking it still leaves memory and disk identical
+    /// because each pass upserts before it writes). `sha256` stays nil forever:
+    /// no written value can equal its own file's hash, and a WRONG one is worse
+    /// than none — `uploadArtifact` stamps it onto the Storage object and
+    /// merges it into `room_scans.artifacts_sha256`.
+    func registerBundleManifestPointer() throws {
+        var stated = 0
+        for _ in 0..<5 {    // convergence cap
+            upsertArtifact(
+                ScanManifest.Artifact(
+                    kind: .bundleManifest,
+                    relativePath: "manifest.json",
+                    sizeBytes: stated,
+                    sha256: nil,
+                    mimeType: "application/json"
+                )
+            )
+            try writeManifest()
+            let attrs = try? fileManager.attributesOfItem(atPath: manifestURL.path)
+            let actual = (attrs?[.size] as? NSNumber)?.intValue ?? stated
+            if actual == stated { return }
+            stated = actual
+        }
     }
 }
 

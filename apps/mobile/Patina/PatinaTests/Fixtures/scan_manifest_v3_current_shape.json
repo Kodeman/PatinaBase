@@ -1,0 +1,108 @@
+{
+  "annotations" : {
+    "reviewCompletedAt" : "2026-07-28T14:15:02Z",
+    "roomNotes" : "Radiator sits under the north window.",
+    "userProvidedRoomName" : "Living Room"
+  },
+  "artifacts" : [
+    {
+      "kind" : "usdz",
+      "mimeType" : "model\/vnd.usdz+zip",
+      "relativePath" : "scan.usdz",
+      "sha256" : "3a1f0c5b9d2e4a7f6b8c0d1e2f3a4b5c6d7e8f90a1b2c3d4e5f60718293a4b5c",
+      "sizeBytes" : 481203
+    },
+    {
+      "kind" : "capturedRoomJson",
+      "mimeType" : "application\/json",
+      "relativePath" : "captured_room.json",
+      "sha256" : "b7c8d9e0f1a2b3c4d5e6f708192a3b4c5d6e7f8091a2b3c4d5e6f7081920a3b4",
+      "sizeBytes" : 20418
+    },
+    {
+      "kind" : "depthIndex",
+      "mimeType" : "application\/x-ndjson",
+      "relativePath" : "depth\/depth_index.ndjson",
+      "sizeBytes" : 9042
+    }
+  ],
+  "capture" : {
+    "autoPhotoInterval" : 2,
+    "highFidelityDepthEnabled" : true,
+    "multiRoomBuilderId" : "5C1A9F30-77B2-4E68-8D4A-0F3E6B21C845"
+  },
+  "captureEnvironment" : {
+    "batteryLevel" : 0.75,
+    "coverageHeatmapPresent" : true,
+    "lightEstimate" : 742.5,
+    "motionQuality" : "good",
+    "opticalFlowMean" : 0.125,
+    "sceneDepthFrameCount" : 618,
+    "thermalState" : "nominal"
+  },
+  "completedAt" : "2026-07-28T14:13:47Z",
+  "createdAt" : "2026-07-28T14:02:11Z",
+  "device" : {
+    "hasLidar" : true,
+    "model" : "iPhone17,2",
+    "osVersion" : "26.5",
+    "roomPlanVersion" : "1.0"
+  },
+  "photos" : [
+    {
+      "cameraIntrinsics" : {
+        "cx" : 2016,
+        "cy" : 1512,
+        "fx" : 1594.5,
+        "fy" : 1594.5,
+        "height" : 3024,
+        "width" : 4032
+      },
+      "cameraTransform" : [
+        1,
+        0,
+        0,
+        1.25,
+        0,
+        1,
+        0,
+        1.5,
+        0,
+        0,
+        1,
+        -0.75,
+        0,
+        0,
+        0,
+        1
+      ],
+      "capturedAt" : "2026-07-28T14:03:05Z",
+      "eulerAngles" : [
+        -0.125,
+        1.5,
+        0.25
+      ],
+      "height" : 3024,
+      "id" : "A2E4C801-3F76-4B9D-8C05-1E7A6D2B4F93",
+      "isFullResolution" : true,
+      "isUserSelectedHero" : true,
+      "kind" : "hero",
+      "lightEstimateLumens" : 742.5,
+      "mimeType" : "image\/heic",
+      "orderIndex" : 0,
+      "qualityScore" : 0.875,
+      "relativePath" : "photos\/hero_000.00.heic",
+      "sharpnessScore" : 0.75,
+      "sizeBytes" : 1842013,
+      "thumbnailRelativePath" : "photos\/thumb_hero_000.00.jpg",
+      "thumbnailSizeBytes" : 18244,
+      "timestampSeconds" : 54.25,
+      "userAnnotation" : "Window wall, morning light.",
+      "width" : 4032
+    }
+  ],
+  "roomLocalId" : "1D4C7E62-8A05-42B7-93F1-6E0B5C9A7D31",
+  "roomName" : "Living Room",
+  "scanId" : "9F14B2C8-6D3E-4A91-B0F5-2C7E8D1A4B60",
+  "schemaVersion" : 3
+}

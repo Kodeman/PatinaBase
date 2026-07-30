@@ -19,9 +19,63 @@ import Foundation
 /// CaptureEnvironment optical-flow/depth/coverage fields. A v2 manifest.json
 /// on disk still decodes through the v3 types — every new field is optional
 /// or has a default.
+///
+/// The instrument layer (see below) is additive *within* v3 and does NOT bump
+/// this number. Field's `FieldScanManifest` also writes `schemaVersion = 3`
+/// and distinguishes an instrument bundle by `bundleSpecVersion = 1`; keeping
+/// one on-disk format version across both apps is the whole point of the
+/// superset. `bundleSpecVersion`, not `schemaVersion`, is the marker.
 public nonisolated let scanBundleSchemaVersion: Int = 3
 
 /// Root manifest describing everything in a `Scans/{scanId}/` bundle.
+///
+/// ## The instrument layer (Field superset)
+///
+/// Field's `FieldScanManifest`
+/// (`apps/mobile/Capture/CaptureKit/CaptureKit/SiteScan/FieldScanManifest.swift`)
+/// documents itself as a strict SUPERSET of this type: every inherited key
+/// keeps its v3 name, and it adds an instrument layer — `session`, `anchors`,
+/// `scorecard`, `poseGraphSummary`, `unverified`, `checksumAlgorithm`,
+/// `bundleSpecVersion` — defined by `capture-bundle-spec-v1.md` §3 and
+/// enforced by `scripts/validate_capture_bundle.py` §10.
+///
+/// Those seven keys now live here too, all Optional, so this type can hold a
+/// Field-produced manifest without loss. Nothing in the client populates them
+/// yet (a later wave wires the producers); a client scan encodes exactly the
+/// bytes it encoded before, because a nil Optional is omitted entirely by the
+/// synthesized `encode(to:)`.
+///
+/// The four structured ones split by who owns the shape. `session` and
+/// `poseGraphSummary` are pure manifest payload and are nested next door in
+/// `ScanManifest+Instrument.swift`. `anchors` and `scorecard` are typed by the
+/// ported decision substrate in `Features/Walk/Instrument/` — `AnchorRecord`
+/// and `Scorecard` — because those are the values `AnchorGate` and
+/// `ScorecardEvaluator` produce at capture time, and a second manifest-local
+/// copy of them would be two Swift models of one wire format. Their fields are
+/// `let`: a producer assigns them WHOLESALE (`manifest.scorecard = card`), and
+/// `ScanBundleWriter` mutates only `photos`, `captureEnvironment`, `roomName`,
+/// `annotations`, `completedAt` and `artifacts` in place.
+///
+/// ### Type note — why the inherited keys keep UUID/Date and the instrument
+/// ### layer uses String
+///
+/// Field declares `scanId`/`createdAt` as `String`; this type keeps `UUID` and
+/// `Date`. That is not a divergence in the JSON: `ScanBundleWriter` encodes
+/// with `dateEncodingStrategy = .iso8601`, so `createdAt` is already the same
+/// ISO8601 string Field writes, and `UUID` already encodes as a string. The
+/// Swift-side types are load-bearing on this side of the fence in a way they
+/// are not on Field's — `RoomScanPackage.scanId` is an `@Attribute(.unique)
+/// UUID` matched by `#Predicate { $0.scanId == scanId }`, and
+/// `RoomScanPackage.createdAt` is a `Date` driving `SortDescriptor`. Weakening
+/// them to String would buy nothing on the wire and cost every call site.
+///
+/// The instrument layer goes the other way: its timestamps are `String`,
+/// matching Field exactly. They are pass-through diagnostics the client never
+/// sorts or does arithmetic on, and a `String` round-trips 1:1 regardless of
+/// the decoder's `dateDecodingStrategy` — the same reasoning Field's
+/// `FieldPhotoEntry` records for its own `capturedAt`. A `Date` here would
+/// make the whole manifest fail to decode the day a producer emits fractional
+/// seconds.
 public nonisolated struct ScanManifest: Codable, Equatable, Sendable {
 
     public var schemaVersion: Int
@@ -42,6 +96,32 @@ public nonisolated struct ScanManifest: Codable, Equatable, Sendable {
     /// default).
     public var annotations: Annotations
 
+    // MARK: - Instrument layer (Field superset · capture-bundle-spec-v1 §3)
+    //
+    // All Optional and all nil on a client-written bundle, so they encode to
+    // nothing. Key names are Field's, verbatim.
+
+    /// Bundle-spec version. `1` marks a Field instrument bundle; nil means a
+    /// plain client bundle. This is the marker the server keys on, not
+    /// `schemaVersion` (which is 3 on both).
+    public var bundleSpecVersion: Int?
+    /// The accuracy verdict: true when fewer than three typed ground-truth
+    /// anchors were captured (spec §10.6 / AnchorGate). The validator cross-
+    /// checks this against `anchors.count`, so the two must be written
+    /// together.
+    public var unverified: Bool?
+    /// Always `"sha256"` in a v1 bundle; the validator rejects anything else.
+    public var checksumAlgorithm: String?
+    /// Per-session instrument provenance (spec §3.2).
+    public var session: Session?
+    /// Typed ground-truth spans (spec §3.3). Field folds `anchors.json` into
+    /// the manifest here.
+    public var anchors: [AnchorRecord]?
+    /// End-of-scan QA scorecard (spec §3.4).
+    public var scorecard: Scorecard?
+    /// SfM pose-graph statistics (spec §3.5).
+    public var poseGraphSummary: PoseGraphSummary?
+
     public init(
         schemaVersion: Int = scanBundleSchemaVersion,
         scanId: UUID,
@@ -54,7 +134,14 @@ public nonisolated struct ScanManifest: Codable, Equatable, Sendable {
         artifacts: [Artifact] = [],
         photos: [PhotoEntry] = [],
         captureEnvironment: CaptureEnvironment = .init(),
-        annotations: Annotations = Annotations()
+        annotations: Annotations = Annotations(),
+        bundleSpecVersion: Int? = nil,
+        unverified: Bool? = nil,
+        checksumAlgorithm: String? = nil,
+        session: Session? = nil,
+        anchors: [AnchorRecord]? = nil,
+        scorecard: Scorecard? = nil,
+        poseGraphSummary: PoseGraphSummary? = nil
     ) {
         self.schemaVersion = schemaVersion
         self.scanId = scanId
@@ -68,14 +155,26 @@ public nonisolated struct ScanManifest: Codable, Equatable, Sendable {
         self.photos = photos
         self.captureEnvironment = captureEnvironment
         self.annotations = annotations
+        self.bundleSpecVersion = bundleSpecVersion
+        self.unverified = unverified
+        self.checksumAlgorithm = checksumAlgorithm
+        self.session = session
+        self.anchors = anchors
+        self.scorecard = scorecard
+        self.poseGraphSummary = poseGraphSummary
     }
 
     // v2 bundles on disk predate the `annotations` field. Provide a custom
     // decoder that tolerates its absence (default = empty Annotations). All
     // other fields are required on both v2 and v3.
+    //
+    // The instrument-layer keys are absent from every client-written bundle,
+    // so they decode with `decodeIfPresent` and stay nil there.
     private enum CodingKeys: String, CodingKey {
         case schemaVersion, scanId, roomLocalId, roomName, createdAt, completedAt
         case device, capture, artifacts, photos, captureEnvironment, annotations
+        case bundleSpecVersion, unverified, checksumAlgorithm
+        case session, anchors, scorecard, poseGraphSummary
     }
 
     public init(from decoder: Decoder) throws {
@@ -92,6 +191,13 @@ public nonisolated struct ScanManifest: Codable, Equatable, Sendable {
         self.photos = try c.decode([PhotoEntry].self, forKey: .photos)
         self.captureEnvironment = try c.decode(CaptureEnvironment.self, forKey: .captureEnvironment)
         self.annotations = try c.decodeIfPresent(Annotations.self, forKey: .annotations) ?? Annotations()
+        self.bundleSpecVersion = try c.decodeIfPresent(Int.self, forKey: .bundleSpecVersion)
+        self.unverified = try c.decodeIfPresent(Bool.self, forKey: .unverified)
+        self.checksumAlgorithm = try c.decodeIfPresent(String.self, forKey: .checksumAlgorithm)
+        self.session = try c.decodeIfPresent(Session.self, forKey: .session)
+        self.anchors = try c.decodeIfPresent([AnchorRecord].self, forKey: .anchors)
+        self.scorecard = try c.decodeIfPresent(Scorecard.self, forKey: .scorecard)
+        self.poseGraphSummary = try c.decodeIfPresent(PoseGraphSummary.self, forKey: .poseGraphSummary)
     }
 
     // MARK: - Device
@@ -241,6 +347,19 @@ public nonisolated struct ScanManifest: Codable, Equatable, Sendable {
         case annotations            // annotations.json (user review notes/name/etc.)
         case bundleManifest         // manifest.json (pointer to existing root manifest)
         case photosManifest         // photos/photos_metadata.ndjson (pointer to existing NDJSON)
+
+        // NOT YET BROUGHT ACROSS from Field's artifact vocabulary:
+        // `scorecard`, `anchors`, `keyframeIndex`, `keyframeSummary`,
+        // `keyframesArchive` (see FieldManifestAssembler.candidates). Adding
+        // them is a *coupled* change, not an additive one: this enum is
+        // switched exhaustively and without a `default` in three places —
+        // ScanBundleWriter.defaultFileName(for:), ArtifactUploader
+        // .scanColumn(for:) and .storagePathComponents(for:) — each needing a
+        // real storage-folder / room_scans-column decision per kind.
+        // Consequence today: the instrument *layer* round-trips, but a Field
+        // manifest that LISTS one of those kinds in `artifacts[]` fails to
+        // decode here. Pinned by
+        // `ScanManifestSupersetTests.fieldOnlyArtifactKindDoesNotDecodeYet`.
     }
 
     public struct Artifact: Codable, Equatable, Sendable {
