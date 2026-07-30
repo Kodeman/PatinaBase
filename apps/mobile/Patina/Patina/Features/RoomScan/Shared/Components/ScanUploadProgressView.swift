@@ -77,6 +77,7 @@ public struct ScanUploadProgressView: View {
         case .synced:    return "checkmark.circle.fill"
         case .failed:    return "exclamationmark.triangle.fill"
         case .heldLocal: return "internaldrive"
+        case .quarantined: return "questionmark.folder"
         }
     }
 
@@ -87,6 +88,7 @@ public struct ScanUploadProgressView: View {
         case .synced:    return .green
         case .failed:    return .orange
         case .heldLocal: return .secondary
+        case .quarantined: return .orange
         }
     }
 
@@ -97,6 +99,7 @@ public struct ScanUploadProgressView: View {
         case .synced:    return "Uploaded"
         case .failed:    return "Upload failed — will retry"
         case .heldLocal: return "Saved on this phone"
+        case .quarantined: return package.lastError ?? "Saved on this phone — we couldn't read it"
         }
     }
 

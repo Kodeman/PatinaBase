@@ -45,14 +45,15 @@
 //  Field's coach writes `scorecard.json` into the bundle at `finalize`. This one
 //  does not write anything. Two reasons, both blocking rather than stylistic:
 //
-//    1. `ScanRecoveryService` DELETES a bundle and its SwiftData row when
-//       `manifest.json` fails to decode (ScanRecoveryService.swift, the
-//       `catch` around `JSONDecoder.scanManifestDecoder.decode`). That is
-//       harmless while nothing populates the instrument layer. The moment a
-//       producer writes `manifest.scorecard`, one unrecognized enum value — a
-//       new `Verdict` case, a new `TrackingHealth` case, a spec revision — turns
-//       into deleted user data on next launch. That guard has to be made
-//       lenient BEFORE any producer writes instrument fields.
+//    1. ✅ LIFTED. `ScanRecoveryService` used to DELETE a bundle and its
+//       SwiftData row when `manifest.json` failed to decode, which would have
+//       turned one unrecognized enum value — a new `Verdict` case, a new
+//       `TrackingHealth` case, a spec revision — into deleted user data on the
+//       next launch. It no longer deletes on a read failure: unreadable bundles
+//       are QUARANTINED (kept on disk, `.quarantined`, logged), and an unknown
+//       value inside an *optional* instrument key degrades that one key to nil
+//       via `ScanManifest.init(from:)` rather than failing the manifest. A
+//       producer may now write `manifest.scorecard` without risking the scan.
 //    2. Patina holds scan bytes strictly on-device until the user requests
 //       design services (`RoomUploadService.holdLocally`,
 //       `RoomScanPackage.markHeldLocal`). Adding bundle files is a change to
