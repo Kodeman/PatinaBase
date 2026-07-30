@@ -21,7 +21,7 @@ export default function SpecBookLayout({
         aria-busy="true"
         aria-label="Loading spec book workspace"
       >
-        <div className="mx-auto max-w-7xl animate-pulse">
+        <div className="mx-auto max-w-7xl animate-pulse motion-reduce:animate-none">
           <div className="h-3 w-24 bg-[var(--color-pearl)]" />
           <div className="mt-6 h-9 w-80 bg-[var(--color-pearl)]" />
           <div className="mt-10 grid gap-4 md:grid-cols-[220px_1fr_320px]">
@@ -50,7 +50,7 @@ export default function SpecBookLayout({
           </p>
           <Link
             href={`/doc/${params.id}`}
-            className="mt-6 inline-block font-mono text-[10px] uppercase tracking-[0.08em] text-[var(--color-clay)]"
+            className="mt-6 inline-flex min-h-11 items-center px-2 font-mono text-[10px] uppercase tracking-[0.08em] text-[var(--color-clay)]"
           >
             ← Return to project
           </Link>

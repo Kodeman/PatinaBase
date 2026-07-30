@@ -62,7 +62,10 @@ export interface ProjectFfeSpec {
   warranty_notes: string | null;
   selected_media: unknown[];
   source_verifications: Record<string, string>;
-  na_declarations: Record<string, { reason: string; declared_at?: string }>;
+  na_declarations: Record<
+    string,
+    { na: true; reason: string; declared_at?: string }
+  >;
   field_provenance: Record<string, unknown>;
   readiness_status: SpecBookReadiness;
   row_version: number;
