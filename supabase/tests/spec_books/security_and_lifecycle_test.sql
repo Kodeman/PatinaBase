@@ -130,6 +130,7 @@ DECLARE
   v_count integer;
   v_version integer;
   v_raised boolean;
+  v_detail text;
 BEGIN
   -- ACLs are explicit and revision writes remain RPC/service-only.
   ASSERT has_table_privilege('authenticated', 'public.spec_books', 'SELECT'),
@@ -294,10 +295,34 @@ BEGIN
   WHERE s.ffe_item_id = sp.ffe_item_id
     AND s.spec_book_id = v_book.id;
 
+  -- Installer issues require both a location and actionable install notes at
+  -- the RPC boundary, even if a caller bypasses the portal preflight.
+  v_raised := false;
+  v_detail := NULL;
+  BEGIN
+    PERFORM public.prepare_spec_book_issue(
+      v_book.id, ARRAY['installer'], 'full', NULL, NULL,
+      'issue-missing-install-notes', '[]'::jsonb
+    );
+  EXCEPTION WHEN check_violation THEN
+    GET STACKED DIAGNOSTICS v_detail = PG_EXCEPTION_DETAIL;
+    v_raised := position('missing_install_notes' IN COALESCE(v_detail, '')) > 0;
+  END;
+  ASSERT v_raised, 'missing installer notes must be a SQL preflight blocker';
+
+  UPDATE public.project_ffe_specs
+  SET install_notes = 'Confirm wall clearance before setting the chair.'
+  WHERE ffe_item_id IN ('5b000000-0000-4000-8000-000000000501', v_second_item);
+  UPDATE public.spec_book_item_settings s
+  SET publication_overrides = jsonb_build_object('expectedRowVersion', sp.row_version)
+  FROM public.project_ffe_specs sp
+  WHERE s.ffe_item_id = sp.ffe_item_id
+    AND s.spec_book_id = v_book.id;
+
   -- Prepare freezes one normalized row per item and one artifact per audience.
   v_issue := public.prepare_spec_book_issue(
     v_book.id,
-    ARRAY['internal','client'],
+    ARRAY['internal','client','installer'],
     'full',
     NULL,
     NULL,
@@ -311,7 +336,7 @@ BEGIN
     WHERE revision_id = v_revision_id
   ), 'revision must normalize every included item';
   ASSERT (
-    SELECT count(*) = 2 FROM public.spec_book_artifacts
+    SELECT count(*) = 3 FROM public.spec_book_artifacts
     WHERE revision_id = v_revision_id
   ), 'prepare must create one artifact per requested audience';
   ASSERT (
@@ -323,7 +348,7 @@ BEGIN
 
   v_issue_again := public.prepare_spec_book_issue(
     v_book.id,
-    ARRAY['client','internal'],
+    ARRAY['client','installer','internal'],
     'full',
     NULL,
     NULL,
@@ -364,9 +389,49 @@ BEGIN
   END;
   ASSERT v_raised, 'pending artifacts must block finalization';
 
+  v_raised := false;
+  BEGIN
+    UPDATE public.spec_book_artifacts
+    SET status = 'failed',
+        error_code = 'not_rendered',
+        error_message = 'Cannot fail before a render claim.'
+    WHERE revision_id = v_revision_id AND audience = 'client';
+  EXCEPTION WHEN object_not_in_prerequisite_state THEN
+    v_raised := true;
+  END;
+  ASSERT v_raised, 'pending artifact must not skip directly to failed';
+
   FOR v_artifact IN
     SELECT * FROM public.spec_book_artifacts WHERE revision_id = v_revision_id
   LOOP
+    UPDATE public.spec_book_artifacts
+    SET status = 'rendering',
+        attempt_count = attempt_count + 1,
+        render_started_at = now(),
+        rendered_at = NULL,
+        error_code = NULL,
+        error_message = NULL
+    WHERE id = v_artifact.id;
+
+    -- Exercise the renderer's failed-artifact retry path on one audience.
+    IF v_artifact.audience = 'client' THEN
+      UPDATE public.spec_book_artifacts
+      SET status = 'failed',
+          error_code = 'render_failed',
+          error_message = 'Synthetic first-attempt failure.',
+          rendered_at = NULL
+      WHERE id = v_artifact.id;
+
+      UPDATE public.spec_book_artifacts
+      SET status = 'rendering',
+          attempt_count = attempt_count + 1,
+          render_started_at = now(),
+          rendered_at = NULL,
+          error_code = NULL,
+          error_message = NULL
+      WHERE id = v_artifact.id;
+    END IF;
+
     INSERT INTO public.project_documents (
       project_id, title, doc_type, category, storage_path, size_bytes, version,
       status, uploaded_by, anchor_kind, section_key, client_visible
@@ -396,6 +461,17 @@ BEGIN
         rendered_at = now()
     WHERE id = v_artifact.id;
   END LOOP;
+  ASSERT (
+    SELECT attempt_count = 2 FROM public.spec_book_artifacts
+    WHERE revision_id = v_revision_id AND audience = 'client'
+  ), 'failed artifact retry must reclaim the same artifact row';
+  ASSERT (
+    SELECT bool_and(
+      CASE WHEN audience = 'client' THEN attempt_count = 2 ELSE attempt_count = 1 END
+    )
+    FROM public.spec_book_artifacts
+    WHERE revision_id = v_revision_id
+  ), 'valid pending/failed rendering claims must preserve audience artifacts';
 
   v_revision := public.finalize_spec_book_issue(v_revision_id);
   ASSERT v_revision.status = 'issued' AND v_revision.issued_at IS NOT NULL,
@@ -485,6 +561,155 @@ BEGIN
   RAISE NOTICE 'spec_books owner lifecycle assertions passed';
 END
 $$;
+
+-- Triggers apply to the renderer's privileged client too: service_role can
+-- advance valid lifecycle transitions, but cannot rewrite issued/ready truth.
+SET LOCAL ROLE service_role;
+DO $$
+DECLARE
+  v_revision_id uuid;
+  v_artifact_id uuid;
+  v_other_document_id uuid;
+  v_original_path text;
+  v_original_checksum text;
+  v_original_document_id uuid;
+  v_original_issued_at timestamptz;
+  v_raised boolean;
+BEGIN
+  SELECT id, issued_at
+    INTO v_revision_id, v_original_issued_at
+  FROM public.spec_book_revisions
+  WHERE idempotency_key = 'issue-1';
+
+  SELECT id, project_document_id, storage_path, checksum_sha256
+    INTO v_artifact_id, v_original_document_id, v_original_path, v_original_checksum
+  FROM public.spec_book_artifacts
+  WHERE revision_id = v_revision_id AND audience = 'client';
+
+  SELECT project_document_id INTO v_other_document_id
+  FROM public.spec_book_artifacts
+  WHERE revision_id = v_revision_id AND audience = 'internal';
+
+  v_raised := false;
+  BEGIN
+    UPDATE public.spec_book_revisions
+    SET issued_at = issued_at + interval '1 minute'
+    WHERE id = v_revision_id;
+  EXCEPTION WHEN object_not_in_prerequisite_state THEN
+    v_raised := true;
+  END;
+  ASSERT v_raised, 'service_role must not rewrite issued_at';
+
+  v_raised := false;
+  BEGIN
+    UPDATE public.spec_book_revisions
+    SET status = 'pending', issued_at = NULL
+    WHERE id = v_revision_id;
+  EXCEPTION WHEN object_not_in_prerequisite_state THEN
+    v_raised := true;
+  END;
+  ASSERT v_raised, 'issued revision status must not regress';
+
+  v_raised := false;
+  BEGIN
+    UPDATE public.spec_book_revisions
+    SET reason = 'tampered after issue'
+    WHERE id = v_revision_id;
+  EXCEPTION WHEN object_not_in_prerequisite_state THEN
+    v_raised := true;
+  END;
+  ASSERT v_raised, 'service_role must not rewrite issued issue metadata';
+
+  v_raised := false;
+  BEGIN
+    UPDATE public.spec_book_revisions
+    SET render_snapshot = render_snapshot || '{"tampered":true}'::jsonb
+    WHERE id = v_revision_id;
+  EXCEPTION WHEN object_not_in_prerequisite_state THEN
+    v_raised := true;
+  END;
+  ASSERT v_raised, 'service_role must not rewrite issued render snapshots';
+
+  v_raised := false;
+  BEGIN
+    UPDATE public.spec_book_artifacts
+    SET revision_id = extensions.gen_random_uuid()
+    WHERE id = v_artifact_id;
+  EXCEPTION WHEN object_not_in_prerequisite_state THEN
+    v_raised := true;
+  END;
+  ASSERT v_raised, 'artifact revision identity must be immutable';
+
+  v_raised := false;
+  BEGIN
+    UPDATE public.spec_book_artifacts SET audience = 'care'
+    WHERE id = v_artifact_id;
+  EXCEPTION WHEN object_not_in_prerequisite_state THEN
+    v_raised := true;
+  END;
+  ASSERT v_raised, 'artifact audience identity must be immutable';
+
+  v_raised := false;
+  BEGIN
+    UPDATE public.spec_book_artifacts SET format = 'docx'
+    WHERE id = v_artifact_id;
+  EXCEPTION WHEN object_not_in_prerequisite_state THEN
+    v_raised := true;
+  END;
+  ASSERT v_raised, 'artifact format identity must be immutable';
+
+  v_raised := false;
+  BEGIN
+    UPDATE public.spec_book_artifacts SET status = 'failed'
+    WHERE id = v_artifact_id;
+  EXCEPTION WHEN object_not_in_prerequisite_state THEN
+    v_raised := true;
+  END;
+  ASSERT v_raised, 'ready artifact status must not regress';
+
+  v_raised := false;
+  BEGIN
+    UPDATE public.spec_book_artifacts SET storage_path = storage_path || '.tampered'
+    WHERE id = v_artifact_id;
+  EXCEPTION WHEN object_not_in_prerequisite_state THEN
+    v_raised := true;
+  END;
+  ASSERT v_raised, 'ready artifact storage path must be immutable';
+
+  v_raised := false;
+  BEGIN
+    UPDATE public.spec_book_artifacts SET project_document_id = v_other_document_id
+    WHERE id = v_artifact_id;
+  EXCEPTION WHEN object_not_in_prerequisite_state THEN
+    v_raised := true;
+  END;
+  ASSERT v_raised, 'ready artifact document link must be immutable';
+
+  v_raised := false;
+  BEGIN
+    UPDATE public.spec_book_artifacts SET checksum_sha256 = repeat('b', 64)
+    WHERE id = v_artifact_id;
+  EXCEPTION WHEN object_not_in_prerequisite_state THEN
+    v_raised := true;
+  END;
+  ASSERT v_raised, 'ready artifact checksum must be immutable';
+
+  ASSERT (
+    SELECT issued_at = v_original_issued_at
+    FROM public.spec_book_revisions WHERE id = v_revision_id
+  ), 'issued revision timestamp must remain unchanged after denied writes';
+  ASSERT (
+    SELECT status = 'ready'
+       AND storage_path = v_original_path
+       AND project_document_id = v_original_document_id
+       AND checksum_sha256 = v_original_checksum
+    FROM public.spec_book_artifacts WHERE id = v_artifact_id
+  ), 'ready artifact durable identity must remain unchanged after denied writes';
+
+  RAISE NOTICE 'spec_books service-role immutability assertions passed';
+END
+$$;
+RESET ROLE;
 
 -- Non-owner RPC denial + RLS invisibility under the actual authenticated role.
 DO $$
