@@ -332,7 +332,7 @@ final class ArtifactUploader {
     /// `coverage_heatmap_url`) come from `supabase/migrations/00082_*.sql`.
     /// Swift compiles either way; at runtime the PATCH fails until that
     /// migration is applied.
-    private nonisolated static func routing(
+    nonisolated private static func routing(
         for kind: ScanManifest.ArtifactKind
     ) -> (column: String, folder: String)? {
         switch kind {

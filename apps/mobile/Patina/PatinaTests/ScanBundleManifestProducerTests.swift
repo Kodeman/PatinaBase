@@ -148,8 +148,8 @@ struct ScanBundleManifestProducerTests {
         let writer = try makeWriter()
         defer { try? writer.deleteBundle() }
 
-        for i in 0..<3 {
-            try writer.appendPhoto(photo(index: i), imageData: Data(repeating: 0xC3, count: 32))
+        for index in 0..<3 {
+            try writer.appendPhoto(photo(index: index), imageData: Data(repeating: 0xC3, count: 32))
         }
         try writer.registerPhotosManifest()
 

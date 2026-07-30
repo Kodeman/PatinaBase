@@ -279,34 +279,15 @@ final class RoomCaptureBundleAdapter {
         try writer.setAnnotations(annotations)
 
         // 2. Apply hero selection + reorder + per-photo captions.
-        var photos = writer.currentManifest().photos
-        if let heroId = heroPhotoId {
-            for i in photos.indices {
-                photos[i].isUserSelectedHero = (photos[i].id == heroId)
-            }
-        }
-        if !reorderedPhotoIds.isEmpty {
-            // Build an index → orderIndex map from the caller's ordering.
-            var orderLookup: [UUID: Int] = [:]
-            for (idx, id) in reorderedPhotoIds.enumerated() {
-                orderLookup[id] = idx
-            }
-            for i in photos.indices {
-                if let idx = orderLookup[photos[i].id] {
-                    photos[i].orderIndex = idx
-                }
-            }
-        }
-        if !photoAnnotations.isEmpty {
-            for i in photos.indices {
-                if let caption = photoAnnotations[photos[i].id] {
-                    let trimmed = caption.trimmingCharacters(in: .whitespacesAndNewlines)
-                    photos[i].userAnnotation = trimmed.isEmpty ? nil : trimmed
-                }
-            }
-        }
         if heroPhotoId != nil || !reorderedPhotoIds.isEmpty || !photoAnnotations.isEmpty {
-            try writer.replacePhotos(photos)
+            try writer.replacePhotos(
+                Self.applyingReview(
+                    to: writer.currentManifest().photos,
+                    heroPhotoId: heroPhotoId,
+                    reorderedPhotoIds: reorderedPhotoIds,
+                    photoAnnotations: photoAnnotations
+                )
+            )
         }
 
         // 3. Rewrite + register the posed-photo NDJSON sidecar, now that the
@@ -325,6 +306,36 @@ final class RoomCaptureBundleAdapter {
         //    the scan then rests in `.heldLocal`. Bytes leave the phone only
         //    later, from the explicit design-request flow.
         _ = try writer.finalize(hashArtifacts: true)
+    }
+
+    /// Fold the review step's three edits into the photo list. Pure — extracted
+    /// from `applyReviewAndSeal` so the seal path reads as its four steps.
+    private static func applyingReview(
+        to photos: [ScanManifest.PhotoEntry],
+        heroPhotoId: UUID?,
+        reorderedPhotoIds: [UUID],
+        photoAnnotations: [UUID: String]
+    ) -> [ScanManifest.PhotoEntry] {
+        // Build an index → orderIndex map from the caller's ordering.
+        var orderLookup: [UUID: Int] = [:]
+        for (idx, id) in reorderedPhotoIds.enumerated() {
+            orderLookup[id] = idx
+        }
+
+        return photos.map { photo in
+            var copy = photo
+            if let heroId = heroPhotoId {
+                copy.isUserSelectedHero = (copy.id == heroId)
+            }
+            if let idx = orderLookup[copy.id] {
+                copy.orderIndex = idx
+            }
+            if let caption = photoAnnotations[copy.id] {
+                let trimmed = caption.trimmingCharacters(in: .whitespacesAndNewlines)
+                copy.userAnnotation = trimmed.isEmpty ? nil : trimmed
+            }
+            return copy
+        }
     }
 
     // MARK: - Depth helpers
