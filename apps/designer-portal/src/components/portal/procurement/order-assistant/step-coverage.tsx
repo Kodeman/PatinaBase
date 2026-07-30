@@ -189,9 +189,11 @@ export function StepCoverage({
     (sum, u) => sum + itemTradeCents(u.item),
     0,
   );
-  const invoiceHref = `/portal/billing/invoices/new?projectId=${projectId}&ffeItemIds=${uncovered
-    .map((u) => u.item.id)
-    .join(',')}`;
+  // R21 dissolve: the invoice composer is a sheet raised from the Accounts book,
+  // not a route. The doorway opens the book scoped to this project; the
+  // preselected-line context (`ffeItemIds`) has no doorway key yet and is a
+  // logged deferral, so the designer picks the uncovered lines in the composer.
+  const invoiceHref = `/desk?book=accounts&projectId=${projectId}`;
 
   return (
     <section

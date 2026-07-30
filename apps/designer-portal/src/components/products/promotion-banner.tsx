@@ -108,7 +108,7 @@ export function PromotionBanner() {
         <PromotionToast
           count={bulkSuccessCount}
           layer="studio"
-          viewUrl="/portal/library/studio"
+          viewUrl="/library"
           onDismiss={() => setBulkSuccessCount(null)}
         />
       )}

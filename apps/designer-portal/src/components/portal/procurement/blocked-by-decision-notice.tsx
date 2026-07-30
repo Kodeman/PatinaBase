@@ -78,11 +78,15 @@ export interface BlockedByDecisionInlineProps {
 }
 
 /**
- * Builds the deep link target for a set of blocked items. A single distinct
- * decision links to its detail page; multiple distinct decisions fall back to
- * the decisions list (the list does not yet read a project filter param —
- * `projectId` is accepted for a future scoped-list deep link but is not encoded
- * today to avoid implying a filter the list ignores).
+ * Builds the deep link target for a set of blocked items.
+ *
+ * R21 dissolve: there is no decisions zone any more. A single distinct decision
+ * opens the DOCUMENT it belongs to — /doc/[decisionId] resolves through
+ * use-document-state's third leg (client_decisions.id → project_id) and the
+ * decision unfolds in the margin. Several decisions have no one document to
+ * name, so they land on the Desk, where the blocked project waits as a folder.
+ * (`projectId` is still accepted for a future scoped deep link; it is not
+ * encoded today.)
  */
 export function blockedDecisionHref(
   blockedItems: BlockableFFEItem[],
@@ -90,9 +94,9 @@ export function blockedDecisionHref(
 ): { href: string; isSingle: boolean } {
   const ids = distinctBlockingDecisionIds(blockedItems);
   if (ids.length === 1) {
-    return { href: `/portal/decisions/${ids[0]}`, isSingle: true };
+    return { href: `/doc/${ids[0]}`, isSingle: true };
   }
-  return { href: '/portal/decisions', isSingle: false };
+  return { href: '/desk', isSingle: false };
 }
 
 /**
@@ -187,9 +191,7 @@ export function BlockedItemsRollup({
 }: BlockedItemsRollupProps) {
   if (count <= 0) return null;
 
-  const href = decisionId
-    ? `/portal/decisions/${decisionId}`
-    : '/portal/decisions';
+  const href = decisionId ? `/doc/${decisionId}` : '/desk';
 
   return (
     <Link

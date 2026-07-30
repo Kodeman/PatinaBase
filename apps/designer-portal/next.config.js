@@ -227,31 +227,203 @@ const nextConfig = {
   },
 
 
+  /**
+   * The R21 dissolve — the permanent redirect table (I109).
+   *
+   * The `(portal)` zone tree is gone. Every URL it ever answered to is answered
+   * here instead, permanently (308), so a bookmark, an email footer, a Stripe
+   * return URL and a two-year-old link all still land somewhere true.
+   *
+   * Three shapes of destination:
+   *   · A ROOM with a real route — /doc/:id, /people, /library, /rooms,
+   *     /drafting/:id, /room/:scanId/file, /preferences, /help. 1:1 where the
+   *     key space matches.
+   *   · A DESK DOORWAY — the money/time/post/account zones became sheets, and a
+   *     sheet has no address. `?book=` / `?account=` on /desk is their address;
+   *     components/document/desk-doorway.tsx consumes it once and erases it.
+   *   · Plain /desk — for the zones that dissolved into the Desk's own folders
+   *     and chips (the pipeline, the lists, insights) or into a ⌘K verb.
+   *
+   * Rules of the table:
+   *   · FIRST MATCH WINS. Specific before general; `/portal` exact sits first
+   *     (`/portal/:path*` would otherwise swallow it), the catchall sits last.
+   *   · Query strings ride along untouched — which is how
+   *     /portal/preferences?token=… keeps its unsubscribe token.
+   *   · ROOM id ≠ SCAN id. /portal/rooms/:id speaks `rooms`; /room/:id speaks
+   *     `room_scans`. Never map one to the other — land on the /rooms roster.
+   *   · A decision id, a lead id and a proposal id all resolve through
+   *     /doc/[id]'s resolver (use-document-state.ts legs R6 / F1 / decisions).
+   */
   async redirects() {
     return [
-      // Redirect old dashboard routes to new portal routes
-      { source: '/leads', destination: '/portal/leads', permanent: true },
-      { source: '/leads/:path*', destination: '/portal/leads/:path*', permanent: true },
-      { source: '/projects', destination: '/portal/projects', permanent: true },
-      { source: '/projects/:path*', destination: '/portal/projects/:path*', permanent: true },
-      { source: '/proposals', destination: '/portal/proposals', permanent: true },
-      { source: '/proposals/:path*', destination: '/portal/proposals/:path*', permanent: true },
-      { source: '/earnings', destination: '/portal/earnings', permanent: true },
-      { source: '/messages', destination: '/portal/messages', permanent: true },
-      { source: '/clients', destination: '/portal/clients', permanent: true },
-      { source: '/clients/:path*', destination: '/portal/clients/:path*', permanent: true },
-      { source: '/settings', destination: '/portal/settings', permanent: true },
-      { source: '/catalog', destination: '/portal/catalog', permanent: true },
-      { source: '/catalog/:path*', destination: '/portal/catalog/:path*', permanent: true },
-      { source: '/vendors', destination: '/portal/vendors', permanent: true },
-      { source: '/vendors/:path*', destination: '/portal/vendors/:path*', permanent: true },
-      { source: '/teaching', destination: '/portal/teaching', permanent: true },
-      { source: '/teaching/:path*', destination: '/portal/teaching/:path*', permanent: true },
-      { source: '/communications', destination: '/portal/communications', permanent: true },
-      { source: '/communications/:path*', destination: '/portal/communications/:path*', permanent: true },
-      { source: '/companion', destination: '/portal/companion', permanent: true },
-      { source: '/insights', destination: '/portal/insights', permanent: true },
-      { source: '/profile', destination: '/portal/profile', permanent: true },
+      // ─── The bare landing ──────────────────────────────────────────────────
+      { source: '/portal', destination: '/desk', permanent: true },
+
+      // ─── Projects · proposals · leads · decisions → the document ───────────
+      { source: '/portal/projects/new', destination: '/desk', permanent: true },
+      // The Room File was never project-keyed (room_files is UNIQUE(scan_id, version)).
+      { source: '/portal/projects/:id/room-file/:scanId', destination: '/room/:scanId/file', permanent: true },
+      { source: '/portal/projects/:id', destination: '/doc/:id', permanent: true },
+      // /time /complete /ffe /financials /decisions /edit /phase/* /scope-change*
+      { source: '/portal/projects/:id/:path*', destination: '/doc/:id', permanent: true },
+      { source: '/portal/projects', destination: '/desk', permanent: true },
+
+      { source: '/portal/proposals/new', destination: '/desk', permanent: true },
+      // The Drafting Room is the scope surface; same key space, 1:1.
+      { source: '/portal/proposals/:id/scope', destination: '/drafting/:id', permanent: true },
+      { source: '/portal/proposals/:id/edit', destination: '/drafting/:id', permanent: true },
+      // preview / revise / send / signed / tracking are all overlays on the document.
+      { source: '/portal/proposals/:id/:path*', destination: '/doc/:id', permanent: true },
+      { source: '/portal/proposals/:id', destination: '/doc/:id', permanent: true },
+      { source: '/portal/proposals', destination: '/desk', permanent: true },
+
+      { source: '/portal/leads/:id', destination: '/doc/:id', permanent: true },
+      { source: '/portal/leads', destination: '/desk', permanent: true },
+      { source: '/portal/pipeline', destination: '/desk', permanent: true },
+      { source: '/portal/pipeline/:path*', destination: '/desk', permanent: true },
+
+      // DEC-22 decision analytics has no document home — an accepted loss.
+      { source: '/portal/decisions/analytics', destination: '/desk', permanent: true },
+      // A decision id resolves to its project via the resolver's third leg.
+      { source: '/portal/decisions/:id/edit', destination: '/doc/:id', permanent: true },
+      { source: '/portal/decisions/:id', destination: '/doc/:id', permanent: true },
+      { source: '/portal/decisions', destination: '/desk', permanent: true },
+
+      // ─── People (clients · makers · threads · outreach) ────────────────────
+      // The nav's old "+ Add Client" quick action was /portal/clients?add=1.
+      { source: '/portal/clients', has: [{ type: 'query', key: 'add' }], destination: '/people?role=client&add=client', permanent: true },
+      { source: '/portal/clients/:id/:path*', destination: '/people?person=:id&role=client', permanent: true },
+      { source: '/portal/clients/:id', destination: '/people?person=:id&role=client', permanent: true },
+      { source: '/portal/clients', destination: '/people?role=client', permanent: true },
+
+      { source: '/portal/vendors/new', destination: '/people?add=maker', permanent: true },
+      { source: '/portal/vendors/saved', destination: '/people?role=maker', permanent: true },
+      { source: '/portal/vendors/:id', destination: '/people?person=:id&role=maker', permanent: true },
+      { source: '/portal/vendors', destination: '/people?role=maker', permanent: true },
+
+      { source: '/portal/messages/:id', destination: '/people?thread=:id', permanent: true },
+      { source: '/portal/messages', destination: '/people?view=threads', permanent: true },
+      { source: '/portal/nurture', destination: '/people?view=nurture', permanent: true },
+      { source: '/portal/reviews', destination: '/people?view=reviews', permanent: true },
+      { source: '/portal/portfolio', destination: '/people?view=portfolio', permanent: true },
+      { source: '/portal/communications', destination: '/people?view=outreach', permanent: true },
+      { source: '/portal/communications/:path*', destination: '/people?view=outreach', permanent: true },
+
+      // ─── The Library (catalog · teaching · the companion) ──────────────────
+      { source: '/portal/library', destination: '/library', permanent: true },
+      { source: '/portal/library/:path*', destination: '/library', permanent: true },
+
+      // Static catalog segments first — otherwise `new` reads as a product id.
+      { source: '/portal/catalog/new', destination: '/library', permanent: true },
+      { source: '/portal/catalog/import', destination: '/library', permanent: true },
+      { source: '/portal/catalog/categories', destination: '/library', permanent: true },
+      { source: '/portal/catalog/collections', destination: '/library', permanent: true },
+      { source: '/portal/catalog/collections/:path*', destination: '/library', permanent: true },
+      // Product detail / edit — same key space as the Piece Room.
+      { source: '/portal/catalog/:id/edit', destination: '/library/:id', permanent: true },
+      { source: '/portal/catalog/:id', destination: '/library/:id', permanent: true },
+      { source: '/portal/catalog', destination: '/library', permanent: true },
+
+      { source: '/portal/teaching/judgments', destination: '/library/judgments', permanent: true },
+      { source: '/portal/teaching/your-eye', destination: '/people?view=your-eye', permanent: true },
+      { source: '/portal/teaching/product/:id', destination: '/library/:id', permanent: true },
+      { source: '/portal/teaching', destination: '/library', permanent: true },
+      { source: '/portal/teaching/:path*', destination: '/library', permanent: true },
+      { source: '/portal/companion', destination: '/desk', permanent: true },
+
+      // ─── The Orders book (doorway) ─────────────────────────────────────────
+      { source: '/portal/procurement/receiving', destination: '/desk?book=orders&page=receiving', permanent: true },
+      { source: '/portal/procurement/by-vendor', destination: '/desk?book=orders&page=vendors', permanent: true },
+      { source: '/portal/procurement/expediting', destination: '/desk?book=orders&page=week', permanent: true },
+      { source: '/portal/procurement', destination: '/desk?book=orders', permanent: true },
+      { source: '/portal/procurement/:path*', destination: '/desk?book=orders', permanent: true },
+
+      // ─── The Accounts book (doorway) ───────────────────────────────────────
+      { source: '/portal/billing/ar', destination: '/desk?book=accounts&page=receivables', permanent: true },
+      // The composer is raised from the book; it has no id to carry.
+      { source: '/portal/billing/invoices/new', destination: '/desk?book=accounts', permanent: true },
+      { source: '/portal/billing/invoices/:id/print', destination: '/desk?book=accounts&page=ledger&invoiceId=:id', permanent: true },
+      { source: '/portal/billing/invoices/:id', destination: '/desk?book=accounts&page=ledger&invoiceId=:id', permanent: true },
+      { source: '/portal/billing', destination: '/desk?book=accounts', permanent: true },
+      { source: '/portal/billing/:path*', destination: '/desk?book=accounts', permanent: true },
+      { source: '/portal/earnings', destination: '/desk?book=accounts&page=earnings', permanent: true },
+
+      // ─── Hours · the Post · insights ───────────────────────────────────────
+      { source: '/portal/time', destination: '/desk?book=hours', permanent: true },
+      { source: '/portal/inbox', destination: '/desk?book=post', permanent: true },
+      // R5 + I23: insights distributed into each ledger's front matter.
+      { source: '/portal/insights', destination: '/desk', permanent: true },
+
+      // ─── The Account sheet (doorway) + the permanent preferences page ──────
+      { source: '/portal/settings/notifications', destination: '/desk?account=notifications', permanent: true },
+      { source: '/portal/settings/security', destination: '/desk?account=security', permanent: true },
+      { source: '/portal/settings/devices', destination: '/desk?account=devices', permanent: true },
+      { source: '/portal/settings', destination: '/desk?account=profile', permanent: true },
+      { source: '/portal/settings/:path*', destination: '/desk?account=profile', permanent: true },
+      { source: '/portal/profile', destination: '/desk?account=profile', permanent: true },
+      // R91: /preferences is a REAL page (the unsubscribe token flow lands there
+      // unauthenticated) — never a doorway, and the ?token= rides along.
+      { source: '/portal/preferences', destination: '/preferences', permanent: true },
+
+      // ─── Help (R89 re-homed the whole tree 1:1) ────────────────────────────
+      { source: '/portal/help', destination: '/help', permanent: true },
+      { source: '/portal/help/:path*', destination: '/help/:path*', permanent: true },
+      { source: '/portal/resources', destination: '/help', permanent: true },
+
+      // ─── Rooms — the roster, never a scan ──────────────────────────────────
+      { source: '/portal/rooms/:id', destination: '/rooms', permanent: true },
+      { source: '/portal/rooms', destination: '/rooms', permanent: true },
+
+      // ─── Everything else that ever wore the /portal prefix ─────────────────
+      { source: '/portal/:path*', destination: '/desk', permanent: true },
+
+      // ─── The pre-dissolve bare paths ───────────────────────────────────────
+      // These predate the zone tree and used to hop through /portal/*. They now
+      // name their final destination directly — no redirect chains.
+      { source: '/projects/:id/:path*', destination: '/doc/:id', permanent: true },
+      { source: '/projects/:id', destination: '/doc/:id', permanent: true },
+      { source: '/projects', destination: '/desk', permanent: true },
+      { source: '/proposals/new', destination: '/desk', permanent: true },
+      { source: '/proposals/:id/scope', destination: '/drafting/:id', permanent: true },
+      { source: '/proposals/:id/edit', destination: '/drafting/:id', permanent: true },
+      { source: '/proposals/:id/:path*', destination: '/doc/:id', permanent: true },
+      { source: '/proposals/:id', destination: '/doc/:id', permanent: true },
+      { source: '/proposals', destination: '/desk', permanent: true },
+      { source: '/leads/:id', destination: '/doc/:id', permanent: true },
+      { source: '/leads', destination: '/desk', permanent: true },
+      { source: '/clients/:id/:path*', destination: '/people?person=:id&role=client', permanent: true },
+      { source: '/clients/:id', destination: '/people?person=:id&role=client', permanent: true },
+      { source: '/clients', destination: '/people?role=client', permanent: true },
+      { source: '/vendors/new', destination: '/people?add=maker', permanent: true },
+      { source: '/vendors/saved', destination: '/people?role=maker', permanent: true },
+      { source: '/vendors/:id', destination: '/people?person=:id&role=maker', permanent: true },
+      { source: '/vendors', destination: '/people?role=maker', permanent: true },
+      { source: '/messages/:id', destination: '/people?thread=:id', permanent: true },
+      { source: '/messages', destination: '/people?view=threads', permanent: true },
+      { source: '/communications', destination: '/people?view=outreach', permanent: true },
+      { source: '/communications/:path*', destination: '/people?view=outreach', permanent: true },
+      { source: '/catalog/new', destination: '/library', permanent: true },
+      { source: '/catalog/import', destination: '/library', permanent: true },
+      { source: '/catalog/categories', destination: '/library', permanent: true },
+      { source: '/catalog/collections', destination: '/library', permanent: true },
+      { source: '/catalog/collections/:path*', destination: '/library', permanent: true },
+      { source: '/catalog/:id/edit', destination: '/library/:id', permanent: true },
+      { source: '/catalog/:id', destination: '/library/:id', permanent: true },
+      { source: '/catalog', destination: '/library', permanent: true },
+      { source: '/teaching/judgments', destination: '/library/judgments', permanent: true },
+      { source: '/teaching/your-eye', destination: '/people?view=your-eye', permanent: true },
+      { source: '/teaching/product/:id', destination: '/library/:id', permanent: true },
+      { source: '/teaching', destination: '/library', permanent: true },
+      { source: '/teaching/:path*', destination: '/library', permanent: true },
+      { source: '/earnings', destination: '/desk?book=accounts&page=earnings', permanent: true },
+      { source: '/settings/notifications', destination: '/desk?account=notifications', permanent: true },
+      { source: '/settings/security', destination: '/desk?account=security', permanent: true },
+      { source: '/settings/devices', destination: '/desk?account=devices', permanent: true },
+      { source: '/settings', destination: '/desk?account=profile', permanent: true },
+      { source: '/settings/:path*', destination: '/desk?account=profile', permanent: true },
+      { source: '/profile', destination: '/desk?account=profile', permanent: true },
+      { source: '/companion', destination: '/desk', permanent: true },
+      { source: '/insights', destination: '/desk', permanent: true },
     ];
   },
 

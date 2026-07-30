@@ -116,7 +116,7 @@ describe('error-handler — session expiry detection (PT-D-2-T6-1)', () => {
       // module registry so each test starts from a clean "no redirect in flight".
       jest.resetModules();
       // jsdom location is not configurable enough to spy on assign; replace it.
-      setLocation('/portal/decisions', '?filter=open');
+      setLocation('/desk', '?filter=open');
     });
 
     afterEach(() => {
@@ -128,7 +128,7 @@ describe('error-handler — session expiry detection (PT-D-2-T6-1)', () => {
       const handled = freshHandle({ code: 'PGRST301', message: 'JWT expired' });
       expect(handled).toBe(true);
       expect(window.location.assign).toHaveBeenCalledWith(
-        '/auth/signin?callbackUrl=%2Fportal%2Fdecisions%3Ffilter%3Dopen'
+        '/auth/signin?callbackUrl=%2Fdesk%3Ffilter%3Dopen'
       );
     });
 

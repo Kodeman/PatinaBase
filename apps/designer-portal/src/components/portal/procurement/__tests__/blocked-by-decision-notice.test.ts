@@ -72,31 +72,31 @@ describe('distinctBlockingDecisionIds', () => {
 });
 
 describe('blockedDecisionHref', () => {
-  it('deep-links to the single blocking decision', () => {
+  it('deep-links to the document the single blocking decision belongs to', () => {
     const items = [
       item({ id: '1', blocked: true, blocked_by_decision_id: DEC_A }),
       item({ id: '2', blocked: true, blocked_by_decision_id: DEC_A }),
     ];
     expect(blockedDecisionHref(items)).toEqual({
-      href: `/portal/decisions/${DEC_A}`,
+      href: `/doc/${DEC_A}`,
       isSingle: true,
     });
   });
 
-  it('falls back to the decisions list when multiple decisions block items', () => {
+  it('falls back to the Desk when multiple decisions block items', () => {
     const items = [
       item({ id: '1', blocked: true, blocked_by_decision_id: DEC_A }),
       item({ id: '2', blocked: true, blocked_by_decision_id: DEC_B }),
     ];
     expect(blockedDecisionHref(items)).toEqual({
-      href: '/portal/decisions',
+      href: '/desk',
       isSingle: false,
     });
   });
 
-  it('falls back to the list when there is no decision id at all', () => {
+  it('falls back to the Desk when there is no decision id at all', () => {
     expect(blockedDecisionHref([])).toEqual({
-      href: '/portal/decisions',
+      href: '/desk',
       isSingle: false,
     });
   });

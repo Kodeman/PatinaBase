@@ -11,7 +11,7 @@ export function DesignerIntelligence() {
   const router = useRouter();
   return (
     <SharedDesignerIntelligence
-      onTeach={(productId) => router.push(`/portal/teaching/product/${productId}`)}
+      onTeach={(productId) => router.push(`/library/${productId}`)}
     />
   );
 }

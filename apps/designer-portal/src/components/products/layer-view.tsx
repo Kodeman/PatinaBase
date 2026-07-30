@@ -127,7 +127,7 @@ export function LayerView({
         <Grid
           items={items}
           layer={layer}
-          onOpen={(id) => router.push(`/portal/catalog/${id}`)}
+          onOpen={(id) => router.push(`/library/${id}`)}
           onPromote={
             layer === 'personal' ? (id) => setPromoteTargetId(id) : undefined
           }
@@ -148,7 +148,7 @@ export function LayerView({
         <PromotionToast
           count={toastState.count}
           layer="studio"
-          viewUrl="/portal/library/studio"
+          viewUrl="/library"
           onDismiss={() => setToastState(null)}
         />
       )}

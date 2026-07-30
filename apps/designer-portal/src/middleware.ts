@@ -49,7 +49,7 @@ export async function middleware(req: NextRequest) {
   // collaborator) — the page's useAcceptInvitation hook calls the
   // accept_workspace_invitation RPC, which does its own token/identity
   // validation. Without this exemption the authenticated-user branches below
-  // treat it like any other /auth page and bounce the user to /portal or
+  // treat it like any other /auth page and bounce the user to /desk or
   // /unauthorized before the RPC ever runs.
   const isAcceptInvitePage = req.nextUrl.pathname.startsWith('/auth/accept-invite');
 
@@ -112,7 +112,7 @@ export async function middleware(req: NextRequest) {
 
   // Authenticated user on the public landing page: send them into the app.
   // Mirror the auth-page role gate so a user without a designer/admin role
-  // doesn't bounce `/` -> `/portal` -> `/unauthorized` (one redirect, not two).
+  // doesn't bounce `/` -> `/desk` -> `/unauthorized` (one redirect, not two).
   if (isAuthenticated && isPublicPage) {
     if (!(await userHasDesignerPortalRole(user!.id))) {
       return redirectWithCookies(new URL('/unauthorized', baseUrl));

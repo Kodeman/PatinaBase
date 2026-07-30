@@ -23,9 +23,12 @@ function track(event: string, properties?: Record<string, unknown>): void {
 
 export const procurementEvents = {
   /**
-   * Fired on every navigation into a /portal/procurement/* sub-route.
-   * `sub_view` is the first path segment after /portal/procurement (by-vendor,
-   * by-status, calendar, receiving). `conflicts_shown` is calendar-only.
+   * DORMANT since the R21 dissolve — the /portal/procurement/* sub-routes it
+   * measured are gone (the Orders book is a sheet over the Desk, and sheet opens
+   * are instrumented by their own events). Kept so the historical
+   * `procurement_zone_visited` series in PostHog keeps a definition; no caller.
+   * `sub_view` was the first segment after /portal/procurement (by-vendor,
+   * by-status, calendar, receiving); `conflicts_shown` was calendar-only.
    */
   zoneVisited: (properties: { sub_view?: string; conflicts_shown?: number }) =>
     track('procurement_zone_visited', properties),
