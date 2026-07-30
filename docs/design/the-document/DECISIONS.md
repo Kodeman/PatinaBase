@@ -6639,3 +6639,126 @@ Follow-up sweep against I107’s grammar, executed off the audit in
   to fix on sight. Needs a design ruling before it’s touched either way.
 
 *Entries add: I108 · last id = I108*
+
+### I109 — The R21 dissolve executed (2026-07-29)
+
+The zone tree is gone. `app/(portal)/` — 112 route files, from the Today dashboard
+to the last collections editor — is deleted, and with it DocumentGate, the
+`the-document-pilot` flag it read, and ZoneFlightTelemetry (the instrument built to
+measure straggler traffic into the old zones, whose only mount was the portal
+layout). Middleware, the three auth pages and the public landing "Enter" link now
+land on `/desk`. ToastProvider, which had only ever been mounted in the portal
+layout — so every `toast()` from a /desk or /doc surface had been silently
+no-oping — is mounted in the (document) layout.
+
+**The permanent redirect table** (`next.config.js`, 123 entries, all 308). Every
+one of the 104 concrete routes that existed answers somewhere true, first-match
+wins, catchall `/portal/:path*` → `/desk` last. The 22 pre-existing bare-path
+entries (`/projects/:path*`, `/settings`, `/catalog/:path*` …) were rewritten to
+name their final destination instead of hopping through `/portal` — no chains.
+Three shapes of destination:
+
+- **A room with a real route.** `/portal/projects/:id` → `/doc/:id` (and every
+  sub-route — time, complete, ffe, financials, decisions, phases — onto the same
+  document, because a document has no deeper URL). `/portal/proposals/:id/scope` →
+  `/drafting/:id`. `/portal/clients/:id` → `/people?person=:id&role=client`,
+  makers likewise. `/portal/catalog/:id` and `/portal/teaching/product/:id` →
+  `/library/:id`. `/portal/help/:path*` → `/help/:path*`, segment for segment.
+- **A desk doorway.** The money/time/post/account zones did not move to new
+  routes — they became sheets over the Desk, and a sheet has no address. So the
+  address is a param: `/desk?book=orders|accounts|hours|post[&page=…][&vendorId=]
+  [&projectId=][&invoiceId=]` and `/desk?account=profile|notifications|security|
+  devices|studio`. `desk-doorway.tsx` dispatches the SAME CustomEvents ⌘K already
+  uses (`document:open-ledger`, `document:open-post`, `document:open-account`) —
+  no second opening mechanism exists, so a cold URL and a keystroke can never
+  drift — then erases only the keys it consumed, so a param riding along (the PO
+  checkout return's `po=`) survives. `/portal/billing/ar` →
+  `?book=accounts&page=receivables`; `/portal/billing/invoices/:id` →
+  `?book=accounts&page=ledger&invoiceId=:id`; `/portal/time` → `?book=hours`;
+  `/portal/inbox` → `?book=post`; `/portal/settings/security` →
+  `?account=security`.
+- **Plain `/desk`**, for the zones that dissolved into the Desk's own folders and
+  chips (pipeline, leads, projects and proposals lists, insights) or into a ⌘K
+  verb (`/portal/projects/new`, `/portal/proposals/new`).
+
+**Rehoused surfaces** — the four things that would have been deleted rather than
+dissolved:
+
+- **The Room File** → `/room/:scanId/file`, a leaf beside `/room/:scanId`. It was
+  never project-keyed (`room_files` is `UNIQUE(scan_id, version)`); the old
+  `/portal/projects/:id/room-file/:scanId` shape was an accident of where it was
+  built, and the desk-native Room View was already linking into it. ⚠ ROOM id ≠
+  SCAN id: `/portal/rooms/:id` speaks `rooms`, `/room/:id` speaks `room_scans`, so
+  the redirect lands on the `/rooms` roster — a 1:1 map would have 404'd every
+  bookmark silently.
+- **Taste judgments** → `/library/judgments`, a Room off the Library. Absent from
+  all 235 matrix rows, yet the Library already *counts* them: library-foot's
+  "Pairs weighed" and your-eye's "Learned from N pairs weighed" would have become
+  permanently unfillable.
+- **Your Eye** → `/people?view=your-eye`, the seventh People rail view. The
+  component already lived on the document side; its only mount in the whole repo
+  was the dying `/portal/teaching/your-eye` page.
+- **Preferences** (R91) → `/preferences` is the real editor again, not a shim
+  forwarding into `/portal/preferences`. It carries the unauthenticated
+  unsubscribe-token apply flow and is printed in email footers, so it must never
+  be a doorway and must never redirect. The `?token=` rides through the permanent
+  hop untouched.
+
+**Resolver leg 3.** `use-document-state` gains a third miss-path leg after R6
+(activated proposal → `/doc/:projectId`) and F1 (accepted lead →
+`/doc/:designerClientId`): `client_decisions.id` → `project_id` →
+`/doc/:projectId`. That is what makes `/portal/decisions/:id` → `/doc/:id` honest,
+and it is what blocked-FF&E notices now link through.
+
+**People params.** `?view=<directory|threads|nurture|reviews|portfolio|outreach|
+your-eye>` is new; `?person=`, `?role=`, `?thread=`, `?add=` stay; a BARE `?role=`
+now filters the Directory (it had been read only inside the `if (person)` branch,
+so `/portal/vendors` → `?role=maker` would have done nothing).
+
+**Email and notification targets** now name the new addresses: "Email
+preferences" → `{base}/desk?account=notifications`; public unsubscribe →
+`{base}/preferences`; designer invoice links →
+`/desk?book=accounts&page=ledger&invoiceId={id}`; A/R →
+`/desk?book=accounts&page=receivables`; PO checkout return →
+`/desk?book=orders&po={id}`; proposal-signed → `/doc/{proposalId}`; a message
+thread → `/people?thread={threadId}`.
+
+**Accepted losses.** These are capabilities the dissolve gives up, not bugs, and a
+redirect to the nearest surface is a soft landing rather than parity:
+
+- **DEC-22 decision analytics** — the 256-line live page had zero document-side
+  consumers of `useDecisionMetrics` / `useDecisionAnalyticsByType`. → `/desk`.
+- **LIB-04…08 categories and collections** — no taxonomy-browse or collections
+  surface exists anywhere under the document tree; category survives only as a
+  Piece Room facet. Collection membership management dies outright. → `/library`.
+- **BIL-11 per-project time** — the Hours book is studio-wide and this-week.
+  Per-project entry review and per-project unbilled balance die.
+- **The claim-next teaching queue** — `useClaimNextProduct` ("serve me the next
+  piece") has no document equivalent for either quick-tags or deep analysis; the
+  Library requires self-selection.
+- **PRC-18 bulk "Order all"** — no order-all handler exists on the document side;
+  the Orders ledger's batch selection is batch-ETA only.
+- **Message scope tabs** — `?scope=direct|project|vendor_brief|archived` has no
+  document equivalent; the Threads view is one list.
+- **`/library` search `?q=`** — search is the LibrarianBar plus FieldSearch mounted
+  on the Room; a query in an old URL cannot be carried.
+- **Help-key granularity** — the legacy `/portal`-prefixed surface-key derivation
+  is retired with its only consumer (the utility bar). Document keys resolve per
+  ROOM, not per old zone, so any Sanity copy authored against a
+  `designer-portal/<zone>` key now matches only by ancestor prefix.
+
+**Deferrals, named so they can be picked up:**
+
+- **R3 app-wide shadow ban** — still scoped to the document tree, not enforced
+  app-wide.
+- **e2e coverage debt** — 22 legacy specs were retired with the surfaces they
+  drove (billing/invoices, clients/invite-flow, six decisions, global-header,
+  client-thread, five procurement, three projects, four proposals). Each was the
+  only regression coverage for its business flow. `dissolve-redirects.spec.ts`
+  covers the table, not the flows; the /desk + /doc equivalents are owed.
+- **Sheet deep-link context for POs and invoices** — the doorway carries
+  `book`/`page`/`vendorId`/`projectId`/`invoiceId` but not a line selection, so
+  the order-assistant's coverage warning opens the Accounts book scoped to the
+  project rather than the composer pre-loaded with the uncovered FF&E lines.
+
+*Entries add: I109 · last id = I109*
