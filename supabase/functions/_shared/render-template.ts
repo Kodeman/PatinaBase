@@ -43,13 +43,12 @@ export function brandDefaults(): Record<string, string> {
   const portal =
     Deno.env.get("DESIGNER_PORTAL_URL")?.replace(/\/$/, "") ??
     "https://app.patina.cloud";
-  const prefs = `${portal}/portal/settings/notifications`;
   return {
     app_url: portal,
     dashboard_url: portal,
     help_url: `${portal}/help`,
-    prefs_url: prefs,
-    unsub_url: prefs,
+    prefs_url: `${portal}/desk?account=notifications`,
+    unsub_url: `${portal}/preferences`,
     business_address:
       Deno.env.get("EMAIL_BUSINESS_ADDRESS") ??
       "A workshop for interior designers and the makers they trust.",
