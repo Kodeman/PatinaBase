@@ -72,4 +72,3 @@ item below is checked. Schema is additive; rollback is the feature flag.
 - [ ] Physical-device Patina Field pass uses an explicit UDID.
 - [ ] Server-side Product, field capture, FF&E, room, and spec rows confirmed.
 - [ ] Production was not mutated during implementation or acceptance preparation.
-
