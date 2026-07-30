@@ -45,14 +45,69 @@ final class RoomCaptureSessionDriver {
         setupCaptureView()
     }
 
+    /// The ARSession Patina owns and hands to RoomPlan.
+    ///
+    /// Created here but deliberately NOT run until `run()`, so the camera still
+    /// starts exactly when it did before — at scan start, not at driver init.
+    ///
+    /// Why we own it at all: `RoomCaptureSession.Configuration` has exactly one
+    /// member, `isCoachingEnabled` (verified against the iOS 26.5 SDK
+    /// interface). It exposes no scene-reconstruction and no depth knob, so
+    /// `sceneReconstruction = .mesh` is unreachable through RoomPlan. Owning
+    /// the ARSession is the only way to ask for scene mesh, and
+    /// `RoomCaptureView(frame:arSession:)` is Apple's supported seam for it.
+    ///
+    /// Device readout before this change (iPhone 17 Pro Max, 3623-frame scan):
+    /// `sceneDepth=3605 smoothedSceneDepth=3605 meshAnchors=0` — RoomPlan's
+    /// default session was already vending depth, but never a mesh anchor, so
+    /// `SceneMeshExporter` had nothing to export and the mesh-anchor-fed
+    /// coaching hints were dark.
+    private let arSession = ARSession()
+
     // PT-6-7: The container (RoomCaptureViewRepresentable) sizes this view, so
     // creating it at `.zero` avoids depending on `UIScreen.main.bounds` (which
     // is incorrect under multi-scene / unknown-frame-size conditions).
     private func setupCaptureView() {
-        // Create view first - it owns the session
-        let view = RoomCaptureView(frame: .zero)
+        // Create view first - it owns the session. Hand it OUR ARSession so the
+        // configuration in `makeConfiguration()` is the one that runs.
+        let view = RoomCaptureView(frame: .zero, arSession: arSession)
         view.captureSession.delegate = sessionDelegate
         captureView = view
+    }
+
+    /// The ARKit configuration Patina runs the shared session with.
+    ///
+    /// Mirrors Field's `SharedARCaptureRig.makeConfiguration()`. Every capability
+    /// is behind its own support check so a non-LiDAR device degrades instead of
+    /// throwing.
+    ///
+    /// ⚠ The frame semantics are NOT optional extras. Before this change depth
+    /// arrived for free from RoomPlan's default configuration; the moment we
+    /// supply our own, depth becomes our responsibility. Dropping these lines
+    /// would trade a dead mesh lane for a dead depth lane.
+    ///
+    /// `worldAlignment = .gravity` is stated explicitly but is also
+    /// `ARWorldTrackingConfiguration`'s default — it is not a change of
+    /// coordinate convention, and stored `camera_transform` values keep their
+    /// existing meaning.
+    static func makeConfiguration() -> ARWorldTrackingConfiguration {
+        let config = ARWorldTrackingConfiguration()
+        config.worldAlignment = .gravity
+        config.planeDetection = [.horizontal, .vertical]
+
+        if ARWorldTrackingConfiguration.supportsSceneReconstruction(.mesh) {
+            config.sceneReconstruction = .mesh
+        }
+
+        var semantics: ARConfiguration.FrameSemantics = []
+        if ARWorldTrackingConfiguration.supportsFrameSemantics(.smoothedSceneDepth) {
+            semantics.insert(.smoothedSceneDepth)
+        }
+        if ARWorldTrackingConfiguration.supportsFrameSemantics(.sceneDepth) {
+            semantics.insert(.sceneDepth)
+        }
+        config.frameSemantics = semantics
+        return config
     }
 
     /// Return the RoomCaptureView for embedding in SwiftUI, recreating it if it
@@ -70,19 +125,41 @@ final class RoomCaptureSessionDriver {
     /// ARSession delegate so frame capture can begin.
     /// - Returns: `true` if the session was started, `false` if the capture
     ///   view was not available.
+    /// The ordering below is load-bearing and is Field's, learned the hard way
+    /// (`SharedARCaptureRig`):
+    ///
+    ///   1. Run OUR ARSession with the mesh/depth configuration FIRST, so the
+    ///      settings are live before RoomPlan attaches to the same session.
+    ///      Apple's contract is that RoomPlan preserves an existing session's
+    ///      settings; Field verified that on device on this same iPhone model.
+    ///   2. THEN let RoomPlan start.
+    ///   3. Claim the frame delegate LAST — after RoomPlan's `run(...)` — so
+    ///      RoomPlan cannot overwrite it. A wrong order here does not error; it
+    ///      silently kills every frame-fed lane in the app.
+    ///
+    /// Step 3 was already correct before this change; steps 1 and 2 are new.
     @discardableResult
     func run() -> Bool {
         guard let view = captureView else { return false }
-        // Configure and start the session from the view
+        // 1. Our configuration goes live first.
+        arSession.run(Self.makeConfiguration())
+        // 2. RoomPlan starts on the session we just configured.
         let config = RoomCaptureSession.Configuration()
         view.captureSession.run(configuration: config)
-        // Set up AR session delegate for frame capture
+        // 3. Claim the ARSession delegate last so RoomPlan cannot take it.
         view.captureSession.arSession.delegate = sessionDelegate
         return true
     }
 
     /// Stop the running RoomCaptureSession (no-op if the view is nil).
+    ///
+    /// The explicit `pause()` is new and necessary: RoomPlan pauses a session it
+    /// created, but this one is ours, so stopping the capture session alone
+    /// would leave the camera running after the scan ends. Field pauses for the
+    /// same reason. Pausing after `stop()` does not disturb RoomPlan's
+    /// post-process, which runs off the captured room, not off live frames.
     func stop() {
         captureView?.captureSession.stop()
+        arSession.pause()
     }
 }
