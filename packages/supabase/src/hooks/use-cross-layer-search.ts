@@ -74,10 +74,10 @@ const EMPTY_RESULT: CrossLayerSearchResult = {
  * own personal items, their studio items, and the public catalog;
  * another studio's library is invisible.
  *
- * Used by the `/portal/library/search` page. The header search input in
- * the ProductsZone layout submits to that route rather than rendering an
- * inline panel — keeps the in-tab focus simple and lets the route own
- * pagination / shareable URLs.
+ * Used by the Library's search surface (`/library/search`). The header
+ * search input submits to that route rather than rendering an inline panel
+ * — keeps the in-tab focus simple and lets the route own pagination /
+ * shareable URLs.
  */
 export function useCrossLayerSearch(
   options: UseCrossLayerSearchOptions,
