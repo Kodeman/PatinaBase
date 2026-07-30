@@ -53,11 +53,13 @@ public enum CaptureRouteSafetyPolicy {
         projectID: String?,
         projectName: String?,
         room: String?,
-        shelf: String?
+        shelf: String?,
+        projectRoomID: String? = nil
     ) -> CaptureRoutingMemory {
         var updated = routing
         updated.projectID = projectID
         updated.projectName = projectName
+        updated.projectRoomID = projectRoomID
         updated.room = room
         updated.shelf = shelf
         return updated

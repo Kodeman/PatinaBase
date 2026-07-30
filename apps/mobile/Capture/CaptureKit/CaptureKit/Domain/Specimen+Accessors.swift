@@ -26,6 +26,26 @@ public extension Specimen {
         let lifecycle = CaptureLifecycle.State(rawValue: lifecycleRaw)
         if status == .committed, let receipt = remoteId?.trimmingCharacters(
             in: .whitespacesAndNewlines), !receipt.isEmpty {
+            switch placementState {
+            case .pending:
+                return CaptureTransferState(
+                    phase: .queued, progress: 100,
+                    retryCount: placementRetryCount ?? 0,
+                    receiptID: receipt)
+            case .placing:
+                return CaptureTransferState(
+                    phase: .awaitingConfirmation, progress: 100,
+                    retryCount: placementRetryCount ?? 0,
+                    receiptID: receipt)
+            case .failed:
+                return CaptureTransferState(
+                    phase: .retryableFailure, progress: 100,
+                    errorMessage: placementLastError,
+                    retryCount: placementRetryCount ?? 0,
+                    receiptID: receipt)
+            case .placed, nil:
+                break
+            }
             return CaptureTransferState(
                 phase: .complete, progress: 100, retryCount: retryCount,
                 receiptID: receipt)
@@ -150,4 +170,85 @@ public extension Specimen {
     }
 
     func touch() { updatedAt = Date() }
+
+    // MARK: - Project placement
+
+    var placementState: ProjectPlacementState? {
+        get { placementStateRaw.flatMap(ProjectPlacementState.init(rawValue:)) }
+        set { placementStateRaw = newValue?.rawValue }
+    }
+
+    var hasConfirmedCaptureReceipt: Bool {
+        status == .committed
+            && remoteId?.trimmingCharacters(in: .whitespacesAndNewlines)
+                .isEmpty == false
+    }
+
+    var needsProjectPlacement: Bool {
+        guard placementProjectId?.trimmingCharacters(
+            in: .whitespacesAndNewlines
+        ).isEmpty == false else { return false }
+        return placementState != .placed
+    }
+
+    func configureProjectPlacement(
+        projectID: String,
+        roomID: String?,
+        slotID: String?,
+        category: String?
+    ) {
+        placementProjectId = projectID
+        placementRoomId = roomID
+        placementSlotId = slotID
+        placementCategory = category
+        placementState = .pending
+        placementFFEItemId = nil
+        placementSpecId = nil
+        placementLastError = nil
+        placementRetryCount = 0
+        touch()
+    }
+
+    func clearProjectPlacement() {
+        placementProjectId = nil
+        placementRoomId = nil
+        placementSlotId = nil
+        placementCategory = nil
+        placementState = nil
+        placementFFEItemId = nil
+        placementSpecId = nil
+        placementLastError = nil
+        placementRetryCount = nil
+        touch()
+    }
+
+    func markProjectPlacementPending() {
+        guard placementProjectId != nil else { return }
+        placementState = .pending
+        placementLastError = nil
+        touch()
+    }
+
+    func markProjectPlacementStarted() {
+        guard placementProjectId != nil else { return }
+        placementState = .placing
+        placementLastError = nil
+        touch()
+    }
+
+    func markProjectPlacementFailed(_ message: String) {
+        guard placementProjectId != nil else { return }
+        placementState = .failed
+        placementLastError = message
+        placementRetryCount = (placementRetryCount ?? 0) + 1
+        touch()
+    }
+
+    func applyProjectPlacementReceipt(_ receipt: ProjectPlacementReceipt) {
+        placementState = .placed
+        placementFFEItemId = receipt.ffeItemID.uuidString
+        placementSpecId = receipt.specID.uuidString
+        placementLastError = nil
+        touch()
+    }
 }

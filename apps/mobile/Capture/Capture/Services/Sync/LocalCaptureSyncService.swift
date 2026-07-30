@@ -24,6 +24,7 @@ enum LocalSyncError: LocalizedError {
     case destinationRequired
     case missingRemoteReceipt
     case remoteRejected(String)
+    case invalidPlacementTarget
 
     var errorDescription: String? {
         switch self {
@@ -39,6 +40,8 @@ enum LocalSyncError: LocalizedError {
             return "The server did not confirm this capture."
         case .remoteRejected(let message):
             return message
+        case .invalidPlacementTarget:
+            return "The saved project placement is no longer valid. Choose the project, room, and slot again."
         }
     }
 
@@ -66,6 +69,9 @@ final class LocalCaptureSyncService: CaptureSyncService {
     private let session: (any SessionProviding)?
     /// When present, commits do real upload + RPC; nil leaves records queued.
     private let remote: SupabaseCaptureGateway?
+    /// The remote cohort flag gates both entry UI and placement side effects.
+    /// Nil is fail-closed for tests/legacy composition.
+    private let specBookPilot: (any SpecBookPilotGate)?
 
     private let stream: AsyncStream<SyncSnapshot>
     private let continuation: AsyncStream<SyncSnapshot>.Continuation
@@ -78,12 +84,14 @@ final class LocalCaptureSyncService: CaptureSyncService {
          analytics: (any CaptureAnalytics)? = nil,
          liveActivity: CaptureLiveActivityController? = nil,
          session: (any SessionProviding)? = nil,
-         remote: SupabaseCaptureGateway? = nil) {
+         remote: SupabaseCaptureGateway? = nil,
+         specBookPilot: (any SpecBookPilotGate)? = nil) {
         self.store = store
         self.analytics = analytics
         self.liveActivity = liveActivity
         self.session = session
         self.remote = remote
+        self.specBookPilot = specBookPilot
         var cont: AsyncStream<SyncSnapshot>.Continuation!
         self.stream = AsyncStream(bufferingPolicy: .bufferingNewest(8)) { cont = $0 }
         self.continuation = cont
@@ -155,33 +163,13 @@ final class LocalCaptureSyncService: CaptureSyncService {
             for specimen in items {
                 guard activeOwner == owner else { break }
                 attempted.insert(specimen.id)
-                specimen.applyTransferState(CaptureTransferState(
-                    phase: .uploading, retryCount: specimen.retryCount))
-                try? store.save()
+                beginAttempt(specimen)
                 emit(
                     queued: max(remaining - 1, 0),
                     uploading: 1,
                     lastTitle: specimen.title
                 )
-
-                do {
-                    _ = try await commit(specimen.id, owner: owner)
-                    analytics?.event("sync.commit.ok", ["id": specimen.id.uuidString])
-                } catch let error as LocalSyncError where error.isDeferrable {
-                    specimen.applyTransferState(CaptureTransferState(
-                        phase: .queued, retryCount: specimen.retryCount))
-                    try? store.save()
-                    analytics?.event("sync.commit.deferred", ["id": specimen.id.uuidString])
-                } catch {
-                    let rejected = shouldReject(error)
-                    specimen.applyTransferState(CaptureTransferState(
-                        phase: rejected ? .rejected : .retryableFailure,
-                        progress: specimen.uploadProgress,
-                        errorMessage: error.localizedDescription,
-                        retryCount: specimen.retryCount + (rejected ? 0 : 1)))
-                    try? store.save()
-                    analytics?.event("sync.commit.fail", ["id": specimen.id.uuidString])
-                }
+                await runAttempt(specimen, owner: owner)
 
                 remaining -= 1
                 if activeOwner == owner {
@@ -202,6 +190,58 @@ final class LocalCaptureSyncService: CaptureSyncService {
         liveActivity?.end(.init(queued: 0, uploading: 0, failed: failed))
         analytics?.event("sync.drain.done", ["failed": "\(failed)"])
         emitFromOutbox()
+    }
+
+    private func beginAttempt(_ specimen: Specimen) {
+        if specimen.hasConfirmedCaptureReceipt
+            && specimen.needsProjectPlacement {
+            specimen.markProjectPlacementStarted()
+        } else {
+            specimen.applyTransferState(CaptureTransferState(
+                phase: .uploading, retryCount: specimen.retryCount))
+        }
+        try? store.save()
+    }
+
+    private func runAttempt(
+        _ specimen: Specimen,
+        owner: CaptureOwnerIdentity
+    ) async {
+        do {
+            _ = try await commit(specimen.id, owner: owner)
+            analytics?.event("sync.commit.ok", ["id": specimen.id.uuidString])
+        } catch let error as LocalSyncError where error.isDeferrable {
+            if specimen.hasConfirmedCaptureReceipt
+                && specimen.needsProjectPlacement {
+                specimen.markProjectPlacementPending()
+            } else {
+                specimen.applyTransferState(CaptureTransferState(
+                    phase: .queued, retryCount: specimen.retryCount))
+            }
+            try? store.save()
+            analytics?.event("sync.commit.deferred", ["id": specimen.id.uuidString])
+        } catch {
+            recordFailure(error, on: specimen)
+            analytics?.event("sync.commit.fail", ["id": specimen.id.uuidString])
+        }
+    }
+
+    private func recordFailure(_ error: Error, on specimen: Specimen) {
+        let placementRetry = specimen.hasConfirmedCaptureReceipt
+            && specimen.needsProjectPlacement
+        if placementRetry {
+            if specimen.placementState != .failed {
+                specimen.markProjectPlacementFailed(error.localizedDescription)
+            }
+        } else {
+            let rejected = shouldReject(error)
+            specimen.applyTransferState(CaptureTransferState(
+                phase: rejected ? .rejected : .retryableFailure,
+                progress: specimen.uploadProgress,
+                errorMessage: error.localizedDescription,
+                retryCount: specimen.retryCount + (rejected ? 0 : 1)))
+        }
+        try? store.save()
     }
 
     private func shouldReject(_ error: Error) -> Bool {
@@ -239,11 +279,37 @@ final class LocalCaptureSyncService: CaptureSyncService {
             throw LocalSyncError.notAuthenticated
         }
 
+        let receipt: CommitReceipt
+        if let confirmed = confirmedReceipt(for: specimen) {
+            receipt = confirmed
+        } else {
+            receipt = try await commitCapture(
+                specimen,
+                owner: owner,
+                remote: remote,
+                userID: uid
+            )
+        }
+        if let productID = receipt.productId {
+            try await performProjectPlacementIfNeeded(
+                for: specimen,
+                productID: productID,
+                owner: owner)
+        }
+        return receipt
+    }
+
+    private func commitCapture(
+        _ specimen: Specimen,
+        owner: CaptureOwnerIdentity,
+        remote: SupabaseCaptureGateway,
+        userID: UUID
+    ) async throws -> CommitReceipt {
         let uploadedVoicePath = try await uploadMedia(
             for: specimen,
             owner: owner,
             remote: remote,
-            userID: uid
+            userID: userID
         )
         var payload = FieldCapturePayload(
             specimen: specimen,
@@ -283,6 +349,18 @@ final class LocalCaptureSyncService: CaptureSyncService {
         )
         try requireActiveOwner(owner)
         return try applyCommitResult(result, to: specimen)
+    }
+
+    private func confirmedReceipt(for specimen: Specimen) -> CommitReceipt? {
+        guard specimen.hasConfirmedCaptureReceipt,
+              let remoteID = specimen.remoteId,
+              let productID = specimen.committedProductId else { return nil }
+        return CommitReceipt(
+            remoteId: remoteID,
+            productId: productID,
+            destination: specimen.destination,
+            created: false
+        )
     }
 
     private func uploadMedia(
@@ -410,7 +488,14 @@ final class LocalCaptureSyncService: CaptureSyncService {
             guard activeOwner == owner else {
                 throw LocalSyncError.notAuthenticated
             }
-            _ = try applyCommitResult(result, to: specimen)
+            let receipt = try applyCommitResult(result, to: specimen)
+            if let productID = receipt.productId {
+                try await performProjectPlacementIfNeeded(
+                    for: specimen,
+                    productID: productID,
+                    owner: owner
+                )
+            }
         } else if previousDestination != .inbox {
             throw LocalSyncError.remoteRejected(
                 "A confirmed library capture can’t be moved to the inbox from this device.")
@@ -421,6 +506,85 @@ final class LocalCaptureSyncService: CaptureSyncService {
             "to": destination.rawValue
         ])
         emitFromOutbox()
+    }
+
+    // ── project placement ───────────────────────────────────────────────────
+    /// Runs only after a durable capture receipt + Product exist. Any failure
+    /// updates the placement portion of the same persisted outbox record while
+    /// leaving those durable capture fields untouched.
+    private func performProjectPlacementIfNeeded(
+        for specimen: Specimen,
+        productID: String,
+        owner: CaptureOwnerIdentity
+    ) async throws {
+        guard specimen.needsProjectPlacement else { return }
+        guard await specBookPilot?.isEnabled() == true else {
+            specimen.markProjectPlacementPending()
+            try? store.save()
+            return
+        }
+        do {
+            guard let remote else { throw LocalSyncError.remoteUnavailable }
+            try requireActiveOwner(owner)
+            let request = try placementRequest(
+                for: specimen,
+                productID: productID)
+            specimen.markProjectPlacementStarted()
+            try? store.save()
+            emitTransferState(lastTitle: specimen.title)
+            let receipt = try await ProjectPlacementOrchestrator(
+                gateway: remote
+            ).place(request)
+            try requireActiveOwner(owner)
+            specimen.applyProjectPlacementReceipt(receipt)
+            try? store.save()
+            analytics?.event("spec_book.capture_placement.ok", [
+                "project_id": request.projectID.uuidString,
+                "placement": receipt.placement
+            ])
+        } catch let error as LocalSyncError where error.isDeferrable {
+            specimen.markProjectPlacementPending()
+            try? store.save()
+            throw error
+        } catch {
+            specimen.markProjectPlacementFailed(error.localizedDescription)
+            try? store.save()
+            analytics?.event("spec_book.capture_placement.fail", [
+                "project_id": specimen.placementProjectId ?? "invalid"
+            ])
+            throw error
+        }
+    }
+
+    private func placementRequest(
+        for specimen: Specimen,
+        productID: String
+    ) throws -> ProjectPlacementRequest {
+        guard let projectRaw = specimen.placementProjectId,
+              let projectID = UUID(uuidString: projectRaw),
+              let productUUID = UUID(uuidString: productID),
+              let roomID = validOptionalUUID(specimen.placementRoomId),
+              let slotID = validOptionalUUID(specimen.placementSlotId) else {
+            throw LocalSyncError.invalidPlacementTarget
+        }
+        return ProjectPlacementRequest(
+            projectID: projectID,
+            productID: productUUID,
+            roomID: roomID,
+            slotID: slotID,
+            category: specimen.placementCategory,
+            source: [
+                "client": "field-ios",
+                "captureId": specimen.clientToken.uuidString.lowercased(),
+                "fieldCaptureId": specimen.remoteId ?? ""
+            ])
+    }
+
+    /// Outer optional distinguishes "absent" (valid nil) from malformed.
+    private func validOptionalUUID(_ raw: String?) -> UUID?? {
+        guard let raw else { return .some(nil) }
+        guard let value = UUID(uuidString: raw) else { return nil }
+        return .some(value)
     }
 
     // ── result mapping ─────────────────────────────────────────────────────────

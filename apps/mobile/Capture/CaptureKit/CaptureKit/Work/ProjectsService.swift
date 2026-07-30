@@ -77,12 +77,28 @@ public struct FieldFFEItem: Identifiable, Sendable, Codable {
     public let name: String
     public let status: String
     public let roomName: String?
+    public let projectRoomID: String?
+    public let productID: String?
 
-    public init(id: String, name: String, status: String, roomName: String? = nil) {
+    public init(
+        id: String,
+        name: String,
+        status: String,
+        roomName: String? = nil,
+        projectRoomID: String? = nil,
+        productID: String? = nil
+    ) {
         self.id = id
         self.name = name
         self.status = status
         self.roomName = roomName
+        self.projectRoomID = projectRoomID
+        self.productID = productID
+    }
+
+    public var isEmptySlot: Bool {
+        productID?.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+            ?? true
     }
 }
 
@@ -103,17 +119,22 @@ public struct FieldProjectDetail: Sendable, Codable {
     public let phases: [FieldProjectPhase]
     public let milestones: [FieldMilestone]
     public let ffeItems: [FieldFFEItem]
+    /// Project-scoped FF&E rooms (`project_rooms`), used by spec placement.
+    public let specRooms: [FieldProjectRoom]
+    /// Client-owned physical rooms (`rooms`), used by site scanning.
     public let rooms: [FieldProjectRoom]
 
     public init(project: FieldProject,
                 phases: [FieldProjectPhase] = [],
                 milestones: [FieldMilestone] = [],
                 ffeItems: [FieldFFEItem] = [],
+                specRooms: [FieldProjectRoom] = [],
                 rooms: [FieldProjectRoom] = []) {
         self.project = project
         self.phases = phases
         self.milestones = milestones
         self.ffeItems = ffeItems
+        self.specRooms = specRooms
         self.rooms = rooms
     }
 }
