@@ -53,7 +53,10 @@ struct InstrumentScorecardEvaluatorTests {
         #expect(card.coveragePct == 100)
         #expect(card.namedGaps.isEmpty)
         #expect(card.surfaceChecklist.count == 6)
-        #expect(card.surfaceChecklist.allSatisfy(\.covered))
+        // Hoisted out of `#expect`: a `rethrows` call inside the macro expansion
+        // trips "call can throw, but it is not marked with 'try'".
+        let everyRowCovered = card.surfaceChecklist.allSatisfy(\.covered)
+        #expect(everyRowCovered)
         #expect(card.anchorCount == 3)
     }
 
@@ -154,7 +157,8 @@ struct InstrumentScorecardEvaluatorTests {
         #expect(Scorecard.Verdict.red.rawValue == "red")
         #expect(Scorecard.TrackingHealth.good.rawValue == "good")
         #expect(Scorecard.TrackingHealth.poor.rawValue == "poor")
-        #expect(try JSONDecoder().decode(Scorecard.self, from: data) == card)
+        let roundTripped = try JSONDecoder().decode(Scorecard.self, from: data)
+        #expect(roundTripped == card)
     }
 
     @Test
@@ -219,7 +223,11 @@ struct InstrumentCoverageCoachRulesTests {
     func blurProbeIsThrottled() {
         #expect(CoverageCoachRules.shouldProbeBlur(now: 0, lastProbe: nil))
         #expect(!CoverageCoachRules.shouldProbeBlur(now: 10.19, lastProbe: 10.0))
-        #expect(CoverageCoachRules.shouldProbeBlur(now: 10.2, lastProbe: 10.0))
+        #expect(CoverageCoachRules.shouldProbeBlur(now: 10.5, lastProbe: 10.0))
+        // Boundary on an exactly-representable delta — see the note in
+        // `InstrumentKeyframeGateTests.debounceIsInclusiveAndRejectsRegressedClocks`.
+        #expect(CoverageCoachRules.shouldProbeBlur(now: 0.2, lastProbe: 0.0))
+        #expect(!CoverageCoachRules.shouldProbeBlur(now: 0.19, lastProbe: 0.0))
     }
 
     @Test

@@ -33,6 +33,10 @@ import Testing
 import Foundation
 @testable import Patina
 
+/// Async-safe main-thread probe. `Thread.isMainThread` is
+/// `NS_SWIFT_UNAVAILABLE_FROM_ASYNC`, which is exactly where this check has to run.
+private func isMainThread() -> Bool { pthread_main_np() != 0 }
+
 struct InstrumentIsolationTests {
 
     /// The ported substrate's source directory, resolved from this test file's own
@@ -75,11 +79,13 @@ struct InstrumentIsolationTests {
         // Fail loudly rather than passing vacuously if the port is moved or renamed.
         let sources = try Self.instrumentSources()
         #expect(sources.count >= 13, "expected the ported substrate at \(Self.instrumentDirectory.path)")
-        #expect(sources.contains { $0.name == "KeyframeGate.swift" })
-        #expect(sources.contains { $0.name == "Sharpness.swift" })
-        #expect(sources.contains { $0.name == "DepthBinFormat.swift" })
-        #expect(sources.contains { $0.name == "AnchorRecord.swift" })
-        #expect(sources.contains { $0.name == "ScorecardEvaluator.swift" })
+        let names = Set(sources.map(\.name))
+        for expected in ["KeyframeGate.swift", "Sharpness.swift", "DepthBinFormat.swift",
+                         "AnchorRecord.swift", "AnchorGate.swift", "AnchorMeasurementParser.swift",
+                         "CaptureSurface.swift", "SurfaceCoverageTracker.swift",
+                         "CoverageScorecard.swift", "ScorecardEvaluator.swift"] {
+            #expect(names.contains(expected), "missing \(expected) from the ported substrate")
+        }
     }
 
     @Test
@@ -149,7 +155,7 @@ struct InstrumentIsolationTests {
                                         displayLabel: "East wall"),
                 observed: false, dwellSeconds: 0)
             return Outcome(
-                wasOffMainThread: !Thread.isMainThread,
+                wasOffMainThread: !isMainThread(),
                 motionTriggered: gate.motionTriggered(from: poseA, to: poseB),
                 sharpness: Sharpness.varianceOfLaplacian(luma: luma, width: 5, height: 5),
                 verdict: ScorecardEvaluator.make(coverage: [gap], sharpFrameRatio: 1.0,
@@ -187,7 +193,7 @@ struct InstrumentIsolationTests {
                 pose: [1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1],
                 frameTimestamp: 0,
                 sharpness: { 40 }) == .fire(score: 40)
-            return !Thread.isMainThread && tracker.coveragePct == 100 && fired
+            return !isMainThread() && tracker.coveragePct == 100 && fired
         }.value
         #expect(observed)
     }

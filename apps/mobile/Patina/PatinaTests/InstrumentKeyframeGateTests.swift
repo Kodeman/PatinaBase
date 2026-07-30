@@ -123,8 +123,15 @@ struct InstrumentKeyframeGateTests {
         let gate = KeyframeGate.standard
         #expect(gate.shouldEvaluate(now: 0, lastEvaluation: nil))          // first always
         #expect(!gate.shouldEvaluate(now: 10.09, lastEvaluation: 10.0))    // under 0.1 s
-        #expect(gate.shouldEvaluate(now: 10.1, lastEvaluation: 10.0))      // exactly 0.1 s
+        #expect(gate.shouldEvaluate(now: 10.5, lastEvaluation: 10.0))      // well over
         #expect(!gate.shouldEvaluate(now: 9.0, lastEvaluation: 10.0))      // monotonic only
+        // Exactly at the interval passes — asserted on an exactly-representable
+        // delta. ⚠ Field compares raw `ARFrame.timestamp`s (thousands of seconds),
+        // where `10.1 - 10.0 == 0.09999999999999964` and the boundary case can fall
+        // either way. Ported behaviour, not a port defect: one 1/60 s frame either
+        // side of a 0.1 s debounce is immaterial.
+        #expect(gate.shouldEvaluate(now: 0.1, lastEvaluation: 0.0))
+        #expect(!gate.shouldEvaluate(now: 0.09, lastEvaluation: 0.0))
     }
 
     // MARK: - Sharpness threshold
