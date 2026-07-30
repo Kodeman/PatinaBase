@@ -28,11 +28,18 @@ import {
   type SpecBookAudience,
   type SpecBookIssueType,
 } from "./render-model.ts";
-import { safeRemoteImageUrl } from "./remote-media.ts";
+import {
+  parseAllowedRemoteImageOrigins,
+  safeRemoteImageRedirectUrl,
+  safeRemoteImageUrl,
+} from "./remote-media.ts";
 
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
 const SUPABASE_ANON_KEY = Deno.env.get("SUPABASE_ANON_KEY")!;
 const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
+const ALLOWED_REMOTE_IMAGE_ORIGINS = parseAllowedRemoteImageOrigins(
+  Deno.env.get("SPEC_BOOK_IMAGE_ORIGINS"),
+);
 const IMAGE_MAX_BYTES = 8 * 1024 * 1024;
 const IMAGE_TIMEOUT_MS = 8_000;
 const STALE_RENDER_MS = 15 * 60 * 1_000;
@@ -114,7 +121,11 @@ async function imageBlobToDataUri(blob: Blob): Promise<string | null> {
 async function fetchRemoteImage(url: URL): Promise<Blob | null> {
   let next = url;
   for (let redirects = 0; redirects <= 3; redirects += 1) {
-    const safe = safeRemoteImageUrl(next.toString(), SUPABASE_URL);
+    const safe = safeRemoteImageUrl(
+      next.toString(),
+      SUPABASE_URL,
+      ALLOWED_REMOTE_IMAGE_ORIGINS,
+    );
     if (!safe) return null;
     const response = await fetch(safe, {
       signal: AbortSignal.timeout(IMAGE_TIMEOUT_MS),
@@ -123,7 +134,14 @@ async function fetchRemoteImage(url: URL): Promise<Blob | null> {
     if (response.status >= 300 && response.status < 400) {
       const location = response.headers.get("location");
       if (!location || redirects === 3) return null;
-      next = new URL(location, safe);
+      const redirect = safeRemoteImageRedirectUrl(
+        location,
+        safe,
+        SUPABASE_URL,
+        ALLOWED_REMOTE_IMAGE_ORIGINS,
+      );
+      if (!redirect) return null;
+      next = redirect;
       continue;
     }
     if (!response.ok) return null;
@@ -272,7 +290,11 @@ function repository(
             ? media.url
             : null;
         }
-        const url = safeRemoteImageUrl(media.url, SUPABASE_URL);
+        const url = safeRemoteImageUrl(
+          media.url,
+          SUPABASE_URL,
+          ALLOWED_REMOTE_IMAGE_ORIGINS,
+        );
         if (!url) return null;
         const blob = await fetchRemoteImage(url);
         return blob ? await imageBlobToDataUri(blob) : null;
