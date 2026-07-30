@@ -276,6 +276,17 @@ class StorageClient:
             refine_client_factory or self._build_refine_client
         )
 
+    @property
+    def bucket(self) -> str:
+        """The bucket every method on this client reads and writes.
+
+        Exposed because a caller that RECORDS where it published needs to be
+        able to prove the name it recorded is the name it wrote to; reading
+        ``_bucket`` from outside would make that guard depend on a private.
+        """
+
+        return self._bucket
+
     def _build_refine_client(self) -> httpx.AsyncClient:
         return httpx.AsyncClient(
             base_url=self._cfg.supabase_url,

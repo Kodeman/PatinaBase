@@ -67,6 +67,7 @@ INSTALL_SOURCE_FILES = (
     "src/patina_scan_worker/refine_colmap_command.py",
     "src/patina_scan_worker/refine_colmap_manifest.py",
     "src/patina_scan_worker/refine_colmap_toolchain.py",
+    "src/patina_scan_worker/refine_delivery.py",
     "src/patina_scan_worker/refine_evidence_builder.py",
     "src/patina_scan_worker/refine_engine.py",
     "src/patina_scan_worker/refine_lifecycle.py",
@@ -393,6 +394,7 @@ def test_candidate_smoke_imports_disabled_refine_foundations_before_activation()
         "import patina_scan_worker.refine_colmap_command; "
         "import patina_scan_worker.refine_colmap_manifest; "
         "import patina_scan_worker.refine_colmap_toolchain; "
+        "import patina_scan_worker.refine_delivery; "
         "import patina_scan_worker.refine_evidence_builder; "
         "import patina_scan_worker.refine_lifecycle; "
         "import patina_scan_worker.refine_materializer; "
@@ -1906,6 +1908,7 @@ _prepare_isolated_source_build "$SRC_DIR"
         "src/patina_scan_worker/refine_colmap_command.py",
         "src/patina_scan_worker/refine_colmap_manifest.py",
         "src/patina_scan_worker/refine_colmap_toolchain.py",
+        "src/patina_scan_worker/refine_delivery.py",
         "src/patina_scan_worker/refine_evidence_builder.py",
         "src/patina_scan_worker/refine_lifecycle.py",
         "src/patina_scan_worker/refine_materializer.py",
@@ -2225,6 +2228,7 @@ def test_source_validation_rejects_an_unreviewed_package_module(tmp_path):
         "refine_colmap_command.py",
         "refine_colmap_manifest.py",
         "refine_colmap_toolchain.py",
+        "refine_delivery.py",
         "refine_evidence_builder.py",
         "refine_engine.py",
         "refine_lifecycle.py",

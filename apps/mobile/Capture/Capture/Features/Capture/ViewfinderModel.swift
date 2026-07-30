@@ -18,6 +18,11 @@ final class ViewfinderModel {
     private let location: any LocationService
     private let analytics: any CaptureAnalytics
     private let coordinator: CaptureCoordinator
+    private let sync: any CaptureSyncService
+    private let session: any SessionProviding
+    private let companion: FieldCompanionController
+    private let sessionContext: CaptureSessionContextStore
+    private var visitID: UUID?
 
     // ── Mode + framing (C1/C2) ──
     var mode: CameraMode = .photo
@@ -48,6 +53,14 @@ final class ViewfinderModel {
     var cardSpecimen: Specimen?          // C3 card subject (nil = no card)
     var lastError: String?
 
+    var quickSaveTitle: String {
+        switch cardSpecimen?.destination {
+        case .library: return "Save to library"
+        case .inbox: return "Send to inbox"
+        default: return "Choose destination"
+        }
+    }
+
     private let lowLightThreshold = 0.18
     private var frameTask: Task<Void, Never>?
     private var burstTask: Task<Void, Never>?
@@ -61,16 +74,27 @@ final class ViewfinderModel {
         self.location = container.location
         self.analytics = container.analytics
         self.coordinator = coordinator
+        self.sync = container.sync
+        self.session = container.session
+        self.companion = container.companion
+        self.sessionContext = .shared
     }
 
     // MARK: Lifecycle
 
     func start() async {
         analytics.screen(CaptureScreenID.c1Viewfinder.rawValue)
+        visitID = currentSessionContext().visitID
         refreshSessionCount()
         mode = camera.currentMode
         isLowLight = camera.isLowLight
         await camera.start()
+        guard !Task.isCancelled else {
+            // `stop()` may have run while camera authorization was awaiting.
+            // Do not install a new frame observer after the view has disappeared.
+            camera.stop()
+            return
+        }
         if let av = camera as? AVFoundationCameraService {
             cameraAuthorization = av.authorization
         }
@@ -103,7 +127,16 @@ final class ViewfinderModel {
         venueLabel = venue.placemarkName ?? venue.room ?? "Stamped here"
     }
 
-    private func refreshSessionCount() { sessionCount = store.session().count }
+    private func refreshSessionCount() {
+        switch localListScope {
+        case .globalFixtures:
+            sessionCount = store.session(visitID: visitID).count
+        case .owner(let owner):
+            sessionCount = store.session(visitID: visitID, owner: owner).count
+        case .unavailable:
+            sessionCount = 0
+        }
+    }
 
     // MARK: Mode (tap / swipe)
 
@@ -145,7 +178,10 @@ final class ViewfinderModel {
 
     func openWork() {
         analytics.event("work.open", ["from": "viewfinder"])
-        coordinator.navigate(to: .work)
+        // Release AV/AR resources before the realm transition; onDisappear
+        // repeats stop() defensively for every other Work entry path.
+        stop()
+        coordinator.switchRealm(.work)
     }
 
     // MARK: Shutter press → single tap vs. multi-shot hold
@@ -153,6 +189,7 @@ final class ViewfinderModel {
     func pressChanged() {
         guard !pressActive, cardSpecimen == nil, !capturing else { return }
         pressActive = true
+        guard mode == .photo else { return }
         holdTriggerTask?.cancel()
         holdTriggerTask = Task { [weak self] in
             try? await Task.sleep(for: .milliseconds(350))
@@ -180,24 +217,35 @@ final class ViewfinderModel {
         defer { capturing = false }
         CaptureHaptics.impact(.light)
 
-        let draft = makeDraft()
+        guard let draft = makeDraft() else { return }
         await captureFrame(into: draft, primary: true)
-        guard !draft.photos.isEmpty else { discard(draft); return }
+        guard let currentDraft = currentSpecimen(id: draft.id) else { return }
+        guard !currentDraft.photos.isEmpty else { discard(currentDraft); return }
 
-        applySmartGuess(to: draft)
+        applySmartGuess(to: currentDraft)
         try? store.save()
         refreshSessionCount()
         analytics.event("capture", ["mode": mode.rawValue])
-        cardSpecimen = draft
+        switch SpecimenCapturePolicy.nextStep(for: mode) {
+        case .quickConfirm:
+            cardSpecimen = currentDraft
+        case .tagOCR:
+            coordinator.present(.ocr(currentDraft.id))
+        case .codeScan:
+            coordinator.present(.code(currentDraft.id))
+        case .measure:
+            coordinator.present(.measure(currentDraft.id))
+        }
     }
 
     // MARK: Multi-shot (C4) → C5 sheet on release
 
     private func beginMultiShot() async {
         guard !isHolding, cardSpecimen == nil else { return }
+        guard let draft = makeDraft() else { return }
+
         isHolding = true
         holdCount = 0
-        let draft = makeDraft()
         multiShotID = draft.id
         CaptureHaptics.impact(.medium)
         burstTask = Task { [weak self] in
@@ -214,8 +262,9 @@ final class ViewfinderModel {
         isHolding = false
         burstTask?.cancel(); burstTask = nil
         CaptureHaptics.impact(.medium)
-        guard let id = multiShotID, let draft = store.specimen(id: id) else { return }
+        guard let id = multiShotID else { return }
         multiShotID = nil
+        guard let draft = currentSpecimen(id: id) else { return }
         guard !draft.photos.isEmpty else { discard(draft); return }
 
         flagNearDuplicates(in: draft)
@@ -230,12 +279,26 @@ final class ViewfinderModel {
 
     func saveFromCard() {
         guard let specimen = cardSpecimen else { return }
-        specimen.status = .ready
-        try? store.save()
         CaptureHaptics.success()
         let id = specimen.id
         cardSpecimen = nil
-        coordinator.present(.destination(id))          // S3 route & save
+        guard specimen.destination != .undecided else {
+            specimen.status = .ready
+            try? store.save()
+            coordinator.present(.destination(id))
+            return
+        }
+        Task { @MainActor in
+            do {
+                try await sync.route(id, to: specimen.destination)
+                coordinator.present(specimen.destination == .library
+                    ? .savedTerminal(id)
+                    : .inboxTerminal(id))
+            } catch {
+                // The local record still exists; S3 exposes the recoverable choice.
+                coordinator.present(.destination(id))
+            }
+        }
     }
 
     func addDetailFromCard() {
@@ -252,17 +315,74 @@ final class ViewfinderModel {
 
     // MARK: Plumbing
 
-    private func makeDraft() -> Specimen {
-        let draft = store.newDraft()
+    private func makeDraft() -> Specimen? {
+        guard localListScope != .unavailable else {
+            reportOwnerUnavailable()
+            return nil
+        }
+
+        let context = currentSessionContext()
+        visitID = context.visitID
+        guard let draft = CaptureOwnerProjectionPolicy.newDraft(
+            store: store,
+            sessionID: context.visitID,
+            runsRealServices: AppConfiguration.runsRealServices,
+            userID: session.userID,
+            workspaceID: session.workspaceID
+        ) else {
+            reportOwnerUnavailable()
+            return nil
+        }
+
         draft.venue = venueStamp
         draft.category = .unknown
+        draft.destination = context.routing.destination
+        var venue = draft.venue ?? VenueStamp()
+        venue.projectId = context.routing.projectID
+        venue.projectName = context.routing.projectName
+        venue.room = context.routing.room
+        venue.shelf = context.routing.shelf
+        draft.venue = venue
         return draft
+    }
+
+    private func currentSpecimen(id: UUID) -> Specimen? {
+        CaptureOwnerProjectionPolicy.specimen(
+            id: id,
+            store: store,
+            runsRealServices: AppConfiguration.runsRealServices,
+            userID: session.userID,
+            workspaceID: session.workspaceID)
+    }
+
+    private func reportOwnerUnavailable() {
+        let message = "Choose a workspace before capturing."
+        lastError = message
+        companion.send(.communicate(.init(
+            title: "Choose a workspace",
+            detail: "Patina needs an active studio before it can save this capture."
+        )))
+    }
+
+    private func currentSessionContext() -> CaptureSessionContext {
+        sessionContext.current(identity: CaptureSessionIdentity(
+            userID: session.userID,
+            workspaceID: session.workspaceID))
+    }
+
+    private var localListScope: CaptureLocalListScope {
+        CaptureOwnerProjectionPolicy.resolve(
+            runsRealServices: AppConfiguration.runsRealServices,
+            userID: session.userID,
+            workspaceID: session.workspaceID)
     }
 
     private func captureFrame(into draft: Specimen, primary: Bool) async {
         do {
             if torchOn { camera.setTorch(.on) }
             let frame = try await camera.capture()
+            guard !Task.isCancelled, currentSpecimen(id: draft.id) != nil else { return }
+
             let filename = "\(UUID().uuidString).heic"
             try? store.writeMedia(frame.data, filename: filename)
             let photo = CapturePhoto(

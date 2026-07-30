@@ -99,6 +99,7 @@ struct SiteScanAnchorStep: View {
 
     @State private var anchor: SiteScanAnchorModel?
     @State private var valueText = ""
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
 
     var body: some View {
         ZStack {
@@ -117,11 +118,7 @@ struct SiteScanAnchorStep: View {
             }
             .ignoresSafeArea()
             // Chrome respects the safe area (kept out from under the notch / home bar).
-            VStack(spacing: 0) {
-                instructionBar
-                Spacer()
-                entryPanel
-            }
+            chrome
         }
         .statusBarHidden(true)
         .environment(\.colorScheme, .light)
@@ -132,6 +129,26 @@ struct SiteScanAnchorStep: View {
                 anchor = SiteScanAnchorModel(
                     capture: capture,
                     roomLargerPlanDimensionMeters: model.roomLargerPlanDimensionMeters)
+            }
+        }
+    }
+
+    @ViewBuilder private var chrome: some View {
+        if dynamicTypeSize.isAccessibilitySize {
+            VStack(spacing: 0) {
+                instructionBar
+                Spacer(minLength: 72)
+                ScrollView {
+                    entryPanel
+                }
+                .frame(maxHeight: 360)
+                .scrollIndicators(.hidden)
+            }
+        } else {
+            VStack(spacing: 0) {
+                instructionBar
+                Spacer()
+                entryPanel
             }
         }
     }
@@ -211,17 +228,18 @@ struct SiteScanAnchorStep: View {
                         .font(CaptureType.bodyEmph).foregroundStyle(CaptureColor.paper)
                 }
 
-                HStack(spacing: 10) {
-                    TextField("e.g. 12' 3 1/2\"", text: $valueText)
-                        .textFieldStyle(.roundedBorder)
-                        .font(CaptureType.body)
-                        .accessibilityLabel("Measured length")
-                    SiteScanPrimaryButton(title: "Add", systemImage: "plus") {
-                        analytics.event("siteScan.anchor.add")
-                        anchor?.addAnchor(valueText)
-                        valueText = ""
+                Group {
+                    if dynamicTypeSize.isAccessibilitySize {
+                        VStack(spacing: 10) {
+                            measurementField
+                            addAnchorButton
+                        }
+                    } else {
+                        HStack(spacing: 10) {
+                            measurementField
+                            addAnchorButton
+                        }
                     }
-                    .disabled(!(anchor?.canAdd(valueText) ?? false))
                 }
                 if anchor?.pendingCount == 2, !valueText.isEmpty,
                    AnchorMeasurementParser.parseMillimetres(valueText) == nil {
@@ -242,14 +260,33 @@ struct SiteScanAnchorStep: View {
         .background(.ultraThinMaterial)
     }
 
+    private var measurementField: some View {
+        TextField("e.g. 12' 3 1/2\"", text: $valueText)
+            .textFieldStyle(.roundedBorder)
+            .font(CaptureType.body)
+            .accessibilityLabel("Measured length")
+    }
+
+    private var addAnchorButton: some View {
+        SiteScanPrimaryButton(title: "Add", systemImage: "plus") {
+            analytics.event("siteScan.anchor.add")
+            anchor?.addAnchor(valueText)
+            valueText = ""
+        }
+        .disabled(!(anchor?.canAdd(valueText) ?? false))
+    }
+
     private var doneButton: some View {
         let unverified = anchor?.isUnverified ?? true
         return SiteScanPrimaryButton(
-            title: unverified ? "Finish — mark UNVERIFIED" : "Finish",
+            title: model.isFinishingScan
+                ? "Building scan…"
+                : (unverified ? "Finish — mark UNVERIFIED" : "Finish"),
             systemImage: unverified ? "exclamationmark.triangle" : "checkmark"
         ) {
             analytics.event("siteScan.anchor.done")
             onDone()
         }
+        .disabled(model.isFinishingScan)
     }
 }

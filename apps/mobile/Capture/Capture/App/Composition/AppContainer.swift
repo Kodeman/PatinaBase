@@ -32,6 +32,10 @@ public final class AppContainer {
     public let session: any SessionProviding
     public let location: any LocationService
     public let analytics: any CaptureAnalytics
+    public let companion = FieldCompanionController(
+        initialPresentation: .hidden(reason: .cameraActive),
+        defaultHint: "Next steps"
+    )
 
     // ── Phase 2 designer/pro seams (frozen; wave agents build the screens) ──
     public let projects: any ProjectsService

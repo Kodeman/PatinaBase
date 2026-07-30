@@ -37,7 +37,7 @@ struct DailyGreetingHeader: View {
                     .textCase(.uppercase)
                     .foregroundStyle(PatinaColors.Text.muted)
                 HStack(alignment: .firstTextBaseline, spacing: 6) {
-                    Text("Your Daily Room")
+                    Text("Today")
                         .font(PatinaTypography.h4)
                         .foregroundStyle(PatinaColors.Text.primary)
                         .lineSpacing(0)
@@ -46,7 +46,7 @@ struct DailyGreetingHeader: View {
                     // of room-aware product recommendations refreshed daily.
                     HelpInfoIcon(
                         surfaceKey: SurfaceKeys.IOSApp.Home.dailyGreeting,
-                        fallback: "Your Daily Room is a fresh, room-aware feed of one editorial story and curated product picks — updated every day.",
+                        fallback: "Today keeps Patina focused: one useful next move, one editorial story, and one active room.",
                         size: 13
                     )
                 }

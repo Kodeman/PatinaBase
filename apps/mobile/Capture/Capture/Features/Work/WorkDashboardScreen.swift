@@ -1,15 +1,8 @@
 //  WorkDashboardScreen.swift
-//  Capture · Wave W (Work dashboard)
+//  Capture · Option B Work realm
 //
-//  W1 — the designer's field HQ (route `.work`, id `w1Work`). Renders
-//  WorkDashboardModel's four independently-loaded sections (Projects, Leads,
-//  Decisions, Messages) plus two on-site jump-offs (Receive delivery, Site
-//  scan). One section failing never blanks the others — each keeps its own
-//  loading/loaded/empty/error state with its own inline retry. Content mirrors
-//  the reference DesignerHomeView/DesignerHomeViewModel (active projects,
-//  open leads, pending decisions, unread threads); chrome is field-instrument
-//  only (CaptureColor/CaptureType), following FieldPlaceholderScreen's chrome
-//  and SettingsScreen/SyncStatusScreen's section-card idiom.
+//  Attention first, browsing second. The screen only reflects timestamps and
+//  statuses already present in Field's list DTOs and local active captures.
 
 import Foundation
 import SwiftUI
@@ -19,37 +12,52 @@ struct WorkDashboardScreen: View {
     let session: any SessionProviding
     let analytics: any CaptureAnalytics
     let coordinator: CaptureCoordinator
+    let companion: FieldCompanionController
 
     @State private var model: WorkDashboardModel
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
 
     init(container: AppContainer, coordinator: CaptureCoordinator) {
-        self.session = container.session
-        self.analytics = container.analytics
+        session = container.session
+        analytics = container.analytics
         self.coordinator = coordinator
+        companion = container.companion
         _model = State(wrappedValue: WorkDashboardModel(container: container))
     }
 
-    /// The DB's `project_status` enum (migrations 00001, 00084) is
-    /// active/completed/archived/on_hold/draft. FieldProject.status is a raw
-    /// passthrough string (no enum in this DTO), so "active" is a denylist
-    /// rather than `== "active"` — it narrows to current work the same way
-    /// the reference DesignerHomeViewModel.activeProjects does, but also
-    /// reads sensibly against the mock fixtures' more descriptive strings
-    /// ("in_progress", "design") which aren't literally "active".
-    private static let closedProjectStatuses: Set<String> = ["completed", "archived", "on_hold", "draft", "cancelled"]
-
     var body: some View {
         ScrollView {
-            VStack(alignment: .leading, spacing: 20) {
+            VStack(alignment: .leading, spacing: 22) {
                 header
-                projectsSection
-                leadsSection
-                decisionsSection
-                messagesSection
-                actionRow
+                if !model.loadIssues.isEmpty {
+                    loadIssues
+                }
+                attentionSection(
+                    title: "Needs you",
+                    identifier: "work.section.needs-you",
+                    items: model.attention.needsYou,
+                    emptyText: "You’re caught up for now.",
+                    accent: CaptureColor.terracotta
+                )
+                attentionSection(
+                    title: "Waiting on others",
+                    identifier: "work.section.waiting",
+                    items: model.attention.waitingOnOthers,
+                    emptyText: "Nothing is waiting on someone else.",
+                    accent: CaptureColor.warning
+                )
+                attentionSection(
+                    title: "Moving today",
+                    identifier: "work.section.moving-today",
+                    items: model.attention.movingToday,
+                    emptyText: "No recorded movement today.",
+                    accent: CaptureColor.verdigrisInk
+                )
+                browseSection
             }
-            .padding(20)
+            .padding(.horizontal, 20)
+            .padding(.top, 12)
             .padding(.bottom, 40)
         }
         .background(CaptureColor.paper)
@@ -62,503 +70,600 @@ struct WorkDashboardScreen: View {
         .task {
             analytics.screen(CaptureScreenID.w1Work.rawValue)
             await model.loadAll()
+            updateCompanionHint()
         }
-        .animation(reduceMotion ? nil : .easeInOut(duration: 0.2), value: sectionsLoadedTick)
+        .onChange(of: contentRevision) {
+            updateCompanionHint()
+        }
+        .animation(
+            reduceMotion ? nil : .easeInOut(duration: 0.22),
+            value: contentRevision
+        )
         .accessibilityIdentifier(CaptureScreenID.w1Work.rawValue)
     }
 
-    // MARK: Header
+    // MARK: - Realm header
 
+    @ViewBuilder
     private var header: some View {
-        HStack(alignment: .top, spacing: 12) {
-            VStack(alignment: .leading, spacing: 6) {
-                Text((session.workspaceName ?? "Your studio").uppercased())
-                    .font(CaptureType.eyebrow)
-                    .foregroundStyle(CaptureColor.inkSoft)
-                Text(greeting)
-                    .font(CaptureType.display)
-                    .foregroundStyle(CaptureColor.ink)
-                Text(todayLabel)
-                    .font(CaptureType.callout)
-                    .foregroundStyle(CaptureColor.inkSoft)
+        if dynamicTypeSize.isAccessibilitySize {
+            VStack(alignment: .leading, spacing: 16) {
+                greetingHeader
+                cameraRealmButton
             }
-            Spacer(minLength: 12)
-            captureButton
+        } else {
+            HStack(alignment: .top, spacing: 16) {
+                greetingHeader
+                Spacer(minLength: 4)
+                cameraRealmButton
+            }
         }
     }
 
-    private var captureButton: some View {
+    private var greetingHeader: some View {
+        VStack(alignment: .leading, spacing: 5) {
+            Text((session.workspaceName ?? "Your studio").uppercased())
+                .font(CaptureType.eyebrow)
+                .foregroundStyle(CaptureColor.inkSoft)
+                .fixedSize(horizontal: false, vertical: true)
+            Text(greeting)
+                .font(CaptureType.display)
+                .foregroundStyle(CaptureColor.ink)
+                .fixedSize(horizontal: false, vertical: true)
+            Text(CaptureDates.dayHeading(Date()))
+                .font(CaptureType.callout)
+                .foregroundStyle(CaptureColor.inkSoft)
+                .fixedSize(horizontal: false, vertical: true)
+        }
+    }
+
+    private var cameraRealmButton: some View {
         Button {
-            analytics.event("work.return_to_capture")
-            coordinator.goBack()
+            analytics.event("work.switch_to_camera")
+            coordinator.switchRealm(.camera)
         } label: {
-            VStack(spacing: 4) {
-                Image(systemName: "camera.fill").font(CaptureType.title2)
-                Text("Capture").font(CaptureType.eyebrow).textCase(.uppercase)
+            Group {
+                if dynamicTypeSize.isAccessibilitySize {
+                    Label("Camera", systemImage: "camera.fill")
+                        .font(CaptureType.bodyEmph)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                } else {
+                    VStack(spacing: 4) {
+                        Image(systemName: "camera.fill")
+                            .font(CaptureType.title2)
+                        Text("Camera")
+                            .font(CaptureType.eyebrow)
+                            .textCase(.uppercase)
+                    }
+                }
             }
             .foregroundStyle(CaptureColor.verdigrisInk)
-            .padding(.horizontal, 14)
-            .padding(.vertical, 10)
-            .background(RoundedRectangle(cornerRadius: 12).fill(CaptureColor.verdigris.opacity(0.18)))
+            .frame(minWidth: 68, minHeight: 48)
+            .padding(.horizontal, 8)
+            .background(
+                RoundedRectangle(cornerRadius: 14)
+                    .fill(CaptureColor.verdigris.opacity(0.14))
+            )
+            .overlay(
+                RoundedRectangle(cornerRadius: 14)
+                    .stroke(CaptureColor.verdigris.opacity(0.28), lineWidth: 1)
+            )
         }
         .buttonStyle(.plain)
-        .accessibilityLabel("Back to capture")
-        .accessibilityHint("Returns to the camera viewfinder.")
+        .accessibilityLabel("Camera")
+        .accessibilityHint("Switches to Camera and keeps your place in Work")
+        .accessibilityIdentifier("field.realm.camera")
     }
 
     private var greeting: String {
-        let hour = Calendar.current.component(.hour, from: Date())
         let timeGreeting: String
-        switch hour {
+        switch Calendar.current.component(.hour, from: Date()) {
         case 0..<12: timeGreeting = "Good morning"
         case 12..<17: timeGreeting = "Good afternoon"
         default: timeGreeting = "Good evening"
         }
-        guard let name = session.displayName, let first = name.split(separator: " ").first else {
+        guard let displayName = session.displayName,
+              let firstName = displayName.split(separator: " ").first else {
             return timeGreeting
         }
-        return "\(timeGreeting), \(first)"
+        return "\(timeGreeting), \(firstName)"
     }
 
-    private var todayLabel: String {
-        CaptureDates.dayHeading(Date())
-    }
-
-    // MARK: Sections
-
-    private var projectsSection: some View {
-        WorkSectionCard(title: "Projects", count: activeProjectCount,
-                        onHeaderTap: { openSectionList(.projectList, section: "projects") }) {
-            sectionContent(model.projects, section: "projects", emptyText: "No active projects right now",
-                          retry: { Task { await model.loadProjects() } }) { items in
-                let active = activeProjects(items)
-                if active.isEmpty {
-                    WorkEmptyRow(text: "No active projects right now")
-                } else {
-                    rowList(Array(active.prefix(3))) { project in projectRow(project) }
-                }
-            }
+    private func updateCompanionHint() {
+        let hint: String
+        let needsYouCount = model.attention.needsYou.count
+        if needsYouCount == 1 {
+            hint = "1 item needs you"
+        } else if needsYouCount > 1 {
+            hint = "\(needsYouCount) items need you"
+        } else if !model.loadIssues.isEmpty {
+            hint = "Some work needs a retry"
+        } else if model.hasLoadingSources {
+            hint = "Gathering your work"
+        } else {
+            hint = "You’re caught up"
         }
+        companion.send(.collapse(hint: hint, action: nil))
     }
 
-    private var leadsSection: some View {
-        WorkSectionCard(title: "Leads", count: leadsCount,
-                        onHeaderTap: { openSectionList(.leadList, section: "leads") }) {
-            sectionContent(model.leads, section: "leads", emptyText: "No open leads right now",
-                          retry: { Task { await model.loadLeads() } }) { items in
-                if let newest = items.first {
-                    rowList([newest]) { lead in leadRow(lead) }
-                }
-            }
-        }
-    }
+    // MARK: - Attention
 
-    private var decisionsSection: some View {
-        WorkSectionCard(title: "Decisions", count: decisionsCount,
-                        onHeaderTap: { openSectionList(.decisionList, section: "decisions") }) {
-            sectionContent(model.decisions, section: "decisions", emptyText: "Nothing awaiting the client",
-                          retry: { Task { await model.loadDecisions() } }) { items in
-                rowList(Array(items.prefix(3))) { decision in decisionRow(decision) }
-            }
-        }
-    }
-
-    private var messagesSection: some View {
-        WorkSectionCard(title: "Messages", count: unreadThreadCount,
-                        onHeaderTap: { openSectionList(.inbox, section: "messages") }) {
-            sectionContent(model.threads, section: "messages", emptyText: "No conversations yet",
-                          retry: { Task { await model.loadThreads() } }) { items in
-                rowList(Array(items.prefix(3))) { thread in threadRow(thread) }
-            }
-        }
-    }
-
-    /// Shared per-section state → content switch: skeleton while loading, the
-    /// designed empty state, an inline error + retry, or the caller's rows.
-    @ViewBuilder
-    private func sectionContent<Item, Rows: View>(
-        _ state: WorkSectionState<Item>,
-        section: String,
+    private func attentionSection(
+        title: String,
+        identifier: String,
+        items: [FieldAttentionItem],
         emptyText: String,
-        retry: @escaping () -> Void,
-        @ViewBuilder rows: ([Item]) -> Rows
+        accent: Color
     ) -> some View {
-        switch state {
-        case .loading:
-            WorkSkeletonRows(label: section)
-        case .empty:
-            WorkEmptyRow(text: emptyText)
-        case .error(let message):
-            WorkErrorRow(message: message, retry: retry)
-        case .loaded(let items):
-            rows(items)
-        }
-    }
-
-    private func rowList<Item: Identifiable, RowContent: View>(
-        _ items: [Item], @ViewBuilder row: @escaping (Item) -> RowContent
-    ) -> some View {
-        VStack(spacing: 0) {
-            ForEach(Array(items.enumerated()), id: \.element.id) { index, item in
-                if index != 0 {
-                    Rectangle().fill(CaptureColor.line).frame(height: 1).padding(.leading, 16)
-                }
-                row(item)
-            }
-        }
-    }
-
-    // MARK: Rows
-
-    private func projectRow(_ project: FieldProject) -> some View {
-        Button { openSectionItem(.project(project.id), section: "projects") } label: {
-            HStack(spacing: 12) {
-                VStack(alignment: .leading, spacing: 3) {
-                    Text(project.name)
-                        .font(CaptureType.bodyEmph)
-                        .foregroundStyle(CaptureColor.ink)
-                        .lineLimit(1)
-                    if let clientName = project.clientName {
-                        Text(clientName)
-                            .font(CaptureType.footnote)
-                            .foregroundStyle(CaptureColor.inkSoft)
-                            .lineLimit(1)
-                    }
-                }
-                Spacer(minLength: 8)
-                phaseChip(project)
-                Image(systemName: "chevron.right")
-                    .font(CaptureType.footnote)
-                    .foregroundStyle(CaptureColor.line2)
-            }
-            .padding(.horizontal, 16)
-            .padding(.vertical, 12)
-            .contentShape(Rectangle())
-        }
-        .buttonStyle(.plain)
-        .accessibilityLabel(
-            "\(project.name)\(project.clientName.map { ", \($0)" } ?? ""), \(project.phaseLabel ?? project.status)"
+        WorkAttentionSection(
+            title: title,
+            identifier: identifier,
+            items: items,
+            isLoading: model.hasLoadingSources,
+            emptyText: emptyText,
+            accent: accent,
+            onSelect: openAttentionItem
         )
     }
 
-    private func leadRow(_ lead: FieldLead) -> some View {
-        Button { openSectionItem(.leadDetail(lead.id), section: "leads") } label: {
-            HStack(spacing: 12) {
-                Text(lead.clientName)
+    private func openAttentionItem(_ item: FieldAttentionItem) {
+        analytics.event("work.open_attention", ["kind": item.kind.rawValue])
+        switch item.destination {
+        case .specimen(let id):
+            coordinator.switchRealm(.camera)
+            coordinator.navigate(to: .specimen(id))
+        case .thread(let id):
+            coordinator.navigate(to: .thread(id))
+        case .lead(let id):
+            coordinator.navigate(to: .leadDetail(id))
+        case .decision(let id):
+            coordinator.navigate(to: .decisionDetail(id))
+        case .project(let id):
+            coordinator.navigate(to: .project(id))
+        case .receiving:
+            coordinator.navigate(to: .receiving)
+        case .syncStatus:
+            coordinator.navigate(to: .syncStatus)
+        }
+    }
+
+    // MARK: - Partial failure
+
+    private var loadIssues: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            Label("Some work couldn’t load", systemImage: "wifi.exclamationmark")
+                .font(CaptureType.bodyEmph)
+                .foregroundStyle(CaptureColor.ink)
+
+            ForEach(model.loadIssues) { issue in
+                HStack(spacing: 10) {
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text(issue.source.label)
+                            .font(CaptureType.footnote)
+                            .foregroundStyle(CaptureColor.ink)
+                        Text(issue.message)
+                            .font(CaptureType.footnote)
+                            .foregroundStyle(CaptureColor.inkSoft)
+                    }
+                    Spacer(minLength: 8)
+                    Button("Retry") {
+                        analytics.event("work.retry", ["source": issue.source.rawValue])
+                        Task { await model.retry(issue.source) }
+                    }
+                    .font(CaptureType.footnote)
+                    .foregroundStyle(CaptureColor.verdigrisInk)
+                    .frame(minHeight: 44)
+                    .accessibilityLabel("Retry \(issue.source.label)")
+                }
+            }
+        }
+        .padding(14)
+        .background(
+            RoundedRectangle(cornerRadius: 14)
+                .fill(CaptureColor.warning.opacity(0.12))
+        )
+        .overlay(
+            RoundedRectangle(cornerRadius: 14)
+                .stroke(CaptureColor.warning.opacity(0.32), lineWidth: 1)
+        )
+        .accessibilityIdentifier("work.partial-failure")
+    }
+
+    // MARK: - Browse
+
+    private var browseSection: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            WorkSectionHeading(
+                title: "Browse",
+                count: nil,
+                accent: CaptureColor.inkSoft
+            )
+
+            LazyVGrid(
+                columns: dynamicTypeSize.isAccessibilitySize
+                    ? [GridItem(.flexible(), spacing: 12)]
+                    : [GridItem(.adaptive(minimum: 144), spacing: 12)],
+                spacing: 12
+            ) {
+                browseTile(
+                    title: "Projects",
+                    subtitle: "Current spaces",
+                    symbol: "square.stack.3d.up",
+                    accessory: browseAccessory(model.projects),
+                    route: .projectList
+                )
+                browseTile(
+                    title: "Leads",
+                    subtitle: "New opportunities",
+                    symbol: "person.crop.circle.badge.plus",
+                    accessory: browseAccessory(model.leads),
+                    route: .leadList
+                )
+                browseTile(
+                    title: "Decisions",
+                    subtitle: "Client choices",
+                    symbol: "checkmark.bubble",
+                    accessory: browseAccessory(model.decisions),
+                    route: .decisionList
+                )
+                browseTile(
+                    title: "Messages",
+                    subtitle: "Conversations",
+                    symbol: "bubble.left.and.bubble.right",
+                    accessory: browseAccessory(model.threads),
+                    route: .inbox
+                )
+                browseTile(
+                    title: "Receiving",
+                    subtitle: "Arriving orders",
+                    symbol: "shippingbox",
+                    accessory: browseAccessory(model.arrivingPOs),
+                    route: .receiving
+                )
+                browseTile(
+                    title: "Site scan",
+                    subtitle: "Capture a room",
+                    symbol: "cube.transparent",
+                    accessory: .none,
+                    route: .siteScanSetup
+                )
+            }
+        }
+        .accessibilityIdentifier("work.section.browse")
+    }
+
+    private func browseTile(
+        title: String,
+        subtitle: String,
+        symbol: String,
+        accessory: WorkBrowseAccessory,
+        route: CaptureRoute
+    ) -> some View {
+        WorkBrowseTile(
+            title: title,
+            subtitle: subtitle,
+            symbol: symbol,
+            accessory: accessory
+        ) {
+            analytics.event("work.open_browse", ["section": title.lowercased()])
+            coordinator.navigate(to: route)
+        }
+    }
+
+    private func browseAccessory<Element>(
+        _ state: WorkSectionState<Element>
+    ) -> WorkBrowseAccessory {
+        switch state {
+        case .loaded(let items): .count(items.count)
+        case .empty: .count(0)
+        case .loading: .loading
+        case .error: .none
+        }
+    }
+
+    private var contentRevision: Int {
+        let attention = model.attention
+        return attention.needsYou.count
+            + attention.waitingOnOthers.count
+            + attention.movingToday.count
+            + model.loadIssues.count
+            + (model.hasLoadingSources ? 0 : 1)
+    }
+}
+
+// MARK: - Attention section
+
+private struct WorkAttentionSection: View {
+    let title: String
+    let identifier: String
+    let items: [FieldAttentionItem]
+    let isLoading: Bool
+    let emptyText: String
+    let accent: Color
+    let onSelect: (FieldAttentionItem) -> Void
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            WorkSectionHeading(
+                title: title,
+                count: items.isEmpty ? nil : items.count,
+                accent: accent
+            )
+
+            VStack(spacing: 0) {
+                if items.isEmpty, isLoading {
+                    WorkAttentionSkeleton(title: title)
+                } else if items.isEmpty {
+                    WorkAttentionEmpty(text: emptyText)
+                } else {
+                    ForEach(Array(items.enumerated()), id: \.element.id) { index, item in
+                        if index > 0 {
+                            Rectangle()
+                                .fill(CaptureColor.line)
+                                .frame(height: 1)
+                                .padding(.leading, 62)
+                        }
+                        attentionRow(item)
+                    }
+                }
+            }
+            .background(
+                RoundedRectangle(cornerRadius: 15)
+                    .fill(CaptureColor.paper3)
+            )
+            .overlay(
+                RoundedRectangle(cornerRadius: 15)
+                    .stroke(CaptureColor.line, lineWidth: 1)
+            )
+        }
+        .accessibilityIdentifier(identifier)
+    }
+
+    private func attentionRow(_ item: FieldAttentionItem) -> some View {
+        Button { onSelect(item) } label: {
+            if dynamicTypeSize.isAccessibilitySize {
+                accessibilityAttentionRow(item)
+            } else {
+                standardAttentionRow(item)
+            }
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel("\(item.title), \(item.detail)")
+        .accessibilityHint("Opens this item")
+        .accessibilityIdentifier("work.attention.\(item.id)")
+    }
+
+    private func standardAttentionRow(_ item: FieldAttentionItem) -> some View {
+        HStack(spacing: 12) {
+            attentionBadge(for: item)
+
+            VStack(alignment: .leading, spacing: 3) {
+                Text(item.title)
                     .font(CaptureType.bodyEmph)
                     .foregroundStyle(CaptureColor.ink)
-                    .lineLimit(1)
-                Spacer(minLength: 8)
-                Text(Self.relativeAge(lead.createdAt))
+                    .lineLimit(2)
+                Text(item.detail)
+                    .font(CaptureType.footnote)
+                    .foregroundStyle(CaptureColor.inkSoft)
+                    .lineLimit(2)
+            }
+
+            Spacer(minLength: 8)
+
+            if let timestamp = item.timestamp {
+                Text(CaptureDates.timeOrShortDate(timestamp))
                     .font(CaptureType.monoSmall)
                     .foregroundStyle(CaptureColor.inkSoft)
-                Image(systemName: "chevron.right")
-                    .font(CaptureType.footnote)
-                    .foregroundStyle(CaptureColor.line2)
+                    .lineLimit(1)
             }
-            .padding(.horizontal, 16)
-            .padding(.vertical, 12)
-            .contentShape(Rectangle())
+            Image(systemName: "chevron.right")
+                .font(CaptureType.footnote)
+                .foregroundStyle(CaptureColor.line2)
         }
-        .buttonStyle(.plain)
-        .accessibilityLabel("\(lead.clientName), \(Self.relativeAge(lead.createdAt))")
+        .padding(.horizontal, 14)
+        .padding(.vertical, 11)
+        .frame(minHeight: 56)
+        .contentShape(Rectangle())
     }
 
-    private func decisionRow(_ decision: FieldDecision) -> some View {
-        Button { openSectionItem(.decisionDetail(decision.id), section: "decisions") } label: {
+    private func accessibilityAttentionRow(_ item: FieldAttentionItem) -> some View {
+        VStack(alignment: .leading, spacing: 10) {
             HStack(spacing: 12) {
-                VStack(alignment: .leading, spacing: 3) {
-                    Text(decision.title)
-                        .font(CaptureType.bodyEmph)
-                        .foregroundStyle(CaptureColor.ink)
-                        .lineLimit(1)
-                    if let clientName = decision.clientName {
-                        Text(clientName)
-                            .font(CaptureType.footnote)
-                            .foregroundStyle(CaptureColor.inkSoft)
-                            .lineLimit(1)
-                    }
-                }
-                Spacer(minLength: 8)
-                Image(systemName: "chevron.right")
-                    .font(CaptureType.footnote)
-                    .foregroundStyle(CaptureColor.line2)
-            }
-            .padding(.horizontal, 16)
-            .padding(.vertical, 12)
-            .contentShape(Rectangle())
-        }
-        .buttonStyle(.plain)
-        .accessibilityLabel("\(decision.title)\(decision.clientName.map { ", \($0)" } ?? "")")
-    }
+                attentionBadge(for: item)
 
-    private func threadRow(_ thread: FieldThread) -> some View {
-        Button { openSectionItem(.thread(thread.id), section: "messages") } label: {
-            HStack(alignment: .top, spacing: 12) {
-                if thread.unread {
-                    Circle().fill(CaptureColor.goldenHour).frame(width: 7, height: 7).padding(.top, 6)
-                }
                 VStack(alignment: .leading, spacing: 3) {
-                    Text(thread.title)
+                    Text(item.title)
                         .font(CaptureType.bodyEmph)
                         .foregroundStyle(CaptureColor.ink)
-                        .lineLimit(1)
-                    if let preview = thread.lastMessagePreview {
-                        Text(preview)
-                            .font(CaptureType.footnote)
-                            .foregroundStyle(CaptureColor.inkSoft)
-                            .lineLimit(1)
-                    }
-                }
-                Spacer(minLength: 8)
-                if let at = thread.lastMessageAt {
-                    Text(Self.shortTime(at))
-                        .font(CaptureType.monoSmall)
+                        .fixedSize(horizontal: false, vertical: true)
+                    Text(item.detail)
+                        .font(CaptureType.footnote)
                         .foregroundStyle(CaptureColor.inkSoft)
+                        .fixedSize(horizontal: false, vertical: true)
                 }
+
+                Spacer(minLength: 0)
+
                 Image(systemName: "chevron.right")
-                    .font(CaptureType.footnote)
+                    .font(.system(size: 18, weight: .semibold))
                     .foregroundStyle(CaptureColor.line2)
             }
-            .padding(.horizontal, 16)
-            .padding(.vertical, 12)
-            .contentShape(Rectangle())
-        }
-        .buttonStyle(.plain)
-        .accessibilityLabel("\(thread.title)\(thread.unread ? ", unread" : "")")
-    }
 
-    private func phaseChip(_ project: FieldProject) -> some View {
-        let label = project.phaseLabel ?? project.status.replacingOccurrences(of: "_", with: " ")
-        let color = phaseColor(project.status)
-        return Text(label.uppercased())
-            .font(CaptureType.eyebrow)
-            .foregroundStyle(color)
-            .padding(.horizontal, 7)
-            .padding(.vertical, 3)
-            .overlay(Capsule().stroke(color.opacity(0.45), lineWidth: 1))
-    }
-
-    private func phaseColor(_ status: String) -> Color {
-        switch status {
-        case "on_hold": return CaptureColor.terracotta
-        case "completed", "archived": return CaptureColor.success
-        // Active/in-progress: clayDeep(light)/clay(dark) reads AA on both the
-        // cream card and the dark card — goldenHour is sub-AA on cream (R28/R33
-        // text-chip classification). Dark was already fine; this fixes light.
-        default: return CaptureColor.verdigrisInk
-        }
-    }
-
-    // MARK: Action row
-
-    private var actionRow: some View {
-        HStack(spacing: 12) {
-            actionButton(title: "Receive delivery", subtitle: "Inspect arriving POs", symbol: "shippingbox") {
-                openAction(.receiving, name: "receive_delivery")
-            }
-            actionButton(title: "Site scan", subtitle: "Capture a room in 3D", symbol: "cube") {
-                openAction(.siteScanSetup, name: "site_scan")
+            if let timestamp = item.timestamp {
+                Text(CaptureDates.timeOrShortDate(timestamp))
+                    .font(CaptureType.monoSmall)
+                    .foregroundStyle(CaptureColor.inkSoft)
+                    .padding(.leading, 46)
             }
         }
+        .padding(14)
+        .frame(minHeight: 56)
+        .contentShape(Rectangle())
     }
 
-    private func actionButton(title: String, subtitle: String, symbol: String,
-                              action: @escaping () -> Void) -> some View {
-        Button(action: action) {
-            VStack(alignment: .leading, spacing: 8) {
-                Image(systemName: symbol).font(CaptureType.title2).foregroundStyle(CaptureColor.verdigrisInk)
-                Text(title).font(CaptureType.bodyEmph).foregroundStyle(CaptureColor.ink)
-                Text(subtitle).font(CaptureType.footnote).foregroundStyle(CaptureColor.inkSoft)
-            }
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .padding(16)
-            .background(RoundedRectangle(cornerRadius: 14).fill(CaptureColor.paper3))
-            .overlay(RoundedRectangle(cornerRadius: 14).stroke(CaptureColor.line, lineWidth: 1))
+    private func attentionBadge(for item: FieldAttentionItem) -> some View {
+        Image(systemName: symbol(for: item.kind))
+            .font(
+                dynamicTypeSize.isAccessibilitySize
+                    ? .system(size: 18, weight: .semibold)
+                    : CaptureType.callout
+            )
+            .foregroundStyle(accent)
+            .frame(width: dynamicTypeSize.isAccessibilitySize ? 44 : 34,
+                   height: dynamicTypeSize.isAccessibilitySize ? 44 : 34)
+            .background(accent.opacity(0.12), in: Circle())
+    }
+
+    private func symbol(for kind: FieldAttentionKind) -> String {
+        switch kind {
+        case .capture: "camera.viewfinder"
+        case .scan: "cube.transparent"
+        case .message: "bubble.left.fill"
+        case .lead: "person.crop.circle.badge.plus"
+        case .decision: "checkmark.bubble"
+        case .project: "square.stack.3d.up"
+        case .arrival: "shippingbox.fill"
         }
-        .buttonStyle(.plain)
-        .accessibilityLabel(title)
-        .accessibilityHint(subtitle)
-    }
-
-    // MARK: Navigation + analytics
-
-    private func openSectionList(_ route: CaptureRoute, section: String) {
-        analytics.event("work.open_list", ["section": section])
-        coordinator.navigate(to: route)
-    }
-
-    private func openSectionItem(_ route: CaptureRoute, section: String) {
-        analytics.event("work.open_item", ["section": section])
-        coordinator.navigate(to: route)
-    }
-
-    private func openAction(_ route: CaptureRoute, name: String) {
-        analytics.event("work.\(name)")
-        coordinator.navigate(to: route)
-    }
-
-    // MARK: Derived
-
-    private func activeProjects(_ items: [FieldProject]) -> [FieldProject] {
-        items.filter { !Self.closedProjectStatuses.contains($0.status) }
-    }
-
-    private var activeProjectCount: Int? {
-        guard case .loaded(let items) = model.projects else { return nil }
-        let count = activeProjects(items).count
-        return count > 0 ? count : nil
-    }
-
-    private var leadsCount: Int? {
-        guard case .loaded(let items) = model.leads else { return nil }
-        return items.isEmpty ? nil : items.count
-    }
-
-    private var decisionsCount: Int? {
-        guard case .loaded(let items) = model.decisions else { return nil }
-        return items.isEmpty ? nil : items.count
-    }
-
-    private var unreadThreadCount: Int? {
-        guard case .loaded(let items) = model.threads else { return nil }
-        let count = items.filter(\.unread).count
-        return count > 0 ? count : nil
-    }
-
-    /// Drives the Reduce-Motion-aware loading→loaded transition — a simple
-    /// Equatable proxy since WorkSectionState<Element> isn't itself Equatable.
-    private var sectionsLoadedTick: Int {
-        func done<T>(_ state: WorkSectionState<T>) -> Int {
-            if case .loading = state { return 0 }
-            return 1
-        }
-        return done(model.projects) + done(model.leads) + done(model.decisions) + done(model.threads)
-    }
-
-    // MARK: Formatting
-
-    private static func relativeAge(_ date: Date?) -> String {
-        CaptureDates.relativeAge(date)
-    }
-
-    private static func shortTime(_ date: Date) -> String {
-        CaptureDates.timeOrShortDate(date)
     }
 }
 
-// MARK: - Section card chrome
-
-private struct WorkSectionCard<Content: View>: View {
+private struct WorkSectionHeading: View {
     let title: String
     let count: Int?
-    let onHeaderTap: () -> Void
-    @ViewBuilder var content: () -> Content
+    let accent: Color
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 0) {
-            Button(action: onHeaderTap) {
-                HStack(spacing: 8) {
-                    Text(title.uppercased())
-                        .font(CaptureType.eyebrow)
-                        .foregroundStyle(CaptureColor.inkSoft)
-                    if let count, count > 0 {
-                        Text("\(count)")
-                            .font(CaptureType.eyebrow)
-                            .foregroundStyle(CaptureColor.ink)
-                            .padding(.horizontal, 6)
-                            .padding(.vertical, 2)
-                            .background(Capsule().fill(CaptureColor.paper2))
-                    }
-                    Spacer()
-                    Image(systemName: "chevron.right")
-                        .font(CaptureType.footnote)
-                        .foregroundStyle(CaptureColor.line2)
-                }
-                .padding(.horizontal, 16)
-                .padding(.vertical, 14)
-                .contentShape(Rectangle())
+        HStack(spacing: 8) {
+            Capsule()
+                .fill(accent)
+                .frame(width: 18, height: 3)
+                .accessibilityHidden(true)
+            Text(title.uppercased())
+                .font(CaptureType.eyebrow)
+                .foregroundStyle(CaptureColor.inkSoft)
+            if let count {
+                Text("\(count)")
+                    .font(CaptureType.eyebrow)
+                    .foregroundStyle(CaptureColor.ink)
+                    .padding(.horizontal, 7)
+                    .padding(.vertical, 2)
+                    .background(CaptureColor.paper2, in: Capsule())
             }
-            .buttonStyle(.plain)
-            .accessibilityLabel(count.map { "\(title), \($0)" } ?? title)
-            .accessibilityHint("Opens the full \(title.lowercased()) list.")
-
-            Rectangle().fill(CaptureColor.line).frame(height: 1)
-
-            content()
         }
-        .background(RoundedRectangle(cornerRadius: 14).fill(CaptureColor.paper3))
-        .overlay(RoundedRectangle(cornerRadius: 14).stroke(CaptureColor.line, lineWidth: 1))
+        .accessibilityElement(children: .combine)
+        .accessibilityAddTraits(.isHeader)
     }
 }
 
-// MARK: - Per-section states
-
-private struct WorkSkeletonRows: View {
-    let label: String
+private struct WorkAttentionSkeleton: View {
+    let title: String
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 0) {
+        VStack(spacing: 0) {
             ForEach(0..<2, id: \.self) { index in
-                if index != 0 {
-                    Rectangle().fill(CaptureColor.line).frame(height: 1).padding(.leading, 16)
+                if index > 0 {
+                    Rectangle()
+                        .fill(CaptureColor.line)
+                        .frame(height: 1)
+                        .padding(.leading, 62)
                 }
-                HStack {
-                    VStack(alignment: .leading, spacing: 4) {
-                        Text("Loading title").font(CaptureType.bodyEmph)
-                        Text("Loading subtitle").font(CaptureType.footnote)
+                HStack(spacing: 12) {
+                    Circle()
+                        .fill(CaptureColor.paper2)
+                        .frame(width: 34, height: 34)
+                    VStack(alignment: .leading, spacing: 5) {
+                        Text("Loading attention")
+                            .font(CaptureType.bodyEmph)
+                        Text("Loading detail")
+                            .font(CaptureType.footnote)
                     }
                     Spacer()
                 }
-                .padding(.horizontal, 16)
-                .padding(.vertical, 12)
+                .padding(.horizontal, 14)
+                .padding(.vertical, 11)
             }
         }
         .redacted(reason: .placeholder)
         .accessibilityElement(children: .ignore)
-        .accessibilityLabel("Loading \(label)")
+        .accessibilityLabel("Loading \(title)")
     }
 }
 
-private struct WorkEmptyRow: View {
+private struct WorkAttentionEmpty: View {
     let text: String
+
     var body: some View {
-        Text(text)
+        Label(text, systemImage: "checkmark.circle")
             .font(CaptureType.callout)
             .foregroundStyle(CaptureColor.inkSoft)
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .padding(.horizontal, 16)
-            .padding(.vertical, 20)
+            .frame(maxWidth: .infinity, minHeight: 56, alignment: .leading)
+            .padding(.horizontal, 14)
+            .accessibilityElement(children: .combine)
     }
 }
 
-private struct WorkErrorRow: View {
-    let message: String
-    let retry: () -> Void
+// MARK: - Browse tile
+
+private enum WorkBrowseAccessory {
+    case count(Int)
+    case loading
+    case none
+}
+
+private struct WorkBrowseTile: View {
+    let title: String
+    let subtitle: String
+    let symbol: String
+    let accessory: WorkBrowseAccessory
+    let action: () -> Void
 
     var body: some View {
-        HStack(spacing: 12) {
-            Image(systemName: "exclamationmark.triangle")
-                .font(CaptureType.callout)
-                .foregroundStyle(CaptureColor.error)
-                .accessibilityHidden(true)
-            Text(message)
-                .font(CaptureType.callout)
-                .foregroundStyle(CaptureColor.error)
-            Spacer(minLength: 8)
-            Button("Retry", action: retry)
-                .font(CaptureType.bodyEmph)
-                .foregroundStyle(CaptureColor.verdigris)
+        Button(action: action) {
+            VStack(alignment: .leading, spacing: 9) {
+                HStack(alignment: .top) {
+                    Image(systemName: symbol)
+                        .font(CaptureType.title2)
+                        .foregroundStyle(CaptureColor.verdigrisInk)
+                    Spacer()
+                    if case .count(let count) = accessory {
+                        Text("\(count)")
+                            .font(CaptureType.bodyEmph)
+                            .foregroundStyle(CaptureColor.ink)
+                    } else if case .loading = accessory {
+                        ProgressView()
+                            .controlSize(.small)
+                    }
+                }
+                Text(title)
+                    .font(CaptureType.bodyEmph)
+                    .foregroundStyle(CaptureColor.ink)
+                Text(subtitle)
+                    .font(CaptureType.footnote)
+                    .foregroundStyle(CaptureColor.inkSoft)
+                    .lineLimit(2)
+            }
+            .frame(maxWidth: .infinity, minHeight: 92, alignment: .leading)
+            .padding(14)
+            .background(
+                RoundedRectangle(cornerRadius: 14)
+                    .fill(CaptureColor.paper3)
+            )
+            .overlay(
+                RoundedRectangle(cornerRadius: 14)
+                    .stroke(CaptureColor.line, lineWidth: 1)
+            )
+            .contentShape(Rectangle())
         }
-        .padding(.horizontal, 16)
-        .padding(.vertical, 16)
+        .buttonStyle(.plain)
+        .accessibilityLabel(accessibilityLabel)
+        .accessibilityHint("Opens \(title.lowercased())")
     }
-}
 
-#if DEBUG
-#Preview {
-    NavigationStack {
-        WorkDashboardScreen(container: AppContainer(), coordinator: CaptureCoordinator())
+    private var accessibilityLabel: String {
+        if case .count(let count) = accessory {
+            return "\(title), \(count)"
+        }
+        return title
     }
 }
-#endif

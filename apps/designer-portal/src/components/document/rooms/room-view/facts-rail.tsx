@@ -29,6 +29,8 @@ import {
 } from '@/lib/room-view/geometry';
 import { fmtDay } from '@/lib/document/format';
 import { cn } from '@/lib/utils';
+import { REFINE_COPY } from './refine-copy';
+import { RefineReadout, type RefineReadoutProps } from './refine-readout';
 
 export interface FactsRailMeasureProps {
   /** true while the tool is capturing clicks (armed or first-point placed) —
@@ -69,6 +71,12 @@ export interface FactsRailProps {
    *  (a generated room_file exists for the scan AND it's on a project). One
    *  link, no restructuring: absent otherwise. */
   roomFile?: { href: string };
+  /** Refine diagnostic readout (Field Capture P2, Layer 3, ruling R-G) — the
+   *  drift figures and R123's advisory, behind the `room-view-refined-path`
+   *  flag. Omitted entirely (no line at all) when the flag is off, when no
+   *  Layer-2 delivery record exists, or when the artifacts don't parse — which
+   *  is every scan in production today. No plan or orbit rendering. */
+  refine?: RefineReadoutProps;
 }
 
 function plural(n: number, noun: string): string {
@@ -99,6 +107,7 @@ export function FactsRail({
   photos,
   measure,
   roomFile,
+  refine,
 }: FactsRailProps) {
   const { w, d } = overallDims(geometry);
   const area = Math.round(areaOf(geometry));
@@ -169,6 +178,12 @@ export function FactsRail({
               open
             </span>
           </Link>
+        </Fact>
+      )}
+
+      {refine && (
+        <Fact k={REFINE_COPY.factKey}>
+          <RefineReadout {...refine} />
         </Fact>
       )}
 

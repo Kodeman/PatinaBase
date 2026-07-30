@@ -57,16 +57,33 @@ struct FieldPosedPhotoTests {
         let rid = UUID(uuidString: "22222222-2222-2222-2222-222222222222")!
         let path = RoomScanStoragePath.object(
             folder: RoomScanStoragePath.Folder.photos,
-            userID: uid, roomID: rid, filename: "auto_001.50.jpg")
+            userID: uid,
+            roomID: rid,
+            filename: "auto_001.50.jpg"
+        )
         // seg[1]=photos  seg[2]=uid  seg[3]=roomId  seg[4]=filename
-        #expect(path == "photos/11111111-1111-1111-1111-111111111111/22222222-2222-2222-2222-222222222222/auto_001.50.jpg")
+        #expect(
+            path
+                == "photos/11111111-1111-1111-1111-111111111111/"
+                + "22222222-2222-2222-2222-222222222222/"
+                + "auto_001.50.jpg"
+        )
         #expect(RoomScanStoragePath.Folder.photos == "photos")
 
         // UPPERCASE UUID in → canonical LOWERCASE segments (matches Postgres RLS).
         let upper = UUID(uuidString: "AAAAAAAA-AAAA-AAAA-AAAA-AAAAAAAAAAAA")!
         let lowered = RoomScanStoragePath.object(
-            folder: "photos", userID: upper, roomID: rid, filename: "thumb_auto_001.50.jpg")
-        #expect(lowered == "photos/aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa/22222222-2222-2222-2222-222222222222/thumb_auto_001.50.jpg")
+            folder: "photos",
+            userID: upper,
+            roomID: rid,
+            filename: "thumb_auto_001.50.jpg"
+        )
+        #expect(
+            lowered
+                == "photos/aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa/"
+                + "22222222-2222-2222-2222-222222222222/"
+                + "thumb_auto_001.50.jpg"
+        )
     }
 
     // MARK: - Insert DTO JSON-key snapshot (+ 16-element camera_transform)
@@ -98,6 +115,7 @@ struct FieldPosedPhotoTests {
         let dict = try #require(try JSONSerialization.jsonObject(with: data) as? [String: Any])
 
         // Identity + locked v1 constants.
+        #expect(dict["id"] as? String == dto.id.uuidString)
         #expect(dict["scan_id"] as? String == scanID.uuidString)
         #expect(dict["room_id"] as? String == roomID.uuidString)
         #expect(dict["role"] as? String == "auto")
@@ -137,12 +155,40 @@ struct FieldPosedPhotoTests {
 
         // No stray keys beyond the room_scan_images columns this lane writes.
         #expect(Set(dict.keys) == Set([
-            "scan_id", "room_id", "role", "is_primary", "display_order",
+            "id", "scan_id", "room_id", "role", "is_primary", "display_order",
             "image_url", "thumbnail_url", "captured_at", "camera_transform",
             "camera_intrinsics", "euler_angles", "photo_kind", "is_full_resolution",
             "timestamp_seconds", "width", "height", "file_size_bytes", "mime_type",
             "light_estimate_lumens"
         ]))
+    }
+
+    @Test func imageIDIsStablePerScanAndFilename() {
+        let scanID = UUID(
+            uuidString: "33333333-3333-3333-3333-333333333333"
+        )!
+        let first = FieldRoomScanImageInsert.deterministicID(
+            scanID: scanID,
+            filename: "auto_002.00.jpg"
+        )
+        let replay = FieldRoomScanImageInsert.deterministicID(
+            scanID: scanID,
+            filename: "auto_002.00.jpg"
+        )
+        let differentPhoto = FieldRoomScanImageInsert.deterministicID(
+            scanID: scanID,
+            filename: "auto_004.00.jpg"
+        )
+        let differentScan = FieldRoomScanImageInsert.deterministicID(
+            scanID: UUID(
+                uuidString: "55555555-5555-5555-5555-555555555555"
+            )!,
+            filename: "auto_002.00.jpg"
+        )
+
+        #expect(first == replay)
+        #expect(first != differentPhoto)
+        #expect(first != differentScan)
     }
 
     @Test func insertDTONilLightEstimateOmitsKey() throws {

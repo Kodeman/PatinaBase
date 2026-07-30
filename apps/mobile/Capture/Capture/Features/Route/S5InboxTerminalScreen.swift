@@ -33,7 +33,7 @@ struct S5InboxTerminalScreen: View {
             .animation(.spring(response: 0.45, dampingFraction: 0.7), value: appeared)
 
             VStack(spacing: 6) {
-                Text("Parked in your inbox")
+                Text(isConfirmed ? "Parked in your inbox" : "Held on this device")
                     .font(CaptureType.title)
                     .foregroundStyle(CaptureColor.ink)
                 Text(leftToFinish)
@@ -43,11 +43,13 @@ struct S5InboxTerminalScreen: View {
             }
 
             VStack(alignment: .leading, spacing: 6) {
-                Text("Next in the inbox")
+                Text(isConfirmed ? "Next in the inbox" : transferLabel)
                     .font(CaptureType.eyebrow)
                     .textCase(.uppercase)
                     .foregroundStyle(CaptureColor.warning)
-                Text("Confirm the material, verify the trade price, then promote it to the library.")
+                Text(isConfirmed
+                     ? "Confirm the material, verify the trade price, then promote it to the library."
+                     : "Nothing is lost. Patina will send it to your inbox and confirm when it lands.")
                     .font(CaptureType.callout)
                     .foregroundStyle(CaptureColor.inkSoft)
                     .fixedSize(horizontal: false, vertical: true)
@@ -79,7 +81,26 @@ struct S5InboxTerminalScreen: View {
         .onAppear { appeared = true }
         .task {
             analytics.screen(CaptureScreenID.s5Inbox.rawValue)
-            analytics.event("capture.route_completed", ["destination": "inbox"])
+            analytics.event(
+                isConfirmed ? "capture.route_completed" : "capture.route_queued",
+                ["destination": "inbox"])
+        }
+    }
+
+    private var transfer: CaptureTransferState {
+        specimen?.transferState ?? .local
+    }
+
+    private var isConfirmed: Bool {
+        transfer.phase == .complete && transfer.receiptID != nil
+    }
+
+    private var transferLabel: String {
+        switch transfer.phase {
+        case .uploading: return "Uploading"
+        case .awaitingConfirmation: return "Awaiting confirmation"
+        case .retryableFailure: return "Retry needed"
+        default: return "Queued to sync"
         }
     }
 

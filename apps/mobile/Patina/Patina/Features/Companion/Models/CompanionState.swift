@@ -59,7 +59,7 @@ public enum CompanionState: Equatable {
     }
 
     public var journeyProgress: CGFloat? {
-        if case .journey(let p, _) = self { return p }
+        if case .journey(let progress, _) = self { return progress }
         return nil
     }
 
@@ -201,11 +201,18 @@ public enum CompanionConstants {
     public static let mediumHapticThreshold: CGFloat = 150
 
     // Animation
-    public static let springResponse: Double = 0.4
-    public static let springDamping: Double = 0.85  // Slightly higher for smoother morph
-    public static let morphDuration: Double = 0.4
+    /// Canonical shell morph: a calm 480ms spring within the 420–520ms
+    /// motion window established for the Companion system.
+    public static let springResponse: Double = 0.48
+    public static let springDamping: Double = 0.86
+    public static let morphDuration: Double = 0.48
     public static let breathingDuration: Double = 3.0
     public static let contentFadeThreshold: Double = 0.7  // Content appears at 70% morph
+    /// Copy follows the shell instead of competing with its geometry.
+    public static let contentFollowDelay: Double = 0.08
+    public static let contentFadeDuration: Double = 0.20
+    /// Reduce Motion swaps the geometry morph for a short crossfade.
+    public static let reducedMotionCrossfadeDuration: Double = 0.18
 
     // Voice input
     public static let longPressDuration: Double = 0.5

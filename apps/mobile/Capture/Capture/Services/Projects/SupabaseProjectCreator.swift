@@ -23,10 +23,15 @@ protocol CaptureProjectCreating {
 }
 
 enum ProjectCreateError: LocalizedError {
-    case notAuthenticated
+    case ownerUnavailable
+    case identityChanged
+
     var errorDescription: String? {
         switch self {
-        case .notAuthenticated: return "You need to be signed in to create a project."
+        case .ownerUnavailable:
+            return "Choose a workspace before creating a project."
+        case .identityChanged:
+            return "Your account or workspace changed while the project was being created."
         }
     }
 }
@@ -36,16 +41,19 @@ struct SupabaseProjectCreator: CaptureProjectCreating {
     let session: any SessionProviding
 
     func createProject(name: String) async throws -> String {
-        guard let uid = session.userID else { throw ProjectCreateError.notAuthenticated }
+        guard let owner = session.ownerIdentity else {
+            throw ProjectCreateError.ownerUnavailable
+        }
 
-        // Minimal columns: `name` (NOT NULL), `designer_id` (the RLS check), and
-        // `created_by` — also NOT NULL (00004_catalog_enhancements.sql), added
-        // with a default that was immediately dropped, and filled by no trigger.
-        // Every real INSERT must supply it explicitly or Postgres raises 23502.
-        // The INSERT policy (00168) only checks designer_id = auth.uid(), so
-        // setting created_by to the same id is permitted. (Mirrors how the
-        // SECURITY DEFINER RPCs set it, e.g. open_project_direct, 00237.)
-        let row = NewProjectRow(name: name, designerID: uid, createdBy: uid)
+        // The project is stamped with the same validated owner projection used
+        // by local capture data. `studio_id` is the workspace isolation boundary;
+        // `designer_id` and `created_by` remain the authenticated user required by
+        // the existing RLS and NOT NULL constraints.
+        let row = NewProjectRow(
+            name: name,
+            designerID: owner.userID,
+            createdBy: owner.userID,
+            studioID: owner.workspaceID)
         let created: CreatedProjectRow = try await client
             .from("projects")
             .insert(row)
@@ -53,6 +61,10 @@ struct SupabaseProjectCreator: CaptureProjectCreating {
             .single()
             .execute()
             .value
+
+        guard session.ownerIdentity == owner else {
+            throw ProjectCreateError.identityChanged
+        }
         return created.id.uuidString
     }
 }
@@ -64,10 +76,13 @@ private struct NewProjectRow: Encodable {
     let name: String
     let designerID: String
     let createdBy: String
+    let studioID: String
+
     enum CodingKeys: String, CodingKey {
         case name
         case designerID = "designer_id"
         case createdBy = "created_by"
+        case studioID = "studio_id"
     }
 }
 

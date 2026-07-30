@@ -47,6 +47,10 @@ import UniformTypeIdentifiers
 @MainActor
 final class RoomPlanScanSession: NSObject, FieldScanSession {
 
+    /// Immutable F2 owner stamp. The upload seam refuses to claim this bundle
+    /// after an account or workspace switch.
+    private let captureOwner: CaptureOwnerIdentity?
+
     /// The shared-ARSession capture core (item 3). Owns + configures + runs the
     /// `ARSession`; is its delegate; fans frames/mesh out to the recorders.
     private let rig = SharedARCaptureRig()
@@ -90,7 +94,8 @@ final class RoomPlanScanSession: NSObject, FieldScanSession {
 
     private let logger = Logger(subsystem: "cloud.patina.field", category: "SiteScan")
 
-    override init() {
+    init(owner: CaptureOwnerIdentity) {
+        captureOwner = owner
         let made = AsyncStream.makeStream(of: FieldScanEvent.self)
         eventStream = made.stream
         eventContinuation = made.continuation
@@ -153,12 +158,15 @@ final class RoomPlanScanSession: NSObject, FieldScanSession {
 
     /// Stop scanning, let RoomPlan build the final room, export the two artifacts.
     func finish() async throws -> FieldScanResult {
+        guard let captureOwner else {
+            throw SiteScanError.notAuthenticated
+        }
         // Stop posed sampling; let RoomPlan finalize (RoomBuilder) on the shared
         // session, THEN tear the rig down (final mesh.ply + depth drain, pause AR).
         posedPhotos.stop()
         let room = try await withCheckedThrowingContinuation { cont in
             finishContinuation = cont
-            roomCaptureView?.captureSession.stop()   // → captureView(shouldPresent:) → didPresent
+            roomCaptureView?.captureSession.stop()
         }
         rig.stopRecording(anchorCount: anchors.count)
         eventContinuation.finish()
@@ -168,10 +176,13 @@ final class RoomPlanScanSession: NSObject, FieldScanSession {
         floorAreaSqm = dims.map { $0.x * $0.z }
 
         let bundleURL = try exportBundle(room)
-        return FieldScanResult(localBundleURL: bundleURL,
-                               roomName: nil,
-                               areaLabel: floorAreaSqm.map(Self.areaLabel),
-                               scorecard: rig.lastScorecard)
+        return FieldScanResult(
+            localBundleURL: bundleURL,
+            roomName: nil,
+            areaLabel: floorAreaSqm.map(Self.areaLabel),
+            owner: captureOwner,
+            scorecard: rig.lastScorecard
+        )
     }
 
     func cancel() {

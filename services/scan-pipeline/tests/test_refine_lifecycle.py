@@ -4751,6 +4751,12 @@ def test_the_posture_flag_surface_is_exactly_what_the_program_has_established():
     for expected in (
         "REFINE_LIFECYCLE_QUALIFIED",
         "REFINE_LIFECYCLE_STAGE_REGISTERED",
+        # Delivery is new surface and it declares its own posture rather than
+        # inheriting the lifecycle's.  Both are False and both are named here so
+        # a future agent who flips one has to look at the other; the equality
+        # assertion above is what catches a flip to True.
+        "REFINE_DELIVERY_QUALIFIED",
+        "REFINE_DELIVERY_STAGE_REGISTERED",
         "PILOT_200_400_FRAME_RANGE_QUALIFIED",
         "PRIMARY_EXECUTION_QUALIFIED",
         "RUNNER_PATH_REOPEN_COMPOSITION_QUALIFIED",

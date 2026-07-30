@@ -118,8 +118,12 @@ public final class MockSessionProviding: SessionProviding {
     public var displayName: String? = "Ava Walbridge"
     public init() {}
     public func waitForReady() async {}
-    public func selectWorkspace(id: String) { workspaceID = id }
+    public func selectWorkspace(id: String) {
+        if workspaceID != id { CaptureSessionContextStore.shared.reset() }
+        workspaceID = id
+    }
     public func signOut() async {
+        CaptureSessionContextStore.shared.reset()
         isAuthenticated = false
         userID = nil
         workspaceID = nil

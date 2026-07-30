@@ -15,8 +15,13 @@
  *    read side dedupes (I82).
  *
  * Signing batches every distinct storage path across a scan's photo set into
- * ONE `createSignedUrls` call rather than up to 2N `createSignedUrl`
- * round-trips (image + thumbnail per row).
+ * ONE `createSignedUrls` call rather than up to 3N `createSignedUrl`
+ * round-trips (image + preview + thumbnail per row).
+ *
+ * All three derivative rungs are selected and signed together. `preview_url`
+ * is the 1600 px JPEG the 00340 derivative cron already produces for every
+ * HEIC row; leaving it unselected is what forced consumers to request an
+ * undecodable HEIC, watch it fail, and settle for the 512 px thumbnail.
  *
  * `hero_frame_url` is vestigial — no producer ever assigns it, and
  * `is_primary` is only ever set downstream of capture (client review) — so
@@ -33,8 +38,7 @@ import { publicUrlToPath } from '../lib/storage-url';
 const getSupabase = () => createBrowserClient();
 
 const PHOTO_COLUMNS =
-  'id, scan_id, image_url, thumbnail_url, is_primary, display_order, quality_score, photo_kind, caption, captured_at, camera_transform, mime_type';
-// preview_url arrives with 00340 — extended at integration gate
+  'id, scan_id, image_url, thumbnail_url, preview_url, is_primary, display_order, quality_score, photo_kind, caption, captured_at, camera_transform, mime_type';
 
 // ═══════════════════════════════════════════════════════════════════════════
 // TYPES
@@ -48,6 +52,7 @@ export type RoomScanPhotoRow = Pick<
   | 'scan_id'
   | 'image_url'
   | 'thumbnail_url'
+  | 'preview_url'
   | 'is_primary'
   | 'display_order'
   | 'quality_score'
@@ -67,6 +72,14 @@ export interface RoomScanPhoto extends RoomScanPhotoRow {
   /** Signed thumbnail URL — null when `thumbnail_url` itself is null
    *  (true for every row in prod today per I78) or unresolved. */
   signedThumbUrl: string | null;
+  /** Signed 1600 px JPEG preview URL (00340's derivative lane) — the rung
+   *  between the original and the 512 px thumbnail.
+   *
+   *  Null on JPEG rows BY DESIGN, not by omission: the derivative sweep is
+   *  HEIC-only because a JPEG original is already web-decodable, so there is
+   *  nothing for a preview to buy. Consumers must therefore treat a null
+   *  preview as "no rung here", never as "derivatives missing". */
+  signedPreviewUrl: string | null;
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -81,14 +94,24 @@ export { publicUrlToPath };
  * Dedupe photo rows per I82: retried client batch-inserts leave duplicate
  * `(scan_id, image_url)` rows in the wild (the insert trigger counts them
  * truthfully; only reads defend against them). Preserves input order;
- * within a duplicate group, prefers whichever row carries a `thumbnail_url`
- * over the first-seen row (the derivative-lane-friendly copy wins).
+ * within a duplicate group, prefers whichever row carries the MOST
+ * derivatives — one point each for `thumbnail_url` and `preview_url` — so a
+ * duplicate that the derivative sweep reached beats one it hasn't. Purely
+ * defensive: zero production groups have mixed derivative presence. Ties keep
+ * the first-seen row.
+ *
+ * `preview_url` is optional in the constraint so narrower callers (and bare
+ * test literals) stay valid; an absent key simply scores zero.
  */
 export function dedupeRoomScanPhotos<
-  T extends Pick<RoomScanPhotoRow, 'image_url' | 'thumbnail_url'>,
+  T extends Pick<RoomScanPhotoRow, 'image_url' | 'thumbnail_url'> &
+    Partial<Pick<RoomScanPhotoRow, 'preview_url'>>,
 >(rows: T[]): T[] {
   const order: string[] = [];
   const bestByUrl = new Map<string, T>();
+
+  const derivativeScore = (row: T): number =>
+    (row.thumbnail_url ? 1 : 0) + (row.preview_url ? 1 : 0);
 
   for (const row of rows) {
     const key = row.image_url;
@@ -98,7 +121,7 @@ export function dedupeRoomScanPhotos<
       order.push(key);
       continue;
     }
-    if (!existing.thumbnail_url && row.thumbnail_url) {
+    if (derivativeScore(row) > derivativeScore(existing)) {
       bestByUrl.set(key, row);
     }
   }
@@ -166,13 +189,17 @@ export function useRoomScanPhotos(scanId: string | null | undefined) {
       const rows = dedupeRoomScanPhotos((data ?? []) as RoomScanPhotoRow[]);
       if (rows.length === 0) return [];
 
-      // Batch-sign every distinct storage path (image + thumbnail together)
-      // in ONE call — a scan with N photos costs one storage round-trip,
-      // not up to 2N.
+      // Batch-sign every distinct storage path (image + preview + thumbnail
+      // together) in ONE call — a scan with N photos costs one storage
+      // round-trip, not up to 3N. The preview path is pushed INSIDE this same
+      // loop precisely so the added rung costs zero extra round-trips: the
+      // array grows from ≤2N to ≤3N entries in the one existing request.
       const pathSet = new Set<string>();
       for (const row of rows) {
         const imagePath = publicUrlToPath(row.image_url);
         if (imagePath) pathSet.add(imagePath);
+        const previewPath = publicUrlToPath(row.preview_url);
+        if (previewPath) pathSet.add(previewPath);
         const thumbPath = publicUrlToPath(row.thumbnail_url);
         if (thumbPath) pathSet.add(thumbPath);
       }
@@ -204,6 +231,7 @@ export function useRoomScanPhotos(scanId: string | null | undefined) {
       return rows.map((row) => ({
         ...row,
         signedImageUrl: resolveUrl(row.image_url),
+        signedPreviewUrl: resolveUrl(row.preview_url),
         signedThumbUrl: resolveUrl(row.thumbnail_url),
       }));
     },
@@ -268,6 +296,8 @@ export function useRoomScanCovers(scanIds: Array<string | null | undefined>) {
         if (!cover) continue;
         const imagePath = publicUrlToPath(cover.image_url);
         if (imagePath) pathSet.add(imagePath);
+        const previewPath = publicUrlToPath(cover.preview_url);
+        if (previewPath) pathSet.add(previewPath);
         const thumbPath = publicUrlToPath(cover.thumbnail_url);
         if (thumbPath) pathSet.add(thumbPath);
       }
@@ -300,6 +330,7 @@ export function useRoomScanCovers(scanIds: Array<string | null | undefined>) {
             ? {
                 ...cover,
                 signedImageUrl: resolveUrl(cover.image_url),
+                signedPreviewUrl: resolveUrl(cover.preview_url),
                 signedThumbUrl: resolveUrl(cover.thumbnail_url),
               }
             : null,

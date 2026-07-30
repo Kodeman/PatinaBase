@@ -1,0 +1,217 @@
+//
+//  CompanionPresentationTests.swift
+//  PatinaTests
+//
+//  Canonical state and policy coverage for the Companion Hearth.
+//
+
+@testable import Patina
+import CoreFoundation
+import Testing
+
+@MainActor
+struct CompanionPresentationTests {
+    @Test
+    func restingPresentationIsCollapsedByDefault() {
+        let state = CompanionPresentationState.resting
+
+        #expect(state.canonicalState == .collapsed)
+        #expect(state.analyticsState == "collapsed")
+        #expect(state.accessibilityLabel == "Patina companion")
+        #expect(state.accessibilityValue == "Next steps")
+        #expect(!state.usesFullSheet)
+    }
+
+    @Test
+    func progressClampsFractionAndStepToValidBounds() {
+        let progress = CompanionProgressPresentation(
+            fraction: 1.4,
+            title: "Measuring the room",
+            detail: "Keep moving",
+            step: 8,
+            totalSteps: 4
+        )
+
+        #expect(progress.fraction == 1)
+        #expect(progress.percentComplete == 100)
+        #expect(progress.step == 4)
+        #expect(progress.totalSteps == 4)
+        #expect(progress.stepDescription == "Step 4 of 4")
+        #expect(progress.accessibilityValue == "100 percent, Step 4 of 4, Keep moving")
+    }
+
+    @Test
+    func invalidStepMetadataIsRemovedRatherThanAnnounced() {
+        let progress = CompanionProgressPresentation(
+            fraction: -0.5,
+            title: "Beginning",
+            step: 1,
+            totalSteps: 0
+        )
+
+        #expect(progress.fraction == 0)
+        #expect(progress.percentComplete == 0)
+        #expect(progress.step == nil)
+        #expect(progress.totalSteps == nil)
+        #expect(progress.stepDescription == nil)
+        #expect(progress.accessibilityValue == "0 percent")
+    }
+
+    @Test
+    func reducerMovesThroughCanonicalStatesAndBackToRest() {
+        let progress = CompanionProgressPresentation(
+            fraction: 0.62,
+            title: "Measuring the room"
+        )
+        let expanded = CompanionExpandedPresentation(
+            title: "Materials you love",
+            detail: "Question 3 of 5"
+        )
+
+        let progressing = CompanionPresentationReducer.transition(
+            from: .resting,
+            on: .reportProgress(progress)
+        )
+        #expect(progressing.canonicalState == .progress)
+
+        let communicating = CompanionPresentationReducer.transition(
+            from: progressing,
+            on: .communicate(expanded)
+        )
+        #expect(communicating.canonicalState == .expanded)
+
+        let resting = CompanionPresentationReducer.transition(
+            from: communicating,
+            on: .dismiss
+        )
+        #expect(resting == .collapsed(hint: "Next steps"))
+    }
+
+    @Test
+    func blankCollapsedHintFallsBackToDefault() {
+        let state = CompanionPresentationReducer.transition(
+            from: .resting,
+            on: .collapse(hint: "   "),
+            defaultHint: "What’s next"
+        )
+
+        #expect(state == .collapsed(hint: "What’s next"))
+    }
+
+    @Test
+    func briefCommunicationUsesCardNeverFullSheet() {
+        let content = CompanionExpandedPresentation(
+            title: "A considered next move",
+            communicationLength: .brief
+        )
+        let state = CompanionPresentationState.expanded(content)
+
+        #expect(content.extent == .card)
+        #expect(!state.usesFullSheet)
+    }
+
+    @Test
+    func longFormCommunicationExplicitlyOptsIntoFullSheet() {
+        let content = CompanionExpandedPresentation(
+            title: "A longer conversation",
+            communicationLength: .longForm
+        )
+        let state = CompanionPresentationState.expanded(content)
+
+        #expect(content.extent == .fullSheet)
+        #expect(state.usesFullSheet)
+    }
+
+    @Test
+    func companionMotionAndHearthMetricsStayWithinTheProductContract() {
+        #expect(CompanionConstants.buttonSize >= 56)
+        #expect(CompanionConstants.buttonSize <= 64)
+        #expect(CompanionConstants.minimumTouchTarget >= 44)
+        #expect(CompanionConstants.springResponse >= 0.42)
+        #expect(CompanionConstants.springResponse <= 0.52)
+        #expect(CompanionHearthMetrics.reservedHeight == 120)
+        #expect(CompanionHearthMetrics.reservesRootHearth(for: .heroFrame))
+        #expect(!CompanionHearthMetrics.reservesRootHearth(for: .scanFlow(reason: .fresh)))
+        #expect(!CompanionHearthMetrics.reservesRootHearth(for: .styleQuiz))
+        #expect(CompanionConstants.contentFollowDelay > 0)
+    }
+
+    @Test
+    func liveStudioAttentionLeadsTheCollapsedCompanionWithoutMemoryConsent() {
+        let memory = CompanionMemoryContext(
+            isPersonalizationEnabled: false,
+            activeRoomName: "Living Room",
+            projectAttentionSummary: "A project decision is waiting"
+        )
+
+        #expect(
+            CompanionContextualCopy.collapsedHint(
+                memory: memory,
+                studioAttentionHint: "2 things need your eye"
+            ) == "2 things need your eye"
+        )
+        #expect(
+            CompanionContextualCopy.expandedDetail(
+                memory: memory,
+                studioAttentionHint: "2 things need your eye"
+            ) == "2 things need your eye."
+        )
+    }
+
+    @Test
+    func companionContextCarriesLiveAttentionSeparatelyFromOptInMemory() {
+        let context = CompanionContext(
+            memory: CompanionMemoryContext(isPersonalizationEnabled: false),
+            attentionSummary: "A project decision is waiting"
+        )
+
+        #expect(context.memory?.isPersonalizationEnabled == false)
+        #expect(context.attentionSummary == "A project decision is waiting")
+    }
+
+    @Test
+    func optedOutMemoryNeverChangesCompanionCopy() {
+        let memory = CompanionMemoryContext(
+            isPersonalizationEnabled: false,
+            activeRoomName: "Living Room",
+            tasteSummary: "Warm and tailored",
+            recentSavedItemName: "Oak Credenza"
+        )
+
+        #expect(
+            CompanionContextualCopy.collapsedHint(
+                memory: memory,
+                studioAttentionHint: nil
+            ) == "Next steps"
+        )
+        #expect(
+            CompanionContextualCopy.expandedDetail(
+                memory: memory,
+                studioAttentionHint: nil
+            ) == "A considered next move, based on where you are."
+        )
+    }
+
+    @Test
+    func optedInMemoryCarriesRoomAndTasteThroughTheSameShell() {
+        let memory = CompanionMemoryContext(
+            isPersonalizationEnabled: true,
+            activeRoomName: "Library",
+            tasteSummary: "Warm, quiet, and tailored",
+            preferredMaterials: ["Walnut", "Linen"]
+        )
+
+        #expect(
+            CompanionContextualCopy.collapsedHint(
+                memory: memory,
+                studioAttentionHint: nil
+            ) == "Continue with Library"
+        )
+        #expect(
+            CompanionContextualCopy.expandedDetail(
+                memory: memory,
+                studioAttentionHint: nil
+            ) == "Grounded in Library and your preference for Walnut."
+        )
+    }
+}

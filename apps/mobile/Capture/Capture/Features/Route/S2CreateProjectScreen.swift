@@ -16,14 +16,13 @@ struct S2CreateProjectScreen: View {
     let store: CaptureStore
     let coordinator: CaptureCoordinator
     let analytics: any CaptureAnalytics
+    let session: any SessionProviding
     /// Real mode: inserts into public.projects before caching locally. nil in mock
     /// mode → the local-only path (unchanged harness behavior).
     let projectCreator: (any CaptureProjectCreating)?
 
-    @AppStorage("capture.lastProjectId") private var lastProjectId = ""
-    @AppStorage("capture.lastProjectName") private var lastProjectName = ""
-    @AppStorage("capture.lastRoom") private var lastRoom = ""
     @AppStorage("capture.routingSpecimenId") private var routingSpecimenId = ""
+    private let sessionContext = CaptureSessionContextStore.shared
 
     @State private var name = ""
     @State private var addRoom = false
@@ -107,21 +106,30 @@ struct S2CreateProjectScreen: View {
         guard !projectName.isEmpty, !creating else { return }
         createError = nil
 
-        // Mock mode (no creator): local-only, exactly as before.
+        // Mock mode intentionally keeps unowned, global fixtures so the
+        // verification harness remains deterministic.
         guard let projectCreator else {
-            persistAndAdvance(name: projectName, remoteId: nil)
+            persistAndAdvance(name: projectName, remoteId: nil, owner: nil)
             return
         }
 
-        // Real mode: create server-side FIRST; only cache locally on success, so a
-        // failure leaves no phantom local project.
+        guard let owner = session.ownerIdentity else {
+            createError = "Choose a workspace before creating a project."
+            return
+        }
+
+        // Real mode creates server-side first. The captured owner must still be
+        // current after the network hop before anything is cached or presented.
         creating = true
         Task { @MainActor in
             defer { creating = false }
             do {
+                guard session.ownerIdentity == owner else { return }
                 let remoteId = try await projectCreator.createProject(name: projectName)
-                persistAndAdvance(name: projectName, remoteId: remoteId)
+                guard session.ownerIdentity == owner else { return }
+                persistAndAdvance(name: projectName, remoteId: remoteId, owner: owner)
             } catch {
+                guard session.ownerIdentity == owner else { return }
                 createError = "Couldn’t create it just now — check your connection and try again."
             }
         }
@@ -130,15 +138,34 @@ struct S2CreateProjectScreen: View {
     /// Cache the ref locally (carrying any server id), set the last-used handles
     /// S1 reads, then return to S1. `lastProjectId` is the REMOTE id in real mode
     /// so the venue carries a routable project into the commit RPC.
-    private func persistAndAdvance(name projectName: String, remoteId: String?) {
-        let project = CaptureProjectRef(remoteId: remoteId, name: projectName)
+    private func persistAndAdvance(
+        name projectName: String,
+        remoteId: String?,
+        owner: CaptureOwnerIdentity?
+    ) {
+        guard owner == nil || session.ownerIdentity == owner else { return }
+
+        let project = CaptureProjectRef(
+            remoteId: remoteId,
+            name: projectName,
+            owner: owner)
         store.context.insert(project)
         try? store.save()
 
-        lastProjectId = remoteId ?? project.id.uuidString
-        lastProjectName = projectName
         let trimmedRoom = room.trimmingCharacters(in: .whitespacesAndNewlines)
-        if addRoom, !trimmedRoom.isEmpty { lastRoom = trimmedRoom }
+        let identity = CaptureSessionIdentity(
+            userID: session.userID, workspaceID: session.workspaceID)
+        let current = sessionContext.current(identity: identity).routing
+        sessionContext.remember(
+            CaptureRoutingMemory(
+                destination: current.destination,
+                projectID: remoteId ?? project.id.uuidString,
+                projectName: projectName,
+                room: addRoom && !trimmedRoom.isEmpty ? trimmedRoom : current.room,
+                shelf: current.shelf),
+            identity: identity)
+
+        guard owner == nil || session.ownerIdentity == owner else { return }
 
         // Return to S1 for the specimen we came from (createProject carries no id).
         if let id = UUID(uuidString: routingSpecimenId) {
@@ -156,7 +183,8 @@ import CaptureKitMocks
     // swiftlint:disable:next force_try
     let store = try! CaptureStore.inMemory()
     return S2CreateProjectScreen(store: store, coordinator: CaptureCoordinator(),
-                                 analytics: MockCaptureAnalytics(), projectCreator: nil)
+                                 analytics: MockCaptureAnalytics(),
+                                 session: MockSessionProviding(), projectCreator: nil)
         .modelContainer(store.container)
 }
 #endif

@@ -88,14 +88,16 @@ struct OnboardingFlowHost: View {
             // Reuse the purpose-built camera primer. On grant we hand straight
             // off to the scan flow; on deny we fall back to the quiz-first path
             // so the user still completes onboarding.
-            CameraPermissionView { result in
+            CameraPermissionView({ result in
                 switch result {
                 case .granted:
                     enterWalkFirstScan()
                 case .denied, .notDetermined:
                     advanceToQuiz()
                 }
-            }
+            }, onManualEntry: {
+                enterManualRoom()
+            })
 
         case .styleQuiz:
             StyleQuizView(onComplete: { result in
@@ -129,6 +131,16 @@ struct OnboardingFlowHost: View {
         HapticManager.shared.thresholdCrossed()
         OnboardingFunnel.shared.markWalkFirstScanEntered()
         coordinator.navigate(to: .scanFlow(reason: .fresh))
+    }
+
+    /// A complete non-camera path from the pre-permission screen. The user
+    /// enters the main app and lands in the existing manual room-details form;
+    /// no permission request, capture session, or upload is started.
+    private func enterManualRoom() {
+        AppSettings.shared.hasCompletedOnboarding = true
+        AppSettings.shared.hasSeenThreshold = true
+        HapticManager.shared.thresholdCrossed()
+        coordinator.navigate(to: .manualRoomEntry)
     }
 
     /// Quiz-first completion. Flipping the persisted flag triggers the phase

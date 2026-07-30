@@ -30,12 +30,19 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import Link from 'next/link';
 import type { RoomGeometryDocument, RoomScanPhoto } from '@patina/supabase';
-import { useRoomFiles } from '@patina/supabase';
+import { useRoomFiles, useScanRefineArtifacts } from '@patina/supabase';
 import { useFeatureFlag } from '@/hooks/use-feature-flag';
 import type { RoomGeometry } from '@/lib/room-view/geometry';
 import type { PhotoProvenance } from '@/lib/room-view/photo-poses';
+import {
+  buildCameraPath,
+  parsePoseDeltas,
+  parseRefinementEvidence,
+  poseDriftStats,
+} from '@/lib/room-view/refined-poses';
 import { roomEvents } from '@/lib/analytics';
 import { FactsRail } from './facts-rail';
+import type { RefineReadoutProps } from './refine-readout';
 import { MeasureLayer } from './measure-layer';
 import type { OrbitPhotoPose } from './orbit/photo-marker-objects';
 import { OrbitStage } from './orbit/orbit-stage';
@@ -141,6 +148,62 @@ export function RoomView({
     if (!hasGenerated) return undefined;
     return { href: `/room/${roomId}/file` };
   }, [roomFileEnabled, roomFilesForDoor, roomId]);
+
+  // ── Refine diagnostic readout (Field Capture P2, Layer 3, ruling R-G) ──
+  // A facts-rail line + a <details> disclosure: drift figures and R123's
+  // advisory. NO plan polyline, NO orbit geometry — R-G scoped the render out
+  // deliberately (§3.6), and `buildCameraPath` is consumed here only for the
+  // counts and the refined/captured labelling it is the single authority on.
+  //
+  // The flag gates the QUERY, not the render, so flag-off costs zero database
+  // and zero Storage calls. Every rung below degrades to `undefined` — no
+  // error UI, no toast, no console noise. This resolves to `undefined` for
+  // every scan in production today: nothing has ever published a refine
+  // artifact, so there is no record to find.
+  const { value: refinedPathEnabled } = useFeatureFlag('room-view-refined-path');
+  const { data: refineArtifacts } = useScanRefineArtifacts(roomId, {
+    enabled: refinedPathEnabled,
+  });
+  const refineReadout = useMemo<RefineReadoutProps | undefined>(() => {
+    if (!refinedPathEnabled || !refineArtifacts) return undefined;
+
+    const evidence = parseRefinementEvidence(
+      refineArtifacts.documents['refinement-evidence-v1.json'],
+    );
+    const deltas = parsePoseDeltas(refineArtifacts.documents['pose-deltas-v1.json']);
+    if (!deltas || deltas.length === 0) return undefined;
+
+    // The record's verdict and the evidence document's verdict should agree;
+    // when only one is readable, take it. `false` is the fail-closed default,
+    // and it only ever makes the readout MORE conservative.
+    const refinementEvidenced =
+      evidence?.refinementEvidenced ?? refineArtifacts.record.refinementEvidenced;
+
+    const path = buildCameraPath(deltas, provenance, { refinementEvidenced });
+    if (!path) return undefined;
+
+    const drift = poseDriftStats(deltas);
+    return {
+      frameCount: path.frameCount,
+      usableCount: path.usableCount,
+      droppedCount: path.droppedCount,
+      driftMaxM: drift?.maxM ?? null,
+      driftMedianM: drift?.medianM ?? null,
+      refinementEvidenced,
+      absoluteAccuracyCertified:
+        evidence?.absoluteAccuracyCertified ??
+        refineArtifacts.record.absoluteAccuracyCertified,
+      pathSource: path.source,
+      verdictReason:
+        evidence?.verdictReason ?? refineArtifacts.record.verdictReason ?? null,
+      // Verbatim, from whichever source carries it. Never rewritten.
+      loopConsistencyAdvisory:
+        evidence?.loopConsistencyAdvisory ??
+        refineArtifacts.record.loopConsistencyAdvisory ??
+        null,
+    };
+  }, [refinedPathEnabled, refineArtifacts, provenance]);
+
   const viewBox = useMemo(
     () => (geometry ? planViewBox(geometry) : { width: 1, height: 1 }),
     [geometry],
@@ -297,6 +360,7 @@ export function RoomView({
             onClear: measure.clear,
           }}
           roomFile={roomFileDoor}
+          refine={refineReadout}
         />
         {/* Both stages hold the same grid cell; the inactive one is display-hidden
             (never unmounted once Orbit is up) so re-switching is instant. */}

@@ -32,6 +32,7 @@
 //  timeout that fails the continuation and re-enqueues is deferred to a later cycle.
 
 import Foundation
+import CaptureKit
 
 @MainActor
 final class FieldBackgroundScanUploader: NSObject {
@@ -41,10 +42,12 @@ final class FieldBackgroundScanUploader: NSObject {
     struct Descriptor: Sendable {
         let scanID: String
         let kind: String
+        let ownerUserID: String
+        let ownerWorkspaceID: String
         let sha256: String?
         let mimeType: String
         let fileURL: URL
-        let storagePath: String   // {folder}/{userId}/{scanId}/{filename}
+        let storagePath: String   // {folder}/{userId}/{roomId}/{filename}
     }
 
     enum UploadError: Error, Equatable {
@@ -86,6 +89,7 @@ final class FieldBackgroundScanUploader: NSObject {
     }
     private var inflight: [Int: Tracker] = [:]
     private var didReconcile = false
+    private var reconciliationTask: Task<Void, Never>?
 
     private static let maxAttempts = 3
 
@@ -105,12 +109,22 @@ final class FieldBackgroundScanUploader: NSObject {
     /// Enqueue one artifact as a background upload task (file-based — required for a
     /// background session). No-op-with-failure if there's no access token.
     ///
-    /// Dedup (M3): if a live task already targets this storage path (e.g. one adopted on
-    /// relaunch), let it finish rather than creating a duplicate — its completion routes
-    /// to the same per-kind waiter via `onCompletion`. Returns without firing anything,
-    /// so the caller's continuation is resolved by the surviving task.
+    /// Dedup (M3): if a live task already targets this owner's scan artifact (e.g. one
+    /// adopted on relaunch), let it finish rather than creating a duplicate. Logical
+    /// identity deliberately includes owner + scan + kind instead of object path alone:
+    /// separate scans assigned to the same room must never share a transfer.
     func enqueue(_ descriptor: Descriptor) async {
-        if inflight.values.contains(where: { $0.descriptor.storagePath == descriptor.storagePath }) {
+        // Every enqueue waits until surviving background tasks have been
+        // adopted. This closes the relaunch race even if a future caller
+        // bypasses the service's startup reconciliation path.
+        await reconcileExistingTasks()
+        if inflight.values.contains(where: {
+            let active = $0.descriptor
+            return active.ownerUserID == descriptor.ownerUserID
+                && active.ownerWorkspaceID == descriptor.ownerWorkspaceID
+                && active.scanID == descriptor.scanID
+                && active.kind == descriptor.kind
+        }) {
             return
         }
         guard let request = await buildRequest(descriptor, token: await accessTokenProvider?() ?? nil) else {
@@ -127,14 +141,30 @@ final class FieldBackgroundScanUploader: NSObject {
     /// `enqueue` can dedup against them. Idempotent per launch.
     func reconcileExistingTasks() async {
         guard !didReconcile else { return }
+
+        if let reconciliationTask {
+            await reconciliationTask.value
+            return
+        }
+
+        let task = Task { @MainActor [weak self] in
+            guard let self else { return }
+            let tasks: [URLSessionTask] = await withCheckedContinuation { continuation in
+                self.session.getAllTasks { continuation.resume(returning: $0) }
+            }
+            for task in tasks where self.inflight[task.taskIdentifier] == nil {
+                guard let descriptor = Self.descriptor(from: task) else { continue }
+                self.inflight[task.taskIdentifier] = Tracker(
+                    descriptor,
+                    attempts: Self.maxAttempts,
+                    adopted: true
+                )
+            }
+        }
+        reconciliationTask = task
+        await task.value
         didReconcile = true
-        let tasks: [URLSessionTask] = await withCheckedContinuation { continuation in
-            session.getAllTasks { continuation.resume(returning: $0) }
-        }
-        for task in tasks where inflight[task.taskIdentifier] == nil {
-            guard let descriptor = Self.descriptor(from: task) else { continue }
-            inflight[task.taskIdentifier] = Tracker(descriptor, attempts: Self.maxAttempts, adopted: true)
-        }
+        reconciliationTask = nil
     }
 
     /// Best-effort reconstruction of a Descriptor from a surviving task's request — the
@@ -145,9 +175,16 @@ final class FieldBackgroundScanUploader: NSObject {
         guard let request = task.originalRequest, let path = request.url?.path,
               let range = path.range(of: "/object/room-scans/") else { return nil }
         let storagePath = String(path[range.upperBound...])
-        let meta = request.value(forHTTPHeaderField: "x-metadata").flatMap(decodeMetadataHeader) ?? [:]
-        guard let scanID = meta["scanId"], let kind = meta["artifactKind"] else { return nil }
-        return Descriptor(scanID: scanID, kind: kind, sha256: meta["sha256"],
+        let values = request.value(forHTTPHeaderField: "x-metadata")
+            .flatMap(decodeMetadataHeader) ?? [:]
+        guard let metadata = ScanBackgroundTransferMetadata(
+            dictionary: values
+        ) else { return nil }
+        return Descriptor(scanID: metadata.scanID,
+                          kind: metadata.artifactKind,
+                          ownerUserID: metadata.owner.userID,
+                          ownerWorkspaceID: metadata.owner.workspaceID,
+                          sha256: metadata.sha256,
                           mimeType: request.value(forHTTPHeaderField: "Content-Type") ?? "application/octet-stream",
                           fileURL: URL(fileURLWithPath: ""), storagePath: storagePath)
     }
@@ -167,9 +204,17 @@ final class FieldBackgroundScanUploader: NSObject {
         request.setValue(anonKey, forHTTPHeaderField: "apikey")
         request.setValue(descriptor.mimeType, forHTTPHeaderField: "Content-Type")
         request.setValue("true", forHTTPHeaderField: "x-upsert")
-        var meta: [String: String] = ["scanId": descriptor.scanID, "artifactKind": descriptor.kind]
-        if let sha = descriptor.sha256, !sha.isEmpty { meta["sha256"] = sha }
-        if let header = Self.encodeMetadataHeader(meta) {
+        guard let owner = CaptureOwnerIdentity(
+            userID: descriptor.ownerUserID,
+            workspaceID: descriptor.ownerWorkspaceID
+        ) else { return nil }
+        let metadata = ScanBackgroundTransferMetadata(
+            scanID: descriptor.scanID,
+            artifactKind: descriptor.kind,
+            owner: owner,
+            sha256: descriptor.sha256
+        )
+        if let header = Self.encodeMetadataHeader(metadata.dictionary) {
             request.setValue(header, forHTTPHeaderField: "x-metadata")
         }
         return request

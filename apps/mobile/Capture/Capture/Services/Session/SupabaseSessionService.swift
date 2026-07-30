@@ -40,6 +40,7 @@ final class SupabaseSessionService: SessionProviding {
     // MARK: State (observed — drives SessionProviding + the T2 account screen)
 
     private var session: Session?
+    private(set) var ownerState: CaptureSessionOwnerState = .loading
     /// All organizations the user belongs to (populated after hydration).
     private(set) var workspaces: [CaptureWorkspace] = []
     /// Domain roles (e.g. ["designer"]) — informational only, no hard gate.
@@ -68,8 +69,20 @@ final class SupabaseSessionService: SessionProviding {
     @ObservationIgnored private var hydratedUserID: String?
 
     private enum Keys {
-        static let activeWorkspaceID = "session.activeWorkspaceID"
-        static let activeWorkspaceName = "session.activeWorkspaceName"
+        static let legacyActiveWorkspaceID = "session.activeWorkspaceID"
+        static let legacyActiveWorkspaceName = "session.activeWorkspaceName"
+
+        static func activeWorkspaceID(userID: String) -> String {
+            "session.activeWorkspaceID.\(normalized(userID))"
+        }
+
+        static func activeWorkspaceName(userID: String) -> String {
+            "session.activeWorkspaceName.\(normalized(userID))"
+        }
+
+        private static func normalized(_ userID: String) -> String {
+            userID.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+        }
     }
 
     // MARK: Init
@@ -80,9 +93,11 @@ final class SupabaseSessionService: SessionProviding {
         self.client = client
         self.analytics = analytics
         self.defaults = defaults
-        // Show the last-known workspace immediately (survives offline / pre-fetch).
-        self.activeWorkspaceID = defaults.string(forKey: Keys.activeWorkspaceID)
-        self.activeWorkspaceName = defaults.string(forKey: Keys.activeWorkspaceName)
+        // Never restore the legacy global workspace before the authenticated user
+        // and membership list have been hydrated. Per-user choices are read only
+        // after their current membership has been validated.
+        defaults.removeObject(forKey: Keys.legacyActiveWorkspaceID)
+        defaults.removeObject(forKey: Keys.legacyActiveWorkspaceName)
         startAuthListener()
     }
 
@@ -91,11 +106,17 @@ final class SupabaseSessionService: SessionProviding {
     // MARK: SessionProviding
 
     var isAuthenticated: Bool { session != nil }
-    var userID: String? { session?.user.id.uuidString }
+    var userID: String? {
+        switch ownerState {
+        case .ready(let owner): return owner.userID
+        case .needsWorkspace(let userID): return userID
+        case .loading, .signedOut: return nil
+        }
+    }
     var userEmail: String? { session?.user.email }
     var displayName: String? { profileDisplayName }
-    var workspaceID: String? { activeWorkspaceID }
-    var workspaceName: String? { activeWorkspaceName }
+    var workspaceID: String? { ownerState.owner?.workspaceID }
+    var workspaceName: String? { ownerState.owner == nil ? nil : activeWorkspaceName }
 
     func waitForReady() async {
         if isReady { return }
@@ -105,20 +126,35 @@ final class SupabaseSessionService: SessionProviding {
     }
 
     func selectWorkspace(id: String) {
-        activeWorkspaceID = id
-        if let match = workspaces.first(where: { $0.id == id }) {
-            activeWorkspaceName = match.name
+        guard let currentUserID = currentSessionUserID,
+              hydratedUserID == currentUserID,
+              let workspace = workspaces.first(where: {
+                  $0.id.caseInsensitiveCompare(id) == .orderedSame
+              }),
+              let owner = CaptureOwnerIdentity(
+                  userID: currentUserID,
+                  workspaceID: workspace.id
+              ) else { return }
+
+        if ownerState.owner != owner {
+            CaptureSessionContextStore.shared.reset()
         }
-        persistActiveWorkspace()
+        activeWorkspaceID = workspace.id
+        activeWorkspaceName = workspace.name
+        persistActiveWorkspace(for: currentUserID)
+        ownerState = .ready(owner)
     }
 
     func signOut() async {
+        // Revoke the local owner projection before any network hop so offline or
+        // slow sign-out cannot leave the previous account's UI/data visible.
+        CaptureSessionContextStore.shared.reset()
+        clearLocalState()
         do {
             try await client.auth.signOut()
         } catch {
             log.error("signOut failed: \(error.localizedDescription, privacy: .public)")
         }
-        clearLocalState()
     }
 
     // MARK: Sign-in (Apple + email one-time-code)
@@ -134,7 +170,7 @@ final class SupabaseSessionService: SessionProviding {
             let session = try await client.auth.signInWithIdToken(
                 credentials: .init(provider: .apple, idToken: idToken, nonce: rawNonce)
             )
-            self.session = session
+            acceptSession(session)
             await hydrateAfterSignIn(user: session.user)
             analytics.event("account.sign_in.succeeded", ["method": "apple"])
         } catch {
@@ -181,7 +217,7 @@ final class SupabaseSessionService: SessionProviding {
                                 ["method": "email-otp", "reason": "NoSessionInResponse"])
                 return
             }
-            self.session = session
+            acceptSession(session)
             await hydrateAfterSignIn(user: session.user)
             analytics.event("account.sign_in.succeeded", ["method": "email-otp"])
         } catch {
@@ -211,7 +247,7 @@ final class SupabaseSessionService: SessionProviding {
     func signInWithPortalToken(tokenHash: String) async throws {
         let response = try await client.auth.verifyOTP(tokenHash: tokenHash, type: .magiclink)
         guard let session = response.session else { throw PortalTokenError.noSession }
-        self.session = session
+        acceptSession(session)
         await hydrateAfterSignIn(user: session.user)
     }
 
@@ -234,21 +270,52 @@ final class SupabaseSessionService: SessionProviding {
 
     // MARK: Auth-state observation
 
+    private func acceptSession(_ newSession: Session?) {
+        let previousUserID = currentSessionUserID
+        let incomingUserID = newSession?.user.id.uuidString
+        session = newSession
+        guard previousUserID != incomingUserID else { return }
+        invalidateOwnerReadiness(for: incomingUserID)
+    }
+
+    private func invalidateOwnerReadiness(for userID: String?) {
+        ownerState = userID == nil ? .signedOut : .loading
+        hydrationGeneration += 1
+        hydrationTask?.cancel()
+        hydrationTask = nil
+        hydratedUserID = nil
+        workspaces = []
+        roles = []
+        activeWorkspaceID = nil
+        activeWorkspaceName = nil
+        profileDisplayName = nil
+        CaptureSessionContextStore.shared.reset()
+    }
+
     private func startAuthListener() {
         authStateTask = Task { @MainActor in
-            for await (event, session) in client.auth.authStateChanges {
-                self.session = session
-                self.markReadyIfNeeded()
-
+            for await (event, incomingSession) in client.auth.authStateChanges {
                 switch event {
-                case .signedOut:
+                case .signedOut, .userDeleted:
+                    self.acceptSession(nil)
                     self.clearLocalState()
-                case .initialSession, .signedIn, .tokenRefreshed, .userUpdated:
-                    if let user = session?.user {
-                        await self.hydrate(user: user)
+                    self.markReadyIfNeeded()
+
+                case .initialSession, .signedIn, .tokenRefreshed, .userUpdated,
+                     .passwordRecovery, .mfaChallengeVerified:
+                    self.acceptSession(incomingSession)
+                    guard let user = incomingSession?.user else {
+                        self.clearLocalState()
+                        self.markReadyIfNeeded()
+                        continue
                     }
-                case .passwordRecovery:
-                    break
+                    let userID = user.id.uuidString
+                    await self.hydrate(user: user)
+                    guard self.currentSessionUserID == userID else { continue }
+                    // The first membership attempt completed. Query failure stays
+                    // fail-closed as `.loading`, but Root may now show recovery UI.
+                    self.markReadyIfNeeded()
+
                 @unknown default:
                     break
                 }
@@ -267,18 +334,16 @@ final class SupabaseSessionService: SessionProviding {
     // MARK: Hydration
 
     private func hydrate(user: User) async {
-        // Share one in-flight fetch across concurrent callers (an auth-stream
-        // event and an explicit sign-in can land together) so they never race.
+        // Share one in-flight membership fetch across concurrent callers (an
+        // auth-stream event and explicit sign-in can arrive together).
         if let task = hydrationTask {
             await task.value
             return
         }
-        // Event-driven retry: skip re-fetching only when the last pass actually
-        // landed a profile + workspaces. A failed or empty pass — offline cold
-        // launch, or the SDK's auth context lagging the event by a tick — must
-        // re-hydrate on the *next* auth event (.tokenRefreshed/.signedIn/…).
-        // There is no polling loop; the retry is bounded by the event stream.
+        // A successful query is hydrated even when it legitimately returns no
+        // memberships. Only a failed query remains retryable on a later event.
         if isHydrated { return }
+
         hydrationGeneration += 1
         let generation = hydrationGeneration
         let task = Task { @MainActor in
@@ -286,11 +351,9 @@ final class SupabaseSessionService: SessionProviding {
         }
         hydrationTask = task
         await task.value
-        // Clear the latch so a later event can retry when this pass came back
-        // empty; a successful pass is instead gated out above by `isHydrated`.
-        // Only clear OUR slot: a signOut (which nils the latch) or a successor
-        // hydration pass that bumped the generation must not be clobbered by this
-        // task finishing late.
+
+        // Clear only this generation's latch. Account changes cancel and replace
+        // it, and an older task must never clear a newer hydration attempt.
         if hydrationGeneration == generation { hydrationTask = nil }
     }
 
@@ -298,22 +361,34 @@ final class SupabaseSessionService: SessionProviding {
     /// out. Used to bail an in-flight hydration whose session changed mid-fetch.
     private var currentSessionUserID: String? { session?.user.id.uuidString }
 
-    /// A hydration pass is "good" once it has a profile and at least one
-    /// workspace *for the currently-authenticated user*. Mirrors the reference
-    /// app re-gating on emptiness so failed fetches retry instead of latching an
-    /// empty session for the whole run; the `hydratedUserID` clause additionally
-    /// forces a re-fetch when the account changes mid-run (portal-QR switch).
+    /// A successful membership query hydrates the current user even when the
+    /// validated membership set is empty. Query failure leaves this false so a
+    /// later auth event can retry; an account switch clears `hydratedUserID`.
     private var isHydrated: Bool {
-        profileDisplayName != nil && !workspaces.isEmpty && hydratedUserID == currentSessionUserID
+        guard let currentSessionUserID else { return false }
+        return hydratedUserID == currentSessionUserID
     }
 
     private func performHydration(userID: String) async {
-        // After EACH await, re-check that the session still belongs to the user
-        // this pass started for before writing any state. Otherwise a signOut (or
-        // a different account signing in) that lands while a fetch is in flight
-        // would let this task's post-await writes repopulate identity/workspace
-        // state for the wrong user — and, via the `isHydrated` gate, make the new
-        // account skip hydration and even re-persist the old org id. Bail silently.
+        // Membership is the security gate. Profile and role decoration must not
+        // delay or determine owner readiness, so resolve the workspace projection
+        // first and hydrate display metadata independently afterward.
+        guard let fetchedWorkspaces = await fetchWorkspaces(userID: userID) else {
+            // Query failure is not equivalent to a validated user with no orgs.
+            // Stay loading/fail-closed and retry on the next auth event.
+            return
+        }
+        guard !Task.isCancelled, currentSessionUserID == userID else { return }
+        workspaces = fetchedWorkspaces
+        hydratedUserID = userID
+        resolveActiveWorkspace(for: userID)
+
+        Task { @MainActor [weak self] in
+            await self?.hydrateInformationalMetadata(userID: userID)
+        }
+    }
+
+    private func hydrateInformationalMetadata(userID: String) async {
         let name = await fetchDisplayName(userID: userID)
         guard currentSessionUserID == userID else { return }
         profileDisplayName = name
@@ -321,16 +396,6 @@ final class SupabaseSessionService: SessionProviding {
         let fetchedRoles = await fetchRoles(userID: userID)
         guard currentSessionUserID == userID else { return }
         roles = fetchedRoles
-
-        let fetchedWorkspaces = await fetchWorkspaces(userID: userID)
-        guard currentSessionUserID == userID else { return }
-        workspaces = fetchedWorkspaces
-
-        resolveActiveWorkspace()
-        // Mark this user as the hydrated identity. On an empty pass `isHydrated`
-        // still reads false (no name / no workspaces), so the retry continues;
-        // on a good pass it now also proves *this* account is the one loaded.
-        hydratedUserID = userID
     }
 
     private func fetchDisplayName(userID: String) async -> String? {
@@ -364,11 +429,10 @@ final class SupabaseSessionService: SessionProviding {
         }
     }
 
-    private func fetchWorkspaces(userID: String) async -> [CaptureWorkspace] {
+    private func fetchWorkspaces(userID: String) async -> [CaptureWorkspace]? {
         do {
             // Active-only: org SELECT RLS only exposes orgs for active memberships, so an
-            // invited row embeds null `organizations` — decode tolerates that (compactMap)
-            // instead of throwing and dead-ending sign-in with an empty workspace list.
+            // invited row embeds null organizations and is omitted from the validated set.
             let joins: [OrgJoin] = try await client
                 .from("organization_members")
                 .select("organizations(id, name)")
@@ -376,57 +440,84 @@ final class SupabaseSessionService: SessionProviding {
                 .eq("status", value: "active")
                 .execute()
                 .value
-            return joins.compactMap { $0.organizations }.map { CaptureWorkspace(id: $0.id, name: $0.name) }
+            return joins.compactMap { $0.organizations }.map {
+                CaptureWorkspace(id: $0.id, name: $0.name)
+            }
         } catch {
             log.error("workspaces fetch failed: \(error.localizedDescription, privacy: .public)")
-            return []
+            return nil
         }
     }
 
     // MARK: Active-workspace resolution / persistence
 
-    private func resolveActiveWorkspace() {
-        let savedID = defaults.string(forKey: Keys.activeWorkspaceID)
-        if let match = workspaces.first(where: { $0.id == savedID }) {
+    private func resolveActiveWorkspace(for userID: String) {
+        let idKey = Keys.activeWorkspaceID(userID: userID)
+        let nameKey = Keys.activeWorkspaceName(userID: userID)
+        let savedID = defaults.string(forKey: idKey)
+
+        if let match = workspaces.first(where: {
+            $0.id.caseInsensitiveCompare(savedID ?? "") == .orderedSame
+        }) {
             activeWorkspaceID = match.id
             activeWorkspaceName = match.name
+            persistActiveWorkspace(for: userID)
         } else if workspaces.count == 1 {
-            // Default to the single org.
             activeWorkspaceID = workspaces[0].id
             activeWorkspaceName = workspaces[0].name
-            persistActiveWorkspace()
-        } else if savedID == nil {
-            // Multi-org (or zero) with no prior choice → wait for O2 selection.
+            persistActiveWorkspace(for: userID)
+        } else {
             activeWorkspaceID = nil
             activeWorkspaceName = nil
+            defaults.removeObject(forKey: idKey)
+            defaults.removeObject(forKey: nameKey)
         }
-        // else: keep the persisted selection restored in init (e.g. offline fetch).
+
+        guard let activeWorkspaceID,
+              workspaces.contains(where: {
+                  $0.id.caseInsensitiveCompare(activeWorkspaceID) == .orderedSame
+              }),
+              let owner = CaptureOwnerIdentity(
+                  userID: userID,
+                  workspaceID: activeWorkspaceID
+              ) else {
+            ownerState = .needsWorkspace(
+                userID: userID.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+            )
+            return
+        }
+        ownerState = .ready(owner)
     }
 
-    private func persistActiveWorkspace() {
+    private func persistActiveWorkspace(for userID: String) {
+        let idKey = Keys.activeWorkspaceID(userID: userID)
+        let nameKey = Keys.activeWorkspaceName(userID: userID)
         if let id = activeWorkspaceID {
-            defaults.set(id, forKey: Keys.activeWorkspaceID)
+            defaults.set(id, forKey: idKey)
         } else {
-            defaults.removeObject(forKey: Keys.activeWorkspaceID)
+            defaults.removeObject(forKey: idKey)
         }
         if let name = activeWorkspaceName {
-            defaults.set(name, forKey: Keys.activeWorkspaceName)
+            defaults.set(name, forKey: nameKey)
         } else {
-            defaults.removeObject(forKey: Keys.activeWorkspaceName)
+            defaults.removeObject(forKey: nameKey)
         }
     }
 
     private func clearLocalState() {
+        ownerState = .signedOut
+        hydrationGeneration += 1
+        hydrationTask?.cancel()
+        hydrationTask = nil
+        hydratedUserID = nil
         session = nil
         workspaces = []
         roles = []
         activeWorkspaceID = nil
         activeWorkspaceName = nil
         profileDisplayName = nil
-        hydrationTask = nil
-        hydratedUserID = nil
-        defaults.removeObject(forKey: Keys.activeWorkspaceID)
-        defaults.removeObject(forKey: Keys.activeWorkspaceName)
+        defaults.removeObject(forKey: Keys.legacyActiveWorkspaceID)
+        defaults.removeObject(forKey: Keys.legacyActiveWorkspaceName)
     }
 }
 

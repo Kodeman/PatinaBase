@@ -33,12 +33,14 @@
  */
 
 import { useMemo, useState, type FocusEvent, type KeyboardEvent } from 'react';
+import type { RoomScanPhoto } from '@patina/supabase';
 import type { RoomGeometry } from '@/lib/room-view/geometry';
 import {
   clusterPoses,
   photoPlanPose,
   type PhotoProvenance,
 } from '@/lib/room-view/photo-poses';
+import { isBrowserDecodableMime } from './photo-viewer';
 import { PLAN_STAGE_PAD, PLAN_STAGE_SCALE, planViewBox } from './plan-stage';
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -46,13 +48,18 @@ import { PLAN_STAGE_PAD, PLAN_STAGE_SCALE, planViewBox } from './plan-stage';
 // ═══════════════════════════════════════════════════════════════════════════
 
 /** The minimum a photo needs to become a marker. RoomScanPhoto is a superset,
- *  so the hook's rows pass straight in; the tests construct just this. */
-export interface MarkerPhoto {
+ *  so the hook's rows pass straight in; the tests construct just this.
+ *
+ *  The derivative-lane fields are OPTIONAL — a marker is built from a pose,
+ *  and the peek image is a courtesy. A caller that knows nothing about the
+ *  preview rung still produces correct markers; it just gets a peek that can
+ *  only reach the thumbnail. */
+export type MarkerPhoto = {
   camera_transform: number[] | null;
   captured_at: string | null;
   signedThumbUrl: string | null;
   signedImageUrl: string | null;
-}
+} & Partial<Pick<RoomScanPhoto, 'signedPreviewUrl' | 'mime_type'>>;
 
 /** Plan-frame bounding box of the drawn floor, feet. */
 export interface PlanBounds {
@@ -80,8 +87,13 @@ export interface PhotoMarker {
   representativeIndex: number;
   /** All original-photo indices in the cluster, ascending. */
   memberIndices: number[];
+  /** Peek-chip sources, best-for-a-96px-chip first. `previewUrl` is the
+   *  1600 px derivative; `imageUrl` is the original and may be undecodable —
+   *  `mimeType` is what says so. */
   thumbUrl: string | null;
+  previewUrl: string | null;
   imageUrl: string | null;
+  mimeType: string | null;
   capturedAt: string | null;
 }
 
@@ -167,7 +179,9 @@ export function buildPhotoMarkers(
         .map((mi) => resolvable[mi].photoIndex)
         .sort((a, b) => a - b),
       thumbUrl: rep.photo.signedThumbUrl,
+      previewUrl: rep.photo.signedPreviewUrl ?? null,
       imageUrl: rep.photo.signedImageUrl,
+      mimeType: rep.photo.mime_type ?? null,
       capturedAt: rep.photo.captured_at,
     };
   });
@@ -335,7 +349,14 @@ function PeekChip({
   cy: number;
   view: { width: number; height: number };
 }) {
-  const src = marker.thumbUrl ?? marker.imageUrl;
+  // 96px chip: the thumbnail is already the right size, the 1600 px preview is
+  // the next-best thing, and the original is a last resort only when the
+  // browser can actually decode it — a chip must never spend ~237 KB on a HEIC
+  // it will fail to draw.
+  const src =
+    marker.thumbUrl ??
+    marker.previewUrl ??
+    (isBrowserDecodableMime(marker.mimeType) ? marker.imageUrl : null);
   const caption = timeCaption(marker.capturedAt);
   // Float above the tick, centered; clamp within the stage viewBox.
   const x = clamp(cx - PEEK_W / 2, 4, Math.max(4, view.width - PEEK_W - 4));
@@ -355,6 +376,7 @@ function PeekChip({
           <img
             src={src}
             alt=""
+            decoding="async"
             className="h-[96px] w-full rounded-[1px] object-cover"
           />
         ) : (

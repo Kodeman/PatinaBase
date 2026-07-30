@@ -13,6 +13,7 @@ import CaptureKit
 struct TagOCRSheet: View {
     let specimenID: UUID
     let store: CaptureStore
+    let session: any SessionProviding
     let camera: any CameraService
     let ocr: any TagOCRService
     let analytics: any CaptureAnalytics
@@ -177,7 +178,7 @@ struct TagOCRSheet: View {
     private func read() {
         phase = .reading
         Task { @MainActor in
-            guard let specimen = store.specimen(id: specimenID) else { phase = .fallback; return }
+            guard let specimen = currentSpecimen() else { phase = .fallback; return }
             let image = await RecognitionImageLoader.captureImage(for: specimen, store: store, camera: camera)
             crop = image
             let observations = (try? await ocr.recognizeText(in: image)) ?? []
@@ -202,7 +203,7 @@ struct TagOCRSheet: View {
     }
 
     private func merge(defaultSource: ProvenanceSource) {
-        guard let specimen = store.specimen(id: specimenID) else { return }
+        guard let specimen = currentSpecimen() else { return }
         if !maker.isEmpty {
             specimen.setValue(maker, for: .maker, source: source(for: maker, original: makerOriginal, fallback: defaultSource))
         }
@@ -216,6 +217,15 @@ struct TagOCRSheet: View {
         try? store.save()
         analytics.event("N1.merge", ["source": defaultSource.rawValue])
         coordinator?.present(.specimenSheet(specimenID))
+    }
+
+    private func currentSpecimen() -> Specimen? {
+        CaptureOwnerProjectionPolicy.specimen(
+            id: specimenID,
+            store: store,
+            runsRealServices: AppConfiguration.runsRealServices,
+            userID: session.userID,
+            workspaceID: session.workspaceID)
     }
 
     private func source(for value: String, original: String, fallback: ProvenanceSource) -> ProvenanceSource {
@@ -243,6 +253,7 @@ import CaptureKitMocks
     return TagOCRSheet(
         specimenID: specimen.id,
         store: store,
+        session: MockSessionProviding(),
         camera: MockCameraService(),
         ocr: MockTagOCRService(),
         analytics: MockCaptureAnalytics(),

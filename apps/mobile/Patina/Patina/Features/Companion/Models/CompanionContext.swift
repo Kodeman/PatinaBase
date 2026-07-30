@@ -56,6 +56,17 @@ public struct CompanionContext: Equatable {
     /// used to infer "hasn't taken the quiz" from `roomCount` read this instead.
     public var hasStyleProfile: Bool
 
+    /// Privacy-filtered, human-readable context assembled from durable taste,
+    /// room, saved-item, and project-attention signals. This is intentionally
+    /// prompt-ready rather than a copy of the underlying models: it contains no
+    /// room notes, messages, images, scan geometry, or opaque database IDs.
+    public var memory: CompanionMemoryContext?
+
+    /// Concise, live work-state signal for the collapsed Companion. This is
+    /// derived from currently loaded Studio/badge records and is not persisted,
+    /// so it remains available without opting into contextual memory.
+    public var attentionSummary: String?
+
     // MARK: - Design Request
 
     /// The homeowner's promoted (visible) design request, if any. Session-scoped
@@ -90,6 +101,8 @@ public struct CompanionContext: Equatable {
         tableItemCount: Int = 0,
         roomCount: Int = 0,
         hasStyleProfile: Bool = false,
+        memory: CompanionMemoryContext? = nil,
+        attentionSummary: String? = nil,
         activeDesignRequest: ActiveDesignRequestContext? = nil
     ) {
         self.currentScreen = currentScreen
@@ -101,6 +114,8 @@ public struct CompanionContext: Equatable {
         self.tableItemCount = tableItemCount
         self.roomCount = roomCount
         self.hasStyleProfile = hasStyleProfile
+        self.memory = memory
+        self.attentionSummary = attentionSummary
         self.activeDesignRequest = activeDesignRequest
     }
 
@@ -244,6 +259,65 @@ public struct CompanionContext: Equatable {
         case .documentList:
             return "folder"
         }
+    }
+}
+
+// MARK: - Context Memory
+
+/// Ephemeral, privacy-filtered memory supplied to Companion prompt builders.
+/// The persisted recency store keeps only activity kinds, identifiers, and
+/// timestamps; visible names below are rehydrated from the user's live models.
+public struct CompanionMemoryContext: Equatable, Sendable {
+    public let isPersonalizationEnabled: Bool
+    public let activeRoomName: String?
+    public let tasteSummary: String?
+    public let preferredMaterials: [String]
+    public let recentSavedItemName: String?
+    public let projectAttentionSummary: String?
+    public let latestActivity: ContextActivityKind?
+    public let generatedAt: Date
+
+    public init(
+        isPersonalizationEnabled: Bool,
+        activeRoomName: String? = nil,
+        tasteSummary: String? = nil,
+        preferredMaterials: [String] = [],
+        recentSavedItemName: String? = nil,
+        projectAttentionSummary: String? = nil,
+        latestActivity: ContextActivityKind? = nil,
+        generatedAt: Date = Date()
+    ) {
+        self.isPersonalizationEnabled = isPersonalizationEnabled
+        self.activeRoomName = activeRoomName
+        self.tasteSummary = tasteSummary
+        self.preferredMaterials = preferredMaterials
+        self.recentSavedItemName = recentSavedItemName
+        self.projectAttentionSummary = projectAttentionSummary
+        self.latestActivity = latestActivity
+        self.generatedAt = generatedAt
+    }
+
+    /// Plain, bounded summary suitable for a Companion prompt. It never
+    /// includes identifiers or free-form user-authored text.
+    public var promptSummary: String? {
+        guard isPersonalizationEnabled else { return nil }
+        var parts: [String] = []
+        if let tasteSummary, !tasteSummary.isEmpty {
+            parts.append("Taste: \(tasteSummary)")
+        }
+        if let activeRoomName, !activeRoomName.isEmpty {
+            parts.append("Active room: \(activeRoomName)")
+        }
+        if !preferredMaterials.isEmpty {
+            parts.append("Preferred materials: \(preferredMaterials.prefix(3).joined(separator: ", "))")
+        }
+        if let recentSavedItemName, !recentSavedItemName.isEmpty {
+            parts.append("Recently saved: \(recentSavedItemName)")
+        }
+        if let projectAttentionSummary, !projectAttentionSummary.isEmpty {
+            parts.append("Project attention: \(projectAttentionSummary)")
+        }
+        return parts.isEmpty ? nil : parts.joined(separator: ". ") + "."
     }
 }
 
