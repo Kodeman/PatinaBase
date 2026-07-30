@@ -3929,3 +3929,291 @@ DO $g$ BEGIN
   GRANT EXECUTE ON FUNCTION public.enqueue_agent_successor_if_owned(uuid, text, jsonb, text, int, text, text, uuid, text, timestamptz, int, text, text, uuid, numeric, jsonb, text) TO service_role;
 EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
 END $g$;
+
+-- 00380_spec_books_foundation.sql
+DO $g$ BEGIN
+  REVOKE ALL ON public.project_ffe_specs FROM PUBLIC, anon;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00380_spec_books_foundation.sql
+DO $g$ BEGIN
+  REVOKE ALL ON public.spec_book_templates FROM PUBLIC, anon;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00380_spec_books_foundation.sql
+DO $g$ BEGIN
+  REVOKE ALL ON public.spec_books FROM PUBLIC, anon;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00380_spec_books_foundation.sql
+DO $g$ BEGIN
+  REVOKE ALL ON public.spec_book_chapters FROM PUBLIC, anon;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00380_spec_books_foundation.sql
+DO $g$ BEGIN
+  REVOKE ALL ON public.spec_book_item_settings FROM PUBLIC, anon;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00380_spec_books_foundation.sql
+DO $g$ BEGIN
+  REVOKE ALL ON public.spec_book_revisions FROM PUBLIC, anon, authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00380_spec_books_foundation.sql
+DO $g$ BEGIN
+  REVOKE ALL ON public.spec_book_revision_items FROM PUBLIC, anon, authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00380_spec_books_foundation.sql
+DO $g$ BEGIN
+  REVOKE ALL ON public.spec_book_artifacts FROM PUBLIC, anon, authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00380_spec_books_foundation.sql
+DO $g$ BEGIN
+  GRANT SELECT, INSERT, UPDATE, DELETE ON public.project_ffe_specs TO authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00380_spec_books_foundation.sql
+DO $g$ BEGIN
+  GRANT SELECT ON public.spec_book_templates TO authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00380_spec_books_foundation.sql
+DO $g$ BEGIN
+  GRANT SELECT, INSERT, UPDATE, DELETE ON public.spec_books TO authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00380_spec_books_foundation.sql
+DO $g$ BEGIN
+  GRANT SELECT, INSERT, UPDATE, DELETE ON public.spec_book_chapters TO authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00380_spec_books_foundation.sql
+DO $g$ BEGIN
+  GRANT SELECT, INSERT, UPDATE, DELETE ON public.spec_book_item_settings TO authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00380_spec_books_foundation.sql
+DO $g$ BEGIN
+  GRANT SELECT ON public.spec_book_revisions TO authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00380_spec_books_foundation.sql
+DO $g$ BEGIN
+  GRANT SELECT ON public.spec_book_revision_items TO authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00380_spec_books_foundation.sql
+DO $g$ BEGIN
+  GRANT SELECT ON public.spec_book_artifacts TO authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00380_spec_books_foundation.sql
+DO $g$ BEGIN
+  GRANT ALL ON public.project_ffe_specs TO service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00380_spec_books_foundation.sql
+DO $g$ BEGIN
+  GRANT ALL ON public.spec_book_templates TO service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00380_spec_books_foundation.sql
+DO $g$ BEGIN
+  GRANT ALL ON public.spec_books TO service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00380_spec_books_foundation.sql
+DO $g$ BEGIN
+  GRANT ALL ON public.spec_book_chapters TO service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00380_spec_books_foundation.sql
+DO $g$ BEGIN
+  GRANT ALL ON public.spec_book_item_settings TO service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00380_spec_books_foundation.sql
+DO $g$ BEGIN
+  GRANT ALL ON public.spec_book_revisions TO service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00380_spec_books_foundation.sql
+DO $g$ BEGIN
+  GRANT ALL ON public.spec_book_revision_items TO service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00380_spec_books_foundation.sql
+DO $g$ BEGIN
+  GRANT ALL ON public.spec_book_artifacts TO service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00380_spec_books_foundation.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.ensure_project_spec_book(uuid) FROM PUBLIC, anon;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00380_spec_books_foundation.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.place_product_in_project(uuid, uuid, uuid, uuid, text, jsonb) FROM PUBLIC, anon;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00380_spec_books_foundation.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.prepare_spec_book_issue(uuid, text[], text, text, uuid, text, jsonb) FROM PUBLIC, anon;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00380_spec_books_foundation.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.finalize_spec_book_issue(uuid) FROM PUBLIC, anon;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00380_spec_books_foundation.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.create_spec_book_share(uuid, text, timestamptz) FROM PUBLIC, anon;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00380_spec_books_foundation.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.revoke_document_share(uuid) FROM PUBLIC, anon;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00380_spec_books_foundation.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.resolve_document_share(text) FROM PUBLIC, anon;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00380_spec_books_foundation.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.resolve_spec_book_share(text) FROM PUBLIC, anon;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00380_spec_books_foundation.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.ensure_project_spec_book(uuid) TO authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00380_spec_books_foundation.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.place_product_in_project(uuid, uuid, uuid, uuid, text, jsonb) TO authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00380_spec_books_foundation.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.prepare_spec_book_issue(uuid, text[], text, text, uuid, text, jsonb) TO authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00380_spec_books_foundation.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.finalize_spec_book_issue(uuid) TO authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00380_spec_books_foundation.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.create_spec_book_share(uuid, text, timestamptz) TO authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00380_spec_books_foundation.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.revoke_document_share(uuid) TO authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00380_spec_books_foundation.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.resolve_document_share(text) TO authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00380_spec_books_foundation.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.resolve_spec_book_share(text) TO authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00380_spec_books_foundation.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public._spec_book_resolve_field(jsonb,jsonb,jsonb,jsonb,jsonb,timestamptz,timestamptz,timestamptz,timestamptz) FROM PUBLIC, anon, authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00380_spec_books_foundation.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public._spec_book_canonical_json(jsonb) FROM PUBLIC, anon, authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00380_spec_books_foundation.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public._spec_book_current_item_snapshots(uuid) FROM PUBLIC, anon, authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00380_spec_books_foundation.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public._spec_book_has_forbidden_keys(jsonb,text[]) FROM PUBLIC, anon, authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00380_spec_books_foundation.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public._spec_book_resolve_field(jsonb,jsonb,jsonb,jsonb,jsonb,timestamptz,timestamptz,timestamptz,timestamptz) TO service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00380_spec_books_foundation.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public._spec_book_canonical_json(jsonb) TO service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00380_spec_books_foundation.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public._spec_book_current_item_snapshots(uuid) TO service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00380_spec_books_foundation.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public._spec_book_has_forbidden_keys(jsonb,text[]) TO service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
