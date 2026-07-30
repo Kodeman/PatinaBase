@@ -127,17 +127,18 @@ public final class RoomCaptureService: NSObject {
     /// The end-of-scan QA scorecard, built when the session ends. IN MEMORY
     /// ONLY — deliberately not persisted to `scorecard.json` or
     /// `manifest.scorecard`; see `RoomCoverageCoach.swift` for the two blockers.
-    private(set) var instrumentScorecard: Scorecard?
+    ///
+    /// Not `private(set)`: it is assigned by `finalizeInstrumentLane()`, which
+    /// lives in `RoomCaptureService+Instrument.swift` and a `private` setter is
+    /// file-scoped. Nothing outside the lane writes it.
+    var instrumentScorecard: Scorecard?
 
     /// Counts which ARFrame streams this session actually vends. Diagnostic
     /// only — see `CaptureStreamProbe.swift` for why an app that rides
     /// RoomPlan's default session cannot otherwise tell.
     private(set) var streamProbe: CaptureStreamProbe?
 
-    /// Live instrument coverage state (checklist + machine warnings). Nil
-    /// outside a scan. INSTRUMENT-INTERNAL — read the coverage rule above
-    /// before rendering any part of it.
-    func instrumentCoverageSnapshot() -> CoverageSnapshot? { coverageCoach?.snapshot() }
+    // The lane's two methods live in `RoomCaptureService+Instrument.swift`.
 
     // MARK: - Callbacks
 
@@ -188,7 +189,10 @@ public final class RoomCaptureService: NSObject {
     /// ARSessionDelegate `didAdd`/`didUpdate` callbacks so we have real
     /// mesh geometry at scan end (by which point the session has usually
     /// cleared `currentFrame.anchors`).
-    private var meshAnchors: [UUID: ARMeshAnchor] = [:]
+    /// Internal rather than private so `RoomCaptureService+Instrument.swift` can
+    /// report the count — mesh-anchor arrival is the other half of the
+    /// stream-availability question `CaptureStreamProbe` exists to answer.
+    var meshAnchors: [UUID: ARMeshAnchor] = [:]
 
     // MARK: - Multi-Image Selection
 
@@ -556,39 +560,6 @@ public final class RoomCaptureService: NSObject {
         }) {
             // Already handled individual windows above
         }
-    }
-
-    /// Close the instrument lane: build the QA scorecard from the coach's dwell
-    /// state + the keyframe lane's sharp-frame ratio, and log what the session
-    /// actually vended.
-    ///
-    /// The scorecard is held IN MEMORY on `instrumentScorecard` and goes no
-    /// further. It is NOT written to `scorecard.json` and NOT assigned to
-    /// `manifest.scorecard`, because `ScanRecoveryService` deletes a bundle and
-    /// its row when `manifest.json` fails to decode — so the first producer of
-    /// instrument fields turns any future unrecognized enum value into deleted
-    /// user data. That guard has to be made lenient first. See the header of
-    /// `RoomCoverageCoach.swift`.
-    ///
-    /// Idempotent: safe if the session ends more than once.
-    private func finalizeInstrumentLane() {
-        guard let coach = coverageCoach else { return }
-        let scorecard = coach.finalize(
-            sharpFrameRatio: keyframeRecorder?.sharpFrameRatio ?? 1.0,
-            // Anchor entry is not wired in this app; `AnchorGate.isUnverified(0)`
-            // is true, which is the honest answer for a scan with no anchors.
-            anchorCount: 0
-        )
-        instrumentScorecard = scorecard
-        #if DEBUG
-        if let probe = streamProbe {
-            PatinaLog.scan.debug(probe.summaryLine(meshAnchorCount: meshAnchors.count))
-        }
-        let fired = keyframeRecorder?.telemetry.fired ?? 0
-        PatinaLog.scan.debug(
-            "[Instrument] verdict=\(scorecard.verdict.rawValue) surfaces=\(scorecard.surfaceChecklist.count) coveragePct=\(scorecard.coveragePct) keyframesFired=\(fired)"
-        )
-        #endif
     }
 
     private func emitFeatureIfReady(_ feature: DetectedFeature, at time: Date) {

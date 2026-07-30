@@ -119,12 +119,12 @@ nonisolated public struct RoomBounds: Sendable, Equatable {
         var lowX: Float = .greatestFiniteMagnitude, highX: Float = -.greatestFiniteMagnitude
         var lowZ: Float = .greatestFiniteMagnitude, highZ: Float = -.greatestFiniteMagnitude
         for wall in walls {
-            let c = wall.center
-            sum += c
+            let centre = wall.center
+            sum += centre
             let halfH = wall.height / 2
-            lowY = min(lowY, c.y - halfH); highY = max(highY, c.y + halfH)
-            lowX = min(lowX, c.x); highX = max(highX, c.x)
-            lowZ = min(lowZ, c.z); highZ = max(highZ, c.z)
+            lowY = min(lowY, centre.y - halfH); highY = max(highY, centre.y + halfH)
+            lowX = min(lowX, centre.x); highX = max(highX, centre.x)
+            lowZ = min(lowZ, centre.z); highZ = max(highZ, centre.z)
         }
         centroid = sum / Float(walls.count)
         minY = lowY
@@ -189,13 +189,15 @@ nonisolated public enum SurfaceSynthesis {
         let isFloor = kind == .floor
         let y = isFloor ? bounds.minY : bounds.maxY
         let key = kind.rawValue                     // "floor" / "ceiling"
-        let c = bounds.centroid
+        let centre = bounds.centroid
         let samples = [
-            SIMD3<Float>(c.x, y, c.z),
-            SIMD3<Float>(c.x + bounds.extX, y, c.z), SIMD3<Float>(c.x - bounds.extX, y, c.z),
-            SIMD3<Float>(c.x, y, c.z + bounds.extZ), SIMD3<Float>(c.x, y, c.z - bounds.extZ)
+            SIMD3<Float>(centre.x, y, centre.z),
+            SIMD3<Float>(centre.x + bounds.extX, y, centre.z),
+            SIMD3<Float>(centre.x - bounds.extX, y, centre.z),
+            SIMD3<Float>(centre.x, y, centre.z + bounds.extZ),
+            SIMD3<Float>(centre.x, y, centre.z - bounds.extZ)
         ]
-        return CaptureSurface(id: key, kind: kind, center: SIMD3<Float>(c.x, y, c.z),
+        return CaptureSurface(id: key, kind: kind, center: SIMD3<Float>(centre.x, y, centre.z),
                               normal: SIMD3<Float>(0, isFloor ? 1 : -1, 0), samplePoints: samples,
                               checklistKey: key, displayLabel: key.capitalized)
     }
@@ -230,10 +232,14 @@ nonisolated public enum SurfaceSynthesis {
     /// Sort key: centimetre-rounded x, then z, then y.
     public static func orderedOpenings(_ openings: [SurfaceSolid]) -> [SurfaceSolid] {
         openings.sorted { lhs, rhs in
-            let a = lhs.center, b = rhs.center
-            if centimetres(a.x) != centimetres(b.x) { return centimetres(a.x) < centimetres(b.x) }
-            if centimetres(a.z) != centimetres(b.z) { return centimetres(a.z) < centimetres(b.z) }
-            return centimetres(a.y) < centimetres(b.y)
+            let left = lhs.center, right = rhs.center
+            if centimetres(left.x) != centimetres(right.x) {
+                return centimetres(left.x) < centimetres(right.x)
+            }
+            if centimetres(left.z) != centimetres(right.z) {
+                return centimetres(left.z) < centimetres(right.z)
+            }
+            return centimetres(left.y) < centimetres(right.y)
         }
     }
 

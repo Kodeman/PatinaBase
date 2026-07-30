@@ -335,7 +335,10 @@ struct InstrumentCaptureSeamTests {
         // a silent reordering would make two lanes disagree about which frame
         // came with which timestamp.
         let registry = CaptureSinkRegistry<String>()
-        #expect(registry.count == 0)
+        var deliveredWhileEmpty = 0
+        registry.broadcast { _ in deliveredWhileEmpty += 1 }
+        #expect(deliveredWhileEmpty == 0)
+
         registry.add("coach")
         registry.add("keyframes")
         registry.add("probe")
@@ -360,7 +363,6 @@ struct InstrumentCaptureSeamTests {
         registry.add(1)
         registry.add(2)
         registry.removeAll()
-        #expect(registry.count == 0)
 
         var delivered = 0
         registry.broadcast { _ in delivered += 1 }

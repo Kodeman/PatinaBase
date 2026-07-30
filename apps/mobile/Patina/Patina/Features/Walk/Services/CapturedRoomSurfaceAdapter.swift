@@ -51,13 +51,13 @@ nonisolated enum CapturedRoomSurfaceAdapter {
     /// flatten instead — different representation, same matrix; the two never
     /// meet, which is why neither file converts to the other.)
     static func solid(from surface: CapturedRoom.Surface) -> SurfaceSolid {
-        let t = surface.transform
+        let transform = surface.transform
         return SurfaceSolid(
             id: surface.identifier.uuidString,
-            center: SIMD3<Float>(t.columns.3.x, t.columns.3.y, t.columns.3.z),
-            xAxis: SIMD3<Float>(t.columns.0.x, t.columns.0.y, t.columns.0.z),
-            yAxis: SIMD3<Float>(t.columns.1.x, t.columns.1.y, t.columns.1.z),
-            normal: SIMD3<Float>(t.columns.2.x, t.columns.2.y, t.columns.2.z),
+            center: SIMD3<Float>(transform.columns.3.x, transform.columns.3.y, transform.columns.3.z),
+            xAxis: SIMD3<Float>(transform.columns.0.x, transform.columns.0.y, transform.columns.0.z),
+            yAxis: SIMD3<Float>(transform.columns.1.x, transform.columns.1.y, transform.columns.1.z),
+            normal: SIMD3<Float>(transform.columns.2.x, transform.columns.2.y, transform.columns.2.z),
             width: surface.dimensions.x,
             height: surface.dimensions.y
         )

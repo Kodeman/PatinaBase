@@ -228,8 +228,8 @@ final class RoomCoverageCoach: CaptureFrameSink {
     // MARK: - Vector helpers
 
     private static func distance(_ lhs: SIMD3<Float>, _ rhs: SIMD3<Float>) -> Float {
-        let d = lhs - rhs
-        return (d.x * d.x + d.y * d.y + d.z * d.z).squareRoot()
+        let delta = lhs - rhs
+        return (delta.x * delta.x + delta.y * delta.y + delta.z * delta.z).squareRoot()
     }
 }
 
