@@ -19,6 +19,8 @@
  *   /desk?book=hours
  *   /desk?book=post
  *   /desk?account=profile|notifications|security|devices|studio
+ *   /desk?book=orders&po=…&checkout=success|cancelled&session_id=…
+ *        — the Stripe Checkout return (create-checkout-session builds it).
  *
  * Mechanics, deliberately boring:
  *  · It dispatches the SAME CustomEvents every in-app surface already uses —
@@ -28,12 +30,20 @@
  *  · It must mount AFTER StudioDrawer / PostSheet / AccountSheet in the layout
  *    JSX: React runs effects in mount order, so those listeners have to attach
  *    before this one fires or the event lands on nothing.
- *  · It fires at most once per mount (`firedRef`) and only on /desk.
+ *  · It fires ONCE PER DISTINCT DOORWAY QUERY, not once per mount. The
+ *    (document) layout never unmounts, and in-app soft navigations to doorway
+ *    URLs are real (a Post row, the order-assistant's step-coverage link), so a
+ *    mount-scoped latch would answer the first link of a session and silently
+ *    swallow every one after it. `consumedRef` remembers the exact query string
+ *    it last consumed; a doorway-bearing query that differs fires again.
  *  · Unknown book / page / account values are ignored in silence — a stale link
  *    lands the designer on a plain Desk rather than an error.
- *  · Stripping is surgical: only the doorway keys are deleted, so an unrelated
- *    param riding along (e.g. the PO checkout return's `po=`) survives the
- *    replace instead of being swallowed.
+ *  · Stripping is TOTAL, not surgical: the URL is reduced to /desk (keeping only
+ *    `tour`, the walkthrough replay param, which is not a doorway and belongs to
+ *    the Desk itself). The checkout return's `po` / `checkout` / `session_id`
+ *    are consumed here — nothing downstream reads them — and the catchall
+ *    redirect can append unconsumed path segments as query junk, which has no
+ *    business surviving on the Desk's address.
  */
 
 import { Suspense, useEffect, useRef } from 'react';
@@ -58,7 +68,9 @@ const BOOK_PAGES = {
 
 type Book = keyof typeof BOOK_PAGES;
 
-/** Every key this component consumes — and therefore the only keys it erases. */
+/** Every key that makes a URL a DOORWAY — the presence of any one of these is
+ *  what arms this component. `po`/`checkout`/`session_id` are here because the
+ *  Stripe Checkout return is a doorway too: it wants the Orders book open. */
 const DOORWAY_KEYS = [
   'book',
   'page',
@@ -66,24 +78,50 @@ const DOORWAY_KEYS = [
   'projectId',
   'invoiceId',
   'account',
+  'checkout',
+  'session_id',
+  'po',
 ] as const;
+
+/** The only param the Desk keeps after a doorway fires: the walkthrough replay
+ *  key (desk-walkthrough-gate.ts's DESK_WALKTHROUGH_REPLAY_PARAM), which is the
+ *  Desk's own address, not a doorway. */
+const KEPT_KEYS = ['tour'] as const;
 
 function DeskDoorwayInner() {
   const router = useRouter();
   const pathname = usePathname();
   const params = useSearchParams();
-  const firedRef = useRef(false);
+  // The doorway query this component last consumed. NOT a boolean latch: the
+  // (document) layout never unmounts, so a boolean would answer one link per
+  // session and eat every soft navigation after it.
+  const consumedRef = useRef<string | null>(null);
 
   useEffect(() => {
-    if (firedRef.current) return;
-    if (pathname !== '/desk') return;
+    // Off the Desk, or on a Desk with no doorway on it: RE-ARM. This is the
+    // other half of the repeat-firing fix — the latch has to forget, or the
+    // second click on the same doorway link (a Post row read twice, a coverage
+    // link followed twice) would be swallowed as a duplicate.
+    if (pathname !== '/desk') {
+      consumedRef.current = null;
+      return;
+    }
 
     const present = DOORWAY_KEYS.some((k) => params.get(k) !== null);
-    if (!present) return;
-    firedRef.current = true;
+    if (!present) {
+      consumedRef.current = null;
+      return;
+    }
+    // Guarding on the exact query (not a boolean) keeps the effect idempotent
+    // across the re-renders between the dispatch and the router.replace landing,
+    // without blocking a genuinely new doorway.
+    const signature = params.toString();
+    if (consumedRef.current === signature) return;
+    consumedRef.current = signature;
 
     const book = params.get('book')?.toLowerCase() ?? null;
     const account = params.get('account')?.toLowerCase() ?? null;
+    const checkout = params.get('checkout')?.toLowerCase() ?? null;
 
     if (book && book in BOOK_PAGES) {
       const key = book as Book;
@@ -93,7 +131,14 @@ function DeskDoorwayInner() {
         openPost();
       } else {
         const allowed: readonly string[] = BOOK_PAGES[key];
-        const page = params.get('page')?.toLowerCase() ?? null;
+        const requested = params.get('page')?.toLowerCase() ?? null;
+        // A Stripe Checkout return on the Orders book lands on the LEDGER: the
+        // designer just paid (or backed out of) one PO's payment, and the ledger
+        // is the page that shows a PO's payment state on load. (An explicit
+        // &page= still wins — a hand-built link means what it says.)
+        const page =
+          requested ??
+          (checkout && key === 'orders' ? 'ledger' : null);
         const context: OpenLedgerContext = {};
         if (page && allowed.includes(page)) context.page = page;
         const vendorId = params.get('vendorId');
@@ -116,10 +161,18 @@ function DeskDoorwayInner() {
       openAccountPage(page);
     }
 
-    // Erase only what we consumed; anything else on the URL rides along.
-    const rest = new URLSearchParams(params.toString());
-    for (const k of DOORWAY_KEYS) rest.delete(k);
+    // Strip the address back down to /desk. Only `tour` survives — every other
+    // param on a doorway URL was either consumed above or is junk the catchall
+    // appended, and neither belongs in the designer's address bar or history.
+    const rest = new URLSearchParams();
+    for (const k of KEPT_KEYS) {
+      const value = params.get(k);
+      if (value !== null) rest.set(k, value);
+    }
     const qs = rest.toString();
+    // The replace changes the query, so this effect re-runs — the stripped URL
+    // carries no doorway key, so the `present` guard above ends the pass (and
+    // re-arms for the next doorway).
     router.replace(qs ? `/desk?${qs}` : '/desk');
   }, [pathname, params, router]);
 
