@@ -215,8 +215,8 @@ struct ScanBundleManifestProducerTests {
         let bundlePath = writer.bundleURL.standardizedFileURL.path
         for artifact in sealed.artifacts {
             let url = writer.bundleURL.appendingPathComponent(artifact.relativePath).standardizedFileURL
-            #expect(url.path.hasPrefix(bundlePath), artifact.kind.rawValue)
-            #expect(FileManager.default.fileExists(atPath: url.path), artifact.kind.rawValue)
+            #expect(url.path.hasPrefix(bundlePath), "\(artifact.kind.rawValue)")
+            #expect(FileManager.default.fileExists(atPath: url.path), "\(artifact.kind.rawValue)")
         }
     }
 }

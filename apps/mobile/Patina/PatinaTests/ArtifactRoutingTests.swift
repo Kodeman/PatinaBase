@@ -62,7 +62,7 @@ struct ArtifactRoutingTests {
     @Test func exactlyTheThreeSidecarsAreHeldBackFromStorage() {
         for kind in ScanManifest.ArtifactKind.allCases {
             let uploads = ArtifactUploader.storagePathComponents(for: artifact(kind)) != nil
-            #expect(uploads == !Self.localOnlySidecars.contains(kind), kind.rawValue)
+            #expect(uploads == !Self.localOnlySidecars.contains(kind), "\(kind.rawValue)")
         }
     }
 
@@ -107,8 +107,8 @@ struct ArtifactRoutingTests {
                 mimeType: "application/octet-stream"
             )
             guard let route = ArtifactUploader.storagePathComponents(for: nested) else { continue }
-            #expect(!route.filename.contains("/"), kind.rawValue)
-            #expect(!route.folder.contains("/"), kind.rawValue)
+            #expect(!route.filename.contains("/"), "\(kind.rawValue)")
+            #expect(!route.folder.contains("/"), "\(kind.rawValue)")
         }
     }
 }
