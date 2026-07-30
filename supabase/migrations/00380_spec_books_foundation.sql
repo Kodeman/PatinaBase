@@ -451,11 +451,8 @@ BEGIN
   END IF;
 
   IF OLD.status = 'ready' THEN
-    IF OLD IS DISTINCT FROM NEW THEN
-      RAISE EXCEPTION 'ready artifact is immutable'
-        USING errcode = 'object_not_in_prerequisite_state';
-    END IF;
-    RETURN NEW;
+    RAISE EXCEPTION 'ready artifact is immutable'
+      USING errcode = 'object_not_in_prerequisite_state';
   END IF;
 
   IF NOT (

@@ -660,6 +660,15 @@ BEGIN
 
   v_raised := false;
   BEGIN
+    UPDATE public.spec_book_artifacts SET id = id
+    WHERE id = v_artifact_id;
+  EXCEPTION WHEN object_not_in_prerequisite_state THEN
+    v_raised := true;
+  END;
+  ASSERT v_raised, 'service_role no-op updates must not touch ready artifacts';
+
+  v_raised := false;
+  BEGIN
     UPDATE public.spec_book_artifacts SET status = 'failed'
     WHERE id = v_artifact_id;
   EXCEPTION WHEN object_not_in_prerequisite_state THEN
