@@ -312,33 +312,70 @@ final class ArtifactUploader {
 
     // MARK: - Artifact → column / storage-path mapping
 
-    nonisolated static func scanColumn(for kind: ScanManifest.ArtifactKind) -> String? {
+    /// THE routing table: where a kind's bytes go in Storage, and which
+    /// `room_scans` column records the resulting object key. One switch, so
+    /// the two facts cannot drift apart.
+    ///
+    /// They used to live in two switches whose comments contradicted each
+    /// other about `.depthIndex` / `.photoThumbnails` / `.annotations` — one
+    /// claimed those files were uploaded but not column-patched, the other
+    /// that they were not uploaded at all. The second was right (see
+    /// `uploadArtifact`'s guard), but only one of the two could ever be, and
+    /// nothing stopped the next edit from re-splitting them.
+    ///
+    /// Column and folder are deliberately a single unit: a column holds the
+    /// object key of an uploaded object, so a column without an upload is a
+    /// permanently-NULL column and an upload without a column is an orphan
+    /// object nothing can find. `nil` means neither — a local-only sidecar.
+    ///
+    /// The v3 columns (`bundle_manifest_url`, `photos_manifest_url`,
+    /// `coverage_heatmap_url`) come from `supabase/migrations/00082_*.sql`.
+    /// Swift compiles either way; at runtime the PATCH fails until that
+    /// migration is applied.
+    private nonisolated static func routing(
+        for kind: ScanManifest.ArtifactKind
+    ) -> (column: String, folder: String)? {
         switch kind {
-        case .usdz: return "model_url"
-        case .capturedRoomJson: return "captured_room_json_url"
-        case .worldMap: return "world_map_url"
-        case .mesh: return "mesh_url"
-        case .depthArchive: return "depth_archive_url"
-        case .bundleArchive: return "scan_bundle_url"
-        case .heroThumbnail: return "hero_frame_url"
-        // v3 kinds that map to dedicated room_scans URL columns. The
-        // matching migration lives at supabase/migrations/00082_*.sql —
-        // Swift compiles fine either way; at runtime the PATCH here fails
-        // until the migration is applied.
-        case .bundleManifest:   return "bundle_manifest_url"
-        case .photosManifest:   return "photos_manifest_url"
-        case .coverageHeatmap:  return "coverage_heatmap_url"
-        // v3 sidecars the server doesn't need a dedicated column for:
-        // - depthIndex: content is already inside the depth_archive zip
-        // - photoThumbnails: sidecar NDJSON lives next to the photos
-        // - annotations: inlined into the bundle manifest
-        // Returning nil here causes uploadArtifact(...) to skip the
-        // per-column PATCH but still upload the file to storage.
+        case .usdz:             return ("model_url", "usdz")
+        case .capturedRoomJson: return ("captured_room_json_url", "captured_room")
+        case .worldMap:         return ("world_map_url", "worldmap")
+        case .mesh:             return ("mesh_url", "mesh")
+        case .depthArchive:     return ("depth_archive_url", "depth")
+        case .bundleArchive:    return ("scan_bundle_url", "bundle")
+        case .heroThumbnail:    return ("hero_frame_url", "thumbnails")
+        case .bundleManifest:   return ("bundle_manifest_url", "manifests")
+        case .photosManifest:   return ("photos_manifest_url", "photos_manifest")
+        case .coverageHeatmap:  return ("coverage_heatmap_url", "coverage")
+
+        // Local-only sidecars: no column, and — the part that used to be
+        // mis-documented — no upload either. `uploadArtifact(...)` guards on
+        // `storagePathComponents(for:)`, and a nil there returns before a
+        // single byte is sent; the orchestrator then marks the artifact
+        // `.skipped`. `scanColumn(for:)` is consulted only AFTER a non-nil
+        // upload result, so it can neither cause nor suppress an upload.
+        //
+        // Nothing is lost by holding these back — each one's content already
+        // reaches the server inside an artifact that IS uploaded:
+        //
+        // - depthIndex: `depth/depth_index.ndjson` is written, registered, and
+        //   only then is `depth/` zipped into `depth.zip` (`.depthArchive`), so
+        //   the index rides along inside it.
+        // - annotations: `ScanManifest.annotations` is a field of manifest.json,
+        //   uploaded as `.bundleManifest`.
+        // - photoThumbnails: every line is `photoId` + `thumbnailRelativePath` +
+        //   `sizeBytes`, all three already in `manifest.photos`. More decisive:
+        //   the thumbnail FILES are never uploaded (only full-resolution posed
+        //   photos are, by `uploadPosedPhotos`), so a thumbnail index in Storage
+        //   would index objects that do not exist.
         case .depthIndex,
              .photoThumbnails,
              .annotations:
             return nil
         }
+    }
+
+    nonisolated static func scanColumn(for kind: ScanManifest.ArtifactKind) -> String? {
+        routing(for: kind)?.column
     }
 
     /// What goes in a `room_scans` artifact URL column for an object at
@@ -351,32 +388,24 @@ final class ArtifactUploader {
     /// identical seam (`RoomScanStoragePath.storedReference`).
     nonisolated static func storedReference(forObjectPath path: String) -> String { path }
 
+    /// Where this artifact's bytes land in the `room-scans` bucket, or nil for
+    /// a local-only sidecar. `uploadArtifact(...)` guards on this: nil returns
+    /// before anything is sent. See `routing(for:)` for the table and for why
+    /// exactly three kinds are held back.
+    ///
+    /// The folder is only the FIRST path segment — `uploadArtifact` completes
+    /// the key as `<folder>/<userId>/<roomId>/<filename>`, which is what the
+    /// 00031/00077 Storage policies check (`foldername(name)[2] = auth.uid()`).
+    /// Those policies are prefix-agnostic, so a new folder here needs no
+    /// migration.
     nonisolated static func storagePathComponents(for artifact: ScanManifest.Artifact) -> (folder: String, filename: String)? {
+        guard let folder = routing(for: artifact.kind)?.folder else { return nil }
         let filename: String
         if let last = artifact.relativePath.split(separator: "/").last {
             filename = String(last)
         } else {
             filename = artifact.relativePath
         }
-        switch artifact.kind {
-        case .usdz:              return ("usdz", filename)
-        case .capturedRoomJson:  return ("captured_room", filename)
-        case .worldMap:          return ("worldmap", filename)
-        case .mesh:              return ("mesh", filename)
-        case .depthArchive:      return ("depth", filename)
-        case .bundleArchive:     return ("bundle", filename)
-        case .heroThumbnail:     return ("thumbnails", filename)
-        // v3 kinds that upload to storage (paired with a dedicated column).
-        case .bundleManifest:    return ("manifests", filename)       // manifest.json
-        case .photosManifest:    return ("photos_manifest", filename) // photos_metadata.ndjson
-        case .coverageHeatmap:   return ("coverage", filename)        // coverage_heatmap.json
-        // v3 sidecars we intentionally do not upload separately:
-        // depthIndex is inside the depth_archive zip, photoThumbnails is
-        // sidecar-only, annotations are embedded in the bundle manifest.
-        case .depthIndex,
-             .photoThumbnails,
-             .annotations:
-            return nil
-        }
+        return (folder, filename)
     }
 }

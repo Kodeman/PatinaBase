@@ -260,9 +260,14 @@ final class RoomCaptureBundleAdapter {
     // MARK: - Review / seal
 
     /// Apply user-supplied review data (annotations, hero selection, photo
-    /// ordering, per-photo captions) to the writer and seal the manifest.
-    /// Mirrors steps 1–3 of the original `finalizeBundleAfterReview`; the
-    /// façade keeps the public entry point and fires `onScanComplete`.
+    /// ordering, per-photo captions) to the writer, refresh the posed-photo
+    /// sidecar, and seal the manifest. Mirrors steps 1–3 of the original
+    /// `finalizeBundleAfterReview`; the façade keeps the public entry point and
+    /// fires `onScanComplete`.
+    ///
+    /// Purely local. Sealing is what parks a scan in `.heldLocal` — no artifact
+    /// registered here (or at freeze) is transmitted until the user asks for
+    /// design services and `DesignRequestCoordinator` drives the upload.
     func applyReviewAndSeal(
         writer: ScanBundleWriter,
         annotations: ScanManifest.Annotations,
@@ -304,7 +309,21 @@ final class RoomCaptureBundleAdapter {
             try writer.replacePhotos(photos)
         }
 
-        // 3. Seal the manifest (recomputes sizes + hashes artifacts).
+        // 3. Rewrite + register the posed-photo NDJSON sidecar, now that the
+        //    photo list is final. Best-effort: a sidecar failure must not cost
+        //    the user a sealed scan, and every artifact this file indexes is
+        //    uploaded independently of it.
+        do {
+            try writer.registerPhotosManifest()
+        } catch {
+            PatinaLog.scan.error("[RoomCaptureService] photos manifest register failed: \(error.localizedDescription)")
+        }
+
+        // 4. Seal the manifest (recomputes sizes, hashes artifacts, and
+        //    registers manifest.json as its own `.bundleManifest` pointer).
+        //    Nothing here transmits: sealing writes into the on-disk bundle and
+        //    the scan then rests in `.heldLocal`. Bytes leave the phone only
+        //    later, from the explicit design-request flow.
         _ = try writer.finalize(hashArtifacts: true)
     }
 
