@@ -67,7 +67,7 @@ export default function LandingPage() {
           <div>
             <p className="type-meta mb-1">Enter</p>
             <Link
-              href="/portal"
+              href="/desk"
               className="type-body-small text-patina-charcoal hover:text-patina-clay transition-colors"
             >
               Designer Portal

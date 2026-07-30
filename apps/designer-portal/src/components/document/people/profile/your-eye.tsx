@@ -2,8 +2,9 @@
 
 /**
  * "Your Eye" v1 (Aesthete design §8.5.4, Wave 3B) — the designer's taste
- * profile made legible. Lives with the profile components; mounted from
- * /portal/teaching/your-eye so it stays reachable from Teaching.
+ * profile made legible. Lives with the profile components; mounted from the
+ * People Room's "Your Eye" rail view (`/people?view=your-eye`) since the R21
+ * dissolve retired its original home, /portal/teaching/your-eye.
  *
  * The display contract, in order:
  *   1. Center of gravity — the six spectrum coordinates.

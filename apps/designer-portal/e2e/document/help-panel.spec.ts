@@ -4,7 +4,9 @@ import { getDesignerId, readProfile, setCreatedAt, setTourCompleted, clearHelpSt
 
 /**
  * Reactive help — the contextual panel (the `?` doorways / ⌘K "Help…") and the
- * re-homed Help Center (`/help`, with `/portal/help` retired to a redirect).
+ * re-homed Help Center (`/help`; `/portal/help` is now a permanent 308 from
+ * next.config.js's R21 dissolve table — see dissolve-redirects.spec.ts for the
+ * full table, this file keeps the one browser-level regression walk).
  *
  * The panel scopes to the surface it's opened from. On the Desk the only
  * surfaces carrying the `…/document/desk` help key are VERBS, which the panel's

@@ -38,7 +38,7 @@
 // Once ar_flagged_at is stamped the invoice leaves the scan entirely (the
 // `ar_flagged_at IS NULL` guard): automated client emails stop and follow-up
 // becomes a human job, surfaced on the designer A/R page
-// (/portal/billing/ar). Recording a payment flips status to
+// (/desk?book=accounts&page=receivables). Recording a payment flips status to
 // partially_paid/paid via apply_invoice_payment_effects, which also ends the
 // cadence for paid invoices (status guard).
 //
@@ -179,7 +179,7 @@ async function escalateToDesigner(
   );
   const designerName =
     invoice.designer?.full_name?.trim() || invoice.designer?.business_name?.trim() || null;
-  const arUrl = `${DESIGNER_PORTAL_URL}/portal/billing/ar`;
+  const arUrl = `${DESIGNER_PORTAL_URL}/desk?book=accounts&page=receivables`;
   const subjectLine = `${invoiceNumber} is ${overdueDays}+ days overdue — automated reminders exhausted`;
 
   // In-app visibility row for the designer (the portal inbox surfaces
@@ -195,7 +195,7 @@ async function escalateToDesigner(
       project_id: invoice.project_id,
       subject: subjectLine,
       message: `Invoice ${invoiceNumber} for ${projectName} is ${overdueDays}+ days overdue. Automated reminders are exhausted — it needs direct follow-up.`,
-      deep_link: '/portal/billing/ar',
+      deep_link: '/desk?book=accounts&page=receivables',
     },
   });
   if (logErr) {
@@ -229,7 +229,7 @@ async function escalateToDesigner(
           invoice_id: invoice.id,
           project_id: invoice.project_id,
           subject: rendered.subject,
-          deep_link: '/portal/billing/ar',
+          deep_link: '/desk?book=accounts&page=receivables',
         },
       });
       designerEmailSent = result.success === true;
@@ -410,7 +410,7 @@ Deno.serve(async (_req: Request) => {
           project_id: invoice.project_id,
           subject: `Invoice ${invoiceNumber} is past due`,
           message: `Invoice ${invoiceNumber} for ${projectName} is past due. An automated overdue notice was sent to the client.`,
-          deep_link: '/portal/billing/ar',
+          deep_link: '/desk?book=accounts&page=receivables',
         },
       });
       if (logErr) {

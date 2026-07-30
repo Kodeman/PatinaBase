@@ -54,8 +54,8 @@ export interface LayerProductRow {
  * narrows the response payload — RLS would already exclude rows the caller
  * can't see, but filtering at the query layer keeps the wire size tight.
  *
- * Used by the new ProductsZone LayerViews (`/portal/library/{personal,studio,
- * catalog}`). Existing surfaces should continue to use `useProducts` /
+ * Used by the Library's layer views (personal / studio / catalog shelves
+ * under `/library`). Other surfaces should continue to use `useProducts` /
  * `useProductsWithVendorPricing` from this package; they're orthogonal and
  * RLS-safe through the same policies.
  */

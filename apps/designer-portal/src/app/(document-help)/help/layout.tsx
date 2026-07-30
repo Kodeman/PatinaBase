@@ -2,10 +2,11 @@
  * The Help Center — re-homed (R89).
  *
  * The browsable Layer-4 reference used to live under the portal tree
- * (`/portal/help/**`, which stays until the dissolve per D7). At the dissolve
- * the Document has no portal chrome to hang it on, so it re-homes here to
- * `/help` — its own route group, outside `(portal)`, paper-styled to match the
- * Document (D4 zero shadows, Playfair masthead, DM-mono instruments). The
+ * (`/portal/help/**`). The Document has no portal chrome to hang it on, so it
+ * re-homed here to `/help` — its own route group, paper-styled to match the
+ * Document (D4 zero shadows, Playfair masthead, DM-mono instruments). The R21
+ * dissolve retired the portal tree; `/portal/help/:path*` is now a permanent
+ * redirect onto this one, segment for segment (next.config.js). The
  * in-context ContextualHelpPanel (⌘K "Help…") is the reactive door; this is the
  * reference destination you seek out.
  */

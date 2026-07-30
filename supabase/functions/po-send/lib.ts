@@ -104,9 +104,9 @@ export function resolveVendorRecipient(
 
 // ─── Sidemark fallback ───────────────────────────────────────────────────────
 //
-// Server-side port of the Order Assistant's sidemark generator
-// (apps/designer-portal/src/components/portal/procurement/order-assistant/
-// sidemark.ts, W3-T3b): `{STUDIO≤3}-{CLIENT-or-PROJECT≤8}`, uppercase,
+// Server-side port of the Order Assistant's client-side sidemark generator
+// in the designer portal (grep `buildSidemark`, W3-T3b):
+// `{STUDIO≤3}-{CLIENT-or-PROJECT≤8}`, uppercase,
 // non-alphanumerics stripped, empty segments omitted. The room segment is
 // intentionally dropped server-side — a PO can span rooms.
 

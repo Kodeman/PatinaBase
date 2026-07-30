@@ -56,7 +56,7 @@ function VerifyOtpContent() {
     try {
       await verifyOtp.mutateAsync({ email, token, type: 'email' });
       authEvents.login('magic-link');
-      router.replace('/portal');
+      router.replace('/desk');
     } catch (err) {
       const message =
         err instanceof Error ? err.message : 'Invalid code. Please try again.';

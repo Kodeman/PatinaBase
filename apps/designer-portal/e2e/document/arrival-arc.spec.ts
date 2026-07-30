@@ -9,8 +9,9 @@ import { psqlRun, psqlScalar, psqlRow, psqlAsUser } from '../helpers/psql';
  * Arrival Arc (R106, Wave 2) — the full arc, end to end.
  *
  * Prereqs (house pattern, playwright.config.ts): local Supabase up + seeded
- * (designer@patina.dev / password123), flags `the-document-pilot`,
- * `design-request-pool`, `arrival-arc` all on (NEXT_PUBLIC_FLAG_OVERRIDES).
+ * (designer@patina.dev / password123), flags `design-request-pool` and
+ * `arrival-arc` on (NEXT_PUBLIC_FLAG_OVERRIDES). `the-document-pilot` is gone —
+ * the R21 dissolve (I109) made the Document unconditional.
  *
  * The regression suite for the arc's Phase 2 acceptance walk: accept a pooled
  * request → the Match Ceremony (send-gate, put-down/resume) → the threshold

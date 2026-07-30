@@ -26,7 +26,7 @@ async function setupAuthentication(page: Page): Promise<void> {
 
   for (let attempt = 1; attempt <= maxAttempts; attempt++) {
     try {
-      await page.goto('/auth/signin?callbackUrl=%2Fportal', {
+      await page.goto('/auth/signin?callbackUrl=%2Fdesk', {
         timeout: 30_000,
         waitUntil: 'networkidle',
       });
@@ -50,8 +50,11 @@ async function setupAuthentication(page: Page): Promise<void> {
       // AuthForm renders submit button with submitText="Sign In" prop.
       await page.getByRole('button', { name: /^sign in$/i }).click();
 
+      // R21 dissolve: signin lands on the Desk. The other spellings are the
+      // rooms a callbackUrl can name, plus /unauthorized so a role failure
+      // fails the assertion below instead of timing out here.
       await page.waitForURL(
-        /\/(portal|dashboard|catalog|clients|proposals|projects)/,
+        /\/(desk|doc|people|library|rooms|room|drafting|compose|preferences|unauthorized)/,
         { timeout: 60_000 },
       );
       return;
@@ -70,7 +73,8 @@ async function setupAuthentication(page: Page): Promise<void> {
 
 /**
  * localStorage key the help-system uses to remember the first-sign-in welcome
- * modal was already shown (see components/help/first-signin-tour.tsx). The modal
+ * modal was already shown (the Desk Walkthrough's welcome — see
+ * components/document/help/desk-walkthrough.tsx). The modal
  * renders a <dialog> that makes the rest of the page inert/aria-hidden, which
  * breaks specs written before the modal existed. Pre-set it so the modal never
  * opens during e2e. (The guided tour only starts from the modal's CTA, so
@@ -93,17 +97,6 @@ export const test = base.extend<AuthFixtures>({
 });
 
 export { expect } from '@playwright/test';
-
-export async function isAuthenticated(page: Page): Promise<boolean> {
-  const currentUrl = page.url();
-  await page.goto('/portal');
-  await page.waitForLoadState('networkidle');
-  const isAuth = !page.url().includes('/auth/signin');
-  if (currentUrl !== page.url() && !isAuth) {
-    await page.goto(currentUrl);
-  }
-  return isAuth;
-}
 
 export async function signOut(page: Page): Promise<void> {
   await page.goto('/auth/signout');

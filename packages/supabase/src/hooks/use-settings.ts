@@ -49,10 +49,19 @@ export interface UserSettings {
 
 /**
  * Get current user's profile
+ *
+ * `options.enabled` (default `true`, so existing callers are unchanged) lets a
+ * caller that already knows there is no session hold the query back. Without it
+ * the query function throws `Not authenticated`, and a thrown query error reaches
+ * the app's global QueryCache error handler — an error toast (and, in dev, the
+ * Next error overlay) on any page that merely called `useAuth()` while signed
+ * out. `/preferences` is required to answer signed out (R91), so it cannot afford
+ * that.
  */
-export function useProfile() {
+export function useProfile(options?: { enabled?: boolean }) {
   return useQuery({
     queryKey: ['profile'],
+    enabled: options?.enabled ?? true,
     queryFn: async () => {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const supabase = getSupabase() as any;

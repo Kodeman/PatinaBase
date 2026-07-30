@@ -14,16 +14,18 @@ const VIEWPORTS = {
   largeDesktop: { width: 2560, height: 1440, name: 'Large Desktop (QHD)' },
 };
 
-// Pages to test
+// Pages to test — desk-era routes only (the R21 dissolve, I109). The old zone
+// URLs (/dashboard, /catalog, /clients, /projects, /proposals, /messages,
+// /style-profile) are now permanent 308s, so pointing this suite at them would
+// only ever measure the redirect target twice. /doc/[id] is absent on purpose:
+// it needs a seeded engagement id, and this spec has no fixture for one.
 const PAGES = [
-  { path: '/dashboard', name: 'Dashboard' },
-  { path: '/catalog', name: 'Catalog - Products' },
-  { path: '/catalog/collections', name: 'Catalog - Collections' },
-  { path: '/clients', name: 'Clients' },
-  { path: '/projects', name: 'Projects' },
-  { path: '/proposals', name: 'Proposals' },
-  { path: '/messages', name: 'Messages' },
-  { path: '/style-profile', name: 'Style Profile' },
+  { path: '/desk', name: 'The Desk' },
+  { path: '/library', name: 'The Library' },
+  { path: '/people', name: 'The People room' },
+  { path: '/rooms', name: 'The Rooms roster' },
+  { path: '/help', name: 'Help' },
+  { path: '/preferences', name: 'Preferences' },
 ];
 
 interface OverflowElement {

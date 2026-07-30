@@ -50,12 +50,20 @@ const STATUS_META: Record<
   offline: { label: 'Offline', color: 'var(--color-aged-oak)' },
 };
 
-type AccountPage =
+export type AccountPage =
   | 'profile'
   | 'notifications'
   | 'security'
   | 'devices'
   | 'studio';
+
+export const ACCOUNT_PAGES: readonly AccountPage[] = [
+  'profile',
+  'notifications',
+  'security',
+  'devices',
+  'studio',
+];
 
 const PAGES: { key: AccountPage; label: string }[] = [
   { key: 'profile', label: 'Profile' },
@@ -64,9 +72,23 @@ const PAGES: { key: AccountPage; label: string }[] = [
   { key: 'devices', label: 'Devices' },
 ];
 
-/** Open the Account sheet from anywhere in the document model. */
+/** Open the Account sheet from anywhere in the document model.
+ *  Takes NO argument on purpose — it is passed straight to `onClick` in
+ *  account-nameplate.tsx, so a first parameter would arrive as a MouseEvent.
+ *  Page targeting goes through {@link openAccountPage}. */
 export function openAccount() {
   window.dispatchEvent(new CustomEvent('document:open-account'));
+}
+
+/** R21 dissolve — open the Account sheet ONTO a page. Same event, optional
+ *  `{ page }` detail; the listener below falls back to 'profile' when the
+ *  detail is absent or carries an unknown page, so every existing dispatcher
+ *  (nameplate, mobile drawer, ⌘K) keeps its old behaviour. This is what
+ *  /desk?account=<page> rides on. */
+export function openAccountPage(page: AccountPage) {
+  window.dispatchEvent(
+    new CustomEvent('document:open-account', { detail: { page } }),
+  );
 }
 
 export function AccountSheet() {
@@ -76,7 +98,8 @@ export function AccountSheet() {
   // Flag hook stays above every early return / conditional branch below
   // (hook-order stability) even though this component has no early return
   // today — matches the fail-closed convention in open-requests-strip.tsx.
-  const { value: studioEnabled } = useFeatureFlag('studio-workspaces');
+  const { value: studioEnabled, isLoading: studioFlagLoading } =
+    useFeatureFlag('studio-workspaces');
 
   const { user, signOut } = useAuth();
   const { data: profile } = useProfile();
@@ -90,13 +113,31 @@ export function AccountSheet() {
   const [isSigningOut, setIsSigningOut] = useState(false);
 
   useEffect(() => {
-    const onOpen = () => {
-      setPage('profile');
+    const onOpen = (e: Event) => {
+      const detail = (e as CustomEvent<{ page?: AccountPage } | undefined>)
+        .detail;
+      const wanted = detail?.page;
+      setPage(
+        wanted && ACCOUNT_PAGES.includes(wanted) ? wanted : 'profile',
+      );
       setOpen(true);
     };
     window.addEventListener('document:open-account', onOpen);
     return () => window.removeEventListener('document:open-account', onOpen);
   }, []);
+
+  // The Studio page only exists behind `studio-workspaces`. A request for it
+  // with the flag OFF (the /desk?account=studio doorway, ⌘K, an old link) would
+  // otherwise open the sheet onto a page with no tab and no body — a blank.
+  // Reconciled here rather than in the listener so it also covers the race where
+  // the doorway fires before PostHog has answered: the fallback waits for the
+  // flag to actually resolve (`isLoading` false) before it moves the designer.
+  useEffect(() => {
+    if (page !== 'studio') return;
+    if (studioFlagLoading) return;
+    if (studioEnabled) return;
+    setPage('profile');
+  }, [page, studioEnabled, studioFlagLoading]);
 
   const handleSignOut = useCallback(async () => {
     setIsSigningOut(true);

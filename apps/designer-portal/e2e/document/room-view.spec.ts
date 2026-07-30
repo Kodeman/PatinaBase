@@ -7,7 +7,8 @@ import { psqlScalar, psqlRow } from '../helpers/psql';
  *
  * Prereqs (house pattern, playwright.config.ts): local Supabase up + seeded
  * (designer@patina.dev / password123, `supabase/seed/leads_room_scans.sql`),
- * flag `the-document-pilot` on (pinned in the config's webServer env). Elena's
+ * no flag override needed (the R21 dissolve, I109, retired
+ * `the-document-pilot` — the Document is unconditional). Elena's
  * scan must have PARSED geometry — locally that means
  * `pnpm dev:seed-room-fixture` has run (scripts/dev/seed-room-scan-fixture.mjs)
  * — CI has no such fixture, so this spec self-skips rather than fail red.

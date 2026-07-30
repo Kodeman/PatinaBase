@@ -17,8 +17,10 @@
  *   /desk                  → …/document/desk
  *   /doc/[id]              → …/document/doc
  *   /library               → …/document/library
+ *   /library/judgments     → …/document/library   (a Room off the Library, not a Piece)
  *   /library/[id]          → …/document/library/piece
  *   /people                → …/document/people
+ *   /rooms, /room/[scanId] → …/document/rooms     (R21: the Rooms roster + a scan)
  *   /drafting/[id]         → …/document/drafting
  *   /compose               → …/document/compose
  *   anything else          → …/document (root)
@@ -38,11 +40,18 @@ export function documentPathnameToSurfaceKey(pathname: string): string {
       return DOCUMENT_SURFACE_KEYS.doc;
     case 'library':
       // /library/[id] is the Piece — its own surface (still library-prefixed).
-      return segments[1]
+      // /library/judgments is a static Room the R21 dissolve rehoused off the
+      // Library; it is not a product id, so it keeps the Library's own key.
+      return segments[1] && segments[1] !== 'judgments'
         ? DOCUMENT_SURFACE_KEYS.libraryPiece
         : DOCUMENT_SURFACE_KEYS.library;
     case 'people':
       return DOCUMENT_SURFACE_KEYS.people;
+    // R21: /rooms is the roster, /room/[scanId] (+ /file) is one scan. Both are
+    // the Rooms surface as far as help copy is concerned.
+    case 'rooms':
+    case 'room':
+      return DOCUMENT_SURFACE_KEYS.rooms;
     case 'drafting':
       return DOCUMENT_SURFACE_KEYS.drafting;
     case 'compose':

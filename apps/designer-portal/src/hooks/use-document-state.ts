@@ -13,6 +13,11 @@
  *     designer_clients relationship row (shape D keys engagement_id on it,
  *     and shape C excludes status 'accepted'), so pre-accept links survive
  *     the intake moment the same way.
+ *   · R21 (the dissolve) — a client_decision's id resolves to a redirect to
+ *     `/doc/[projectId]`, or to `/doc/[designerClientId]` when the decision has
+ *     no project yet: the decision never had a document of its own, it is a
+ *     margin item in the document it belongs to.
+ *     /portal/decisions/[id]'s permanent redirect rides this leg.
  */
 
 import { useQuery } from '@tanstack/react-query';
@@ -77,6 +82,34 @@ export function useDocumentEngagement(id: string) {
         if (relError) throw relError;
         const rel = (rels ?? [])[0] as { id: string } | undefined;
         if (rel?.id) return { kind: 'redirect', projectId: rel.id };
+      }
+
+      // R21 dissolve: /portal/decisions/[id] was a real page; the act it held is
+      // a margin item inside the document the decision belongs to. Its permanent
+      // redirect sends the decision id to /doc/[id], so the resolver has to know
+      // that shape too — third miss-path leg, same style as R6/F1: one lookup,
+      // only when nothing else answered.
+      //
+      // NOTE: `client_decisions.project_id` is NULLABLE — a decision recorded
+      // against the client relationship before a project exists carries none.
+      // `designer_client_id` is NOT NULL, and it IS the shape-D document
+      // identity (the same id F1 above redirects an accepted lead to), so a
+      // project-less decision hops there rather than dead-ending. Preference
+      // order matters: the project document is the closer home when it exists.
+      // Either way the target goes back through this resolver, whose shape-D /
+      // miss legs handle it — a stale relationship id lands on 'missing'
+      // gracefully instead of a blank.
+      const { data: decision, error: decisionError } = await supabase
+        .from('client_decisions')
+        .select('project_id, designer_client_id')
+        .eq('id', id)
+        .maybeSingle();
+      if (decisionError) throw decisionError;
+      if (decision?.project_id) {
+        return { kind: 'redirect', projectId: decision.project_id };
+      }
+      if (decision?.designer_client_id) {
+        return { kind: 'redirect', projectId: decision.designer_client_id };
       }
 
       return { kind: 'missing' };

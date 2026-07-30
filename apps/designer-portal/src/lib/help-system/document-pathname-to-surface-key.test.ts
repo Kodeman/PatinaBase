@@ -44,6 +44,21 @@ describe('documentPathnameToSurfaceKey', () => {
     expect(documentPathnameToSurfaceKey('/library/')).toBe(DOCUMENT_SURFACE_KEYS.library);
   });
 
+  // R21 dissolve — the rehoused surfaces.
+  it('/library/judgments is the Library, not a Piece', () => {
+    expect(documentPathnameToSurfaceKey('/library/judgments')).toBe(
+      DOCUMENT_SURFACE_KEYS.library,
+    );
+  });
+
+  it('resolves the Rooms roster and a single scan to the Rooms surface', () => {
+    expect(documentPathnameToSurfaceKey('/rooms')).toBe(DOCUMENT_SURFACE_KEYS.rooms);
+    expect(documentPathnameToSurfaceKey('/room/scan-1')).toBe(DOCUMENT_SURFACE_KEYS.rooms);
+    expect(documentPathnameToSurfaceKey('/room/scan-1/file')).toBe(
+      DOCUMENT_SURFACE_KEYS.rooms,
+    );
+  });
+
   it('falls back to the Document root for unknown / empty paths', () => {
     expect(documentPathnameToSurfaceKey('/')).toBe(DOCUMENT_SURFACE_KEYS.root);
     expect(documentPathnameToSurfaceKey('')).toBe(DOCUMENT_SURFACE_KEYS.root);

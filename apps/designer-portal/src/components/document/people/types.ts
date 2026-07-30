@@ -15,7 +15,13 @@ export type PeopleView =
   | 'nurture'
   | 'reviews'
   | 'portfolio'
-  | 'outreach';
+  | 'outreach'
+  // R21 dissolve — the designer's own taste profile ("Your Eye") lost its only
+  // mount when /portal/teaching/your-eye died with the zone tree. It is a
+  // reading of the designer, not of a party, so it lands here as a seventh
+  // rail view (the People Room is where the roster's own owner lives too).
+  // The panel takes no PeopleViewProps; the widening is the union only.
+  | 'your-eye';
 
 /** The navigation contract every view receives. */
 export interface PeopleViewProps {

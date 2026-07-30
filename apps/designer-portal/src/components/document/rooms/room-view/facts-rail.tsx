@@ -168,7 +168,7 @@ export function FactsRail({
         <Fact k="Room File">
           {/* Quiet, not button-chrome (Photos/Measure precedent): the same
               scored word in the fact-value slot, with a mono "open" hint on
-              hover/focus. Links into /portal/projects/[id]/room-file/[scanId]. */}
+              hover/focus. Links into /room/[scanId]/file (R21 dissolve). */}
           <Link
             href={roomFile.href}
             className="group inline-flex min-h-11 items-center gap-1.5 font-mono text-[12px] font-light uppercase tracking-[0.1em] text-[var(--color-charcoal)] no-underline outline-none focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-clay)]"

@@ -258,7 +258,7 @@ export function useCreateLead() {
       contact_name?: string;
       contact_email?: string;
       // Optional ISO timestamp. Additive + backward-compatible: the old
-      // `/portal/leads` AddLeadDialog never passes it (stays null there).
+      // legacy AddLeadDialog never passed it (stayed null there).
       // The Document's CaptureLeadSheet sets it +1 day (Track 6, R62) so the
       // new lead rises as a `new_lead` need on the Desk.
       response_deadline?: string;
@@ -542,7 +542,7 @@ export function useAcceptLead() {
 /**
  * Begin Discovery — the Document's "Accept" triage act (Track 6, ruling R61).
  *
- * Distinct from {@link useAcceptLead}: the old `/portal/leads` flow jumps a
+ * Distinct from {@link useAcceptLead}: the retired pre-Document lead flow jumped a
  * relationship straight to `status='active'` (it expects you to then build a
  * proposal/project). The Document model instead wants an accepted lead to
  * surface as a **Discovery** document on the Desk — `document_state` Shape D,

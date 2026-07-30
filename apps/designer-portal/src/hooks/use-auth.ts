@@ -8,7 +8,16 @@ import { Permission, Role, hasPermission, hasRole, type Session } from '@/lib/rb
 export function useAuth() {
   const { session: supabaseSession, isLoading } = useSupabaseSession();
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const { data: profile } = useSupabaseProfile() as { data: any };
+  // Held back until there is a session. `useProfile`'s query function throws
+  // `Not authenticated` with no user, and every thrown query error lands in the
+  // global QueryCache handler — so an UNAUTHENTICATED visit to any page that
+  // calls useAuth() raised a spurious error toast (and the dev error overlay).
+  // `/preferences` has to answer signed out (R91), which is where this surfaced.
+  // profile is read below only for an optional display name, so a session-less
+  // visit losing it costs nothing.
+  const { data: profile } = useSupabaseProfile({
+    enabled: !!supabaseSession?.user,
+  }) as { data: any };
   const router = useRouter();
 
   const session: Session | null = useMemo(() => {

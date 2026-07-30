@@ -28,7 +28,7 @@ export default async function UnsubscribePage({ searchParams }: PageProps) {
 
   return (
     <main className="min-h-screen flex items-center justify-center bg-[var(--bg-subtle)] p-6 font-sans">
-      <div className="w-full max-w-xl bg-white rounded-lg shadow-sm overflow-hidden">
+      <div className="w-full max-w-xl bg-white rounded-lg overflow-hidden">
         <header className="bg-[#3C3226] px-10 py-7 text-center">
           <span className="font-serif text-xl font-semibold tracking-[0.15em] text-[var(--color-off-white)]">
             PATINA
@@ -46,7 +46,7 @@ export default async function UnsubscribePage({ searchParams }: PageProps) {
                   : `We've unsubscribed you from ${humanize(outcome.type)} emails.`}
               </p>
               <Link
-                href="/portal/settings/notifications"
+                href="/desk?account=notifications"
                 className="inline-block bg-[var(--color-taupe)] text-white px-9 py-3.5 rounded-full font-semibold text-sm"
               >
                 Manage preferences
@@ -61,7 +61,7 @@ export default async function UnsubscribePage({ searchParams }: PageProps) {
                 {errorCopy(outcome.status)}
               </p>
               <Link
-                href="/portal/settings/notifications"
+                href="/desk?account=notifications"
                 className="inline-block bg-[var(--color-taupe)] text-white px-9 py-3.5 rounded-full font-semibold text-sm"
               >
                 Sign in to manage

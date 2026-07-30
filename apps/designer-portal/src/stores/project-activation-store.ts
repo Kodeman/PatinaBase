@@ -4,7 +4,8 @@
  * Two entry paths:
  *   1. From a signed proposal → activate_proposal_as_project RPC pre-fills
  *      basics + scope, wizard jumps to step 03 (Schedule).
- *   2. Manual from /portal/projects/new → blank wizard from step 01.
+ *   2. Manual from the ⌘K "Open a project" verb on the Desk → blank wizard
+ *      from step 01. (Pre-dissolve this was the /portal/projects/new route.)
  *
  * Drafts auto-persist to localStorage; full save creates a `projects` row
  * with status='draft' (via useUpdateProject) so the row appears in Pipeline

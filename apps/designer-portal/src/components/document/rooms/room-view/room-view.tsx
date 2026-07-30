@@ -30,7 +30,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import Link from 'next/link';
 import type { RoomGeometryDocument, RoomScanPhoto } from '@patina/supabase';
-import { useRoomFiles, useRoomScan, useScanRefineArtifacts } from '@patina/supabase';
+import { useRoomFiles, useScanRefineArtifacts } from '@patina/supabase';
 import { useFeatureFlag } from '@/hooks/use-feature-flag';
 import type { RoomGeometry } from '@/lib/room-view/geometry';
 import type { PhotoProvenance } from '@/lib/room-view/photo-poses';
@@ -131,23 +131,24 @@ export function RoomView({
 
   // Room File door (Field Capture P1, item 12) — a quiet facts-rail link to
   // this scan's generated drawing set. Resolved here (hooks above the early
-  // returns), passed to FactsRail as a plain href. Shown ONLY when: the
-  // `room-file` flag is on, a generated room_file exists for the scan, AND the
-  // scan is on a project (the route is project-nested). Absent otherwise.
+  // returns), passed to FactsRail as a plain href. Shown when the `room-file`
+  // flag is on AND a generated room_file exists for the scan.
+  // R21 dissolve: the old project-nested route also required the scan to be on
+  // a project. `/room/[scanId]/file` is scan-keyed, so that requirement is
+  // gone — an orphan scan with a finished drawing set now shows its door too.
   const { value: roomFileEnabled } = useFeatureFlag('room-file');
   const { data: roomFilesForDoor } = useRoomFiles(
     roomFileEnabled ? roomId : undefined,
   );
-  const { data: scanRow } = useRoomScan(roomFileEnabled ? roomId : '');
   const roomFileDoor = useMemo(() => {
     if (!roomFileEnabled) return undefined;
-    const projectId = scanRow?.project?.id ?? scanRow?.project_id ?? null;
     const hasGenerated = (roomFilesForDoor ?? []).some(
       (rf) => rf.status === 'generated',
     );
-    if (!projectId || !hasGenerated) return undefined;
-    return { href: `/portal/projects/${projectId}/room-file/${roomId}` };
-  }, [roomFileEnabled, scanRow, roomFilesForDoor, roomId]);
+    if (!hasGenerated) return undefined;
+    return { href: `/room/${roomId}/file` };
+  }, [roomFileEnabled, roomFilesForDoor, roomId]);
+
   // ── Refine diagnostic readout (Field Capture P2, Layer 3, ruling R-G) ──
   // A facts-rail line + a <details> disclosure: drift figures and R123's
   // advisory. NO plan polyline, NO orbit geometry — R-G scoped the render out

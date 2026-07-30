@@ -95,9 +95,31 @@ export interface RecordRow {
 }
 
 /** Document routes the Post is allowed to follow. Legacy `/portal/*` deep links
- *  are NOT here — following them would leave the Document (D1); such notices
- *  read in place instead. */
-const DOCUMENT_ROUTE_PREFIXES = ['/doc', '/desk', '/people', '/library', '/drafting', '/compose'];
+ *  are NOT here — a notice minted before the R21 dissolve still carries one, and
+ *  following it would leave the Document (D1); such notices read in place
+ *  instead. (next.config's permanent table would land them somewhere true, but
+ *  the Post does not launch links it cannot name.) The list is every route the
+ *  (document) tree answers to, including the surfaces the dissolve rehoused:
+ *  /rooms + /room/[scanId] (and its /file leaf), /ceremony, /help.
+ *
+ *  `/preferences` is deliberately ABSENT. It is a real page but it lives OUTSIDE
+ *  the (document) route group on purpose (R91 — it has to answer unauthenticated
+ *  for the emailed unsubscribe token, so it carries no Desk chrome). Following a
+ *  notice into it would launch the designer out of the Document, which is exactly
+ *  what D1 forbids; the designer's own notification settings are reachable from
+ *  inside, through the Account sheet (`/desk?account=notifications`). */
+const DOCUMENT_ROUTE_PREFIXES = [
+  '/doc',
+  '/desk',
+  '/people',
+  '/library',
+  '/drafting',
+  '/compose',
+  '/rooms',
+  '/room',
+  '/ceremony',
+  '/help',
+];
 
 function isDocumentRoute(href: string | null | undefined): href is string {
   return (

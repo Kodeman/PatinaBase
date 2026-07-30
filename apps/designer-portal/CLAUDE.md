@@ -39,7 +39,7 @@ On conflict between 1 and 2: do not silently pick. Append the conflict to `DECIS
 ## Conventions
 
 - Components live under the repo's existing designer-portal structure; shared primitives that other portals could use (Stamp, StrataMark, StackedPaper, MarginItem shell, LedgerSheet) go to the appropriate `@patina/*` package per existing patterns — check how the three-layer catalog components were placed (`@patina/catalog-ui`) and follow suit.
-- Feature flag: PostHog flag `the-document-pilot` via the existing `useFeatureFlag` hook + `NEXT_PUBLIC_FLAG_OVERRIDES` env override (DECISIONS.md I1).
+- Feature flag: NONE. `the-document-pilot` is RETIRED — the R21 dissolve (DECISIONS.md I109) deleted `app/(portal)/` along with DocumentGate and the flag it read, so the Document is unconditional and `/desk` is the only landing. Do not gate new Document work behind it; new gated work mints its own flag through `useFeatureFlag` + `NEXT_PUBLIC_FLAG_OVERRIDES` (the mechanism from I1 survives, the flag does not).
 - Commits/PRs: one slice per PR, titled `the-document: slice N — <name>`. Include the acceptance criteria checklist from spec §13 in the PR description, checked off honestly.
 - Keep the prototype HTML untouched — it is a reference artifact, not source.
 

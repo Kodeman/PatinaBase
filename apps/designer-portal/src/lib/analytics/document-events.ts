@@ -3,10 +3,6 @@
  * instrumentation. These events are the instrument for the dissolve criterion,
  * the week-one watch, and (F1) whether ⌘K and the doorway grammar are actually
  * how people move:
- *   · zoneFlight        — a visit to an old zone after the flip, carrying
- *                         from-route + the last document in hand. Replaces
- *                         the twice-missed Q14: the flight triggers name
- *                         themselves as data. Ranks the dissolve backlog.
  *   · deskRendered      — the Desk's composition on load (folder/chip counts
  *                         + need-line kinds), so the week-one watch can read
  *                         sent-unacknowledged frequency and overall noise.
@@ -84,15 +80,6 @@ export function readRecentDocumentsInHand(): RecentDocumentInHand[] {
     return Array.isArray(parsed) ? (parsed as RecentDocumentInHand[]) : [];
   } catch {
     return [];
-  }
-}
-
-function lastDocumentInHand(): string | null {
-  if (typeof window === 'undefined') return null;
-  try {
-    return window.localStorage.getItem(LAST_DOC_KEY);
-  } catch {
-    return null;
   }
 }
 
@@ -187,13 +174,6 @@ export const documentEvents = {
     variant: 'primary' | 'secondary' | 'tertiary' | 'danger';
     presentation: 'inline' | 'mobile_dock';
   }) => track('document_action_selected', props),
-
-  /** An old-zone route visited after the flip (R21 flight telemetry). */
-  zoneFlight: (fromRoute: string) =>
-    track('document_zone_flight', {
-      from_route: fromRoute,
-      last_document_in_hand: lastDocumentInHand(),
-    }),
 
   /** The Desk's composition on render — week-one noise + need-kind mix. */
   deskRendered: (props: {

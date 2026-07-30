@@ -36,11 +36,10 @@
  *     skipped and RoomShell falls back to its normal origin-stash — a
  *     roster-style leave rather than a broken/blank document link.
  *
- * KNOWN GAP (I74b): the A3 deep-link fix has NOT landed. DocumentGate
- * (client-side, fail-closed on `the-document-pilot`) can bounce a
- * hard-refreshed /room/[id] to /portal while the flag resolves. In-app
- * navigation is the v1 path; this is a logged gap, not silently shipped —
- * do not "fix" DocumentGate to work around it here.
+ * (I74b, historical): a hard-refreshed /room/[id] used to be able to bounce
+ * to /portal while the now-removed DocumentGate's flag check resolved.
+ * DocumentGate was retired in the R21 dissolve (the legacy portal spine it
+ * guarded no longer exists), so that bounce no longer happens.
  */
 
 import { use, useEffect, useMemo, useRef, useState } from 'react';

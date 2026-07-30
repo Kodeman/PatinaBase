@@ -5,6 +5,7 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import { createBrowserClient } from '@patina/supabase';
 import { Suspense } from 'react';
 import { StrataSweep } from '@/components/ui/strata-sweep';
+import { safeInternalPath } from '@/lib/safe-internal-path';
 
 /**
  * OAuth callback page.
@@ -25,7 +26,12 @@ function CallbackContent() {
     const handleCallback = async () => {
       const supabase = createBrowserClient();
       const code = searchParams.get('code');
-      const next = searchParams.get('callbackUrl') || searchParams.get('next') || '/portal';
+      // An OAuth provider round-trips whatever it was handed, so this value is
+      // the least trustworthy of the four legs. Same guard as the middleware
+      // and the other two auth pages (@/lib/safe-internal-path).
+      const next = safeInternalPath(
+        searchParams.get('callbackUrl') || searchParams.get('next'),
+      );
 
       try {
         // PKCE flow: GoTrue redirected back with `?code=` — exchange it

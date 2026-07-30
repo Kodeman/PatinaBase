@@ -150,7 +150,7 @@ export function renderBrandedShell(opts: BrandedShellOpts): string {
   const links = opts.footerLinks ?? [
     { label: "Dashboard", href: base },
     { label: "Help center", href: `${base}/help` },
-    { label: "Email preferences", href: `${base}/portal/settings/notifications` },
+    { label: "Email preferences", href: `${base}/desk?account=notifications` },
   ];
   const preheader = opts.preview
     ? `<div style="display:none; font-size:1px; line-height:1px; max-height:0; max-width:0; opacity:0; overflow:hidden; mso-hide:all; color:transparent;">${escapeHtml(opts.preview)}&#847;&zwnj;&nbsp;&#847;&zwnj;&nbsp;&#847;&zwnj;&nbsp;&#847;&zwnj;&nbsp;</div>`

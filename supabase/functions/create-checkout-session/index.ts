@@ -362,7 +362,7 @@ async function loadPoPaymentPayable(
     payment.label?.trim() || PO_PAYMENT_KIND_LABEL[payment.kind] || 'Payment';
   const lineItemName = `${poLabel} — ${vendorName} · ${kindLabel}`;
 
-  const returnBase = `${DESIGNER_PORTAL_URL}/portal/procurement/by-vendor?po=${po.id}`;
+  const returnBase = `${DESIGNER_PORTAL_URL}/desk?book=orders&po=${po.id}`;
 
   return {
     payableType: 'po_payment',

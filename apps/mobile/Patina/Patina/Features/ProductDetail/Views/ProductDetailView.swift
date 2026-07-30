@@ -277,10 +277,10 @@ struct ProductDetailView: View {
 
     // MARK: - Components
 
-    /// Portal deep link for a piece — matches the designer-portal product
-    /// detail route at `app/(portal)/portal/catalog/[id]` on app.patina.cloud.
+    /// Web deep link for a piece — matches the Library piece route at
+    /// `app/(document)/library/[id]` on app.patina.cloud.
     private static func shareURL(for product: Product) -> URL {
-        PatinaPortalLinks.productURL(forProductId: product.id)
+        PatinaDeepLinks.productURL(forProductId: product.id)
     }
 
     private func floatingCircleButton(icon: String) -> some View {

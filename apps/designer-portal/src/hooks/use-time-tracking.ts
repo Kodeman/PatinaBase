@@ -629,7 +629,7 @@ export function useReleaseTimeEntries() {
   });
 }
 
-// ── Studio time report (/portal/time) ──
+// ── Studio time report (the Hours book — /desk?book=hours) ──
 
 export interface StudioTimeEntry extends ProjectTimeEntry {
   project?: { name: string | null } | null;

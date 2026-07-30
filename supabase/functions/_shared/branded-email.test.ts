@@ -33,7 +33,7 @@ function baseOpts() {
       { label: "Help center", href: "https://app.patina.cloud/help" },
       {
         label: "Email preferences",
-        href: "https://app.patina.cloud/portal/settings/notifications",
+        href: "https://app.patina.cloud/desk?account=notifications",
       },
     ],
     businessAddress:

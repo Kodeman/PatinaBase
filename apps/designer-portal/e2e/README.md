@@ -277,16 +277,21 @@ test.describe('Product Editor', () => {
 
 ## 🚩 Feature-flag overrides
 
-Parts of the portal are gated by PostHog feature flags (e.g. the procurement
-workspace behind `procurement-workspace-pilot`). The flag hook is fail-closed
-and PostHog never resolves in e2e/CI, so gated UI would be invisible to tests.
+Parts of the app are gated by PostHog feature flags (e.g. the Orders book's
+open-requests strip still mirrors `procurement-workspace-pilot`, and the Schedule
+Spine rides `schedule-spine`). The flag hook is fail-closed and PostHog never
+resolves in e2e/CI, so gated UI would be invisible to tests.
 
 `src/hooks/use-feature-flag.ts` supports an env-based override that is checked
 before the PostHog path:
 
 ```bash
-NEXT_PUBLIC_FLAG_OVERRIDES='procurement-workspace-pilot:true,some-other-flag:false'
+NEXT_PUBLIC_FLAG_OVERRIDES='procurement-workspace-pilot:true,schedule-spine:false'
 ```
+
+> `the-document-pilot` is gone. The R21 dissolve made the Document the only
+> surface, so there is nothing left to flag on — do not add it back to an
+> override string.
 
 - Format: comma-separated `flag-name:true|false` entries (whitespace trimmed).
 - Overridden flags resolve immediately (`isLoading: false`); PostHog is never
@@ -298,6 +303,18 @@ NEXT_PUBLIC_FLAG_OVERRIDES='procurement-workspace-pilot:true,some-other-flag:fal
   started **without** the var will not see the override — stop the running dev
   server, export the var, and restart — Playwright will start its own server
   only if no server is already listening on port 3000.
+
+## 🚪 The dissolve redirect table
+
+`e2e/document/dissolve-redirects.spec.ts` is the contract test for
+`redirects()` in `next.config.js` — every URL the retired `/portal` zone tree
+answered to. It runs **unauthenticated** on purpose: next.config redirects fire
+before middleware, which is also the honest simulation of a cold click from a
+two-year-old email. It asserts at the request level (`maxRedirects: 0`) so a
+302, or a chain through `/portal`, fails instead of quietly passing.
+
+When you add or move a Document route, add its legacy source to that table and a
+case to that spec in the same commit.
 
 ## 🔍 Debugging Tips
 
