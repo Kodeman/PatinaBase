@@ -53,17 +53,33 @@ extension RoomCaptureService {
         )
         instrumentScorecard = scorecard
         #if DEBUG
+        // Both lines below go out on TWO channels on purpose, and the reason is
+        // worth stating because it cost a device pass to learn:
+        //
+        //   • `PatinaLog.scan.info` -> the unified log, readable in Console.app.
+        //     `.debug` was the original level and it is the wrong one here —
+        //     debug records are memory-only and are filtered out of Console by
+        //     default, so the line existed but could not be read.
+        //   • `print` -> stdout, which is the ONLY channel
+        //     `devicectl device process launch --console` captures. os_log of
+        //     any level never reaches it, which is why a scan that ran fine
+        //     produced no probe output at all.
+        //
+        // A diagnostic that cannot be read on a device is not a diagnostic.
+        // DEBUG-only, so neither channel exists in a release build.
         if let probe = streamProbe {
             // The one line that answers "does RoomPlan's default session vend
             // depth to us at all" — see `CaptureStreamProbe.swift`.
-            PatinaLog.scan.debug(probe.summaryLine(meshAnchorCount: meshAnchors.count))
+            let line = probe.summaryLine(meshAnchorCount: meshAnchors.count)
+            PatinaLog.scan.info(line)
+            print(line)
         }
         let fired = keyframeRecorder?.telemetry.fired ?? 0
-        PatinaLog.scan.debug(
-            "[Instrument] verdict=\(scorecard.verdict.rawValue) "
+        let instrumentLine = "[Instrument] verdict=\(scorecard.verdict.rawValue) "
             + "surfaces=\(scorecard.surfaceChecklist.count) "
             + "coveragePct=\(scorecard.coveragePct) keyframesFired=\(fired)"
-        )
+        PatinaLog.scan.info(instrumentLine)
+        print(instrumentLine)
         #endif
     }
 }
