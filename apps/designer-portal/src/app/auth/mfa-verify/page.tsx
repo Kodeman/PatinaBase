@@ -9,11 +9,15 @@ import {
 import { Input, Alert } from '@patina/design-system';
 import { Button } from '@/components/ui/controls';
 import { ShieldCheck, Smartphone } from 'lucide-react';
+import { safeInternalPath } from '@/lib/safe-internal-path';
 
 function MfaVerifyContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const callbackUrl = searchParams.get('callbackUrl') || '/';
+  // Same guard the middleware ran when it minted this callbackUrl
+  // (@/lib/safe-internal-path): off-origin, protocol-relative, and
+  // backslash-smuggled targets all land on /desk instead.
+  const callbackUrl = safeInternalPath(searchParams.get('callbackUrl'));
 
   const { factors, isLoading } = useMfaFactors();
   const challengeMfa = useChallengeMfa();

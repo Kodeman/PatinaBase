@@ -11,6 +11,7 @@ import { StrataMark } from '@/components/portal/strata-mark';
 import { Button } from '@/components/ui/controls';
 import { StrataSweep } from '@/components/ui/strata-sweep';
 import { authEvents } from '@/lib/analytics/events';
+import { safeInternalPath } from '@/lib/safe-internal-path';
 
 const ERROR_MESSAGES: Record<string, { title: string; description: string }> = {
   OAuthSignin: {
@@ -54,7 +55,10 @@ const ERROR_MESSAGES: Record<string, { title: string; description: string }> = {
 function SignInContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const callbackUrl = searchParams.get('callbackUrl') || '/desk';
+  // Guarded at the source, so every leg below (the two safeRedirect calls and
+  // the QR display's own hard navigation) carries a value that cannot leave
+  // this origin. Absent/hostile → /desk.
+  const callbackUrl = safeInternalPath(searchParams.get('callbackUrl'));
   const error = searchParams.get('error');
   const registered = searchParams.get('registered');
   const reset = searchParams.get('reset');
@@ -102,12 +106,12 @@ function SignInContent() {
     },
   ];
 
+  // A full-page navigation (not router.push) on purpose: the fresh session's
+  // cookies have to reach the middleware, which re-derives the landing route.
+  // The target passes `safeInternalPath` — the same guard the middleware ran
+  // when it minted the callbackUrl (@/lib/safe-internal-path).
   const safeRedirect = (url: string) => {
-    if (url.startsWith('/') && !url.startsWith('//')) {
-      window.location.href = url;
-    } else {
-      window.location.href = '/';
-    }
+    window.location.href = safeInternalPath(url);
   };
 
   const handleOAuthSignIn = async (provider: 'google' | 'apple') => {
