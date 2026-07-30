@@ -481,6 +481,10 @@ verify_jwt = true
 # a Supabase JWT; the function additionally performs a caller-scoped artifact
 # read through RLS before using service-role access to render the frozen
 # revision snapshot and archive the private PDF.
+# External snapshot media is fail-closed. SPEC_BOOK_IMAGE_ORIGINS may be set in
+# the function environment to comma-separated exact HTTPS origins (for example,
+# https://images.example.com,https://cdn.example.com:8443). Wildcards, paths,
+# credentials, insecure origins, and IP literals are rejected.
 [functions.spec-book-render]
 verify_jwt = true
 

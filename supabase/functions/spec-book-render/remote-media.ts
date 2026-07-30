@@ -91,19 +91,81 @@ function isBlockedHost(rawHostname: string): boolean {
   return false;
 }
 
+function isIpLiteral(rawHostname: string): boolean {
+  const host = rawHostname.toLowerCase().replace(/^\[|\]$/g, "");
+  return ipv4Octets(host) !== null || host.includes(":");
+}
+
+/**
+ * Parse a comma-separated list of exact HTTPS origins. Invalid entries are
+ * ignored so missing or malformed configuration stays fail-closed.
+ */
+export function parseAllowedRemoteImageOrigins(
+  raw: string | undefined,
+): ReadonlySet<string> {
+  const origins = new Set<string>();
+  for (const entry of raw?.split(",") ?? []) {
+    const candidate = entry.trim();
+    if (!candidate) continue;
+    try {
+      const url = new URL(candidate);
+      if (
+        url.protocol !== "https:" ||
+        url.username ||
+        url.password ||
+        url.pathname !== "/" ||
+        url.search ||
+        url.hash ||
+        url.hostname.includes("*") ||
+        isIpLiteral(url.hostname) ||
+        isBlockedHost(url.hostname)
+      ) continue;
+      origins.add(url.origin);
+    } catch {
+      // Ignore invalid entries: they must never broaden the egress boundary.
+    }
+  }
+  return origins;
+}
+
 export function safeRemoteImageUrl(
   raw: string,
   supabaseUrl: string,
+  allowedOrigins: ReadonlySet<string>,
 ): URL | null {
   try {
     const url = new URL(raw);
-    const supabaseOrigin = new URL(supabaseUrl).origin;
-    if (url.username || url.password) return null;
-    if (url.protocol !== "https:" && url.origin !== supabaseOrigin) return null;
-    if (url.origin !== supabaseOrigin && isBlockedHost(url.hostname)) {
+    const supabase = new URL(supabaseUrl);
+    if (
+      url.username || url.password || supabase.username || supabase.password
+    ) {
       return null;
     }
+    if (url.origin === supabase.origin) return url;
+    if (
+      url.protocol !== "https:" ||
+      !allowedOrigins.has(url.origin) ||
+      isIpLiteral(url.hostname) ||
+      isBlockedHost(url.hostname)
+    ) return null;
     return url;
+  } catch {
+    return null;
+  }
+}
+
+export function safeRemoteImageRedirectUrl(
+  location: string,
+  currentUrl: URL,
+  supabaseUrl: string,
+  allowedOrigins: ReadonlySet<string>,
+): URL | null {
+  try {
+    return safeRemoteImageUrl(
+      new URL(location, currentUrl).toString(),
+      supabaseUrl,
+      allowedOrigins,
+    );
   } catch {
     return null;
   }
