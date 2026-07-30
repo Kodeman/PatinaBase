@@ -92,6 +92,53 @@ public final class RoomCaptureService: NSObject {
     /// cue toward under-covered areas.
     public private(set) var coachingHint: CoverageAnalyzer.CoachingHint?
 
+    // MARK: - Instrument lane (ported capture substrate)
+    //
+    // The instrument substrate (`Features/Walk/Instrument/`) observes the scan
+    // through the recorder seams in `CaptureRecorderSeams.swift` and nothing
+    // else. This service is the single fan-out point: it computes the shared
+    // clock ONCE per sample and broadcasts to every registered sink, so no sink
+    // recomputes the clock and all instrument streams agree on t = 0.
+    //
+    // ⚠ THE COVERAGE RULE. This lane produces a SECOND coverage figure
+    // (`SurfaceCoverageTracker.coveragePct` — per-surface dwell). It is
+    // instrument-internal and feeds only `ScorecardEvaluator`.
+    // `CoverageAnalyzer.overallCoverage` — i.e. `scanProgress` below — remains
+    // the ONLY coverage number the UI and analytics see. See the header of
+    // `RoomCoverageCoach.swift`.
+
+    /// The one clock for this scan. Re-based at every `startCapture`.
+    private(set) var captureTimebase = CaptureTimebase()
+
+    /// Per-ARFrame sinks (instrument lane only — the three pre-existing lanes
+    /// keep their inline calls; see `CaptureRecorderSeams.swift`).
+    private let frameSinks = CaptureSinkRegistry<CaptureFrameSink>()
+
+    /// Live RoomPlan parametric-graph sinks.
+    private let roomUpdateSinks = CaptureSinkRegistry<CaptureRoomUpdateSink>()
+
+    /// Per-surface dwell coach + QA gate. Nil outside a scan.
+    private(set) var coverageCoach: RoomCoverageCoach?
+
+    /// Keyframe gate + counters. DECISION LANE ONLY — writes no images and no
+    /// bundle bytes; see `KeyframeTelemetryRecorder.swift`.
+    private(set) var keyframeRecorder: KeyframeTelemetryRecorder?
+
+    /// The end-of-scan QA scorecard, built when the session ends. IN MEMORY
+    /// ONLY — deliberately not persisted to `scorecard.json` or
+    /// `manifest.scorecard`; see `RoomCoverageCoach.swift` for the two blockers.
+    private(set) var instrumentScorecard: Scorecard?
+
+    /// Counts which ARFrame streams this session actually vends. Diagnostic
+    /// only — see `CaptureStreamProbe.swift` for why an app that rides
+    /// RoomPlan's default session cannot otherwise tell.
+    private(set) var streamProbe: CaptureStreamProbe?
+
+    /// Live instrument coverage state (checklist + machine warnings). Nil
+    /// outside a scan. INSTRUMENT-INTERNAL — read the coverage rule above
+    /// before rendering any part of it.
+    func instrumentCoverageSnapshot() -> CoverageSnapshot? { coverageCoach?.snapshot() }
+
     // MARK: - Callbacks
 
     /// Called when a new feature is detected during scanning
@@ -212,6 +259,27 @@ public final class RoomCaptureService: NSObject {
         meshAnchors.removeAll()
         coachingHint = nil
 
+        // Re-base the instrument lane: one clock, fresh sinks, fresh recorders.
+        // Registered BEFORE `sessionDriver.run()` so no sample can arrive at an
+        // empty registry.
+        captureTimebase = CaptureTimebase(start: scanStartTime ?? Date())
+        frameSinks.removeAll()
+        roomUpdateSinks.removeAll()
+        instrumentScorecard = nil
+
+        let coach = RoomCoverageCoach()
+        coverageCoach = coach
+        frameSinks.add(coach)
+        roomUpdateSinks.add(coach)
+
+        let keyframes = KeyframeTelemetryRecorder()
+        keyframeRecorder = keyframes
+        frameSinks.add(keyframes)
+
+        let probe = CaptureStreamProbe()
+        streamProbe = probe
+        frameSinks.add(probe)
+
         // High-fidelity depth gate: only keep the flag set if the running
         // device advertises sceneDepth. Non-LiDAR devices silently continue
         // without depth rather than failing the whole scan.
@@ -322,6 +390,16 @@ public final class RoomCaptureService: NSObject {
         currentScanId = nil
         bundleWriter = nil
         meshAnchors.removeAll()
+
+        // Release the instrument lane. `startCapture` re-registers, but a
+        // hard failure can sit here for a while and a stale scorecard/snapshot
+        // from the dead session must not be readable in the meantime.
+        frameSinks.removeAll()
+        roomUpdateSinks.removeAll()
+        coverageCoach = nil
+        keyframeRecorder = nil
+        streamProbe = nil
+        instrumentScorecard = nil
 
         // Start a fresh capture with a new scanId.
         startCapture()
@@ -480,6 +558,39 @@ public final class RoomCaptureService: NSObject {
         }
     }
 
+    /// Close the instrument lane: build the QA scorecard from the coach's dwell
+    /// state + the keyframe lane's sharp-frame ratio, and log what the session
+    /// actually vended.
+    ///
+    /// The scorecard is held IN MEMORY on `instrumentScorecard` and goes no
+    /// further. It is NOT written to `scorecard.json` and NOT assigned to
+    /// `manifest.scorecard`, because `ScanRecoveryService` deletes a bundle and
+    /// its row when `manifest.json` fails to decode — so the first producer of
+    /// instrument fields turns any future unrecognized enum value into deleted
+    /// user data. That guard has to be made lenient first. See the header of
+    /// `RoomCoverageCoach.swift`.
+    ///
+    /// Idempotent: safe if the session ends more than once.
+    private func finalizeInstrumentLane() {
+        guard let coach = coverageCoach else { return }
+        let scorecard = coach.finalize(
+            sharpFrameRatio: keyframeRecorder?.sharpFrameRatio ?? 1.0,
+            // Anchor entry is not wired in this app; `AnchorGate.isUnverified(0)`
+            // is true, which is the honest answer for a scan with no anchors.
+            anchorCount: 0
+        )
+        instrumentScorecard = scorecard
+        #if DEBUG
+        if let probe = streamProbe {
+            PatinaLog.scan.debug(probe.summaryLine(meshAnchorCount: meshAnchors.count))
+        }
+        let fired = keyframeRecorder?.telemetry.fired ?? 0
+        PatinaLog.scan.debug(
+            "[Instrument] verdict=\(scorecard.verdict.rawValue) surfaces=\(scorecard.surfaceChecklist.count) coveragePct=\(scorecard.coveragePct) keyframesFired=\(fired)"
+        )
+        #endif
+    }
+
     private func emitFeatureIfReady(_ feature: DetectedFeature, at time: Date) {
         // Enforce minimum interval between features
         guard time.timeIntervalSince(lastFeatureTime) >= Constants.minimumFeatureInterval else {
@@ -546,6 +657,12 @@ extension RoomCaptureService: RoomCaptureSessionDelegate {
 
             // Process detected objects for narration
             self.processDetectedObjects(from: room)
+
+            // Instrument lane: rebuild the tracked surface set from the live
+            // parametric graph. This is the ONLY input `SurfaceCoverageTracker`
+            // has — without it the coverage scorecard has logic and no data.
+            let instrumentTimestamp = self.captureTimebase.seconds(at: Date())
+            self.roomUpdateSinks.broadcast { $0.capture(room: room, timestampSeconds: instrumentTimestamp) }
         }
     }
 
@@ -556,6 +673,11 @@ extension RoomCaptureService: RoomCaptureSessionDelegate {
             // Stop frame capture
             self.frameCaptureService.stopCapture()
             self.posedPhotoService?.stop()
+
+            // Close the instrument lane FIRST, and before the error early-return
+            // below — a session that ended badly is exactly the one whose
+            // scorecard is worth having.
+            self.finalizeInstrumentLane()
 
             let scanId = self.bundleWriter?.scanId
 
@@ -762,6 +884,13 @@ extension RoomCaptureService: ARSessionDelegate {
                 }
                 recorder.consume(frame: frame, associatedPhotoId: associatedPhotoId)
             }
+
+            // Instrument lane. The shared-clock timestamp is computed ONCE here
+            // and handed to every sink — no sink recomputes the clock, so all
+            // instrument streams agree on t = 0. Sinks must return quickly;
+            // they run inside the AR frame pump like the lanes above.
+            let instrumentTimestamp = self.captureTimebase.seconds(at: Date())
+            self.frameSinks.broadcast { $0.capture(frame: frame, timestampSeconds: instrumentTimestamp) }
         }
     }
 
