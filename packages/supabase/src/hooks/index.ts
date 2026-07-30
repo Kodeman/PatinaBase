@@ -861,6 +861,35 @@ export type {
   BulkReassignFfeVendorResult,
 } from './use-project-v2';
 export {
+  specBookKeys,
+  useProjectSpecBook,
+  useSpecBookWorkbench,
+  useUpdateProjectFfeSpec,
+  useUpdateSpecBookChapter,
+  useUpdateSpecBookItemSetting,
+  usePrepareSpecBookIssue,
+  useFinalizeSpecBookIssue,
+  useRenderSpecBookArtifact,
+  useCreateSpecBookShare,
+  useRevokeDocumentShare,
+} from './use-spec-books';
+export type {
+  SpecBookAudience,
+  SpecBookIssueType,
+  SpecBookReadiness,
+  SpecBookArtifactStatus,
+  SpecBook,
+  SpecBookChapter,
+  ProjectFfeSpec,
+  SpecBookItemSetting,
+  SpecBookRevision,
+  SpecBookArtifact,
+  SpecBookWorkItem,
+  SpecBookWorkbench,
+  UpdateProjectFfeSpecInput,
+  PrepareSpecBookIssueInput,
+} from './use-spec-books';
+export {
   // Proposal Activation
   useActivateProposal,
 } from './use-proposal-activation';
