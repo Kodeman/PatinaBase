@@ -40,6 +40,7 @@ import { useHydrated } from "@/hooks/use-hydrated";
 import { specBookEvents } from "@/lib/analytics/spec-book-events";
 import {
   audienceAllows,
+  buildNaDeclarationUpdate,
   displayResolvedValue,
   editableSpecSeed,
   hasIssuedDrift,
@@ -310,10 +311,7 @@ function SelectionEditor({
         changes: {
           na_declarations: {
             ...item.spec.na_declarations,
-            [naField]: {
-              reason: naReason.trim(),
-              declared_at: new Date().toISOString(),
-            },
+            ...buildNaDeclarationUpdate(naField, naReason),
           },
         },
       });
@@ -435,6 +433,7 @@ function SelectionEditor({
         </p>
         <div className="mt-2 grid gap-2 sm:grid-cols-[150px_1fr_auto]">
           <Select
+            aria-label="Field to mark not applicable"
             value={naField}
             onChange={(event) => setNaField(event.target.value as SpecField)}
           >
@@ -446,6 +445,7 @@ function SelectionEditor({
             <option value="exact_location">Location</option>
           </Select>
           <Input
+            aria-label="Reason field is not applicable"
             value={naReason}
             placeholder="Reason required"
             onChange={(event) => setNaReason(event.target.value)}
@@ -901,7 +901,11 @@ export function SpecBookWorkspace({ projectId }: { projectId: string }) {
   if (!hydrated || workbench.isLoading) {
     return (
       <main className="min-h-screen bg-[var(--doc-paper)] px-8 py-12" aria-busy>
-        <p className="font-heading italic text-[var(--text-muted)]">
+        <p
+          className="font-heading italic text-[var(--text-muted)]"
+          role="status"
+          aria-live="polite"
+        >
           Opening the working book…
         </p>
       </main>
@@ -1259,7 +1263,7 @@ export function SpecBookWorkspace({ projectId }: { projectId: string }) {
                             setSelectedItemId(issue.itemId!);
                             setView("workbench");
                           }}
-                          className="font-mono text-[8px] uppercase tracking-[0.08em] text-[var(--color-clay)]"
+                          className="min-h-11 px-2 font-mono text-[8px] uppercase tracking-[0.08em] text-[var(--color-clay)]"
                         >
                           Resolve
                         </button>

@@ -28,6 +28,41 @@ export type SpecField =
   | "selected_dimensions"
   | "exact_location";
 
+type ContractSpecField =
+  | "sku"
+  | "finish"
+  | "material"
+  | "colorFabric"
+  | "dimensions"
+  | "exactLocation";
+
+const SPEC_FIELD_CONTRACT_KEYS: Record<SpecField, ContractSpecField> = {
+  sku: "sku",
+  finish: "finish",
+  material: "material",
+  color_fabric: "colorFabric",
+  selected_dimensions: "dimensions",
+  exact_location: "exactLocation",
+};
+
+export function specFieldContractKey(field: SpecField): ContractSpecField {
+  return SPEC_FIELD_CONTRACT_KEYS[field];
+}
+
+export function buildNaDeclarationUpdate(
+  field: SpecField,
+  reason: string,
+  declaredAt = new Date(),
+): Record<string, { na: true; reason: string; declared_at: string }> {
+  return {
+    [specFieldContractKey(field)]: {
+      na: true,
+      reason: reason.trim(),
+      declared_at: declaredAt.toISOString(),
+    },
+  };
+}
+
 export type AudiencePreviewField =
   | SpecField
   | "name"
@@ -152,6 +187,15 @@ function productValue(
   }
 }
 
+function contractFieldValue<T>(
+  record: Record<string, T> | null | undefined,
+  field: SpecField,
+): T | undefined {
+  if (!record) return undefined;
+  const canonical = specFieldContractKey(field);
+  return canonical in record ? record[canonical] : record[field];
+}
+
 /**
  * The sole value-resolution rule shared by cards, editor, preview, and
  * preflight: project override → FF&E line → product master → studio custom.
@@ -160,8 +204,8 @@ export function resolveSpecValue(
   item: SpecBookWorkItem,
   field: SpecField,
 ): ResolvedSpecValue {
-  const declaration = item.spec?.na_declarations?.[field];
-  if (declaration?.reason?.trim()) {
+  const declaration = contractFieldValue(item.spec?.na_declarations, field);
+  if (declaration?.na === true && declaration.reason?.trim()) {
     return {
       value: null,
       source: "declaration",
@@ -172,13 +216,17 @@ export function resolveSpecValue(
     };
   }
 
+  const verifiedAt = contractFieldValue(
+    item.spec?.source_verifications,
+    field,
+  ) ?? null;
   const override = item.spec?.[field];
   if (present(override)) {
     return {
       value: override,
       source: "project_override",
       sourceUpdatedAt: item.spec?.updated_at ?? null,
-      verifiedAt: item.spec?.source_verifications?.[field] ?? null,
+      verifiedAt,
       na: false,
       naReason: null,
     };
@@ -202,15 +250,16 @@ export function resolveSpecValue(
       value: masterValue,
       source: "product_master",
       sourceUpdatedAt: (item.product?.updated_at as string | null) ?? null,
-      verifiedAt: item.spec?.source_verifications?.[field] ?? null,
+      verifiedAt,
       na: false,
       naReason: null,
     };
   }
 
-  const custom = (item.custom_fields as Record<string, unknown> | undefined)?.[
-    field
-  ];
+  const custom = contractFieldValue(
+    item.custom_fields as Record<string, unknown> | undefined,
+    field,
+  );
   return {
     value: present(custom) ? custom : null,
     source: "studio_custom",

@@ -153,7 +153,7 @@ Deno.test("addendum includes only added and changed current items plus removed l
     ],
     allowances: [{
       ...base.allowances[0],
-      clientPriceCents: 250000,
+      pricing: { clientPriceCents: 250000 },
       contentHash: "hash-allowance-revised",
     }],
     tbd: [],
@@ -190,6 +190,72 @@ Deno.test("addendum includes only added and changed current items plus removed l
       kind: "removed",
     },
   ]);
+});
+
+Deno.test("external addenda ignore private-only changes and expose audience-safe hashes", async () => {
+  const base = frozenSnapshot();
+  const currentItem = {
+    ...base.items[0],
+    notes: {
+      ...(base.items[0].notes as Record<string, unknown>),
+      private: "PRIVATE-ONLY revised discount exception",
+      procurement: "PROCUREMENT-ONLY revised deposit instruction",
+    },
+    pricing: {
+      ...(base.items[0].pricing as Record<string, unknown>),
+      tradePriceCents: 7654,
+      markupPercent: 1.61,
+    },
+    vendor: {
+      ...(base.items[0].vendor as Record<string, unknown>),
+      internalContact: "INTERNAL-CONTACT revised@example.test",
+    },
+    contentHash: "hash-b-private-revised",
+  };
+  const current = frozenSnapshot({
+    issue: {
+      type: "addendum",
+      reason: "Internal procurement update",
+      baseRevisionId: "30000000-0000-4000-8000-000000000001",
+    },
+    items: [currentItem, base.items[1]],
+  });
+
+  const [baseClient, clientAddendum, internalAddendum] = await Promise.all([
+    buildAudienceRenderModel(base, "client", context),
+    buildAudienceRenderModel(
+      current,
+      "client",
+      { ...context, revisionNumber: 2, issueType: "addendum" },
+      base,
+    ),
+    buildAudienceRenderModel(
+      current,
+      "internal",
+      { ...context, revisionNumber: 2, issueType: "addendum" },
+      base,
+    ),
+  ]);
+
+  assertEquals(clientAddendum.items, []);
+  assertEquals(clientAddendum.changes, []);
+  assertEquals(
+    baseClient.items.find((item) => item.id === "item-b")?.contentHash,
+    (
+      await buildAudienceRenderModel(
+        current,
+        "client",
+        { ...context, revisionNumber: 2, issueType: "full" },
+      )
+    ).items.find((item) => item.id === "item-b")?.contentHash,
+  );
+  assertEquals(internalAddendum.items.map((item) => item.id), ["item-b"]);
+  assertEquals(internalAddendum.changes, [{
+    id: "item-b",
+    documentCode: "PB-201",
+    name: "Console",
+    kind: "changed",
+  }]);
 });
 
 Deno.test("snapshot limits and requested-audience boundary fail closed", async () => {

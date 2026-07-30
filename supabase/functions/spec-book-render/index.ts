@@ -28,6 +28,7 @@ import {
   type SpecBookAudience,
   type SpecBookIssueType,
 } from "./render-model.ts";
+import { safeRemoteImageUrl } from "./remote-media.ts";
 
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
 const SUPABASE_ANON_KEY = Deno.env.get("SUPABASE_ANON_KEY")!;
@@ -100,31 +101,6 @@ function bytesToDataUri(bytes: Uint8Array, contentType: string): string {
   return `data:${contentType};base64,${btoa(binary)}`;
 }
 
-function safeRemoteImageUrl(raw: string): URL | null {
-  try {
-    const url = new URL(raw);
-    const supabaseOrigin = new URL(SUPABASE_URL).origin;
-    if (url.username || url.password) return null;
-    if (url.protocol !== "https:" && url.origin !== supabaseOrigin) return null;
-    const host = url.hostname.toLowerCase();
-    if (
-      url.origin !== supabaseOrigin &&
-      (host === "localhost" ||
-        host === "::1" ||
-        host.startsWith("127.") ||
-        host.startsWith("10.") ||
-        host.startsWith("192.168.") ||
-        /^172\.(1[6-9]|2\d|3[01])\./.test(host) ||
-        host === "169.254.169.254")
-    ) {
-      return null;
-    }
-    return url;
-  } catch {
-    return null;
-  }
-}
-
 async function imageBlobToDataUri(blob: Blob): Promise<string | null> {
   const type = blob.type.toLowerCase().split(";")[0];
   if (
@@ -138,7 +114,7 @@ async function imageBlobToDataUri(blob: Blob): Promise<string | null> {
 async function fetchRemoteImage(url: URL): Promise<Blob | null> {
   let next = url;
   for (let redirects = 0; redirects <= 3; redirects += 1) {
-    const safe = safeRemoteImageUrl(next.toString());
+    const safe = safeRemoteImageUrl(next.toString(), SUPABASE_URL);
     if (!safe) return null;
     const response = await fetch(safe, {
       signal: AbortSignal.timeout(IMAGE_TIMEOUT_MS),
@@ -160,7 +136,10 @@ async function fetchRemoteImage(url: URL): Promise<Blob | null> {
   return null;
 }
 
-function repository(admin: SupabaseClient): SpecBookRenderRepository {
+function repository(
+  admin: SupabaseClient,
+  mediaClient: SupabaseClient,
+): SpecBookRenderRepository {
   return {
     async claimArtifact(artifactId): Promise<ClaimedArtifact | null> {
       const { data: current, error: lookupError } = await admin
@@ -275,7 +254,10 @@ function repository(admin: SupabaseClient): SpecBookRenderRepository {
         if (media.storagePath) {
           const bucket = media.storageBucket ?? "product-images";
           if (!ALLOWED_MEDIA_BUCKETS.has(bucket)) return null;
-          const { data, error } = await admin.storage
+          // Use the authenticated caller so storage RLS remains the object-level
+          // authorization boundary. The service-role client must never become a
+          // confused deputy for a frozen path from another project or owner.
+          const { data, error } = await mediaClient.storage
             .from(bucket)
             .download(media.storagePath);
           if (error || !data) return null;
@@ -290,7 +272,7 @@ function repository(admin: SupabaseClient): SpecBookRenderRepository {
             ? media.url
             : null;
         }
-        const url = safeRemoteImageUrl(media.url);
+        const url = safeRemoteImageUrl(media.url, SUPABASE_URL);
         if (!url) return null;
         const blob = await fetchRemoteImage(url);
         return blob ? await imageBlobToDataUri(blob) : null;
@@ -433,7 +415,10 @@ Deno.serve(async (req: Request) => {
 
   const admin = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
   try {
-    const result = await runSpecBookRender(repository(admin), artifactId);
+    const result = await runSpecBookRender(
+      repository(admin, caller),
+      artifactId,
+    );
     return json({ ok: true, ...result });
   } catch (error) {
     const code =

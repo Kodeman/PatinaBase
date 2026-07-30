@@ -199,7 +199,7 @@ export function FFESlotPicker({
             type="button"
             onClick={onCancel}
             disabled={assigning}
-            className="font-mono text-[0.58rem] uppercase tracking-[0.06em] text-ink-soft hover:text-ink"
+            className="min-h-11 px-2 font-mono text-[0.58rem] uppercase tracking-[0.06em] text-ink-soft hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-verdigris"
           >
             Cancel
           </button>
@@ -211,7 +211,7 @@ export function FFESlotPicker({
           aria-label="Capture destination"
           value={routeKind}
           onChange={(event) => setRouteKind(event.target.value as RouteKind)}
-          className="w-full rounded-md border border-line bg-paper-3 px-2.5 py-2 text-[0.85rem] text-ink outline-none focus:border-verdigris"
+          className="min-h-11 w-full rounded-md border border-line bg-paper-3 px-2.5 py-2 text-[0.85rem] text-ink outline-none focus:border-verdigris focus-visible:ring-2 focus-visible:ring-verdigris"
         >
           <option value="library">Library only</option>
           <option value="project_inbox">Project inbox</option>
@@ -232,7 +232,7 @@ export function FFESlotPicker({
             remember(projectId, null);
           }}
           disabled={assigning}
-          className="w-full rounded-md border border-line bg-paper-3 px-2.5 py-2 text-[0.85rem] text-ink outline-none focus:border-verdigris"
+          className="min-h-11 w-full rounded-md border border-line bg-paper-3 px-2.5 py-2 text-[0.85rem] text-ink outline-none focus:border-verdigris focus-visible:ring-2 focus-visible:ring-verdigris"
         >
           <option value="">Select project…</option>
           {projects.map((project) => (
@@ -254,7 +254,7 @@ export function FFESlotPicker({
             remember(selectedProjectId, roomId);
           }}
           disabled={assigning || loadingRooms}
-          className="w-full rounded-md border border-line bg-paper-3 px-2.5 py-2 text-[0.85rem] text-ink outline-none focus:border-verdigris disabled:opacity-50"
+          className="min-h-11 w-full rounded-md border border-line bg-paper-3 px-2.5 py-2 text-[0.85rem] text-ink outline-none focus:border-verdigris focus-visible:ring-2 focus-visible:ring-verdigris disabled:opacity-50"
         >
           <option value="">{loadingRooms ? 'Loading rooms…' : 'Project inbox / no room'}</option>
           {rooms.map((room) => (
@@ -271,7 +271,7 @@ export function FFESlotPicker({
           value={selectedSlotId ?? ''}
           onChange={(event) => setSelectedSlotId(event.target.value || null)}
           disabled={assigning || loadingSlots}
-          className="w-full rounded-md border border-line bg-paper-3 px-2.5 py-2 text-[0.85rem] text-ink outline-none focus:border-verdigris disabled:opacity-50"
+          className="min-h-11 w-full rounded-md border border-line bg-paper-3 px-2.5 py-2 text-[0.85rem] text-ink outline-none focus:border-verdigris focus-visible:ring-2 focus-visible:ring-verdigris disabled:opacity-50"
         >
           <option value="">{loadingSlots ? 'Loading slots…' : 'Select unassigned slot…'}</option>
           {slots.map((slot) => (
@@ -305,7 +305,7 @@ export function FFESlotPicker({
           type="button"
           onClick={handleAssign}
           disabled={!currentRoute() || assigning}
-          className="w-full rounded-md bg-verdigris py-2.5 text-[0.82rem] font-medium text-paper disabled:opacity-50"
+          className="min-h-11 w-full rounded-md bg-verdigris py-2.5 text-[0.82rem] font-medium text-paper focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-verdigris focus-visible:ring-offset-2 disabled:opacity-50"
         >
           {assigning ? 'Placing…' : error ? 'Retry placement' : 'Place product'}
         </button>

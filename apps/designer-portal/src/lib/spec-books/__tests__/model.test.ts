@@ -1,6 +1,7 @@
 import type { SpecBookWorkItem } from "@patina/supabase";
 import {
   audienceAllows,
+  buildNaDeclarationUpdate,
   hasIssuedDrift,
   resolveSpecValue,
   runSpecBookPreflight,
@@ -101,12 +102,74 @@ describe("spec-book model", () => {
     value.spec = {
       ...value.spec!,
       finish: null,
-      na_declarations: { finish: { reason: "Natural unfinished surface" } },
+      na_declarations: {
+        finish: { na: true, reason: "Natural unfinished surface" },
+      },
     };
     expect(resolveSpecValue(value, "finish")).toMatchObject({
       source: "declaration",
       na: true,
       naReason: "Natural unfinished surface",
+    });
+  });
+
+  it("builds the canonical database N/A declaration contract", () => {
+    expect(
+      buildNaDeclarationUpdate(
+        "selected_dimensions",
+        "  Custom site template  ",
+        new Date("2026-07-30T12:00:00Z"),
+      ),
+    ).toEqual({
+      dimensions: {
+        na: true,
+        reason: "Custom site template",
+        declared_at: "2026-07-30T12:00:00.000Z",
+      },
+    });
+  });
+
+  it("resolves canonical snapshot keys for declarations and provenance", () => {
+    const value = item();
+    value.spec = {
+      ...value.spec!,
+      selected_dimensions: null,
+      source_verifications: {
+        ...value.spec!.source_verifications,
+        dimensions: "2026-07-29T00:00:00Z",
+      },
+      na_declarations: {
+        dimensions: {
+          na: true,
+          reason: "Measured from site template",
+          declared_at: "2026-07-30T00:00:00Z",
+        },
+      },
+    };
+    expect(resolveSpecValue(value, "selected_dimensions")).toMatchObject({
+      source: "declaration",
+      na: true,
+      naReason: "Measured from site template",
+      sourceUpdatedAt: "2026-07-30T00:00:00Z",
+    });
+  });
+
+  it("uses canonical custom fields and verification timestamps", () => {
+    const value = item({
+      custom_fields: { colorFabric: "Studio linen" },
+    });
+    value.spec = {
+      ...value.spec!,
+      color_fabric: null,
+      source_verifications: {
+        ...value.spec!.source_verifications,
+        colorFabric: "2026-07-29T00:00:00Z",
+      },
+    };
+    value.product = { ...value.product!, colors: null, available_colors: null };
+    expect(resolveSpecValue(value, "color_fabric")).toMatchObject({
+      value: "Studio linen",
+      source: "studio_custom",
     });
   });
 

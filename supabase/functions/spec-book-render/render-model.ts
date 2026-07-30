@@ -544,6 +544,34 @@ function buildSafeItem(
   return normalized;
 }
 
+async function audienceItemHash(
+  item: JsonRecord,
+  audience: SpecBookAudience,
+  chapters: RenderChapter[],
+  allow: ReadonlySet<string>,
+): Promise<string> {
+  if (audience === "internal") return await rawItemHash(item);
+  const safeItem = buildSafeItem(item, audience, chapters, allow);
+  safeItem.contentHash = "";
+  return await sha256Hex(canonicalStringify(safeItem));
+}
+
+async function buildAudienceItem(
+  item: JsonRecord,
+  audience: SpecBookAudience,
+  chapters: RenderChapter[],
+  allow: ReadonlySet<string>,
+): Promise<AudienceItem> {
+  const normalized = buildSafeItem(item, audience, chapters, allow);
+  normalized.contentHash = await audienceItemHash(
+    item,
+    audience,
+    chapters,
+    allow,
+  );
+  return normalized;
+}
+
 function normalizeChapters(chapters: JsonRecord[]): RenderChapter[] {
   return chapters
     .map((chapter) => ({
@@ -619,6 +647,8 @@ function rawItemHash(item: JsonRecord): Promise<string> {
 async function diffItems(
   current: JsonRecord[],
   base: JsonRecord[],
+  currentHash: (item: JsonRecord) => Promise<string> = rawItemHash,
+  baseHash: (item: JsonRecord) => Promise<string> = rawItemHash,
 ): Promise<{ includedIds: Set<string>; changes: AddendumChange[] }> {
   const currentById = new Map(current.map((item) => [itemId(item), item]));
   const baseById = new Map(base.map((item) => [itemId(item), item]));
@@ -638,7 +668,7 @@ async function diffItems(
       });
       continue;
     }
-    if (await rawItemHash(item) !== await rawItemHash(before)) {
+    if (await currentHash(item) !== await baseHash(before)) {
       includedIds.add(id);
       changes.push({
         id,
@@ -782,25 +812,34 @@ export async function buildAudienceRenderModel(
       );
     }
     const baseSnapshot = parseSnapshot(rawBaseSnapshot);
-    const baseItems = sortedRawItems(
-      baseSnapshot,
-      normalizeChapters(baseSnapshot.chapters),
-    ).filter((item) => itemVisibleToAudience(item, audience));
+    const baseChapters = normalizeChapters(baseSnapshot.chapters);
+    const baseAllow = audienceAllowTokens(baseSnapshot.template, audience);
+    const baseItems = sortedRawItems(baseSnapshot, baseChapters).filter((
+      item,
+    ) => itemVisibleToAudience(item, audience));
     const baseAllowances = baseSnapshot.allowances.filter((item) =>
       itemVisibleToAudience(item, audience)
     );
     const baseTbd = baseSnapshot.tbd.filter((item) =>
       itemVisibleToAudience(item, audience)
     );
-    const itemDiff = await diffItems(
-      sorted,
-      baseItems,
-    );
+    const currentHash = (item: JsonRecord) =>
+      audienceItemHash(item, audience, chapters, allow);
+    const baseHash = (item: JsonRecord) =>
+      audienceItemHash(item, audience, baseChapters, baseAllow);
+    const itemDiff = await diffItems(sorted, baseItems, currentHash, baseHash);
     const allowanceDiff = await diffItems(
       visibleAllowances,
       baseAllowances,
+      currentHash,
+      baseHash,
     );
-    const tbdDiff = await diffItems(visibleTbd, baseTbd);
+    const tbdDiff = await diffItems(
+      visibleTbd,
+      baseTbd,
+      currentHash,
+      baseHash,
+    );
     included = sorted.filter((item) => itemDiff.includedIds.has(itemId(item)));
     includedAllowances = visibleAllowances.filter((item) =>
       allowanceDiff.includedIds.has(itemId(item))
@@ -819,15 +858,23 @@ export async function buildAudienceRenderModel(
       );
   }
 
-  const items = included.map((item) =>
-    buildSafeItem(item, audience, chapters, allow)
-  );
-  const allowances = includedAllowances.map((item) =>
-    buildSafeItem(item, audience, chapters, allow)
-  );
-  const tbd = includedTbd.map((item) =>
-    buildSafeItem(item, audience, chapters, allow)
-  );
+  const [items, allowances, tbd] = await Promise.all([
+    Promise.all(
+      included.map((item) =>
+        buildAudienceItem(item, audience, chapters, allow)
+      ),
+    ),
+    Promise.all(
+      includedAllowances.map((item) =>
+        buildAudienceItem(item, audience, chapters, allow)
+      ),
+    ),
+    Promise.all(
+      includedTbd.map((item) =>
+        buildAudienceItem(item, audience, chapters, allow)
+      ),
+    ),
+  ]);
   const mediaCount = [...items, ...allowances, ...tbd]
     .reduce((total, item) => total + item.media.length, 0);
   if (mediaCount > MAX_RENDER_MEDIA) {
