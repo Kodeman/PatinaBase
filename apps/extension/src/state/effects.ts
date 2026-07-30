@@ -23,15 +23,14 @@ import { draftToProductPayload } from './draft';
 import { extensionEvents } from '../lib/analytics';
 import { addRecent, type RecentCapture } from '../lib/recent-captures';
 import type { DraftSlice, RoutingSlice } from './types';
+import { placeProductInProject, type SpecBookPlacementRoute } from '../lib/spec-book-placement';
 
 type ProductStatus = 'published' | 'draft';
 
 // ─── Pure payload helpers (unit-tested) ───────────────────────────────────────
 
 function selectedImageUrls(draft: DraftSlice): string[] {
-  return draft.images.selected
-    .map((i) => draft.images.all[i]?.url)
-    .filter((u): u is string => !!u);
+  return draft.images.selected.map((i) => draft.images.all[i]?.url).filter((u): u is string => !!u);
 }
 
 function priceCents(draft: DraftSlice): number | null {
@@ -44,12 +43,11 @@ function resolvedName(draft: DraftSlice): string {
 }
 
 /** A products insert row at the requested status (library=published, inbox=draft). */
-export function productRow(
-  draft: DraftSlice,
-  userId: string,
-  status: ProductStatus
-) {
-  return { ...buildProductInsertPayload(draftToProductPayload(draft, userId)), status };
+export function productRow(draft: DraftSlice, userId: string, status: ProductStatus) {
+  return {
+    ...buildProductInsertPayload(draftToProductPayload(draft, userId)),
+    status,
+  };
 }
 
 export function captureInput(
@@ -70,12 +68,8 @@ export function captureInput(
       name: draft.fields.name.value || draft.raw.productName || null,
       description: draft.fields.description.value || null,
       price_retail_cents: priceCents(draft),
-      vendor: draft.manufacturer.vendor?.name
-        ? { name: draft.manufacturer.vendor.name }
-        : null,
-      retailer: draft.retailer.vendor?.name
-        ? { name: draft.retailer.vendor.name }
-        : null,
+      vendor: draft.manufacturer.vendor?.name ? { name: draft.manufacturer.vendor.name } : null,
+      retailer: draft.retailer.vendor?.name ? { name: draft.retailer.vendor.name } : null,
       note: draft.note || null,
       confidence: draft.confidence,
     },
@@ -83,10 +77,7 @@ export function captureInput(
   };
 }
 
-export function decisionInput(
-  draft: DraftSlice,
-  routing: RoutingSlice
-): BuildDecisionPayloadInput {
+export function decisionInput(draft: DraftSlice, routing: RoutingSlice): BuildDecisionPayloadInput {
   return {
     designerClientId: routing.decision.designerClientId ?? '',
     projectId: routing.decision.projectId,
@@ -134,11 +125,7 @@ function captureAnalytics(draft: DraftSlice, method: 'new' | 'update') {
   });
 }
 
-function recordRecent(
-  draft: DraftSlice,
-  productId: string,
-  target: RecentCapture['target']
-) {
+function recordRecent(draft: DraftSlice, productId: string, target: RecentCapture['target']) {
   void addRecent({
     productId,
     name: resolvedName(draft),
@@ -146,6 +133,68 @@ function recordRecent(
     capturedAt: new Date().toISOString(),
     target,
   });
+}
+
+function placementSource(draft: DraftSlice) {
+  return {
+    sourceUrl: draft.sourceUrl,
+    captureKind: draft.captureKind,
+  };
+}
+
+async function runPilotPlacement(
+  productId: string,
+  route: SpecBookPlacementRoute,
+  draft: DraftSlice,
+  reusedProduct: boolean
+): Promise<void> {
+  extensionEvents.specBookPlacementAttempted({
+    routeKind: route.kind,
+    reusedProduct,
+  });
+  try {
+    await placeProductInProject(productId, route, placementSource(draft));
+    extensionEvents.specBookPlacementSucceeded({
+      routeKind: route.kind,
+      reusedProduct,
+    });
+  } catch (error) {
+    extensionEvents.specBookPlacementFailed({
+      routeKind: route.kind,
+      reusedProduct,
+      retryable: true,
+    });
+    throw error;
+  }
+}
+
+/**
+ * Retry only the failed placement leg. The already-created Product id is
+ * supplied by reducer state, so retry can never insert a duplicate Product.
+ */
+export async function retrySpecBookPlacement(
+  productId: string,
+  draft: DraftSlice,
+  routing: RoutingSlice
+): Promise<string> {
+  const route = routing.specBookPlacement;
+  if (!route || route.kind === 'library') return productId;
+  await runPilotPlacement(productId, route, draft, false);
+  recordRecent(draft, productId, 'library');
+  return productId;
+}
+
+/** Reuse a matched Product master as a distinct project selection. */
+export async function reuseProductForSpecBookPlacement(
+  productId: string,
+  draft: DraftSlice,
+  routing: RoutingSlice
+): Promise<string> {
+  const route = routing.specBookPlacement;
+  if (!route || route.kind === 'library') return productId;
+  await runPilotPlacement(productId, route, draft, true);
+  recordRecent(draft, productId, 'library');
+  return productId;
 }
 
 // ─── Save effects (thin I/O) ──────────────────────────────────────────────────
@@ -164,7 +213,7 @@ export async function saveToLibrary(
   if (error) throw error;
   if (!product) throw new Error('Failed to create product');
 
-  if (routing.destination.type === 'project-room') {
+  if (routing.specBookPlacement === null && routing.destination.type === 'project-room') {
     await supabase.from('project_products').insert({
       project_id: routing.destination.projectId,
       product_id: product.id,
@@ -172,12 +221,13 @@ export async function saveToLibrary(
     });
   }
   if (draft.styleIds.length) {
-    await supabase
-      .from('product_styles')
-      .insert(styleInserts(product.id, draft.styleIds, user.id));
+    await supabase.from('product_styles').insert(styleInserts(product.id, draft.styleIds, user.id));
+  }
+  captureAnalytics(draft, 'new');
+  if (routing.specBookPlacement && routing.specBookPlacement.kind !== 'library') {
+    await runPilotPlacement(product.id, routing.specBookPlacement, draft, false);
   }
   recordRecent(draft, product.id, 'library');
-  captureAnalytics(draft, 'new');
   return product.id;
 }
 
@@ -196,9 +246,7 @@ export async function saveToInbox(
   if (!product) throw new Error('Failed to create product');
 
   if (draft.styleIds.length) {
-    await supabase
-      .from('product_styles')
-      .insert(styleInserts(product.id, draft.styleIds, user.id));
+    await supabase.from('product_styles').insert(styleInserts(product.id, draft.styleIds, user.id));
   }
   const { error: capErr } = await supabase
     .from('proposal_captures')
@@ -228,9 +276,7 @@ export async function saveAsDecision(
   if (!product) throw new Error('Failed to create product');
 
   if (draft.styleIds.length) {
-    await supabase
-      .from('product_styles')
-      .insert(styleInserts(product.id, draft.styleIds, user.id));
+    await supabase.from('product_styles').insert(styleInserts(product.id, draft.styleIds, user.id));
   }
   const { data: decision, error: decErr } = await supabase
     .from('client_decisions')
@@ -242,11 +288,7 @@ export async function saveAsDecision(
 
   const { error: optErr } = await supabase
     .from('client_decision_options')
-    .insert(
-      buildDecisionOptionInsertPayload(
-        decisionOptionInput(draft, decision.id, product.id)
-      )
-    );
+    .insert(buildDecisionOptionInsertPayload(decisionOptionInput(draft, decision.id, product.id)));
   if (optErr) throw optErr;
 
   // Non-fatal: a notify failure must not undo a created decision.
@@ -288,7 +330,7 @@ export async function updateExisting(
     .eq('id', existingId);
   if (error) throw error;
 
-  if (routing.destination.type === 'project-room') {
+  if (routing.specBookPlacement === null && routing.destination.type === 'project-room') {
     const { data: assignment } = await supabase
       .from('project_products')
       .select('id')
@@ -303,11 +345,12 @@ export async function updateExisting(
       });
     }
   }
+  if (routing.specBookPlacement && routing.specBookPlacement.kind !== 'library') {
+    await runPilotPlacement(existingId, routing.specBookPlacement, draft, true);
+  }
   if (draft.styleIds.length) {
     await supabase.from('product_styles').delete().eq('product_id', existingId);
-    await supabase
-      .from('product_styles')
-      .insert(styleInserts(existingId, draft.styleIds, user.id));
+    await supabase.from('product_styles').insert(styleInserts(existingId, draft.styleIds, user.id));
   }
   recordRecent(draft, existingId, 'update');
   captureAnalytics(draft, 'update');
@@ -315,10 +358,7 @@ export async function updateExisting(
 }
 
 /** Vendor-mode save — vendors + vendor_certifications. */
-export async function saveVendor(
-  vendorData: VendorCaptureInput,
-  _user: User
-): Promise<void> {
+export async function saveVendor(vendorData: VendorCaptureInput, _user: User): Promise<void> {
   const { data: vendor, error } = await supabase
     .from('vendors')
     .insert(buildVendorInsertPayload(vendorData))

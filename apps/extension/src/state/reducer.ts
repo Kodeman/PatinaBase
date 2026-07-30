@@ -38,6 +38,9 @@ export function initialCaptureState(prefs: Prefs = DEFAULT_PREFS): CaptureState 
       proposalId: null,
       scopeRoomId: null,
       ffeCategorySlug: null,
+      specBookPlacement: null,
+      specBookPlacementPilot: false,
+      specBookPlacementValid: true,
       decision: {
         designerClientId: null,
         clientProfileId: null,
@@ -49,7 +52,13 @@ export function initialCaptureState(prefs: Prefs = DEFAULT_PREFS): CaptureState 
     dedup: { match: null, confidence: 0, mergePicks: {} },
     queue: { items: [], online: true, lastSyncAt: null },
     prefs,
-    io: { isExtracting: false, isSaving: false, error: null, lastSavedProductId: null },
+    io: {
+      isExtracting: false,
+      isSaving: false,
+      error: null,
+      lastSavedProductId: null,
+      pendingPlacementProductId: null,
+    },
   };
 }
 
@@ -70,10 +79,7 @@ function setMissing(draft: DraftSlice, keys: DraftFieldKey[]): DraftSlice {
   return { ...draft, fields: fields as unknown as DraftSlice['fields'] };
 }
 
-export function captureReducer(
-  state: CaptureState,
-  action: CaptureAction
-): CaptureState {
+export function captureReducer(state: CaptureState, action: CaptureAction): CaptureState {
   switch (action.type) {
     // ── nav ──────────────────────────────────────────────────────────────
     case 'NAV':
@@ -82,7 +88,11 @@ export function captureReducer(
     case 'OPEN_OVERLAY':
       return {
         ...state,
-        nav: { ...state.nav, overlay: action.overlay, returnTo: state.nav.screen },
+        nav: {
+          ...state.nav,
+          overlay: action.overlay,
+          returnTo: state.nav.screen,
+        },
       };
 
     case 'CLOSE_OVERLAY':
@@ -154,9 +164,7 @@ export function captureReducer(
     case 'EXTRACTION_BLOCKED':
       return {
         ...state,
-        draft: state.draft
-          ? { ...state.draft, snapshotUrl: action.snapshotUrl }
-          : state.draft,
+        draft: state.draft ? { ...state.draft, snapshotUrl: action.snapshotUrl } : state.draft,
         nav: { ...state.nav, screen: 'R2' },
         io: { ...state.io, isExtracting: false },
       };
@@ -192,7 +200,15 @@ export function captureReducer(
           captureKind: action.type === 'SNAPSHOT_CAPTURED' ? 'snapshot' : 'image',
           snapshotUrl: action.type === 'SNAPSHOT_CAPTURED' ? action.imageUrl : null,
           images: {
-            all: [{ url: action.imageUrl, score: 100, width: 0, height: 0, alt: '' }],
+            all: [
+              {
+                url: action.imageUrl,
+                score: 100,
+                width: 0,
+                height: 0,
+                alt: '',
+              },
+            ],
             selected: [0],
             variant: null,
           },
@@ -234,9 +250,7 @@ export function captureReducer(
       const next = {
         ...prev,
         value: original,
-        status: (isPresent(original) ? 'extracted' : 'missing') as
-          | 'extracted'
-          | 'missing',
+        status: (isPresent(original) ? 'extracted' : 'missing') as 'extracted' | 'missing',
         source: 'extracted' as const,
       };
       return {
@@ -321,13 +335,19 @@ export function captureReducer(
 
     // ── routing ──────────────────────────────────────────────────────────
     case 'DESTINATION_SET':
-      return { ...state, routing: { ...state.routing, destination: action.value } };
+      return {
+        ...state,
+        routing: { ...state.routing, destination: action.value },
+      };
 
     case 'SHELF_SET':
       return { ...state, routing: { ...state.routing, shelf: action.shelf } };
 
     case 'COMMIT_TARGET_SET':
-      return { ...state, routing: { ...state.routing, commitTarget: action.target } };
+      return {
+        ...state,
+        routing: { ...state.routing, commitTarget: action.target },
+      };
 
     case 'INBOX_TARGET_SET':
       return {
@@ -337,6 +357,26 @@ export function captureReducer(
           proposalId: action.proposalId,
           scopeRoomId: action.scopeRoomId,
           ffeCategorySlug: action.ffeCategorySlug,
+        },
+      };
+
+    case 'SPEC_BOOK_PLACEMENT_SET':
+      return {
+        ...state,
+        routing: {
+          ...state.routing,
+          specBookPlacement: action.route,
+          specBookPlacementPilot: action.pilot,
+          specBookPlacementValid: action.valid ?? true,
+          ...(action.route && action.route.kind !== 'library'
+            ? {
+                destination: {
+                  type: 'project-room' as const,
+                  projectId: action.route.projectId,
+                  roomId: action.route.roomId,
+                },
+              }
+            : {}),
         },
       };
 
@@ -354,25 +394,39 @@ export function captureReducer(
       // Exact-URL match: surface inline (banner + Update) without interrupting.
       return {
         ...state,
-        dedup: { match: action.match, confidence: action.confidence, mergePicks: {} },
+        dedup: {
+          match: action.match,
+          confidence: action.confidence,
+          mergePicks: {},
+        },
       };
 
     case 'DUPLICATE_FOUND':
       return {
         ...state,
-        dedup: { match: action.match, confidence: action.confidence, mergePicks: {} },
+        dedup: {
+          match: action.match,
+          confidence: action.confidence,
+          mergePicks: {},
+        },
         nav: { ...state.nav, screen: 'D1' },
       };
 
     case 'DUPLICATE_CLEARED':
-      return { ...state, dedup: { match: null, confidence: 0, mergePicks: {} } };
+      return {
+        ...state,
+        dedup: { match: null, confidence: 0, mergePicks: {} },
+      };
 
     case 'MERGE_FIELD_PICK':
       return {
         ...state,
         dedup: {
           ...state.dedup,
-          mergePicks: { ...state.dedup.mergePicks, [action.field]: action.pick },
+          mergePicks: {
+            ...state.dedup.mergePicks,
+            [action.field]: action.pick,
+          },
         },
       };
 
@@ -387,12 +441,29 @@ export function captureReducer(
     case 'SAVE_SUCCESS':
       return {
         ...state,
-        nav: { ...state.nav, screen: action.landed === 'library' ? 'S4' : 'S5' },
-        io: { ...state.io, isSaving: false, lastSavedProductId: action.productId },
+        nav: {
+          ...state.nav,
+          screen: action.landed === 'library' ? 'S4' : 'S5',
+        },
+        io: {
+          ...state.io,
+          isSaving: false,
+          lastSavedProductId: action.productId,
+          pendingPlacementProductId: null,
+        },
       };
 
     case 'SAVE_ERROR':
-      return { ...state, io: { ...state.io, isSaving: false, error: action.error } };
+      return {
+        ...state,
+        io: {
+          ...state.io,
+          isSaving: false,
+          error: action.error,
+          pendingPlacementProductId:
+            action.preservedProductId ?? state.io.pendingPlacementProductId,
+        },
+      };
 
     case 'CAPTURE_NEXT':
       return {
@@ -400,7 +471,13 @@ export function captureReducer(
         draft: null,
         dedup: { match: null, confidence: 0, mergePicks: {} },
         nav: { ...state.nav, screen: 'C1', overlay: null },
-        io: { isExtracting: false, isSaving: false, error: null, lastSavedProductId: null },
+        io: {
+          isExtracting: false,
+          isSaving: false,
+          error: null,
+          lastSavedProductId: null,
+          pendingPlacementProductId: null,
+        },
       };
 
     // ── connectivity / prefs ─────────────────────────────────────────────
@@ -410,14 +487,21 @@ export function captureReducer(
     case 'QUEUE_STATUS':
       return {
         ...state,
-        queue: { ...state.queue, items: action.items, lastSyncAt: action.lastSyncAt },
+        queue: {
+          ...state.queue,
+          items: action.items,
+          lastSyncAt: action.lastSyncAt,
+        },
       };
 
     case 'PREFS_LOADED':
       return { ...state, prefs: action.prefs };
 
     case 'PREF_SET':
-      return { ...state, prefs: { ...state.prefs, [action.key]: action.value } };
+      return {
+        ...state,
+        prefs: { ...state.prefs, [action.key]: action.value },
+      };
 
     default:
       return state;

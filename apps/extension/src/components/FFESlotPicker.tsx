@@ -1,35 +1,12 @@
-/**
- * FFESlotPicker — Sprint 3 / Wave 3.3 capture-to-slot integration.
- *
- * Renders a 3-stage cascading picker (project → room → unassigned FFE slot)
- * that lets the designer attach a freshly captured product to an existing FFE
- * line item on an active project. The product row already exists in `products`
- * (written by the capture flow in sidepanel.tsx). This component performs the
- * follow-on update:
- *
- *   UPDATE project_ffe_items
- *      SET product_id = $productId
- *    WHERE id = $ffeItemId
- *      AND project_id = $projectId
- *
- * Scoping is enforced both by the existing project_ffe_items RLS policy
- * (designer_id = auth.uid() through the projects join) AND by the explicit
- * project_id filter — defense in depth matching the W1.2.6 pattern used by
- * useUpdateFFEItemStatus in @patina/supabase.
- *
- * The hook `useAssignProductToFfeSlot` in @patina/supabase performs the same
- * update from the portal; this component duplicates the call directly via the
- * extension's Supabase client because Chrome extensions can't import React
- * Query hooks (different React tree, different query client).
- *
- * Slots already linked to a different product (product_id IS NOT NULL) are
- * filtered out so the designer can't accidentally overwrite an existing
- * assignment. To replace an existing assignment, the designer reopens the
- * slot in the portal.
- */
 import { useEffect, useState } from 'react';
 import type { Project, UUID } from '@patina/shared';
 import { supabase } from '../lib/supabase';
+import {
+  placeProductInProject,
+  saveSpecBookPlacementContext,
+  type SpecBookPlacementContext,
+  type SpecBookPlacementRoute,
+} from '../lib/spec-book-placement';
 
 interface Room {
   id: UUID;
@@ -41,264 +18,298 @@ interface FFESlot {
   name: string;
   ffe_category: string | null;
   quantity: number;
-  status: string;
-  sort_order: number;
 }
 
+type RouteKind = SpecBookPlacementRoute['kind'];
+
 interface FFESlotPickerProps {
-  productId: UUID;
-  productName: string;
   projects: Project[];
-  /** Pre-selected project from the main capture form (optional). */
-  initialProjectId?: UUID | null;
-  onComplete: () => void;
-  onCancel: () => void;
+  initialContext?: SpecBookPlacementContext;
+  /**
+   * Present only on the legacy post-save surface. Selection mode is used in
+   * the capture form and defers the RPC until the Product is durable.
+   */
+  productId?: UUID;
+  productName?: string;
+  onRouteChange?: (route: SpecBookPlacementRoute | null, valid: boolean) => void;
+  onComplete?: () => void;
+  onCancel?: () => void;
+}
+
+function messageFor(error: unknown): string {
+  if (error instanceof Error) return error.message;
+  if (error && typeof error === 'object') {
+    const value = error as {
+      message?: string;
+      details?: string;
+      hint?: string;
+    };
+    return value.message || value.details || value.hint || 'Could not place the product';
+  }
+  return 'Could not place the product';
 }
 
 export function FFESlotPicker({
-  productId,
-  productName,
   projects,
-  initialProjectId,
+  initialContext,
+  productId,
+  productName = 'Captured piece',
+  onRouteChange,
   onComplete,
   onCancel,
 }: FFESlotPickerProps) {
-  const [selectedProjectId, setSelectedProjectId] = useState<UUID | null>(
-    initialProjectId ?? null
+  const assigningExisting = !!productId;
+  const [routeKind, setRouteKind] = useState<RouteKind>(
+    assigningExisting ? 'fill_slot' : 'library'
   );
-  const [selectedRoomId, setSelectedRoomId] = useState<UUID | null>(null);
-  const [selectedSlotId, setSelectedSlotId] = useState<UUID | null>(null);
-
+  const [selectedProjectId, setSelectedProjectId] = useState<string | null>(
+    initialContext?.projectId ?? null
+  );
+  const [selectedRoomId, setSelectedRoomId] = useState<string | null>(
+    initialContext?.roomId ?? null
+  );
+  const [selectedSlotId, setSelectedSlotId] = useState<string | null>(null);
+  const [category, setCategory] = useState('');
   const [rooms, setRooms] = useState<Room[]>([]);
   const [slots, setSlots] = useState<FFESlot[]>([]);
+  const [loadingRooms, setLoadingRooms] = useState(false);
+  const [loadingSlots, setLoadingSlots] = useState(false);
+  const [assigning, setAssigning] = useState(false);
+  const [error, setError] = useState('');
 
-  const [isLoadingRooms, setIsLoadingRooms] = useState(false);
-  const [isLoadingSlots, setIsLoadingSlots] = useState(false);
-  const [isAssigning, setIsAssigning] = useState(false);
-  const [assignError, setAssignError] = useState<string>('');
-  const [assignSuccess, setAssignSuccess] = useState(false);
-
-  // Load rooms whenever the chosen project changes.
   useEffect(() => {
     if (!selectedProjectId) {
       setRooms([]);
-      setSelectedRoomId(null);
       return;
     }
-    let cancelled = false;
-    setIsLoadingRooms(true);
-    supabase
+    let active = true;
+    setLoadingRooms(true);
+    void supabase
       .from('project_rooms')
       .select('id, name')
       .eq('project_id', selectedProjectId)
       .order('sort_order', { ascending: true })
-      .then(({ data, error }) => {
-        if (cancelled) return;
-        if (error) {
-          setRooms([]);
-        } else {
-          setRooms((data ?? []) as Room[]);
+      .then(({ data }) => {
+        if (!active) return;
+        const next = (data ?? []) as Room[];
+        setRooms(next);
+        if (selectedRoomId && !next.some((room) => room.id === selectedRoomId)) {
+          setSelectedRoomId(null);
         }
-        setIsLoadingRooms(false);
-        // Reset downstream selection.
-        setSelectedRoomId(null);
-        setSelectedSlotId(null);
+        setLoadingRooms(false);
       });
     return () => {
-      cancelled = true;
+      active = false;
     };
-  }, [selectedProjectId]);
+  }, [selectedProjectId, selectedRoomId]);
 
-  // Load unassigned FFE slots for the chosen project + room.
   useEffect(() => {
-    if (!selectedProjectId || !selectedRoomId) {
+    if (routeKind !== 'fill_slot' || !selectedProjectId || !selectedRoomId) {
       setSlots([]);
       setSelectedSlotId(null);
       return;
     }
-    let cancelled = false;
-    setIsLoadingSlots(true);
-    supabase
+    let active = true;
+    setLoadingSlots(true);
+    void supabase
       .from('project_ffe_items')
-      .select('id, name, ffe_category, quantity, status, sort_order, product_id')
+      .select('id, name, ffe_category, quantity, product_id')
       .eq('project_id', selectedProjectId)
       .eq('project_room_id', selectedRoomId)
       .is('product_id', null)
       .order('sort_order', { ascending: true })
-      .then(({ data, error }) => {
-        if (cancelled) return;
-        if (error) {
-          setSlots([]);
-        } else {
-          setSlots((data ?? []) as FFESlot[]);
-        }
-        setIsLoadingSlots(false);
-        setSelectedSlotId(null);
+      .then(({ data }) => {
+        if (!active) return;
+        setSlots((data ?? []) as FFESlot[]);
+        setLoadingSlots(false);
       });
     return () => {
-      cancelled = true;
+      active = false;
     };
-  }, [selectedProjectId, selectedRoomId]);
+  }, [routeKind, selectedProjectId, selectedRoomId]);
 
-  const canSubmit =
-    !!selectedProjectId && !!selectedRoomId && !!selectedSlotId && !isAssigning;
+  const currentRoute = (): SpecBookPlacementRoute | null => {
+    if (routeKind === 'library') return { kind: 'library' };
+    if (!selectedProjectId) return null;
+    if (routeKind === 'project_inbox') {
+      return {
+        kind: 'project_inbox',
+        projectId: selectedProjectId,
+        roomId: selectedRoomId,
+      };
+    }
+    if (!selectedRoomId) return null;
+    if (routeKind === 'fill_slot') {
+      return selectedSlotId
+        ? {
+            kind: 'fill_slot',
+            projectId: selectedProjectId,
+            roomId: selectedRoomId,
+            slotId: selectedSlotId,
+          }
+        : null;
+    }
+    return category.trim()
+      ? {
+          kind: 'create_line',
+          projectId: selectedProjectId,
+          roomId: selectedRoomId,
+          category: category.trim(),
+        }
+      : null;
+  };
+
+  const publish = () => {
+    const route = currentRoute();
+    onRouteChange?.(route, route !== null);
+  };
+
+  useEffect(publish, [routeKind, selectedProjectId, selectedRoomId, selectedSlotId, category]);
+
+  const remember = (projectId: string | null, roomId: string | null) => {
+    void saveSpecBookPlacementContext({ projectId, roomId });
+  };
 
   const handleAssign = async () => {
-    if (!selectedProjectId || !selectedSlotId) return;
-
-    setIsAssigning(true);
-    setAssignError('');
-
+    const route = currentRoute();
+    if (!productId || !route || route.kind === 'library') return;
+    setAssigning(true);
+    setError('');
     try {
-      const { error } = await supabase
-        .from('project_ffe_items')
-        .update({ product_id: productId })
-        .eq('id', selectedSlotId)
-        .eq('project_id', selectedProjectId)
-        .select('id, product_id')
-        .single();
-
-      if (error) throw error;
-      setAssignSuccess(true);
-      // Brief delay so the success state is visible before we dismiss.
-      setTimeout(() => onComplete(), 600);
-    } catch (err) {
-      let message = 'Failed to assign product to slot';
-      if (err instanceof Error) {
-        message = err.message;
-      } else if (err && typeof err === 'object') {
-        const e = err as { message?: string; details?: string; hint?: string };
-        message = e.message || e.details || e.hint || message;
-      }
-      setAssignError(message);
+      await placeProductInProject(productId, route, {
+        sourceUrl: '',
+        captureKind: 'post_save',
+      });
+      onComplete?.();
+    } catch (cause) {
+      setError(messageFor(cause));
     } finally {
-      setIsAssigning(false);
+      setAssigning(false);
     }
   };
 
   return (
-    <div className="space-y-3 p-3 border border-pearl rounded-md bg-surface">
+    <div className="space-y-3 rounded-md border border-line bg-paper-2 p-3">
       <div className="flex items-center justify-between">
-        <h3 className="font-display text-[0.95rem] text-charcoal">
-          Assign to FFE slot
-        </h3>
-        <button
-          type="button"
-          onClick={onCancel}
-          disabled={isAssigning}
-          className="font-mono text-[0.62rem] uppercase tracking-[0.06em] text-aged-oak hover:text-charcoal disabled:opacity-40"
-        >
-          Cancel
-        </button>
+        <span className="font-mono text-[0.6rem] uppercase tracking-[0.1em] text-ink-soft">
+          {assigningExisting ? `Place ${productName}` : 'Capture destination'}
+        </span>
+        {onCancel && (
+          <button
+            type="button"
+            onClick={onCancel}
+            disabled={assigning}
+            className="font-mono text-[0.58rem] uppercase tracking-[0.06em] text-ink-soft hover:text-ink"
+          >
+            Cancel
+          </button>
+        )}
       </div>
 
-      <p className="text-[0.78rem] text-aged-oak">
-        Placing <span className="font-medium text-charcoal">{productName}</span>{' '}
-        in a project room slot.
-      </p>
-
-      {/* Project select */}
-      <div>
-        <label className="font-mono text-[0.62rem] uppercase tracking-[0.06em] text-aged-oak block mb-1">
-          Project
-        </label>
+      {!assigningExisting && (
         <select
-          value={selectedProjectId ?? ''}
-          onChange={(e) => setSelectedProjectId(e.target.value || null)}
-          disabled={isAssigning}
-          className="w-full p-2 text-[0.85rem] border border-pearl rounded-md bg-off-white text-charcoal focus:border-clay focus:outline-none disabled:opacity-50"
+          aria-label="Capture destination"
+          value={routeKind}
+          onChange={(event) => setRouteKind(event.target.value as RouteKind)}
+          className="w-full rounded-md border border-line bg-paper-3 px-2.5 py-2 text-[0.85rem] text-ink outline-none focus:border-verdigris"
         >
-          <option value="">— Select project —</option>
-          {projects.map((p) => (
-            <option key={p.id} value={p.id}>
-              {p.name}
+          <option value="library">Library only</option>
+          <option value="project_inbox">Project inbox</option>
+          <option value="fill_slot">Fill existing slot</option>
+          <option value="create_line">Create new FF&amp;E line</option>
+        </select>
+      )}
+
+      {routeKind !== 'library' && (
+        <select
+          aria-label="Project"
+          value={selectedProjectId ?? ''}
+          onChange={(event) => {
+            const projectId = event.target.value || null;
+            setSelectedProjectId(projectId);
+            setSelectedRoomId(null);
+            setSelectedSlotId(null);
+            remember(projectId, null);
+          }}
+          disabled={assigning}
+          className="w-full rounded-md border border-line bg-paper-3 px-2.5 py-2 text-[0.85rem] text-ink outline-none focus:border-verdigris"
+        >
+          <option value="">Select project…</option>
+          {projects.map((project) => (
+            <option key={project.id} value={project.id}>
+              {project.name}
             </option>
           ))}
         </select>
-      </div>
+      )}
 
-      {/* Room select */}
-      {selectedProjectId && (
-        <div>
-          <label className="font-mono text-[0.62rem] uppercase tracking-[0.06em] text-aged-oak block mb-1">
-            Room
-          </label>
-          <select
-            value={selectedRoomId ?? ''}
-            onChange={(e) => setSelectedRoomId(e.target.value || null)}
-            disabled={isAssigning || isLoadingRooms || rooms.length === 0}
-            className="w-full p-2 text-[0.85rem] border border-pearl rounded-md bg-off-white text-charcoal focus:border-clay focus:outline-none disabled:opacity-50"
-          >
-            <option value="">
-              {isLoadingRooms
-                ? 'Loading rooms…'
-                : rooms.length === 0
-                ? 'No rooms in this project'
-                : '— Select room —'}
+      {routeKind !== 'library' && selectedProjectId && (
+        <select
+          aria-label="Room"
+          value={selectedRoomId ?? ''}
+          onChange={(event) => {
+            const roomId = event.target.value || null;
+            setSelectedRoomId(roomId);
+            setSelectedSlotId(null);
+            remember(selectedProjectId, roomId);
+          }}
+          disabled={assigning || loadingRooms}
+          className="w-full rounded-md border border-line bg-paper-3 px-2.5 py-2 text-[0.85rem] text-ink outline-none focus:border-verdigris disabled:opacity-50"
+        >
+          <option value="">{loadingRooms ? 'Loading rooms…' : 'Project inbox / no room'}</option>
+          {rooms.map((room) => (
+            <option key={room.id} value={room.id}>
+              {room.name}
             </option>
-            {rooms.map((r) => (
-              <option key={r.id} value={r.id}>
-                {r.name}
-              </option>
-            ))}
-          </select>
-        </div>
+          ))}
+        </select>
       )}
 
-      {/* FFE slot select */}
-      {selectedProjectId && selectedRoomId && (
-        <div>
-          <label className="font-mono text-[0.62rem] uppercase tracking-[0.06em] text-aged-oak block mb-1">
-            Unassigned FFE slot
-          </label>
-          <select
-            value={selectedSlotId ?? ''}
-            onChange={(e) => setSelectedSlotId(e.target.value || null)}
-            disabled={isAssigning || isLoadingSlots || slots.length === 0}
-            className="w-full p-2 text-[0.85rem] border border-pearl rounded-md bg-off-white text-charcoal focus:border-clay focus:outline-none disabled:opacity-50"
-          >
-            <option value="">
-              {isLoadingSlots
-                ? 'Loading slots…'
-                : slots.length === 0
-                ? 'No unassigned slots in this room'
-                : '— Select slot —'}
+      {routeKind === 'fill_slot' && selectedRoomId && (
+        <select
+          aria-label="Existing FF&E slot"
+          value={selectedSlotId ?? ''}
+          onChange={(event) => setSelectedSlotId(event.target.value || null)}
+          disabled={assigning || loadingSlots}
+          className="w-full rounded-md border border-line bg-paper-3 px-2.5 py-2 text-[0.85rem] text-ink outline-none focus:border-verdigris disabled:opacity-50"
+        >
+          <option value="">{loadingSlots ? 'Loading slots…' : 'Select unassigned slot…'}</option>
+          {slots.map((slot) => (
+            <option key={slot.id} value={slot.id}>
+              {slot.name}
+              {slot.ffe_category ? ` · ${slot.ffe_category}` : ''}
+              {slot.quantity > 1 ? ` · qty ${slot.quantity}` : ''}
             </option>
-            {slots.map((s) => (
-              <option key={s.id} value={s.id}>
-                {s.name}
-                {s.ffe_category ? ` · ${s.ffe_category}` : ''}
-                {s.quantity > 1 ? ` · qty ${s.quantity}` : ''}
-              </option>
-            ))}
-          </select>
-        </div>
+          ))}
+        </select>
       )}
 
-      {/* Error */}
-      {assignError && (
-        <div className="p-2 bg-off-white border-l-[3px] border-terracotta rounded-md">
-          <p className="text-[0.82rem] text-terracotta">{assignError}</p>
-        </div>
+      {routeKind === 'create_line' && selectedRoomId && (
+        <input
+          aria-label="New line category"
+          value={category}
+          onChange={(event) => setCategory(event.target.value)}
+          placeholder="Category, e.g. seating"
+          className="w-full rounded-md border border-line bg-paper-3 px-2.5 py-2 text-[0.85rem] text-ink outline-none placeholder:text-ink-faint focus:border-verdigris"
+        />
       )}
 
-      {/* Confirm button */}
-      <button
-        type="button"
-        onClick={handleAssign}
-        disabled={!canSubmit}
-        className={`w-full py-2.5 px-4 rounded-[3px] text-[0.85rem] font-medium transition-all ${
-          assignSuccess
-            ? 'bg-sage text-white shadow-md'
-            : 'bg-charcoal text-off-white hover:bg-mocha shadow-md hover:shadow-lg'
-        } disabled:opacity-50 disabled:cursor-not-allowed disabled:shadow-none`}
-      >
-        {isAssigning
-          ? 'Assigning…'
-          : assignSuccess
-          ? 'Assigned to slot'
-          : 'Assign to slot'}
-      </button>
+      {error && (
+        <p role="alert" className="text-[0.78rem] text-rust">
+          {error}. The product is safe in your library; retry this placement.
+        </p>
+      )}
+
+      {assigningExisting && (
+        <button
+          type="button"
+          onClick={handleAssign}
+          disabled={!currentRoute() || assigning}
+          className="w-full rounded-md bg-verdigris py-2.5 text-[0.82rem] font-medium text-paper disabled:opacity-50"
+        >
+          {assigning ? 'Placing…' : error ? 'Retry placement' : 'Place product'}
+        </button>
+      )}
     </div>
   );
 }

@@ -18,7 +18,15 @@ function NextActions() {
   );
 }
 
-function Terminal({ tone, title, sub }: { tone: 'verdigris' | 'brass'; title: string; sub: string }) {
+function Terminal({
+  tone,
+  title,
+  sub,
+}: {
+  tone: 'verdigris' | 'brass';
+  title: string;
+  sub: string;
+}) {
   const ring = tone === 'verdigris' ? 'text-verdigris' : 'text-brass';
   return (
     <div className="flex flex-col items-center justify-center py-16 text-center">
@@ -37,8 +45,13 @@ export function SavedScreen() {
   const [showFfe, setShowFfe] = useState(false);
 
   const productId = io.lastSavedProductId;
-  const initialProjectId =
-    routing.destination.type === 'project-room' ? routing.destination.projectId : null;
+  const initialContext =
+    routing.destination.type === 'project-room'
+      ? {
+          projectId: routing.destination.projectId,
+          roomId: routing.destination.roomId,
+        }
+      : { projectId: null, roomId: null };
 
   if (showFfe && productId) {
     return (
@@ -46,7 +59,7 @@ export function SavedScreen() {
         productId={productId}
         productName={draft?.fields.name.value || 'Captured piece'}
         projects={projects}
-        initialProjectId={initialProjectId}
+        initialContext={initialContext}
         onComplete={() => setShowFfe(false)}
         onCancel={() => setShowFfe(false)}
       />
@@ -67,7 +80,7 @@ export function SavedScreen() {
       >
         Capture another
       </button>
-      {productId && (
+      {productId && !routing.specBookPlacementPilot && (
         <button
           type="button"
           onClick={() => setShowFfe(true)}
@@ -81,7 +94,13 @@ export function SavedScreen() {
 }
 
 export function InboxSavedScreen() {
-  return <Terminal tone="brass" title="Sent to your inbox" sub="Tucked into the inbox to sort when you're back at the desk." />;
+  return (
+    <Terminal
+      tone="brass"
+      title="Sent to your inbox"
+      sub="Tucked into the inbox to sort when you're back at the desk."
+    />
+  );
 }
 
 export function ErrorScreen() {
