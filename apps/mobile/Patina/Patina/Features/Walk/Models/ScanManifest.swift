@@ -43,8 +43,18 @@ public nonisolated let scanBundleSchemaVersion: Int = 3
 /// Field-produced manifest without loss. Nothing in the client populates them
 /// yet (a later wave wires the producers); a client scan encodes exactly the
 /// bytes it encoded before, because a nil Optional is omitted entirely by the
-/// synthesized `encode(to:)`. The four structured ones are defined next door
-/// in `ScanManifest+Instrument.swift`.
+/// synthesized `encode(to:)`.
+///
+/// The four structured ones split by who owns the shape. `session` and
+/// `poseGraphSummary` are pure manifest payload and are nested next door in
+/// `ScanManifest+Instrument.swift`. `anchors` and `scorecard` are typed by the
+/// ported decision substrate in `Features/Walk/Instrument/` — `AnchorRecord`
+/// and `Scorecard` — because those are the values `AnchorGate` and
+/// `ScorecardEvaluator` produce at capture time, and a second manifest-local
+/// copy of them would be two Swift models of one wire format. Their fields are
+/// `let`: a producer assigns them WHOLESALE (`manifest.scorecard = card`), and
+/// `ScanBundleWriter` mutates only `photos`, `captureEnvironment`, `roomName`,
+/// `annotations`, `completedAt` and `artifacts` in place.
 ///
 /// ### Type note — why the inherited keys keep UUID/Date and the instrument
 /// ### layer uses String

@@ -20,6 +20,11 @@
 //
 //  ISOLATION: `nonisolated` — see the note in `KeyframeGate.swift`.
 //
+//  ── This type is BOTH a producer output and a wire reader ─────────────────────
+//  `ScorecardEvaluator` mints one of these inside the capture callback, AND
+//  `ScanManifest.scorecard` decodes one out of a Field-produced manifest. Those two
+//  jobs pull `namedGaps` in opposite directions; see the note on that property.
+//
 
 import Foundation
 
@@ -82,11 +87,32 @@ nonisolated public struct Scorecard: Codable, Sendable, Equatable {
     public let surfaceChecklist: [SurfaceStatus]
     /// Unobserved-surface gaps (surface id + placeholder phrase). Additive beyond
     /// spec §3.4 — logged spec-delta.
-    public let namedGaps: [ScorecardGap]
+    ///
+    /// OPTIONAL, unlike Field's — and the difference is on purpose. Field's
+    /// `Scorecard` is only ever *produced*, so a non-Optional array is right there.
+    /// This one is also the type `ScanManifest.scorecard` decodes foreign manifests
+    /// into, and the spec makes the key optional: capture-bundle-spec-v1 §3.4 says
+    /// "It is **optional**; the validator (§10) checks the object shape only when
+    /// present", and `validate_capture_bundle.py` §10.8 guards its shape behind
+    /// `if named_gaps is not None`. Verified against that validator: a manifest with
+    /// the key absent and the same manifest with `"namedGaps":[]` BOTH exit 0, so
+    /// they are two distinct legal documents.
+    ///
+    /// A non-Optional here would therefore be wrong twice over: Swift's synthesized
+    /// decoder throws `keyNotFound` on a spec-legal manifest that omits the key, and
+    /// a `?? []` recovery would re-encode it as `"namedGaps":[]` — inventing a key
+    /// the producer deliberately left out. Optional is the only shape that
+    /// round-trips absence.
+    ///
+    /// Field parity on the WRITE side is unaffected: `ScorecardEvaluator.make`
+    /// always passes a real (possibly empty) array, so a Patina-produced scorecard
+    /// emits the key exactly as Field does. `scorecardJsonKeysAndEnumValuesAreWireContracts`
+    /// pins that.
+    public let namedGaps: [ScorecardGap]?
 
     public init(coveragePct: Int, sharpFrameRatio: Double, trackingHealth: TrackingHealth,
                 anchorCount: Int, verdict: Verdict, surfaceChecklist: [SurfaceStatus],
-                namedGaps: [ScorecardGap]) {
+                namedGaps: [ScorecardGap]?) {
         self.coveragePct = coveragePct
         self.sharpFrameRatio = sharpFrameRatio
         self.trackingHealth = trackingHealth

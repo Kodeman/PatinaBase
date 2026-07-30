@@ -51,7 +51,7 @@ struct InstrumentScorecardEvaluatorTests {
                                            trackingHealth: .good, anchorCount: 3)
         #expect(card.verdict == .green)
         #expect(card.coveragePct == 100)
-        #expect(card.namedGaps.isEmpty)
+        #expect(card.namedGaps?.isEmpty == true)          // non-nil AND empty
         #expect(card.surfaceChecklist.count == 6)
         // Hoisted out of `#expect`: a `rethrows` call inside the macro expansion
         // trips "call can throw, but it is not marked with 'try'".
@@ -68,8 +68,8 @@ struct InstrumentScorecardEvaluatorTests {
                                            trackingHealth: .good, anchorCount: 3)
         #expect(card.verdict == .red)                 // structural gap is the hard gate
         #expect(card.coveragePct == 83)               // 5 of 6, rounded
-        #expect(card.namedGaps.map(\.surface) == ["wall:east"])
-        #expect(card.namedGaps.first?.phrase == "East wall not fully captured")
+        #expect(card.namedGaps?.map(\.surface) == ["wall:east"])
+        #expect(card.namedGaps?.first?.phrase == "East wall not fully captured")
         // The checklist still carries the row, marked uncovered.
         #expect(card.surfaceChecklist.first { $0.surface == "wall:east" }?.covered == false)
     }
@@ -84,8 +84,8 @@ struct InstrumentScorecardEvaluatorTests {
         ]
         let card = ScorecardEvaluator.make(coverage: room, sharpFrameRatio: 1.0,
                                            trackingHealth: .good, anchorCount: 0)
-        #expect(card.namedGaps.first?.surface == "wall:north")
-        #expect(card.namedGaps.count == 3)
+        #expect(card.namedGaps?.first?.surface == "wall:north")
+        #expect(card.namedGaps?.count == 3)
     }
 
     @Test
@@ -98,7 +98,7 @@ struct InstrumentScorecardEvaluatorTests {
                                            trackingHealth: .good, anchorCount: 3)
         #expect(card.coveragePct == 95)
         #expect(card.verdict == .green)
-        #expect(card.namedGaps.map(\.surface) == ["opening:1"])
+        #expect(card.namedGaps?.map(\.surface) == ["opening:1"])
     }
 
     @Test
@@ -134,7 +134,7 @@ struct InstrumentScorecardEvaluatorTests {
                                            trackingHealth: .good, anchorCount: 0)
         #expect(card.coveragePct == 0)
         #expect(card.verdict == .red)
-        #expect(card.namedGaps.isEmpty)
+        #expect(card.namedGaps?.isEmpty == true)          // non-nil AND empty
     }
 
     @Test

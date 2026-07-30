@@ -183,8 +183,8 @@ struct ScanManifestSupersetTests {
         #expect(first.label == "north wall run")
         #expect(first.spanKind == .span)
         #expect(first.entryMethod == .typed)
-        #expect(first.endpointA == ScanManifest.AnchorPoint3(x: 0, y: 0, z: 0))
-        #expect(first.endpointB == ScanManifest.AnchorPoint3(x: 4.118, y: 0, z: 0))
+        #expect(first.endpointA == AnchorRecord.Point3(x: 0, y: 0, z: 0))
+        #expect(first.endpointB == AnchorRecord.Point3(x: 4.118, y: 0, z: 0))
         #expect(first.modelSpanMeters == 4.118)
         #expect(first.measuredValueMm == 4115)
         #expect(anchors[1].spanKind == .height)
@@ -206,7 +206,7 @@ struct ScanManifestSupersetTests {
         #expect(scorecard.surfaceChecklist.last?.surface == "ceiling")
         #expect(scorecard.surfaceChecklist.last?.covered == false)
         let gaps = try #require(scorecard.namedGaps)
-        #expect(gaps == [ScanManifest.ScorecardGap(
+        #expect(gaps == [ScorecardGap(
             surface: "ceiling", phrase: "walk back and pan up at the ceiling")])
 
         let pose = try #require(manifest.poseGraphSummary)
@@ -250,6 +250,90 @@ struct ScanManifestSupersetTests {
         #expect(twice.scorecard == once.scorecard)
         #expect(twice.poseGraphSummary == once.poseGraphSummary)
         #expect(twice == once)
+    }
+
+    /// Stronger than the value round-trip above: re-encoding a Field manifest
+    /// reproduces the instrument layer's JSON *keys and values*, not merely
+    /// Swift values that compare equal. A collapsed model that quietly dropped
+    /// a key, or invented one, would compare fine on the Swift side and still
+    /// move the bytes; this compares the decoded JSON objects.
+    ///
+    /// Scoped to the seven instrument keys on purpose — the inherited v3 layer
+    /// legitimately re-shapes (`createdAt` goes through `Date`, `capture`/
+    /// `device` have client-side fields Field omits), and those divergences are
+    /// documented on `ScanManifest` and pinned by the tests above.
+    @Test
+    func fieldInstrumentLayerReEncodesWithIdenticalJsonKeysAndValues() throws {
+        let original = try fixtureData("field_manifest_instrument_layer")
+        let reEncoded = try writerEncoder.encode(try decodeThroughReadManifest(original))
+
+        let before = try #require(try JSONSerialization.jsonObject(with: original) as? [String: Any])
+        let after = try #require(try JSONSerialization.jsonObject(with: reEncoded) as? [String: Any])
+
+        for key in ["bundleSpecVersion", "unverified", "checksumAlgorithm",
+                    "session", "anchors", "scorecard", "poseGraphSummary"] {
+            let lhs = try #require(before[key], "fixture lost its '\(key)'")
+            let rhs = try #require(after[key], "re-encode dropped '\(key)'")
+            // Wrapped so `NSDictionary`'s deep `isEqual:` does the comparison
+            // for scalars, arrays and nested objects alike.
+            #expect(NSDictionary(dictionary: ["v": lhs]) == NSDictionary(dictionary: ["v": rhs]),
+                    "instrument key '\(key)' changed shape across a re-encode")
+        }
+    }
+
+    /// `scorecard.namedGaps` is OPTIONAL on the wire — spec §3.4 ("It is
+    /// optional; the validator checks the object shape only when present") and
+    /// `validate_capture_bundle.py` §10.8, which guards its shape behind
+    /// `if named_gaps is not None`. Both a manifest omitting the key and one
+    /// carrying `"namedGaps":[]` exit 0 against that validator, so they are two
+    /// distinct legal documents and the Swift type has to tell them apart.
+    ///
+    /// This is why `Scorecard.namedGaps` is `[ScorecardGap]?` here while Field's
+    /// is non-Optional: Field's is write-only, ours also reads foreign
+    /// manifests. A non-Optional would throw `keyNotFound` on the input below,
+    /// and a `?? []` recovery would re-encode it as `"namedGaps":[]` —
+    /// inventing a key the producer left out.
+    @Test
+    func aScorecardWithoutNamedGapsDecodesAndTheKeyIsNotInvented() throws {
+        var object = try #require(
+            try JSONSerialization.jsonObject(with: fixtureData("field_manifest_instrument_layer"))
+                as? [String: Any])
+        var scorecard = try #require(object["scorecard"] as? [String: Any])
+        #expect(scorecard.removeValue(forKey: "namedGaps") != nil,
+                "fixture no longer carries scorecard.namedGaps")
+        object["scorecard"] = scorecard
+
+        let stripped = try JSONSerialization.data(withJSONObject: object, options: [.sortedKeys])
+        let manifest = try decodeThroughReadManifest(stripped)
+
+        let decoded = try #require(manifest.scorecard)
+        #expect(decoded.namedGaps == nil)          // absent, not empty
+        #expect(decoded.coveragePct == 92)         // the rest of §3.4 still read
+        #expect(decoded.verdict == .green)
+
+        let json = try utf8(try writerEncoder.encode(manifest))
+        #expect(!json.contains("\"namedGaps\""), "re-encode invented a namedGaps key")
+    }
+
+    /// The other half of the same contract: an EMPTY array is carried as an
+    /// empty array, never collapsed to absent. Field's producer always writes
+    /// the key, so collapsing `[]` to nil would drop it off Patina's re-encode
+    /// of every gap-free Field scan.
+    @Test
+    func anEmptyNamedGapsArrayStaysAnEmptyArray() throws {
+        var object = try #require(
+            try JSONSerialization.jsonObject(with: fixtureData("field_manifest_instrument_layer"))
+                as? [String: Any])
+        var scorecard = try #require(object["scorecard"] as? [String: Any])
+        scorecard["namedGaps"] = [Any]()
+        object["scorecard"] = scorecard
+
+        let emptied = try JSONSerialization.data(withJSONObject: object, options: [.sortedKeys])
+        let manifest = try decodeThroughReadManifest(emptied)
+
+        #expect(manifest.scorecard?.namedGaps == [])   // present and empty
+        let json = try utf8(try writerEncoder.encode(manifest))
+        #expect(json.contains("\"namedGaps\" : ["), "re-encode dropped an empty namedGaps key")
     }
 
     /// The two invariants `validate_capture_bundle.py` §10.6 enforces across

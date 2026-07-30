@@ -26,6 +26,15 @@
 //
 //  ISOLATION: `nonisolated` — see the note in `KeyframeGate.swift`.
 //
+//  This is also the element type of `ScanManifest.anchors` (spec §3.3). The fields
+//  are `let` and stay `let`: `ScanBundleWriter` assigns the manifest's instrument
+//  properties WHOLESALE (`manifest.scorecard = card`) and mutates only
+//  `photos`/`captureEnvironment`/`roomName`/`annotations`/`completedAt`/`artifacts`
+//  in place — no writer anywhere touches a field of an anchor after minting it.
+//  Immutability is load-bearing: `AnchorGate` hands these to logic a capture
+//  callback runs off the main actor, and a `var` would make `Sendable` a promise
+//  the type could not keep.
+//
 
 import Foundation
 
