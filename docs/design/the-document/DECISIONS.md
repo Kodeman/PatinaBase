@@ -6663,9 +6663,31 @@ both handled honestly:
   report was a `toast()`. It now renders a terracotta inline band above the pair,
   in the send-sheet's grammar (`role="alert"`, 11px, `--color-terracotta`),
   cleared on the next pick. A lost judgment says so where the judgment was made.
-- `send-sheet.tsx`'s email-failure `toast()` stays as-is and stays silent. Its
-  neighbouring `linkError` band is the model to follow — converting it is OWED
-  inline-band polish, named here so it isn't found again by accident.
+- The other five `toast()` paths reachable from a (document) surface stay as-is
+  and stay silent. This is not new silence: on main, `ToastProvider` was mounted
+  in `(portal)/portal/layout.tsx` and NOWHERE else, so every one of these already
+  no-oped whenever its component was rendered from /desk or /doc. The dissolve
+  changes nothing about them; deleting the portal layout only removed the last
+  address where they were ever audible. Converting each to an inline band at the
+  act site is the work R83 ruled for and left owed — named here in full so the
+  next reader inherits a survey rather than a discovery:
+  - `log-inspection-drawer.tsx` — the partial-write warning ("N received counts
+    failed to save — re-check the items"). **Highest priority of the five: it is
+    the only one reporting DATA LOSS.** The inspection is logged but per-item
+    counts silently aren't, and the drawer closes on success, so nothing else on
+    screen says so. Its sibling `submitError` band is the model.
+  - `order-assistant/index.tsx` — the two payment prompts ("pay from the panel
+    below, or later from By Vendor" on a queued order; "redirecting you to
+    payment…" on a single one). These are the designer's instruction for what
+    happens next, and they arrive as nothing.
+  - `po-send-actions.tsx` — the send confirmations ("PO N sent to X" / "marked as
+    sent"). Least costly: the PO's own stamp moves, so the act is visibly done.
+  - `use-time-tracking.ts` — the timer notices ("You already have a timer
+    running", "Could not start the timer"). Note the hook already has the pattern
+    at line 261 (`R83 — document surfaces render failures inline; no global
+    toast`) for its other legs; the start path was missed.
+  - `send-sheet.tsx` — the email-failure warning (proposal marked sent, notice
+    undelivered). Its neighbouring `linkError` band is the model to follow.
 
 **Middleware: /preferences and /preferences/unsubscribe are PUBLIC** (review
 round). The R91 mechanism only works if the page answers with no session — the
@@ -6676,11 +6698,38 @@ and the page's own token-apply flow is the validation. They are public but not
 still covers every other route. The signed-out bounce also carries the SEARCH in
 its `callbackUrl` now, not just the pathname — every desk doorway is addressed by
 query, so dropping it turned a signed-out click on an emailed invoice link into a
-plain Desk. The `callbackUrl` is validated on consumption (same-origin path only;
-absolute, protocol-relative and backslash-smuggled values fall back to /desk).
+plain Desk. The `callbackUrl` is validated by ONE shared guard on every leg
+(`lib/safe-internal-path.ts`, review round): a value is honoured only if, after
+backslash normalisation, it is a single-leading-slash path carrying no scheme —
+absolute, protocol-relative (`//evil.example`) and backslash-smuggled
+(`/\evil.example`, which browsers normalise to the same thing) values fall back to
+`/desk`. Four legs now agree: the middleware that mints the value, `/auth/signin`
+(which had the test but not the backslash normalisation, and which also feeds the
+QR display's own hard navigation), `/auth/mfa-verify`, and `/auth/callback` — the
+least trustworthy of the four, since an OAuth provider round-trips whatever it was
+handed. Before the round, the last three honoured the raw parameter.
 
-**The permanent redirect table** (`next.config.js`, 135 entries after the review
-round, all 308). Every
+**And the signed-out page has to be QUIET, not just reachable** (review round).
+Being public was necessary but not sufficient: two React Query queries fired on an
+unauthenticated visit and each threw `Not authenticated` from its query function,
+which the global QueryCache handler turns into a destructive toast (`lib/
+react-query.ts` → `showErrorToast`, bridged to the design-system `Toaster` in the
+root `Providers` — so it fires on `/preferences` too, which sits outside
+`(document)` and therefore outside R83's no-toast zone). A recipient clicking an
+emailed unsubscribe link met a red error card. Both are now held back by an
+additive optional `enabled` (default `true`, so no existing caller changes):
+`useNotificationPreferences({ enabled: isAuthenticated })`, and —
+found only by walking it — `useProfile({ enabled: !!session?.user })` inside
+`useAuth()` itself, which means EVERY page that merely calls `useAuth()` while
+signed out was raising this. The second one is the load-bearing fix; gating only
+the first leaves the toast in place. The token's outcome is also rendered in the
+SIGNED-OUT branch now (`TokenStatusBanner` was mounted only in the authenticated
+one), so a bad token says "We could not apply that link." instead of failing
+silently — which is what this page's own header contract already promised.
+
+**The permanent redirect table** (`next.config.js`, **133** entries after the
+review round — counted, not estimated: `node -e "require('./next.config.js')
+.redirects().then(r=>console.log(r.length))"` — all 308). Every
 one of the 104 concrete routes that existed answers somewhere true, first-match
 wins, catchall `/portal/:path*` → `/desk` last. The 22 pre-existing bare-path
 entries (`/projects/:path*`, `/settings`, `/catalog/:path*` …) were rewritten to
@@ -6722,13 +6771,21 @@ destination:
   answered the first cold link of a session and silently swallowed every in-app
   soft navigation after it (a Post row, the order-assistant's step-coverage
   link). It remembers the query it consumed and re-arms whenever the Desk is
-  doorway-free. (2) The Stripe Checkout return is a doorway too: `po`, `checkout`
-  and `session_id` are CONSUMED here (`checkout` on the Orders book opens page
-  `ledger` — the page that shows a PO's payment state on load), and the strip is
-  total rather than surgical, keeping only `tour`. Nothing downstream ever read
-  `po=`, and the catchall can append unconsumed path segments as query junk, so
-  "let it ride along" was leaving debris in the designer's address bar and
-  history. `/portal/billing/ar` →
+  doorway-free. (2) The Stripe Checkout return is a doorway too: `checkout`,
+  `session_id` and `po` are CONSUMED AND STRIPPED here (`checkout` on the Orders
+  book opens page `ledger` — the page that shows a PO's payment state on load),
+  and the strip is total rather than surgical, keeping only `tour`. Be precise
+  about what "consumed" means for `po=`: it is read off the URL and thrown away.
+  `OpenLedgerContext` is `{ page, vendorId, projectId, invoiceId }` — it has NO PO
+  field — so the Orders book opens knowing the designer came back from a payment
+  but not WHICH purchase order they paid. The reason to take the whole query
+  rather than delete known keys is address hygiene, not junk removal: a doorway is
+  a one-shot instruction, and once carried out the address should read `/desk`, so
+  a refresh or a shared link shows the Desk's own state instead of re-firing
+  someone else's arrival. (Correcting an earlier claim in this entry: Next's
+  `redirects()` does NOT append unmatched params to a destination —
+  `appendParamsToQuery` is false for redirects, true only for rewrites — so there
+  was never redirect-appended junk to defend against.) `/portal/billing/ar` →
   `?book=accounts&page=receivables`; `/portal/billing/invoices/:id` →
   `?book=accounts&page=ledger&invoiceId=:id`; `/portal/time` → `?book=hours`;
   `/portal/inbox` → `?book=post`; `/portal/settings/security` →
@@ -6781,10 +6838,18 @@ now filters the Directory (it had been read only inside the `if (person)` branch
 so `/portal/vendors` → `?role=maker` would have done nothing). Review round:
 `?role=` is honoured in the `?add=` branch too — the add-quick-action redirect
 emits both (`/portal/clients?add=1` → `?role=client&add=client`), so closing the
-add sheet has to leave the designer on the tab they asked for, not under "All" —
-and the params the Room has ANSWERED (`view`, `role`, `add`) are erased from the
-address once applied. `person` and `thread` stay: they name what is on screen, so
-they keep their share/refresh semantics.
+add sheet has to leave the designer on the tab they asked for, not under "All".
+
+`view`, `role` and `add` are **one-shot doorway params, exactly like `/desk?book=`**:
+the Room applies them on arrival and then erases them from the address. So they
+are addresses for ARRIVING, not for describing a state — refresh or re-share a
+`/people?view=nurture` URL that the Room has already answered and you get the
+Room's own current state, because the instruction was spent the first time. This
+is the same grammar as the Desk's doorway (the Desk keeps only `tour`) and it is
+deliberate: a URL that re-fires someone else's arrival every time it is loaded is
+not an address, it is a trap. `person` and `thread` are the exception and STAY in
+the address: they name what is on screen rather than instructing a change, so they
+keep ordinary share/refresh semantics.
 
 **Email and notification targets** now name the new addresses: "Email
 preferences" → `{base}/desk?account=notifications`; public unsubscribe →
@@ -6823,9 +6888,14 @@ redirect to the nearest surface is a soft landing rather than parity:
   lands in the open Orders book, which shows each PO's payment state on load: the
   truth is there, but the *moment* isn't narrated, so a designer who beats the
   webhook home sees the old state with nothing telling them why. **NAMED
-  FOLLOW-UP:** a payment-confirm affordance in the Orders book (the doorway
-  already carries `checkout=success|cancelled` and `po=`, so the information to
-  build it arrives intact — nothing reads them yet).
+  FOLLOW-UP:** a payment-confirm affordance in the Orders book. Its cost is
+  larger than the first cut of this entry claimed. The doorway does receive
+  `checkout=success|cancelled` and `po=`, but it consumes and strips both, and
+  `OpenLedgerContext` carries no PO identity — so the work is not "read the params
+  someone already forwarded". It is: add a PO field to `OpenLedgerContext`, have
+  `desk-doorway.tsx` forward `po` (and the checkout outcome) through
+  `openLedger('orders', …)`, and then build the confirm/poll affordance on the
+  receiving end. Three steps, not one.
 
 **Deferrals, named so they can be picked up:**
 
@@ -6850,8 +6920,16 @@ redirect to the nearest surface is a soft landing rather than parity:
   bare path (`/catalog/foo/bar`) *through* `/portal` and let the `/portal`
   catchall answer it. The first cut of the table named the bare paths directly but
   copied only their specific rows, so those URLs 404'd. `:path*` mirrors now sit
-  at the foot of `/catalog`, `/vendors`, `/leads`, `/clients`, `/teaching` and
-  `/communications`.
+  at the foot of `/catalog`, `/vendors`, `/leads`, `/teaching` and
+  `/communications`. NOT `/clients`: it is the one bare family with an
+  `/:id/:path*` rule, and because `:path*` matches zero segments that rule already
+  answers the whole family — the catchall could never fire, so the review round
+  deleted it rather than leave an unreachable line to mislead the next reader. The
+  same review also put each family's `/:id` row ABOVE its `/:id/:path*` sibling
+  (`/portal/projects`, `/portal/clients`, `/clients`), per this table's
+  specific-before-general law. Those three moves change no destination — the
+  catchall resolved to the same place — they just stop the file contradicting its
+  own stated rule.
 - **Sheet deep-link context for POs and invoices** — the doorway carries
   `book`/`page`/`vendorId`/`projectId`/`invoiceId` but not a line selection, so
   the order-assistant's coverage warning opens the Accounts book scoped to the
