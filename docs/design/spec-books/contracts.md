@@ -102,9 +102,11 @@ PDF bytes.
 - `resolve_spec_book_share(p_token text) -> jsonb`
 
 `create_spec_book_share` returns the raw token once. Only its SHA-256 hash is stored.
-`resolve_spec_book_share` returns artifact metadata plus a short-lived signed download
-URL for a ready artifact. Expired, revoked, malformed, wrong-audience, or non-ready
-shares return no artifact.
+`resolve_spec_book_share` returns fail-closed artifact metadata for a ready artifact,
+including an opaque artifact id but never a storage path. The client portal's
+server-only share route uses that resolved artifact id with its service-role Storage
+client to mint the short-lived signed download URL. Expired, revoked, malformed,
+wrong-audience, or non-ready shares return no artifact.
 
 ## Preflight
 
@@ -137,4 +139,3 @@ are frozen into the snapshot.
 
 All entries fail closed while the flag is loading. The pilot cohort is selected in
 PostHog by studio name/traits; no studio UUID is hard-coded.
-
