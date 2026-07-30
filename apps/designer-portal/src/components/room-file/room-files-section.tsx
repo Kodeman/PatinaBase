@@ -5,7 +5,8 @@
  * P1, package item 12). The FIRST consumer of `useProjectRoomScans`: it feeds
  * the project's ready scans, then keeps only those with a finished (generated)
  * Room File deliverable (`useGeneratedRoomFilesByScan`), each a door into
- * `/portal/projects/[id]/room-file/[scanId]`. Returns null when the project has
+ * `/room/[scanId]/file` (R21 dissolve — the deliverable is scan-keyed, so its
+ * address stopped being project-nested). Returns null when the project has
  * no room-file-bearing scans (no empty chrome), matching ProjectBoardsSection.
  *
  * Typography-first, zero shadows (D4). Strings are escalate-class placeholders
@@ -63,7 +64,7 @@ export function RoomFilesSection({ projectId }: RoomFilesSectionProps) {
           return (
             <li key={scan.id} className="border-b" style={{ borderColor: 'var(--border-default)' }}>
               <Link
-                href={`/portal/projects/${projectId}/room-file/${scan.id}`}
+                href={`/room/${scan.id}/file`}
                 className="group flex flex-wrap items-baseline justify-between gap-x-6 gap-y-1 py-3.5 transition-colors"
               >
                 <span className="flex items-baseline gap-3">

@@ -2,7 +2,8 @@
 
 /**
  * RoomFileView — the Room File v0 surface (Field Capture P1, package item 12).
- * A project-attached, scan-grained page: the drawing set + accuracy certificate
+ * A scan-grained page (rehoused to /room/[scanId]/file by the R21 dissolve;
+ * formerly project-nested): the drawing set + accuracy certificate
  * + measurements + capture context for one scan's generated deliverable,
  * version-aware (a re-scan appends, never overwrites — 00341 R-f).
  *
@@ -38,11 +39,14 @@ function fmtDay(iso: string | null): string {
 }
 
 export interface RoomFileViewProps {
-  projectId: string;
+  /** The SCAN id — `room_files` is UNIQUE(scan_id, version), so this is the
+   *  deliverable's only true key. The owning project (when there is one) is
+   *  read off the scan row below; R21 retired the projectId prop along with
+   *  the project-nested route it existed to link back to. */
   scanId: string;
 }
 
-export function RoomFileView({ projectId, scanId }: RoomFileViewProps) {
+export function RoomFileView({ scanId }: RoomFileViewProps) {
   const hydrated = useHydrated();
   const { value: enabled, isLoading: flagLoading } = useFeatureFlag('room-file');
 
@@ -80,19 +84,21 @@ export function RoomFileView({ projectId, scanId }: RoomFileViewProps) {
     );
   }
 
-  const projectName = scan?.project?.name ?? null;
   const roomLabel = scan?.name ?? 'Room';
   const roomType = scan?.room_type ? prettyRoomType(scan.room_type) : null;
   const capturedIso = scan?.scanned_at ?? scan?.created_at ?? null;
 
   return (
     <div className="mx-auto max-w-[880px] px-1 pb-24">
-      {/* Back to the project */}
+      {/* Back to the room. R21: the Room File is the scan's leaf, so its parent
+          is the Room View of the same scan — an address that always resolves,
+          project or no project (the old link needed a projectId the deliverable
+          never actually depended on). */}
       <Link
-        href={`/portal/projects/${projectId}`}
+        href={`/room/${scanId}`}
         className="font-mono text-[10px] uppercase tracking-[0.12em] text-[var(--text-muted)] transition-colors hover:text-[var(--color-clay)]"
       >
-        {C.backToProject(projectName ?? 'Project')}
+        {C.backToRoom(roomLabel)}
       </Link>
 
       {/* Header */}

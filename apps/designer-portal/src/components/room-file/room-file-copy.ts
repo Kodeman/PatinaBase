@@ -15,7 +15,9 @@ export const ROOM_FILE_COPY = {
 
   // Page / header
   eyebrow: 'Room File',
-  backToProject: (name: string) => `← ${name}`,
+  // R21 dissolve: the Room File's parent is the Room (the scan), not the
+  // project — `backToProject` retired with the project-nested route.
+  backToRoom: (name: string) => `← ${name}`,
   scanDatePrefix: 'Captured',
   unverifiedBadge: 'UNVERIFIED',
   unverifiedNote:

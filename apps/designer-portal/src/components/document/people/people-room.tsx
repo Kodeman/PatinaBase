@@ -36,6 +36,7 @@ import { NurtureView } from './views/nurture-view';
 import { ReviewsView } from './views/reviews-view';
 import { PortfolioView } from './views/portfolio-view';
 import { OutreachView } from './views/outreach-view';
+import { YourEyePanel } from './profile/your-eye';
 import { AskBar, routePeopleAsk } from './directory/ask-bar';
 import { AddPersonSheet } from './directory/add-person-sheet';
 import type { PeopleView, PeopleViewProps } from './types';
@@ -51,6 +52,31 @@ const VIEWS: Array<{ key: PeopleView; name: string }> = [
   { key: 'reviews', name: 'Reviews' },
   { key: 'portfolio', name: 'Portfolio' },
   { key: 'outreach', name: 'Outreach' },
+  // R21 dissolve — Your Eye's rehousing (see PeopleView in ./types).
+  { key: 'your-eye', name: 'Your Eye' },
+];
+
+/** R21 dissolve — the URL surface for the rail. `/people?view=<key>` lands on
+ *  a view directly; every permanent redirect off the dead zone tree
+ *  (/portal/messages → ?view=threads, /portal/nurture, /portal/reviews,
+ *  /portal/portfolio, /portal/communications* → ?view=outreach,
+ *  /portal/teaching/your-eye → ?view=your-eye) rides this. */
+const VIEW_KEYS: readonly PeopleView[] = VIEWS.map((v) => v.key);
+
+/** Roles a BARE `?role=` may filter the Directory to — /portal/clients and
+ *  /portal/vendors redirect to `?role=client` / `?role=maker` with no person.
+ *  Mirrors DirectoryRole (PartyRole | 'all' | 'field'). */
+const DIRECTORY_ROLES: readonly DirectoryRole[] = [
+  'all',
+  'field',
+  'client',
+  'lead',
+  'maker',
+  'team',
+  'gc',
+  'sub',
+  'installer',
+  'receiver',
 ];
 
 /** The quiet descending mark beside a view row (prototype .vr-mark). */
@@ -132,6 +158,7 @@ export function PeopleRoom() {
     const roleParam = params.get('role');
     const thread = params.get('thread');
     const add = params.get('add');
+    const viewParam = params.get('view');
     const roles: PartyRole[] = [
       'client',
       'lead',
@@ -189,6 +216,22 @@ export function PeopleRoom() {
       setAddOpen(true);
     } else {
       deepLinkHandledRef.current = true;
+      // R21 dissolve — the rail and the Directory's role filter are addressable
+      // now. `?view=` names a rail view; a BARE `?role=` (no person) filters the
+      // Directory, which is what /portal/clients and /portal/vendors became.
+      // Both together (`?view=directory&role=maker`) is coherent, so neither
+      // clobbers the other; an unknown value is ignored in silence.
+      const wantedView =
+        viewParam && (VIEW_KEYS as readonly string[]).includes(viewParam)
+          ? (viewParam as PeopleView)
+          : null;
+      const wantedRole =
+        roleParam && (DIRECTORY_ROLES as readonly string[]).includes(roleParam)
+          ? (roleParam as DirectoryRole)
+          : null;
+      if (wantedRole) setRoleFilter(wantedRole);
+      if (wantedView) setView(wantedView);
+      else if (wantedRole) setView('directory');
     }
   }, [all]);
 
@@ -303,6 +346,10 @@ export function PeopleRoom() {
     <ReviewsView {...nav} />
   ) : view === 'portfolio' ? (
     <PortfolioView {...nav} />
+  ) : view === 'your-eye' ? (
+    // R21 dissolve — the panel is self-contained (its own hooks, no nav
+    // contract); it reads the designer, not a party in the roster.
+    <YourEyePanel />
   ) : (
     <OutreachView {...nav} />
   );
@@ -407,7 +454,8 @@ export function PeopleRoom() {
           filterDirectory(kind);
           setNotice(message);
         }}
-        onGoToLeads={() => router.push('/portal/pipeline')}
+        // R21 dissolve — /portal/pipeline is gone; open leads are Desk folders.
+        onGoToLeads={() => router.push('/desk')}
       />
 
       {/* Field party sheet — the SMS/field-link surface for a GC / sub /

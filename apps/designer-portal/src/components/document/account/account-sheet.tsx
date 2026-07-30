@@ -50,12 +50,20 @@ const STATUS_META: Record<
   offline: { label: 'Offline', color: 'var(--color-aged-oak)' },
 };
 
-type AccountPage =
+export type AccountPage =
   | 'profile'
   | 'notifications'
   | 'security'
   | 'devices'
   | 'studio';
+
+export const ACCOUNT_PAGES: readonly AccountPage[] = [
+  'profile',
+  'notifications',
+  'security',
+  'devices',
+  'studio',
+];
 
 const PAGES: { key: AccountPage; label: string }[] = [
   { key: 'profile', label: 'Profile' },
@@ -64,9 +72,23 @@ const PAGES: { key: AccountPage; label: string }[] = [
   { key: 'devices', label: 'Devices' },
 ];
 
-/** Open the Account sheet from anywhere in the document model. */
+/** Open the Account sheet from anywhere in the document model.
+ *  Takes NO argument on purpose — it is passed straight to `onClick` in
+ *  account-nameplate.tsx, so a first parameter would arrive as a MouseEvent.
+ *  Page targeting goes through {@link openAccountPage}. */
 export function openAccount() {
   window.dispatchEvent(new CustomEvent('document:open-account'));
+}
+
+/** R21 dissolve — open the Account sheet ONTO a page. Same event, optional
+ *  `{ page }` detail; the listener below falls back to 'profile' when the
+ *  detail is absent or carries an unknown page, so every existing dispatcher
+ *  (nameplate, mobile drawer, ⌘K) keeps its old behaviour. This is what
+ *  /desk?account=<page> rides on. */
+export function openAccountPage(page: AccountPage) {
+  window.dispatchEvent(
+    new CustomEvent('document:open-account', { detail: { page } }),
+  );
 }
 
 export function AccountSheet() {
@@ -90,8 +112,13 @@ export function AccountSheet() {
   const [isSigningOut, setIsSigningOut] = useState(false);
 
   useEffect(() => {
-    const onOpen = () => {
-      setPage('profile');
+    const onOpen = (e: Event) => {
+      const detail = (e as CustomEvent<{ page?: AccountPage } | undefined>)
+        .detail;
+      const wanted = detail?.page;
+      setPage(
+        wanted && ACCOUNT_PAGES.includes(wanted) ? wanted : 'profile',
+      );
       setOpen(true);
     };
     window.addEventListener('document:open-account', onOpen);

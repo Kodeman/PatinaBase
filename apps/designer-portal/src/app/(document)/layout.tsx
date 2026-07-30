@@ -5,6 +5,7 @@ import { LogStrip } from '@/components/document/log-strip';
 import { CommandBar } from '@/components/document/command-bar';
 import { InterruptionSettings } from '@/components/document/interruption-settings';
 import { AccountSheet } from '@/components/document/account/account-sheet';
+import { DeskDoorway } from '@/components/document/desk-doorway';
 import { InvoiceOverlays } from '@/components/document/accounts/invoice-overlays';
 import { DraftProposalOverlay } from '@/components/document/rooms/drafting/draft-proposal-opener';
 import { DocumentHelpProvider } from '@/components/document/help/document-help';
@@ -87,6 +88,13 @@ export default function DocumentLayout({
                   {/* R97 — the desk-first intro tour (WelcomeModal + six coachmarks).
                       Self-guards to /desk; renders nothing elsewhere. */}
                   <DeskWalkthrough />
+                  {/* R21 dissolve — the /desk?book= / ?account= doorways. LAST
+                      on purpose: React runs effects in mount order, so the
+                      drawer's open-ledger listener, the Post sheet's, and the
+                      Account sheet's must all be attached before this fires.
+                      Renders nothing; self-wraps its useSearchParams read in a
+                      Suspense boundary. */}
+                  <DeskDoorway />
                 </DeskWalkthroughProvider>
               </DocumentHelpProvider>
             </HelpStateProvider>
