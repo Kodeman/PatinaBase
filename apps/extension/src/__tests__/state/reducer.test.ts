@@ -3,9 +3,7 @@ import { captureReducer, initialCaptureState } from '../../state/reducer';
 import type { CaptureState } from '../../state/types';
 import type { ExtractedProductData } from '@patina/shared';
 
-function extraction(
-  overrides: Partial<ExtractedProductData> = {}
-): ExtractedProductData {
+function extraction(overrides: Partial<ExtractedProductData> = {}): ExtractedProductData {
   return {
     productName: 'Test Chair',
     description: null,
@@ -24,12 +22,19 @@ function extraction(
   } as unknown as ExtractedProductData;
 }
 
-const fakeUser = { id: 'u1', email: 'a@b.com' } as unknown as CaptureState['session']['user'];
+const fakeUser = {
+  id: 'u1',
+  email: 'a@b.com',
+} as unknown as CaptureState['session']['user'];
 
 function captured(): CaptureState {
   let s = initialCaptureState();
   s = captureReducer(s, { type: 'SESSION_RESOLVED', user: fakeUser });
-  s = captureReducer(s, { type: 'EXTRACTION_START', url: 'https://shop.example/p/1', entry: 'toolbar' });
+  s = captureReducer(s, {
+    type: 'EXTRACTION_START',
+    url: 'https://shop.example/p/1',
+    entry: 'toolbar',
+  });
   s = captureReducer(s, { type: 'EXTRACTION_SUCCESS', data: extraction() });
   return s;
 }
@@ -42,12 +47,18 @@ describe('captureReducer — nav', () => {
   });
 
   it('NAV moves the base screen', () => {
-    const s = captureReducer(initialCaptureState(), { type: 'NAV', screen: 'R5' });
+    const s = captureReducer(initialCaptureState(), {
+      type: 'NAV',
+      screen: 'R5',
+    });
     expect(s.nav.screen).toBe('R5');
   });
 
   it('OPEN_OVERLAY records the return-to base screen', () => {
-    const s = captureReducer(captured(), { type: 'OPEN_OVERLAY', overlay: 'C5' });
+    const s = captureReducer(captured(), {
+      type: 'OPEN_OVERLAY',
+      overlay: 'C5',
+    });
     expect(s.nav.screen).toBe('C2');
     expect(s.nav.overlay).toBe('C5');
     expect(s.nav.returnTo).toBe('C2');
@@ -63,14 +74,20 @@ describe('captureReducer — nav', () => {
 
 describe('captureReducer — session', () => {
   it('SESSION_RESOLVED with a user becomes signed-in and arms capture', () => {
-    const s = captureReducer(initialCaptureState(), { type: 'SESSION_RESOLVED', user: fakeUser });
+    const s = captureReducer(initialCaptureState(), {
+      type: 'SESSION_RESOLVED',
+      user: fakeUser,
+    });
     expect(s.session.status).toBe('signed-in');
     expect(s.session.user).toBe(fakeUser);
     expect(s.nav.screen).toBe('C1');
   });
 
   it('SESSION_RESOLVED with null shows the signed-out screen', () => {
-    const s = captureReducer(initialCaptureState(), { type: 'SESSION_RESOLVED', user: null });
+    const s = captureReducer(initialCaptureState(), {
+      type: 'SESSION_RESOLVED',
+      user: null,
+    });
     expect(s.session.status).toBe('signed-out');
     expect(s.nav.screen).toBe('signedOut');
   });
@@ -86,8 +103,15 @@ describe('captureReducer — session', () => {
 
 describe('captureReducer — extraction lifecycle', () => {
   it('EXTRACTION_START enters C1 and marks extracting', () => {
-    let s = captureReducer(initialCaptureState(), { type: 'SESSION_RESOLVED', user: fakeUser });
-    s = captureReducer(s, { type: 'EXTRACTION_START', url: 'https://x', entry: 'shortcut' });
+    let s = captureReducer(initialCaptureState(), {
+      type: 'SESSION_RESOLVED',
+      user: fakeUser,
+    });
+    s = captureReducer(s, {
+      type: 'EXTRACTION_START',
+      url: 'https://x',
+      entry: 'shortcut',
+    });
     expect(s.nav.screen).toBe('C1');
     expect(s.io.isExtracting).toBe(true);
     expect(s.nav.entry).toBe('shortcut');
@@ -101,8 +125,15 @@ describe('captureReducer — extraction lifecycle', () => {
   });
 
   it('EXTRACTION_PARTIAL forces named fields to missing', () => {
-    let s = captureReducer(initialCaptureState(), { type: 'SESSION_RESOLVED', user: fakeUser });
-    s = captureReducer(s, { type: 'EXTRACTION_START', url: 'https://x', entry: 'toolbar' });
+    let s = captureReducer(initialCaptureState(), {
+      type: 'SESSION_RESOLVED',
+      user: fakeUser,
+    });
+    s = captureReducer(s, {
+      type: 'EXTRACTION_START',
+      url: 'https://x',
+      entry: 'toolbar',
+    });
     s = captureReducer(s, {
       type: 'EXTRACTION_PARTIAL',
       data: extraction(),
@@ -115,14 +146,23 @@ describe('captureReducer — extraction lifecycle', () => {
   });
 
   it('EXTRACTION_BLOCKED routes to R2 with the snapshot url', () => {
-    let s = captureReducer(initialCaptureState(), { type: 'SESSION_RESOLVED', user: fakeUser });
-    s = captureReducer(s, { type: 'EXTRACTION_BLOCKED', snapshotUrl: 'data:image/jpeg;base64,xx' });
+    let s = captureReducer(initialCaptureState(), {
+      type: 'SESSION_RESOLVED',
+      user: fakeUser,
+    });
+    s = captureReducer(s, {
+      type: 'EXTRACTION_BLOCKED',
+      snapshotUrl: 'data:image/jpeg;base64,xx',
+    });
     expect(s.nav.screen).toBe('R2');
     expect(s.io.isExtracting).toBe(false);
   });
 
   it('MANUAL_START seeds a blank draft on C2 for hand entry', () => {
-    let s = captureReducer(initialCaptureState(), { type: 'SESSION_RESOLVED', user: fakeUser });
+    let s = captureReducer(initialCaptureState(), {
+      type: 'SESSION_RESOLVED',
+      user: fakeUser,
+    });
     s = captureReducer(s, { type: 'MANUAL_START', url: 'https://x/p' });
     expect(s.nav.screen).toBe('C2');
     expect(s.draft?.captureKind).toBe('unknown');
@@ -132,7 +172,10 @@ describe('captureReducer — extraction lifecycle', () => {
   });
 
   it('SNAPSHOT_CAPTURED seeds a snapshot draft with the uploaded image', () => {
-    let s = captureReducer(initialCaptureState(), { type: 'SESSION_RESOLVED', user: fakeUser });
+    let s = captureReducer(initialCaptureState(), {
+      type: 'SESSION_RESOLVED',
+      user: fakeUser,
+    });
     s = captureReducer(s, {
       type: 'SNAPSHOT_CAPTURED',
       sourceUrl: 'https://x/p',
@@ -146,8 +189,15 @@ describe('captureReducer — extraction lifecycle', () => {
   });
 
   it('IMAGE_CAPTURED seeds an image draft (OCR-eligible)', () => {
-    let s = captureReducer(initialCaptureState(), { type: 'SESSION_RESOLVED', user: fakeUser });
-    s = captureReducer(s, { type: 'IMAGE_CAPTURED', sourceUrl: 'https://x/p', imageUrl: 'https://cdn/i.jpg' });
+    let s = captureReducer(initialCaptureState(), {
+      type: 'SESSION_RESOLVED',
+      user: fakeUser,
+    });
+    s = captureReducer(s, {
+      type: 'IMAGE_CAPTURED',
+      sourceUrl: 'https://x/p',
+      imageUrl: 'https://cdn/i.jpg',
+    });
     expect(s.nav.screen).toBe('C2');
     expect(s.draft?.captureKind).toBe('image');
     expect(s.draft?.snapshotUrl).toBeNull();
@@ -155,9 +205,15 @@ describe('captureReducer — extraction lifecycle', () => {
   });
 
   it('EXTRACTION_UNKNOWN routes to R4, EXTRACTION_ERROR routes to R5', () => {
-    const base = captureReducer(initialCaptureState(), { type: 'SESSION_RESOLVED', user: fakeUser });
+    const base = captureReducer(initialCaptureState(), {
+      type: 'SESSION_RESOLVED',
+      user: fakeUser,
+    });
     expect(captureReducer(base, { type: 'EXTRACTION_UNKNOWN' }).nav.screen).toBe('R4');
-    const err = captureReducer(base, { type: 'EXTRACTION_ERROR', error: 'timeout' });
+    const err = captureReducer(base, {
+      type: 'EXTRACTION_ERROR',
+      error: 'timeout',
+    });
     expect(err.nav.screen).toBe('R5');
     expect(err.io.error).toBe('timeout');
   });
@@ -166,14 +222,22 @@ describe('captureReducer — extraction lifecycle', () => {
 describe('captureReducer — draft editing', () => {
   it('FIELD_EDIT updates value and marks the field edited', () => {
     let s = captured();
-    s = captureReducer(s, { type: 'FIELD_EDIT', field: 'name', value: 'Renamed' });
+    s = captureReducer(s, {
+      type: 'FIELD_EDIT',
+      field: 'name',
+      value: 'Renamed',
+    });
     expect(s.draft?.fields.name.value).toBe('Renamed');
     expect(s.draft?.fields.name.status).toBe('edited');
   });
 
   it('FIELD_REVERT restores the original extracted value', () => {
     let s = captured();
-    s = captureReducer(s, { type: 'FIELD_EDIT', field: 'name', value: 'Renamed' });
+    s = captureReducer(s, {
+      type: 'FIELD_EDIT',
+      field: 'name',
+      value: 'Renamed',
+    });
     s = captureReducer(s, { type: 'FIELD_REVERT', field: 'name' });
     expect(s.draft?.fields.name.value).toBe('Test Chair');
     expect(s.draft?.fields.name.status).toBe('extracted');
@@ -185,7 +249,11 @@ describe('captureReducer — save + dedup', () => {
     let s = captured();
     s = captureReducer(s, { type: 'SAVE_START', target: 'library' });
     expect(s.io.isSaving).toBe(true);
-    s = captureReducer(s, { type: 'SAVE_SUCCESS', productId: 'p1', landed: 'library' });
+    s = captureReducer(s, {
+      type: 'SAVE_SUCCESS',
+      productId: 'p1',
+      landed: 'library',
+    });
     expect(s.io.isSaving).toBe(false);
     expect(s.nav.screen).toBe('S4');
     expect(s.io.lastSavedProductId).toBe('p1');
@@ -193,13 +261,21 @@ describe('captureReducer — save + dedup', () => {
 
   it('SAVE_SUCCESS(inbox) lands on S5', () => {
     let s = captured();
-    s = captureReducer(s, { type: 'SAVE_SUCCESS', productId: 'p1', landed: 'inbox' });
+    s = captureReducer(s, {
+      type: 'SAVE_SUCCESS',
+      productId: 'p1',
+      landed: 'inbox',
+    });
     expect(s.nav.screen).toBe('S5');
   });
 
   it('CAPTURE_NEXT resets the draft and re-arms on C1', () => {
     let s = captured();
-    s = captureReducer(s, { type: 'SAVE_SUCCESS', productId: 'p1', landed: 'library' });
+    s = captureReducer(s, {
+      type: 'SAVE_SUCCESS',
+      productId: 'p1',
+      landed: 'library',
+    });
     s = captureReducer(s, { type: 'CAPTURE_NEXT' });
     expect(s.draft).toBeNull();
     expect(s.nav.screen).toBe('C1');
@@ -210,12 +286,45 @@ describe('captureReducer — save + dedup', () => {
     let s = captured();
     s = captureReducer(s, {
       type: 'DUPLICATE_FOUND',
-      match: { id: 'p9', name: 'Test Chair', imageUrl: null, priceRetail: 10000, capturedAt: null },
+      match: {
+        id: 'p9',
+        name: 'Test Chair',
+        imageUrl: null,
+        priceRetail: 10000,
+        capturedAt: null,
+      },
       confidence: 0.82,
     });
     expect(s.nav.screen).toBe('D1');
     expect(s.dedup.match?.id).toBe('p9');
     expect(s.dedup.confidence).toBeCloseTo(0.82);
+  });
+
+  it('preserves a Product id for placement-only retry without dropping routing', () => {
+    let s = captured();
+    const route = {
+      kind: 'fill_slot' as const,
+      projectId: 'project-1',
+      roomId: 'room-1',
+      slotId: 'slot-1',
+    };
+    s = captureReducer(s, {
+      type: 'SPEC_BOOK_PLACEMENT_SET',
+      route,
+      pilot: true,
+      valid: true,
+    });
+    s = captureReducer(s, { type: 'SAVE_START', target: 'library' });
+    s = captureReducer(s, {
+      type: 'SAVE_ERROR',
+      error: 'slot conflict',
+      preservedProductId: 'product-1',
+    });
+
+    expect(s.draft?.fields.name.value).toBe('Test Chair');
+    expect(s.routing.specBookPlacement).toEqual(route);
+    expect(s.io.pendingPlacementProductId).toBe('product-1');
+    expect(s.io.error).toBe('slot conflict');
   });
 
   it('does not mutate the previous state (pure reducer)', () => {

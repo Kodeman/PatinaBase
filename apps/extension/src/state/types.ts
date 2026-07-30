@@ -15,6 +15,7 @@ import type {
   UUID,
 } from '@patina/shared';
 import type { NavState } from './screens';
+import type { SpecBookPlacementRoute } from '../lib/spec-book-placement';
 
 // ─── Routing destination (mirrors @patina/catalog-ui DestinationPicker) ──────
 
@@ -75,13 +76,7 @@ export interface DraftVendorSlot {
   status: FieldStatus;
 }
 
-export type CaptureKind =
-  | 'product'
-  | 'vendor'
-  | 'image'
-  | 'selection'
-  | 'snapshot'
-  | 'unknown';
+export type CaptureKind = 'product' | 'vendor' | 'image' | 'selection' | 'snapshot' | 'unknown';
 
 export interface DraftSlice {
   captureKind: CaptureKind;
@@ -127,6 +122,13 @@ export interface RoutingSlice {
   proposalId: UUID | null;
   scopeRoomId: UUID | null;
   ffeCategorySlug: string | null;
+  /**
+   * Null means the pilot flag has not enabled the new placement contract and
+   * the legacy destination behavior must remain untouched.
+   */
+  specBookPlacement: SpecBookPlacementRoute | null;
+  specBookPlacementPilot: boolean;
+  specBookPlacementValid: boolean;
   // Decision targeting (carried from the legacy panel).
   decision: {
     designerClientId: UUID | null;
@@ -179,6 +181,8 @@ export interface IoSlice {
   isSaving: boolean;
   error: string | null;
   lastSavedProductId: UUID | null;
+  /** Durable Product retained when only the project-placement RPC failed. */
+  pendingPlacementProductId: UUID | null;
 }
 
 export interface CaptureState {
@@ -207,7 +211,11 @@ export type CaptureAction =
   // extraction lifecycle
   | { type: 'EXTRACTION_START'; url: string; entry: EntryPoint }
   | { type: 'EXTRACTION_SUCCESS'; data: ExtractedProductData }
-  | { type: 'EXTRACTION_PARTIAL'; data: ExtractedProductData; missing: DraftFieldKey[] }
+  | {
+      type: 'EXTRACTION_PARTIAL';
+      data: ExtractedProductData;
+      missing: DraftFieldKey[];
+    }
   | { type: 'EXTRACTION_BLOCKED'; snapshotUrl: string | null }
   | { type: 'EXTRACTION_UNKNOWN' }
   | { type: 'EXTRACTION_ERROR'; error: string }
@@ -221,28 +229,52 @@ export type CaptureAction =
   | { type: 'CUSTOM_FIELD_ADD'; label: string }
   | { type: 'CUSTOM_FIELD_SET'; key: string; value: string }
   | { type: 'IMAGES_SET'; selected: number[]; variant: string | null }
-  | { type: 'VENDOR_SET'; role: 'manufacturer' | 'retailer'; vendor: VendorSummaryForCapture | null; confidence: VendorMatchConfidence }
+  | {
+      type: 'VENDOR_SET';
+      role: 'manufacturer' | 'retailer';
+      vendor: VendorSummaryForCapture | null;
+      confidence: VendorMatchConfidence;
+    }
   | { type: 'STYLE_TOGGLE'; styleId: UUID }
   | { type: 'NOTE_SET'; note: string }
   // routing
   | { type: 'DESTINATION_SET'; value: Destination }
   | { type: 'SHELF_SET'; shelf: string | null }
   | { type: 'COMMIT_TARGET_SET'; target: CommitTarget }
-  | { type: 'INBOX_TARGET_SET'; proposalId: UUID | null; scopeRoomId: UUID | null; ffeCategorySlug: string | null }
+  | {
+      type: 'INBOX_TARGET_SET';
+      proposalId: UUID | null;
+      scopeRoomId: UUID | null;
+      ffeCategorySlug: string | null;
+    }
+  | {
+      type: 'SPEC_BOOK_PLACEMENT_SET';
+      route: SpecBookPlacementRoute | null;
+      pilot: boolean;
+      valid?: boolean;
+    }
   | { type: 'DECISION_TARGET_SET'; patch: Partial<RoutingSlice['decision']> }
   // dedup
-  | { type: 'DUPLICATE_MATCHED'; match: ExistingProductMatch; confidence: number }
+  | {
+      type: 'DUPLICATE_MATCHED';
+      match: ExistingProductMatch;
+      confidence: number;
+    }
   | { type: 'DUPLICATE_FOUND'; match: ExistingProductMatch; confidence: number }
   | { type: 'DUPLICATE_CLEARED' }
   | { type: 'MERGE_FIELD_PICK'; field: DraftFieldKey; pick: 'existing' | 'new' }
   // save lifecycle
   | { type: 'SAVE_START'; target: CommitTarget }
   | { type: 'SAVE_SUCCESS'; productId: UUID; landed: 'library' | 'inbox' }
-  | { type: 'SAVE_ERROR'; error: string }
+  | { type: 'SAVE_ERROR'; error: string; preservedProductId?: UUID }
   | { type: 'CAPTURE_NEXT' }
   // offline / prefs
   | { type: 'CONNECTIVITY'; online: boolean }
-  | { type: 'QUEUE_STATUS'; items: QueuedCaptureSummary[]; lastSyncAt: string | null }
+  | {
+      type: 'QUEUE_STATUS';
+      items: QueuedCaptureSummary[];
+      lastSyncAt: string | null;
+    }
   | { type: 'PREFS_LOADED'; prefs: Prefs }
   | { type: 'PREF_SET'; key: keyof Prefs; value: Prefs[keyof Prefs] };
 
