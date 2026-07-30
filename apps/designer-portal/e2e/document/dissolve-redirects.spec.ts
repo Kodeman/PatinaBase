@@ -104,6 +104,22 @@ test.describe('R21 dissolve — the permanent redirect table', () => {
     }
   });
 
+  test('the ruled sub-routes carry their section anchor', async ({ request }) => {
+    // A document has no deeper URL, but it does have sections: the old page's
+    // work is still findable without scrolling the whole paper. Ids come from
+    // lib/document/section-anchor.ts.
+    const cases: Array<[string, string]> = [
+      ['complete', '#doc-section-care'],
+      ['ffe', '#doc-section-project'],
+      ['financials', '#doc-section-project'],
+      ['phase/discovery', '#doc-section-project'],
+    ];
+    for (const [leaf, hash] of cases) {
+      const { location } = await hop(request, `/portal/projects/${PROJECT_ID}/${leaf}`);
+      expect(location, leaf).toBe(`/doc/${PROJECT_ID}${hash}`);
+    }
+  });
+
   test('the Room File is scan-keyed, not project-keyed', async ({ request }) => {
     const { location } = await hop(
       request,
@@ -191,7 +207,6 @@ test.describe('R21 dissolve — the permanent redirect table', () => {
     request,
   }) => {
     for (const from of [
-      '/portal/catalog/new',
       '/portal/catalog/import',
       '/portal/catalog/categories',
       '/portal/catalog/collections',
@@ -207,13 +222,32 @@ test.describe('R21 dissolve — the permanent redirect table', () => {
     expect(parse(location).pathname).toBe('/library/judgments');
   });
 
+  test('the "new piece" segment names the Composing Page, not the shelves', async ({
+    request,
+  }) => {
+    // R40: /compose is a real Room, and it is what /portal/catalog/new was for.
+    // Landing on /library instead would drop the designer's intent to author.
+    for (const from of ['/portal/catalog/new', '/catalog/new']) {
+      expect(parse((await hop(request, from)).location).pathname, from).toBe('/compose');
+    }
+  });
+
+  test('the companion lands in the Library, its successor surface', async ({ request }) => {
+    // LibrarianBar + EngineResults are what the companion became — the Desk is
+    // not an asking surface.
+    for (const from of ['/portal/companion', '/companion']) {
+      expect(parse((await hop(request, from)).location).pathname, from).toBe('/library');
+    }
+  });
+
   test('the Orders book opens through the doorway params', async ({ request }) => {
     const cases: Array<[string, string | null]> = [
       ['/portal/procurement/receiving', 'receiving'],
       ['/portal/procurement/by-vendor', 'vendors'],
       ['/portal/procurement/expediting', 'week'],
       ['/portal/procurement', null],
-      ['/portal/procurement/calendar', null],
+      // The delivery calendar IS the week page — never the plain ledger.
+      ['/portal/procurement/calendar', 'week'],
     ];
     for (const [from, page] of cases) {
       const { pathname, params } = parse((await hop(request, from)).location);
@@ -325,6 +359,57 @@ test.describe('R21 dissolve — the permanent redirect table', () => {
     const earnings = parse((await hop(request, '/earnings')).location);
     expect(earnings.pathname).toBe('/desk');
     expect(earnings.params.get('book')).toBe('accounts');
+  });
+
+  test('a bare static segment is never read as an id', async ({ request }) => {
+    // `new` before /projects/:id, or the table sends it to /doc/new — a URL the
+    // resolver can only answer with "missing".
+    expect(parse((await hop(request, '/projects/new')).location).pathname).toBe('/desk');
+    expect(parse((await hop(request, '/proposals/new')).location).pathname).toBe('/desk');
+    const addMaker = parse((await hop(request, '/vendors/new')).location);
+    expect(addMaker.pathname).toBe('/people');
+    expect(addMaker.params.get('add')).toBe('maker');
+  });
+
+  test('the bare tree has the same catchall reach as /portal did', async ({ request }) => {
+    // main funnelled a deep bare path THROUGH /portal and let the /portal
+    // catchall answer. Without the bare-tree `:path*` mirrors these 404.
+    const cases: Array<[string, string]> = [
+      ['/catalog/foo/bar', '/library'],
+      ['/teaching/foo/bar', '/library'],
+      ['/leads/foo/bar', '/desk'],
+      ['/communications/foo/bar', '/people'],
+      ['/vendors/foo/bar', '/people'],
+    ];
+    for (const [from, pathname] of cases) {
+      const hopped = await hop(request, from);
+      expect(hopped.status, from).toBe(308);
+      expect(parse(hopped.location).pathname, from).toBe(pathname);
+    }
+  });
+
+  test('the add-quick-action has a bare twin', async ({ request }) => {
+    const { pathname, params } = parse((await hop(request, '/clients?add=1')).location);
+    expect(pathname).toBe('/people');
+    expect(params.get('role')).toBe('client');
+    expect(params.get('add')).toBe('client');
+  });
+
+  test('/preferences answers while signed OUT — the R91 unsubscribe contract', async ({
+    request,
+  }) => {
+    // The whole point of the token flow: an emailed unsubscribe link is clicked
+    // by someone with no session. FOLLOW redirects here (unlike every other case
+    // in this file) — the claim is about where the click ends up, and a
+    // middleware bounce to /auth/signin would break the footer of every email
+    // Patina sends. A bad token is fine: the PAGE must render and say so.
+    const res = await request.get('/preferences?token=not-a-real-token');
+    expect(res.status()).toBe(200);
+    expect(new URL(res.url()).pathname).toBe('/preferences');
+
+    const unsub = await request.get('/preferences/unsubscribe?token=not-a-real-token');
+    expect(unsub.status()).toBe(200);
+    expect(new URL(unsub.url()).pathname).toBe('/preferences/unsubscribe');
   });
 
   test('a live document route is NOT permanently redirected', async ({ request }) => {

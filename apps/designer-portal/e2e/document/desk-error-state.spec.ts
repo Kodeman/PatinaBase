@@ -6,7 +6,8 @@ import { getDesignerId, setTourCompleted } from '../helpers/help-state';
  * Arrival Arc Phase 0 (DECISIONS.md I64) — the Desk's whole-desk error state.
  *
  * Prereqs (house pattern, playwright.config.ts): local Supabase up + seeded
- * (designer@patina.dev / password123), the-document-pilot flag on.
+ * (designer@patina.dev / password123). No flag override needed — the Document
+ * is unconditional since the R21 dissolve (I109) retired `the-document-pilot`.
  *
  * Chromium-pinned: these tests intercept network routes rather than mutate a
  * shared DB row, so cross-browser correctness isn't the concern here — the

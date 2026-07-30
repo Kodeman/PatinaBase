@@ -74,10 +74,12 @@ const EMPTY_RESULT: CrossLayerSearchResult = {
  * own personal items, their studio items, and the public catalog;
  * another studio's library is invisible.
  *
- * Used by the Library's search surface (`/library/search`). The header
- * search input submits to that route rather than rendering an inline panel
- * — keeps the in-tab focus simple and lets the route own pagination /
- * shareable URLs.
+ * Used by the Library's ASK surface — the LibrarianBar on `/library`, which
+ * renders results in place on the Room. There is no `/library/search` route: the
+ * R21 dissolve (the-document DECISIONS I109) retired the old zone's search page
+ * along with the header input that submitted to it, and the `?q=` URL contract
+ * went with them. Results are not shareable by URL; the ask is a gesture on the
+ * Room, not an address.
  */
 export function useCrossLayerSearch(
   options: UseCrossLayerSearchOptions,

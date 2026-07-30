@@ -6,14 +6,19 @@ import { test, expect } from '@playwright/test';
  */
 
 test.describe('Designer Portal - Comprehensive Smoke Tests', () => {
+  // Desk-era routes (the R21 dissolve, I109). The old zone URLs are permanent
+  // 308s now, so smoking them would prove nothing about a page. /preferences is
+  // public by design (R91 — the emailed unsubscribe token must land signed out),
+  // so it is listed as requiresAuth: false. /doc/[id] is absent: it needs a
+  // seeded engagement id and this spec has no fixture for one.
   const criticalPages = [
     { path: '/', name: 'Homepage/Root', requiresAuth: false },
-    { path: '/dashboard', name: 'Main Dashboard', requiresAuth: true },
-    { path: '/catalog', name: 'Product Catalog', requiresAuth: true },
-    { path: '/clients', name: 'Client Management', requiresAuth: true },
-    { path: '/projects', name: 'Project Management', requiresAuth: true },
-    { path: '/proposals', name: 'Proposals Page', requiresAuth: true },
-    { path: '/messages', name: 'Messaging', requiresAuth: true },
+    { path: '/desk', name: 'The Desk', requiresAuth: true },
+    { path: '/library', name: 'The Library', requiresAuth: true },
+    { path: '/people', name: 'The People room', requiresAuth: true },
+    { path: '/rooms', name: 'The Rooms roster', requiresAuth: true },
+    { path: '/help', name: 'Help', requiresAuth: true },
+    { path: '/preferences', name: 'Preferences', requiresAuth: false },
     { path: '/auth/signin', name: 'Sign-in Page', requiresAuth: false },
   ];
 
@@ -143,13 +148,16 @@ test.describe('Designer Portal - Comprehensive Smoke Tests', () => {
     });
   }
 
-  test('Additional pages discovery - settings, profile, etc.', async ({ page }) => {
+  test('Additional pages discovery - doorways and leaves', async ({ page }) => {
+    // The settings/profile zones became Account-sheet doorways on /desk; the
+    // remaining entries are real desk-era leaves.
     const additionalPages = [
-      '/settings',
-      '/profile',
-      '/notifications',
-      '/help',
-      '/analytics',
+      '/desk?account=profile',
+      '/desk?account=notifications',
+      '/desk?book=orders',
+      '/library/judgments',
+      '/compose',
+      '/preferences/unsubscribe',
     ];
 
     for (const path of additionalPages) {

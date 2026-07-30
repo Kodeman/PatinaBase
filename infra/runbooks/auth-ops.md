@@ -233,8 +233,8 @@ Run each in a fresh incognito window. Use DevTools → Application → Cookies t
 This is the Task 2.1 follow-up regression test (the one that fixed `redirectWithCookies` dropping attributes).
 
 1. Clear all cookies
-2. Visit `https://app.patina.cloud/portal/clients` directly (a protected page)
-3. Expect redirect to `https://app.patina.cloud/auth/signin?callbackUrl=/portal/clients`
+2. Visit `https://app.patina.cloud/people?role=client` directly (a protected page)
+3. Expect redirect to `https://app.patina.cloud/auth/signin?callbackUrl=%2Fpeople%3Frole%3Dclient` — the callbackUrl carries the path **and** the query (the desk doorways are addressed by query, so dropping it would land the designer on a bare room)
 4. Inspect Set-Cookie headers on the redirect response (DevTools → Network → the 307 response)
 5. Expected: any `sb-` cookies in the Set-Cookie chain have `Domain=.patina.cloud`, `Secure`, `SameSite=Lax`
 

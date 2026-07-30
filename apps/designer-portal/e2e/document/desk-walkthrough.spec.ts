@@ -14,8 +14,8 @@ import {
  *
  * Prereqs (house pattern, playwright.config.ts):
  *   · Local Supabase up + seeded (designer@patina.dev / password123).
- *   · `pnpm dev` on :3000 with the-document-pilot flag on (pinned in .env.local
- *     + the config webServer env).
+ *   · `pnpm dev` on :3000. No flag override needed — the R21 dissolve (I109)
+ *     retired `the-document-pilot`; the Document is unconditional.
  *
  * These three tests mutate ONE shared row (profiles for the seed designer), so
  * they run serially and each establishes its own DB precondition. The suite

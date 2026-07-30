@@ -55,7 +55,7 @@ echo
 echo "[seed] complete."
 echo
 echo "Smoke URLs:"
-echo "  Designer: https://app.patina.cloud/portal/projects      (QR sign-in as kody@middlewest.studio)"
+echo "  Designer: https://app.patina.cloud/desk                 (QR sign-in as kody@middlewest.studio)"
 echo "  Client:   https://client.patina.cloud/projects          (password sign-in as client@middlewest.studio)"
 echo
 echo "Seeded UUID namespace: 99999999-9999-9999-9999-*"
