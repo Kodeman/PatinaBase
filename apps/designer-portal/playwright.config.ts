@@ -104,8 +104,7 @@ export default defineConfig({
      * dev-server start — with reuseExistingServer, a server started without
      * this var will NOT pick it up; restart `pnpm dev` with the var set). */
     env: {
-      NEXT_PUBLIC_FLAG_OVERRIDES:
-        'procurement-workspace-pilot:true,the-document-pilot:true',
+      NEXT_PUBLIC_FLAG_OVERRIDES: 'procurement-workspace-pilot:true',
     },
   },
 });

@@ -107,7 +107,7 @@ export async function middleware(req: NextRequest) {
     if (callbackUrl) {
       return redirectWithCookies(new URL(callbackUrl, baseUrl));
     }
-    return redirectWithCookies(new URL('/portal', baseUrl));
+    return redirectWithCookies(new URL('/desk', baseUrl));
   }
 
   // Authenticated user on the public landing page: send them into the app.
@@ -117,7 +117,7 @@ export async function middleware(req: NextRequest) {
     if (!(await userHasDesignerPortalRole(user!.id))) {
       return redirectWithCookies(new URL('/unauthorized', baseUrl));
     }
-    return redirectWithCookies(new URL('/portal', baseUrl));
+    return redirectWithCookies(new URL('/desk', baseUrl));
   }
 
   // Redirect unauthenticated users to login

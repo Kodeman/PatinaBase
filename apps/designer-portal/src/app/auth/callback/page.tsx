@@ -25,7 +25,7 @@ function CallbackContent() {
     const handleCallback = async () => {
       const supabase = createBrowserClient();
       const code = searchParams.get('code');
-      const next = searchParams.get('callbackUrl') || searchParams.get('next') || '/portal';
+      const next = searchParams.get('callbackUrl') || searchParams.get('next') || '/desk';
 
       try {
         // PKCE flow: GoTrue redirected back with `?code=` — exchange it

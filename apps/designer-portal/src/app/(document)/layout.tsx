@@ -19,7 +19,7 @@ import { MobileBar } from '@/components/document/mobile/mobile-bar';
 import { MobileActionDock } from '@/components/document/mobile/mobile-action-dock';
 import { MobileSheets } from '@/components/document/mobile/mobile-sheets';
 import { DocumentTimeProvider } from '@/hooks/document-time-provider';
-import { DocumentGate } from './document-gate';
+import { ToastProvider } from '@/components/portal/toast-provider';
 
 export const metadata: Metadata = {
   title: 'The Desk · Patina',
@@ -40,7 +40,7 @@ export default function DocumentLayout({
 }) {
   return (
     <div className="min-h-screen bg-[var(--bg-primary)]">
-      <DocumentGate>
+      <ToastProvider>
         {/* One time system above the Desk and every document (R4): the
             log-offer strip rides across navigation inside the provider. */}
         <DocumentTimeProvider>
@@ -92,7 +92,7 @@ export default function DocumentLayout({
             </HelpStateProvider>
           </MobileShellProvider>
         </DocumentTimeProvider>
-      </DocumentGate>
+      </ToastProvider>
     </div>
   );
 }

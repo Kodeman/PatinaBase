@@ -54,7 +54,7 @@ const ERROR_MESSAGES: Record<string, { title: string; description: string }> = {
 function SignInContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const callbackUrl = searchParams.get('callbackUrl') || '/portal';
+  const callbackUrl = searchParams.get('callbackUrl') || '/desk';
   const error = searchParams.get('error');
   const registered = searchParams.get('registered');
   const reset = searchParams.get('reset');
