@@ -26,6 +26,25 @@ export const ROOM_FILE_COPY = {
   notGeneratedBody:
     'The drawings are still being generated, or the last run stopped. Check back shortly.',
 
+  // ── Present Layer (00376) — the one place `present_status` is READ ────────
+  // Nothing else in the product reads this column. A version parked at
+  // 'refining' after a Refine delivery was otherwise invisible: the Room View
+  // readout is flag-gated AND needs its artifacts to resolve, so an operator
+  // had no ungated way to tell a delivery had landed at all. This line is that
+  // way. It is a status token, not a claim about accuracy — the refine readout
+  // (flagged) is where the numbers live.
+  presentPrefix: 'Present layer',
+  presentStatusLabel: {
+    pending: 'queued',
+    refining: 'poses refined',
+    fusing: 'mesh fusing',
+    training: 'splat training',
+    ready: 'ready',
+    error: 'stopped',
+  } as const,
+  /** Appended when `present.refine_engine` names the engine that ran. */
+  presentEngineSuffix: (engine: string) => ` · ${engine}`,
+
   // Drawings section
   drawingsTitle: 'Drawings',
   drawingsSubtitle: (n: number, date: string | null) =>

@@ -462,6 +462,8 @@ export type {
   RoomFile,
   RoomFileListItem,
   RoomFileStatus,
+  RoomFilePresent,
+  RoomFilePresentStatus,
   RoomFileDrawings,
   RoomFileDrawingSheet,
   RoomFileCertificate,
@@ -1425,13 +1427,16 @@ export { useRoomRoster } from './use-room-roster';
 export type { RoomRosterScan, RoomRosterScanRow, RoomRosterGeometryElementRow } from './use-room-roster';
 
 // Field Capture P2 (Layer 3) — Refine's published artifacts: the delivery
-// record in `room_files.present.refine_engine` plus the documents it points
-// at. Gate at the QUERY level (`enabled: false`) so a flag-off costs zero
-// database and zero Storage calls.
+// record in `room_files.present.refine` (an OBJECT — `present.refine_engine`
+// beside it is the engine NAME as TEXT, which is what 00377's admin view
+// reads) plus the documents it points at. Gate at the QUERY level
+// (`enabled: false`) so a flag-off costs zero database and zero Storage calls.
 export {
   useScanRefineArtifacts,
   parseScanRefineRecord,
   DEFAULT_REFINE_ARTIFACT_NAMES,
+  REFINE_PRESENT_KEY,
+  REFINE_DELIVERY_CONTRACT,
 } from './use-scan-refine-artifacts';
 export type {
   ScanRefineArtifacts,
