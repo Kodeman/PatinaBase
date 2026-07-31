@@ -297,6 +297,35 @@ public final class ScanBundleWriter {
         try buffer.write(to: indexURL, options: .atomic)
     }
 
+    // MARK: - Instrument layer (capture-bundle-spec-v1 §3.2–§3.5)
+
+    /// Fold the seven instrument keys into the manifest and persist it.
+    ///
+    /// Call this IMMEDIATELY BEFORE `finalize(hashArtifacts: true)`, from the
+    /// seal path and nowhere else. Two reasons it belongs at seal rather than
+    /// at freeze:
+    ///
+    ///  * `checksumAlgorithm: "sha256"` is a claim about the artifact hashes,
+    ///    and those are computed by `finalize(hashArtifacts:)`. Written at
+    ///    freeze it would sit on disk describing hashes that did not exist.
+    ///  * The manifest is rewritten by `finalize`, so a layer applied here
+    ///    survives into the sealed bytes without a second pass.
+    ///
+    /// It writes no new FILE into the bundle. Field persists `scorecard.json`
+    /// and `anchors.json` alongside the manifest; Patina deliberately does not,
+    /// because what the bundle contains is what eventually leaves the phone
+    /// when the user asks for design services, and that payload is the user's
+    /// call (`RoomUploadService.holdLocally`). Everything the server needs is a
+    /// manifest FIELD, and manifest.json already ships.
+    ///
+    /// The three derived scalars (`unverified`, `scorecard.anchorCount`,
+    /// `checksumAlgorithm`/`bundleSpecVersion`) are computed by
+    /// `ScanManifest.apply(_:)` — see there.
+    public func applyInstrumentLayer(_ layer: ScanManifest.InstrumentLayer) throws {
+        manifest.apply(layer)
+        try writeManifest()
+    }
+
     // MARK: - Finalize
 
     /// Close out the bundle. Recomputes sizes, stamps `completedAt`, and writes

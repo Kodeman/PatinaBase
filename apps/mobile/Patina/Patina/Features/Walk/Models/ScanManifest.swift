@@ -39,11 +39,19 @@ public nonisolated let scanBundleSchemaVersion: Int = 3
 /// `bundleSpecVersion` — defined by `capture-bundle-spec-v1.md` §3 and
 /// enforced by `scripts/validate_capture_bundle.py` §10.
 ///
-/// Those seven keys now live here too, all Optional, so this type can hold a
-/// Field-produced manifest without loss. Nothing in the client populates them
-/// yet (a later wave wires the producers); a client scan encodes exactly the
-/// bytes it encoded before, because a nil Optional is omitted entirely by the
-/// synthesized `encode(to:)`.
+/// Those seven keys live here too, all Optional, so this type can hold a
+/// Field-produced manifest without loss — and so that a client bundle can now
+/// emit them itself. They are populated at SEAL by `apply(_:)` (see
+/// `ScanManifest+Instrument.swift`) and are nil until then, because a nil
+/// Optional is omitted entirely by the synthesized `encode(to:)`. They are
+/// Optional rather than required because an unsealed, in-flight bundle
+/// legitimately has no instrument layer to state yet, and a v2/v3 manifest
+/// already on disk from an older build has none at all.
+///
+/// Emitting them is not cosmetic: `validate_capture_bundle.py` §10.2 lists all
+/// seven in `REQUIRED_TOP_LEVEL_KEYS`, and a client scan that omitted them
+/// parked permanently at ingest on `SCHEMA_VIOLATION` (a PERMANENT_TOKEN — no
+/// retry).
 ///
 /// The four structured ones split by who owns the shape. `session` and
 /// `poseGraphSummary` are pure manifest payload and are nested next door in
@@ -98,12 +106,14 @@ public nonisolated struct ScanManifest: Codable, Equatable, Sendable {
 
     // MARK: - Instrument layer (Field superset · capture-bundle-spec-v1 §3)
     //
-    // All Optional and all nil on a client-written bundle, so they encode to
-    // nothing. Key names are Field's, verbatim.
+    // All Optional, and all nil until `apply(_:)` runs at seal. Key names are
+    // Field's, verbatim.
 
-    /// Bundle-spec version. `1` marks a Field instrument bundle; nil means a
-    /// plain client bundle. This is the marker the server keys on, not
-    /// `schemaVersion` (which is 3 on both).
+    /// Bundle-spec version — `1` = `capture-bundle-spec-v1`, which a sealed
+    /// bundle from EITHER app now conforms to (see
+    /// `ScanManifest.instrumentBundleSpecVersion` for why the old "Field-only
+    /// marker" reading is retired). Nil only on an unsealed bundle or one
+    /// written by a build that predates the producer.
     public var bundleSpecVersion: Int?
     /// The accuracy verdict: true when fewer than three typed ground-truth
     /// anchors were captured (spec §10.6 / AnchorGate). The validator cross-
@@ -222,10 +232,11 @@ public nonisolated struct ScanManifest: Codable, Equatable, Sendable {
         // them.
         //
         // The instrument layer is the opposite: every key is Optional, absence
-        // is legal and is the norm (nothing in this app populates them), and NO
-        // client behaviour reads any of them. So "present but unreadable"
-        // degrades to the same nil that "absent" already produces, and the key
-        // is named in `unreadableInstrumentKeys`.
+        // is legal (an unsealed bundle, or one from a build that predates the
+        // producer, has none), and NO client behaviour reads any of them —
+        // they are written for the server. So "present but unreadable" degrades
+        // to the same nil that "absent" already produces, and the key is named
+        // in `unreadableInstrumentKeys`.
         //
         // WHY HERE AND NOT IN THE ENUMS. The tempting alternative is an
         // `unknown` sentinel case on `Scorecard.Verdict` / `.TrackingHealth` /

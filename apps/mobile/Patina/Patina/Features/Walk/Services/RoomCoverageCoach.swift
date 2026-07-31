@@ -43,7 +43,9 @@
 //
 //  ── What this coach deliberately does NOT do ─────────────────────────────────
 //  Field's coach writes `scorecard.json` into the bundle at `finalize`. This one
-//  does not write anything. Two reasons, both blocking rather than stylistic:
+//  writes nothing at all, and the scorecard it produces reaches the bundle as a
+//  manifest FIELD instead. The two reasons below are why, and they resolved in
+//  opposite directions:
 //
 //    1. ✅ LIFTED. `ScanRecoveryService` used to DELETE a bundle and its
 //       SwiftData row when `manifest.json` failed to decode, which would have
@@ -53,15 +55,18 @@
 //       are QUARANTINED (kept on disk, `.quarantined`, logged), and an unknown
 //       value inside an *optional* instrument key degrades that one key to nil
 //       via `ScanManifest.init(from:)` rather than failing the manifest. A
-//       producer may now write `manifest.scorecard` without risking the scan.
-//    2. Patina holds scan bytes strictly on-device until the user requests
-//       design services (`RoomUploadService.holdLocally`,
-//       `RoomScanPackage.markHeldLocal`). Adding bundle files is a change to
+//       producer may now write `manifest.scorecard` without risking the scan —
+//       and `RoomCaptureService.finalizeInstrumentLane(arSession:)` now does,
+//       via `ScanBundleWriter.applyInstrumentLayer` at seal.
+//    2. STILL STANDS. Patina holds scan bytes strictly on-device until the user
+//       requests design services (`RoomUploadService.holdLocally`,
+//       `RoomScanPackage.markHeldLocal`). Adding bundle FILES is a change to
 //       what eventually leaves the phone, and is the user's call, not this
-//       wave's.
+//       wave's — so there is still no `scorecard.json` and no `anchors.json`.
 //
-//  So the scorecard is produced IN MEMORY and exposed on the service. Persisting
-//  it is the next wave's first task, gated on (1).
+//  The distinction (2) draws is the whole shape of the answer: manifest.json
+//  already ships, so putting the scorecard in it adds no file and no new bytes
+//  of consequence, while writing a sidecar would.
 //
 //  Ceiling + floor are SYNTHESIZED from wall geometry rather than depending on a
 //  specific-iOS `CapturedRoom.floors` shape — see `SurfaceSynthesis`.

@@ -268,18 +268,27 @@ final class RoomCaptureBundleAdapter {
     /// Apply user-supplied review data (annotations, hero selection, photo
     /// ordering, per-photo captions) to the writer, refresh the posed-photo
     /// sidecar, and seal the manifest. Mirrors steps 1–3 of the original
-    /// `finalizeBundleAfterReview`; the façade keeps the public entry point and
-    /// fires `onScanComplete`.
+    /// `finalizeBundleAfterReview`, plus the instrument layer; the façade keeps
+    /// the public entry point and fires `onScanComplete`.
     ///
     /// Purely local. Sealing is what parks a scan in `.heldLocal` — no artifact
     /// registered here (or at freeze) is transmitted until the user asks for
     /// design services and `DesignRequestCoordinator` drives the upload.
+    /// - Parameter instrument: the manifest's instrument layer, snapshotted by
+    ///   `RoomCaptureService.finalizeInstrumentLane(arSession:)` when the
+    ///   session ended. Optional because a bundle whose instrument lane never
+    ///   ran has no honest layer to state, and half a layer is worse than none:
+    ///   the validator's §10.6 cross-checks (`unverified` vs `anchors.count`,
+    ///   `scorecard.anchorCount` vs `anchors.count`) would then fail on
+    ///   INCONSISTENCY rather than absence. A nil here seals exactly the bundle
+    ///   this method sealed before.
     func applyReviewAndSeal(
         writer: ScanBundleWriter,
         annotations: ScanManifest.Annotations,
         heroPhotoId: UUID?,
         reorderedPhotoIds: [UUID],
-        photoAnnotations: [UUID: String]
+        photoAnnotations: [UUID: String],
+        instrument: ScanManifest.InstrumentLayer?
     ) throws {
         // 1. Persist annotations.
         try writer.setAnnotations(annotations)
@@ -306,7 +315,32 @@ final class RoomCaptureBundleAdapter {
             PatinaLog.scan.error("[RoomCaptureService] photos manifest register failed: \(error.localizedDescription)")
         }
 
-        // 4. Seal the manifest (recomputes sizes, hashes artifacts). It does
+        // 4. Fold in the instrument layer — the seven top-level keys
+        //    `validate_capture_bundle.py` §10.2 requires of every v1 bundle
+        //    (`bundleSpecVersion`, `session`, `anchors`, `scorecard`,
+        //    `poseGraphSummary`, `unverified`, `checksumAlgorithm`). A client
+        //    scan that omitted them died at ingest on SCHEMA_VIOLATION, which
+        //    is a PERMANENT_TOKEN: parked on attempt 1, never retried.
+        //
+        //    Immediately before the seal, never after: `finalize` rewrites
+        //    manifest.json from the same in-memory value, so this ordering puts
+        //    the layer in the sealed bytes in one pass, and it is `finalize`
+        //    that computes the sha256s `checksumAlgorithm` is a claim about.
+        //
+        //    Best-effort, deliberately: a scan the user just finished must not
+        //    be lost to a manifest-write failure here. The server's verdict on
+        //    a bundle missing the layer is a parked task; its verdict on a
+        //    bundle that never sealed is nothing at all.
+        if let instrument {
+            do {
+                try writer.applyInstrumentLayer(instrument)
+            } catch {
+                PatinaLog.scan.error(
+                    "[RoomCaptureService] instrument layer write failed: \(error.localizedDescription)")
+            }
+        }
+
+        // 5. Seal the manifest (recomputes sizes, hashes artifacts). It does
         //    NOT list manifest.json as an artifact of itself — the list cannot
         //    contain itself, and the entry could never carry the sha256 the
         //    validator requires. The uploader adds it from
