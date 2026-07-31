@@ -25,6 +25,7 @@
 import { useEffect, useId, useRef } from 'react';
 import type { LucideIcon } from 'lucide-react';
 import { openHelp, type HelpOpenSource } from '@/lib/help-system/open-help';
+import { lockBodyScroll } from './body-scroll-lock';
 
 const FOCUSABLE_SELECTOR = [
   'a[href]:not([tabindex="-1"])',
@@ -35,37 +36,6 @@ const FOCUSABLE_SELECTOR = [
   '[contenteditable="true"]:not([tabindex="-1"])',
   '[tabindex]:not([tabindex="-1"])',
 ].join(',');
-
-let bodyScrollLocks = 0;
-let bodyOverflowBeforeLock = '';
-let bodyPaddingBeforeLock = '';
-
-function lockBodyScroll() {
-  if (bodyScrollLocks === 0) {
-    bodyOverflowBeforeLock = document.body.style.overflow;
-    bodyPaddingBeforeLock = document.body.style.paddingRight;
-
-    const layoutWidth = document.documentElement.clientWidth;
-    const scrollbarWidth =
-      layoutWidth > 0 ? Math.max(0, window.innerWidth - layoutWidth) : 0;
-    if (scrollbarWidth > 0) {
-      const currentPadding =
-        Number.parseFloat(window.getComputedStyle(document.body).paddingRight) ||
-        0;
-      document.body.style.paddingRight = `${currentPadding + scrollbarWidth}px`;
-    }
-    document.body.style.overflow = 'hidden';
-  }
-
-  bodyScrollLocks += 1;
-
-  return () => {
-    bodyScrollLocks = Math.max(0, bodyScrollLocks - 1);
-    if (bodyScrollLocks > 0) return;
-    document.body.style.overflow = bodyOverflowBeforeLock;
-    document.body.style.paddingRight = bodyPaddingBeforeLock;
-  };
-}
 
 function getFocusableElements(panel: HTMLElement) {
   return Array.from(

@@ -1,7 +1,14 @@
 import { useEffect, useState } from 'react';
-import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import {
+  act,
+  fireEvent,
+  render,
+  screen,
+  waitFor,
+} from '@testing-library/react';
 import { DocSpine } from '../doc-spine';
 import { ResponsiveMarginRail } from '../margin-rail';
+import { DocSheet } from '../overlays/doc-sheet';
 import type { SpineSection } from '@/lib/document/section-derivation';
 
 jest.mock('next/link', () => ({
@@ -55,11 +62,9 @@ function NestedSheetFixture() {
       <button type="button" onClick={() => setOpen(true)}>
         Open nested sheet
       </button>
-      {open && (
-        <div role="dialog" aria-label="Nested sheet" tabIndex={-1}>
-          <button type="button">Nested action</button>
-        </div>
-      )}
+      <DocSheet open={open} onClose={() => setOpen(false)} title="Nested sheet">
+        <button type="button">Nested action</button>
+      </DocSheet>
     </>
   );
 }
@@ -73,11 +78,13 @@ function installMatchMedia({
   compact: boolean;
   full: boolean;
 }) {
+  const state = { compact, full };
   const listeners = new Set<MediaListener>();
   window.matchMedia = jest.fn((query: string) => {
-    const matches = query.includes('1440px') ? full : compact;
     return {
-      matches,
+      get matches() {
+        return query.includes('1440px') ? state.full : state.compact;
+      },
       media: query,
       onchange: null,
       addEventListener: (_type: string, listener: MediaListener) =>
@@ -89,10 +96,24 @@ function installMatchMedia({
       dispatchEvent: jest.fn(),
     } as unknown as MediaQueryList;
   });
+
+  return {
+    setMode(next: { compact: boolean; full: boolean }) {
+      state.compact = next.compact;
+      state.full = next.full;
+      listeners.forEach((listener) =>
+        listener({ matches: next.full } as MediaQueryListEvent),
+      );
+    },
+  };
 }
 
 describe('quiet responsive document shell', () => {
-  beforeEach(() => installMatchMedia({ compact: true, full: false }));
+  beforeEach(() => {
+    installMatchMedia({ compact: true, full: false });
+    document.body.style.overflow = '';
+    document.body.style.paddingRight = '';
+  });
 
   it('exposes a compact index at 1180px and the full labelled spine at 1440px', () => {
     const onJump = jest.fn();
@@ -165,6 +186,55 @@ describe('quiet responsive document shell', () => {
     await waitFor(() => expect(trigger).toHaveFocus());
   });
 
+  it('locks background scrolling until Escape, backdrop close, or unmount', async () => {
+    document.body.style.overflow = 'scroll';
+    const { container, unmount } = render(
+      <ResponsiveMarginRail>
+        <p>Margin content</p>
+      </ResponsiveMarginRail>,
+    );
+
+    const trigger = screen.getByRole('button', { name: 'Margin' });
+    fireEvent.click(trigger);
+    expect(document.body.style.overflow).toBe('hidden');
+
+    fireEvent.keyDown(screen.getByRole('dialog', { name: 'In the margin' }), {
+      key: 'Escape',
+    });
+    await waitFor(() => expect(document.body.style.overflow).toBe('scroll'));
+
+    fireEvent.click(trigger);
+    const backdrop = container.querySelector<HTMLButtonElement>(
+      'button[aria-hidden="true"]',
+    );
+    expect(backdrop).not.toBeNull();
+    fireEvent.click(backdrop as HTMLButtonElement);
+    await waitFor(() => expect(document.body.style.overflow).toBe('scroll'));
+
+    fireEvent.click(trigger);
+    expect(document.body.style.overflow).toBe('hidden');
+    unmount();
+    expect(document.body.style.overflow).toBe('scroll');
+  });
+
+  it('restores background scrolling when the sheet settles into the full rail', async () => {
+    document.body.style.overflow = 'scroll';
+    const media = installMatchMedia({ compact: true, full: false });
+    render(
+      <ResponsiveMarginRail>
+        <p>Margin content</p>
+      </ResponsiveMarginRail>,
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: 'Margin' }));
+    expect(document.body.style.overflow).toBe('hidden');
+
+    act(() => media.setMode({ compact: true, full: true }));
+
+    await screen.findByRole('complementary', { name: 'Margin' });
+    await waitFor(() => expect(document.body.style.overflow).toBe('scroll'));
+  });
+
   it('settles the same margin content into a labelled rail on wide screens', async () => {
     installMatchMedia({ compact: true, full: true });
     render(
@@ -199,5 +269,34 @@ describe('quiet responsive document shell', () => {
 
     fireEvent.keyDown(margin, { key: 'Escape' });
     await waitFor(() => expect(margin).toHaveAttribute('aria-hidden', 'true'));
+  });
+
+  it('keeps scrolling locked when a nested sheet survives the full-rail transition', async () => {
+    document.body.style.overflow = 'scroll';
+    const media = installMatchMedia({ compact: true, full: false });
+    render(
+      <ResponsiveMarginRail>
+        <NestedSheetFixture />
+      </ResponsiveMarginRail>,
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: 'Margin' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Open nested sheet' }));
+    expect(document.body.style.overflow).toBe('hidden');
+    expect(screen.getByRole('dialog', { name: 'Nested sheet' })).toBeInTheDocument();
+
+    act(() => media.setMode({ compact: true, full: true }));
+
+    await screen.findByRole('complementary', { name: 'Margin' });
+    expect(screen.getByRole('dialog', { name: 'Nested sheet' })).toBeInTheDocument();
+    expect(document.body.style.overflow).toBe('hidden');
+
+    fireEvent.keyDown(screen.getByRole('button', { name: 'Nested action' }), {
+      key: 'Escape',
+    });
+    await waitFor(() =>
+      expect(screen.queryByRole('dialog', { name: 'Nested sheet' })).not.toBeInTheDocument(),
+    );
+    expect(document.body.style.overflow).toBe('scroll');
   });
 });

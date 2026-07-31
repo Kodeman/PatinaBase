@@ -35,6 +35,7 @@ import { MarginItem } from './margin-item';
 import { MarginItemBody } from './margin-bodies';
 import { MarginNote } from './margin-note';
 import { DocSheet } from './overlays/doc-sheet';
+import { lockBodyScroll } from './overlays/body-scroll-lock';
 import {
   ItemComposer,
   toComposerFfeItems,
@@ -160,6 +161,14 @@ export function ResponsiveMarginRail({ children }: { children: ReactNode }) {
 
   const openAsSheet = isCompactShell && !isFullRail && open;
   const visible = isFullRail || openAsSheet;
+
+  // The compact margin is modal, so it joins the same ref-counted body lock as
+  // any DocSheet opened inside it. Sharing the counter keeps the page locked if
+  // a breakpoint settles the margin into its rail while a nested sheet remains.
+  useEffect(() => {
+    if (!openAsSheet) return;
+    return lockBodyScroll();
+  }, [openAsSheet]);
 
   return (
     <>
