@@ -46,11 +46,11 @@ import { DocSheet } from './doc-sheet';
 type AnyRecord = any;
 
 const labelCls =
-  'font-mono text-[9px] font-semibold uppercase tracking-[0.08em] text-[var(--color-aged-oak)]';
+  'font-mono text-[12px] font-semibold uppercase tracking-[0.08em] text-[var(--color-charcoal)]';
 const fieldCls =
-  'w-full rounded-[4px] border border-[var(--color-pearl)] bg-white px-3 py-2 text-[13px] text-[var(--color-charcoal)] outline-none transition-colors placeholder:italic placeholder:text-[var(--text-faint)] focus:border-[var(--color-clay)]';
+  'min-h-11 w-full rounded-[4px] border border-[var(--color-pearl)] bg-white px-3 py-2 text-[16px] text-[var(--color-charcoal)] outline-none transition-colors placeholder:italic placeholder:text-[var(--text-faint)] focus:border-[var(--color-clay)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-clay)] motion-reduce:transition-none';
 const quietBtnCls =
-  'font-mono text-[9px] uppercase tracking-[0.06em] text-[var(--color-aged-oak)] hover:text-[var(--color-charcoal)]';
+  'inline-flex min-h-11 min-w-11 items-center justify-center font-mono text-[12px] uppercase tracking-[0.06em] text-[var(--text-body)] hover:text-[var(--color-charcoal)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-clay)]';
 
 const fmtMoney = (cents: number) =>
   `$${Math.round(cents / 100).toLocaleString('en-US')}`;
@@ -181,7 +181,7 @@ export function AmendmentSheet({
 
   return (
     <DocSheet open={open} onClose={onClose} title="Amendment">
-      <div className="mx-auto max-w-xl">
+      <div data-overlay-amendment className="mx-auto max-w-xl">
         <p className={labelCls}>
           {project?.name ?? 'Project'} &middot; current {fmtMoney(currentCents)}
         </p>
@@ -196,17 +196,17 @@ export function AmendmentSheet({
               <p className="text-[14px] font-medium text-[var(--color-charcoal)]">
                 {reviewing.title}
               </p>
-              <span className="whitespace-nowrap font-mono text-[9px] uppercase tracking-[0.06em] text-[var(--color-aged-oak)]">
+              <span className="whitespace-nowrap font-mono text-[12px] uppercase tracking-[0.06em] text-[var(--color-charcoal)]">
                 {amendmentStatusWord(reviewing)}
               </span>
             </div>
             {reviewing.description && (
-              <p className="text-[12.5px] leading-relaxed text-[var(--color-mocha)]">
+              <p className="text-[14px] leading-relaxed text-[var(--color-charcoal)]">
                 {reviewing.description}
               </p>
             )}
 
-            <dl className="space-y-1 border-t border-[var(--color-pearl)] pt-3 text-[12px]">
+            <dl className="space-y-1 border-t border-[var(--color-pearl)] pt-3">
               <Row k="Impact" v={amendmentImpactLine(reviewing)} />
               {(reviewing.new_total_budget_cents ?? 0) > 0 && (
                 <Row
@@ -244,14 +244,14 @@ export function AmendmentSheet({
             </dl>
 
             {confirmation && (
-              <p className="text-[12px] text-[rgba(168,181,160,0.9)]">
+              <p className="text-[14px] text-[var(--color-charcoal)]">
                 {confirmation}
               </p>
             )}
             {error && (
               <div
                 role="alert"
-                className="rounded-[4px] border border-[rgba(196,124,92,0.4)] bg-[rgba(196,124,92,0.08)] p-3 text-[12.5px] text-[var(--color-clay)]"
+                className="border-l-2 border-[var(--color-terracotta)] p-3 text-[14px] text-[var(--color-charcoal)]"
               >
                 {error}{' '}
                 <span className="opacity-80">The act is safe to retry.</span>
@@ -325,7 +325,7 @@ export function AmendmentSheet({
               )}
               {(reviewing.status === 'sent' ||
                 reviewing.status === 'viewed') && (
-                <span className="text-[12px] italic text-[var(--color-aged-oak)]">
+                <span className="text-[14px] italic text-[var(--text-body)]">
                   With {family} — it settles here when they answer.
                 </span>
               )}
@@ -349,7 +349,7 @@ export function AmendmentSheet({
         ) : (
           /* ── COMPOSE a new amendment ──────────────────────────────────── */
           <div className="mt-1 space-y-5">
-            <p className="text-[12.5px] leading-relaxed text-[var(--color-mocha)]">
+            <p className="text-[14px] leading-relaxed text-[var(--color-charcoal)]">
               A scope change with its fee and timeline impacts — {family}{' '}
               approve it in their portal, then one act applies it to the
               project.
@@ -382,13 +382,13 @@ export function AmendmentSheet({
               />
             </div>
 
-            <div className="grid grid-cols-2 gap-x-6 gap-y-5">
+            <div className="grid grid-cols-1 gap-x-6 gap-y-5 sm:grid-cols-2">
               <div className="flex flex-col gap-1.5">
                 <label className={labelCls} htmlFor="amendment-ffe">
                   Additional FF&amp;E budget
                 </label>
                 <div className="relative">
-                  <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-[13px] text-[var(--color-aged-oak)]">
+                  <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-[14px] text-[var(--text-body)]">
                     $
                   </span>
                   <input
@@ -406,7 +406,7 @@ export function AmendmentSheet({
                   Additional design fee
                 </label>
                 <div className="relative">
-                  <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-[13px] text-[var(--color-aged-oak)]">
+                  <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-[14px] text-[var(--text-body)]">
                     $
                   </span>
                   <input
@@ -436,9 +436,9 @@ export function AmendmentSheet({
               </div>
               <div className="flex flex-col gap-1.5">
                 <span className={labelCls}>New project total</span>
-                <p className="px-3 py-2 font-mono text-[13px] text-[var(--color-charcoal)]">
+                <p className="min-h-11 px-3 py-2 font-mono text-[14px] text-[var(--color-charcoal)]">
                   {fmtMoney(newTotalCents)}
-                  <span className="ml-2 text-[10px] text-[var(--color-aged-oak)]">
+                  <span className="ml-2 text-[12px] text-[var(--text-body)]">
                     was {fmtMoney(currentCents)}
                   </span>
                 </p>
@@ -451,12 +451,12 @@ export function AmendmentSheet({
               {rooms.map((room, i) => (
                 <div
                   key={`${room.name}-${i}`}
-                  className="flex items-center gap-2 rounded-[4px] border border-[var(--color-pearl)] px-3 py-1.5"
+                  className="flex min-h-11 items-center gap-2 rounded-[4px] border border-[var(--color-pearl)] px-3 py-1.5"
                 >
-                  <span className="flex-1 text-[12.5px] text-[var(--color-charcoal)]">
+                  <span className="flex-1 text-[14px] text-[var(--color-charcoal)]">
                     {room.name}
                   </span>
-                  <span className="font-mono text-[10px] text-[var(--color-aged-oak)]">
+                  <span className="font-mono text-[12px] text-[var(--text-body)]">
                     {fmtMoney(room.budgetCents)}
                   </span>
                   <button
@@ -471,7 +471,7 @@ export function AmendmentSheet({
                   </button>
                 </div>
               ))}
-              <div className="flex gap-2">
+              <div className="flex flex-col gap-2 sm:flex-row">
                 <input
                   value={roomName}
                   onChange={(e) => setRoomName(e.target.value)}
@@ -485,8 +485,8 @@ export function AmendmentSheet({
                   aria-label="New room name"
                   className={`${fieldCls} flex-1`}
                 />
-                <div className="relative w-32">
-                  <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-[13px] text-[var(--color-aged-oak)]">
+                <div className="relative w-full sm:w-32">
+                  <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-[14px] text-[var(--text-body)]">
                     $
                   </span>
                   <input
@@ -514,7 +514,7 @@ export function AmendmentSheet({
             {error && (
               <div
                 role="alert"
-                className="rounded-[4px] border border-[rgba(196,124,92,0.4)] bg-[rgba(196,124,92,0.08)] p-3 text-[12.5px] text-[var(--color-clay)]"
+                className="border-l-2 border-[var(--color-terracotta)] p-3 text-[14px] text-[var(--color-charcoal)]"
               >
                 {error}{' '}
                 <span className="opacity-80">The act is safe to retry.</span>
@@ -571,16 +571,16 @@ export function AmendmentSheet({
                           setError(null);
                           setReviewingId(a.id);
                         }}
-                        className="grid w-full grid-cols-[1fr_auto_auto] items-baseline gap-3 rounded-[3px] px-1.5 py-1 text-left transition-colors hover:bg-[rgba(196,165,123,0.06)]"
+                        className="grid min-h-11 w-full grid-cols-1 items-baseline gap-x-3 gap-y-0.5 px-1.5 py-2 text-left transition-colors hover:text-[var(--color-charcoal)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-clay)] motion-reduce:transition-none sm:grid-cols-[1fr_auto_auto]"
                       >
-                        <span className="truncate text-[12px] text-[var(--color-charcoal)]">
+                        <span className="truncate text-[14px] text-[var(--color-charcoal)]">
                           {a.title}
                         </span>
-                        <span className="whitespace-nowrap font-mono text-[9px] text-[var(--color-aged-oak)]">
+                        <span className="whitespace-nowrap font-mono text-[12px] text-[var(--text-body)]">
                           {amendmentImpactLine(a)}
                         </span>
                         <span
-                          className="whitespace-nowrap font-mono text-[9px] uppercase tracking-[0.05em]"
+                          className="whitespace-nowrap font-mono text-[12px] uppercase tracking-[0.05em]"
                           style={{
                             color:
                               a.status === 'approved' && !a.applied_at
@@ -606,10 +606,10 @@ export function AmendmentSheet({
 function Row({ k, v }: { k: string; v: string }) {
   return (
     <div className="flex items-baseline justify-between gap-4">
-      <dt className="font-mono text-[9px] uppercase tracking-[0.06em] text-[var(--color-aged-oak)]">
+      <dt className="font-mono text-[12px] uppercase tracking-[0.06em] text-[var(--color-charcoal)]">
         {k}
       </dt>
-      <dd className="text-right text-[12px] text-[var(--color-charcoal)]">
+      <dd className="text-right text-[14px] text-[var(--color-charcoal)]">
         {v}
       </dd>
     </div>
