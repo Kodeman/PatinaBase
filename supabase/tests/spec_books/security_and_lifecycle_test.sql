@@ -284,9 +284,38 @@ BEGIN
     WHERE ffe_item_id = '5b000000-0000-4000-8000-000000000501'
   ), 'selection update must advance optimistic row_version';
 
+  -- Compatibility for already-loaded clients from before 00382: those clients
+  -- send exactly the next version while also filtering on the current version.
+  SELECT row_version INTO v_version
+  FROM public.project_ffe_specs
+  WHERE ffe_item_id = '5b000000-0000-4000-8000-000000000501';
+  UPDATE public.project_ffe_specs
+  SET client_notes = 'Approved selection, legacy client.',
+      row_version = v_version + 1
+  WHERE ffe_item_id = '5b000000-0000-4000-8000-000000000501'
+    AND row_version = v_version;
+  ASSERT (
+    SELECT row_version = v_version + 1
+    FROM public.project_ffe_specs
+    WHERE ffe_item_id = '5b000000-0000-4000-8000-000000000501'
+  ), 'legacy next-version payload must be normalized and accepted';
+
+  SELECT row_version INTO v_version
+  FROM public.project_ffe_specs
+  WHERE ffe_item_id = '5b000000-0000-4000-8000-000000000501';
+  v_raised := false;
+  BEGIN
+    UPDATE public.project_ffe_specs
+    SET row_version = v_version + 7
+    WHERE ffe_item_id = '5b000000-0000-4000-8000-000000000501';
+  EXCEPTION WHEN serialization_failure THEN
+    v_raised := true;
+  END;
+  ASSERT v_raised, 'arbitrary row_version payload must remain rejected';
+
   -- A stale expectedRowVersion blocks issue preparation.
   UPDATE public.spec_book_item_settings
-  SET publication_overrides = jsonb_build_object('expectedRowVersion', v_version)
+  SET publication_overrides = jsonb_build_object('expectedRowVersion', v_version - 1)
   WHERE spec_book_id = v_book.id
     AND ffe_item_id = '5b000000-0000-4000-8000-000000000501';
   v_raised := false;

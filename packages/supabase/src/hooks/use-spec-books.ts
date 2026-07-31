@@ -336,7 +336,9 @@ export function useUpdateProjectFfeSpec() {
     }: UpdateProjectFfeSpecInput): Promise<ProjectFfeSpec> => {
       const { data, error } = await getSupabase()
         .from("project_ffe_specs")
-        .update({ ...changes, row_version: expectedRowVersion + 1 })
+        // row_version is database-managed by spec_book_bump_spec_version().
+        // Sending it in the payload is rejected before the trigger can bump it.
+        .update(changes)
         .eq("id", specId)
         .eq("row_version", expectedRowVersion)
         .select("*")
@@ -349,6 +351,8 @@ export function useUpdateProjectFfeSpec() {
       }
       return data as ProjectFfeSpec;
     },
+    // A stale version is a user-visible conflict, not a transient failure.
+    retry: false,
     onSuccess: (_data, { projectId }) => {
       void queryClient.invalidateQueries({
         queryKey: specBookKeys.workbench(projectId),
