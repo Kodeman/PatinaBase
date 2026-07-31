@@ -312,9 +312,29 @@ final class ArtifactUploader {
 
     // MARK: - Artifact → column / storage-path mapping
 
-    /// THE routing table: where a kind's bytes go in Storage, and which
-    /// `room_scans` column records the resulting object key. One switch, so
-    /// the two facts cannot drift apart.
+    /// One kind's disposition, as a single indivisible fact.
+    ///
+    /// `listed` is reachable only through a non-nil `Route`, which is what
+    /// makes "a listed kind is always uploaded" true by construction rather
+    /// than by review — there is no way to spell a listed kind with no folder.
+    nonisolated struct Route {
+        let column: String
+        let folder: String
+        /// May this kind appear in `manifest.artifacts[]`? False only for
+        /// `.bundleManifest` — see `routing(for:)`.
+        let listed: Bool
+
+        init(_ column: String, _ folder: String, listed: Bool = true) {
+            self.column = column
+            self.folder = folder
+            self.listed = listed
+        }
+    }
+
+    /// THE routing table: where a kind's bytes go in Storage, which
+    /// `room_scans` column records the resulting object key, and whether the
+    /// kind may appear in `manifest.artifacts[]`. One switch, so the three
+    /// facts cannot drift apart.
     ///
     /// They used to live in two switches whose comments contradicted each
     /// other about `.depthIndex` / `.photoThumbnails` / `.annotations` — one
@@ -326,7 +346,17 @@ final class ArtifactUploader {
     /// Column and folder are deliberately a single unit: a column holds the
     /// object key of an uploaded object, so a column without an upload is a
     /// permanently-NULL column and an upload without a column is an orphan
-    /// object nothing can find. `nil` means neither — a local-only sidecar.
+    /// object nothing can find. `nil` means neither — a device-local file.
+    ///
+    /// `listed` joined them because a third pairing was just as load-bearing
+    /// and just as unenforced. THE INVARIANT: **the manifest must not list an
+    /// artifact that will not be present in Storage.** The server-side
+    /// validator (`scripts/validate_capture_bundle.py` §10.5, vendored into the
+    /// scan worker's ingest stage) fetches every entry in `artifacts[]` and
+    /// names `MISSING_FILE` when one is absent — and `MISSING_FILE` becomes
+    /// fatal on the second attempt, so a listed-but-unuploaded artifact parks
+    /// the scan permanently. Making `listed` unreadable except off a non-nil
+    /// route means "listed ⟹ routed" holds by construction, not by review.
     ///
     /// The v3 columns (`bundle_manifest_url`, `photos_manifest_url`,
     /// `coverage_heatmap_url`) come from `supabase/migrations/00082_*.sql`.
@@ -334,39 +364,62 @@ final class ArtifactUploader {
     /// migration is applied.
     nonisolated private static func routing(
         for kind: ScanManifest.ArtifactKind
-    ) -> (column: String, folder: String)? {
+    ) -> Route? {
         switch kind {
-        case .usdz:             return ("model_url", "usdz")
-        case .capturedRoomJson: return ("captured_room_json_url", "captured_room")
-        case .worldMap:         return ("world_map_url", "worldmap")
-        case .mesh:             return ("mesh_url", "mesh")
-        case .depthArchive:     return ("depth_archive_url", "depth")
-        case .bundleArchive:    return ("scan_bundle_url", "bundle")
-        case .heroThumbnail:    return ("hero_frame_url", "thumbnails")
-        case .bundleManifest:   return ("bundle_manifest_url", "manifests")
-        case .photosManifest:   return ("photos_manifest_url", "photos_manifest")
-        case .coverageHeatmap:  return ("coverage_heatmap_url", "coverage")
+        case .usdz:             return Route("model_url", "usdz")
+        case .capturedRoomJson: return Route("captured_room_json_url", "captured_room")
+        case .worldMap:         return Route("world_map_url", "worldmap")
+        case .mesh:             return Route("mesh_url", "mesh")
+        case .depthArchive:     return Route("depth_archive_url", "depth")
+        case .bundleArchive:    return Route("scan_bundle_url", "bundle")
+        case .heroThumbnail:    return Route("hero_frame_url", "thumbnails")
+        case .photosManifest:   return Route("photos_manifest_url", "photos_manifest")
+        case .coverageHeatmap:  return Route("coverage_heatmap_url", "coverage")
 
-        // Local-only sidecars: no column, and — the part that used to be
-        // mis-documented — no upload either. `uploadArtifact(...)` guards on
-        // `storagePathComponents(for:)`, and a nil there returns before a
-        // single byte is sent; the orchestrator then marks the artifact
-        // `.skipped`. `scanColumn(for:)` is consulted only AFTER a non-nil
-        // upload result, so it can neither cause nor suppress an upload.
+        // Uploaded, but NEVER listed — the manifest IS the artifact list, and a
+        // list cannot contain itself. The validator requires a 64-hex `sha256`
+        // on every listed artifact (§10.5); no value written into manifest.json
+        // can equal the hash of manifest.json, so a self-entry is unsatisfiable
+        // as such and fails `SCHEMA_VIOLATION` — which is in the worker's
+        // `PERMANENT_TOKENS`, i.e. parked on attempt 1, no retry. It shipped
+        // that way and killed two real client scans (`fa361ed4…`, `d995df8a…`).
         //
-        // Nothing is lost by holding these back — each one's content already
-        // reaches the server inside an artifact that IS uploaded:
+        // Not listing it costs nothing: the server never reaches the manifest
+        // THROUGH `artifacts[]` — ingest resolves it from the
+        // `room_scans.bundle_manifest_url` column and only then reads the
+        // inventory. Field solves it the same way, by construction:
+        // `FieldManifestAssembler.candidates` has no manifest.json entry while
+        // `ScanUploadDescriptor.all` uploads one.
         //
-        // - depthIndex: `depth/depth_index.ndjson` is written, registered, and
-        //   only then is `depth/` zipped into `depth.zip` (`.depthArchive`), so
-        //   the index rides along inside it.
-        // - annotations: `ScanManifest.annotations` is a field of manifest.json,
-        //   uploaded as `.bundleManifest`.
+        // The upload still happens, and the column is still patched, because
+        // `uploadPlan(for:in:)` appends this kind to whatever the manifest
+        // lists — see there for how its (real) sha256 is obtained.
+        case .bundleManifest:   return Route("bundle_manifest_url", "manifests", listed: false)
+
+        // Device-local: no column, no upload — and therefore, by the invariant
+        // above, no `artifacts[]` entry either. `uploadArtifact(...)` guards on
+        // `storagePathComponents(for:)` and a nil there returns before a single
+        // byte is sent; `ScanBundleWriter.upsertArtifact` guards on
+        // `isManifestListed(_:)` and drops the entry before it can be written.
+        //
+        // Nothing is lost by holding these back:
+        //
+        // - depthIndex: `depth/depth_index.ndjson` is written by
+        //   `DepthFrameRecorder` and `depth/` is then zipped into `depth.zip`
+        //   (`.depthArchive`, uploaded, column `depth_archive_url`), so the
+        //   index's bytes reach the server inside the archive. It used to be
+        //   listed and never uploaded: the worker prefix-swapped it to
+        //   `depth/{uid}/{room}/depth_index.ndjson` (keys.KIND_TO_FOLDER),
+        //   404'd, and raised MISSING_FILE.
+        // - annotations: `ScanManifest.annotations` is a FIELD of manifest.json,
+        //   which is uploaded as `.bundleManifest`.
         // - photoThumbnails: every line is `photoId` + `thumbnailRelativePath` +
         //   `sizeBytes`, all three already in `manifest.photos`. More decisive:
         //   the thumbnail FILES are never uploaded (only full-resolution posed
         //   photos are, by `uploadPosedPhotos`), so a thumbnail index in Storage
-        //   would index objects that do not exist.
+        //   would index objects that do not exist — and the worker has no folder
+        //   for the kind at all (`keys.KIND_TO_FOLDER`), so listing it raised
+        //   `KeyResolutionError` → skipped fetch → MISSING_FILE.
         case .depthIndex,
              .photoThumbnails,
              .annotations:
@@ -376,6 +429,16 @@ final class ArtifactUploader {
 
     nonisolated static func scanColumn(for kind: ScanManifest.ArtifactKind) -> String? {
         routing(for: kind)?.column
+    }
+
+    /// Whether this kind may appear in `manifest.artifacts[]`.
+    ///
+    /// False for every kind whose bytes do not reach Storage, and for
+    /// `.bundleManifest`, whose bytes do but which cannot be an entry in the
+    /// list it *is*. `ScanBundleWriter` consults this on the single path by
+    /// which anything enters `manifest.artifacts`.
+    nonisolated static func isManifestListed(_ kind: ScanManifest.ArtifactKind) -> Bool {
+        routing(for: kind)?.listed ?? false
     }
 
     /// What goes in a `room_scans` artifact URL column for an object at
@@ -389,7 +452,7 @@ final class ArtifactUploader {
     nonisolated static func storedReference(forObjectPath path: String) -> String { path }
 
     /// Where this artifact's bytes land in the `room-scans` bucket, or nil for
-    /// a local-only sidecar. `uploadArtifact(...)` guards on this: nil returns
+    /// a device-local file. `uploadArtifact(...)` guards on this: nil returns
     /// before anything is sent. See `routing(for:)` for the table and for why
     /// exactly three kinds are held back.
     ///

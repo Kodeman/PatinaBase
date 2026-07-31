@@ -414,10 +414,15 @@ public nonisolated struct ScanManifest: Codable, Equatable, Sendable {
 
         // v3 additive kinds.
         case coverageHeatmap        // coverage_heatmap.json (XZ grid JSON)
-        case depthIndex             // depth/depth_index.ndjson (per-frame depth index)
-        case photoThumbnails        // photos/photo_thumbnails.ndjson (256px thumb index)
-        case annotations            // annotations.json (user review notes/name/etc.)
-        case bundleManifest         // manifest.json (pointer to existing root manifest)
+        // Not every kind may appear in `artifacts[]`. The list is a promise the
+        // server holds the bundle to — it fetches every entry — so a kind whose
+        // bytes never reach Storage must not be listed. `ArtifactUploader
+        // .isManifestListed(_:)` is the single ruling; `ScanBundleWriter
+        // .upsertArtifact` enforces it on the one path into this array.
+        case depthIndex             // depth/depth_index.ndjson — device-local, rides in depth.zip
+        case photoThumbnails        // photos/photo_thumbnails.ndjson — device-local (thumbs never upload)
+        case annotations            // device-local; the data ships as a manifest FIELD
+        case bundleManifest         // manifest.json — UPLOADED but never listed (it IS the list)
         case photosManifest         // photos/photos_metadata.ndjson (pointer to existing NDJSON)
 
         // NOT YET BROUGHT ACROSS from Field's artifact vocabulary:

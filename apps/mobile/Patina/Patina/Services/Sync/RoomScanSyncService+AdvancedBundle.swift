@@ -171,20 +171,32 @@ extension RoomScanSyncService {
         // 3–4. Seed artifact state + upload artifacts. Small artifacts go
         //      first (fail fast on network issues), large ones run with
         //      bounded concurrency (max 2 in-flight).
+        //
+        // The loop is driven by the upload PLAN, not by `manifest.artifacts`.
+        // The two differ by exactly one entry: manifest.json, which the manifest
+        // cannot list (it is the list — see `ArtifactUploader.routing`) but which
+        // must still be PUT and must still have its key written to
+        // `room_scans.bundle_manifest_url`. That column being NULL is what
+        // parked two real client scans at `MISSING_MANIFEST`. Because the plan
+        // carries `.bundleManifest` as an ordinary entry, the generic
+        // `scanColumn(for:)` PATCH inside `launchArtifactUpload` reaches it with
+        // no special case.
+        let uploadPlan = ArtifactUploader.uploadPlan(for: manifest, in: bundleURL)
+
         var state = package.artifactState
         if state.artifacts.isEmpty {
-            state.artifacts = manifest.artifacts.map { ArtifactUploadState(kind: $0.kind) }
+            state.artifacts = uploadPlan.map { ArtifactUploadState(kind: $0.kind) }
             state.photosTotal = manifest.photos.count
             state.photosUploaded = 0
             package.artifactState = state
         }
 
-        let totalBytes = max(1, manifest.artifacts.reduce(0) { $0 + $1.sizeBytes } +
+        let totalBytes = max(1, uploadPlan.reduce(0) { $0 + $1.sizeBytes } +
                                  manifest.photos.reduce(0) { $0 + $1.sizeBytes })
         let uploadedCounter = UploadedBytesCounter()
 
         try await uploadArtifactsBoundedConcurrency(
-            manifest: manifest,
+            artifacts: uploadPlan,
             bundleURL: bundleURL,
             package: package,
             scanId: package.scanId,
@@ -437,8 +449,11 @@ extension RoomScanSyncService {
     /// Orchestrates the artifact upload loop with small-artifacts-first
     /// ordering and a bounded in-flight window (max 2). A successful upload
     /// bumps the upload_progress column (throttled to ~1Hz).
+    ///
+    /// `artifacts` is the upload PLAN (`ArtifactUploader.uploadPlan`), not the
+    /// manifest's `artifacts[]` — it additionally carries manifest.json itself.
     private func uploadArtifactsBoundedConcurrency(
-        manifest: ScanManifest,
+        artifacts: [ScanManifest.Artifact],
         bundleURL: URL,
         package: RoomScanPackage,
         scanId: UUID,
@@ -447,7 +462,7 @@ extension RoomScanSyncService {
         totalBytes: Int,
         uploadedCounter: UploadedBytesCounter
     ) async throws {
-        let sorted = manifest.artifacts.sorted { $0.sizeBytes < $1.sizeBytes }
+        let sorted = artifacts.sorted { $0.sizeBytes < $1.sizeBytes }
         let maxInFlight = 2
 
         try await withThrowingTaskGroup(of: Void.self) { group in
