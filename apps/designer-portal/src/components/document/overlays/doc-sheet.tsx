@@ -16,19 +16,76 @@
  * DM-mono title + page + "put back · esc") renders when an `icon` is supplied;
  * consumers that already render their own header simply omit it.
  *
- * Built without design-system overlay primitives (DECISIONS.md I5): minimal
- * dialog semantics — Esc, backdrop dismiss, focus in on open / restored on
- * close. Navigation invariant (§3): an overlay, never a route — the surface
- * beneath must not unmount.
+ * Built without design-system overlay primitives (DECISIONS.md I5): labelled
+ * dialog semantics, trapped focus, Esc/backdrop dismiss, scroll isolation,
+ * and focus restoration. Navigation invariant (§3): an overlay, never a route
+ * — the surface beneath must not unmount.
  */
 
-import { useEffect, useRef } from 'react';
+import { useEffect, useId, useRef } from 'react';
 import type { LucideIcon } from 'lucide-react';
 import { openHelp, type HelpOpenSource } from '@/lib/help-system/open-help';
 
+const FOCUSABLE_SELECTOR = [
+  'a[href]:not([tabindex="-1"])',
+  'button:not([disabled]):not([tabindex="-1"])',
+  'input:not([disabled]):not([type="hidden"]):not([tabindex="-1"])',
+  'select:not([disabled]):not([tabindex="-1"])',
+  'textarea:not([disabled]):not([tabindex="-1"])',
+  '[contenteditable="true"]:not([tabindex="-1"])',
+  '[tabindex]:not([tabindex="-1"])',
+].join(',');
+
+let bodyScrollLocks = 0;
+let bodyOverflowBeforeLock = '';
+let bodyPaddingBeforeLock = '';
+
+function lockBodyScroll() {
+  if (bodyScrollLocks === 0) {
+    bodyOverflowBeforeLock = document.body.style.overflow;
+    bodyPaddingBeforeLock = document.body.style.paddingRight;
+
+    const layoutWidth = document.documentElement.clientWidth;
+    const scrollbarWidth =
+      layoutWidth > 0 ? Math.max(0, window.innerWidth - layoutWidth) : 0;
+    if (scrollbarWidth > 0) {
+      const currentPadding =
+        Number.parseFloat(window.getComputedStyle(document.body).paddingRight) ||
+        0;
+      document.body.style.paddingRight = `${currentPadding + scrollbarWidth}px`;
+    }
+    document.body.style.overflow = 'hidden';
+  }
+
+  bodyScrollLocks += 1;
+
+  return () => {
+    bodyScrollLocks = Math.max(0, bodyScrollLocks - 1);
+    if (bodyScrollLocks > 0) return;
+    document.body.style.overflow = bodyOverflowBeforeLock;
+    document.body.style.paddingRight = bodyPaddingBeforeLock;
+  };
+}
+
+function getFocusableElements(panel: HTMLElement) {
+  return Array.from(
+    panel.querySelectorAll<HTMLElement>(FOCUSABLE_SELECTOR),
+  ).filter((element) => {
+    const style = window.getComputedStyle(element);
+    return (
+      !element.hidden &&
+      !element.matches(':disabled') &&
+      element.getAttribute('aria-disabled') !== 'true' &&
+      !element.closest('[hidden], [aria-hidden="true"], [inert]') &&
+      style.display !== 'none' &&
+      style.visibility !== 'hidden'
+    );
+  });
+}
+
 /**
  * The `?` doorway (help-desk Wave 1) — the reactive-help glyph: a quiet
- * DM-mono question mark in aged-oak, no circle, no border, hover → charcoal.
+ * DM-mono question mark in Quiet Ink, no circle, no border, hover → charcoal.
  * Clicking opens the ContextualHelpPanel scoped to `helpKey` via
  * `openHelp({ source, surfaceKey })`. Exported so the ledger front-matter and
  * the court bar render the exact same doorway without re-deriving its idiom.
@@ -52,7 +109,7 @@ export function HelpGlyph({
       type="button"
       aria-label={label}
       onClick={() => openHelp({ source, surfaceKey: helpKey })}
-      className={`shrink-0 rounded-[3px] px-1 font-mono text-[11px] text-[var(--color-aged-oak)] transition-colors hover:text-[var(--color-charcoal)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-clay)] ${className ?? ''}`}
+      className={`doc-type-meta -my-2 inline-flex min-h-11 min-w-11 shrink-0 items-center justify-center rounded-[3px] text-[var(--color-quiet-ink)] transition-colors hover:text-[var(--color-charcoal)] ${className ?? ''}`}
     >
       ?
     </button>
@@ -74,6 +131,7 @@ export function DocSheetHead({
   pageLabel,
   onClose,
   helpKey,
+  titleId,
 }: {
   icon: LucideIcon;
   title: string;
@@ -82,6 +140,8 @@ export function DocSheetHead({
   /** When set, the head carries the `?` doorway → openHelp({ source:
    *  'sheet-head', surfaceKey: helpKey }). */
   helpKey?: string;
+  /** Connects the visible title to an owning dialog's aria-labelledby. */
+  titleId?: string;
 }) {
   return (
     <div className="mb-5 flex items-center justify-between gap-4 border-b border-[var(--color-pearl)] pb-3">
@@ -91,10 +151,10 @@ export function DocSheetHead({
           strokeWidth={1.5}
           aria-hidden
         />
-        <span className="truncate font-mono text-[11px] font-semibold uppercase tracking-[0.14em] text-[var(--color-charcoal)]">
-          {title}
+        <span className="doc-type-meta truncate font-semibold uppercase tracking-[0.14em] text-[var(--color-charcoal)]">
+          <span id={titleId}>{title}</span>
           {pageLabel ? (
-            <span className="font-normal text-[var(--color-aged-oak)]"> · {pageLabel}</span>
+            <span className="font-normal text-[var(--color-quiet-ink)]"> · {pageLabel}</span>
           ) : null}
         </span>
       </span>
@@ -104,14 +164,14 @@ export function DocSheetHead({
           <button
             type="button"
             onClick={onClose}
-            className="shrink-0 font-mono text-[10px] uppercase tracking-[0.1em] text-[var(--color-aged-oak)] transition-colors hover:text-[var(--color-charcoal)]"
+            className="doc-type-meta -my-2 inline-flex min-h-11 shrink-0 items-center px-1 uppercase tracking-[0.1em] text-[var(--color-quiet-ink)] transition-colors hover:text-[var(--color-charcoal)]"
           >
             Put back · Esc
           </button>
         ) : (
           <span
             aria-hidden
-            className="shrink-0 font-mono text-[10px] uppercase tracking-[0.1em] text-[var(--color-aged-oak)]"
+            className="doc-type-meta shrink-0 uppercase tracking-[0.1em] text-[var(--color-quiet-ink)]"
           >
             Put back · Esc
           </span>
@@ -150,6 +210,7 @@ export function DocSheet({
 }) {
   const panelRef = useRef<HTMLDivElement>(null);
   const restoreRef = useRef<HTMLElement | null>(null);
+  const titleId = useId();
 
   // Focus in on open, restore on close. Depends ONLY on `open` — not onClose —
   // so a caller's unstable onClose identity (recreated each render) can't re-run
@@ -157,20 +218,62 @@ export function DocSheet({
   // caller → new onClose → panel.focus() would yank focus out of the input).
   useEffect(() => {
     if (!open) return;
-    restoreRef.current = document.activeElement as HTMLElement | null;
-    panelRef.current?.focus();
+    const activeElement = document.activeElement;
+    restoreRef.current =
+      activeElement instanceof HTMLElement && activeElement !== document.body
+        ? activeElement
+        : null;
+    const unlockBodyScroll = lockBodyScroll();
+    const focusFrame = window.requestAnimationFrame(() => {
+      panelRef.current?.focus({ preventScroll: true });
+    });
+
     return () => {
-      restoreRef.current?.focus?.();
+      window.cancelAnimationFrame(focusFrame);
+      unlockBodyScroll();
+      const focusTarget = restoreRef.current;
+      restoreRef.current = null;
+      if (!focusTarget?.isConnected) return;
+      window.requestAnimationFrame(() => {
+        focusTarget.focus({ preventScroll: true });
+      });
     };
   }, [open]);
 
-  // Esc closes. Re-subscribes if onClose changes (harmless — no focus effect).
+  // Keep keyboard focus on the laid sheet and let Escape put it back.
   useEffect(() => {
     if (!open) return;
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') {
+      if (e.key === 'Escape' && !e.defaultPrevented) {
+        e.preventDefault();
         e.stopPropagation();
         onClose();
+        return;
+      }
+
+      if (e.key !== 'Tab' || e.defaultPrevented) return;
+      const panel = panelRef.current;
+      if (!panel) return;
+      const focusable = getFocusableElements(panel);
+      if (focusable.length === 0) {
+        e.preventDefault();
+        panel.focus({ preventScroll: true });
+        return;
+      }
+
+      const first = focusable[0];
+      const last = focusable[focusable.length - 1];
+      const active = document.activeElement;
+
+      if (active === panel || !panel.contains(active)) {
+        e.preventDefault();
+        (e.shiftKey ? last : first).focus();
+      } else if (!e.shiftKey && active === last) {
+        e.preventDefault();
+        first.focus();
+      } else if (e.shiftKey && active === first) {
+        e.preventDefault();
+        last.focus();
       }
     };
     document.addEventListener('keydown', onKey);
@@ -180,12 +283,13 @@ export function DocSheet({
   if (!open) return null;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto p-4 sm:p-12">
+    <div className="doc-sheet-layer fixed inset-0 z-50 flex items-center justify-center overflow-y-auto overscroll-contain">
       {/* Warm veil over the desk (matches the paper-folio scrim), a backdrop
           button so a click in the margin puts the sheet back. */}
       <button
         type="button"
         aria-label="Close sheet"
+        tabIndex={-1}
         onClick={onClose}
         className="absolute inset-0 h-full w-full cursor-default bg-[rgba(20,18,16,0.55)]"
       />
@@ -193,11 +297,12 @@ export function DocSheet({
         ref={panelRef}
         role="dialog"
         aria-modal="true"
-        aria-label={title}
+        aria-labelledby={titleId}
         tabIndex={-1}
-        className={`relative w-full ${
+        data-doc-sheet-panel
+        className={`doc-sheet-panel relative w-full ${
           wide ? 'max-w-[760px]' : 'max-w-[640px]'
-        } max-h-[82vh] overflow-y-auto rounded-[5px] border border-[var(--color-rule-strong,#D8CCB8)] bg-[var(--doc-paper,#FAF7F2)] px-6 pb-8 pt-6 outline-none motion-safe:animate-[doc-fade_200ms_ease-out] sm:px-9`}
+        } overflow-y-auto rounded-[5px] border border-[var(--color-rule-strong,#D8CCB8)] bg-[var(--doc-paper,#FAF7F2)] px-6 pb-8 pt-6 outline-none sm:px-9`}
       >
         {icon ? (
           <DocSheetHead
@@ -206,8 +311,13 @@ export function DocSheet({
             pageLabel={pageLabel}
             onClose={onClose}
             helpKey={helpKey}
+            titleId={titleId}
           />
-        ) : null}
+        ) : (
+          <h2 id={titleId} className="sr-only">
+            {title}
+          </h2>
+        )}
         {children}
       </div>
     </div>

@@ -41,15 +41,15 @@ const ActionRegionContext = createContext<ActionRegion | null>(null);
    rule is the instruction. So an action is a word with its scoring underneath
    — no border, no fill, no plate. The chrome the eye used to read as "button"
    is gone; what remains is ink (.da-pool, z 0), the word and its two scores
-   (.da-label, z 1), and an unseen 44px halo (.da-hit) that keeps the pointer
-   target honest now that the visible control is ~26px tall.
+   (.da-label, z 1), and an honest 44px control box (.da-act). The invisible
+   .da-hit child is a testable witness to that box, not a simulated hit area.
 
    Everything that moves is triggered by hover/press/focus (R15) and stilled
    under prefers-reduced-motion; the grammar itself lives in globals.css under
    the matching "The Scored Ink (I107)" block. Colour and depth are value only
    — never a shadow (D4). ─────────────────────────────────────────────────── */
 const BASE_CLASS =
-  'da-act relative inline-flex shrink-0 items-center justify-center gap-2 whitespace-nowrap px-[6px] pt-[4px] pb-[10px] font-mono text-[12px] uppercase no-underline disabled:cursor-not-allowed disabled:opacity-50 aria-disabled:cursor-not-allowed aria-disabled:opacity-50';
+  'da-act relative inline-flex min-h-[44px] min-w-[44px] shrink-0 items-center justify-center gap-2 whitespace-nowrap px-[6px] pt-[4px] pb-[10px] font-mono text-[12px] uppercase no-underline disabled:cursor-not-allowed disabled:opacity-50 aria-disabled:cursor-not-allowed aria-disabled:opacity-50';
 
 const VARIANT_CLASS: Record<DocumentActionVariant, string> = {
   primary: 'da-primary font-medium tracking-[0.12em]',
@@ -187,7 +187,7 @@ export const DocumentAction = forwardRef<
           {trailing}
         </span>
       )}
-      {/* the 44px target, unseen: the word is ~26px, the halo is honest */}
+      {/* target witness: CSS makes the interactive parent itself >=44px */}
       <span aria-hidden="true" data-action-hit className="da-hit" />
     </>
   );
