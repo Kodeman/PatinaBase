@@ -7,7 +7,14 @@
  * the R8 placeholder so the full-bleed geometry holds.
  */
 
-import { useEffect, useMemo, useState } from 'react';
+import {
+  useEffect,
+  useId,
+  useMemo,
+  useRef,
+  useState,
+  type ReactNode,
+} from 'react';
 import {
   useProjectFFEItems,
   useProjectParties,
@@ -39,6 +46,191 @@ import {
   DocumentActionGroup,
   DocumentActionRow,
 } from './document-action';
+
+const COMPACT_MARGIN_QUERY = '(min-width: 1180px)';
+const FULL_MARGIN_QUERY = '(min-width: 1440px)';
+const FOCUSABLE_MARGIN_CONTROLS = [
+  'a[href]',
+  'button:not([disabled])',
+  'input:not([disabled])',
+  'select:not([disabled])',
+  'textarea:not([disabled])',
+  '[tabindex]:not([tabindex="-1"])',
+].join(',');
+
+/**
+ * The responsive edge around the margin's existing content.
+ *
+ * At laptop widths the margin is an on-demand paper sheet, keeping the work
+ * canvas intact. At 1440px it settles back into the document grid as the
+ * familiar sticky rail. The content stays mounted across both modes so notes,
+ * open folds, and draft composers do not reset during a resize.
+ */
+export function ResponsiveMarginRail({ children }: { children: ReactNode }) {
+  const [open, setOpen] = useState(false);
+  const [isCompactShell, setIsCompactShell] = useState(false);
+  const [isFullRail, setIsFullRail] = useState(false);
+  const triggerRef = useRef<HTMLButtonElement>(null);
+  const closeRef = useRef<HTMLButtonElement>(null);
+  const panelRef = useRef<HTMLElement>(null);
+  const titleId = useId();
+
+  useEffect(() => {
+    const compactMedia = window.matchMedia(COMPACT_MARGIN_QUERY);
+    const fullMedia = window.matchMedia(FULL_MARGIN_QUERY);
+    const syncMode = () => {
+      setIsCompactShell(compactMedia.matches);
+      setIsFullRail(fullMedia.matches);
+      if (!compactMedia.matches || fullMedia.matches) setOpen(false);
+    };
+
+    syncMode();
+    compactMedia.addEventListener('change', syncMode);
+    fullMedia.addEventListener('change', syncMode);
+    return () => {
+      compactMedia.removeEventListener('change', syncMode);
+      fullMedia.removeEventListener('change', syncMode);
+    };
+  }, []);
+
+  useEffect(() => {
+    if (!open || !isCompactShell || isFullRail) return;
+
+    const panel = panelRef.current;
+    const returnFocusTarget = triggerRef.current;
+    const focusFrame = window.requestAnimationFrame(() =>
+      closeRef.current?.focus(),
+    );
+    const onKeyDown = (event: KeyboardEvent) => {
+      const nestedDialogs = panel
+        ? Array.from(panel.querySelectorAll<HTMLElement>('[role="dialog"]'))
+        : [];
+      const nestedDialog = nestedDialogs[nestedDialogs.length - 1];
+
+      if (event.key === 'Escape') {
+        // A composer or ledger opened from the margin owns Escape first.
+        // Its bubble-phase listener closes it; the margin remains in place.
+        if (nestedDialog) return;
+        event.preventDefault();
+        event.stopPropagation();
+        setOpen(false);
+        return;
+      }
+
+      if (event.key !== 'Tab' || !panel) return;
+      const focusScope = nestedDialog ?? panel;
+      const controls = Array.from(
+        focusScope.querySelectorAll<HTMLElement>(FOCUSABLE_MARGIN_CONTROLS),
+      ).filter((control) => !control.hasAttribute('disabled'));
+      if (controls.length === 0) {
+        event.preventDefault();
+        focusScope.focus();
+        return;
+      }
+
+      const first = controls[0];
+      const last = controls[controls.length - 1];
+      if (
+        document.activeElement === focusScope ||
+        !focusScope.contains(document.activeElement)
+      ) {
+        event.preventDefault();
+        (event.shiftKey ? last : first).focus();
+      } else if (event.shiftKey && document.activeElement === first) {
+        event.preventDefault();
+        last.focus();
+      } else if (!event.shiftKey && document.activeElement === last) {
+        event.preventDefault();
+        first.focus();
+      }
+    };
+
+    document.addEventListener('keydown', onKeyDown, true);
+    return () => {
+      window.cancelAnimationFrame(focusFrame);
+      document.removeEventListener('keydown', onKeyDown, true);
+      if (
+        window.matchMedia(COMPACT_MARGIN_QUERY).matches &&
+        !window.matchMedia(FULL_MARGIN_QUERY).matches
+      ) {
+        window.requestAnimationFrame(() => returnFocusTarget?.focus());
+      }
+    };
+  }, [isCompactShell, isFullRail, open]);
+
+  const openAsSheet = isCompactShell && !isFullRail && open;
+  const visible = isFullRail || openAsSheet;
+
+  return (
+    <>
+      <button
+        ref={triggerRef}
+        type="button"
+        aria-controls={`${titleId}-panel`}
+        aria-expanded={openAsSheet}
+        onClick={() => setOpen(true)}
+        data-margin-trigger
+        className="group fixed right-0 top-28 z-[30] hidden min-h-11 min-w-11 items-center gap-2 rounded-l-[4px] border border-r-0 border-[var(--color-pearl)] bg-[rgba(250,247,242,0.96)] px-3 font-mono text-[12px] font-semibold uppercase tracking-[0.08em] text-[var(--color-charcoal)] hover:text-[var(--color-clay)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-clay)] min-[1180px]:inline-flex min-[1440px]:hidden"
+      >
+        <span className="da-score-hover group-hover:after:scale-x-100 group-focus-visible:after:scale-x-100">
+          Margin
+        </span>
+        <span aria-hidden>←</span>
+      </button>
+
+      {openAsSheet && (
+        <button
+          type="button"
+          aria-hidden
+          tabIndex={-1}
+          onClick={() => setOpen(false)}
+          className="fixed inset-0 z-[31] hidden cursor-default bg-[rgba(44,40,37,0.08)] min-[1180px]:block min-[1440px]:hidden"
+        />
+      )}
+
+      <aside
+        ref={panelRef}
+        id={`${titleId}-panel`}
+        role={openAsSheet ? 'dialog' : undefined}
+        aria-modal={openAsSheet ? true : undefined}
+        aria-label={isFullRail ? 'Margin' : undefined}
+        aria-labelledby={openAsSheet ? titleId : undefined}
+        aria-hidden={!visible}
+        inert={!visible ? true : undefined}
+        tabIndex={openAsSheet ? -1 : undefined}
+        data-margin-panel
+        data-margin-mode={isFullRail ? 'rail' : 'sheet'}
+        className={`z-[32] hidden border-[var(--color-pearl)] bg-[rgba(250,247,242,0.98)] motion-safe:transition-transform motion-safe:duration-200 motion-reduce:transition-none min-[1180px]:fixed min-[1180px]:inset-y-0 min-[1180px]:right-0 min-[1180px]:block min-[1180px]:h-screen min-[1180px]:w-[min(360px,calc(100vw-56px))] min-[1180px]:overflow-y-auto min-[1180px]:border-l min-[1440px]:sticky min-[1440px]:top-0 min-[1440px]:col-start-3 min-[1440px]:h-screen min-[1440px]:w-auto min-[1440px]:translate-x-0 min-[1440px]:overflow-y-auto min-[1440px]:bg-[rgba(250,247,242,0.55)] ${
+          openAsSheet
+            ? 'min-[1180px]:translate-x-0 min-[1180px]:pointer-events-auto'
+            : 'min-[1180px]:translate-x-full min-[1180px]:pointer-events-none min-[1440px]:pointer-events-auto'
+        }`}
+      >
+        <div className="sticky top-0 z-[1] flex min-h-14 items-center justify-between border-b border-[var(--color-pearl)] bg-[var(--doc-paper)] px-4 min-[1440px]:hidden">
+          <p
+            id={titleId}
+            className="font-mono text-[12px] font-semibold uppercase tracking-[0.08em] text-[var(--color-charcoal)]"
+          >
+            In the margin
+          </p>
+          <button
+            ref={closeRef}
+            type="button"
+            onClick={() => setOpen(false)}
+            aria-label="Close margin"
+            data-margin-close
+            className="group inline-flex min-h-11 min-w-11 items-center justify-center font-mono text-[12px] uppercase tracking-[0.08em] text-[var(--color-charcoal)] hover:text-[var(--color-clay)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-clay)]"
+          >
+            <span className="da-score-hover group-hover:after:scale-x-100 group-focus-visible:after:scale-x-100">
+              Close
+            </span>
+          </button>
+        </div>
+        <div className="px-4 pb-24 pt-4 min-[1440px]:pt-6">{children}</div>
+      </aside>
+    </>
+  );
+}
 
 export function MarginRail({
   projectId,
@@ -189,7 +381,7 @@ export function MarginRail({
         </MarginNote>
       )}
       <div className="mb-3 flex items-baseline justify-between">
-        <p className="font-mono text-[9px] font-semibold uppercase tracking-[0.08em] text-[var(--text-muted)]">
+        <p className="font-mono text-[12px] font-semibold uppercase tracking-[0.08em] text-[var(--color-charcoal)]">
           In the margin
         </p>
         <DocumentActionGroup
@@ -223,7 +415,7 @@ export function MarginRail({
             type="button"
             aria-expanded={draftsOpen}
             onClick={() => setDraftsOpen((v) => !v)}
-            className="group mb-1 inline-flex min-h-11 min-w-11 items-center font-mono text-[9px] font-semibold uppercase tracking-[0.08em] text-[var(--text-muted)] transition-colors hover:text-[var(--color-charcoal)] focus-visible:text-[var(--color-charcoal)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-clay)] motion-reduce:transition-none"
+            className="group mb-1 inline-flex min-h-11 min-w-11 items-center font-mono text-[12px] font-semibold uppercase tracking-[0.08em] text-[var(--color-charcoal)] transition-colors hover:text-[var(--color-clay)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-clay)] motion-reduce:transition-none"
           >
             <span className="da-score-hover group-hover:after:scale-x-100 group-focus-visible:after:scale-x-100">
               Drafts · {draftItems.length} {draftsOpen ? '↑' : '↓'}
@@ -236,10 +428,10 @@ export function MarginRail({
                   key={d.id}
                   type="button"
                   onClick={() => setComposer({ mode: 'edit', item: d })}
-                  className="group flex min-h-11 min-w-11 items-center gap-2 px-2 py-1.5 text-left text-[11px] text-[var(--color-charcoal)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-clay)]"
+                  className="group flex min-h-11 min-w-11 items-center gap-2 px-2 py-1.5 text-left text-[14px] text-[var(--color-charcoal)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-clay)]"
                 >
                   <span
-                    className="inline-block rounded-[2px] border px-1 py-px font-mono text-[7.5px] font-semibold uppercase tracking-[0.04em] text-[var(--color-aged-oak)]"
+                    className="inline-block rounded-[2px] border px-1 py-px font-mono text-[12px] font-semibold uppercase tracking-[0.04em] text-[var(--color-charcoal)]"
                     style={{ borderColor: 'var(--color-pearl)' }}
                   >
                     {itemTypeToken(d.coordination_kind).label}
@@ -247,7 +439,7 @@ export function MarginRail({
                   <span className="flex-1 truncate">
                     {d.title || 'Untitled draft'}
                   </span>
-                  <span className="da-score-hover font-mono text-[8px] uppercase tracking-[0.05em] text-[var(--text-muted)] transition-colors group-hover:text-[var(--color-charcoal)] group-hover:after:scale-x-100 group-focus-visible:text-[var(--color-charcoal)] group-focus-visible:after:scale-x-100 motion-reduce:transition-none">
+                  <span className="da-score-hover font-mono text-[12px] uppercase tracking-[0.05em] text-[var(--color-charcoal)] transition-colors group-hover:text-[var(--color-clay)] group-hover:after:scale-x-100 group-focus-visible:after:scale-x-100 motion-reduce:transition-none">
                     edit
                   </span>
                 </button>
@@ -269,7 +461,7 @@ export function MarginRail({
               noteAnchorLine ? 'Note on this line…' : 'Note to the margin…'
             }
             aria-label="Note body"
-            className="w-full resize-none rounded-[4px] border border-[var(--color-pearl)] bg-[var(--doc-paper)] px-2 py-1.5 text-[11px] text-[var(--color-charcoal)] focus:border-[var(--color-clay)] focus:outline-none"
+            className="w-full resize-none rounded-[4px] border border-[var(--color-pearl)] bg-[var(--doc-paper)] px-2 py-1.5 text-[16px] leading-relaxed text-[var(--color-charcoal)] focus:border-[var(--color-clay)] focus:outline-none"
             value={noteBody}
             onChange={(e) => setNoteBody(e.target.value)}
             onKeyDown={(e) => {
@@ -285,7 +477,7 @@ export function MarginRail({
             <input
               type="date"
               aria-label="Note due date (optional)"
-              className="rounded-[4px] border border-[var(--color-pearl)] bg-[var(--doc-paper)] px-2 py-1 text-[10px] text-[var(--color-charcoal)] focus:border-[var(--color-clay)] focus:outline-none"
+              className="rounded-[4px] border border-[var(--color-pearl)] bg-[var(--doc-paper)] px-2 py-1 text-[16px] text-[var(--color-charcoal)] focus:border-[var(--color-clay)] focus:outline-none"
               value={noteDue}
               onChange={(e) => setNoteDue(e.target.value)}
             />
@@ -314,7 +506,7 @@ export function MarginRail({
       )}
 
       {!isLoading && (items ?? []).length === 0 && (
-        <p className="text-[11px] italic leading-relaxed text-[var(--text-muted)]">
+        <p className="text-[14px] italic leading-relaxed text-[var(--color-charcoal)]">
           The margin — decisions, messages, and money gather here
         </p>
       )}
@@ -329,7 +521,7 @@ export function MarginRail({
             type="button"
             aria-expanded={settledOpen}
             onClick={() => setSettledOpen((v) => !v)}
-            className="group mb-1.5 inline-flex min-h-11 min-w-11 items-center font-mono text-[9px] font-semibold uppercase tracking-[0.08em] text-[var(--text-muted)] transition-colors hover:text-[var(--color-charcoal)] focus-visible:text-[var(--color-charcoal)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-clay)] motion-reduce:transition-none"
+            className="group mb-1.5 inline-flex min-h-11 min-w-11 items-center font-mono text-[12px] font-semibold uppercase tracking-[0.08em] text-[var(--color-charcoal)] transition-colors hover:text-[var(--color-clay)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-clay)] motion-reduce:transition-none"
           >
             <span className="da-score-hover group-hover:after:scale-x-100 group-focus-visible:after:scale-x-100">
               Settled · {settled.length} {settledOpen ? '↑' : '↓'}
