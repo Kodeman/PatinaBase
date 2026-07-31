@@ -1,8 +1,8 @@
 'use client';
 
 /**
- * LibraryShelf — one of the Library's three shelves (R32/R39), separated by a
- * Strata rule. Reads its own layer from the real catalog (useLayerProducts);
+ * LibraryShelf — the Library's currently selected shelf (R32/R39), separated
+ * by a Strata rule. Reads its own layer from the real catalog (useLayerProducts);
  * no mock data. My Library = raw captures, Studio = proven, Patina Catalog =
  * the marketplace. The header is Playfair-italic (typography-first, never tabs).
  */
@@ -15,7 +15,8 @@ export function LibraryShelf({
   layer,
   name,
   meta,
-  actions,
+  id,
+  labelledBy,
   teachingIds,
   validationIds,
   onDeep,
@@ -25,7 +26,8 @@ export function LibraryShelf({
   layer: LayerProductLayer;
   name: string;
   meta?: string;
-  actions?: React.ReactNode;
+  id: string;
+  labelledBy: string;
   teachingIds: Set<string>;
   /** Pieces in the validation queue (needs_validation) — get the validate lens. */
   validationIds?: Set<string>;
@@ -37,17 +39,23 @@ export function LibraryShelf({
   const items = data ?? [];
 
   return (
-    <section className="pt-9 first:pt-2" aria-label={name}>
+    <section
+      id={id}
+      role="tabpanel"
+      aria-labelledby={labelledBy}
+      tabIndex={0}
+      data-library-shelf={layer}
+      className="pt-6 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-[var(--color-clay)]"
+    >
       <div className="mb-1 flex flex-wrap items-baseline gap-x-3.5 gap-y-1">
         <h2 className="font-heading text-[1.5rem] font-medium italic text-[var(--color-charcoal)]">
           {name}
         </h2>
         {meta && (
-          <span className="font-mono text-[9px] uppercase tracking-[0.06em] text-[var(--color-aged-oak)]">
+          <span className="font-mono text-[12px] uppercase tracking-[0.06em] text-[var(--color-charcoal)]">
             {meta}
           </span>
         )}
-        {actions && <span className="ml-auto flex items-center gap-4">{actions}</span>}
       </div>
 
       {/* The Strata rule that separates shelves. */}
@@ -60,20 +68,20 @@ export function LibraryShelf({
       {isLoading && (
         <div className="flex items-center gap-2 py-6">
           <StrataSweep size="sm" label={`Reading ${name}`} />
-          <span className="font-mono text-[10px] uppercase tracking-[0.08em] text-[var(--color-aged-oak)] opacity-60">
+          <span className="font-mono text-[12px] uppercase tracking-[0.08em] text-[var(--color-charcoal)]">
             reading the shelf…
           </span>
         </div>
       )}
 
       {isError && (
-        <p className="py-6 text-[13px] italic text-[var(--text-muted)]">
+        <p className="py-6 text-[14px] italic text-[var(--color-charcoal)]">
           This shelf could not be read just now.
         </p>
       )}
 
       {!isLoading && !isError && items.length === 0 && (
-        <p className="py-6 font-heading text-[14px] italic text-[var(--text-muted)]">
+        <p className="py-6 font-heading text-[14px] italic text-[var(--color-charcoal)]">
           {layer === 'personal'
             ? 'Nothing captured yet. Bring something in — it lands here, raw.'
             : 'This shelf is empty.'}
