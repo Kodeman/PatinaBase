@@ -5,7 +5,8 @@
  * timer); the drawer is the desk's book list (its six books open the
  * existing charcoal DocSheet ledgers via the open-ledger event — Library,
  * People, and Rooms are Rooms, so the same event walks them in instead). One
- * scrim, scrim-tap dismiss; no shadows (D4). Shown below 980px only.
+ * scrim, scrim-tap dismiss; no shadows (D4). Shown below 1180px, matching
+ * the responsive paper-shell handoff.
  */
 
 import { useEffect, useMemo, useState } from 'react';
@@ -93,7 +94,7 @@ function Sheet({
 }) {
   return (
     <div
-      className="fixed inset-0 z-[58] min-[980px]:hidden"
+      className="fixed inset-0 z-[58] min-[1180px]:hidden"
       role="dialog"
       aria-modal="true"
     >
@@ -156,7 +157,7 @@ export function MobileSheets() {
           The drawer{' '}
           <em className="italic text-[var(--color-clay)]">· six books</em>
         </h2>
-        <p className="mt-0.5 text-[11.5px] text-[rgba(250,247,242,0.45)]">
+        <p className="mt-0.5 text-[14px] text-[rgba(250,247,242,0.58)]">
           Pulled over whatever you&apos;re holding. Put back when done.
         </p>
         <ul className="mt-2">
@@ -187,18 +188,18 @@ export function MobileSheets() {
                   />
                 )}
                 <span className="min-w-0 flex-1">
-                  <span className="block font-heading text-[13px] font-medium text-[rgba(250,247,242,0.9)]">
+                  <span className="block font-heading text-[14px] font-medium text-[rgba(250,247,242,0.9)]">
                     {l.name}
                     {l.weight === 'room' && (
                       <span
                         aria-hidden
-                        className="ml-1.5 font-mono text-[11px] text-[var(--color-clay)] opacity-70"
+                        className="ml-1.5 font-mono text-[12px] text-[var(--color-clay)] opacity-70"
                       >
                         ↗
                       </span>
                     )}
                   </span>
-                  <span className="block font-mono text-[8.5px] uppercase tracking-[0.05em] text-[rgba(250,247,242,0.4)]">
+                  <span className="block font-mono text-[12px] uppercase tracking-[0.05em] text-[rgba(250,247,242,0.58)]">
                     {l.count}
                   </span>
                 </span>
@@ -230,7 +231,7 @@ export function MobileSheets() {
             closeSheet();
             router.push('/desk');
           }}
-          className="block w-full border-b border-[var(--color-pearl)] py-2 text-left font-mono text-[10px] uppercase tracking-[0.08em] text-[var(--color-aged-oak)]"
+          className="block min-h-11 w-full border-b border-[var(--color-pearl)] py-2 text-left font-mono text-[12px] uppercase tracking-[0.08em] text-[var(--color-aged-oak)]"
         >
           ← Put down · back to the Desk
         </button>
@@ -245,7 +246,7 @@ export function MobileSheets() {
                 />
                 <span className={s.state === 'future' ? 'opacity-45' : ''}>
                   <span
-                    className={`block text-[13px] ${
+                    className={`block text-[14px] ${
                       s.state === 'active'
                         ? 'font-semibold text-[var(--color-charcoal)]'
                         : s.state === 'settled'
@@ -255,7 +256,7 @@ export function MobileSheets() {
                   >
                     {s.label}
                   </span>
-                  <span className="block font-mono text-[8.5px] uppercase tracking-[0.05em] text-[var(--text-muted)]">
+                  <span className="block font-mono text-[12px] uppercase tracking-[0.05em] text-[var(--text-muted)]">
                     {s.sub}
                   </span>
                 </span>
@@ -291,7 +292,7 @@ export function MobileSheets() {
         {/* R25: room headings as jump rows — tap lands on the heading. */}
         {(activeDoc?.rooms ?? []).length > 0 && (
           <>
-            <p className="mt-3 border-t border-[var(--color-pearl)] pt-2.5 font-mono text-[9px] font-semibold uppercase tracking-[0.1em] text-[var(--color-aged-oak)]">
+            <p className="mt-3 border-t border-[var(--color-pearl)] pt-2.5 font-mono text-[12px] font-semibold uppercase tracking-[0.1em] text-[var(--color-aged-oak)]">
               Rooms
             </p>
             <ul className="mt-1">
@@ -318,11 +319,11 @@ export function MobileSheets() {
           </>
         )}
 
-        <p className="mt-3 border-t border-[var(--color-pearl)] pt-2.5 font-mono text-[9px] font-semibold uppercase tracking-[0.1em] text-[var(--color-aged-oak)]">
+        <p className="mt-3 border-t border-[var(--color-pearl)] pt-2.5 font-mono text-[12px] font-semibold uppercase tracking-[0.1em] text-[var(--color-aged-oak)]">
           In the margin · {raised.length}
         </p>
         {open.length === 0 ? (
-          <p className="py-1.5 text-[11px] italic text-[var(--text-muted)]">
+          <p className="py-1.5 text-[14px] italic text-[var(--text-muted)]">
             The margin — decisions, messages, and money gather here.
           </p>
         ) : (
@@ -338,12 +339,12 @@ export function MobileSheets() {
                   }}
                 >
                   <span
-                    className="mt-px shrink-0 font-mono text-[8px] font-semibold uppercase tracking-[0.06em]"
+                    className="mt-px shrink-0 font-mono text-[12px] font-semibold uppercase tracking-[0.06em]"
                     style={{ color: marginAccent(row.kind).label }}
                   >
                     {deriveKindLine(row)}
                   </span>
-                  <span className="text-[11.5px] leading-snug text-[var(--color-charcoal)]">
+                  <span className="text-[14px] leading-snug text-[var(--color-charcoal)]">
                     {row.title}
                   </span>
                 </button>
@@ -366,7 +367,7 @@ export function MobileSheets() {
     return (
       <Sheet tone="paper" onClose={closeSheet}>
         <span
-          className="mb-1 block font-mono text-[9px] font-semibold uppercase tracking-[0.08em]"
+          className="mb-1 block font-mono text-[12px] font-semibold uppercase tracking-[0.08em]"
           style={{ color: marginAccent(row.kind).label }}
         >
           {deriveKindLine(row)}
@@ -415,7 +416,7 @@ function MobileTimerSheet() {
 
   return (
     <div>
-      <span className="font-mono text-[10px] font-semibold uppercase tracking-[0.08em] text-[var(--color-clay)]">
+      <span className="font-mono text-[12px] font-semibold uppercase tracking-[0.08em] text-[var(--color-clay)]">
         In hand{paused ? ' · paused' : ''}
       </span>
       <p className="mb-2 mt-1 font-mono text-[26px] tracking-[0.04em] text-[var(--color-charcoal)]">
@@ -500,7 +501,7 @@ function MobileTimerSheet() {
           </DocumentActionRow>
         </div>
       )}
-      <p className="mt-3 text-[11px] italic text-[var(--text-muted)]">
+      <p className="mt-3 text-[14px] italic text-[var(--text-muted)]">
         Pick up = clock in. Put down = you decide what logs. Nothing bills
         itself.
       </p>

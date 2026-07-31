@@ -1,12 +1,49 @@
-import { useState } from 'react';
 import { fireEvent, render, screen } from '@testing-library/react';
 import { MobileActionDock } from './mobile-action-dock';
+import { MobileBar } from './mobile-bar';
 import {
   MobileShellProvider,
   useMobilePrimaryAction,
-  useMobileShell,
   type MobilePrimaryAction,
 } from './mobile-shell';
+import { openFeedbackSheet } from '../feedback/feedback-sheet';
+
+const mockOpenPost = jest.fn();
+let mockPathname = '/desk';
+let mockUnseenFeedback: Array<{ id: string }> = [];
+let mockTimeState = {
+  inHandToday: 0,
+  running: false,
+  paused: false,
+  elapsedSeconds: 0,
+  offer: null as null | { id: string },
+};
+
+jest.mock('next/navigation', () => ({
+  usePathname: () => mockPathname,
+}));
+
+jest.mock('@patina/supabase', () => ({
+  useUnreadInboxCount: () => ({ data: 1 }),
+  useProcurementUnreadCount: () => ({ data: 2 }),
+  useUnseenShipped: () => ({ data: mockUnseenFeedback }),
+}));
+
+jest.mock('@/hooks/use-hydrated', () => ({
+  useHydrated: () => true,
+}));
+
+jest.mock('@/hooks/document-time-provider', () => ({
+  useDocumentTime: () => mockTimeState,
+}));
+
+jest.mock('../overlays/post-sheet', () => ({
+  openPost: () => mockOpenPost(),
+}));
+
+jest.mock('../feedback/feedback-sheet', () => ({
+  openFeedbackSheet: jest.fn(),
+}));
 
 jest.mock('@/lib/analytics/document-events', () => ({
   documentEvents: {
@@ -15,43 +52,29 @@ jest.mock('@/lib/analytics/document-events', () => ({
   },
 }));
 
-function Registration({
-  action,
-  priority = 0,
-}: {
-  action: MobilePrimaryAction | null;
-  priority?: number;
-}) {
-  useMobilePrimaryAction(action, { priority });
+function Registration({ action }: { action: MobilePrimaryAction | null }) {
+  useMobilePrimaryAction(action);
   return null;
 }
 
-function SheetControl() {
-  const { openDrawer, closeSheet } = useMobileShell();
-  return (
-    <>
-      <button onClick={openDrawer}>Open sheet</button>
-      <button onClick={closeSheet}>Close sheet</button>
-    </>
-  );
-}
-
-function StatefulRegistration() {
-  const [ready, setReady] = useState(false);
-  useMobilePrimaryAction({
-    actionKey: ready ? 'send' : 'draft',
-    surfaceKey: 'drafting',
-    regionKey: 'room-head',
-    label: ready ? 'Send proposal' : 'Continue drafting',
-    target: { kind: 'press', onPress: () => undefined },
+describe('unified mobile edge owner', () => {
+  beforeEach(() => {
+    mockPathname = '/desk';
+    mockUnseenFeedback = [];
+    mockTimeState = {
+      inHandToday: 0,
+      running: false,
+      paused: false,
+      elapsedSeconds: 0,
+      offer: null,
+    };
+    mockOpenPost.mockClear();
+    jest.mocked(openFeedbackSheet).mockClear();
   });
-  return <button onClick={() => setReady(true)}>Ready</button>;
-}
 
-describe('MobileActionDock', () => {
-  it('registers a press action, updates it, and reserves safe-area clearance', () => {
+  it('renders the registered primary action in one bar and no second dock', () => {
     const press = jest.fn();
-    const { rerender } = render(
+    render(
       <MobileShellProvider>
         <Registration
           action={{
@@ -63,132 +86,91 @@ describe('MobileActionDock', () => {
           }}
         />
         <MobileActionDock />
+        <MobileBar />
       </MobileShellProvider>,
     );
 
-    const dock = screen.getByTestId('mobile-action-dock');
-    expect(dock).toHaveClass('min-[980px]:hidden');
-    expect(
-      screen.getByTestId('mobile-action-dock-clearance').className,
-    ).toContain('safe-area-inset-bottom');
-    fireEvent.click(screen.getByRole('button', { name: 'Capture a lead' }));
+    expect(screen.queryByTestId('mobile-action-dock')).not.toBeInTheDocument();
+    expect(screen.getByTestId('mobile-bar')).toHaveAttribute(
+      'data-mobile-edge-owner',
+      'document-bar',
+    );
+    expect(screen.getByTestId('mobile-bar')).toHaveClass('min-[1180px]:hidden');
+
+    const primary = screen.getByRole('button', { name: 'Capture a lead' });
+    expect(primary).toHaveAttribute('data-action-key', 'capture');
+    expect(primary).toHaveClass('min-h-11');
+    fireEvent.click(primary);
     expect(press).toHaveBeenCalledTimes(1);
-
-    rerender(
-      <MobileShellProvider>
-        <Registration
-          action={{
-            actionKey: 'open',
-            surfaceKey: 'desk',
-            regionKey: 'desk-head',
-            label: 'Open a project',
-            target: { kind: 'press', onPress: press },
-          }}
-        />
-        <MobileActionDock />
-      </MobileShellProvider>,
-    );
-    expect(
-      screen.getByRole('button', { name: 'Open a project' }),
-    ).toBeInTheDocument();
   });
 
-  it('uses the highest-priority active registration and falls back on cleanup', () => {
-    const { rerender } = render(
-      <MobileShellProvider>
-        <Registration
-          action={{
-            actionKey: 'message',
-            surfaceKey: 'document',
-            regionKey: 'letterhead',
-            label: 'Message the family',
-            target: { kind: 'press', onPress: () => undefined },
-          }}
-        />
-        <Registration
-          priority={10}
-          action={{
-            actionKey: 'send',
-            surfaceKey: 'document',
-            regionKey: 'proposal',
-            label: 'Send proposal',
-            target: { kind: 'press', onPress: () => undefined },
-          }}
-        />
-        <MobileActionDock />
-      </MobileShellProvider>,
-    );
-    expect(
-      screen.getByRole('button', { name: 'Send proposal' }),
-    ).toBeInTheDocument();
-
-    rerender(
-      <MobileShellProvider>
-        <Registration
-          action={{
-            actionKey: 'message',
-            surfaceKey: 'document',
-            regionKey: 'letterhead',
-            label: 'Message the family',
-            target: { kind: 'press', onPress: () => undefined },
-          }}
-        />
-        <MobileActionDock />
-      </MobileShellProvider>,
-    );
-    expect(
-      screen.getByRole('button', { name: 'Message the family' }),
-    ).toBeInTheDocument();
-  });
-
-  it('updates lifecycle state and suppresses the dock while a shell sheet is open', () => {
+  it('keeps secondary doorways in an accessible More disclosure', () => {
     render(
       <MobileShellProvider>
-        <StatefulRegistration />
-        <SheetControl />
-        <MobileActionDock />
+        <MobileBar />
       </MobileShellProvider>,
     );
 
+    const more = screen.getByRole('button', { name: 'More studio actions' });
+    expect(more).toHaveClass('min-h-11', 'min-w-11');
+    fireEvent.click(more);
+
     expect(
-      screen.getByRole('button', { name: 'Continue drafting' }),
+      screen.getByRole('group', { name: 'More studio actions' }),
     ).toBeInTheDocument();
-    fireEvent.click(screen.getByRole('button', { name: 'Ready' }));
+    const time = screen.getByRole('button', { name: /Time in hand/i });
+    expect(time).toHaveFocus();
     expect(
-      screen.getByRole('button', { name: 'Send proposal' }),
+      screen.getByRole('button', { name: /The Post/i }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole('button', { name: 'Studio books' }),
     ).toBeInTheDocument();
 
-    fireEvent.click(screen.getByRole('button', { name: 'Open sheet' }));
-    expect(screen.queryByTestId('mobile-action-dock')).not.toBeInTheDocument();
-    fireEvent.click(screen.getByRole('button', { name: 'Close sheet' }));
-    expect(screen.getByTestId('mobile-action-dock')).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Leave a note' }));
+    expect(openFeedbackSheet).toHaveBeenCalledTimes(1);
+    expect(screen.queryByRole('group')).not.toBeInTheDocument();
   });
 
-  it('renders href targets and hides when no action is registered', () => {
-    const { rerender } = render(
+  it('restores focus to More when Escape closes the menu', () => {
+    render(
       <MobileShellProvider>
-        <Registration
-          action={{
-            actionKey: 'open-library',
-            surfaceKey: 'library',
-            regionKey: 'room-head',
-            label: 'Open the Library',
-            target: { kind: 'href', href: '/library' },
-          }}
-        />
-        <MobileActionDock />
+        <MobileBar />
       </MobileShellProvider>,
+    );
+
+    const more = screen.getByRole('button', { name: 'More studio actions' });
+    fireEvent.click(more);
+    fireEvent.keyDown(document, { key: 'Escape' });
+
+    expect(screen.queryByRole('group')).not.toBeInTheDocument();
+    expect(more).toHaveFocus();
+  });
+
+  it('carries the shipped-feedback signal into the single feedback entrance', () => {
+    mockUnseenFeedback = [{ id: 'feedback-1' }];
+    render(
+      <MobileShellProvider>
+        <MobileBar />
+      </MobileShellProvider>,
+    );
+
+    fireEvent.click(
+      screen.getByRole('button', { name: 'More studio actions' }),
     );
     expect(
-      screen.getByRole('link', { name: 'Open the Library' }),
-    ).toHaveAttribute('href', '/library');
+      screen.getByRole('button', { name: /Leave a note.*Shipped/i }),
+    ).toBeInTheDocument();
+  });
 
-    rerender(
+  it('yields the edge while a log offer is active', () => {
+    mockTimeState.offer = { id: 'offer-1' };
+    render(
       <MobileShellProvider>
-        <Registration action={null} />
-        <MobileActionDock />
+        <MobileBar />
       </MobileShellProvider>,
     );
-    expect(screen.queryByTestId('mobile-action-dock')).not.toBeInTheDocument();
+
+    expect(screen.queryByTestId('mobile-bar')).not.toBeInTheDocument();
   });
 });
