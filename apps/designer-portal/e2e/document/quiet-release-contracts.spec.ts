@@ -222,6 +222,11 @@ test.describe("Quiet Work release browser contracts", () => {
     });
     await expect(desktopDraftingActions).toHaveCount(1);
     await expect(desktopDraftingActions).toBeHidden();
+    // Let the fetched proposal replace the initial route shell before opening
+    // More; that hydration step also settles the primary/secondary registries.
+    await expect(
+      page.getByRole("button", { name: "Send as-is" }),
+    ).toBeVisible();
 
     const more = page.getByRole("button", { name: "More studio actions" });
     await more.click();
