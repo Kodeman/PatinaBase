@@ -122,6 +122,21 @@ public nonisolated struct ScanManifest: Codable, Equatable, Sendable {
     /// SfM pose-graph statistics (spec §3.5).
     public var poseGraphSummary: PoseGraphSummary?
 
+    // MARK: - Decode diagnostics (not a manifest key)
+
+    /// Instrument keys that were PRESENT in the JSON but could not be decoded
+    /// into their Swift shape — an enum value this build does not know, a
+    /// scalar of the wrong type, a sub-object whose shape moved. Each such key
+    /// degrades to nil (see `init(from:)`) and is named here.
+    ///
+    /// NOT a manifest key: absent from `CodingKeys`, so the synthesized
+    /// `encode(to:)` never writes it and `init(from:)` never reads it. It exists
+    /// so a caller that tolerated a partial decode can SAY SO — `ScanRecoveryService`
+    /// logs it — rather than silently carrying a manifest with a hole in it.
+    /// Empty on every well-formed manifest, which is why the byte-identity and
+    /// round-trip pins in `ScanManifestSupersetTests` are unaffected.
+    public var unreadableInstrumentKeys: [String] = []
+
     public init(
         schemaVersion: Int = scanBundleSchemaVersion,
         scanId: UUID,
@@ -170,6 +185,9 @@ public nonisolated struct ScanManifest: Codable, Equatable, Sendable {
     //
     // The instrument-layer keys are absent from every client-written bundle,
     // so they decode with `decodeIfPresent` and stay nil there.
+    //
+    // `unreadableInstrumentKeys` is deliberately NOT a case here — it is decode
+    // output, not wire.
     private enum CodingKeys: String, CodingKey {
         case schemaVersion, scanId, roomLocalId, roomName, createdAt, completedAt
         case device, capture, artifacts, photos, captureEnvironment, annotations
@@ -191,13 +209,67 @@ public nonisolated struct ScanManifest: Codable, Equatable, Sendable {
         self.photos = try c.decode([PhotoEntry].self, forKey: .photos)
         self.captureEnvironment = try c.decode(CaptureEnvironment.self, forKey: .captureEnvironment)
         self.annotations = try c.decodeIfPresent(Annotations.self, forKey: .annotations) ?? Annotations()
-        self.bundleSpecVersion = try c.decodeIfPresent(Int.self, forKey: .bundleSpecVersion)
-        self.unverified = try c.decodeIfPresent(Bool.self, forKey: .unverified)
-        self.checksumAlgorithm = try c.decodeIfPresent(String.self, forKey: .checksumAlgorithm)
-        self.session = try c.decodeIfPresent(Session.self, forKey: .session)
-        self.anchors = try c.decodeIfPresent([AnchorRecord].self, forKey: .anchors)
-        self.scorecard = try c.decodeIfPresent(Scorecard.self, forKey: .scorecard)
-        self.poseGraphSummary = try c.decodeIfPresent(PoseGraphSummary.self, forKey: .poseGraphSummary)
+
+        // ── The instrument layer decodes LENIENTLY; the layer above does not ──
+        //
+        // Everything decoded above this line is load-bearing on the client side
+        // and stays strict: `scanId` is the `@Attribute(.unique)` key
+        // `RoomScanPackage` is matched on, `completedAt` decides whether the sync
+        // service still owns the bundle, `photos`/`artifacts` drive the upload.
+        // Defaulting any of those past a malformed value would substitute a lie
+        // for a failure, and the failure is recoverable — see
+        // `ScanRecoveryService`, which now keeps the bytes instead of deleting
+        // them.
+        //
+        // The instrument layer is the opposite: every key is Optional, absence
+        // is legal and is the norm (nothing in this app populates them), and NO
+        // client behaviour reads any of them. So "present but unreadable"
+        // degrades to the same nil that "absent" already produces, and the key
+        // is named in `unreadableInstrumentKeys`.
+        //
+        // WHY HERE AND NOT IN THE ENUMS. The tempting alternative is an
+        // `unknown` sentinel case on `Scorecard.Verdict` / `.TrackingHealth` /
+        // `AnchorRecord.SpanKind`. Rejected: those types are ported verbatim
+        // from Field and are BOTH wire readers and producer outputs —
+        // `ScorecardEvaluator` mints a `Scorecard`, and `AnchorGate` reasons
+        // over `SpanKind`. A sentinel makes an impossible state constructible in
+        // the producer and forces every present and future switch in both apps
+        // to carry a case that can never legitimately occur on the write side;
+        // and a plain `case unknown` re-encodes as the literal string "unknown",
+        // destroying the producer's real value on the next manifest rewrite —
+        // turning a read problem into a write corruption. Tolerance belongs to
+        // the READER OF A FOREIGN DOCUMENT, which is this initializer, not to a
+        // decision type's value space.
+        var unreadable: [String] = []
+        self.bundleSpecVersion = Self.decodeInstrument(Int.self, .bundleSpecVersion, c, &unreadable)
+        self.unverified = Self.decodeInstrument(Bool.self, .unverified, c, &unreadable)
+        self.checksumAlgorithm = Self.decodeInstrument(String.self, .checksumAlgorithm, c, &unreadable)
+        self.session = Self.decodeInstrument(Session.self, .session, c, &unreadable)
+        self.anchors = Self.decodeInstrument([AnchorRecord].self, .anchors, c, &unreadable)
+        self.scorecard = Self.decodeInstrument(Scorecard.self, .scorecard, c, &unreadable)
+        self.poseGraphSummary = Self.decodeInstrument(PoseGraphSummary.self, .poseGraphSummary, c, &unreadable)
+        self.unreadableInstrumentKeys = unreadable
+    }
+
+    /// Decode one OPTIONAL instrument key without letting it fail the whole
+    /// manifest. Absent (or explicit null) stays nil silently; present and
+    /// well-formed decodes; present and undecodable degrades to nil and appends
+    /// the key name to `unreadable`.
+    ///
+    /// Only ever called on the seven instrument keys — see the block comment in
+    /// `init(from:)` for why the inherited v3 layer must NOT go through here.
+    private static func decodeInstrument<T: Decodable>(
+        _ type: T.Type,
+        _ key: CodingKeys,
+        _ container: KeyedDecodingContainer<CodingKeys>,
+        _ unreadable: inout [String]
+    ) -> T? {
+        do {
+            return try container.decodeIfPresent(type, forKey: key)
+        } catch {
+            unreadable.append(key.stringValue)
+            return nil
+        }
     }
 
     // MARK: - Device
@@ -342,10 +414,15 @@ public nonisolated struct ScanManifest: Codable, Equatable, Sendable {
 
         // v3 additive kinds.
         case coverageHeatmap        // coverage_heatmap.json (XZ grid JSON)
-        case depthIndex             // depth/depth_index.ndjson (per-frame depth index)
-        case photoThumbnails        // photos/photo_thumbnails.ndjson (256px thumb index)
-        case annotations            // annotations.json (user review notes/name/etc.)
-        case bundleManifest         // manifest.json (pointer to existing root manifest)
+        // Not every kind may appear in `artifacts[]`. The list is a promise the
+        // server holds the bundle to — it fetches every entry — so a kind whose
+        // bytes never reach Storage must not be listed. `ArtifactUploader
+        // .isManifestListed(_:)` is the single ruling; `ScanBundleWriter
+        // .upsertArtifact` enforces it on the one path into this array.
+        case depthIndex             // depth/depth_index.ndjson — device-local, rides in depth.zip
+        case photoThumbnails        // photos/photo_thumbnails.ndjson — device-local (thumbs never upload)
+        case annotations            // device-local; the data ships as a manifest FIELD
+        case bundleManifest         // manifest.json — UPLOADED but never listed (it IS the list)
         case photosManifest         // photos/photos_metadata.ndjson (pointer to existing NDJSON)
 
         // NOT YET BROUGHT ACROSS from Field's artifact vocabulary:

@@ -34,12 +34,7 @@ import { useRoomFiles, useScanRefineArtifacts } from '@patina/supabase';
 import { useFeatureFlag } from '@/hooks/use-feature-flag';
 import type { RoomGeometry } from '@/lib/room-view/geometry';
 import type { PhotoProvenance } from '@/lib/room-view/photo-poses';
-import {
-  buildCameraPath,
-  parsePoseDeltas,
-  parseRefinementEvidence,
-  poseDriftStats,
-} from '@/lib/room-view/refined-poses';
+import { buildRefineReadoutProps } from '@/lib/room-view/refine-readout-props';
 import { roomEvents } from '@/lib/analytics';
 import { FactsRail } from './facts-rail';
 import type { RefineReadoutProps } from './refine-readout';
@@ -164,45 +159,17 @@ export function RoomView({
   const { data: refineArtifacts } = useScanRefineArtifacts(roomId, {
     enabled: refinedPathEnabled,
   });
-  const refineReadout = useMemo<RefineReadoutProps | undefined>(() => {
-    if (!refinedPathEnabled || !refineArtifacts) return undefined;
-
-    const evidence = parseRefinementEvidence(
-      refineArtifacts.documents['refinement-evidence-v1.json'],
-    );
-    const deltas = parsePoseDeltas(refineArtifacts.documents['pose-deltas-v1.json']);
-    if (!deltas || deltas.length === 0) return undefined;
-
-    // The record's verdict and the evidence document's verdict should agree;
-    // when only one is readable, take it. `false` is the fail-closed default,
-    // and it only ever makes the readout MORE conservative.
-    const refinementEvidenced =
-      evidence?.refinementEvidenced ?? refineArtifacts.record.refinementEvidenced;
-
-    const path = buildCameraPath(deltas, provenance, { refinementEvidenced });
-    if (!path) return undefined;
-
-    const drift = poseDriftStats(deltas);
-    return {
-      frameCount: path.frameCount,
-      usableCount: path.usableCount,
-      droppedCount: path.droppedCount,
-      driftMaxM: drift?.maxM ?? null,
-      driftMedianM: drift?.medianM ?? null,
-      refinementEvidenced,
-      absoluteAccuracyCertified:
-        evidence?.absoluteAccuracyCertified ??
-        refineArtifacts.record.absoluteAccuracyCertified,
-      pathSource: path.source,
-      verdictReason:
-        evidence?.verdictReason ?? refineArtifacts.record.verdictReason ?? null,
-      // Verbatim, from whichever source carries it. Never rewritten.
-      loopConsistencyAdvisory:
-        evidence?.loopConsistencyAdvisory ??
-        refineArtifacts.record.loopConsistencyAdvisory ??
-        null,
-    };
-  }, [refinedPathEnabled, refineArtifacts, provenance]);
+  // The composition lives in `lib/room-view/refine-readout-props.ts` as a pure
+  // function so ONE test can run the whole chain — the exact `present` document
+  // `refine_delivery.build_present_patch` writes, through `parseScanRefineRecord`,
+  // through this composition, into the rendered readout.
+  const refineReadout = useMemo<RefineReadoutProps | undefined>(
+    () =>
+      refinedPathEnabled
+        ? buildRefineReadoutProps(refineArtifacts, provenance)
+        : undefined,
+    [refinedPathEnabled, refineArtifacts, provenance],
+  );
 
   const viewBox = useMemo(
     () => (geometry ? planViewBox(geometry) : { width: 1, height: 1 }),

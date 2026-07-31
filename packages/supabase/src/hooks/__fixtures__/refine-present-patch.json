@@ -1,0 +1,110 @@
+{
+  "refine": {
+    "artifacts": [
+      {
+        "key": "room_file/user-1/scan-1/v3/refine/adapter-v2.json",
+        "name": "adapter-v2.json",
+        "semanticMediaType": "application/json",
+        "sha256": "659f7e41827e76690689ec414bf5796252f555ba52b34ecadabf1056cfe325f9",
+        "sizeBytes": 20
+      },
+      {
+        "key": "room_file/user-1/scan-1/v3/refine/aligned-sparse-model-v1.tar",
+        "name": "aligned-sparse-model-v1.tar",
+        "semanticMediaType": "application/x-tar",
+        "sha256": "7860d64b8f3be16aa5ad210fd063def076682d93db6d0a6ced96d80e426314c4",
+        "sizeBytes": 24
+      },
+      {
+        "key": "room_file/user-1/scan-1/v3/refine/database-v1.db",
+        "name": "database-v1.db",
+        "semanticMediaType": "application/vnd.sqlite3",
+        "sha256": "1d7150236e7f6dc32dc73ce668d876d1bd2d1d3e6363f265034e9399f71c7a95",
+        "sizeBytes": 12
+      },
+      {
+        "key": "room_file/user-1/scan-1/v3/refine/engine-command-evidence-v1.json",
+        "name": "engine-command-evidence-v1.json",
+        "semanticMediaType": "application/json",
+        "sha256": "80f3d90666804a9335821cdb40782458835ffedaef33088bd1dc5eb3ef85ce61",
+        "sizeBytes": 20
+      },
+      {
+        "key": "room_file/user-1/scan-1/v3/refine/pairs-v2.txt",
+        "name": "pairs-v2.txt",
+        "semanticMediaType": "text/plain",
+        "sha256": "65720783171f9b3a30fc4ce87644bc58f01a2d9f87d5ccf1534b16f49b852de6",
+        "sizeBytes": 34
+      },
+      {
+        "key": "room_file/user-1/scan-1/v3/refine/pose-deltas-v1.json",
+        "name": "pose-deltas-v1.json",
+        "semanticMediaType": "application/json",
+        "sha256": "2c66f9fc6508e900c0a3519afa5cd9993ab034d875f620fde8143ec579e34a9d",
+        "sizeBytes": 1373
+      },
+      {
+        "key": "room_file/user-1/scan-1/v3/refine/refined-poses-v1.json",
+        "name": "refined-poses-v1.json",
+        "semanticMediaType": "application/json",
+        "sha256": "c89918022ec6fbe401515d8cf3390232d1fece94488eb462007d14e00d00d9b7",
+        "sizeBytes": 1144
+      },
+      {
+        "key": "room_file/user-1/scan-1/v3/refine/refinement-evidence-v1.json",
+        "name": "refinement-evidence-v1.json",
+        "semanticMediaType": "application/json",
+        "sha256": "666f9167dd8e6bf8edfd7e1a694e8372e9d594bb702eebc20a808ad165a0a7b8",
+        "sizeBytes": 1080
+      },
+      {
+        "key": "room_file/user-1/scan-1/v3/refine/seed-model-v1.tar",
+        "name": "seed-model-v1.tar",
+        "semanticMediaType": "application/x-tar",
+        "sha256": "edf594cf57b128b70fcea8dd3502317be40ab9eb53b7d52d3ae094a3b6cfd22e",
+        "sizeBytes": 14
+      },
+      {
+        "key": "room_file/user-1/scan-1/v3/refine/trajectory-shape-v1.json",
+        "name": "trajectory-shape-v1.json",
+        "semanticMediaType": "application/json",
+        "sha256": "4af29e600c047da17bd58efe6a0e50c169369b4b10c74685d1548d0927b97f23",
+        "sizeBytes": 228
+      },
+      {
+        "key": "room_file/user-1/scan-1/v3/refine/refine-manifest-v1.json",
+        "name": "refine-manifest-v1.json",
+        "semanticMediaType": "application/json",
+        "sha256": "0e00398a15b8b1a7c5cd6493c881fdce4c5f9fc30418a4e06c3bf5bdd98d5dd8",
+        "sizeBytes": 8203
+      }
+    ],
+    "bucket": "room-scans",
+    "contract": "patina-refine-delivery-v1",
+    "createdKeys": [],
+    "engine": {
+      "durationMs": 1250,
+      "selected": "colmap-4-known-pose-triangulate-ba"
+    },
+    "manifestKey": "room_file/user-1/scan-1/v3/refine/refine-manifest-v1.json",
+    "manifestSha256": "0e00398a15b8b1a7c5cd6493c881fdce4c5f9fc30418a4e06c3bf5bdd98d5dd8",
+    "posture": {
+      "enqueued": false,
+      "productionEnablement": "disabled",
+      "refineDeliveryQualified": false,
+      "refineDeliveryStageRegistered": false,
+      "stageRegistered": false
+    },
+    "prefix": "room_file/user-1/scan-1/v3/refine",
+    "replayedKeys": [],
+    "schemaVersion": 1,
+    "verdict": {
+      "absoluteAccuracyCertified": false,
+      "loopConsistencyAdvisory": "advisory_not_gating_r123: loop_rotation_rmse_deg 1.000000->0.900000 (-10.00%); loop_translation_direction_rmse_deg 2.000000->1.800000 (-10.00%); verified_loop_edges 1",
+      "refinementEvidenced": true,
+      "verdictReason": "internal_geometric_refinement_evidenced_absolute_accuracy_unproven"
+    }
+  },
+  "refine_engine": "colmap-4-known-pose-triangulate-ba",
+  "vram_peak_mb": 512
+}

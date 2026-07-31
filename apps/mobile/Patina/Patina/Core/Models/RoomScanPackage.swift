@@ -26,6 +26,24 @@ public enum RoomScanPackageStatus: String, Codable, Sendable {
     /// only) and never evicted by `ScanDiskBudget` (which evicts synced
     /// only).
     case heldLocal   // sealed on disk, held for an explicit request
+    /// Bytes on disk this build cannot read: `manifest.json` is absent, or it
+    /// is present and does not decode. The bundle is KEPT — the capture is the
+    /// user's and a decode failure is our problem, not theirs — but it is not
+    /// usable, so it is excluded everywhere by construction rather than by a
+    /// special case:
+    ///
+    ///   · `needsProcessing` (pending/syncing/failed) → never re-uploaded;
+    ///     we cannot enumerate its artifacts.
+    ///   · `heldOrSyncedItems` → never offered in `ScanPickerView`; attaching
+    ///     it to a design request would only fail later.
+    ///   · `syncedItems` → never evicted by `ScanDiskBudget`, which evicts
+    ///     `synced` only. Preserving the bytes is the point.
+    ///   · `ScanRecoveryService`'s fetch → not re-examined every launch, so
+    ///     one unreadable bundle does not log the same failure forever.
+    ///
+    /// Set only by `ScanRecoveryService`. The exit is the user's explicit
+    /// `discard`, which still deletes bundle + row.
+    case quarantined
 }
 
 @Model
@@ -163,6 +181,19 @@ public final class RoomScanPackage {
         status = .heldLocal
         syncedAt = nil
         lastError = nil
+        updatedAt = Date()
+    }
+
+    /// Park an unreadable bundle. The bytes on disk are left ALONE — this is
+    /// the marker that says "we could not read this, and we did not delete it".
+    /// `reason` lands in `lastError` so the state is legible in the UI and in a
+    /// SwiftData dump, not only in the log stream.
+    ///
+    /// Deliberately does NOT clear `remoteRoomId` or the artifact state: if
+    /// bytes already reached the server, that record stays true.
+    public func markQuarantined(_ reason: String) {
+        status = .quarantined
+        lastError = reason
         updatedAt = Date()
     }
 
