@@ -7,7 +7,15 @@ jest.mock('@/lib/help-system/open-help', () => ({
   openHelp: jest.fn(),
 }));
 
-function SheetHarness({ icon = false }: { icon?: boolean }) {
+function SheetHarness({
+  icon = false,
+  tall = false,
+  wide = false,
+}: {
+  icon?: boolean;
+  tall?: boolean;
+  wide?: boolean;
+}) {
   const [open, setOpen] = useState(false);
 
   return (
@@ -20,13 +28,50 @@ function SheetHarness({ icon = false }: { icon?: boolean }) {
         onClose={() => setOpen(false)}
         title="Order review"
         icon={icon ? FileText : undefined}
+        wide={wide}
       >
         <button type="button" hidden>
           Hidden action
         </button>
         <button type="button">First action</button>
         <input aria-label="Order note" />
+        {tall ? (
+          <div data-testid="tall-sheet-body" className="h-[1200px]">
+            The order ledger continues.
+          </div>
+        ) : null}
         <button type="button">Last action</button>
+      </DocSheet>
+    </>
+  );
+}
+
+function NestedSheetHarness() {
+  const [outerOpen, setOuterOpen] = useState(false);
+  const [innerOpen, setInnerOpen] = useState(false);
+
+  return (
+    <>
+      <button type="button" onClick={() => setOuterOpen(true)}>
+        Open outer sheet
+      </button>
+      <DocSheet
+        open={outerOpen}
+        onClose={() => setOuterOpen(false)}
+        title="Outer review"
+        icon={FileText}
+      >
+        <button type="button" onClick={() => setInnerOpen(true)}>
+          Open nested sheet
+        </button>
+      </DocSheet>
+      <DocSheet
+        open={innerOpen}
+        onClose={() => setInnerOpen(false)}
+        title="Nested review"
+        icon={FileText}
+      >
+        <p>The nested decision.</p>
       </DocSheet>
     </>
   );
@@ -77,6 +122,89 @@ describe('DocSheet', () => {
     first.focus();
     fireEvent.keyDown(document, { key: 'Tab', shiftKey: true });
     expect(last).toHaveFocus();
+  });
+
+  it('keeps the head reachable and makes the paper the bounded scroll region', async () => {
+    render(<SheetHarness icon tall />);
+    fireEvent.click(screen.getByRole('button', { name: 'Open orders' }));
+
+    const dialog = screen.getByRole('dialog', { name: 'Order review' });
+    const layer = dialog.closest('[data-doc-sheet-layer]');
+    expect(layer).toHaveClass(
+      'items-start',
+      'overflow-hidden',
+      'pt-[var(--doc-sheet-inset-top)]',
+      'pb-[var(--doc-sheet-inset-bottom)]',
+      'pl-[var(--doc-sheet-inset-left)]',
+      'pr-[var(--doc-sheet-inset-right)]',
+    );
+    expect(dialog).toHaveAttribute('data-doc-sheet-scroll-region');
+    expect(dialog).toHaveClass(
+      'my-auto',
+      'max-h-[calc(100dvh_-_var(--doc-sheet-inset-top)_-_var(--doc-sheet-inset-bottom))]',
+      'overflow-y-auto',
+      'overscroll-contain',
+    );
+    expect(dialog).toContainElement(screen.getByText('Order review'));
+    expect(dialog).toContainElement(
+      screen.getByRole('button', { name: 'Put back · Esc' }),
+    );
+    expect(dialog).toContainElement(screen.getByTestId('tall-sheet-body'));
+    await waitFor(() => expect(dialog).toHaveFocus());
+  });
+
+  it('keeps narrow sheets fluid and wide ledgers capped at their existing width', () => {
+    const onClose = jest.fn();
+    const { rerender } = render(
+      <DocSheet open onClose={onClose} title="Narrow review">
+        <p>Narrow paper</p>
+      </DocSheet>,
+    );
+
+    const narrow = screen.getByRole('dialog', { name: 'Narrow review' });
+    expect(narrow).toHaveClass('min-w-0', 'w-full', 'max-w-[640px]');
+
+    rerender(
+      <DocSheet open wide onClose={onClose} title="Wide ledger">
+        <p>Wide paper</p>
+      </DocSheet>,
+    );
+    const wide = screen.getByRole('dialog', { name: 'Wide ledger' });
+    expect(wide).toHaveClass('min-w-0', 'w-full', 'max-w-[760px]');
+    expect(wide).not.toHaveClass('max-w-[640px]');
+  });
+
+  it('keeps body scroll locked until the last nested sheet closes', async () => {
+    render(<NestedSheetHarness />);
+    const opener = screen.getByRole('button', { name: 'Open outer sheet' });
+    opener.focus();
+    fireEvent.click(opener);
+    expect(document.body.style.overflow).toBe('hidden');
+
+    const nestedOpener = screen.getByRole('button', {
+      name: 'Open nested sheet',
+    });
+    nestedOpener.focus();
+    fireEvent.click(nestedOpener);
+    expect(screen.getAllByRole('dialog')).toHaveLength(2);
+    expect(document.body.style.overflow).toBe('hidden');
+
+    const closeButtons = screen.getAllByRole('button', {
+      name: 'Put back · Esc',
+    });
+    fireEvent.click(closeButtons[closeButtons.length - 1]);
+    await waitFor(() => expect(screen.getAllByRole('dialog')).toHaveLength(1));
+    expect(document.body.style.overflow).toBe('hidden');
+    await waitFor(() => expect(nestedOpener).toHaveFocus());
+
+    fireEvent.click(
+      screen.getByRole('button', { name: 'Put back · Esc' }),
+    );
+    await waitFor(() =>
+      expect(screen.queryByRole('dialog')).not.toBeInTheDocument(),
+    );
+    expect(document.body.style.overflow).toBe('');
+    await waitFor(() => expect(opener).toHaveFocus());
   });
 
   it('closes on Escape and exposes a visible labelled title when it owns the head', async () => {

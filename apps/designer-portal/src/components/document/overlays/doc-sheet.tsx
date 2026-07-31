@@ -5,10 +5,10 @@
  *
  * Both the historic 'sheet' (bottom slide-up) and 'center' variants have
  * converged onto the paper-folio treatment: a warm veil over the desk and a
- * CENTERED laid-paper panel that slides over whatever the designer is holding
- * (D8) without ever unmounting it (D1). Depth is value contrast + a single
- * 1px rule edge — zero shadow (D4). The panel is `--doc-paper`, so every sheet
- * content reads as ink on paper, not chrome on charcoal.
+ * laid-paper panel that centers when it fits and begins at the safe viewport
+ * edge when it does not (D8), without ever unmounting the work beneath (D1).
+ * Depth is value contrast + a single 1px rule edge — zero shadow (D4). The
+ * panel is `--doc-paper`, so every sheet reads as ink on paper, not chrome.
  *
  * The `variant` prop is retained for backward compatibility (callers still pass
  * it) but no longer changes the ground — both are the same paper sheet. Ledgers
@@ -283,7 +283,10 @@ export function DocSheet({
   if (!open) return null;
 
   return (
-    <div className="doc-sheet-layer fixed inset-0 z-50 flex items-center justify-center overflow-y-auto overscroll-contain">
+    <div
+      data-doc-sheet-layer
+      className="doc-sheet-layer fixed inset-0 z-50 box-border flex items-start justify-center overflow-hidden overscroll-contain pb-[var(--doc-sheet-inset-bottom)] pl-[var(--doc-sheet-inset-left)] pr-[var(--doc-sheet-inset-right)] pt-[var(--doc-sheet-inset-top)]"
+    >
       {/* Warm veil over the desk (matches the paper-folio scrim), a backdrop
           button so a click in the margin puts the sheet back. */}
       <button
@@ -300,9 +303,10 @@ export function DocSheet({
         aria-labelledby={titleId}
         tabIndex={-1}
         data-doc-sheet-panel
-        className={`doc-sheet-panel relative w-full ${
+        data-doc-sheet-scroll-region
+        className={`doc-sheet-panel relative my-auto max-h-[calc(100dvh_-_var(--doc-sheet-inset-top)_-_var(--doc-sheet-inset-bottom))] min-w-0 w-full ${
           wide ? 'max-w-[760px]' : 'max-w-[640px]'
-        } overflow-y-auto rounded-[5px] border border-[var(--color-rule-strong,#D8CCB8)] bg-[var(--doc-paper,#FAF7F2)] px-6 pb-8 pt-6 outline-none sm:px-9`}
+        } overflow-y-auto overscroll-contain rounded-[5px] border border-[var(--color-rule-strong,#D8CCB8)] bg-[var(--doc-paper,#FAF7F2)] px-6 pb-8 pt-6 outline-none sm:px-9`}
       >
         {icon ? (
           <DocSheetHead
