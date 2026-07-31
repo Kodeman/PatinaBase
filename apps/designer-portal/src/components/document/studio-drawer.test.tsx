@@ -1,0 +1,182 @@
+import {
+  fireEvent,
+  render,
+  screen,
+  waitFor,
+  within,
+} from '@testing-library/react';
+import { StudioDrawer } from './studio-drawer';
+import { openFeedbackSheet } from './feedback/feedback-sheet';
+
+const mockPush = jest.fn();
+let mockUnseenFeedback: Array<{ id: string }> = [];
+
+jest.mock('next/navigation', () => ({
+  usePathname: () => '/desk',
+  useRouter: () => ({ push: mockPush }),
+}));
+
+jest.mock('@patina/supabase', () => ({
+  useUnreadInboxCount: () => ({ data: 0 }),
+  useProcurementUnreadCount: () => ({ data: 0 }),
+  useUnseenShipped: () => ({ data: mockUnseenFeedback }),
+}));
+
+jest.mock('@/hooks/use-hydrated', () => ({
+  useHydrated: () => true,
+}));
+
+jest.mock('@/hooks/document-time-provider', () => ({
+  useDocumentTime: () => ({ inHandToday: 0 }),
+}));
+
+jest.mock('@/lib/help-system/use-sheet-surface-key', () => ({
+  useSheetSurfaceKey: jest.fn(),
+}));
+
+jest.mock('@/lib/document/room-origin', () => ({
+  rememberRoomOrigin: jest.fn(),
+}));
+
+jest.mock('@/lib/analytics/document-events', () => ({
+  documentEvents: {
+    wayfinding: {
+      roomEntered: jest.fn(),
+      doorOpened: jest.fn(),
+    },
+  },
+}));
+
+jest.mock('./overlays/doc-sheet', () => ({
+  DocSheet: ({
+    open,
+    title,
+    children,
+  }: {
+    open: boolean;
+    title: string;
+    children: React.ReactNode;
+  }) =>
+    open ? (
+      <div role="dialog" aria-label={title}>
+        {children}
+      </div>
+    ) : null,
+}));
+
+jest.mock('./overlays/post-sheet', () => ({
+  PostSheet: () => null,
+  openPost: jest.fn(),
+}));
+
+jest.mock('./orders-ledger', () => ({
+  OrdersLedger: () => <div>Orders ledger</div>,
+}));
+
+jest.mock('./accounts/accounts-book', () => ({
+  AccountsBook: () => <div>Accounts book</div>,
+}));
+
+jest.mock('./hours-ledger', () => ({
+  HoursLedger: () => <div>Hours ledger</div>,
+}));
+
+jest.mock('./feedback/feedback-ledger', () => ({
+  FeedbackLedger: () => <div>Feedback ledger</div>,
+}));
+
+jest.mock('./feedback/feedback-sheet', () => ({
+  openFeedbackSheet: jest.fn(),
+}));
+
+jest.mock('./account/account-nameplate', () => ({
+  AccountNameplate: () => <div>Designer account</div>,
+}));
+
+describe('StudioDrawer', () => {
+  beforeEach(() => {
+    mockPush.mockClear();
+    mockUnseenFeedback = [];
+    jest.mocked(openFeedbackSheet).mockClear();
+    window.localStorage.clear();
+  });
+
+  it('keeps Rooms direct and gathers sheet ledgers behind one doorway', () => {
+    render(<StudioDrawer />);
+
+    const drawer = screen.getByRole('navigation', { name: 'Studio drawer' });
+    expect(drawer).toHaveClass('min-[1180px]:grid');
+    expect(screen.getByRole('button', { name: 'Library' })).toHaveClass(
+      'min-h-11',
+    );
+    expect(screen.getByRole('button', { name: 'People' })).toBeInTheDocument();
+    expect(
+      screen.getByRole('button', { name: 'The Rooms' }),
+    ).toBeInTheDocument();
+    expect(
+      screen.queryByRole('button', { name: 'Orders' }),
+    ).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: /Studio books/i }));
+    const menu = screen.getByRole('group', { name: 'Studio books' });
+    expect(within(menu).getByRole('button', { name: 'Orders' })).toHaveFocus();
+    expect(within(menu).getByRole('button', { name: 'Accounts' })).toHaveClass(
+      'min-h-11',
+    );
+    expect(
+      within(menu).getByRole('button', { name: 'Hours' }),
+    ).toBeInTheDocument();
+    expect(
+      within(menu).queryByRole('button', { name: 'Feedback' }),
+    ).not.toBeInTheDocument();
+    expect(
+      within(menu).getByRole('button', { name: 'Leave a note' }),
+    ).toBeInTheDocument();
+  });
+
+  it('puts the most recently opened book first on the next visit', async () => {
+    const first = render(<StudioDrawer />);
+    fireEvent.click(screen.getByRole('button', { name: /Studio books/i }));
+    fireEvent.click(screen.getByRole('button', { name: 'Accounts' }));
+
+    expect(
+      screen.getByRole('dialog', { name: 'Accounts' }),
+    ).toBeInTheDocument();
+    expect(
+      window.localStorage.getItem('patina.document.recentStudioBook'),
+    ).toBe('accounts');
+
+    first.unmount();
+    render(<StudioDrawer />);
+    fireEvent.click(screen.getByRole('button', { name: /Studio books/i }));
+
+    await waitFor(() => {
+      const items = within(
+        screen.getByRole('group', { name: 'Studio books' }),
+      ).getAllByRole('button');
+      expect(items[0]).toHaveAccessibleName(/Accounts.*Recent/i);
+    });
+  });
+
+  it('offers feedback contextually from the books hub', () => {
+    render(<StudioDrawer />);
+    fireEvent.click(screen.getByRole('button', { name: /Studio books/i }));
+    fireEvent.click(screen.getByRole('button', { name: 'Leave a note' }));
+
+    expect(openFeedbackSheet).toHaveBeenCalledTimes(1);
+    expect(screen.queryByRole('group')).not.toBeInTheDocument();
+  });
+
+  it('carries the shipped-feedback signal into the single feedback entrance', () => {
+    mockUnseenFeedback = [{ id: 'feedback-1' }];
+    render(<StudioDrawer />);
+    fireEvent.click(screen.getByRole('button', { name: /Studio books/i }));
+
+    expect(
+      screen.getByRole('button', { name: /Leave a note.*Shipped/i }),
+    ).toBeInTheDocument();
+    expect(
+      screen.queryByRole('button', { name: 'Feedback' }),
+    ).not.toBeInTheDocument();
+  });
+});

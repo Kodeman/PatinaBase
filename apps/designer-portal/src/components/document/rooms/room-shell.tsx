@@ -119,7 +119,7 @@ export function RoomShell({
       />
 
       {/* The thin band that frames a Room: leave · ident · one action. */}
-      <header className="sticky top-0 z-20 flex items-center gap-3 border-b border-[var(--doc-ink-border)] bg-[rgba(252,250,246,0.85)] px-4 py-3 backdrop-blur-sm sm:px-6">
+      <header className="sticky top-0 z-20 grid grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] items-center gap-3 border-b border-[var(--doc-ink-border)] bg-[rgba(252,250,246,0.85)] px-4 py-2 backdrop-blur-sm sm:px-6 min-[1180px]:py-3">
         {/* The way out is a word, not a box (I107). The Room's own action sits
             at the other end of this same row as a scored DocumentAction, so the
             leave reads as its quietest relative: tertiary ink values, the score
@@ -128,31 +128,36 @@ export function RoomShell({
         <button
           type="button"
           onClick={leave}
-          className="inline-flex min-h-11 min-w-11 items-center gap-1.5 px-2 py-1 font-mono text-[12px] font-light uppercase tracking-[0.1em] text-[var(--color-aged-oak)] transition-colors hover:text-[var(--color-charcoal)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-clay)]"
+          className="inline-flex min-h-11 min-w-11 max-w-full items-center gap-1.5 justify-self-start px-2 py-1 font-mono text-[12px] font-light uppercase tracking-[0.1em] text-[var(--color-aged-oak)] transition-colors hover:text-[var(--color-charcoal)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-clay)]"
         >
           <span aria-hidden>←</span>{' '}
           <span className="da-score-hover">
-            {backLabel ?? originLabel(origin)}
+            <span className="hidden sm:inline">
+              {backLabel ?? originLabel(origin)}
+            </span>
+            <span className="sm:hidden">Back</span>
           </span>
         </button>
 
-        <div className="mx-auto flex items-center gap-2.5">
+        <div className="flex items-center justify-self-center gap-2.5">
           <StrataMark state="active" size="sm" />
-          <span className="font-mono text-[10px] font-semibold uppercase tracking-[0.2em] text-[var(--color-aged-oak)]">
+          <span className="font-mono text-[12px] font-semibold uppercase tracking-[0.2em] text-[var(--color-aged-oak)]">
             {title}
           </span>
           {count && (
-            <span className="font-mono text-[10px] tracking-[0.04em] text-[var(--color-aged-oak)] opacity-70">
+            <span className="hidden font-mono text-[12px] tracking-[0.04em] text-[var(--color-aged-oak)] opacity-70 sm:inline">
               · {count}
             </span>
           )}
         </div>
 
-        <div className="ml-auto shrink-0">{action}</div>
+        <div className="justify-self-end">
+          <div className="hidden min-[1180px]:block">{action}</div>
+        </div>
       </header>
 
       {/* The paper itself. Bottom padding clears the fixed Drawer + log strip. */}
-      <div className="relative z-10 flex-1 pb-[120px] min-[980px]:pb-[108px]">
+      <div className="relative z-10 flex-1 pb-[96px] min-[1180px]:pb-[84px]">
         {children}
       </div>
 
@@ -163,7 +168,7 @@ export function RoomShell({
           aria-live="polite"
           className="fixed inset-0 z-[60] flex items-center justify-center bg-[rgba(28,26,24,0.4)] motion-safe:animate-[doc-fade_200ms_ease-out]"
         >
-          <span className="font-mono text-[11px] uppercase tracking-[0.14em] text-[rgba(250,247,242,0.7)]">
+          <span className="font-mono text-[12px] uppercase tracking-[0.14em] text-[rgba(250,247,242,0.7)]">
             Putting {title} down…
           </span>
         </div>
