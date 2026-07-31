@@ -2,8 +2,8 @@
 
 /**
  * The Library Room (R32 / R39) — the first tenant of the reusable Rooms shell.
- * The librarian stands on top (R38, ask deferred to Slice 3); three shelves
- * separated by Strata rules read the real catalog (My / Studio / Patina);
+ * The librarian stands on top (R38); one omnibox finds or asks, and one shelf
+ * lens at a time reads the real catalog (My / Studio / Patina);
  * capture lands raw, promote and nominate move pieces between shelves; teaching
  * happens in place (inline Quick Tags / the Deep Analysis paper sheet); the foot
  * compresses teaching to one quiet line. No mock data, nothing gamified.
@@ -17,11 +17,12 @@ import {
   useValidationQueue,
   useOrganizations,
   createBrowserClient,
+  type LayerProductLayer,
 } from '@patina/supabase';
 import { RoomShell } from '../room-shell';
 import { LibrarianBar } from './librarian-bar';
-import { FieldSearch } from './field-search';
 import { LibraryShelf } from './library-shelf';
+import { LibraryToolbar } from './library-toolbar';
 import { LibraryFoot } from './library-foot';
 import { CaptureSheet } from './capture-sheet';
 import { ImportSheet } from './import-sheet';
@@ -33,9 +34,23 @@ import { DOCUMENT_SURFACE_KEYS } from '@/lib/help-system/document-surface-keys';
 import {
   DocumentAction,
   DocumentActionGroup,
-  DocumentActionRow,
 } from '../../document-action';
 import { useMobilePrimaryAction } from '../../mobile/mobile-shell';
+
+const SHELF_COPY: Record<LayerProductLayer, { name: string; meta: string }> = {
+  personal: {
+    name: 'My Library',
+    meta: 'raw captures · from the extension, photos, paste',
+  },
+  studio: {
+    name: 'Studio Library',
+    meta: 'proven · promoted from captures',
+  },
+  catalog: {
+    name: 'Patina Catalog',
+    meta: 'maker pieces · order through Patina · nominate a maker',
+  },
+};
 
 export function LibraryRoom() {
   useDocumentSurface(DOCUMENT_SURFACE_KEYS.library); // R89 — scope help to the Library room
@@ -85,6 +100,7 @@ export function LibraryRoom() {
 
   const [captureOpen, setCaptureOpen] = useState(false);
   const [importOpen, setImportOpen] = useState(false);
+  const [activeLayer, setActiveLayer] = useState<LayerProductLayer>('personal');
   const [deep, setDeep] = useState<{ id: string; name: string } | null>(null);
   const [promoteId, setPromoteId] = useState<string | null>(null);
   const [nominateVendorId, setNominateVendorId] = useState<string | null>(null);
@@ -146,14 +162,6 @@ export function LibraryRoom() {
           >
             Capture
           </DocumentAction>
-          <DocumentAction
-            actionKey="compose-piece"
-            variant="secondary"
-            leading="✎"
-            onClick={enterCompose}
-          >
-            Compose a piece
-          </DocumentAction>
         </DocumentActionGroup>
       }
     >
@@ -166,59 +174,29 @@ export function LibraryRoom() {
           }
         />
 
-        {/* The exact-find companion to the librarian's semantic ask (R88). */}
-        <FieldSearch />
+        <LibraryToolbar
+          activeLayer={activeLayer}
+          counts={counts ?? null}
+          onLayerChange={setActiveLayer}
+          onCompose={enterCompose}
+          onImport={() => setImportOpen(true)}
+        />
 
-        <div className="mt-6 px-6 sm:px-9">
+        <div className="px-6 sm:px-9">
           <LibraryShelf
-            layer="personal"
-            name="My Library"
-            meta="raw captures · from the extension, photos, paste"
+            key={activeLayer}
+            id="library-shelf-panel"
+            labelledBy={`library-lens-${activeLayer}`}
+            layer={activeLayer}
+            name={SHELF_COPY[activeLayer].name}
+            meta={SHELF_COPY[activeLayer].meta}
             teachingIds={teachingIds}
             validationIds={validationIds}
             onDeep={(id, name) => setDeep({ id, name })}
-            onPromote={(id) => setPromoteId(id)}
-            actions={
-              <DocumentActionRow
-                surfaceKey="library"
-                regionKey="personal-shelf"
-                aria-label="My Library shelf actions"
-              >
-                <DocumentAction
-                  actionKey="import-pieces"
-                  variant="tertiary"
-                  onClick={() => setImportOpen(true)}
-                >
-                  Import…
-                </DocumentAction>
-                <DocumentAction
-                  actionKey="capture-piece"
-                  variant="tertiary"
-                  onClick={() => setCaptureOpen(true)}
-                >
-                  + Capture
-                </DocumentAction>
-              </DocumentActionRow>
+            onPromote={activeLayer === 'personal' ? (id) => setPromoteId(id) : undefined}
+            onNominate={
+              activeLayer === 'studio' ? (id) => void handleNominate(id) : undefined
             }
-          />
-
-          <LibraryShelf
-            layer="studio"
-            name="Studio Library"
-            meta="proven · promoted from captures"
-            teachingIds={teachingIds}
-            validationIds={validationIds}
-            onDeep={(id, name) => setDeep({ id, name })}
-            onNominate={(id) => void handleNominate(id)}
-          />
-
-          <LibraryShelf
-            layer="catalog"
-            name="Patina Catalog"
-            meta="maker pieces · order through Patina · nominate a maker"
-            teachingIds={teachingIds}
-            validationIds={validationIds}
-            onDeep={(id, name) => setDeep({ id, name })}
           />
         </div>
 

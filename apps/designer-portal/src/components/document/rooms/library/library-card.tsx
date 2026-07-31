@@ -73,7 +73,7 @@ export function LibraryCard({
     'unknown maker';
 
   return (
-    <article className="group relative overflow-hidden rounded-[8px] border border-[var(--doc-ink-border)] bg-white transition-colors duration-200 hover:border-[var(--color-clay)]">
+    <article className="group relative overflow-hidden rounded-[8px] border border-[var(--doc-ink-border)] bg-white transition-colors duration-200 hover:border-[var(--color-clay)] motion-reduce:transition-none">
       <Link
         href={`/library/${item.id}`}
         aria-label={`Open ${item.name}`}
@@ -87,24 +87,26 @@ export function LibraryCard({
             loading="lazy"
           />
         ) : (
-          <span className="font-mono text-[9px] uppercase tracking-[0.14em] text-[var(--color-aged-oak)] opacity-50">
+          <span className="font-mono text-[12px] uppercase tracking-[0.1em] text-[var(--color-charcoal)]">
             {item.category ?? 'piece'}
           </span>
         )}
 
         {needsValidation ? (
-          <span className="absolute left-2 top-2 rounded-[3px] bg-[rgba(139,156,173,0.92)] px-1.5 py-0.5 font-mono text-[8px] font-semibold uppercase tracking-[0.08em] text-white">
+          <span className="absolute left-2 top-2 inline-flex items-center gap-1.5 rounded-[3px] border border-[var(--color-pearl)] bg-[rgba(252,250,246,0.94)] px-1.5 py-0.5 font-mono text-[12px] font-semibold uppercase tracking-[0.06em] text-[var(--color-charcoal)]">
+            <i aria-hidden className="h-1.5 w-1.5 rounded-full bg-[var(--color-dusty-blue)]" />
             Needs a look
           </span>
         ) : (
           needsTeaching && (
-            <span className="absolute left-2 top-2 rounded-[3px] bg-[rgba(232,197,71,0.92)] px-1.5 py-0.5 font-mono text-[8px] font-semibold uppercase tracking-[0.08em] text-[#5c4a1a]">
+            <span className="absolute left-2 top-2 inline-flex items-center gap-1.5 rounded-[3px] border border-[var(--color-pearl)] bg-[rgba(252,250,246,0.94)] px-1.5 py-0.5 font-mono text-[12px] font-semibold uppercase tracking-[0.06em] text-[var(--color-charcoal)]">
+              <i aria-hidden className="h-1.5 w-1.5 rounded-full bg-[#d2ad2f]" />
               Needs teaching
             </span>
           )
         )}
         {item.layer === 'catalog' && (
-          <span className="absolute right-2 top-2 inline-flex items-center gap-1 rounded-[3px] border border-[rgba(196,165,123,0.5)] bg-[rgba(252,250,246,0.92)] px-1.5 py-0.5 font-mono text-[8px] font-semibold uppercase tracking-[0.06em] text-[var(--color-aged-oak)]">
+          <span className="absolute right-2 top-2 inline-flex items-center gap-1 rounded-[3px] border border-[rgba(196,165,123,0.5)] bg-[rgba(252,250,246,0.92)] px-1.5 py-0.5 font-mono text-[12px] font-semibold uppercase tracking-[0.06em] text-[var(--color-charcoal)]">
             <span aria-hidden className="inline-flex flex-col gap-[1px]">
               <i className="block h-px w-2 bg-[var(--color-clay)]" />
               <i className="block h-px w-1.5 bg-[var(--color-clay)] opacity-60" />
@@ -118,19 +120,19 @@ export function LibraryCard({
       <div className="px-3.5 py-3">
         <Link
           href={`/library/${item.id}`}
-          className="block text-[0.82rem] font-medium leading-snug text-[var(--color-charcoal)] transition-colors hover:text-[var(--color-clay)]"
+          className="block text-[14px] font-medium leading-snug text-[var(--color-charcoal)] transition-colors hover:text-[var(--text-body)] motion-reduce:transition-none"
         >
           {item.name}
         </Link>
-        <div className="mt-0.5 text-[0.66rem] text-[var(--color-aged-oak)]">
+        <div className="mt-0.5 text-[12px] text-[var(--color-charcoal)]">
           {sub}
         </div>
 
         <div className="mt-2.5 flex items-center justify-between gap-2">
-          <span className="font-mono text-[9px] uppercase tracking-[0.06em] text-[var(--color-aged-oak)] opacity-60">
+          <span className="font-mono text-[12px] uppercase tracking-[0.06em] text-[var(--color-charcoal)]">
             {LAYER_FOOT[item.layer]}
           </span>
-          <div className="flex items-center gap-1.5">
+          <div className="flex flex-wrap items-center justify-end gap-1.5">
             {foldable && (
               <CardLink
                 actionKey="open-piece-teaching"
@@ -203,7 +205,7 @@ function CardLink({
       regionKey="library-card"
       variant="secondary"
       onClick={onClick}
-      className={subtle ? 'text-[var(--color-aged-oak)]' : undefined}
+      className={subtle ? 'text-[var(--text-body)]' : undefined}
     >
       {children}
     </DocumentAction>
@@ -239,7 +241,7 @@ function InlineQuickTags({
 
   return (
     <div className="border-t border-[var(--color-pearl)] bg-[rgba(232,197,71,0.05)] px-3.5 py-3 motion-safe:animate-[doc-fade_200ms_ease-out]">
-      <div className="mb-2 font-mono text-[8px] font-semibold uppercase tracking-[0.08em] text-[#b89a2e]">
+      <div className="mb-2 font-mono text-[12px] font-semibold uppercase tracking-[0.08em] text-[var(--color-charcoal)]">
         What is its character?
       </div>
       {isLoading ? (
@@ -255,10 +257,10 @@ function InlineQuickTags({
               key={s.id}
               type="button"
               onClick={() => setPicked((p) => (p === s.id ? null : s.id))}
-              className={`inline-flex min-h-11 min-w-11 items-center justify-center px-2.5 py-1 text-[0.66rem] transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-clay)] ${
+              className={`inline-flex min-h-11 min-w-11 items-center justify-center px-2.5 py-1 text-[12px] transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-clay)] motion-reduce:transition-none ${
                 picked === s.id
                   ? 'text-[var(--color-charcoal)]'
-                  : 'text-[var(--color-aged-oak)] hover:text-[var(--color-charcoal)]'
+                  : 'text-[var(--text-body)] hover:text-[var(--color-charcoal)]'
               }`}
             >
               <span
@@ -340,7 +342,7 @@ function InlineValidate({
 
   return (
     <div className="border-t border-[var(--color-pearl)] bg-[rgba(139,156,173,0.06)] px-3.5 py-3 motion-safe:animate-[doc-fade_200ms_ease-out]">
-      <div className="mb-2 font-mono text-[8px] font-semibold uppercase tracking-[0.08em] text-[var(--color-dusty-blue)]">
+      <div className="mb-2 font-mono text-[12px] font-semibold uppercase tracking-[0.08em] text-[var(--color-charcoal)]">
         Does this read look right?
       </div>
 
@@ -351,7 +353,7 @@ function InlineValidate({
           {read.map((r) => (
             <span
               key={r.name}
-              className={`rounded-[14px] border px-2.5 py-1 text-[0.66rem] ${
+              className={`rounded-[14px] border px-2.5 py-1 text-[12px] ${
                 r.primary
                   ? 'border-[var(--color-dusty-blue)] text-[var(--color-charcoal)]'
                   : 'border-[var(--color-pearl)] text-[var(--text-body)]'
@@ -363,14 +365,14 @@ function InlineValidate({
           ))}
         </div>
       ) : (
-        <p className="text-[0.7rem] italic text-[var(--color-aged-oak)]">
+        <p className="text-[14px] italic text-[var(--color-charcoal)]">
           No read on file — confirm it belongs on the shelf, or flag it for a
           closer look.
         </p>
       )}
 
       {done ? (
-        <p className="mt-3 text-[0.7rem] italic text-[var(--color-aged-oak)]">
+        <p className="mt-3 text-[14px] italic text-[var(--color-charcoal)]">
           {done === 'confirm'
             ? 'Recorded — thank you for weighing in.'
             : 'Flagged for another eye.'}
@@ -414,7 +416,7 @@ function InlineValidate({
       )}
 
       {error && (
-        <p className="mt-2 text-[0.7rem] text-[var(--color-terracotta)]">
+        <p className="mt-2 border-l-2 border-[var(--color-terracotta)] pl-2 text-[14px] text-[var(--color-charcoal)]">
           {error}
         </p>
       )}
