@@ -201,6 +201,9 @@ async function evaluateFlag(
       identity.distinctId,
       {
         groups: identity.studioId ? { studio: identity.studioId } : undefined,
+        personProperties: identity.studioId
+          ? { studio_id: identity.studioId }
+          : undefined,
         sendFeatureFlagEvents: false,
         disableGeoip: true,
       },

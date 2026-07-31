@@ -120,6 +120,7 @@ describe("spec-book anonymous server feature gate", () => {
       CREATOR_ID,
       {
         groups: { studio: STUDIO_ID },
+        personProperties: { studio_id: STUDIO_ID },
         sendFeatureFlagEvents: false,
         disableGeoip: true,
       },
