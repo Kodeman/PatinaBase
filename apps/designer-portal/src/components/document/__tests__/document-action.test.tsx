@@ -30,8 +30,9 @@ const events = documentEvents as jest.Mocked<typeof documentEvents>;
 
 /**
  * The Scored Ink (I107): the visible control is a scored word, not a box. Each
- * variant keeps the 12px floor (I91) and differentiates by weight and ink; the
- * retired chrome column is the box grammar that must no longer appear.
+ * variant keeps the 12px floor (I91), owns a real 44px target, and
+ * differentiates by weight and ink; the retired chrome column is the box
+ * grammar that must no longer appear.
  */
 const VARIANTS = [
   {
@@ -83,12 +84,14 @@ describe('DocumentAction', () => {
       expect(action).toHaveClass(
         'da-act',
         `da-${variant}`,
+        'min-h-[44px]',
+        'min-w-[44px]',
         'text-[12px]',
         tracking,
         weight,
       );
 
-      // The box is gone: the 44px floor now lives on the hit halo, not the ink.
+      // The control itself owns the target. Its visual ink remains unboxed.
       expect(action).not.toHaveClass('min-h-11');
       expect(action).not.toHaveClass('min-w-11');
       expect(action).not.toHaveClass('rounded-[4px]');
