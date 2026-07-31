@@ -17,7 +17,6 @@
 //
 
 import Foundation
-import CryptoKit
 import Supabase
 
 /// Routes `BackgroundScanUploader` progress + completion callbacks back to
@@ -313,6 +312,25 @@ final class ArtifactUploader {
 
     // MARK: - Artifact → column / storage-path mapping
 
+    /// One kind's disposition, as a single indivisible fact.
+    ///
+    /// `listed` is reachable only through a non-nil `Route`, which is what
+    /// makes "a listed kind is always uploaded" true by construction rather
+    /// than by review — there is no way to spell a listed kind with no folder.
+    nonisolated struct Route {
+        let column: String
+        let folder: String
+        /// May this kind appear in `manifest.artifacts[]`? False only for
+        /// `.bundleManifest` — see `routing(for:)`.
+        let listed: Bool
+
+        init(_ column: String, _ folder: String, listed: Bool = true) {
+            self.column = column
+            self.folder = folder
+            self.listed = listed
+        }
+    }
+
     /// THE routing table: where a kind's bytes go in Storage, which
     /// `room_scans` column records the resulting object key, and whether the
     /// kind may appear in `manifest.artifacts[]`. One switch, so the three
@@ -346,17 +364,17 @@ final class ArtifactUploader {
     /// migration is applied.
     nonisolated private static func routing(
         for kind: ScanManifest.ArtifactKind
-    ) -> (column: String, folder: String, listed: Bool)? {
+    ) -> Route? {
         switch kind {
-        case .usdz:             return ("model_url", "usdz", true)
-        case .capturedRoomJson: return ("captured_room_json_url", "captured_room", true)
-        case .worldMap:         return ("world_map_url", "worldmap", true)
-        case .mesh:             return ("mesh_url", "mesh", true)
-        case .depthArchive:     return ("depth_archive_url", "depth", true)
-        case .bundleArchive:    return ("scan_bundle_url", "bundle", true)
-        case .heroThumbnail:    return ("hero_frame_url", "thumbnails", true)
-        case .photosManifest:   return ("photos_manifest_url", "photos_manifest", true)
-        case .coverageHeatmap:  return ("coverage_heatmap_url", "coverage", true)
+        case .usdz:             return Route("model_url", "usdz")
+        case .capturedRoomJson: return Route("captured_room_json_url", "captured_room")
+        case .worldMap:         return Route("world_map_url", "worldmap")
+        case .mesh:             return Route("mesh_url", "mesh")
+        case .depthArchive:     return Route("depth_archive_url", "depth")
+        case .bundleArchive:    return Route("scan_bundle_url", "bundle")
+        case .heroThumbnail:    return Route("hero_frame_url", "thumbnails")
+        case .photosManifest:   return Route("photos_manifest_url", "photos_manifest")
+        case .coverageHeatmap:  return Route("coverage_heatmap_url", "coverage")
 
         // Uploaded, but NEVER listed — the manifest IS the artifact list, and a
         // list cannot contain itself. The validator requires a 64-hex `sha256`
@@ -376,7 +394,7 @@ final class ArtifactUploader {
         // The upload still happens, and the column is still patched, because
         // `uploadPlan(for:in:)` appends this kind to whatever the manifest
         // lists — see there for how its (real) sha256 is obtained.
-        case .bundleManifest:   return ("bundle_manifest_url", "manifests", false)
+        case .bundleManifest:   return Route("bundle_manifest_url", "manifests", listed: false)
 
         // Device-local: no column, no upload — and therefore, by the invariant
         // above, no `artifacts[]` entry either. `uploadArtifact(...)` guards on
@@ -421,65 +439,6 @@ final class ArtifactUploader {
     /// which anything enters `manifest.artifacts`.
     nonisolated static func isManifestListed(_ kind: ScanManifest.ArtifactKind) -> Bool {
         routing(for: kind)?.listed ?? false
-    }
-
-    // MARK: - Upload plan
-
-    /// Everything that must be PUT to Storage for this bundle: every artifact
-    /// the manifest lists, plus `manifest.json` itself.
-    ///
-    /// The plan is a strict SUPERSET of `manifest.artifacts` — that asymmetry
-    /// is the whole design. The list may only name what will be there
-    /// (`isManifestListed`), while the upload may carry more than the list
-    /// names; the manifest is exactly the one thing in the second set and not
-    /// the first. Driving the upload loop from this rather than from
-    /// `manifest.artifacts` is what keeps `room_scans.bundle_manifest_url`
-    /// getting patched now that the self-entry is gone: the loop's generic
-    /// `scanColumn(for:)` PATCH sees `.bundleManifest` exactly as before.
-    ///
-    /// The manifest entry's `sha256` is REAL here, and could never have been
-    /// real inside the file: measured at upload time, when manifest.json is
-    /// final. It is what `uploadArtifact` stamps onto the Storage object's
-    /// metadata and merges into `room_scans.artifacts_sha256`. The worker's
-    /// `reconcile_artifacts_sha256` only compares kinds the manifest lists, so
-    /// the extra ledger row is inert there.
-    ///
-    /// Entries the manifest lists but that cannot be uploaded are dropped
-    /// rather than carried: a bundle SEALED BY AN EARLIER BUILD still lists
-    /// `.depthIndex`, `.photoThumbnails` and a hash-less `.bundleManifest` on
-    /// disk, and those would otherwise seed dead upload states and a duplicate
-    /// `.bundleManifest`. Dropping them changes nothing about what reaches
-    /// Storage — they never did — it just keeps the plan a set of real objects.
-    /// (It does NOT repair such a bundle: its manifest.json bytes still name
-    /// them, so ingest still fails until the bundle is re-sealed.)
-    ///
-    /// Falls back to the listable subset if manifest.json is unreadable — a
-    /// bundle with no manifest on disk is already failing elsewhere, and a
-    /// fabricated entry would be worse than an absent one.
-    nonisolated static func uploadPlan(
-        for manifest: ScanManifest,
-        in bundleURL: URL
-    ) -> [ScanManifest.Artifact] {
-        let listed = manifest.artifacts.filter { isManifestListed($0.kind) }
-        guard let manifestArtifact = manifestArtifact(in: bundleURL) else {
-            return listed
-        }
-        return listed + [manifestArtifact]
-    }
-
-    /// Describe `manifest.json` as it is on disk right now: true size, true
-    /// sha256. Nil when the file is missing or unreadable.
-    nonisolated static func manifestArtifact(in bundleURL: URL) -> ScanManifest.Artifact? {
-        let url = bundleURL.appendingPathComponent("manifest.json")
-        guard let data = try? Data(contentsOf: url) else { return nil }
-        let digest = SHA256.hash(data: data)
-        return ScanManifest.Artifact(
-            kind: .bundleManifest,
-            relativePath: "manifest.json",
-            sizeBytes: data.count,
-            sha256: digest.map { String(format: "%02x", $0) }.joined(),
-            mimeType: "application/json"
-        )
     }
 
     /// What goes in a `room_scans` artifact URL column for an object at

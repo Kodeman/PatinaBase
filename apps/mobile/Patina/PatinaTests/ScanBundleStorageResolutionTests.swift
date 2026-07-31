@@ -201,9 +201,11 @@ struct ScanBundleStorageResolutionTests {
     /// code the worker vendors, so running it on these bytes is the closest a
     /// local test gets to the gate a real scan hits.
     ///
-    ///     xcrun simctl get_app_container <udid> cloud.patina.app data
-    ///     python3 scripts/validate_capture_bundle.py \
-    ///       "<container>/tmp/validator-export/<scanId>"
+    ///     C=$(xcrun simctl get_app_container <udid> cloud.patina.app data)
+    ///     python3 scripts/validate_capture_bundle.py "$C/tmp/validator-export"
+    ///
+    /// The destination is fixed and replaced on every run, so it neither
+    /// accumulates nor needs a scan id looked up.
     ///
     /// Expected today: the artifact-level checks (§10.4 required kinds, §10.5
     /// per-artifact existence/sha256/size, §10.11 photo parity) all pass, and
@@ -216,11 +218,9 @@ struct ScanBundleStorageResolutionTests {
         let writer = try sealedRealisticBundle()
         defer { try? writer.deleteBundle() }
 
-        let exportRoot = FileManager.default.temporaryDirectory
+        let dest = FileManager.default.temporaryDirectory
             .appendingPathComponent(Self.exportDirName, isDirectory: true)
-        let dest = exportRoot.appendingPathComponent(writer.scanId.uuidString, isDirectory: true)
         try? FileManager.default.removeItem(at: dest)
-        try FileManager.default.createDirectory(at: exportRoot, withIntermediateDirectories: true)
         try FileManager.default.copyItem(at: writer.bundleURL, to: dest)
 
         // The copy is the subject, so assert against the copy.

@@ -376,8 +376,10 @@ public final class ScanBundleWriter {
         case .depthIndex: return "depth/depth_index.ndjson"
         case .photoThumbnails: return "photos/photo_thumbnails.ndjson"
         case .annotations: return "annotations.json"
-        // `.bundleManifest` is a registered pointer to the existing root
-        // manifest.json; `.photosManifest` points at the existing NDJSON.
+        // `.photosManifest` points at the existing NDJSON. `.bundleManifest`
+        // names the root manifest, but is never registered through here —
+        // `upsertArtifact` refuses it (the list cannot contain itself); the
+        // uploader adds it from `ArtifactUploader.uploadPlan(for:in:)`.
         case .bundleManifest: return "manifest.json"
         case .photosManifest: return "photos/photos_metadata.ndjson"
         }

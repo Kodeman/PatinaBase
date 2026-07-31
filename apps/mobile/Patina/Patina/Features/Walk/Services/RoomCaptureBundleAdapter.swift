@@ -306,8 +306,11 @@ final class RoomCaptureBundleAdapter {
             PatinaLog.scan.error("[RoomCaptureService] photos manifest register failed: \(error.localizedDescription)")
         }
 
-        // 4. Seal the manifest (recomputes sizes, hashes artifacts, and
-        //    registers manifest.json as its own `.bundleManifest` pointer).
+        // 4. Seal the manifest (recomputes sizes, hashes artifacts). It does
+        //    NOT list manifest.json as an artifact of itself — the list cannot
+        //    contain itself, and the entry could never carry the sha256 the
+        //    validator requires. The uploader adds it from
+        //    `ArtifactUploader.uploadPlan(for:in:)`, where the hash is real.
         //    Nothing here transmits: sealing writes into the on-disk bundle and
         //    the scan then rests in `.heldLocal`. Bytes leave the phone only
         //    later, from the explicit design-request flow.
