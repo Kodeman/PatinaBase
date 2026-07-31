@@ -98,13 +98,11 @@ export default defineConfig({
     url: 'http://localhost:3000',
     reuseExistingServer: !process.env.CI,
     timeout: 120_000,
-    /* Playwright merges this with process.env. PostHog never resolves in
-     * e2e/CI, so force feature-flag-gated UI on via the env override read
-     * by src/hooks/use-feature-flag.ts (NEXT_PUBLIC_ vars are inlined at
-     * dev-server start — with reuseExistingServer, a server started without
-     * this var will NOT pick it up; restart `pnpm dev` with the var set). */
+    /* Playwright merges this with process.env. Keep unrelated feature
+     * workspaces deterministic in local and CI journeys. */
     env: {
-      NEXT_PUBLIC_FLAG_OVERRIDES: 'procurement-workspace-pilot:true',
+      NEXT_PUBLIC_FLAG_OVERRIDES:
+        'procurement-workspace-pilot:true',
     },
   },
 });

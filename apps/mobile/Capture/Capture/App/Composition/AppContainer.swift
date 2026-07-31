@@ -62,8 +62,7 @@ public final class AppContainer {
     let portalLogin = PortalLoginController()
 
     public init() {
-        let real = AppConfiguration.runsRealServices
-        let store = CaptureStore.resilient(persistent: real)
+        let real = AppConfiguration.runsRealServices; let store = CaptureStore.resilient(persistent: real)
         self.store = store
 
         if real {

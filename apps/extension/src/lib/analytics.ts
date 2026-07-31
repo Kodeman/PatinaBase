@@ -20,7 +20,6 @@ export function getPostHog() {
     autocapture: false,
     disable_session_recording: true,
     disable_surveys: true,
-    advanced_disable_decide: true,
     respect_dnt: true,
     ip: false,
   });
@@ -36,10 +35,7 @@ export function getPostHog() {
  * Identify the authenticated user for cross-platform identity linking.
  * Uses user.id as distinct_id, never sends full email.
  */
-export function identifyUser(
-  userId: string,
-  properties?: { emailDomain?: string }
-): void {
+export function identifyUser(userId: string, properties?: { emailDomain?: string }): void {
   const ph = getPostHog();
   if (!ph) return;
   ph.identify(userId, {
@@ -85,8 +81,7 @@ function track(event: string, properties?: Record<string, unknown>): void {
  */
 export const extensionEvents = {
   /** Sidepanel opened. `domain` is the active tab's host when known. */
-  open: (properties?: { domain?: string }) =>
-    track('capture.extension.opened', properties ?? {}),
+  open: (properties?: { domain?: string }) => track('capture.extension.opened', properties ?? {}),
 
   /** Sidepanel closed without a successful capture. */
   cancelled: (properties?: { domain?: string; openMs?: number }) =>
@@ -110,10 +105,8 @@ export const extensionEvents = {
     }),
 
   /** Vendor successfully saved. Not in PRD §10.1 — internal-use event. */
-  vendorCapture: (properties: {
-    hasLogo: boolean;
-    hasContactInfo: boolean;
-  }) => track('vendor.captured', properties),
+  vendorCapture: (properties: { hasLogo: boolean; hasContactInfo: boolean }) =>
+    track('vendor.captured', properties),
 
   /** Mobile capture surfaces — emit from the mobile flow when it lands. */
   mobilePhotoTaken: (properties: { hadNotes: boolean }) =>
@@ -127,8 +120,7 @@ export const extensionEvents = {
   manualCreated: () => track('capture.manual.created', {}),
 
   /** Extraction telemetry — extension-internal, not in PRD §10.1. */
-  extractionStart: (mode: string) =>
-    track('extraction_started', { mode }),
+  extractionStart: (mode: string) => track('extraction_started', { mode }),
   extractionComplete: (mode: string, fieldCount?: number) =>
     track('extraction_completed', { mode, field_count: fieldCount }),
   extractionError: (mode: string, errorType?: string) =>
@@ -139,6 +131,27 @@ export const extensionEvents = {
     track('mode_switch', { from, to, auto_detected: autoDetected }),
 
   /** Existing product/vendor found during save. */
-  duplicateDetected: (type: 'product' | 'vendor') =>
-    track('duplicate_detected', { type }),
+  duplicateDetected: (type: 'product' | 'vendor') => track('duplicate_detected', { type }),
+
+  /** Spec-book project placement, namespaced for the cross-surface funnel. */
+  specBookPlacementAttempted: (properties: { routeKind: string; reusedProduct: boolean }) =>
+    track('spec_book.capture_routing.attempted', {
+      route_kind: properties.routeKind,
+      reused_product: properties.reusedProduct,
+    }),
+  specBookPlacementSucceeded: (properties: { routeKind: string; reusedProduct: boolean }) =>
+    track('spec_book.capture_routing.succeeded', {
+      route_kind: properties.routeKind,
+      reused_product: properties.reusedProduct,
+    }),
+  specBookPlacementFailed: (properties: {
+    routeKind: string;
+    reusedProduct: boolean;
+    retryable: boolean;
+  }) =>
+    track('spec_book.capture_routing.failed', {
+      route_kind: properties.routeKind,
+      reused_product: properties.reusedProduct,
+      retryable: properties.retryable,
+    }),
 };

@@ -1,0 +1,71 @@
+{
+  "project": {
+    "name": "Middlewest Spec Book Production Readiness",
+    "studio": "Middlewest Studio"
+  },
+  "rooms": [
+    {
+      "name": "Living Room",
+      "items": [
+        {
+          "code": "LR-101",
+          "kind": "fixed",
+          "productKey": "shared-console",
+          "finish": "Natural walnut",
+          "audiences": ["client", "vendor", "installer", "internal", "care"]
+        },
+        {
+          "code": "LR-102",
+          "kind": "allowance",
+          "audiences": ["client", "internal"]
+        }
+      ]
+    },
+    {
+      "name": "Primary Bedroom",
+      "items": [
+        {
+          "code": "PB-201",
+          "kind": "fixed",
+          "productKey": "shared-console",
+          "finish": "Ebonized oak",
+          "audiences": ["client", "vendor", "installer", "internal", "care"]
+        },
+        {
+          "code": "PB-202",
+          "kind": "tbd",
+          "audiences": ["client", "internal"]
+        }
+      ]
+    },
+    {
+      "name": "Entry",
+      "items": [
+        {
+          "code": "EN-301",
+          "kind": "fixed",
+          "productKey": "entry-pendant",
+          "finish": "Aged brass",
+          "audiences": ["client", "vendor", "installer", "internal", "care"]
+        }
+      ]
+    }
+  ],
+  "issueJourney": {
+    "firstAudiences": ["client", "vendor", "installer", "internal", "care"],
+    "postIssueChange": {
+      "code": "PB-201",
+      "field": "finish",
+      "from": "Ebonized oak",
+      "to": "Oxidized oak"
+    },
+    "secondIssueType": "addendum"
+  },
+  "forbiddenClientMarkers": [
+    "trade_price_cents",
+    "markup",
+    "private_notes",
+    "internal_vendor_contact",
+    "procurement_commentary"
+  ]
+}

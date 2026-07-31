@@ -98,6 +98,7 @@ struct SupabaseProjectsService: ProjectsService {
         async let phases = fetchPhases(projectID: id)
         async let milestones = fetchMilestones(projectID: id)
         async let ffeItems = fetchFFEItems(projectID: id)
+        async let specRooms = fetchProjectRooms(projectID: id)
         async let rooms = fetchClientRooms(clientID: row.clientID)
 
         let detail = try await FieldProjectDetail(
@@ -105,6 +106,7 @@ struct SupabaseProjectsService: ProjectsService {
             phases: phases,
             milestones: milestones,
             ffeItems: ffeItems,
+            specRooms: specRooms,
             rooms: rooms
         )
 
@@ -157,12 +159,25 @@ struct SupabaseProjectsService: ProjectsService {
     private func fetchFFEItems(projectID: String) async throws -> [FieldFFEItem] {
         let rows: [FFEItemRow] = try await client
             .from("project_ffe_items")
-            .select("id, name, status, room:project_rooms!project_room_id(name)")
+            .select("id, name, status, project_room_id, product_id, "
+                + "room:project_rooms!project_room_id(name)")
             .eq("project_id", value: projectID)
             .order("sort_order", ascending: true)
             .execute()
             .value
         return rows.map { $0.field }
+    }
+
+    /// Project-scoped FF&E rooms accepted by `place_product_in_project`.
+    private func fetchProjectRooms(projectID: String) async throws -> [FieldProjectRoom] {
+        let rows: [RoomRow] = try await client
+            .from("project_rooms")
+            .select("id, name")
+            .eq("project_id", value: projectID)
+            .order("sort_order", ascending: true)
+            .execute()
+            .value
+        return rows.map { FieldProjectRoom(id: $0.id, name: $0.name) }
     }
 
     /// `rooms?select=id,name&user_id=eq.<client_id>&order=created_at.desc` —
@@ -336,17 +351,28 @@ private struct FFEItemRow: Decodable {
     /// CHECK: specified | quoted | approved | ordered | production | shipped
     /// | delivered | installed (00066).
     let status: String
+    let projectRoomID: String?
+    let productID: String?
     let room: FFERoomRow?
 
     enum CodingKeys: String, CodingKey {
         case id
         case name
         case status
+        case projectRoomID = "project_room_id"
+        case productID = "product_id"
         case room
     }
 
     var field: FieldFFEItem {
-        FieldFFEItem(id: id, name: name, status: status, roomName: room?.name)
+        FieldFFEItem(
+            id: id,
+            name: name,
+            status: status,
+            roomName: room?.name,
+            projectRoomID: projectRoomID,
+            productID: productID
+        )
     }
 }
 

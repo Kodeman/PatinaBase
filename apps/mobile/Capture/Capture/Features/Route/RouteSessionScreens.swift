@@ -20,6 +20,7 @@ enum RouteSessionScreens {
         let projectCreator = container.projectCreator
         let analytics = container.analytics
         let session = container.session
+        let projects = container.projects
 
         func currentSpecimen(_ id: UUID) -> Specimen? {
             CaptureOwnerProjectionPolicy.specimen(
@@ -45,6 +46,7 @@ enum RouteSessionScreens {
             return AnyView(S1AssignVenueScreen(
                 specimen: currentSpecimen(id), store: store,
                 location: location, session: session,
+                projects: projects,
                 coordinator: coordinator, analytics: analytics))
         }
         r.registerSheet(CaptureSheet.createProject.registryKey) { _ in

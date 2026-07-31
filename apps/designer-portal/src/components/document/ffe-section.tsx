@@ -23,6 +23,7 @@
  * unfold — Track 11-M's surface — wired post-merge.)
  */
 
+import Link from 'next/link';
 import {
   useFfeInvoiceCoverage,
   useProjectFFEItems,
@@ -487,6 +488,14 @@ export function FFESection({
             <span className="font-mono text-[9px] uppercase tracking-[0.05em] text-[var(--text-muted)]">
               {meta}
             </span>
+          )}
+          {mode === 'project' && (
+            <Link
+              href={`/doc/${projectId}/spec-book`}
+              className="font-mono text-[9px] uppercase tracking-[0.08em] text-[var(--color-clay)] hover:text-[var(--color-charcoal)]"
+            >
+              Spec book →
+            </Link>
           )}
           {/* R76 — bill the schedule: the composer opens FF&E-prefilled with
               every uninvoiced priced line ticked (untick there to narrow). */}

@@ -4512,7 +4512,8 @@ export type Database = {
           id: string
           label: string | null
           last_viewed_at: string | null
-          proposal_id: string
+          proposal_id: string | null
+          spec_book_artifact_id: string | null
           status: string
           token_hash: string
           updated_at: string
@@ -4526,7 +4527,8 @@ export type Database = {
           id?: string
           label?: string | null
           last_viewed_at?: string | null
-          proposal_id: string
+          proposal_id?: string | null
+          spec_book_artifact_id?: string | null
           status?: string
           token_hash: string
           updated_at?: string
@@ -4540,7 +4542,8 @@ export type Database = {
           id?: string
           label?: string | null
           last_viewed_at?: string | null
-          proposal_id?: string
+          proposal_id?: string | null
+          spec_book_artifact_id?: string | null
           status?: string
           token_hash?: string
           updated_at?: string
@@ -4553,6 +4556,13 @@ export type Database = {
             columns: ["proposal_id"]
             isOneToOne: false
             referencedRelation: "proposals"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "document_shares_spec_book_artifact_id_fkey"
+            columns: ["spec_book_artifact_id"]
+            isOneToOne: false
+            referencedRelation: "spec_book_artifacts"
             referencedColumns: ["id"]
           },
         ]
@@ -10561,6 +10571,92 @@ export type Database = {
           },
         ]
       }
+      project_ffe_specs: {
+        Row: {
+          care_notes: string | null
+          client_notes: string | null
+          color_fabric: string | null
+          created_at: string
+          exact_location: string | null
+          ffe_item_id: string
+          field_provenance: Json
+          finish: string | null
+          id: string
+          install_notes: string | null
+          material: string | null
+          na_declarations: Json
+          readiness_status: string
+          routing_source: Json
+          row_version: number
+          selected_dimensions: Json | null
+          selected_media: Json
+          sku: string | null
+          source_verifications: Json
+          trade_notes: string | null
+          updated_at: string
+          updated_by: string | null
+          warranty_notes: string | null
+        }
+        Insert: {
+          care_notes?: string | null
+          client_notes?: string | null
+          color_fabric?: string | null
+          created_at?: string
+          exact_location?: string | null
+          ffe_item_id: string
+          field_provenance?: Json
+          finish?: string | null
+          id?: string
+          install_notes?: string | null
+          material?: string | null
+          na_declarations?: Json
+          readiness_status?: string
+          routing_source?: Json
+          row_version?: number
+          selected_dimensions?: Json | null
+          selected_media?: Json
+          sku?: string | null
+          source_verifications?: Json
+          trade_notes?: string | null
+          updated_at?: string
+          updated_by?: string | null
+          warranty_notes?: string | null
+        }
+        Update: {
+          care_notes?: string | null
+          client_notes?: string | null
+          color_fabric?: string | null
+          created_at?: string
+          exact_location?: string | null
+          ffe_item_id?: string
+          field_provenance?: Json
+          finish?: string | null
+          id?: string
+          install_notes?: string | null
+          material?: string | null
+          na_declarations?: Json
+          readiness_status?: string
+          routing_source?: Json
+          row_version?: number
+          selected_dimensions?: Json | null
+          selected_media?: Json
+          sku?: string | null
+          source_verifications?: Json
+          trade_notes?: string | null
+          updated_at?: string
+          updated_by?: string | null
+          warranty_notes?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "project_ffe_specs_ffe_item_id_fkey"
+            columns: ["ffe_item_id"]
+            isOneToOne: true
+            referencedRelation: "project_ffe_items"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       project_narrative_sections: {
         Row: {
           body: string | null
@@ -16496,6 +16592,462 @@ export type Database = {
           },
         ]
       }
+      spec_book_artifacts: {
+        Row: {
+          attempt_count: number
+          audience: string
+          checksum_sha256: string | null
+          created_at: string
+          error_code: string | null
+          error_message: string | null
+          format: string
+          id: string
+          project_document_id: string | null
+          render_started_at: string | null
+          rendered_at: string | null
+          revision_id: string
+          size_bytes: number | null
+          status: string
+          storage_bucket: string
+          storage_path: string | null
+          updated_at: string
+        }
+        Insert: {
+          attempt_count?: number
+          audience: string
+          checksum_sha256?: string | null
+          created_at?: string
+          error_code?: string | null
+          error_message?: string | null
+          format?: string
+          id?: string
+          project_document_id?: string | null
+          render_started_at?: string | null
+          rendered_at?: string | null
+          revision_id: string
+          size_bytes?: number | null
+          status?: string
+          storage_bucket?: string
+          storage_path?: string | null
+          updated_at?: string
+        }
+        Update: {
+          attempt_count?: number
+          audience?: string
+          checksum_sha256?: string | null
+          created_at?: string
+          error_code?: string | null
+          error_message?: string | null
+          format?: string
+          id?: string
+          project_document_id?: string | null
+          render_started_at?: string | null
+          rendered_at?: string | null
+          revision_id?: string
+          size_bytes?: number | null
+          status?: string
+          storage_bucket?: string
+          storage_path?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "spec_book_artifacts_project_document_id_fkey"
+            columns: ["project_document_id"]
+            isOneToOne: false
+            referencedRelation: "project_documents"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "spec_book_artifacts_revision_id_fkey"
+            columns: ["revision_id"]
+            isOneToOne: false
+            referencedRelation: "spec_book_revisions"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      spec_book_chapters: {
+        Row: {
+          created_at: string
+          hero_media: Json
+          id: string
+          included: boolean
+          page_template: string
+          position: number
+          project_room_id: string | null
+          review_state: string
+          spec_book_id: string
+          title: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          hero_media?: Json
+          id?: string
+          included?: boolean
+          page_template?: string
+          position?: number
+          project_room_id?: string | null
+          review_state?: string
+          spec_book_id: string
+          title: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          hero_media?: Json
+          id?: string
+          included?: boolean
+          page_template?: string
+          position?: number
+          project_room_id?: string | null
+          review_state?: string
+          spec_book_id?: string
+          title?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "spec_book_chapters_project_room_id_fkey"
+            columns: ["project_room_id"]
+            isOneToOne: false
+            referencedRelation: "project_rooms"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "spec_book_chapters_spec_book_id_fkey"
+            columns: ["spec_book_id"]
+            isOneToOne: false
+            referencedRelation: "spec_books"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      spec_book_item_settings: {
+        Row: {
+          chapter_id: string | null
+          created_at: string
+          ffe_item_id: string
+          id: string
+          included: boolean
+          page_template: string
+          position: number
+          publication_overrides: Json
+          review_state: string
+          spec_book_id: string
+          updated_at: string
+        }
+        Insert: {
+          chapter_id?: string | null
+          created_at?: string
+          ffe_item_id: string
+          id?: string
+          included?: boolean
+          page_template?: string
+          position?: number
+          publication_overrides?: Json
+          review_state?: string
+          spec_book_id: string
+          updated_at?: string
+        }
+        Update: {
+          chapter_id?: string | null
+          created_at?: string
+          ffe_item_id?: string
+          id?: string
+          included?: boolean
+          page_template?: string
+          position?: number
+          publication_overrides?: Json
+          review_state?: string
+          spec_book_id?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "spec_book_item_settings_chapter_id_fkey"
+            columns: ["chapter_id"]
+            isOneToOne: false
+            referencedRelation: "spec_book_chapters"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "spec_book_item_settings_ffe_item_id_fkey"
+            columns: ["ffe_item_id"]
+            isOneToOne: false
+            referencedRelation: "project_ffe_items"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "spec_book_item_settings_spec_book_id_fkey"
+            columns: ["spec_book_id"]
+            isOneToOne: false
+            referencedRelation: "spec_books"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      spec_book_revision_items: {
+        Row: {
+          chapter_position: number
+          content_hash: string
+          created_at: string
+          document_code: string | null
+          ffe_item_id: string
+          id: string
+          item_position: number
+          item_snapshot: Json
+          item_type: string
+          revision_id: string
+        }
+        Insert: {
+          chapter_position: number
+          content_hash: string
+          created_at?: string
+          document_code?: string | null
+          ffe_item_id: string
+          id?: string
+          item_position: number
+          item_snapshot: Json
+          item_type: string
+          revision_id: string
+        }
+        Update: {
+          chapter_position?: number
+          content_hash?: string
+          created_at?: string
+          document_code?: string | null
+          ffe_item_id?: string
+          id?: string
+          item_position?: number
+          item_snapshot?: Json
+          item_type?: string
+          revision_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "spec_book_revision_items_ffe_item_id_fkey"
+            columns: ["ffe_item_id"]
+            isOneToOne: false
+            referencedRelation: "project_ffe_items"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "spec_book_revision_items_revision_id_fkey"
+            columns: ["revision_id"]
+            isOneToOne: false
+            referencedRelation: "spec_book_revisions"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      spec_book_revisions: {
+        Row: {
+          base_revision_id: string | null
+          created_at: string
+          created_by: string | null
+          id: string
+          idempotency_key: string
+          issue_type: string
+          issued_at: string | null
+          prior_revision_id: string | null
+          reason: string | null
+          render_snapshot: Json
+          requested_audiences: string[]
+          revision_number: number
+          snapshot_checksum: string
+          spec_book_id: string
+          status: string
+          template_snapshot: Json
+          warning_acknowledgements: Json
+        }
+        Insert: {
+          base_revision_id?: string | null
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          idempotency_key: string
+          issue_type: string
+          issued_at?: string | null
+          prior_revision_id?: string | null
+          reason?: string | null
+          render_snapshot: Json
+          requested_audiences: string[]
+          revision_number: number
+          snapshot_checksum: string
+          spec_book_id: string
+          status?: string
+          template_snapshot: Json
+          warning_acknowledgements?: Json
+        }
+        Update: {
+          base_revision_id?: string | null
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          idempotency_key?: string
+          issue_type?: string
+          issued_at?: string | null
+          prior_revision_id?: string | null
+          reason?: string | null
+          render_snapshot?: Json
+          requested_audiences?: string[]
+          revision_number?: number
+          snapshot_checksum?: string
+          spec_book_id?: string
+          status?: string
+          template_snapshot?: Json
+          warning_acknowledgements?: Json
+        }
+        Relationships: [
+          {
+            foreignKeyName: "spec_book_revisions_base_revision_id_fkey"
+            columns: ["base_revision_id"]
+            isOneToOne: false
+            referencedRelation: "spec_book_revisions"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "spec_book_revisions_prior_revision_id_fkey"
+            columns: ["prior_revision_id"]
+            isOneToOne: false
+            referencedRelation: "spec_book_revisions"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "spec_book_revisions_spec_book_id_fkey"
+            columns: ["spec_book_id"]
+            isOneToOne: false
+            referencedRelation: "spec_books"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      spec_book_templates: {
+        Row: {
+          audience_profiles: Json
+          branding: Json
+          created_at: string
+          created_by: string | null
+          id: string
+          is_active: boolean
+          layout_settings: Json
+          name: string
+          page_grammar: Json
+          required_field_rules: Json
+          studio_id: string | null
+          template_key: string
+          version: number
+          visibility_rules: Json
+        }
+        Insert: {
+          audience_profiles: Json
+          branding?: Json
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          is_active?: boolean
+          layout_settings?: Json
+          name: string
+          page_grammar: Json
+          required_field_rules: Json
+          studio_id?: string | null
+          template_key: string
+          version: number
+          visibility_rules: Json
+        }
+        Update: {
+          audience_profiles?: Json
+          branding?: Json
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          is_active?: boolean
+          layout_settings?: Json
+          name?: string
+          page_grammar?: Json
+          required_field_rules?: Json
+          studio_id?: string | null
+          template_key?: string
+          version?: number
+          visibility_rules?: Json
+        }
+        Relationships: [
+          {
+            foreignKeyName: "spec_book_templates_studio_id_fkey"
+            columns: ["studio_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "spec_book_templates_studio_id_fkey"
+            columns: ["studio_id"]
+            isOneToOne: false
+            referencedRelation: "v_studios"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      spec_books: {
+        Row: {
+          created_at: string
+          created_by: string | null
+          default_audiences: string[]
+          id: string
+          project_id: string
+          settings: Json
+          template_id: string
+          title: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          created_by?: string | null
+          default_audiences?: string[]
+          id?: string
+          project_id: string
+          settings?: Json
+          template_id: string
+          title: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          created_by?: string | null
+          default_audiences?: string[]
+          id?: string
+          project_id?: string
+          settings?: Json
+          template_id?: string
+          title?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "spec_books_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: true
+            referencedRelation: "field_activity_summary"
+            referencedColumns: ["project_id"]
+          },
+          {
+            foreignKeyName: "spec_books_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: true
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "spec_books_template_id_fkey"
+            columns: ["template_id"]
+            isOneToOne: false
+            referencedRelation: "spec_book_templates"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       spec_field_defs: {
         Row: {
           created_at: string
@@ -20346,6 +20898,37 @@ export type Database = {
         Args: { p_value: string }
         Returns: string
       }
+      _spec_book_canonical_json: { Args: { p_value: Json }; Returns: string }
+      _spec_book_current_item_snapshots: {
+        Args: { p_spec_book_id: string }
+        Returns: {
+          chapter_position: number
+          content_hash: string
+          document_code: string
+          ffe_item_id: string
+          item_position: number
+          item_snapshot: Json
+          item_type: string
+        }[]
+      }
+      _spec_book_has_forbidden_keys: {
+        Args: { p_forbidden: string[]; p_value: Json }
+        Returns: boolean
+      }
+      _spec_book_resolve_field: {
+        Args: {
+          p_line: Json
+          p_line_at: string
+          p_master: Json
+          p_master_at: string
+          p_na: Json
+          p_override: Json
+          p_override_at: string
+          p_studio: Json
+          p_verified_at: string
+        }
+        Returns: Json
+      }
       accept_design_request: { Args: { p_lead_id: string }; Returns: Json }
       accept_workspace_invitation: {
         Args: { p_token: string }
@@ -20812,6 +21395,10 @@ export type Database = {
           isSetofReturn: false
         }
       }
+      create_spec_book_share: {
+        Args: { p_artifact_id: string; p_expires_at?: string; p_label: string }
+        Returns: Json
+      }
       create_studio_workspace: {
         Args: { p_name: string }
         Returns: {
@@ -20980,6 +21567,26 @@ export type Database = {
         Args: { p_user_id: string }
         Returns: undefined
       }
+      ensure_project_spec_book: {
+        Args: { p_project_id: string }
+        Returns: {
+          created_at: string
+          created_by: string | null
+          default_audiences: string[]
+          id: string
+          project_id: string
+          settings: Json
+          template_id: string
+          title: string
+          updated_at: string
+        }
+        SetofOptions: {
+          from: "*"
+          to: "spec_books"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
       enter_concierge_damage_mode: {
         Args: {
           p_actor: string
@@ -21023,6 +21630,34 @@ export type Database = {
       field_capture_jsonb_text_array: {
         Args: { p_value: Json }
         Returns: string[]
+      }
+      finalize_spec_book_issue: {
+        Args: { p_revision_id: string }
+        Returns: {
+          base_revision_id: string | null
+          created_at: string
+          created_by: string | null
+          id: string
+          idempotency_key: string
+          issue_type: string
+          issued_at: string | null
+          prior_revision_id: string | null
+          reason: string | null
+          render_snapshot: Json
+          requested_audiences: string[]
+          revision_number: number
+          snapshot_checksum: string
+          spec_book_id: string
+          status: string
+          template_snapshot: Json
+          warning_acknowledgements: Json
+        }
+        SetofOptions: {
+          from: "*"
+          to: "spec_book_revisions"
+          isOneToOne: true
+          isSetofReturn: false
+        }
       }
       find_products_for_style: {
         Args: { match_count?: number; style_id: string }
@@ -21786,7 +22421,30 @@ export type Database = {
         }
         Returns: string
       }
+      place_product_in_project: {
+        Args: {
+          p_category?: string
+          p_product_id: string
+          p_project_id: string
+          p_room_id?: string
+          p_slot_id?: string
+          p_source?: Json
+        }
+        Returns: Json
+      }
       po_status_to_ffe_stage: { Args: { p_po_status: string }; Returns: string }
+      prepare_spec_book_issue: {
+        Args: {
+          p_audiences: string[]
+          p_base_revision_id: string
+          p_idempotency_key: string
+          p_issue_type: string
+          p_reason: string
+          p_spec_book_id: string
+          p_warning_acknowledgements?: Json
+        }
+        Returns: Json
+      }
       preview_taste_update: { Args: { p_judgment_id: number }; Returns: Json }
       process_style_quiz: {
         Args: { quiz_answers: Json; timings?: Json }
@@ -22078,6 +22736,7 @@ export type Database = {
           isSetofReturn: false
         }
       }
+      resolve_spec_book_share: { Args: { p_token: string }; Returns: Json }
       resolve_studio_identity: {
         Args: { p_designer_id?: string; p_project_id?: string }
         Returns: {

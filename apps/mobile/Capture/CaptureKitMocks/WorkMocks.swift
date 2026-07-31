@@ -92,9 +92,23 @@ public enum WorkFixtures {
                            dueDate: nil, status: "upcoming")
         ],
         ffeItems: [
-            FieldFFEItem(id: "ffe-1", name: "Holloway 3-seat sofa", status: "specified", roomName: "Living room"),
-            FieldFFEItem(id: "ffe-2", name: "Oak dining table", status: "ordered", roomName: "Dining room"),
-            FieldFFEItem(id: "ffe-3", name: "Brass pendant", status: "proposed", roomName: "Dining room")
+            FieldFFEItem(
+                id: "ffe-1", name: "Holloway 3-seat sofa",
+                status: "specified", roomName: "Living room",
+                projectRoomID: "room-1", productID: "product-1"),
+            FieldFFEItem(
+                id: "ffe-2", name: "Oak dining table",
+                status: "ordered", roomName: "Dining room",
+                projectRoomID: "room-2", productID: "product-2"),
+            FieldFFEItem(
+                id: "ffe-3", name: "Brass pendant allowance",
+                status: "proposed", roomName: "Dining room",
+                projectRoomID: "room-2", productID: nil)
+        ],
+        specRooms: [
+            FieldProjectRoom(id: "room-1", name: "Living room"),
+            FieldProjectRoom(id: "room-2", name: "Dining room"),
+            FieldProjectRoom(id: "room-3", name: "Entry")
         ],
         rooms: [
             FieldProjectRoom(id: "room-1", name: "Living room"),

@@ -445,6 +445,7 @@ struct CaptureSessionContextPolicyTests {
             destination: .library,
             projectID: "old-project",
             projectName: "Old project",
+            projectRoomID: "old-room",
             room: "Gallery",
             shelf: "Lighting")
 
@@ -453,11 +454,13 @@ struct CaptureSessionContextPolicyTests {
             projectID: "new-project",
             projectName: "New project",
             room: "Dining room",
-            shelf: "Seating")
+            shelf: "Seating",
+            projectRoomID: "new-room")
 
         #expect(updated.destination == .library)
         #expect(updated.projectID == "new-project")
         #expect(updated.projectName == "New project")
+        #expect(updated.projectRoomID == "new-room")
         #expect(updated.room == "Dining room")
         #expect(updated.shelf == "Seating")
     }
