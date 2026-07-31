@@ -124,7 +124,13 @@ export function DocSheetHead({
         <span className="doc-type-meta truncate font-semibold uppercase tracking-[0.14em] text-[var(--color-charcoal)]">
           <span id={titleId}>{title}</span>
           {pageLabel ? (
-            <span className="font-normal text-[var(--color-quiet-ink)]"> · {pageLabel}</span>
+            <span
+              className="hidden font-normal text-[var(--color-quiet-ink)] sm:inline"
+              data-doc-sheet-page-label
+            >
+              {' '}
+              · {pageLabel}
+            </span>
           ) : null}
         </span>
       </span>

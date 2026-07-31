@@ -210,7 +210,13 @@ describe('DocSheet', () => {
   it('closes on Escape and exposes a visible labelled title when it owns the head', async () => {
     const onClose = jest.fn();
     render(
-      <DocSheet open onClose={onClose} title="Order review" icon={FileText}>
+      <DocSheet
+        open
+        onClose={onClose}
+        title="Order review"
+        icon={FileText}
+        pageLabel="Ledger"
+      >
         <p>Three orders need review.</p>
       </DocSheet>,
     );
@@ -221,6 +227,9 @@ describe('DocSheet', () => {
     expect(document.getElementById(titleId ?? '')).toHaveTextContent(
       'Order review',
     );
+    expect(
+      dialog.querySelector('[data-doc-sheet-page-label]'),
+    ).toHaveClass('hidden', 'sm:inline');
     expect(screen.getByRole('button', { name: 'Put back · Esc' })).toHaveClass(
       'min-h-11',
       'doc-type-meta',
