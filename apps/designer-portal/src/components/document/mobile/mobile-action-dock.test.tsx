@@ -4,9 +4,12 @@ import { MobileBar } from './mobile-bar';
 import {
   MobileShellProvider,
   useMobilePrimaryAction,
+  useMobileSecondaryAction,
   type MobilePrimaryAction,
+  type MobileSecondaryAction,
 } from './mobile-shell';
 import { openFeedbackSheet } from '../feedback/feedback-sheet';
+import { ProposalShareInstrument } from '../proposal-share-instrument';
 
 const mockOpenPost = jest.fn();
 let mockPathname = '/desk';
@@ -45,6 +48,11 @@ jest.mock('../feedback/feedback-sheet', () => ({
   openFeedbackSheet: jest.fn(),
 }));
 
+jest.mock('../overlays/share-sheet', () => ({
+  ShareSheet: ({ open }: { open: boolean }) =>
+    open ? <div role="dialog" aria-label="Share sheet" /> : null,
+}));
+
 jest.mock('@/lib/analytics/document-events', () => ({
   documentEvents: {
     actionShown: jest.fn(),
@@ -54,6 +62,15 @@ jest.mock('@/lib/analytics/document-events', () => ({
 
 function Registration({ action }: { action: MobilePrimaryAction | null }) {
   useMobilePrimaryAction(action);
+  return null;
+}
+
+function SecondaryRegistration({
+  action,
+}: {
+  action: MobileSecondaryAction | null;
+}) {
+  useMobileSecondaryAction(action);
   return null;
 }
 
@@ -130,6 +147,113 @@ describe('unified mobile edge owner', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Leave a note' }));
     expect(openFeedbackSheet).toHaveBeenCalledTimes(1);
     expect(screen.queryByRole('group')).not.toBeInTheDocument();
+  });
+
+  it('registers and removes a surface-owned secondary action in More', () => {
+    const share = jest.fn();
+    const action: MobileSecondaryAction = {
+      actionKey: 'share-proposal',
+      label: 'Share client copy',
+      onPress: share,
+    };
+    const { rerender } = render(
+      <MobileShellProvider>
+        <SecondaryRegistration action={action} />
+        <MobileBar />
+      </MobileShellProvider>,
+    );
+
+    fireEvent.click(
+      screen.getByRole('button', { name: 'More studio actions' }),
+    );
+    const secondary = screen.getByRole('button', {
+      name: 'Share client copy',
+    });
+    expect(secondary).toHaveAttribute(
+      'data-mobile-secondary-key',
+      'share-proposal',
+    );
+    expect(secondary).toHaveFocus();
+    fireEvent.click(secondary);
+    expect(share).toHaveBeenCalledTimes(1);
+
+    rerender(
+      <MobileShellProvider>
+        <SecondaryRegistration action={null} />
+        <MobileBar />
+      </MobileShellProvider>,
+    );
+    fireEvent.click(
+      screen.getByRole('button', { name: 'More studio actions' }),
+    );
+    expect(
+      screen.queryByRole('button', { name: 'Share client copy' }),
+    ).not.toBeInTheDocument();
+  });
+
+  it('never repeats the active primary action in the secondary registry', () => {
+    const primary = jest.fn();
+    const secondary = jest.fn();
+    render(
+      <MobileShellProvider>
+        <Registration
+          action={{
+            actionKey: 'share-proposal',
+            surfaceKey: 'drafting',
+            regionKey: 'room-head',
+            label: 'Share client copy',
+            target: { kind: 'press', onPress: primary },
+          }}
+        />
+        <SecondaryRegistration
+          action={{
+            actionKey: 'share-proposal',
+            label: 'Share client copy',
+            onPress: secondary,
+          }}
+        />
+        <MobileBar />
+      </MobileShellProvider>,
+    );
+
+    expect(
+      screen.getAllByRole('button', { name: 'Share client copy' }),
+    ).toHaveLength(1);
+    fireEvent.click(
+      screen.getByRole('button', { name: 'More studio actions' }),
+    );
+    expect(
+      document.querySelector('[data-mobile-secondary-key="share-proposal"]'),
+    ).toBeNull();
+  });
+
+  it('opens Drafting’s same ShareSheet through More when no primary exists', () => {
+    render(
+      <MobileShellProvider>
+        <div data-testid="desktop-only-action" className="hidden">
+          <ProposalShareInstrument proposalId="proposal-1" mobileSecondary />
+        </div>
+        <MobileBar />
+      </MobileShellProvider>,
+    );
+
+    expect(
+      screen.queryByRole('button', { name: /Send to|Send as-is/i }),
+    ).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Share…' })).toBeInTheDocument();
+    fireEvent.click(
+      screen.getByRole('button', { name: 'More studio actions' }),
+    );
+    expect(
+      screen.getAllByRole('button', { name: 'Share client copy' }),
+    ).toHaveLength(1);
+    fireEvent.click(screen.getByRole('button', { name: 'Share client copy' }));
+    const shareSheet = screen.getByRole('dialog', { name: 'Share sheet' });
+    expect(shareSheet).toBeInTheDocument();
+    expect(screen.getByTestId('desktop-only-action')).not.toContainElement(
+      shareSheet,
+    );
+    expect(shareSheet.parentElement).toBe(document.body);
   });
 
   it('restores focus to More when Escape closes the menu', () => {

@@ -5,11 +5,11 @@
  * timer); the drawer is the desk's book list (its six books open the
  * existing charcoal DocSheet ledgers via the open-ledger event — Library,
  * People, and Rooms are Rooms, so the same event walks them in instead). One
- * scrim, scrim-tap dismiss; no shadows (D4). Shown below 1180px, matching
- * the responsive paper-shell handoff.
+ * scrim, scrim-tap dismiss; no shadows (D4). Document/drawer sheets stop at
+ * 1180px; the timer alone remains the compact spine's sheet through 1439px.
  */
 
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useMarginItems } from '@/hooks/use-margin-items';
 import { useDocumentTime } from '@/hooks/document-time-provider';
@@ -27,7 +27,48 @@ import { openLedger } from '../command-bar';
 import { openAccount } from '../account/account-sheet';
 import { MobileAccountHeader } from '../account/mobile-account-header';
 import { DocumentAction, DocumentActionRow } from '../document-action';
+import { lockBodyScroll } from '../overlays/body-scroll-lock';
 import { useMobileShell } from './mobile-shell';
+
+const SHEET_FOCUSABLE = [
+  'a[href]:not([tabindex="-1"])',
+  'button:not([disabled]):not([tabindex="-1"])',
+  'input:not([disabled]):not([type="hidden"]):not([tabindex="-1"])',
+  'select:not([disabled]):not([tabindex="-1"])',
+  'textarea:not([disabled]):not([tabindex="-1"])',
+  '[contenteditable="true"]:not([tabindex="-1"])',
+  '[tabindex]:not([tabindex="-1"])',
+].join(',');
+
+function focusableSheetControls(panel: HTMLElement) {
+  return Array.from(
+    panel.querySelectorAll<HTMLElement>(SHEET_FOCUSABLE),
+  ).filter((control) => {
+    const style = window.getComputedStyle(control);
+    return (
+      !control.hidden &&
+      !control.matches(':disabled') &&
+      control.getAttribute('aria-disabled') !== 'true' &&
+      !control.closest('[hidden], [aria-hidden="true"], [inert]') &&
+      style.display !== 'none' &&
+      style.visibility !== 'hidden'
+    );
+  });
+}
+
+function topActiveDialog() {
+  return Array.from(
+    document.querySelectorAll<HTMLElement>(
+      '[role="dialog"][aria-modal="true"]',
+    ),
+  )
+    .filter(
+      (dialog) =>
+        !dialog.hidden &&
+        !dialog.closest('[hidden], [aria-hidden="true"], [inert]'),
+    )
+    .at(-1);
+}
 
 const LEDGERS: {
   key: string;
@@ -85,30 +126,112 @@ const LEDGERS: {
 
 function Sheet({
   tone,
+  kind,
   onClose,
   children,
 }: {
   tone: 'paper' | 'dark';
+  kind: 'drawer' | 'timer' | 'spine' | 'margin-item';
   onClose: () => void;
   children: React.ReactNode;
 }) {
+  const compactTimer = kind === 'timer';
+  const dialogRef = useRef<HTMLDivElement>(null);
+  const panelRef = useRef<HTMLDivElement>(null);
+  const closeRef = useRef(onClose);
+  closeRef.current = onClose;
+
+  useEffect(() => {
+    const activeElement = document.activeElement;
+    const returnFocusTarget =
+      activeElement instanceof HTMLElement && activeElement !== document.body
+        ? activeElement
+        : null;
+    const unlockBodyScroll = lockBodyScroll();
+    const focusFrame = window.requestAnimationFrame(() => {
+      panelRef.current?.focus({ preventScroll: true });
+    });
+    const onKeyDown = (event: KeyboardEvent) => {
+      const dialog = dialogRef.current;
+      const panel = panelRef.current;
+      if (!dialog || !panel || topActiveDialog() !== dialog) return;
+
+      if (event.key === 'Escape') {
+        event.preventDefault();
+        event.stopPropagation();
+        closeRef.current();
+        return;
+      }
+
+      if (event.key !== 'Tab' || event.defaultPrevented) return;
+      const controls = focusableSheetControls(panel);
+      if (controls.length === 0) {
+        event.preventDefault();
+        panel.focus({ preventScroll: true });
+        return;
+      }
+
+      const first = controls[0];
+      const last = controls[controls.length - 1];
+      const active = document.activeElement;
+      if (active === panel || !panel.contains(active)) {
+        event.preventDefault();
+        (event.shiftKey ? last : first).focus();
+      } else if (event.shiftKey && active === first) {
+        event.preventDefault();
+        last.focus();
+      } else if (!event.shiftKey && active === last) {
+        event.preventDefault();
+        first.focus();
+      }
+    };
+
+    document.addEventListener('keydown', onKeyDown, true);
+    return () => {
+      window.cancelAnimationFrame(focusFrame);
+      document.removeEventListener('keydown', onKeyDown, true);
+      unlockBodyScroll();
+      if (!returnFocusTarget?.isConnected) return;
+      window.requestAnimationFrame(() => {
+        returnFocusTarget.focus({ preventScroll: true });
+      });
+    };
+  }, []);
+
   return (
     <div
-      className="fixed inset-0 z-[58] min-[1180px]:hidden"
+      ref={dialogRef}
+      id={compactTimer ? 'mobile-timer-sheet' : undefined}
+      data-mobile-sheet-kind={kind}
+      data-mobile-sheet-regime={
+        compactTimer ? 'through-1439' : 'below-1180-only'
+      }
+      className={`fixed inset-0 z-[58] ${
+        compactTimer ? 'min-[1440px]:hidden' : 'min-[1180px]:hidden'
+      }`}
       role="dialog"
+      aria-label={compactTimer ? 'Time in hand' : undefined}
       aria-modal="true"
     >
       <button
         type="button"
         aria-label="Dismiss"
+        tabIndex={-1}
         onClick={onClose}
         className="absolute inset-0 cursor-default bg-[rgba(44,41,38,0.5)]"
       />
       <div
+        ref={panelRef}
+        tabIndex={-1}
+        data-mobile-sheet-panel
         className={`absolute inset-x-0 bottom-0 max-h-[80%] overflow-y-auto rounded-t-[14px] pb-[max(0.9rem,env(safe-area-inset-bottom))] motion-safe:animate-[doc-sheet-up_250ms_var(--ease-editorial)] ${
           tone === 'paper'
             ? 'border-t border-[var(--doc-ink-border)] bg-[var(--doc-paper)]'
             : 'border-t border-[rgba(250,247,242,0.18)] bg-[var(--color-charcoal)]'
+        } ${
+          compactTimer
+            ? 'min-[1180px]:left-14 min-[1180px]:right-auto min-[1180px]:w-[28rem] min-[1180px]:rounded-tr-[14px]'
+            : ''
         }`}
       >
         <div
@@ -143,7 +266,7 @@ export function MobileSheets() {
   // ── Drawer: the six books ──
   if (sheet.kind === 'drawer') {
     return (
-      <Sheet tone="dark" onClose={closeSheet}>
+      <Sheet tone="dark" kind="drawer" onClose={closeSheet}>
         {/* The maker's nameplate — tap to open the Account sheet (identity,
             status, settings, sign out). Distinct from the money "Accounts" book
             in the list below. */}
@@ -214,7 +337,7 @@ export function MobileSheets() {
   // ── Timer (paper) ──
   if (sheet.kind === 'timer') {
     return (
-      <Sheet tone="paper" onClose={closeSheet}>
+      <Sheet tone="paper" kind="timer" onClose={closeSheet}>
         <MobileTimerSheet />
       </Sheet>
     );
@@ -224,7 +347,7 @@ export function MobileSheets() {
   if (sheet.kind === 'spine') {
     const open = allItems.filter((i) => i.kind !== 'time');
     return (
-      <Sheet tone="paper" onClose={closeSheet}>
+      <Sheet tone="paper" kind="spine" onClose={closeSheet}>
         <button
           type="button"
           onClick={() => {
@@ -365,7 +488,7 @@ export function MobileSheets() {
       return null;
     }
     return (
-      <Sheet tone="paper" onClose={closeSheet}>
+      <Sheet tone="paper" kind="margin-item" onClose={closeSheet}>
         <span
           className="mb-1 block font-mono text-[12px] font-semibold uppercase tracking-[0.08em]"
           style={{ color: marginAccent(row.kind).label }}
@@ -415,8 +538,8 @@ function MobileTimerSheet() {
   const valid = Number.isFinite(parsed) && parsed >= 1;
 
   return (
-    <div>
-      <span className="font-mono text-[12px] font-semibold uppercase tracking-[0.08em] text-[var(--color-clay)]">
+    <div data-mobile-timer-sheet-content>
+      <span className="doc-type-meta font-semibold uppercase tracking-[0.08em] text-[var(--color-quiet-ink)]">
         In hand{paused ? ' · paused' : ''}
       </span>
       <p className="mb-2 mt-1 font-mono text-[26px] tracking-[0.04em] text-[var(--color-charcoal)]">
@@ -460,13 +583,13 @@ function MobileTimerSheet() {
             aria-label="Minutes"
             value={minutes}
             onChange={(e) => setMinutes(e.target.value)}
-            className="w-full rounded-[5px] border border-[var(--color-pearl)] bg-white px-2.5 py-2 text-[13px] text-[var(--color-charcoal)] focus:border-[var(--color-clay)] focus:outline-none"
+            className="doc-type-control min-h-11 w-full rounded-[5px] border border-[var(--color-pearl)] bg-white px-2.5 py-2 text-[var(--color-charcoal)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-quiet-ink)]"
           />
           <select
             aria-label="Activity"
             value={activity}
             onChange={(e) => setActivity(e.target.value)}
-            className="w-full rounded-[5px] border border-[var(--color-pearl)] bg-white px-2.5 py-2 text-[13px] text-[var(--color-charcoal)] focus:border-[var(--color-clay)] focus:outline-none"
+            className="doc-type-control min-h-11 w-full rounded-[5px] border border-[var(--color-pearl)] bg-white px-2.5 py-2 text-[var(--color-charcoal)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-quiet-ink)]"
           >
             {ACTIVITIES.map((a) => (
               <option key={a.key} value={a.key}>
@@ -510,4 +633,4 @@ function MobileTimerSheet() {
 }
 
 const BTN =
-  'rounded-[4px] border border-[var(--color-pearl)] px-3 py-1.5 text-[12px] font-medium text-[var(--color-charcoal)] active:border-[var(--color-clay)]';
+  'doc-type-meta min-h-11 min-w-11 rounded-[4px] border border-[var(--color-pearl)] px-3 py-2 font-medium text-[var(--color-charcoal)] active:border-[var(--color-clay)]';

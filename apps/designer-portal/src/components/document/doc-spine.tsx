@@ -10,7 +10,7 @@
 
 import Link from 'next/link';
 import { StrataMark } from './strata-mark';
-import { SpineTimer } from './spine-timer';
+import { CompactSpineTimerDoorway, SpineTimer } from './spine-timer';
 import { fillStateAtSection } from '@/lib/document/fill-state';
 import type { SpineSection } from '@/lib/document/section-derivation';
 import type { SectionKey } from '@/lib/document/desk-derivation';
@@ -112,6 +112,8 @@ export function DocSpine({
           );
         })}
       </ul>
+
+      <CompactSpineTimerDoorway />
 
       <div className="hidden min-[1440px]:block">
         <SpineTimer />

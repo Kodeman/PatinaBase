@@ -324,6 +324,7 @@ export function DraftingRoom({ proposalId }: { proposalId: string }) {
           <ProposalShareInstrument
             proposalId={proposalId}
             tier={proposal?.client_visibility_tier}
+            mobileSecondary
           />
         </DocumentActionGroup>
       }
