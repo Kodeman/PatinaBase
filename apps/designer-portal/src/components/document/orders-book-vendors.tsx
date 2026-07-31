@@ -38,14 +38,14 @@ import {
 } from './document-action';
 import { fmtDay, fmtUsd } from '@/lib/document/format';
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
 type AnyRecord = any;
 
 const getSupabase = () => createBrowserClient() as AnyRecord;
 
 const MONO_LABEL =
-  'font-mono text-[8.5px] uppercase tracking-[0.08em] text-[var(--color-aged-oak)]';
-const ROW_LINK = 'text-[10.5px] text-[var(--color-clay)] hover:underline';
+  'doc-type-meta uppercase tracking-[0.08em] text-[var(--color-quiet-ink)]';
+const ROW_LINK =
+  'da-score-hover doc-type-meta inline-flex min-h-11 min-w-11 items-center text-[var(--color-quiet-ink)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-quiet-ink)]';
 // The vendor message accent — dusty-blue (the message margin kind); MItem
 // repaints it clay for the studio's own voice.
 const MSG_ACCENT = {
@@ -246,7 +246,7 @@ function VendorThread({
       <button
         type="button"
         onClick={() => onOpenDocument(thread.project_id)}
-        className="inline-flex min-h-11 min-w-11 items-center font-mono text-[8.5px] uppercase tracking-[0.1em] text-[var(--color-clay)] hover:opacity-80 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-clay)]"
+        className="da-score-hover doc-type-meta inline-flex min-h-11 min-w-11 items-center uppercase tracking-[0.1em] text-[var(--color-quiet-ink)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-quiet-ink)]"
       >
         re: {projectName} →
       </button>
@@ -276,7 +276,7 @@ function VendorThread({
           );
         })}
         {messages.length === 0 && (
-          <li className="text-[11px] italic text-[var(--color-aged-oak)]">
+          <li className="doc-type-body italic text-[var(--color-quiet-ink)]">
             Opening the thread…
           </li>
         )}
@@ -284,14 +284,14 @@ function VendorThread({
       <DocumentActionRow
         surfaceKey="orders"
         regionKey="vendor-thread-reply"
-        className="items-end"
+        className="min-w-0 flex-col items-stretch sm:flex-row sm:items-end"
         aria-label="Vendor reply actions"
       >
         <textarea
           rows={2}
           placeholder="Reply…"
           aria-label="Reply to vendor"
-          className="flex-1 resize-none rounded-[3px] border border-[var(--color-pearl)] bg-transparent px-2 py-1.5 text-[11px] text-[var(--color-charcoal)] outline-none placeholder:text-[var(--text-faint)]"
+          className="doc-type-control min-h-11 w-full min-w-0 flex-1 resize-none rounded-[3px] border border-[var(--color-pearl)] bg-transparent px-2 py-2 text-[var(--color-charcoal)] placeholder:text-[var(--text-faint)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-quiet-ink)]"
           value={body}
           onChange={(e) => setBody(e.target.value)}
         />
@@ -339,7 +339,7 @@ function BriefComposer({
 
   if (!vendor.contact_profile_id) {
     return (
-      <p className="mt-2 text-[11px] italic text-[var(--color-aged-oak)]">
+      <p className="doc-type-body mt-2 italic text-[var(--color-quiet-ink)]">
         No comms profile on file for {vendor.name} — link one to open a thread.
       </p>
     );
@@ -353,14 +353,14 @@ function BriefComposer({
       <DocumentActionRow
         surfaceKey="orders"
         regionKey="vendor-brief"
-        className="mt-1 items-end"
+        className="mt-1 min-w-0 flex-col items-stretch sm:flex-row sm:items-end"
         aria-label="Vendor brief actions"
       >
         <textarea
           rows={2}
           placeholder={`Brief ${vendor.name}…`}
           aria-label="Opening brief"
-          className="flex-1 resize-none rounded-[3px] border border-[var(--color-pearl)] bg-transparent px-2 py-1.5 text-[11px] text-[var(--color-charcoal)] outline-none placeholder:text-[var(--text-faint)]"
+          className="doc-type-control min-h-11 w-full min-w-0 flex-1 resize-none rounded-[3px] border border-[var(--color-pearl)] bg-transparent px-2 py-2 text-[var(--color-charcoal)] placeholder:text-[var(--text-faint)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-quiet-ink)]"
           value={body}
           onChange={(e) => setBody(e.target.value)}
         />
@@ -395,7 +395,7 @@ function BriefComposer({
         </DocumentAction>
       </DocumentActionRow>
       {error && (
-        <p className="mt-1 text-[10px] text-[var(--color-terracotta)]">
+        <p className="doc-type-body mt-1 text-[var(--color-terracotta)]">
           {error}
         </p>
       )}
@@ -421,22 +421,22 @@ function VendorBookbar({
     { key: 'orders', label: `Orders · ${openCount}` },
   ];
   return (
-    <div className="mb-3 flex flex-wrap items-baseline gap-x-4 gap-y-1 border-b border-[var(--color-pearl)] pb-2">
+    <div className="mb-3 flex min-w-0 flex-wrap items-center gap-x-4 gap-y-1 border-b border-[var(--color-pearl)] pb-1">
       <span className="font-heading text-[15px] font-medium text-[var(--color-charcoal)]">
         {vendor.name}{' '}
-        <em className="not-italic text-[var(--color-clay)]">· vendor</em>
+        <em className="not-italic text-[var(--color-quiet-ink)]">· vendor</em>
       </span>
-      <span className="ml-auto flex flex-wrap items-baseline gap-x-3">
+      <span className="ml-auto flex flex-wrap items-center gap-x-3">
         {pages.map((p) => (
           <button
             key={p.key}
             type="button"
             onClick={() => onPage(p.key)}
             aria-current={page === p.key ? 'page' : undefined}
-            className={`inline-flex min-h-11 min-w-11 items-center font-mono text-[9px] uppercase tracking-[0.1em] transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-clay)] ${
+            className={`da-score-hover doc-type-meta inline-flex min-h-11 min-w-11 items-center uppercase tracking-[0.1em] transition-colors motion-reduce:transition-none focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-quiet-ink)] ${
               page === p.key
-                ? 'text-[var(--color-clay)]'
-                : 'text-[var(--color-aged-oak)] hover:text-[var(--color-charcoal)]'
+                ? 'da-score-on text-[var(--color-charcoal)]'
+                : 'text-[var(--color-quiet-ink)] hover:text-[var(--color-charcoal)]'
             }`}
           >
             {p.label}
@@ -495,21 +495,21 @@ export function VendorsBookPage({
 
   if (!vendor) {
     return (
-      <ul>
+      <ul className="min-w-0">
         {vendors.map((v) => (
           <li
             key={v.id}
-            className="grid grid-cols-[1fr_auto] items-baseline gap-3 border-b border-[var(--color-pearl)] px-1 py-2.5"
+            className="flex min-w-0 flex-wrap items-center gap-x-3 gap-y-1 border-b border-[var(--color-pearl)] px-1 py-3"
           >
-            <div>
+            <div className="min-w-[12rem] flex-1">
               <button
                 type="button"
                 onClick={() => setSelectedId(v.id)}
-                className="min-h-11 min-w-11 text-left text-[13px] font-medium text-[var(--color-charcoal)] hover:text-[var(--color-clay)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-clay)]"
+                className="da-score-hover doc-type-body inline-flex min-h-11 min-w-11 items-center text-left font-medium text-[var(--color-charcoal)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-quiet-ink)]"
               >
                 {v.name}
               </button>
-              <p className="font-mono text-[9px] uppercase tracking-[0.05em] text-[var(--color-aged-oak)]">
+              <p className="doc-type-meta uppercase tracking-[0.05em] text-[var(--color-quiet-ink)]">
                 {[
                   v.default_payment_terms?.replace(/_/g, ' '),
                   v.trade_account_email,
@@ -521,7 +521,7 @@ export function VendorsBookPage({
             <button
               type="button"
               onClick={() => setSelectedId(v.id)}
-              className={`${ROW_LINK} min-h-11 min-w-11 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-clay)]`}
+              className={ROW_LINK}
             >
               open page →
             </button>
@@ -532,11 +532,11 @@ export function VendorsBookPage({
   }
 
   return (
-    <div>
+    <div className="min-w-0">
       <button
         type="button"
         onClick={() => setSelectedId(null)}
-        className="mb-2 inline-flex min-h-11 min-w-11 items-center font-mono text-[9px] uppercase tracking-[0.07em] text-[var(--color-aged-oak)] hover:text-[var(--color-clay)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-clay)]"
+        className={`${ROW_LINK} mb-2 uppercase tracking-[0.07em]`}
       >
         ← all vendors
       </button>
@@ -551,7 +551,7 @@ export function VendorsBookPage({
       {/* ── Terms page: the trade account + the brief opener ── */}
       {page === 'terms' && (
         <div>
-          <p className="font-mono text-[10px] uppercase tracking-[0.06em] text-[var(--color-mocha)]">
+          <p className="doc-type-body uppercase tracking-[0.06em] text-[var(--color-charcoal)]">
             {[
               vendor.default_payment_terms?.replace(/_/g, ' '),
               vendor.trade_account_email,
@@ -564,7 +564,7 @@ export function VendorsBookPage({
               href={vendor.trade_portal_url}
               target="_blank"
               rel="noreferrer"
-              className="mt-1 inline-flex min-h-11 min-w-11 items-center text-[10.5px] text-[var(--color-clay)] hover:underline focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-clay)]"
+              className={`${ROW_LINK} mt-1`}
             >
               trade portal →
             </a>
@@ -572,7 +572,7 @@ export function VendorsBookPage({
           {/* R78/R60 cross-link contract: trade lives here; the RELATIONSHIP lives in People. */}
           <a
             href={`/people?person=${vendor.id}&role=maker`}
-            className="mt-1 inline-flex min-h-11 min-w-11 items-center text-[10.5px] text-[var(--color-clay)] hover:underline focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-clay)]"
+            className={`${ROW_LINK} mt-1`}
           >
             their profile · in People →
           </a>
@@ -591,16 +591,27 @@ export function VendorsBookPage({
               return (
                 <li
                   key={po.id}
-                  className="grid grid-cols-[1fr_auto_auto_auto] items-center gap-3 border-b border-[var(--color-pearl)] px-1 py-2"
+                  data-orders-vendor-po-row
+                  className="border-b border-[var(--color-pearl)] px-1 py-3"
                 >
-                  <div>
-                    <p className="text-[12px] font-medium text-[var(--color-charcoal)]">
+                  <div className="flex min-w-0 flex-wrap items-center gap-x-3 gap-y-2">
+                    <p className="doc-type-body min-w-[11rem] flex-1 font-medium text-[var(--color-charcoal)]">
                       {po.po_number ??
                         po.vendor_po_number ??
                         po.sidemark ??
                         'PO drafted'}
                     </p>
-                    <p className="font-mono text-[8.5px] uppercase tracking-[0.05em] text-[var(--color-aged-oak)]">
+                    <Stamp
+                      label={po.status.replace(/_/g, ' ')}
+                      color={stamp.color}
+                      ink={stamp.ink}
+                    />
+                    <span className="doc-type-meta whitespace-nowrap text-[var(--color-charcoal)]">
+                      {po.confirmed_eta ? `~${fmtDay(po.confirmed_eta)}` : '—'}
+                    </span>
+                  </div>
+                  <div className="mt-1 flex min-w-0 flex-wrap items-center gap-x-3 gap-y-1">
+                    <p className="doc-type-meta min-w-[12rem] flex-1 uppercase tracking-[0.05em] text-[var(--color-quiet-ink)]">
                       {[
                         po.project?.name ?? 'Project',
                         po.total_cents != null ? fmtUsd(po.total_cents) : '—',
@@ -608,29 +619,21 @@ export function VendorsBookPage({
                         .filter(Boolean)
                         .join(' · ')}
                     </p>
+                    <button
+                      type="button"
+                      onClick={() =>
+                        onOpenDocument(po.project_id ?? po.project?.id ?? null)
+                      }
+                      className={ROW_LINK}
+                    >
+                      open document →
+                    </button>
                   </div>
-                  <Stamp
-                    label={po.status.replace(/_/g, ' ')}
-                    color={stamp.color}
-                    ink={stamp.ink}
-                  />
-                  <span className="whitespace-nowrap font-mono text-[9.5px] text-[var(--color-mocha)]">
-                    {po.confirmed_eta ? `~${fmtDay(po.confirmed_eta)}` : '—'}
-                  </span>
-                  <button
-                    type="button"
-                    onClick={() =>
-                      onOpenDocument(po.project_id ?? po.project?.id ?? null)
-                    }
-                    className={`${ROW_LINK} min-h-11 min-w-11 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-clay)]`}
-                  >
-                    open document →
-                  </button>
                 </li>
               );
             })}
             {openPos.length === 0 && (
-              <li className="py-1.5 text-[11px] italic text-[var(--color-aged-oak)]">
+              <li className="doc-type-body py-2 italic text-[var(--color-quiet-ink)]">
                 Nothing open with {vendor.name}.
               </li>
             )}
@@ -642,23 +645,23 @@ export function VendorsBookPage({
       {page === 'thread' && (
         <>
           {!vendor.contact_profile_id ? (
-            <p className="text-[11px] italic text-[var(--color-aged-oak)]">
+            <p className="doc-type-body italic text-[var(--color-quiet-ink)]">
               No comms profile on file for {vendor.name} — link one to open a
               thread.
             </p>
           ) : (threads ?? []).length > 0 && thread ? (
             <>
               {(threads ?? []).length > 1 && (
-                <p className="mb-1 font-mono text-[8.5px] uppercase tracking-[0.05em] text-[var(--color-aged-oak)]">
+                <p className="doc-type-meta mb-1 uppercase tracking-[0.05em] text-[var(--color-quiet-ink)]">
                   {(threads ?? []).map((t, i) => (
                     <button
                       key={t.id}
                       type="button"
                       onClick={() => setActiveThreadId(t.id)}
-                      className={`inline-flex min-h-11 min-w-11 items-center focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-clay)] ${
+                      className={`da-score-hover inline-flex min-h-11 min-w-11 items-center focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-quiet-ink)] ${
                         t.id === thread.id
-                          ? 'text-[var(--color-clay)]'
-                          : 'text-[var(--color-aged-oak)] hover:text-[var(--color-clay)]'
+                          ? 'da-score-on text-[var(--color-charcoal)]'
+                          : 'text-[var(--color-quiet-ink)] hover:text-[var(--color-charcoal)]'
                       }`}
                     >
                       {i > 0 ? ' · ' : ''}
@@ -670,7 +673,7 @@ export function VendorsBookPage({
               <VendorThread thread={thread} onOpenDocument={onOpenDocument} />
             </>
           ) : (
-            <p className="text-[11px] italic text-[var(--color-aged-oak)]">
+            <p className="doc-type-body italic text-[var(--color-quiet-ink)]">
               No thread with {vendor.name} yet.
             </p>
           )}
