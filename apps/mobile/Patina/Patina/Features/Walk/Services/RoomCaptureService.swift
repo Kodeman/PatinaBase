@@ -816,12 +816,14 @@ extension RoomCaptureService: RoomCaptureSessionDelegate {
         // the photo sidecar, fold in the instrument layer, seal the manifest)
         // live in the bundle adapter.
         try bundleAdapter.applyReviewAndSeal(
-            writer: writer,
-            annotations: annotations,
-            heroPhotoId: heroPhotoId,
-            reorderedPhotoIds: reorderedPhotoIds,
-            photoAnnotations: photoAnnotations,
-            instrument: instrumentLayer
+            RoomCaptureBundleAdapter.SealContext(
+                writer: writer,
+                annotations: annotations,
+                heroPhotoId: heroPhotoId,
+                reorderedPhotoIds: reorderedPhotoIds,
+                photoAnnotations: photoAnnotations,
+                instrument: instrumentLayer
+            )
         )
 
         // 4. Fire the legacy onScanComplete callback so downstream

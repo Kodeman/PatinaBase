@@ -213,7 +213,7 @@ extension ScanManifest {
     /// A caller that could set any of those separately could produce a manifest
     /// the validator rejects for INCONSISTENCY rather than absence, which is a
     /// worse failure than the one this whole change exists to fix. `apply(_:)`
-    /// derives all three, so that state is unreachable.
+    /// derives every one of them, so that state is unreachable.
     public struct InstrumentLayer: Equatable, Sendable {
         /// Per-session provenance (spec §3.2).
         public let session: Session

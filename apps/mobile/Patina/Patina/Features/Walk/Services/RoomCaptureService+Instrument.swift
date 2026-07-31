@@ -159,6 +159,10 @@ extension RoomCaptureService {
             // backwards mid-scan cannot emit a negative duration.
             captureDurationSeconds: max(0, Int(ended.timeIntervalSince(started))),
             arWorldTrackingConfig: Self.sharedRoomCaptureConfigLabel,
+            // The fallback is unreachable in practice — the recorder is
+            // registered in the same block as the coach this method already
+            // guarded on — and it is not a fabrication if it is ever reached:
+            // one reading is the peak OF ONE SAMPLE, which is all we would have.
             thermalPeak: thermalPeakRecorder?.peakLabel
                 ?? ThermalPeakRecorder.label(for: ProcessInfo.processInfo.thermalState)
         )
