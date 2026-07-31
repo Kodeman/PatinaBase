@@ -81,4 +81,39 @@ test.describe('Quiet Work focused rooms', () => {
     await expect(page.getByText("The client's copy · live")).toBeVisible();
     await expectNoHorizontalOverflow(page);
   });
+
+  test('People groups seven views without keeping a mobile rail in the room', async ({
+    authenticatedPage: page,
+  }) => {
+    await page.setViewportSize({ width: 390, height: 844 });
+    await page.goto('/people', { waitUntil: 'domcontentloaded' });
+
+    const selector = page.locator('[data-people-compact-selector]');
+    const trigger = page.locator('[data-people-selector-trigger]');
+    await expect(selector).toBeVisible();
+    await expect(page.locator('[data-people-desktop-rail]')).toBeHidden();
+    await trigger.click();
+    const selectorPanel = page.locator('[data-people-selector-panel]');
+    await expect(selectorPanel).toBeVisible();
+    await expect(
+      selectorPanel.locator('[data-people-view-group]'),
+    ).toHaveCount(3);
+    await selectorPanel.getByRole('button', { name: 'Reviews' }).click();
+    await expect(selector).toHaveAttribute('data-people-current-view', 'reviews');
+    await expect(selectorPanel).toBeHidden();
+    await expect(trigger).toBeFocused();
+    await expect(page.locator('[data-people-main-panel]')).toBeVisible();
+    await expectNoHorizontalOverflow(page);
+
+    await page.setViewportSize({ width: 1280, height: 900 });
+    const rail = page.locator('[data-people-desktop-rail]');
+    await expect(selector).toBeHidden();
+    await expect(rail).toBeVisible();
+    await expect(rail.locator('[data-people-view-group]')).toHaveCount(3);
+    await rail.getByRole('button', { name: 'Threads' }).click();
+    await expect(
+      rail.locator('[data-people-view-option="threads"]'),
+    ).toHaveAttribute('aria-current', 'page');
+    await expectNoHorizontalOverflow(page);
+  });
 });
