@@ -4217,3 +4217,51 @@ DO $g$ BEGIN
   GRANT EXECUTE ON FUNCTION public._spec_book_has_forbidden_keys(jsonb,text[]) TO service_role;
 EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
 END $g$;
+
+-- 00381_spec_book_trigger_execute_hardening.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.spec_book_validate_na_declarations() FROM PUBLIC, anon, authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00381_spec_book_trigger_execute_hardening.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.spec_book_bump_spec_version() FROM PUBLIC, anon, authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00381_spec_book_trigger_execute_hardening.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.spec_book_validate_working_links() FROM PUBLIC, anon, authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00381_spec_book_trigger_execute_hardening.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.spec_book_reject_immutable_change() FROM PUBLIC, anon, authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00381_spec_book_trigger_execute_hardening.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.spec_book_guard_revision_update() FROM PUBLIC, anon, authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00381_spec_book_trigger_execute_hardening.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.spec_book_guard_artifact_update() FROM PUBLIC, anon, authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00381_spec_book_trigger_execute_hardening.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.spec_book_set_updated_at() FROM PUBLIC, anon, authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00381_spec_book_trigger_execute_hardening.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.spec_book_attach_ffe_line() FROM PUBLIC, anon, authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;

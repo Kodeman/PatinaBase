@@ -149,6 +149,16 @@ BEGIN
     'public.resolve_spec_book_share(text)',
     'EXECUTE'
   ), 'anon must not probe shares directly';
+  ASSERT NOT has_function_privilege(
+    'authenticated',
+    'public.spec_book_attach_ffe_line()',
+    'EXECUTE'
+  ), 'authenticated must not invoke internal spec-book trigger functions';
+  ASSERT NOT has_function_privilege(
+    'service_role',
+    'public.spec_book_attach_ffe_line()',
+    'EXECUTE'
+  ), 'service role must not invoke internal spec-book trigger functions';
 
   -- Canonical compact JSON hash contract (sorted keys, no whitespace).
   ASSERT public._spec_book_canonical_json('{"b":1,"a":{"d":4,"c":3}}'::jsonb)
