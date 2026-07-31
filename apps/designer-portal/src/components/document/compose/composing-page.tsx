@@ -47,6 +47,22 @@ const STATE_TONE: Record<string, { color: string; bg: string }> = {
   'Catalog-ready': { color: 'var(--color-sage)', bg: 'rgba(168,181,160,0.12)' },
 };
 
+type ComposeFacetId = keyof ComposeSections;
+
+const COMPOSE_FACET_ORDER: ComposeFacetId[] = [
+  'identity',
+  'piece',
+  'commerce',
+  'folio',
+  'eye',
+];
+
+function firstIncompleteComposeFacet(
+  sections: ComposeSections,
+): ComposeFacetId {
+  return COMPOSE_FACET_ORDER.find((id) => !sections[id]) ?? 'identity';
+}
+
 export function ComposingPage() {
   const { data: archetypes } = useStyleArchetypes();
   const styles = (archetypes ?? []) as unknown as StyleArchetype[];
@@ -67,7 +83,6 @@ export function ComposingPage() {
   const [images, setImages] = useState<string[]>([]);
   const [styleSel, setStyleSel] = useState<Set<string>>(new Set());
 
-  const [open, setOpen] = useState<Set<string>>(new Set(['identity']));
   const [savedId, setSavedId] = useState<string | undefined>(undefined);
   const [toast, setToast] = useState<string | null>(null);
 
@@ -99,6 +114,12 @@ export function ComposingPage() {
     ],
   );
 
+  // Exactly one section stays in hand. The first incomplete section is the
+  // initial landing, but choosing another never implies an order or a gate.
+  const [activeFacet, setActiveFacet] = useState<ComposeFacetId>(() =>
+    firstIncompleteComposeFacet(sections),
+  );
+
   const fill = composeFill(sections);
   const pct = composePct(fill);
   const state = composeStateLabel(pct);
@@ -106,17 +127,10 @@ export function ComposingPage() {
 
   const guide =
     pct === 0
-      ? 'The librarian is here if you want it (⌘K). Start anywhere — identity, the price, or just teach its style. Nothing is required to save.'
+      ? 'Start anywhere. Each section belongs to the same usable draft.'
       : pct >= 100
-        ? 'Fully composed. This piece is catalog-ready and taught — it joins the shelf at full strength.'
-        : `Coming together. Still open: ${gaps.slice(0, 3).join(', ')}${gaps.length > 3 ? '…' : ''}. Fill them in any order.`;
-
-  const toggle = (id: string) =>
-    setOpen((prev) => {
-      const next = new Set(prev);
-      next.has(id) ? next.delete(id) : next.add(id);
-      return next;
-    });
+        ? 'Catalog-ready. Every section is written.'
+        : `Still open: ${gaps.slice(0, 3).join(', ')}${gaps.length > 3 ? '…' : ''}. Choose any section.`;
 
   const toggleStyle = (id: string) =>
     setStyleSel((prev) => {
@@ -218,7 +232,7 @@ export function ComposingPage() {
                   className="h-full w-full object-cover"
                 />
               ) : (
-                <span className="font-mono text-[0.46rem] uppercase tracking-[0.08em] text-[var(--color-aged-oak)] opacity-60">
+                <span className="doc-type-meta uppercase tracking-[0.08em] opacity-70">
                   no image
                 </span>
               )}
@@ -233,7 +247,7 @@ export function ComposingPage() {
               >
                 {name.trim() || 'A piece, taking shape…'}
               </p>
-              <p className="mt-0.5 min-h-[1.1em] text-[0.72rem] text-[var(--color-aged-oak)]">
+              <p className="doc-type-body mt-0.5 min-h-[1.1em] text-[var(--color-quiet-ink)]">
                 {maker.trim() ||
                   (sections.piece
                     ? `${width} × ${depth} × ${height}`
@@ -241,14 +255,14 @@ export function ComposingPage() {
               </p>
               <div className="mt-2 flex items-center gap-3">
                 <StrataMark size="lg" fill={fill} />
-                <span className="font-mono text-[0.6rem] tracking-[0.04em] text-[var(--color-aged-oak)]">
+                <span className="doc-type-meta tracking-[0.04em]">
                   <b className="font-heading text-[0.95rem] text-[var(--color-charcoal)]">
                     {pct}
                   </b>
                   % composed
                 </span>
                 <span
-                  className="rounded-[3px] border px-2 py-0.5 font-mono text-[0.5rem] uppercase tracking-[0.1em]"
+                  className="doc-type-meta rounded-[3px] border px-2 py-0.5 uppercase tracking-[0.1em]"
                   style={{
                     color: tone.color,
                     borderColor: tone.color,
@@ -260,8 +274,7 @@ export function ComposingPage() {
               </div>
             </div>
           </div>
-          {/* The librarian offers, never blocks (R40). */}
-          <p className="mt-3 rounded-[7px] border border-[rgba(196,165,123,0.25)] bg-[rgba(196,165,123,0.06)] px-3 py-2 text-[0.72rem] text-[var(--color-mocha)]">
+          <p className="doc-type-body mt-3 border-l-2 border-[var(--color-clay)] pl-3 text-[var(--color-quiet-ink)]">
             {guide}
           </p>
         </section>
@@ -282,8 +295,8 @@ export function ComposingPage() {
                   : 'not yet written'
             }
             done={sections.identity}
-            open={open.has('identity')}
-            onToggle={() => toggle('identity')}
+            open={activeFacet === 'identity'}
+            onToggle={() => setActiveFacet('identity')}
           >
             <ComposeField
               label="Name"
@@ -309,9 +322,9 @@ export function ComposingPage() {
                 />
               </div>
             </div>
-            <p className="mt-3 border-t border-[var(--doc-ink-border)] pt-2.5 text-[0.7rem] italic text-[var(--color-aged-oak)]">
+            <p className="doc-type-body mt-3 border-t border-[var(--doc-ink-border)] pt-2.5 italic text-[var(--color-quiet-ink)]">
               Often this arrives pre-filled — a{' '}
-              <b className="not-italic font-semibold text-[var(--color-mocha)]">
+              <b className="not-italic font-semibold text-[var(--color-charcoal)]">
                 capture
               </b>{' '}
               from the extension lands here already named.
@@ -328,8 +341,8 @@ export function ComposingPage() {
                   : 'not yet written'
             }
             done={sections.piece}
-            open={open.has('piece')}
-            onToggle={() => toggle('piece')}
+            open={activeFacet === 'piece'}
+            onToggle={() => setActiveFacet('piece')}
           >
             <div className="flex gap-3">
               <div className="flex-1">
@@ -382,8 +395,8 @@ export function ComposingPage() {
                   : 'not yet written'
             }
             done={sections.commerce}
-            open={open.has('commerce')}
-            onToggle={() => toggle('commerce')}
+            open={activeFacet === 'commerce'}
+            onToggle={() => setActiveFacet('commerce')}
           >
             <div className="flex gap-3">
               <div className="flex-1">
@@ -409,9 +422,9 @@ export function ComposingPage() {
               onChange={setLead}
               placeholder="11"
             />
-            <p className="mt-3 border-t border-[var(--doc-ink-border)] pt-2.5 text-[0.7rem] italic text-[var(--color-aged-oak)]">
+            <p className="doc-type-body mt-3 border-t border-[var(--doc-ink-border)] pt-2.5 italic text-[var(--color-quiet-ink)]">
               On the maker&apos;s side,{' '}
-              <b className="not-italic font-semibold text-[var(--color-mocha)]">
+              <b className="not-italic font-semibold text-[var(--color-charcoal)]">
                 this section is theirs
               </b>{' '}
               — the manufacturer fills price and lead time in their portal; the
@@ -427,8 +440,8 @@ export function ComposingPage() {
                 : 'no images yet'
             }
             done={sections.folio}
-            open={open.has('folio')}
-            onToggle={() => toggle('folio')}
+            open={activeFacet === 'folio'}
+            onToggle={() => setActiveFacet('folio')}
           >
             <div className="mt-2 flex flex-wrap gap-2">
               {images.map((src, i) => (
@@ -462,7 +475,7 @@ export function ComposingPage() {
                   e.key === 'Enter' && (e.preventDefault(), addImage())
                 }
                 placeholder="paste an image URL (or a cut sheet)"
-                className="flex-1 rounded-[6px] border border-[var(--color-pearl)] bg-[var(--doc-paper)] px-3 py-2 text-[0.8rem] text-[var(--color-charcoal)] focus:border-[var(--color-clay)] focus:bg-white focus:outline-none"
+                className="doc-type-control min-h-11 flex-1 rounded-[6px] border border-[var(--color-pearl)] bg-[var(--doc-paper)] px-3 py-2 focus:border-[var(--color-clay)] focus:bg-white focus:outline-none focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-quiet-ink)]"
               />
               <DocumentAction
                 actionKey="add-folio-image-url"
@@ -475,7 +488,7 @@ export function ComposingPage() {
                 + add
               </DocumentAction>
             </div>
-            <p className="mt-2 text-[0.66rem] italic text-[var(--color-aged-oak)]">
+            <p className="doc-type-body mt-2 italic text-[var(--color-quiet-ink)]">
               Images and cut sheets clip here — the same folio that lives on a
               document section.
             </p>
@@ -498,15 +511,15 @@ export function ComposingPage() {
                   : 'untaught'
             }
             done={sections.eye}
-            open={open.has('eye')}
-            onToggle={() => toggle('eye')}
+            open={activeFacet === 'eye'}
+            onToggle={() => setActiveFacet('eye')}
           >
-            <span className="mb-1.5 mt-3 block font-mono text-[0.5rem] font-semibold uppercase tracking-[0.08em] text-[var(--color-aged-oak)]">
+            <span className="doc-type-meta mb-1.5 mt-3 block font-semibold uppercase tracking-[0.08em]">
               Character
             </span>
             <div className="flex flex-wrap gap-1.5">
               {styles.length === 0 && (
-                <span className="text-[0.72rem] italic text-[var(--color-aged-oak)]">
+                <span className="doc-type-body italic text-[var(--color-quiet-ink)]">
                   Loading the style vocabulary…
                 </span>
               )}
@@ -517,7 +530,7 @@ export function ComposingPage() {
                     key={s.id}
                     type="button"
                     onClick={() => toggleStyle(s.id)}
-                    className={`min-h-11 min-w-11 px-2.5 py-1 text-[0.68rem] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-clay)] ${
+                    className={`doc-type-control min-h-11 min-w-11 px-2.5 py-1 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-quiet-ink)] ${
                       on
                         ? 'text-[var(--color-charcoal)]'
                         : 'text-[var(--color-aged-oak)]'
@@ -533,8 +546,8 @@ export function ComposingPage() {
                 );
               })}
             </div>
-            <p className="mt-3 border-t border-[var(--doc-ink-border)] pt-2.5 text-[0.7rem] italic text-[var(--color-aged-oak)]">
-              <b className="not-italic font-semibold text-[var(--color-mocha)]">
+            <p className="doc-type-body mt-3 border-t border-[var(--doc-ink-border)] pt-2.5 italic text-[var(--color-quiet-ink)]">
+              <b className="not-italic font-semibold text-[var(--color-charcoal)]">
                 This is the teaching.
               </b>{' '}
               The same act you do inline on a card with Quick Tags — here, one
@@ -544,10 +557,9 @@ export function ComposingPage() {
           </ComposeSection>
         </Movement>
 
-        <p className="mx-auto mt-8 max-w-[620px] border-t border-[var(--doc-ink-border)] py-5 text-center text-[0.72rem] italic text-[var(--color-aged-oak)]">
-          No Next. No Back. No Step 3 of 7. The page fills in any order, shows
-          its own gaps, and is a real, usable draft at every percent. The Strata
-          Mark is the only progress indicator there is.
+        <p className="doc-type-body mx-auto mt-8 max-w-[620px] border-t border-[var(--doc-ink-border)] py-5 text-center italic text-[var(--color-quiet-ink)]">
+          Work in any order. Every save is a usable draft; there are no steps to
+          unlock.
         </p>
       </div>
 
@@ -555,7 +567,7 @@ export function ComposingPage() {
         <div
           role="status"
           aria-live="polite"
-          className="fixed bottom-[72px] left-1/2 z-[65] -translate-x-1/2 rounded-[8px] border border-[rgba(196,165,123,0.3)] bg-[var(--color-charcoal)] px-4 py-2.5 text-[0.74rem] text-[var(--color-off-white)] motion-safe:animate-[doc-fade_200ms_ease-out]"
+          className="doc-type-body fixed bottom-[72px] left-1/2 z-[65] -translate-x-1/2 rounded-[8px] border border-[rgba(196,165,123,0.3)] bg-[var(--color-charcoal)] px-4 py-2.5 text-[var(--color-off-white)] motion-safe:animate-[doc-fade_200ms_ease-out]"
         >
           {toast}
         </div>
@@ -586,7 +598,7 @@ function Movement({
         <h2 className="font-heading text-[1.2rem] font-medium italic text-[var(--color-charcoal)]">
           {name}
         </h2>
-        <span className="ml-auto font-mono text-[0.5rem] uppercase tracking-[0.06em] text-[var(--color-aged-oak)]">
+        <span className="doc-type-meta ml-auto uppercase tracking-[0.06em]">
           {meta}
         </span>
       </div>
