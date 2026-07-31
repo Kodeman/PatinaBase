@@ -41,6 +41,7 @@ import { DocSheet } from './doc-sheet';
 import { STUDIO_LEDGERS } from '@/lib/document/registry';
 import { DOCUMENT_SURFACE_KEYS } from '@/lib/help-system/document-surface-keys';
 import { useSheetSurfaceKey } from '@/lib/help-system/use-sheet-surface-key';
+import { DocumentAction, DocumentActionRow } from '../document-action';
 import {
   inboxRecordItem,
   procurementRecordItem,
@@ -221,47 +222,57 @@ export function PostSheet() {
       pageLabel={page === 'record' ? 'The Record' : 'Letters'}
       helpKey={DOCUMENT_SURFACE_KEYS.thePost}
     >
-      <div className="mx-auto max-w-xl">
+      <div data-overlay-post className="mx-auto max-w-xl">
         {/* Mark all read rides quietly under the head; the page links follow. */}
         {page === 'record' && unreadCount > 0 && (
           <div className="mb-1 flex justify-end">
-            <button
-              type="button"
+            <DocumentAction
+              actionKey="mark-all-post-read"
+              surfaceKey="the-post"
+              regionKey="post-record-tools"
+              variant="tertiary"
               onClick={markAllRead}
-              className="min-h-11 rounded-[3px] font-mono text-[9.5px] uppercase tracking-[0.08em] text-[var(--color-aged-oak)] transition-colors hover:text-[var(--color-clay)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-clay)]"
+              className="text-[var(--text-body)]"
             >
               Mark all read
-            </button>
+            </DocumentAction>
           </div>
         )}
 
         {/* R28 page links — DM-mono, never tabs. */}
-        <div className="mb-4 mt-2 flex flex-wrap items-baseline gap-x-4 border-b border-[var(--color-pearl)] pb-2">
+        <DocumentActionRow
+          surfaceKey="the-post"
+          regionKey="post-pages"
+          aria-label="Post pages"
+          className="mb-4 mt-2 border-b border-[var(--color-pearl)] pb-2"
+        >
           {PAGES.map((p) => (
-            <button
+            <DocumentAction
               key={p.key}
-              type="button"
+              actionKey={`open-post-${p.key}`}
+              variant="tertiary"
               onClick={() => {
                 setMarkReadError(null);
                 setPage(p.key);
               }}
               aria-current={page === p.key ? 'page' : undefined}
-              className={`min-h-11 rounded-[3px] font-mono text-[9.5px] uppercase tracking-[0.08em] transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-clay)] ${
+              data-overlay-post-page={p.key}
+              className={
                 page === p.key
-                  ? 'text-[var(--color-clay)]'
-                  : 'text-[var(--color-aged-oak)] hover:text-[var(--color-charcoal)]'
-              }`}
+                  ? 'font-medium text-[var(--color-charcoal)]'
+                  : 'text-[var(--text-body)]'
+              }
             >
               {p.label}
-            </button>
+            </DocumentAction>
           ))}
-        </div>
+        </DocumentActionRow>
 
         {/* R83 — the failure grammar: a quiet inline terracotta band, never a toast. */}
         {markReadError && (
           <p
             role="alert"
-            className="mb-3 rounded-[5px] border border-[var(--color-terracotta)] px-3 py-2 text-[12px] text-[var(--color-terracotta)]"
+            className="mb-3 border-l-2 border-[var(--color-terracotta)] px-3 py-2 text-[14px] text-[var(--color-charcoal)]"
           >
             {markReadError}
           </p>
@@ -324,8 +335,9 @@ function RecordRow({ item, onOpen }: { item: RecordItem; onOpen: () => void }) {
         type="button"
         onClick={onOpen}
         data-testid="post-record-row"
+        data-overlay-post-row="record"
         data-cross-reference={isCrossRef ? 'true' : undefined}
-        className="block w-full px-1 py-3.5 text-left transition-colors hover:bg-[rgba(196,165,123,0.06)]"
+        className="group block min-h-11 w-full px-1 py-3 text-left transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-clay)] motion-reduce:transition-none"
       >
         <div className="flex items-start gap-2.5">
           {/* Awareness dot, never a count (D8). */}
@@ -338,35 +350,41 @@ function RecordRow({ item, onOpen }: { item: RecordItem; onOpen: () => void }) {
           <div className="min-w-0 flex-1">
             <div className="flex items-baseline justify-between gap-3">
               <span
-                className={`truncate text-[13px] ${
+                data-overlay-post-row-title
+                className={`truncate text-[14px] group-hover:underline group-hover:decoration-[var(--color-clay)] group-hover:underline-offset-4 ${
                   read
-                    ? 'text-[var(--color-mocha)]'
+                    ? 'text-[var(--text-body)]'
                     : 'font-medium text-[var(--color-charcoal)]'
                 }`}
               >
                 {title}
               </span>
-              <span className="flex-shrink-0 font-mono text-[9px] uppercase tracking-[0.06em] text-[var(--color-aged-oak)]">
+              <span className="flex-shrink-0 font-mono text-[12px] uppercase tracking-[0.06em] text-[var(--text-body)]">
                 {relTime(item.createdAt)}
               </span>
             </div>
-            {body ? (
-              <p className="mt-1 line-clamp-2 text-[12px] text-[var(--color-mocha)]">
-                {body}
-              </p>
-            ) : null}
-            <div className="mt-1 flex items-center gap-2 font-mono text-[9px] uppercase tracking-[0.06em] text-[var(--color-aged-oak)]">
-              <span>{item.typeLabel}</span>
+            <p
+              data-overlay-post-row-body
+              className="mt-1 line-clamp-1 text-[14px] text-[var(--text-body)]"
+            >
+              <span
+                data-overlay-post-row-meta
+                className="font-mono text-[12px] uppercase tracking-[0.06em] text-[var(--color-charcoal)]"
+              >
+                {item.typeLabel}
+              </span>
+              {body ? <span aria-hidden> — </span> : null}
+              {body}
               {isCrossRef && (
                 <>
-                  <span aria-hidden>·</span>
+                  <span aria-hidden> · </span>
                   {/* A quiet reference, not an act — the Desk already holds it. */}
-                  <span className="text-[var(--color-clay)]">
+                  <span className="font-mono text-[12px] uppercase tracking-[0.05em] text-[var(--color-clay)]">
                     on your Desk ↗
                   </span>
                 </>
               )}
-            </div>
+            </p>
           </div>
         </div>
       </button>
@@ -419,7 +437,8 @@ function LetterRow({
         type="button"
         onClick={onOpen}
         data-testid="post-letter-row"
-        className="block w-full px-1 py-3.5 text-left transition-colors hover:bg-[rgba(196,165,123,0.06)]"
+        data-overlay-post-row="letter"
+        className="group block min-h-11 w-full px-1 py-3 text-left transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-clay)] motion-reduce:transition-none"
       >
         <div className="flex items-start gap-2.5">
           <span
@@ -431,26 +450,34 @@ function LetterRow({
           <div className="min-w-0 flex-1">
             <div className="flex items-baseline justify-between gap-3">
               <span
-                className={`truncate text-[13px] ${
+                data-overlay-post-row-title
+                className={`truncate text-[14px] group-hover:underline group-hover:decoration-[var(--color-clay)] group-hover:underline-offset-4 ${
                   message.is_unread
                     ? 'font-medium text-[var(--color-charcoal)]'
-                    : 'text-[var(--color-mocha)]'
+                    : 'text-[var(--text-body)]'
                 }`}
               >
                 {sender}
               </span>
-              <span className="flex-shrink-0 font-mono text-[9px] uppercase tracking-[0.06em] text-[var(--color-aged-oak)]">
+              <span className="flex-shrink-0 font-mono text-[12px] uppercase tracking-[0.06em] text-[var(--text-body)]">
                 {relTime(message.created_at)}
               </span>
             </div>
-            <p className="mt-1 line-clamp-2 text-[12px] text-[var(--color-mocha)]">
+            <p
+              data-overlay-post-row-body
+              className="mt-1 line-clamp-1 text-[14px] text-[var(--text-body)]"
+            >
+              <span
+                data-overlay-post-row-meta
+                className="font-mono text-[12px] uppercase tracking-[0.06em] text-[var(--color-charcoal)]"
+              >
+                {title}
+              </span>
+              <span aria-hidden> — </span>
               {message.deleted_at
                 ? '(message withdrawn)'
                 : message.body || '(no content)'}
             </p>
-            <div className="mt-1 font-mono text-[9px] uppercase tracking-[0.06em] text-[var(--color-aged-oak)]">
-              {title}
-            </div>
           </div>
         </div>
       </button>
@@ -461,9 +488,11 @@ function LetterRow({
 function QuietLine({ text, hint }: { text: string; hint?: string }) {
   return (
     <div className="flex flex-col items-center gap-1.5 py-14 text-center">
-      <p className="text-[13px] text-[var(--color-mocha)]">{text}</p>
+      <p className="text-[14px] text-[var(--color-charcoal)]">{text}</p>
       {hint ? (
-        <p className="text-[12px] text-[var(--color-aged-oak)]">{hint}</p>
+        <p className="max-w-[48ch] text-[14px] text-[var(--text-body)]">
+          {hint}
+        </p>
       ) : null}
     </div>
   );

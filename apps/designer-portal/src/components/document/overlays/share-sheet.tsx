@@ -35,10 +35,10 @@ import { DocSheet } from './doc-sheet';
 import { DocumentAction, DocumentActionGroup } from '../document-action';
 
 const labelCls =
-  'font-mono text-[9px] font-semibold uppercase tracking-[0.08em] text-[var(--color-aged-oak)]';
+  'font-mono text-[12px] font-semibold uppercase tracking-[0.08em] text-[var(--color-charcoal)]';
 
 const fieldCls =
-  'w-full rounded-[4px] border border-[var(--color-pearl)] bg-white px-3 py-2 text-[13px] text-[var(--color-charcoal)] outline-none transition-colors placeholder:italic placeholder:text-[var(--text-faint)] focus:border-[var(--color-clay)]';
+  'min-h-11 w-full rounded-[4px] border border-[var(--color-pearl)] bg-white px-3 py-2 text-[16px] text-[var(--color-charcoal)] outline-none transition-colors placeholder:italic placeholder:text-[var(--text-faint)] focus:border-[var(--color-clay)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-clay)] motion-reduce:transition-none';
 
 // Guests are always view-only, so the feedback toggle is meaningless on a share
 // link (it is forced off for tokenized guests). Omit it from the matrix.
@@ -142,12 +142,12 @@ export function ShareSheet({
 
   return (
     <DocSheet open={open} onClose={onClose} title="Share links">
-      <div className="mx-auto max-w-xl">
+      <div data-overlay-share className="mx-auto max-w-xl">
         <p className={labelCls}>Share links</p>
         <h2 className="mt-1 font-heading text-xl text-[var(--color-charcoal)]">
           Share this proposal
         </h2>
-        <p className="mt-1 text-[12.5px] leading-relaxed text-[var(--color-mocha)]">
+        <p className="mt-1 text-[14px] leading-relaxed text-[var(--color-charcoal)]">
           A share link opens a <b>view-only</b> copy of this proposal for anyone
           who has it — no account needed. Choose what the link reveals; feedback
           stays off on shared links.
@@ -156,20 +156,20 @@ export function ShareSheet({
         {/* ── The just-created link — shown ONCE ── */}
         {created && (
           <div className="mt-5 rounded-[4px] border border-[rgba(168,181,160,0.4)] bg-[rgba(168,181,160,0.08)] p-3.5">
-            <p className="mb-1 font-mono text-[9px] font-semibold uppercase tracking-[0.06em] text-[var(--color-sage)]">
+            <p className="mb-1 font-mono text-[12px] font-semibold uppercase tracking-[0.06em] text-[var(--color-sage)]">
               Link created
             </p>
-            <p className="mb-2 text-[12px] leading-relaxed text-[var(--color-mocha)]">
+            <p className="mb-2 text-[14px] leading-relaxed text-[var(--color-charcoal)]">
               Copy this link now — it is shown only once and can&rsquo;t be
               retrieved later.
             </p>
-            <div className="flex items-center gap-2">
+            <div className="flex flex-col items-stretch gap-2 sm:flex-row sm:items-center">
               <input
                 readOnly
                 value={created.url}
                 onFocus={(e) => e.currentTarget.select()}
                 aria-label="Share link"
-                className={`${fieldCls} font-mono !text-[11px]`}
+                className={`${fieldCls} font-mono`}
               />
               <DocumentAction
                 actionKey="copy-share-link"
@@ -188,7 +188,7 @@ export function ShareSheet({
         <div className="mt-6">
           <p className={labelCls}>Existing links</p>
           {shares.length === 0 ? (
-            <p className="mt-2 text-[12px] italic text-[var(--color-aged-oak)]">
+            <p className="mt-2 text-[14px] italic text-[var(--text-body)]">
               No share links yet.
             </p>
           ) : (
@@ -201,15 +201,15 @@ export function ShareSheet({
                     className="flex items-start justify-between gap-3 rounded-[4px] border border-[var(--color-pearl)] bg-white px-3 py-2"
                   >
                     <div className="min-w-0">
-                      <p className="truncate text-[12.5px] text-[var(--color-charcoal)]">
+                      <p className="truncate text-[14px] text-[var(--color-charcoal)]">
                         {s.label || 'Untitled link'}
                         {revoked && (
-                          <span className="ml-2 font-mono text-[9px] uppercase tracking-[0.06em] text-[var(--color-aged-oak)]">
+                          <span className="ml-2 font-mono text-[12px] uppercase tracking-[0.06em] text-[var(--text-body)]">
                             revoked
                           </span>
                         )}
                       </p>
-                      <p className="mt-0.5 font-mono text-[9.5px] uppercase tracking-[0.04em] text-[var(--color-aged-oak)]">
+                      <p className="mt-0.5 font-mono text-[12px] uppercase tracking-[0.04em] text-[var(--text-body)]">
                         {fmtDate(s.created_at)} · {s.view_count} view
                         {s.view_count === 1 ? '' : 's'}
                         {s.last_viewed_at
@@ -237,7 +237,7 @@ export function ShareSheet({
             </ul>
           )}
           {activeShares.length > 0 && (
-            <p className="mt-2 text-[11px] leading-relaxed text-[var(--color-aged-oak)]">
+            <p className="mt-2 text-[14px] leading-relaxed text-[var(--text-body)]">
               An existing link&rsquo;s URL can&rsquo;t be shown again (only its
               hash is stored). To regenerate one, revoke it and create a new
               link — the old URL stops working at once.
@@ -259,18 +259,18 @@ export function ShareSheet({
                   onClick={() =>
                     setVisibility((v) => ({ ...v, [f.key]: !v[f.key] }))
                   }
-                  className="flex w-full items-start justify-between gap-3 rounded-[4px] border border-[var(--color-pearl)] px-3 py-2 text-left transition-colors hover:border-[var(--color-clay)]"
+                  className="flex min-h-11 w-full items-start justify-between gap-3 rounded-[4px] border border-[var(--color-pearl)] px-3 py-2 text-left transition-colors hover:border-[var(--color-clay)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-clay)] motion-reduce:transition-none"
                 >
                   <span className="min-w-0">
-                    <span className="block text-[12.5px] text-[var(--color-charcoal)]">
+                    <span className="block text-[14px] text-[var(--color-charcoal)]">
                       {f.label}
                     </span>
-                    <span className="block text-[11px] leading-snug text-[var(--color-aged-oak)]">
+                    <span className="block text-[14px] leading-snug text-[var(--text-body)]">
                       {f.description}
                     </span>
                   </span>
                   <span
-                    className={`shrink-0 self-center font-mono text-[9px] uppercase tracking-[0.08em] ${
+                    className={`shrink-0 self-center font-mono text-[12px] uppercase tracking-[0.08em] ${
                       on
                         ? 'text-[var(--color-clay)]'
                         : 'text-[var(--color-aged-oak)]'
@@ -300,7 +300,7 @@ export function ShareSheet({
           {error && (
             <div
               role="alert"
-              className="mt-4 rounded-[4px] border border-[rgba(196,124,92,0.4)] bg-[rgba(196,124,92,0.08)] p-3 text-[12.5px] text-[var(--color-clay)]"
+              className="mt-4 border-l-2 border-[var(--color-terracotta)] p-3 text-[14px] text-[var(--color-charcoal)]"
             >
               {error}
             </div>
