@@ -1,5 +1,7 @@
 'use client';
 
+import { useId } from 'react';
+
 /**
  * One facet of the Drafting Room (R42) — the anti-wizard's section primitive,
  * a sibling to the Composing Page's ComposeSection (compose-section.tsx). A
@@ -34,9 +36,11 @@ export function FacetSection({
   accent?: string;
   children: React.ReactNode;
 }) {
+  const contentId = useId();
+
   return (
     <div
-      className={`mb-2.5 overflow-hidden rounded-[8px] border bg-[var(--doc-paper)] transition-colors ${
+      className={`mb-2.5 overflow-hidden rounded-[8px] border bg-[var(--doc-paper)] transition-colors motion-reduce:transition-none ${
         open
           ? 'border-[var(--color-clay)]'
           : done
@@ -48,12 +52,13 @@ export function FacetSection({
         type="button"
         onClick={onToggle}
         aria-expanded={open}
-        className="flex w-full items-center gap-3 px-4 py-3 text-left"
+        aria-controls={contentId}
+        className="flex min-h-11 w-full items-center gap-3 px-4 py-2.5 text-left focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-quiet-ink)]"
       >
         {/* ✓ done tick — sage when written, hollow when not (matches compose). */}
         <span
           aria-hidden
-          className={`flex h-[17px] w-[17px] shrink-0 items-center justify-center rounded-[4px] border-[1.5px] text-[0.6rem] font-bold transition-colors ${
+          className={`flex h-[17px] w-[17px] shrink-0 items-center justify-center rounded-[4px] border-[1.5px] text-[0.6rem] font-bold transition-colors motion-reduce:transition-none ${
             done
               ? 'border-[var(--color-sage)] bg-[rgba(168,181,160,0.18)] text-[var(--color-sage)]'
               : 'border-[#cfc8bb] text-transparent'
@@ -68,24 +73,32 @@ export function FacetSection({
             style={{ background: accent }}
           />
         )}
-        <span className="text-[0.86rem] font-semibold text-[var(--color-charcoal)]">{name}</span>
-        <span
-          className={`ml-auto max-w-[55%] truncate font-mono text-[0.55rem] tracking-[0.04em] text-[var(--color-aged-oak)] ${
-            done ? '' : 'italic opacity-70'
-          }`}
-        >
-          {status}
+        <span className="flex min-w-0 flex-1 flex-col sm:flex-row sm:items-baseline sm:gap-3">
+          <span className="doc-type-body shrink-0 font-semibold leading-tight text-[var(--color-charcoal)]">
+            {name}
+          </span>
+          <span
+            title={status}
+            className={`doc-type-meta truncate leading-tight sm:ml-auto ${
+              done ? '' : 'italic opacity-70'
+            }`}
+          >
+            {status}
+          </span>
         </span>
         {/* chevron — rotates open in place (no navigation). */}
         <span
           aria-hidden
-          className={`shrink-0 text-[0.7rem] text-[var(--color-aged-oak)] transition-transform ${open ? 'rotate-90' : ''}`}
+          className={`doc-type-meta shrink-0 text-[var(--color-quiet-ink)] transition-transform motion-reduce:transition-none ${open ? 'rotate-90' : ''}`}
         >
           ▸
         </span>
       </button>
       {open && (
-        <div className="border-t border-[var(--doc-ink-border)] px-4 pb-4 pt-3 motion-safe:animate-[doc-fade_200ms_ease-out]">
+        <div
+          id={contentId}
+          className="border-t border-[var(--doc-ink-border)] px-4 pb-4 pt-3 motion-safe:animate-[doc-fade_200ms_ease-out]"
+        >
           {children}
         </div>
       )}
