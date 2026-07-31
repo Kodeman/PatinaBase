@@ -208,7 +208,11 @@ final class ArtifactUploader {
                     path,
                     data: data,
                     options: FileOptions(
-                        contentType: artifact.mimeType,
+                        // TRANSPORT type, not the semantic one — see ScanBucketMime.
+                        // `artifact.mimeType` may be application/x-ndjson, which the
+                        // bucket rejects with 400 invalid_mime_type; the manifest
+                        // keeps the semantic type for the pipeline's parser.
+                        contentType: ScanBucketMime.transportContentType(for: artifact.mimeType),
                         upsert: true,
                         metadata: metadata
                     )
@@ -258,7 +262,10 @@ final class ArtifactUploader {
             scanId: scanId,
             artifactKind: artifact.kind.rawValue,
             sha256: artifact.sha256,
-            mimeType: artifact.mimeType,
+            // Same TRANSPORT/SEMANTIC split as the foreground path above. The
+            // background uploader sets this straight onto the PUT's Content-Type,
+            // so it must be bucket-legal or the upload 400s out of process.
+            mimeType: ScanBucketMime.transportContentType(for: artifact.mimeType),
             sizeBytes: artifact.sizeBytes,
             fileURL: fileURL,
             storagePath: storagePath,
