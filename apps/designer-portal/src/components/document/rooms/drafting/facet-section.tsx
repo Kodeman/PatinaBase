@@ -1,6 +1,6 @@
 'use client';
 
-import { useId } from 'react';
+import { useEffect, useId, useState } from 'react';
 
 /**
  * One facet of the Drafting Room (R42) — the anti-wizard's section primitive,
@@ -37,6 +37,15 @@ export function FacetSection({
   children: React.ReactNode;
 }) {
   const contentId = useId();
+  const [hasOpened, setHasOpened] = useState(open);
+
+  useEffect(() => {
+    if (open) setHasOpened(true);
+  }, [open]);
+
+  // The underlying editors hold unsaved local fields. Visit lazily, then keep
+  // that exact instance mounted while another facet is the active one.
+  const bodyMounted = open || hasOpened;
 
   return (
     <div
@@ -94,10 +103,16 @@ export function FacetSection({
           ▸
         </span>
       </button>
-      {open && (
+      {bodyMounted && (
         <div
           id={contentId}
-          className="border-t border-[var(--doc-ink-border)] px-4 pb-4 pt-3 motion-safe:animate-[doc-fade_200ms_ease-out]"
+          data-drafting-facet-body
+          hidden={!open}
+          inert={!open}
+          aria-hidden={!open}
+          className={`border-t border-[var(--doc-ink-border)] px-4 pb-4 pt-3 ${
+            open ? 'motion-safe:animate-[doc-fade_200ms_ease-out]' : ''
+          }`}
         >
           {children}
         </div>

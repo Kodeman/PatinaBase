@@ -28,6 +28,15 @@ jest.mock('../strata-mark', () => ({
 
 jest.mock('../spine-timer', () => ({
   SpineTimer: () => <div data-testid="spine-timer">Timer</div>,
+  CompactSpineTimerDoorway: () => (
+    <button
+      type="button"
+      data-testid="compact-spine-timer"
+      className="hidden min-[1180px]:flex min-[1440px]:hidden"
+    >
+      Compact timer
+    </button>
+  ),
 }));
 
 jest.mock('@/lib/document/fill-state', () => ({
@@ -148,6 +157,11 @@ describe('quiet responsive document shell', () => {
     expect(screen.getByTestId('spine-timer').parentElement).toHaveClass(
       'hidden',
       'min-[1440px]:block',
+    );
+    expect(screen.getByTestId('compact-spine-timer')).toHaveClass(
+      'hidden',
+      'min-[1180px]:flex',
+      'min-[1440px]:hidden',
     );
   });
 

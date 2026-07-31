@@ -5,8 +5,8 @@
  * timer); the drawer is the desk's book list (its six books open the
  * existing charcoal DocSheet ledgers via the open-ledger event — Library,
  * People, and Rooms are Rooms, so the same event walks them in instead). One
- * scrim, scrim-tap dismiss; no shadows (D4). Shown below 1180px, matching
- * the responsive paper-shell handoff.
+ * scrim, scrim-tap dismiss; no shadows (D4). Document/drawer sheets stop at
+ * 1180px; the timer alone remains the compact spine's sheet through 1439px.
  */
 
 import { useEffect, useMemo, useState } from 'react';
@@ -85,17 +85,28 @@ const LEDGERS: {
 
 function Sheet({
   tone,
+  kind,
   onClose,
   children,
 }: {
   tone: 'paper' | 'dark';
+  kind: 'drawer' | 'timer' | 'spine' | 'margin-item';
   onClose: () => void;
   children: React.ReactNode;
 }) {
+  const compactTimer = kind === 'timer';
   return (
     <div
-      className="fixed inset-0 z-[58] min-[1180px]:hidden"
+      id={compactTimer ? 'mobile-timer-sheet' : undefined}
+      data-mobile-sheet-kind={kind}
+      data-mobile-sheet-regime={
+        compactTimer ? 'through-1439' : 'below-1180-only'
+      }
+      className={`fixed inset-0 z-[58] ${
+        compactTimer ? 'min-[1440px]:hidden' : 'min-[1180px]:hidden'
+      }`}
       role="dialog"
+      aria-label={compactTimer ? 'Time in hand' : undefined}
       aria-modal="true"
     >
       <button
@@ -109,6 +120,10 @@ function Sheet({
           tone === 'paper'
             ? 'border-t border-[var(--doc-ink-border)] bg-[var(--doc-paper)]'
             : 'border-t border-[rgba(250,247,242,0.18)] bg-[var(--color-charcoal)]'
+        } ${
+          compactTimer
+            ? 'min-[1180px]:left-14 min-[1180px]:right-auto min-[1180px]:w-[28rem] min-[1180px]:rounded-tr-[14px]'
+            : ''
         }`}
       >
         <div
@@ -143,7 +158,7 @@ export function MobileSheets() {
   // ── Drawer: the six books ──
   if (sheet.kind === 'drawer') {
     return (
-      <Sheet tone="dark" onClose={closeSheet}>
+      <Sheet tone="dark" kind="drawer" onClose={closeSheet}>
         {/* The maker's nameplate — tap to open the Account sheet (identity,
             status, settings, sign out). Distinct from the money "Accounts" book
             in the list below. */}
@@ -214,7 +229,7 @@ export function MobileSheets() {
   // ── Timer (paper) ──
   if (sheet.kind === 'timer') {
     return (
-      <Sheet tone="paper" onClose={closeSheet}>
+      <Sheet tone="paper" kind="timer" onClose={closeSheet}>
         <MobileTimerSheet />
       </Sheet>
     );
@@ -224,7 +239,7 @@ export function MobileSheets() {
   if (sheet.kind === 'spine') {
     const open = allItems.filter((i) => i.kind !== 'time');
     return (
-      <Sheet tone="paper" onClose={closeSheet}>
+      <Sheet tone="paper" kind="spine" onClose={closeSheet}>
         <button
           type="button"
           onClick={() => {
@@ -365,7 +380,7 @@ export function MobileSheets() {
       return null;
     }
     return (
-      <Sheet tone="paper" onClose={closeSheet}>
+      <Sheet tone="paper" kind="margin-item" onClose={closeSheet}>
         <span
           className="mb-1 block font-mono text-[12px] font-semibold uppercase tracking-[0.08em]"
           style={{ color: marginAccent(row.kind).label }}
@@ -415,8 +430,8 @@ function MobileTimerSheet() {
   const valid = Number.isFinite(parsed) && parsed >= 1;
 
   return (
-    <div>
-      <span className="font-mono text-[12px] font-semibold uppercase tracking-[0.08em] text-[var(--color-clay)]">
+    <div data-mobile-timer-sheet-content>
+      <span className="doc-type-meta font-semibold uppercase tracking-[0.08em] text-[var(--color-quiet-ink)]">
         In hand{paused ? ' · paused' : ''}
       </span>
       <p className="mb-2 mt-1 font-mono text-[26px] tracking-[0.04em] text-[var(--color-charcoal)]">
@@ -460,13 +475,13 @@ function MobileTimerSheet() {
             aria-label="Minutes"
             value={minutes}
             onChange={(e) => setMinutes(e.target.value)}
-            className="w-full rounded-[5px] border border-[var(--color-pearl)] bg-white px-2.5 py-2 text-[13px] text-[var(--color-charcoal)] focus:border-[var(--color-clay)] focus:outline-none"
+            className="doc-type-control min-h-11 w-full rounded-[5px] border border-[var(--color-pearl)] bg-white px-2.5 py-2 text-[var(--color-charcoal)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-quiet-ink)]"
           />
           <select
             aria-label="Activity"
             value={activity}
             onChange={(e) => setActivity(e.target.value)}
-            className="w-full rounded-[5px] border border-[var(--color-pearl)] bg-white px-2.5 py-2 text-[13px] text-[var(--color-charcoal)] focus:border-[var(--color-clay)] focus:outline-none"
+            className="doc-type-control min-h-11 w-full rounded-[5px] border border-[var(--color-pearl)] bg-white px-2.5 py-2 text-[var(--color-charcoal)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-quiet-ink)]"
           >
             {ACTIVITIES.map((a) => (
               <option key={a.key} value={a.key}>
@@ -510,4 +525,4 @@ function MobileTimerSheet() {
 }
 
 const BTN =
-  'rounded-[4px] border border-[var(--color-pearl)] px-3 py-1.5 text-[12px] font-medium text-[var(--color-charcoal)] active:border-[var(--color-clay)]';
+  'doc-type-meta min-h-11 min-w-11 rounded-[4px] border border-[var(--color-pearl)] px-3 py-2 font-medium text-[var(--color-charcoal)] active:border-[var(--color-clay)]';

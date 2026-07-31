@@ -6,6 +6,7 @@ import {
   within,
 } from '@testing-library/react';
 import { DraftingRoom } from './drafting-room';
+import { useMobilePrimaryAction } from '../../mobile/mobile-shell';
 
 const mockPush = jest.fn();
 const mockInvalidateQueries = jest.fn().mockResolvedValue(undefined);
@@ -77,7 +78,18 @@ jest.mock('@/hooks/use-drafting-state', () => ({
 }));
 
 jest.mock('../room-shell', () => ({
-  RoomShell: ({ children }: { children: React.ReactNode }) => <>{children}</>,
+  RoomShell: ({
+    action,
+    children,
+  }: {
+    action?: React.ReactNode;
+    children: React.ReactNode;
+  }) => (
+    <>
+      {action}
+      {children}
+    </>
+  ),
 }));
 
 jest.mock('../../strata-mark', () => ({
@@ -89,7 +101,16 @@ jest.mock('../../status-chip', () => ({
 }));
 
 jest.mock('../../proposal-share-instrument', () => ({
-  ProposalShareInstrument: () => null,
+  ProposalShareInstrument: ({
+    mobileSecondary,
+  }: {
+    mobileSecondary?: boolean;
+  }) => (
+    <span
+      data-testid="proposal-share-instrument"
+      data-mobile-secondary={mobileSecondary ? 'true' : 'false'}
+    />
+  ),
 }));
 
 jest.mock('@/lib/document/verdict-chip', () => ({
@@ -185,6 +206,11 @@ jest.mock('@/lib/help-system/open-help', () => ({
 }));
 
 describe('DraftingRoom quiet deep work', () => {
+  beforeEach(() => {
+    mockDraftingState.pct = 42;
+    jest.mocked(useMobilePrimaryAction).mockClear();
+  });
+
   it('lands on the first incomplete facet and keeps exactly one facet open', async () => {
     render(<DraftingRoom proposalId="proposal-1" />);
 
@@ -236,5 +262,19 @@ describe('DraftingRoom quiet deep work', () => {
     expect(
       within(dialog).getByText('Previewing the copy for Sarah Whitfield.'),
     ).toBeInTheDocument();
+  });
+
+  it('publishes Share to mobile More even at 0% when Send is absent', () => {
+    mockDraftingState.pct = 0;
+    render(<DraftingRoom proposalId="proposal-1" />);
+
+    expect(screen.getByTestId('proposal-share-instrument')).toHaveAttribute(
+      'data-mobile-secondary',
+      'true',
+    );
+    expect(
+      document.querySelector('[data-action-key="send-proposal"]'),
+    ).toBeNull();
+    expect(useMobilePrimaryAction).toHaveBeenLastCalledWith(null);
   });
 });

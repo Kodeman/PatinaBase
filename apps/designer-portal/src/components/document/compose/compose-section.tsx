@@ -1,6 +1,6 @@
 'use client';
 
-import { useId } from 'react';
+import { useEffect, useId, useState } from 'react';
 
 /**
  * One fillable section of the Composing Page (R40). A section is a grouping that
@@ -26,6 +26,15 @@ export function ComposeSection({
   children: React.ReactNode;
 }) {
   const contentId = useId();
+  const [hasOpened, setHasOpened] = useState(open);
+
+  useEffect(() => {
+    if (open) setHasOpened(true);
+  }, [open]);
+
+  // Mount an editor only when first visited; after that, keep its local draft
+  // alive while the single-active facet moves elsewhere.
+  const bodyMounted = open || hasOpened;
 
   return (
     <div
@@ -74,10 +83,16 @@ export function ComposeSection({
           ▸
         </span>
       </button>
-      {open && (
+      {bodyMounted && (
         <div
           id={contentId}
-          className="border-t border-[var(--doc-ink-border)] px-4 pb-4 pt-1 motion-safe:animate-[doc-fade_200ms_ease-out]"
+          data-compose-section-body
+          hidden={!open}
+          inert={!open}
+          aria-hidden={!open}
+          className={`border-t border-[var(--doc-ink-border)] px-4 pb-4 pt-1 ${
+            open ? 'motion-safe:animate-[doc-fade_200ms_ease-out]' : ''
+          }`}
         >
           {children}
         </div>

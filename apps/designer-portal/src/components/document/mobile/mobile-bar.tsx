@@ -51,13 +51,20 @@ function surfaceLabel(pathname: string | null): string {
 }
 
 const MENU_ITEM =
-  'flex min-h-11 w-full items-center gap-3 border-b border-[rgba(250,247,242,0.1)] px-3 py-2 text-left text-[var(--color-pearl)] last:border-b-0 hover:bg-[rgba(250,247,242,0.06)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-[-3px] focus-visible:outline-[var(--color-clay)]';
+  'flex min-h-11 w-full items-center gap-3 border-b border-[rgba(250,247,242,0.1)] px-3 py-2 text-left text-[var(--color-pearl)] last:border-b-0 hover:bg-[rgba(250,247,242,0.06)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-[-3px] focus-visible:outline-[var(--color-clay)] disabled:cursor-not-allowed disabled:opacity-50';
 
 export function MobileBar() {
   const pathname = usePathname();
   const hydrated = useHydrated();
-  const { activeDoc, sheet, primaryAction, openSpine, openTimer, openDrawer } =
-    useMobileShell();
+  const {
+    activeDoc,
+    sheet,
+    primaryAction,
+    secondaryActions,
+    openSpine,
+    openTimer,
+    openDrawer,
+  } = useMobileShell();
   const { inHandToday, running, paused, elapsedSeconds, offer } =
     useDocumentTime();
   const { data: unreadInbox = 0 } = useUnreadInboxCount();
@@ -134,6 +141,9 @@ export function MobileBar() {
         children: primaryAction.label,
       }
     : null;
+  const menuSecondaryActions = secondaryActions.filter(
+    (action) => action.actionKey !== primaryAction?.actionKey,
+  );
 
   return (
     <nav
@@ -225,8 +235,34 @@ export function MobileBar() {
           aria-label="More studio actions"
           className="absolute bottom-[calc(100%+8px)] right-3 w-[min(19rem,calc(100vw-1.5rem))] overflow-hidden rounded-[6px] border border-[rgba(250,247,242,0.2)] bg-[var(--color-charcoal)]"
         >
+          {menuSecondaryActions.map((action, index) => (
+            <button
+              key={action.actionKey}
+              ref={index === 0 ? firstMenuItemRef : undefined}
+              type="button"
+              data-mobile-secondary-action
+              data-mobile-secondary-key={action.actionKey}
+              disabled={action.disabled || action.loading}
+              aria-busy={action.loading || undefined}
+              onClick={() => closeThen(action.onPress)}
+              className={MENU_ITEM}
+            >
+              <span
+                aria-hidden
+                className="inline-flex w-4 items-center justify-center font-mono text-[14px] text-[var(--color-clay)]"
+              >
+                ↗
+              </span>
+              <span className="min-w-0 flex-1 text-[14px]">
+                {action.label}
+                {action.loading ? '…' : ''}
+              </span>
+            </button>
+          ))}
           <button
-            ref={firstMenuItemRef}
+            ref={
+              menuSecondaryActions.length === 0 ? firstMenuItemRef : undefined
+            }
             type="button"
             onClick={() => closeThen(openTimer)}
             className={MENU_ITEM}

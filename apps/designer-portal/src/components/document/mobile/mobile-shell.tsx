@@ -3,8 +3,8 @@
 /**
  * The D13 mobile shell — the phone's physics for the document model
  * (spec v1.3 §3 "Mobile", D13; canonical prototype
- * patina-the-document-mobile-d3-v1.html). Active only below the 980px
- * breakpoint; the desktop rails hide there.
+ * patina-the-document-mobile-d3-v1.html). The unified bar owns widths below
+ * 1180px; the shared timer sheet also serves the compact spine through 1439px.
  *
  * Three rulings, ported as INTENT (never markup):
  *   D3-1  one unified bottom bar owns the thumb edge — on the Desk: drawer
@@ -59,6 +59,15 @@ export type MobilePrimaryAction = {
   loading?: boolean;
 };
 
+/** A surface-owned quiet act that belongs inside MobileBar's More disclosure. */
+export type MobileSecondaryAction = {
+  actionKey: string;
+  label: string;
+  onPress: () => void;
+  disabled?: boolean;
+  loading?: boolean;
+};
+
 interface MobileShellValue {
   activeDoc: MobileActiveDoc | null;
   setActiveDoc: (d: MobileActiveDoc | null) => void;
@@ -73,6 +82,11 @@ interface MobileShellValue {
     owner: symbol,
     action: MobilePrimaryAction | null,
     priority: number,
+  ) => void;
+  secondaryActions: MobileSecondaryAction[];
+  registerSecondaryAction: (
+    owner: symbol,
+    action: MobileSecondaryAction | null,
   ) => void;
 }
 
@@ -93,6 +107,9 @@ export function MobileShellProvider({
   const [sheet, setSheet] = useState<Sheet | null>(null);
   const [primaryAction, setPrimaryAction] =
     useState<MobilePrimaryAction | null>(null);
+  const [secondaryActions, setSecondaryActions] = useState<
+    MobileSecondaryAction[]
+  >([]);
   const primaryRegistry = useRef(
     new Map<
       symbol,
@@ -100,6 +117,10 @@ export function MobileShellProvider({
     >(),
   );
   const primarySequence = useRef(0);
+  const secondaryRegistry = useRef(
+    new Map<symbol, { action: MobileSecondaryAction; sequence: number }>(),
+  );
+  const secondarySequence = useRef(0);
 
   const registerPrimaryAction = useCallback(
     (owner: symbol, action: MobilePrimaryAction | null, priority: number) => {
@@ -122,6 +143,33 @@ export function MobileShellProvider({
     [],
   );
 
+  const registerSecondaryAction = useCallback(
+    (owner: symbol, action: MobileSecondaryAction | null) => {
+      if (action) {
+        const existing = secondaryRegistry.current.get(owner);
+        secondaryRegistry.current.set(owner, {
+          action,
+          sequence: existing?.sequence ?? ++secondarySequence.current,
+        });
+      } else {
+        secondaryRegistry.current.delete(owner);
+      }
+
+      // A surface can briefly mount the same instrument by two paths during a
+      // transition. Keep the latest owner and show one menu act per action key.
+      const seen = new Set<string>();
+      const next = [...secondaryRegistry.current.values()]
+        .sort((a, b) => b.sequence - a.sequence)
+        .flatMap(({ action: registered }) => {
+          if (seen.has(registered.actionKey)) return [];
+          seen.add(registered.actionKey);
+          return [registered];
+        });
+      setSecondaryActions(next);
+    },
+    [],
+  );
+
   const value = useMemo<MobileShellValue>(
     () => ({
       activeDoc,
@@ -135,8 +183,17 @@ export function MobileShellProvider({
       closeSheet: () => setSheet(null),
       primaryAction,
       registerPrimaryAction,
+      secondaryActions,
+      registerSecondaryAction,
     }),
-    [activeDoc, primaryAction, registerPrimaryAction, sheet],
+    [
+      activeDoc,
+      primaryAction,
+      registerPrimaryAction,
+      registerSecondaryAction,
+      secondaryActions,
+      sheet,
+    ],
   );
 
   return <Ctx.Provider value={value}>{children}</Ctx.Provider>;
@@ -169,6 +226,7 @@ export function useMobilePrimaryAction(
   const href = action?.target.kind === 'href' ? action.target.href : null;
 
   useEffect(() => {
+    const ownerId = owner.current;
     const current = latest.current;
     const normalized: MobilePrimaryAction | null = current
       ? {
@@ -179,8 +237,8 @@ export function useMobilePrimaryAction(
               : { kind: 'press', onPress: press },
         }
       : null;
-    registerPrimaryAction(owner.current, normalized, priority);
-    return () => registerPrimaryAction(owner.current, null, priority);
+    registerPrimaryAction(ownerId, normalized, priority);
+    return () => registerPrimaryAction(ownerId, null, priority);
   }, [
     actionKey,
     disabled,
@@ -194,6 +252,31 @@ export function useMobilePrimaryAction(
     surfaceKey,
     targetKind,
   ]);
+}
+
+/** Surface-side: publish a quiet mobile act into the existing More shelf. */
+export function useMobileSecondaryAction(action: MobileSecondaryAction | null) {
+  const { registerSecondaryAction } = useMobileShell();
+  const owner = useRef(Symbol('mobile-secondary-action'));
+  const latest = useRef(action);
+  latest.current = action;
+
+  const press = useCallback(() => {
+    latest.current?.onPress();
+  }, []);
+
+  const actionKey = action?.actionKey ?? null;
+  const label = action?.label ?? null;
+  const disabled = action?.disabled ?? false;
+  const loading = action?.loading ?? false;
+
+  useEffect(() => {
+    const ownerId = owner.current;
+    const current = latest.current;
+    const normalized = current ? { ...current, onPress: press } : null;
+    registerSecondaryAction(ownerId, normalized);
+    return () => registerSecondaryAction(ownerId, null);
+  }, [actionKey, disabled, label, loading, press, registerSecondaryAction]);
 }
 
 /** Page-side: publish the held document to the shell while mounted, and clear
