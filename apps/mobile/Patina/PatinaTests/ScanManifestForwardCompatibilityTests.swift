@@ -178,7 +178,7 @@ struct ScanManifestForwardCompatibilityTests {
         let encoder = JSONEncoder()
         encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
         encoder.dateEncodingStrategy = .iso8601
-        let json = String(decoding: try encoder.encode(manifest), as: UTF8.self)
+        let json = try #require(String(bytes: try encoder.encode(manifest), encoding: .utf8))
 
         #expect(!json.contains("unreadableInstrumentKeys"))
         #expect(!json.contains("forced"))

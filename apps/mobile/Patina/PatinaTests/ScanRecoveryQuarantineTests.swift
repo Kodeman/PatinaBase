@@ -41,11 +41,18 @@ struct ScanRecoveryQuarantineTests {
 
     /// A bundle directory under Application Support plus the matching row.
     /// `cleanup` removes the directory; callers `defer` it.
+    /// Named to avoid shadowing `Foundation.Bundle`.
+    private struct ScanBundleFixture {
+        let package: RoomScanPackage
+        let url: URL
+        let cleanup: () -> Void
+    }
+
     private func makeBundle(
         in context: ModelContext,
         status: RoomScanPackageStatus = .pending,
         createDirectory: Bool = true
-    ) throws -> (package: RoomScanPackage, url: URL, cleanup: () -> Void) {
+    ) throws -> ScanBundleFixture {
         // `create: true` so a fresh simulator container has the directory the
         // (create: false) `absoluteBundleURL` lookup will need.
         let base = try FileManager.default.url(
@@ -63,7 +70,7 @@ struct ScanRecoveryQuarantineTests {
         context.insert(package)
         try context.save()
 
-        return (package, url, { try? FileManager.default.removeItem(at: url) })
+        return ScanBundleFixture(package: package, url: url) { try? FileManager.default.removeItem(at: url) }
     }
 
     /// Five posed-photo files — `countPhotos` reads the disk, so this is what

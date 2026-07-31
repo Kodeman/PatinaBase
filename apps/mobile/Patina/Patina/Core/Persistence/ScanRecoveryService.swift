@@ -132,12 +132,18 @@ public final class ScanRecoveryService {
         // would re-log the same failure forever and could never reach a
         // different answer — the bytes don't change and neither does the reader
         // until the app is updated.
+        //
+        // A `contains` over one array rather than a chain of `&&` inequalities:
+        // a fourth `!=` clause tips `#Predicate`'s type-checker over its budget
+        // ("unable to type-check this expression in reasonable time").
+        let restingStates = [
+            RoomScanPackageStatus.synced.rawValue,
+            RoomScanPackageStatus.heldLocal.rawValue,
+            RoomScanPackageStatus.quarantined.rawValue
+        ]
         let descriptor = FetchDescriptor<RoomScanPackage>(
             predicate: #Predicate<RoomScanPackage> { pkg in
-                pkg.syncedAt == nil
-                    && pkg.statusRaw != "synced"
-                    && pkg.statusRaw != "heldLocal"
-                    && pkg.statusRaw != "quarantined"
+                pkg.syncedAt == nil && !restingStates.contains(pkg.statusRaw)
             },
             sortBy: [SortDescriptor(\.createdAt, order: .forward)]
         )
@@ -147,82 +153,100 @@ public final class ScanRecoveryService {
             return []
         }
 
+        var pass = Pass()
+        for package in packages {
+            apply(package, into: &pass)
+        }
+        commit(pass, in: context)
+        return pass.candidates
+    }
+
+    // MARK: - One pass
+
+    /// What the pass has decided so far. An accumulator rather than three
+    /// `inout` locals, so `apply` reads as "one package, one disposition".
+    private struct Pass {
         var candidates: [RecoveryCandidate] = []
         var rowsToDelete: [RoomScanPackage] = []
         var didQuarantine = false
+    }
 
-        for package in packages {
-            let scanId = package.scanId.uuidString
+    /// Classify one package and record the consequence. The ONLY branches that
+    /// touch disk are `emptyBundle` and `tooSmall` — see the file header for
+    /// why every other failure keeps its bytes.
+    private func apply(_ package: RoomScanPackage, into pass: inout Pass) {
+        let scanId = package.scanId.uuidString
 
-            guard let bundleURL = package.absoluteBundleURL else {
-                // Application Support did not resolve. That is an app-wide,
-                // usually transient environment failure — it says nothing about
-                // THIS row, and it would say the same about every row. Deleting
-                // on it would wipe the whole table for a bad `FileManager`
-                // answer. Leave the row and complain.
-                logger.error("Cannot resolve bundle URL for scan \(scanId, privacy: .public); leaving row untouched")
-                continue
-            }
-
-            switch classify(package: package, bundleURL: bundleURL) {
-
-            case .orphanedRow:
-                // A row pointing at a directory that isn't there. Nothing on
-                // disk to lose — this is the cleanup that stays.
-                logger.info("No bundle on disk for scan \(scanId, privacy: .public); removing orphaned row")
-                rowsToDelete.append(package)
-
-            case .emptyBundle:
-                // The directory exists and holds zero bytes. Also nothing to
-                // lose; take the empty shell with it.
-                logger.info("Bundle for scan \(scanId, privacy: .public) holds no bytes; removing bundle + row")
-                removeBundleDirectory(at: bundleURL)
-                rowsToDelete.append(package)
-
-            case .unreadable(let reason):
-                quarantine(package, reason: reason, detail: nil)
-                didQuarantine = true
-
-            case .unreadableManifest(let reason, let error):
-                quarantine(package, reason: reason, detail: error.localizedDescription)
-                didQuarantine = true
-
-            case .finalized:
-                // Already sealed but not synced — RoomScanSyncService owns the
-                // retry. Not ours to touch either way.
-                continue
-
-            case .tooSmall(let photosCount):
-                logger.info("Scan \(scanId, privacy: .public) has only \(photosCount) photos; discarding")
-                removeBundleDirectory(at: bundleURL)
-                rowsToDelete.append(package)
-
-            case .recoverable(let photosCount, let reviewCompletedAt):
-                candidates.append(
-                    RecoveryCandidate(
-                        id: package.scanId,
-                        bundleURL: bundleURL,
-                        photosCount: photosCount,
-                        reviewCompletedAt: reviewCompletedAt,
-                        createdAt: package.createdAt
-                    )
-                )
-            }
+        guard let bundleURL = package.absoluteBundleURL else {
+            // Application Support did not resolve. That is an app-wide, usually
+            // transient environment failure — it says nothing about THIS row,
+            // and it would say the same about every row. Deleting on it would
+            // wipe the whole table for a bad `FileManager` answer. Leave the
+            // row and complain.
+            logger.error("Cannot resolve bundle URL for scan \(scanId, privacy: .public); leaving row untouched")
+            return
         }
 
-        for pkg in rowsToDelete {
+        switch classify(package: package, bundleURL: bundleURL) {
+
+        case .orphanedRow:
+            // A row pointing at a directory that isn't there. Nothing on disk
+            // to lose — this is the cleanup that stays.
+            logger.info("No bundle on disk for scan \(scanId, privacy: .public); removing orphaned row")
+            pass.rowsToDelete.append(package)
+
+        case .emptyBundle:
+            // The directory exists and holds zero bytes. Also nothing to lose;
+            // take the empty shell with it.
+            logger.info("Bundle for scan \(scanId, privacy: .public) holds no bytes; removing bundle + row")
+            removeBundleDirectory(at: bundleURL)
+            pass.rowsToDelete.append(package)
+
+        case .unreadable(let reason):
+            quarantine(package, reason: reason, detail: nil)
+            pass.didQuarantine = true
+
+        case .unreadableManifest(let reason, let error):
+            quarantine(package, reason: reason, detail: error.localizedDescription)
+            pass.didQuarantine = true
+
+        case .finalized:
+            // Already sealed but not synced — RoomScanSyncService owns the
+            // retry. Not ours to touch either way.
+            break
+
+        case .tooSmall(let photosCount):
+            logger.info("Scan \(scanId, privacy: .public) has only \(photosCount) photos; discarding")
+            removeBundleDirectory(at: bundleURL)
+            pass.rowsToDelete.append(package)
+
+        case .recoverable(let photosCount, let reviewCompletedAt):
+            pass.candidates.append(
+                RecoveryCandidate(
+                    id: package.scanId,
+                    bundleURL: bundleURL,
+                    photosCount: photosCount,
+                    reviewCompletedAt: reviewCompletedAt,
+                    createdAt: package.createdAt
+                )
+            )
+        }
+    }
+
+    /// Land the pass: drop the rows proven empty, then save once if anything
+    /// changed (a quarantine is a row mutation and needs the save too).
+    private func commit(_ pass: Pass, in context: ModelContext) {
+        for pkg in pass.rowsToDelete {
             context.delete(pkg)
         }
 
-        if !rowsToDelete.isEmpty || didQuarantine {
-            do {
-                try context.save()
-            } catch {
-                logger.error("Failed to save after recovery pass: \(error.localizedDescription, privacy: .public)")
-            }
-        }
+        guard !pass.rowsToDelete.isEmpty || pass.didQuarantine else { return }
 
-        return candidates
+        do {
+            try context.save()
+        } catch {
+            logger.error("Failed to save after recovery pass: \(error.localizedDescription, privacy: .public)")
+        }
     }
 
     // MARK: - Classification
