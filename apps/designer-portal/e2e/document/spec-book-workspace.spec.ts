@@ -1,7 +1,7 @@
 import { test, expect } from "../fixtures/auth";
 import { psqlScalar } from "../helpers/psql";
 
-test.describe("spec-book workspace pilot", () => {
+test.describe("spec-book workspace", () => {
   test.skip(
     ({ browserName }) => browserName !== "chromium",
     "ensure_project_spec_book creates one canonical row; avoid cross-browser fixture races",
@@ -20,7 +20,7 @@ test.describe("spec-book workspace pilot", () => {
     `);
   });
 
-  test("opens the gated workbench and uses one audience-safe preview surface", async ({
+  test("opens the workbench and uses one audience-safe preview surface", async ({
     authenticatedPage: page,
   }) => {
     await page.goto(`/doc/${projectId}/spec-book`, {

@@ -69,10 +69,6 @@ final class LocalCaptureSyncService: CaptureSyncService {
     private let session: (any SessionProviding)?
     /// When present, commits do real upload + RPC; nil leaves records queued.
     private let remote: SupabaseCaptureGateway?
-    /// The remote cohort flag gates both entry UI and placement side effects.
-    /// Nil is fail-closed for tests/legacy composition.
-    private let specBookPilot: (any SpecBookPilotGate)?
-
     private let stream: AsyncStream<SyncSnapshot>
     private let continuation: AsyncStream<SyncSnapshot>.Continuation
     /// One drain task per authenticated identity. Re-entrant callers await the
@@ -84,14 +80,12 @@ final class LocalCaptureSyncService: CaptureSyncService {
          analytics: (any CaptureAnalytics)? = nil,
          liveActivity: CaptureLiveActivityController? = nil,
          session: (any SessionProviding)? = nil,
-         remote: SupabaseCaptureGateway? = nil,
-         specBookPilot: (any SpecBookPilotGate)? = nil) {
+         remote: SupabaseCaptureGateway? = nil) {
         self.store = store
         self.analytics = analytics
         self.liveActivity = liveActivity
         self.session = session
         self.remote = remote
-        self.specBookPilot = specBookPilot
         var cont: AsyncStream<SyncSnapshot>.Continuation!
         self.stream = AsyncStream(bufferingPolicy: .bufferingNewest(8)) { cont = $0 }
         self.continuation = cont
@@ -518,11 +512,6 @@ final class LocalCaptureSyncService: CaptureSyncService {
         owner: CaptureOwnerIdentity
     ) async throws {
         guard specimen.needsProjectPlacement else { return }
-        guard await specBookPilot?.isEnabled() == true else {
-            specimen.markProjectPlacementPending()
-            try? store.save()
-            return
-        }
         do {
             guard let remote else { throw LocalSyncError.remoteUnavailable }
             try requireActiveOwner(owner)

@@ -32,7 +32,6 @@ public final class AppContainer {
     public let session: any SessionProviding
     public let location: any LocationService
     public let analytics: any CaptureAnalytics
-    let specBookPilot: any SpecBookPilotGate
     public let companion = FieldCompanionController(
         initialPresentation: .hidden(reason: .cameraActive),
         defaultHint: "Next steps"
@@ -72,8 +71,7 @@ public final class AppContainer {
             let client = SupabaseClientProvider.makeClient()
 
             let analytics = PostHogCaptureAnalytics()
-            let specBookPilot = PostHogSpecBookPilotGate()
-            self.analytics = analytics; self.specBookPilot = specBookPilot
+            self.analytics = analytics
 
             let session = SupabaseSessionService(client: client, analytics: analytics)
             self.session = session
@@ -84,8 +82,7 @@ public final class AppContainer {
                                                  bucket: AppConfiguration.captureMediaBucket)
             self.sync = LocalCaptureSyncService(store: store, analytics: analytics,
                                                 liveActivity: liveActivity,
-                                                session: session, remote: gateway,
-                                                specBookPilot: specBookPilot)
+                                                session: session, remote: gateway)
             self.projectCreator = SupabaseProjectCreator(client: client, session: session)
 
             // Phase 2 seams — each flow's own factory. The freeze leaves these
@@ -118,7 +115,6 @@ public final class AppContainer {
         } else {
             let analytics = MockCaptureAnalytics()
             self.analytics = analytics
-            self.specBookPilot = LaunchArgumentSpecBookPilotGate()
             self.session = MockSessionProviding()
             self.authorizer = StubWorkspaceAuthorizer()
             self.sync = InMemoryCaptureSyncService()

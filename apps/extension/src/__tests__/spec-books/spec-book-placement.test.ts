@@ -34,7 +34,6 @@ import {
 import { reuseProductForSpecBookPlacement } from '../../state/effects';
 import { draftFromExtraction } from '../../state/draft';
 import { initialCaptureState } from '../../state/reducer';
-import { parseExtensionFlagOverride } from '../../hooks/use-feature-flag';
 
 const source = {
   sourceUrl: 'https://shop.example/chair',
@@ -62,21 +61,6 @@ function extraction(): ExtractedProductData {
 beforeEach(() => {
   vi.clearAllMocks();
   rpc.mockResolvedValue({ data: { ffe_item_id: 'ffe-1' }, error: null });
-});
-
-afterEach(() => {
-  delete process.env.PLASMO_PUBLIC_FLAG_OVERRIDES;
-});
-
-describe('spec-book pilot flag override', () => {
-  it('is fail-closed when no deterministic override is configured', () => {
-    expect(parseExtensionFlagOverride('spec-book-workspace-pilot')).toBeUndefined();
-  });
-
-  it('parses only the named extension override', () => {
-    process.env.PLASMO_PUBLIC_FLAG_OVERRIDES = 'other:true,spec-book-workspace-pilot:true';
-    expect(parseExtensionFlagOverride('spec-book-workspace-pilot')).toBe(true);
-  });
 });
 
 describe('sticky spec-book placement context', () => {

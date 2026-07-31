@@ -14,8 +14,6 @@ const TOKEN = "a".repeat(64);
 const ARTIFACT_ID = "40000000-0000-4000-8000-000000000001";
 const DOCUMENT_ID = "60000000-0000-4000-8000-000000000001";
 const STORAGE_PATH = "project-1/spec-books/revision-1/client.pdf";
-const ORIGINAL_FLAG_OVERRIDES = process.env.NEXT_PUBLIC_FLAG_OVERRIDES;
-const ORIGINAL_POSTHOG_KEY = process.env.NEXT_PUBLIC_POSTHOG_KEY;
 
 const resolvedShare = {
   shareId: "70000000-0000-4000-8000-000000000001",
@@ -83,23 +81,6 @@ function serviceClient({
   return { client, rpc, from, tableReads, storageFrom, createSignedUrl };
 }
 
-beforeEach(() => {
-  process.env.NEXT_PUBLIC_FLAG_OVERRIDES = "spec-book-workspace-pilot:true";
-});
-
-afterAll(() => {
-  if (ORIGINAL_FLAG_OVERRIDES === undefined) {
-    delete process.env.NEXT_PUBLIC_FLAG_OVERRIDES;
-  } else {
-    process.env.NEXT_PUBLIC_FLAG_OVERRIDES = ORIGINAL_FLAG_OVERRIDES;
-  }
-  if (ORIGINAL_POSTHOG_KEY === undefined) {
-    delete process.env.NEXT_PUBLIC_POSTHOG_KEY;
-  } else {
-    process.env.NEXT_PUBLIC_POSTHOG_KEY = ORIGINAL_POSTHOG_KEY;
-  }
-});
-
 describe("resolveSpecBookShare", () => {
   beforeEach(() => {
     jest.mocked(createServiceClient).mockReset();
@@ -120,20 +101,6 @@ describe("resolveSpecBookShare", () => {
       issuedAt: "2026-07-30T18:00:00.000Z",
       shareExpiresAt: "2026-08-30T18:00:00.000Z",
     });
-    expect(fake.rpc).toHaveBeenCalledWith("resolve_spec_book_share", {
-      p_token: TOKEN,
-    });
-    expect(fake.from).not.toHaveBeenCalled();
-    expect(fake.storageFrom).not.toHaveBeenCalled();
-  });
-
-  it("fails closed for a valid existing token when server flag configuration is missing", async () => {
-    delete process.env.NEXT_PUBLIC_FLAG_OVERRIDES;
-    delete process.env.NEXT_PUBLIC_POSTHOG_KEY;
-    const fake = serviceClient();
-    jest.mocked(createServiceClient).mockReturnValue(fake.client as never);
-
-    await expect(resolveSpecBookShare(TOKEN)).resolves.toBeNull();
     expect(fake.rpc).toHaveBeenCalledWith("resolve_spec_book_share", {
       p_token: TOKEN,
     });
@@ -215,20 +182,6 @@ describe("signResolvedSpecBookArtifact", () => {
       SPEC_BOOK_SIGNED_URL_TTL_SECONDS,
       undefined,
     );
-  });
-
-  it("does not sign a valid pre-existing capability when the pilot is rolled back", async () => {
-    process.env.NEXT_PUBLIC_FLAG_OVERRIDES = "spec-book-workspace-pilot:false";
-    const fake = serviceClient({ rows: readyRows });
-
-    await expect(
-      signResolvedSpecBookArtifact(TOKEN, false, fake.client as never),
-    ).resolves.toBeNull();
-    expect(fake.rpc).toHaveBeenCalledWith("resolve_spec_book_share", {
-      p_token: TOKEN,
-    });
-    expect(fake.tableReads).toEqual([]);
-    expect(fake.storageFrom).not.toHaveBeenCalled();
   });
 
   it("adds only a sanitized filename when download is requested", async () => {

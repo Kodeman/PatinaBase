@@ -49,7 +49,6 @@ import {
   useAddDocumentRoom,
   useDocumentRooms,
 } from '@/hooks/use-document-rooms';
-import { useFeatureFlag } from '@/hooks/use-feature-flag';
 import type { SectionKey } from '@/lib/document/desk-derivation';
 import { DocumentAction } from './document-action';
 
@@ -416,9 +415,6 @@ export function FFESection({
   // R76 — per-line billing truth (00187 bridge). Invalidated by every invoice
   // mutation that moves money, so the stamps stay honest without a poll.
   const { data: coverage } = useFfeInvoiceCoverage(projectId);
-  // Fail closed: value remains false while PostHog resolves, so the launch
-  // never flashes for studios outside the pilot.
-  const specBookGate = useFeatureFlag('spec-book-workspace-pilot');
 
   const rows: LineRow[] = (items ?? []).map((item) => ({
     item,
@@ -493,7 +489,7 @@ export function FFESection({
               {meta}
             </span>
           )}
-          {mode === 'project' && specBookGate.value && (
+          {mode === 'project' && (
             <Link
               href={`/doc/${projectId}/spec-book`}
               className="font-mono text-[9px] uppercase tracking-[0.08em] text-[var(--color-clay)] hover:text-[var(--color-charcoal)]"

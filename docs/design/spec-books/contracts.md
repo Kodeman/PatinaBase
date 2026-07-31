@@ -130,12 +130,12 @@ Warnings:
 An N/A declaration and warning acknowledgement both require a non-empty reason and
 are frozen into the snapshot.
 
-## Route and flag map
+## Production route map
 
 - Designer workspace: `/doc/[projectId]/spec-book`
 - Designer launch: the project room-grouped FF&E section
 - Guest/client artifact: `/field/spec-book/[token]` in the client portal
-- Feature flag: `spec-book-workspace-pilot`
 
-All entries fail closed while the flag is loading. The pilot cohort is selected in
-PostHog by studio name/traits; no studio UUID is hard-coded.
+All authenticated designer entry points are available in production. Guest access
+continues to fail closed through the hashed capability lifecycle, expiry,
+revocation, immutable-artifact checks, and short-lived signed storage URLs.

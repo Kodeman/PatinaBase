@@ -6,7 +6,6 @@
 import { useEffect, useState } from 'react';
 import { useCapture, useCaptureDispatch } from '../../state/CaptureProvider';
 import { useReferenceData } from '../../hooks/use-reference-data';
-import { useExtensionFeatureFlag } from '../../hooks/use-feature-flag';
 import { FFESlotPicker } from '../../components/FFESlotPicker';
 import {
   loadSpecBookPlacementContext,
@@ -17,19 +16,9 @@ export function RouteCommitRegion() {
   const { routing, draft } = useCapture();
   const dispatch = useCaptureDispatch();
   const { projects, styles } = useReferenceData();
-  const specBookPilot = useExtensionFeatureFlag('spec-book-workspace-pilot');
   const [stickyContext, setStickyContext] = useState<SpecBookPlacementContext | null>(null);
 
   useEffect(() => {
-    if (!specBookPilot.value) {
-      dispatch({
-        type: 'SPEC_BOOK_PLACEMENT_SET',
-        route: null,
-        pilot: false,
-      });
-      setStickyContext(null);
-      return;
-    }
     let active = true;
     void loadSpecBookPlacementContext().then((context) => {
       if (active) setStickyContext(context);
@@ -37,7 +26,7 @@ export function RouteCommitRegion() {
     return () => {
       active = false;
     };
-  }, [dispatch, specBookPilot.value]);
+  }, []);
 
   if (!draft) return null;
 
@@ -58,7 +47,7 @@ export function RouteCommitRegion() {
           + New project
         </button>
       </div>
-      {specBookPilot.value && stickyContext ? (
+      {stickyContext ? (
         <FFESlotPicker
           projects={projects}
           initialContext={stickyContext}

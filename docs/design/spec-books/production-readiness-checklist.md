@@ -1,11 +1,12 @@
-# Middlewest Spec Book pilot checklist
+# Spec Book production readiness checklist
 
-The `spec-book-workspace-pilot` flag remains off in production until every required
-item below is checked. Schema is additive; rollback is the feature flag.
+Spec Books ship as a generally available production capability. The schema is
+additive; rollback is a redeploy of the prior application/function versions,
+with any database remediation handled by a forward migration.
 
 ## Fixture
 
-- [ ] Middlewest Studio selected by PostHog cohort traits, with no hard-coded UUID.
+- [ ] One representative studio account.
 - [ ] One live project with at least three rooms.
 - [ ] Fixed items, one allowance, and one TBD.
 - [ ] One Product master reused by two FF&E lines with different project finishes.
@@ -71,4 +72,4 @@ item below is checked. Schema is additive; rollback is the feature flag.
 - [ ] `capture-gate.sh all` passes.
 - [ ] Physical-device Patina Field pass uses an explicit UDID.
 - [ ] Server-side Product, field capture, FF&E, room, and spec rows confirmed.
-- [ ] Production was not mutated during implementation or acceptance preparation.
+- [ ] Production migration, function, portals, and public routes verified after deploy.

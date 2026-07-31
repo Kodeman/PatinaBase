@@ -20,7 +20,6 @@ struct S1AssignVenueScreen: View {
     let location: any LocationService
     let session: any SessionProviding
     let projects: any ProjectsService
-    let specBookPilot: any SpecBookPilotGate
     let coordinator: CaptureCoordinator
     let analytics: any CaptureAnalytics
 
@@ -30,7 +29,7 @@ struct S1AssignVenueScreen: View {
                 S1Content(
                     specimen: specimen, store: store, location: location,
                     session: session, projectsService: projects,
-                    specBookPilot: specBookPilot, coordinator: coordinator,
+                    coordinator: coordinator,
                     analytics: analytics)
             } else {
                 RouteMissingSpecimen()
@@ -50,7 +49,6 @@ private struct S1Content: View {
     let location: any LocationService
     let session: any SessionProviding
     let projectsService: any ProjectsService
-    let specBookPilot: any SpecBookPilotGate
     let coordinator: CaptureCoordinator
     let analytics: any CaptureAnalytics
 
@@ -63,7 +61,6 @@ private struct S1Content: View {
     @State private var selectedProjectRoomId = ""
     @State private var projectDetail: FieldProjectDetail?
     @State private var placementChoice: PlacementChoice = .none
-    @State private var pilotEnabled = false
     @State private var projectLoadError: String?
     @State private var isLoadingProject = false
     @State private var room = ""
@@ -85,16 +82,8 @@ private struct S1Content: View {
 
                 VStack(spacing: 0) {
                     projectField
-                    if pilotEnabled {
-                        projectRoomField
-                        placementField
-                    } else {
-                        RouteFieldShell(label: "Room") {
-                            TextField("Add a room", text: $room)
-                                .font(CaptureType.body)
-                                .foregroundStyle(CaptureColor.ink)
-                        }
-                    }
+                    projectRoomField
+                    placementField
                     RouteFieldShell(label: "Shelf") {
                         TextField("Seating · “maybe”", text: $shelf)
                             .font(CaptureType.body)
@@ -103,7 +92,7 @@ private struct S1Content: View {
                 }
                 .routeCard()
 
-                if let projectLoadError, pilotEnabled {
+                if let projectLoadError {
                     Label(projectLoadError, systemImage: "wifi.exclamationmark")
                         .font(CaptureType.footnote)
                         .foregroundStyle(CaptureColor.warning)
@@ -124,7 +113,7 @@ private struct S1Content: View {
         .scrollDismissesKeyboard(.interactively)
         .task {
             loadLocalContext()
-            await loadPilotContext()
+            await loadProjectContext()
         }
     }
 
@@ -304,10 +293,7 @@ private struct S1Content: View {
         if venueName.isEmpty { Task { await stampVenue() } }
     }
 
-    private func loadPilotContext() async {
-        let enabled = await specBookPilot.isEnabled()
-        pilotEnabled = enabled
-        guard enabled else { return }
+    private func loadProjectContext() async {
         do {
             let remoteProjects = try await projectsService.listProjects()
                 .map { RoutingProjectOption(id: $0.id, name: $0.name) }
@@ -381,15 +367,13 @@ private struct S1Content: View {
         if !trimmedName.isEmpty { venue.placemarkName = trimmedName }
         venue.projectId = selectedProjectId.isEmpty ? nil : selectedProjectId
         venue.projectName = projectName.isEmpty ? nil : projectName
-        if pilotEnabled {
-            venue.projectRoomId = selectedProjectRoomId.isEmpty
-                ? nil
-                : selectedProjectRoomId
-        }
+        venue.projectRoomId = selectedProjectRoomId.isEmpty
+            ? nil
+            : selectedProjectRoomId
         venue.room = room.isEmpty ? nil : room
         venue.shelf = shelf.isEmpty ? nil : shelf
         specimen.venue = venue
-        if pilotEnabled, !selectedProjectId.isEmpty {
+        if !selectedProjectId.isEmpty {
             switch placementChoice {
             case .none:
                 specimen.clearProjectPlacement()
@@ -498,7 +482,6 @@ private enum PlacementChoice: Equatable {
         location: MockLocationService(),
         session: MockSessionProviding(),
         projects: MockProjectsService(),
-        specBookPilot: LaunchArgumentSpecBookPilotGate(),
         coordinator: CaptureCoordinator(),
         analytics: MockCaptureAnalytics()
     )
