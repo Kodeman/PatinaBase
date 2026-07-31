@@ -31,13 +31,12 @@ extension RoomCaptureService {
     /// state + the keyframe lane's sharp-frame ratio, and log what the session
     /// actually vended.
     ///
-    /// ⚠ The scorecard is held IN MEMORY on `instrumentScorecard` and goes no
-    /// further. It is NOT written to `scorecard.json` and NOT assigned to
-    /// `manifest.scorecard`, because `ScanRecoveryService` deletes a bundle and
-    /// its SwiftData row when `manifest.json` fails to decode — so the first
-    /// producer of instrument fields turns any future unrecognized enum value
-    /// into deleted user data on next launch. That guard has to be made lenient
-    /// before this becomes a write. See `RoomCoverageCoach.swift`.
+    /// The scorecard is held IN MEMORY on `instrumentScorecard` and goes no
+    /// further in this wave — it is not written to `scorecard.json` and not
+    /// assigned to `manifest.scorecard`. That is now a scheduling fact, not a
+    /// safety gate: the gate (`ScanRecoveryService` deleting a bundle whose
+    /// manifest would not decode) has been LIFTED — see the numbered note in
+    /// `RoomCoverageCoach.swift`. A producer wave may take this on.
     ///
     /// Internal rather than private only because it lives in this file and is
     /// called from the delegate conformance in `RoomCaptureService.swift`.
