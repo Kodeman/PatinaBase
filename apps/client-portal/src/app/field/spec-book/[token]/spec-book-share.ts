@@ -1,6 +1,7 @@
 import "server-only";
 
 import { createServiceClient } from "@patina/supabase/server";
+import { isSpecBookGuestEntryEnabled } from "./spec-book-feature-gate";
 
 export const SPEC_BOOK_SHARE_TOKEN_PATTERN = /^[0-9a-f]{64}$/;
 export const SPEC_BOOK_SIGNED_URL_TTL_SECONDS = 120;
@@ -112,7 +113,11 @@ export async function resolveSpecBookShare(
       p_token: token,
     });
     if (error) return null;
-    return parseResolvedShare(data);
+    const share = parseResolvedShare(data);
+    if (!share) return null;
+    return (await isSpecBookGuestEntryEnabled(share.artifactId, admin))
+      ? share
+      : null;
   } catch {
     return null;
   }
