@@ -25,6 +25,66 @@ async function expectNoHorizontalOverflow(page: AuthenticatedPage) {
 }
 
 test.describe('Quiet Work responsive document shell', () => {
+  test('keeps drafting bulk actions above persistent bottom chrome', async ({
+    authenticatedPage: page,
+  }) => {
+    await page.setViewportSize({ width: 1440, height: 900 });
+    await page.goto(`/drafting/${SENT_PROPOSAL_ID}`, {
+      waitUntil: 'domcontentloaded',
+    });
+    const ffeFacet = page.getByRole('button', { name: /^FF&E / });
+    await expect(async () => {
+      if ((await ffeFacet.getAttribute('aria-expanded')) !== 'true') {
+        await ffeFacet.click();
+      }
+      await expect(ffeFacet).toHaveAttribute('aria-expanded', 'true', {
+        timeout: 1_000,
+      });
+    }).toPass({ timeout: 10_000 });
+
+    const firstScheduleItem = page
+      .getByRole('checkbox', { name: /^Select / })
+      .first();
+    await expect(firstScheduleItem).toBeVisible();
+    await firstScheduleItem.check();
+
+    const bulkActions = page.getByRole('region', { name: 'Bulk actions' });
+    const studioDrawer = page.getByRole('navigation', {
+      name: 'Studio drawer',
+    });
+    await expect(bulkActions).toBeVisible();
+    await expect(studioDrawer).toBeVisible();
+    await expect
+      .poll(async () => {
+        const [bulkBox, drawerBox] = await Promise.all([
+          bulkActions.boundingBox(),
+          studioDrawer.boundingBox(),
+        ]);
+        return !!bulkBox && !!drawerBox
+          ? bulkBox.y + bulkBox.height <= drawerBox.y
+          : false;
+      })
+      .toBe(true);
+
+    await page.setViewportSize({ width: 1024, height: 900 });
+    const mobileBar = page.getByTestId('mobile-bar');
+    await expect(mobileBar).toBeVisible();
+    await expect(studioDrawer).toBeHidden();
+    await expect
+      .poll(async () => {
+        const [bulkBox, mobileBox] = await Promise.all([
+          bulkActions.boundingBox(),
+          mobileBar.boundingBox(),
+        ]);
+        return !!bulkBox && !!mobileBox
+          ? bulkBox.y + bulkBox.height <= mobileBox.y &&
+              bulkBox.x >= 15 &&
+              bulkBox.x + bulkBox.width <= 1009
+          : false;
+      })
+      .toBe(true);
+  });
+
   test('1024px protects one paper canvas and one mobile edge', async ({
     authenticatedPage: page,
   }) => {

@@ -45,7 +45,7 @@ export default function DocumentLayout({
   children: React.ReactNode;
 }) {
   return (
-    <div className="min-h-screen bg-[var(--bg-primary)]">
+    <div className="document-route-shell min-h-screen bg-[var(--bg-primary)]">
       {/* One time system above the Desk and every document (R4): the
           log-offer strip rides across navigation inside the provider. */}
       <DocumentTimeProvider>
