@@ -297,6 +297,30 @@ public final class ScanBundleWriter {
         try buffer.write(to: indexURL, options: .atomic)
     }
 
+    // MARK: - Instrument layer (capture-bundle-spec-v1 §3.2–§3.5)
+
+    /// Fold the seven instrument keys into the manifest and persist it.
+    ///
+    /// Call this IMMEDIATELY BEFORE `finalize(hashArtifacts: true)`, from the
+    /// seal path and nowhere else: `checksumAlgorithm: "sha256"` is a claim
+    /// about the artifact hashes, and `finalize` is what computes them — written
+    /// at freeze it would sit on disk describing hashes that did not exist. That
+    /// same `finalize` rewrites the manifest, so a layer applied here reaches
+    /// the sealed bytes without a second pass.
+    ///
+    /// It writes no new FILE into the bundle. Field persists `scorecard.json`
+    /// and `anchors.json` alongside the manifest; Patina deliberately does not,
+    /// because what the bundle contains is what eventually leaves the phone
+    /// when the user asks for design services, and that payload is the user's
+    /// call (`RoomUploadService.holdLocally`). Everything the server needs is a
+    /// manifest FIELD, and manifest.json already ships.
+    ///
+    /// The derived scalars are computed by `ScanManifest.apply(_:)` — see there.
+    public func applyInstrumentLayer(_ layer: ScanManifest.InstrumentLayer) throws {
+        manifest.apply(layer)
+        try writeManifest()
+    }
+
     // MARK: - Finalize
 
     /// Close out the bundle. Recomputes sizes, stamps `completedAt`, and writes
@@ -468,26 +492,8 @@ extension ScanBundleWriter {
 
 }
 
-// MARK: - Reading an existing bundle
-
-extension ScanBundleWriter {
-
-    /// Load a manifest without opening the writer (read-only). Used by the
-    /// sync service to decide what's left to upload.
-    public static func readManifest(at bundleURL: URL) throws -> ScanManifest {
-        let manifestURL = bundleURL.appendingPathComponent("manifest.json")
-        let data = try Data(contentsOf: manifestURL)
-        let decoder = JSONDecoder()
-        decoder.dateDecodingStrategy = .iso8601
-        return try decoder.decode(ScanManifest.self, from: data)
-    }
-
-    /// Bytes for an artifact referenced by the manifest.
-    public static func readArtifactData(
-        _ artifact: ScanManifest.Artifact,
-        in bundleURL: URL
-    ) throws -> Data {
-        let url = bundleURL.appendingPathComponent(artifact.relativePath)
-        return try Data(contentsOf: url)
-    }
-}
+// The read side — `readManifest(at:)` / `readArtifactData(_:in:)` — lives in
+// `ScanBundleWriter+Reading.swift`. It moved when this file reached SwiftLint's
+// 500-line gate, and it is the right seam to cut on: both are `static`, neither
+// touches the writer's private state, and their caller is the sync service
+// asking what is left to upload rather than anything writing a bundle.

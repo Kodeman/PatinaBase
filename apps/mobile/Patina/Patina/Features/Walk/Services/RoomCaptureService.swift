@@ -124,14 +124,26 @@ public final class RoomCaptureService: NSObject {
     /// bundle bytes; see `KeyframeTelemetryRecorder.swift`.
     private(set) var keyframeRecorder: KeyframeTelemetryRecorder?
 
-    /// The end-of-scan QA scorecard, built when the session ends. IN MEMORY
-    /// ONLY — deliberately not persisted to `scorecard.json` or
-    /// `manifest.scorecard`; see `RoomCoverageCoach.swift` for the two blockers.
+    /// Peak `ProcessInfo.thermalState` across the capture — the one §3.2 input
+    /// a single end-of-scan reading cannot honestly supply. Nil outside a scan.
+    private(set) var thermalPeakRecorder: ThermalPeakRecorder?
+
+    /// The manifest's instrument layer (session, anchors, scorecard,
+    /// poseGraphSummary), assembled when the session ends and folded into
+    /// manifest.json at SEAL by `RoomCaptureBundleAdapter.applyReviewAndSeal`.
     ///
-    /// Not `private(set)`: it is assigned by `finalizeInstrumentLane()`, which
-    /// lives in `RoomCaptureService+Instrument.swift` and a `private` setter is
-    /// file-scoped. Nothing outside the lane writes it.
-    var instrumentScorecard: Scorecard?
+    /// It has to outlive the recorders — the seal happens after the user's
+    /// review step, by which time the coach and keyframe recorder have nothing
+    /// left to say — which is why the layer is snapshotted here rather than
+    /// re-derived at seal.
+    ///
+    /// Not `private(set)`: it is assigned by `finalizeInstrumentLane(arSession:)`,
+    /// which lives in `RoomCaptureService+Instrument.swift` and a `private`
+    /// setter is file-scoped. Nothing outside the lane writes it.
+    var instrumentLayer: ScanManifest.InstrumentLayer?
+
+    /// The end-of-scan QA scorecard, for readers that want only that half.
+    var instrumentScorecard: Scorecard? { instrumentLayer?.scorecard }
 
     /// Counts which ARFrame streams this session actually vends. Diagnostic
     /// only — see `CaptureStreamProbe.swift` for why an app that rides
@@ -269,7 +281,7 @@ public final class RoomCaptureService: NSObject {
         captureTimebase = CaptureTimebase(start: scanStartTime ?? Date())
         frameSinks.removeAll()
         roomUpdateSinks.removeAll()
-        instrumentScorecard = nil
+        instrumentLayer = nil
 
         let coach = RoomCoverageCoach()
         coverageCoach = coach
@@ -283,6 +295,12 @@ public final class RoomCaptureService: NSObject {
         let probe = CaptureStreamProbe()
         streamProbe = probe
         frameSinks.add(probe)
+
+        // Seeded with the state RIGHT NOW, so a scan that starts on an already
+        // hot phone reports that rather than waiting for a transition.
+        let thermal = ThermalPeakRecorder()
+        thermalPeakRecorder = thermal
+        frameSinks.add(thermal)
 
         // High-fidelity depth gate: only keep the flag set if the running
         // device advertises sceneDepth. Non-LiDAR devices silently continue
@@ -403,7 +421,8 @@ public final class RoomCaptureService: NSObject {
         coverageCoach = nil
         keyframeRecorder = nil
         streamProbe = nil
-        instrumentScorecard = nil
+        thermalPeakRecorder = nil
+        instrumentLayer = nil
 
         // Start a fresh capture with a new scanId.
         startCapture()
@@ -648,7 +667,7 @@ extension RoomCaptureService: RoomCaptureSessionDelegate {
             // Close the instrument lane FIRST, and before the error early-return
             // below — a session that ended badly is exactly the one whose
             // scorecard is worth having.
-            self.finalizeInstrumentLane()
+            self.finalizeInstrumentLane(arSession: session.arSession)
 
             let scanId = self.bundleWriter?.scanId
 
@@ -793,14 +812,18 @@ extension RoomCaptureService: RoomCaptureSessionDelegate {
     ) async throws {
         guard let writer = bundleWriter else { return }
 
-        // Steps 1–3 (persist annotations, apply hero/reorder/captions, seal
-        // the manifest) live in the bundle adapter.
+        // Steps 1–5 (persist annotations, apply hero/reorder/captions, refresh
+        // the photo sidecar, fold in the instrument layer, seal the manifest)
+        // live in the bundle adapter.
         try bundleAdapter.applyReviewAndSeal(
-            writer: writer,
-            annotations: annotations,
-            heroPhotoId: heroPhotoId,
-            reorderedPhotoIds: reorderedPhotoIds,
-            photoAnnotations: photoAnnotations
+            RoomCaptureBundleAdapter.SealContext(
+                writer: writer,
+                annotations: annotations,
+                heroPhotoId: heroPhotoId,
+                reorderedPhotoIds: reorderedPhotoIds,
+                photoAnnotations: photoAnnotations,
+                instrument: instrumentLayer
+            )
         )
 
         // 4. Fire the legacy onScanComplete callback so downstream
