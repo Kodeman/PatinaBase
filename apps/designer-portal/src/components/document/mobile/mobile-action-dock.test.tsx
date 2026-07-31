@@ -163,9 +163,8 @@ describe('unified mobile edge owner', () => {
       </MobileShellProvider>,
     );
 
-    fireEvent.click(
-      screen.getByRole('button', { name: 'More studio actions' }),
-    );
+    const more = screen.getByRole('button', { name: 'More studio actions' });
+    fireEvent.click(more);
     const secondary = screen.getByRole('button', {
       name: 'Share client copy',
     });
@@ -176,6 +175,7 @@ describe('unified mobile edge owner', () => {
     expect(secondary).toHaveFocus();
     fireEvent.click(secondary);
     expect(share).toHaveBeenCalledTimes(1);
+    expect(more).toHaveFocus();
 
     rerender(
       <MobileShellProvider>
@@ -183,9 +183,7 @@ describe('unified mobile edge owner', () => {
         <MobileBar />
       </MobileShellProvider>,
     );
-    fireEvent.click(
-      screen.getByRole('button', { name: 'More studio actions' }),
-    );
+    fireEvent.click(more);
     expect(
       screen.queryByRole('button', { name: 'Share client copy' }),
     ).not.toBeInTheDocument();

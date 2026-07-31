@@ -120,6 +120,9 @@ export function MobileBar() {
   if (offer) return null;
 
   const closeThen = (action: () => void) => {
+    // Hand modal focus restoration a stable, still-rendered doorway before the
+    // focused menu row unmounts. The opened sheet can now return to More.
+    moreButtonRef.current?.focus({ preventScroll: true });
     setMoreOpen(false);
     action();
   };

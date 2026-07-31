@@ -343,6 +343,7 @@ export function StudioDrawer() {
             <button
               ref={booksButtonRef}
               type="button"
+              data-studio-books-doorway
               aria-expanded={booksOpen}
               aria-controls="studio-books-menu"
               onClick={() => setBooksOpen((open) => !open)}

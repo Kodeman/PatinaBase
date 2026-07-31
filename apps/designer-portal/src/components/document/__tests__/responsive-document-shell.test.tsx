@@ -136,6 +136,7 @@ describe('quiet responsive document shell', () => {
     expect(spine).toHaveClass(
       'min-[1180px]:block',
       'min-[1180px]:box-border',
+      'min-[1180px]:overflow-x-hidden',
       'min-[1180px]:w-full',
       'min-[1440px]:w-auto',
     );
@@ -273,14 +274,22 @@ describe('quiet responsive document shell', () => {
 
     fireEvent.click(screen.getByRole('button', { name: 'Margin' }));
     fireEvent.click(screen.getByRole('button', { name: 'Open nested sheet' }));
-    const margin = screen.getByRole('dialog', { name: 'In the margin' });
-    expect(screen.getByRole('dialog', { name: 'Nested sheet' })).toBeInTheDocument();
+    const margin = document.querySelector<HTMLElement>('[data-margin-panel]')!;
+    expect(margin).toHaveAttribute('role', 'dialog');
+    expect(margin).toHaveAttribute('aria-hidden', 'true');
+    expect(margin).not.toHaveAttribute('aria-modal');
+    expect(
+      screen.getByRole('dialog', { name: 'Nested sheet' }),
+    ).toBeInTheDocument();
 
     fireEvent.keyDown(screen.getByRole('button', { name: 'Nested action' }), {
       key: 'Escape',
     });
-    expect(screen.queryByRole('dialog', { name: 'Nested sheet' })).not.toBeInTheDocument();
-    expect(margin).toHaveAttribute('aria-hidden', 'false');
+    expect(
+      screen.queryByRole('dialog', { name: 'Nested sheet' }),
+    ).not.toBeInTheDocument();
+    await waitFor(() => expect(margin).toHaveAttribute('aria-hidden', 'false'));
+    expect(margin).toHaveAttribute('aria-modal', 'true');
 
     fireEvent.keyDown(margin, { key: 'Escape' });
     await waitFor(() => expect(margin).toHaveAttribute('aria-hidden', 'true'));
@@ -298,20 +307,92 @@ describe('quiet responsive document shell', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Margin' }));
     fireEvent.click(screen.getByRole('button', { name: 'Open nested sheet' }));
     expect(document.body.style.overflow).toBe('hidden');
-    expect(screen.getByRole('dialog', { name: 'Nested sheet' })).toBeInTheDocument();
+    expect(
+      screen.getByRole('dialog', { name: 'Nested sheet' }),
+    ).toBeInTheDocument();
 
     act(() => media.setMode({ compact: true, full: true }));
 
     await screen.findByRole('complementary', { name: 'Margin' });
-    expect(screen.getByRole('dialog', { name: 'Nested sheet' })).toBeInTheDocument();
+    expect(
+      screen.getByRole('dialog', { name: 'Nested sheet' }),
+    ).toBeInTheDocument();
     expect(document.body.style.overflow).toBe('hidden');
 
     fireEvent.keyDown(screen.getByRole('button', { name: 'Nested action' }), {
       key: 'Escape',
     });
     await waitFor(() =>
-      expect(screen.queryByRole('dialog', { name: 'Nested sheet' })).not.toBeInTheDocument(),
+      expect(
+        screen.queryByRole('dialog', { name: 'Nested sheet' }),
+      ).not.toBeInTheDocument(),
     );
+    expect(document.body.style.overflow).toBe('scroll');
+  });
+
+  it('reopens the compact margin beneath a portalled sheet on the 1440→1439 transition', async () => {
+    document.body.style.overflow = 'scroll';
+    const media = installMatchMedia({ compact: true, full: true });
+    render(
+      <ResponsiveMarginRail>
+        <NestedSheetFixture />
+      </ResponsiveMarginRail>,
+    );
+
+    await screen.findByRole('complementary', { name: 'Margin' });
+    fireEvent.click(screen.getByRole('button', { name: 'Open nested sheet' }));
+    const nested = screen.getByRole('dialog', { name: 'Nested sheet' });
+    await waitFor(() => expect(nested).toHaveFocus());
+    expect(document.body.style.overflow).toBe('hidden');
+
+    act(() => media.setMode({ compact: true, full: false }));
+
+    const margin = document.querySelector<HTMLElement>('[data-margin-panel]')!;
+    expect(margin).toHaveAttribute('data-margin-mode', 'sheet');
+    expect(margin).toHaveAttribute('aria-hidden', 'true');
+    expect(margin).toHaveAttribute('inert');
+    expect(margin).not.toHaveAttribute('aria-modal');
+    expect(nested).toBeInTheDocument();
+    expect(document.body.style.overflow).toBe('hidden');
+
+    fireEvent.keyDown(document, { key: 'Escape' });
+    await waitFor(() => expect(nested).not.toBeInTheDocument());
+    await screen.findByRole('dialog', { name: 'In the margin' });
+    expect(margin).toHaveAttribute('aria-hidden', 'false');
+    expect(margin).toHaveAttribute('aria-modal', 'true');
+    expect(document.body.style.overflow).toBe('hidden');
+
+    fireEvent.keyDown(document, { key: 'Escape' });
+    await waitFor(() => expect(margin).toHaveAttribute('aria-hidden', 'true'));
+    expect(document.body.style.overflow).toBe('scroll');
+  });
+
+  it('keeps a portalled margin sheet reachable below 1180 without a stale lock', async () => {
+    document.body.style.overflow = 'scroll';
+    const media = installMatchMedia({ compact: true, full: false });
+    render(
+      <ResponsiveMarginRail>
+        <NestedSheetFixture />
+      </ResponsiveMarginRail>,
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: 'Margin' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Open nested sheet' }));
+    const nested = screen.getByRole('dialog', { name: 'Nested sheet' });
+    const margin = document.querySelector<HTMLElement>('[data-margin-panel]');
+    expect(margin).not.toBeNull();
+    await waitFor(() => expect(nested).toHaveFocus());
+
+    act(() => media.setMode({ compact: false, full: false }));
+
+    expect(margin).toHaveAttribute('aria-hidden', 'true');
+    expect(margin).toHaveAttribute('inert');
+    expect(nested).toBeInTheDocument();
+    expect(margin).not.toContainElement(nested);
+    expect(document.body.style.overflow).toBe('hidden');
+
+    fireEvent.keyDown(document, { key: 'Escape' });
+    await waitFor(() => expect(nested).not.toBeInTheDocument());
     expect(document.body.style.overflow).toBe('scroll');
   });
 });

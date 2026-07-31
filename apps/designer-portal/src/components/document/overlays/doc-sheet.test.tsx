@@ -69,9 +69,10 @@ function NestedSheetHarness() {
         open={innerOpen}
         onClose={() => setInnerOpen(false)}
         title="Nested review"
-        icon={FileText}
       >
         <p>The nested decision.</p>
+        <button type="button">First nested action</button>
+        <button type="button">Last nested action</button>
       </DocSheet>
     </>
   );
@@ -174,7 +175,7 @@ describe('DocSheet', () => {
     expect(wide).not.toHaveClass('max-w-[640px]');
   });
 
-  it('keeps body scroll locked until the last nested sheet closes', async () => {
+  it('gives keyboard ownership to the top sheet and keeps scroll locked until both close', async () => {
     render(<NestedSheetHarness />);
     const opener = screen.getByRole('button', { name: 'Open outer sheet' });
     opener.focus();
@@ -186,20 +187,53 @@ describe('DocSheet', () => {
     });
     nestedOpener.focus();
     fireEvent.click(nestedOpener);
-    expect(screen.getAllByRole('dialog')).toHaveLength(2);
+    expect(screen.getAllByRole('dialog', { hidden: true })).toHaveLength(2);
     expect(document.body.style.overflow).toBe('hidden');
-
-    const closeButtons = screen.getAllByRole('button', {
-      name: 'Put back · Esc',
+    const inner = screen.getByRole('dialog', { name: 'Nested review' });
+    const coveredOuter = screen.getByRole('dialog', {
+      name: 'Outer review',
+      hidden: true,
     });
-    fireEvent.click(closeButtons[closeButtons.length - 1]);
+    expect(coveredOuter).not.toHaveAttribute('aria-modal');
+    expect(coveredOuter.closest('[data-doc-sheet-layer]')).toHaveAttribute(
+      'data-doc-sheet-stack-state',
+      'covered',
+    );
+    expect(coveredOuter.closest('[data-doc-sheet-layer]')).toHaveAttribute(
+      'inert',
+    );
+    expect(inner).toHaveAttribute('aria-modal', 'true');
+    await waitFor(() => expect(inner).toHaveFocus());
+
+    const firstNested = screen.getByRole('button', {
+      name: 'First nested action',
+    });
+    const lastNested = screen.getByRole('button', {
+      name: 'Last nested action',
+    });
+    fireEvent.keyDown(document, { key: 'Tab' });
+    expect(firstNested).toHaveFocus();
+    lastNested.focus();
+    fireEvent.keyDown(document, { key: 'Tab' });
+    expect(firstNested).toHaveFocus();
+
+    fireEvent.keyDown(document, { key: 'Escape' });
     await waitFor(() => expect(screen.getAllByRole('dialog')).toHaveLength(1));
+    expect(
+      screen.queryByRole('dialog', { name: 'Nested review' }),
+    ).not.toBeInTheDocument();
+    const restoredOuter = screen.getByRole('dialog', {
+      name: 'Outer review',
+    });
+    expect(restoredOuter).toHaveAttribute('aria-modal', 'true');
+    expect(restoredOuter.closest('[data-doc-sheet-layer]')).toHaveAttribute(
+      'data-doc-sheet-stack-state',
+      'top',
+    );
     expect(document.body.style.overflow).toBe('hidden');
     await waitFor(() => expect(nestedOpener).toHaveFocus());
 
-    fireEvent.click(
-      screen.getByRole('button', { name: 'Put back · Esc' }),
-    );
+    fireEvent.keyDown(document, { key: 'Escape' });
     await waitFor(() =>
       expect(screen.queryByRole('dialog')).not.toBeInTheDocument(),
     );
@@ -227,12 +261,18 @@ describe('DocSheet', () => {
     expect(document.getElementById(titleId ?? '')).toHaveTextContent(
       'Order review',
     );
+    expect(dialog.querySelector('[data-doc-sheet-page-label]')).toHaveClass(
+      'hidden',
+      'sm:inline',
+    );
     expect(
-      dialog.querySelector('[data-doc-sheet-page-label]'),
-    ).toHaveClass('hidden', 'sm:inline');
-    expect(screen.getByRole('button', { name: 'Put back · Esc' })).toHaveClass(
-      'min-h-11',
-      'doc-type-meta',
+      dialog.querySelector('[data-doc-sheet-title-line]'),
+    ).toHaveTextContent('Order review');
+    const putBack = screen.getByRole('button', { name: 'Put back · Esc' });
+    expect(putBack).toHaveClass('min-h-11', 'doc-type-meta');
+    expect(putBack.querySelector('.sm\\:hidden')).toHaveTextContent('Close');
+    expect(putBack.querySelector('.sm\\:inline')).toHaveTextContent(
+      'Put back · Esc',
     );
 
     fireEvent.keyDown(document, { key: 'Escape' });

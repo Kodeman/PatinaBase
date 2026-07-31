@@ -32,7 +32,7 @@ export function DocSpine({
       data-spine-regime="sheet-below-1180-compact-to-1439-full-from-1440"
       // D13: below 1180px the unified bar's section handle replaces the rail
       // (the spine doubles as a bottom sheet, D3-3).
-      className="sticky top-0 z-[2] hidden border-r border-[var(--color-pearl)] bg-[rgba(229,226,221,0.28)] min-[1180px]:box-border min-[1180px]:block min-[1180px]:h-screen min-[1180px]:w-full min-[1180px]:overflow-y-auto min-[1180px]:px-1.5 min-[1180px]:pb-24 min-[1180px]:pt-4 min-[1440px]:w-auto min-[1440px]:px-4 min-[1440px]:pt-6"
+      className="sticky top-0 z-[2] hidden border-r border-[var(--color-pearl)] bg-[rgba(229,226,221,0.28)] min-[1180px]:box-border min-[1180px]:block min-[1180px]:h-screen min-[1180px]:w-full min-[1180px]:overflow-x-hidden min-[1180px]:overflow-y-auto min-[1180px]:px-1.5 min-[1180px]:pb-24 min-[1180px]:pt-4 min-[1440px]:w-auto min-[1440px]:px-4 min-[1440px]:pt-6"
     >
       <Link
         href="/desk"
@@ -57,7 +57,9 @@ export function DocSpine({
                   fill={fillStateAtSection(s.key)}
                   size="sm"
                   breathing={s.state === 'active'}
-                  label={s.state === 'active' ? `${s.label} — ${s.sub}` : undefined}
+                  label={
+                    s.state === 'active' ? `${s.label} — ${s.sub}` : undefined
+                  }
                 />
               </span>
               <span
@@ -78,7 +80,9 @@ export function DocSpine({
                 </span>
                 <span
                   className={`mt-px block font-mono text-[12px] uppercase tracking-[0.05em] ${
-                    s.state === 'active' ? 'text-[var(--color-clay)]' : 'text-[var(--text-muted)]'
+                    s.state === 'active'
+                      ? 'text-[var(--color-clay)]'
+                      : 'text-[var(--text-muted)]'
                   }`}
                 >
                   {s.sub}

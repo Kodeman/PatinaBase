@@ -34,8 +34,12 @@ import { todayYmd } from '@/lib/document/format';
 import { MarginItem } from './margin-item';
 import { MarginItemBody } from './margin-bodies';
 import { MarginNote } from './margin-note';
-import { DocSheet } from './overlays/doc-sheet';
+import { DocSheet, DocSheetOriginProvider } from './overlays/doc-sheet';
 import { lockBodyScroll } from './overlays/body-scroll-lock';
+import {
+  registerManagedModalDialog,
+  topActiveModalDialog,
+} from './overlays/active-dialog';
 import {
   ItemComposer,
   toComposerFfeItems,
@@ -75,6 +79,7 @@ export function ResponsiveMarginRail({ children }: { children: ReactNode }) {
   const closeRef = useRef<HTMLButtonElement>(null);
   const panelRef = useRef<HTMLElement>(null);
   const titleId = useId();
+  const [isTopModal, setIsTopModal] = useState(true);
 
   useEffect(() => {
     const compactMedia = window.matchMedia(COMPACT_MARGIN_QUERY);
@@ -82,7 +87,11 @@ export function ResponsiveMarginRail({ children }: { children: ReactNode }) {
     const syncMode = () => {
       setIsCompactShell(compactMedia.matches);
       setIsFullRail(fullMedia.matches);
-      if (!compactMedia.matches || fullMedia.matches) setOpen(false);
+      if (!compactMedia.matches || fullMedia.matches) {
+        setOpen(false);
+      } else if (topActiveModalDialog()?.dataset.docSheetOrigin === 'margin') {
+        setOpen(true);
+      }
     };
 
     syncMode();
@@ -99,19 +108,15 @@ export function ResponsiveMarginRail({ children }: { children: ReactNode }) {
 
     const panel = panelRef.current;
     const returnFocusTarget = triggerRef.current;
-    const focusFrame = window.requestAnimationFrame(() =>
-      closeRef.current?.focus(),
-    );
+    const focusFrame = window.requestAnimationFrame(() => {
+      const topDialog = topActiveModalDialog();
+      if (!topDialog || topDialog === panel) closeRef.current?.focus();
+    });
     const onKeyDown = (event: KeyboardEvent) => {
-      const nestedDialogs = panel
-        ? Array.from(panel.querySelectorAll<HTMLElement>('[role="dialog"]'))
-        : [];
-      const nestedDialog = nestedDialogs[nestedDialogs.length - 1];
+      const topDialog = topActiveModalDialog();
+      if (topDialog && topDialog !== panel) return;
 
       if (event.key === 'Escape') {
-        // A composer or ledger opened from the margin owns Escape first.
-        // Its bubble-phase listener closes it; the margin remains in place.
-        if (nestedDialog) return;
         event.preventDefault();
         event.stopPropagation();
         setOpen(false);
@@ -119,7 +124,7 @@ export function ResponsiveMarginRail({ children }: { children: ReactNode }) {
       }
 
       if (event.key !== 'Tab' || !panel) return;
-      const focusScope = nestedDialog ?? panel;
+      const focusScope = panel;
       const controls = Array.from(
         focusScope.querySelectorAll<HTMLElement>(FOCUSABLE_MARGIN_CONTROLS),
       ).filter((control) => !control.hasAttribute('disabled'));
@@ -162,6 +167,12 @@ export function ResponsiveMarginRail({ children }: { children: ReactNode }) {
   const openAsSheet = isCompactShell && !isFullRail && open;
   const visible = isFullRail || openAsSheet;
 
+  useEffect(() => {
+    const panel = panelRef.current;
+    if (!openAsSheet || !panel) return;
+    return registerManagedModalDialog(panel, setIsTopModal);
+  }, [openAsSheet]);
+
   // The compact margin is modal, so it joins the same ref-counted body lock as
   // any DocSheet opened inside it. Sharing the counter keeps the page locked if
   // a breakpoint settles the margin into its rail while a nested sheet remains.
@@ -201,11 +212,11 @@ export function ResponsiveMarginRail({ children }: { children: ReactNode }) {
         ref={panelRef}
         id={`${titleId}-panel`}
         role={openAsSheet ? 'dialog' : undefined}
-        aria-modal={openAsSheet ? true : undefined}
+        aria-modal={openAsSheet && isTopModal ? true : undefined}
         aria-label={isFullRail ? 'Margin' : undefined}
         aria-labelledby={openAsSheet ? titleId : undefined}
-        aria-hidden={!visible}
-        inert={!visible ? true : undefined}
+        aria-hidden={!visible || (openAsSheet && !isTopModal)}
+        inert={!visible || (openAsSheet && !isTopModal) ? true : undefined}
         tabIndex={openAsSheet ? -1 : undefined}
         data-margin-panel
         data-margin-mode={isFullRail ? 'rail' : 'sheet'}
@@ -235,7 +246,11 @@ export function ResponsiveMarginRail({ children }: { children: ReactNode }) {
             </span>
           </button>
         </div>
-        <div className="px-4 pb-24 pt-4 min-[1440px]:pt-6">{children}</div>
+        <div className="px-4 pb-24 pt-4 min-[1440px]:pt-6">
+          <DocSheetOriginProvider origin="margin">
+            {children}
+          </DocSheetOriginProvider>
+        </div>
       </aside>
     </>
   );

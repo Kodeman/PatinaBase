@@ -199,6 +199,87 @@ test.describe("Quiet Work release browser contracts", () => {
         .poll(() => page.evaluate(() => document.body.style.overflow))
         .toBe(originalBodyOverflow);
 
+      await test.step("1439→1440 closes the compact timer without hidden focus", async () => {
+        await page.setViewportSize({ width: 1439, height: 900 });
+        await expect(timerDoorway).toBeVisible();
+        await timerDoorway.click();
+        await expect(timerDialog).toBeVisible();
+        await expect
+          .poll(() => page.evaluate(() => document.body.style.overflow))
+          .toBe("hidden");
+
+        await page.setViewportSize({ width: 1440, height: 900 });
+        await expect(timerDialog).toHaveCount(0);
+        await expect(page.locator("[data-full-spine-timer]")).toBeVisible();
+        await expect(
+          page.locator(
+            '[data-full-spine-timer] [data-action-key="open-manual-time-entry"]',
+          ),
+        ).toBeFocused();
+        await expect(timerDoorway).toBeHidden();
+        await expect(timerDoorway).not.toBeFocused();
+        await expect
+          .poll(() => page.evaluate(() => document.body.style.overflow))
+          .toBe(originalBodyOverflow);
+
+        await page.setViewportSize({ width: 1439, height: 900 });
+        await expect(timerDialog).toHaveCount(0);
+      });
+
+      await test.step("the timer remains open when 1180 gives way to the mobile edge", async () => {
+        await page.setViewportSize({ width: 1280, height: 900 });
+        await timerDoorway.click();
+        await expect(timerDialog).toBeVisible();
+
+        await page.setViewportSize({ width: 1179, height: 900 });
+        await expect(timerDialog).toBeVisible();
+        await expect(timerDoorway).toBeHidden();
+        await expect
+          .poll(() => page.evaluate(() => document.body.style.overflow))
+          .toBe("hidden");
+
+        await page.keyboard.press("Escape");
+        await expect(timerDialog).toHaveCount(0);
+        await expect(timerDoorway).not.toBeFocused();
+        await expect(
+          page.getByRole("button", { name: "More studio actions" }),
+        ).toBeFocused();
+        await expect
+          .poll(() => page.evaluate(() => document.body.style.overflow))
+          .toBe(originalBodyOverflow);
+      });
+
+      await test.step("1179→1180 returns a mobile-opened timer to the compact doorway", async () => {
+        const mobileMore = page.getByRole("button", {
+          name: "More studio actions",
+        });
+        await expect(mobileMore).toBeVisible();
+        await mobileMore.click();
+        await page
+          .getByRole("group", { name: "More studio actions" })
+          .getByRole("button", { name: /^Time in hand/ })
+          .click();
+        await expect(timerDialog).toBeVisible();
+        await expect
+          .poll(() => page.evaluate(() => document.body.style.overflow))
+          .toBe("hidden");
+
+        await page.setViewportSize({ width: 1180, height: 900 });
+        await expect(timerDialog).toBeVisible();
+        await expect(mobileMore).toBeHidden();
+        await expect(timerDoorway).toBeVisible();
+
+        await page.keyboard.press("Escape");
+        await expect(timerDialog).toHaveCount(0);
+        await expect(timerDoorway).toBeFocused();
+        await expect
+          .poll(() => page.evaluate(() => document.body.style.overflow))
+          .toBe(originalBodyOverflow);
+
+        await page.setViewportSize({ width: 1179, height: 900 });
+        await expect(timerDialog).toHaveCount(0);
+      });
+
       // Put the seeded project back so a later spec does not inherit its
       // one-running-timer row.
       await page.goto("/desk", { waitUntil: "domcontentloaded" });
@@ -245,19 +326,66 @@ test.describe("Quiet Work release browser contracts", () => {
     await expect(shareDialog.locator("[data-overlay-share]")).toBeVisible();
     await page.keyboard.press("Escape");
     await expect(shareDialog).toBeHidden();
+    await expect(more).toBeFocused();
 
-    await page.setViewportSize({ width: 390, height: 480 });
+    await page.setViewportSize({ width: 1179, height: 844 });
     await page.goto(`/doc/${SENT_PROPOSAL_ID}`, {
       waitUntil: "domcontentloaded",
     });
     await expect(page.locator("[data-document-shell]")).toBeVisible();
+    await page.waitForLoadState("networkidle");
 
-    await page.getByRole("button", { name: "More studio actions" }).click();
+    const mobileMore = page.getByRole("button", {
+      name: "More studio actions",
+      includeHidden: true,
+    });
+    const originalBodyOverflow = await page.evaluate(
+      () => document.body.style.overflow,
+    );
+    await mobileMore.click();
     await page
       .getByRole("group", { name: "More studio actions" })
       .getByRole("button", { name: "Studio books" })
       .click();
-    const drawer = page.locator('[data-mobile-sheet-kind="drawer"]');
+    let drawer = page.locator('[data-mobile-sheet-kind="drawer"]');
+    await expect(drawer).toBeVisible();
+    await expect
+      .poll(() => page.evaluate(() => document.body.style.overflow))
+      .toBe("hidden");
+
+    await page.setViewportSize({ width: 1180, height: 844 });
+    await expect(drawer).toHaveCount(0);
+    await expect(page.locator("[data-studio-books-doorway]")).toBeFocused();
+    await expect(mobileMore).toBeHidden();
+    await expect(mobileMore).not.toBeFocused();
+    await expect
+      .poll(() => page.evaluate(() => document.body.style.overflow))
+      .toBe(originalBodyOverflow);
+
+    await page.setViewportSize({ width: 1179, height: 844 });
+    await expect(drawer).toHaveCount(0);
+
+    await page.setViewportSize({ width: 320, height: 480 });
+    await mobileMore.click();
+    await page
+      .getByRole("group", { name: "More studio actions" })
+      .getByRole("button", { name: "Studio books" })
+      .click();
+    drawer = page.locator('[data-mobile-sheet-kind="drawer"]');
+    await expect(drawer).toBeVisible();
+    await page.keyboard.press("Escape");
+    await expect(drawer).toHaveCount(0);
+    await expect(mobileMore).toBeFocused();
+    await expect
+      .poll(() => page.evaluate(() => document.body.style.overflow))
+      .toBe(originalBodyOverflow);
+
+    await mobileMore.click();
+    await page
+      .getByRole("group", { name: "More studio actions" })
+      .getByRole("button", { name: "Studio books" })
+      .click();
+    drawer = page.locator('[data-mobile-sheet-kind="drawer"]');
     await expect(drawer).toBeVisible();
     await drawer.getByRole("button", { name: /^Orders/ }).click();
 
@@ -271,11 +399,21 @@ test.describe("Quiet Work release browser contracts", () => {
     const headControl = ordersDialog.getByRole("button", {
       name: "Put back · Esc",
     });
-    await expectHorizontalBounds(layer, 0, 390);
+    await expectHorizontalBounds(layer, 0, 320);
     await expectVerticalBounds(layer, 0, 480);
-    await expectHorizontalBounds(ordersDialog, 15, 375);
+    await expectHorizontalBounds(ordersDialog, 15, 305);
     await expectVerticalBounds(ordersDialog, 15, 465);
     await expectVerticalBounds(headControl, 15, 465);
+    await expect(ordersDialog.locator("[data-doc-sheet-title]")).toHaveText(
+      "Orders",
+    );
+    await expect
+      .poll(() =>
+        ordersDialog
+          .locator("[data-doc-sheet-title-line]")
+          .evaluate((title) => title.scrollWidth <= title.clientWidth),
+      )
+      .toBe(true);
     await expect
       .poll(() =>
         layer.evaluate((surface) => getComputedStyle(surface).overflowY),
@@ -294,6 +432,7 @@ test.describe("Quiet Work release browser contracts", () => {
         { timeout: 30_000 },
       )
       .toEqual({ bounded: true, overflowY: "auto", scrollable: true });
+
     await ordersDialog.evaluate((panel) => {
       panel.scrollTop = 100;
     });
@@ -301,5 +440,12 @@ test.describe("Quiet Work release browser contracts", () => {
       .poll(() => ordersDialog.evaluate((panel) => panel.scrollTop))
       .toBeGreaterThan(0);
     await expectNoHorizontalOverflow(page);
+
+    await page.keyboard.press("Escape");
+    await expect(ordersDialog).toHaveCount(0);
+    await expect(mobileMore).toBeFocused();
+    await expect
+      .poll(() => page.evaluate(() => document.body.style.overflow))
+      .toBe(originalBodyOverflow);
   });
 });

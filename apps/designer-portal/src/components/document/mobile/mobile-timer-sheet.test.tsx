@@ -1,5 +1,11 @@
 import type { ReactNode } from 'react';
-import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import {
+  act,
+  fireEvent,
+  render,
+  screen,
+  waitFor,
+} from '@testing-library/react';
 import { MobileShellProvider, useMobileShell } from './mobile-shell';
 import { MobileSheets } from './mobile-sheets';
 import { CompactSpineTimerDoorway } from '../spine-timer';
@@ -17,6 +23,64 @@ let mockTimeState = {
   resume: mockResume,
   manualLog: mockManualLog,
 };
+
+type TestMediaRecord = {
+  query: string;
+  matches: boolean;
+  listeners: Set<(event: MediaQueryListEvent) => void>;
+};
+
+let testMediaRecords: TestMediaRecord[] = [];
+let testViewportWidth = 1280;
+
+function matchesViewportQuery(query: string, width: number) {
+  const min = query.match(/min-width:\s*(\d+)px/);
+  const max = query.match(/max-width:\s*(\d+)px/);
+  return (!min || width >= Number(min[1])) && (!max || width <= Number(max[1]));
+}
+
+function installViewportMatchMedia(width: number) {
+  testMediaRecords = [];
+  testViewportWidth = width;
+  window.matchMedia = jest.fn((query: string) => {
+    const record: TestMediaRecord = {
+      query,
+      matches: matchesViewportQuery(query, testViewportWidth),
+      listeners: new Set(),
+    };
+    testMediaRecords.push(record);
+
+    return {
+      get matches() {
+        return record.matches;
+      },
+      media: query,
+      onchange: null,
+      addListener: jest.fn(),
+      removeListener: jest.fn(),
+      addEventListener: (
+        _type: string,
+        listener: (event: MediaQueryListEvent) => void,
+      ) => record.listeners.add(listener),
+      removeEventListener: (
+        _type: string,
+        listener: (event: MediaQueryListEvent) => void,
+      ) => record.listeners.delete(listener),
+      dispatchEvent: jest.fn(() => true),
+    } as unknown as MediaQueryList;
+  });
+}
+
+function setViewportWidth(width: number) {
+  testViewportWidth = width;
+  for (const record of testMediaRecords) {
+    const next = matchesViewportQuery(record.query, width);
+    if (next === record.matches) continue;
+    record.matches = next;
+    const event = { matches: next, media: record.query } as MediaQueryListEvent;
+    for (const listener of record.listeners) listener(event);
+  }
+}
 
 jest.mock('next/navigation', () => ({
   useRouter: () => ({ push: jest.fn() }),
@@ -81,8 +145,39 @@ function OpenDrawer() {
   );
 }
 
+function MobileTimerFallbackDoorway() {
+  const { openTimer } = useMobileShell();
+  return (
+    <nav data-mobile-edge-owner="document-bar">
+      <button
+        type="button"
+        aria-label="More studio actions"
+        onClick={openTimer}
+      >
+        More
+      </button>
+    </nav>
+  );
+}
+
+function DesktopFocusFallbacks() {
+  return (
+    <>
+      <button type="button" data-studio-books-doorway>
+        Studio books doorway
+      </button>
+      <div data-full-spine-timer>
+        <button type="button" data-action-key="open-manual-time-entry">
+          Full timer log
+        </button>
+      </div>
+    </>
+  );
+}
+
 describe('compact-spine timer doorway', () => {
   beforeEach(() => {
+    installViewportMatchMedia(1280);
     document.body.style.overflow = '';
     document.body.style.paddingRight = '';
     mockPause.mockClear();
@@ -175,6 +270,7 @@ describe('compact-spine timer doorway', () => {
   });
 
   it('keeps every non-timer sheet below 1180', () => {
+    setViewportWidth(390);
     render(
       <MobileShellProvider>
         <OpenDrawer />
@@ -190,6 +286,210 @@ describe('compact-spine timer doorway', () => {
     );
     expect(drawer).toHaveClass('min-[1180px]:hidden');
     expect(drawer).not.toHaveClass('min-[1440px]:hidden');
+    expect(screen.getByRole('button', { name: /Orders/i })).toHaveClass(
+      'focus-visible:outline-[var(--color-clay)]',
+    );
+  });
+
+  it('closes a drawer when 1180px ends its regime without restoring hidden focus', async () => {
+    setViewportWidth(1179);
+    render(
+      <MobileShellProvider>
+        <OpenDrawer />
+        <DesktopFocusFallbacks />
+        <SheetState />
+        <MobileSheets />
+      </MobileShellProvider>,
+    );
+
+    const opener = screen.getByRole('button', { name: 'Open drawer' });
+    const desktopDoorway = screen.getByRole('button', {
+      name: 'Studio books doorway',
+    });
+    desktopDoorway.style.display = 'none';
+    opener.focus();
+    fireEvent.click(opener);
+    const drawer = screen.getByRole('dialog');
+    await waitFor(() =>
+      expect(drawer.querySelector('[data-mobile-sheet-panel]')).toHaveFocus(),
+    );
+    expect(document.body.style.overflow).toBe('hidden');
+
+    opener.style.display = 'none';
+    desktopDoorway.style.display = '';
+    act(() => setViewportWidth(1180));
+
+    await waitFor(() =>
+      expect(screen.queryByRole('dialog')).not.toBeInTheDocument(),
+    );
+    expect(screen.getByTestId('sheet-state')).toHaveTextContent('closed');
+    expect(document.body.style.overflow).toBe('');
+    expect(opener).not.toHaveFocus();
+    await waitFor(() => expect(desktopDoorway).toHaveFocus());
+
+    act(() => setViewportWidth(1179));
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+  });
+
+  it('closes the compact timer at 1440px and does not resurrect it on return', async () => {
+    setViewportWidth(1439);
+    render(
+      <MobileShellProvider>
+        <CompactSpineTimerDoorway />
+        <DesktopFocusFallbacks />
+        <SheetState />
+        <MobileSheets />
+      </MobileShellProvider>,
+    );
+
+    const doorway = screen.getByRole('button', {
+      name: 'Open time controls, In hand, 1h05 elapsed',
+    });
+    const fullTimerLog = screen.getByRole('button', {
+      name: 'Full timer log',
+    });
+    fullTimerLog.style.display = 'none';
+    doorway.focus();
+    fireEvent.click(doorway);
+    const timerDialog = screen.getByRole('dialog', { name: 'Time in hand' });
+    await waitFor(() =>
+      expect(
+        timerDialog.querySelector('[data-mobile-sheet-panel]'),
+      ).toHaveFocus(),
+    );
+    expect(document.body.style.overflow).toBe('hidden');
+
+    doorway.style.display = 'none';
+    fullTimerLog.style.display = '';
+    act(() => setViewportWidth(1440));
+
+    await waitFor(() =>
+      expect(
+        screen.queryByRole('dialog', { name: 'Time in hand' }),
+      ).not.toBeInTheDocument(),
+    );
+    expect(screen.getByTestId('sheet-state')).toHaveTextContent('closed');
+    expect(document.body.style.overflow).toBe('');
+    expect(doorway).not.toHaveFocus();
+    await waitFor(() => expect(fullTimerLog).toHaveFocus());
+
+    act(() => setViewportWidth(1439));
+    expect(
+      screen.queryByRole('dialog', { name: 'Time in hand' }),
+    ).not.toBeInTheDocument();
+  });
+
+  it('keeps the timer open when compact chrome gives way to the mobile edge', async () => {
+    render(
+      <MobileShellProvider>
+        <CompactSpineTimerDoorway />
+        <MobileTimerFallbackDoorway />
+        <MobileSheets />
+      </MobileShellProvider>,
+    );
+
+    const compactDoorway = screen.getByRole('button', {
+      name: 'Open time controls, In hand, 1h05 elapsed',
+    });
+    const mobileMore = screen.getByRole('button', {
+      name: 'More studio actions',
+    });
+    mobileMore.style.display = 'none';
+    fireEvent.click(compactDoorway);
+    const dialog = screen.getByRole('dialog', { name: 'Time in hand' });
+    await waitFor(() =>
+      expect(dialog.querySelector('[data-mobile-sheet-panel]')).toHaveFocus(),
+    );
+
+    compactDoorway.style.display = 'none';
+    mobileMore.style.display = '';
+    act(() => setViewportWidth(1179));
+    expect(dialog).toBeInTheDocument();
+    expect(document.body.style.overflow).toBe('hidden');
+
+    fireEvent.keyDown(document, { key: 'Escape' });
+    await waitFor(() => expect(dialog).not.toBeInTheDocument());
+    expect(document.body.style.overflow).toBe('');
+    await waitFor(() => expect(mobileMore).toHaveFocus());
+  });
+
+  it('hands a mobile-opened timer to the compact doorway after crossing 1180px', async () => {
+    setViewportWidth(1179);
+    render(
+      <MobileShellProvider>
+        <CompactSpineTimerDoorway />
+        <MobileTimerFallbackDoorway />
+        <MobileSheets />
+      </MobileShellProvider>,
+    );
+
+    const compactDoorway = screen.getByRole('button', {
+      name: 'Open time controls, In hand, 1h05 elapsed',
+    });
+    const mobileMore = screen.getByRole('button', {
+      name: 'More studio actions',
+    });
+    compactDoorway.style.display = 'none';
+    fireEvent.click(mobileMore);
+    const dialog = screen.getByRole('dialog', { name: 'Time in hand' });
+    await waitFor(() =>
+      expect(dialog.querySelector('[data-mobile-sheet-panel]')).toHaveFocus(),
+    );
+
+    mobileMore.style.display = 'none';
+    compactDoorway.style.display = '';
+    act(() => setViewportWidth(1180));
+    expect(dialog).toBeInTheDocument();
+    expect(document.body.style.overflow).toBe('hidden');
+
+    fireEvent.keyDown(document, { key: 'Escape' });
+    await waitFor(() => expect(dialog).not.toBeInTheDocument());
+    expect(document.body.style.overflow).toBe('');
+    await waitFor(() => expect(compactDoorway).toHaveFocus());
+  });
+
+  it('does not steal focus from a replacement modal during responsive cleanup', async () => {
+    setViewportWidth(1179);
+    render(
+      <MobileShellProvider>
+        <OpenDrawer />
+        <DesktopFocusFallbacks />
+        <MobileSheets />
+      </MobileShellProvider>,
+    );
+
+    const opener = screen.getByRole('button', { name: 'Open drawer' });
+    const desktopDoorway = screen.getByRole('button', {
+      name: 'Studio books doorway',
+    });
+    desktopDoorway.style.display = 'none';
+    fireEvent.click(opener);
+    await waitFor(() =>
+      expect(
+        screen.getByRole('dialog').querySelector('[data-mobile-sheet-panel]'),
+      ).toHaveFocus(),
+    );
+
+    const replacement = document.createElement('div');
+    replacement.setAttribute('role', 'dialog');
+    replacement.setAttribute('aria-modal', 'true');
+    replacement.setAttribute('tabindex', '-1');
+    replacement.setAttribute('aria-label', 'Replacement sheet');
+    document.body.appendChild(replacement);
+    replacement.focus();
+
+    opener.style.display = 'none';
+    desktopDoorway.style.display = '';
+    act(() => setViewportWidth(1180));
+
+    await waitFor(() =>
+      expect(
+        document.querySelector('[data-mobile-sheet-kind="drawer"]'),
+      ).not.toBeInTheDocument(),
+    );
+    await waitFor(() => expect(replacement).toHaveFocus());
+    expect(desktopDoorway).not.toHaveFocus();
+    replacement.remove();
   });
 
   it('publishes no compact timer doorway without a held project', () => {

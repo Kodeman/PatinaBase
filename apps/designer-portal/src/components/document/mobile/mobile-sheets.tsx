@@ -28,6 +28,10 @@ import { openAccount } from '../account/account-sheet';
 import { MobileAccountHeader } from '../account/mobile-account-header';
 import { DocumentAction, DocumentActionRow } from '../document-action';
 import { lockBodyScroll } from '../overlays/body-scroll-lock';
+import {
+  isElementRendered,
+  topActiveModalDialog,
+} from '../overlays/active-dialog';
 import { useMobileShell } from './mobile-shell';
 
 const SHEET_FOCUSABLE = [
@@ -54,20 +58,6 @@ function focusableSheetControls(panel: HTMLElement) {
       style.visibility !== 'hidden'
     );
   });
-}
-
-function topActiveDialog() {
-  return Array.from(
-    document.querySelectorAll<HTMLElement>(
-      '[role="dialog"][aria-modal="true"]',
-    ),
-  )
-    .filter(
-      (dialog) =>
-        !dialog.hidden &&
-        !dialog.closest('[hidden], [aria-hidden="true"], [inert]'),
-    )
-    .at(-1);
 }
 
 const LEDGERS: {
@@ -124,6 +114,56 @@ const LEDGERS: {
   },
 ];
 
+const MOBILE_MORE_DOORWAY =
+  '[data-mobile-edge-owner="document-bar"] [aria-label="More studio actions"]';
+
+const SHEET_RETURN_FALLBACKS: Record<
+  'drawer' | 'timer' | 'spine' | 'margin-item',
+  readonly string[]
+> = {
+  drawer: ['[data-studio-books-doorway]', MOBILE_MORE_DOORWAY],
+  timer: [
+    '[data-compact-spine-timer-doorway]',
+    '[data-full-spine-timer] [data-action-key="open-manual-time-entry"]',
+    MOBILE_MORE_DOORWAY,
+    '[data-studio-books-doorway]',
+  ],
+  spine: ['[data-document-spine] button', MOBILE_MORE_DOORWAY],
+  'margin-item': [
+    '[data-margin-trigger]',
+    '[data-document-spine] button',
+    MOBILE_MORE_DOORWAY,
+  ],
+};
+
+function focusMobileMoreDoorway() {
+  document
+    .querySelector<HTMLButtonElement>(MOBILE_MORE_DOORWAY)
+    ?.focus({ preventScroll: true });
+}
+
+function restoreSheetFocus(
+  kind: keyof typeof SHEET_RETURN_FALLBACKS,
+  captured: HTMLElement | null,
+) {
+  window.requestAnimationFrame(() => {
+    // A drawer action may replace this sheet with a DocSheet in the same
+    // commit. That new modal owns focus; never pull it back to shell chrome.
+    if (topActiveModalDialog()) return;
+
+    const candidates = [
+      captured,
+      ...SHEET_RETURN_FALLBACKS[kind].flatMap((selector) =>
+        Array.from(document.querySelectorAll<HTMLElement>(selector)),
+      ),
+    ];
+    const target = candidates.find((candidate): candidate is HTMLElement =>
+      Boolean(candidate?.isConnected && isElementRendered(candidate)),
+    );
+    target?.focus({ preventScroll: true });
+  });
+}
+
 function Sheet({
   tone,
   kind,
@@ -139,7 +179,9 @@ function Sheet({
   const dialogRef = useRef<HTMLDivElement>(null);
   const panelRef = useRef<HTMLDivElement>(null);
   const closeRef = useRef(onClose);
+  const kindRef = useRef(kind);
   closeRef.current = onClose;
+  kindRef.current = kind;
 
   useEffect(() => {
     const activeElement = document.activeElement;
@@ -154,7 +196,7 @@ function Sheet({
     const onKeyDown = (event: KeyboardEvent) => {
       const dialog = dialogRef.current;
       const panel = panelRef.current;
-      if (!dialog || !panel || topActiveDialog() !== dialog) return;
+      if (!dialog || !panel || topActiveModalDialog() !== dialog) return;
 
       if (event.key === 'Escape') {
         event.preventDefault();
@@ -191,10 +233,7 @@ function Sheet({
       window.cancelAnimationFrame(focusFrame);
       document.removeEventListener('keydown', onKeyDown, true);
       unlockBodyScroll();
-      if (!returnFocusTarget?.isConnected) return;
-      window.requestAnimationFrame(() => {
-        returnFocusTarget.focus({ preventScroll: true });
-      });
+      restoreSheetFocus(kindRef.current, returnFocusTarget);
     };
   }, []);
 
@@ -260,6 +299,22 @@ export function MobileSheets() {
     [items],
   );
   const allItems = useMemo(() => [...raised, ...settled], [raised, settled]);
+  const sheetKind = sheet?.kind ?? null;
+
+  useEffect(() => {
+    if (!sheetKind) return;
+
+    const validRegime = window.matchMedia(
+      sheetKind === 'timer' ? '(max-width: 1439px)' : '(max-width: 1179px)',
+    );
+    const closeOutsideRegime = () => {
+      if (!validRegime.matches) closeSheet();
+    };
+
+    closeOutsideRegime();
+    validRegime.addEventListener('change', closeOutsideRegime);
+    return () => validRegime.removeEventListener('change', closeOutsideRegime);
+  }, [closeSheet, sheetKind]);
 
   if (!sheet) return null;
 
@@ -272,6 +327,7 @@ export function MobileSheets() {
             in the list below. */}
         <MobileAccountHeader
           onOpen={() => {
+            focusMobileMoreDoorway();
             closeSheet();
             openAccount();
           }}
@@ -289,10 +345,11 @@ export function MobileSheets() {
               <button
                 type="button"
                 onClick={() => {
+                  focusMobileMoreDoorway();
                   closeSheet();
                   openLedger(l.name);
                 }}
-                className="flex w-full items-center gap-3 border-b border-[rgba(250,247,242,0.08)] py-2.5 text-left"
+                className="flex w-full items-center gap-3 border-b border-[rgba(250,247,242,0.08)] py-2.5 text-left focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-[-3px] focus-visible:outline-[var(--color-clay)]"
               >
                 {l.weight === 'room' ? (
                   <span

@@ -22,10 +22,23 @@
  * — the surface beneath must not unmount.
  */
 
-import { useEffect, useId, useRef } from 'react';
+import {
+  createContext,
+  useContext,
+  useEffect,
+  useId,
+  useRef,
+  useState,
+} from 'react';
+import { createPortal } from 'react-dom';
 import type { LucideIcon } from 'lucide-react';
 import { openHelp, type HelpOpenSource } from '@/lib/help-system/open-help';
 import { lockBodyScroll } from './body-scroll-lock';
+import {
+  isElementRendered,
+  registerManagedModalDialog,
+  topActiveModalDialog,
+} from './active-dialog';
 
 const FOCUSABLE_SELECTOR = [
   'a[href]:not([tabindex="-1"])',
@@ -36,6 +49,23 @@ const FOCUSABLE_SELECTOR = [
   '[contenteditable="true"]:not([tabindex="-1"])',
   '[tabindex]:not([tabindex="-1"])',
 ].join(',');
+
+type DocSheetOrigin = 'document' | 'margin';
+const DocSheetOriginContext = createContext<DocSheetOrigin>('document');
+
+export function DocSheetOriginProvider({
+  origin,
+  children,
+}: {
+  origin: DocSheetOrigin;
+  children: React.ReactNode;
+}) {
+  return (
+    <DocSheetOriginContext.Provider value={origin}>
+      {children}
+    </DocSheetOriginContext.Provider>
+  );
+}
 
 function getFocusableElements(panel: HTMLElement) {
   return Array.from(
@@ -121,8 +151,13 @@ export function DocSheetHead({
           strokeWidth={1.5}
           aria-hidden
         />
-        <span className="doc-type-meta truncate font-semibold uppercase tracking-[0.14em] text-[var(--color-charcoal)]">
-          <span id={titleId}>{title}</span>
+        <span
+          className="doc-type-meta truncate font-semibold uppercase tracking-[0.14em] text-[var(--color-charcoal)]"
+          data-doc-sheet-title-line
+        >
+          <span id={titleId} data-doc-sheet-title>
+            {title}
+          </span>
           {pageLabel ? (
             <span
               className="hidden font-normal text-[var(--color-quiet-ink)] sm:inline"
@@ -134,15 +169,21 @@ export function DocSheetHead({
           ) : null}
         </span>
       </span>
-      <span className="flex shrink-0 items-center gap-2.5">
+      <span className="flex shrink-0 items-center gap-1 sm:gap-2.5">
         {helpKey ? <HelpGlyph helpKey={helpKey} source="sheet-head" /> : null}
         {onClose ? (
           <button
             type="button"
             onClick={onClose}
+            aria-label="Put back · Esc"
             className="doc-type-meta -my-2 inline-flex min-h-11 shrink-0 items-center px-1 uppercase tracking-[0.1em] text-[var(--color-quiet-ink)] transition-colors hover:text-[var(--color-charcoal)]"
           >
-            Put back · Esc
+            <span aria-hidden className="sm:hidden">
+              Close
+            </span>
+            <span aria-hidden className="hidden sm:inline">
+              Put back · Esc
+            </span>
           </button>
         ) : (
           <span
@@ -187,11 +228,18 @@ export function DocSheet({
   const panelRef = useRef<HTMLDivElement>(null);
   const restoreRef = useRef<HTMLElement | null>(null);
   const titleId = useId();
+  const origin = useContext(DocSheetOriginContext);
+  const [isTopModal, setIsTopModal] = useState(true);
 
-  // Focus in on open, restore on close. Depends ONLY on `open` — not onClose —
-  // so a caller's unstable onClose identity (recreated each render) can't re-run
-  // this and steal focus from a field mid-typing (one keystroke re-renders the
-  // caller → new onClose → panel.focus() would yank focus out of the input).
+  useEffect(() => {
+    const panel = panelRef.current;
+    if (!open || !panel) return;
+    return registerManagedModalDialog(panel, setIsTopModal);
+  }, [open]);
+
+  // Focus in on open, restore on close. Depends on the open state and stable
+  // origin — never onClose — so a caller's unstable onClose identity (recreated
+  // each render) can't steal focus from a field mid-typing.
   useEffect(() => {
     if (!open) return;
     const activeElement = document.activeElement;
@@ -199,6 +247,9 @@ export function DocSheet({
       activeElement instanceof HTMLElement && activeElement !== document.body
         ? activeElement
         : null;
+    if (panelRef.current) {
+      panelRef.current.dataset.docSheetOrigin = origin;
+    }
     const unlockBodyScroll = lockBodyScroll();
     const focusFrame = window.requestAnimationFrame(() => {
       panelRef.current?.focus({ preventScroll: true });
@@ -211,15 +262,20 @@ export function DocSheet({
       restoreRef.current = null;
       if (!focusTarget?.isConnected) return;
       window.requestAnimationFrame(() => {
-        focusTarget.focus({ preventScroll: true });
+        if (focusTarget.isConnected && isElementRendered(focusTarget)) {
+          focusTarget.focus({ preventScroll: true });
+        }
       });
     };
-  }, [open]);
+  }, [open, origin]);
 
   // Keep keyboard focus on the laid sheet and let Escape put it back.
   useEffect(() => {
     if (!open) return;
     const onKey = (e: KeyboardEvent) => {
+      const panel = panelRef.current;
+      if (!panel || topActiveModalDialog() !== panel) return;
+
       if (e.key === 'Escape' && !e.defaultPrevented) {
         e.preventDefault();
         e.stopPropagation();
@@ -228,8 +284,6 @@ export function DocSheet({
       }
 
       if (e.key !== 'Tab' || e.defaultPrevented) return;
-      const panel = panelRef.current;
-      if (!panel) return;
       const focusable = getFocusableElements(panel);
       if (focusable.length === 0) {
         e.preventDefault();
@@ -256,11 +310,14 @@ export function DocSheet({
     return () => document.removeEventListener('keydown', onKey);
   }, [open, onClose]);
 
-  if (!open) return null;
+  if (!open || typeof document === 'undefined') return null;
 
-  return (
+  return createPortal(
     <div
       data-doc-sheet-layer
+      data-doc-sheet-stack-state={isTopModal ? 'top' : 'covered'}
+      aria-hidden={isTopModal ? undefined : true}
+      inert={isTopModal ? undefined : true}
       className="doc-sheet-layer fixed inset-0 z-50 box-border flex items-start justify-center overflow-hidden overscroll-contain pb-[var(--doc-sheet-inset-bottom)] pl-[var(--doc-sheet-inset-left)] pr-[var(--doc-sheet-inset-right)] pt-[var(--doc-sheet-inset-top)]"
     >
       {/* Warm veil over the desk (matches the paper-folio scrim), a backdrop
@@ -275,7 +332,7 @@ export function DocSheet({
       <div
         ref={panelRef}
         role="dialog"
-        aria-modal="true"
+        aria-modal={isTopModal ? true : undefined}
         aria-labelledby={titleId}
         tabIndex={-1}
         data-doc-sheet-panel
@@ -300,6 +357,7 @@ export function DocSheet({
         )}
         {children}
       </div>
-    </div>
+    </div>,
+    document.body,
   );
 }
