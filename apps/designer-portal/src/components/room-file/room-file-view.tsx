@@ -27,6 +27,7 @@ import { CertificateSection } from './certificate-section';
 import { MeasurementsTable } from './measurements-table';
 import { CaptureContextSection } from './capture-context-section';
 import { RoomFileVersionStrip } from './room-file-version-strip';
+import { RoomFilePresentLine } from './room-file-present-line';
 import { ROOM_FILE_COPY as C } from './room-file-copy';
 
 function prettyRoomType(roomType: string): string {
@@ -118,6 +119,10 @@ export function RoomFileView({ scanId }: RoomFileViewProps) {
         <p className="mt-1.5 font-mono text-[10px] uppercase tracking-[0.1em] text-[var(--text-muted)]">
           {C.scanDatePrefix} {fmtDay(capturedIso)}
         </p>
+        {/* UNGATED on purpose — the only place `present_status` is read, and
+            the only trace a landed Refine delivery leaves on a page an
+            operator opens without a feature flag. */}
+        <RoomFilePresentLine roomFile={current} />
 
         {versions.length > 1 && (
           <div className="mt-4">
