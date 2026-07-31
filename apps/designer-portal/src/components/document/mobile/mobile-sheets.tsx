@@ -9,7 +9,7 @@
  * 1180px; the timer alone remains the compact spine's sheet through 1439px.
  */
 
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useMarginItems } from '@/hooks/use-margin-items';
 import { useDocumentTime } from '@/hooks/document-time-provider';
@@ -27,7 +27,48 @@ import { openLedger } from '../command-bar';
 import { openAccount } from '../account/account-sheet';
 import { MobileAccountHeader } from '../account/mobile-account-header';
 import { DocumentAction, DocumentActionRow } from '../document-action';
+import { lockBodyScroll } from '../overlays/body-scroll-lock';
 import { useMobileShell } from './mobile-shell';
+
+const SHEET_FOCUSABLE = [
+  'a[href]:not([tabindex="-1"])',
+  'button:not([disabled]):not([tabindex="-1"])',
+  'input:not([disabled]):not([type="hidden"]):not([tabindex="-1"])',
+  'select:not([disabled]):not([tabindex="-1"])',
+  'textarea:not([disabled]):not([tabindex="-1"])',
+  '[contenteditable="true"]:not([tabindex="-1"])',
+  '[tabindex]:not([tabindex="-1"])',
+].join(',');
+
+function focusableSheetControls(panel: HTMLElement) {
+  return Array.from(
+    panel.querySelectorAll<HTMLElement>(SHEET_FOCUSABLE),
+  ).filter((control) => {
+    const style = window.getComputedStyle(control);
+    return (
+      !control.hidden &&
+      !control.matches(':disabled') &&
+      control.getAttribute('aria-disabled') !== 'true' &&
+      !control.closest('[hidden], [aria-hidden="true"], [inert]') &&
+      style.display !== 'none' &&
+      style.visibility !== 'hidden'
+    );
+  });
+}
+
+function topActiveDialog() {
+  return Array.from(
+    document.querySelectorAll<HTMLElement>(
+      '[role="dialog"][aria-modal="true"]',
+    ),
+  )
+    .filter(
+      (dialog) =>
+        !dialog.hidden &&
+        !dialog.closest('[hidden], [aria-hidden="true"], [inert]'),
+    )
+    .at(-1);
+}
 
 const LEDGERS: {
   key: string;
@@ -95,8 +136,71 @@ function Sheet({
   children: React.ReactNode;
 }) {
   const compactTimer = kind === 'timer';
+  const dialogRef = useRef<HTMLDivElement>(null);
+  const panelRef = useRef<HTMLDivElement>(null);
+  const closeRef = useRef(onClose);
+  closeRef.current = onClose;
+
+  useEffect(() => {
+    const activeElement = document.activeElement;
+    const returnFocusTarget =
+      activeElement instanceof HTMLElement && activeElement !== document.body
+        ? activeElement
+        : null;
+    const unlockBodyScroll = lockBodyScroll();
+    const focusFrame = window.requestAnimationFrame(() => {
+      panelRef.current?.focus({ preventScroll: true });
+    });
+    const onKeyDown = (event: KeyboardEvent) => {
+      const dialog = dialogRef.current;
+      const panel = panelRef.current;
+      if (!dialog || !panel || topActiveDialog() !== dialog) return;
+
+      if (event.key === 'Escape') {
+        event.preventDefault();
+        event.stopPropagation();
+        closeRef.current();
+        return;
+      }
+
+      if (event.key !== 'Tab' || event.defaultPrevented) return;
+      const controls = focusableSheetControls(panel);
+      if (controls.length === 0) {
+        event.preventDefault();
+        panel.focus({ preventScroll: true });
+        return;
+      }
+
+      const first = controls[0];
+      const last = controls[controls.length - 1];
+      const active = document.activeElement;
+      if (active === panel || !panel.contains(active)) {
+        event.preventDefault();
+        (event.shiftKey ? last : first).focus();
+      } else if (event.shiftKey && active === first) {
+        event.preventDefault();
+        last.focus();
+      } else if (!event.shiftKey && active === last) {
+        event.preventDefault();
+        first.focus();
+      }
+    };
+
+    document.addEventListener('keydown', onKeyDown, true);
+    return () => {
+      window.cancelAnimationFrame(focusFrame);
+      document.removeEventListener('keydown', onKeyDown, true);
+      unlockBodyScroll();
+      if (!returnFocusTarget?.isConnected) return;
+      window.requestAnimationFrame(() => {
+        returnFocusTarget.focus({ preventScroll: true });
+      });
+    };
+  }, []);
+
   return (
     <div
+      ref={dialogRef}
       id={compactTimer ? 'mobile-timer-sheet' : undefined}
       data-mobile-sheet-kind={kind}
       data-mobile-sheet-regime={
@@ -112,10 +216,14 @@ function Sheet({
       <button
         type="button"
         aria-label="Dismiss"
+        tabIndex={-1}
         onClick={onClose}
         className="absolute inset-0 cursor-default bg-[rgba(44,41,38,0.5)]"
       />
       <div
+        ref={panelRef}
+        tabIndex={-1}
+        data-mobile-sheet-panel
         className={`absolute inset-x-0 bottom-0 max-h-[80%] overflow-y-auto rounded-t-[14px] pb-[max(0.9rem,env(safe-area-inset-bottom))] motion-safe:animate-[doc-sheet-up_250ms_var(--ease-editorial)] ${
           tone === 'paper'
             ? 'border-t border-[var(--doc-ink-border)] bg-[var(--doc-paper)]'

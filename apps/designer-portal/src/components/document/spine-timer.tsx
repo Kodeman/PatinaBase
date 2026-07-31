@@ -51,7 +51,13 @@ export function CompactSpineTimerDoorway() {
       aria-label={`Open time controls, ${stateLabel}, ${elapsed} elapsed`}
       aria-controls="mobile-timer-sheet"
       aria-expanded={sheet?.kind === 'timer'}
-      onClick={openTimer}
+      onClick={(event) => {
+        // Pointer activation does not focus buttons consistently across
+        // browsers. Establish the doorway as the modal's return target before
+        // the sheet mounts and captures document.activeElement.
+        event.currentTarget.focus({ preventScroll: true });
+        openTimer();
+      }}
       className="da-score-hover mt-3 hidden min-h-11 w-full min-w-11 flex-col items-center justify-center gap-1 py-2 text-center text-[var(--color-charcoal)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-quiet-ink)] min-[1180px]:flex min-[1440px]:hidden"
     >
       <span

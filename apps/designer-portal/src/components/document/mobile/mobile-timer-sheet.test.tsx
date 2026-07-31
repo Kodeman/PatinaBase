@@ -1,5 +1,5 @@
 import type { ReactNode } from 'react';
-import { fireEvent, render, screen } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { MobileShellProvider, useMobileShell } from './mobile-shell';
 import { MobileSheets } from './mobile-sheets';
 import { CompactSpineTimerDoorway } from '../spine-timer';
@@ -83,6 +83,8 @@ function OpenDrawer() {
 
 describe('compact-spine timer doorway', () => {
   beforeEach(() => {
+    document.body.style.overflow = '';
+    document.body.style.paddingRight = '';
     mockPause.mockClear();
     mockResume.mockClear();
     mockManualLog.mockClear();
@@ -97,7 +99,7 @@ describe('compact-spine timer doorway', () => {
     };
   });
 
-  it('exists only in compact-spine classes and opens the shared timer sheet', () => {
+  it('opens a focus-contained, scroll-locked sheet and restores its doorway on Escape', async () => {
     render(
       <MobileShellProvider>
         <CompactSpineTimerDoorway />
@@ -133,10 +135,27 @@ describe('compact-spine timer doorway', () => {
     );
     expect(timerSheet).toHaveClass('min-[1440px]:hidden');
     expect(timerSheet).not.toHaveClass('min-[1180px]:hidden');
+    expect(document.body.style.overflow).toBe('hidden');
 
-    fireEvent.click(screen.getByRole('button', { name: 'Pause' }));
+    const panel = timerSheet.querySelector<HTMLElement>(
+      '[data-mobile-sheet-panel]',
+    );
+    expect(panel).not.toBeNull();
+    await waitFor(() => expect(panel).toHaveFocus());
+
+    const pause = screen.getByRole('button', { name: 'Pause' });
+    const manual = screen.getByRole('button', { name: '+ Log manually' });
+    fireEvent.keyDown(document, { key: 'Tab' });
+    expect(pause).toHaveFocus();
+    manual.focus();
+    fireEvent.keyDown(document, { key: 'Tab' });
+    expect(pause).toHaveFocus();
+    fireEvent.keyDown(document, { key: 'Tab', shiftKey: true });
+    expect(manual).toHaveFocus();
+
+    fireEvent.click(pause);
     expect(mockPause).toHaveBeenCalledTimes(1);
-    fireEvent.click(screen.getByRole('button', { name: '+ Log manually' }));
+    fireEvent.click(manual);
     expect(screen.getByLabelText('Minutes')).toHaveClass(
       'doc-type-control',
       'min-h-11',
@@ -145,6 +164,14 @@ describe('compact-spine timer doorway', () => {
       'doc-type-control',
       'min-h-11',
     );
+
+    fireEvent.keyDown(document, { key: 'Escape' });
+    expect(screen.getByTestId('sheet-state')).toHaveTextContent('closed');
+    expect(
+      screen.queryByRole('dialog', { name: 'Time in hand' }),
+    ).not.toBeInTheDocument();
+    expect(document.body.style.overflow).toBe('');
+    await waitFor(() => expect(doorway).toHaveFocus());
   });
 
   it('keeps every non-timer sheet below 1180', () => {
