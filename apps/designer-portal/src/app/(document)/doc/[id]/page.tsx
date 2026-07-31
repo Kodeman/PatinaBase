@@ -39,7 +39,10 @@ import { CareSection } from '@/components/document/quiet-sections';
 import { DiscoverySection } from '@/components/document/discovery/discovery-section';
 import { DiscoveryRecap } from '@/components/document/discovery/discovery-recap';
 import { DiscoveryMargin } from '@/components/document/discovery/discovery-margin';
-import { MarginRail } from '@/components/document/margin-rail';
+import {
+  MarginRail,
+  ResponsiveMarginRail,
+} from '@/components/document/margin-rail';
 import { useDocumentSurface } from '@/lib/help-system/use-document-surface';
 import { DOCUMENT_SURFACE_KEYS } from '@/lib/help-system/document-surface-keys';
 import { AccountBand } from '@/components/document/account-band';
@@ -301,7 +304,11 @@ export default function DocumentPage({ params }: { params: Promise<{ id: string 
     : null;
 
   return (
-    <div className="relative grid min-h-screen grid-cols-1 bg-[var(--doc-paper)] [grid-template-rows:auto_1fr] min-[980px]:grid-cols-[200px_minmax(0,1fr)_232px] min-[980px]:[grid-template-rows:none] motion-safe:animate-[doc-raise_270ms_ease-out] motion-reduce:animate-[doc-fade_200ms_ease-out]">
+    <div
+      data-document-shell
+      data-shell-regime="single-below-1180-compact-to-1439-full-from-1440"
+      className="relative grid min-h-screen grid-cols-1 overflow-x-clip bg-[var(--doc-paper)] [grid-template-rows:auto_1fr] min-[1180px]:grid-cols-[56px_minmax(0,1fr)] min-[1180px]:[grid-template-rows:none] min-[1440px]:grid-cols-[200px_minmax(0,1fr)_232px] motion-safe:animate-[doc-raise_270ms_ease-out] motion-reduce:animate-[doc-fade_200ms_ease-out]"
+    >
       {/* Paper grain at the threshold of perception */}
       <div
         aria-hidden
@@ -318,7 +325,11 @@ export default function DocumentPage({ params }: { params: Promise<{ id: string 
           procurement panels (inspection drawer, Order Assistant) mounted in
           line unfolds beneath the aside rail and the drawer strip. The z-0
           grain painting over content is imperceptible at 1% alpha. */}
-      <main ref={mainRef} className="max-w-[1040px] px-7 pb-32 pt-8 min-[980px]:px-12">
+      <main
+        ref={mainRef}
+        data-document-paper
+        className="w-full min-w-0 max-w-[1040px] justify-self-center px-7 pb-32 pt-8 min-[1180px]:px-10 min-[1440px]:px-12"
+      >
         {/* The household — who this document is for — is a first-class subtitle
             in the title block (R68.2): a prominent clickable line directly under
             the title, not a tiny line tucked below the divider. View / set /
@@ -679,12 +690,10 @@ export default function DocumentPage({ params }: { params: Promise<{ id: string 
       </main>
 
       {/* Margin rail (D12; D2: the margin IS the notification model).
-          D13: below 980px the margin lives as anchored chips + the spine
-          sheet's summary, so the rail hides. */}
-      <aside
-        aria-label="Margin"
-        className="z-[1] hidden border-t border-dashed border-[var(--color-pearl)] bg-[rgba(250,247,242,0.55)] px-4 pb-24 pt-6 min-[980px]:sticky min-[980px]:top-0 min-[980px]:block min-[980px]:h-screen min-[980px]:overflow-y-auto min-[980px]:border-l min-[980px]:border-t-0"
-      >
+          Below 1180px the margin lives as anchored chips + the mobile spine
+          sheet's summary. From 1180–1439px it opens on demand; only the wide
+          Document gives it a permanent grid column. */}
+      <ResponsiveMarginRail>
         {row.active_section === 'discovery' ? (
           // R66: at Discovery (Shape D) there is no project/proposal — the
           // margin is notes-only, keyed on the relationship.
@@ -700,7 +709,7 @@ export default function DocumentPage({ params }: { params: Promise<{ id: string 
             onNoteAnchorConsumed={() => setPendingNoteAnchor(null)}
           />
         )}
-      </aside>
+      </ResponsiveMarginRail>
     </div>
   );
 }
