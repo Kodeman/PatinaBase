@@ -158,8 +158,11 @@ final class RoomCoverageCoach: CaptureFrameSink {
         return CoverageSnapshot(coveragePct: tracker.coveragePct, checklist: checklist, warnings: ordered)
     }
 
-    /// Build the end-of-scan QA scorecard. IN MEMORY ONLY — nothing is written to
-    /// the bundle and nothing enters `manifest.json`; see the file header.
+    /// Build the end-of-scan QA scorecard. This coach still writes NO FILE; the
+    /// card it returns is carried to the seal by
+    /// `RoomCaptureService.finalizeInstrumentLane(arSession:)` and lands in
+    /// `manifest.scorecard` (spec §3.4). See the file header for the difference
+    /// that matters — a manifest field, not a `scorecard.json`.
     ///
     /// - Parameters:
     ///   - sharpFrameRatio: from the keyframe lane. ⚠ `KeyframeTelemetry`
@@ -167,8 +170,10 @@ final class RoomCoverageCoach: CaptureFrameSink {
     ///     PERFECT sharpness ratio. That is faithful to Field and is safe only
     ///     because the verdict is also gated on coverage — an aborted scan has
     ///     no observed surfaces and lands `.red` regardless.
-    ///   - anchorCount: 0 until anchor entry is wired; `AnchorGate.isUnverified`
-    ///     will read the same count.
+    ///   - anchorCount: 0 until anchor entry is wired. The caller passes
+    ///     `anchors.count` off the same empty array it puts in the manifest, and
+    ///     `ScanManifest.apply(_:)` re-derives both this and `unverified` from
+    ///     that array, so the validator's §10.6 cross-check cannot drift.
     @discardableResult
     func finalize(sharpFrameRatio: Double, anchorCount: Int) -> Scorecard {
         ScorecardEvaluator.make(coverage: tracker.coverage,
