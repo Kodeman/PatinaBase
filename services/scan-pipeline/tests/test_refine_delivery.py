@@ -1149,6 +1149,172 @@ def test_the_present_patch_lights_refine_engine_which_is_what_the_view_reads(tmp
 
 
 # ---------------------------------------------------------------------------
+# The cross-language pin -- the ONLY thing that makes the portal reader
+# falsifiable against this writer
+# ---------------------------------------------------------------------------
+#: The exact document ``build_present_patch`` produces, checked into the portal
+#: package the TypeScript reader lives in.  Both sides had thorough suites that
+#: passed in isolation while disagreeing about the record entirely -- the reader
+#: looked for the record under ``present.refine_engine`` (a STRING here, and
+#: TEXT in the 00377 view) and for the verdict at the record's top level (it is
+#: nested under ``verdict``).  Neither suite could see it, because neither
+#: crossed the boundary.  This file is that boundary, written down.
+PRESENT_PATCH_FIXTURE = (
+    "packages/supabase/src/hooks/__fixtures__/refine-present-patch.json"
+)
+
+#: The two published documents Layer 3 actually fetches, pinned as the exact
+#: BYTES the publisher wrote so the portal's readout test runs on real
+#: artifacts rather than on a plausible hand-written stand-in.
+PUBLISHED_ARTIFACT_FIXTURES: dict[str, str] = {
+    "pose-deltas-v1.json": (
+        "apps/designer-portal/src/lib/room-view/__fixtures__/"
+        "refine-published-pose-deltas-v1.json"
+    ),
+    "refinement-evidence-v1.json": (
+        "apps/designer-portal/src/lib/room-view/__fixtures__/"
+        "refine-published-evidence-v1.json"
+    ),
+}
+
+
+def _present_patch_fixture_path() -> pathlib.Path:
+    return _repository_root() / PRESENT_PATCH_FIXTURE
+
+
+def test_the_two_documents_layer_3_fetches_are_pinned_as_published_bytes(tmp_path):
+    """The portal's readout renders these; a reshape must redden HERE too.
+
+    Byte equality, not a parsed comparison: the publisher's canonical encoding
+    (sorted keys, no spaces, one trailing newline) is part of what the portal
+    receives, and comparing parsed documents would let an encoder change slip
+    through unremarked.
+    """
+
+    if not _repository_root().joinpath(PRESENT_PATCH_FIXTURE).is_file():
+        pytest.skip("running outside a repository checkout")  # pragma: no cover
+
+    root = _published_tree(tmp_path)
+    for name, relative in PUBLISHED_ARTIFACT_FIXTURES.items():
+        published = (_refine_dir(root) / name).read_bytes()
+        checked_in = (_repository_root() / relative).read_bytes()
+        assert published == checked_in, (
+            f"{relative} is no longer the bytes the publisher writes for "
+            f"{name}; regenerate it from a published tree"
+        )
+
+
+def _serialise_present_patch(patch: dict[str, Any]) -> str:
+    """The fixture's on-disk form.  Indented + sorted so a diff is readable."""
+
+    return json.dumps(patch, indent=2, sort_keys=True) + "\n"
+
+
+def test_the_checked_in_portal_fixture_is_byte_for_byte_what_this_module_writes(
+    tmp_path,
+):
+    """Reddens the moment the writer's record shape moves under the reader.
+
+    The fixture is GENERATED, never hand-edited: on a failure this assertion
+    prints the produced document in the exact on-disk form, so regenerating is
+    copying that block over the file.  The TypeScript round-trip test in
+    ``packages/supabase/src/hooks/__tests__/use-scan-refine-artifacts.test.ts``
+    reads the same file, so a shape change this test is updated to accept is a
+    shape change that test then judges.
+    """
+
+    fixture = _present_patch_fixture_path()
+    if not fixture.is_file():  # pragma: no cover - installed release
+        pytest.skip("running outside a repository checkout")
+
+    root = _published_tree(tmp_path)
+    verified = _verify(root)
+    record = build_delivery_record(
+        verified,
+        bucket="room-scans",
+        created_keys=(),
+        replayed_keys=(),
+    )
+    produced = _serialise_present_patch(build_present_patch(verified, record))
+    assert produced == fixture.read_text(encoding="utf-8"), (
+        "the portal's cross-boundary fixture no longer matches what "
+        "build_present_patch writes; regenerate "
+        f"{PRESENT_PATCH_FIXTURE} from this run's output and re-run the "
+        "TypeScript round-trip test\n--- produced ---\n" + produced
+    )
+
+
+def test_the_fixture_carries_every_field_the_portal_reader_needs():
+    """Names the reader's requirements HERE, where the writer can break them.
+
+    The reader (``parseScanRefineRecord``) refuses a record without a bucket,
+    without at least one ``artifacts[]`` row carrying ``name`` + ``key``, or
+    without both verdict booleans.  A writer change that dropped any of them
+    would still produce a valid patch and a green delivery suite; this is the
+    test that would go red.
+    """
+
+    fixture = _present_patch_fixture_path()
+    if not fixture.is_file():  # pragma: no cover - installed release
+        pytest.skip("running outside a repository checkout")
+    patch = json.loads(fixture.read_text(encoding="utf-8"))
+
+    # The record is under 'refine' (object). 'refine_engine' beside it is the
+    # engine NAME as a bare string -- 00377 reads it as TEXT.
+    record = patch["refine"]
+    assert isinstance(record, dict)
+    assert isinstance(patch["refine_engine"], str) and patch["refine_engine"]
+    assert record["contract"] == delivery_module.DELIVERY_CONTRACT
+    assert record["schemaVersion"] == delivery_module.DELIVERY_SCHEMA_VERSION
+    assert record["bucket"] == "room-scans"
+
+    keys_by_name = {
+        row["name"]: row["key"]
+        for row in record["artifacts"]
+        if isinstance(row, dict)
+    }
+    assert set(keys_by_name) == set(PUBLISHED_REFINE_ARTIFACT_NAMES)
+    # The two documents Layer 3 actually resolves.
+    for name in ("pose-deltas-v1.json", "refinement-evidence-v1.json"):
+        assert keys_by_name[name].startswith(f"{PREFIX}/")
+        assert "://" not in keys_by_name[name]  # bare keys, never URLs (R122)
+
+    verdict = record["verdict"]
+    assert isinstance(verdict["refinementEvidenced"], bool)
+    # Unreachable-by-construction; the surface renders NOT CERTIFIED anyway.
+    assert verdict["absoluteAccuracyCertified"] is False
+    assert isinstance(verdict["verdictReason"], str)
+    advisory = verdict["loopConsistencyAdvisory"]
+    assert isinstance(advisory, str) and advisory.strip()
+    assert advisory.startswith("advisory_not_gating_r123: ")
+
+
+def test_the_fixture_advisory_is_the_adapters_string_character_for_character(
+    tmp_path,
+):
+    """R123's numbers must survive the writer, the fixture and the reader.
+
+    ``refine_adapter.render_loop_consistency_advisory`` is the origin. This
+    asserts the fixture carries ITS output unchanged -- no rounding, no
+    truncation, no summary -- so the TypeScript assertion against the same file
+    is anchored to the generator rather than to a copy of a copy.
+    """
+
+    fixture = _present_patch_fixture_path()
+    if not fixture.is_file():  # pragma: no cover - installed release
+        pytest.skip("running outside a repository checkout")
+
+    root = _published_tree(tmp_path)
+    verified = _verify(root)
+    manifest = json.loads((_refine_dir(root) / REFINE_MANIFEST_NAME).read_text())
+    from_manifest = manifest["refinementEvidence"]["loopConsistencyAdvisory"]
+
+    patch = json.loads(fixture.read_text(encoding="utf-8"))
+    assert patch["refine"]["verdict"]["loopConsistencyAdvisory"] == from_manifest
+    assert verified.loop_consistency_advisory == from_manifest
+
+
+# ---------------------------------------------------------------------------
 # The database writer
 # ---------------------------------------------------------------------------
 def _db_with(handler) -> tuple[DbClient, list[httpx.Request]]:

@@ -3,10 +3,33 @@
  *
  * The Refine stage publishes eleven immutable objects per run under
  * `room_file/{userId}/{scanId}/v{n}/refine/` in the private `room-scans`
- * bucket, and records where they landed in `room_files.present.refine_engine`
+ * bucket, and records where they landed in `room_files.present.refine`
  * (Layer 2). This hook is the ONLY portal reader of that record: it resolves
  * the record, signs the handful of keys a consumer actually wants, and fetches
  * those documents.
+ *
+ * ─── THE KEY IS `present.refine`, AND `present.refine_engine` IS A STRING ────
+ *
+ * `room_files.present` carries BOTH, and they are different things:
+ *
+ *   · `present.refine`        — the delivery record, a JSON OBJECT. This hook
+ *                               reads it. `refine_delivery.build_present_patch`
+ *                               writes it.
+ *   · `present.refine_engine` — the engine NAME, a JSON STRING (e.g.
+ *                               `'colmap-4-known-pose-triangulate-ba'`).
+ *                               Migration 00377 — already applied to
+ *                               production — reads it as TEXT for the
+ *                               `scan_present_stats` view. Nothing about it is
+ *                               a record, and an object there would make the
+ *                               admin view print JSON as the engine name.
+ *
+ * An earlier revision of this file read the record out of `refine_engine` and
+ * so resolved `null` for every real delivery — indistinguishable from correct
+ * pre-enablement behaviour. `__fixtures__/refine-present-patch.json` is the
+ * exact document `build_present_patch` produces, pinned byte-for-byte by
+ * `services/scan-pipeline/tests/test_refine_delivery.py`, and the round-trip
+ * test in `__tests__/` feeds it through this parser. That fixture is the only
+ * thing keeping the two sides honest — do not reshape this parser without it.
  *
  * ─── FOUR PROPERTIES WORTH KNOWING BEFORE YOU CHANGE THIS ───────────────────
  *
@@ -47,14 +70,25 @@ import { publicUrlToPath } from '../lib/storage-url';
 const getSupabase = () => createBrowserClient();
 
 // ═══════════════════════════════════════════════════════════════════════════
-// TYPES — Layer 2's `present.refine_engine` record
+// TYPES — Layer 2's `present.refine` record
 // ═══════════════════════════════════════════════════════════════════════════
 
+/** The key `refine_delivery.build_present_patch` writes the record under. */
+export const REFINE_PRESENT_KEY = 'refine';
+
+/** The record's own contract token (`refine_delivery.DELIVERY_CONTRACT`). */
+export const REFINE_DELIVERY_CONTRACT = 'patina-refine-delivery-v1';
+
 /**
- * The Layer-2 delivery record, as written into
- * `room_files.present.refine_engine`. Only the fields a reader needs are
- * modelled; the stored record carries more (per-artifact digests, sizes,
- * created/replayed key lists, the posture block).
+ * The Layer-2 delivery record, as written into `room_files.present.refine`.
+ * Only the fields a reader needs are modelled; the stored record carries more
+ * (per-artifact digests and sizes, created/replayed key lists, the manifest
+ * key + digest, the engine block, the posture block).
+ *
+ * ⚠ The stored record carries NO identity — `build_delivery_record` writes no
+ * `scanId`/`roomFileId`/`roomFileVersion`, because the row it lands on IS the
+ * identity and the delivery already refused unless the manifest agreed with
+ * it. These three therefore come from the `room_files` row, always.
  */
 export interface ScanRefineArtifacts {
   scanId: string;
@@ -111,6 +145,25 @@ function readString(value: unknown): string | null {
  * `room_files.present` (JSONB) → the delivery record, or `null` when no usable
  * record is present. Never throws.
  *
+ * SHAPE, exactly as `refine_delivery.build_present_patch` writes it:
+ *
+ * ```jsonc
+ * {
+ *   "refine": {
+ *     "bucket": "room-scans",
+ *     "artifacts": [{ "name": "pose-deltas-v1.json", "key": "room_file/…" }, …],
+ *     "verdict": {
+ *       "refinementEvidenced": true,
+ *       "absoluteAccuracyCertified": false,   // never true — see the type
+ *       "verdictReason": "…",
+ *       "loopConsistencyAdvisory": "advisory_not_gating_r123: …"
+ *     }
+ *   },
+ *   "refine_engine": "colmap-…",   // a STRING, for 00377's view. Not read here.
+ *   "vram_peak_mb": 512
+ * }
+ * ```
+ *
  * The bar for "usable" is deliberately: a bucket, at least one key, and both
  * verdict booleans. A record missing any of those cannot drive an honest
  * readout, and half-rendering one would be worse than rendering none.
@@ -120,22 +173,16 @@ export function parseScanRefineRecord(
   context: { scanId: string; roomFileId: string; roomFileVersion: number },
 ): ScanRefineArtifacts | null {
   if (!isRecord(present)) return null;
-  const raw = present.refine_engine;
+  const raw = present[REFINE_PRESENT_KEY];
   if (!isRecord(raw)) return null;
 
   const bucket = readString(raw.bucket);
   if (!bucket) return null;
 
   const keysByName: Record<string, string> = {};
-  if (isRecord(raw.keysByName)) {
-    for (const [name, key] of Object.entries(raw.keysByName)) {
-      const value = readString(key);
-      if (value) keysByName[name] = value;
-    }
-  } else if (Array.isArray(raw.artifacts)) {
-    // Tolerated alternative shape: the record's per-artifact rows carry
-    // `{ name, key }`. Layer 2 writes both; reading either costs one branch
-    // and means a reshaped record degrades rather than dark-fails.
+  // CANONICAL: the record's per-artifact ledger rows, `{ name, key, … }` —
+  // this is what Layer 2 writes, one row per published object.
+  if (Array.isArray(raw.artifacts)) {
     for (const entry of raw.artifacts) {
       if (!isRecord(entry)) continue;
       const name = readString(entry.name);
@@ -143,16 +190,33 @@ export function parseScanRefineRecord(
       if (name && key) keysByName[name] = key;
     }
   }
+  // TOLERATED: a flat name→key map. The pipeline does NOT write this (the
+  // earlier claim that it wrote "both" was wrong and is what let the reader
+  // drift); it is accepted so a hand-assembled record still resolves. The
+  // ledger wins where the two disagree.
+  if (isRecord(raw.keysByName)) {
+    for (const [name, key] of Object.entries(raw.keysByName)) {
+      const value = readString(key);
+      if (value && !(name in keysByName)) keysByName[name] = value;
+    }
+  }
   if (Object.keys(keysByName).length === 0) return null;
 
+  // The verdict is NESTED under `verdict` — `build_delivery_record` groups the
+  // four evidence fields there rather than at the record's top level.
+  const verdict = isRecord(raw.verdict) ? raw.verdict : null;
   if (
-    typeof raw.refinementEvidenced !== 'boolean' ||
-    typeof raw.absoluteAccuracyCertified !== 'boolean'
+    !verdict ||
+    typeof verdict.refinementEvidenced !== 'boolean' ||
+    typeof verdict.absoluteAccuracyCertified !== 'boolean'
   ) {
     return null;
   }
 
   return {
+    // The record carries no identity of its own (see the type's note); the row
+    // is the identity. Read defensively anyway so a record that grew one is
+    // not ignored.
     scanId: readString(raw.scanId) ?? context.scanId,
     roomFileId: readString(raw.roomFileId) ?? context.roomFileId,
     roomFileVersion:
@@ -161,10 +225,11 @@ export function parseScanRefineRecord(
         : context.roomFileVersion,
     bucket,
     keysByName,
-    refinementEvidenced: raw.refinementEvidenced,
-    absoluteAccuracyCertified: raw.absoluteAccuracyCertified,
-    verdictReason: readString(raw.verdictReason) ?? '',
-    loopConsistencyAdvisory: readString(raw.loopConsistencyAdvisory) ?? '',
+    refinementEvidenced: verdict.refinementEvidenced,
+    absoluteAccuracyCertified: verdict.absoluteAccuracyCertified,
+    verdictReason: readString(verdict.verdictReason) ?? '',
+    // VERBATIM. Never trimmed, never reformatted, never paraphrased.
+    loopConsistencyAdvisory: readString(verdict.loopConsistencyAdvisory) ?? '',
   };
 }
 
@@ -184,10 +249,12 @@ export interface UseScanRefineArtifactsOptions {
  * record, plus the requested artifacts' parsed JSON.
  *
  * Resolves to `null` — not an error — for every "nothing to show" case: no
- * `scanId`, no `room_files` row, no `present.refine_engine`, or a record none
- * of whose keys match the requested names. No refine artifact exists in
- * production today, so `null` is the expected answer everywhere until Refine
- * is enabled and Layer 2 has run.
+ * `scanId`, no `room_files` row, no `present.refine`, or a record none of whose
+ * keys match the requested names. No refine artifact exists in production
+ * today, so `null` is the expected answer everywhere until Refine is enabled
+ * and Layer 2 has run. ⚠ That makes `null` indistinguishable from a broken
+ * parse; `room_files.present_status` is the out-of-band signal that a delivery
+ * landed, and the Room File page renders it (`RoomFilePresentLine`).
  */
 export function useScanRefineArtifacts(
   scanId: string | null | undefined,

@@ -94,7 +94,64 @@ export interface RoomFileCertificate {
 export type RoomFileStatus = 'pending' | 'solved' | 'generated' | 'error';
 export type ToleranceClass = 'verified' | 'measured' | 'estimated';
 
-/** A `room_files` row (00341), with the two JSONB columns typed. */
+/**
+ * `room_files.present_status` — the Present-Layer lifecycle (00376), which is
+ * INDEPENDENT of `status` (the True-Layer/drawings lifecycle). `NULL` means no
+ * Present Layer has run. The CHECK constraint admits exactly these six values.
+ * A Refine delivery advances the row to `'refining'` and stops there
+ * (`refine_delivery.PRESENT_STATUS_AFTER_REFINE`); only Splat reaches `'ready'`
+ * and only `'ready'` sets `presented_at`.
+ */
+export type RoomFilePresentStatus =
+  | 'pending'
+  | 'refining'
+  | 'fusing'
+  | 'training'
+  | 'ready'
+  | 'error';
+
+/**
+ * `room_files.present` — the Present-Layer manifest (00376), `NOT NULL DEFAULT
+ * '{}'`, so a P1-only version carries `{}` rather than null.
+ *
+ * ⚠ TWO CONSUMERS WITH DIFFERENT NEEDS, AND THEY DISAGREE ABOUT NOTHING ONLY
+ * IF THE TYPES BELOW ARE HONOURED. `scan_present_stats` (00377, already applied
+ * to production) casts the numeric keys to `bigint`/`numeric`/`int` and reads
+ * `splat_format`/`refine_engine` as TEXT — a value of the wrong JSON type
+ * raises on cast and dark-fails the WHOLE view for every row, not just the
+ * offending one. `refine_delivery.assert_present_manifest_is_cast_safe` is the
+ * writer-side guard; this type is the reader-side statement of the same
+ * contract.
+ *
+ * `refine` is the odd one out: it is an OBJECT (the delivery record), it is not
+ * read by the view at all, and it is what `parseScanRefineRecord` consumes.
+ * `refine_engine` beside it is the engine NAME as a bare string.
+ */
+export interface RoomFilePresent {
+  /** The Refine delivery record — parse with `parseScanRefineRecord`. */
+  refine?: unknown;
+  /** Engine name, e.g. `'colmap-4-known-pose-triangulate-ba'`. TEXT in 00377. */
+  refine_engine?: string;
+  splat_format?: string;
+  gaussian_count?: number;
+  train_seconds?: number;
+  vram_peak_mb?: number;
+  mesh_vertices?: number;
+  /**
+   * ⚠ Refine deliberately never writes this — the refine evidence reports
+   * `reprojection_rmse_px_after`, which is PIXELS, and converting it to a
+   * percentage would invent a denominator (ruling R-D is open). Absent reads
+   * as NULL in the view, which is the honest value.
+   */
+  sfm_residual_pct?: number;
+  masked_frames?: number;
+  splat_bytes?: number;
+  mesh_bytes?: number;
+  /** Free-form by design (00376) — new telemetry needs no migration. */
+  [key: string]: unknown;
+}
+
+/** A `room_files` row (00341 + 00376), with the JSONB columns typed. */
 export interface RoomFile {
   id: string;
   scan_id: string;
@@ -112,6 +169,17 @@ export interface RoomFile {
   generated_at: string | null;
   created_at: string;
   updated_at: string;
+  // ── Present Layer (00376). Columns verified against database.types.ts. ──
+  /** Storage pointer to the fused dense mesh. Server/derived, never shipped. */
+  dense_mesh_url: string | null;
+  /** Decimated web mesh — the invisible click-to-measure raycast target. */
+  measure_mesh_url: string | null;
+  /** The SPZ walkthrough asset. Seen, never measured against. */
+  splat_url: string | null;
+  present: RoomFilePresent;
+  present_status: RoomFilePresentStatus | null;
+  /** Set only when `present_status` reaches `'ready'`. */
+  presented_at: string | null;
 }
 
 /**
