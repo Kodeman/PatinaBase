@@ -195,12 +195,18 @@ final class RoomCaptureBundleAdapter {
             PatinaLog.scan.error("[RoomCaptureService] coverage heatmap write failed: \(error.localizedDescription)")
         }
 
-        // 8. Depth index + depth.zip — only if the recorder wrote anything.
+        // 8. depth.zip — only if the recorder wrote anything.
+        //
+        // `depth/depth_index.ndjson` is deliberately NOT registered as a
+        // `.depthIndex` artifact. It is never uploaded under its own key, and
+        // the manifest must not list what will not be in Storage: the worker
+        // prefix-swapped the entry to `depth/{uid}/{room}/depth_index.ndjson`
+        // (keys.KIND_TO_FOLDER), 404'd, and raised MISSING_FILE — fatal on the
+        // second ingest attempt. The recorder has already written the file and
+        // the zip below carries the whole `depth/` directory, index included,
+        // to `depth_archive_url`.
         let framesWritten = context.depthRecorder?.framesWritten ?? 0
         if framesWritten > 0 {
-            // Register the existing NDJSON file as a depthIndex artifact.
-            registerExistingDepthIndex(writer: writer)
-
             // Best-effort zip of depth/ → depth.zip using NSFileCoordinator.
             if let zipURL = try? zipDepthDirectory(at: writer.bundleURL) {
                 do {
@@ -339,26 +345,6 @@ final class RoomCaptureBundleAdapter {
     }
 
     // MARK: - Depth helpers
-
-    /// Best-effort: compute the NDJSON index size on disk and upsert it into
-    /// the manifest as a `.depthIndex` artifact. The recorder writes the
-    /// file directly; ScanBundleWriter's public API surface has no "register
-    /// existing file as artifact" helper, so we read + rewrite via
-    /// `writeArtifact` (which preserves the same path via `fileName`).
-    private func registerExistingDepthIndex(writer: ScanBundleWriter) {
-        let indexURL = writer.bundleURL.appendingPathComponent("depth/depth_index.ndjson")
-        guard let data = try? Data(contentsOf: indexURL), !data.isEmpty else { return }
-        do {
-            _ = try writer.writeArtifact(
-                kind: .depthIndex,
-                data: data,
-                mimeType: "application/x-ndjson",
-                fileName: "depth/depth_index.ndjson"
-            )
-        } catch {
-            PatinaLog.scan.error("[RoomCaptureService] depth index register failed: \(error.localizedDescription)")
-        }
-    }
 
     /// Zip the `<bundleURL>/depth/` directory into a sibling `depth.zip`
     /// using `NSFileCoordinator`'s `forUploading` option. Returns the URL

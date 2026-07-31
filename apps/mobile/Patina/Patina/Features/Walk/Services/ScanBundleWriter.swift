@@ -253,10 +253,20 @@ public final class ScanBundleWriter {
         try handle.write(contentsOf: Data(payload.utf8))
     }
 
-    /// Enumerate every photo in the manifest that has a thumbnail on disk,
-    /// emit one NDJSON line per entry into `photos/photo_thumbnails.ndjson`,
-    /// and register the index file as a `.photoThumbnails` artifact. Safe to
-    /// call repeatedly (rewrites the file from scratch each time).
+    /// Enumerate every photo in the manifest that has a thumbnail on disk and
+    /// emit one NDJSON line per entry into `photos/photo_thumbnails.ndjson`.
+    /// Safe to call repeatedly (rewrites the file from scratch each time).
+    ///
+    /// DEVICE-LOCAL. The index is written into the bundle and is NOT listed in
+    /// `artifacts[]`, because it is never uploaded — and it is never uploaded
+    /// because the thumbnail files it indexes are never uploaded either
+    /// (`uploadPosedPhotos` sends only full-resolution posed photos). An index
+    /// in Storage would name objects that do not exist. Listing it made the
+    /// worker fail to resolve the kind at all — `keys.KIND_TO_FOLDER` has no
+    /// `photoThumbnails` entry — so ingest skipped the fetch and the validator
+    /// named `MISSING_FILE` against the manifest. Every field of a line
+    /// (`photoId`, `thumbnailRelativePath`, `sizeBytes`) is already in
+    /// `manifest.photos`, so the server loses nothing.
     public func registerPhotoThumbnailsIndex() throws {
         let indexURL = photosURL.appendingPathComponent("photo_thumbnails.ndjson")
 
@@ -285,23 +295,18 @@ public final class ScanBundleWriter {
 
         try fileManager.createDirectory(at: photosURL, withIntermediateDirectories: true)
         try buffer.write(to: indexURL, options: .atomic)
-
-        let artifact = ScanManifest.Artifact(
-            kind: .photoThumbnails,
-            relativePath: "photos/photo_thumbnails.ndjson",
-            sizeBytes: buffer.count,
-            sha256: sha256Hex(buffer),
-            mimeType: "application/x-ndjson"
-        )
-        upsertArtifact(artifact)
-        try writeManifest()
     }
 
     // MARK: - Finalize
 
-    /// Close out the bundle. Recomputes sizes, stamps `completedAt`, registers
-    /// the manifest's self-pointer, and writes the final manifest. Call from
-    /// `didEndWith`.
+    /// Close out the bundle. Recomputes sizes, stamps `completedAt`, and writes
+    /// the final manifest. Call from `didEndWith`.
+    ///
+    /// manifest.json is NOT among the artifacts refreshed here, and is not an
+    /// entry in the list at all — see `upsertArtifact` and
+    /// `ArtifactUploader.routing(for:)`. It is uploaded from
+    /// `ArtifactUploader.uploadPlan(for:in:)`, which measures it after this
+    /// method has written it for the last time.
     @discardableResult
     public func finalize(
         completedAt: Date = Date(),
@@ -310,11 +315,8 @@ public final class ScanBundleWriter {
         manifest.completedAt = completedAt
 
         // Recompute artifact sizes (files may have been rewritten in place).
-        // `.bundleManifest` is excluded and re-registered below: it points at
-        // manifest.json, the file this method is about to rewrite, so any size
-        // or hash measured here would describe the PREVIOUS write.
         var refreshed: [ScanManifest.Artifact] = []
-        for artifact in manifest.artifacts where artifact.kind != .bundleManifest {
+        for artifact in manifest.artifacts {
             let url = bundleURL.appendingPathComponent(artifact.relativePath)
             let attrs = try? fileManager.attributesOfItem(atPath: url.path)
             var copy = artifact
@@ -326,8 +328,7 @@ public final class ScanBundleWriter {
         }
         manifest.artifacts = refreshed
 
-        // Must be last — it writes the manifest, repeatedly.
-        try registerBundleManifestPointer()
+        try writeManifest()
         return manifest
     }
 
@@ -382,7 +383,25 @@ public final class ScanBundleWriter {
         }
     }
 
+    /// The ONLY path by which anything enters `manifest.artifacts`.
+    ///
+    /// It refuses any kind that will not be present in Storage
+    /// (`ArtifactUploader.isManifestListed`). `artifacts[]` is a promise to the
+    /// server: the validator fetches every entry and names `MISSING_FILE` for
+    /// each one it cannot find, which is fatal on the second ingest attempt.
+    /// So the promise is kept here, at the one place it can be made, rather
+    /// than by every producer remembering.
+    ///
+    /// Dropping is deliberately the failure direction. A producer that
+    /// registers an unroutable kind then yields a VALID bundle missing one
+    /// optional entry, instead of a permanently-parked scan.
     private func upsertArtifact(_ artifact: ScanManifest.Artifact) {
+        guard ArtifactUploader.isManifestListed(artifact.kind) else {
+            logger.debug(
+                "not listing \(artifact.kind.rawValue, privacy: .public) in artifacts[] — it does not reach Storage under its own key"
+            )
+            return
+        }
         if let idx = manifest.artifacts.firstIndex(where: { $0.kind == artifact.kind }) {
             manifest.artifacts[idx] = artifact
         } else {
@@ -404,10 +423,15 @@ public final class ScanBundleWriter {
     }
 }
 
-/// The two artifacts whose file IS a manifest. Both were declared as
-/// `ArtifactKind` cases with `room_scans` columns waiting for them (00082) but
-/// had no producer, so `photos_manifest_url` and `bundle_manifest_url` were NULL
-/// on every row. Rationale: `ScanBundleManifestProducerTests`.
+/// The posed-photo sidecar producer. `photosManifest` was declared as an
+/// `ArtifactKind` with a `room_scans` column waiting for it (00082) but had no
+/// producer, so `photos_manifest_url` was NULL on every row.
+///
+/// Its sibling `bundleManifest` is produced too — but not here, and not as an
+/// `artifacts[]` entry: manifest.json is the list, so it cannot be in it.
+/// `ArtifactUploader.uploadPlan(for:in:)` appends it at upload time, which is
+/// also the first moment its sha256 can be true. Rationale:
+/// `ScanBundleManifestProducerTests`.
 extension ScanBundleWriter {
 
     /// Rewrite `photos/photos_metadata.ndjson` from the sealed photo list and
@@ -440,39 +464,6 @@ extension ScanBundleWriter {
         try writeManifest()
     }
 
-    /// Register manifest.json as `.bundleManifest` — the "authoritative
-    /// artifact inventory" `bundle_manifest_url` points at (00082), and the only
-    /// vehicle carrying the review-step `annotations` and the per-photo
-    /// thumbnail fields to the server, both being fields of this file rather
-    /// than artifacts of their own.
-    ///
-    /// A manifest cannot describe itself without a fixed point, so `sizeBytes`
-    /// is CONVERGED — write, measure, restate, until the size the file states is
-    /// the size the file is (one integer's digits change per pass; the cap only
-    /// guards oscillation, and taking it still leaves memory and disk identical
-    /// because each pass upserts before it writes). `sha256` stays nil forever:
-    /// no written value can equal its own file's hash, and a WRONG one is worse
-    /// than none — `uploadArtifact` stamps it onto the Storage object and
-    /// merges it into `room_scans.artifacts_sha256`.
-    func registerBundleManifestPointer() throws {
-        var stated = 0
-        for _ in 0..<5 {    // convergence cap
-            upsertArtifact(
-                ScanManifest.Artifact(
-                    kind: .bundleManifest,
-                    relativePath: "manifest.json",
-                    sizeBytes: stated,
-                    sha256: nil,
-                    mimeType: "application/json"
-                )
-            )
-            try writeManifest()
-            let attrs = try? fileManager.attributesOfItem(atPath: manifestURL.path)
-            let actual = (attrs?[.size] as? NSNumber)?.intValue ?? stated
-            if actual == stated { return }
-            stated = actual
-        }
-    }
 }
 
 // MARK: - Reading an existing bundle

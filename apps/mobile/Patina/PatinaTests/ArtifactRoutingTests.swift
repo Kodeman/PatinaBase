@@ -24,6 +24,20 @@
 //  Both now derive from one private `routing(for:)` table. These tests pin the
 //  coupling from the outside so a future split re-breaks a test, not prod.
 //
+//  A third fact has since joined that table, for the same reason: whether a
+//  kind may appear in `manifest.artifacts[]`. THE INVARIANT it protects is
+//  server-side — *every entry in `artifacts[]` must resolve to an object the
+//  worker can fetch*. `scripts/validate_capture_bundle.py` §10.5 (vendored into
+//  the scan worker's ingest stage) fetches every listed artifact and names
+//  `MISSING_FILE` for each absent one, which turns fatal on the second attempt;
+//  a listed artifact with no `sha256` is worse still — `SCHEMA_VIOLATION`,
+//  a permanent token, parked on attempt 1.
+//
+//  Three kinds used to be registered and never uploaded (`.depthIndex`,
+//  `.photoThumbnails`), or listed with a hash they could not have
+//  (`.bundleManifest`). All three now fail `isManifestListed`, and the tests
+//  below pin that no kind can be listed without a route.
+//
 
 import Testing
 import Foundation
@@ -63,6 +77,38 @@ struct ArtifactRoutingTests {
         for kind in ScanManifest.ArtifactKind.allCases {
             let uploads = ArtifactUploader.storagePathComponents(for: artifact(kind)) != nil
             #expect(uploads == !Self.localOnlySidecars.contains(kind), "\(kind.rawValue)")
+        }
+    }
+
+    /// THE bundle-validity invariant, at the kind level: a kind may be listed
+    /// in `manifest.artifacts[]` only if its bytes reach Storage under a key the
+    /// worker can derive. Anything else is a promise the bundle cannot keep, and
+    /// the server parks the scan for it.
+    @Test func nothingIsListableWithoutAStorageRoute() {
+        for kind in ScanManifest.ArtifactKind.allCases
+        where ArtifactUploader.isManifestListed(kind) {
+            #expect(ArtifactUploader.storagePathComponents(for: artifact(kind)) != nil,
+                    "\(kind.rawValue) may be listed but is never uploaded")
+            #expect(ArtifactUploader.scanColumn(for: kind) != nil, "\(kind.rawValue)")
+        }
+    }
+
+    /// The exact roster, named. `.bundleManifest` is the asymmetric one — it
+    /// uploads (it must: `bundle_manifest_url` is how the worker finds the
+    /// bundle at all) but is never listed, because manifest.json IS the list and
+    /// no value written into a file can equal that file's own hash. Patina Field
+    /// resolves it identically: `FieldManifestAssembler.candidates` has no
+    /// manifest.json entry while `ScanUploadDescriptor.all` uploads one.
+    @Test func exactlyTheDeviceLocalKindsAndTheManifestAreUnlistable() {
+        let unlistable = Set(
+            ScanManifest.ArtifactKind.allCases.filter { !ArtifactUploader.isManifestListed($0) }
+        )
+        #expect(unlistable == Self.localOnlySidecars.union([.bundleManifest]))
+
+        // …and the manifest is the only unlistable kind that still uploads.
+        for kind in unlistable {
+            let uploads = ArtifactUploader.storagePathComponents(for: artifact(kind)) != nil
+            #expect(uploads == (kind == .bundleManifest), "\(kind.rawValue)")
         }
     }
 

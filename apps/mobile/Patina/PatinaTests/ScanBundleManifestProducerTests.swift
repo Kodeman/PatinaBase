@@ -2,22 +2,29 @@
 //  ScanBundleManifestProducerTests.swift
 //  PatinaTests
 //
-//  Pins the two artifact producers added for the always-NULL `room_scans`
-//  columns `bundle_manifest_url` and `photos_manifest_url`.
+//  Pins the two producers for the always-NULL `room_scans` columns
+//  `bundle_manifest_url` and `photos_manifest_url`, and — the part these tests
+//  originally got wrong — WHERE each one's record belongs.
 //
-//  `ScanManifest.ArtifactKind` declares 13 kinds; before this branch only 8 had
-//  a producer (usdz, capturedRoomJson, worldMap, mesh, depthArchive,
-//  coverageHeatmap, depthIndex, photoThumbnails). `.bundleManifest` and
-//  `.photosManifest` were never registered by anything, so their columns could
-//  only ever be NULL — which also made the claim that annotations are "inlined
-//  into the bundle manifest" false, since the manifest itself never shipped.
+//  `.photosManifest` is an artifact: a file beside the manifest, uploaded under
+//  its own key, listed in `artifacts[]`.
 //
-//  The self-pointer is the awkward one: manifest.json is the file that records
-//  the artifact list, so registering it inside that list changes it. Its
-//  `sizeBytes` is converged by write/measure/restate; its `sha256` is nil
-//  forever, because no value can be written into a file that equals the hash of
-//  that file and a WRONG hash is worse than none — the uploader stamps it onto
-//  the Storage object and merges it into `room_scans.artifacts_sha256`.
+//  `.bundleManifest` is not. manifest.json is the artifact list, so it cannot
+//  be an entry in itself, and the earlier attempt to make it one was
+//  unsatisfiable rather than merely awkward: the self-entry converged its
+//  `sizeBytes` but left `sha256` nil forever, while the server-side validator
+//  (`scripts/validate_capture_bundle.py` §10.5) requires a 64-hex sha256 on
+//  EVERY listed artifact and raises `SCHEMA_VIOLATION` without one —
+//  a token in the worker's `PERMANENT_TOKENS`, i.e. parked on attempt 1 with no
+//  retry. Two real client scans (`fa361ed4…`, `d995df8a…`) died of it.
+//
+//  So the manifest is uploaded WITHOUT being listed, exactly as Patina Field
+//  does it (`FieldManifestAssembler.candidates` omits manifest.json;
+//  `ScanUploadDescriptor.all` uploads it): `ArtifactUploader.uploadPlan(for:in:)`
+//  appends it to whatever the manifest lists, which is also the first moment its
+//  sha256 can be TRUE — measured off the finished file rather than written into
+//  it. `bundle_manifest_url` is still patched, by the same generic
+//  `scanColumn(for:)` PATCH that handles every other kind.
 //
 //  Everything here is filesystem-only. `ScanBundleWriter` has no network
 //  dependency at all: registering an artifact writes into
@@ -30,6 +37,7 @@
 
 import Testing
 import Foundation
+import CryptoKit
 @testable import Patina
 
 @MainActor
@@ -61,40 +69,12 @@ struct ScanBundleManifestProducerTests {
         return (attrs?[.size] as? NSNumber)?.intValue ?? -1
     }
 
-    // MARK: - .bundleManifest self-pointer
+    // MARK: - .bundleManifest is uploaded, never listed
 
-    @Test func finalizeRegistersTheManifestAsItsOwnArtifact() throws {
-        let writer = try makeWriter()
-        defer { try? writer.deleteBundle() }
-
-        #expect(writer.currentManifest().artifacts.contains { $0.kind == .bundleManifest } == false)
-
-        let sealed = try writer.finalize()
-        let pointer = sealed.artifacts.first { $0.kind == .bundleManifest }
-
-        #expect(pointer != nil)
-        #expect(pointer?.relativePath == "manifest.json")
-        #expect(pointer?.mimeType == "application/json")
-    }
-
-    /// The converged size: what the file says about itself is what the file is.
-    /// A stale-by-a-few-bytes number would be the kind of plausible wrong value
-    /// that gets trusted later.
-    @Test func manifestPointerStatesItsOwnSizeOnDisk() throws {
-        let writer = try makeWriter()
-        defer { try? writer.deleteBundle() }
-
-        try writer.appendPhoto(photo(index: 0), imageData: Data(repeating: 0xA1, count: 128))
-        let sealed = try writer.finalize()
-
-        let pointer = try #require(sealed.artifacts.first { $0.kind == .bundleManifest })
-        #expect(pointer.sizeBytes == manifestFileSize(writer))
-        #expect(pointer.sizeBytes > 0)
-    }
-
-    /// A self-hash is impossible, so it must be absent rather than wrong —
-    /// including on the `hashArtifacts: true` path the seal actually uses.
-    @Test func manifestPointerNeverCarriesASha256EvenWhenHashingIsOn() throws {
+    /// The list does not contain itself. A self-entry is not merely redundant:
+    /// it is the one entry whose `sha256` can never be filled in, and the
+    /// validator rejects any listed artifact without one.
+    @Test func sealingNeverListsTheManifestAsAnArtifactOfItself() throws {
         let writer = try makeWriter()
         defer { try? writer.deleteBundle() }
 
@@ -105,29 +85,79 @@ struct ScanBundleManifestProducerTests {
         )
         let sealed = try writer.finalize(hashArtifacts: true)
 
-        let pointer = try #require(sealed.artifacts.first { $0.kind == .bundleManifest })
-        #expect(pointer.sha256 == nil)
-        // …while a real artifact on the same pass does get hashed, so this is
-        // an exclusion and not a broken hashing pass.
-        let real = try #require(sealed.artifacts.first { $0.kind == .capturedRoomJson })
-        #expect(real.sha256?.count == 64)
+        #expect(sealed.artifacts.contains { $0.kind == .bundleManifest } == false)
+        // …and the file on disk agrees, which is the copy that ships.
+        let reloaded = try ScanBundleWriter.readManifest(at: writer.bundleURL)
+        #expect(reloaded.artifacts.contains { $0.kind == .bundleManifest } == false)
     }
 
-    /// Re-sealing must not accumulate duplicate pointers or drift the size.
+    /// Not listing it must not stop it shipping. The upload plan carries
+    /// manifest.json, so `bundle_manifest_url` is still patched — the NULL that
+    /// column used to hold is what parked both production scans at
+    /// `MISSING_MANIFEST`.
+    @Test func theUploadPlanCarriesTheManifestAndItsColumn() throws {
+        let writer = try makeWriter()
+        defer { try? writer.deleteBundle() }
+
+        try writer.writeArtifact(kind: .usdz, data: Data(repeating: 0xA1, count: 64),
+                                 mimeType: "model/vnd.usdz+zip")
+        let sealed = try writer.finalize(hashArtifacts: true)
+
+        let plan = ArtifactUploader.uploadPlan(for: sealed, in: writer.bundleURL)
+        let entry = try #require(plan.first { $0.kind == .bundleManifest })
+
+        #expect(entry.relativePath == "manifest.json")
+        #expect(entry.mimeType == "application/json")
+        // The three facts that make the PATCH happen, end to end.
+        #expect(ArtifactUploader.scanColumn(for: .bundleManifest) == "bundle_manifest_url")
+        #expect(ArtifactUploader.storagePathComponents(for: entry)?.folder == "manifests")
+        #expect(ArtifactUploader.storagePathComponents(for: entry)?.filename == "manifest.json")
+    }
+
+    /// The hash a self-entry could never carry. Measured off the finished file
+    /// at upload time, so it is both present and correct — the thing a written
+    /// value could not be.
+    @Test func theManifestUploadEntryCarriesARealSha256AndSize() throws {
+        let writer = try makeWriter()
+        defer { try? writer.deleteBundle() }
+
+        try writer.appendPhoto(photo(index: 0), imageData: Data(repeating: 0xA1, count: 128))
+        let sealed = try writer.finalize(hashArtifacts: true)
+
+        let entry = try #require(
+            ArtifactUploader.uploadPlan(for: sealed, in: writer.bundleURL)
+                .first { $0.kind == .bundleManifest }
+        )
+        #expect(entry.sizeBytes == manifestFileSize(writer))
+        #expect(entry.sizeBytes > 0)
+
+        let bytes = try Data(contentsOf: writer.manifestURL)
+        #expect(entry.sha256?.count == 64)
+        #expect(entry.sha256 == SHA256.hash(data: bytes)
+            .map { String(format: "%02x", $0) }.joined())
+    }
+
+    /// Re-sealing must not accumulate entries or drift a size.
     @Test func resealingIsIdempotent() throws {
         let writer = try makeWriter()
         defer { try? writer.deleteBundle() }
 
+        try writer.writeArtifact(kind: .usdz, data: Data(repeating: 0xA1, count: 64),
+                                 mimeType: "model/vnd.usdz+zip")
         _ = try writer.finalize()
         let second = try writer.finalize()
 
-        #expect(second.artifacts.filter { $0.kind == .bundleManifest }.count == 1)
-        #expect(second.artifacts.first { $0.kind == .bundleManifest }?.sizeBytes == manifestFileSize(writer))
+        #expect(second.artifacts.filter { $0.kind == .usdz }.count == 1)
+        #expect(second.artifacts.contains { $0.kind == .bundleManifest } == false)
+
+        let plan = ArtifactUploader.uploadPlan(for: second, in: writer.bundleURL)
+        #expect(plan.filter { $0.kind == .bundleManifest }.count == 1)
+        #expect(plan.first { $0.kind == .bundleManifest }?.sizeBytes == manifestFileSize(writer))
     }
 
     /// The bytes that will be uploaded must decode — the in-memory manifest is
     /// not what ships, the file is.
-    @Test func sealedManifestOnDiskDecodesAndDescribesItself() throws {
+    @Test func sealedManifestOnDiskDecodesAndListsItsRealArtifacts() throws {
         let writer = try makeWriter()
         defer { try? writer.deleteBundle() }
 
@@ -136,10 +166,54 @@ struct ScanBundleManifestProducerTests {
         _ = try writer.finalize(hashArtifacts: true)
 
         let reloaded = try ScanBundleWriter.readManifest(at: writer.bundleURL)
-        let pointer = try #require(reloaded.artifacts.first { $0.kind == .bundleManifest })
-        #expect(pointer.sizeBytes == manifestFileSize(writer))
         #expect(reloaded.artifacts.contains { $0.kind == .photosManifest })
         #expect(reloaded.completedAt != nil)
+        // Every entry hashed — the validator requires a 64-hex sha256 on each.
+        for artifact in reloaded.artifacts {
+            #expect(artifact.sha256?.count == 64, "\(artifact.kind.rawValue)")
+        }
+    }
+
+    // MARK: - Device-local files are written but never listed
+
+    /// The thumbnail index is still produced (it is a real local file); it is
+    /// simply not promised to the server, because its own contents point at
+    /// thumbnail files that `uploadPosedPhotos` never uploads.
+    @Test func thePhotoThumbnailIndexIsWrittenToDiskButNotListed() throws {
+        let writer = try makeWriter()
+        defer { try? writer.deleteBundle() }
+
+        var entry = photo(index: 0)
+        entry.thumbnailRelativePath = "photos/auto_0_thumb.heic"
+        entry.thumbnailSizeBytes = 12
+        try writer.appendPhoto(entry, imageData: Data(repeating: 0xC3, count: 32))
+        try writer.registerPhotoThumbnailsIndex()
+
+        let indexURL = writer.photosURL.appendingPathComponent("photo_thumbnails.ndjson")
+        #expect(FileManager.default.fileExists(atPath: indexURL.path))
+        #expect(writer.currentManifest().artifacts.contains { $0.kind == .photoThumbnails } == false)
+    }
+
+    /// The single gate. Any producer — present or future — that tries to list a
+    /// kind whose bytes do not reach Storage is refused at the one place an
+    /// entry can be made, rather than by every producer remembering.
+    @Test func theWriterRefusesToListAKindThatDoesNotReachStorage() throws {
+        let writer = try makeWriter()
+        defer { try? writer.deleteBundle() }
+
+        for kind in ScanManifest.ArtifactKind.allCases
+        where !ArtifactUploader.isManifestListed(kind) {
+            _ = try writer.writeArtifact(
+                kind: kind,
+                data: Data(repeating: 0xD4, count: 8),
+                mimeType: "application/octet-stream",
+                fileName: "unlistable_\(kind.rawValue).bin"
+            )
+            #expect(
+                writer.currentManifest().artifacts.contains { $0.kind == kind } == false,
+                "\(kind.rawValue) reached artifacts[] but has no storage route"
+            )
+        }
     }
 
     // MARK: - .photosManifest sidecar
