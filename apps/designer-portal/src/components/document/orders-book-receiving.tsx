@@ -25,7 +25,6 @@ import { receivingFrontMatter } from '@/lib/document/ledger-summary';
 import { fmtDay } from '@/lib/document/format';
 import { DocumentAction, DocumentActionGroup } from './document-action';
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
 type AnyRecord = any;
 
 const isoOffsetDays = (days: number) =>
@@ -46,15 +45,15 @@ function Figure({
   sub?: string;
 }) {
   return (
-    <div className="flex-1 px-4 first:pl-0">
-      <p className="font-mono text-[9px] font-semibold uppercase tracking-[0.1em] text-[var(--color-aged-oak)]">
+    <div className="min-w-0 border-l border-[var(--color-pearl)] px-3 first:border-l-0 first:pl-0 sm:px-4">
+      <p className="doc-type-meta font-semibold uppercase tracking-[0.1em] text-[var(--color-quiet-ink)]">
         {label}
       </p>
       <p className="mt-1 truncate font-heading text-[1.05rem] leading-none text-[var(--color-charcoal)]">
         {value}
       </p>
       {sub && (
-        <p className="mt-1 font-mono text-[8.5px] uppercase tracking-[0.06em] text-[var(--color-aged-oak)]">
+        <p className="doc-type-meta mt-1 uppercase tracking-[0.06em] text-[var(--color-quiet-ink)]">
           {sub}
         </p>
       )}
@@ -122,12 +121,12 @@ function OpenClaimRow({
 
   return (
     <li className="border-b border-[var(--color-pearl)] px-1 py-2.5">
-      <div className="grid grid-cols-[1fr_auto_auto_auto] items-center gap-3">
-        <div>
-          <p className="text-[12.5px] font-medium text-[var(--color-charcoal)]">
+      <div className="flex min-w-0 flex-wrap items-center gap-x-3 gap-y-2">
+        <div className="min-w-[12rem] flex-1">
+          <p className="doc-type-body font-medium text-[var(--color-charcoal)]">
             {vendorName} · {projectName}
           </p>
-          <p className="font-mono text-[9px] uppercase tracking-[0.05em] text-[var(--color-aged-oak)]">
+          <p className="doc-type-meta uppercase tracking-[0.05em] text-[var(--color-quiet-ink)]">
             {[
               `drafted ${fmtDay(claim.created_at)}`,
               claim.vendor_notified_at
@@ -146,38 +145,40 @@ function OpenClaimRow({
           }
           ink={drafted ? undefined : '#D8BE56'}
         />
-        <DocumentAction
-          actionKey={
-            drafted ? 'review-claim-notification' : 'review-claim-resolution'
-          }
-          surfaceKey="orders"
-          regionKey="damage-claim-row"
-          variant="secondary"
-          onClick={() =>
-            setAct((cur) => (cur ? null : drafted ? 'notify' : 'resolve'))
-          }
-          aria-expanded={act != null}
-        >
-          {drafted ? 'Notify vendor' : 'Mark resolved'}
-        </DocumentAction>
-        <button
-          type="button"
-          onClick={() => onOpenDocument(po?.project?.id ?? null)}
-          className="whitespace-nowrap text-[10.5px] text-[var(--color-clay)] hover:underline"
-        >
-          open document →
-        </button>
+        <div className="flex flex-wrap items-center gap-x-3">
+          <DocumentAction
+            actionKey={
+              drafted ? 'review-claim-notification' : 'review-claim-resolution'
+            }
+            surfaceKey="orders"
+            regionKey="damage-claim-row"
+            variant="secondary"
+            onClick={() =>
+              setAct((cur) => (cur ? null : drafted ? 'notify' : 'resolve'))
+            }
+            aria-expanded={act != null}
+          >
+            {drafted ? 'Notify vendor' : 'Mark resolved'}
+          </DocumentAction>
+          <button
+            type="button"
+            onClick={() => onOpenDocument(po?.project?.id ?? null)}
+            className="da-score-hover doc-type-meta inline-flex min-h-11 min-w-11 items-center whitespace-nowrap text-[var(--color-quiet-ink)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-quiet-ink)]"
+          >
+            open document →
+          </button>
+        </div>
       </div>
 
       {act === 'notify' && (
-        <div className="mt-2 flex items-end gap-2 pl-1">
+        <div className="mt-2 flex min-w-0 flex-col items-stretch gap-2 pl-1 sm:flex-row sm:items-end">
           <textarea
             rows={3}
             value={description}
             onChange={(e) => setDescription(e.target.value)}
             placeholder="Describe the damage or shortage before notifying the vendor."
             aria-label="Claim description"
-            className="flex-1 resize-none rounded-[3px] border border-[var(--color-pearl)] bg-transparent px-2 py-1.5 text-[11px] text-[var(--color-charcoal)] outline-none placeholder:text-[var(--text-faint)]"
+            className="doc-type-control min-h-11 w-full min-w-0 flex-1 resize-none rounded-[3px] border border-[var(--color-pearl)] bg-transparent px-2 py-2 text-[var(--color-charcoal)] placeholder:text-[var(--text-faint)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-quiet-ink)]"
           />
           <DocumentAction
             actionKey="notify-vendor-of-claim"
@@ -195,14 +196,14 @@ function OpenClaimRow({
       )}
 
       {act === 'resolve' && (
-        <div className="mt-2 flex items-end gap-2 pl-1">
+        <div className="mt-2 flex min-w-0 flex-col items-stretch gap-2 pl-1 sm:flex-row sm:items-end">
           <textarea
             rows={2}
             value={note}
             onChange={(e) => setNote(e.target.value)}
             placeholder="How was it resolved? (replacement shipped, credit issued…)"
             aria-label="Resolution notes"
-            className="flex-1 resize-none rounded-[3px] border border-[var(--color-pearl)] bg-transparent px-2 py-1.5 text-[11px] text-[var(--color-charcoal)] outline-none placeholder:text-[var(--text-faint)]"
+            className="doc-type-control min-h-11 w-full min-w-0 flex-1 resize-none rounded-[3px] border border-[var(--color-pearl)] bg-transparent px-2 py-2 text-[var(--color-charcoal)] placeholder:text-[var(--text-faint)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-quiet-ink)]"
           />
           <DocumentAction
             actionKey="resolve-damage-claim"
@@ -221,7 +222,7 @@ function OpenClaimRow({
 
       {done && !error && (
         // R51: the quiet confirmation (the row leaves the open set on refetch).
-        <p className="mt-1.5 text-[10.5px] text-[var(--color-charcoal)]">
+        <p className="doc-type-body mt-1.5 text-[var(--color-charcoal)]">
           {done}
         </p>
       )}
@@ -229,7 +230,7 @@ function OpenClaimRow({
         // R83: inline at the act — the reason and a retry.
         <div
           role="alert"
-          className="mt-1.5 text-[10.5px] text-[var(--color-terracotta)]"
+          className="doc-type-body mt-1.5 text-[var(--color-terracotta)]"
         >
           <p>{error}</p>
           <DocumentActionGroup
@@ -322,22 +323,13 @@ export function ReceivingBookPage({
   const isLoading = ordersLoading || inspLoading;
 
   return (
-    <div className="mx-auto max-w-3xl">
-      <div className="mb-4">
-        <h2 className="font-heading text-xl text-[var(--color-charcoal)]">
-          Receiving{' '}
-          <em className="italic text-[var(--color-clay)]">
-            · the warehouse day
-          </em>
-        </h2>
-      </div>
-
+    <div className="mx-auto w-full min-w-0 max-w-3xl">
       {/* PRC-10 (R84): the four-figure KPI strip — arriving · awaiting log ·
           open claims · received (30d) — in the proposal-watch figures-strip
           grammar. Counts derive from the queries the page already holds
           (receivingFrontMatter, R5-pure). */}
       {!isLoading && (
-        <div className="mb-4 flex items-stretch divide-x divide-[var(--color-pearl)] border-y border-[var(--color-pearl)] py-3">
+        <div className="mb-4 grid grid-cols-2 items-stretch gap-y-4 border-y border-[var(--color-pearl)] py-3 sm:grid-cols-4 sm:gap-y-0">
           <Figure
             label="Arriving"
             value={stats.find((s) => s.label === 'Arriving')?.value ?? '0'}
@@ -361,27 +353,27 @@ export function ReceivingBookPage({
       )}
 
       {isLoading ? (
-        <p className="py-3 text-[12px] italic text-[var(--color-aged-oak)]">
+        <p className="doc-type-body py-3 italic text-[var(--color-quiet-ink)]">
           Opening the book…
         </p>
       ) : (
         <>
           {/* The warehouse-day queue — delivered, awaiting the log. */}
-          <p className="mb-1 font-mono text-[8.5px] font-semibold uppercase tracking-[0.08em] text-[var(--color-aged-oak)]">
+          <p className="doc-type-meta mb-1 font-semibold uppercase tracking-[0.08em] text-[var(--color-quiet-ink)]">
             Awaiting inspection · {queue.length}
           </p>
           <ul className="mb-5">
             {queue.map((po) => (
               <li
                 key={po.id}
-                className="grid grid-cols-[1fr_auto_auto] items-center gap-3 border-b border-[var(--color-pearl)] px-1 py-2.5"
+                className="flex min-w-0 flex-wrap items-center gap-x-3 gap-y-2 border-b border-[var(--color-pearl)] px-1 py-3"
               >
-                <div>
-                  <p className="text-[12.5px] font-medium text-[var(--color-charcoal)]">
+                <div className="min-w-[12rem] flex-1">
+                  <p className="doc-type-body font-medium text-[var(--color-charcoal)]">
                     {po.po_number ?? po.vendor_po_number ?? po.sidemark ?? 'PO'}{' '}
                     · {po.vendor?.name ?? 'Vendor'}
                   </p>
-                  <p className="font-mono text-[9px] uppercase tracking-[0.05em] text-[var(--color-aged-oak)]">
+                  <p className="doc-type-meta uppercase tracking-[0.05em] text-[var(--color-quiet-ink)]">
                     {[
                       po.project?.name ?? 'Project',
                       po.delivered_date
@@ -394,28 +386,30 @@ export function ReceivingBookPage({
                       .join(' · ')}
                   </p>
                 </div>
-                <DocumentAction
-                  actionKey="inspect-delivery"
-                  surfaceKey="orders"
-                  regionKey="receiving-row"
-                  variant="primary"
-                  onClick={() => setTarget(po)}
-                >
-                  Inspect
-                </DocumentAction>
-                <button
-                  type="button"
-                  onClick={() =>
-                    onOpenDocument(po.project_id ?? po.project?.id ?? null)
-                  }
-                  className="whitespace-nowrap text-[10.5px] text-[var(--color-clay)] hover:underline"
-                >
-                  open document →
-                </button>
+                <div className="flex flex-wrap items-center gap-x-3">
+                  <DocumentAction
+                    actionKey="inspect-delivery"
+                    surfaceKey="orders"
+                    regionKey="receiving-row"
+                    variant="primary"
+                    onClick={() => setTarget(po)}
+                  >
+                    Inspect
+                  </DocumentAction>
+                  <button
+                    type="button"
+                    onClick={() =>
+                      onOpenDocument(po.project_id ?? po.project?.id ?? null)
+                    }
+                    className="da-score-hover doc-type-meta inline-flex min-h-11 min-w-11 items-center whitespace-nowrap text-[var(--color-quiet-ink)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-quiet-ink)]"
+                  >
+                    open document →
+                  </button>
+                </div>
               </li>
             ))}
             {queue.length === 0 && (
-              <li className="py-2 text-[11px] italic text-[var(--color-aged-oak)]">
+              <li className="doc-type-body py-2 italic text-[var(--color-quiet-ink)]">
                 Nothing waiting on the warehouse floor.
               </li>
             )}
@@ -425,7 +419,7 @@ export function ReceivingBookPage({
               already counts them. */}
           {openClaims.length > 0 && (
             <>
-              <p className="mb-1 font-mono text-[8.5px] font-semibold uppercase tracking-[0.08em] text-[var(--color-aged-oak)]">
+              <p className="doc-type-meta mb-1 font-semibold uppercase tracking-[0.08em] text-[var(--color-quiet-ink)]">
                 Open claims · {openClaims.length}
               </p>
               <ul className="mb-5">
@@ -447,7 +441,7 @@ export function ReceivingBookPage({
                 type="button"
                 onClick={() => setShowCleared((v) => !v)}
                 aria-expanded={showCleared}
-                className="font-mono text-[8.5px] uppercase tracking-[0.07em] text-[var(--color-aged-oak)] hover:text-[var(--color-clay)]"
+                className="da-score-hover doc-type-meta inline-flex min-h-11 min-w-11 items-center uppercase tracking-[0.07em] text-[var(--color-quiet-ink)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-quiet-ink)]"
               >
                 Settled · {cleared.length} cleared · 30 days{' '}
                 {showCleared ? '↑' : '↓'}
@@ -457,13 +451,13 @@ export function ReceivingBookPage({
                   {cleared.map((i) => (
                     <li
                       key={i.id}
-                      className="grid grid-cols-[1fr_auto] items-baseline gap-3 border-b border-dashed border-[var(--color-pearl)] px-1 py-1.5"
+                      className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1 border-b border-dashed border-[var(--color-pearl)] px-1 py-2"
                     >
-                      <span className="text-[11px] text-[var(--color-charcoal)]">
+                      <span className="doc-type-body min-w-[12rem] flex-1 text-[var(--color-charcoal)]">
                         {i.purchase_order?.vendor?.name ?? 'Vendor'} ·{' '}
                         {i.purchase_order?.project?.name ?? 'Project'}
                       </span>
-                      <span className="font-mono text-[8.5px] uppercase tracking-[0.05em] text-[var(--color-sage)]">
+                      <span className="doc-type-meta uppercase tracking-[0.05em] text-[var(--color-sage)]">
                         clean · {fmtDay(i.inspected_at)}
                       </span>
                     </li>

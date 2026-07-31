@@ -34,17 +34,23 @@ export function LedgerFrontMatter({
   return (
     <div className="mb-4 flex flex-wrap items-baseline gap-x-5 gap-y-1 border-y border-[var(--color-pearl)] py-2.5">
       <span className="flex items-baseline gap-1">
-        <span className="font-mono text-[9px] font-semibold uppercase tracking-[0.08em] text-[var(--color-clay)]">
+        <span className="doc-type-meta font-semibold uppercase tracking-[0.08em] text-[var(--color-quiet-ink)]">
           {caption}
         </span>
         {helpKey ? (
-          <HelpGlyph helpKey={helpKey} source="front-matter" label="About this ledger" />
+          <HelpGlyph
+            helpKey={helpKey}
+            source="front-matter"
+            label="About this ledger"
+          />
         ) : null}
       </span>
       {stats.map((s) => (
         <span key={s.label} className="flex items-baseline gap-1.5">
-          <span className="font-heading text-[15px] text-[var(--color-charcoal)]">{s.value}</span>
-          <span className="font-mono text-[8.5px] uppercase tracking-[0.06em] text-[var(--color-aged-oak)]">
+          <span className="font-heading text-[15px] text-[var(--color-charcoal)]">
+            {s.value}
+          </span>
+          <span className="doc-type-meta uppercase tracking-[0.06em] text-[var(--color-quiet-ink)]">
             {s.label}
           </span>
         </span>
