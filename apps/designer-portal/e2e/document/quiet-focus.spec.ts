@@ -20,6 +20,7 @@ test.describe('Quiet Work focused rooms', () => {
   }) => {
     await page.setViewportSize({ width: 390, height: 844 });
     await page.goto('/library', { waitUntil: 'domcontentloaded' });
+    await page.waitForLoadState('networkidle');
 
     await expect(page.locator('[data-library-omnibox]')).toHaveCount(1);
     await expect(page.locator('[data-library-lens]')).toHaveCount(3);
@@ -56,6 +57,7 @@ test.describe('Quiet Work focused rooms', () => {
     await page.goto(`/drafting/${SENT_PROPOSAL_ID}`, {
       waitUntil: 'domcontentloaded',
     });
+    await page.waitForLoadState('networkidle');
 
     await expect
       .poll(() => page.locator('button[aria-expanded="true"]:visible').count())
@@ -87,6 +89,7 @@ test.describe('Quiet Work focused rooms', () => {
   }) => {
     await page.setViewportSize({ width: 390, height: 844 });
     await page.goto('/people', { waitUntil: 'domcontentloaded' });
+    await page.waitForLoadState('networkidle');
 
     const selector = page.locator('[data-people-compact-selector]');
     const trigger = page.locator('[data-people-selector-trigger]');
