@@ -16,23 +16,26 @@
  */
 
 import Link from 'next/link';
-import { useFieldActivity, useSmsReviewQueue } from '@patina/supabase';
+import { useMemo } from 'react';
+import {
+  useFieldActivity,
+  useSmsReviewQueue,
+  type FieldActivityRow,
+  type SmsReviewMessage,
+} from '@patina/supabase';
 import { SectionEyebrow } from '@/components/document/section-eyebrow';
 import { SmsReviewCard } from './sms-review-card';
 
-interface FieldNeedLine {
+export interface FieldNeedLine {
   key: string;
   projectId: string;
   projectName: string;
   text: string;
 }
 
-export function FieldDesk() {
-  const { data: reviews } = useSmsReviewQueue();
-  const { data: activity } = useFieldActivity();
-
-  const cards = reviews ?? [];
-
+export function deriveFieldNeedLines(
+  activity: readonly FieldActivityRow[] | undefined,
+): FieldNeedLine[] {
   // Need-lines from the per-project rollup. The unreviewed-SMS count is already
   // carried by the triage cards, so the lines cover the softer nudges only.
   const lines: FieldNeedLine[] = [];
@@ -61,6 +64,40 @@ export function FieldDesk() {
       });
     }
   }
+  return lines;
+}
+
+export interface FieldDeskPopulation {
+  cards: SmsReviewMessage[];
+  lines: FieldNeedLine[];
+  isLoading: boolean;
+  isError: boolean;
+}
+
+export function useFieldDeskPopulation(): FieldDeskPopulation {
+  const reviewsQuery = useSmsReviewQueue();
+  const activityQuery = useFieldActivity();
+  const lines = useMemo(
+    () => deriveFieldNeedLines(activityQuery.data),
+    [activityQuery.data],
+  );
+
+  return {
+    cards: reviewsQuery.data ?? [],
+    lines,
+    isLoading: reviewsQuery.isLoading || activityQuery.isLoading,
+    isError: reviewsQuery.isError || activityQuery.isError,
+  };
+}
+
+export function FieldDesk({
+  population,
+  withinPulse = false,
+}: {
+  population: FieldDeskPopulation;
+  withinPulse?: boolean;
+}) {
+  const { cards, lines } = population;
 
   // R94 — quiet state teaches instead of vanishing. When there is no field work
   // the section stays, in the pencil idiom, naming what will land here so the
@@ -70,18 +107,25 @@ export function FieldDesk() {
   // invited per-project inside a document's coordination (there is no global
   // field-parties surface, and no palette-visible act, to point at).
   if (cards.length === 0 && lines.length === 0) {
+    if (population.isError) return null;
     return (
-      <section aria-labelledby="in-the-field" className="mt-14">
+      <section
+        aria-labelledby="in-the-field"
+        className={withinPulse ? '' : 'mt-14'}
+      >
         <SectionEyebrow>
           <span id="in-the-field">In the field</span>
         </SectionEyebrow>
         <p className="max-w-[52ch]">
           <span className="font-heading text-[15px] italic leading-[1.55] text-[var(--text-body)]">
-            <span aria-hidden className="mr-1 not-italic text-[var(--text-muted)]">
+            <span
+              aria-hidden
+              className="mr-1 not-italic text-[var(--text-muted)]"
+            >
               –
             </span>
-            Nothing needs coordinating. When your builders and makers text photos or
-            questions, they land here as cards you can act on.
+            Nothing needs coordinating. When your builders and makers text
+            photos or questions, they land here as cards you can act on.
           </span>
         </p>
       </section>
@@ -89,7 +133,10 @@ export function FieldDesk() {
   }
 
   return (
-    <section aria-labelledby="in-the-field" className="mt-14">
+    <section
+      aria-labelledby="in-the-field"
+      className={withinPulse ? '' : 'mt-14'}
+    >
       <SectionEyebrow count={cards.length + lines.length}>
         <span id="in-the-field">In the field</span>
       </SectionEyebrow>
@@ -108,7 +155,7 @@ export function FieldDesk() {
             <li key={l.key}>
               <Link
                 href={`/doc/${l.projectId}`}
-                className="group flex items-baseline gap-2 text-[13px] leading-snug text-[var(--text-muted)] transition-colors hover:text-[var(--text-body)]"
+                className="doc-type-body group flex min-h-11 items-center gap-2 transition-colors hover:text-[var(--text-primary)] motion-reduce:transition-none"
               >
                 <span>{l.text}</span>
                 <span aria-hidden className="text-[var(--text-subtle)]">

@@ -25,10 +25,18 @@
 
 import { useRouter } from 'next/navigation';
 import type { LucideIcon } from 'lucide-react';
-import { STUDIO_ROOMS, STUDIO_LEDGERS, STUDIO_VERBS } from '@/lib/document/registry';
+import {
+  STUDIO_ROOMS,
+  STUDIO_LEDGERS,
+  STUDIO_VERBS,
+} from '@/lib/document/registry';
 import { SectionEyebrow } from '@/components/document/section-eyebrow';
 import { documentEvents } from '@/lib/analytics/document-events';
-import { openLedger, openCaptureLead, openOpenProject } from '@/components/document/command-bar';
+import {
+  openLedger,
+  openCaptureLead,
+  openOpenProject,
+} from '@/components/document/command-bar';
 import { openPost } from '@/components/document/overlays/post-sheet';
 import { openInvoiceComposer } from '@/components/document/accounts/invoice-overlays';
 import { openDraftProposalPicker } from '@/components/document/rooms/drafting/draft-proposal-opener';
@@ -38,7 +46,7 @@ type RowVariant = 'room' | 'ledger' | 'verb';
 /** The small DM-mono heading over each column of the contents. */
 function ColumnHead({ children }: { children: React.ReactNode }) {
   return (
-    <p className="mb-3.5 font-mono text-[10px] font-semibold uppercase tracking-[0.14em] text-[var(--text-muted)]">
+    <p className="doc-type-meta mb-3.5 font-semibold uppercase tracking-[0.14em]">
       {children}
     </p>
   );
@@ -66,10 +74,13 @@ function ContentsRow({
       <button
         type="button"
         onClick={onOpen}
-        className="group flex w-full items-baseline gap-2 rounded-[3px] py-[5px] text-left focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-clay)]"
+        className="group flex min-h-11 w-full items-baseline gap-2 rounded-[3px] py-[5px] text-left focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-clay)]"
       >
         {variant === 'verb' && (
-          <span aria-hidden className="self-center font-heading text-[15px] leading-none text-[var(--text-muted)]">
+          <span
+            aria-hidden
+            className="self-center font-heading text-[15px] leading-none text-[var(--text-muted)]"
+          >
             —
           </span>
         )}
@@ -79,7 +90,7 @@ function ContentsRow({
           aria-hidden
         />
         <span
-          className={`shrink-0 font-heading ${labelSize} font-normal leading-tight text-[var(--text-primary)] transition-colors group-hover:text-[var(--color-aged-oak)]`}
+          className={`shrink-0 font-heading ${labelSize} font-normal leading-tight text-[var(--text-primary)] transition-colors group-hover:text-[var(--color-aged-oak)] motion-reduce:transition-none`}
         >
           {label}
         </span>
@@ -92,7 +103,7 @@ function ContentsRow({
         {variant === 'room' && (
           <span
             aria-hidden
-            className="shrink-0 self-center font-mono text-[13px] text-[var(--text-muted)] transition-colors group-hover:text-[var(--color-clay)]"
+            className="shrink-0 self-center font-mono text-[13px] text-[var(--text-muted)] transition-colors group-hover:text-[var(--color-clay)] motion-reduce:transition-none"
           >
             ↗
           </span>
@@ -100,7 +111,7 @@ function ContentsRow({
         {variant === 'ledger' && (
           <span
             aria-hidden
-            className="shrink-0 self-center font-mono text-[10px] uppercase tracking-[0.12em] text-[var(--text-muted)]"
+            className="doc-type-meta shrink-0 self-center uppercase tracking-[0.12em]"
           >
             Sheet
           </span>

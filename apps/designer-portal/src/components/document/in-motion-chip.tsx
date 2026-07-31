@@ -33,7 +33,10 @@ export function InMotionChip({ chip }: { chip: MotionChip }) {
   useEffect(() => {
     if (!chip.ceremonyId) return;
     if (chip.kind === 'intro_nudge') {
-      documentEvents.nudgeFired({ ceremony_id: chip.ceremonyId, lead_id: chip.row.lead_id });
+      documentEvents.nudgeFired({
+        ceremony_id: chip.ceremonyId,
+        lead_id: chip.row.lead_id,
+      });
     } else if (chip.kind === 'slots_stale') {
       documentEvents.freshTimesRequested({
         ceremony_id: chip.ceremonyId,
@@ -50,19 +53,21 @@ export function InMotionChip({ chip }: { chip: MotionChip }) {
         // kind-agnostic; the data attribute lets CSS or analytics key off it
         // without re-deriving from the (translatable) text.
         data-motion-kind={chip.kind}
-        className="group flex items-baseline gap-2 text-[13px] leading-snug text-[var(--text-muted)] transition-colors hover:text-[var(--text-body)]"
+        className="doc-type-body group flex min-h-11 items-center gap-2 transition-colors hover:text-[var(--text-primary)] motion-reduce:transition-none"
       >
         <span
           aria-hidden
           className="inline-block h-1.5 w-1.5 shrink-0 self-center rounded-full bg-[var(--color-golden-hour)]"
         />
-        <span className="font-heading text-[14px] text-[var(--text-primary)]">
+        <span className="font-heading text-[16px] text-[var(--text-primary)]">
           {chip.row.title}
         </span>
         <span aria-hidden className="text-[var(--text-subtle)]">
           —
         </span>
-        <span className={warmed ? 'font-medium text-[var(--text-body)]' : undefined}>
+        <span
+          className={warmed ? 'font-medium text-[var(--text-body)]' : undefined}
+        >
           {chip.text}
         </span>
       </Link>
