@@ -135,7 +135,8 @@ describe('quiet responsive document shell', () => {
     );
     expect(spine).toHaveClass(
       'min-[1180px]:block',
-      'min-[1180px]:w-14',
+      'min-[1180px]:box-border',
+      'min-[1180px]:w-full',
       'min-[1440px]:w-auto',
     );
 
