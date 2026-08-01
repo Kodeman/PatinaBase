@@ -298,6 +298,12 @@ verify_jwt = false
 [functions.comms-mute]
 verify_jwt = false
 
+# Browser-invoked after the guarded send_proposal RPC. The gateway validates
+# the user JWT again before constructing any service-role client, then limits
+# dispatch to the exact owner or an eligible active design-studio co-member.
+[functions.proposal-send]
+verify_jwt = true
+
 # Web→Field QR handoff (designer portal → Patina Field iOS). The gateway MUST
 # verify the caller's JWT; the function then mints a magiclink token ONLY for
 # the caller's own verified identity (never an arbitrary email). Explicit here

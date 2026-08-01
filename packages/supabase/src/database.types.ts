@@ -13005,6 +13005,59 @@ export type Database = {
           },
         ]
       }
+      proposal_send_dispatches: {
+        Row: {
+          attempt_count: number
+          claim_token: string
+          claimed_at: string
+          created_at: string
+          delivered_at: string | null
+          last_error: string | null
+          notification_log_id: string
+          proposal_id: string
+          provider_id: string | null
+          sent_at: string
+          status: string
+          updated_at: string
+        }
+        Insert: {
+          attempt_count?: number
+          claim_token?: string
+          claimed_at?: string
+          created_at?: string
+          delivered_at?: string | null
+          last_error?: string | null
+          notification_log_id?: string
+          proposal_id: string
+          provider_id?: string | null
+          sent_at: string
+          status?: string
+          updated_at?: string
+        }
+        Update: {
+          attempt_count?: number
+          claim_token?: string
+          claimed_at?: string
+          created_at?: string
+          delivered_at?: string | null
+          last_error?: string | null
+          notification_log_id?: string
+          proposal_id?: string
+          provider_id?: string | null
+          sent_at?: string
+          status?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "proposal_send_dispatches_proposal_id_fkey"
+            columns: ["proposal_id"]
+            isOneToOne: false
+            referencedRelation: "proposals"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       proposal_team_members: {
         Row: {
           created_at: string
@@ -20805,6 +20858,10 @@ export type Database = {
       _aesthete_utilization: { Args: { p_ratio: number }; Returns: number }
       _compute_quiz_profile: { Args: { p_answers: Json }; Returns: Json }
       _primary_studio_for: { Args: { p_user: string }; Returns: string }
+      _proposal_review_fingerprint: {
+        Args: { p_proposal_id: string }
+        Returns: string
+      }
       _provision_studio: {
         Args: { p_name: string; p_user_id: string }
         Returns: {
@@ -21066,9 +21123,14 @@ export type Database = {
         Args: { p_designer_client_id: string }
         Returns: string
       }
+      begin_discovery: { Args: { p_lead_id: string }; Returns: Json }
       calculate_engagement_score: {
         Args: { p_user_id: string }
         Returns: number
+      }
+      can_dispatch_proposal_send: {
+        Args: { p_owner: string }
+        Returns: boolean
       }
       cancel_agent_task: {
         Args: { p_actor: string; p_id: string; p_reason?: string }
@@ -21188,6 +21250,14 @@ export type Database = {
         }
       }
       claim_design_request: { Args: { p_lead_id: string }; Returns: Json }
+      claim_proposal_send_dispatch: {
+        Args: {
+          p_proposal_id: string
+          p_sent_at: string
+          p_stale_after_seconds?: number
+        }
+        Returns: Json
+      }
       claim_quiz_session: { Args: { p_session_key: string }; Returns: Json }
       client_pick: {
         Args: { p_ceremony_id: string; p_slot_id: string }
@@ -21279,6 +21349,17 @@ export type Database = {
           p_fatal?: boolean
           p_id: string
           p_outcome: string
+        }
+        Returns: undefined
+      }
+      complete_proposal_send_dispatch: {
+        Args: {
+          p_claim_token: string
+          p_error?: string
+          p_proposal_id: string
+          p_provider_id?: string
+          p_sent_at: string
+          p_succeeded: boolean
         }
         Returns: undefined
       }
