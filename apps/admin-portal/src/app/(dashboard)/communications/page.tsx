@@ -42,7 +42,7 @@ const RANGES: { value: TimeRange; label: string }[] = [
 function activityVariant(status: string): StatusVariant {
   if (status === 'delivered' || status === 'opened' || status === 'clicked') return 'success';
   if (status === 'bounced' || status === 'failed') return 'error';
-  if (status === 'sending') return 'warning';
+  if (status === 'sending' || status === 'unconfirmed') return 'warning';
   return 'neutral';
 }
 

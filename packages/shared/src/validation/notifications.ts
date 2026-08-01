@@ -35,7 +35,7 @@ export const notificationTypeSchema = z.enum([
 export const notificationChannelSchema = z.enum(['email', 'push', 'in_app', 'sms']);
 
 export const notificationStatusSchema = z.enum([
-  'queued', 'sending', 'delivered', 'opened', 'clicked', 'bounced', 'failed', 'suppressed',
+  'queued', 'sending', 'delivered', 'opened', 'clicked', 'bounced', 'failed', 'suppressed', 'unconfirmed',
 ]);
 
 export const notificationPrioritySchema = z.enum(['critical', 'high', 'normal', 'low']);

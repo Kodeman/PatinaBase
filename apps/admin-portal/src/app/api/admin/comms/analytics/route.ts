@@ -24,8 +24,9 @@ async function getOverview(supabase: any, since: string) {
 
   const allLogs = logs || [];
   const deliveredStatuses = ['delivered', 'opened', 'clicked'];
+  const sentStatuses = [...deliveredStatuses, 'bounced', 'unconfirmed'];
 
-  const totalSent = allLogs.filter((l: { status: string }) => deliveredStatuses.includes(l.status) || l.status === 'bounced').length;
+  const totalSent = allLogs.filter((l: { status: string }) => sentStatuses.includes(l.status)).length;
   const totalDelivered = allLogs.filter((l: { status: string }) => deliveredStatuses.includes(l.status)).length;
   const totalOpened = allLogs.filter((l: { opened_at: string | null }) => l.opened_at).length;
   const totalClicked = allLogs.filter((l: { clicked_at: string | null }) => l.clicked_at).length;
@@ -35,7 +36,7 @@ async function getOverview(supabase: any, since: string) {
   for (const log of allLogs) {
     const day = log.created_at.slice(0, 10);
     if (!dayMap[day]) dayMap[day] = { sent: 0, opened: 0, clicked: 0 };
-    if (deliveredStatuses.includes(log.status) || log.status === 'bounced') dayMap[day].sent++;
+    if (sentStatuses.includes(log.status)) dayMap[day].sent++;
     if (log.opened_at) dayMap[day].opened++;
     if (log.clicked_at) dayMap[day].clicked++;
   }
@@ -146,7 +147,7 @@ async function getCohorts(supabase: any) {
 async function getDeliveryHealth(supabase: any, since: string) {
   const deliveredStatuses = ['delivered', 'opened', 'clicked'];
   const [totalResult, deliveredResult, bouncedResult, complaintsResult, suppressedResult] = await Promise.all([
-    supabase.from('notification_log').select('*', { count: 'exact', head: true }).gte('created_at', since).in('status', [...deliveredStatuses, 'bounced', 'failed']),
+    supabase.from('notification_log').select('*', { count: 'exact', head: true }).gte('created_at', since).in('status', [...deliveredStatuses, 'bounced', 'failed', 'unconfirmed']),
     supabase.from('notification_log').select('*', { count: 'exact', head: true }).gte('created_at', since).in('status', deliveredStatuses),
     supabase.from('notification_log').select('error', { count: 'exact' }).gte('created_at', since).eq('status', 'bounced'),
     supabase.from('profiles').select('*', { count: 'exact', head: true }).eq('email_complaint', true),

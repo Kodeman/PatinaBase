@@ -227,7 +227,7 @@ async function findRecentSequenceSend(
     .select('sent_at, created_at, metadata')
     .eq('user_id', userId)
     .eq('channel', 'email')
-    .in('status', ['delivered', 'sending', 'opened', 'clicked'])
+    .in('status', ['delivered', 'sending', 'opened', 'clicked', 'unconfirmed'])
     .gte('created_at', cutoff)
     .order('created_at', { ascending: false })
     .limit(25);

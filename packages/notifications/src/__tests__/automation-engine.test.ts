@@ -517,6 +517,15 @@ describe('processEnrollments', () => {
 
       expect(result.processed).toBe(1);
       expect(supabase.functions.invoke).not.toHaveBeenCalled();
+      const notificationLogQueryIndex = supabase.from.mock.calls.findIndex(
+        (call: [string]) => call[0] === 'notification_log',
+      );
+      expect(
+        supabase.from.mock.results[notificationLogQueryIndex].value.in,
+      ).toHaveBeenCalledWith(
+        'status',
+        ['delivered', 'sending', 'opened', 'clicked', 'unconfirmed'],
+      );
       // Deferred to last send + 24h.
       const expected = new Date(new Date(lastSentAt).getTime() + 86400000).toISOString();
       expect(supabase.enrollmentUpdates).toContainEqual(

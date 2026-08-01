@@ -266,6 +266,17 @@ describe('resolveAudience', () => {
 
     expect(result).toHaveLength(1);
     expect(result[0].user_id).toBe('u2');
+
+    const notificationLogQueries = supabase.from.mock.calls.flatMap(
+      (call: [string], index: number) =>
+        call[0] === 'notification_log'
+          ? [supabase.from.mock.results[index].value]
+          : [],
+    );
+    expect(notificationLogQueries[notificationLogQueries.length - 1].in).toHaveBeenCalledWith(
+      'status',
+      ['delivered', 'sending', 'opened', 'clicked', 'unconfirmed'],
+    );
   });
 
   it('returns all email-subscribed users when conditions array is empty', async () => {
