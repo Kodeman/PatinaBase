@@ -222,6 +222,12 @@ jest.mock('@/hooks/use-proposals', () => ({
   useProposalVersions: () => ({ data: [] }),
   useSendProposal: () => ({ mutateAsync: mockSend, isPending: false }),
   useRetryProposalSend: () => ({ mutateAsync: jest.fn(), isPending: false }),
+  useProposalSendDispatchStatus: () => ({
+    data: undefined,
+    isLoading: false,
+    isError: false,
+    error: null,
+  }),
   useUpdateProposal: () => ({ mutate: jest.fn(), isPending: false }),
 }));
 
