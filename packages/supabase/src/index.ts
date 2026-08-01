@@ -12,10 +12,15 @@ export { getCookieDomain } from './lib/cookie-domain';
 export {
   assessProposalPaymentSchedule,
   canonicalizeProposalPaymentSchedule,
+  parseProposalSendSnapshot,
+  proposalPaymentScheduleReviewKey,
+  proposalSendSnapshotsMatch,
   type ProposalPaymentMilestoneLike,
   type ProposalPaymentScheduleAssessment,
   type ProposalPaymentScheduleIssue,
   type ProposalPaymentScheduleIssueCode,
+  type ProposalSendSnapshot,
+  type ProposalSendSnapshotRpcRow,
 } from './lib/proposal-payment-schedule';
 export {
   resolveVendor,

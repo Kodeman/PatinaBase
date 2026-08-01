@@ -1,10 +1,47 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { createBrowserClient } from '../client';
 import { updateProposalTotal } from '../lib/proposal-total';
-import { assessProposalPaymentSchedule } from '../lib/proposal-payment-schedule';
+import {
+  assessProposalPaymentSchedule,
+  parseProposalSendSnapshot,
+  proposalPaymentScheduleReviewKey,
+  proposalSendSnapshotsMatch,
+  type ProposalSendSnapshot,
+} from '../lib/proposal-payment-schedule';
 
 // Lazy client getter to avoid module-level initialization during SSR
 const getSupabase = () => createBrowserClient();
+
+const REVIEWED_PROPOSAL_CHANGED =
+  'Proposal cannot be sent: the proposal changed since it was reviewed. Review the latest client copy and send again.';
+
+async function readProposalSendSnapshot(
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  supabase: any,
+  proposalId: string,
+): Promise<ProposalSendSnapshot> {
+  const { data, error } = await supabase.rpc('get_proposal_send_snapshot', {
+    p_proposal_id: proposalId,
+  });
+  if (error) throw error;
+
+  const snapshot = parseProposalSendSnapshot(data);
+  if (!snapshot) {
+    throw new Error(
+      'Proposal cannot be sent: the reviewed snapshot could not be verified.',
+    );
+  }
+  return snapshot;
+}
+
+function assertReviewedProposalSnapshot(
+  actual: ProposalSendSnapshot,
+  expected: ProposalSendSnapshot,
+) {
+  if (!proposalSendSnapshotsMatch(actual, expected)) {
+    throw new Error(REVIEWED_PROPOSAL_CHANGED);
+  }
+}
 
 // ═══════════════════════════════════════════════════════════════════════════
 // TYPES
@@ -669,14 +706,28 @@ export function useSendProposal(options?: { errorSurface?: 'inline' }) {
       personalMessage,
       ccEmail,
       validUntil,
+      expectedSnapshot,
     }: {
       proposalId: string;
       personalMessage?: string;
       ccEmail?: string;
       validUntil?: string;
+      expectedSnapshot: ProposalSendSnapshot;
     }) => {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const supabase = getSupabase() as any;
+
+      if (!expectedSnapshot) {
+        throw new Error(
+          'Proposal cannot be sent: review the latest client copy before sending.',
+        );
+      }
+
+      const snapshotBefore = await readProposalSendSnapshot(
+        supabase,
+        proposalId,
+      );
+      assertReviewedProposalSnapshot(snapshotBefore, expectedSnapshot);
 
       // Preflight the exact client-facing payload before stamping the proposal
       // sent. Percentage + the current proposal total are canonical; reconcile
@@ -697,6 +748,16 @@ export function useSendProposal(options?: { errorSurface?: 'inline' }) {
 
       if (proposalResult.error) throw proposalResult.error;
       if (milestonesResult.error) throw milestonesResult.error;
+      if (
+        Number(proposalResult.data?.total_amount ?? 0) !==
+        expectedSnapshot.proposalTotalAmount
+      ) {
+        throw new Error(REVIEWED_PROPOSAL_CHANGED);
+      }
+
+      const reviewedScheduleKey = proposalPaymentScheduleReviewKey(
+        milestonesResult.data ?? [],
+      );
 
       const paymentSchedule = assessProposalPaymentSchedule(
         milestonesResult.data ?? [],
@@ -778,6 +839,20 @@ export function useSendProposal(options?: { errorSurface?: 'inline' }) {
         verifiedMilestonesResult.data ?? [],
         verifiedProposalResult.data?.total_amount ?? 0,
       );
+      const snapshotAfter = await readProposalSendSnapshot(
+        supabase,
+        proposalId,
+      );
+      assertReviewedProposalSnapshot(snapshotAfter, expectedSnapshot);
+      if (
+        Number(verifiedProposalResult.data?.total_amount ?? 0) !==
+          expectedSnapshot.proposalTotalAmount ||
+        proposalPaymentScheduleReviewKey(
+          verifiedMilestonesResult.data ?? [],
+        ) !== reviewedScheduleKey
+      ) {
+        throw new Error(REVIEWED_PROPOSAL_CHANGED);
+      }
       if (!verifiedSchedule.safeToSend || !verifiedSchedule.storedAmountsMatch) {
         throw new Error(
           'Proposal cannot be sent: the client payment schedule changed while it was being checked. Review it and send again.',
@@ -789,6 +864,10 @@ export function useSendProposal(options?: { errorSurface?: 'inline' }) {
       // so a stale version can no longer be signed by the client.
       const { data, error } = await supabase.rpc('send_proposal', {
         p_proposal_id: proposalId,
+        p_expected_updated_at: expectedSnapshot.proposalUpdatedAt,
+        p_expected_total_amount: expectedSnapshot.proposalTotalAmount,
+        p_expected_schedule_fingerprint:
+          expectedSnapshot.scheduleFingerprint,
         p_personal_message: personalMessage ?? null,
         p_cc_email: ccEmail ?? null,
         p_valid_until: validUntil ?? null,

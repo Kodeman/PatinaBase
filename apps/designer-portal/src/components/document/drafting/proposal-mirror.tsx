@@ -31,6 +31,9 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 import {
   assessProposalPaymentSchedule,
   createBrowserClient,
+  parseProposalSendSnapshot,
+  proposalSendSnapshotsMatch,
+  type ProposalSendSnapshot,
   useUpdateProposal,
 } from '@patina/supabase';
 import {
@@ -50,21 +53,39 @@ const getSupabase = () => createBrowserClient() as any;
 
 type AnyRow = any;
 
+async function readProposalSendSnapshot(
+  supabase: AnyRow,
+  proposalId: string,
+): Promise<ProposalSendSnapshot> {
+  const { data, error } = await supabase.rpc('get_proposal_send_snapshot', {
+    p_proposal_id: proposalId,
+  });
+  if (error) throw error;
+
+  const snapshot = parseProposalSendSnapshot(data);
+  if (!snapshot) {
+    throw new Error('The client preview snapshot could not be verified.');
+  }
+  return snapshot;
+}
+
 export function useProposalMirrorData(proposalId: string) {
   return useQuery({
     queryKey: ['proposal-mirror', proposalId],
     enabled: !!proposalId,
-    // "The client's copy · LIVE": this bespoke read spans many child tables that
-    // the facet editors mutate through their own keys (which don't invalidate
-    // this one), so a gentle focused-only poll keeps the preview in step as the
-    // designer composes — a piece flipped to TBD drops out here within a tick,
-    // an exclusion / price / tier change reflows immediately.
+    // Mutations invalidate this key directly. Avoid interval polling: cached
+    // complete data must not oscillate between send-enabled and refetching.
     refetchOnWindowFocus: true,
-    refetchInterval: 2000,
-    refetchIntervalInBackground: false,
     staleTime: 0,
     queryFn: async () => {
       const supabase = getSupabase();
+      // Bound the displayed multi-query read with the server's opaque send
+      // token. Equal boundary snapshots prove the proposal and schedule stayed
+      // stable while this exact client copy was materialized.
+      const snapshotBefore = await readProposalSendSnapshot(
+        supabase,
+        proposalId,
+      );
       const [
         { data: proposal, error: proposalError },
         { data: rooms, error: roomsError },
@@ -79,7 +100,7 @@ export function useProposalMirrorData(proposalId: string) {
         // tier that governs the whole render (R86). NO trade/cost/margin column.
         supabase
           .from('proposals')
-          .select('title, total_amount, client_visibility_tier')
+          .select('title, total_amount, client_visibility_tier, updated_at')
           .eq('id', proposalId)
           .single(),
         // Rooms in scope — name + type + the client-facing per-room budget
@@ -117,7 +138,7 @@ export function useProposalMirrorData(proposalId: string) {
         supabase
           .from('proposal_payment_milestones')
           .select(
-            'label, percentage, amount_cents, trigger_condition, sort_order',
+            'id, label, percentage, amount_cents, trigger_condition, sort_order',
           )
           .eq('proposal_id', proposalId)
           .order('sort_order', { ascending: true }),
@@ -157,6 +178,28 @@ export function useProposalMirrorData(proposalId: string) {
         boardsError,
       ].find(Boolean);
       if (readError) throw readError;
+
+      const snapshotAfter = await readProposalSendSnapshot(
+        supabase,
+        proposalId,
+      );
+      if (!proposalSendSnapshotsMatch(snapshotBefore, snapshotAfter)) {
+        throw new Error(
+          'The proposal changed while the client preview was being prepared. Refresh and review it again.',
+        );
+      }
+
+      const proposalRow = proposal as AnyRow;
+      if (
+        String(proposalRow?.updated_at ?? '') !==
+          snapshotAfter.proposalUpdatedAt ||
+        Number(proposalRow?.total_amount ?? 0) !==
+          snapshotAfter.proposalTotalAmount
+      ) {
+        throw new Error(
+          'The client preview does not match the proposal snapshot. Refresh and review it again.',
+        );
+      }
 
       const roomNameById = new Map<string, string>(
         ((rooms ?? []) as AnyRow[]).map((r) => [r.id, r.name]),
@@ -231,6 +274,7 @@ export function useProposalMirrorData(proposalId: string) {
         // the amounts. Stored projections are reconciled by the send preflight.
         milestones: paymentSchedule.milestones,
         paymentSchedule,
+        sendSnapshot: snapshotAfter,
         phases: (phases ?? []) as AnyRow[],
         boards,
         totalCents,

@@ -40,6 +40,28 @@ const reconciliations: Array<{
   values: Record<string, unknown>;
   filters: Array<[string, unknown]>;
 }> = [];
+const expectedSnapshot = {
+  proposalUpdatedAt: '2026-07-31T12:00:00.000Z',
+  proposalTotalAmount: 1_320_000,
+  scheduleFingerprint: 'schedule-fingerprint-v1',
+};
+let snapshotReads: Array<{ data: unknown; error: unknown }>;
+let sendRpcResult: { data: unknown; error: unknown };
+
+function snapshotResult(
+  snapshot = expectedSnapshot,
+): { data: unknown; error: unknown } {
+  return {
+    data: [
+      {
+        proposal_updated_at: snapshot.proposalUpdatedAt,
+        proposal_total_amount: snapshot.proposalTotalAmount,
+        schedule_fingerprint: snapshot.scheduleFingerprint,
+      },
+    ],
+    error: null,
+  };
+}
 
 function proposalQuery() {
   const query: {
@@ -101,6 +123,8 @@ function milestoneQuery() {
 beforeEach(() => {
   proposalReads = [];
   milestoneReads = [];
+  snapshotReads = [];
+  sendRpcResult = { data: { id: 'proposal-1' }, error: null };
   reconciliationResult = { data: { id: 'deposit' }, error: null };
   reconciliations.length = 0;
   from.mockReset();
@@ -108,7 +132,11 @@ beforeEach(() => {
     table === 'proposals' ? proposalQuery() : milestoneQuery(),
   );
   rpc.mockReset();
-  rpc.mockResolvedValue({ data: { id: 'proposal-1' }, error: null });
+  rpc.mockImplementation(async (name: string) =>
+    name === 'get_proposal_send_snapshot'
+      ? (snapshotReads.shift() ?? snapshotResult())
+      : sendRpcResult,
+  );
   invoke.mockReset();
   invoke.mockResolvedValue({ error: null });
   invalidateQueries.mockReset();
@@ -151,9 +179,15 @@ describe('useSendProposal payment preflight', () => {
     });
 
     await expect(
-      config().mutationFn({ proposalId: 'proposal-1' }),
+      config().mutationFn({
+        proposalId: 'proposal-1',
+        expectedSnapshot,
+      }),
     ).rejects.toThrow('must total 100%');
-    expect(rpc).not.toHaveBeenCalled();
+    expect(rpc).not.toHaveBeenCalledWith(
+      'send_proposal',
+      expect.anything(),
+    );
     expect(invoke).not.toHaveBeenCalled();
   });
 
@@ -192,7 +226,10 @@ describe('useSendProposal payment preflight', () => {
     );
 
     await expect(
-      config().mutationFn({ proposalId: 'proposal-1' }),
+      config().mutationFn({
+        proposalId: 'proposal-1',
+        expectedSnapshot,
+      }),
     ).resolves.toMatchObject({ id: 'proposal-1', _emailDispatched: true });
 
     expect(reconciliations).toEqual([
@@ -207,6 +244,10 @@ describe('useSendProposal payment preflight', () => {
     ]);
     expect(rpc).toHaveBeenCalledWith('send_proposal', {
       p_proposal_id: 'proposal-1',
+      p_expected_updated_at: expectedSnapshot.proposalUpdatedAt,
+      p_expected_total_amount: expectedSnapshot.proposalTotalAmount,
+      p_expected_schedule_fingerprint:
+        expectedSnapshot.scheduleFingerprint,
       p_personal_message: null,
       p_cc_email: null,
       p_valid_until: null,
@@ -234,9 +275,15 @@ describe('useSendProposal payment preflight', () => {
     reconciliationResult = { data: null, error: null };
 
     await expect(
-      config().mutationFn({ proposalId: 'proposal-1' }),
+      config().mutationFn({
+        proposalId: 'proposal-1',
+        expectedSnapshot,
+      }),
     ).rejects.toThrow('changed while it was being checked');
-    expect(rpc).not.toHaveBeenCalled();
+    expect(rpc).not.toHaveBeenCalledWith(
+      'send_proposal',
+      expect.anything(),
+    );
   });
 
   it('CAS-compares the original row when only a later milestone is stale', async () => {
@@ -269,7 +316,10 @@ describe('useSendProposal payment preflight', () => {
     );
     reconciliationResult = { data: { id: 'second' }, error: null };
 
-    await config().mutationFn({ proposalId: 'proposal-1' });
+    await config().mutationFn({
+      proposalId: 'proposal-1',
+      expectedSnapshot,
+    });
 
     expect(reconciliations).toEqual([
       {
@@ -318,12 +368,56 @@ describe('useSendProposal payment preflight', () => {
     );
 
     await expect(
-      config().mutationFn({ proposalId: 'proposal-1' }),
-    ).rejects.toThrow('changed while it was being checked');
-    expect(rpc).not.toHaveBeenCalled();
+      config().mutationFn({
+        proposalId: 'proposal-1',
+        expectedSnapshot,
+      }),
+    ).rejects.toThrow('changed since it was reviewed');
+    expect(rpc).not.toHaveBeenCalledWith(
+      'send_proposal',
+      expect.anything(),
+    );
   });
 
-  it('preserves an authoritative RPC validation error for the inline send sheet', async () => {
+  it('rejects a valid concurrent schedule edit before calling the send RPC', async () => {
+    const reviewed = {
+      id: 'deposit',
+      label: 'Project deposit',
+      percentage: 100,
+      amount_cents: 1_320_000,
+      trigger_condition: 'Upon contract signing',
+      sort_order: 0,
+    };
+    proposalReads.push(
+      { data: { total_amount: 1_320_000 }, error: null },
+      { data: { total_amount: 1_320_000 }, error: null },
+    );
+    milestoneReads.push(
+      { data: [reviewed], error: null },
+      {
+        data: [
+          {
+            ...reviewed,
+            label: 'Non-refundable project deposit',
+          },
+        ],
+        error: null,
+      },
+    );
+
+    await expect(
+      config().mutationFn({
+        proposalId: 'proposal-1',
+        expectedSnapshot,
+      }),
+    ).rejects.toThrow('changed since it was reviewed');
+    expect(rpc).not.toHaveBeenCalledWith(
+      'send_proposal',
+      expect.anything(),
+    );
+  });
+
+  it('rejects when the authoritative snapshot changes before the send RPC', async () => {
     const valid = {
       id: 'deposit',
       label: 'Project deposit',
@@ -340,17 +434,57 @@ describe('useSendProposal payment preflight', () => {
       { data: [valid], error: null },
       { data: [valid], error: null },
     );
-    rpc.mockResolvedValueOnce({
-      data: null,
-      error: new Error(
-        'send_proposal: payment milestones must allocate exactly 100 percent',
-      ),
-    });
+    snapshotReads.push(
+      snapshotResult(),
+      snapshotResult({
+        ...expectedSnapshot,
+        scheduleFingerprint: 'schedule-fingerprint-v2',
+      }),
+    );
 
     await expect(
-      config().mutationFn({ proposalId: 'proposal-1' }),
+      config().mutationFn({
+        proposalId: 'proposal-1',
+        expectedSnapshot,
+      }),
+    ).rejects.toThrow('changed since it was reviewed');
+    expect(rpc).not.toHaveBeenCalledWith(
+      'send_proposal',
+      expect.anything(),
+    );
+  });
+
+  it('preserves the authoritative locked-snapshot mismatch for the inline send sheet', async () => {
+    const valid = {
+      id: 'deposit',
+      label: 'Project deposit',
+      percentage: 100,
+      amount_cents: 1_320_000,
+      trigger_condition: null,
+      sort_order: 0,
+    };
+    proposalReads.push(
+      { data: { total_amount: 1_320_000 }, error: null },
+      { data: { total_amount: 1_320_000 }, error: null },
+    );
+    milestoneReads.push(
+      { data: [valid], error: null },
+      { data: [valid], error: null },
+    );
+    sendRpcResult = {
+      data: null,
+      error: new Error(
+        'proposal changed after send review; refresh and review again',
+      ),
+    };
+
+    await expect(
+      config().mutationFn({
+        proposalId: 'proposal-1',
+        expectedSnapshot,
+      }),
     ).rejects.toThrow(
-      'send_proposal: payment milestones must allocate exactly 100 percent',
+      'proposal changed after send review; refresh and review again',
     );
     expect(invoke).not.toHaveBeenCalled();
   });
