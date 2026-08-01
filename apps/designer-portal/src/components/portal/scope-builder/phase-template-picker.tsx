@@ -14,7 +14,7 @@
  *      onApplied is invoked with the inserted phase IDs.
  */
 
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import {
   Dialog,
   DialogContent,
@@ -69,6 +69,7 @@ export function PhaseTemplatePicker({
   // primary action becomes a confirmation. Click anywhere else or hit
   // cancel to disarm.
   const [armedSlug, setArmedSlug] = useState<string | null>(null);
+  const applyInFlight = useRef(false);
 
   // Keep the armed state in sync with modal open/close.
   function handleOpenChange(next: boolean) {
@@ -77,6 +78,8 @@ export function PhaseTemplatePicker({
   }
 
   async function handleApply(template: PhaseTemplate) {
+    if (applyInFlight.current) return;
+    applyInFlight.current = true;
     try {
       const phaseIds = await applyMutation.mutateAsync({
         proposalId,
@@ -89,6 +92,8 @@ export function PhaseTemplatePicker({
       // Surface the error inline; keep the modal open so the user can retry
       // or pick a different template.
       console.error('apply_phase_template failed', err);
+    } finally {
+      applyInFlight.current = false;
     }
   }
 

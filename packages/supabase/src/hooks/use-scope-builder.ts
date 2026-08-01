@@ -350,7 +350,6 @@ export function useAddProposalPhase() {
       deliverables,
       durationDays,
       anchorDate,
-      followsPhaseId,
       lane,
     }: {
       proposalId: string;
@@ -361,51 +360,30 @@ export function useAddProposalPhase() {
       revisionLimit?: number;
       gateCondition?: string;
       deliverables?: Array<{ label: string; type?: string }>;
-      /**
-       * Chain columns (00323/00324 — Schedule Compose). Additive: existing
-       * callers that omit these keep the exact prior insert shape —
-       * duration_days/anchor_date/follows_phase_id NULL, lane 'main' (the
-       * column's own DB default).
-       */
+      /** Chain values authored by the caller; predecessor/sort authority stays
+       *  in create_proposal_phase under the locked proposal parent. */
       durationDays?: number;
       anchorDate?: string;
-      followsPhaseId?: string;
       lane?: 'main' | 'thread';
     }) => {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const supabase = getSupabase() as any;
 
-      const { data: existing } = await supabase
-        .from('proposal_phases')
-        .select('sort_order')
-        .eq('proposal_id', proposalId)
-        .order('sort_order', { ascending: false })
-        .limit(1);
-
-      const nextOrder = (existing?.[0]?.sort_order ?? -1) + 1;
-
-      const { data, error } = await supabase
-        .from('proposal_phases')
-        .insert({
-          proposal_id: proposalId,
-          name,
-          phase_key: phaseKey || null,
-          duration_weeks: durationWeeks || null,
-          fee_cents: feeCents || 0,
-          revision_limit: revisionLimit ?? 2,
-          gate_condition: gateCondition || null,
-          deliverables: deliverables || [],
-          sort_order: nextOrder,
-          duration_days: durationDays ?? null,
-          anchor_date: anchorDate ?? null,
-          follows_phase_id: followsPhaseId ?? null,
-          lane: lane ?? 'main',
-        })
-        .select()
-        .single();
+      const { data, error } = await supabase.rpc('create_proposal_phase', {
+        p_proposal_id: proposalId,
+        p_name: name,
+        p_phase_key: phaseKey ?? null,
+        p_duration_weeks: durationWeeks ?? null,
+        p_fee_cents: feeCents ?? 0,
+        p_revision_limit: revisionLimit ?? 2,
+        p_gate_condition: gateCondition ?? null,
+        p_deliverables: deliverables ?? [],
+        p_duration_days: durationDays ?? null,
+        p_anchor_date: anchorDate ?? null,
+        p_lane: lane ?? 'main',
+      });
       if (error) throw error;
-      // Phase fees count toward proposals.total_amount — keep it in step.
-      await updateProposalTotal(supabase, proposalId);
+      if (!data) throw new Error('Phase creation returned no row');
       return data;
     },
     onSuccess: async (_, { proposalId }) => {

@@ -76,7 +76,24 @@ jest.mock('../gate-conditions-editor', () => ({ GateConditionsEditor: () => null
 jest.mock('../proposal-milestones-editor', () => ({ ProposalMilestonesEditor: () => null }));
 jest.mock('../phase-template-picker', () => ({ PhaseTemplatePicker: () => null }));
 jest.mock('../phase-timeline-view', () => ({ PhaseTimelineView: () => null }));
-jest.mock('@/components/document/schedule/schedule-birth', () => ({ ScheduleBirth: () => null }));
+jest.mock('@/components/document/schedule/schedule-birth', () => ({
+  ScheduleBirth: ({
+    onSeedPatinaSix,
+    busy,
+    errorText,
+  }: {
+    onSeedPatinaSix: () => void;
+    busy: boolean;
+    errorText?: string | null;
+  }) => (
+    <div>
+      <button type="button" disabled={busy} onClick={onSeedPatinaSix}>
+        The Patina Six
+      </button>
+      {errorText ? <p role="alert">{errorText}</p> : null}
+    </div>
+  ),
+}));
 jest.mock('@/components/document/schedule/schedule-entry-field', () => ({
   ScheduleEntryField: ({
     onCommit,
@@ -206,7 +223,7 @@ describe('PhaseBuilder autosave integrity', () => {
     render(<PhaseBuilder proposalId="proposal-1" />);
 
     await act(async () => {
-      fireEvent.click(screen.getByRole('button', { name: 'Add Defaults' }));
+      fireEvent.click(screen.getByRole('button', { name: 'The Patina Six' }));
       await Promise.resolve();
       await Promise.resolve();
     });
@@ -219,13 +236,34 @@ describe('PhaseBuilder autosave integrity', () => {
     expect(addMutateAsync).not.toHaveBeenCalled();
   });
 
+  it('coalesces rapid Patina Six submits while the atomic RPC is in flight', async () => {
+    phaseRows = [];
+    let resolveApply: (value: unknown[]) => void = () => {};
+    applyTemplateMutateAsync.mockReturnValueOnce(
+      new Promise((resolve) => {
+        resolveApply = resolve;
+      }),
+    );
+    render(<PhaseBuilder proposalId="proposal-1" />);
+
+    const seed = screen.getByRole('button', { name: 'The Patina Six' });
+    fireEvent.click(seed);
+    fireEvent.click(seed);
+
+    expect(applyTemplateMutateAsync).toHaveBeenCalledTimes(1);
+    await act(async () => {
+      resolveApply([]);
+      await Promise.resolve();
+    });
+  });
+
   it('surfaces an atomic template failure without falling back to partial phase writes', async () => {
     phaseRows = [];
     applyTemplateMutateAsync.mockRejectedValueOnce(new Error('template unavailable'));
     render(<PhaseBuilder proposalId="proposal-1" />);
 
     await act(async () => {
-      fireEvent.click(screen.getByRole('button', { name: 'Add Defaults' }));
+      fireEvent.click(screen.getByRole('button', { name: 'The Patina Six' }));
       await Promise.resolve();
       await Promise.resolve();
     });
@@ -237,7 +275,7 @@ describe('PhaseBuilder autosave integrity', () => {
     expect(addMutateAsync).not.toHaveBeenCalled();
   });
 
-  it('keeps custom phase addition and links it to the current tail', () => {
+  it('keeps custom phase addition while leaving tail authority to the server', () => {
     render(<PhaseBuilder proposalId="proposal-1" />);
 
     expect(screen.queryByRole('button', { name: 'Add Defaults' })).not.toBeInTheDocument();
@@ -252,7 +290,6 @@ describe('PhaseBuilder autosave integrity', () => {
         durationWeeks: 2,
         feeCents: 0,
         revisionLimit: 2,
-        followsPhaseId: 'phase-1',
         lane: 'main',
       },
       expect.objectContaining({ onSuccess: expect.any(Function) }),

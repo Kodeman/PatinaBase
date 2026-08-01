@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Button } from '@/components/ui/controls';
 import { useBufferedAutosave } from '@/hooks/use-buffered-autosave';
 import { proposalEvents } from '@/lib/analytics';
@@ -127,8 +127,8 @@ export function PhaseBuilder({ proposalId }: PhaseBuilderProps) {
   // Local edit state keyed by phase id (used by the per-phase form rows).
   const [edits, setEdits] = useState<Record<string, Record<string, unknown>>>({});
   const [templatePickerOpen, setTemplatePickerOpen] = useState(false);
-  const [addingDefaults, setAddingDefaults] = useState(false);
   const [phaseCreateError, setPhaseCreateError] = useState<string | null>(null);
+  const templateApplyInFlight = useRef(false);
   // Bumped on a successful ghost-line create — clears the birth ghost line's kept fields.
   const [ghostResetSignal, setGhostResetSignal] = useState(0);
 
@@ -262,20 +262,25 @@ export function PhaseBuilder({ proposalId }: PhaseBuilderProps) {
     [scheduleMilestones],
   );
 
-  function handleSeedPatinaSix() {
+  async function handleSeedPatinaSix() {
+    if (templateApplyInFlight.current) return;
+    templateApplyInFlight.current = true;
     setPhaseCreateError(null);
-    applyTemplate.mutate(
-      { proposalId, templateSlug: 'patina_six' },
-      {
-        onSuccess: () => {
-          scheduleEvents.scheduleBorn({
-            surface: 'proposal',
-            proposal_id: proposalId,
-            kind: 'patina_six',
-          });
-        },
-      },
-    );
+    try {
+      await applyTemplate.mutateAsync({
+        proposalId,
+        templateSlug: 'patina_six',
+      });
+      scheduleEvents.scheduleBorn({
+        surface: 'proposal',
+        proposal_id: proposalId,
+        kind: 'patina_six',
+      });
+    } catch {
+      setPhaseCreateError('Couldn’t seed the Patina Six — nothing was saved');
+    } finally {
+      templateApplyInFlight.current = false;
+    }
   }
 
   function handleCopyFromPastProject(sourceProjectId: string) {
@@ -306,7 +311,6 @@ export function PhaseBuilder({ proposalId }: PhaseBuilderProps) {
         name: input.name,
         durationDays: input.durationDays,
         anchorDate: input.anchorDate,
-        followsPhaseId: phases.length > 0 ? phases[phases.length - 1].id : undefined,
         lane: 'main',
       },
       {
@@ -332,11 +336,12 @@ export function PhaseBuilder({ proposalId }: PhaseBuilderProps) {
 
   const ghostError = addPhase.isError ? 'Add failed — nothing was saved; your entry is kept' : null;
   const birthBusy = applyTemplate.isPending || copyAsBuilt.isPending;
-  const birthError = !phaseCreateError && applyTemplate.isError
-    ? 'Couldn’t seed the Patina Six — nothing was saved'
-    : copyAsBuilt.isError
-      ? 'Couldn’t copy that schedule — nothing was saved'
-      : null;
+  const birthError = phaseCreateError
+    ?? (applyTemplate.isError
+      ? 'Couldn’t seed the Patina Six — nothing was saved'
+      : copyAsBuilt.isError
+        ? 'Couldn’t copy that schedule — nothing was saved'
+        : null);
 
   function handleAddPhase() {
     setPhaseCreateError(null);
@@ -348,7 +353,6 @@ export function PhaseBuilder({ proposalId }: PhaseBuilderProps) {
         durationWeeks: 2,
         feeCents: 0,
         revisionLimit: 2,
-        followsPhaseId: phases.length > 0 ? phases[phases.length - 1].id : undefined,
         lane: 'main',
       },
       {
@@ -359,34 +363,8 @@ export function PhaseBuilder({ proposalId }: PhaseBuilderProps) {
     );
   }
 
-  async function handleAddDefaults() {
-    if (addingDefaults || addPhase.isPending || applyTemplate.isPending) return;
-    setAddingDefaults(true);
-    setPhaseCreateError(null);
-    try {
-      await applyTemplate.mutateAsync({
-        proposalId,
-        templateSlug: 'patina_six',
-      });
-      scheduleEvents.scheduleBorn({
-        surface: 'proposal',
-        proposal_id: proposalId,
-        kind: 'patina_six',
-      });
-      proposalEvents.scopeUpdated({ proposalId, field: 'phase', action: 'add' });
-    } catch {
-      setPhaseCreateError('Couldn’t seed the Patina Six — nothing was saved');
-    } finally {
-      setAddingDefaults(false);
-    }
-  }
-
   const phaseWritePending =
-    addPhase.isPending || addingDefaults || applyTemplate.isPending || copyAsBuilt.isPending;
-  // The canonical template RPC creates one root and a linear follows chain.
-  // It is only safe as a birth operation: appending it to an existing schedule
-  // would create another root, so the legacy "remaining defaults" path is gone.
-  const canAddDefaults = phases.length === 0;
+    addPhase.isPending || applyTemplate.isPending || copyAsBuilt.isPending;
 
   const totalFee = phases.reduce(
     (sum: number, p: ProposalPhaseRow) => sum + (p.fee_cents || 0),
@@ -448,26 +426,17 @@ export function PhaseBuilder({ proposalId }: PhaseBuilderProps) {
             >
               Apply Template
             </Button>
-            {canAddDefaults && (
-              <Button
-                variant="secondary"
-                disabled={phaseWritePending}
-                onClick={() => void handleAddDefaults()}
-              >
-                {addingDefaults ? 'Adding defaults…' : 'Add Defaults'}
-              </Button>
-            )}
             <Button
               variant="secondary"
               disabled={phaseWritePending}
               onClick={handleAddPhase}
             >
-              {addPhase.isPending && !addingDefaults ? 'Adding phase…' : '+ Add Phase'}
+              {addPhase.isPending ? 'Adding phase…' : '+ Add Phase'}
             </Button>
           </div>
         </div>
 
-        {phaseCreateError ? (
+        {phaseCreateError && phases.length > 0 ? (
           <p role="alert" className="mb-4 text-sm text-[var(--color-terracotta)]">
             {phaseCreateError}
           </p>
@@ -726,9 +695,8 @@ export function PhaseBuilder({ proposalId }: PhaseBuilderProps) {
         )}
 
         {/* Zero-state — ScheduleBirth (Slice 03 §4/§5, R100 "PRIMARY" birth
-            surface). The header's Apply Template / Add Defaults / + Add
-            Phase buttons above stay live escape hatches (existing behavior
-            intact); this is the primary typographic path. */}
+            surface). The header's Apply Template / + Add Phase buttons remain
+            escape hatches; Patina Six has one canonical birth affordance. */}
         {phases.length === 0 && (
           <ScheduleBirth
             surface="proposal"
