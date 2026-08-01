@@ -21,7 +21,7 @@ export function useProjectV2(projectId: string) {
           *,
           designer:profiles!projects_designer_id_fkey(id, full_name, email),
           client:profiles!projects_client_id_fkey(id, full_name, email),
-          proposal:proposals!projects_proposal_id_fkey(id, title, status, version, signed_at, signed_by_name, sent_at, created_at, total_amount)
+          proposal:proposals!projects_proposal_id_fkey(id, title, status, version, signed_at, signed_by_name, sent_at, created_at, total_amount, designer_client_id)
         `)
         .eq('id', projectId)
         .single();

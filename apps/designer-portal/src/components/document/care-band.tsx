@@ -21,12 +21,19 @@
  */
 
 import { useState } from 'react';
-import { useProjectV2 } from '@patina/supabase';
+import {
+  useFfeInvoiceCoverage,
+  useProjectFFEItems,
+  useProjectInvoices,
+  useProjectPaymentMilestones,
+  useProjectV2,
+} from '@patina/supabase';
 import { useCloseProject } from '@/hooks/use-project-lifecycle';
 import {
-  allClosureComplete,
   centsToDollarString,
+  closureReady,
   defaultClosureItems,
+  deriveCloseoutReadiness,
   dollarsToCents,
   seedSnapshot,
   toggleClosureItem,
@@ -44,6 +51,10 @@ const LABEL_CLS =
 
 export function CareBand({ projectId }: { projectId: string }) {
   const { data: project } = useProjectV2(projectId) as { data: AnyRecord };
+  const ffeQuery = useProjectFFEItems(projectId);
+  const coverageQuery = useFfeInvoiceCoverage(projectId);
+  const milestoneQuery = useProjectPaymentMilestones(projectId);
+  const invoiceQuery = useProjectInvoices(projectId);
   const closeProject = useCloseProject();
 
   const nearClose =
@@ -64,8 +75,53 @@ export function CareBand({ projectId }: { projectId: string }) {
 
   const seed = seedSnapshot(project);
   const open = unfolded || nearClose;
-  const ready = allClosureComplete(items);
-  const done = items.filter((i) => i.completed).length;
+  const operationalDataReady =
+    ffeQuery.data !== undefined &&
+    coverageQuery.data !== undefined &&
+    milestoneQuery.data !== undefined &&
+    invoiceQuery.data !== undefined &&
+    !ffeQuery.isError &&
+    !coverageQuery.isError &&
+    !milestoneQuery.isError &&
+    !invoiceQuery.isError;
+  const operational = deriveCloseoutReadiness({
+    dataReady: operationalDataReady,
+    projectTotalCents: project?.total_amount_cents ?? null,
+    ffeItems: (ffeQuery.data ?? []) as Array<{
+      id: string;
+      status: string | null;
+    }>,
+    ffeCoverage: coverageQuery.data ?? {},
+    paymentMilestones: (milestoneQuery.data ?? []) as Array<{
+      id: string;
+      status: string | null;
+      amount_cents: number | null;
+    }>,
+    invoices: (invoiceQuery.data ?? []) as Array<{
+      id: string;
+      status: string | null;
+      total_cents: number | null;
+      amount_paid_cents: number | null;
+    }>,
+  });
+  const paymentReady =
+    operationalDataReady &&
+    !operational.blockers.some((blocker) =>
+      [
+        'ffe_not_paid',
+        'milestone_unpaid',
+        'invoice_balance_due',
+        'project_balance_due',
+      ].includes(blocker.code),
+    );
+  // Payment is not a self-attestation: it mirrors invoice/milestone truth.
+  const effectiveItems = items.map((item) =>
+    item.key === 'payment'
+      ? { ...item, completed: paymentReady }
+      : item,
+  );
+  const ready = closureReady(effectiveItems, operational);
+  const done = effectiveItems.filter((i) => i.completed).length;
 
   // R51 — the quiet inline confirmation while the read models re-derive.
   if (closed) {
@@ -103,7 +159,7 @@ export function CareBand({ projectId }: { projectId: string }) {
     closeProject.mutate(
       {
         projectId,
-        closure: items,
+        closure: effectiveItems,
         snapshot: {
           headline: headline.trim(),
           description: description.trim(),
@@ -169,18 +225,39 @@ export function CareBand({ projectId }: { projectId: string }) {
 
       {/* The closure checklist — square ticks that fill sage (the Work
           block's stamp grammar, not a SaaS checkbox). */}
+      {operational.blockers.length > 0 && (
+        <div
+          role="status"
+          className="mt-3 rounded-[3px] border-l-2 border-[var(--color-terracotta)] bg-[rgba(212,160,144,0.08)] px-3.5 py-2.5"
+        >
+          <p className="font-mono text-[9px] font-semibold uppercase tracking-[0.08em] text-[#C4836F]">
+            Operational closeout still open
+          </p>
+          <ul className="mt-1 space-y-0.5 text-[11.5px] text-[var(--color-charcoal)]">
+            {operational.blockers.map((blocker) => (
+              <li key={blocker.code}>· {blocker.label}</li>
+            ))}
+          </ul>
+        </div>
+      )}
       <ul className="mt-3 border-t border-[rgba(139,115,85,0.14)] pt-2">
-        {items.map((item) => (
+        {effectiveItems.map((item) => (
           <li
             key={item.key}
             className="border-b border-dashed border-[rgba(139,115,85,0.14)]"
           >
             <button
               type="button"
+              aria-disabled={item.key === 'payment'}
               onClick={() =>
+                item.key !== 'payment' &&
                 setItems((prev) => toggleClosureItem(prev, item.key))
               }
-              className="grid w-full grid-cols-[auto_1fr] items-baseline gap-2.5 px-1 py-1.5 text-left hover:bg-[rgba(196,165,123,0.06)]"
+              className={`grid w-full grid-cols-[auto_1fr] items-baseline gap-2.5 px-1 py-1.5 text-left ${
+                item.key === 'payment'
+                  ? 'cursor-default'
+                  : 'hover:bg-[rgba(196,165,123,0.06)]'
+              }`}
             >
               <span
                 aria-hidden
@@ -204,7 +281,11 @@ export function CareBand({ projectId }: { projectId: string }) {
                     : 'text-[var(--color-charcoal)]'
                 }`}
               >
-                {item.label}
+                {item.key === 'payment'
+                  ? paymentReady
+                    ? 'No balance due · verified from billing'
+                    : 'Final payment collected · waiting on billing'
+                  : item.label}
               </span>
             </button>
           </li>

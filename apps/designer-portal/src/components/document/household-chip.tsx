@@ -16,6 +16,8 @@ export interface HouseholdChipProps {
   projectId: string | null;
   proposalId: string | null;
   clientProfileId: string | null;
+  /** Canonical relationship id; remains present for a captured/no-login household. */
+  designerClientId?: string | null;
   clientName: string;
   proposalStatus?: string | null;
 }
@@ -25,10 +27,12 @@ export function HouseholdChip({
   projectId,
   proposalId,
   clientProfileId,
+  designerClientId = null,
   clientName,
   proposalStatus,
 }: HouseholdChipProps) {
   const [open, setOpen] = useState(false);
+  const hasHousehold = Boolean(clientProfileId || designerClientId);
 
   return (
     <>
@@ -38,7 +42,7 @@ export function HouseholdChip({
         className="group mt-1.5 flex items-baseline text-left"
         aria-label="View or change the client this document is for"
       >
-        {clientProfileId ? (
+        {hasHousehold ? (
           <span className="font-heading text-[1.15rem] italic leading-tight text-[var(--color-aged-oak)] transition-colors group-hover:text-[var(--color-clay)]">
             for {familyLabel(clientName)}
             <span
@@ -65,6 +69,7 @@ export function HouseholdChip({
         projectId={projectId}
         proposalId={proposalId}
         clientProfileId={clientProfileId}
+        designerClientId={designerClientId}
         clientName={clientName}
         proposalStatus={proposalStatus}
       />

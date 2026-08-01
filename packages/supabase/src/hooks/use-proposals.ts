@@ -66,6 +66,8 @@ export interface Proposal {
   project_id: string | null;
   designer_id: string;
   client_id: string | null;
+  /** Canonical designer↔household relationship, including no-login clients. */
+  designer_client_id: string | null;
   title: string;
   description: string | null;
   project_address: string | null;
