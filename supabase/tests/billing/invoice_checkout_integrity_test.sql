@@ -352,9 +352,31 @@ VALUES
    'b9700000-0000-4000-8000-000000000001', 'b9700000-0000-4000-8000-000000000004',
    'INV-BILL-16', 'sent', 'USD', 10000, 10000, 0);
 
--- Service-only authority boundary is explicit.
+-- Private invoice implementations stay private even after the generated
+-- legacy-grant replay. This catches a reset-only privilege regression where
+-- the blanket compatibility seed could reopen a newly renamed SECURITY
+-- DEFINER body and bypass its exact design-studio wrapper.
 DO $$
+DECLARE
+  v_role text;
+  v_signature text;
 BEGIN
+  FOREACH v_role IN ARRAY ARRAY['anon', 'authenticated', 'service_role']
+  LOOP
+    FOREACH v_signature IN ARRAY ARRAY[
+      'public._can_manage_invoice_owner(uuid)',
+      'public._issue_invoice_authorized_legacy_00397(uuid,date)',
+      'public._record_invoice_payment_authorized_legacy_00397(uuid,integer,text,text,timestamp with time zone,text)',
+      'public._void_invoice_authorized_legacy_00397(uuid,text)'
+    ]
+    LOOP
+      ASSERT NOT has_function_privilege(v_role, v_signature, 'EXECUTE'),
+        format('%s must not execute private invoice function %s',
+               v_role, v_signature);
+    END LOOP;
+  END LOOP;
+
+  -- Service-only Checkout authority remains explicit.
   ASSERT has_function_privilege(
     'service_role',
     'public.claim_invoice_checkout_attempt(uuid,uuid,text,boolean)',
