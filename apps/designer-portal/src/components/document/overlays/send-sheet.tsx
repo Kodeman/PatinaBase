@@ -15,7 +15,7 @@
  * invalidated so the line stamp, margin, and Desk move in one act (§5).
  */
 
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useIsMutating, useQueryClient } from '@tanstack/react-query';
 import {
   useProposal,
@@ -46,6 +46,31 @@ const labelCls =
 const fieldCls =
   'w-full rounded-[4px] border border-[var(--color-pearl)] bg-white px-3 py-2 text-[13px] text-[var(--color-charcoal)] outline-none transition-colors placeholder:italic placeholder:text-[var(--text-faint)] focus:border-[var(--color-clay)]';
 
+function sendReviewFingerprint({
+  proposalTotalCents,
+  clientTotalCents,
+  sendSnapshot,
+  draftingGaps,
+  blockers,
+  warnings,
+}: {
+  proposalTotalCents: number;
+  clientTotalCents: number;
+  sendSnapshot: unknown;
+  draftingGaps: string[];
+  blockers: string[];
+  warnings: string[];
+}) {
+  return JSON.stringify({
+    proposalTotalCents,
+    clientTotalCents,
+    sendSnapshot,
+    draftingGaps,
+    blockers,
+    warnings,
+  });
+}
+
 export function SendSheet({
   proposalId,
   open,
@@ -64,6 +89,12 @@ export function SendSheet({
   const { data: versions } = useProposalVersions(proposalId);
   const clientPayload = useProposalMirrorData(proposalId);
   const draftingState = useDraftingState(proposalId, open);
+  // Treat fresh drafting reconciliation as a required capability: if it is
+  // unavailable during a rolling update, sending stays fail-closed.
+  const draftingVerification = draftingState as typeof draftingState & {
+    isFetching?: boolean;
+    refresh?: () => Promise<{ gaps: string[] }>;
+  };
   // R83 — this sheet renders failures inline at the act site (sendError /
   // linkError bands below); the global mutation toast stays quiet.
   const sendProposal = useSendProposal({ errorSurface: 'inline' });
@@ -83,6 +114,24 @@ export function SendSheet({
   const [sendError, setSendError] = useState<string | null>(null);
   const [linkError, setLinkError] = useState<string | null>(null);
   const [acknowledgedIncomplete, setAcknowledgedIncomplete] = useState(false);
+  const [isPreparingSend, setIsPreparingSend] = useState(false);
+  const sendAttemptInFlight = useRef(false);
+  const [refreshedGaps, setRefreshedGaps] = useState<string[] | null>(null);
+  const [refreshedClientData, setRefreshedClientData] = useState<
+    NonNullable<typeof clientPayload.data> | null
+  >(null);
+
+  const sourceGapsFingerprint = JSON.stringify(draftingState.gaps);
+  useEffect(() => {
+    setRefreshedGaps(null);
+  }, [sourceGapsFingerprint]);
+
+  useEffect(() => {
+    setRefreshedClientData(null);
+  }, [clientPayload.data]);
+
+  const effectiveGaps = refreshedGaps ?? draftingState.gaps;
+  const effectiveClientData = refreshedClientData ?? clientPayload.data;
 
   const paymentMutationsPending = useIsMutating({
     predicate: (mutation) => {
@@ -97,20 +146,34 @@ export function SendSheet({
   });
 
   const readiness = useMemo(() => {
-    if (!proposal || !clientPayload.data) return null;
+    if (!proposal || !effectiveClientData) return null;
     return assessProposalSendReadiness({
       proposalTotalCents: proposal.total_amount ?? 0,
-      clientTotalCents: clientPayload.data.totalCents,
-      milestones: clientPayload.data.milestones,
-      draftingGaps: draftingState.gaps,
+      clientTotalCents: effectiveClientData.totalCents,
+      milestones: effectiveClientData.milestones,
+      draftingGaps: effectiveGaps,
     });
-  }, [clientPayload.data, draftingState.gaps, proposal]);
+  }, [effectiveClientData, effectiveGaps, proposal]);
+
+  const reviewFingerprint = useMemo(() => {
+    if (!proposal || !effectiveClientData || !readiness) return null;
+    return sendReviewFingerprint({
+      proposalTotalCents: proposal.total_amount ?? 0,
+      clientTotalCents: effectiveClientData.totalCents,
+      sendSnapshot: effectiveClientData.sendSnapshot,
+      draftingGaps: effectiveGaps,
+      blockers: readiness.blockers,
+      warnings: readiness.warnings,
+    });
+  }, [effectiveClientData, effectiveGaps, proposal, readiness]);
 
   const checkingClientCopy =
     clientPayload.isLoading ||
-    (!clientPayload.data && clientPayload.isFetching) ||
+    clientPayload.isFetching ||
     draftingState.isLoading ||
-    paymentMutationsPending > 0;
+    draftingVerification.isFetching ||
+    paymentMutationsPending > 0 ||
+    isPreparingSend;
   const hasBlockers = (readiness?.blockers.length ?? 0) > 0;
   const incompleteIsAcknowledged =
     !readiness?.requiresIncompleteAcknowledgement || acknowledgedIncomplete;
@@ -126,13 +189,16 @@ export function SendSheet({
   }, [clientEmail]);
 
   useEffect(() => {
-    if (!open) setAcknowledgedIncomplete(false);
-  }, [open]);
+    setAcknowledgedIncomplete(false);
+  }, [open, reviewFingerprint]);
 
   const canSend = Boolean(
     proposal?.client_id &&
       recipientEmail &&
       readiness &&
+      reviewFingerprint &&
+      effectiveClientData?.sendSnapshot &&
+      draftingVerification.refresh &&
       !checkingClientCopy &&
       !clientPayload.error &&
       !hasBlockers &&
@@ -140,8 +206,10 @@ export function SendSheet({
   );
 
   const handleSend = async () => {
-    if (!canSend) return;
+    if (!canSend || sendAttemptInFlight.current) return;
 
+    sendAttemptInFlight.current = true;
+    setIsPreparingSend(true);
     setSendError(null);
 
     const validUntil = expiryDays
@@ -149,8 +217,52 @@ export function SendSheet({
       : undefined;
 
     try {
+      const refreshDrafting = draftingVerification.refresh;
+      if (!refreshDrafting) {
+        throw new Error(
+          'The proposal readiness check is unavailable. Refresh the page before sending.',
+        );
+      }
+
+      const [freshClientPayload, freshDraftingState] = await Promise.all([
+        clientPayload.refetch(),
+        refreshDrafting(),
+      ]);
+      if (freshClientPayload.error) throw freshClientPayload.error;
+      if (!freshClientPayload.data?.sendSnapshot) {
+        throw new Error(
+          'The latest client copy could not be verified. Refresh and review it before sending.',
+        );
+      }
+
+      const freshReadiness = assessProposalSendReadiness({
+        proposalTotalCents: proposal.total_amount ?? 0,
+        clientTotalCents: freshClientPayload.data.totalCents,
+        milestones: freshClientPayload.data.milestones,
+        draftingGaps: freshDraftingState.gaps,
+      });
+      const freshReviewFingerprint = sendReviewFingerprint({
+        proposalTotalCents: proposal.total_amount ?? 0,
+        clientTotalCents: freshClientPayload.data.totalCents,
+        sendSnapshot: freshClientPayload.data.sendSnapshot,
+        draftingGaps: freshDraftingState.gaps,
+        blockers: freshReadiness.blockers,
+        warnings: freshReadiness.warnings,
+      });
+
+      if (freshReviewFingerprint !== reviewFingerprint) {
+        setRefreshedClientData(freshClientPayload.data);
+        setRefreshedGaps(freshDraftingState.gaps);
+        setAcknowledgedIncomplete(false);
+        setSendError(
+          'The client copy changed during the final check. Review the updated details, then send again.',
+        );
+        return;
+      }
+
       const result = await sendProposal.mutateAsync({
         proposalId,
+        expectedSnapshot: freshClientPayload.data.sendSnapshot,
         personalMessage: personalMessage || undefined,
         ccEmail: ccEmail || undefined,
         validUntil,
@@ -183,6 +295,9 @@ export function SendSheet({
           ? err.message
           : 'Could not send the proposal. Please try again.',
       );
+    } finally {
+      sendAttemptInFlight.current = false;
+      setIsPreparingSend(false);
     }
   };
 
@@ -439,7 +554,7 @@ export function SendSheet({
                 )}
 
               {!checkingClientCopy &&
-                clientPayload.data?.paymentSchedule.storedAmountsMatch === false && (
+                effectiveClientData?.paymentSchedule.storedAmountsMatch === false && (
                   <p role="status" className="mt-2 text-[11px] text-[var(--color-aged-oak)]">
                     Payment amounts will be synchronized to the current proposal total before send.
                   </p>

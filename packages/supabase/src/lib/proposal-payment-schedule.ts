@@ -31,6 +31,18 @@ export interface ProposalPaymentScheduleAssessment<
   issues: ProposalPaymentScheduleIssue[];
 }
 
+export interface ProposalSendSnapshot {
+  proposalUpdatedAt: string;
+  proposalTotalAmount: number;
+  scheduleFingerprint: string;
+}
+
+export interface ProposalSendSnapshotRpcRow {
+  proposal_updated_at: string;
+  proposal_total_amount: number;
+  schedule_fingerprint: string;
+}
+
 function finiteNumber(value: unknown): number {
   const parsed = Number(value);
   return Number.isFinite(parsed) ? parsed : 0;
@@ -38,6 +50,71 @@ function finiteNumber(value: unknown): number {
 
 function isFullyAllocated(percentageTotal: number): boolean {
   return Math.abs(percentageTotal - 100) < 0.000_001;
+}
+
+/** Normalize the one-row TABLE result returned by get_proposal_send_snapshot. */
+export function parseProposalSendSnapshot(
+  value:
+    | ProposalSendSnapshotRpcRow
+    | ProposalSendSnapshotRpcRow[]
+    | null
+    | undefined,
+): ProposalSendSnapshot | null {
+  const row = Array.isArray(value) ? value[0] : value;
+  if (!row) return null;
+
+  const proposalUpdatedAt = String(row.proposal_updated_at ?? '');
+  const proposalTotalAmount = Number(row.proposal_total_amount);
+  const scheduleFingerprint = String(row.schedule_fingerprint ?? '');
+  if (
+    !proposalUpdatedAt ||
+    !Number.isFinite(proposalTotalAmount) ||
+    !scheduleFingerprint
+  ) {
+    return null;
+  }
+
+  return {
+    proposalUpdatedAt,
+    proposalTotalAmount: Math.round(proposalTotalAmount),
+    scheduleFingerprint,
+  };
+}
+
+export function proposalSendSnapshotsMatch(
+  left: ProposalSendSnapshot,
+  right: ProposalSendSnapshot,
+): boolean {
+  return (
+    left.proposalUpdatedAt === right.proposalUpdatedAt &&
+    left.proposalTotalAmount === right.proposalTotalAmount &&
+    left.scheduleFingerprint === right.scheduleFingerprint
+  );
+}
+
+/**
+ * Client-side equality key for two direct milestone reads. This deliberately
+ * mirrors the fields protected by the SQL fingerprint while leaving the SQL
+ * MD5 opaque; amount_cents is a derived projection reconciled during send.
+ */
+export function proposalPaymentScheduleReviewKey<
+  T extends ProposalPaymentMilestoneLike & { sort_order?: number | null },
+>(milestones: readonly T[]): string {
+  return JSON.stringify(
+    [...milestones]
+      .sort(
+        (left, right) =>
+          finiteNumber(left.sort_order) - finiteNumber(right.sort_order) ||
+          String(left.id ?? '').localeCompare(String(right.id ?? '')),
+      )
+      .map((milestone) => [
+        String(milestone.id ?? ''),
+        Math.round(finiteNumber(milestone.sort_order)),
+        milestone.label,
+        finiteNumber(milestone.percentage).toFixed(2),
+        milestone.trigger_condition ?? null,
+      ]),
+  );
 }
 
 /**

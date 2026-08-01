@@ -12,9 +12,9 @@
  *   1. the mirror never references a TRADE cost, markup, or margin column — the
  *      studio-internal figures the client must never see at any tier;
  *   2. the mirror filters out `tbd` pieces (studio-side scaffolding);
- *   3. the mirror is read-only — no insert/update/delete/upsert/rpc in the
- *      PROJECTION (the tier setter's write lives in its own small instrument,
- *      excluded from this projection guard).
+ *   3. the mirror is read-only — no insert/update/delete/upsert in the
+ *      PROJECTION. Its sole RPC is the read-only send-snapshot guard (the tier
+ *      setter's write lives in its own small instrument).
  */
 
 import { readFileSync } from 'fs';
@@ -51,10 +51,19 @@ describe('the proposal mirror (R43 · R86 contract)', () => {
     expect(mirrorSource).toMatch(/@patina\/utils/);
   });
 
-  it('the projection is read-only — no insert/delete/upsert/rpc; the only update is the tier setter', () => {
-    expect(mirrorSource).not.toMatch(/\.(insert|delete|upsert|rpc)\(/);
+  it('the projection is read-only — its sole RPC is the send-snapshot guard', () => {
+    expect(mirrorSource).not.toMatch(/\.(insert|delete|upsert)\(/);
+    expect(mirrorSource.match(/\.rpc\('([^']+)'/g)).toEqual([
+      ".rpc('get_proposal_send_snapshot'",
+    ]);
     // A single mutation is allowed: the tier setter (useUpdateProposal.mutate).
     // Guard that no bare supabase `.update(` write leaks into the projection.
     expect(mirrorSource).not.toMatch(/\.update\(/);
+  });
+
+  it('binds each rendered copy to stable boundary snapshots without interval polling', () => {
+    expect(mirrorSource).toContain('snapshotBefore');
+    expect(mirrorSource).toContain('snapshotAfter');
+    expect(mirrorSource).not.toContain('refetchInterval');
   });
 });

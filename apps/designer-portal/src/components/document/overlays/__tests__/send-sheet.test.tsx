@@ -6,6 +6,7 @@ const mockUpdate = jest.fn();
 const mockInvalidate = jest.fn();
 const mockUseProposalMirrorData = jest.fn();
 const mockUseDraftingState = jest.fn();
+const mockRefreshDrafting = jest.fn();
 let mockPaymentMutationsPending = 0;
 
 jest.mock('@tanstack/react-query', () => ({
@@ -89,15 +90,22 @@ jest.mock('../../document-action', () => ({
 }));
 
 function mirror(milestones: Array<Record<string, unknown>>) {
-  return {
-    data: {
-      totalCents: 1_320_000,
-      milestones,
-      paymentSchedule: { storedAmountsMatch: true },
+  const data = {
+    totalCents: 1_320_000,
+    milestones,
+    paymentSchedule: { storedAmountsMatch: true },
+    sendSnapshot: {
+      proposalUpdatedAt: '2026-07-31T12:00:00.000Z',
+      proposalTotalAmount: 1_320_000,
+      scheduleFingerprint: 'schedule-fingerprint-v1',
     },
+  };
+  return {
+    data,
     isLoading: false,
     isFetching: false,
     error: null,
+    refetch: jest.fn().mockResolvedValue({ data, error: null }),
   };
 }
 
@@ -108,10 +116,18 @@ beforeEach(() => {
   mockInvalidate.mockReset();
   mockInvalidate.mockResolvedValue(undefined);
   mockUseDraftingState.mockReset();
+  mockRefreshDrafting.mockReset();
+  mockRefreshDrafting.mockResolvedValue({
+    facets: {},
+    state: 'Ready to send',
+    gaps: [],
+  });
   mockPaymentMutationsPending = 0;
   mockUseDraftingState.mockReturnValue({
     gaps: [],
     isLoading: false,
+    isFetching: false,
+    refresh: mockRefreshDrafting,
   });
   mockUseProposalMirrorData.mockReset();
 });
@@ -153,6 +169,13 @@ describe('SendSheet canonical client-copy validation', () => {
     mockUseDraftingState.mockReturnValue({
       gaps: ['mood boards'],
       isLoading: false,
+      isFetching: false,
+      refresh: mockRefreshDrafting,
+    });
+    mockRefreshDrafting.mockResolvedValue({
+      facets: {},
+      state: 'Drafting',
+      gaps: ['mood boards'],
     });
 
     render(<SendSheet proposalId="proposal-1" open onClose={jest.fn()} />);
@@ -194,5 +217,206 @@ describe('SendSheet canonical client-copy validation', () => {
       screen.getByRole('button', { name: 'Send proposal' }),
     ).toBeDisabled();
     expect(mockSend).not.toHaveBeenCalled();
+  });
+
+  it('keeps send blocked while cached complete client data is refetching', async () => {
+    const cachedMirror = mirror([
+      {
+        id: 'deposit',
+        label: 'Project deposit',
+        percentage: 100,
+        amount_cents: 1_320_000,
+      },
+    ]);
+    mockUseProposalMirrorData.mockReturnValue(cachedMirror);
+
+    const { rerender } = render(
+      <SendSheet proposalId="proposal-1" open onClose={jest.fn()} />,
+    );
+    expect(
+      screen.getByRole('button', { name: 'Send proposal' }),
+    ).toBeEnabled();
+
+    mockUseProposalMirrorData.mockReturnValue({
+      ...cachedMirror,
+      isFetching: true,
+    });
+    rerender(<SendSheet proposalId="proposal-1" open onClose={jest.fn()} />);
+
+    const send = screen.getByRole('button', { name: 'Send proposal' });
+    expect(send).toBeDisabled();
+    fireEvent.click(send);
+    expect(mockSend).not.toHaveBeenCalled();
+  });
+
+  it('keeps send blocked while canonical drafting gaps are refetching', () => {
+    mockUseProposalMirrorData.mockReturnValue(
+      mirror([
+        {
+          id: 'deposit',
+          label: 'Project deposit',
+          percentage: 100,
+          amount_cents: 1_320_000,
+        },
+      ]),
+    );
+    mockUseDraftingState.mockReturnValue({
+      gaps: [],
+      isLoading: false,
+      isFetching: true,
+      refresh: mockRefreshDrafting,
+    });
+
+    render(<SendSheet proposalId="proposal-1" open onClose={jest.fn()} />);
+
+    expect(
+      screen.getByRole('button', { name: 'Send proposal' }),
+    ).toBeDisabled();
+    expect(
+      screen.getByText(/Checking the latest client preview/i),
+    ).toBeInTheDocument();
+    expect(mockSend).not.toHaveBeenCalled();
+  });
+
+  it('resets incomplete acknowledgement when the missing-part fingerprint changes', async () => {
+    mockUseProposalMirrorData.mockReturnValue(
+      mirror([
+        {
+          id: 'deposit',
+          label: 'Project deposit',
+          percentage: 100,
+          amount_cents: 1_320_000,
+        },
+      ]),
+    );
+    mockUseDraftingState.mockReturnValue({
+      gaps: ['mood boards'],
+      isLoading: false,
+      isFetching: false,
+      refresh: mockRefreshDrafting,
+    });
+
+    const { rerender } = render(
+      <SendSheet proposalId="proposal-1" open onClose={jest.fn()} />,
+    );
+    fireEvent.click(
+      screen.getByRole('checkbox', {
+        name: /I reviewed the missing parts/i,
+      }),
+    );
+    expect(
+      screen.getByRole('button', { name: 'Send proposal' }),
+    ).toBeEnabled();
+
+    mockUseDraftingState.mockReturnValue({
+      gaps: ['mood boards', 'change-order terms'],
+      isLoading: false,
+      isFetching: false,
+      refresh: mockRefreshDrafting,
+    });
+    rerender(<SendSheet proposalId="proposal-1" open onClose={jest.fn()} />);
+
+    await waitFor(() =>
+      expect(
+        screen.getByRole('button', { name: 'Send proposal' }),
+      ).toBeDisabled(),
+    );
+    expect(
+      screen.getByRole('checkbox', {
+        name: /I reviewed the missing parts/i,
+      }),
+    ).not.toBeChecked();
+  });
+
+  it('refreshes drafting gaps immediately before send and blocks on a newly found gap', async () => {
+    mockUseProposalMirrorData.mockReturnValue(
+      mirror([
+        {
+          id: 'deposit',
+          label: 'Project deposit',
+          percentage: 100,
+          amount_cents: 1_320_000,
+        },
+      ]),
+    );
+    mockRefreshDrafting.mockResolvedValueOnce({
+      facets: {},
+      state: 'Drafting',
+      gaps: ['change-order terms'],
+    });
+
+    render(<SendSheet proposalId="proposal-1" open onClose={jest.fn()} />);
+
+    fireEvent.click(screen.getByRole('button', { name: 'Send proposal' }));
+
+    await waitFor(() => expect(mockRefreshDrafting).toHaveBeenCalledTimes(1));
+    expect(mockSend).not.toHaveBeenCalled();
+    expect(
+      await screen.findByText('Still missing: change-order terms.'),
+    ).toBeInTheDocument();
+  });
+
+  it('requires a second explicit send when the refreshed mirror token changed', async () => {
+    const reviewedMirror = mirror([
+      {
+        id: 'deposit',
+        label: 'Project deposit',
+        percentage: 100,
+        amount_cents: 1_320_000,
+      },
+    ]);
+    const refreshedData = {
+      ...reviewedMirror.data,
+      sendSnapshot: {
+        ...reviewedMirror.data.sendSnapshot,
+        scheduleFingerprint: 'schedule-fingerprint-v2',
+      },
+    };
+    reviewedMirror.refetch.mockResolvedValue({
+      data: refreshedData,
+      error: null,
+    });
+    mockUseProposalMirrorData.mockReturnValue(reviewedMirror);
+    mockUseDraftingState.mockReturnValue({
+      gaps: ['mood boards'],
+      isLoading: false,
+      isFetching: false,
+      refresh: mockRefreshDrafting,
+    });
+    mockRefreshDrafting.mockResolvedValue({
+      facets: {},
+      state: 'Drafting',
+      gaps: ['mood boards'],
+    });
+
+    render(<SendSheet proposalId="proposal-1" open onClose={jest.fn()} />);
+    fireEvent.click(
+      screen.getByRole('checkbox', {
+        name: /I reviewed the missing parts/i,
+      }),
+    );
+    fireEvent.click(screen.getByRole('button', { name: 'Send proposal' }));
+
+    expect(
+      await screen.findByText(/client copy changed during the final check/i),
+    ).toBeInTheDocument();
+    expect(mockSend).not.toHaveBeenCalled();
+    expect(
+      screen.getByRole('checkbox', {
+        name: /I reviewed the missing parts/i,
+      }),
+    ).not.toBeChecked();
+
+    fireEvent.click(
+      screen.getByRole('checkbox', {
+        name: /I reviewed the missing parts/i,
+      }),
+    );
+    fireEvent.click(screen.getByRole('button', { name: 'Send proposal' }));
+
+    await waitFor(() => expect(mockSend).toHaveBeenCalledTimes(1));
+    expect(mockSend).toHaveBeenCalledWith(
+      expect.objectContaining({ expectedSnapshot: refreshedData.sendSnapshot }),
+    );
   });
 });
