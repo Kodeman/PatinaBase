@@ -702,14 +702,29 @@ BEGIN
 END;
 $$;
 
--- There is no authenticated compatibility bypass: every send must carry the
--- exact snapshot the designer reviewed.
+-- The previously shipped designer portal keeps one exact, non-defaulted
+-- adapter. It derives the snapshot itself and delegates to the guarded send;
+-- anon/service callers still cannot use it.
 DO $$
 BEGIN
   ASSERT to_regprocedure(
     'public.send_proposal(uuid,text,text,timestamptz)'
-  ) IS NULL,
-    'unsafe four-argument send_proposal overload must be dropped';
+  ) IS NOT NULL,
+    'four-argument rollback adapter must remain during the adoption window';
+  ASSERT has_function_privilege(
+    'authenticated',
+    'public.send_proposal(uuid,text,text,timestamptz)',
+    'EXECUTE'
+  ), 'authenticated must execute the rollback adapter';
+  ASSERT NOT has_function_privilege(
+    'anon',
+    'public.send_proposal(uuid,text,text,timestamptz)',
+    'EXECUTE'
+  ) AND NOT has_function_privilege(
+    'service_role',
+    'public.send_proposal(uuid,text,text,timestamptz)',
+    'EXECUTE'
+  ), 'rollback adapter must remain authenticated-only';
 END;
 $$;
 

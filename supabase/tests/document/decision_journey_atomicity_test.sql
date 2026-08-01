@@ -199,18 +199,21 @@ BEGIN
     'public.assert_client_decision_reference_integrity(uuid,uuid,uuid,uuid,text,uuid,uuid,uuid,uuid,uuid,uuid)',
     'EXECUTE'
   ), 'authenticated trigger callers need invoker-helper execution';
-  ASSERT NOT has_table_privilege('authenticated', 'public.client_decisions', 'INSERT'),
-    'authenticated direct decision INSERT must remain revoked';
-  ASSERT NOT has_table_privilege('authenticated', 'public.client_decision_options', 'INSERT'),
-    'authenticated direct option INSERT must remain revoked';
+  ASSERT has_table_privilege('authenticated', 'public.client_decisions', 'INSERT'),
+    'expand phase must retain legacy decision INSERT compatibility';
+  ASSERT has_table_privilege('authenticated', 'public.client_decision_options', 'INSERT'),
+    'expand phase must retain legacy option INSERT compatibility';
   ASSERT has_function_privilege(
     'authenticated',
     'public.create_client_decision(uuid,jsonb,jsonb,uuid[],uuid[])', 'EXECUTE'
   ), 'canonical create RPC must be callable';
-  ASSERT NOT has_function_privilege(
+  ASSERT has_function_privilege(
     'authenticated', 'public.notify_decision_required(uuid)', 'EXECUTE'
-  ), 'authenticated callers cannot spoof lifecycle notices';
+  ), 'expand phase must retain the guarded legacy notification call';
 
+  PERFORM pg_temp.assume_atomic_actor(
+    'fa000000-0000-4000-8000-000000000004'
+  );
   BEGIN
     PERFORM public.notify_decision_required(
       'fa0c0000-0000-4000-8000-000000000001'
@@ -218,7 +221,11 @@ BEGIN
   EXCEPTION WHEN insufficient_privilege THEN
     v_error := SQLERRM;
   END;
-  ASSERT v_error IS NOT NULL, 'notice spoof RPC must reject authenticated callers';
+  ASSERT v_error IS NOT NULL,
+    'guarded legacy notice must reject a foreign authenticated caller';
+  PERFORM pg_temp.assume_atomic_actor(
+    'fa000000-0000-4000-8000-000000000001'
+  );
 END;
 $$;
 

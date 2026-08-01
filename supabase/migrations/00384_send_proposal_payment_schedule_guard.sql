@@ -295,6 +295,58 @@ COMMENT ON FUNCTION public.send_proposal(
   'Token-required send boundary: locks the proposal and schedule, rejects any '
   'change from the RLS-scoped reviewed snapshot, validates a positive 100% '
   'schedule, reconciles derived child cents to total, then stamps sent and '
-  'supersedes eligible siblings in the same transaction. The legacy four-arg '
-  'callable is intentionally dropped so authenticated callers cannot bypass '
-  'the reviewed-snapshot guard.';
+  'supersedes eligible siblings in the same transaction.';
+
+-- Compatibility phase: the previously shipped designer portal always sends
+-- all four named arguments below (including explicit NULLs). Keep that exact,
+-- non-defaulted signature until portal adoption is confirmed. It cannot skip
+-- the new schedule checks: the wrapper obtains an RLS-scoped snapshot and the
+-- canonical seven-argument function locks and revalidates it before sending.
+CREATE OR REPLACE FUNCTION public.send_proposal(
+  p_proposal_id uuid,
+  p_personal_message text,
+  p_cc_email text,
+  p_valid_until timestamptz
+)
+RETURNS public.proposals
+LANGUAGE plpgsql
+SECURITY INVOKER
+SET search_path = public, pg_temp
+AS $$
+DECLARE
+  v_snapshot record;
+  v_result public.proposals;
+BEGIN
+  SELECT * INTO v_snapshot
+  FROM public.get_proposal_send_snapshot(p_proposal_id);
+
+  IF NOT FOUND THEN
+    RAISE EXCEPTION
+      'send_proposal: proposal % not found or access denied', p_proposal_id
+      USING ERRCODE = 'insufficient_privilege';
+  END IF;
+
+  SELECT sent.* INTO v_result
+  FROM public.send_proposal(
+    p_proposal_id,
+    v_snapshot.proposal_updated_at,
+    v_snapshot.proposal_total_amount,
+    v_snapshot.schedule_fingerprint,
+    p_personal_message,
+    p_cc_email,
+    p_valid_until
+  ) AS sent;
+
+  RETURN v_result;
+END;
+$$;
+
+REVOKE ALL ON FUNCTION public.send_proposal(uuid, text, text, timestamptz)
+  FROM PUBLIC, anon, service_role;
+GRANT EXECUTE ON FUNCTION public.send_proposal(uuid, text, text, timestamptz)
+  TO authenticated;
+
+COMMENT ON FUNCTION public.send_proposal(uuid, text, text, timestamptz) IS
+  'Temporary non-defaulted compatibility wrapper for the previously shipped '
+  'designer portal. It derives then revalidates the canonical send snapshot; '
+  'remove only after old portal rollback support is retired.';

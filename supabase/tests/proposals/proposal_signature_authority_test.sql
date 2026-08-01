@@ -301,6 +301,27 @@ BEGIN
            'public.sign_proposal(uuid,text,text,boolean,date)'
          ) IS NULL,
     'legacy signature overload must be removed';
+  ASSERT to_regprocedure('public.sign_proposal(uuid,text,text)') IS NOT NULL
+     AND to_regprocedure(
+           'public.sign_proposal(uuid,text,text,boolean)'
+         ) IS NOT NULL
+     AND has_function_privilege(
+           'authenticated', 'public.sign_proposal(uuid,text,text)', 'EXECUTE'
+         )
+     AND has_function_privilege(
+           'authenticated',
+           'public.sign_proposal(uuid,text,text,boolean)',
+           'EXECUTE'
+         ),
+    'exact non-defaulted rollback wrappers must remain authenticated-only';
+  ASSERT (
+    SELECT bool_and(pronargdefaults = 0)
+    FROM pg_proc
+    WHERE oid IN (
+      'public.sign_proposal(uuid,text,text)'::regprocedure,
+      'public.sign_proposal(uuid,text,text,boolean)'::regprocedure
+    )
+  ), 'rollback signature wrappers must not introduce PostgREST ambiguity';
   ASSERT has_function_privilege(
            'authenticated', 'public.sign_proposal(uuid,text)', 'EXECUTE'
          ),

@@ -503,3 +503,62 @@ COMMENT ON FUNCTION public.sign_proposal_with_trusted_ip(
   'Service-only signature bridge for the production API route. The route '
   'authenticates p_client_id before passing trusted edge-derived IP evidence; '
   'the shared core re-checks exact proposal ownership and owns activation.';
+
+-- Rollback compatibility for previously deployed web bundles. These exact,
+-- non-defaulted overloads accept the old caller-controlled fields but ignore
+-- them, delegating to the two-argument authenticated authority. Keeping them
+-- non-defaulted avoids ambiguity with the native app's two-argument call.
+CREATE OR REPLACE FUNCTION public.sign_proposal(
+  p_proposal_id uuid,
+  p_signed_name text,
+  p_signed_ip text
+)
+RETURNS jsonb
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public, pg_temp
+AS $$
+BEGIN
+  RETURN public._sign_proposal_authorized_00400(
+    p_proposal_id, p_signed_name, auth.uid(), NULL
+  );
+END;
+$$;
+
+CREATE OR REPLACE FUNCTION public.sign_proposal(
+  p_proposal_id uuid,
+  p_signed_name text,
+  p_signed_ip text,
+  p_auto_activate boolean
+)
+RETURNS jsonb
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public, pg_temp
+AS $$
+BEGIN
+  IF p_auto_activate IS DISTINCT FROM true THEN
+    RAISE EXCEPTION 'proposal activation is mandatory after signature'
+      USING ERRCODE = 'check_violation';
+  END IF;
+  RETURN public._sign_proposal_authorized_00400(
+    p_proposal_id, p_signed_name, auth.uid(), NULL
+  );
+END;
+$$;
+
+REVOKE ALL ON FUNCTION public.sign_proposal(uuid, text, text)
+  FROM PUBLIC, anon, service_role;
+REVOKE ALL ON FUNCTION public.sign_proposal(uuid, text, text, boolean)
+  FROM PUBLIC, anon, service_role;
+GRANT EXECUTE ON FUNCTION public.sign_proposal(uuid, text, text)
+  TO authenticated;
+GRANT EXECUTE ON FUNCTION public.sign_proposal(uuid, text, text, boolean)
+  TO authenticated;
+
+COMMENT ON FUNCTION public.sign_proposal(uuid, text, text) IS
+  'Temporary rollback wrapper; ignores caller-supplied IP and delegates to '
+  'the canonical authenticated signature authority.';
+COMMENT ON FUNCTION public.sign_proposal(uuid, text, text, boolean) IS
+  'Temporary rollback wrapper; ignores caller-supplied IP, requires mandatory '
+  'activation, and delegates to the canonical authenticated authority.';

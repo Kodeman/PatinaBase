@@ -173,75 +173,67 @@ BEGIN
   ASSERT has_function_privilege(
     'service_role', 'public.expire_due_client_decisions(timestamptz)', 'EXECUTE'
   ), 'expiry worker needs its checked service-role RPC';
-  ASSERT NOT has_table_privilege(
+  ASSERT has_table_privilege(
     'authenticated', 'public.client_decisions', 'UPDATE'
-  ), 'authenticated must not retain direct decision UPDATE';
-  ASSERT NOT has_table_privilege(
+  ), 'expand phase must retain rollback decision UPDATE';
+  ASSERT has_table_privilege(
     'authenticated', 'public.client_decision_options', 'UPDATE'
-  ), 'authenticated must not retain direct option UPDATE';
-  ASSERT NOT has_table_privilege(
+  ), 'expand phase must retain rollback option UPDATE';
+  ASSERT has_table_privilege(
     'authenticated', 'public.decision_overrides', 'INSERT'
-  ), 'override evidence must be RPC-only';
+  ), 'expand phase must retain rollback override INSERT';
 END;
 $$;
 
 SET LOCAL ROLE authenticated;
 SELECT pg_temp.assume_journey_actor('f8000000-0000-4000-8000-000000000001');
 
--- A forged capability cannot turn direct status, consent, option-price, or
--- audit writes into authority. ACL denial occurs before any row trigger.
+-- Expand phase is explicit and observable: authenticated legacy paths remain
+-- under their existing RLS policies, while anonymous writes and the new hard
+-- guard triggers stay off until client-version adoption is measured.
 DO $$
-DECLARE
-  v_error text;
 BEGIN
-  PERFORM set_config(
-    'app.client_decision_write_id',
-    'f8100000-0000-4000-8000-000000000001', true
-  );
-  BEGIN
-    UPDATE public.client_decisions
-    SET status = 'responded',
-        selected_by = 'f8000000-0000-4000-8000-000000000001',
-        client_consent_method = 'click_through',
-        client_consented_at = now()
-    WHERE id = 'f8100000-0000-4000-8000-000000000001';
-  EXCEPTION WHEN insufficient_privilege THEN
-    v_error := SQLERRM;
-  END;
-  ASSERT v_error IS NOT NULL,
-    'direct decision status/consent multiwrite must be denied';
-
-  v_error := NULL;
-  BEGIN
-    UPDATE public.client_decision_options
-    SET price = 1, product_id = NULL, selected = true
-    WHERE id = 'f8200000-0000-4000-8000-000000000001';
-  EXCEPTION WHEN insufficient_privilege THEN
-    v_error := SQLERRM;
-  END;
-  ASSERT v_error IS NOT NULL,
-    'direct option pricing/selection UPDATE must be denied';
-
-  v_error := NULL;
-  BEGIN
-    INSERT INTO public.decision_overrides (
-      decision_id, option_id, acted_by, consent_method, consent_evidence
-    ) VALUES (
-      'f8100000-0000-4000-8000-000000000002',
-      'f8200000-0000-4000-8000-000000000003',
-      'f8000000-0000-4000-8000-000000000001', 'verbal', 'forged'
-    );
-  EXCEPTION WHEN insufficient_privilege THEN
-    v_error := SQLERRM;
-  END;
-  PERFORM set_config('app.client_decision_write_id', '', true);
-  ASSERT v_error IS NOT NULL, 'direct override INSERT must be denied';
-  ASSERT (SELECT status = 'pending'
-                 AND selected_by IS NULL
-                 AND client_consent_method IS NULL
-          FROM public.client_decisions
-          WHERE id = 'f8100000-0000-4000-8000-000000000001'),
-    'denied direct writes must preserve pending decision truth';
+  ASSERT NOT EXISTS (
+    SELECT 1
+    FROM pg_trigger
+    WHERE NOT tgisinternal
+      AND tgname IN (
+        'zz_guard_client_decision_authority_trg',
+        'zz_guard_client_decision_option_authority_trg'
+      )
+  ), 'decision hardening triggers must remain unattached in expand phase';
+  ASSERT NOT has_table_privilege(
+    'anon', 'public.client_decisions', 'INSERT'
+  ) AND NOT has_table_privilege(
+    'anon', 'public.client_decisions', 'UPDATE'
+  ) AND NOT has_table_privilege(
+    'anon', 'public.client_decisions', 'DELETE'
+  ) AND NOT has_table_privilege(
+    'anon', 'public.client_decision_options', 'INSERT'
+  ) AND NOT has_table_privilege(
+    'anon', 'public.client_decision_options', 'UPDATE'
+  ) AND NOT has_table_privilege(
+    'anon', 'public.client_decision_options', 'DELETE'
+  ) AND NOT has_table_privilege(
+    'anon', 'public.decision_overrides', 'INSERT'
+  ) AND NOT has_table_privilege(
+    'anon', 'public.decision_overrides', 'UPDATE'
+  ) AND NOT has_table_privilege(
+    'anon', 'public.decision_overrides', 'DELETE'
+  ), 'expand compatibility must never restore anonymous mutations';
+  ASSERT EXISTS (
+    SELECT 1 FROM pg_policies
+    WHERE schemaname = 'public'
+      AND tablename = 'client_decisions'
+      AND policyname = 'client_decisions_studio_rw'
+      AND cmd = 'ALL'
+  ) AND EXISTS (
+    SELECT 1 FROM pg_policies
+    WHERE schemaname = 'public'
+      AND tablename = 'client_decision_options'
+      AND policyname = 'client_decision_options_studio_rw'
+      AND cmd = 'ALL'
+  ), 'rollback studio RLS policies must remain explicit';
 END;
 $$;
 
@@ -379,7 +371,7 @@ BEGIN
   EXCEPTION WHEN insufficient_privilege THEN
     v_error := SQLERRM;
   END;
-  ASSERT v_error = 'p_selected_by must match the authenticated caller',
+  ASSERT v_error = 'p_selected_by must match the authenticated client',
     format('legacy actor spoof must reject, got %L', v_error);
 
   v_row := public.apply_client_decision(

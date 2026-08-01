@@ -428,15 +428,20 @@ BEGIN
     'authenticated', 'public._assert_proposal_phase_topology(uuid,text)',
     'EXECUTE'
   ), 'proposal topology assertion must remain private';
-  ASSERT NOT has_table_privilege(
+  ASSERT has_table_privilege(
     'authenticated', 'public.proposal_phases', 'INSERT'
-  ), 'authenticated direct proposal phase INSERT must remain revoked';
-  ASSERT NOT has_table_privilege(
+  ), 'expand phase must retain rollback phase INSERT';
+  ASSERT has_table_privilege(
     'authenticated', 'public.proposal_phases', 'UPDATE'
-  ), 'authenticated direct proposal phase UPDATE must remain revoked';
-  ASSERT NOT has_table_privilege(
+  ), 'expand phase must retain rollback phase UPDATE';
+  ASSERT has_table_privilege(
     'authenticated', 'public.proposal_phases', 'DELETE'
-  ), 'authenticated direct proposal phase DELETE must remain revoked';
+  ), 'expand phase must retain rollback phase DELETE';
+  ASSERT EXISTS (
+    SELECT 1 FROM pg_trigger
+    WHERE NOT tgisinternal
+      AND tgname = 'y_guard_proposal_phase_topology_write_trg'
+  ), 'expand phase must still guard cross-proposal/topology rewrites';
   ASSERT NOT has_table_privilege(
     'authenticated', 'public.proposal_phase_template_applications', 'SELECT'
   ), 'authenticated callers must not read private template receipts';
@@ -496,26 +501,17 @@ BEGIN
 END;
 $$;
 
--- Direct browser fee/delete writes cannot bypass CAS, topology repair, or the
--- atomic total recomputation.
+-- Expand compatibility is authenticated-only; anonymous phase writes stay
+-- closed while rollback bundles retain their draft builder path.
 DO $$
-DECLARE v_error text;
 BEGIN
-  BEGIN
-    UPDATE public.proposal_phases
-    SET fee_cents = 999999
-    WHERE id = 'fb052000-0000-4000-8000-000000000001';
-  EXCEPTION WHEN insufficient_privilege THEN v_error := SQLERRM;
-  END;
-  ASSERT v_error IS NOT NULL, 'direct proposal phase UPDATE must reject';
-
-  v_error := NULL;
-  BEGIN
-    DELETE FROM public.proposal_phases
-    WHERE id = 'fb052000-0000-4000-8000-000000000005';
-  EXCEPTION WHEN insufficient_privilege THEN v_error := SQLERRM;
-  END;
-  ASSERT v_error IS NOT NULL, 'direct proposal phase DELETE must reject';
+  ASSERT NOT has_table_privilege(
+    'anon', 'public.proposal_phases', 'INSERT'
+  ) AND NOT has_table_privilege(
+    'anon', 'public.proposal_phases', 'UPDATE'
+  ) AND NOT has_table_privilege(
+    'anon', 'public.proposal_phases', 'DELETE'
+  ), 'anonymous proposal phase writes must remain revoked';
 END;
 $$;
 

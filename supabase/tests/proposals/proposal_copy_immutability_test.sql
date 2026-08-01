@@ -648,14 +648,20 @@ BEGIN
     SELECT array_agg(format('%s:%s', policyname, cmd) ORDER BY policyname)
     FROM pg_policies
     WHERE schemaname = 'public' AND tablename = 'proposal_items'
-  ) = ARRAY['proposal_items_studio_rw:ALL'],
+  ) = ARRAY[
+    'proposal_items_legacy_ios_client_select:SELECT',
+    'proposal_items_studio_rw:ALL'
+  ],
     'proposal_items policy catalog drifted';
 
   ASSERT (
     SELECT array_agg(format('%s:%s', policyname, cmd) ORDER BY policyname)
     FROM pg_policies
     WHERE schemaname = 'public' AND tablename = 'proposal_sections'
-  ) = ARRAY['proposal_sections_studio_rw:ALL'],
+  ) = ARRAY[
+    'proposal_sections_legacy_ios_client_select:SELECT',
+    'proposal_sections_studio_rw:ALL'
+  ],
     'proposal_sections policy catalog drifted';
 
   ASSERT (
@@ -664,6 +670,7 @@ BEGIN
     WHERE schemaname = 'public' AND tablename = 'proposals'
   ) = ARRAY[
     'Designers can manage their proposals:ALL',
+    'proposals_legacy_ios_client_select:SELECT',
     'proposals_studio_rw:ALL'
   ], 'proposals policy catalog drifted';
 
@@ -718,8 +725,18 @@ BEGIN
 
   ASSERT to_regprocedure(
            'public.sign_proposal(uuid,text,text,boolean,date)'
-         ) IS NULL,
-    'caller-controlled IP/activation/start-date signature overload must be gone';
+         ) IS NULL
+     AND has_function_privilege(
+           'authenticated',
+           'public.sign_proposal(uuid,text,text)',
+           'EXECUTE'
+         )
+     AND has_function_privilege(
+           'authenticated',
+           'public.sign_proposal(uuid,text,text,boolean)',
+           'EXECUTE'
+         ),
+    'exact rollback wrappers must avoid the defaulted five-argument surface';
   ASSERT has_function_privilege(
            'service_role',
            'public.sign_proposal_with_trusted_ip(uuid,text,uuid,text)',
@@ -1201,15 +1218,15 @@ DECLARE
   v_error text;
   v_viewed jsonb;
 BEGIN
-  ASSERT (SELECT count(*) = 0 FROM public.proposals
+  ASSERT (SELECT count(*) = 1 FROM public.proposals
           WHERE id = 'e8300000-0000-4000-8000-000000000001'),
-    'client raw proposal rows must be hidden behind the safe DTO';
-  ASSERT (SELECT count(*) = 0 FROM public.proposal_items
+    'installed iOS must retain scoped issued-proposal read compatibility';
+  ASSERT (SELECT count(*) = 1 FROM public.proposal_items
           WHERE proposal_id = 'e8300000-0000-4000-8000-000000000001'),
-    'client raw item rows must be hidden behind the safe DTO';
-  ASSERT (SELECT count(*) = 0 FROM public.proposal_sections
+    'installed iOS must retain scoped proposal-item read compatibility';
+  ASSERT (SELECT count(*) = 2 FROM public.proposal_sections
           WHERE proposal_id = 'e8300000-0000-4000-8000-000000000001'),
-    'client raw section rows must be hidden behind the safe DTO';
+    'installed iOS must retain scoped proposal-section read compatibility';
 
   v_list := public.list_client_proposals();
   v_bundle := public.get_client_proposal_bundle(
@@ -2420,9 +2437,9 @@ DECLARE
   v_mover_error text;
   v_phase_owner uuid;
 BEGIN
-  ASSERT NOT has_table_privilege(
+  ASSERT has_table_privilege(
     'authenticated', 'public.proposal_phases', 'UPDATE'
-  ), 'authenticated browser sessions must not update proposal topology directly';
+  ), 'expand phase must retain rollback draft-phase edit privilege';
 
   PERFORM extensions.dblink_connect('phase_mover', v_conninfo);
   PERFORM extensions.dblink_exec('phase_mover', 'BEGIN');
@@ -2444,8 +2461,10 @@ BEGIN
     v_mover_error := SQLERRM;
   END;
 
-  ASSERT position('permission denied' IN coalesce(v_mover_error, '')) > 0,
-    format('direct phase move must fail at the table privilege boundary, got %L',
+  ASSERT position(
+    'topology may only change' IN coalesce(v_mover_error, '')
+  ) > 0,
+    format('direct phase move must fail at the topology guard, got %L',
            v_mover_error);
   PERFORM extensions.dblink_exec('phase_mover', 'ROLLBACK');
   PERFORM extensions.dblink_disconnect('phase_mover');

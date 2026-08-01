@@ -1319,6 +1319,28 @@ BEGIN
           IS DISTINCT FROM NEW.id::text
      )
   THEN
+    -- Temporary installed-iOS bridge. The authenticated role has UPDATE only
+    -- on viewed_at and these consent columns, and RLS restricts the row to the
+    -- addressed client. Consent may be filled exactly once after the canonical
+    -- apply_decision transition; lifecycle/selection truth remains protected.
+    IF current_user IS NOT DISTINCT FROM 'authenticated'
+       AND OLD.status = 'responded'
+       AND NEW.status = 'responded'
+       AND OLD.client_consent_method IS NULL
+       AND OLD.client_consented_at IS NULL
+       AND OLD.client_signature IS NULL
+       AND NEW.client_consent_method IS NOT NULL
+       AND NEW.client_consented_at IS NOT NULL
+       AND EXISTS (
+         SELECT 1
+         FROM public.designer_clients AS relationship
+         WHERE relationship.id = OLD.designer_client_id
+           AND relationship.client_id = auth.uid()
+       )
+    THEN
+      RETURN NEW;
+    END IF;
+
     RAISE EXCEPTION
       'client decision business truth may only change through a canonical workflow'
       USING ERRCODE = 'check_violation';
@@ -1333,9 +1355,8 @@ REVOKE ALL ON FUNCTION public.guard_client_decision_authority()
 
 DROP TRIGGER IF EXISTS zz_guard_client_decision_authority_trg
   ON public.client_decisions;
-CREATE TRIGGER zz_guard_client_decision_authority_trg
-BEFORE INSERT OR UPDATE OR DELETE ON public.client_decisions
-FOR EACH ROW EXECUTE FUNCTION public.guard_client_decision_authority();
+-- Expand phase: leave this guard unattached until the extension and rollback
+-- web bundles have adopted the canonical decision RPCs.
 
 CREATE OR REPLACE FUNCTION public.guard_client_decision_option_authority()
 RETURNS trigger
@@ -1432,9 +1453,8 @@ REVOKE ALL ON FUNCTION public.guard_client_decision_option_authority()
 
 DROP TRIGGER IF EXISTS zz_guard_client_decision_option_authority_trg
   ON public.client_decision_options;
-CREATE TRIGGER zz_guard_client_decision_option_authority_trg
-BEFORE INSERT OR UPDATE OR DELETE ON public.client_decision_options
-FOR EACH ROW EXECUTE FUNCTION public.guard_client_decision_option_authority();
+-- Expand phase: leave this guard unattached until the extension and rollback
+-- web bundles have adopted the canonical decision RPCs.
 
 -- The recommendation mirror is itself a canonical parent/option workflow.
 -- Make both directions DEFINER-owned and set the exact parent capability.
@@ -1544,9 +1564,36 @@ CREATE POLICY client_decisions_studio_insert
 ON public.client_decisions FOR INSERT TO authenticated
 WITH CHECK (public.is_studio_comember(designer_id));
 
+-- Installed Patina iOS builds still PATCH viewed_at and then the three consent
+-- columns after apply_decision. RLS scopes this temporary compatibility path
+-- to the addressed client; column grants below prevent any lifecycle write.
+DROP POLICY IF EXISTS client_decisions_client_compat_update
+  ON public.client_decisions;
+CREATE POLICY client_decisions_client_compat_update
+ON public.client_decisions FOR UPDATE TO authenticated
+USING (
+  EXISTS (
+    SELECT 1
+    FROM public.designer_clients AS relationship
+    WHERE relationship.id = client_decisions.designer_client_id
+      AND relationship.client_id = auth.uid()
+  )
+)
+WITH CHECK (
+  EXISTS (
+    SELECT 1
+    FROM public.designer_clients AS relationship
+    WHERE relationship.id = client_decisions.designer_client_id
+      AND relationship.client_id = auth.uid()
+  )
+);
+
 REVOKE INSERT, UPDATE, DELETE ON TABLE public.client_decisions FROM anon;
 REVOKE UPDATE, DELETE ON TABLE public.client_decisions FROM authenticated;
 GRANT SELECT, INSERT ON TABLE public.client_decisions TO authenticated;
+GRANT UPDATE (
+  viewed_at, client_consent_method, client_consented_at, client_signature
+) ON TABLE public.client_decisions TO authenticated;
 GRANT ALL ON TABLE public.client_decisions TO service_role;
 
 DROP POLICY IF EXISTS "Designers can manage decision options"
@@ -1589,6 +1636,113 @@ REVOKE INSERT, UPDATE, DELETE ON TABLE public.decision_overrides
   FROM anon, authenticated;
 GRANT SELECT ON TABLE public.decision_overrides TO authenticated;
 GRANT ALL ON TABLE public.decision_overrides TO service_role;
+
+-- Expand phase: restore the authenticated legacy surfaces after installing the
+-- canonical RPCs. Old portal/extension builds are distributed independently,
+-- so enforcement moves to a later adoption-gated migration. Anonymous writes
+-- remain revoked and the existing RLS ownership boundaries remain in force.
+DROP POLICY IF EXISTS "Designers can manage their decisions"
+  ON public.client_decisions;
+CREATE POLICY "Designers can manage their decisions"
+ON public.client_decisions FOR ALL TO authenticated
+USING (
+  EXISTS (
+    SELECT 1 FROM public.designer_clients AS relationship
+    WHERE relationship.id = client_decisions.designer_client_id
+      AND relationship.designer_id = auth.uid()
+  )
+);
+
+DROP POLICY IF EXISTS "Clients can respond to their decisions"
+  ON public.client_decisions;
+CREATE POLICY "Clients can respond to their decisions"
+ON public.client_decisions FOR UPDATE TO authenticated
+USING (
+  EXISTS (
+    SELECT 1 FROM public.designer_clients AS relationship
+    WHERE relationship.id = client_decisions.designer_client_id
+      AND relationship.client_id = auth.uid()
+  )
+)
+WITH CHECK (
+  EXISTS (
+    SELECT 1 FROM public.designer_clients AS relationship
+    WHERE relationship.id = client_decisions.designer_client_id
+      AND relationship.client_id = auth.uid()
+  )
+);
+
+DROP POLICY IF EXISTS "client_decisions_studio_rw"
+  ON public.client_decisions;
+CREATE POLICY "client_decisions_studio_rw"
+ON public.client_decisions FOR ALL TO authenticated
+USING (public.is_studio_comember(designer_id))
+WITH CHECK (public.is_studio_comember(designer_id));
+
+DROP POLICY IF EXISTS "Designers can manage decision options"
+  ON public.client_decision_options;
+CREATE POLICY "Designers can manage decision options"
+ON public.client_decision_options FOR ALL TO authenticated
+USING (
+  EXISTS (
+    SELECT 1
+    FROM public.client_decisions AS decision
+    JOIN public.designer_clients AS relationship
+      ON relationship.id = decision.designer_client_id
+    WHERE decision.id = client_decision_options.decision_id
+      AND relationship.designer_id = auth.uid()
+  )
+);
+
+DROP POLICY IF EXISTS "Clients can select decision options"
+  ON public.client_decision_options;
+CREATE POLICY "Clients can select decision options"
+ON public.client_decision_options FOR UPDATE TO authenticated
+USING (
+  EXISTS (
+    SELECT 1
+    FROM public.client_decisions AS decision
+    JOIN public.designer_clients AS relationship
+      ON relationship.id = decision.designer_client_id
+    WHERE decision.id = client_decision_options.decision_id
+      AND relationship.client_id = auth.uid()
+  )
+)
+WITH CHECK (
+  EXISTS (
+    SELECT 1
+    FROM public.client_decisions AS decision
+    JOIN public.designer_clients AS relationship
+      ON relationship.id = decision.designer_client_id
+    WHERE decision.id = client_decision_options.decision_id
+      AND relationship.client_id = auth.uid()
+  )
+);
+
+DROP POLICY IF EXISTS "client_decision_options_studio_rw"
+  ON public.client_decision_options;
+CREATE POLICY "client_decision_options_studio_rw"
+ON public.client_decision_options FOR ALL TO authenticated
+USING (
+  EXISTS (
+    SELECT 1 FROM public.client_decisions AS decision
+    WHERE decision.id = client_decision_options.decision_id
+      AND public.is_studio_comember(decision.designer_id)
+  )
+)
+WITH CHECK (
+  EXISTS (
+    SELECT 1 FROM public.client_decisions AS decision
+    WHERE decision.id = client_decision_options.decision_id
+      AND public.is_studio_comember(decision.designer_id)
+  )
+);
+
+GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE public.client_decisions
+  TO authenticated;
+GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE public.client_decision_options
+  TO authenticated;
+GRANT SELECT, INSERT ON TABLE public.decision_overrides TO authenticated;
 
 -- Decision lifecycle notices are durable effects of the same transaction as
 -- the state change.  Keep the primitive private so a caller cannot forge a
@@ -1674,7 +1828,10 @@ REVOKE ALL ON FUNCTION public._enqueue_decision_notification(
   uuid, public.decision_notification_kind
 ) FROM PUBLIC, anon, authenticated, service_role;
 
--- Edge workers retain narrow, status-checked compatibility entry points.
+-- Edge workers retain narrow, status-checked compatibility entry points. The
+-- previously shipped Chrome extension also calls decision_required after its
+-- two guarded INSERTs, so that one notification permits the exact studio
+-- author during the compatibility window.
 CREATE OR REPLACE FUNCTION public.notify_decision_required(p_decision_id uuid)
 RETURNS uuid
 LANGUAGE plpgsql
@@ -1682,8 +1839,19 @@ SECURITY DEFINER
 SET search_path = public, pg_temp
 AS $$
 BEGIN
-  IF COALESCE(auth.role(), '') <> 'service_role' THEN
-    RAISE EXCEPTION 'notify_decision_required is service-role only'
+  IF COALESCE(auth.role(), '') <> 'service_role'
+     AND (
+       auth.uid() IS NULL
+       OR NOT EXISTS (
+         SELECT 1
+         FROM public.client_decisions AS decision
+         WHERE decision.id = p_decision_id
+           AND public.is_studio_comember(decision.designer_id)
+       )
+     )
+  THEN
+    RAISE EXCEPTION
+      'notify_decision_required requires service_role or the decision studio'
       USING ERRCODE = 'insufficient_privilege';
   END IF;
   RETURN public._enqueue_decision_notification(
@@ -1716,12 +1884,56 @@ SECURITY DEFINER
 SET search_path = public, pg_temp
 AS $$
 BEGIN
-  IF COALESCE(auth.role(), '') <> 'service_role' THEN
-    RAISE EXCEPTION 'notify_decision_resolved is service-role only'
+  IF COALESCE(auth.role(), '') <> 'service_role'
+     AND (
+       auth.uid() IS NULL
+       OR NOT EXISTS (
+         SELECT 1
+         FROM public.client_decisions AS decision
+         JOIN public.designer_clients AS relationship
+           ON relationship.id = decision.designer_client_id
+         WHERE decision.id = p_decision_id
+           AND (
+             relationship.client_id = auth.uid()
+             OR public.is_studio_comember(decision.designer_id)
+           )
+       )
+     )
+  THEN
+    RAISE EXCEPTION
+      'notify_decision_resolved requires service_role or a decision party'
       USING ERRCODE = 'insufficient_privilege';
   END IF;
   RETURN public._enqueue_decision_notification(
     p_decision_id, 'decision_resolved'
+  );
+END;
+$$;
+
+CREATE OR REPLACE FUNCTION public.notify_decision_updated(p_decision_id uuid)
+RETURNS uuid
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public, pg_temp
+AS $$
+BEGIN
+  IF COALESCE(auth.role(), '') <> 'service_role'
+     AND (
+       auth.uid() IS NULL
+       OR NOT EXISTS (
+         SELECT 1
+         FROM public.client_decisions AS decision
+         WHERE decision.id = p_decision_id
+           AND public.is_studio_comember(decision.designer_id)
+       )
+     )
+  THEN
+    RAISE EXCEPTION
+      'notify_decision_updated requires service_role or the decision studio'
+      USING ERRCODE = 'insufficient_privilege';
+  END IF;
+  RETURN public._enqueue_decision_notification(
+    p_decision_id, 'decision_updated'
   );
 END;
 $$;
@@ -1732,11 +1944,15 @@ REVOKE ALL ON FUNCTION public.notify_decision_overdue(uuid)
   FROM PUBLIC, anon, authenticated;
 REVOKE ALL ON FUNCTION public.notify_decision_resolved(uuid)
   FROM PUBLIC, anon, authenticated;
-GRANT EXECUTE ON FUNCTION public.notify_decision_required(uuid) TO service_role;
-GRANT EXECUTE ON FUNCTION public.notify_decision_overdue(uuid) TO service_role;
-GRANT EXECUTE ON FUNCTION public.notify_decision_resolved(uuid) TO service_role;
 REVOKE ALL ON FUNCTION public.notify_decision_updated(uuid)
-  FROM PUBLIC, anon, authenticated, service_role;
+  FROM PUBLIC, anon, authenticated;
+GRANT EXECUTE ON FUNCTION public.notify_decision_required(uuid)
+  TO authenticated, service_role;
+GRANT EXECUTE ON FUNCTION public.notify_decision_overdue(uuid) TO service_role;
+GRANT EXECUTE ON FUNCTION public.notify_decision_resolved(uuid)
+  TO authenticated, service_role;
+GRANT EXECUTE ON FUNCTION public.notify_decision_updated(uuid)
+  TO authenticated, service_role;
 
 -- One checked create owns the parent row, option children, dependency web and
 -- first notification.  The caller supplies the UUID as an idempotency token.
@@ -2077,12 +2293,10 @@ GRANT EXECUTE ON FUNCTION public.create_client_decision(
   uuid, jsonb, jsonb, uuid[], uuid[]
 ) TO authenticated;
 
-DROP POLICY IF EXISTS client_decisions_studio_insert
-  ON public.client_decisions;
-DROP POLICY IF EXISTS client_decision_options_studio_insert
-  ON public.client_decision_options;
-REVOKE INSERT ON TABLE public.client_decisions FROM authenticated;
-REVOKE INSERT ON TABLE public.client_decision_options FROM authenticated;
+-- Expand phase: installed Chrome extensions and rollback web bundles still use
+-- direct decision/option mutations. The legacy authenticated RLS/ACL surfaces
+-- restored above remain until version telemetry proves adoption; canonical
+-- clients should use this RPC and the checked workflows below.
 
 -- ── Checked decision edit / publish / reopen / expire / delete paths ────────
 
@@ -3136,8 +3350,10 @@ REVOKE ALL ON FUNCTION public._apply_client_decision_authorized(
   uuid, uuid, uuid, text, text, text, integer
 ) FROM PUBLIC, anon, authenticated, service_role;
 
--- Compatibility entry point retained for SQL callers. Unlike the legacy body,
--- p_selected_by can no longer be used to impersonate another user.
+-- Compatibility entry point retained for installed/rollback callers. Clients
+-- may attribute only themselves. A studio override may attribute only the
+-- addressed client and must already have the matching audited override row
+-- created by the legacy flow.
 CREATE OR REPLACE FUNCTION public.apply_decision(
   p_decision_id uuid,
   p_selected_option_id uuid,
@@ -3151,17 +3367,15 @@ AS $$
 DECLARE
   v_actor uuid := auth.uid();
   v_client_id uuid;
+  v_designer_id uuid;
 BEGIN
   IF v_actor IS NULL THEN
     RAISE EXCEPTION 'apply_decision requires an authenticated user'
       USING ERRCODE = 'insufficient_privilege';
   END IF;
-  IF p_selected_by IS NOT NULL AND p_selected_by IS DISTINCT FROM v_actor THEN
-    RAISE EXCEPTION 'p_selected_by must match the authenticated caller'
-      USING ERRCODE = 'insufficient_privilege';
-  END IF;
 
-  SELECT relationship.client_id INTO v_client_id
+  SELECT relationship.client_id, decision.designer_id
+  INTO v_client_id, v_designer_id
   FROM public.client_decisions AS decision
   JOIN public.designer_clients AS relationship
     ON relationship.id = decision.designer_client_id
@@ -3169,14 +3383,39 @@ BEGIN
   FOR UPDATE OF decision
   FOR SHARE OF relationship;
 
-  IF v_client_id IS DISTINCT FROM v_actor THEN
-    RAISE EXCEPTION 'only the addressed client may apply this decision'
-      USING ERRCODE = 'insufficient_privilege';
+  IF v_client_id IS NOT DISTINCT FROM v_actor THEN
+    IF p_selected_by IS NOT NULL AND p_selected_by IS DISTINCT FROM v_actor THEN
+      RAISE EXCEPTION 'p_selected_by must match the authenticated client'
+        USING ERRCODE = 'insufficient_privilege';
+    END IF;
+
+    PERFORM public._apply_client_decision_authorized(
+      p_decision_id, p_selected_option_id, v_actor, NULL, NULL, NULL, NULL
+    );
+    RETURN;
   END IF;
 
-  PERFORM public._apply_client_decision_authorized(
-    p_decision_id, p_selected_option_id, v_actor, NULL, NULL, NULL, NULL
-  );
+  IF public._can_author_proposal(v_designer_id)
+     AND p_selected_by IS NOT DISTINCT FROM v_client_id
+     AND EXISTS (
+       SELECT 1
+       FROM public.decision_overrides AS override
+       WHERE override.decision_id = p_decision_id
+         AND override.option_id = p_selected_option_id
+         AND override.acted_by = v_actor
+     )
+  THEN
+    PERFORM public._apply_client_decision_authorized(
+      p_decision_id, p_selected_option_id, v_client_id,
+      NULL, NULL, NULL, NULL
+    );
+    RETURN;
+  END IF;
+
+  RAISE EXCEPTION
+    'apply_decision requires the addressed client or an audited studio override'
+    USING ERRCODE = 'insufficient_privilege';
+
 END;
 $$;
 
@@ -4155,9 +4394,10 @@ BEGIN
   END IF;
 
   IF TG_OP = 'INSERT' THEN
-    RAISE EXCEPTION
-      'proposal phases may only be inserted through create_proposal_phase or apply_phase_template'
-      USING ERRCODE = 'insufficient_privilege';
+    -- Expand-phase compatibility: rollback builders still insert draft phases
+    -- directly. The earlier draft-only parent guard validates and serializes
+    -- that write; this trigger continues to forbid topology rewrites.
+    RETURN NEW;
   END IF;
   IF NEW.proposal_id IS DISTINCT FROM OLD.proposal_id
      OR NEW.lane IS DISTINCT FROM OLD.lane
@@ -4181,8 +4421,10 @@ BEFORE INSERT OR UPDATE OF proposal_id, lane, follows_phase_id
 ON public.proposal_phases
 FOR EACH ROW EXECUTE FUNCTION public.guard_proposal_phase_topology_write();
 
-REVOKE INSERT, UPDATE, DELETE ON TABLE public.proposal_phases
-  FROM anon, authenticated;
+-- Expand phase retains direct draft phase create/edit/remove for rollback
+-- bundles; the topology guard above and 00390 draft-only guard remain active.
+REVOKE INSERT, UPDATE, DELETE ON TABLE public.proposal_phases FROM anon;
+GRANT INSERT, UPDATE, DELETE ON TABLE public.proposal_phases TO authenticated;
 
 -- 00316 widened the parent phases/payment schedule to active design-studio
 -- peers but missed the three phase-parented child tables. Keep their existing

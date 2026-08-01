@@ -256,44 +256,15 @@ public actor DecisionsAPIClient {
 
     // MARK: - Writes
 
-    /// Stamp `viewed_at` the first time the client opens a decision so the
-    /// designer-side dashboard can show "seen". Idempotent on the client —
-    /// we only PATCH when the row hasn't been viewed yet (`viewed_at is.null`)
-    /// so re-opens don't keep moving the timestamp. RLS (00064) allows the
-    /// client to update this field on their own decisions.
-    public func markViewed(decisionId: String, viewedAt: Date = Date()) async throws {
-        let url = baseURL.appendingPathComponent("/rest/v1/client_decisions")
-            .appending(queryItems: [
-                URLQueryItem(name: "id", value: "eq.\(decisionId)"),
-                URLQueryItem(name: "viewed_at", value: "is.null"),
-            ])
-        var request = URLRequest(url: url)
-        request.httpMethod = "PATCH"
-        await applyHeaders(to: &request, prefer: "return=minimal")
-        let iso = ISO8601DateFormatter().string(from: viewedAt)
-        let body: [String: String] = ["viewed_at": iso]
-        request.httpBody = try JSONSerialization.data(withJSONObject: body)
-        let (data, response) = try await session.data(for: request)
-        if let http = response as? HTTPURLResponse, !(200..<300).contains(http.statusCode) {
-            throw RoomsAPIError.http(status: http.statusCode, body: String(data: data, encoding: .utf8) ?? "")
-        }
-    }
-
-    /// Apply the client's selection through the canonical feed-through RPC
-    /// (`apply_decision`, migration 00085): marks the decision `responded`,
-    /// flips the chosen option's `selected` flag, and clears any FF&E items
-    /// blocked on this decision. `selected_by` defaults to `auth.uid()`
-    /// inside the function, so a separate optionId update isn't needed.
-    public func applyDecision(decisionId: String, optionId: String) async throws {
-        let url = baseURL.appendingPathComponent("/rest/v1/rpc/apply_decision")
+    /// Stamp `viewed_at` through the addressed-client authority. The server
+    /// owns the timestamp and keeps repeat opens idempotent.
+    public func markViewed(decisionId: String) async throws {
+        let url = baseURL.appendingPathComponent("/rest/v1/rpc/mark_client_decision_viewed")
         var request = URLRequest(url: url)
         request.httpMethod = "POST"
         await applyHeaders(to: &request)
-        let params: [String: Any] = [
-            "p_decision_id": decisionId,
-            "p_selected_option_id": optionId,
-        ]
-        request.httpBody = try JSONSerialization.data(withJSONObject: params)
+        let body: [String: String] = ["p_decision_id": decisionId]
+        request.httpBody = try JSONSerialization.data(withJSONObject: body)
         let (data, response) = try await session.data(for: request)
         if let http = response as? HTTPURLResponse, !(200..<300).contains(http.statusCode) {
             throw RoomsAPIError.http(status: http.statusCode, body: String(data: data, encoding: .utf8) ?? "")
@@ -307,45 +278,29 @@ public actor DecisionsAPIClient {
         case electronicSignature = "electronic_signature"
     }
 
-    /// Record the client's consent for a resolved decision (migration 00117).
-    /// Called after `applyDecision` succeeds. `signature` carries the typed
-    /// name for `electronic_signature`; it's omitted for a plain click-through.
-    public func recordConsent(
-        decisionId: String,
-        method: ConsentMethod,
-        signature: String? = nil,
-        consentedAt: Date = Date()
-    ) async throws {
-        let url = baseURL.appendingPathComponent("/rest/v1/client_decisions")
-            .appending(queryItems: [URLQueryItem(name: "id", value: "eq.\(decisionId)")])
-        var request = URLRequest(url: url)
-        request.httpMethod = "PATCH"
-        await applyHeaders(to: &request, prefer: "return=minimal")
-        var body: [String: String] = [
-            "client_consent_method": method.rawValue,
-            "client_consented_at": ISO8601DateFormatter().string(from: consentedAt),
-        ]
-        if let signature, !signature.isEmpty {
-            body["client_signature"] = signature
-        }
-        request.httpBody = try JSONSerialization.data(withJSONObject: body)
-        let (data, response) = try await session.data(for: request)
-        if let http = response as? HTTPURLResponse, !(200..<300).contains(http.statusCode) {
-            throw RoomsAPIError.http(status: http.statusCode, body: String(data: data, encoding: .utf8) ?? "")
-        }
-    }
-
-    /// Select an option and capture consent in one call. The selection is
-    /// fed through `apply_decision`; consent is recorded as a follow-up
-    /// PATCH so a transient consent failure can't leave the decision in a
-    /// half-applied state without the designer ever seeing the choice.
+    /// Select an option and capture consent in one canonical transaction.
     public func selectOption(
         decisionId: String,
         optionId: String,
         consent: ConsentMethod,
         signature: String? = nil
     ) async throws {
-        try await applyDecision(decisionId: decisionId, optionId: optionId)
-        try await recordConsent(decisionId: decisionId, method: consent, signature: signature)
+        let url = baseURL.appendingPathComponent("/rest/v1/rpc/apply_client_decision")
+        var request = URLRequest(url: url)
+        request.httpMethod = "POST"
+        await applyHeaders(to: &request)
+        let params: [String: Any] = [
+            "p_decision_id": decisionId,
+            "p_selected_option_id": optionId,
+            "p_client_consent_method": consent.rawValue,
+            "p_client_signature": signature ?? NSNull(),
+            "p_client_note": NSNull(),
+            "p_quantity": NSNull(),
+        ]
+        request.httpBody = try JSONSerialization.data(withJSONObject: params)
+        let (data, response) = try await session.data(for: request)
+        if let http = response as? HTTPURLResponse, !(200..<300).contains(http.statusCode) {
+            throw RoomsAPIError.http(status: http.statusCode, body: String(data: data, encoding: .utf8) ?? "")
+        }
     }
 }

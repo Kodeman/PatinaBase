@@ -1983,7 +1983,7 @@ REVOKE ALL ON FUNCTION public.get_client_proposal_feedback(uuid, boolean)
 GRANT EXECUTE ON FUNCTION public.get_client_proposal_feedback(uuid, boolean)
   TO authenticated;
 
--- ── Remove legacy client write/read paths ──────────────────────────────────
+-- ── Remove legacy writes; stage installed-iOS read compatibility ───────────
 
 DROP POLICY IF EXISTS "Clients can update proposal status" ON public.proposals;
 DROP POLICY IF EXISTS "Clients can view their proposals" ON public.proposals;
@@ -2034,5 +2034,158 @@ DROP POLICY IF EXISTS "proposal_schedule_milestones_client_select"
   ON public.proposal_schedule_milestones;
 DROP POLICY IF EXISTS "Clients can view non-draft proposal CO terms"
   ON public.proposal_change_order_terms;
+
+-- Installed Patina iOS and rollback web bundles still request these raw row
+-- sets. Replace
+-- the former broad/loosely-scoped policies with temporary SELECT-only policies
+-- for the addressed client and an issued terminal/active proposal. The new app
+-- and portal use list_client_proposals/get_client_proposal_bundle. Remove only
+-- these *_legacy_ios_client_select policies after adoption is measured.
+CREATE POLICY proposals_legacy_ios_client_select
+ON public.proposals FOR SELECT TO authenticated
+USING (
+  client_id = (SELECT auth.uid())
+  AND status IN ('sent', 'viewed', 'accepted', 'declined', 'expired')
+);
+
+CREATE POLICY proposal_items_legacy_ios_client_select
+ON public.proposal_items FOR SELECT TO authenticated
+USING (
+  EXISTS (
+    SELECT 1 FROM public.proposals AS proposal
+    WHERE proposal.id = proposal_items.proposal_id
+      AND proposal.client_id = (SELECT auth.uid())
+      AND proposal.status IN ('sent', 'viewed', 'accepted', 'declined', 'expired')
+  )
+);
+
+CREATE POLICY proposal_sections_legacy_ios_client_select
+ON public.proposal_sections FOR SELECT TO authenticated
+USING (
+  EXISTS (
+    SELECT 1 FROM public.proposals AS proposal
+    WHERE proposal.id = proposal_sections.proposal_id
+      AND proposal.client_id = (SELECT auth.uid())
+      AND proposal.status IN ('sent', 'viewed', 'accepted', 'declined', 'expired')
+  )
+);
+
+CREATE POLICY proposal_payment_milestones_legacy_ios_client_select
+ON public.proposal_payment_milestones FOR SELECT TO authenticated
+USING (
+  EXISTS (
+    SELECT 1 FROM public.proposals AS proposal
+    WHERE proposal.id = proposal_payment_milestones.proposal_id
+      AND proposal.client_id = (SELECT auth.uid())
+      AND proposal.status IN ('sent', 'viewed', 'accepted', 'declined', 'expired')
+  )
+);
+
+CREATE POLICY proposal_phases_legacy_ios_client_select
+ON public.proposal_phases FOR SELECT TO authenticated
+USING (
+  EXISTS (
+    SELECT 1 FROM public.proposals AS proposal
+    WHERE proposal.id = proposal_phases.proposal_id
+      AND proposal.client_id = (SELECT auth.uid())
+      AND proposal.status IN ('sent', 'viewed', 'accepted', 'declined', 'expired')
+  )
+);
+
+CREATE POLICY proposal_exclusions_legacy_ios_client_select
+ON public.proposal_exclusions FOR SELECT TO authenticated
+USING (
+  EXISTS (
+    SELECT 1 FROM public.proposals AS proposal
+    WHERE proposal.id = proposal_exclusions.proposal_id
+      AND proposal.client_id = (SELECT auth.uid())
+      AND proposal.status IN ('sent', 'viewed', 'accepted', 'declined', 'expired')
+  )
+);
+
+CREATE POLICY proposal_scope_rooms_legacy_ios_client_select
+ON public.proposal_scope_rooms FOR SELECT TO authenticated
+USING (
+  EXISTS (
+    SELECT 1 FROM public.proposals AS proposal
+    WHERE proposal.id = proposal_scope_rooms.proposal_id
+      AND proposal.client_id = (SELECT auth.uid())
+      AND proposal.status IN ('sent', 'viewed', 'accepted', 'declined', 'expired')
+  )
+);
+
+CREATE POLICY proposal_boards_legacy_ios_client_select
+ON public.proposal_boards FOR SELECT TO authenticated
+USING (
+  status = 'active'
+  AND EXISTS (
+    SELECT 1 FROM public.proposals AS proposal
+    WHERE proposal.id = proposal_boards.proposal_id
+      AND proposal.client_id = (SELECT auth.uid())
+      AND proposal.status IN ('sent', 'viewed', 'accepted', 'declined', 'expired')
+  )
+);
+
+CREATE POLICY proposal_board_items_legacy_ios_client_select
+ON public.proposal_board_items FOR SELECT TO authenticated
+USING (
+  EXISTS (
+    SELECT 1
+    FROM public.proposal_boards AS board
+    JOIN public.proposals AS proposal ON proposal.id = board.proposal_id
+    WHERE board.id = proposal_board_items.board_id
+      AND board.status = 'active'
+      AND proposal.client_id = (SELECT auth.uid())
+      AND proposal.status IN ('sent', 'viewed', 'accepted', 'declined', 'expired')
+  )
+);
+
+CREATE POLICY proposal_palettes_legacy_client_select
+ON public.proposal_palettes FOR SELECT TO authenticated
+USING (
+  EXISTS (
+    SELECT 1 FROM public.proposals AS proposal
+    WHERE proposal.id = proposal_palettes.proposal_id
+      AND proposal.client_id = (SELECT auth.uid())
+      AND proposal.status IN ('sent', 'viewed', 'accepted', 'declined', 'expired')
+  )
+);
+
+CREATE POLICY palette_swatches_legacy_client_select
+ON public.palette_swatches FOR SELECT TO authenticated
+USING (
+  EXISTS (
+    SELECT 1
+    FROM public.proposal_palettes AS palette
+    JOIN public.proposals AS proposal ON proposal.id = palette.proposal_id
+    WHERE palette.id = palette_swatches.palette_id
+      AND proposal.client_id = (SELECT auth.uid())
+      AND proposal.status IN ('sent', 'viewed', 'accepted', 'declined', 'expired')
+  )
+);
+
+CREATE POLICY proposal_schedule_milestones_legacy_client_select
+ON public.proposal_schedule_milestones FOR SELECT TO authenticated
+USING (
+  EXISTS (
+    SELECT 1
+    FROM public.proposal_phases AS phase
+    JOIN public.proposals AS proposal ON proposal.id = phase.proposal_id
+    WHERE phase.id = proposal_schedule_milestones.phase_id
+      AND proposal.client_id = (SELECT auth.uid())
+      AND proposal.status IN ('sent', 'viewed', 'accepted', 'declined', 'expired')
+  )
+);
+
+CREATE POLICY proposal_change_order_terms_legacy_client_select
+ON public.proposal_change_order_terms FOR SELECT TO authenticated
+USING (
+  EXISTS (
+    SELECT 1 FROM public.proposals AS proposal
+    WHERE proposal.id = proposal_change_order_terms.proposal_id
+      AND proposal.client_id = (SELECT auth.uid())
+      AND proposal.status IN ('sent', 'viewed', 'accepted', 'declined', 'expired')
+  )
+);
 
 COMMIT;
