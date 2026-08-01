@@ -38,6 +38,7 @@ import {
 } from "@/components/ui/controls";
 import { useHydrated } from "@/hooks/use-hydrated";
 import { specBookEvents } from "@/lib/analytics/spec-book-events";
+import { resolveClientPortalOrigin } from "@/lib/client-portal-url";
 import {
   audienceAllows,
   buildNaDeclarationUpdate,
@@ -876,11 +877,7 @@ export function SpecBookWorkspace({ projectId }: { projectId: string }) {
         label: `${artifact.audience} spec book`,
         expiresAt: null,
       });
-      const clientPortalBase =
-        process.env.NEXT_PUBLIC_CLIENT_PORTAL_URL ??
-        (window.location.hostname === "localhost"
-          ? "http://localhost:3002"
-          : "https://client.patina.cloud");
+      const clientPortalBase = resolveClientPortalOrigin(window.location.origin);
       const url = `${clientPortalBase}/field/spec-book/${result.token}`;
       setShareResult({ artifactId: artifact.id, url });
       specBookEvents.shareCreated({
