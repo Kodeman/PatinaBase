@@ -82,25 +82,29 @@ VALUES (
 );
 
 INSERT INTO public.scope_change_requests (
-  id, project_id, requested_by, title, description, status, applied_at
+  id, project_id, requested_by, request_origin, title, description, status,
+  applied_at
 )
 VALUES
   (
     'a7170000-0000-4000-8000-000000000001',
     'a7100000-0000-4000-8000-000000000012',
     'a7000000-0000-4000-8000-000000000002',
+    'client_request',
     'Approved but not applied', 'Add one final built-in', 'approved', NULL
   ),
   (
     'a7170000-0000-4000-8000-000000000002',
     'a7100000-0000-4000-8000-000000000012',
     'a7000000-0000-4000-8000-000000000002',
+    'client_request',
     'Declined change', 'No longer wanted', 'declined', NULL
   ),
   (
     'a7170000-0000-4000-8000-000000000003',
     'a7100000-0000-4000-8000-000000000012',
     'a7000000-0000-4000-8000-000000000002',
+    'client_request',
     'Cancelled change', 'Withdrawn', 'cancelled', NULL
   );
 
