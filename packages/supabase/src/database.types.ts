@@ -21821,6 +21821,10 @@ export type Database = {
         }
         Returns: string[]
       }
+      create_client_scope_change_request: {
+        Args: { p_description: string; p_project_id: string; p_title: string }
+        Returns: Json
+      }
       create_direct_order: {
         Args: { p_product_id: string; p_quantity?: number }
         Returns: {
