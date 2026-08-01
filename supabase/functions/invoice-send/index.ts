@@ -1,15 +1,13 @@
 // Supabase Edge Function: invoice-send
 //
 // Invoicing Wave 2. Invoked by useSendInvoice after issue_invoice (Issue &
-// Send) or standalone (Resend). The caller must be the invoice's designer
-// (verified against the JWT in the Authorization header — verify_jwt is on,
-// but gateway verification alone doesn't prove ownership).
+// Send) or standalone (Resend). The caller must have the same studio capability
+// as generate/issue/void: invoice owner or active non-guest co-member.
 //
 // Flow:
 //   1. Auth: resolve the caller from the Authorization header.
-//   2. Load the invoice (service role) + project / client / designer joins;
-//      reject unless caller === designer_id and status is issued (not draft,
-//      not void).
+//   2. Prove can_manage_invoice through a caller-JWT Supabase client, then load
+//      the invoice (service role) + joins and require issued (not draft/void).
 //   3. Resolve the recipient: invoice.client_id → project.client_id profile,
 //      falling back to designer_clients.client_email for not-yet-signed-up
 //      clients (mirrors decision-reminders).
@@ -42,9 +40,14 @@ import {
   buildInvoiceOverdueNoticeEmail,
   buildInvoiceSentEmail,
 } from '../_shared/invoice-emails.ts';
-import { resolveStudioIdentity, studioCobrand, studioDisplayName } from '../_shared/studio-identity.ts';
+import {
+  resolveStudioIdentity,
+  studioCobrand,
+  studioDisplayName,
+} from '../_shared/studio-identity.ts';
 
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL')!;
+const SUPABASE_ANON_KEY = Deno.env.get('SUPABASE_ANON_KEY')!;
 const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
 const CLIENT_PORTAL_URL = Deno.env.get('CLIENT_PORTAL_URL') ?? 'https://client.patina.cloud';
 
@@ -67,7 +70,11 @@ interface InvoiceRow {
   sent_at: string | null;
   project: { id: string; name: string; client_id: string | null } | null;
   client: { id: string; full_name: string | null; email: string | null } | null;
-  designer: { id: string; full_name: string | null; business_name: string | null } | null;
+  designer: {
+    id: string;
+    full_name: string | null;
+    business_name: string | null;
+  } | null;
 }
 
 function json(body: unknown, status = 200): Response {
@@ -116,6 +123,22 @@ Deno.serve(async (req: Request) => {
     return json({ error: 'unauthorized' }, 401);
   }
 
+  const authorization = req.headers.get('Authorization')!;
+  const callerClient = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
+    auth: { persistSession: false, autoRefreshToken: false },
+    global: { headers: { Authorization: authorization } },
+  });
+  const { data: canManage, error: capabilityErr } = await callerClient.rpc('can_manage_invoice', {
+    p_invoice_id: invoiceId,
+  });
+  if (capabilityErr) {
+    console.error('invoice-send: capability check failed', capabilityErr);
+    return json({ error: 'authorization_failed' }, 500);
+  }
+  if (canManage !== true) {
+    return json({ error: 'invoice_not_found' }, 404);
+  }
+
   const admin = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
 
   const { data, error } = await admin
@@ -137,22 +160,37 @@ Deno.serve(async (req: Request) => {
     return json({ error: 'lookup_failed', detail: error.message }, 500);
   }
   const invoice = data as unknown as InvoiceRow | null;
-  // Not-found and not-owned collapse to 404 so the endpoint doesn't confirm
-  // foreign invoice ids exist.
-  if (!invoice || invoice.designer_id !== caller.id) {
+  // Not-found collapses to 404. Capability was already checked using the
+  // caller JWT, not the service role.
+  if (!invoice) {
     return json({ error: 'invoice_not_found' }, 404);
   }
   if (invoice.status === 'draft') {
-    return json({ error: 'invoice_not_issued', detail: 'Issue the invoice before sending.' }, 409);
+    return json(
+      {
+        error: 'invoice_not_issued',
+        detail: 'Issue the invoice before sending.',
+      },
+      409
+    );
   }
   if (invoice.status === 'void') {
-    return json({ error: 'invoice_void', detail: 'A voided invoice cannot be sent.' }, 409);
+    return json(
+      {
+        error: 'invoice_void',
+        detail: 'A voided invoice cannot be sent.',
+      },
+      409
+    );
   }
   // Manual reminders only make sense on a live receivable.
   if (sendType === 'reminder' && invoice.status !== 'sent' && invoice.status !== 'partially_paid') {
     return json(
-      { error: 'invoice_not_open', detail: 'Reminders can only be sent on open (sent or partially paid) invoices.' },
-      409,
+      {
+        error: 'invoice_not_open',
+        detail: 'Reminders can only be sent on open (sent or partially paid) invoices.',
+      },
+      409
     );
   }
 
@@ -219,10 +257,7 @@ Deno.serve(async (req: Request) => {
           projectName,
           designerName,
           clientName: recipientName,
-          balanceCents: Math.max(
-            (invoice.total_cents || 0) - (invoice.amount_paid_cents || 0),
-            0,
-          ),
+          balanceCents: Math.max((invoice.total_cents || 0) - (invoice.amount_paid_cents || 0), 0),
           dueDate: invoice.due_date,
           portalUrl,
           currency: invoice.currency,
