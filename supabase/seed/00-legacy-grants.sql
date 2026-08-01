@@ -4316,13 +4316,31 @@ END $g$;
 
 -- 00388_proposal_send_dispatch_guard.sql
 DO $g$ BEGIN
-  REVOKE ALL ON TABLE public.proposal_send_dispatches FROM PUBLIC, anon, authenticated;
+  REVOKE ALL ON TABLE public.proposal_send_dispatches FROM PUBLIC, anon, authenticated, service_role;
 EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
 END $g$;
 
 -- 00388_proposal_send_dispatch_guard.sql
 DO $g$ BEGIN
-  GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE public.proposal_send_dispatches TO service_role;
+  REVOKE ALL ON FUNCTION public.guard_proposal_send_dispatch_link() FROM PUBLIC, anon, authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00388_proposal_send_dispatch_guard.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public._commit_proposal_send( uuid, timestamptz, integer, text, text, text, timestamptz ) FROM PUBLIC, anon, authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00388_proposal_send_dispatch_guard.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.send_proposal( uuid, timestamptz, integer, text, text, text, timestamptz ) FROM PUBLIC, anon;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00388_proposal_send_dispatch_guard.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.send_proposal( uuid, timestamptz, integer, text, text, text, timestamptz ) TO authenticated;
 EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
 END $g$;
 
@@ -4340,24 +4358,108 @@ END $g$;
 
 -- 00388_proposal_send_dispatch_guard.sql
 DO $g$ BEGIN
-  REVOKE ALL ON FUNCTION public.claim_proposal_send_dispatch(uuid, timestamptz, integer) FROM PUBLIC, anon, authenticated;
+  REVOKE ALL ON FUNCTION public.claim_proposal_send_dispatch( uuid, uuid, timestamptz, integer ) FROM PUBLIC, anon, authenticated;
 EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
 END $g$;
 
 -- 00388_proposal_send_dispatch_guard.sql
 DO $g$ BEGIN
-  GRANT EXECUTE ON FUNCTION public.claim_proposal_send_dispatch(uuid, timestamptz, integer) TO service_role;
+  REVOKE ALL ON FUNCTION public.read_proposal_send_dispatch( uuid, uuid, timestamptz ) FROM PUBLIC, anon, authenticated;
 EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
 END $g$;
 
 -- 00388_proposal_send_dispatch_guard.sql
 DO $g$ BEGIN
-  REVOKE ALL ON FUNCTION public.complete_proposal_send_dispatch(uuid, timestamptz, uuid, boolean, text, text) FROM PUBLIC, anon, authenticated;
+  REVOKE ALL ON FUNCTION public.persist_proposal_send_request( uuid, uuid, text, text, text[], text[], text, boolean ) FROM PUBLIC, anon, authenticated;
 EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
 END $g$;
 
 -- 00388_proposal_send_dispatch_guard.sql
 DO $g$ BEGIN
-  GRANT EXECUTE ON FUNCTION public.complete_proposal_send_dispatch(uuid, timestamptz, uuid, boolean, text, text) TO service_role;
+  REVOKE ALL ON FUNCTION public.begin_proposal_send_provider_attempt(uuid, uuid) FROM PUBLIC, anon, authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00388_proposal_send_dispatch_guard.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.complete_proposal_send_dispatch( uuid, uuid, text, text, text ) FROM PUBLIC, anon, authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00388_proposal_send_dispatch_guard.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.suppress_proposal_send_dispatch(uuid, uuid, text) FROM PUBLIC, anon, authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00388_proposal_send_dispatch_guard.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.release_proposal_send_dispatch(uuid, uuid, text) FROM PUBLIC, anon, authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00388_proposal_send_dispatch_guard.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.sync_proposal_send_email_log(uuid) FROM PUBLIC, anon, authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00388_proposal_send_dispatch_guard.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.sync_proposal_send_in_app_log(uuid) FROM PUBLIC, anon, authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00388_proposal_send_dispatch_guard.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.claim_proposal_send_dispatch( uuid, uuid, timestamptz, integer ) TO service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00388_proposal_send_dispatch_guard.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.read_proposal_send_dispatch( uuid, uuid, timestamptz ) TO service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00388_proposal_send_dispatch_guard.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.persist_proposal_send_request( uuid, uuid, text, text, text[], text[], text, boolean ) TO service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00388_proposal_send_dispatch_guard.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.begin_proposal_send_provider_attempt(uuid, uuid) TO service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00388_proposal_send_dispatch_guard.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.complete_proposal_send_dispatch( uuid, uuid, text, text, text ) TO service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00388_proposal_send_dispatch_guard.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.suppress_proposal_send_dispatch(uuid, uuid, text) TO service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00388_proposal_send_dispatch_guard.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.release_proposal_send_dispatch(uuid, uuid, text) TO service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00388_proposal_send_dispatch_guard.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.sync_proposal_send_email_log(uuid) TO service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00388_proposal_send_dispatch_guard.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.sync_proposal_send_in_app_log(uuid) TO service_role;
 EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
 END $g$;
