@@ -7,14 +7,32 @@ import type {
 import {
   deriveActivePhaseActions,
   PhaseAdvanceControl,
+  phaseTransitionErrorMessage,
 } from '../phase-advance-control';
 
 const mockMutate = jest.fn();
+const mockChainMutate = jest.fn();
+const mockCoordinationRefetch = jest.fn();
 let mockPending = false;
-let mockCoordinationItems: CoordinationItem[] = [];
+let mockChainPending = false;
+let mockCoordinationItems: CoordinationItem[] | undefined = [];
+let mockCoordinationLoading = false;
+let mockCoordinationError = false;
+let mockCoordinationFetching = false;
 
 jest.mock('@patina/supabase', () => ({
-  useCoordinationItems: () => ({ data: mockCoordinationItems }),
+  useCoordinationItems: () => ({
+    data: mockCoordinationItems,
+    isLoading: mockCoordinationLoading,
+    isPending: mockCoordinationLoading,
+    isError: mockCoordinationError,
+    isFetching: mockCoordinationFetching,
+    refetch: mockCoordinationRefetch,
+  }),
+  useUpdateProjectPhaseChain: () => ({
+    mutate: mockChainMutate,
+    isPending: mockChainPending,
+  }),
   useUpdateProjectPhaseStatus: () => ({
     mutate: mockMutate,
     isPending: mockPending,
@@ -80,6 +98,11 @@ type MutationOptions = {
   onError: (error: unknown) => void;
 };
 
+type ChainMutationOptions = {
+  onSuccess: () => void;
+  onError: (error: unknown) => void;
+};
+
 const parallelPhases = [
   phase({
     id: 'thread-active',
@@ -141,11 +164,46 @@ describe('deriveActivePhaseActions', () => {
   });
 });
 
+describe('phaseTransitionErrorMessage', () => {
+  it.each([
+    [
+      'advance_project_phase: canonical successor is missing',
+      'This schedule is not connected after this phase.',
+    ],
+    [
+      'advance_project_phase: cross-lane handoff is unsupported',
+      'A phase is connected across the main and thread lanes.',
+    ],
+    [
+      'advance_project_phase: predecessor phases must be completed',
+      'An earlier phase in this schedule is still open.',
+    ],
+    [
+      'advance_project_phase: successor phases must be pending',
+      'A later phase in this schedule has already started or closed.',
+    ],
+    [
+      'advance_project_phase: phase status changed (expected in_progress, found completed)',
+      'The schedule changed while this handoff was running.',
+    ],
+  ])('maps raw RPC error %s to calm copy', (raw, expected) => {
+    const message = phaseTransitionErrorMessage({ message: raw });
+    expect(message).toContain(expected);
+    expect(message).not.toContain('advance_project_phase');
+  });
+});
+
 describe('PhaseAdvanceControl', () => {
   beforeEach(() => {
     mockPending = false;
+    mockChainPending = false;
     mockCoordinationItems = [];
+    mockCoordinationLoading = false;
+    mockCoordinationError = false;
+    mockCoordinationFetching = false;
     mockMutate.mockReset();
+    mockChainMutate.mockReset();
+    mockCoordinationRefetch.mockReset();
   });
 
   it('renders independent, accessible controls for simultaneous main and thread phases', () => {
@@ -170,9 +228,9 @@ describe('PhaseAdvanceControl', () => {
     const threadRow = screen.getByRole('listitem', {
       name: 'Custom Drapery',
     });
-    expect(within(threadRow).getByText(/Thread lane · Delayed/)).toHaveTextContent(
-      'Follows Window Survey',
-    );
+    expect(
+      within(threadRow).getByText(/Thread lane · Delayed/),
+    ).toHaveTextContent('Follows Window Survey');
     const mainRow = screen.getByRole('listitem', {
       name: 'Design Development',
     });
@@ -191,7 +249,7 @@ describe('PhaseAdvanceControl', () => {
     const wrongBySort = phase({
       id: 'wrong-by-sort',
       name: 'Wrong by Sort',
-      status: 'pending',
+      status: 'completed',
       sortOrder: 51,
     });
     const canonical = phase({
@@ -313,7 +371,321 @@ describe('PhaseAdvanceControl', () => {
       screen.getByRole('button', {
         name: 'Complete Design Development (main lane)',
       }),
+    ).toBeDisabled();
+  });
+
+  it('fails completion closed while blocker data loads, without blocking a delayed resume', () => {
+    mockCoordinationItems = undefined;
+    mockCoordinationLoading = true;
+
+    render(
+      <PhaseAdvanceControl projectId="project-1" phases={parallelPhases} />,
+    );
+
+    expect(completeDevelopmentButton()).toBeDisabled();
+    expect(
+      screen.getByText('Checking open phase blockers before completion…'),
+    ).toBeVisible();
+    expect(
+      screen.getByRole('button', {
+        name: 'Resume Custom Drapery (thread lane)',
+      }),
     ).toBeEnabled();
+  });
+
+  it('fails completion closed when blocker data errors and exposes a retry act', () => {
+    mockCoordinationItems = undefined;
+    mockCoordinationError = true;
+
+    render(<PhaseAdvanceControl projectId="project-1" phases={[mainActive]} />);
+
+    expect(completeDevelopmentButton()).toBeDisabled();
+    fireEvent.click(
+      screen.getByRole('button', { name: 'Check blockers again' }),
+    );
+    expect(mockCoordinationRefetch).toHaveBeenCalledTimes(1);
+  });
+
+  it('requires an explicit legacy-main root choice and connects only the selected exact phase', () => {
+    const procurement = phase({
+      id: 'procurement-root',
+      name: 'Procurement',
+      status: 'pending',
+      sortOrder: -100,
+    });
+    const installation = phase({
+      id: 'installation-root',
+      name: 'Installation',
+      status: 'pending',
+      sortOrder: 999,
+    });
+    mockChainMutate.mockImplementation(
+      (_variables: unknown, options: ChainMutationOptions) =>
+        options.onSuccess(),
+    );
+
+    render(
+      <PhaseAdvanceControl
+        projectId="project-1"
+        phases={[mainActive, procurement, installation]}
+      />,
+    );
+
+    expect(completeDevelopmentButton()).toBeDisabled();
+    const chooser = screen.getByRole('combobox', {
+      name: 'Next phase after Design Development',
+    });
+    expect(chooser).toHaveValue('');
+    expect(
+      screen.getByRole('button', { name: 'Connect selected next phase' }),
+    ).toBeDisabled();
+
+    fireEvent.change(chooser, { target: { value: installation.id } });
+    expect(
+      screen.getByText(
+        'Confirming changes the schedule dependency: Installation will follow Design Development.',
+      ),
+    ).toBeVisible();
+    fireEvent.click(
+      screen.getByRole('button', {
+        name: 'Connect Installation after Design Development',
+      }),
+    );
+
+    expect(mockChainMutate).toHaveBeenCalledWith(
+      {
+        phaseId: installation.id,
+        projectId: 'project-1',
+        followsPhaseId: mainActive.id,
+      },
+      expect.objectContaining({
+        onSuccess: expect.any(Function),
+        onError: expect.any(Function),
+      }),
+    );
+    expect(screen.getByRole('status')).toHaveTextContent(
+      'Installation now follows Design Development.',
+    );
+  });
+
+  it('does not offer inline relinking when a pending child still belongs to completed history', () => {
+    const historicalRoot = phase({
+      id: 'historical-root',
+      name: 'Historic Procurement',
+      status: 'completed',
+    });
+    const pendingChild = phase({
+      id: 'pending-child',
+      name: 'Installation',
+      status: 'pending',
+      followsPhaseId: historicalRoot.id,
+    });
+
+    render(
+      <PhaseAdvanceControl
+        projectId="project-1"
+        phases={[mainActive, historicalRoot, pendingChild]}
+      />,
+    );
+
+    expect(completeDevelopmentButton()).toBeDisabled();
+    expect(screen.queryByRole('combobox')).not.toBeInTheDocument();
+    expect(screen.getByText(/none is a safe pending root/i)).toBeVisible();
+    expect(mockChainMutate).not.toHaveBeenCalled();
+  });
+
+  it('preserves valid independent thread-root components', () => {
+    const drapery = phase({
+      id: 'drapery-thread',
+      name: 'Drapery',
+      status: 'in_progress',
+      lane: 'thread',
+    });
+    const art = phase({
+      id: 'art-thread',
+      name: 'Art Placement',
+      status: 'delayed',
+      lane: 'thread',
+    });
+
+    render(
+      <PhaseAdvanceControl projectId="project-1" phases={[drapery, art]} />,
+    );
+
+    expect(
+      screen.getByRole('button', {
+        name: 'Complete Drapery (thread lane)',
+      }),
+    ).toBeEnabled();
+    expect(
+      screen.getByRole('button', {
+        name: 'Resume Art Placement (thread lane)',
+      }),
+    ).toBeEnabled();
+  });
+
+  it.each([
+    {
+      label: 'main to thread',
+      parent: phase({
+        id: 'main-parent',
+        name: 'Main Design',
+        status: 'in_progress',
+      }),
+      child: phase({
+        id: 'thread-child',
+        name: 'Thread Procurement',
+        status: 'pending',
+        lane: 'thread',
+        followsPhaseId: 'main-parent',
+      }),
+      actionName: 'Complete Main Design (main lane)',
+      disconnectName: 'Disconnect Thread Procurement from Main Design',
+    },
+    {
+      label: 'thread to main',
+      parent: phase({
+        id: 'thread-parent',
+        name: 'Thread Survey',
+        status: 'completed',
+        lane: 'thread',
+      }),
+      child: phase({
+        id: 'main-child',
+        name: 'Main Install',
+        status: 'delayed',
+        followsPhaseId: 'thread-parent',
+      }),
+      actionName: 'Resume Main Install (main lane)',
+      disconnectName: 'Disconnect Main Install from Thread Survey',
+    },
+  ])(
+    'blocks a $label edge and requires explicit disconnection',
+    ({ parent, child, actionName, disconnectName }) => {
+      mockChainMutate.mockImplementation(
+        (_variables: unknown, options: ChainMutationOptions) =>
+          options.onSuccess(),
+      );
+      render(
+        <PhaseAdvanceControl projectId="project-1" phases={[parent, child]} />,
+      );
+
+      expect(screen.getByRole('button', { name: actionName })).toBeDisabled();
+      fireEvent.click(screen.getByRole('button', { name: disconnectName }));
+      expect(mockChainMutate).toHaveBeenCalledWith(
+        {
+          phaseId: child.id,
+          projectId: 'project-1',
+          followsPhaseId: null,
+        },
+        expect.any(Object),
+      );
+    },
+  );
+
+  it('renders one project-global repair act while disabling every active phase', () => {
+    const main = phase({
+      id: 'main-parent',
+      name: 'Main Design',
+      status: 'in_progress',
+    });
+    const thread = phase({
+      id: 'thread-child',
+      name: 'Thread Procurement',
+      status: 'delayed',
+      lane: 'thread',
+      followsPhaseId: main.id,
+    });
+
+    render(
+      <PhaseAdvanceControl projectId="project-1" phases={[main, thread]} />,
+    );
+
+    expect(
+      screen.getByRole('button', {
+        name: 'Complete Main Design (main lane)',
+      }),
+    ).toBeDisabled();
+    expect(
+      screen.getByRole('button', {
+        name: 'Resume Thread Procurement (thread lane)',
+      }),
+    ).toBeDisabled();
+    expect(
+      screen.getAllByRole('note', {
+        name: 'Project schedule connection issue',
+      }),
+    ).toHaveLength(1);
+    expect(
+      screen.getAllByRole('button', {
+        name: 'Disconnect Thread Procurement from Main Design',
+      }),
+    ).toHaveLength(1);
+  });
+
+  it('blocks and can explicitly clear a dependency outside the loaded project graph', () => {
+    const dangling = phase({
+      id: 'dangling-active',
+      name: 'Installation',
+      status: 'delayed',
+      followsPhaseId: 'phase-from-another-project',
+    });
+    mockChainMutate.mockImplementation(
+      (_variables: unknown, options: ChainMutationOptions) =>
+        options.onSuccess(),
+    );
+
+    render(<PhaseAdvanceControl projectId="project-1" phases={[dangling]} />);
+
+    expect(
+      screen.getByRole('button', {
+        name: 'Resume Installation (main lane)',
+      }),
+    ).toBeDisabled();
+    fireEvent.click(
+      screen.getByRole('button', {
+        name: 'Clear invalid connection for Installation',
+      }),
+    );
+    expect(mockChainMutate).toHaveBeenCalledWith(
+      {
+        phaseId: dangling.id,
+        projectId: 'project-1',
+        followsPhaseId: null,
+      },
+      expect.any(Object),
+    );
+  });
+
+  it('blocks a delayed resume when its same-component topology is malformed', () => {
+    const delayed = phase({
+      id: 'delayed',
+      name: 'Custom Drapery',
+      status: 'delayed',
+      lane: 'thread',
+    });
+    const startedSuccessor = phase({
+      id: 'started-successor',
+      name: 'Drapery Install',
+      status: 'in_progress',
+      lane: 'thread',
+      followsPhaseId: delayed.id,
+    });
+
+    render(
+      <PhaseAdvanceControl
+        projectId="project-1"
+        phases={[delayed, startedSuccessor]}
+      />,
+    );
+
+    expect(
+      screen.getByRole('button', {
+        name: 'Resume Custom Drapery (thread lane)',
+      }),
+    ).toBeDisabled();
+    expect(screen.getByText(/is not pending/i)).toBeVisible();
+    expect(mockMutate).not.toHaveBeenCalled();
   });
 
   it('disables duplicate actions and exposes an accessible live pending state', () => {
@@ -337,7 +709,7 @@ describe('PhaseAdvanceControl', () => {
     mockMutate
       .mockImplementationOnce((_variables: unknown, options: MutationOptions) =>
         options.onError({
-          message: 'Phase blocked: Client approves stone is still pending',
+          message: 'advance_project_phase: 1 unresolved phase blocker(s)',
         }),
       )
       .mockImplementationOnce((_variables: unknown, options: MutationOptions) =>
@@ -349,7 +721,7 @@ describe('PhaseAdvanceControl', () => {
     fireEvent.click(action);
 
     expect(screen.getByRole('alert')).toHaveTextContent(
-      'Phase blocked: Client approves stone is still pending',
+      'This phase still has open blockers. Resolve them in Coordination, then try again.',
     );
     expect(screen.queryByText(/is complete/)).not.toBeInTheDocument();
 
@@ -375,11 +747,26 @@ describe('PhaseAdvanceControl', () => {
 
     rerender(
       <PhaseAdvanceControl
+        projectId="project-1"
+        phases={[{ ...mainActive, status: 'completed' }]}
+      />,
+    );
+    expect(screen.getByRole('status')).toHaveTextContent(
+      'Design Development is complete. Its lane is now complete.',
+    );
+    expect(
+      screen.getByText('No active phase handoffs need attention.'),
+    ).toBeVisible();
+
+    rerender(
+      <PhaseAdvanceControl
         projectId="project-2"
         phases={[{ ...mainActive, project_id: 'project-2' }]}
       />,
     );
-    expect(screen.queryByText(/Its lane is now complete/)).not.toBeInTheDocument();
+    expect(
+      screen.queryByText(/Its lane is now complete/),
+    ).not.toBeInTheDocument();
 
     rerender(
       <PhaseAdvanceControl
@@ -416,7 +803,9 @@ describe('PhaseAdvanceControl', () => {
       pendingOptions?.onSuccess(terminalMainReceipt);
     });
 
-    expect(screen.queryByText(/Its lane is now complete/)).not.toBeInTheDocument();
+    expect(
+      screen.queryByText(/Its lane is now complete/),
+    ).not.toBeInTheDocument();
     expect(screen.queryByRole('alert')).not.toBeInTheDocument();
   });
 });
