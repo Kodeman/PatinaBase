@@ -1,5 +1,5 @@
 -- Immutable proposal-send outbox regression (00388).
--- Run only against local Supabase after 00387 + 00388.
+-- Run only against local Supabase after 00387–00391.
 
 BEGIN;
 
@@ -15,7 +15,14 @@ CREATE TEMP TABLE committed_send (
   dispatch_id uuid
 ) ON COMMIT DROP;
 
-GRANT SELECT, INSERT ON reviewed_send_snapshot, committed_send
+CREATE TEMP TABLE whitespace_cc_send (
+  proposal_id uuid,
+  sent_at timestamptz,
+  dispatch_id uuid
+) ON COMMIT DROP;
+
+GRANT SELECT, INSERT ON reviewed_send_snapshot, committed_send,
+  whitespace_cc_send
   TO authenticated, service_role;
 
 INSERT INTO auth.users (
@@ -73,29 +80,50 @@ INSERT INTO public.proposals (
   id, designer_id, client_id, designer_client_id, title, total_amount,
   status, sent_at, updated_at
 )
-VALUES (
-  'c8300000-0000-4000-8000-000000000001',
-  'c8000000-0000-4000-8000-000000000001',
-  'c8000000-0000-4000-8000-000000000002',
-  'c8250000-0000-4000-8000-000000000001',
-  'Immutable Walker Residence',
-  1320000,
-  'draft',
-  NULL,
-  '2026-07-31T12:00:00Z'
-);
+VALUES
+  (
+    'c8300000-0000-4000-8000-000000000001',
+    'c8000000-0000-4000-8000-000000000001',
+    'c8000000-0000-4000-8000-000000000002',
+    'c8250000-0000-4000-8000-000000000001',
+    'Immutable Walker Residence',
+    1320000,
+    'draft',
+    NULL,
+    '2026-07-31T12:00:00Z'
+  ),
+  (
+    'c8300000-0000-4000-8000-000000000002',
+    'c8000000-0000-4000-8000-000000000001',
+    'c8000000-0000-4000-8000-000000000002',
+    'c8250000-0000-4000-8000-000000000001',
+    'Whitespace CC Residence',
+    10000,
+    'draft',
+    NULL,
+    '2026-07-31T12:00:00Z'
+  );
 
 INSERT INTO public.proposal_payment_milestones (
   id, proposal_id, label, percentage, amount_cents, sort_order
 )
-VALUES (
-  'c8350000-0000-4000-8000-000000000001',
-  'c8300000-0000-4000-8000-000000000001',
-  'Project deposit',
-  100,
-  1320000,
-  0
-);
+VALUES
+  (
+    'c8350000-0000-4000-8000-000000000001',
+    'c8300000-0000-4000-8000-000000000001',
+    'Project deposit',
+    100,
+    1320000,
+    0
+  ),
+  (
+    'c8350000-0000-4000-8000-000000000002',
+    'c8300000-0000-4000-8000-000000000002',
+    'Project deposit',
+    100,
+    10000,
+    0
+  );
 
 CREATE OR REPLACE FUNCTION pg_temp.assume_authenticated(p_user_id uuid)
 RETURNS void
@@ -115,6 +143,15 @@ $$;
 -- active-design-studio authorization predicate.
 DO $$
 BEGIN
+  ASSERT EXISTS (
+    SELECT 1
+    FROM pg_enum AS enum_value
+    JOIN pg_type AS enum_type ON enum_type.oid = enum_value.enumtypid
+    JOIN pg_namespace AS enum_schema ON enum_schema.oid = enum_type.typnamespace
+    WHERE enum_schema.nspname = 'public'
+      AND enum_type.typname = 'notification_status'
+      AND enum_value.enumlabel = 'unconfirmed'
+  ), '00391 must commit unconfirmed before dispatch reconciliation executes';
   ASSERT (
     SELECT relrowsecurity
     FROM pg_class
@@ -154,6 +191,26 @@ BEGIN
     'public.claim_proposal_send_dispatch(uuid,uuid,timestamptz,integer)',
     'EXECUTE'
   ), 'service role needs exact-instance claim RPC';
+  ASSERT has_function_privilege(
+    'authenticated',
+    'public.get_proposal_send_dispatch_status(uuid,uuid,timestamptz)',
+    'EXECUTE'
+  ), 'authenticated needs the narrow exact-tuple status RPC';
+  ASSERT NOT has_function_privilege(
+    'anon',
+    'public.get_proposal_send_dispatch_status(uuid,uuid,timestamptz)',
+    'EXECUTE'
+  ), 'anon must not poll proposal delivery status';
+  ASSERT NOT has_function_privilege(
+    'service_role',
+    'public.get_proposal_send_dispatch_status(uuid,uuid,timestamptz)',
+    'EXECUTE'
+  ), 'service role must not receive the authenticated status surface';
+  ASSERT NOT has_function_privilege(
+    'authenticated',
+    'public._sync_proposal_send_email_log(uuid)',
+    'EXECUTE'
+  ), 'authenticated must not invoke the private log reconciler';
 END;
 $$;
 
@@ -166,6 +223,64 @@ FROM public.get_proposal_send_snapshot(
   'c8300000-0000-4000-8000-000000000001'
 );
 
+-- CC is normalized and rejected before the private lifecycle transition. Both
+-- invalid attempts must leave the reviewed draft and outbox completely intact.
+DO $$
+DECLARE
+  v_rejected boolean;
+BEGIN
+  v_rejected := false;
+  BEGIN
+    PERFORM public.send_proposal(
+      'c8300000-0000-4000-8000-000000000001',
+      (SELECT proposal_updated_at FROM reviewed_send_snapshot),
+      (SELECT proposal_total_amount FROM reviewed_send_snapshot),
+      (SELECT schedule_fingerprint FROM reviewed_send_snapshot),
+      'Original personal note',
+      'not-an-email',
+      '2026-08-31T00:00:00Z'
+    );
+  EXCEPTION WHEN check_violation THEN
+    v_rejected := true;
+  END;
+  ASSERT v_rejected, 'malformed proposal CC must fail closed';
+  ASSERT (
+    SELECT status = 'draft' AND proposal_send_dispatch_id IS NULL
+    FROM public.proposals
+    WHERE id = 'c8300000-0000-4000-8000-000000000001'
+  ), 'malformed CC must not commit the business send';
+  ASSERT NOT EXISTS (
+    SELECT 1 FROM public.proposal_send_dispatches
+    WHERE proposal_id = 'c8300000-0000-4000-8000-000000000001'
+  ), 'malformed CC must not create dispatch work';
+
+  v_rejected := false;
+  BEGIN
+    PERFORM public.send_proposal(
+      'c8300000-0000-4000-8000-000000000001',
+      (SELECT proposal_updated_at FROM reviewed_send_snapshot),
+      (SELECT proposal_total_amount FROM reviewed_send_snapshot),
+      (SELECT schedule_fingerprint FROM reviewed_send_snapshot),
+      'Original personal note',
+      repeat('a', 245) || '@example.com',
+      '2026-08-31T00:00:00Z'
+    );
+  EXCEPTION WHEN check_violation THEN
+    v_rejected := true;
+  END;
+  ASSERT v_rejected, 'overlong proposal CC must fail closed';
+  ASSERT (
+    SELECT status = 'draft' AND proposal_send_dispatch_id IS NULL
+    FROM public.proposals
+    WHERE id = 'c8300000-0000-4000-8000-000000000001'
+  ), 'overlong CC must not commit the business send';
+  ASSERT NOT EXISTS (
+    SELECT 1 FROM public.proposal_send_dispatches
+    WHERE proposal_id = 'c8300000-0000-4000-8000-000000000001'
+  ), 'overlong CC must not create dispatch work';
+END;
+$$;
+
 INSERT INTO committed_send
 SELECT sent.id, sent.sent_at, sent.proposal_send_dispatch_id
 FROM public.send_proposal(
@@ -174,9 +289,43 @@ FROM public.send_proposal(
   (SELECT proposal_total_amount FROM reviewed_send_snapshot),
   (SELECT schedule_fingerprint FROM reviewed_send_snapshot),
   'Original personal note',
-  NULL,
+  '  finance@example.com  ',
   '2026-08-31T00:00:00Z'
 ) AS sent;
+
+-- Whitespace-only optional CC canonicalizes to NULL in both the proposal and
+-- immutable outbox snapshot.
+DO $$
+DECLARE
+  v_snapshot record;
+  v_sent public.proposals%ROWTYPE;
+BEGIN
+  SELECT * INTO v_snapshot
+  FROM public.get_proposal_send_snapshot(
+    'c8300000-0000-4000-8000-000000000002'
+  );
+  SELECT sent.* INTO v_sent
+  FROM public.send_proposal(
+    'c8300000-0000-4000-8000-000000000002',
+    v_snapshot.proposal_updated_at,
+    v_snapshot.proposal_total_amount,
+    v_snapshot.schedule_fingerprint,
+    NULL,
+    '   ',
+    NULL
+  ) AS sent;
+  INSERT INTO whitespace_cc_send
+  VALUES (v_sent.id, v_sent.sent_at, v_sent.proposal_send_dispatch_id);
+
+  ASSERT v_sent.cc_email IS NULL,
+    'whitespace-only CC must normalize to NULL on proposal';
+  ASSERT (
+    SELECT cc_email IS NULL
+    FROM public.proposal_send_dispatches
+    WHERE id = v_sent.proposal_send_dispatch_id
+  ), 'whitespace-only CC must normalize to NULL in outbox';
+END;
+$$;
 
 -- No direct proposal write may replace or clear the linked nonce, even when RLS
 -- otherwise permits the owner to edit the proposal.
@@ -197,28 +346,102 @@ $$;
 
 -- Narrow authorization stays active-design-studio only.
 DO $$
+DECLARE
+  v_status jsonb;
 BEGIN
   ASSERT public.can_dispatch_proposal_send(
     'c8000000-0000-4000-8000-000000000001'
   ), 'owner must be authorized';
+  v_status := public.get_proposal_send_dispatch_status(
+    'c8300000-0000-4000-8000-000000000001',
+    (SELECT dispatch_id FROM committed_send),
+    (SELECT sent_at FROM committed_send)
+  );
+  ASSERT v_status->>'delivery_state' = 'pending',
+    'owner must read the exact dispatch status';
+  ASSERT (
+    SELECT array_agg(key ORDER BY key)
+    FROM jsonb_object_keys(v_status) AS status_keys(key)
+  ) = ARRAY[
+    'attempt_count', 'delivery_state', 'last_error', 'retry_exhausted',
+    'retryable'
+  ], 'status RPC must expose exactly five delivery fields';
 END;
 $$;
 
 SELECT pg_temp.assume_authenticated('c8000000-0000-4000-8000-000000000003');
 DO $$
+DECLARE
+  v_status jsonb;
 BEGIN
   ASSERT public.can_dispatch_proposal_send(
     'c8000000-0000-4000-8000-000000000001'
   ), 'active design-studio co-member must be authorized';
+  v_status := public.get_proposal_send_dispatch_status(
+    'c8300000-0000-4000-8000-000000000001',
+    (SELECT dispatch_id FROM committed_send),
+    (SELECT sent_at FROM committed_send)
+  );
+  ASSERT v_status->>'delivery_state' = 'pending',
+    'active design-studio peer must read exact dispatch status';
 END;
 $$;
 
 SELECT pg_temp.assume_authenticated('c8000000-0000-4000-8000-000000000004');
 DO $$
+DECLARE
+  v_rejected boolean := false;
 BEGIN
   ASSERT NOT public.can_dispatch_proposal_send(
     'c8000000-0000-4000-8000-000000000001'
   ), 'shared contractor membership must not confer dispatch authority';
+  BEGIN
+    PERFORM public.get_proposal_send_dispatch_status(
+      'c8300000-0000-4000-8000-000000000001',
+      (SELECT dispatch_id FROM committed_send),
+      (SELECT sent_at FROM committed_send)
+    );
+  EXCEPTION WHEN insufficient_privilege THEN
+    v_rejected := true;
+  END;
+  ASSERT v_rejected,
+    'foreign shared-contractor member must not read status';
+END;
+$$;
+
+SELECT pg_temp.assume_authenticated('c8000000-0000-4000-8000-000000000002');
+DO $$
+DECLARE
+  v_rejected boolean := false;
+BEGIN
+  BEGIN
+    PERFORM public.get_proposal_send_dispatch_status(
+      'c8300000-0000-4000-8000-000000000001',
+      (SELECT dispatch_id FROM committed_send),
+      (SELECT sent_at FROM committed_send)
+    );
+  EXCEPTION WHEN insufficient_privilege THEN
+    v_rejected := true;
+  END;
+  ASSERT v_rejected, 'proposal client must not read designer delivery status';
+END;
+$$;
+
+SELECT pg_temp.assume_authenticated('c8000000-0000-4000-8000-000000000001');
+DO $$
+DECLARE
+  v_rejected boolean := false;
+BEGIN
+  BEGIN
+    PERFORM public.get_proposal_send_dispatch_status(
+      'c8300000-0000-4000-8000-000000000001',
+      (SELECT dispatch_id FROM committed_send),
+      (SELECT sent_at FROM committed_send) - interval '1 microsecond'
+    );
+  EXCEPTION WHEN insufficient_privilege THEN
+    v_rejected := true;
+  END;
+  ASSERT v_rejected, 'status nonce/timestamp mismatch must fail closed';
 END;
 $$;
 
@@ -259,6 +482,13 @@ BEGIN
   ASSERT v_dispatch.proposal_title = 'Immutable Walker Residence'
     AND v_dispatch.personal_message = 'Original personal note',
     'proposal content must be captured at business send';
+  ASSERT v_dispatch.cc_email = 'finance@example.com',
+    'outbox CC must store the trimmed canonical address';
+  ASSERT (
+    SELECT cc_email = 'finance@example.com'
+    FROM public.proposals
+    WHERE id = v_dispatch.proposal_id
+  ), 'proposal CC must store the same trimmed canonical address';
 END;
 $$;
 
@@ -345,15 +575,17 @@ BEGIN
   v_request := public.persist_proposal_send_request(
     v_dispatch_id,
     (v_claim->>'claim_token')::uuid,
-    '{"from":"Original Studio","to":["dispatch-client@test.invalid"],"subject":"Exact","html":"<p>exact</p>"}',
+    '{"from":"Original Studio","to":["dispatch-client@test.invalid"],"cc":["finance@example.com"],"subject":"Exact","html":"<p>exact</p>"}',
     'Original Studio <hello@patina.cloud>',
     ARRAY['dispatch-client@test.invalid'],
-    NULL,
+    ARRAY['finance@example.com'],
     'Exact provider subject',
     false
   );
   ASSERT v_request->>'idempotency_key' = 'proposal-send/' || v_dispatch_id::text,
     'provider key must derive only from immutable nonce';
+  ASSERT v_request->'cc' = '["finance@example.com"]'::jsonb,
+    'persisted provider request must retain normalized CC exactly';
 
   -- Equality proof is allowed; mutation is not.
   PERFORM public.persist_proposal_send_request(
@@ -362,7 +594,7 @@ BEGIN
     v_request->>'body',
     v_request->>'from',
     ARRAY['dispatch-client@test.invalid'],
-    NULL,
+    ARRAY['finance@example.com'],
     v_request->>'subject',
     false
   );
@@ -374,7 +606,7 @@ BEGIN
       '{"changed":true}',
       v_request->>'from',
       ARRAY['dispatch-client@test.invalid'],
-      NULL,
+      ARRAY['finance@example.com'],
       v_request->>'subject',
       false
     );
@@ -407,7 +639,8 @@ END;
 $$;
 
 -- A definitive failure can be explicitly retried, but every retry sees the
--- exact stored bytes/key. Ambiguous attempt three is terminal and never claims.
+-- exact stored bytes/key. Ambiguous attempt three terminalizes as unconfirmed
+-- and never claims again.
 DO $$
 DECLARE
   v_claim jsonb;
@@ -449,9 +682,15 @@ BEGIN
     30
   );
   ASSERT NOT (v_terminal->>'claimed')::boolean
-    AND v_terminal->>'delivery_state' = 'ambiguous'
+    AND v_terminal->>'delivery_state' = 'unconfirmed'
     AND (v_terminal->>'retry_exhausted')::boolean,
     'attempt ceiling must fail closed without a fourth upload';
+  ASSERT (
+    SELECT log.status = 'unconfirmed'::public.notification_status
+    FROM public.proposal_send_dispatches AS dispatch
+    JOIN public.notification_log AS log ON log.id = dispatch.email_log_id
+    WHERE dispatch.id = v_dispatch_id
+  ), 'terminal ambiguity must never remain logged as sending';
 END;
 $$;
 
@@ -542,8 +781,227 @@ BEGIN
     30
   );
   ASSERT NOT (v_claim->>'claimed')::boolean
+    AND v_claim->>'delivery_state' = 'failed'
     AND (v_claim->>'retry_exhausted')::boolean,
-    'expired idempotency retention must never reacquire a provider lease';
+    'expired definitive failure must stay failed and never reacquire a lease';
+END;
+$$;
+
+RESET ROLE;
+
+-- Authenticated status observation repairs stale leases instead of leaving a
+-- reopened send sheet permanently in-flight. A pre-provider lease restores its
+-- previous failed state.
+UPDATE public.proposal_send_dispatches
+SET state = 'in_flight',
+    claim_token = 'c8400000-0000-4000-8000-000000000001',
+    lease_expires_at = clock_timestamp() - interval '1 second',
+    claimed_from_state = 'failed',
+    provider_started_at = NULL,
+    provider_attempt_count = 1,
+    retry_deadline = clock_timestamp() + interval '1 hour',
+    last_error = 'prior definitive failure'
+WHERE id = (SELECT dispatch_id FROM committed_send);
+
+SELECT pg_temp.assume_authenticated('c8000000-0000-4000-8000-000000000001');
+SET LOCAL ROLE authenticated;
+DO $$
+DECLARE
+  v_status jsonb;
+BEGIN
+  v_status := public.get_proposal_send_dispatch_status(
+    'c8300000-0000-4000-8000-000000000001',
+    (SELECT dispatch_id FROM committed_send),
+    (SELECT sent_at FROM committed_send)
+  );
+  ASSERT v_status->>'delivery_state' = 'failed'
+    AND (v_status->>'retryable')::boolean,
+    'stale pre-provider status must restore its prior retryable state';
+  ASSERT (
+    SELECT state <> 'in_flight'
+      AND claim_token IS NULL
+      AND claimed_from_state IS NULL
+    FROM public.proposal_send_dispatches
+    WHERE id = (SELECT dispatch_id FROM committed_send)
+  ), 'status must clear a stale pre-provider lease atomically';
+END;
+$$;
+
+RESET ROLE;
+
+-- A stale lease after provider start is ambiguous, not failed or pending.
+UPDATE public.proposal_send_dispatches
+SET state = 'in_flight',
+    claim_token = 'c8400000-0000-4000-8000-000000000002',
+    lease_expires_at = clock_timestamp() - interval '1 second',
+    claimed_from_state = 'failed',
+    provider_started_at = clock_timestamp() - interval '2 seconds',
+    provider_attempt_count = 1,
+    retry_deadline = clock_timestamp() + interval '1 hour',
+    last_error = NULL
+WHERE id = (SELECT dispatch_id FROM committed_send);
+
+SELECT pg_temp.assume_authenticated('c8000000-0000-4000-8000-000000000001');
+SET LOCAL ROLE authenticated;
+DO $$
+DECLARE
+  v_status jsonb;
+BEGIN
+  v_status := public.get_proposal_send_dispatch_status(
+    'c8300000-0000-4000-8000-000000000001',
+    (SELECT dispatch_id FROM committed_send),
+    (SELECT sent_at FROM committed_send)
+  );
+  ASSERT v_status->>'delivery_state' = 'ambiguous'
+    AND (v_status->>'retryable')::boolean,
+    'stale started-provider lease must become retryable ambiguity';
+END;
+$$;
+
+RESET ROLE;
+
+-- Newly recorded bounce/complaint suppression after an ambiguous attempt may
+-- stop replay, but can never rewrite uncertainty as definitive suppression.
+SELECT set_config('request.jwt.claims', '{"role":"service_role"}', true);
+SET LOCAL ROLE service_role;
+DO $$
+DECLARE
+  v_claim jsonb;
+  v_completed jsonb;
+  v_suppress_rejected boolean := false;
+BEGIN
+  v_claim := public.claim_proposal_send_dispatch(
+    (SELECT dispatch_id FROM committed_send),
+    'c8300000-0000-4000-8000-000000000001',
+    (SELECT sent_at FROM committed_send),
+    30
+  );
+  ASSERT (v_claim->>'claimed')::boolean
+    AND v_claim->>'previous_delivery_state' = 'ambiguous',
+    'ambiguous retry must retain its semantic origin';
+
+  BEGIN
+    PERFORM public.suppress_proposal_send_dispatch(
+      (SELECT dispatch_id FROM committed_send),
+      (v_claim->>'claim_token')::uuid,
+      'email_suppressed'
+    );
+  EXCEPTION WHEN object_not_in_prerequisite_state THEN
+    v_suppress_rejected := true;
+  END;
+  ASSERT v_suppress_rejected,
+    'prior ambiguity must never be rewritten as suppressed';
+
+  v_completed := public.complete_proposal_send_dispatch(
+    (SELECT dispatch_id FROM committed_send),
+    (v_claim->>'claim_token')::uuid,
+    'unconfirmed',
+    NULL,
+    'email_suppressed_after_ambiguous_delivery'
+  );
+  ASSERT v_completed->>'delivery_state' = 'unconfirmed'
+    AND (v_completed->>'retry_exhausted')::boolean,
+    'suppressed replay after ambiguity must be durable unconfirmed';
+  ASSERT (
+    SELECT log.status = 'unconfirmed'::public.notification_status
+    FROM public.proposal_send_dispatches AS dispatch
+    JOIN public.notification_log AS log ON log.id = dispatch.email_log_id
+    WHERE dispatch.id = (SELECT dispatch_id FROM committed_send)
+  ), 'suppressed ambiguous replay must terminalize its email log';
+END;
+$$;
+
+RESET ROLE;
+
+-- An ambiguous row can also age out without another edge invocation; the
+-- authorized status observer terminalizes and syncs it before returning.
+UPDATE public.proposal_send_dispatches
+SET state = 'ambiguous',
+    claim_token = NULL,
+    lease_expires_at = NULL,
+    claimed_from_state = NULL,
+    provider_attempt_count = 1,
+    provider_started_at = clock_timestamp() - interval '2 hours',
+    retry_deadline = clock_timestamp() - interval '1 second',
+    last_error = 'provider response lost'
+WHERE id = (SELECT dispatch_id FROM committed_send);
+
+SELECT pg_temp.assume_authenticated('c8000000-0000-4000-8000-000000000001');
+SET LOCAL ROLE authenticated;
+DO $$
+DECLARE
+  v_status jsonb;
+BEGIN
+  v_status := public.get_proposal_send_dispatch_status(
+    'c8300000-0000-4000-8000-000000000001',
+    (SELECT dispatch_id FROM committed_send),
+    (SELECT sent_at FROM committed_send)
+  );
+  ASSERT v_status->>'delivery_state' = 'unconfirmed'
+    AND NOT (v_status->>'retryable')::boolean
+    AND (v_status->>'retry_exhausted')::boolean,
+    'expired observed ambiguity must return terminal unconfirmed';
+  ASSERT (
+    SELECT log.status = 'unconfirmed'::public.notification_status
+    FROM public.proposal_send_dispatches AS dispatch
+    JOIN public.notification_log AS log ON log.id = dispatch.email_log_id
+    WHERE dispatch.id = (SELECT dispatch_id FROM committed_send)
+  ), 'expired observed ambiguity must atomically sync the email log';
+END;
+$$;
+
+RESET ROLE;
+
+-- A definitive third-attempt provider response remains failed, is exhausted,
+-- and can never be claimed as ambiguous/unconfirmed.
+UPDATE public.proposal_send_dispatches
+SET state = 'in_flight',
+    claim_token = 'c8400000-0000-4000-8000-000000000003',
+    lease_expires_at = clock_timestamp() + interval '30 seconds',
+    claimed_from_state = 'failed',
+    provider_attempt_count = 3,
+    provider_started_at = clock_timestamp(),
+    retry_deadline = clock_timestamp() + interval '1 hour',
+    last_error = NULL
+WHERE id = (SELECT dispatch_id FROM committed_send);
+
+SELECT set_config('request.jwt.claims', '{"role":"service_role"}', true);
+SET LOCAL ROLE service_role;
+DO $$
+DECLARE
+  v_completed jsonb;
+  v_claim jsonb;
+BEGIN
+  v_completed := public.complete_proposal_send_dispatch(
+    (SELECT dispatch_id FROM committed_send),
+    'c8400000-0000-4000-8000-000000000003',
+    'failed',
+    NULL,
+    'Resend API 422'
+  );
+  ASSERT v_completed->>'delivery_state' = 'failed'
+    AND (v_completed->>'retry_exhausted')::boolean,
+    'definitive exhausted provider response must stay failed';
+
+  v_claim := public.claim_proposal_send_dispatch(
+    (SELECT dispatch_id FROM committed_send),
+    'c8300000-0000-4000-8000-000000000001',
+    (SELECT sent_at FROM committed_send),
+    30
+  );
+  ASSERT NOT (v_claim->>'claimed')::boolean
+    AND v_claim->>'delivery_state' = 'failed'
+    AND (v_claim->>'retry_exhausted')::boolean,
+    'definitive exhausted failure must never retry';
+  PERFORM public.sync_proposal_send_email_log(
+    (SELECT dispatch_id FROM committed_send)
+  );
+  ASSERT (
+    SELECT log.status = 'failed'::public.notification_status
+    FROM public.proposal_send_dispatches AS dispatch
+    JOIN public.notification_log AS log ON log.id = dispatch.email_log_id
+    WHERE dispatch.id = (SELECT dispatch_id FROM committed_send)
+  ), 'definitive exhausted failure must remain logged failed';
 END;
 $$;
 

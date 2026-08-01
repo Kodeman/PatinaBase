@@ -4,6 +4,7 @@ import {
 } from "https://deno.land/std@0.224.0/assert/mod.ts";
 import {
   buildResendRequestHeaders,
+  checkEmailSuppression,
   prepareCompliantEmail,
   type PreparedResendRequest,
   sendPreparedResendRequest,
@@ -140,6 +141,43 @@ Deno.test("suppressed profile produces no provider request", async () => {
     emailOptions,
   );
   assertEquals(result, { state: "suppressed", reason: "email_suppressed" });
+});
+
+Deno.test("replay suppression check never reapplies notification-log rate cap", async () => {
+  const queriedTables: string[] = [];
+  const client = {
+    from(table: string) {
+      queriedTables.push(table);
+      if (table !== "profiles") {
+        throw new Error(`unexpected policy table: ${table}`);
+      }
+      const query = {
+        select() {
+          return query;
+        },
+        eq() {
+          return query;
+        },
+        maybeSingle() {
+          return Promise.resolve({
+            data: { email_suppressed: false },
+            error: null,
+          });
+        },
+      };
+      return query;
+    },
+  };
+
+  assertEquals(
+    await checkEmailSuppression(
+      client as never,
+      "10000000-0000-4000-8000-000000000001",
+      { failClosed: true },
+    ),
+    { state: "clear" },
+  );
+  assertEquals(queriedTables, ["profiles"]);
 });
 
 Deno.test("prepared upload forwards exact bytes and key", async () => {

@@ -31,6 +31,7 @@ function snapshot(): ProposalSendSnapshot {
     clientId: CLIENT_ID,
     proposalTitle: "Walker Residence",
     personalMessage: "I look forward to your thoughts.",
+    ccEmail: "finance@test.invalid",
     validUntil: "2026-08-15T00:00:00+00:00",
     totalAmount: 1_320_000,
     recipientEmail: "alex@test.invalid",
@@ -49,9 +50,12 @@ function harness(options: {
   exactInstanceMissing?: boolean;
   initialState?: ProposalDeliveryState;
   initialAttempts?: number;
+  persistedRequest?: boolean;
   beginFailure?: string;
   prepareFailure?: string;
   suppressed?: string;
+  replaySuppressed?: string;
+  replaySuppressionFailure?: string;
   providerResults?: ProviderResult[];
   emailLogFailure?: boolean;
   inAppLogFailure?: boolean;
@@ -59,12 +63,24 @@ function harness(options: {
   let state = options.initialState ?? "pending";
   let attempts = options.initialAttempts ?? 0;
   let claimToken: string | undefined;
-  let storedRequest: PersistedProviderRequest | undefined;
+  let previousClaimState: "pending" | "failed" | "ambiguous" | undefined;
+  let storedRequest: PersistedProviderRequest | undefined = options
+      .persistedRequest
+    ? {
+      body: '{"immutable":true}',
+      from: "Olive Studio <hello@test.invalid>",
+      to: ["alex@test.invalid"],
+      subject: "Persisted proposal",
+      idempotencyKey: IDEMPOTENCY_KEY,
+      dryRun: false,
+    }
+    : undefined;
   let gatewayCreations = 0;
   let claims = 0;
   let prepares = 0;
   let persists = 0;
   let releases = 0;
+  let replaySuppressionChecks = 0;
   let studioChecks = 0;
   const providerRequests: PersistedProviderRequest[] = [];
   const logCalls = { email: 0, inApp: 0 };
@@ -99,13 +115,17 @@ function harness(options: {
         sentAt: SENT_AT,
         dispatchId: DISPATCH_ID,
       });
-      if (state === "delivered" || state === "suppressed") {
+      if (
+        state === "delivered" || state === "suppressed" ||
+        state === "unconfirmed"
+      ) {
         return { claimed: false, deliveryState: state, attemptCount: attempts };
       }
       if (state === "in_flight") {
         return { claimed: false, deliveryState: state, attemptCount: attempts };
       }
-      if ((state === "failed" || state === "ambiguous") && attempts >= 3) {
+      if (state === "ambiguous" && attempts >= 3) {
+        state = "unconfirmed";
         return {
           claimed: false,
           deliveryState: state,
@@ -113,6 +133,15 @@ function harness(options: {
           retryExhausted: true,
         };
       }
+      if (state === "failed" && attempts >= 3) {
+        return {
+          claimed: false,
+          deliveryState: state,
+          attemptCount: attempts,
+          retryExhausted: true,
+        };
+      }
+      previousClaimState = state as "pending" | "failed" | "ambiguous";
       state = "in_flight";
       claimToken = `claim-${claims}`;
       return {
@@ -120,6 +149,7 @@ function harness(options: {
         deliveryState: "in_flight",
         claimToken,
         attemptCount: attempts,
+        previousDeliveryState: previousClaimState,
         dispatch: immutableSnapshot,
         request: storedRequest,
         idempotencyKey: IDEMPOTENCY_KEY,
@@ -134,6 +164,7 @@ function harness(options: {
       const body = JSON.stringify({
         from: "Olive Studio <hello@test.invalid>",
         to: [input.dispatch.recipientEmail],
+        cc: input.dispatch.ccEmail ? [input.dispatch.ccEmail] : undefined,
         subject: input.subject,
         html: input.html,
       });
@@ -143,11 +174,21 @@ function harness(options: {
           body,
           from: "Olive Studio <hello@test.invalid>",
           to: [input.dispatch.recipientEmail],
+          cc: input.dispatch.ccEmail ? [input.dispatch.ccEmail] : undefined,
           subject: input.subject,
           idempotencyKey: input.idempotencyKey,
           dryRun: false,
         },
       };
+    },
+    async checkReplaySuppression() {
+      replaySuppressionChecks += 1;
+      if (options.replaySuppressionFailure) {
+        throw new Error(options.replaySuppressionFailure);
+      }
+      return options.replaySuppressed
+        ? { state: "suppressed" as const, reason: options.replaySuppressed }
+        : { state: "clear" as const };
     },
     async persistRequest(input) {
       persists += 1;
@@ -174,23 +215,39 @@ function harness(options: {
     },
     async completeDispatch(input) {
       assertEquals(input.claimToken, claimToken);
-      state = input.deliveryState;
+      state = input.deliveryState === "ambiguous" && attempts >= 3
+        ? "unconfirmed"
+        : input.deliveryState;
       claimToken = undefined;
       return {
         deliveryState: state,
         attemptCount: attempts,
         retryDeadline: "2026-08-01T11:00:00Z",
+        retryExhausted: state === "unconfirmed" ||
+          (state === "failed" && attempts >= 3),
         lastError: input.error,
       };
     },
-    async suppressDispatch() {
+    async suppressDispatch(input) {
       state = "suppressed";
       claimToken = undefined;
+      return {
+        deliveryState: state,
+        attemptCount: attempts,
+        retryExhausted: false,
+        lastError: input.reason,
+      };
     },
-    async releaseDispatch() {
+    async releaseDispatch(input) {
       releases += 1;
-      state = "pending";
+      state = previousClaimState ?? "pending";
       claimToken = undefined;
+      return {
+        deliveryState: state,
+        attemptCount: attempts,
+        retryExhausted: state === "failed" && attempts >= 3,
+        lastError: input.error,
+      };
     },
     async syncEmailLog() {
       logCalls.email += 1;
@@ -233,6 +290,9 @@ function harness(options: {
     },
     get releases() {
       return releases;
+    },
+    get replaySuppressionChecks() {
+      return replaySuppressionChecks;
     },
     get studioChecks() {
       return studioChecks;
@@ -328,6 +388,7 @@ Deno.test("first authorized attempt persists before one provider upload", async 
   assertEquals(h.providerRequests[0].idempotencyKey, IDEMPOTENCY_KEY);
   assert(h.providerRequests[0].body.includes("Walker Residence"));
   assert(h.providerRequests[0].body.includes("original-logo.png"));
+  assert(h.providerRequests[0].body.includes("finance@test.invalid"));
 });
 
 Deno.test("ambiguous retries replay byte-identical request and stop at three", async () => {
@@ -341,7 +402,7 @@ Deno.test("ambiguous retries replay byte-identical request and stop at three", a
   const response = await h.handler(request());
   const result = await body(response);
 
-  assertEquals(result.delivery_state, "ambiguous");
+  assertEquals(result.delivery_state, "unconfirmed");
   assertEquals(result.retry_exhausted, true);
   assertEquals(result.retryable, false);
   assertEquals(h.providerRequests.length, 3);
@@ -368,6 +429,92 @@ Deno.test("known provider failure is surfaced as failed and remains retryable", 
     retry_exhausted: false,
     detail: "Resend API 503",
   });
+});
+
+Deno.test("third definitive provider failure stays failed and exhausts retries", async () => {
+  const h = harness({
+    initialState: "failed",
+    initialAttempts: 2,
+    persistedRequest: true,
+    providerResults: [{ state: "failed", error: "Resend API 422" }],
+  });
+  const response = await h.handler(request());
+  assertEquals(await body(response), {
+    ok: false,
+    delivery_state: "failed",
+    attempt_count: 3,
+    retryable: false,
+    retry_exhausted: true,
+    detail: "Resend API 422",
+  });
+});
+
+Deno.test("failed replay checks suppression only and reuses exact persisted bytes", async () => {
+  const h = harness({
+    initialState: "failed",
+    initialAttempts: 1,
+    persistedRequest: true,
+  });
+  const response = await h.handler(request());
+  assertEquals((await body(response)).delivery_state, "delivered");
+  assertEquals(h.replaySuppressionChecks, 1);
+  assertEquals(h.prepares, 0);
+  assertEquals(h.persists, 0);
+  assertEquals(h.providerRequests, [{
+    body: '{"immutable":true}',
+    from: "Olive Studio <hello@test.invalid>",
+    to: ["alex@test.invalid"],
+    subject: "Persisted proposal",
+    idempotencyKey: IDEMPOTENCY_KEY,
+    dryRun: false,
+  }]);
+});
+
+Deno.test("new suppression terminalizes a definitively failed replay", async () => {
+  const h = harness({
+    initialState: "failed",
+    initialAttempts: 1,
+    persistedRequest: true,
+    replaySuppressed: "email_suppressed",
+  });
+  const response = await h.handler(request());
+  const result = await body(response);
+  assertEquals(result.delivery_state, "suppressed");
+  assertEquals(result.retryable, false);
+  assertEquals(h.replaySuppressionChecks, 1);
+  assertEquals(h.providerRequests.length, 0);
+});
+
+Deno.test("new suppression after ambiguity is terminal unconfirmed", async () => {
+  const h = harness({
+    initialState: "ambiguous",
+    initialAttempts: 1,
+    persistedRequest: true,
+    replaySuppressed: "email_suppressed",
+  });
+  const response = await h.handler(request());
+  const result = await body(response);
+  assertEquals(result.delivery_state, "unconfirmed");
+  assertEquals(result.retryable, false);
+  assertEquals(result.retry_exhausted, true);
+  assertEquals(h.providerRequests.length, 0);
+});
+
+Deno.test("replay suppression read failure restores prior delivery semantics", async () => {
+  for (const initialState of ["failed", "ambiguous"] as const) {
+    const h = harness({
+      initialState,
+      initialAttempts: 1,
+      persistedRequest: true,
+      replaySuppressionFailure: "email_suppression_check_failed: unavailable",
+    });
+    const response = await h.handler(request());
+    const result = await body(response);
+    assertEquals(result.delivery_state, initialState);
+    assertEquals(result.retryable, true);
+    assertEquals(h.releases, 1);
+    assertEquals(h.providerRequests.length, 0);
+  }
 });
 
 Deno.test("suppression is never reported as delivery", async () => {

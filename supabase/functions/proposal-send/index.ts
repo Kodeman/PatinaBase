@@ -6,6 +6,7 @@
 
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import {
+  checkEmailSuppression,
   prepareCompliantEmail,
   sendPreparedResendRequest,
 } from "../_shared/send-email.ts";
@@ -152,6 +153,10 @@ function mapClaim(value: unknown): DispatchClaim {
     ) as ProposalDeliveryState,
     claimToken: optionalString(row, "claim_token"),
     attemptCount: Number(row.attempt_count ?? 0),
+    previousDeliveryState: optionalString(
+      row,
+      "previous_delivery_state",
+    ) as DispatchClaim["previousDeliveryState"],
     retryDeadline: optionalString(row, "retry_deadline"),
     retryExhausted: row.retry_exhausted === true,
     lastError: optionalString(row, "last_error"),
@@ -159,6 +164,20 @@ function mapClaim(value: unknown): DispatchClaim {
     dispatch: row.dispatch ? mapSnapshot(row.dispatch) : undefined,
     request: mapPersistedRequest(row),
     idempotencyKey,
+  };
+}
+
+function mapDispatchResult(value: unknown) {
+  const row = record(value, "dispatch result");
+  return {
+    deliveryState: requiredString(
+      row,
+      "delivery_state",
+    ) as ProposalDeliveryState,
+    attemptCount: Number(row.attempt_count ?? 0),
+    retryDeadline: optionalString(row, "retry_deadline"),
+    retryExhausted: row.retry_exhausted === true,
+    lastError: optionalString(row, "last_error"),
   };
 }
 
@@ -234,6 +253,12 @@ function createGateway(authorization: string): ProposalSendGateway {
       };
     },
 
+    async checkReplaySuppression(clientId) {
+      return await checkEmailSuppression(admin, clientId, {
+        failClosed: true,
+      });
+    },
+
     async persistRequest(input) {
       const { data, error } = await admin.rpc("persist_proposal_send_request", {
         p_dispatch_id: input.dispatchId,
@@ -283,34 +308,33 @@ function createGateway(authorization: string): ProposalSendGateway {
         },
       );
       if (error) throw error;
-      const row = record(data, "dispatch completion");
-      return {
-        deliveryState: requiredString(
-          row,
-          "delivery_state",
-        ) as ProposalDeliveryState,
-        attemptCount: Number(row.attempt_count ?? 0),
-        retryDeadline: optionalString(row, "retry_deadline"),
-        lastError: optionalString(row, "last_error"),
-      };
+      return mapDispatchResult(data);
     },
 
     async suppressDispatch(input) {
-      const { error } = await admin.rpc("suppress_proposal_send_dispatch", {
-        p_dispatch_id: input.dispatchId,
-        p_claim_token: input.claimToken,
-        p_reason: input.reason,
-      });
+      const { data, error } = await admin.rpc(
+        "suppress_proposal_send_dispatch",
+        {
+          p_dispatch_id: input.dispatchId,
+          p_claim_token: input.claimToken,
+          p_reason: input.reason,
+        },
+      );
       if (error) throw error;
+      return mapDispatchResult(data);
     },
 
     async releaseDispatch(input) {
-      const { error } = await admin.rpc("release_proposal_send_dispatch", {
-        p_dispatch_id: input.dispatchId,
-        p_claim_token: input.claimToken,
-        p_error: input.error,
-      });
+      const { data, error } = await admin.rpc(
+        "release_proposal_send_dispatch",
+        {
+          p_dispatch_id: input.dispatchId,
+          p_claim_token: input.claimToken,
+          p_error: input.error,
+        },
+      );
       if (error) throw error;
+      return mapDispatchResult(data);
     },
 
     async syncEmailLog(dispatchId) {

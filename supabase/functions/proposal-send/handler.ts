@@ -21,7 +21,8 @@ export type ProposalDeliveryState =
   | "delivered"
   | "suppressed"
   | "failed"
-  | "ambiguous";
+  | "ambiguous"
+  | "unconfirmed";
 
 export interface ProposalSendInstance {
   id: string;
@@ -69,6 +70,7 @@ export interface DispatchClaim {
   deliveryState: ProposalDeliveryState;
   claimToken?: string;
   attemptCount: number;
+  previousDeliveryState?: "pending" | "failed" | "ambiguous";
   retryDeadline?: string;
   retryExhausted?: boolean;
   lastError?: string;
@@ -104,6 +106,10 @@ export interface ProposalSendGateway {
     | { state: "ready"; request: PersistedProviderRequest }
     | { state: "suppressed"; reason: string }
   >;
+  checkReplaySuppression(clientId: string): Promise<
+    | { state: "clear" }
+    | { state: "suppressed"; reason: string }
+  >;
   persistRequest(input: {
     dispatchId: string;
     claimToken: string;
@@ -117,25 +123,36 @@ export interface ProposalSendGateway {
   completeDispatch(input: {
     dispatchId: string;
     claimToken: string;
-    deliveryState: "delivered" | "failed" | "ambiguous";
+    deliveryState: "delivered" | "failed" | "ambiguous" | "unconfirmed";
     providerId?: string;
     error?: string;
   }): Promise<{
     deliveryState: ProposalDeliveryState;
     attemptCount: number;
     retryDeadline?: string;
+    retryExhausted?: boolean;
     lastError?: string;
   }>;
   suppressDispatch(input: {
     dispatchId: string;
     claimToken: string;
     reason: string;
-  }): Promise<void>;
+  }): Promise<{
+    deliveryState: ProposalDeliveryState;
+    attemptCount: number;
+    retryExhausted?: boolean;
+    lastError?: string;
+  }>;
   releaseDispatch(input: {
     dispatchId: string;
     claimToken: string;
     error: string;
-  }): Promise<void>;
+  }): Promise<{
+    deliveryState: ProposalDeliveryState;
+    attemptCount: number;
+    retryExhausted?: boolean;
+    lastError?: string;
+  }>;
   syncEmailLog(dispatchId: string): Promise<void>;
   syncInAppLog(dispatchId: string): Promise<void>;
 }
@@ -251,15 +268,19 @@ function deliveryResponse(
     detail?: string;
   } = {},
 ): Response {
+  const retryExhausted = options.retryExhausted ??
+    (state === "unconfirmed" ||
+      ((state === "failed" || state === "ambiguous") &&
+        (options.attemptCount ?? 0) >= 3));
   const retryable = state === "pending" || state === "in_flight" ||
     ((state === "failed" || state === "ambiguous") &&
-      !options.retryExhausted && (options.attemptCount ?? 0) < 3);
+      !retryExhausted && (options.attemptCount ?? 0) < 3);
   return json({
     ok: state === "delivered",
     delivery_state: state,
     attempt_count: options.attemptCount ?? 0,
     retryable,
-    retry_exhausted: options.retryExhausted ?? false,
+    retry_exhausted: retryExhausted,
     detail: options.detail,
   });
 }
@@ -343,6 +364,95 @@ export function createProposalSendHandler(deps: ProposalSendDependencies) {
     }
 
     let request = claim.request;
+    if (request && claim.attemptCount > 0) {
+      let suppression:
+        | { state: "clear" }
+        | { state: "suppressed"; reason: string };
+      try {
+        // The exact provider bytes remain immutable. On replay, only newly
+        // recorded bounce/complaint suppression is relevant; reapplying the
+        // rolling hourly cap would make eligibility depend on unrelated mail.
+        suppression = await gateway.checkReplaySuppression(
+          claim.dispatch.clientId,
+        );
+      } catch (error) {
+        const detail = error instanceof Error
+          ? error.message
+          : "email_suppression_check_failed";
+        console.error("proposal-send: fail-closed replay policy", error);
+        try {
+          const restored = await gateway.releaseDispatch({
+            dispatchId: payload.dispatchId,
+            claimToken: claim.claimToken,
+            error: detail,
+          });
+          await reconcileLogs(gateway, payload.dispatchId);
+          return deliveryResponse(restored.deliveryState, {
+            attemptCount: restored.attemptCount,
+            retryExhausted: restored.retryExhausted,
+            detail: restored.lastError ?? detail,
+          });
+        } catch (releaseError) {
+          console.error(
+            "proposal-send: failed to restore replay state",
+            releaseError,
+          );
+          await reconcileLogs(gateway, payload.dispatchId);
+          return deliveryResponse(claim.previousDeliveryState ?? "ambiguous", {
+            attemptCount: claim.attemptCount,
+            detail,
+          });
+        }
+      }
+
+      if (suppression.state === "suppressed") {
+        if (claim.previousDeliveryState === "ambiguous") {
+          const completed = await gateway.completeDispatch({
+            dispatchId: payload.dispatchId,
+            claimToken: claim.claimToken,
+            deliveryState: "unconfirmed",
+            error: `${suppression.reason}_after_ambiguous_delivery`,
+          });
+          await reconcileLogs(gateway, payload.dispatchId);
+          return deliveryResponse(completed.deliveryState, {
+            attemptCount: completed.attemptCount,
+            retryExhausted: true,
+            detail: completed.lastError,
+          });
+        }
+
+        if (
+          claim.previousDeliveryState === "pending" ||
+          claim.previousDeliveryState === "failed"
+        ) {
+          const completed = await gateway.suppressDispatch({
+            dispatchId: payload.dispatchId,
+            claimToken: claim.claimToken,
+            reason: suppression.reason,
+          });
+          await reconcileLogs(gateway, payload.dispatchId);
+          return deliveryResponse(completed.deliveryState, {
+            attemptCount: completed.attemptCount,
+            retryExhausted: completed.retryExhausted,
+            detail: completed.lastError ?? suppression.reason,
+          });
+        }
+
+        const detail = "proposal replay claim omitted its previous state";
+        const restored = await gateway.releaseDispatch({
+          dispatchId: payload.dispatchId,
+          claimToken: claim.claimToken,
+          error: detail,
+        });
+        await reconcileLogs(gateway, payload.dispatchId);
+        return deliveryResponse(restored.deliveryState, {
+          attemptCount: restored.attemptCount,
+          retryExhausted: restored.retryExhausted,
+          detail: restored.lastError ?? detail,
+        });
+      }
+    }
+
     if (!request) {
       try {
         const rendered = renderProposalEmail(
@@ -356,13 +466,17 @@ export function createProposalSendHandler(deps: ProposalSendDependencies) {
           idempotencyKey: claim.idempotencyKey,
         });
         if (prepared.state === "suppressed") {
-          await gateway.suppressDispatch({
+          const completed = await gateway.suppressDispatch({
             dispatchId: payload.dispatchId,
             claimToken: claim.claimToken,
             reason: prepared.reason,
           });
           await reconcileLogs(gateway, payload.dispatchId);
-          return deliveryResponse("suppressed", { detail: prepared.reason });
+          return deliveryResponse(completed.deliveryState, {
+            attemptCount: completed.attemptCount,
+            retryExhausted: completed.retryExhausted,
+            detail: completed.lastError ?? prepared.reason,
+          });
         }
         request = await gateway.persistRequest({
           dispatchId: payload.dispatchId,
@@ -375,10 +489,16 @@ export function createProposalSendHandler(deps: ProposalSendDependencies) {
           : "pre_provider_failure";
         console.error("proposal-send: fail-closed preparation", error);
         try {
-          await gateway.releaseDispatch({
+          const restored = await gateway.releaseDispatch({
             dispatchId: payload.dispatchId,
             claimToken: claim.claimToken,
             error: detail,
+          });
+          await reconcileLogs(gateway, payload.dispatchId);
+          return deliveryResponse(restored.deliveryState, {
+            attemptCount: restored.attemptCount,
+            retryExhausted: restored.retryExhausted,
+            detail: restored.lastError ?? detail,
           });
         } catch (releaseError) {
           console.error(
@@ -387,7 +507,10 @@ export function createProposalSendHandler(deps: ProposalSendDependencies) {
           );
         }
         await reconcileLogs(gateway, payload.dispatchId);
-        return deliveryResponse("pending", { detail });
+        return deliveryResponse(claim.previousDeliveryState ?? "pending", {
+          attemptCount: claim.attemptCount,
+          detail,
+        });
       }
     }
 
@@ -404,20 +527,21 @@ export function createProposalSendHandler(deps: ProposalSendDependencies) {
         lastAmbiguousError = error instanceof Error
           ? error.message
           : "provider attempt could not start";
-        // No provider call has happened in this invocation. Prefer releasing
-        // the claim back to pending. If the begin RPC committed but its reply
-        // was lost, release rejects on provider_started_at and we conservatively
-        // fall through to ambiguous under the same claim/idempotency key.
+        // No provider call has happened in this invocation. Prefer restoring
+        // the state this claim came from. If the begin RPC committed but its
+        // reply was lost, release rejects on provider_started_at and we
+        // conservatively fall through to ambiguity under the same key.
         try {
-          await gateway.releaseDispatch({
+          const restored = await gateway.releaseDispatch({
             dispatchId: payload.dispatchId,
             claimToken: claim.claimToken,
             error: lastAmbiguousError,
           });
           await reconcileLogs(gateway, payload.dispatchId);
-          return deliveryResponse("pending", {
-            attemptCount,
-            detail: lastAmbiguousError,
+          return deliveryResponse(restored.deliveryState, {
+            attemptCount: restored.attemptCount,
+            retryExhausted: restored.retryExhausted,
+            detail: restored.lastError ?? lastAmbiguousError,
           });
         } catch (releaseError) {
           console.error(
@@ -451,6 +575,7 @@ export function createProposalSendHandler(deps: ProposalSendDependencies) {
         await reconcileLogs(gateway, payload.dispatchId);
         return deliveryResponse("failed", {
           attemptCount: completed.attemptCount,
+          retryExhausted: completed.retryExhausted,
           detail: completed.lastError,
         });
       }
@@ -467,9 +592,9 @@ export function createProposalSendHandler(deps: ProposalSendDependencies) {
         error: lastAmbiguousError,
       });
       await reconcileLogs(gateway, payload.dispatchId);
-      return deliveryResponse("ambiguous", {
+      return deliveryResponse(completed.deliveryState, {
         attemptCount: completed.attemptCount,
-        retryExhausted: completed.attemptCount >= 3,
+        retryExhausted: completed.retryExhausted,
         detail: completed.lastError,
       });
     } catch (error) {

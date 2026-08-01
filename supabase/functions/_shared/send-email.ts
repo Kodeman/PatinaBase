@@ -63,6 +63,10 @@ export type CompliancePreparationResult =
   | { state: "ready"; request: PreparedResendRequest }
   | { state: "suppressed"; reason: string };
 
+export type EmailSuppressionCheckResult =
+  | { state: "clear" }
+  | { state: "suppressed"; reason: "email_suppressed" };
+
 export type PreparedResendResult =
   | { state: "delivered"; id?: string }
   | { state: "failed"; error: string }
@@ -157,6 +161,39 @@ export async function generateUnsubscribeUrl(
 }
 
 /**
+ * Check only durable bounce/complaint suppression. This intentionally does not
+ * inspect notification_log or apply a rolling rate cap, so an already-
+ * persisted provider request can be replayed without changing its original
+ * eligibility merely because time or unrelated sends have advanced.
+ */
+export async function checkEmailSuppression(
+  supabase: SupabaseClient,
+  userId: string,
+  options: { failClosed?: boolean } = {},
+): Promise<EmailSuppressionCheckResult> {
+  const { data: profile, error: profileError } = await supabase
+    .from("profiles")
+    .select("email_suppressed")
+    .eq("id", userId)
+    .maybeSingle();
+
+  if (profileError) {
+    if (options.failClosed) {
+      throw new Error(
+        `email_suppression_check_failed: ${profileError.message}`,
+      );
+    }
+    console.error("send-email: suppression check unavailable", profileError);
+  }
+  if (options.failClosed && !profile) {
+    throw new Error("email_suppression_check_failed: profile missing");
+  }
+  return profile?.email_suppressed
+    ? { state: "suppressed", reason: "email_suppressed" }
+    : { state: "clear" };
+}
+
+/**
  * Run compliance and serialize the exact provider body without uploading it.
  * Durable callers can opt into fail-closed suppression/rate-cap reads; the
  * compatibility wrapper keeps legacy direct-send behavior unless requested.
@@ -172,24 +209,13 @@ export async function prepareCompliantEmail(
     : options.to;
 
   if (options.userId) {
-    const { data: profile, error: profileError } = await supabase
-      .from("profiles")
-      .select("email_suppressed")
-      .eq("id", options.userId)
-      .maybeSingle();
-    if (profileError) {
-      if (options.failClosedPolicyReads) {
-        throw new Error(
-          `email_suppression_check_failed: ${profileError.message}`,
-        );
-      }
-      console.error("send-email: suppression check unavailable", profileError);
-    }
-    if (options.failClosedPolicyReads && !profile) {
-      throw new Error("email_suppression_check_failed: profile missing");
-    }
-    if (profile?.email_suppressed) {
-      return { state: "suppressed", reason: "email_suppressed" };
+    const suppression = await checkEmailSuppression(
+      supabase,
+      options.userId,
+      { failClosed: options.failClosedPolicyReads },
+    );
+    if (suppression.state === "suppressed") {
+      return suppression;
     }
 
     if (options.category !== "transactional") {
