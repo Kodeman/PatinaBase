@@ -277,6 +277,102 @@ BEGIN
 END;
 $$;
 
+CREATE OR REPLACE FUNCTION pg_temp.expect_proposal_insert_failure(
+  p_proposal_id uuid,
+  p_status text,
+  p_client_id uuid,
+  p_designer_client_id uuid,
+  p_sent_at timestamptz,
+  p_expected text
+)
+RETURNS void
+LANGUAGE plpgsql
+AS $$
+DECLARE
+  v_error text;
+BEGIN
+  BEGIN
+    INSERT INTO public.proposals (
+      id, designer_id, designer_client_id, client_id, title,
+      total_amount, status, sent_at
+    ) VALUES (
+      p_proposal_id,
+      'b7000000-0000-4000-8000-000000000001',
+      p_designer_client_id,
+      p_client_id,
+      'Rejected direct insert',
+      100000,
+      p_status,
+      p_sent_at
+    );
+  EXCEPTION WHEN check_violation THEN
+    v_error := SQLERRM;
+  END;
+
+  ASSERT v_error = p_expected,
+    format('expected insert error %L, got %L', p_expected, v_error);
+  ASSERT NOT EXISTS (
+    SELECT 1 FROM public.proposals WHERE id = p_proposal_id
+  ), 'rejected proposal insert must leave no row';
+END;
+$$;
+
+CREATE OR REPLACE FUNCTION pg_temp.expect_sent_at_rewrite_denied(
+  p_actor uuid,
+  p_forge_guc boolean,
+  p_label text
+)
+RETURNS void
+LANGUAGE plpgsql
+AS $$
+DECLARE
+  v_before_sent_at timestamptz;
+  v_before_updated_at timestamptz;
+  v_after_sent_at timestamptz;
+  v_after_updated_at timestamptz;
+  v_error text;
+BEGIN
+  PERFORM pg_temp.assume_proposal_actor(p_actor);
+  SELECT sent_at, updated_at
+  INTO STRICT v_before_sent_at, v_before_updated_at
+  FROM public.proposals
+  WHERE id = 'b7100000-0000-4000-8000-000000000017';
+
+  ASSERT v_before_sent_at IS NOT NULL,
+    'sent_at rewrite fixture must first pass canonical send_proposal';
+  PERFORM set_config(
+    'app.proposal_send_id',
+    CASE
+      WHEN p_forge_guc THEN 'b7100000-0000-4000-8000-000000000017'
+      ELSE ''
+    END,
+    true
+  );
+
+  BEGIN
+    UPDATE public.proposals
+    SET sent_at = v_before_sent_at + interval '1 minute',
+        updated_at = v_before_sent_at + interval '1 minute'
+    WHERE id = 'b7100000-0000-4000-8000-000000000017';
+  EXCEPTION WHEN check_violation THEN
+    v_error := SQLERRM;
+  END;
+  PERFORM set_config('app.proposal_send_id', '', true);
+
+  SELECT sent_at, updated_at
+  INTO STRICT v_after_sent_at, v_after_updated_at
+  FROM public.proposals
+  WHERE id = 'b7100000-0000-4000-8000-000000000017';
+
+  ASSERT v_error = 'proposal sent_at may only change through send_proposal',
+    format('%s sent_at rewrite should reject, got %L', p_label, v_error);
+  ASSERT v_after_sent_at = v_before_sent_at,
+    format('%s rewrite changed the immutable dispatch timestamp', p_label);
+  ASSERT v_after_updated_at = v_before_updated_at,
+    format('%s rejected rewrite changed proposal updated_at', p_label);
+END;
+$$;
+
 CREATE OR REPLACE FUNCTION pg_temp.expect_send_failure(
   p_proposal_id uuid,
   p_expected text
@@ -313,6 +409,82 @@ $$;
 SET LOCAL ROLE authenticated;
 SELECT pg_temp.assume_proposal_owner();
 
+-- The insert boundary admits a normal ad-hoc draft with both canonical client
+-- identity legs, but no authenticated/RLS writer can materialize sent or
+-- terminal state, pre-stamp sent_at, or forge a split/mismatched identity.
+INSERT INTO public.proposals (
+  id, designer_id, designer_client_id, client_id, title, total_amount, status
+)
+VALUES (
+  'b7100000-0000-4000-8000-000000000018',
+  'b7000000-0000-4000-8000-000000000001',
+  'b7050000-0000-4000-8000-000000000001',
+  'b7000000-0000-4000-8000-000000000002',
+  'Valid ad-hoc draft', 0, 'draft'
+);
+DO $$
+BEGIN
+  ASSERT EXISTS (
+    SELECT 1
+    FROM public.proposals
+    WHERE id = 'b7100000-0000-4000-8000-000000000018'
+      AND status = 'draft'
+      AND sent_at IS NULL
+      AND client_id = 'b7000000-0000-4000-8000-000000000002'
+      AND designer_client_id = 'b7050000-0000-4000-8000-000000000001'
+  ), 'valid paired ad-hoc draft insert must remain available';
+END;
+$$;
+
+SELECT pg_temp.expect_proposal_insert_failure(
+  'b7100000-0000-4000-8000-000000000019',
+  'sent',
+  'b7000000-0000-4000-8000-000000000002',
+  'b7050000-0000-4000-8000-000000000001',
+  now(),
+  'proposal inserts must start as draft with sent_at null'
+);
+SELECT pg_temp.expect_proposal_insert_failure(
+  'b7100000-0000-4000-8000-000000000020',
+  'accepted',
+  'b7000000-0000-4000-8000-000000000002',
+  'b7050000-0000-4000-8000-000000000001',
+  NULL,
+  'proposal inserts must start as draft with sent_at null'
+);
+SELECT pg_temp.expect_proposal_insert_failure(
+  'b7100000-0000-4000-8000-000000000021',
+  'draft',
+  'b7000000-0000-4000-8000-000000000002',
+  'b7050000-0000-4000-8000-000000000001',
+  now(),
+  'proposal inserts must start as draft with sent_at null'
+);
+SELECT pg_temp.expect_proposal_insert_failure(
+  'b7100000-0000-4000-8000-000000000022',
+  'draft',
+  'b7000000-0000-4000-8000-000000000002',
+  NULL,
+  NULL,
+  'proposal client_id and designer_client_id must be linked or cleared together'
+);
+SELECT pg_temp.expect_proposal_insert_failure(
+  'b7100000-0000-4000-8000-000000000023',
+  'draft',
+  NULL,
+  'b7050000-0000-4000-8000-000000000001',
+  NULL,
+  'proposal client_id and designer_client_id must be linked or cleared together'
+);
+SELECT pg_temp.expect_proposal_insert_failure(
+  'b7100000-0000-4000-8000-000000000024',
+  'draft',
+  'b7000000-0000-4000-8000-000000000001',
+  'b7050000-0000-4000-8000-000000000002',
+  NULL,
+  'proposal client identity does not match its designer relationship'
+);
+
 -- Authoring authority is intentionally narrower than shared-workspace RLS:
 -- owner access remains available to a solo designer, while peer access exists
 -- only through an active design_studio and active non-guest memberships on
@@ -345,8 +517,24 @@ BEGIN
   );
   ASSERT v_sent.status = 'sent',
     'an active non-guest design_studio peer must retain send authority';
+  ASSERT v_sent.sent_at IS NOT NULL
+         AND v_sent.updated_at = v_sent.sent_at,
+    'canonical send must stamp one exact dispatch timestamp';
 END;
 $$;
+
+SELECT pg_temp.expect_sent_at_rewrite_denied(
+  'b7000000-0000-4000-8000-000000000001', false, 'proposal owner'
+);
+SELECT pg_temp.expect_sent_at_rewrite_denied(
+  'b7000000-0000-4000-8000-000000000003', false, 'studio peer'
+);
+SELECT pg_temp.expect_sent_at_rewrite_denied(
+  'b7000000-0000-4000-8000-000000000001', true, 'proposal owner with forged GUC'
+);
+SELECT pg_temp.expect_sent_at_rewrite_denied(
+  'b7000000-0000-4000-8000-000000000003', true, 'studio peer with forged GUC'
+);
 
 SELECT pg_temp.expect_proposal_author_denied(
   'b7000000-0000-4000-8000-000000000004', 'contractor co-member'

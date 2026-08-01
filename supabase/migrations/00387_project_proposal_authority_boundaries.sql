@@ -3,11 +3,14 @@
 --
 -- RLS answers who may edit a row; it cannot prove that an irreversible state
 -- transition passed its domain checks. These guards require two independent
--- facts for protected updates:
+-- facts for protected writes:
 --   1. current_user is postgres (the owner executing the SECURITY DEFINER RPC);
 --   2. that RPC set a transaction-local, row-scoped authority GUC.
 -- Authenticated callers can forge a custom GUC, but cannot become postgres.
 -- The trigger functions remain SECURITY INVOKER so current_user is meaningful.
+-- The proposal guard protects API insert state, entry into sent, and every
+-- sent_at rewrite. 00388 binds outbound email to the immutable send instance,
+-- so a writer must never fabricate or replace that business timestamp.
 --
 -- Function-body lineage:
 --   close_project:       00238 → 00383 → 00387
@@ -562,6 +565,40 @@ SECURITY INVOKER
 SET search_path = public, pg_temp
 AS $$
 BEGIN
+  IF TG_OP = 'INSERT' THEN
+    -- API writers may create only an inert draft. Trusted postgres-owned
+    -- server paths and local seeds remain able to materialize historical
+    -- fixtures, but an authenticated/RLS writer cannot fabricate sent or
+    -- terminal business state at insert time.
+    IF current_user IS DISTINCT FROM 'postgres' THEN
+      IF NEW.status IS DISTINCT FROM 'draft' OR NEW.sent_at IS NOT NULL THEN
+        RAISE EXCEPTION
+          'proposal inserts must start as draft with sent_at null'
+          USING ERRCODE = 'check_violation';
+      END IF;
+
+      IF (NEW.client_id IS NULL) <> (NEW.designer_client_id IS NULL) THEN
+        RAISE EXCEPTION
+          'proposal client_id and designer_client_id must be linked or cleared together'
+          USING ERRCODE = 'check_violation';
+      END IF;
+
+      IF NEW.client_id IS NOT NULL AND NOT EXISTS (
+        SELECT 1
+        FROM public.designer_clients AS relationship
+        WHERE relationship.id = NEW.designer_client_id
+          AND relationship.designer_id = NEW.designer_id
+          AND relationship.client_id = NEW.client_id
+      ) THEN
+        RAISE EXCEPTION
+          'proposal client identity does not match its designer relationship'
+          USING ERRCODE = 'check_violation';
+      END IF;
+    END IF;
+
+    RETURN NEW;
+  END IF;
+
   IF NEW.status = 'sent'
      AND OLD.status IS DISTINCT FROM 'sent'
      AND (
@@ -571,6 +608,17 @@ BEGIN
      )
   THEN
     RAISE EXCEPTION 'proposals may only enter sent through send_proposal'
+      USING ERRCODE = 'check_violation';
+  END IF;
+
+  IF NEW.sent_at IS DISTINCT FROM OLD.sent_at
+     AND (
+       current_user IS DISTINCT FROM 'postgres'
+       OR current_setting('app.proposal_send_id', true)
+          IS DISTINCT FROM NEW.id::text
+     )
+  THEN
+    RAISE EXCEPTION 'proposal sent_at may only change through send_proposal'
       USING ERRCODE = 'check_violation';
   END IF;
 
@@ -612,9 +660,20 @@ $$;
 REVOKE ALL ON FUNCTION public.guard_proposal_authority()
   FROM PUBLIC, anon, authenticated, service_role;
 
+COMMENT ON FUNCTION public.guard_proposal_authority() IS
+  'SECURITY INVOKER table boundary: API inserts are draft-only with canonical '
+  'client identity; sent_at and entry into sent require the exact postgres '
+  'send authority, and later identity changes require set_document_client.';
+
 DROP TRIGGER IF EXISTS guard_proposal_authority_trg ON public.proposals;
+DROP TRIGGER IF EXISTS guard_proposal_authority_insert_trg ON public.proposals;
+CREATE TRIGGER guard_proposal_authority_insert_trg
+BEFORE INSERT ON public.proposals
+FOR EACH ROW
+EXECUTE FUNCTION public.guard_proposal_authority();
+
 CREATE TRIGGER guard_proposal_authority_trg
-BEFORE UPDATE OF status, client_id, designer_client_id ON public.proposals
+BEFORE UPDATE OF status, sent_at, client_id, designer_client_id ON public.proposals
 FOR EACH ROW
 EXECUTE FUNCTION public.guard_proposal_authority();
 
