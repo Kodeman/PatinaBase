@@ -124,8 +124,374 @@ WHERE p.checkout_attempt_id IS NULL
 
 -- ── 2. Milestone draft repair + atomic lifecycle ─────────────────────
 
--- Repair the precise bad historical shape: a milestone points at a DRAFT
--- invoice whose header has zero lines. Existing authored lines are not touched.
+-- A legacy manual-composer path could create the real milestone line on a
+-- later invoice without moving the milestone's header latch off an earlier,
+-- empty draft. The unique line is the stronger billing record, but automatic
+-- convergence is allowed only for the exact same-project/same-party shape with
+-- no financial evidence on the stale draft. Anything else fails closed.
+DO $$
+DECLARE
+  v_unsafe_milestone uuid;
+BEGIN
+  -- Keep the audit, relatch, and missing-line insert in one statement-level
+  -- transaction while preventing a direct line writer from racing the repair.
+  LOCK TABLE public.invoice_line_items IN SHARE ROW EXCLUSIVE MODE;
+
+  SELECT m.id
+  INTO v_unsafe_milestone
+  FROM public.project_payment_milestones m
+  JOIN public.projects project ON project.id = m.project_id
+  JOIN public.invoices stale
+    ON stale.id = m.invoice_id
+   AND stale.status = 'draft'
+  JOIN public.invoice_line_items li
+    ON li.milestone_id = m.id
+   AND li.invoice_id <> stale.id
+  JOIN public.invoices live ON live.id = li.invoice_id
+  WHERE NOT EXISTS (
+    SELECT 1 FROM public.invoice_line_items x WHERE x.invoice_id = stale.id
+  )
+    AND (
+      live.status IN ('draft','sent','partially_paid','paid')
+      AND live.project_id = m.project_id
+      AND stale.project_id = m.project_id
+      AND live.designer_id IS NOT DISTINCT FROM stale.designer_id
+      AND (
+        live.designer_id = project.designer_id
+        OR EXISTS (
+          SELECT 1
+          FROM public.organization_members live_member
+          JOIN public.organization_members project_member
+            ON project_member.organization_id = live_member.organization_id
+          JOIN public.organizations organization
+            ON organization.id = live_member.organization_id
+          WHERE live_member.user_id = live.designer_id
+            AND live_member.status = 'active'
+            AND live_member.role <> 'guest'
+            AND project_member.user_id = project.designer_id
+            AND project_member.status = 'active'
+            AND project_member.role <> 'guest'
+            AND organization.type = 'design_studio'
+            AND organization.status = 'active'
+        )
+      )
+      AND live.client_id IS NOT DISTINCT FROM stale.client_id
+      AND live.client_id IS NOT DISTINCT FROM project.client_id
+      AND stale.client_id IS NOT DISTINCT FROM project.client_id
+      AND live.currency IS NOT DISTINCT FROM stale.currency
+      AND li.kind = 'milestone'
+      AND li.quantity = 1
+      AND li.unit_amount_cents = m.amount_cents
+      AND li.amount_cents = m.amount_cents
+      AND (m.status <> 'paid' OR live.status = 'paid')
+      AND stale.subtotal_cents = m.amount_cents
+      AND stale.tax_cents = 0
+      AND stale.total_cents = m.amount_cents
+      AND stale.amount_paid_cents = 0
+      AND stale.stripe_checkout_session_id IS NULL
+      AND NOT EXISTS (
+        SELECT 1 FROM public.invoice_payments p WHERE p.invoice_id = stale.id
+      )
+      AND NOT EXISTS (
+        SELECT 1 FROM public.invoice_checkout_attempts a WHERE a.invoice_id = stale.id
+      )
+      AND NOT EXISTS (
+        SELECT 1 FROM public.project_time_entries t WHERE t.invoice_id = stale.id
+      )
+      AND NOT EXISTS (
+        SELECT 1 FROM public.designer_earnings e WHERE e.invoice_id = stale.id
+      )
+      AND NOT EXISTS (
+        SELECT 1 FROM public.concierge_orders o WHERE o.client_invoice_id = stale.id
+      )
+    ) IS NOT TRUE
+  LIMIT 1;
+
+  IF v_unsafe_milestone IS NOT NULL THEN
+    RAISE EXCEPTION
+      'billing integrity: milestone % has an unsafe empty-draft/line-owner conflict',
+      v_unsafe_milestone;
+  END IF;
+
+  v_unsafe_milestone := NULL;
+  SELECT m.id
+  INTO v_unsafe_milestone
+  FROM public.project_payment_milestones m
+  JOIN public.projects p ON p.id = m.project_id
+  JOIN public.invoice_line_items li ON li.milestone_id = m.id
+  JOIN public.invoices live ON live.id = li.invoice_id
+  WHERE m.invoice_id IS NULL
+    AND (
+      live.status IN ('draft','sent','partially_paid','paid')
+      AND live.project_id = m.project_id
+      AND live.client_id IS NOT DISTINCT FROM p.client_id
+      AND (
+        live.designer_id = p.designer_id
+        OR EXISTS (
+          SELECT 1
+          FROM public.organization_members live_member
+          JOIN public.organization_members project_member
+            ON project_member.organization_id = live_member.organization_id
+          JOIN public.organizations organization
+            ON organization.id = live_member.organization_id
+          WHERE live_member.user_id = live.designer_id
+            AND live_member.status = 'active'
+            AND live_member.role <> 'guest'
+            AND project_member.user_id = p.designer_id
+            AND project_member.status = 'active'
+            AND project_member.role <> 'guest'
+            AND organization.type = 'design_studio'
+            AND organization.status = 'active'
+        )
+      )
+      AND li.kind = 'milestone'
+      AND li.quantity = 1
+      AND li.unit_amount_cents = m.amount_cents
+      AND li.amount_cents = m.amount_cents
+      AND (m.status <> 'paid' OR live.status = 'paid')
+    ) IS NOT TRUE
+  LIMIT 1;
+
+  IF v_unsafe_milestone IS NOT NULL THEN
+    RAISE EXCEPTION
+      'billing integrity: milestone % has an unsafe unlatched invoice line',
+      v_unsafe_milestone;
+  END IF;
+
+  v_unsafe_milestone := NULL;
+  SELECT li.milestone_id
+  INTO v_unsafe_milestone
+  FROM public.invoice_line_items li
+  JOIN public.invoices i ON i.id = li.invoice_id
+  WHERE i.status = 'void'
+    AND li.milestone_id IS NOT NULL
+  LIMIT 1;
+
+  IF v_unsafe_milestone IS NOT NULL THEN
+    RAISE EXCEPTION
+      'billing integrity: void invoice still owns milestone line %',
+      v_unsafe_milestone;
+  END IF;
+
+  v_unsafe_milestone := NULL;
+  SELECT m.id
+  INTO v_unsafe_milestone
+  FROM public.project_payment_milestones m
+  JOIN public.projects project ON project.id = m.project_id
+  JOIN public.invoices draft
+    ON draft.id = m.invoice_id
+   AND draft.status = 'draft'
+  WHERE NOT EXISTS (
+    SELECT 1 FROM public.invoice_line_items x WHERE x.invoice_id = draft.id
+  )
+    AND NOT EXISTS (
+      SELECT 1 FROM public.invoice_line_items x WHERE x.milestone_id = m.id
+    )
+    AND (
+      draft.project_id = m.project_id
+      AND draft.client_id IS NOT DISTINCT FROM project.client_id
+      AND (
+        draft.designer_id = project.designer_id
+        OR EXISTS (
+          SELECT 1
+          FROM public.organization_members draft_member
+          JOIN public.organization_members project_member
+            ON project_member.organization_id = draft_member.organization_id
+          JOIN public.organizations organization
+            ON organization.id = draft_member.organization_id
+          WHERE draft_member.user_id = draft.designer_id
+            AND draft_member.status = 'active'
+            AND draft_member.role <> 'guest'
+            AND project_member.user_id = project.designer_id
+            AND project_member.status = 'active'
+            AND project_member.role <> 'guest'
+            AND organization.type = 'design_studio'
+            AND organization.status = 'active'
+        )
+      )
+      AND draft.subtotal_cents = m.amount_cents
+      AND draft.tax_cents = 0
+      AND draft.total_cents = m.amount_cents
+      AND draft.amount_paid_cents = 0
+      AND draft.stripe_checkout_session_id IS NULL
+      AND NOT EXISTS (
+        SELECT 1 FROM public.invoice_payments p WHERE p.invoice_id = draft.id
+      )
+      AND NOT EXISTS (
+        SELECT 1 FROM public.invoice_checkout_attempts a WHERE a.invoice_id = draft.id
+      )
+      AND NOT EXISTS (
+        SELECT 1 FROM public.project_time_entries t WHERE t.invoice_id = draft.id
+      )
+      AND NOT EXISTS (
+        SELECT 1 FROM public.designer_earnings e WHERE e.invoice_id = draft.id
+      )
+      AND NOT EXISTS (
+        SELECT 1 FROM public.concierge_orders o WHERE o.client_invoice_id = draft.id
+      )
+    ) IS NOT TRUE
+  LIMIT 1;
+
+  IF v_unsafe_milestone IS NOT NULL THEN
+    RAISE EXCEPTION
+      'billing integrity: milestone % has an unsafe header-only draft',
+      v_unsafe_milestone;
+  END IF;
+
+  -- A line on a non-void same-project invoice is also canonical when a legacy
+  -- writer omitted the header latch entirely.
+  WITH safe_unlatched AS (
+    SELECT
+      m.id AS milestone_id,
+      live.id AS live_invoice_id,
+      live.status AS live_status,
+      live.due_date AS live_due_date,
+      live.paid_at AS live_paid_at
+    FROM public.project_payment_milestones m
+    JOIN public.projects p ON p.id = m.project_id
+    JOIN public.invoice_line_items li ON li.milestone_id = m.id
+    JOIN public.invoices live ON live.id = li.invoice_id
+    WHERE m.invoice_id IS NULL
+      AND live.status IN ('draft','sent','partially_paid','paid')
+      AND live.project_id = m.project_id
+      AND live.client_id IS NOT DISTINCT FROM p.client_id
+      AND (
+        live.designer_id = p.designer_id
+        OR EXISTS (
+          SELECT 1
+          FROM public.organization_members live_member
+          JOIN public.organization_members project_member
+            ON project_member.organization_id = live_member.organization_id
+          JOIN public.organizations organization
+            ON organization.id = live_member.organization_id
+          WHERE live_member.user_id = live.designer_id
+            AND live_member.status = 'active'
+            AND live_member.role <> 'guest'
+            AND project_member.user_id = p.designer_id
+            AND project_member.status = 'active'
+            AND project_member.role <> 'guest'
+            AND organization.type = 'design_studio'
+            AND organization.status = 'active'
+        )
+      )
+      AND li.kind = 'milestone'
+      AND li.quantity = 1
+      AND li.unit_amount_cents = m.amount_cents
+      AND li.amount_cents = m.amount_cents
+      AND (m.status <> 'paid' OR live.status = 'paid')
+  )
+  UPDATE public.project_payment_milestones m
+  SET invoice_id = c.live_invoice_id,
+      status = CASE
+        WHEN c.live_status = 'paid' THEN 'paid'
+        WHEN c.live_status IN ('sent','partially_paid') THEN 'outstanding'
+        ELSE 'pending'
+      END,
+      due_date = CASE
+        WHEN c.live_status IN ('sent','partially_paid','paid') THEN c.live_due_date
+        ELSE NULL
+      END,
+      paid_at = CASE WHEN c.live_status = 'paid' THEN c.live_paid_at ELSE NULL END,
+      updated_at = now()
+  FROM safe_unlatched c
+  WHERE m.id = c.milestone_id
+    AND m.invoice_id IS NULL;
+
+-- Repoint exact safe conflicts to the invoice that already owns the unique
+-- line and synchronize the milestone lifecycle. The empty draft is left
+-- untouched as financial history; no invoice or authored line is rewritten.
+WITH safe_conflicts AS (
+  SELECT
+    m.id AS milestone_id,
+    stale.id AS stale_invoice_id,
+    live.id AS live_invoice_id,
+    live.status AS live_status,
+    live.due_date AS live_due_date,
+    live.paid_at AS live_paid_at
+  FROM public.project_payment_milestones m
+  JOIN public.projects project ON project.id = m.project_id
+  JOIN public.invoices stale
+    ON stale.id = m.invoice_id
+   AND stale.status = 'draft'
+  JOIN public.invoice_line_items li
+    ON li.milestone_id = m.id
+   AND li.invoice_id <> stale.id
+  JOIN public.invoices live ON live.id = li.invoice_id
+  WHERE NOT EXISTS (
+    SELECT 1 FROM public.invoice_line_items x WHERE x.invoice_id = stale.id
+  )
+    AND live.status IN ('draft','sent','partially_paid','paid')
+    AND live.project_id = m.project_id
+    AND stale.project_id = m.project_id
+    AND live.designer_id IS NOT DISTINCT FROM stale.designer_id
+    AND (
+      live.designer_id = project.designer_id
+      OR EXISTS (
+        SELECT 1
+        FROM public.organization_members live_member
+        JOIN public.organization_members project_member
+          ON project_member.organization_id = live_member.organization_id
+        JOIN public.organizations organization
+          ON organization.id = live_member.organization_id
+        WHERE live_member.user_id = live.designer_id
+          AND live_member.status = 'active'
+          AND live_member.role <> 'guest'
+          AND project_member.user_id = project.designer_id
+          AND project_member.status = 'active'
+          AND project_member.role <> 'guest'
+          AND organization.type = 'design_studio'
+          AND organization.status = 'active'
+      )
+    )
+    AND live.client_id IS NOT DISTINCT FROM stale.client_id
+    AND live.client_id IS NOT DISTINCT FROM project.client_id
+    AND stale.client_id IS NOT DISTINCT FROM project.client_id
+    AND live.currency IS NOT DISTINCT FROM stale.currency
+    AND li.kind = 'milestone'
+    AND li.quantity = 1
+    AND li.unit_amount_cents = m.amount_cents
+    AND li.amount_cents = m.amount_cents
+    AND (m.status <> 'paid' OR live.status = 'paid')
+    AND stale.subtotal_cents = m.amount_cents
+    AND stale.tax_cents = 0
+    AND stale.total_cents = m.amount_cents
+    AND stale.amount_paid_cents = 0
+    AND stale.stripe_checkout_session_id IS NULL
+    AND NOT EXISTS (
+      SELECT 1 FROM public.invoice_payments p WHERE p.invoice_id = stale.id
+    )
+    AND NOT EXISTS (
+      SELECT 1 FROM public.invoice_checkout_attempts a WHERE a.invoice_id = stale.id
+    )
+    AND NOT EXISTS (
+      SELECT 1 FROM public.project_time_entries t WHERE t.invoice_id = stale.id
+    )
+    AND NOT EXISTS (
+      SELECT 1 FROM public.designer_earnings e WHERE e.invoice_id = stale.id
+    )
+    AND NOT EXISTS (
+      SELECT 1 FROM public.concierge_orders o WHERE o.client_invoice_id = stale.id
+    )
+)
+UPDATE public.project_payment_milestones m
+SET invoice_id = c.live_invoice_id,
+    status = CASE
+      WHEN c.live_status = 'paid' THEN 'paid'
+      WHEN c.live_status IN ('sent','partially_paid') THEN 'outstanding'
+      ELSE 'pending'
+    END,
+    due_date = CASE
+      WHEN c.live_status IN ('sent','partially_paid','paid') THEN c.live_due_date
+      ELSE NULL
+    END,
+    paid_at = CASE WHEN c.live_status = 'paid' THEN c.live_paid_at ELSE NULL END,
+    updated_at = now()
+FROM safe_conflicts c
+WHERE m.id = c.milestone_id
+  AND m.invoice_id = c.stale_invoice_id;
+
+-- Repair the remaining precise bad historical shape: a milestone points at a
+-- draft invoice whose header has zero lines and no line exists anywhere else.
 INSERT INTO public.invoice_line_items (
   invoice_id, kind, milestone_id, description, quantity,
   unit_amount_cents, amount_cents, metadata, sort_order
@@ -135,10 +501,57 @@ SELECT
   m.amount_cents, m.amount_cents,
   jsonb_build_object('source', 'milestone_draft_repair'), 0
 FROM public.project_payment_milestones m
+JOIN public.projects project ON project.id = m.project_id
 JOIN public.invoices i ON i.id = m.invoice_id AND i.status = 'draft'
 WHERE NOT EXISTS (
   SELECT 1 FROM public.invoice_line_items li WHERE li.invoice_id = i.id
+)
+AND NOT EXISTS (
+  SELECT 1 FROM public.invoice_line_items li WHERE li.milestone_id = m.id
+)
+AND i.project_id = m.project_id
+AND i.client_id IS NOT DISTINCT FROM project.client_id
+AND (
+  i.designer_id = project.designer_id
+  OR EXISTS (
+    SELECT 1
+    FROM public.organization_members invoice_member
+    JOIN public.organization_members project_member
+      ON project_member.organization_id = invoice_member.organization_id
+    JOIN public.organizations organization
+      ON organization.id = invoice_member.organization_id
+    WHERE invoice_member.user_id = i.designer_id
+      AND invoice_member.status = 'active'
+      AND invoice_member.role <> 'guest'
+      AND project_member.user_id = project.designer_id
+      AND project_member.status = 'active'
+      AND project_member.role <> 'guest'
+      AND organization.type = 'design_studio'
+      AND organization.status = 'active'
+  )
+)
+AND i.subtotal_cents = m.amount_cents
+AND i.tax_cents = 0
+AND i.total_cents = m.amount_cents
+AND i.amount_paid_cents = 0
+AND i.stripe_checkout_session_id IS NULL
+AND NOT EXISTS (
+  SELECT 1 FROM public.invoice_payments p WHERE p.invoice_id = i.id
+)
+AND NOT EXISTS (
+  SELECT 1 FROM public.invoice_checkout_attempts a WHERE a.invoice_id = i.id
+)
+AND NOT EXISTS (
+  SELECT 1 FROM public.project_time_entries t WHERE t.invoice_id = i.id
+)
+AND NOT EXISTS (
+  SELECT 1 FROM public.designer_earnings e WHERE e.invoice_id = i.id
+)
+AND NOT EXISTS (
+  SELECT 1 FROM public.concierge_orders o WHERE o.client_invoice_id = i.id
 );
+END;
+$$;
 
 -- Draft creation never makes a milestone collectible. Correct historical
 -- header-only drafts that the old function prematurely marked outstanding.
@@ -164,64 +577,255 @@ SECURITY DEFINER
 SET search_path = public
 AS $$
 DECLARE
-  v_m          project_payment_milestones%ROWTYPE;
-  v_p          projects%ROWTYPE;
-  v_inv        uuid;
-  v_inv_status text;
-  v_line_count integer;
+  v_m                project_payment_milestones%ROWTYPE;
+  v_p                projects%ROWTYPE;
+  v_inv              uuid;
+  v_latched_invoice  invoices%ROWTYPE;
+  v_existing_invoice invoices%ROWTYPE;
+  v_existing_line    invoice_line_items%ROWTYPE;
+  v_line_count       integer;
+  v_inserted         integer;
 BEGIN
   SELECT * INTO v_m
   FROM project_payment_milestones
-  WHERE id = p_milestone_id
-  FOR UPDATE;
+  WHERE id = p_milestone_id;
   IF NOT FOUND THEN
     RAISE EXCEPTION 'draft_invoice_from_milestone: milestone % not found', p_milestone_id;
   END IF;
 
-  -- Idempotency and safe repair share the same milestone lock. A dangling or
-  -- void header latch is released; a header-only draft receives its exact line.
+  -- A unique line is the canonical billing identity. Lock it first, then
+  -- reload/lock the milestone so deletes, identity edits, voids, and project
+  -- close all share line -> milestone ordering.
+  SELECT * INTO v_existing_line
+  FROM invoice_line_items
+  WHERE milestone_id = v_m.id
+  FOR UPDATE;
+
+  IF FOUND THEN
+    SELECT * INTO v_m
+    FROM project_payment_milestones
+    WHERE id = p_milestone_id
+    FOR UPDATE;
+    IF NOT FOUND THEN
+      RAISE EXCEPTION 'draft_invoice_from_milestone: milestone % not found', p_milestone_id;
+    END IF;
+
+    SELECT * INTO v_p FROM projects WHERE id = v_m.project_id;
+    IF NOT FOUND THEN
+      RAISE EXCEPTION 'draft_invoice_from_milestone: project % not found', v_m.project_id;
+    END IF;
+
+    SELECT * INTO v_existing_invoice
+    FROM invoices
+    WHERE id = v_existing_line.invoice_id;
+
+    IF NOT FOUND
+       OR v_existing_invoice.status NOT IN ('draft','sent','partially_paid','paid')
+       OR (v_m.status = 'paid' AND v_existing_invoice.status <> 'paid')
+       OR v_existing_invoice.project_id IS DISTINCT FROM v_m.project_id
+       OR v_existing_invoice.client_id IS DISTINCT FROM v_p.client_id
+       OR (
+         (v_m.invoice_id IS NULL OR v_m.invoice_id <> v_existing_invoice.id)
+         AND (
+           v_existing_invoice.designer_id = v_p.designer_id
+           OR EXISTS (
+             SELECT 1
+             FROM organization_members invoice_member
+             JOIN organization_members project_member
+               ON project_member.organization_id = invoice_member.organization_id
+             JOIN organizations organization
+               ON organization.id = invoice_member.organization_id
+             WHERE invoice_member.user_id = v_existing_invoice.designer_id
+               AND invoice_member.status = 'active'
+               AND invoice_member.role <> 'guest'
+               AND project_member.user_id = v_p.designer_id
+               AND project_member.status = 'active'
+               AND project_member.role <> 'guest'
+               AND organization.type = 'design_studio'
+               AND organization.status = 'active'
+           )
+         ) IS NOT TRUE
+       )
+       OR v_existing_line.kind IS DISTINCT FROM 'milestone'
+       OR v_existing_line.quantity IS DISTINCT FROM 1
+       OR v_existing_line.unit_amount_cents IS DISTINCT FROM v_m.amount_cents
+       OR v_existing_line.amount_cents IS DISTINCT FROM v_m.amount_cents THEN
+      RAISE EXCEPTION
+        'draft_invoice_from_milestone: milestone % has an unsafe line owner %',
+        v_m.id, v_existing_line.invoice_id
+        USING ERRCODE = '23514';
+    END IF;
+
+    IF v_m.invoice_id IS NOT NULL
+       AND v_m.invoice_id <> v_existing_invoice.id THEN
+      SELECT * INTO v_latched_invoice
+      FROM invoices
+      WHERE id = v_m.invoice_id;
+
+      IF NOT FOUND
+         OR v_latched_invoice.status <> 'draft'
+         OR v_latched_invoice.project_id IS DISTINCT FROM v_m.project_id
+         OR v_latched_invoice.client_id IS DISTINCT FROM v_p.client_id
+         OR v_existing_invoice.designer_id IS DISTINCT FROM v_latched_invoice.designer_id
+         OR v_existing_invoice.client_id IS DISTINCT FROM v_latched_invoice.client_id
+         OR v_existing_invoice.currency IS DISTINCT FROM v_latched_invoice.currency
+         OR v_latched_invoice.subtotal_cents IS DISTINCT FROM v_m.amount_cents
+         OR v_latched_invoice.tax_cents IS DISTINCT FROM 0
+         OR v_latched_invoice.total_cents IS DISTINCT FROM v_m.amount_cents
+         OR v_latched_invoice.amount_paid_cents IS DISTINCT FROM 0
+         OR v_latched_invoice.stripe_checkout_session_id IS NOT NULL
+         OR EXISTS (
+           SELECT 1 FROM invoice_line_items x WHERE x.invoice_id = v_latched_invoice.id
+         )
+         OR EXISTS (
+           SELECT 1 FROM invoice_payments p WHERE p.invoice_id = v_latched_invoice.id
+         )
+         OR EXISTS (
+           SELECT 1 FROM invoice_checkout_attempts a
+           WHERE a.invoice_id = v_latched_invoice.id
+         )
+         OR EXISTS (
+           SELECT 1 FROM project_time_entries t
+           WHERE t.invoice_id = v_latched_invoice.id
+         )
+         OR EXISTS (
+           SELECT 1 FROM designer_earnings e
+           WHERE e.invoice_id = v_latched_invoice.id
+         )
+         OR EXISTS (
+           SELECT 1 FROM concierge_orders o
+           WHERE o.client_invoice_id = v_latched_invoice.id
+         ) THEN
+        RAISE EXCEPTION
+          'draft_invoice_from_milestone: milestone % has an unsafe line-owner conflict between invoices % and %',
+          v_m.id, v_latched_invoice.id, v_existing_line.invoice_id
+          USING ERRCODE = '23514';
+      END IF;
+    END IF;
+
+    UPDATE project_payment_milestones
+    SET invoice_id = v_existing_invoice.id,
+        status = CASE
+          WHEN v_existing_invoice.status = 'paid' THEN 'paid'
+          WHEN v_existing_invoice.status IN ('sent','partially_paid') THEN 'outstanding'
+          ELSE 'pending'
+        END,
+        due_date = CASE
+          WHEN v_existing_invoice.status IN ('sent','partially_paid','paid')
+            THEN v_existing_invoice.due_date
+          ELSE NULL
+        END,
+        paid_at = CASE
+          WHEN v_existing_invoice.status = 'paid' THEN v_existing_invoice.paid_at
+          ELSE NULL
+        END,
+        updated_at = now()
+    WHERE id = p_milestone_id;
+
+    RETURN v_existing_invoice.id;
+  END IF;
+
+  -- With no canonical line, a draft latch may receive its exact missing line.
+  -- Void latches are superseded by the new line trigger without a reverse lock.
+  SELECT * INTO v_p FROM projects WHERE id = v_m.project_id;
+  IF NOT FOUND THEN
+    RAISE EXCEPTION 'draft_invoice_from_milestone: project % not found', v_m.project_id;
+  END IF;
+
   IF v_m.invoice_id IS NOT NULL THEN
-    SELECT status INTO v_inv_status FROM invoices WHERE id = v_m.invoice_id;
-    IF NOT FOUND OR v_inv_status = 'void' THEN
-      UPDATE project_payment_milestones
-      SET invoice_id = NULL, status = 'pending', due_date = NULL, paid_at = NULL,
-          updated_at = now()
-      WHERE id = p_milestone_id;
-      v_m.invoice_id := NULL;
-    ELSIF v_inv_status = 'draft' THEN
+    -- Serialize header validation plus the zero-line proof against both header
+    -- edits and every line writer. The companion BEFORE trigger below makes
+    -- invoice -> line -> milestone the shared creation order.
+    SELECT * INTO v_latched_invoice
+    FROM invoices
+    WHERE id = v_m.invoice_id
+    FOR UPDATE;
+    IF FOUND AND v_latched_invoice.status = 'draft' THEN
+      IF v_latched_invoice.project_id IS DISTINCT FROM v_m.project_id
+         OR v_latched_invoice.client_id IS DISTINCT FROM v_p.client_id
+         OR (
+           v_latched_invoice.designer_id = v_p.designer_id
+           OR EXISTS (
+             SELECT 1
+             FROM organization_members invoice_member
+             JOIN organization_members project_member
+               ON project_member.organization_id = invoice_member.organization_id
+             JOIN organizations organization
+               ON organization.id = invoice_member.organization_id
+             WHERE invoice_member.user_id = v_latched_invoice.designer_id
+               AND invoice_member.status = 'active'
+               AND invoice_member.role <> 'guest'
+               AND project_member.user_id = v_p.designer_id
+               AND project_member.status = 'active'
+               AND project_member.role <> 'guest'
+               AND organization.type = 'design_studio'
+               AND organization.status = 'active'
+           )
+         ) IS NOT TRUE
+         OR v_latched_invoice.subtotal_cents IS DISTINCT FROM v_m.amount_cents
+         OR v_latched_invoice.tax_cents IS DISTINCT FROM 0
+         OR v_latched_invoice.total_cents IS DISTINCT FROM v_m.amount_cents
+         OR v_latched_invoice.amount_paid_cents IS DISTINCT FROM 0
+         OR v_latched_invoice.stripe_checkout_session_id IS NOT NULL
+         OR EXISTS (
+           SELECT 1 FROM invoice_payments p WHERE p.invoice_id = v_latched_invoice.id
+         )
+         OR EXISTS (
+           SELECT 1 FROM invoice_checkout_attempts a
+           WHERE a.invoice_id = v_latched_invoice.id
+         )
+         OR EXISTS (
+           SELECT 1 FROM project_time_entries t
+           WHERE t.invoice_id = v_latched_invoice.id
+         )
+         OR EXISTS (
+           SELECT 1 FROM designer_earnings e
+           WHERE e.invoice_id = v_latched_invoice.id
+         )
+         OR EXISTS (
+           SELECT 1 FROM concierge_orders o
+           WHERE o.client_invoice_id = v_latched_invoice.id
+         ) THEN
+        RAISE EXCEPTION
+          'draft_invoice_from_milestone: draft invoice % is unsafe for milestone % repair',
+          v_m.invoice_id, v_m.id
+          USING ERRCODE = '23514';
+      END IF;
+
       SELECT count(*) INTO v_line_count
       FROM invoice_line_items WHERE invoice_id = v_m.invoice_id;
 
-      IF v_line_count = 0 THEN
-        INSERT INTO invoice_line_items (
-          invoice_id, kind, milestone_id, description, quantity,
-          unit_amount_cents, amount_cents, metadata, sort_order
-        ) VALUES (
-          v_m.invoice_id, 'milestone', v_m.id, v_m.label, 1,
-          v_m.amount_cents, v_m.amount_cents,
-          jsonb_build_object('source', 'milestone_draft_repair'), 0
-        );
-      ELSIF NOT EXISTS (
-        SELECT 1 FROM invoice_line_items
-        WHERE invoice_id = v_m.invoice_id AND milestone_id = v_m.id
-      ) THEN
+      IF v_line_count <> 0 THEN
+        IF EXISTS (
+          SELECT 1 FROM invoice_line_items WHERE milestone_id = v_m.id
+        ) THEN
+          RETURN public.draft_invoice_from_milestone(p_milestone_id);
+        END IF;
+
         RAISE EXCEPTION
           'draft_invoice_from_milestone: draft invoice % has authored lines but no line for milestone %; refusing unsafe repair',
           v_m.invoice_id, v_m.id;
       END IF;
 
-      UPDATE project_payment_milestones
-      SET status = 'pending', due_date = NULL, paid_at = NULL, updated_at = now()
-      WHERE id = p_milestone_id AND status = 'outstanding';
+      INSERT INTO invoice_line_items (
+        invoice_id, kind, milestone_id, description, quantity,
+        unit_amount_cents, amount_cents, metadata, sort_order
+      ) VALUES (
+        v_m.invoice_id, 'milestone', v_m.id, v_m.label, 1,
+        v_m.amount_cents, v_m.amount_cents,
+        jsonb_build_object('source', 'milestone_draft_repair'), 0
+      )
+      ON CONFLICT (milestone_id) WHERE milestone_id IS NOT NULL DO NOTHING;
+
+      GET DIAGNOSTICS v_inserted = ROW_COUNT;
+      IF v_inserted = 0 THEN
+        RETURN public.draft_invoice_from_milestone(p_milestone_id);
+      END IF;
+
       RETURN v_m.invoice_id;
-    ELSE
+    ELSIF FOUND AND v_latched_invoice.status <> 'void' THEN
       RETURN v_m.invoice_id;
     END IF;
-  END IF;
-
-  SELECT * INTO v_p FROM projects WHERE id = v_m.project_id;
-  IF NOT FOUND THEN
-    RAISE EXCEPTION 'draft_invoice_from_milestone: project % not found', v_m.project_id;
   END IF;
 
   INSERT INTO invoices (
@@ -242,7 +846,14 @@ BEGIN
     v_inv, 'milestone', v_m.id, v_m.label, 1,
     v_m.amount_cents, v_m.amount_cents,
     jsonb_build_object('source', 'milestone_autodraft'), 0
-  );
+  )
+  ON CONFLICT (milestone_id) WHERE milestone_id IS NOT NULL DO NOTHING;
+
+  GET DIAGNOSTICS v_inserted = ROW_COUNT;
+  IF v_inserted = 0 THEN
+    DELETE FROM invoices WHERE id = v_inv;
+    RETURN public.draft_invoice_from_milestone(p_milestone_id);
+  END IF;
 
   UPDATE project_payment_milestones
   SET invoice_id = v_inv, status = 'pending', due_date = NULL, paid_at = NULL,
@@ -282,7 +893,7 @@ REVOKE ALL ON FUNCTION public.draft_invoice_from_milestone(uuid)
 GRANT EXECUTE ON FUNCTION public.draft_invoice_from_milestone(uuid) TO service_role;
 
 COMMENT ON FUNCTION public.draft_invoice_from_milestone(uuid) IS
-  'Atomically creates one draft invoice plus one exact milestone line and latches the milestone. Repairs the historical header-only draft shape under the same milestone lock; notification remains best effort.';
+  'Atomically creates one draft invoice plus one exact milestone line and latches the milestone. The unique line serializes creators; repair locks line then milestone, and notification remains best effort.';
 
 -- Financial acts are narrower than shared-workspace visibility. The general
 -- is_studio_comember helper intentionally treats any shared organization as a
@@ -304,6 +915,312 @@ REVOKE ALL ON FUNCTION public._can_manage_invoice_owner(uuid)
 
 COMMENT ON FUNCTION public._can_manage_invoice_owner(uuid) IS
   'Private invoice authority: exact designer or active non-guest peer in the same active design_studio; contractor/manufacturer co-membership never grants money authority.';
+
+-- A header-only draft can be repaired safely only while its empty-line proof
+-- remains true. Every new line takes a shared lock on the destination header;
+-- draft repair takes FOR UPDATE above. Existing line rows cannot be moved to a
+-- different invoice: allowing row -> invoice lock order would reintroduce a
+-- deadlock against invoice -> row lifecycle workflows.
+CREATE OR REPLACE FUNCTION public.lock_invoice_for_line_insert()
+RETURNS trigger
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public, pg_temp
+AS $$
+BEGIN
+  PERFORM 1
+  FROM invoices
+  WHERE id = NEW.invoice_id
+  FOR SHARE;
+
+  IF NOT FOUND THEN
+    RAISE EXCEPTION
+      'invoice line write: invoice % not found', NEW.invoice_id
+      USING ERRCODE = '23503';
+  END IF;
+
+  RETURN NEW;
+END;
+$$;
+
+REVOKE ALL ON FUNCTION public.lock_invoice_for_line_insert()
+  FROM PUBLIC, anon, authenticated, service_role;
+
+DROP TRIGGER IF EXISTS a_lock_invoice_for_line_insert_trg
+  ON public.invoice_line_items;
+CREATE TRIGGER a_lock_invoice_for_line_insert_trg
+BEFORE INSERT ON public.invoice_line_items
+FOR EACH ROW EXECUTE FUNCTION public.lock_invoice_for_line_insert();
+
+COMMENT ON FUNCTION public.lock_invoice_for_line_insert() IS
+  'Serializes invoice-line inserts with header-only milestone repair by locking the destination invoice before the new line row exists.';
+
+CREATE OR REPLACE FUNCTION public.reject_invoice_line_reparent()
+RETURNS trigger
+LANGUAGE plpgsql
+SECURITY INVOKER
+SET search_path = public, pg_temp
+AS $$
+BEGIN
+  IF OLD.invoice_id IS DISTINCT FROM NEW.invoice_id THEN
+    RAISE EXCEPTION
+      'invoice line % cannot move from invoice % to %; delete and recreate it through an invoice-first workflow',
+      OLD.id, OLD.invoice_id, NEW.invoice_id
+      USING ERRCODE = '23514';
+  END IF;
+
+  RETURN NEW;
+END;
+$$;
+
+REVOKE ALL ON FUNCTION public.reject_invoice_line_reparent()
+  FROM PUBLIC, anon, authenticated, service_role;
+
+DROP TRIGGER IF EXISTS a_reject_invoice_line_reparent_trg
+  ON public.invoice_line_items;
+CREATE TRIGGER a_reject_invoice_line_reparent_trg
+BEFORE UPDATE OF invoice_id ON public.invoice_line_items
+FOR EACH ROW EXECUTE FUNCTION public.reject_invoice_line_reparent();
+
+COMMENT ON FUNCTION public.reject_invoice_line_reparent() IS
+  'Rejects invoice-line reparenting so lifecycle workflows keep invoice -> line lock order; ordinary in-place line edits remain supported.';
+
+-- Browser invoice composition writes the header and lines separately. Keep the
+-- milestone latch DB-owned so a successful milestone-line write cannot leave
+-- Accounts offering a second, doomed "Generate invoice" action. This AFTER
+-- trigger follows the established line -> milestone lock order.
+CREATE OR REPLACE FUNCTION public.sync_invoice_line_milestone_latch()
+RETURNS trigger
+LANGUAGE plpgsql
+SECURITY INVOKER
+SET search_path = public, pg_temp
+AS $$
+DECLARE
+  v_invoice          invoices%ROWTYPE;
+  v_previous_invoice invoices%ROWTYPE;
+  v_milestone        project_payment_milestones%ROWTYPE;
+  v_project          projects%ROWTYPE;
+  v_detach           boolean := false;
+BEGIN
+  IF TG_OP = 'DELETE' THEN
+    v_detach := OLD.milestone_id IS NOT NULL;
+  ELSIF TG_OP = 'UPDATE' THEN
+    v_detach := OLD.milestone_id IS NOT NULL
+      AND (
+        OLD.milestone_id IS DISTINCT FROM NEW.milestone_id
+        OR OLD.invoice_id IS DISTINCT FROM NEW.invoice_id
+      );
+  END IF;
+
+  IF v_detach THEN
+    SELECT * INTO v_previous_invoice
+    FROM invoices
+    WHERE id = OLD.invoice_id;
+
+    IF FOUND
+       AND v_previous_invoice.status NOT IN ('draft','void')
+       AND EXISTS (
+         SELECT 1
+         FROM project_payment_milestones m
+         WHERE m.id = OLD.milestone_id
+           AND m.invoice_id = OLD.invoice_id
+       ) THEN
+      RAISE EXCEPTION
+        'invoice milestone latch: cannot detach milestone % from % invoice %',
+        OLD.milestone_id, v_previous_invoice.status, OLD.invoice_id
+        USING ERRCODE = '23514';
+    END IF;
+
+    UPDATE project_payment_milestones
+    SET invoice_id = NULL,
+        status = 'pending',
+        due_date = NULL,
+        paid_at = NULL,
+        updated_at = now()
+    WHERE id = OLD.milestone_id
+      AND invoice_id = OLD.invoice_id;
+  END IF;
+
+  IF TG_OP = 'DELETE' THEN
+    RETURN OLD;
+  END IF;
+  IF NEW.milestone_id IS NULL THEN
+    RETURN NEW;
+  END IF;
+
+  SELECT * INTO v_invoice
+  FROM invoices
+  WHERE id = NEW.invoice_id;
+  IF NOT FOUND OR v_invoice.status <> 'draft' THEN
+    RAISE EXCEPTION
+      'invoice milestone latch: invoice % is missing or not draft', NEW.invoice_id
+      USING ERRCODE = '23514';
+  END IF;
+
+  SELECT * INTO v_milestone
+  FROM project_payment_milestones
+  WHERE id = NEW.milestone_id
+  FOR UPDATE;
+  IF NOT FOUND THEN
+    RAISE EXCEPTION
+      'invoice milestone latch: milestone % not found', NEW.milestone_id
+      USING ERRCODE = '23514';
+  END IF;
+
+  SELECT * INTO v_project
+  FROM projects
+  WHERE id = v_milestone.project_id;
+  IF NOT FOUND THEN
+    RAISE EXCEPTION
+      'invoice milestone latch: project % not found', v_milestone.project_id
+      USING ERRCODE = '23514';
+  END IF;
+
+  -- Direct browser writes execute as authenticated and must prove exact
+  -- design-studio authority. Nested SECURITY DEFINER billing workflows execute
+  -- as postgres and have already performed their own domain authorization.
+  IF current_user = 'authenticated'
+     AND NOT EXISTS (
+       SELECT 1
+       WHERE v_project.designer_id = auth.uid()
+          OR EXISTS (
+            SELECT 1
+            FROM organization_members actor_membership
+            JOIN organization_members owner_membership
+              ON owner_membership.organization_id = actor_membership.organization_id
+            JOIN organizations organization
+              ON organization.id = actor_membership.organization_id
+            WHERE actor_membership.user_id = auth.uid()
+              AND actor_membership.status = 'active'
+              AND actor_membership.role <> 'guest'
+              AND owner_membership.user_id = v_project.designer_id
+              AND owner_membership.status = 'active'
+              AND owner_membership.role <> 'guest'
+              AND organization.type = 'design_studio'
+              AND organization.status = 'active'
+          )
+     ) THEN
+    RAISE EXCEPTION
+      'invoice milestone latch: milestone % not found or access denied', NEW.milestone_id
+      USING ERRCODE = '42501';
+  END IF;
+
+  IF v_invoice.project_id IS DISTINCT FROM v_milestone.project_id
+     OR v_invoice.client_id IS DISTINCT FROM v_project.client_id
+     OR (
+       v_invoice.designer_id = v_project.designer_id
+       OR EXISTS (
+         SELECT 1
+         FROM organization_members invoice_member
+         JOIN organization_members project_member
+           ON project_member.organization_id = invoice_member.organization_id
+         JOIN organizations organization
+           ON organization.id = invoice_member.organization_id
+         WHERE invoice_member.user_id = v_invoice.designer_id
+           AND invoice_member.status = 'active'
+           AND invoice_member.role <> 'guest'
+           AND project_member.user_id = v_project.designer_id
+           AND project_member.status = 'active'
+           AND project_member.role <> 'guest'
+           AND organization.type = 'design_studio'
+           AND organization.status = 'active'
+       )
+     ) IS NOT TRUE
+     OR NEW.kind IS DISTINCT FROM 'milestone'
+     OR NEW.quantity IS DISTINCT FROM 1
+     OR NEW.unit_amount_cents IS DISTINCT FROM v_milestone.amount_cents
+     OR NEW.amount_cents IS DISTINCT FROM v_milestone.amount_cents THEN
+    RAISE EXCEPTION
+      'invoice milestone latch: line % does not exactly match milestone %',
+      NEW.id, NEW.milestone_id
+      USING ERRCODE = '23514';
+  END IF;
+
+  IF v_milestone.status = 'paid' THEN
+    RAISE EXCEPTION
+      'invoice milestone latch: paid milestone % cannot be attached to a draft invoice',
+      NEW.milestone_id
+      USING ERRCODE = '23514';
+  END IF;
+
+  IF v_milestone.invoice_id IS NOT NULL
+     AND v_milestone.invoice_id <> NEW.invoice_id THEN
+    SELECT * INTO v_previous_invoice
+    FROM invoices
+    WHERE id = v_milestone.invoice_id;
+
+    IF NOT FOUND THEN
+      RAISE EXCEPTION
+        'invoice milestone latch: existing invoice % is unavailable for milestone %',
+        v_milestone.invoice_id, NEW.milestone_id
+        USING ERRCODE = '23514';
+    ELSIF v_previous_invoice.status <> 'void'
+       AND (
+         v_previous_invoice.status = 'draft'
+         AND v_previous_invoice.project_id = v_milestone.project_id
+         AND v_previous_invoice.designer_id IS NOT DISTINCT FROM v_invoice.designer_id
+         AND v_previous_invoice.client_id IS NOT DISTINCT FROM v_invoice.client_id
+         AND v_previous_invoice.currency IS NOT DISTINCT FROM v_invoice.currency
+         AND v_previous_invoice.subtotal_cents = v_milestone.amount_cents
+         AND v_previous_invoice.tax_cents = 0
+         AND v_previous_invoice.total_cents = v_milestone.amount_cents
+         AND v_previous_invoice.amount_paid_cents = 0
+         AND v_previous_invoice.stripe_checkout_session_id IS NULL
+         AND NOT EXISTS (
+           SELECT 1 FROM invoice_line_items x
+           WHERE x.invoice_id = v_previous_invoice.id
+         )
+         AND NOT EXISTS (
+           SELECT 1 FROM invoice_payments p
+           WHERE p.invoice_id = v_previous_invoice.id
+         )
+         AND NOT EXISTS (
+           SELECT 1 FROM invoice_checkout_attempts a
+           WHERE a.invoice_id = v_previous_invoice.id
+         )
+         AND NOT EXISTS (
+           SELECT 1 FROM project_time_entries t
+           WHERE t.invoice_id = v_previous_invoice.id
+         )
+         AND NOT EXISTS (
+           SELECT 1 FROM designer_earnings e
+           WHERE e.invoice_id = v_previous_invoice.id
+         )
+         AND NOT EXISTS (
+           SELECT 1 FROM concierge_orders o
+           WHERE o.client_invoice_id = v_previous_invoice.id
+         )
+       ) IS NOT TRUE THEN
+      RAISE EXCEPTION
+        'invoice milestone latch: milestone % is already latched to invoice %',
+        NEW.milestone_id, v_milestone.invoice_id
+        USING ERRCODE = '23514';
+    END IF;
+  END IF;
+
+  UPDATE project_payment_milestones
+  SET invoice_id = NEW.invoice_id,
+      status = 'pending',
+      due_date = NULL,
+      paid_at = NULL,
+      updated_at = now()
+  WHERE id = NEW.milestone_id;
+
+  RETURN NEW;
+END;
+$$;
+
+REVOKE ALL ON FUNCTION public.sync_invoice_line_milestone_latch()
+  FROM PUBLIC, anon, authenticated, service_role;
+
+DROP TRIGGER IF EXISTS sync_invoice_line_milestone_latch_trg
+  ON public.invoice_line_items;
+CREATE TRIGGER sync_invoice_line_milestone_latch_trg
+AFTER INSERT OR UPDATE OR DELETE ON public.invoice_line_items
+FOR EACH ROW EXECUTE FUNCTION public.sync_invoice_line_milestone_latch();
+
+COMMENT ON FUNCTION public.sync_invoice_line_milestone_latch() IS
+  'DB-owned milestone/invoice identity synchronization for direct draft line writes; validates exact same-project milestone lines and releases only the prior draft latch.';
 
 CREATE OR REPLACE FUNCTION public.generate_milestone_invoice(p_milestone_id uuid)
 RETURNS uuid
@@ -374,6 +1291,15 @@ BEGIN
   IF v_invoice.amount_paid_cents <> 0 THEN
     RAISE EXCEPTION 'void_invoice: invoice % has collected payments and cannot be voided', p_invoice_id;
   END IF;
+
+  -- Canonical billing lock order is invoice -> lines -> milestones. The latch
+  -- synchronization trigger also takes line -> milestone, so lock every line
+  -- deterministically before changing either lifecycle.
+  PERFORM 1
+  FROM invoice_line_items
+  WHERE invoice_id = p_invoice_id
+  ORDER BY id
+  FOR UPDATE;
 
   UPDATE invoices
   SET status = 'void', voided_at = now(), void_reason = p_reason,

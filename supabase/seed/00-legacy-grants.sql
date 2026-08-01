@@ -5096,6 +5096,24 @@ END $g$;
 
 -- 00397_billing_checkout_integrity.sql
 DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.lock_invoice_for_line_insert() FROM PUBLIC, anon, authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00397_billing_checkout_integrity.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.reject_invoice_line_reparent() FROM PUBLIC, anon, authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00397_billing_checkout_integrity.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.sync_invoice_line_milestone_latch() FROM PUBLIC, anon, authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00397_billing_checkout_integrity.sql
+DO $g$ BEGIN
   REVOKE ALL ON FUNCTION public.generate_milestone_invoice(uuid) FROM PUBLIC, anon;
 EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
 END $g$;

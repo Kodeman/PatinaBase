@@ -57,10 +57,12 @@ BEGIN
     VALUES (v_m1, v_proj, 'RRA M1', 100, 8000, 'outstanding');
 
   INSERT INTO public.invoices (id, project_id, designer_id, client_id, invoice_number, status, currency, total_cents, amount_paid_cents)
-    VALUES (v_inv1, v_proj, v_designer, v_designer, 'INV-RRA-1', 'sent', 'USD', 8000, 0);
+    VALUES (v_inv1, v_proj, v_designer, v_designer, 'INV-RRA-1', 'draft', 'USD', 8000, 0);
 
   INSERT INTO public.invoice_line_items (invoice_id, kind, milestone_id, description, quantity, unit_amount_cents, amount_cents)
     VALUES (v_inv1, 'milestone', v_m1, 'RRA milestone line', 1, 8000, 8000);
+
+  UPDATE public.invoices SET status = 'sent' WHERE id = v_inv1;
 
   -- Settle: succeeded payment fires the AFTER trigger → paid.
   INSERT INTO public.invoice_payments (id, invoice_id, amount_cents, method, status, received_at, stripe_payment_intent_id)
@@ -115,10 +117,12 @@ BEGIN
     VALUES (v_m2, v_proj, 'RRA M2', 100, 8000, 'outstanding');
 
   INSERT INTO public.invoices (id, project_id, designer_id, client_id, invoice_number, status, currency, total_cents, amount_paid_cents)
-    VALUES (v_inv2, v_proj, v_designer, v_designer, 'INV-RRA-2', 'sent', 'USD', 8000, 0);
+    VALUES (v_inv2, v_proj, v_designer, v_designer, 'INV-RRA-2', 'draft', 'USD', 8000, 0);
 
   INSERT INTO public.invoice_line_items (invoice_id, kind, milestone_id, description, quantity, unit_amount_cents, amount_cents)
     VALUES (v_inv2, 'milestone', v_m2, 'RRA milestone line 2', 1, 8000, 8000);
+
+  UPDATE public.invoices SET status = 'sent' WHERE id = v_inv2;
 
   INSERT INTO public.invoice_payments (id, invoice_id, amount_cents, method, status, received_at, stripe_payment_intent_id)
     VALUES (v_pay2a, v_inv2, 4000, 'stripe', 'succeeded', NOW(), 'pi_rra_2a');

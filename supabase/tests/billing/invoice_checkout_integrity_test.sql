@@ -77,7 +77,17 @@ VALUES
   ('b9740000-0000-4000-8000-000000000003', 'b9730000-0000-4000-8000-000000000001',
    'Rollback target', 10, 10000, 'pending', 3),
   ('b9740000-0000-4000-8000-000000000004', 'b9730000-0000-4000-8000-000000000001',
-   'Header repair target', 15, 15000, 'outstanding', 4);
+   'Header repair target', 15, 15000, 'outstanding', 4),
+  ('b9740000-0000-4000-8000-000000000005', 'b9730000-0000-4000-8000-000000000001',
+   'Sent owner convergence', 12, 12000, 'pending', 5),
+  ('b9740000-0000-4000-8000-000000000006', 'b9730000-0000-4000-8000-000000000001',
+   'Direct line latch', 8, 8000, 'pending', 6),
+  ('b9740000-0000-4000-8000-000000000007', 'b9730000-0000-4000-8000-000000000001',
+   'Paid owner convergence', 9, 9000, 'pending', 7),
+  ('b9740000-0000-4000-8000-000000000008', 'b9730000-0000-4000-8000-000000000001',
+   'Trusted workflow deposit', 7, 7000, 'pending', 8),
+  ('b9740000-0000-4000-8000-000000000009', 'b9730000-0000-4000-8000-000000000001',
+   'Contractor authority rejection', 6, 6000, 'pending', 9);
 
 CREATE OR REPLACE FUNCTION pg_temp.assume_billing_actor(p_actor uuid)
 RETURNS void
@@ -182,6 +192,334 @@ BEGIN
     'repaired draft milestone must reset to pending/no due date';
 END;
 $$;
+
+-- A unique milestone line on a later sent/paid invoice is canonical over an
+-- older empty draft latch. Repair must converge without copying or rewriting
+-- either authored line or the stale invoice history.
+RESET ROLE;
+INSERT INTO public.invoices (
+  id, project_id, designer_id, client_id, status,
+  subtotal_cents, total_cents, memo
+)
+VALUES
+  ('b9750000-0000-4000-8000-000000000007',
+   'b9730000-0000-4000-8000-000000000001',
+   'b9700000-0000-4000-8000-000000000001',
+   'b9700000-0000-4000-8000-000000000004',
+   'draft', 12000, 12000, 'canonical sent owner'),
+  ('b9750000-0000-4000-8000-000000000008',
+   'b9730000-0000-4000-8000-000000000001',
+   'b9700000-0000-4000-8000-000000000001',
+   'b9700000-0000-4000-8000-000000000004',
+   'draft', 12000, 12000, 'stale sent-owner latch'),
+  ('b9750000-0000-4000-8000-000000000009',
+   'b9730000-0000-4000-8000-000000000001',
+   'b9700000-0000-4000-8000-000000000001',
+   'b9700000-0000-4000-8000-000000000004',
+   'draft', 8000, 8000, 'direct latch trigger'),
+  ('b9750000-0000-4000-8000-000000000070',
+   'b9730000-0000-4000-8000-000000000001',
+   'b9700000-0000-4000-8000-000000000001',
+   'b9700000-0000-4000-8000-000000000004',
+   'draft', 9000, 9000, 'canonical paid owner'),
+  ('b9750000-0000-4000-8000-000000000071',
+   'b9730000-0000-4000-8000-000000000001',
+   'b9700000-0000-4000-8000-000000000001',
+   'b9700000-0000-4000-8000-000000000004',
+   'draft', 9000, 9000, 'stale paid-owner latch');
+
+SET LOCAL ROLE authenticated;
+SELECT pg_temp.assume_billing_actor('b9700000-0000-4000-8000-000000000001');
+INSERT INTO public.invoice_line_items (
+  invoice_id, kind, milestone_id, description, quantity,
+  unit_amount_cents, amount_cents, sort_order
+)
+VALUES
+  ('b9750000-0000-4000-8000-000000000007', 'milestone',
+   'b9740000-0000-4000-8000-000000000005', 'Sent owner convergence', 1,
+   12000, 12000, 0),
+  ('b9750000-0000-4000-8000-000000000009', 'milestone',
+   'b9740000-0000-4000-8000-000000000006', 'Direct line latch', 1,
+   8000, 8000, 0),
+  ('b9750000-0000-4000-8000-000000000070', 'milestone',
+   'b9740000-0000-4000-8000-000000000007', 'Paid owner convergence', 1,
+   9000, 9000, 0);
+
+DO $$
+BEGIN
+  ASSERT (SELECT invoice_id = 'b9750000-0000-4000-8000-000000000009'
+                 AND status = 'pending'
+          FROM public.project_payment_milestones
+          WHERE id = 'b9740000-0000-4000-8000-000000000006'),
+    'direct milestone-line insert must immediately own the header latch';
+END;
+$$;
+
+DO $$
+DECLARE v_state text;
+BEGIN
+  BEGIN
+    UPDATE public.invoice_line_items
+    SET invoice_id = 'b9750000-0000-4000-8000-000000000007'
+    WHERE milestone_id = 'b9740000-0000-4000-8000-000000000006';
+  EXCEPTION WHEN OTHERS THEN
+    GET STACKED DIAGNOSTICS v_state = RETURNED_SQLSTATE;
+  END;
+
+  ASSERT v_state = '23514',
+    'an existing invoice line must not be reparented across invoice headers';
+  ASSERT (SELECT invoice_id = 'b9750000-0000-4000-8000-000000000009'
+          FROM public.invoice_line_items
+          WHERE milestone_id = 'b9740000-0000-4000-8000-000000000006'),
+    'rejected line reparent must preserve the original invoice owner';
+END;
+$$;
+
+UPDATE public.project_payment_milestones
+SET invoice_id = NULL
+WHERE id = 'b9740000-0000-4000-8000-000000000006';
+
+DO $$
+DECLARE v_invoice uuid;
+BEGIN
+  v_invoice := public.generate_milestone_invoice(
+    'b9740000-0000-4000-8000-000000000006'
+  );
+  ASSERT v_invoice = 'b9750000-0000-4000-8000-000000000009',
+    'unlatched unique line must be recovered without creating a second header';
+  ASSERT (SELECT invoice_id = v_invoice
+          FROM public.project_payment_milestones
+          WHERE id = 'b9740000-0000-4000-8000-000000000006'),
+    'unlatched runtime recovery must restore the canonical header latch';
+END;
+$$;
+
+DELETE FROM public.invoice_line_items
+WHERE invoice_id = 'b9750000-0000-4000-8000-000000000009'
+  AND milestone_id = 'b9740000-0000-4000-8000-000000000006';
+
+DO $$
+BEGIN
+  ASSERT (SELECT invoice_id IS NULL AND status = 'pending'
+                 AND due_date IS NULL AND paid_at IS NULL
+          FROM public.project_payment_milestones
+          WHERE id = 'b9740000-0000-4000-8000-000000000006'),
+    'deleting a draft milestone line must release only its exact latch';
+END;
+$$;
+
+RESET ROLE;
+SET LOCAL ROLE authenticated;
+SELECT pg_temp.assume_billing_actor('b9700000-0000-4000-8000-000000000003');
+INSERT INTO public.invoices (
+  id, project_id, designer_id, client_id, status,
+  subtotal_cents, total_cents, memo
+)
+VALUES (
+  'b9750000-0000-4000-8000-000000000072',
+  'b9730000-0000-4000-8000-000000000001',
+  'b9700000-0000-4000-8000-000000000003',
+  'b9700000-0000-4000-8000-000000000004',
+  'draft', 6000, 6000, 'contractor-only authority probe'
+);
+
+DO $$
+DECLARE v_state text;
+BEGIN
+  BEGIN
+    INSERT INTO public.invoice_line_items (
+      invoice_id, kind, milestone_id, description, quantity,
+      unit_amount_cents, amount_cents, sort_order
+    ) VALUES (
+      'b9750000-0000-4000-8000-000000000072', 'milestone',
+      'b9740000-0000-4000-8000-000000000009', 'Contractor authority rejection',
+      1, 6000, 6000, 0
+    );
+  EXCEPTION WHEN OTHERS THEN
+    GET STACKED DIAGNOSTICS v_state = RETURNED_SQLSTATE;
+  END;
+
+  ASSERT v_state = '42501',
+    'contractor-only shared organization must fail exact design-studio authority';
+  ASSERT NOT EXISTS (
+    SELECT 1 FROM public.invoice_line_items
+    WHERE milestone_id = 'b9740000-0000-4000-8000-000000000009'
+  ), 'rejected contractor line must roll back';
+END;
+$$;
+
+RESET ROLE;
+DO $$
+BEGIN
+  ASSERT (SELECT invoice_id IS NULL
+          FROM public.project_payment_milestones
+          WHERE id = 'b9740000-0000-4000-8000-000000000009'),
+    'rejected contractor line must not mutate the milestone latch';
+END;
+$$;
+
+-- Header-only repair must fail closed when the draft is addressed to a
+-- different client, even if every other header field looks repairable.
+INSERT INTO public.invoices (
+  id, project_id, designer_id, client_id, status,
+  subtotal_cents, total_cents, memo
+)
+VALUES (
+  'b9750000-0000-4000-8000-000000000073',
+  'b9730000-0000-4000-8000-000000000001',
+  'b9700000-0000-4000-8000-000000000001',
+  'b9700000-0000-4000-8000-000000000003',
+  'draft', 6000, 6000, 'unsafe wrong-client header repair probe'
+);
+UPDATE public.project_payment_milestones
+SET invoice_id = 'b9750000-0000-4000-8000-000000000073'
+WHERE id = 'b9740000-0000-4000-8000-000000000009';
+
+SET LOCAL ROLE authenticated;
+SELECT pg_temp.assume_billing_actor('b9700000-0000-4000-8000-000000000001');
+DO $$
+DECLARE v_state text;
+BEGIN
+  BEGIN
+    PERFORM public.generate_milestone_invoice(
+      'b9740000-0000-4000-8000-000000000009'
+    );
+  EXCEPTION WHEN OTHERS THEN
+    GET STACKED DIAGNOSTICS v_state = RETURNED_SQLSTATE;
+  END;
+
+  ASSERT v_state = '23514',
+    'wrong-client header-only repair must fail closed';
+END;
+$$;
+
+RESET ROLE;
+DO $$
+BEGIN
+  ASSERT NOT EXISTS (
+    SELECT 1 FROM public.invoice_line_items
+    WHERE milestone_id = 'b9740000-0000-4000-8000-000000000009'
+  ), 'unsafe header-only repair must not create a financial line';
+  ASSERT (SELECT invoice_id = 'b9750000-0000-4000-8000-000000000073'
+          FROM public.project_payment_milestones
+          WHERE id = 'b9740000-0000-4000-8000-000000000009'),
+    'unsafe header-only repair must preserve the existing latch for review';
+END;
+$$;
+
+UPDATE public.invoices
+SET status = 'sent', invoice_number = 'INV-BILL-07',
+    issue_date = current_date, due_date = current_date + 30, sent_at = now()
+WHERE id = 'b9750000-0000-4000-8000-000000000007';
+
+UPDATE public.invoices
+SET status = 'paid', invoice_number = 'INV-BILL-70',
+    issue_date = current_date - 10, due_date = current_date + 20,
+    sent_at = now() - interval '10 days', paid_at = now(), amount_paid_cents = 9000
+WHERE id = 'b9750000-0000-4000-8000-000000000070';
+
+UPDATE public.project_payment_milestones
+SET invoice_id = 'b9750000-0000-4000-8000-000000000008',
+    status = 'outstanding', due_date = current_date - 1
+WHERE id = 'b9740000-0000-4000-8000-000000000005';
+
+UPDATE public.project_payment_milestones
+SET invoice_id = 'b9750000-0000-4000-8000-000000000071',
+    status = 'paid', due_date = current_date - 10, paid_at = now() - interval '1 day'
+WHERE id = 'b9740000-0000-4000-8000-000000000007';
+
+SET LOCAL ROLE authenticated;
+SELECT pg_temp.assume_billing_actor('b9700000-0000-4000-8000-000000000002');
+DO $$
+DECLARE
+  v_sent uuid;
+  v_paid uuid;
+BEGIN
+  v_sent := public.generate_milestone_invoice(
+    'b9740000-0000-4000-8000-000000000005'
+  );
+  ASSERT v_sent = 'b9750000-0000-4000-8000-000000000007',
+    'sent line owner must replace the stale empty-draft latch';
+  ASSERT public.generate_milestone_invoice(
+    'b9740000-0000-4000-8000-000000000005'
+  ) = v_sent, 'sent owner retry must be exact';
+  ASSERT (SELECT invoice_id = v_sent AND status = 'outstanding'
+                 AND due_date = current_date + 30 AND paid_at IS NULL
+          FROM public.project_payment_milestones
+          WHERE id = 'b9740000-0000-4000-8000-000000000005'),
+    'sent owner convergence must synchronize latch and due lifecycle';
+  ASSERT (SELECT status = 'draft'
+                 AND NOT EXISTS (
+                   SELECT 1 FROM public.invoice_line_items li
+                   WHERE li.invoice_id = 'b9750000-0000-4000-8000-000000000008'
+                 )
+          FROM public.invoices
+          WHERE id = 'b9750000-0000-4000-8000-000000000008'),
+    'stale empty draft must remain untouched for audit history';
+  ASSERT (SELECT count(*) = 1 FROM public.invoice_line_items
+          WHERE milestone_id = 'b9740000-0000-4000-8000-000000000005'),
+    'sent convergence must preserve one global milestone line';
+
+  v_paid := public.generate_milestone_invoice(
+    'b9740000-0000-4000-8000-000000000007'
+  );
+  ASSERT v_paid = 'b9750000-0000-4000-8000-000000000070',
+    'paid line owner must replace the stale empty-draft latch';
+  ASSERT (SELECT invoice_id = v_paid AND status = 'paid'
+                 AND due_date = current_date + 20 AND paid_at IS NOT NULL
+          FROM public.project_payment_milestones
+          WHERE id = 'b9740000-0000-4000-8000-000000000007'),
+    'paid owner convergence must preserve the paid lifecycle';
+  ASSERT (SELECT count(*) = 1 FROM public.invoice_line_items
+          WHERE milestone_id = 'b9740000-0000-4000-8000-000000000007'),
+    'paid convergence must preserve one global milestone line';
+END;
+$$;
+
+-- Trusted SECURITY DEFINER workflows may draft on behalf of a client/trade
+-- actor after performing their own domain authorization. The latch trigger is
+-- SECURITY INVOKER so it inherits postgres from that trusted outer function
+-- instead of mistaking the initiating JWT for the financial author.
+RESET ROLE;
+CREATE FUNCTION pg_temp.trusted_milestone_draft(p_milestone_id uuid)
+RETURNS uuid
+LANGUAGE sql
+SECURITY DEFINER
+SET search_path = public, pg_temp
+AS $$
+  SELECT public.draft_invoice_from_milestone(p_milestone_id);
+$$;
+GRANT EXECUTE ON FUNCTION pg_temp.trusted_milestone_draft(uuid) TO authenticated;
+CREATE TEMP TABLE trusted_milestone_draft_result (invoice_id uuid) ON COMMIT DROP;
+GRANT INSERT ON TABLE pg_temp.trusted_milestone_draft_result TO authenticated;
+
+SET LOCAL ROLE authenticated;
+SELECT pg_temp.assume_billing_actor('b9700000-0000-4000-8000-000000000004');
+INSERT INTO pg_temp.trusted_milestone_draft_result (invoice_id)
+SELECT pg_temp.trusted_milestone_draft(
+  'b9740000-0000-4000-8000-000000000008'
+);
+
+RESET ROLE;
+DO $$
+DECLARE
+  v_invoice uuid := (
+    SELECT invoice_id FROM pg_temp.trusted_milestone_draft_result
+  );
+BEGIN
+  ASSERT (SELECT invoice_id = v_invoice AND status = 'pending'
+          FROM public.project_payment_milestones
+          WHERE id = 'b9740000-0000-4000-8000-000000000008'),
+    'trusted outer workflow must retain automatic drafting and latch sync';
+  ASSERT (SELECT count(*) = 1 FROM public.invoice_line_items
+          WHERE invoice_id = v_invoice
+            AND milestone_id = 'b9740000-0000-4000-8000-000000000008'
+            AND amount_cents = 7000),
+    'trusted outer workflow must create one exact milestone line';
+END;
+$$;
+
+SELECT pg_temp.assume_billing_actor('b9700000-0000-4000-8000-000000000002');
 
 -- Co-member can generate, issue, and void; void fully releases for redraft.
 DO $$
@@ -365,6 +703,9 @@ BEGIN
   LOOP
     FOREACH v_signature IN ARRAY ARRAY[
       'public._can_manage_invoice_owner(uuid)',
+      'public.lock_invoice_for_line_insert()',
+      'public.reject_invoice_line_reparent()',
+      'public.sync_invoice_line_milestone_latch()',
       'public._issue_invoice_authorized_legacy_00397(uuid,date)',
       'public._record_invoice_payment_authorized_legacy_00397(uuid,integer,text,text,timestamp with time zone,text)',
       'public._void_invoice_authorized_legacy_00397(uuid,text)'
