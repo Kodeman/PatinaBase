@@ -4,7 +4,11 @@
 
 import { createServerClient } from '@patina/supabase/server';
 
-import { fetchClientProjects, fetchClientProjectView } from '../projects';
+import {
+  fetchClientProjects,
+  fetchClientProjectView,
+  summariseProjectPhases,
+} from '../projects';
 
 jest.mock('server-only', () => ({}), { virtual: true });
 
@@ -85,5 +89,108 @@ describe('client project reads', () => {
       ]),
     );
     expect(mockCreateServerClient).not.toHaveBeenCalled();
+  });
+});
+
+describe('client project phase projection', () => {
+  it('keeps a live concurrent thread out of the canonical current phase and main rollups', () => {
+    const summary = summariseProjectPhases(
+      [
+        {
+          id: 'main-complete',
+          name: 'Discovery',
+          phase_key: 'discovery',
+          lane: 'main',
+          status: 'completed',
+          progress: 100,
+          sort_order: 0,
+          follows_phase_id: null,
+        },
+        {
+          id: 'thread-live',
+          name: 'Procurement thread',
+          phase_key: 'procurement',
+          lane: 'thread',
+          status: 'in_progress',
+          progress: 100,
+          sort_order: 1,
+          follows_phase_id: 'main-complete',
+        },
+        {
+          id: 'main-current',
+          name: 'Design development',
+          phase_key: 'design_development',
+          lane: 'main',
+          status: 'in_progress',
+          progress: 20,
+          sort_order: 2,
+          follows_phase_id: 'main-complete',
+        },
+        {
+          id: 'main-next',
+          name: 'Installation',
+          phase_key: 'installation',
+          lane: 'main',
+          status: 'pending',
+          progress: 0,
+          sort_order: 3,
+          follows_phase_id: 'main-current',
+        },
+      ],
+      'design_development',
+    );
+
+    expect(summary.currentPhase?.id).toBe('main-current');
+    expect(summary.currentPhaseLabel).toBe('Design development');
+    expect(summary.progressPercentage).toBe(40);
+    expect(summary.completed).toBe(1);
+    expect(summary.mainPhases).toHaveLength(3);
+    expect(summary.phases).toHaveLength(4);
+  });
+
+  it('chooses next from the canonical current phase edge, not sort order', () => {
+    const summary = summariseProjectPhases(
+      [
+        {
+          id: 'main-current',
+          name: 'Design development',
+          phase_key: 'design_development',
+          lane: 'main',
+          status: 'in_progress',
+          sort_order: 20,
+          follows_phase_id: 'main-complete',
+        },
+        {
+          id: 'thread-first',
+          name: 'Early procurement',
+          phase_key: 'procurement',
+          lane: 'thread',
+          status: 'pending',
+          sort_order: 21,
+          follows_phase_id: 'main-current',
+        },
+        {
+          id: 'main-next',
+          name: 'Installation',
+          phase_key: 'installation',
+          lane: 'main',
+          status: 'pending',
+          sort_order: 99,
+          follows_phase_id: 'main-current',
+        },
+        {
+          id: 'main-complete',
+          name: 'Discovery',
+          phase_key: 'discovery',
+          lane: 'main',
+          status: 'completed',
+          sort_order: 0,
+          follows_phase_id: null,
+        },
+      ],
+      'design_development',
+    );
+
+    expect(summary.nextPhase?.id).toBe('main-next');
   });
 });
