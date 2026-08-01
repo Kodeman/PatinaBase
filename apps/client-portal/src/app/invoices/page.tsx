@@ -14,6 +14,7 @@ import {
   type InvoiceStatus,
 } from '@patina/shared';
 import { StrataMark } from '@/components/strata-mark';
+import { QueryFailure } from '@/components/query-failure';
 
 // Invoices across all of the client's projects. RLS scopes the query to
 // issued (non-draft) invoices on projects where the signed-in user is the
@@ -55,7 +56,9 @@ function InvoicesPageInner() {
   const searchParams = useSearchParams();
   const projectId = searchParams.get('project') ?? undefined;
 
-  const { data, isLoading } = useInvoices(projectId ? { projectId } : undefined);
+  const { data, isLoading, isError, refetch } = useInvoices(
+    projectId ? { projectId } : undefined
+  );
   const { open, paid, archived } = partitionInvoices(data);
   const projectName = projectId
     ? (data ?? []).find((i) => i.project?.name)?.project?.name
@@ -84,7 +87,16 @@ function InvoicesPageInner() {
         </div>
       )}
 
-      {!isLoading && open.length === 0 && paid.length === 0 && archived.length === 0 && (
+      {isError && !isLoading && (
+        <QueryFailure
+          className="mt-8"
+          title="Unable to load invoices"
+          message="Your invoice history is still there, but it could not be opened just now."
+          onRetry={refetch}
+        />
+      )}
+
+      {!isLoading && !isError && open.length === 0 && paid.length === 0 && archived.length === 0 && (
         <div className="py-16 text-center">
           <p className="type-body-small">
             No invoices yet. When your designer sends one, it will appear here.

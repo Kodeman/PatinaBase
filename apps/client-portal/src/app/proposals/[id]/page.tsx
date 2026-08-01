@@ -13,6 +13,7 @@ import { ProposalDocument } from '@/components/proposal-document';
 import { ProposalDeclineDialog } from '@/components/proposals/ProposalDeclineDialog';
 import { ProposalRequestChangeDialog } from '@/components/proposals/ProposalRequestChangeDialog';
 import { ProposalClarifyButton } from '@/components/proposals/ProposalClarifyButton';
+import { QueryFailure } from '@/components/query-failure';
 
 function formatDate(iso: string): string {
   return new Date(iso).toLocaleDateString('en-US', {
@@ -28,7 +29,13 @@ export default function ClientProposalDetailPage({
   params: Promise<{ id: string }>;
 }) {
   const { id } = use(params);
-  const { data: proposal, bundle, isLoading: proposalLoading } = useClientProposal(id);
+  const {
+    data: proposal,
+    bundle,
+    isLoading: proposalLoading,
+    isError: proposalError,
+    refetch: refetchProposal,
+  } = useClientProposal(id);
   const sections = bundle?.sections ?? [];
   const paymentMilestones = bundle?.payment_milestones ?? [];
   const phases = bundle?.phases ?? [];
@@ -56,6 +63,25 @@ export default function ClientProposalDetailPage({
     return (
       <div className="flex items-center justify-center py-20">
         <Loader2 className="h-6 w-6 animate-spin text-[var(--text-muted)]" />
+      </div>
+    );
+  }
+
+  if (proposalError) {
+    return (
+      <div className="mx-auto max-w-2xl px-6 py-16">
+        <QueryFailure
+          title="Unable to load this proposal"
+          message="The proposal could not be opened just now. Try again before asking your designer for another copy."
+          onRetry={refetchProposal}
+        />
+        <Link
+          href="/proposals"
+          className="mt-4 inline-flex items-center gap-1 type-meta text-[var(--accent-primary)] no-underline hover:underline"
+        >
+          <ArrowLeft className="h-3.5 w-3.5" />
+          Back to proposals
+        </Link>
       </div>
     );
   }

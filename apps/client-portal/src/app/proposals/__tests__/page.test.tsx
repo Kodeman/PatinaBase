@@ -9,7 +9,7 @@
  * 100x too high.
  */
 
-import { render, screen } from '@testing-library/react';
+import { fireEvent, render, screen } from '@testing-library/react';
 import React from 'react';
 import { formatCurrency } from '@patina/shared';
 import type { Proposal } from '@patina/supabase';
@@ -75,5 +75,37 @@ describe('ClientProposalsPage', () => {
     render(<ClientProposalsPage />);
 
     expect(screen.getByText(formatCurrency(0))).toBeInTheDocument();
+  });
+
+  it('shows a retryable query failure instead of claiming there are no proposals', () => {
+    const refetch = jest.fn();
+    mockUseClientProposals.mockReturnValue({
+      data: undefined,
+      isLoading: false,
+      isError: true,
+      refetch,
+    });
+
+    render(<ClientProposalsPage />);
+
+    expect(screen.getByRole('alert')).toHaveTextContent(/unable to load proposals/i);
+    expect(screen.queryByText(/no proposals yet/i)).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: /try again/i }));
+    expect(refetch).toHaveBeenCalledTimes(1);
+  });
+
+  it('reserves the empty state for a successful empty query', () => {
+    mockUseClientProposals.mockReturnValue({
+      data: [],
+      isLoading: false,
+      isError: false,
+      refetch: jest.fn(),
+    });
+
+    render(<ClientProposalsPage />);
+
+    expect(screen.getByText(/no proposals yet/i)).toBeInTheDocument();
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument();
   });
 });

@@ -548,6 +548,8 @@ const fetchPendingApprovalCounts = async (
 };
 
 export const fetchClientProjects = cache(async (): Promise<ProjectListItem[]> => {
+  if (env.useProjectFixtures) return devFallbackProjects;
+
   try {
     const supabase = (await createServerClient()) as any;
     const {
@@ -581,15 +583,13 @@ export const fetchClientProjects = cache(async (): Promise<ProjectListItem[]> =>
       });
     });
   } catch (error) {
-    if (env.isDevelopment) {
-      console.warn('[Client Portal] Projects query failed — using fallback data', error);
-      return devFallbackProjects;
-    }
     throw error;
   }
 });
 
-export const fetchClientProjectView = cache(async (projectId: string): Promise<ClientProjectView> => {
+export const fetchClientProjectView = cache(async (projectId: string): Promise<ClientProjectView | null> => {
+  if (env.useProjectFixtures) return devFallbackProjectView(projectId);
+
   try {
     const supabase = (await createServerClient()) as any;
     const {
@@ -604,7 +604,7 @@ export const fetchClientProjectView = cache(async (projectId: string): Promise<C
       .eq('client_id', user.id)
       .maybeSingle();
     if (error) throw error;
-    if (!row) throw new Error('Project not found');
+    if (!row) return null;
 
     const { approvalsByProject, unreadByProject } = await computeProjectCounts(supabase, user.id);
 
@@ -659,10 +659,6 @@ export const fetchClientProjectView = cache(async (projectId: string): Promise<C
 
     return { project, milestones, lastUpdated: asString(row.updated_at) };
   } catch (error) {
-    if (env.isDevelopment) {
-      console.warn('[Client Portal] Project view query failed — using fallback data for', projectId, error);
-      return devFallbackProjectView(projectId);
-    }
     throw error;
   }
 });

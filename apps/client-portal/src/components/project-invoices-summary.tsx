@@ -9,6 +9,7 @@ import {
   invoiceBalanceCents,
   isInvoiceOverdue,
 } from '@patina/shared';
+import { QueryFailure } from '@/components/query-failure';
 
 interface ProjectInvoicesSummaryProps {
   projectId: string;
@@ -20,7 +21,7 @@ interface ProjectInvoicesSummaryProps {
  * invoices on the client's own project; renders nothing when there are none.
  */
 export function ProjectInvoicesSummary({ projectId }: ProjectInvoicesSummaryProps) {
-  const { data, isLoading } = useProjectInvoices(projectId);
+  const { data, isLoading, isError, refetch } = useProjectInvoices(projectId);
 
   const invoices = (data ?? []).filter((i) => i.status !== 'draft' && i.status !== 'void');
 
@@ -29,6 +30,17 @@ export function ProjectInvoicesSummary({ projectId }: ProjectInvoicesSummaryProp
       <div className="py-6">
         <div className="h-4 w-32 animate-pulse rounded bg-[var(--color-pearl)]" />
       </div>
+    );
+  }
+
+  if (isError) {
+    return (
+      <QueryFailure
+        className="mt-8"
+        title="Unable to load project invoices"
+        message="The project is available, but its invoice summary could not be opened just now."
+        onRetry={refetch}
+      />
     );
   }
 

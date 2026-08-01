@@ -7,6 +7,7 @@ import { ArrowLeft, Loader2 } from 'lucide-react';
 import { useClientProposal } from '@/hooks/use-proposals-client';
 import { useAuth } from '@/hooks/use-auth';
 import { proposalClientEvents } from '@/lib/analytics/events';
+import { QueryFailure } from '@/components/query-failure';
 
 export default function ClientProposalSignPage({
   params,
@@ -16,7 +17,7 @@ export default function ClientProposalSignPage({
   const { id } = use(params);
   const router = useRouter();
   const { user } = useAuth();
-  const { data: proposal, isLoading } = useClientProposal(id);
+  const { data: proposal, isLoading, isError, refetch } = useClientProposal(id);
   const [name, setName] = useState('');
   const [agreed, setAgreed] = useState(false);
   const [submitting, setSubmitting] = useState(false);
@@ -26,6 +27,18 @@ export default function ClientProposalSignPage({
     return (
       <div className="flex items-center justify-center py-20">
         <Loader2 className="h-6 w-6 animate-spin text-[var(--text-muted)]" />
+      </div>
+    );
+  }
+
+  if (isError) {
+    return (
+      <div className="mx-auto max-w-2xl px-6 py-16">
+        <QueryFailure
+          title="Unable to load this proposal"
+          message="The proposal could not be checked for signing just now."
+          onRetry={refetch}
+        />
       </div>
     );
   }
