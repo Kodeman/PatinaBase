@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useMemo, useRef, useEffect, type ReactNode } from 'react';
-import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { useQuery } from '@tanstack/react-query';
 import {
   DndContext,
   useDroppable,
@@ -68,6 +68,7 @@ import { useSpecFieldDefs } from '@/hooks/use-spec-fields';
 import { withFieldValue, formatFieldValue } from '@/lib/scope/spec-fields';
 import { computeMarkupUpdate } from '@/lib/scope/markup';
 import { downloadSpecPdf } from '@/lib/scope/spec-pdf-client';
+import { useDraftingFacetInvalidation } from '@/hooks/use-drafting-facet-invalidation';
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
@@ -425,7 +426,7 @@ export function ItemEditForm({
 
 // ─── Item row ────────────────────────────────────────────────────────────────
 
-function ItemRow({
+export function ItemRow({
   item,
   proposalId,
   rooms,
@@ -457,6 +458,7 @@ function ItemRow({
   verdictChip?: ReactNode;
 }) {
   const removeItem = useRemoveProposalItem();
+  const refreshDraftingSummary = useDraftingFacetInvalidation(proposalId);
   const lineCost = item.unit_price * item.quantity;
 
   const rangeText =
@@ -467,7 +469,10 @@ function ItemRow({
       : null;
 
   const handleRemove = () => {
-    removeItem.mutate({ itemId: item.id, proposalId });
+    removeItem.mutate(
+      { itemId: item.id, proposalId },
+      { onSuccess: () => void refreshDraftingSummary() },
+    );
   };
 
   const subtitle = item.vendor_name
@@ -855,9 +860,7 @@ export function FFEScheduleBuilder({
   renderVerdictChip,
   initialUnfoldedId,
 }: FFEScheduleBuilderProps) {
-  const queryClient = useQueryClient();
-  const refreshDraftingSummary = () =>
-    queryClient.invalidateQueries({ queryKey: ['drafting-facets', proposalId] });
+  const refreshDraftingSummary = useDraftingFacetInvalidation(proposalId);
   const { data: rooms = [] } = useProposalScopeRooms(proposalId);
   const { data: categories = [] } = useFFECategories({ proposalId });
 
@@ -1043,8 +1046,6 @@ export function FFEScheduleBuilder({
     didAutoOpenRef.current = true;
     setUnfoldedItemId(initialUnfoldedId);
     requestAnimationFrame(() => jumpToLine(initialUnfoldedId));
-    // jumpToLine is stable enough; only the loaded set + target matter here.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [initialUnfoldedId, items, renderUnfold]);
 
   // ── S4 — apply search + facets over the loaded lines ──────────────────────
@@ -1731,7 +1732,6 @@ function useProposalItems(proposalId: string) {
   return useQuery({
     queryKey: ['proposal-items-schedule', proposalId],
     queryFn: async () => {
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const supabase = createBrowserClient() as any;
       const { data, error } = await supabase
         .from('proposal_items')

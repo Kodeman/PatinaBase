@@ -1,7 +1,6 @@
 'use client';
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { useQueryClient } from '@tanstack/react-query';
 import { Button } from '@/components/ui/controls';
 import { proposalEvents } from '@/lib/analytics';
 import { scheduleEvents } from '@/lib/analytics/schedule-events';
@@ -41,6 +40,7 @@ import { ScheduleEntryField } from '@/components/document/schedule/schedule-entr
 import { AnchorChip } from '@/components/document/schedule/milestone-row';
 import type { GhostAddInput } from '@/components/document/schedule/ghost-add-line';
 import type { PastProjectOption } from '@/components/document/schedule/past-project-picker';
+import { useDraftingFacetInvalidation } from '@/hooks/use-drafting-facet-invalidation';
 
 const PHASE_KEY_OPTIONS = [
   { value: 'consultation', label: 'Consultation' },
@@ -51,7 +51,7 @@ const PHASE_KEY_OPTIONS = [
   { value: 'final_walkthrough', label: 'Final Walkthrough' },
 ] as const;
 
-const DEFAULT_PHASES = [
+export const DEFAULT_PHASES = [
   {
     name: 'Schematic Design',
     phaseKey: 'concept_development',
@@ -87,7 +87,48 @@ const DEFAULT_PHASES = [
     feeCents: 50000,
     revisionLimit: 0,
   },
-];
+] as const;
+
+type DefaultPhase = (typeof DEFAULT_PHASES)[number];
+
+type PhaseIdentityInput = {
+  name: string;
+  phaseKey?: string | null;
+  phase_key?: string | null;
+};
+
+/** A phase key survives harmless label edits; the normalized name is the
+ * fallback for phases created before keys were consistently persisted. */
+export function defaultPhaseIdentity(phase: PhaseIdentityInput): string {
+  const phaseKey = phase.phaseKey ?? phase.phase_key;
+  return phaseKey?.trim() || `name:${phase.name.trim().toLocaleLowerCase('en-US')}`;
+}
+
+export function missingDefaultPhases(
+  existing: readonly PhaseIdentityInput[],
+  optimisticallyAdded: ReadonlySet<string> = new Set(),
+): DefaultPhase[] {
+  const present = new Set(optimisticallyAdded);
+  existing.forEach((phase) => present.add(defaultPhaseIdentity(phase)));
+  return DEFAULT_PHASES.filter((phase) => !present.has(defaultPhaseIdentity(phase)));
+}
+
+/** Defaults are intentionally sequential: each add computes the next sort
+ * order, so concurrent writes can collide and make partial recovery opaque. */
+export async function addDefaultPhasesSequentially({
+  phases,
+  add,
+  onAdded,
+}: {
+  phases: readonly DefaultPhase[];
+  add: (phase: DefaultPhase) => Promise<unknown>;
+  onAdded: (phase: DefaultPhase) => void | Promise<void>;
+}): Promise<void> {
+  for (const phase of phases) {
+    await add(phase);
+    await onAdded(phase);
+  }
+}
 
 interface PhaseBuilderProps {
   proposalId: string;
@@ -158,9 +199,7 @@ function useDebouncedSave(
 }
 
 export function PhaseBuilder({ proposalId }: PhaseBuilderProps) {
-  const queryClient = useQueryClient();
-  const refreshDraftingSummary = () =>
-    queryClient.invalidateQueries({ queryKey: ['drafting-facets', proposalId] });
+  const refreshDraftingSummary = useDraftingFacetInvalidation(proposalId);
   const { data: phases = [], isLoading } = useProposalPhases(proposalId) as {
     data: ProposalPhaseRow[];
     isLoading: boolean;
@@ -191,9 +230,14 @@ export function PhaseBuilder({ proposalId }: PhaseBuilderProps) {
   const [edits, setEdits] = useState<Record<string, Record<string, unknown>>>({});
   const [templatePickerOpen, setTemplatePickerOpen] = useState(false);
   const [addingDefaults, setAddingDefaults] = useState(false);
+  const [addedDefaultKeys, setAddedDefaultKeys] = useState<Set<string>>(() => new Set());
   const [phaseCreateError, setPhaseCreateError] = useState<string | null>(null);
   // Bumped on a successful ghost-line create — clears the birth ghost line's kept fields.
   const [ghostResetSignal, setGhostResetSignal] = useState(0);
+
+  useEffect(() => {
+    setAddedDefaultKeys(new Set());
+  }, [proposalId]);
 
   // Sync server data into local state when phases load.
   useEffect(() => {
@@ -428,9 +472,11 @@ export function PhaseBuilder({ proposalId }: PhaseBuilderProps) {
     if (addingDefaults || addPhase.isPending) return;
     setAddingDefaults(true);
     setPhaseCreateError(null);
+    let addedThisAttempt = 0;
     try {
-      await Promise.all(
-        DEFAULT_PHASES.map((phase) =>
+      await addDefaultPhasesSequentially({
+        phases: defaultsStillMissing,
+        add: (phase) =>
           addPhase.mutateAsync({
             proposalId,
             name: phase.name,
@@ -439,22 +485,36 @@ export function PhaseBuilder({ proposalId }: PhaseBuilderProps) {
             feeCents: phase.feeCents,
             revisionLimit: phase.revisionLimit,
           }),
-        ),
-      );
-      DEFAULT_PHASES.forEach(() => {
-        proposalEvents.scopeUpdated({ proposalId, field: 'phase', action: 'add' });
+        onAdded: (phase) => {
+          addedThisAttempt += 1;
+          setAddedDefaultKeys((current) => {
+            const next = new Set(current);
+            next.add(defaultPhaseIdentity(phase));
+            return next;
+          });
+          proposalEvents.scopeUpdated({ proposalId, field: 'phase', action: 'add' });
+          void refreshDraftingSummary();
+        },
       });
       await refreshDraftingSummary();
-    } catch (error) {
+    } catch {
+      const remaining = defaultsStillMissing.length - addedThisAttempt;
       setPhaseCreateError(
-        error instanceof Error ? error.message : 'Could not add the default phases. Try again.',
+        addedThisAttempt > 0
+          ? `Added ${addedThisAttempt} default ${addedThisAttempt === 1 ? 'phase' : 'phases'}. Retry to add the remaining ${remaining}.`
+          : 'Could not add the default phases. Try again.',
       );
+      await refreshDraftingSummary();
     } finally {
       setAddingDefaults(false);
     }
   }
 
   const phaseWritePending = addPhase.isPending || addingDefaults;
+  const defaultsStillMissing = missingDefaultPhases(phases, addedDefaultKeys);
+  const defaultPhasesPresent = DEFAULT_PHASES.length - defaultsStillMissing.length;
+  const canAddDefaults =
+    defaultsStillMissing.length > 0 && (phases.length === 0 || defaultPhasesPresent > 0);
 
   const totalFee = phases.reduce(
     (sum: number, p: ProposalPhaseRow) => sum + (p.fee_cents || 0),
@@ -516,13 +576,17 @@ export function PhaseBuilder({ proposalId }: PhaseBuilderProps) {
             >
               Apply Template
             </Button>
-            {phases.length === 0 && (
+            {canAddDefaults && (
               <Button
                 variant="secondary"
                 disabled={phaseWritePending}
                 onClick={() => void handleAddDefaults()}
               >
-                {addingDefaults ? 'Adding defaults…' : 'Add Defaults'}
+                {addingDefaults
+                  ? 'Adding defaults…'
+                  : defaultPhasesPresent > 0
+                    ? 'Add remaining defaults'
+                    : 'Add Defaults'}
               </Button>
             )}
             <Button

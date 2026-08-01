@@ -5,7 +5,14 @@ describe('Discovery field semantics', () => {
   it('labels every row control with its column and row', () => {
     render(
       <RowListEditor
-        rows={[{ room_type: 'office', floor_area_sqft: 450, room: 'Household' }]}
+        rows={[
+          {
+            room_type: 'office',
+            floor_area_sqft: 450,
+            room: 'Household',
+            keep_as_is: true,
+          },
+        ]}
         columns={[
           {
             key: 'room_type',
@@ -20,6 +27,7 @@ describe('Discovery field semantics', () => {
             type: 'select',
             options: [{ value: 'Household', label: 'Household' }],
           },
+          { key: 'keep_as_is', label: 'Keep', type: 'checkbox' },
         ]}
         onChange={jest.fn()}
         addLabel="Add a room"
@@ -29,6 +37,8 @@ describe('Discovery field semantics', () => {
     expect(screen.getByRole('combobox', { name: 'Room type, row 1' })).toBeVisible();
     expect(screen.getByRole('spinbutton', { name: 'Square footage, row 1' })).toBeVisible();
     expect(screen.getByRole('combobox', { name: 'Household or room, row 1' })).toBeVisible();
+    expect(screen.getByRole('checkbox', { name: 'Keep, row 1' })).toBeVisible();
+    expect(screen.getByRole('button', { name: 'Remove row 1' })).toBeVisible();
   });
 
   it('offers direct MM/DD/YYYY entry and commits an ISO date-only value', () => {

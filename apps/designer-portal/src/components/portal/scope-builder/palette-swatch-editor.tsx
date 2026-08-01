@@ -8,6 +8,7 @@ import {
   type PaletteSwatch,
   type PaletteSwatchRole,
 } from '@patina/supabase';
+import { useDraftingFacetInvalidation } from '@/hooks/use-drafting-facet-invalidation';
 
 const ROLE_OPTIONS: Array<{ value: PaletteSwatchRole; label: string }> = [
   { value: 'foundation', label: 'Foundation' },
@@ -22,6 +23,7 @@ const ROLE_OPTIONS: Array<{ value: PaletteSwatchRole; label: string }> = [
 ];
 
 interface PaletteSwatchEditorProps {
+  proposalId: string;
   swatch: PaletteSwatch;
   /** dnd-kit drag handle props/refs forwarded by the parent. */
   dragHandleProps?: Record<string, unknown>;
@@ -33,12 +35,17 @@ interface PaletteSwatchEditorProps {
  * useUpsertSwatch hook (host invalidates the parent palette query on
  * success).
  */
-export function PaletteSwatchEditor({ swatch, dragHandleProps }: PaletteSwatchEditorProps) {
+export function PaletteSwatchEditor({
+  proposalId,
+  swatch,
+  dragHandleProps,
+}: PaletteSwatchEditorProps) {
   const [name, setName] = useState(swatch.name ?? '');
   const [role, setRole] = useState<PaletteSwatchRole | ''>((swatch.role ?? '') as PaletteSwatchRole | '');
 
   const upsert = useUpsertSwatch();
   const remove = useDeleteSwatch();
+  const refreshDraftingSummary = useDraftingFacetInvalidation(proposalId);
 
   const isLinkedToBrand = !!(swatch.paint_color_id && swatch.brand && swatch.brand_code);
 
@@ -65,7 +72,10 @@ export function PaletteSwatchEditor({ swatch, dragHandleProps }: PaletteSwatchEd
 
   const handleDelete = () => {
     if (!confirm('Delete this swatch?')) return;
-    remove.mutate({ swatchId: swatch.id, paletteId: swatch.palette_id });
+    remove.mutate(
+      { swatchId: swatch.id, paletteId: swatch.palette_id },
+      { onSuccess: () => void refreshDraftingSummary() },
+    );
   };
 
   return (

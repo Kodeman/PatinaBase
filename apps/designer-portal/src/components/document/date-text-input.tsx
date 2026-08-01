@@ -39,12 +39,14 @@ export function DateTextInput({
   onChange,
   className,
   ariaLabel,
+  onValidityChange,
   instruction = 'Enter as MM/DD/YYYY.',
 }: {
   value: string | null;
   onChange: (value: string | null) => void;
   className?: string;
   ariaLabel?: string;
+  onValidityChange?: (valid: boolean) => void;
   instruction?: string;
 }) {
   const descriptionId = useId();
@@ -55,20 +57,24 @@ export function DateTextInput({
   useEffect(() => {
     setDraft(displayDateText(value));
     setInvalid(false);
-  }, [value]);
+    onValidityChange?.(!value || parseDateText(value) !== null);
+  }, [value, onValidityChange]);
 
   const commit = () => {
     if (!draft.trim()) {
       setInvalid(false);
+      onValidityChange?.(true);
       onChange(null);
       return true;
     }
     const parsed = parseDateText(draft);
     if (!parsed) {
       setInvalid(true);
+      onValidityChange?.(false);
       return false;
     }
     setInvalid(false);
+    onValidityChange?.(true);
     setDraft(displayDateText(parsed));
     onChange(parsed);
     return true;
@@ -87,8 +93,10 @@ export function DateTextInput({
         aria-invalid={invalid || undefined}
         className={className}
         onChange={(event) => {
-          setDraft(event.target.value);
+          const next = event.target.value;
+          setDraft(next);
           setInvalid(false);
+          onValidityChange?.(!next.trim() || parseDateText(next) !== null);
         }}
         onBlur={commit}
         onKeyDown={(event) => {

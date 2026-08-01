@@ -138,6 +138,37 @@ test.describe('Inked Instruments action visibility', () => {
       page.getByTestId('mobile-action-dock-clearance'),
     ).toBeVisible();
 
+    // Regression: the first client-journey form must remain usable without
+    // sideways scrolling at the smallest supported phone width.
+    await page
+      .getByTestId('mobile-action-dock')
+      .locator('[data-action-key="capture-lead"]')
+      .click();
+    const captureLeadSheet = page.getByRole('dialog', {
+      name: 'Capture a lead',
+    });
+    await expect(captureLeadSheet).toBeVisible();
+    for (const field of [
+      captureLeadSheet.getByLabel('Contact'),
+      captureLeadSheet.getByLabel('The project (one line)'),
+    ]) {
+      await expect
+        .poll(async () => {
+          const box = await field.boundingBox();
+          return box !== null && box.x >= 0 && box.x + box.width <= 390;
+        })
+        .toBe(true);
+    }
+    await expect
+      .poll(() =>
+        page.evaluate(
+          () => document.documentElement.scrollWidth <= window.innerWidth,
+        ),
+      )
+      .toBe(true);
+    await captureLeadSheet.getByRole('button', { name: 'Close sheet' }).click();
+    await expect(captureLeadSheet).toBeHidden();
+
     await page.goto(`/doc/${SENT_PROPOSAL_ID}`, {
       waitUntil: 'domcontentloaded',
     });
