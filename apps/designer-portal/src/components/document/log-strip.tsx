@@ -53,6 +53,12 @@ export function LogStrip() {
   const adjusted = valid && isAdjusted(offer, parsed);
   const crossProject = Boolean(heldProjectId && heldProjectId !== offer.projectId);
 
+  // A chained-out entry is already saved. Keep its adjustment offer in the
+  // provider, but do not lay an unrelated project's controls over the
+  // document currently in hand. It can surface again once no other project is
+  // held (for example, back at the Desk).
+  if (crossProject) return null;
+
   const submit = async () => {
     if (!valid || busy) return;
     setBusy(true);
@@ -72,17 +78,15 @@ export function LogStrip() {
   return (
     <div
       role="status"
-      aria-label={
-        crossProject ? 'Review time from another project' : 'Review time to log'
-      }
+      aria-label="Review time to log"
       className="fixed inset-x-0 bottom-[56px] z-50 flex flex-wrap items-center justify-center gap-2.5 border-t border-[var(--color-clay)] bg-[var(--bg-warm)] px-4 py-2 min-[980px]:bottom-[60px]"
     >
       <span className="font-mono text-[9px] font-semibold uppercase tracking-[0.08em] text-[var(--color-aged-oak)]">
-        {crossProject ? 'Time from another project' : 'Time to review'}
+        Time to review
       </span>
       <p className="text-[12px] text-[var(--text-body)]">
         <strong className="font-medium text-[var(--text-primary)]">{offer.projectName}</strong>
-        {crossProject ? ' · carried over' : ''} was in hand for{' '}
+        {' '}was in hand for{' '}
         <strong className="font-medium text-[var(--text-primary)]">
           {fmtMinutes(offer.suggestedMinutes)}
         </strong>{' '}
