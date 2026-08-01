@@ -3,6 +3,34 @@ import { createBrowserClient } from '../client';
 
 const getSupabase = () => createBrowserClient();
 
+export const COMPLETED_PROJECT_SCOPE_CHANGE_ERROR =
+  'This project is complete and no longer accepts change requests.';
+
+export interface ClientScopeChangeRequestReceipt {
+  id: string;
+  project_id: string;
+  status: 'sent';
+  sent_at: string;
+}
+
+function parseClientScopeChangeReceipt(value: unknown): ClientScopeChangeRequestReceipt {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) {
+    throw new Error('create_client_scope_change_request returned a malformed receipt');
+  }
+  const receipt = value as Record<string, unknown>;
+  const keys = Object.keys(receipt).sort();
+  if (
+    keys.join(',') !== 'id,project_id,sent_at,status' ||
+    typeof receipt.id !== 'string' ||
+    typeof receipt.project_id !== 'string' ||
+    receipt.status !== 'sent' ||
+    typeof receipt.sent_at !== 'string'
+  ) {
+    throw new Error('create_client_scope_change_request returned a malformed receipt');
+  }
+  return receipt as unknown as ClientScopeChangeRequestReceipt;
+}
+
 // ═══════════════════════════════════════════════════════════════════════════
 // QUERIES
 // ═══════════════════════════════════════════════════════════════════════════
@@ -222,9 +250,9 @@ export function useDeclineScopeChange() {
 // ═══════════════════════════════════════════════════════════════════════════
 
 /**
- * Client submits a scope change request. Creates the row with status='sent'
- * so the designer sees it immediately. Budget/timeline impact defaults to 0 —
- * the designer fills those in when they review.
+ * Client submits a scope change request through the 00395 project-locked RPC.
+ * The RPC owns authorization, completed-project rejection, request creation,
+ * and the designer activity line in one transaction.
  */
 export function useCreateClientScopeChangeRequest() {
   const queryClient = useQueryClient();
@@ -240,65 +268,19 @@ export function useCreateClientScopeChangeRequest() {
     }) => {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const supabase = getSupabase() as any;
-
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user) throw new Error('Not authenticated');
-
-      // 1. Insert the scope_change_requests row.
-      const { data: req, error: reqErr } = await supabase
-        .from('scope_change_requests')
-        .insert({
-          project_id: projectId,
-          requested_by: user.id,
-          title,
-          description,
-          additional_ffe_budget_cents: 0,
-          additional_design_fee_cents: 0,
-          timeline_impact_weeks: 0,
-          new_rooms: [],
-          new_ffe_items: [],
-          status: 'sent',
-          sent_at: new Date().toISOString(),
-        })
-        .select()
-        .single();
-      if (reqErr) throw reqErr;
-
-      // 2. Look up the designer_clients row that links this client + project designer.
-      const { data: project } = await supabase
-        .from('projects')
-        .select('designer_id, client_id, name')
-        .eq('id', projectId)
-        .maybeSingle();
-
-      if (project?.designer_id && project?.client_id) {
-        const { data: dc } = await supabase
-          .from('designer_clients')
-          .select('id')
-          .eq('designer_id', project.designer_id)
-          .eq('client_id', project.client_id)
-          .maybeSingle();
-
-        if (dc?.id) {
-          // 3. Insert client_activity_log so the designer's project Recent Activity surfaces it.
-          const { data: profile } = await supabase
-            .from('profiles')
-            .select('full_name')
-            .eq('id', user.id)
-            .maybeSingle();
-
-          await supabase.from('client_activity_log').insert({
-            designer_client_id: dc.id,
-            activity_type: 'scope_change_requested',
-            title: `Client requested change: ${title}`,
-            description: description.slice(0, 500),
-            metadata: { project_id: projectId, change_id: req.id },
-            actor_name: profile?.full_name ?? null,
-          });
+      const { data, error } = await supabase.rpc('create_client_scope_change_request', {
+        p_project_id: projectId,
+        p_title: title,
+        p_description: description,
+      });
+      if (error) {
+        if (String(error.message ?? error).includes('completed_project')) {
+          throw new Error(COMPLETED_PROJECT_SCOPE_CHANGE_ERROR);
         }
+        throw error;
       }
 
-      return req;
+      return parseClientScopeChangeReceipt(data);
     },
     onSuccess: (_, vars) => {
       queryClient.invalidateQueries({ queryKey: ['scope-changes', vars.projectId] });

@@ -64,6 +64,7 @@ export function ProjectOverview({ project, milestones = [] }: ProjectOverviewPro
   const liveActivities = useActivityFeed();
   const teamPresence = useTeamPresence();
   const [showAllActivities, setShowAllActivities] = useState(false);
+  const scopeIsClosed = project.status === 'completed' || project.status === 'archived';
 
   // Derive activities from milestone data (serves as historical feed)
   const derivedActivities = useMemo((): ActivityItem[] => {
@@ -195,15 +196,17 @@ export function ProjectOverview({ project, milestones = [] }: ProjectOverviewPro
               )}
             </div>
 
-            {/* Scope change CTA */}
-            <div className="mt-6">
-              <Link
-                href={`/projects/${project.id}/scope-change/new`}
-                className="inline-flex items-center rounded-md border border-gray-300 px-4 py-2 font-body text-sm text-gray-600 transition-colors hover:bg-gray-50 hover:border-gray-400"
-              >
-                Request a change to this project
-              </Link>
-            </div>
+            {/* A completed project is a closed record, not an editable scope. */}
+            {!scopeIsClosed && (
+              <div className="mt-6">
+                <Link
+                  href={`/projects/${project.id}/scope-change/new`}
+                  className="inline-flex items-center rounded-md border border-gray-300 px-4 py-2 font-body text-sm text-gray-600 transition-colors hover:bg-gray-50 hover:border-gray-400"
+                >
+                  Request a change to this project
+                </Link>
+              </div>
+            )}
           </div>
 
           {/* Progress + Next Milestone */}

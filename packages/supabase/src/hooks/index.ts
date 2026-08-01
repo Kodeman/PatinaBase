@@ -951,6 +951,7 @@ export type {
 } from './use-proposal-team';
 export {
   // Scope Changes
+  COMPLETED_PROJECT_SCOPE_CHANGE_ERROR,
   useScopeChangeRequests,
   useScopeChangeRequest,
   useCreateScopeChangeRequest,
@@ -961,6 +962,7 @@ export {
   useCreateClientScopeChangeRequest,
   useCancelClientScopeChangeRequest,
 } from './use-scope-changes';
+export type { ClientScopeChangeRequestReceipt } from './use-scope-changes';
 export { useProjectDocuments } from './use-project-documents';
 export type { ProjectDocument, ProjectDocumentKind } from './use-project-documents';
 export {

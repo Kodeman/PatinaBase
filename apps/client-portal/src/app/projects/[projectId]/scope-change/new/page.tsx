@@ -3,9 +3,15 @@
 import { use, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
+import { Loader2 } from 'lucide-react';
 
-import { useCreateClientScopeChangeRequest } from '@patina/supabase';
+import {
+  COMPLETED_PROJECT_SCOPE_CHANGE_ERROR,
+  useCreateClientScopeChangeRequest,
+  useProjectV2,
+} from '@patina/supabase';
 import { ChangeRequestForm, type ChangeRequestFormData } from '@patina/design-system';
+import { QueryFailure } from '@/components/query-failure';
 
 export default function ClientScopeChangeNewPage({
   params,
@@ -14,6 +20,7 @@ export default function ClientScopeChangeNewPage({
 }) {
   const { projectId } = use(params);
   const router = useRouter();
+  const projectQuery = useProjectV2(projectId);
   const createRequest = useCreateClientScopeChangeRequest();
   const [submitted, setSubmitted] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -33,6 +40,60 @@ export default function ClientScopeChangeNewPage({
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Something went wrong. Please try again.');
     }
+  }
+
+  if (projectQuery.isLoading) {
+    return (
+      <div className="flex items-center justify-center py-20" aria-label="Loading project">
+        <Loader2 className="h-6 w-6 animate-spin text-[var(--text-muted)]" />
+      </div>
+    );
+  }
+
+  if (projectQuery.isError) {
+    return (
+      <div className="mx-auto max-w-2xl px-4 py-12">
+        <QueryFailure
+          title="Unable to check this project"
+          message="The project could not be checked before opening a change request."
+          onRetry={projectQuery.refetch}
+        />
+      </div>
+    );
+  }
+
+  if (!projectQuery.data) {
+    return (
+      <div className="mx-auto max-w-2xl px-4 py-12 text-center">
+        <p className="font-body text-sm text-gray-700">Project not found.</p>
+        <Link href="/projects" className="mt-4 inline-block underline">
+          Back to projects
+        </Link>
+      </div>
+    );
+  }
+
+  if (
+    projectQuery.data.status === 'completed' ||
+    projectQuery.data.status === 'archived'
+  ) {
+    return (
+      <div className="mx-auto max-w-2xl px-4 py-12 text-center">
+        <p className="mb-2 font-mono text-[0.6rem] uppercase tracking-widest text-gray-400">
+          Project complete
+        </p>
+        <h1 className="font-serif text-3xl font-normal tracking-tight text-gray-900">
+          This project&rsquo;s scope is closed
+        </h1>
+        <p className="mx-auto mt-3 max-w-lg font-body text-sm leading-relaxed text-gray-600">
+          {COMPLETED_PROJECT_SCOPE_CHANGE_ERROR} Contact your designer if something still needs
+          attention.
+        </p>
+        <Link href={`/projects/${projectId}`} className="mt-6 inline-block underline">
+          Return to your project
+        </Link>
+      </div>
+    );
   }
 
   if (submitted) {
