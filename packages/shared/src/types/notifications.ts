@@ -67,7 +67,8 @@ export type NotificationStatus =
   | 'clicked'
   | 'bounced'
   | 'failed'
-  | 'suppressed';
+  | 'suppressed'
+  | 'unconfirmed';
 
 export type NotificationPriority = 'critical' | 'high' | 'normal' | 'low';
 

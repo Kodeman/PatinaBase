@@ -226,7 +226,13 @@ export async function prepareCompliantEmail(
         .select("id", { count: "exact", head: true })
         .eq("user_id", options.userId)
         .eq("channel", "email")
-        .in("status", ["delivered", "sending", "opened", "clicked"])
+        .in("status", [
+          "delivered",
+          "sending",
+          "opened",
+          "clicked",
+          "unconfirmed",
+        ])
         .gte("created_at", cutoff);
       if (capError) {
         if (options.failClosedPolicyReads) {

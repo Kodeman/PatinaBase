@@ -30,6 +30,7 @@ function complianceClient(options: {
   profileError?: { message: string };
   count?: number;
   capError?: { message: string };
+  onCapStatuses?: (statuses: string[]) => void;
 }) {
   return {
     from(table: string) {
@@ -40,7 +41,10 @@ function complianceClient(options: {
         eq() {
           return query;
         },
-        in() {
+        in(column: string, values: string[]) {
+          if (table === "notification_log" && column === "status") {
+            options.onCapStatuses?.(values);
+          }
           return query;
         },
         gte() {
@@ -100,6 +104,36 @@ Deno.test("rate-cap lookup failure is fail-closed", async () => {
     Error,
     "email_rate_cap_check_failed",
   );
+});
+
+Deno.test("rate cap counts terminal unconfirmed delivery", async () => {
+  const previousSecret = Deno.env.get("UNSUBSCRIBE_TOKEN_SECRET");
+  Deno.env.set("UNSUBSCRIBE_TOKEN_SECRET", "test-only-secret");
+  try {
+    let statuses: string[] = [];
+    const result = await prepareCompliantEmail(
+      complianceClient({
+        onCapStatuses: (values) => {
+          statuses = values;
+        },
+      }) as never,
+      emailOptions,
+    );
+    assertEquals(result.state, "ready");
+    assertEquals(statuses, [
+      "delivered",
+      "sending",
+      "opened",
+      "clicked",
+      "unconfirmed",
+    ]);
+  } finally {
+    if (previousSecret === undefined) {
+      Deno.env.delete("UNSUBSCRIBE_TOKEN_SECRET");
+    } else {
+      Deno.env.set("UNSUBSCRIBE_TOKEN_SECRET", previousSecret);
+    }
+  }
 });
 
 Deno.test("missing suppression policy row is fail-closed", async () => {
