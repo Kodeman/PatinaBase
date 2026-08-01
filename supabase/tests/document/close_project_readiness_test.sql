@@ -1,4 +1,4 @@
--- close_project operational-truth + authority regression (00383, 00387)
+-- close_project workflow + operational-truth authority regression (00394)
 -- Run:
 --   psql 'postgresql://postgres:postgres@127.0.0.1:54322/postgres' \
 --     -v ON_ERROR_STOP=1 -f supabase/tests/document/close_project_readiness_test.sql
@@ -9,33 +9,100 @@ INSERT INTO auth.users (
   id, email, encrypted_password, email_confirmed_at, created_at, updated_at,
   instance_id, aud, role
 )
-VALUES (
-  'a7000000-0000-4000-8000-000000000001',
-  'close-project-owner@test.invalid', '', NOW(), NOW(), NOW(),
-  '00000000-0000-0000-0000-000000000000', 'authenticated', 'authenticated'
-);
+VALUES
+  (
+    'a7000000-0000-4000-8000-000000000001',
+    'close-project-owner@test.invalid', '', NOW(), NOW(), NOW(),
+    '00000000-0000-0000-0000-000000000000', 'authenticated', 'authenticated'
+  ),
+  (
+    'a7000000-0000-4000-8000-000000000002',
+    'close-project-client@test.invalid', '', NOW(), NOW(), NOW(),
+    '00000000-0000-0000-0000-000000000000', 'authenticated', 'authenticated'
+  );
 
 INSERT INTO public.profiles (id, email, full_name, created_at, updated_at)
-VALUES (
-  'a7000000-0000-4000-8000-000000000001',
-  'close-project-owner@test.invalid', 'Close Project Owner', NOW(), NOW()
-)
+VALUES
+  (
+    'a7000000-0000-4000-8000-000000000001',
+    'close-project-owner@test.invalid', 'Close Project Owner', NOW(), NOW()
+  ),
+  (
+    'a7000000-0000-4000-8000-000000000002',
+    'close-project-client@test.invalid', 'Close Project Client', NOW(), NOW()
+  )
 ON CONFLICT (id) DO NOTHING;
 
+INSERT INTO public.designer_clients (id, designer_id, client_id, status)
+VALUES (
+  'a7050000-0000-4000-8000-000000000001',
+  'a7000000-0000-4000-8000-000000000001',
+  'a7000000-0000-4000-8000-000000000002',
+  'active'
+);
+
 INSERT INTO public.projects (
-  id, name, designer_id, created_by, total_amount_cents
+  id, name, designer_id, created_by, client_id, total_amount_cents
 )
 VALUES
   ('a7100000-0000-4000-8000-000000000001', 'Operational closeout',
-   'a7000000-0000-4000-8000-000000000001', 'a7000000-0000-4000-8000-000000000001', 320000),
+   'a7000000-0000-4000-8000-000000000001', 'a7000000-0000-4000-8000-000000000001', NULL, 320000),
   ('a7100000-0000-4000-8000-000000000002', 'Nonbillable closeout',
-   'a7000000-0000-4000-8000-000000000001', 'a7000000-0000-4000-8000-000000000001', NULL),
+   'a7000000-0000-4000-8000-000000000001', 'a7000000-0000-4000-8000-000000000001', NULL, NULL),
   ('a7100000-0000-4000-8000-000000000003', 'Outstanding invoice closeout',
-   'a7000000-0000-4000-8000-000000000001', 'a7000000-0000-4000-8000-000000000001', 100000),
+   'a7000000-0000-4000-8000-000000000001', 'a7000000-0000-4000-8000-000000000001', NULL, 100000),
   ('a7100000-0000-4000-8000-000000000004', 'Uncollected contract closeout',
-   'a7000000-0000-4000-8000-000000000001', 'a7000000-0000-4000-8000-000000000001', 100000),
+   'a7000000-0000-4000-8000-000000000001', 'a7000000-0000-4000-8000-000000000001', NULL, 100000),
   ('a7100000-0000-4000-8000-000000000005', 'Stale draft invoice header',
-   'a7000000-0000-4000-8000-000000000001', 'a7000000-0000-4000-8000-000000000001', NULL);
+   'a7000000-0000-4000-8000-000000000001', 'a7000000-0000-4000-8000-000000000001', NULL, NULL),
+  ('a7100000-0000-4000-8000-000000000010', 'Unfinished phase closeout',
+   'a7000000-0000-4000-8000-000000000001', 'a7000000-0000-4000-8000-000000000001', NULL, NULL),
+  ('a7100000-0000-4000-8000-000000000011', 'Unresolved decision closeout',
+   'a7000000-0000-4000-8000-000000000001', 'a7000000-0000-4000-8000-000000000001', 'a7000000-0000-4000-8000-000000000002', NULL),
+  ('a7100000-0000-4000-8000-000000000012', 'Unresolved amendment closeout',
+   'a7000000-0000-4000-8000-000000000001', 'a7000000-0000-4000-8000-000000000001', 'a7000000-0000-4000-8000-000000000002', NULL);
+
+INSERT INTO public.project_phases (
+  id, project_id, name, phase_key, status, sort_order
+)
+VALUES (
+  'a7150000-0000-4000-8000-000000000001',
+  'a7100000-0000-4000-8000-000000000010',
+  'Final walkthrough', 'final_walkthrough', 'delayed', 0
+);
+
+INSERT INTO public.client_decisions (
+  id, designer_client_id, project_id, title, status
+)
+VALUES (
+  'a7160000-0000-4000-8000-000000000001',
+  'a7050000-0000-4000-8000-000000000001',
+  'a7100000-0000-4000-8000-000000000011',
+  'Choose the final placement', 'draft'
+);
+
+INSERT INTO public.scope_change_requests (
+  id, project_id, requested_by, title, description, status, applied_at
+)
+VALUES
+  (
+    'a7170000-0000-4000-8000-000000000001',
+    'a7100000-0000-4000-8000-000000000012',
+    'a7000000-0000-4000-8000-000000000002',
+    'Approved but not applied', 'Add one final built-in', 'approved', NULL
+  ),
+  (
+    'a7170000-0000-4000-8000-000000000002',
+    'a7100000-0000-4000-8000-000000000012',
+    'a7000000-0000-4000-8000-000000000002',
+    'Declined change', 'No longer wanted', 'declined', NULL
+  ),
+  (
+    'a7170000-0000-4000-8000-000000000003',
+    'a7100000-0000-4000-8000-000000000012',
+    'a7000000-0000-4000-8000-000000000002',
+    'Cancelled change', 'Withdrawn', 'cancelled', NULL
+  );
 
 INSERT INTO public.project_ffe_items (
   id, project_id, name, status, quantity, unit_price_cents, line_total_cents
@@ -104,6 +171,19 @@ BEGIN
 END;
 $$;
 
+CREATE OR REPLACE FUNCTION pg_temp.assume_closeout_actor(p_actor uuid)
+RETURNS void
+LANGUAGE plpgsql
+AS $$
+BEGIN
+  PERFORM set_config(
+    'request.jwt.claims',
+    json_build_object('sub', p_actor, 'role', 'authenticated')::text,
+    true
+  );
+END;
+$$;
+
 CREATE OR REPLACE FUNCTION pg_temp.complete_closeout()
 RETURNS jsonb
 LANGUAGE sql
@@ -115,8 +195,7 @@ AS $$
     {"key":"payment","label":"Payment","completed":true},
     {"key":"photography","label":"Photography","completed":true},
     {"key":"photos","label":"Photos","completed":true},
-    {"key":"case_study","label":"Case study","completed":true},
-    {"key":"review","label":"Review","completed":true}
+    {"key":"case_study","label":"Case study","completed":true}
   ]'::jsonb;
 $$;
 
@@ -186,7 +265,46 @@ BEGIN
 END;
 $$;
 
+DO $$
+BEGIN
+  ASSERT NOT has_function_privilege(
+    'anon', 'public.close_project(uuid,jsonb,jsonb)', 'EXECUTE'
+  ), 'anon must not execute close_project';
+  ASSERT has_function_privilege(
+    'authenticated', 'public.close_project(uuid,jsonb,jsonb)', 'EXECUTE'
+  ), 'authenticated owners need close_project EXECUTE';
+  ASSERT NOT has_function_privilege(
+    'service_role', 'public.close_project(uuid,jsonb,jsonb)', 'EXECUTE'
+  ), 'service_role must not bypass close_project owner authority';
+END;
+$$;
+
 SET LOCAL ROLE authenticated;
+SELECT pg_temp.assume_closeout_owner();
+
+-- Project visibility is not closeout authority. Even the linked client (and,
+-- by the same exact-id rule, a studio collaborator) receives the owner-only
+-- denial before any checklist or workflow census runs.
+SELECT pg_temp.assume_closeout_actor(
+  'a7000000-0000-4000-8000-000000000002'
+);
+DO $$
+DECLARE v_error text;
+BEGIN
+  BEGIN
+    PERFORM public.close_project(
+      'a7100000-0000-4000-8000-000000000011',
+      pg_temp.complete_closeout(), '{}'::jsonb
+    );
+  EXCEPTION WHEN insufficient_privilege THEN
+    v_error := SQLERRM;
+  END;
+
+  ASSERT v_error =
+    'project a7100000-0000-4000-8000-000000000011 may only be closed by its designer',
+    format('non-owner closeout should fail with exact authority error, got %L', v_error);
+END;
+$$;
 SELECT pg_temp.assume_closeout_owner();
 
 -- RLS-valid project creation stays available, but no browser writer may start
@@ -254,20 +372,33 @@ BEGIN
 END;
 $$;
 
--- close_project shares rows with issue_invoice, record_invoice_payment /
--- apply_invoice_payment_effects, void_invoice, and direct invoice-line edits.
--- Lock them in the canonical dependency direction so two valid operations do
--- not form invoice<->milestone or line<->FF&E deadlock cycles.
+-- close_project locks project children in one documented order. Workflow rows
+-- precede the preserved invoice → line → milestone → FF&E operational chain.
 DO $$
 DECLARE
   v_source text := pg_get_functiondef(
     'public.close_project(uuid,jsonb,jsonb)'::regprocedure
   );
+  v_scope_pos integer;
+  v_phase_pos integer;
+  v_decision_pos integer;
   v_invoice_pos integer;
   v_line_pos integer;
   v_milestone_pos integer;
   v_ffe_pos integer;
 BEGIN
+  v_scope_pos := position(
+    E'FROM public.scope_change_requests AS scope_change\n  WHERE scope_change.project_id = p_project_id\n  ORDER BY scope_change.id\n  FOR UPDATE'
+    IN v_source
+  );
+  v_phase_pos := position(
+    E'FROM public.project_phases AS phase\n  WHERE phase.project_id = p_project_id\n  ORDER BY phase.id\n  FOR UPDATE'
+    IN v_source
+  );
+  v_decision_pos := position(
+    E'FROM public.client_decisions AS decision\n  WHERE decision.project_id = p_project_id\n  ORDER BY decision.id\n  FOR UPDATE'
+    IN v_source
+  );
   v_invoice_pos := position(
     E'FROM public.invoices\n  WHERE project_id = p_project_id\n  ORDER BY id\n  FOR UPDATE'
     IN v_source
@@ -285,13 +416,17 @@ BEGIN
     IN v_source
   );
 
-  ASSERT v_invoice_pos > 0 AND v_line_pos > 0
+  ASSERT v_scope_pos > 0 AND v_phase_pos > 0 AND v_decision_pos > 0
+      AND v_invoice_pos > 0 AND v_line_pos > 0
       AND v_milestone_pos > 0 AND v_ffe_pos > 0,
     'close_project must retain explicit ordered child locks';
-  ASSERT v_invoice_pos < v_line_pos
+  ASSERT v_scope_pos < v_decision_pos
+      AND v_decision_pos < v_phase_pos
+      AND v_phase_pos < v_invoice_pos
+      AND v_invoice_pos < v_line_pos
       AND v_line_pos < v_milestone_pos
       AND v_milestone_pos < v_ffe_pos,
-    'close_project lock order must be invoice -> line -> milestone -> FF&E';
+    'close_project lock order must be scope -> decision -> phase -> invoice -> line -> milestone -> FF&E';
 END;
 $$;
 
@@ -302,8 +437,10 @@ SELECT pg_temp.expect_close_failure(
   '[{"key":"walkthrough","completed":true}]'::jsonb
 );
 
--- The same project is valid once all workflow items are attested: empty
--- operational sets + no contract value represent a real nonbillable project.
+-- The review request is deliberately absent from complete_closeout(). A real
+-- request becomes available after completion; it is never a self-attested
+-- precondition. Empty operational sets + no contract value represent a real
+-- nonbillable project.
 DO $$
 DECLARE
   v_project public.projects;
@@ -315,6 +452,94 @@ BEGIN
   );
   ASSERT v_project.status = 'completed',
     'zero-item/nonbillable projects should be closable';
+END;
+$$;
+
+-- Every stored phase must reach the sole terminal phase state. Delayed remains
+-- promised work and blocks until phase authority records completion.
+SELECT pg_temp.expect_close_failure(
+  'a7100000-0000-4000-8000-000000000010',
+  'project cannot close: 1 project phase(s) are not completed'
+);
+
+SELECT public.advance_project_phase(
+  'a7100000-0000-4000-8000-000000000010',
+  'a7150000-0000-4000-8000-000000000001',
+  'delayed'
+);
+SELECT public.advance_project_phase(
+  'a7100000-0000-4000-8000-000000000010',
+  'a7150000-0000-4000-8000-000000000001',
+  'in_progress'
+);
+
+DO $$
+DECLARE v_project public.projects;
+BEGIN
+  v_project := public.close_project(
+    'a7100000-0000-4000-8000-000000000010',
+    pg_temp.complete_closeout(), '{}'::jsonb
+  );
+  ASSERT v_project.status = 'completed',
+    'a project with only completed phases should close';
+END;
+$$;
+
+-- Both nonterminal decision states block, even for a non-blocking row. Expired
+-- is a guarded terminal status and may close, just like responded.
+SELECT pg_temp.expect_close_failure(
+  'a7100000-0000-4000-8000-000000000011',
+  'project cannot close: 1 coordination/decision item(s) are unresolved'
+);
+
+UPDATE public.client_decisions
+SET status = 'pending'
+WHERE id = 'a7160000-0000-4000-8000-000000000001';
+
+SELECT pg_temp.expect_close_failure(
+  'a7100000-0000-4000-8000-000000000011',
+  'project cannot close: 1 coordination/decision item(s) are unresolved'
+);
+
+UPDATE public.client_decisions
+SET status = 'expired'
+WHERE id = 'a7160000-0000-4000-8000-000000000001';
+
+DO $$
+DECLARE v_project public.projects;
+BEGIN
+  v_project := public.close_project(
+    'a7100000-0000-4000-8000-000000000011',
+    pg_temp.complete_closeout(), '{}'::jsonb
+  );
+  ASSERT v_project.status = 'completed',
+    'expired decisions are terminal and should not strand closeout';
+END;
+$$;
+
+-- Declined/cancelled amendments are terminal. Approved remains open until the
+-- actual apply act stamps applied_at, so it cannot be erased by completion.
+SELECT pg_temp.expect_close_failure(
+  'a7100000-0000-4000-8000-000000000012',
+  'project cannot close: 1 scope change request(s) are unresolved'
+);
+
+RESET ROLE;
+UPDATE public.scope_change_requests
+SET applied_at = now()
+WHERE id = 'a7170000-0000-4000-8000-000000000001';
+SET LOCAL ROLE authenticated;
+SELECT pg_temp.assume_closeout_owner();
+
+DO $$
+DECLARE v_project public.projects;
+BEGIN
+  v_project := public.close_project(
+    'a7100000-0000-4000-8000-000000000012',
+    pg_temp.complete_closeout(), '{}'::jsonb
+  );
+  ASSERT v_project.status = 'completed',
+    'applied/declined/cancelled scope changes are terminal';
 END;
 $$;
 

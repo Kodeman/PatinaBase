@@ -2,7 +2,9 @@
  * Closure derivation (Track 7 · R80) — the pure logic behind the Care band's
  * "Close the book": the closure checklist vocabulary (ported from the legacy
  * /portal/projects/[id]/complete page, minus its hardcoded fixture dates), the
- * all-complete gate, and the portfolio-snapshot seeding math.
+ * all-complete gate, and the portfolio-snapshot seeding math. Review outreach
+ * is deliberately post-close work; the checklist never asks a designer to
+ * attest that a request was sent before the request UI becomes available.
  *
  * Everything here is presentation-free so the band stays testable; the write
  * itself is one transaction (close_project, 00238).
@@ -24,7 +26,6 @@ export const CLOSURE_ITEM_DEFS: ReadonlyArray<{ key: string; label: string }> = 
   { key: 'photography', label: 'Professional photography scheduled' },
   { key: 'photos', label: 'Final project photos on file (for portfolio)' },
   { key: 'case_study', label: 'Project case study written for portfolio' },
-  { key: 'review', label: 'Client review request sent' },
 ];
 
 export function defaultClosureItems(): ClosureItem[] {
@@ -44,6 +45,9 @@ export function allClosureComplete(items: ClosureItem[]): boolean {
 
 export type CloseoutBlockerCode =
   | 'operational_data_unavailable'
+  | 'phase_unfinished'
+  | 'coordination_unresolved'
+  | 'scope_change_unresolved'
   | 'ffe_not_installed'
   | 'ffe_not_paid'
   | 'milestone_unpaid'
@@ -66,6 +70,19 @@ export interface CloseoutReadinessInput {
   dataReady?: boolean;
   /** Positive contracted value must be backed by collected invoice payments. */
   projectTotalCents?: number | null;
+  projectPhases?: ReadonlyArray<{
+    id: string;
+    status: string | null;
+  }>;
+  coordinationItems?: ReadonlyArray<{
+    id: string;
+    status: string | null;
+  }>;
+  scopeChanges?: ReadonlyArray<{
+    id: string;
+    status: string | null;
+    applied_at?: string | null;
+  }>;
   ffeItems: ReadonlyArray<{
     id: string;
     status: string | null;
@@ -129,6 +146,48 @@ export function deriveCloseoutReadiness(
   }
 
   const blockers: CloseoutBlocker[] = [];
+
+  // The database uses one terminal phase state: completed. A delayed phase is
+  // paused work, and a pending phase is still promised work, so neither may be
+  // erased by project closeout.
+  const unfinishedPhases = (input.projectPhases ?? []).filter(
+    (phase) => phase.status !== 'completed',
+  ).length;
+  if (unfinishedPhases > 0) {
+    blockers.push({
+      code: 'phase_unfinished',
+      count: unfinishedPhases,
+      label: `${countLabel(unfinishedPhases, 'project phase')} not completed`,
+    });
+  }
+
+  // responded and expired are the two terminal client_decisions states.
+  // Draft and pending rows still have a live hand to resolve before closeout.
+  const unresolvedCoordination = (input.coordinationItems ?? []).filter(
+    (item) => item.status !== 'responded' && item.status !== 'expired',
+  ).length;
+  if (unresolvedCoordination > 0) {
+    blockers.push({
+      code: 'coordination_unresolved',
+      count: unresolvedCoordination,
+      label: `${countLabel(unresolvedCoordination, 'coordination item')} unresolved`,
+    });
+  }
+
+  // A declined/cancelled amendment is terminal; an approved amendment remains
+  // live until apply_scope_change stamps applied_at.
+  const unresolvedScopeChanges = (input.scopeChanges ?? []).filter(
+    (change) =>
+      change.status !== 'declined' && change.status !== 'cancelled' && change.applied_at == null,
+  ).length;
+  if (unresolvedScopeChanges > 0) {
+    blockers.push({
+      code: 'scope_change_unresolved',
+      count: unresolvedScopeChanges,
+      label: `${countLabel(unresolvedScopeChanges, 'scope change')} unresolved`,
+    });
+  }
+
   const notInstalled = input.ffeItems.filter(
     (item) => item.status !== 'installed',
   ).length;

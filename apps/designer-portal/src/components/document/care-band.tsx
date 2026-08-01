@@ -22,12 +22,16 @@
 
 import { useState } from 'react';
 import {
+  useCoordinationItems,
   useFfeInvoiceCoverage,
   useProjectFFEItems,
   useProjectInvoices,
   useProjectPaymentMilestones,
+  useProjectPhases,
   useProjectV2,
+  useScopeChangeRequests,
 } from '@patina/supabase';
+import { useAuth } from '@/hooks/use-auth';
 import { useCloseProject } from '@/hooks/use-project-lifecycle';
 import {
   centsToDollarString,
@@ -49,8 +53,25 @@ const FIELD_CLS =
 const LABEL_CLS =
   'mb-1 block font-mono text-[8px] font-semibold uppercase tracking-[0.08em] text-[var(--color-aged-oak)]';
 
+function closeErrorMessage(error: unknown): string {
+  if (error instanceof Error) return error.message;
+  if (
+    error !== null &&
+    typeof error === 'object' &&
+    'message' in error &&
+    typeof error.message === 'string'
+  ) {
+    return error.message;
+  }
+  return 'Could not close the book. Try again.';
+}
+
 export function CareBand({ projectId }: { projectId: string }) {
   const { data: project } = useProjectV2(projectId) as { data: AnyRecord };
+  const { user, isLoading: authLoading } = useAuth();
+  const phaseQuery = useProjectPhases(projectId);
+  const coordinationQuery = useCoordinationItems(projectId);
+  const scopeChangeQuery = useScopeChangeRequests(projectId);
   const ffeQuery = useProjectFFEItems(projectId);
   const coverageQuery = useFfeInvoiceCoverage(projectId);
   const milestoneQuery = useProjectPaymentMilestones(projectId);
@@ -72,14 +93,46 @@ export function CareBand({ projectId }: { projectId: string }) {
   const [closed, setClosed] = useState(false);
 
   if (!project || project.status === 'completed') return null;
+  if (authLoading) return null;
+
+  const isProjectOwner =
+    typeof project.designer_id === 'string' && project.designer_id === user?.id;
+  if (!isProjectOwner) {
+    const ownerName =
+      typeof project.designer?.full_name === 'string' &&
+      project.designer.full_name.trim()
+        ? project.designer.full_name.trim()
+        : 'the project owner';
+
+    return (
+      <section
+        aria-label="Project closeout ownership"
+        className="mt-8 border-l-2 border-[var(--color-sage)] px-3.5 py-2.5"
+      >
+        <p className="font-mono text-[9px] font-semibold uppercase tracking-[0.08em] text-[var(--text-muted)]">
+          Project closeout · owner action
+        </p>
+        <p className="mt-1 text-[11.5px] leading-relaxed text-[var(--color-charcoal)]">
+          Only {ownerName} can close the book. The project stays available for
+          your coordination work until its owner completes closeout.
+        </p>
+      </section>
+    );
+  }
 
   const seed = seedSnapshot(project);
   const open = unfolded || nearClose;
   const operationalDataReady =
+    phaseQuery.data !== undefined &&
+    coordinationQuery.data !== undefined &&
+    scopeChangeQuery.data !== undefined &&
     ffeQuery.data !== undefined &&
     coverageQuery.data !== undefined &&
     milestoneQuery.data !== undefined &&
     invoiceQuery.data !== undefined &&
+    !phaseQuery.isError &&
+    !coordinationQuery.isError &&
+    !scopeChangeQuery.isError &&
     !ffeQuery.isError &&
     !coverageQuery.isError &&
     !milestoneQuery.isError &&
@@ -87,6 +140,19 @@ export function CareBand({ projectId }: { projectId: string }) {
   const operational = deriveCloseoutReadiness({
     dataReady: operationalDataReady,
     projectTotalCents: project?.total_amount_cents ?? null,
+    projectPhases: (phaseQuery.data ?? []) as Array<{
+      id: string;
+      status: string | null;
+    }>,
+    coordinationItems: (coordinationQuery.data ?? []) as Array<{
+      id: string;
+      status: string | null;
+    }>,
+    scopeChanges: (scopeChangeQuery.data ?? []) as Array<{
+      id: string;
+      status: string | null;
+      applied_at: string | null;
+    }>,
     ffeItems: (ffeQuery.data ?? []) as Array<{
       id: string;
       status: string | null;
@@ -176,12 +242,7 @@ export function CareBand({ projectId }: { projectId: string }) {
       },
       {
         onSuccess: () => setClosed(true),
-        onError: (err) =>
-          setError(
-            err instanceof Error
-              ? err.message
-              : 'Could not close the book. Try again.',
-          ),
+        onError: (err) => setError(closeErrorMessage(err)),
       },
     );
   };

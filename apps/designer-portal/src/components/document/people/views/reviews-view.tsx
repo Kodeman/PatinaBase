@@ -203,7 +203,7 @@ export function ReviewsView({ notify }: PeopleViewProps) {
     // queued
     if ((queued?.length ?? 0) === 0) {
       return (
-        <EmptyBlock text="Nothing queued. Scheduled review requests — auto-fired on project close — appear here." />
+        <EmptyBlock text="Nothing queued. Review requests you schedule for later appear here." />
       );
     }
     return (
@@ -214,8 +214,8 @@ export function ReviewsView({ notify }: PeopleViewProps) {
             name={reviewClientName(r)}
             why={
               r.scheduled_for
-                ? `Auto-request scheduled for ${new Date(r.scheduled_for).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}`
-                : 'Queued — fires on project close'
+                ? `Request scheduled for ${new Date(r.scheduled_for).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}`
+                : 'Queued for delivery'
             }
           />
         ))}

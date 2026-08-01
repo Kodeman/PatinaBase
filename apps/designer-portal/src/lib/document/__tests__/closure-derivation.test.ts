@@ -27,7 +27,6 @@ describe('closure checklist', () => {
       'photography',
       'photos',
       'case_study',
-      'review',
     ]);
     expect(items.every((i) => i.completed === false)).toBe(true);
     // The defs are the source of truth; defaults mirror them 1:1.
@@ -108,6 +107,83 @@ describe('closure checklist', () => {
     expect(operational.blockers[0]?.code).toBe(
       'operational_data_unavailable',
     );
+  });
+
+  it('surfaces every unfinished workflow family before closeout', () => {
+    const operational = deriveCloseoutReadiness({
+      projectPhases: [
+        { id: 'complete', status: 'completed' },
+        { id: 'pending', status: 'pending' },
+        { id: 'delayed', status: 'delayed' },
+        { id: 'unknown', status: null },
+      ],
+      coordinationItems: [
+        { id: 'answered', status: 'responded' },
+        { id: 'expired', status: 'expired' },
+        { id: 'draft', status: 'draft' },
+        { id: 'pending', status: 'pending' },
+        { id: 'unknown', status: null },
+      ],
+      scopeChanges: [
+        { id: 'declined', status: 'declined', applied_at: null },
+        { id: 'cancelled', status: 'cancelled', applied_at: null },
+        {
+          id: 'applied',
+          status: 'approved',
+          applied_at: '2026-08-01T12:00:00Z',
+        },
+        { id: 'approved', status: 'approved', applied_at: null },
+        { id: 'sent', status: 'sent', applied_at: null },
+        { id: 'unknown', status: null, applied_at: null },
+      ],
+      ffeItems: [],
+      ffeCoverage: {},
+      paymentMilestones: [],
+      invoices: [],
+    });
+
+    expect(operational.blockers).toEqual([
+      {
+        code: 'phase_unfinished',
+        count: 3,
+        label: '3 project phases not completed',
+      },
+      {
+        code: 'coordination_unresolved',
+        count: 3,
+        label: '3 coordination items unresolved',
+      },
+      {
+        code: 'scope_change_unresolved',
+        count: 3,
+        label: '3 scope changes unresolved',
+      },
+    ]);
+  });
+
+  it('treats only explicit terminal workflow states as closeout-ready', () => {
+    const operational = deriveCloseoutReadiness({
+      projectPhases: [{ id: 'phase', status: 'completed' }],
+      coordinationItems: [
+        { id: 'answered', status: 'responded' },
+        { id: 'expired', status: 'expired' },
+      ],
+      scopeChanges: [
+        { id: 'declined', status: 'declined', applied_at: null },
+        { id: 'cancelled', status: 'cancelled', applied_at: null },
+        {
+          id: 'applied',
+          status: 'approved',
+          applied_at: '2026-08-01T12:00:00Z',
+        },
+      ],
+      ffeItems: [],
+      ffeCoverage: {},
+      paymentMilestones: [],
+      invoices: [],
+    });
+
+    expect(operational).toEqual({ ready: true, blockers: [] });
   });
 
   it('does not treat an empty invoice set as settled when the project has a contract value', () => {

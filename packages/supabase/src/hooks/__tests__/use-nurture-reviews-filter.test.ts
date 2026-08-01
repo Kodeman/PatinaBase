@@ -83,10 +83,15 @@ vi.mock('@tanstack/react-query', () => ({
 
 // Import AFTER the mocks are wired up.
 import { useNurtureTouchpoints, type NurtureFilters } from '../use-nurture';
-import { useClientReviews, type ReviewFilters } from '../use-reviews';
+import {
+  useClientReviews,
+  useCreateReviewRequest,
+  type ReviewFilters,
+} from '../use-reviews';
 
 beforeEach(() => {
   Object.keys(builders).forEach((k) => delete builders[k]);
+  invalidateQueries.mockClear();
 });
 
 function nurtureQueryFn(filters?: NurtureFilters) {
@@ -164,5 +169,25 @@ describe('useClientReviews — server-side designerClientId filter (P2)', () => 
 
     expect(designerClientEqCalls(b)).toHaveLength(0);
     expect(b.__chain.some((c) => c.method === 'eq' && c.args[0] === 'request_status')).toBe(true);
+  });
+});
+
+describe('useCreateReviewRequest — post-close candidate refresh', () => {
+  it('removes the completed project from the request-ready list after creation', () => {
+    const mutation = useCreateReviewRequest() as unknown as {
+      onSuccess: () => void;
+    };
+
+    mutation.onSuccess();
+
+    expect(invalidateQueries).toHaveBeenCalledWith({
+      queryKey: ['client-reviews'],
+    });
+    expect(invalidateQueries).toHaveBeenCalledWith({
+      queryKey: ['review-stats'],
+    });
+    expect(invalidateQueries).toHaveBeenCalledWith({
+      queryKey: ['completed-projects-without-review'],
+    });
   });
 });

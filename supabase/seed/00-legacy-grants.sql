@@ -4932,6 +4932,18 @@ DO $g$ BEGIN
 EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
 END $g$;
 
+-- 00394_close_project_workflow_integrity.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.close_project(uuid, jsonb, jsonb) FROM PUBLIC, anon, authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00394_close_project_workflow_integrity.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.close_project(uuid, jsonb, jsonb) TO authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
 -- 00395_create_client_scope_change_request.sql
 DO $g$ BEGIN
   REVOKE ALL ON FUNCTION public.create_client_scope_change_request(uuid, text, text) FROM PUBLIC, anon;
