@@ -15,8 +15,8 @@
  * invalidated so the line stamp, margin, and Desk move in one act (§5).
  */
 
-import { useEffect, useState } from 'react';
-import { useQueryClient } from '@tanstack/react-query';
+import { useEffect, useMemo, useState } from 'react';
+import { useIsMutating, useQueryClient } from '@tanstack/react-query';
 import {
   useProposal,
   useSendProposal,
@@ -28,6 +28,9 @@ import { useToast } from '@/components/portal/toast-provider';
 import { proposalEvents } from '@/lib/analytics';
 import { DocSheet } from './doc-sheet';
 import { DocumentAction, DocumentActionGroup } from '../document-action';
+import { useProposalMirrorData } from '../drafting/proposal-mirror';
+import { useDraftingState } from '@/hooks/use-drafting-state';
+import { assessProposalSendReadiness } from '@/lib/document/proposal-send-validation';
 
 const EXPIRY_OPTIONS = [
   { value: '7', label: '7 days' },
@@ -59,6 +62,8 @@ export function SendSheet({
   const qc = useQueryClient();
   const { data: proposal } = useProposal(proposalId) as { data: any };
   const { data: versions } = useProposalVersions(proposalId);
+  const clientPayload = useProposalMirrorData(proposalId);
+  const draftingState = useDraftingState(proposalId, open);
   // R83 — this sheet renders failures inline at the act site (sendError /
   // linkError bands below); the global mutation toast stays quiet.
   const sendProposal = useSendProposal({ errorSurface: 'inline' });
@@ -77,6 +82,38 @@ export function SendSheet({
   const [showAltAddress, setShowAltAddress] = useState(false);
   const [sendError, setSendError] = useState<string | null>(null);
   const [linkError, setLinkError] = useState<string | null>(null);
+  const [acknowledgedIncomplete, setAcknowledgedIncomplete] = useState(false);
+
+  const paymentMutationsPending = useIsMutating({
+    predicate: (mutation) => {
+      if (mutation.options.mutationKey?.[0] !== 'proposal-payment-schedule') {
+        return false;
+      }
+      const variables = mutation.state.variables as
+        | { proposalId?: string }
+        | undefined;
+      return variables?.proposalId === proposalId;
+    },
+  });
+
+  const readiness = useMemo(() => {
+    if (!proposal || !clientPayload.data) return null;
+    return assessProposalSendReadiness({
+      proposalTotalCents: proposal.total_amount ?? 0,
+      clientTotalCents: clientPayload.data.totalCents,
+      milestones: clientPayload.data.milestones,
+      draftingGaps: draftingState.gaps,
+    });
+  }, [clientPayload.data, draftingState.gaps, proposal]);
+
+  const checkingClientCopy =
+    clientPayload.isLoading ||
+    (!clientPayload.data && clientPayload.isFetching) ||
+    draftingState.isLoading ||
+    paymentMutationsPending > 0;
+  const hasBlockers = (readiness?.blockers.length ?? 0) > 0;
+  const incompleteIsAcknowledged =
+    !readiness?.requiresIncompleteAcknowledgement || acknowledgedIncomplete;
 
   const clientEmail: string | undefined = proposal?.client?.email ?? undefined;
 
@@ -88,8 +125,22 @@ export function SendSheet({
     }
   }, [clientEmail]);
 
+  useEffect(() => {
+    if (!open) setAcknowledgedIncomplete(false);
+  }, [open]);
+
+  const canSend = Boolean(
+    proposal?.client_id &&
+      recipientEmail &&
+      readiness &&
+      !checkingClientCopy &&
+      !clientPayload.error &&
+      !hasBlockers &&
+      incompleteIsAcknowledged,
+  );
+
   const handleSend = async () => {
-    if (!proposal?.client_id || !recipientEmail) return;
+    if (!canSend) return;
 
     setSendError(null);
 
@@ -324,6 +375,77 @@ export function SendSheet({
               />
             </div>
 
+            {/* Canonical client-copy validation */}
+            <div className="rounded-[4px] border border-[var(--color-pearl)] bg-white/70 p-3.5">
+              <p className="font-mono text-[9px] font-semibold uppercase tracking-[0.06em] text-[var(--color-aged-oak)]">
+                Client copy check
+              </p>
+
+              {checkingClientCopy && (
+                <p role="status" className="mt-2 text-[12px] text-[var(--color-mocha)]">
+                  Checking the latest client preview and payment schedule…
+                </p>
+              )}
+
+              {!checkingClientCopy && clientPayload.error && (
+                <p role="alert" className="mt-2 text-[12px] text-[var(--color-terracotta)]">
+                  The client preview could not be verified. Refresh it before sending.
+                </p>
+              )}
+
+              {!checkingClientCopy && !clientPayload.error && hasBlockers && (
+                <div role="alert" className="mt-2 text-[12px] text-[var(--color-terracotta)]">
+                  <p className="font-semibold">Not safe to send yet</p>
+                  <ul className="mt-1 list-disc space-y-1 pl-5">
+                    {readiness?.blockers.map((blocker, index) => (
+                      <li key={`${blocker}-${index}`}>{blocker}</li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+
+              {!checkingClientCopy &&
+                !clientPayload.error &&
+                !hasBlockers &&
+                readiness?.requiresIncompleteAcknowledgement && (
+                  <div className="mt-2 text-[12px] text-[var(--color-mocha)]">
+                    <p className="font-semibold">This draft is incomplete</p>
+                    {readiness.warnings.map((warning) => (
+                      <p key={warning} className="mt-1">
+                        {warning}
+                      </p>
+                    ))}
+                    <label className="mt-2 flex items-start gap-2">
+                      <input
+                        type="checkbox"
+                        checked={acknowledgedIncomplete}
+                        onChange={(event) =>
+                          setAcknowledgedIncomplete(event.target.checked)
+                        }
+                        className="mt-0.5"
+                      />
+                      <span>I reviewed the missing parts and still want to send this version.</span>
+                    </label>
+                  </div>
+                )}
+
+              {!checkingClientCopy &&
+                !clientPayload.error &&
+                !hasBlockers &&
+                !readiness?.requiresIncompleteAcknowledgement && (
+                  <p role="status" className="mt-2 text-[12px] text-[var(--color-sage)]">
+                    Client total and payment schedule are ready to send.
+                  </p>
+                )}
+
+              {!checkingClientCopy &&
+                clientPayload.data?.paymentSchedule.storedAmountsMatch === false && (
+                  <p role="status" className="mt-2 text-[11px] text-[var(--color-aged-oak)]">
+                    Payment amounts will be synchronized to the current proposal total before send.
+                  </p>
+                )}
+            </div>
+
             {/* Send error */}
             {sendError && (
               <div
@@ -345,7 +467,7 @@ export function SendSheet({
                 actionKey="send-proposal"
                 variant="primary"
                 onClick={handleSend}
-                disabled={!proposal.client_id || !recipientEmail}
+                disabled={!canSend}
                 loading={sendProposal.isPending}
                 loadingLabel="Sending…"
                 trailing="→"

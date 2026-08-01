@@ -10,6 +10,14 @@ export * from './hooks';
 export { isOAuthProviderEnabled, ENABLED_OAUTH_PROVIDERS, type OAuthProvider } from './lib/oauth-providers';
 export { getCookieDomain } from './lib/cookie-domain';
 export {
+  assessProposalPaymentSchedule,
+  canonicalizeProposalPaymentSchedule,
+  type ProposalPaymentMilestoneLike,
+  type ProposalPaymentScheduleAssessment,
+  type ProposalPaymentScheduleIssue,
+  type ProposalPaymentScheduleIssueCode,
+} from './lib/proposal-payment-schedule';
+export {
   resolveVendor,
   type ResolveVendorInput,
   type ResolvedVendor,

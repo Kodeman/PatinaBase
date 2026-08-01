@@ -10,6 +10,8 @@ import {
   useRemovePaymentMilestone,
 } from '@patina/supabase';
 
+type SaveState = 'idle' | 'dirty' | 'saving' | 'saved' | 'error';
+
 interface PaymentMilestonesBuilderProps {
   proposalId: string;
   totalCents: number;
@@ -37,6 +39,8 @@ export function PaymentMilestonesBuilder({ proposalId, totalCents }: PaymentMile
 
   // Local edit state
   const [edits, setEdits] = useState<Record<string, Record<string, unknown>>>({});
+  const [saveState, setSaveState] = useState<SaveState>('idle');
+  const [saveError, setSaveError] = useState<string | null>(null);
 
   useEffect(() => {
     setEdits((prev) => {
@@ -72,29 +76,70 @@ export function PaymentMilestonesBuilder({ proposalId, totalCents }: PaymentMile
     });
   }, [milestones]);
 
-  // Debounced save
+  // Row-level autosave. Pending fields are MERGED before the debounce fires;
+  // previously, editing label then percentage canceled the label write and
+  // left the client copy on the row's defaults. Blur flushes immediately so a
+  // click on Send cannot race a still-local payment edit.
   const timers = useRef<Map<string, ReturnType<typeof setTimeout>>>(new Map());
+  const pendingUpdates = useRef<Map<string, Record<string, unknown>>>(new Map());
+
+  const flushSave = useCallback(
+    async (milestoneId: string) => {
+      const updates = pendingUpdates.current.get(milestoneId);
+      if (!updates) return;
+
+      const timer = timers.current.get(milestoneId);
+      if (timer) clearTimeout(timer);
+      timers.current.delete(milestoneId);
+      pendingUpdates.current.delete(milestoneId);
+      setSaveState('saving');
+      setSaveError(null);
+
+      try {
+        await updateMilestone.mutateAsync({ milestoneId, proposalId, updates });
+        proposalEvents.scopeUpdated({
+          proposalId,
+          field: 'milestone',
+          action: 'update',
+        });
+        setSaveState(pendingUpdates.current.size > 0 ? 'dirty' : 'saved');
+      } catch (error) {
+        // Restore the failed fields so a blur/change retry keeps the complete
+        // row rather than silently losing only part of it.
+        pendingUpdates.current.set(milestoneId, {
+          ...updates,
+          ...pendingUpdates.current.get(milestoneId),
+        });
+        setSaveState('error');
+        setSaveError(
+          error instanceof Error
+            ? error.message
+            : 'Could not save the payment schedule.',
+        );
+      }
+    },
+    [proposalId, updateMilestone],
+  );
+
   const debouncedSave = useCallback(
     (milestoneId: string, updates: Record<string, unknown>) => {
+      pendingUpdates.current.set(milestoneId, {
+        ...pendingUpdates.current.get(milestoneId),
+        ...updates,
+      });
+      setSaveState('dirty');
+      setSaveError(null);
+
       const existing = timers.current.get(milestoneId);
       if (existing) clearTimeout(existing);
       timers.current.set(
         milestoneId,
         setTimeout(() => {
-          updateMilestone.mutate(
-            { milestoneId, proposalId, updates },
-            {
-              onSuccess: () => {
-                proposalEvents.scopeUpdated({ proposalId, field: 'milestone', action: 'update' });
-              },
-              onError: (err) => console.error('Failed to update payment milestone', err),
-            }
-          );
-          timers.current.delete(milestoneId);
-        }, 600)
+          void flushSave(milestoneId);
+        }, 600),
       );
     },
-    [updateMilestone, proposalId]
+    [flushSave],
   );
 
   function setField(milestoneId: string, field: string, value: unknown) {
@@ -116,6 +161,8 @@ export function PaymentMilestonesBuilder({ proposalId, totalCents }: PaymentMile
   }
 
   function handleAdd() {
+    setSaveState('saving');
+    setSaveError(null);
     addMilestone.mutate(
       {
         proposalId,
@@ -126,8 +173,16 @@ export function PaymentMilestonesBuilder({ proposalId, totalCents }: PaymentMile
       {
         onSuccess: () => {
           proposalEvents.scopeUpdated({ proposalId, field: 'milestone', action: 'add' });
+          setSaveState('saved');
         },
-        onError: (err) => console.error('Failed to add payment milestone', err),
+        onError: (error) => {
+          setSaveState('error');
+          setSaveError(
+            error instanceof Error
+              ? error.message
+              : 'Could not add the payment milestone.',
+          );
+        },
       }
     );
   }
@@ -175,9 +230,31 @@ export function PaymentMilestonesBuilder({ proposalId, totalCents }: PaymentMile
             </span>
           )}
         </div>
-        <Button variant="secondary" onClick={handleAdd}>
+        <Button
+          variant="secondary"
+          onClick={handleAdd}
+          loading={addMilestone.isPending}
+        >
           + Add Milestone
         </Button>
+      </div>
+
+      <div className="mb-3 min-h-4" aria-live="polite">
+        {(saveState === 'dirty' || saveState === 'saving') && (
+          <p role="status" className="font-mono text-[0.68rem] text-[var(--text-muted)]">
+            Saving payment schedule…
+          </p>
+        )}
+        {saveState === 'saved' && (
+          <p role="status" className="font-mono text-[0.68rem] text-[var(--color-sage)]">
+            Payment schedule saved
+          </p>
+        )}
+        {saveState === 'error' && (
+          <p role="alert" className="font-mono text-[0.68rem] text-[var(--color-terracotta)]">
+            {saveError ?? 'Could not save the payment schedule.'} Your client preview was not updated.
+          </p>
+        )}
       </div>
 
       {/* Percentage bar */}
@@ -261,8 +338,10 @@ export function PaymentMilestonesBuilder({ proposalId, totalCents }: PaymentMile
               {/* Label */}
               <input
                 type="text"
+                aria-label="Milestone label"
                 value={(local.label as string) ?? m.label}
                 onChange={(e) => setField(m.id, 'label', e.target.value)}
+                onBlur={() => void flushSave(m.id)}
                 className="w-full border-b border-transparent bg-transparent font-body text-[0.88rem] text-[var(--text-primary)] outline-none focus:border-[var(--accent-primary)]"
               />
 
@@ -270,12 +349,14 @@ export function PaymentMilestonesBuilder({ proposalId, totalCents }: PaymentMile
               <div className="flex items-center justify-end gap-0.5">
                 <input
                   type="number"
+                  aria-label="Milestone percentage"
                   min={0}
                   max={100}
                   value={pct}
                   onChange={(e) =>
                     handlePercentageChange(m.id, parseInt(e.target.value) || 0)
                   }
+                  onBlur={() => void flushSave(m.id)}
                   className="w-full border-b border-transparent bg-transparent text-right font-mono text-[0.82rem] text-[var(--text-primary)] outline-none focus:border-[var(--accent-primary)]"
                 />
                 <span className="font-mono text-[0.72rem] text-[var(--text-muted)]">%</span>
@@ -289,9 +370,11 @@ export function PaymentMilestonesBuilder({ proposalId, totalCents }: PaymentMile
               {/* Trigger condition */}
               <input
                 type="text"
+                aria-label="Milestone trigger"
                 placeholder="e.g. Upon contract signing"
                 value={(local.trigger_condition as string) ?? m.trigger_condition ?? ''}
                 onChange={(e) => setField(m.id, 'trigger_condition', e.target.value)}
+                onBlur={() => void flushSave(m.id)}
                 className="w-full border-b border-transparent bg-transparent font-body text-[0.78rem] text-[var(--text-muted)] outline-none placeholder:text-[var(--text-muted)]/40 focus:border-[var(--accent-primary)] focus:text-[var(--text-primary)]"
               />
 
@@ -300,17 +383,28 @@ export function PaymentMilestonesBuilder({ proposalId, totalCents }: PaymentMile
                 variant="ghost"
                 size="sm"
                 className="h-6 w-6 !px-0 !py-0"
-                onClick={() =>
+                loading={removeMilestone.isPending}
+                onClick={() => {
+                  setSaveState('saving');
+                  setSaveError(null);
                   removeMilestone.mutate(
                     { milestoneId: m.id, proposalId },
                     {
                       onSuccess: () => {
                         proposalEvents.scopeUpdated({ proposalId, field: 'milestone', action: 'remove' });
+                        setSaveState('saved');
                       },
-                      onError: (err) => console.error('Failed to remove payment milestone', err),
-                    }
-                  )
-                }
+                      onError: (error) => {
+                        setSaveState('error');
+                        setSaveError(
+                          error instanceof Error
+                            ? error.message
+                            : 'Could not remove the payment milestone.',
+                        );
+                      },
+                    },
+                  );
+                }}
                 aria-label="Remove milestone"
               >
                 x
