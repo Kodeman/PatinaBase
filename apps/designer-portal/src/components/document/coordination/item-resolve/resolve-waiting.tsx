@@ -78,7 +78,11 @@ export function ResolveWaiting({
 
   const sendExtend = () =>
     extend.mutate(
-      { itemId: item.id, dueDate: newDue || null },
+      {
+        itemId: item.id,
+        dueDate: newDue || null,
+        expectedUpdatedAt: item.updated_at,
+      },
       {
         onSuccess: () => {
           setConfirm('Date extended. The item and the margin update together.');
@@ -89,7 +93,12 @@ export function ResolveWaiting({
 
   const doReassign = (court: Court, partyId: string | null) =>
     reassign.mutate(
-      { itemId: item.id, court, courtPartyId: partyId },
+      {
+        itemId: item.id,
+        court,
+        courtPartyId: partyId,
+        expectedUpdatedAt: item.updated_at,
+      },
       {
         onSuccess: () => {
           setConfirm(

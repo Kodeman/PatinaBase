@@ -105,6 +105,8 @@ export interface ClientDecision {
 }
 
 export interface CreateDecisionInput {
+  /** Optional caller-owned idempotency key. Generated when omitted. */
+  decisionId?: string;
   designerClientId: string;
   projectId?: string;
   title: string;
@@ -113,9 +115,9 @@ export interface CreateDecisionInput {
   linkedPhase?: string;
   decisionType?: DecisionType;
   blockingStatus?: BlockingStatus;
-  linkedProposalId?: string;
   status?: 'draft' | 'pending';
   blockedFfeItemIds?: string[];
+  blockedTaskIds?: string[];
   options: {
     name: string;
     imageUrl?: string;
@@ -132,6 +134,8 @@ export interface CreateDecisionInput {
 
 export interface UpdateDecisionInput {
   decisionId: string;
+  /** Compare-and-swap token from the row that populated the edit surface. */
+  expectedUpdatedAt: string;
   /** The designer_client_id, used to scope cache invalidation. */
   designerClientId: string;
   projectId?: string | null;
@@ -426,71 +430,38 @@ export function useCreateDecision() {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const supabase = getSupabase() as any;
 
-      const { data: decision, error: decisionError } = await supabase
-        .from('client_decisions')
-        .insert({
+      const decisionId = input.decisionId ?? crypto.randomUUID();
+      const { data: decision, error: decisionError } = await supabase.rpc('create_client_decision', {
+        p_decision_id: decisionId,
+        p_payload: {
           designer_client_id: input.designerClientId,
-          project_id: input.projectId || null,
+          project_id: input.projectId ?? null,
           title: input.title,
-          context: input.context || null,
-          due_date: input.dueDate || null,
-          linked_phase: input.linkedPhase || null,
-          decision_type: input.decisionType || 'product',
-          blocking_status: input.blockingStatus || 'non_blocking',
-          linked_proposal_id: input.linkedProposalId || null,
-          status: input.status || 'pending',
-          sent_at: input.status === 'draft' ? null : new Date().toISOString(),
-        })
-        .select()
-        .single();
+          context: input.context ?? null,
+          due_date: input.dueDate ?? null,
+          linked_phase: input.linkedPhase ?? null,
+          decision_type: input.decisionType ?? 'product',
+          blocking_status: input.blockingStatus ?? 'non_blocking',
+          status: input.status ?? 'pending',
+        },
+        p_options: input.options.map((opt, i) => ({
+          name: opt.name,
+          image_url: opt.imageUrl ?? null,
+          designer_note: opt.designerNote ?? null,
+          is_recommended: opt.isRecommended ?? false,
+          price: opt.price ?? null,
+          quantity: opt.quantity ?? 1,
+          cost_delta_cents: opt.costDeltaCents ?? null,
+          lead_time_days_delta: opt.leadTimeDaysDelta ?? null,
+          product_id: opt.productId ?? null,
+          sort_order: i,
+        })),
+        p_blocked_ffe_item_ids: input.blockedFfeItemIds ?? [],
+        p_blocked_task_ids: input.blockedTaskIds ?? [],
+      });
 
       if (decisionError) throw decisionError;
-
-      if (input.options.length > 0) {
-        const { error: optionsError } = await supabase
-          .from('client_decision_options')
-          .insert(
-            input.options.map((opt, i) => ({
-              decision_id: decision.id,
-              name: opt.name,
-              image_url: opt.imageUrl || null,
-              designer_note: opt.designerNote || null,
-              is_recommended: opt.isRecommended || false,
-              price: opt.price ?? null,
-              quantity: opt.quantity ?? 1,
-              cost_delta_cents: opt.costDeltaCents ?? null,
-              lead_time_days_delta: opt.leadTimeDaysDelta ?? null,
-              product_id: opt.productId || null,
-              sort_order: i,
-            }))
-          );
-
-        if (optionsError) throw optionsError;
-      }
-
-      // Tag downstream FF&E items as blocked by this decision (PRD line 118).
-      if (input.blockedFfeItemIds && input.blockedFfeItemIds.length > 0) {
-        const { error: ffeError } = await supabase
-          .from('project_ffe_items')
-          .update({ blocked_by_decision_id: decision.id })
-          .in('id', input.blockedFfeItemIds);
-        if (ffeError) {
-          // Non-fatal — surface in console but don't undo decision creation.
-          console.warn('useCreateDecision: failed to tag blocked FF&E items', ffeError);
-        }
-      }
-
-      // If the decision is sent immediately (not a draft), fire the
-      // decision_required notification to the client. Non-fatal: a notify
-      // failure must not undo a successfully created decision.
-      if ((input.status ?? 'pending') === 'pending') {
-        const { error: notifyError } = await supabase.rpc('notify_decision_required', {
-          p_decision_id: decision.id,
-        });
-        if (notifyError) {
-          console.warn('useCreateDecision: notify_decision_required failed', notifyError);
-        }
-      }
+      if (!decision) throw new Error('Decision creation returned no row');
 
       return decision as ClientDecision;
     },
@@ -501,6 +472,7 @@ export function useCreateDecision() {
       if (data.project_id) {
         queryClient.invalidateQueries({ queryKey: ['project-decisions', data.project_id] });
         queryClient.invalidateQueries({ queryKey: ['project-ffe-items', data.project_id] });
+        queryClient.invalidateQueries({ queryKey: ['section-tasks', data.project_id] });
       }
     },
   });
@@ -616,38 +588,56 @@ export function useUpdateDecision(options?: { errorSurface?: 'inline' }) {
             sort_order: i,
           }));
 
-      const { error: updateError } = await supabase.rpc('update_client_decision', {
+      const { data, error: updateError } = await supabase.rpc('update_client_decision', {
         p_decision_id: input.decisionId,
         p_patch: patch,
         p_options: rpcOptions,
-        p_expected_updated_at: null,
+        p_expected_updated_at: input.expectedUpdatedAt,
       });
       if (updateError) throw updateError;
+      if (!data) throw new Error('Decision update returned no row');
 
-      const { data, error } = await supabase
-        .from('client_decisions')
-        .select(`
-          *,
-          options:client_decision_options!decision_id(*)
-        `)
-        .eq('id', input.decisionId)
-        .single();
-      if (error) throw error;
-
-      // Re-notify the client on a material edit to a LIVE (pending) decision.
-      // Draft edits are silent — the client hasn't been told about the decision
-      // yet, so there is nothing to re-announce. notify_decision_updated is
-      // intentionally NOT idempotent (00174): each edit inserts a fresh row.
-      // Non-fatal: a notify failure must not undo a successful edit.
-      if ((data as ClientDecision).status === 'pending') {
-        const { error: notifyError } = await supabase.rpc('notify_decision_updated', {
-          p_decision_id: input.decisionId,
-        });
-        if (notifyError) {
-          console.warn('useUpdateDecision: notify_decision_updated failed', notifyError);
-        }
+      return data as ClientDecision;
+    },
+    onSuccess: (data) => {
+      queryClient.invalidateQueries({ queryKey: ['client-decisions', data.designer_client_id] });
+      queryClient.invalidateQueries({ queryKey: ['client-decision', data.id] });
+      queryClient.invalidateQueries({ queryKey: ['all-decisions'] });
+      queryClient.invalidateQueries({ queryKey: ['decision-metrics'] });
+      if (data.project_id) {
+        queryClient.invalidateQueries({ queryKey: ['project-decisions', data.project_id] });
       }
+    },
+  });
+}
 
+export interface ExtendAndReopenDecisionInput {
+  decisionId: string;
+  dueDate: string;
+  /** Compare-and-swap token from the expired row shown in the margin. */
+  expectedUpdatedAt: string;
+}
+
+/**
+ * Atomically move an expired decision's deadline and reopen it. The lifecycle
+ * RPC owns both the response-evidence reset and its single required notice, so
+ * a failed request can never leave the decision reopened with the old date.
+ */
+export function useExtendAndReopenDecision(options?: { errorSurface?: 'inline' }) {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    meta: options?.errorSurface ? { errorSurface: options.errorSurface } : undefined,
+    mutationFn: async (input: ExtendAndReopenDecisionInput) => {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const supabase = getSupabase() as any;
+      const { data, error } = await supabase.rpc('extend_and_reopen_client_decision', {
+        p_decision_id: input.decisionId,
+        p_due_date: input.dueDate,
+        p_expected_updated_at: input.expectedUpdatedAt,
+      });
+      if (error) throw error;
+      if (!data) throw new Error('Decision extension returned no row');
       return data as ClientDecision;
     },
     onSuccess: (data) => {
@@ -700,9 +690,9 @@ export function useDeleteDecision() {
 }
 
 /**
- * Publish a draft decision: flip status draft → pending, stamp sent_at, and
- * fire the decision_required notification to the client. The 00171 DB guard
- * enforces that only draft rows can be published this way.
+ * Publish a draft decision: flip status draft → pending and stamp sent_at. The
+ * lifecycle RPC owns the required notification and the 00171 DB guard enforces
+ * that only draft rows can be published this way.
  */
 export function usePublishDraftDecision() {
   const queryClient = useQueryClient();
@@ -716,13 +706,6 @@ export function usePublishDraftDecision() {
         p_decision_id: decisionId,
       });
       if (error) throw error;
-
-      const { error: notifyError } = await supabase.rpc('notify_decision_required', {
-        p_decision_id: decisionId,
-      });
-      if (notifyError) {
-        console.warn('usePublishDraftDecision: notify_decision_required failed', notifyError);
-      }
 
       return data as ClientDecision;
     },
@@ -840,14 +823,6 @@ export function useSelectDecisionOption() {
       });
       if (rpcError) throw rpcError;
 
-      // Decision is now resolved — notify the owning designer. Non-fatal.
-      const { error: notifyError } = await supabase.rpc('notify_decision_resolved', {
-        p_decision_id: decisionId,
-      });
-      if (notifyError) {
-        console.warn('useSelectDecisionOption: notify_decision_resolved failed', notifyError);
-      }
-
       return data as ClientDecision;
     },
     onSuccess: (data) => {
@@ -895,14 +870,6 @@ export function useApplyDecisionOverride() {
         p_consent_evidence: consentEvidence,
       });
       if (rpcError) throw rpcError;
-
-      // Decision is now resolved — notify the owning designer. Non-fatal.
-      const { error: notifyError } = await supabase.rpc('notify_decision_resolved', {
-        p_decision_id: decisionId,
-      });
-      if (notifyError) {
-        console.warn('useApplyDecisionOverride: notify_decision_resolved failed', notifyError);
-      }
 
       return data as ClientDecision;
     },

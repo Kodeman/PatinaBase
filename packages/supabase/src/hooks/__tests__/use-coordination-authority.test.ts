@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { beforeEach, describe, expect, expectTypeOf, it, vi } from 'vitest';
 
 const from = vi.fn();
 const rpc = vi.fn();
@@ -15,11 +15,16 @@ vi.mock('@tanstack/react-query', () => ({
 }));
 
 import {
+  useCreateCoordinationItem,
   useDeleteCoordinationItem,
+  useExtendCoordinationItem,
   useNudgeCoordinationItem,
   usePublishCoordinationItem,
+  useReassignCoordinationItem,
   useResolveCoordinationItem,
+  useSubmitCoordinationRevision,
   useUpdateCoordinationItem,
+  type SubmitCoordinationRevisionInput,
 } from '../use-coordination';
 
 const coordinationItem = {
@@ -36,7 +41,7 @@ beforeEach(() => {
 });
 
 describe('coordination authority routing', () => {
-  it('never forwards caller-supplied resolution attribution', async () => {
+  it('never forwards caller-supplied resolution attribution or a separate notice', async () => {
     const config = useResolveCoordinationItem('proj-1') as unknown as {
       mutationFn: (input: unknown) => Promise<unknown>;
     };
@@ -55,9 +60,70 @@ describe('coordination authority routing', () => {
       p_next_court: null,
       p_resolved_by: null,
     });
+    expect(rpc).toHaveBeenCalledTimes(1);
   });
 
-  it('routes reminders and publish through checked lifecycle RPCs', async () => {
+  it('creates the item, options, dependency web, and first notice atomically', async () => {
+    const config = useCreateCoordinationItem('proj-1') as unknown as {
+      mutationFn: (input: unknown) => Promise<unknown>;
+    };
+
+    await config.mutationFn({
+      itemId: 'coord-1',
+      designerClientId: 'dc-1',
+      projectId: 'proj-1',
+      title: 'Final selection',
+      coordinationKind: 'selection',
+      court: 'client',
+      options: [{ name: 'Walnut', productId: 'prod-1' }],
+      blockedFfeItemIds: ['ffe-1'],
+      blockedTaskIds: ['task-1'],
+    });
+
+    expect(rpc).toHaveBeenCalledWith('create_client_decision', {
+      p_decision_id: 'coord-1',
+      p_payload: expect.objectContaining({
+        designer_client_id: 'dc-1',
+        project_id: 'proj-1',
+        title: 'Final selection',
+        coordination_kind: 'selection',
+        court: 'client',
+        status: 'pending',
+      }),
+      p_options: [
+        expect.objectContaining({
+          name: 'Walnut',
+          product_id: 'prod-1',
+          sort_order: 0,
+        }),
+      ],
+      p_blocked_ffe_item_ids: ['ffe-1'],
+      p_blocked_task_ids: ['task-1'],
+    });
+    expect(rpc).toHaveBeenCalledTimes(1);
+    expect(from).not.toHaveBeenCalled();
+  });
+
+  it('surfaces an atomic create failure without partial child writes', async () => {
+    const createError = { code: '23514', message: 'dependency mismatch' };
+    rpc.mockResolvedValueOnce({ data: null, error: createError });
+    const config = useCreateCoordinationItem('proj-1') as unknown as {
+      mutationFn: (input: unknown) => Promise<unknown>;
+    };
+
+    await expect(
+      config.mutationFn({
+        itemId: 'coord-1',
+        designerClientId: 'dc-1',
+        title: 'Blocked item',
+        coordinationKind: 'rfi',
+        court: 'gc',
+      }),
+    ).rejects.toBe(createError);
+    expect(from).not.toHaveBeenCalled();
+  });
+
+  it('routes reminder and publish through their notification-owning lifecycle RPCs', async () => {
     const nudge = useNudgeCoordinationItem('proj-1') as unknown as {
       mutationFn: (input: unknown) => Promise<unknown>;
     };
@@ -68,36 +134,99 @@ describe('coordination authority routing', () => {
     await nudge.mutationFn({ itemId: 'coord-1' });
     await publish.mutationFn({ itemId: 'coord-1' });
 
-    expect(rpc).toHaveBeenCalledWith('stamp_client_decision_reminder', {
-      p_decision_id: 'coord-1',
-    });
-    expect(rpc).toHaveBeenCalledWith('publish_client_decision', {
-      p_decision_id: 'coord-1',
-    });
+    expect(rpc.mock.calls.map(([name]) => name)).toEqual([
+      'stamp_client_decision_reminder',
+      'publish_client_decision',
+    ]);
   });
 
-  it('updates the item and its option set atomically', async () => {
+  it('updates the item, options, and dependencies through one CAS RPC', async () => {
     const config = useUpdateCoordinationItem('proj-1') as unknown as {
       mutationFn: (input: unknown) => Promise<unknown>;
     };
 
     await config.mutationFn({
       itemId: 'coord-1',
+      expectedUpdatedAt: '2026-08-01T12:00:00Z',
+      designerClientId: 'dc-1',
+      projectId: 'proj-1',
       title: 'Final selection',
       options: [{ name: 'Walnut', productId: 'prod-1' }],
+      blockedFfeItemIds: [],
+      blockedTaskIds: ['task-1'],
     });
 
-    expect(rpc).toHaveBeenCalledWith('update_client_decision', {
-      p_decision_id: 'coord-1',
+    expect(rpc).toHaveBeenCalledWith('update_coordination_item', {
+      p_item_id: 'coord-1',
       p_patch: { title: 'Final selection' },
-      p_options: [expect.objectContaining({
-        name: 'Walnut',
-        product_id: 'prod-1',
-        sort_order: 0,
-      })],
-      p_expected_updated_at: null,
+      p_options: [
+        expect.objectContaining({
+          name: 'Walnut',
+          product_id: 'prod-1',
+          sort_order: 0,
+        }),
+      ],
+      p_blocked_ffe_item_ids: [],
+      p_blocked_task_ids: ['task-1'],
+      p_expected_updated_at: '2026-08-01T12:00:00Z',
     });
-    expect(from).not.toHaveBeenCalledWith('client_decision_options');
+    expect(rpc).toHaveBeenCalledTimes(1);
+    expect(from).not.toHaveBeenCalled();
+  });
+
+  it('passes non-null CAS tokens through extend and reassign', async () => {
+    const extend = useExtendCoordinationItem('proj-1') as unknown as {
+      mutationFn: (input: unknown) => Promise<unknown>;
+    };
+    const reassign = useReassignCoordinationItem('proj-1') as unknown as {
+      mutationFn: (input: unknown) => Promise<unknown>;
+    };
+
+    await extend.mutationFn({
+      itemId: 'coord-1',
+      dueDate: '2026-08-15',
+      expectedUpdatedAt: '2026-08-01T12:00:00Z',
+    });
+    await reassign.mutationFn({
+      itemId: 'coord-1',
+      court: 'vendor',
+      courtPartyId: 'party-1',
+      expectedUpdatedAt: '2026-08-02T12:00:00Z',
+    });
+
+    expect(rpc).toHaveBeenNthCalledWith(1, 'update_client_decision', {
+      p_decision_id: 'coord-1',
+      p_patch: { due_date: '2026-08-15' },
+      p_options: null,
+      p_expected_updated_at: '2026-08-01T12:00:00Z',
+    });
+    expect(rpc).toHaveBeenNthCalledWith(2, 'update_client_decision', {
+      p_decision_id: 'coord-1',
+      p_patch: { court: 'vendor', court_party_id: 'party-1' },
+      p_options: null,
+      p_expected_updated_at: '2026-08-02T12:00:00Z',
+    });
+  });
+
+  it('narrows revision submission to the two pending-workflow statuses', async () => {
+    expectTypeOf<SubmitCoordinationRevisionInput['status']>().toEqualTypeOf<
+      'submitted' | 'revise_resubmit' | undefined
+    >();
+    const config = useSubmitCoordinationRevision('proj-1') as unknown as {
+      mutationFn: (input: unknown) => Promise<unknown>;
+    };
+    await config.mutationFn({
+      itemId: 'coord-1',
+      status: 'revise_resubmit',
+      note: 'Tighten the reveal',
+    });
+    expect(rpc).toHaveBeenCalledWith('submit_coordination_revision', {
+      p_item_id: 'coord-1',
+      p_attachments: [],
+      p_note: 'Tighten the reveal',
+      p_status: 'revise_resubmit',
+      p_submitted_by: null,
+    });
   });
 
   it('deletes through the checked cleanup RPC', async () => {

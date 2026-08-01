@@ -24,7 +24,7 @@ import {
   useSendMessage,
   useThreadMessages,
   useUpdateDecision,
-  useUpdateDecisionStatus,
+  useExtendAndReopenDecision,
   type ConsentMethod,
   type FieldParsedIntent,
 } from '@patina/supabase';
@@ -145,7 +145,7 @@ export function DecisionBody({
   // R83: the margin's quiet grammar — failures render inline at the act, never
   // as the global toast (errorSurface:'inline').
   const update = useUpdateDecision({ errorSurface: 'inline' });
-  const updateStatus = useUpdateDecisionStatus({ errorSurface: 'inline' });
+  const extendAndReopen = useExtendAndReopenDecision({ errorSurface: 'inline' });
   const override = useApplyDecisionOverride();
 
   // R11: the override action is personal — "Record Sarah's pick".
@@ -187,28 +187,27 @@ export function DecisionBody({
 
   const selectedOption = options.find((o) => o.selected) ?? null;
 
-  // R87 — Extend on a STORED-expired decision revives it: bump the due_date first
-  // (useUpdateDecision), then run the 00171 expired→pending recovery so the client
-  // can respond again (the natural meaning of extending the date). On a still-live
-  // (pending/overdue) decision, Extend just moves the deadline — no status move.
-  // Mirrors the /portal detail page's handleExtendAndReopen. Quiet inline
-  // confirmation, inline error on failure (R51/R83 — no toast).
+  // R87 — an expired decision's date + reopen are one checked lifecycle act.
+  // A still-live (pending/overdue) decision only moves its deadline through the
+  // ordinary CAS update. Both paths preserve the margin's quiet inline grammar.
   const isExpired = extendRevivesDecision(decision.status);
-  const extendBusy = update.isPending || updateStatus.isPending;
+  const extendBusy = update.isPending || extendAndReopen.isPending;
   const handleExtend = async () => {
     if (!extendTo || extendBusy) return;
     setExtendNote(null);
     try {
-      await update.mutateAsync({
-        decisionId: row.item_id,
-        designerClientId: decision.designer_client_id,
-        dueDate: extendTo,
-      });
       if (isExpired) {
-        await updateStatus.mutateAsync({
+        await extendAndReopen.mutateAsync({
           decisionId: row.item_id,
-          status: 'pending',
-          currentStatus: decision.status,
+          dueDate: extendTo,
+          expectedUpdatedAt: decision.updated_at,
+        });
+      } else {
+        await update.mutateAsync({
+          decisionId: row.item_id,
+          designerClientId: decision.designer_client_id,
+          dueDate: extendTo,
+          expectedUpdatedAt: decision.updated_at,
         });
       }
       invalidateMarginSurfaces(qc, projectId);

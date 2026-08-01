@@ -258,7 +258,7 @@ export async function saveToInbox(
   return product.id;
 }
 
-/** "Send as decision option" — product + client_decisions + option + notify RPC. */
+/** "Send as decision option" — product + one atomic decision lifecycle RPC. */
 export async function saveAsDecision(
   draft: DraftSlice,
   routing: RoutingSlice,
@@ -278,26 +278,46 @@ export async function saveAsDecision(
   if (draft.styleIds.length) {
     await supabase.from('product_styles').insert(styleInserts(product.id, draft.styleIds, user.id));
   }
-  const { data: decision, error: decErr } = await supabase
-    .from('client_decisions')
-    .insert(buildDecisionInsertPayload(decisionInput(draft, routing)))
-    .select('id')
-    .single();
+  const decisionId = crypto.randomUUID();
+  const decisionInsert = buildDecisionInsertPayload(decisionInput(draft, routing));
+  const decisionPayload = {
+    designer_client_id: decisionInsert.designer_client_id,
+    project_id: decisionInsert.project_id,
+    room_id: decisionInsert.room_id,
+    title: decisionInsert.title,
+    context: decisionInsert.context,
+    due_date: decisionInsert.due_date,
+    decision_type: decisionInsert.decision_type,
+    blocking_status: decisionInsert.blocking_status,
+    status: decisionInsert.status,
+  };
+  const optionInsert = buildDecisionOptionInsertPayload(
+    decisionOptionInput(draft, decisionId, product.id),
+  );
+  const optionPayload = {
+    name: optionInsert.name,
+    image_url: optionInsert.image_url,
+    designer_note: optionInsert.designer_note,
+    product_id: optionInsert.product_id,
+    is_recommended: optionInsert.is_recommended,
+    price: optionInsert.price,
+    quantity: optionInsert.quantity,
+    sort_order: optionInsert.sort_order,
+  };
+  // Generated RPC types intentionally lag the in-progress authority migration.
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const { data: decision, error: decErr } = await (supabase as any).rpc(
+    'create_client_decision',
+    {
+      p_decision_id: decisionId,
+      p_payload: decisionPayload,
+      p_options: [optionPayload],
+      p_blocked_ffe_item_ids: [],
+      p_blocked_task_ids: [],
+    },
+  );
   if (decErr) throw decErr;
   if (!decision) throw new Error('Failed to create decision');
-
-  const { error: optErr } = await supabase
-    .from('client_decision_options')
-    .insert(buildDecisionOptionInsertPayload(decisionOptionInput(draft, decision.id, product.id)));
-  if (optErr) throw optErr;
-
-  // Non-fatal: a notify failure must not undo a created decision.
-  const { error: notifyErr } = await supabase.rpc('notify_decision_required', {
-    p_decision_id: decision.id,
-  });
-  if (notifyErr) {
-    console.warn('saveAsDecision: notify_decision_required failed', notifyErr);
-  }
   recordRecent(draft, product.id, 'decision');
   captureAnalytics(draft, 'new');
   return product.id;

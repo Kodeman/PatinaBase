@@ -176,9 +176,10 @@ export function useRequestSectionGate(projectId: string | null) {
       dueDate?: string | null;
     }) => {
       const supabase = getSupabase();
-      const { data: decision, error } = await supabase
-        .from('client_decisions')
-        .insert({
+      const decisionId = crypto.randomUUID();
+      const { data: decision, error } = await supabase.rpc('create_client_decision', {
+        p_decision_id: decisionId,
+        p_payload: {
           designer_client_id: input.designerClientId,
           project_id: projectId,
           title: `Approve ${input.sectionLabel}`,
@@ -188,24 +189,16 @@ export function useRequestSectionGate(projectId: string | null) {
           section_key: input.sectionKey,
           blocking_status: 'non_blocking',
           status: 'pending',
-          sent_at: new Date().toISOString(),
-        })
-        .select()
-        .single();
-      if (error) throw error;
-
-      const { error: optErr } = await supabase.from('client_decision_options').insert([
-        { decision_id: decision.id, name: 'Approve', approves: true, sort_order: 0 },
-        { decision_id: decision.id, name: 'Request changes', approves: false, sort_order: 1 },
-      ]);
-      if (optErr) throw optErr;
-
-      // Same mirror, same knock: the client hears about a gate exactly the
-      // way they hear about any decision. Non-fatal, per useCreateDecision.
-      const { error: notifyErr } = await supabase.rpc('notify_decision_required', {
-        p_decision_id: decision.id,
+        },
+        p_options: [
+          { name: 'Approve', approves: true, sort_order: 0 },
+          { name: 'Request changes', approves: false, sort_order: 1 },
+        ],
+        p_blocked_ffe_item_ids: [],
+        p_blocked_task_ids: [],
       });
-      if (notifyErr) console.warn('useRequestSectionGate: notify failed', notifyErr);
+      if (error) throw error;
+      if (!decision) throw new Error('Section gate creation returned no row');
 
       return decision;
     },
