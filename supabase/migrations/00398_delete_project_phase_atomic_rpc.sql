@@ -1051,12 +1051,12 @@ BEGIN
     pg_catalog.txid_current()
   );
   v_rpc_authorized := current_user = v_rpc_owner
-    AND current_setting('app.advance_project_phase_token', true) =
-        v_expected_token;
+    AND current_setting('app.advance_project_phase_token', true)
+        IS NOT DISTINCT FROM v_expected_token;
   v_batch_authorized := current_user = v_rpc_owner
     AND TG_OP = 'INSERT'
-    AND current_setting('app.project_phase_batch_token', true) =
-        v_batch_expected_token;
+    AND current_setting('app.project_phase_batch_token', true)
+        IS NOT DISTINCT FROM v_batch_expected_token;
   v_owner_maint := current_user = v_rpc_owner
     AND session_user = v_rpc_owner
     AND COALESCE(current_setting('role', true), 'none') = 'none';
@@ -1155,16 +1155,18 @@ BEGIN
   );
   v_rpc_authorized := current_user = v_rpc_owner
     AND (
-      current_setting('app.project_phase_topology_token', true) = v_expected_token
+      current_setting('app.project_phase_topology_token', true)
+        IS NOT DISTINCT FROM v_expected_token
       OR (
         TG_OP = 'UPDATE'
-        AND current_setting('app.project_phase_topology_token', true) = v_delete_token
+        AND current_setting('app.project_phase_topology_token', true)
+          IS NOT DISTINCT FROM v_delete_token
       )
     );
   v_batch_authorized := current_user = v_rpc_owner
     AND TG_OP IN ('INSERT', 'UPDATE')
-    AND current_setting('app.project_phase_batch_token', true) =
-        v_batch_expected_token
+    AND current_setting('app.project_phase_batch_token', true)
+        IS NOT DISTINCT FROM v_batch_expected_token
     AND CASE
       WHEN TG_OP = 'UPDATE' THEN
         NEW.project_id IS NOT DISTINCT FROM OLD.project_id

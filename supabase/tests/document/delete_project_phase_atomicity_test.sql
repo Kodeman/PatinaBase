@@ -235,7 +235,8 @@ $$;
 -- while attempting to write project B. Exact scope must still reject it.
 CREATE OR REPLACE FUNCTION pg_temp.attempt_wrong_scope_phase_batch(
   p_authorized_project_id uuid,
-  p_write_project_id uuid
+  p_write_project_id uuid,
+  p_status text DEFAULT 'pending'
 )
 RETURNS void
 LANGUAGE plpgsql
@@ -259,7 +260,7 @@ BEGIN
     p_write_project_id,
     'wrong-scope',
     'Wrong-scope batch phase',
-    'pending',
+    p_status,
     0,
     'main'
   );
@@ -421,6 +422,15 @@ SELECT pg_temp.expect_topology_failure(
     )$$,
   '42501',
   'topology inserts are writable only through create_project_phase'
+);
+SELECT pg_temp.expect_topology_failure(
+  $$SELECT pg_temp.attempt_wrong_scope_phase_batch(
+      'b9300000-0000-4000-8000-000000000004',
+      'b9300000-0000-4000-8000-000000000005',
+      'in_progress'
+    )$$,
+  '42501',
+  'lifecycle inserts must start pending with zero progress'
 );
 
 -- Atomic delete relinks every direct follower to the server-read predecessor,
