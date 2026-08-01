@@ -13,9 +13,8 @@
 //      idempotent across re-runs, so a decision is announced overdue exactly
 //      once even though it stays pending across multiple daily runs.
 //
-//   2. EXPIRE — sets status = 'expired' on pending decisions whose due_date
-//      passed more than 7 days ago (unchanged from the original behaviour and
-//      the inline SQL in 00092).
+//   2. EXPIRE — calls the row-locked, service-role-only lifecycle authority for
+//      pending decisions whose due_date passed more than 7 days ago.
 //
 // Ordering note: overdue notifications are sent BEFORE the expire UPDATE so a
 // decision that crosses the 7-day cutoff on the same run still gets its single
@@ -106,13 +105,9 @@ Deno.serve(async (_req: Request) => {
   }
 
   // ─── 2. EXPIRE decisions past the 7-day grace ───────────────────────────
-  const { data, error } = await supabase
-    .from('client_decisions')
-    .update({ status: 'expired' })
-    .eq('status', 'pending')
-    .not('due_date', 'is', null)
-    .lt('due_date', cutoff)
-    .select('id');
+  const { data, error } = await supabase.rpc('expire_due_client_decisions', {
+    p_cutoff: cutoff,
+  });
 
   if (error) {
     console.error('expire-decisions: failed', error);
@@ -123,7 +118,7 @@ Deno.serve(async (_req: Request) => {
     JSON.stringify({
       overdue_notified: overdueNotified,
       expired: (data ?? []).length,
-      ids: (data ?? []).map((d: any) => d.id),
+      ids: (data ?? []).map((d: { id: string }) => d.id),
     }),
     { headers: { 'Content-Type': 'application/json' } },
   );
