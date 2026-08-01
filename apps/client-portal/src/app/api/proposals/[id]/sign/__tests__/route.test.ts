@@ -48,32 +48,33 @@ describe('POST /api/proposals/[id]/sign', () => {
   }
 
   let rpcMock: jest.Mock;
-  let singleMock: jest.Mock;
+  let fromMock: jest.Mock;
   let invokeMock: jest.Mock;
 
   beforeEach(() => {
     mockGetUser.mockResolvedValue({ id: 'client-1' });
 
-    singleMock = jest.fn().mockResolvedValue({
-      data: {
-        id: 'prop-1',
-        status: 'sent',
-        client_id: 'client-1',
-        designer_id: 'designer-1',
-        valid_until: null,
-      },
-      error: null,
+    rpcMock = jest.fn().mockImplementation((name: string) => {
+      if (name === 'get_client_proposal_bundle') {
+        return Promise.resolve({
+          data: {
+            proposal: {
+              id: 'prop-1',
+              status: 'sent',
+              designer_id: 'designer-1',
+              valid_until: null,
+            },
+          },
+          error: null,
+        });
+      }
+      return Promise.resolve({ error: null });
     });
-    rpcMock = jest.fn().mockResolvedValue({ error: null });
     invokeMock = jest.fn().mockResolvedValue({ data: null, error: null });
-
-    const fromChain: Record<string, jest.Mock> = {};
-    fromChain.select = jest.fn(() => fromChain);
-    fromChain.eq = jest.fn(() => fromChain);
-    fromChain.single = singleMock;
+    fromMock = jest.fn();
 
     mockCreateServerClient.mockResolvedValue({
-      from: jest.fn().mockReturnValue(fromChain),
+      from: fromMock,
       rpc: rpcMock,
       functions: { invoke: invokeMock },
     });
@@ -87,6 +88,16 @@ describe('POST /api/proposals/[id]/sign', () => {
       'sign_proposal',
       expect.objectContaining({ p_signed_ip: '203.0.113.7' }),
     );
+  });
+
+  it('uses the client-safe proposal bundle for the friendly signability preflight', async () => {
+    const res = await POST(makeRequest(), makeParams());
+
+    expect(res.status).toBe(200);
+    expect(rpcMock).toHaveBeenNthCalledWith(1, 'get_client_proposal_bundle', {
+      p_proposal_id: 'prop-1',
+    });
+    expect(fromMock).not.toHaveBeenCalled();
   });
 
   it('falls back to x-forwarded-for when cf-connecting-ip is absent (e.g. local dev behind a reverse proxy)', async () => {

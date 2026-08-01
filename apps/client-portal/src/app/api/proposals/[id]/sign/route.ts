@@ -23,17 +23,14 @@ export async function POST(
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const supabase = (await createServerClient()) as any;
 
-  const { data: proposal, error: fetchError } = await supabase
-    .from('proposals')
-    .select('id, status, client_id, designer_id, valid_until')
-    .eq('id', id)
-    .single();
+  const { data: bundle, error: fetchError } = await supabase.rpc(
+    'get_client_proposal_bundle',
+    { p_proposal_id: id },
+  );
+  const proposal = bundle?.proposal;
 
   if (fetchError || !proposal) {
     return NextResponse.json({ error: 'not_found' }, { status: 404 });
-  }
-  if (proposal.client_id !== user.id) {
-    return NextResponse.json({ error: 'forbidden' }, { status: 403 });
   }
   if (proposal.status !== 'sent' && proposal.status !== 'viewed') {
     return NextResponse.json({ error: 'not_signable' }, { status: 409 });

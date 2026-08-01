@@ -7,7 +7,6 @@ import { PaymentScheduleBlock } from '@patina/design-system';
 import {
   useProjects,
   useProjectInvoices,
-  useProposalPaymentMilestones,
   type Invoice,
   type Proposal,
 } from '@patina/supabase';
@@ -29,8 +28,9 @@ import { computeInvoiceRollup, visibleInvoices } from './rollup';
 // since both the investment total and the payment schedule are meaningful
 // only in the context of a single accepted proposal.
 //
-// Deliberately reads `proposal_payment_milestones` (the schedule the client
-// actually signed) rather than the post-activation `project_payment_milestones`
+// Deliberately renders the proposal-owned payment milestones embedded by the
+// client-safe proposal RPC (the schedule the client actually signed), rather
+// than the post-activation `project_payment_milestones`
 // table BudgetOverview (components/budget-overview.tsx) uses for the FF&E
 // spend-cap view on a project's own page — that's a different question
 // ("how's the furnishings budget tracking") from this page's ("what did I
@@ -207,7 +207,7 @@ function ProjectBudgetSection({
 }
 
 function AcceptedProposalSummary({ proposal }: { proposal: Proposal }) {
-  const { data: milestones, isLoading, isError } = useProposalPaymentMilestones(proposal.id);
+  const milestones = proposal.payment_milestones ?? [];
   const terms = proposal.payment_terms;
   const notes = proposal.payment_notes;
 
@@ -225,17 +225,8 @@ function AcceptedProposalSummary({ proposal }: { proposal: Proposal }) {
         )}
       </div>
 
-      {isError ? (
-        <p
-          className="type-body-small mt-3"
-          style={{ color: 'var(--color-terracotta, #C77B6E)' }}
-        >
-          We couldn&rsquo;t load the payment schedule for this proposal right now.
-        </p>
-      ) : isLoading ? (
-        <div className="mt-6 h-4 w-40 animate-pulse rounded bg-[var(--color-pearl)]" />
-      ) : (
-        <PaymentScheduleBlock milestones={milestones ?? []} totalCents={proposal.total_amount} />
+      {milestones.length > 0 && (
+        <PaymentScheduleBlock milestones={milestones} totalCents={proposal.total_amount} />
       )}
     </div>
   );

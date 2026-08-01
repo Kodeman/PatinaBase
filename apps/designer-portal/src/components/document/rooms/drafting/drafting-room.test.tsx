@@ -9,7 +9,21 @@ import { DraftingRoom } from './drafting-room';
 import { useMobilePrimaryAction } from '../../mobile/mobile-shell';
 
 const mockPush = jest.fn();
+const mockReplace = jest.fn();
 const mockInvalidateQueries = jest.fn().mockResolvedValue(undefined);
+let mockProposalResult = {
+  data: {
+    id: 'proposal-1',
+    title: 'Whitfield House',
+    client_name: 'Sarah Whitfield',
+    project_id: 'project-1',
+    client_id: 'client-1',
+    status: 'draft',
+  } as any,
+  isLoading: false,
+  error: null as Error | null,
+  refetch: jest.fn(),
+};
 
 const mockDraftingState = {
   facets: {
@@ -42,7 +56,7 @@ const mockDraftingState = {
 };
 
 jest.mock('next/navigation', () => ({
-  useRouter: () => ({ push: mockPush }),
+  useRouter: () => ({ push: mockPush, replace: mockReplace }),
 }));
 
 jest.mock('@tanstack/react-query', () => ({
@@ -54,15 +68,7 @@ jest.mock('@patina/utils', () => ({
 }));
 
 jest.mock('@patina/supabase', () => ({
-  useProposal: () => ({
-    data: {
-      id: 'proposal-1',
-      title: 'Whitfield House',
-      client_name: 'Sarah Whitfield',
-      project_id: 'project-1',
-      client_id: 'client-1',
-    },
-  }),
+  useProposal: () => mockProposalResult,
   useProposalFeedback: () => ({ data: [] }),
   useScopeBuilderSummary: () => ({
     data: { totalFFEEstimateCents: 1000, totalDesignFeeCents: 500 },
@@ -209,6 +215,20 @@ jest.mock('@/lib/help-system/open-help', () => ({
 describe('DraftingRoom quiet deep work', () => {
   beforeEach(() => {
     mockDraftingState.pct = 42;
+    mockReplace.mockReset();
+    mockProposalResult = {
+      data: {
+        id: 'proposal-1',
+        title: 'Whitfield House',
+        client_name: 'Sarah Whitfield',
+        project_id: 'project-1',
+        client_id: 'client-1',
+        status: 'draft',
+      },
+      isLoading: false,
+      error: null,
+      refetch: jest.fn(),
+    };
     jest.mocked(useMobilePrimaryAction).mockClear();
   });
 
@@ -277,5 +297,37 @@ describe('DraftingRoom quiet deep work', () => {
       document.querySelector('[data-action-key="send-proposal"]'),
     ).toBeNull();
     expect(useMobilePrimaryAction).toHaveBeenLastCalledWith(null);
+  });
+
+  it('never mounts editors for an issued proposal and redirects to the document', async () => {
+    mockProposalResult = {
+      ...mockProposalResult,
+      data: { ...mockProposalResult.data, status: 'sent' },
+    };
+
+    render(<DraftingRoom proposalId="proposal-1" />);
+
+    expect(screen.getByText(/already been issued/i)).toBeInTheDocument();
+    expect(screen.queryByText('Rooms editor')).not.toBeInTheDocument();
+    await waitFor(() =>
+      expect(mockReplace).toHaveBeenCalledWith('/doc/proposal-1'),
+    );
+  });
+
+  it('fails closed and retries when draft status cannot be verified', () => {
+    const retry = jest.fn();
+    mockProposalResult = {
+      data: undefined,
+      isLoading: false,
+      error: new Error('read failed'),
+      refetch: retry,
+    };
+
+    render(<DraftingRoom proposalId="proposal-1" />);
+
+    expect(screen.getByText(/editing stays closed/i)).toBeInTheDocument();
+    expect(screen.queryByText('Rooms editor')).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Retry' }));
+    expect(retry).toHaveBeenCalledTimes(1);
   });
 });

@@ -26,7 +26,16 @@ import {
 const TERMS_TITLE = 'Terms & Agreement';
 
 export function TermsAgreementBody({ proposalId }: { proposalId: string }) {
-  const { data: sections, isLoading } = useProposalSections(proposalId);
+  return <TermsAgreementBodyState key={proposalId} proposalId={proposalId} />;
+}
+
+function TermsAgreementBodyState({ proposalId }: { proposalId: string }) {
+  const {
+    data: sections,
+    isLoading,
+    error,
+    refetch,
+  } = useProposalSections(proposalId);
   const upsert = useUpsertProposalSection({ errorSurface: 'inline' });
 
   const termsSection: ProposalSection | undefined = (sections ?? []).find(
@@ -41,7 +50,7 @@ export function TermsAgreementBody({ proposalId }: { proposalId: string }) {
 
   // Seed the local draft once the server row loads (or once we know there is none).
   useEffect(() => {
-    if (initialized || isLoading) return;
+    if (initialized || isLoading || error) return;
     setBody(termsSection?.body ?? '');
     sectionIdentityRef.current = {
       id: termsSection?.id,
@@ -54,6 +63,7 @@ export function TermsAgreementBody({ proposalId }: { proposalId: string }) {
     termsSection?.body,
     termsSection?.id,
     termsSection?.title,
+    error,
   ]);
 
   const agreementAutosave = useBufferedAutosave<
@@ -86,6 +96,32 @@ export function TermsAgreementBody({ proposalId }: { proposalId: string }) {
     setBody(next);
     agreementAutosave.queue(proposalId, { body: next });
   };
+
+  if (error) {
+    return (
+      <div
+        role="alert"
+        className="mb-8 rounded-[3px] border border-[var(--color-terracotta,#c77b6e)] bg-[rgba(199,123,110,0.06)] px-3 py-3 text-[0.72rem] leading-snug text-[var(--color-terracotta,#c77b6e)]"
+      >
+        <p>The agreement text could not be loaded. Editing is paused to avoid replacing it.</p>
+        <button
+          type="button"
+          onClick={() => void refetch()}
+          className="mt-2 underline underline-offset-4"
+        >
+          Retry agreement
+        </button>
+      </div>
+    );
+  }
+
+  if (isLoading || !initialized) {
+    return (
+      <p className="mb-8 py-4 text-center text-[0.72rem] text-[var(--text-muted)]">
+        Loading agreement…
+      </p>
+    );
+  }
 
   return (
     <div className="mb-8">

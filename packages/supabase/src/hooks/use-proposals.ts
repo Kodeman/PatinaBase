@@ -12,6 +12,12 @@ import {
   proposalSendSnapshotsMatch,
   type ProposalSendSnapshot,
 } from '../lib/proposal-payment-schedule';
+import type {
+  ProposalExclusion,
+  ProposalPaymentMilestone,
+  ProposalPhase,
+  ProposalScopeRoom,
+} from './use-scope-builder';
 
 // Lazy client getter to avoid module-level initialization during SSR
 const getSupabase = () => createBrowserClient();
@@ -133,6 +139,20 @@ function assertReviewedProposalSnapshot(
 
 export type ProposalItemType = 'fixed' | 'allowance' | 'tbd';
 
+export interface ProposalItemProductSnapshot {
+  product_id?: string;
+  name?: string;
+  images?: string[] | null;
+  brand?: string | null;
+  source_url?: string | null;
+  dimensions?: unknown;
+  materials?: string[] | null;
+  price_retail?: number | null;
+  has_teaching?: boolean;
+  /** Safe DTOs hide completeness when tier-redacted inputs would undercount. */
+  record_completeness_hidden?: boolean;
+}
+
 export interface ProposalItem {
   id: string;
   proposal_id: string;
@@ -164,6 +184,8 @@ export interface ProposalItem {
   doc_code?: string | null;
   /** Designer-defined field values, keyed by spec_field_defs.field_key (S6, 00268). */
   custom_fields?: Record<string, unknown> | null;
+  /** Immutable product provenance owned by the proposal edition (00390). */
+  client_product_snapshot?: ProposalItemProductSnapshot | null;
   // Joined data
   product?: {
     id: string;
@@ -177,9 +199,12 @@ export interface ProposalItem {
     dimensions: unknown;
     materials: string[] | null;
     price_retail: number | null;
-    price_trade: number | null;
+    price_trade?: number | null;
     /** PostgREST aggregate embed: [{ count }] — ≥1 style ⇒ the record is "taught". */
     product_styles?: { count: number }[];
+    /** Present when client rendering has normalized the immutable snapshot. */
+    has_teaching?: boolean;
+    record_completeness_hidden?: boolean;
   };
 }
 
@@ -228,12 +253,49 @@ export interface Proposal {
     full_name: string | null;
   };
   items?: ProposalItem[];
+  /** Client-safe list DTO embeds the signed schedule for the budget surface. */
+  payment_milestones?: ProposalPaymentMilestone[];
 }
 
 export interface ProposalFilters {
   status?: string | string[];
   clientId?: string;
   projectId?: string;
+}
+
+export interface ClientProposalBoardItem {
+  id: string;
+  type: string;
+  x: number;
+  y: number;
+  width: number;
+  height: number | null;
+  z_index: number;
+  rotation: number;
+  image_url: string | null;
+  content: string | null;
+  data: Record<string, unknown>;
+}
+
+export interface ClientProposalBoard {
+  id: string;
+  name: string;
+  cover_image_url?: string | null;
+  sort_order?: number;
+  canvas_width: number;
+  canvas_height: number;
+  background_color: string;
+  items: ClientProposalBoardItem[];
+}
+
+export interface ClientProposalBundle {
+  proposal: Proposal;
+  sections: ProposalSection[];
+  payment_milestones: ProposalPaymentMilestone[];
+  phases: ProposalPhase[];
+  exclusions: ProposalExclusion[];
+  scope_rooms: ProposalScopeRoom[];
+  boards: ClientProposalBoard[];
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -322,6 +384,40 @@ export function useProposal(proposalId: string) {
       return data as Proposal;
     },
     enabled: !!proposalId,
+  });
+}
+
+/** Client-only proposal list. The RPC returns an explicit allowlist DTO; raw
+ * proposal rows remain unavailable to authenticated clients. */
+export function useClientSafeProposals() {
+  return useQuery({
+    queryKey: ['proposals', 'client-safe'],
+    queryFn: async () => {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const supabase = getSupabase() as any;
+      const { data, error } = await supabase.rpc('list_client_proposals');
+      if (error) throw error;
+      return (Array.isArray(data) ? data : []) as Proposal[];
+    },
+  });
+}
+
+/** Client-only detail bundle. Parent, items, sections, schedule, rooms, and
+ * boards cross one database-owned allowlist boundary in a single request. */
+export function useClientSafeProposalBundle(proposalId: string) {
+  return useQuery({
+    queryKey: ['proposal', proposalId, 'client-safe'],
+    enabled: !!proposalId,
+    queryFn: async () => {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const supabase = getSupabase() as any;
+      const { data, error } = await supabase.rpc(
+        'get_client_proposal_bundle',
+        { p_proposal_id: proposalId },
+      );
+      if (error) throw error;
+      return data as ClientProposalBundle;
+    },
   });
 }
 

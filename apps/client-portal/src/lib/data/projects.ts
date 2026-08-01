@@ -419,14 +419,14 @@ async function countPendingDecisionsByProject(supabase: any, userId: string): Pr
 }
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-async function countAwaitingProposalsByProject(supabase: any, userId: string): Promise<Map<string, number>> {
-  const { data, error } = await supabase
-    .from('proposals')
-    .select('project_id')
-    .eq('client_id', userId)
-    .in('status', ['sent', 'viewed']);
+async function countAwaitingProposalsByProject(supabase: any): Promise<Map<string, number>> {
+  const { data, error } = await supabase.rpc('list_client_proposals');
   if (error) throw error;
-  return tallyByProject(data);
+  return tallyByProject(
+    asArray<any>(data).filter(
+      (proposal) => proposal?.status === 'sent' || proposal?.status === 'viewed',
+    ),
+  );
 }
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -496,7 +496,7 @@ async function computeProjectCounts(
   try {
     const [decisions, proposals, unreadByProject] = await Promise.all([
       countPendingDecisionsByProject(supabase, userId),
-      countAwaitingProposalsByProject(supabase, userId),
+      countAwaitingProposalsByProject(supabase),
       countUnreadMessagesByProject(supabase, userId),
     ]);
     const approvalsByProject = new Map<string, number>();

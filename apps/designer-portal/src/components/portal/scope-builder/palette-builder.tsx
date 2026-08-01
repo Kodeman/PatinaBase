@@ -44,14 +44,30 @@ interface PaletteBuilderProps {
 }
 
 export function PaletteBuilder({ proposalId }: PaletteBuilderProps) {
-  const { data: palettes = [] } = usePalettes(proposalId);
+  return <PaletteBuilderState key={proposalId} proposalId={proposalId} />;
+}
+
+function PaletteBuilderState({ proposalId }: PaletteBuilderProps) {
+  const {
+    data: palettes = [],
+    isLoading: palettesLoading,
+    error: palettesError,
+    refetch: refetchPalettes,
+  } = usePalettes(proposalId);
   const upsertPalette = useUpsertPalette();
   const updatePalette = useUpsertPalette();
   const deletePalette = useDeletePalette();
 
   const [activePaletteId, setActivePaletteId] = useState<string | null>(null);
-  const activeId = activePaletteId ?? palettes[0]?.id ?? null;
-  const { data: active } = usePalette(activeId);
+  const activeId =
+    activePaletteId && palettes.some((palette) => palette.id === activePaletteId)
+      ? activePaletteId
+      : palettes[0]?.id ?? null;
+  const {
+    data: active,
+    error: activeError,
+    refetch: refetchActive,
+  } = usePalette(activeId);
 
   const [tab, setTab] = useState<Tab>('image');
 
@@ -91,6 +107,31 @@ export function PaletteBuilder({ proposalId }: PaletteBuilderProps) {
     },
     [deletePalette, proposalId, activePaletteId],
   );
+
+  if (palettesError || activeError) {
+    return (
+      <div
+        role="alert"
+        className="rounded-[3px] border border-[var(--color-terracotta)] px-3 py-3 text-sm text-[var(--color-terracotta)]"
+      >
+        <p>The palette could not be loaded. Editing is paused to protect this proposal.</p>
+        <button
+          type="button"
+          onClick={() => {
+            void refetchPalettes();
+            if (activeId) void refetchActive();
+          }}
+          className="mt-2 underline underline-offset-4"
+        >
+          Retry palette
+        </button>
+      </div>
+    );
+  }
+
+  if (palettesLoading) {
+    return <p className="py-4 text-sm text-[var(--text-muted)]">Loading palette…</p>;
+  }
 
   return (
     <div className="space-y-6">

@@ -30,7 +30,16 @@ const DEFAULT_TERMS: LocalTerms = {
 };
 
 export function ChangeOrderTermsEditor({ proposalId }: ChangeOrderTermsEditorProps) {
-  const { data: terms, isLoading } = useProposalChangeOrderTerms(proposalId);
+  return <ChangeOrderTermsEditorState key={proposalId} proposalId={proposalId} />;
+}
+
+function ChangeOrderTermsEditorState({ proposalId }: ChangeOrderTermsEditorProps) {
+  const {
+    data: terms,
+    isLoading,
+    error,
+    refetch,
+  } = useProposalChangeOrderTerms(proposalId);
   const upsert = useUpsertChangeOrderTerms({ errorSurface: 'inline' });
 
   const [local, setLocal] = useState<LocalTerms>(DEFAULT_TERMS);
@@ -39,6 +48,7 @@ export function ChangeOrderTermsEditor({ proposalId }: ChangeOrderTermsEditorPro
 
   // Sync server data once loaded
   useEffect(() => {
+    if (error) return;
     if (terms && !initialized) {
       const next = {
         processDescription: terms.process_description ?? DEFAULT_TERMS.processDescription,
@@ -53,7 +63,7 @@ export function ChangeOrderTermsEditor({ proposalId }: ChangeOrderTermsEditorPro
       // No existing terms yet -- keep defaults
       setInitialized(true);
     }
-  }, [terms, isLoading, initialized]);
+  }, [terms, isLoading, initialized, error]);
 
   const termsAutosave = useBufferedAutosave<string, LocalTerms>({
     proposalId,
@@ -82,7 +92,25 @@ export function ChangeOrderTermsEditor({ proposalId }: ChangeOrderTermsEditorPro
     if (flush) void termsAutosave.flush(proposalId);
   }
 
-  if (isLoading) {
+  if (error) {
+    return (
+      <div
+        role="alert"
+        className="rounded-[3px] border border-[var(--color-terracotta)] px-3 py-3 font-body text-[0.78rem] text-[var(--color-terracotta)]"
+      >
+        <p>Change-order terms could not be loaded. Editing is paused to protect the client copy.</p>
+        <button
+          type="button"
+          onClick={() => void refetch()}
+          className="mt-2 underline underline-offset-4"
+        >
+          Retry terms
+        </button>
+      </div>
+    );
+  }
+
+  if (isLoading || !initialized) {
     return (
       <div className="py-8 text-center font-body text-[0.82rem] text-[var(--text-muted)]">
         Loading terms...
@@ -186,22 +214,15 @@ export function ChangeOrderTermsEditor({ proposalId }: ChangeOrderTermsEditorPro
       {/* Approval required */}
       <div className="mt-6">
         <label className="flex cursor-pointer items-start gap-3">
-          <button
-            type="button"
-            role="checkbox"
-            aria-checked={local.approvalRequired}
-            onClick={() =>
-              update({ approvalRequired: !localRef.current.approvalRequired }, true)
+          <input
+            id={`change-order-approval-${proposalId}`}
+            type="checkbox"
+            checked={local.approvalRequired}
+            onChange={(event) =>
+              update({ approvalRequired: event.target.checked }, true)
             }
-            className={`mt-0.5 flex h-[18px] w-[18px] shrink-0 items-center justify-center rounded-[3px] border-[1.5px] transition-colors ${
-              local.approvalRequired
-                ? 'border-[var(--color-sage)] bg-[rgba(122,155,118,0.1)] text-[var(--color-sage)]'
-                : 'border-[var(--border-default)]'
-            }`}
-            style={{ fontSize: '0.6rem', cursor: 'pointer' }}
-          >
-            {local.approvalRequired && '\u2713'}
-          </button>
+            className="mt-0.5 h-[18px] w-[18px] shrink-0 cursor-pointer accent-[var(--color-sage)]"
+          />
           <div>
             <span className="font-body text-[0.88rem] text-[var(--text-primary)]">
               Written approval required before work begins

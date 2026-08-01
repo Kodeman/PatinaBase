@@ -58,6 +58,7 @@ const supabaseClient = {
   auth: {
     getUser: vi.fn(),
   },
+  rpc: vi.fn(),
   from: vi.fn((table: string) => {
     if (!builders[table]) builders[table] = makeBuilder();
     return builders[table];
@@ -76,7 +77,10 @@ vi.mock('@tanstack/react-query', () => ({
 }));
 
 // Import AFTER mocks are wired up.
-import { useClientNotifications } from '../use-client-notifications';
+import {
+  useClientNotifications,
+  type ClientNotification,
+} from '../use-client-notifications';
 
 function callsTo(builder: MockBuilder, method: string) {
   return builder.__chain.filter((c) => c.method === method);
@@ -89,6 +93,8 @@ beforeEach(() => {
     data: { user: { id: 'signed-in-client' } },
     error: null,
   });
+  supabaseClient.rpc.mockReset();
+  supabaseClient.rpc.mockResolvedValue({ data: [], error: null });
   supabaseClient.from.mockClear();
   invalidateQueries.mockReset();
 });
@@ -124,7 +130,7 @@ describe('useClientNotifications — decision scoping (security)', () => {
     ).toBe(true);
   });
 
-  it('keeps proposals scoped to client_id = signed-in user (regression guard)', async () => {
+  it('reads proposals only through the authenticated client-safe RPC', async () => {
     setTableResult('client_decisions', { data: [], error: null });
     setTableResult('proposals', { data: [], error: null });
     setTableResult('scope_change_requests', { data: [], error: null });
@@ -132,11 +138,8 @@ describe('useClientNotifications — decision scoping (security)', () => {
     const config = useClientNotifications() as unknown as { queryFn: () => Promise<unknown> };
     await config.queryFn();
 
-    const proposals = builders['proposals'];
-    const eqs = callsTo(proposals, 'eq');
-    expect(
-      eqs.some((c) => c.args[0] === 'client_id' && c.args[1] === 'signed-in-client'),
-    ).toBe(true);
+    expect(supabaseClient.rpc).toHaveBeenCalledWith('list_client_proposals');
+    expect(supabaseClient.from).not.toHaveBeenCalledWith('proposals');
   });
 
   it('returns an empty feed when there is no signed-in user', async () => {
@@ -179,5 +182,38 @@ describe('useClientNotifications — decision scoping (security)', () => {
       url: '/decisions/dec-1',
       message: 'Pick a sofa',
     });
+  });
+
+  it('filters the safe proposal list to live review notifications', async () => {
+    setTableResult('client_decisions', { data: [], error: null });
+    setTableResult('scope_change_requests', { data: [], error: null });
+    supabaseClient.rpc.mockResolvedValue({
+      data: [
+        {
+          id: 'proposal-sent',
+          title: 'Sent proposal',
+          status: 'sent',
+          sent_at: '2026-02-15T10:00:00Z',
+          created_at: '2026-02-14T10:00:00Z',
+        },
+        {
+          id: 'proposal-accepted',
+          title: 'Accepted proposal',
+          status: 'accepted',
+          sent_at: '2026-02-13T10:00:00Z',
+          created_at: '2026-02-12T10:00:00Z',
+        },
+      ],
+      error: null,
+    });
+
+    const config = useClientNotifications() as unknown as {
+      queryFn: () => Promise<ClientNotification[]>;
+    };
+    const result = await config.queryFn();
+
+    expect(result.map((notification) => notification.id)).toEqual([
+      'proposal-proposal-sent',
+    ]);
   });
 });

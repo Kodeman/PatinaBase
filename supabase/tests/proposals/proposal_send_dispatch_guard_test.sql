@@ -138,6 +138,43 @@ BEGIN
 END;
 $$;
 
+-- Test-only inspectors keep assertions honest after the production ledger's
+-- direct SELECT privilege is revoked from every API role.
+CREATE OR REPLACE FUNCTION pg_temp.dispatch_count(p_proposal_id uuid)
+RETURNS bigint
+LANGUAGE sql
+STABLE
+SECURITY DEFINER
+SET search_path = public, pg_temp
+AS $$
+  SELECT count(*)
+  FROM public.proposal_send_dispatches AS dispatch
+  WHERE dispatch.proposal_id = p_proposal_id
+$$;
+
+CREATE OR REPLACE FUNCTION pg_temp.inspect_dispatch(p_dispatch_id uuid)
+RETURNS jsonb
+LANGUAGE sql
+STABLE
+SECURITY DEFINER
+SET search_path = public, pg_temp
+AS $$
+  SELECT jsonb_build_object(
+    'cc_email', dispatch.cc_email,
+    'state', dispatch.state,
+    'claim_token', dispatch.claim_token,
+    'claimed_from_state', dispatch.claimed_from_state,
+    'email_log_status', log.status
+  )
+  FROM public.proposal_send_dispatches AS dispatch
+  LEFT JOIN public.notification_log AS log ON log.id = dispatch.email_log_id
+  WHERE dispatch.id = p_dispatch_id
+$$;
+
+GRANT EXECUTE ON FUNCTION pg_temp.dispatch_count(uuid) TO authenticated;
+GRANT EXECUTE ON FUNCTION pg_temp.inspect_dispatch(uuid) TO authenticated;
+GRANT EXECUTE ON FUNCTION pg_temp.inspect_dispatch(uuid) TO service_role;
+
 -- Object posture: API roles never read/write the ledger or invoke its service
 -- functions; authenticated callers receive only the public send + narrow
 -- active-design-studio authorization predicate.
@@ -249,10 +286,10 @@ BEGIN
     FROM public.proposals
     WHERE id = 'c8300000-0000-4000-8000-000000000001'
   ), 'malformed CC must not commit the business send';
-  ASSERT NOT EXISTS (
-    SELECT 1 FROM public.proposal_send_dispatches
-    WHERE proposal_id = 'c8300000-0000-4000-8000-000000000001'
-  ), 'malformed CC must not create dispatch work';
+  ASSERT pg_temp.dispatch_count(
+           'c8300000-0000-4000-8000-000000000001'
+         ) = 0,
+    'malformed CC must not create dispatch work';
 
   v_rejected := false;
   BEGIN
@@ -274,10 +311,10 @@ BEGIN
     FROM public.proposals
     WHERE id = 'c8300000-0000-4000-8000-000000000001'
   ), 'overlong CC must not commit the business send';
-  ASSERT NOT EXISTS (
-    SELECT 1 FROM public.proposal_send_dispatches
-    WHERE proposal_id = 'c8300000-0000-4000-8000-000000000001'
-  ), 'overlong CC must not create dispatch work';
+  ASSERT pg_temp.dispatch_count(
+           'c8300000-0000-4000-8000-000000000001'
+         ) = 0,
+    'overlong CC must not create dispatch work';
 END;
 $$;
 
@@ -319,11 +356,10 @@ BEGIN
 
   ASSERT v_sent.cc_email IS NULL,
     'whitespace-only CC must normalize to NULL on proposal';
-  ASSERT (
-    SELECT cc_email IS NULL
-    FROM public.proposal_send_dispatches
-    WHERE id = v_sent.proposal_send_dispatch_id
-  ), 'whitespace-only CC must normalize to NULL in outbox';
+  ASSERT pg_temp.inspect_dispatch(
+           v_sent.proposal_send_dispatch_id
+         )->>'cc_email' IS NULL,
+    'whitespace-only CC must normalize to NULL in outbox';
 END;
 $$;
 
@@ -511,9 +547,21 @@ WHERE id IN (
 UPDATE public.organizations
 SET name = 'Changed Organization', logo_url = 'https://changed.invalid/logo.png'
 WHERE id = 'c8100000-0000-4000-8000-000000000001';
-UPDATE public.proposals
-SET title = 'Changed proposal title'
-WHERE id = 'c8300000-0000-4000-8000-000000000001';
+DO $$
+DECLARE
+  v_rejected boolean := false;
+BEGIN
+  BEGIN
+    UPDATE public.proposals
+    SET title = 'Changed proposal title'
+    WHERE id = 'c8300000-0000-4000-8000-000000000001';
+  EXCEPTION WHEN check_violation THEN
+    v_rejected := true;
+  END;
+  ASSERT v_rejected,
+    'issued proposal title must remain immutable after send';
+END;
+$$;
 
 DO $$
 DECLARE
@@ -528,7 +576,7 @@ BEGIN
     AND v_dispatch.sender_name = 'Original Studio'
     AND v_dispatch.studio_name = 'Original Studio'
     AND v_dispatch.proposal_title = 'Immutable Walker Residence',
-    'profile/studio/proposal edits must not mutate the render snapshot';
+    'profile/studio edits and a rejected proposal edit must not mutate the render snapshot';
 END;
 $$;
 
@@ -685,12 +733,9 @@ BEGIN
     AND v_terminal->>'delivery_state' = 'unconfirmed'
     AND (v_terminal->>'retry_exhausted')::boolean,
     'attempt ceiling must fail closed without a fourth upload';
-  ASSERT (
-    SELECT log.status = 'unconfirmed'::public.notification_status
-    FROM public.proposal_send_dispatches AS dispatch
-    JOIN public.notification_log AS log ON log.id = dispatch.email_log_id
-    WHERE dispatch.id = v_dispatch_id
-  ), 'terminal ambiguity must never remain logged as sending';
+  ASSERT pg_temp.inspect_dispatch(v_dispatch_id)->>'email_log_status'
+           = 'unconfirmed',
+    'terminal ambiguity must never remain logged as sending';
 END;
 $$;
 
@@ -817,13 +862,16 @@ BEGIN
   ASSERT v_status->>'delivery_state' = 'failed'
     AND (v_status->>'retryable')::boolean,
     'stale pre-provider status must restore its prior retryable state';
-  ASSERT (
-    SELECT state <> 'in_flight'
-      AND claim_token IS NULL
-      AND claimed_from_state IS NULL
-    FROM public.proposal_send_dispatches
-    WHERE id = (SELECT dispatch_id FROM committed_send)
-  ), 'status must clear a stale pre-provider lease atomically';
+  ASSERT pg_temp.inspect_dispatch(
+           (SELECT dispatch_id FROM committed_send)
+         )->>'state' <> 'in_flight'
+     AND pg_temp.inspect_dispatch(
+           (SELECT dispatch_id FROM committed_send)
+         )->>'claim_token' IS NULL
+     AND pg_temp.inspect_dispatch(
+           (SELECT dispatch_id FROM committed_send)
+         )->>'claimed_from_state' IS NULL,
+    'status must clear a stale pre-provider lease atomically';
 END;
 $$;
 
@@ -902,12 +950,10 @@ BEGIN
   ASSERT v_completed->>'delivery_state' = 'unconfirmed'
     AND (v_completed->>'retry_exhausted')::boolean,
     'suppressed replay after ambiguity must be durable unconfirmed';
-  ASSERT (
-    SELECT log.status = 'unconfirmed'::public.notification_status
-    FROM public.proposal_send_dispatches AS dispatch
-    JOIN public.notification_log AS log ON log.id = dispatch.email_log_id
-    WHERE dispatch.id = (SELECT dispatch_id FROM committed_send)
-  ), 'suppressed ambiguous replay must terminalize its email log';
+  ASSERT pg_temp.inspect_dispatch(
+           (SELECT dispatch_id FROM committed_send)
+         )->>'email_log_status' = 'unconfirmed',
+    'suppressed ambiguous replay must terminalize its email log';
 END;
 $$;
 
@@ -941,12 +987,10 @@ BEGIN
     AND NOT (v_status->>'retryable')::boolean
     AND (v_status->>'retry_exhausted')::boolean,
     'expired observed ambiguity must return terminal unconfirmed';
-  ASSERT (
-    SELECT log.status = 'unconfirmed'::public.notification_status
-    FROM public.proposal_send_dispatches AS dispatch
-    JOIN public.notification_log AS log ON log.id = dispatch.email_log_id
-    WHERE dispatch.id = (SELECT dispatch_id FROM committed_send)
-  ), 'expired observed ambiguity must atomically sync the email log';
+  ASSERT pg_temp.inspect_dispatch(
+           (SELECT dispatch_id FROM committed_send)
+         )->>'email_log_status' = 'unconfirmed',
+    'expired observed ambiguity must atomically sync the email log';
 END;
 $$;
 
@@ -996,12 +1040,10 @@ BEGIN
   PERFORM public.sync_proposal_send_email_log(
     (SELECT dispatch_id FROM committed_send)
   );
-  ASSERT (
-    SELECT log.status = 'failed'::public.notification_status
-    FROM public.proposal_send_dispatches AS dispatch
-    JOIN public.notification_log AS log ON log.id = dispatch.email_log_id
-    WHERE dispatch.id = (SELECT dispatch_id FROM committed_send)
-  ), 'definitive exhausted failure must remain logged failed';
+  ASSERT pg_temp.inspect_dispatch(
+           (SELECT dispatch_id FROM committed_send)
+         )->>'email_log_status' = 'failed',
+    'definitive exhausted failure must remain logged failed';
 END;
 $$;
 

@@ -48,6 +48,19 @@ ON CONFLICT (id) DO NOTHING;
 INSERT INTO designer_clients (id, designer_id, client_id, status)
 VALUES ('dddd0000-0000-4000-8000-000000000001', '88888888-8888-4888-8888-888888888801', '88888888-8888-4888-8888-888888888802', 'proposal');
 
+CREATE OR REPLACE FUNCTION pg_temp.assume_dual_pricing_designer()
+RETURNS void
+LANGUAGE sql
+AS $$
+  SELECT set_config(
+    'request.jwt.claims',
+    '{"sub":"88888888-8888-4888-8888-888888888801","role":"authenticated"}',
+    true
+  )::void
+$$;
+GRANT EXECUTE ON FUNCTION pg_temp.assume_dual_pricing_designer()
+  TO authenticated;
+
 -- Products: one with a catalog trade price, one without.
 INSERT INTO products (id, name, source_url, captured_by, captured_at, price_retail, price_trade)
 VALUES
@@ -57,7 +70,7 @@ VALUES
 -- ─── case 1: activation maps dual pricing correctly ──────────────────────────
 
 INSERT INTO proposals (id, designer_id, client_id, title, status, total_amount)
-VALUES ('dddd0000-0000-4000-8000-000000000021', '88888888-8888-4888-8888-888888888801', '88888888-8888-4888-8888-888888888802', 'Dual Pricing Proposal', 'accepted', 310000);
+VALUES ('dddd0000-0000-4000-8000-000000000021', '88888888-8888-4888-8888-888888888801', '88888888-8888-4888-8888-888888888802', 'Dual Pricing Proposal', 'draft', 310000);
 
 -- Item A: 30% markup — trade 100000, client 130000, qty 2, client total 260000.
 -- Item B: zero markup — trade = client = 50000, qty 1.
@@ -66,7 +79,18 @@ VALUES
   ('dddd0000-0000-4000-8000-000000000031', 'dddd0000-0000-4000-8000-000000000021', 'Marked-up sofa', 2, 100000, 30.00, 130000, 260000, 'fixed', 0),
   ('dddd0000-0000-4000-8000-000000000032', 'dddd0000-0000-4000-8000-000000000021', 'Pass-through rug', 1, 50000, 0, 50000, 50000, 'fixed', 1);
 
+SELECT set_config(
+  'app.proposal_accept_id',
+  'dddd0000-0000-4000-8000-000000000021',
+  true
+);
+UPDATE proposals SET status = 'accepted'
+WHERE id = 'dddd0000-0000-4000-8000-000000000021';
+SELECT set_config('app.proposal_accept_id', '', true);
+SET LOCAL ROLE authenticated;
+SELECT pg_temp.assume_dual_pricing_designer();
 SELECT activate_proposal_as_project('dddd0000-0000-4000-8000-000000000021'::uuid);
+RESET ROLE;
 
 DO $$
 DECLARE
@@ -321,7 +345,7 @@ $$;
 -- the raw unit_sell_price unclamped (no CHECK on that pre-existing column).
 
 INSERT INTO proposals (id, designer_id, client_id, title, status, total_amount)
-VALUES ('dddd0000-0000-4000-8000-000000000091', '88888888-8888-4888-8888-888888888801', '88888888-8888-4888-8888-888888888802', 'Negative Markup Proposal', 'accepted', 45000);
+VALUES ('dddd0000-0000-4000-8000-000000000091', '88888888-8888-4888-8888-888888888801', '88888888-8888-4888-8888-888888888802', 'Negative Markup Proposal', 'draft', 45000);
 
 -- Item with negative markup: trade 50000, markup -10.00, client 45000.
 INSERT INTO proposal_items (id, proposal_id, name, quantity, unit_price, markup_percent, unit_sell_price, line_total_cents, item_type, position)
@@ -330,7 +354,18 @@ VALUES
   -- Negative unit_price (-5000) AND negative markup (-10.00): GREATEST clamp must fire on trade_price_cents → 0.
   ('dddd0000-0000-4000-8000-000000000093', 'dddd0000-0000-4000-8000-000000000091', 'Negative trade item', 1, -5000, -10.00,  4500,  4500, 'fixed', 1);
 
+SELECT set_config(
+  'app.proposal_accept_id',
+  'dddd0000-0000-4000-8000-000000000091',
+  true
+);
+UPDATE proposals SET status = 'accepted'
+WHERE id = 'dddd0000-0000-4000-8000-000000000091';
+SELECT set_config('app.proposal_accept_id', '', true);
+SET LOCAL ROLE authenticated;
+SELECT pg_temp.assume_dual_pricing_designer();
 SELECT activate_proposal_as_project('dddd0000-0000-4000-8000-000000000091'::uuid);
+RESET ROLE;
 
 DO $$
 DECLARE

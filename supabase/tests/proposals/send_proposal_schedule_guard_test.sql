@@ -163,10 +163,12 @@ VALUES
   ('b7100000-0000-4000-8000-000000000009', 'b7000000-0000-4000-8000-000000000001', 'b7050000-0000-4000-8000-000000000001', 'b7000000-0000-4000-8000-000000000002', 'Concurrent schedule edit', 100000, 'draft'),
   ('b7100000-0000-4000-8000-000000000010', 'b7000000-0000-4000-8000-000000000001', 'b7050000-0000-4000-8000-000000000001', 'b7000000-0000-4000-8000-000000000002', 'Concurrent total edit', 100000, 'draft'),
   ('b7100000-0000-4000-8000-000000000011', 'b7000000-0000-4000-8000-000000000002', 'b7050000-0000-4000-8000-000000000002', 'b7000000-0000-4000-8000-000000000001', 'RLS-hidden proposal', 100000, 'draft'),
-  ('b7100000-0000-4000-8000-000000000012', 'b7000000-0000-4000-8000-000000000001', 'b7050000-0000-4000-8000-000000000001', 'b7000000-0000-4000-8000-000000000002', 'Already sent', 100000, 'sent'),
-  ('b7100000-0000-4000-8000-000000000013', 'b7000000-0000-4000-8000-000000000001', 'b7050000-0000-4000-8000-000000000001', 'b7000000-0000-4000-8000-000000000002', 'Already viewed', 100000, 'viewed'),
-  ('b7100000-0000-4000-8000-000000000014', 'b7000000-0000-4000-8000-000000000001', 'b7050000-0000-4000-8000-000000000001', 'b7000000-0000-4000-8000-000000000002', 'Already accepted', 100000, 'accepted'),
-  ('b7100000-0000-4000-8000-000000000015', 'b7000000-0000-4000-8000-000000000001', 'b7050000-0000-4000-8000-000000000001', 'b7000000-0000-4000-8000-000000000002', 'Already declined', 100000, 'declined'),
+  -- Historical lifecycle fixtures are materialized as drafts until their
+  -- authored children below exist; 00390 forbids adding copy to issued rows.
+  ('b7100000-0000-4000-8000-000000000012', 'b7000000-0000-4000-8000-000000000001', 'b7050000-0000-4000-8000-000000000001', 'b7000000-0000-4000-8000-000000000002', 'Already sent', 100000, 'draft'),
+  ('b7100000-0000-4000-8000-000000000013', 'b7000000-0000-4000-8000-000000000001', 'b7050000-0000-4000-8000-000000000001', 'b7000000-0000-4000-8000-000000000002', 'Already viewed', 100000, 'draft'),
+  ('b7100000-0000-4000-8000-000000000014', 'b7000000-0000-4000-8000-000000000001', 'b7050000-0000-4000-8000-000000000001', 'b7000000-0000-4000-8000-000000000002', 'Already accepted', 100000, 'draft'),
+  ('b7100000-0000-4000-8000-000000000015', 'b7000000-0000-4000-8000-000000000001', 'b7050000-0000-4000-8000-000000000001', 'b7000000-0000-4000-8000-000000000002', 'Already declined', 100000, 'draft'),
   ('b7100000-0000-4000-8000-000000000016', 'b7000000-0000-4000-8000-000000000001', NULL, NULL, 'Unlinked draft', 100000, 'draft'),
   ('b7100000-0000-4000-8000-000000000017', 'b7000000-0000-4000-8000-000000000001', 'b7050000-0000-4000-8000-000000000001', 'b7000000-0000-4000-8000-000000000002', 'Studio peer authority', 100000, 'draft');
 
@@ -217,6 +219,45 @@ VALUES (
   'b7400000-0000-4000-8000-000000000010',
   '#D8C8B8', 'Linen', 0
 );
+
+-- Cross each historical fixture's lifecycle boundary only after its payment
+-- row exists. These exact trusted tokens mirror the canonical authorities and
+-- keep the later non-draft send regression focused on its original contract.
+DO $$
+BEGIN
+  PERFORM set_config(
+    'app.proposal_send_id',
+    'b7100000-0000-4000-8000-000000000012', true
+  );
+  UPDATE public.proposals SET status = 'sent'
+  WHERE id = 'b7100000-0000-4000-8000-000000000012';
+  PERFORM set_config('app.proposal_send_id', '', true);
+
+  PERFORM set_config(
+    'app.proposal_view_id',
+    'b7100000-0000-4000-8000-000000000013', true
+  );
+  UPDATE public.proposals SET status = 'viewed'
+  WHERE id = 'b7100000-0000-4000-8000-000000000013';
+  PERFORM set_config('app.proposal_view_id', '', true);
+
+  PERFORM set_config(
+    'app.proposal_accept_id',
+    'b7100000-0000-4000-8000-000000000014', true
+  );
+  UPDATE public.proposals SET status = 'accepted'
+  WHERE id = 'b7100000-0000-4000-8000-000000000014';
+  PERFORM set_config('app.proposal_accept_id', '', true);
+
+  PERFORM set_config(
+    'app.proposal_decline_id',
+    'b7100000-0000-4000-8000-000000000015', true
+  );
+  UPDATE public.proposals SET status = 'declined'
+  WHERE id = 'b7100000-0000-4000-8000-000000000015';
+  PERFORM set_config('app.proposal_decline_id', '', true);
+END;
+$$;
 
 CREATE OR REPLACE FUNCTION pg_temp.assume_proposal_actor(p_actor uuid)
 RETURNS void

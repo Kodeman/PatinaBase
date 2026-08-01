@@ -3,6 +3,7 @@ import { TermsAgreementBody } from '../terms-agreement-body';
 
 const mutate = jest.fn();
 const mutateAsync = jest.fn();
+const refetch = jest.fn();
 const sections = [
   {
     id: 'section-1',
@@ -17,8 +18,18 @@ const sections = [
   },
 ];
 
+let sectionsByProposal: Record<string, typeof sections> = {
+  'proposal-1': sections,
+};
+let readError: Error | null = null;
+
 jest.mock('@patina/supabase', () => ({
-  useProposalSections: () => ({ data: sections, isLoading: false }),
+  useProposalSections: (proposalId: string) => ({
+    data: sectionsByProposal[proposalId] ?? [],
+    isLoading: false,
+    error: readError,
+    refetch,
+  }),
   useUpsertProposalSection: () => ({ mutate, mutateAsync, isPending: false }),
 }));
 
@@ -28,6 +39,9 @@ describe('TermsAgreementBody persistence', () => {
     mutate.mockReset();
     mutateAsync.mockReset();
     mutateAsync.mockResolvedValue(sections[0]);
+    refetch.mockReset();
+    readError = null;
+    sectionsByProposal = { 'proposal-1': sections };
   });
 
   afterEach(() => jest.useRealTimers());
@@ -47,5 +61,35 @@ describe('TermsAgreementBody persistence', () => {
       title: 'Terms & Agreement',
       body: 'Final agreement survives navigation',
     });
+  });
+
+  it('fails closed when section reads fail and retries explicitly', () => {
+    readError = new Error('section read failed');
+    render(<TermsAgreementBody proposalId="proposal-1" />);
+
+    expect(screen.getByRole('alert')).toHaveTextContent('Editing is paused');
+    expect(screen.queryByRole('textbox')).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Retry agreement' }));
+    expect(refetch).toHaveBeenCalledTimes(1);
+  });
+
+  it('does not carry agreement state from proposal A into proposal B', () => {
+    sectionsByProposal = {
+      'proposal-1': sections,
+      'proposal-2': [
+        {
+          ...sections[0],
+          id: 'section-2',
+          proposal_id: 'proposal-2',
+          body: 'Proposal B agreement',
+        },
+      ],
+    };
+    const { rerender } = render(<TermsAgreementBody proposalId="proposal-1" />);
+    expect(screen.getByRole('textbox')).toHaveValue('Existing agreement');
+
+    rerender(<TermsAgreementBody proposalId="proposal-2" />);
+
+    expect(screen.getByRole('textbox')).toHaveValue('Proposal B agreement');
   });
 });

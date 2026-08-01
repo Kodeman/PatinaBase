@@ -88,6 +88,7 @@ export function useProposalMirrorData(proposalId: string) {
       );
       const [
         { data: proposal, error: proposalError },
+        { data: sections, error: sectionsError },
         { data: rooms, error: roomsError },
         { data: rawPieces, error: piecesError },
         { data: palettes, error: palettesError },
@@ -103,6 +104,14 @@ export function useProposalMirrorData(proposalId: string) {
           .select('title, total_amount, client_visibility_tier, updated_at')
           .eq('id', proposalId)
           .single(),
+        // Narrative is authored in proposal_sections and rendered verbatim by
+        // the client document. Title/body plus concept/space-plan metadata are
+        // therefore part of both this mirror and the reviewed fingerprint.
+        supabase
+          .from('proposal_sections')
+          .select('id, type, title, body, metadata, sort_order')
+          .eq('proposal_id', proposalId)
+          .order('sort_order', { ascending: true }),
         // Rooms in scope — name + type + the client-facing per-room budget
         // (shown only at 'full' via the tier gate; never a trade/cost column).
         supabase
@@ -169,6 +178,7 @@ export function useProposalMirrorData(proposalId: string) {
 
       const readError = [
         proposalError,
+        sectionsError,
         roomsError,
         piecesError,
         palettesError,
@@ -263,6 +273,7 @@ export function useProposalMirrorData(proposalId: string) {
 
       return {
         proposal,
+        sections: (sections ?? []) as AnyRow[],
         tier: ((proposal as AnyRow)?.client_visibility_tier ??
           'milestone') as ClientVisibilityTier,
         rooms: (rooms ?? []) as AnyRow[],
@@ -404,7 +415,25 @@ export function ProposalPreviewRail({
   proposalId: string;
   clientName?: string;
 }) {
-  const { data } = useProposalMirrorData(proposalId);
+  const { data, error, refetch } = useProposalMirrorData(proposalId);
+
+  if (error) {
+    return (
+      <div
+        role="alert"
+        className="rounded-[3px] border border-[var(--color-terracotta)] px-3 py-3 text-[12px] text-[var(--color-terracotta)]"
+      >
+        <p>The client copy could not be verified. Preview and send remain unavailable.</p>
+        <button
+          type="button"
+          onClick={() => void refetch()}
+          className="mt-2 font-mono text-[9px] uppercase tracking-[0.08em] underline underline-offset-4"
+        >
+          Retry preview
+        </button>
+      </div>
+    );
+  }
 
   if (!data) {
     return (
@@ -434,6 +463,10 @@ export function ProposalPreviewRail({
       <p className="mb-6 mt-1 text-[11px] text-[var(--text-muted)]">
         {clientName ? `Prepared for ${clientName}` : 'Prepared for you'}
       </p>
+
+      {data.sections.map((section) => (
+        <MirrorNarrativeSection key={section.id} section={section} />
+      ))}
 
       {/* In scope — names + types always (scope shape survives every tier); the
           per-room budget column shows only at the tier that reveals it. */}
@@ -566,5 +599,69 @@ export function ProposalPreviewRail({
         </section>
       )}
     </div>
+  );
+}
+
+export function MirrorNarrativeSection({ section }: { section: AnyRow }) {
+  const metadata = (section.metadata ?? {}) as Record<string, unknown>;
+  const moodUrls = (metadata.mood_board_urls as string[] | undefined) ?? [];
+  const colors =
+    (metadata.color_palette as Array<{ hex?: string; name?: string }> | undefined) ?? [];
+  const floorPlanUrl = metadata.floor_plan_url as string | undefined;
+  const clientShowsBody =
+    section.body && section.type !== 'investment' && section.type !== 'timeline';
+
+  return (
+    <section className="mb-6" data-preview-section-type={section.type}>
+      <h2 className="mb-2 font-heading text-[1.05rem] font-normal text-[var(--color-charcoal)]">
+        {section.title}
+      </h2>
+      {clientShowsBody && (
+        <p className="whitespace-pre-wrap text-[12px] leading-6 text-[var(--color-quiet-ink)]">
+          {section.body}
+        </p>
+      )}
+      {section.type === 'concept' && (moodUrls.length > 0 || colors.length > 0) && (
+        <div className="mt-3">
+          {moodUrls.length > 0 && (
+            <div className="mb-3 flex flex-wrap gap-2">
+              {moodUrls.map((url, index) => (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img
+                  key={`${url}-${index}`}
+                  src={url}
+                  alt=""
+                  className="h-[58px] w-[78px] rounded object-cover"
+                />
+              ))}
+            </div>
+          )}
+          {colors.length > 0 && (
+            <div className="flex flex-wrap gap-1.5">
+              {colors.map((color, index) => (
+                <span
+                  key={`${color.hex ?? 'color'}-${index}`}
+                  aria-label={color.name ?? color.hex ?? 'Concept color'}
+                  className="h-8 w-8 rounded border border-[var(--color-pearl)]"
+                  style={{ backgroundColor: color.hex ?? 'transparent' }}
+                />
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+      {section.type === 'space_plan' && (
+        <div className="mt-3 flex h-[140px] items-center justify-center overflow-hidden rounded bg-[var(--color-pearl)]">
+          {floorPlanUrl ? (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img src={floorPlanUrl} alt="Space plan" className="h-full w-full object-contain" />
+          ) : (
+            <span className="font-mono text-[9px] uppercase tracking-[0.06em] text-[var(--text-muted)]">
+              Space plan pending
+            </span>
+          )}
+        </div>
+      )}
+    </section>
   );
 }

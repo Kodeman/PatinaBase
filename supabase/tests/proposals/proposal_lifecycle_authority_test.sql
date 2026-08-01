@@ -260,13 +260,15 @@ BEGIN
 END;
 $$;
 
--- The legacy client UPDATE RLS policy no longer confers lifecycle authority.
+-- The legacy client UPDATE RLS policy is gone. A client-forged lifecycle write
+-- now sees zero writable rows even when it also forges the private row token.
 SELECT pg_temp.assume_proposal_lifecycle_actor(
   'e7000000-0000-4000-8000-000000000002'
 );
 DO $$
 DECLARE
   v_error text;
+  v_rows integer;
 BEGIN
   PERFORM set_config(
     'app.proposal_decline_id',
@@ -277,60 +279,92 @@ BEGIN
     UPDATE public.proposals
     SET status = 'declined', declined_at = now(), decline_reason = 'forged'
     WHERE id = 'e7300000-0000-4000-8000-000000000009';
+    GET DIAGNOSTICS v_rows = ROW_COUNT;
   EXCEPTION WHEN check_violation THEN
     v_error := SQLERRM;
   END;
   PERFORM set_config('app.proposal_decline_id', '', true);
-  ASSERT v_error =
-    'proposal status may only change through its canonical lifecycle authority',
-    format('client forged decline token should reject, got %L', v_error);
+  ASSERT v_error IS NULL,
+    format('client-forged decline should be filtered by RLS, got %L', v_error);
+  ASSERT v_rows = 0,
+    format('client-forged decline should affect zero rows, got %s', v_rows);
+  ASSERT public.get_client_proposal_bundle(
+           'e7300000-0000-4000-8000-000000000009'
+         ) #>> '{proposal,status}' = 'sent',
+    'client-forged decline must preserve the issued client-safe copy';
 END;
 $$;
 
 -- Canonical client view, decline, and electronic signature remain functional.
 DO $$
 DECLARE
-  v_viewed public.proposals;
+  v_viewed jsonb;
   v_viewed_at timestamptz;
-  v_declined public.proposals;
-  v_signed public.proposals;
+  v_declined jsonb;
+  v_signed jsonb;
+  v_forbidden text;
 BEGIN
   v_viewed := public.mark_proposal_viewed(
     'e7300000-0000-4000-8000-000000000002'
   );
-  v_viewed_at := v_viewed.viewed_at;
-  ASSERT v_viewed.status = 'viewed' AND v_viewed_at IS NOT NULL,
+  v_viewed_at := (v_viewed->>'viewed_at')::timestamptz;
+  ASSERT v_viewed->>'status' = 'viewed' AND v_viewed_at IS NOT NULL,
     'canonical client view must stamp viewed status/time';
   v_viewed := public.mark_proposal_viewed(
     'e7300000-0000-4000-8000-000000000002'
   );
-  ASSERT v_viewed.viewed_at = v_viewed_at,
+  ASSERT (v_viewed->>'viewed_at')::timestamptz = v_viewed_at,
     'canonical view retry must preserve the first viewed_at';
 
   v_declined := public.decline_proposal(
     'e7300000-0000-4000-8000-000000000003', '  Not the right fit  '
   );
-  ASSERT v_declined.status = 'declined'
-         AND v_declined.declined_at IS NOT NULL
-         AND v_declined.decline_reason = 'Not the right fit',
-    'canonical decline must atomically stamp normalized decline state';
+  ASSERT v_declined->>'status' = 'declined'
+         AND v_declined->>'declined_at' IS NOT NULL,
+    'canonical decline must atomically stamp decline state';
 
   v_signed := public.sign_proposal(
     'e7300000-0000-4000-8000-000000000004',
     'Lifecycle Client', '203.0.113.42', false, current_date
   );
-  ASSERT v_signed.status = 'accepted'
-         AND v_signed.accepted_at IS NOT NULL
-         AND v_signed.signed_at IS NOT NULL
-         AND v_signed.signed_by_name = 'Lifecycle Client'
-         AND v_signed.signed_ip = '203.0.113.42',
-    'canonical electronic signature must retain accepted/signature state';
+  ASSERT v_signed->>'status' = 'accepted'
+         AND v_signed->>'accepted_at' IS NOT NULL
+         AND v_signed->>'signed_at' IS NOT NULL,
+    'canonical electronic signature must return safe accepted state';
+
+  FOREACH v_forbidden IN ARRAY ARRAY[
+    'client_id', 'designer_id', 'cc_email', 'signed_by_name', 'signed_ip',
+    'decline_reason', 'proposal_send_dispatch_id'
+  ] LOOP
+    ASSERT NOT (v_viewed ? v_forbidden),
+      format('mark_proposal_viewed leaked %s: %s', v_forbidden, v_viewed);
+    ASSERT NOT (v_declined ? v_forbidden),
+      format('decline_proposal leaked %s: %s', v_forbidden, v_declined);
+    ASSERT NOT (v_signed ? v_forbidden),
+      format('sign_proposal leaked %s: %s', v_forbidden, v_signed);
+  END LOOP;
 END;
 $$;
 
 -- A service-role table writer is still not postgres and cannot turn a forged
 -- exact expiry token into terminal-state authority.
 RESET ROLE;
+DO $$
+BEGIN
+  ASSERT (SELECT decline_reason = 'Not the right fit'
+                 AND declined_at IS NOT NULL
+          FROM public.proposals
+          WHERE id = 'e7300000-0000-4000-8000-000000000003'),
+    'canonical decline must persist its normalized reason internally';
+  ASSERT (SELECT signed_by_name = 'Lifecycle Client'
+                 AND signed_ip = '203.0.113.42'
+                 AND signed_at IS NOT NULL
+                 AND accepted_at IS NOT NULL
+          FROM public.proposals
+          WHERE id = 'e7300000-0000-4000-8000-000000000004'),
+    'canonical signature must persist legal/audit fields internally';
+END;
+$$;
 SET LOCAL ROLE service_role;
 SELECT pg_temp.assume_proposal_lifecycle_actor(NULL, 'service_role');
 DO $$
@@ -417,6 +451,25 @@ BEGIN
   ASSERT has_function_privilege(
     'authenticated', 'public.decline_proposal(uuid,text)', 'EXECUTE'
   ), 'authenticated must execute decline_proposal';
+  ASSERT has_function_privilege(
+    'authenticated', 'public.sign_proposal(uuid,text,text,boolean,date)', 'EXECUTE'
+  ), 'authenticated must execute sign_proposal';
+  ASSERT pg_get_function_result(
+           'public.mark_proposal_viewed(uuid)'::regprocedure
+         ) = 'jsonb'
+     AND pg_get_function_result(
+           'public.decline_proposal(uuid,text)'::regprocedure
+         ) = 'jsonb'
+     AND pg_get_function_result(
+           'public.sign_proposal(uuid,text,text,boolean,date)'::regprocedure
+         ) = 'jsonb',
+    'client lifecycle authorities must never return raw proposal composites';
+  ASSERT NOT has_function_privilege(
+    'authenticated', 'public._mark_proposal_viewed_impl(uuid)', 'EXECUTE'
+  ), 'authenticated must not execute the raw view implementation';
+  ASSERT NOT has_function_privilege(
+    'authenticated', 'public._decline_proposal_impl(uuid,text)', 'EXECUTE'
+  ), 'authenticated must not execute the raw decline implementation';
   ASSERT has_function_privilege(
     'authenticated', 'public.begin_proposal_revision(uuid)', 'EXECUTE'
   ), 'authenticated must execute begin_proposal_revision';

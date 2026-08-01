@@ -29,12 +29,13 @@ import {
   recordCompletenessPct,
   type ShareVisibility,
 } from '@patina/utils';
-import { useProposalFeedback, type ItemFeedback } from '@patina/supabase';
+import { useClientProposalFeedback, type ItemFeedback } from '@patina/supabase';
 import { useAuth } from '@/hooks/use-auth';
 import { StrataMark } from '@/components/strata-mark';
 import { BoardsBlock } from '@/components/board-block';
 import { LineFeedback } from '@/components/proposal-line-feedback';
 import { proposalClientEvents } from '@/lib/analytics/events';
+import { productFromProposalSnapshot } from '@/lib/proposal-product-snapshot';
 
 interface ProposalDocumentProps {
   proposal: Proposal & { items?: ProposalItem[] };
@@ -210,11 +211,26 @@ export function ProposalDocument({
   // same record, so existing money-block behavior is unchanged.
   const share = visibility ?? shareVisibilityForTier(proposal.client_visibility_tier);
   const gate = blockVisibilityFromShare(share);
-  const items = (proposal.items ?? []).filter((it) => it.item_type !== 'tbd');
+  // A product is shared catalog state; the proposal-owned snapshot is the
+  // edition. Normalize it into the legacy product shape so every renderer in
+  // this document consumes the frozen copy, never a newer catalog join.
+  const items = (proposal.items ?? [])
+    .filter((it) => it.item_type !== 'tbd')
+    .map((item) => ({
+      ...item,
+      // A guest bundle has already reduced `product` to the fields permitted by
+      // that share's visibility. Keep that audited DTO intact; authenticated
+      // renders build the product exclusively from the immutable client copy.
+      product: visibility
+        ? item.product
+        : productFromProposalSnapshot(item.client_product_snapshot, item.id),
+    }));
 
   // C3/C5 — the client's own verdicts on this proposal's lines (only when the
   // loop is offered; a guest render passes feedbackEnabled=false so this is inert).
-  const { data: feedbackRows = [] } = useProposalFeedback(feedbackEnabled ? proposal.id : undefined);
+  const { data: feedbackRows = [] } = useClientProposalFeedback(
+    feedbackEnabled ? proposal.id : undefined,
+  );
   const feedbackByItem = useMemo(() => {
     const m = new Map<string, ItemFeedback[]>();
     for (const f of feedbackRows) {
@@ -598,7 +614,8 @@ function SelectionsList({
         const product = item.product;
         const sourceHost =
           showSourceUrls && product?.source_url ? hostOf(product.source_url) : null;
-        const hasTeaching = (product?.product_styles?.[0]?.count ?? 0) > 0;
+        const hasTeaching =
+          product?.has_teaching === true || (product?.product_styles?.[0]?.count ?? 0) > 0;
         const completenessHidden =
           (product as { record_completeness_hidden?: boolean } | undefined)
             ?.record_completeness_hidden === true;

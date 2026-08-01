@@ -362,6 +362,8 @@ export type { ClientActivity, ActivityType } from './use-activity';
 export {
   useProposals,
   useProposal,
+  useClientSafeProposals,
+  useClientSafeProposalBundle,
   useProposalStats,
   useCreateProposal,
   useUpdateProposal,
@@ -402,6 +404,10 @@ export type {
 export type {
   Proposal,
   ProposalItem,
+  ProposalItemProductSnapshot,
+  ClientProposalBundle,
+  ClientProposalBoard,
+  ClientProposalBoardItem,
   ProposalItemType,
   ProposalFilters,
   ProposalSection,
@@ -1402,7 +1408,9 @@ export {
 export type { DocumentShare, CreatedShare } from './use-document-shares';
 export {
   useProposalFeedback,
+  useClientProposalFeedback,
   useBoardFeedback,
+  useClientBoardFeedback,
   useItemFeedbackThread,
   useSubmitVerdict,
   useReplyToItemFeedback,

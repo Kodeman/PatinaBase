@@ -4655,3 +4655,249 @@ DO $g$ BEGIN
   GRANT EXECUTE ON FUNCTION public.reorder_palette_swatches(uuid, uuid, uuid[]) TO authenticated;
 EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
 END $g$;
+
+-- 00390_proposal_copy_immutability.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.set_proposal_item_product_snapshot() FROM PUBLIC, anon, authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00390_proposal_copy_immutability.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public._proposal_review_fingerprint(uuid) FROM PUBLIC, anon, authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00390_proposal_copy_immutability.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.guard_proposal_child_draft_only() FROM PUBLIC, anon, authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00390_proposal_copy_immutability.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public._mark_proposal_viewed_impl(uuid) FROM PUBLIC, anon, authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00390_proposal_copy_immutability.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public._decline_proposal_impl(uuid, text) FROM PUBLIC, anon, authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00390_proposal_copy_immutability.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.mark_proposal_viewed(uuid) FROM PUBLIC, anon, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00390_proposal_copy_immutability.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.mark_proposal_viewed(uuid) TO authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00390_proposal_copy_immutability.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.decline_proposal(uuid, text) FROM PUBLIC, anon, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00390_proposal_copy_immutability.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.decline_proposal(uuid, text) TO authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00390_proposal_copy_immutability.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public._item_feedback_gate_impl(uuid, uuid, uuid) FROM PUBLIC, anon, authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00390_proposal_copy_immutability.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.item_feedback_gate(uuid, uuid, uuid) FROM PUBLIC, anon, authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00390_proposal_copy_immutability.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.can_access_item_feedback_anchor(uuid, uuid, uuid) FROM PUBLIC, anon, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00390_proposal_copy_immutability.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.can_access_item_feedback_anchor(uuid, uuid, uuid) TO authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00390_proposal_copy_immutability.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.can_submit_item_feedback_anchor(uuid, uuid, uuid) FROM PUBLIC, anon, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00390_proposal_copy_immutability.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.can_submit_item_feedback_anchor(uuid, uuid, uuid) TO authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00390_proposal_copy_immutability.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.notify_item_feedback(uuid) FROM PUBLIC, anon, authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00390_proposal_copy_immutability.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.nudge_proposal(uuid) FROM PUBLIC, anon, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00390_proposal_copy_immutability.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.nudge_proposal(uuid) TO authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00390_proposal_copy_immutability.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.request_proposal_change(uuid, text) FROM PUBLIC, anon, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00390_proposal_copy_immutability.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.request_proposal_change(uuid, text) TO authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00390_proposal_copy_immutability.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public._activate_proposal_as_project_impl(uuid, date) FROM PUBLIC, anon, authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00390_proposal_copy_immutability.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public._activate_proposal_as_project_authorized(uuid, date) FROM PUBLIC, anon, authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00390_proposal_copy_immutability.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.activate_proposal_as_project(uuid, date) FROM PUBLIC, anon, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00390_proposal_copy_immutability.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.activate_proposal_as_project(uuid, date) TO authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00390_proposal_copy_immutability.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.sign_proposal(uuid, text, text, boolean, date) FROM PUBLIC, anon, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00390_proposal_copy_immutability.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.sign_proposal(uuid, text, text, boolean, date) TO authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00390_proposal_copy_immutability.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.guard_project_completion_authority() FROM PUBLIC, anon, authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00390_proposal_copy_immutability.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.guard_proposal_copy_immutability() FROM PUBLIC, anon, authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00390_proposal_copy_immutability.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public._send_proposal_with_dispatch( uuid, timestamptz, integer, text, text, text, timestamptz ) FROM PUBLIC, anon, authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00390_proposal_copy_immutability.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.send_proposal( uuid, timestamptz, integer, text, text, text, timestamptz ) FROM PUBLIC, anon, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00390_proposal_copy_immutability.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.send_proposal( uuid, timestamptz, integer, text, text, text, timestamptz ) TO authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00390_proposal_copy_immutability.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.resolve_document_share(text) FROM PUBLIC, anon;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00390_proposal_copy_immutability.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.resolve_document_share(text) TO authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00390_proposal_copy_immutability.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.list_client_proposals() FROM PUBLIC, anon, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00390_proposal_copy_immutability.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.list_client_proposals() TO authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00390_proposal_copy_immutability.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.get_client_proposal_bundle(uuid) FROM PUBLIC, anon, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00390_proposal_copy_immutability.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.get_client_proposal_bundle(uuid) TO authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00390_proposal_copy_immutability.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.get_client_proposal_feedback(uuid, boolean) FROM PUBLIC, anon, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00390_proposal_copy_immutability.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.get_client_proposal_feedback(uuid, boolean) TO authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00392_notification_unconfirmed_analytics.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.get_ab_variant_stats(uuid) FROM PUBLIC, anon;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00392_notification_unconfirmed_analytics.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.get_ab_variant_stats(uuid) TO authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
