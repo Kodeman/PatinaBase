@@ -236,6 +236,16 @@ struct DecisionDetailView: View {
 
 // MARK: - Consent Sheet
 
+enum DecisionConsentValidation {
+    static func normalizedSignature(_ signature: String) -> String {
+        signature.trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
+    static func canConfirm(requiresSignature: Bool, signature: String) -> Bool {
+        !requiresSignature || normalizedSignature(signature).count >= 2
+    }
+}
+
 /// Captures the client's consent before committing a decision. Two modes,
 /// mirroring `client_decisions.client_consent_method` (migration 00117):
 ///   • Click-through  — a single confirm tap.
@@ -252,10 +262,10 @@ private struct DecisionConsentSheet: View {
     @Environment(\.dismiss) private var dismiss
 
     private var canConfirm: Bool {
-        if requireSignature {
-            return !signature.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
-        }
-        return true
+        DecisionConsentValidation.canConfirm(
+            requiresSignature: requireSignature,
+            signature: signature
+        )
     }
 
     var body: some View {
@@ -305,7 +315,7 @@ private struct DecisionConsentSheet: View {
                     let method: DecisionsAPIClient.ConsentMethod =
                         requireSignature ? .electronicSignature : .clickThrough
                     let sig = requireSignature
-                        ? signature.trimmingCharacters(in: .whitespacesAndNewlines)
+                        ? DecisionConsentValidation.normalizedSignature(signature)
                         : nil
                     onConfirm(method, sig)
                 }

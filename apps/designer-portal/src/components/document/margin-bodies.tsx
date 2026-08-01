@@ -39,7 +39,7 @@ import { AmendmentSheet } from '@/components/document/overlays/amendment-sheet';
 import type { MarginItemRow } from '@/lib/document/margin-derivation';
 import { extendRevivesDecision } from '@/lib/document/decision-edges';
 import { composePulseDraft } from '@/lib/document/compose-pulse-draft';
-import { fmtDay, fmtUsd, todayYmd } from '@/lib/document/format';
+import { fmtDay, fmtUsd, tomorrowYmd } from '@/lib/document/format';
 import { openInvoiceFolio } from './accounts/invoice-overlays';
 import {
   DocumentAction,
@@ -151,7 +151,7 @@ export function DecisionBody({
   // R11: the override action is personal — "Record Sarah's pick".
   const clientFirstName = (clientName ?? '').trim().split(/\s+/)[0];
 
-  const [extendTo, setExtendTo] = useState(todayYmd());
+  const [extendTo, setExtendTo] = useState(tomorrowYmd());
   // R51/R83 quiet confirmation for the Extend act — sage when it landed,
   // terracotta when it didn't. Null until the designer acts.
   const [extendNote, setExtendNote] = useState<string | null>(null);
@@ -345,6 +345,7 @@ export function DecisionBody({
               aria-label="Extend due date to"
               className={INPUT}
               value={extendTo}
+              min={tomorrowYmd()}
               onChange={(e) => setExtendTo(e.target.value)}
             />
             <DocumentAction

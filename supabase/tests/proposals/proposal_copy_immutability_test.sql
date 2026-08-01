@@ -649,8 +649,11 @@ BEGIN
     FROM pg_policies
     WHERE schemaname = 'public' AND tablename = 'proposal_items'
   ) = ARRAY[
-    'proposal_items_legacy_ios_client_select:SELECT',
-    'proposal_items_studio_rw:ALL'
+    'proposal_items_design_studio_delete:DELETE',
+    'proposal_items_design_studio_insert:INSERT',
+    'proposal_items_design_studio_select:SELECT',
+    'proposal_items_design_studio_update:UPDATE',
+    'proposal_items_legacy_ios_client_select:SELECT'
   ],
     'proposal_items policy catalog drifted';
 
@@ -659,8 +662,11 @@ BEGIN
     FROM pg_policies
     WHERE schemaname = 'public' AND tablename = 'proposal_sections'
   ) = ARRAY[
-    'proposal_sections_legacy_ios_client_select:SELECT',
-    'proposal_sections_studio_rw:ALL'
+    'proposal_sections_design_studio_delete:DELETE',
+    'proposal_sections_design_studio_insert:INSERT',
+    'proposal_sections_design_studio_select:SELECT',
+    'proposal_sections_design_studio_update:UPDATE',
+    'proposal_sections_legacy_ios_client_select:SELECT'
   ],
     'proposal_sections policy catalog drifted';
 
@@ -669,9 +675,11 @@ BEGIN
     FROM pg_policies
     WHERE schemaname = 'public' AND tablename = 'proposals'
   ) = ARRAY[
-    'Designers can manage their proposals:ALL',
-    'proposals_legacy_ios_client_select:SELECT',
-    'proposals_studio_rw:ALL'
+    'proposals_design_studio_delete:DELETE',
+    'proposals_design_studio_insert:INSERT',
+    'proposals_design_studio_select:SELECT',
+    'proposals_design_studio_update:UPDATE',
+    'proposals_legacy_ios_client_select:SELECT'
   ], 'proposals policy catalog drifted';
 
   FOR v_policy IN
@@ -1446,28 +1454,27 @@ $$;
 SELECT pg_temp.assume_copy_actor('e8000000-0000-4000-8000-000000000001');
 DO $$
 DECLARE
-  v_error text;
+  v_rows integer;
 BEGIN
-  BEGIN
-    UPDATE public.proposal_items
-    SET product_id = NULL
-    WHERE id = 'e8330000-0000-4000-8000-000000000001';
-  EXCEPTION WHEN check_violation THEN
-    v_error := SQLERRM;
-  END;
-  ASSERT v_error LIKE 'proposal % is viewed, so its authored copy is immutable',
-    format('direct product detach should remain blocked, got %L', v_error);
+  UPDATE public.proposal_items
+  SET product_id = NULL
+  WHERE id = 'e8330000-0000-4000-8000-000000000001';
+  GET DIAGNOSTICS v_rows = ROW_COUNT;
+  ASSERT v_rows = 0
+         AND (SELECT product_id IS NOT NULL
+              FROM public.proposal_items
+              WHERE id = 'e8330000-0000-4000-8000-000000000001'),
+    'terminal product detach must be hidden by draft-only write policy';
 
-  v_error := NULL;
-  BEGIN
-    UPDATE public.proposal_board_items
-    SET capture_id = NULL
-    WHERE id = 'e83e0000-0000-4000-8000-000000000003';
-  EXCEPTION WHEN check_violation THEN
-    v_error := SQLERRM;
-  END;
-  ASSERT v_error LIKE 'proposal % is viewed, so its authored copy is immutable',
-    format('direct capture detach should remain blocked, got %L', v_error);
+  UPDATE public.proposal_board_items
+  SET capture_id = NULL
+  WHERE id = 'e83e0000-0000-4000-8000-000000000003';
+  GET DIAGNOSTICS v_rows = ROW_COUNT;
+  ASSERT v_rows = 0
+         AND (SELECT capture_id IS NOT NULL
+              FROM public.proposal_board_items
+              WHERE id = 'e83e0000-0000-4000-8000-000000000003'),
+    'terminal capture detach must be hidden by draft-only write policy';
 END;
 $$;
 
@@ -2141,29 +2148,32 @@ BEGIN
 END;
 $$;
 
--- Owners and studio peers can still address the row through RLS, which proves
--- the table guards (rather than row filtering) reject their stale editor tabs.
+-- Draft-only child write policies make stale issued-edition UPDATE/DELETE tabs
+-- harmless zero-row operations. Parent writes and INSERTs still fail loudly.
 SELECT pg_temp.assume_copy_actor('e8000000-0000-4000-8000-000000000001');
 DO $$
 DECLARE
   v_error text;
+  v_rows integer;
 BEGIN
-  BEGIN
-    UPDATE public.proposal_items SET name = 'Owner stale write'
-    WHERE id = 'e8330000-0000-4000-8000-000000000001';
-  EXCEPTION WHEN check_violation THEN v_error := SQLERRM;
-  END;
-  ASSERT v_error LIKE 'proposal % is viewed, so its authored copy is immutable',
-    format('owner item update should hit immutability guard, got %L', v_error);
+  UPDATE public.proposal_items SET name = 'Owner stale write'
+  WHERE id = 'e8330000-0000-4000-8000-000000000001';
+  GET DIAGNOSTICS v_rows = ROW_COUNT;
+  ASSERT v_rows = 0
+         AND (SELECT name <> 'Owner stale write'
+              FROM public.proposal_items
+              WHERE id = 'e8330000-0000-4000-8000-000000000001'),
+    'owner stale item update must be a draft-policy no-op';
 
-  v_error := NULL;
-  BEGIN
-    DELETE FROM public.proposal_items
-    WHERE id = 'e8330000-0000-4000-8000-000000000001';
-  EXCEPTION WHEN check_violation THEN v_error := SQLERRM;
-  END;
-  ASSERT v_error LIKE 'proposal % is viewed, so its authored copy is immutable',
-    format('owner item delete should hit immutability guard, got %L', v_error);
+  DELETE FROM public.proposal_items
+  WHERE id = 'e8330000-0000-4000-8000-000000000001';
+  GET DIAGNOSTICS v_rows = ROW_COUNT;
+  ASSERT v_rows = 0
+         AND EXISTS (
+           SELECT 1 FROM public.proposal_items
+           WHERE id = 'e8330000-0000-4000-8000-000000000001'
+         ),
+    'owner stale item delete must be a draft-policy no-op';
 
   v_error := NULL;
   BEGIN
@@ -2172,10 +2182,16 @@ BEGIN
     ) VALUES (
       'e8300000-0000-4000-8000-000000000001', 'Owner stale insertion', 1, 1, 1, 1
     );
-  EXCEPTION WHEN check_violation THEN v_error := SQLERRM;
+  EXCEPTION WHEN check_violation OR insufficient_privilege THEN
+    v_error := SQLERRM;
   END;
-  ASSERT v_error LIKE 'proposal % is viewed, so its authored copy is immutable',
-    format('owner item insert should hit immutability guard, got %L', v_error);
+  ASSERT v_error IS NOT NULL
+         AND NOT EXISTS (
+           SELECT 1 FROM public.proposal_items
+           WHERE proposal_id = 'e8300000-0000-4000-8000-000000000001'
+             AND name = 'Owner stale insertion'
+         ),
+    format('owner stale item insert must fail closed, got %L', v_error);
 
   v_error := NULL;
   BEGIN
@@ -2201,14 +2217,16 @@ SELECT pg_temp.assume_copy_actor('e8000000-0000-4000-8000-000000000003');
 DO $$
 DECLARE
   v_error text;
+  v_rows integer;
 BEGIN
-  BEGIN
-    UPDATE public.proposal_sections SET body = 'Peer stale write'
-    WHERE id = 'e8320000-0000-4000-8000-000000000001';
-  EXCEPTION WHEN check_violation THEN v_error := SQLERRM;
-  END;
-  ASSERT v_error LIKE 'proposal % is viewed, so its authored copy is immutable',
-    format('studio peer section update should reject, got %L', v_error);
+  UPDATE public.proposal_sections SET body = 'Peer stale write'
+  WHERE id = 'e8320000-0000-4000-8000-000000000001';
+  GET DIAGNOSTICS v_rows = ROW_COUNT;
+  ASSERT v_rows = 0
+         AND (SELECT body <> 'Peer stale write'
+              FROM public.proposal_sections
+              WHERE id = 'e8320000-0000-4000-8000-000000000001'),
+    'studio peer stale section update must be a draft-policy no-op';
 
   v_error := NULL;
   BEGIN
@@ -2437,9 +2455,13 @@ DECLARE
   v_mover_error text;
   v_phase_owner uuid;
 BEGIN
-  ASSERT has_table_privilege(
+  ASSERT NOT has_table_privilege(
     'authenticated', 'public.proposal_phases', 'UPDATE'
-  ), 'expand phase must retain rollback draft-phase edit privilege';
+  ) AND has_column_privilege(
+    'authenticated', 'public.proposal_phases', 'name', 'UPDATE'
+  ) AND NOT has_column_privilege(
+    'authenticated', 'public.proposal_phases', 'proposal_id', 'UPDATE'
+  ), 'expand phase must retain only column-limited draft edit privilege';
 
   PERFORM extensions.dblink_connect('phase_mover', v_conninfo);
   PERFORM extensions.dblink_exec('phase_mover', 'BEGIN');
@@ -2461,11 +2483,8 @@ BEGIN
     v_mover_error := SQLERRM;
   END;
 
-  ASSERT position(
-    'topology may only change' IN coalesce(v_mover_error, '')
-  ) > 0,
-    format('direct phase move must fail at the topology guard, got %L',
-           v_mover_error);
+  ASSERT v_mover_error IS NOT NULL,
+    'direct phase move must fail at the column ACL or topology guard';
   PERFORM extensions.dblink_exec('phase_mover', 'ROLLBACK');
   PERFORM extensions.dblink_disconnect('phase_mover');
 

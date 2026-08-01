@@ -5516,13 +5516,61 @@ END $g$;
 
 -- 00399_journey_authority_integrity.sql
 DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.is_design_studio_comember(uuid) FROM PUBLIC, anon;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00399_journey_authority_integrity.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.is_design_studio_comember(uuid) TO authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00399_journey_authority_integrity.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.is_addressed_client_decision(uuid) FROM PUBLIC, anon;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00399_journey_authority_integrity.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.is_addressed_client_decision(uuid) TO authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00399_journey_authority_integrity.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.lock_client_decision_option_parent(uuid, text) FROM PUBLIC, anon, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00399_journey_authority_integrity.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.lock_client_decision_option_parent(uuid, text) TO authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00399_journey_authority_integrity.sql
+DO $g$ BEGIN
   REVOKE ALL ON FUNCTION public.guard_client_decision_authority() FROM PUBLIC, anon, authenticated, service_role;
 EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
 END $g$;
 
 -- 00399_journey_authority_integrity.sql
 DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.cleanup_client_decision_draft_delete() FROM PUBLIC, anon, authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00399_journey_authority_integrity.sql
+DO $g$ BEGIN
   REVOKE ALL ON FUNCTION public.guard_client_decision_option_authority() FROM PUBLIC, anon, authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00399_journey_authority_integrity.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.guard_decision_override_authority() FROM PUBLIC, anon, authenticated, service_role;
 EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
 END $g$;
 
@@ -5612,13 +5660,25 @@ END $g$;
 
 -- 00399_journey_authority_integrity.sql
 DO $g$ BEGIN
-  GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE public.client_decisions TO authenticated;
+  GRANT UPDATE ( title, context, due_date, linked_phase, decision_type, blocking_status, project_id, coordination_kind, court, court_party_id, blocks_kind, phase_id, status, sent_at, reminder_sent_at, viewed_at, client_consent_method, client_consented_at, client_signature ) ON TABLE public.client_decisions TO authenticated;
 EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
 END $g$;
 
 -- 00399_journey_authority_integrity.sql
 DO $g$ BEGIN
-  GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE public.client_decision_options TO authenticated;
+  GRANT DELETE ON TABLE public.client_decisions TO authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00399_journey_authority_integrity.sql
+DO $g$ BEGIN
+  GRANT UPDATE ( client_note, quantity, selected ) ON TABLE public.client_decision_options TO authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00399_journey_authority_integrity.sql
+DO $g$ BEGIN
+  GRANT DELETE ON TABLE public.client_decision_options TO authenticated;
 EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
 END $g$;
 
@@ -5942,25 +6002,55 @@ END $g$;
 
 -- 00399_journey_authority_integrity.sql
 DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public._prepare_legacy_proposal_phase_insert(uuid, uuid) FROM PUBLIC, anon, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00399_journey_authority_integrity.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public._prepare_legacy_proposal_phase_insert(uuid, uuid) TO authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00399_journey_authority_integrity.sql
+DO $g$ BEGIN
   REVOKE ALL ON FUNCTION public.guard_proposal_phase_topology_write() FROM PUBLIC, anon, authenticated, service_role;
 EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
 END $g$;
 
 -- 00399_journey_authority_integrity.sql
 DO $g$ BEGIN
-  REVOKE INSERT, UPDATE, DELETE ON TABLE public.proposal_phases FROM anon;
+  REVOKE ALL ON FUNCTION public.rewire_legacy_proposal_phase_delete() FROM PUBLIC, anon, authenticated, service_role;
 EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
 END $g$;
 
 -- 00399_journey_authority_integrity.sql
 DO $g$ BEGIN
-  GRANT INSERT, UPDATE, DELETE ON TABLE public.proposal_phases TO authenticated;
+  REVOKE INSERT, UPDATE, DELETE ON TABLE public.proposal_phases FROM anon, authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00399_journey_authority_integrity.sql
+DO $g$ BEGIN
+  GRANT INSERT, DELETE ON TABLE public.proposal_phases TO authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00399_journey_authority_integrity.sql
+DO $g$ BEGIN
+  GRANT UPDATE ( name, phase_key, duration_weeks, fee_cents, revision_limit, gate_condition, deliverables, duration_days, anchor_date ) ON TABLE public.proposal_phases TO authenticated;
 EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
 END $g$;
 
 -- 00399_journey_authority_integrity.sql
 DO $g$ BEGIN
   REVOKE ALL ON FUNCTION public._recompute_proposal_total_locked(uuid) FROM PUBLIC, anon, authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00399_journey_authority_integrity.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.sync_proposal_phase_total() FROM PUBLIC, anon, authenticated, service_role;
 EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
 END $g$;
 
@@ -6177,5 +6267,47 @@ END $g$;
 -- 00400_proposal_signature_authority.sql
 DO $g$ BEGIN
   GRANT EXECUTE ON FUNCTION public.sign_proposal(uuid, text, text, boolean) TO authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00401_proposal_policy_locking_integrity.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.lock_proposal_authored_parent(uuid) FROM PUBLIC, anon, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00401_proposal_policy_locking_integrity.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.lock_proposal_authored_parent(uuid) TO authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00401_proposal_policy_locking_integrity.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.guard_authenticated_proposal_reparent() FROM PUBLIC, anon, authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00401_proposal_policy_locking_integrity.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.rewire_legacy_proposal_phase_delete() FROM PUBLIC, anon, authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00401_proposal_policy_locking_integrity.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.normalize_authenticated_proposal_total() FROM PUBLIC, anon, authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00401_proposal_policy_locking_integrity.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.sync_proposal_item_total() FROM PUBLIC, anon, authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00401_proposal_policy_locking_integrity.sql
+DO $g$ BEGIN
+  REVOKE INSERT, UPDATE, DELETE ON TABLE public.document_shares FROM anon, authenticated;
 EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
 END $g$;

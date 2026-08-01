@@ -1157,6 +1157,137 @@ GRANT EXECUTE ON FUNCTION public.assert_client_decision_reference_integrity(
   uuid, uuid, uuid, uuid, text, uuid, uuid, uuid, uuid, uuid, uuid
 ) TO authenticated, service_role;
 
+-- Policy-compatible exact design-studio authority. The broad historical
+-- is_studio_comember helper intentionally treats contractor/manufacturer
+-- organizations as shared workspaces; client-document authorship requires the
+-- exact owner or active non-guest peers in an active design_studio instead.
+CREATE OR REPLACE FUNCTION public.is_design_studio_comember(
+  p_owner uuid
+)
+RETURNS boolean
+LANGUAGE sql
+STABLE
+SECURITY DEFINER
+SET search_path = public, pg_temp
+AS $$
+  SELECT p_owner IS NOT NULL
+    AND auth.uid() IS NOT NULL
+    AND (
+      p_owner = (SELECT auth.uid())
+      OR EXISTS (
+        SELECT 1
+        FROM public.organization_members AS actor_membership
+        JOIN public.organization_members AS owner_membership
+          ON owner_membership.organization_id = actor_membership.organization_id
+        JOIN public.organizations AS organization
+          ON organization.id = actor_membership.organization_id
+        WHERE actor_membership.user_id = (SELECT auth.uid())
+          AND actor_membership.status = 'active'
+          AND actor_membership.role <> 'guest'
+          AND owner_membership.user_id = p_owner
+          AND owner_membership.status = 'active'
+          AND owner_membership.role <> 'guest'
+          AND organization.type = 'design_studio'
+          AND organization.status = 'active'
+      )
+    );
+$$;
+
+REVOKE ALL ON FUNCTION public.is_design_studio_comember(uuid)
+  FROM PUBLIC, anon;
+GRANT EXECUTE ON FUNCTION public.is_design_studio_comember(uuid)
+  TO authenticated, service_role;
+
+-- Client-facing decision policies cannot join designer_clients directly:
+-- that table intentionally hides designer notes/revenue from client accounts,
+-- so an invoker-side EXISTS is silently empty. Resolve only the boolean
+-- addressed-client fact behind a DEFINER boundary and expose no relationship
+-- row or client metadata.
+CREATE OR REPLACE FUNCTION public.is_addressed_client_decision(
+  p_decision_id uuid
+)
+RETURNS boolean
+LANGUAGE sql
+STABLE
+SECURITY DEFINER
+SET search_path = public
+AS $$
+  SELECT auth.uid() IS NOT NULL
+    AND EXISTS (
+      SELECT 1
+      FROM public.client_decisions AS decision
+      JOIN public.designer_clients AS relationship
+        ON relationship.id = decision.designer_client_id
+      WHERE decision.id = p_decision_id
+        AND relationship.client_id = auth.uid()
+        AND decision.status IN ('pending', 'responded', 'expired')
+    );
+$$;
+
+REVOKE ALL ON FUNCTION public.is_addressed_client_decision(uuid)
+  FROM PUBLIC, anon;
+GRANT EXECUTE ON FUNCTION public.is_addressed_client_decision(uuid)
+  TO authenticated, service_role;
+
+-- UPDATE/DELETE row triggers run after PostgreSQL has already locked the
+-- target option. Acquire the lifecycle parent during the RLS scan instead,
+-- before ModifyTable can lock the child, so browser compatibility writes use
+-- the same parent -> children order as canonical workflows.
+CREATE OR REPLACE FUNCTION public.lock_client_decision_option_parent(
+  p_decision_id uuid,
+  p_path text
+)
+RETURNS boolean
+LANGUAGE plpgsql
+VOLATILE
+SECURITY DEFINER
+SET search_path = public, pg_temp
+AS $$
+DECLARE
+  v_decision public.client_decisions%ROWTYPE;
+BEGIN
+  IF COALESCE(auth.role(), '') <> 'authenticated'
+     OR auth.uid() IS NULL
+  THEN
+    RETURN false;
+  END IF;
+
+  SELECT decision.* INTO v_decision
+  FROM public.client_decisions AS decision
+  WHERE decision.id = p_decision_id
+    AND CASE p_path
+      WHEN 'studio_draft_delete' THEN
+        decision.status = 'draft'
+        AND public.is_design_studio_comember(decision.designer_id)
+      WHEN 'studio_option_insert' THEN
+        decision.status IN ('draft', 'pending')
+        AND public.is_design_studio_comember(decision.designer_id)
+      WHEN 'studio_override_insert' THEN
+        decision.status = 'pending'
+        AND decision.coordination_kind = 'selection'
+        AND decision.court = 'client'
+        AND public.is_design_studio_comember(decision.designer_id)
+      WHEN 'client_pending_update' THEN
+        decision.status = 'pending'
+        AND decision.coordination_kind = 'selection'
+        AND decision.court = 'client'
+        AND public.is_addressed_client_decision(decision.id)
+      WHEN 'studio_expired_reopen_update' THEN
+        decision.status = 'expired'
+        AND public.is_design_studio_comember(decision.designer_id)
+      ELSE false
+    END
+  FOR UPDATE;
+
+  RETURN FOUND;
+END;
+$$;
+
+REVOKE ALL ON FUNCTION public.lock_client_decision_option_parent(uuid, text)
+  FROM PUBLIC, anon, service_role;
+GRANT EXECUTE ON FUNCTION public.lock_client_decision_option_parent(uuid, text)
+  TO authenticated;
+
 CREATE OR REPLACE FUNCTION public.guard_client_decision_authority()
 RETURNS trigger
 LANGUAGE plpgsql
@@ -1168,8 +1299,25 @@ DECLARE
     AND auth.uid() IS NULL
     AND COALESCE(auth.role(), '') NOT IN ('authenticated', 'service_role');
   v_protected_change boolean;
+  v_actor_is_studio boolean;
+  v_actor_is_client boolean;
+  v_previous_decision_capability text;
+  v_previous_compat_reopen text;
 BEGIN
   IF TG_OP = 'DELETE' THEN
+    IF current_user IS NOT DISTINCT FROM 'authenticated'
+       AND OLD.status = 'draft'
+       AND public.is_design_studio_comember(OLD.designer_id)
+    THEN
+      -- Rollback web bundles delete only authored drafts. Keep that exact
+      -- operation during the expand phase without restoring terminal-row
+      -- deletion authority.
+      PERFORM set_config(
+        'app.client_decision_delete_cascade_id', OLD.id::text, true
+      );
+      RETURN OLD;
+    END IF;
+
     IF NOT v_maintenance
        AND (
          current_user IS DISTINCT FROM 'postgres'
@@ -1181,24 +1329,27 @@ BEGIN
         'client decisions may only be deleted through delete_client_decision_draft'
         USING ERRCODE = 'check_violation';
     END IF;
+    PERFORM set_config(
+      'app.client_decision_delete_cascade_id', OLD.id::text, true
+    );
     RETURN OLD;
   END IF;
 
-  PERFORM public.assert_client_decision_reference_integrity(
-    NEW.id,
-    NEW.designer_client_id,
-    NEW.designer_id,
-    NEW.project_id,
-    NEW.status,
-    NEW.phase_id,
-    NEW.room_id,
-    NEW.blocks_milestone_id,
-    NEW.court_party_id,
-    NEW.linked_proposal_id,
-    NEW.recommended_option_id
-  );
-
   IF TG_OP = 'INSERT' THEN
+    PERFORM public.assert_client_decision_reference_integrity(
+      NEW.id,
+      NEW.designer_client_id,
+      NEW.designer_id,
+      NEW.project_id,
+      NEW.status,
+      NEW.phase_id,
+      NEW.room_id,
+      NEW.blocks_milestone_id,
+      NEW.court_party_id,
+      NEW.linked_proposal_id,
+      NEW.recommended_option_id
+    );
+
     -- Every row, including a trusted workflow insert, must bind to the exact
     -- designer↔client relationship named by its denormalized designer_id.
     IF NOT EXISTS (
@@ -1238,25 +1389,12 @@ BEGIN
     END IF;
 
     IF current_user IS DISTINCT FROM 'postgres' THEN
-      IF NOT (
-        NEW.designer_id = auth.uid()
-        OR EXISTS (
-          SELECT 1
-          FROM public.organization_members AS actor_membership
-          JOIN public.organization_members AS owner_membership
-            ON owner_membership.organization_id = actor_membership.organization_id
-          JOIN public.organizations AS organization
-            ON organization.id = actor_membership.organization_id
-          WHERE actor_membership.user_id = auth.uid()
-            AND actor_membership.status = 'active'
-            AND actor_membership.role <> 'guest'
-            AND owner_membership.user_id = NEW.designer_id
-            AND owner_membership.status = 'active'
-            AND owner_membership.role <> 'guest'
-            AND organization.type = 'design_studio'
-            AND organization.status = 'active'
-        )
-      ) THEN
+      -- Browser-created rows may supply every insertable column, but audit
+      -- birth timestamps are server evidence rather than caller metadata.
+      NEW.created_at := now();
+      NEW.updated_at := now();
+
+      IF NOT public.is_design_studio_comember(NEW.designer_id) THEN
         RAISE EXCEPTION 'not authorized to create a client decision'
           USING ERRCODE = 'insufficient_privilege';
       END IF;
@@ -1273,9 +1411,47 @@ BEGIN
           'proposal approval decisions may only be inserted by signature authority'
           USING ERRCODE = 'check_violation';
       END IF;
+
+      -- Installed extension/web bundles create pending rows directly and send
+      -- browser timestamps. Preserve that birth shape while owning delivery
+      -- and keeping client-view/reminder evidence empty until their real acts.
+      IF NEW.status = 'pending' THEN
+        NEW.sent_at := now();
+      END IF;
+      NEW.viewed_at := NULL;
+      NEW.reminder_sent_at := NULL;
     END IF;
 
     RETURN NEW;
+  END IF;
+
+  -- Metadata-only installed-client PATCHes do not need to re-read the private
+  -- designer_clients relationship. Revalidate the reference graph only when
+  -- one of its inputs (or the lifecycle status used by the check) changes.
+  IF NEW.designer_client_id IS DISTINCT FROM OLD.designer_client_id
+     OR NEW.designer_id IS DISTINCT FROM OLD.designer_id
+     OR NEW.project_id IS DISTINCT FROM OLD.project_id
+     OR NEW.status IS DISTINCT FROM OLD.status
+     OR NEW.phase_id IS DISTINCT FROM OLD.phase_id
+     OR NEW.room_id IS DISTINCT FROM OLD.room_id
+     OR NEW.blocks_milestone_id IS DISTINCT FROM OLD.blocks_milestone_id
+     OR NEW.court_party_id IS DISTINCT FROM OLD.court_party_id
+     OR NEW.linked_proposal_id IS DISTINCT FROM OLD.linked_proposal_id
+     OR NEW.recommended_option_id IS DISTINCT FROM OLD.recommended_option_id
+  THEN
+    PERFORM public.assert_client_decision_reference_integrity(
+      NEW.id,
+      NEW.designer_client_id,
+      NEW.designer_id,
+      NEW.project_id,
+      NEW.status,
+      NEW.phase_id,
+      NEW.room_id,
+      NEW.blocks_milestone_id,
+      NEW.court_party_id,
+      NEW.linked_proposal_id,
+      NEW.recommended_option_id
+    );
   END IF;
 
   v_protected_change :=
@@ -1309,7 +1485,326 @@ BEGIN
     OR NEW.answered_by IS DISTINCT FROM OLD.answered_by
     OR NEW.client_consent_method IS DISTINCT FROM OLD.client_consent_method
     OR NEW.client_consented_at IS DISTINCT FROM OLD.client_consented_at
-    OR NEW.client_signature IS DISTINCT FROM OLD.client_signature;
+    OR NEW.client_signature IS DISTINCT FROM OLD.client_signature
+    OR NEW.created_at IS DISTINCT FROM OLD.created_at
+    OR NEW.viewed_at IS DISTINCT FROM OLD.viewed_at
+    OR NEW.reminder_sent_at IS DISTINCT FROM OLD.reminder_sent_at;
+
+  v_actor_is_studio := current_user IS NOT DISTINCT FROM 'authenticated'
+    AND public.is_design_studio_comember(OLD.designer_id);
+  v_actor_is_client := current_user IS NOT DISTINCT FROM 'authenticated'
+    AND public.is_addressed_client_decision(OLD.id);
+
+  -- Deleting a recommended option applies its ON DELETE SET NULL action to
+  -- the parent from inside PostgreSQL's FK trigger. The direct draft editor
+  -- sets this decision-scoped capability in the option guard below (stable
+  -- across its multi-row replacement DELETE); trigger depth distinguishes the
+  -- FK action from a caller-authored parent PATCH.
+  IF v_protected_change
+     AND public.is_design_studio_comember(OLD.designer_id)
+     AND OLD.status = 'draft'
+     AND NEW.status = 'draft'
+     AND NEW.recommended_option_id IS NULL
+     AND OLD.recommended_option_id IS NOT NULL
+     AND pg_trigger_depth() > 1
+     AND current_setting(
+           'app.client_decision_option_delete_decision_id', true
+         ) IS NOT DISTINCT FROM OLD.id::text
+     AND (
+       to_jsonb(NEW) - ARRAY['recommended_option_id', 'updated_at']
+     ) IS NOT DISTINCT FROM (
+       to_jsonb(OLD) - ARRAY['recommended_option_id', 'updated_at']
+     )
+  THEN
+    RETURN NEW;
+  END IF;
+
+  -- Rollback designer bundles edit authored draft payload directly. RLS
+  -- scopes the row; this fail-closed shape comparison limits the writable
+  -- columns to the historical editor contract.
+  IF v_protected_change
+     AND v_actor_is_studio
+     AND OLD.status = 'draft'
+     AND NEW.status = 'draft'
+     AND (
+       to_jsonb(NEW) - ARRAY[
+         'title', 'context', 'due_date', 'linked_phase', 'decision_type',
+         'blocking_status', 'project_id', 'coordination_kind', 'court',
+         'court_party_id', 'blocks_kind', 'phase_id', 'updated_at'
+       ]
+     ) IS NOT DISTINCT FROM (
+       to_jsonb(OLD) - ARRAY[
+         'title', 'context', 'due_date', 'linked_phase', 'decision_type',
+         'blocking_status', 'project_id', 'coordination_kind', 'court',
+         'court_party_id', 'blocks_kind', 'phase_id', 'updated_at'
+       ]
+     )
+  THEN
+    IF NEW.decision_type = 'approval'
+       AND NEW.linked_proposal_id IS NOT NULL
+    THEN
+      RAISE EXCEPTION
+        'proposal approval decisions may only be authored by signature authority'
+        USING ERRCODE = 'check_violation';
+    END IF;
+    RETURN NEW;
+  END IF;
+
+  -- The old publish mutation changed only status and sent_at. Stamp the
+  -- authoritative delivery time at the database boundary.
+  IF v_protected_change
+     AND v_actor_is_studio
+     AND OLD.status = 'draft'
+     AND NEW.status = 'pending'
+     AND (
+       to_jsonb(NEW) - ARRAY['status', 'sent_at', 'updated_at']
+     ) IS NOT DISTINCT FROM (
+       to_jsonb(OLD) - ARRAY['status', 'sent_at', 'updated_at']
+     )
+  THEN
+    -- The parent UPDATE already owns the decision row. Lock every existing
+    -- child before making the sent-copy boundary visible, preserving the
+    -- canonical parent -> children order. A concurrent direct option edit or
+    -- delete therefore commits into the draft first or observes pending and
+    -- rejects; it cannot mutate the sent copy afterward.
+    PERFORM 1
+    FROM public.client_decision_options AS option
+    WHERE option.decision_id = OLD.id
+    ORDER BY option.id
+    FOR UPDATE;
+    NEW.sent_at := now();
+    RETURN NEW;
+  END IF;
+
+  -- Rollback coordination editors reassign the court or extend a still-open
+  -- due date directly. These metadata-only changes cannot resolve/reopen a
+  -- decision and reference integrity has already been checked above.
+  IF v_protected_change
+     AND v_actor_is_studio
+     AND OLD.status = 'pending'
+     AND NEW.status = 'pending'
+     AND (
+       to_jsonb(NEW) - ARRAY[
+         'due_date', 'court', 'court_party_id', 'updated_at'
+       ]
+     ) IS NOT DISTINCT FROM (
+       to_jsonb(OLD) - ARRAY[
+         'due_date', 'court', 'court_party_id', 'updated_at'
+       ]
+     )
+  THEN
+    IF NEW.due_date IS DISTINCT FROM OLD.due_date
+       AND NEW.due_date IS NOT NULL
+       AND NEW.due_date <= now()
+       AND NEW.due_date::date = current_date
+    THEN
+      -- Rollback date inputs submit bare YYYY-MM-DD values at midnight. Treat
+      -- "today" as end-of-day so the default Extend act remains meaningful.
+      NEW.due_date := (current_date + 1)::timestamptz
+        - interval '1 microsecond';
+    END IF;
+    IF NEW.due_date IS DISTINCT FROM OLD.due_date
+       AND (NEW.due_date IS NULL OR NEW.due_date <= now())
+    THEN
+      RAISE EXCEPTION 'an extended due date must be in the future'
+        USING ERRCODE = 'check_violation';
+    END IF;
+    RETURN NEW;
+  END IF;
+
+  -- The rollback margin action extends an expired deadline and then reopens
+  -- it in a second PATCH. Preserve that wire contract while making the reopen
+  -- itself safe: require a future deadline and clear every prior response
+  -- field/option selection in the status-transition transaction.
+  IF v_protected_change
+     AND v_actor_is_studio
+     AND OLD.status = 'expired'
+     AND NEW.status = 'expired'
+     AND (
+       to_jsonb(NEW) - ARRAY[
+         'due_date', 'reminder_sent_at', 'updated_at'
+       ]
+     ) IS NOT DISTINCT FROM (
+       to_jsonb(OLD) - ARRAY[
+         'due_date', 'reminder_sent_at', 'updated_at'
+       ]
+     )
+  THEN
+    IF NEW.due_date IS DISTINCT FROM OLD.due_date
+       AND NEW.due_date IS NOT NULL
+       AND NEW.due_date <= now()
+       AND NEW.due_date::date = current_date
+    THEN
+      NEW.due_date := (current_date + 1)::timestamptz
+        - interval '1 microsecond';
+    END IF;
+    IF NEW.due_date IS DISTINCT FROM OLD.due_date
+       AND (NEW.due_date IS NULL OR NEW.due_date <= now())
+    THEN
+      RAISE EXCEPTION 'an extended due date must be in the future'
+        USING ERRCODE = 'check_violation';
+    END IF;
+    IF NEW.reminder_sent_at IS DISTINCT FROM OLD.reminder_sent_at THEN
+      NEW.reminder_sent_at := now();
+    END IF;
+    RETURN NEW;
+  END IF;
+
+  IF v_protected_change
+     AND v_actor_is_studio
+     AND OLD.status = 'expired'
+     AND NEW.status = 'pending'
+     AND NEW.due_date IS NOT NULL
+     AND NEW.due_date > now()
+     AND (
+       to_jsonb(NEW) - ARRAY['status', 'updated_at']
+     ) IS NOT DISTINCT FROM (
+       to_jsonb(OLD) - ARRAY['status', 'updated_at']
+     )
+  THEN
+    v_previous_decision_capability := current_setting(
+      'app.client_decision_write_id', true
+    );
+    v_previous_compat_reopen := current_setting(
+      'app.client_decision_compat_reopen_id', true
+    );
+    PERFORM set_config('app.client_decision_write_id', OLD.id::text, true);
+    PERFORM set_config(
+      'app.client_decision_compat_reopen_id', OLD.id::text, true
+    );
+    UPDATE public.client_decision_options
+    SET selected = false,
+        client_note = NULL
+    WHERE decision_id = OLD.id;
+    PERFORM set_config(
+      'app.client_decision_compat_reopen_id',
+      COALESCE(v_previous_compat_reopen, ''), true
+    );
+    PERFORM set_config(
+      'app.client_decision_write_id',
+      COALESCE(v_previous_decision_capability, ''), true
+    );
+
+    NEW.responded_at := NULL;
+    NEW.viewed_at := NULL;
+    NEW.reminder_sent_at := NULL;
+    NEW.selected_by := NULL;
+    NEW.answer := NULL;
+    NEW.answered_at := NULL;
+    NEW.answered_by := NULL;
+    NEW.client_consent_method := NULL;
+    NEW.client_consented_at := NULL;
+    NEW.client_signature := NULL;
+    RETURN NEW;
+  END IF;
+
+  -- Legacy reminder bookkeeping is studio-owned metadata, never client-owned
+  -- lifecycle truth. Normalize the caller timestamp to server time.
+  IF v_protected_change
+     AND v_actor_is_studio
+     AND OLD.status = 'pending'
+     AND NEW.status = 'pending'
+     AND (
+       to_jsonb(NEW) - ARRAY['reminder_sent_at', 'updated_at']
+     ) IS NOT DISTINCT FROM (
+       to_jsonb(OLD) - ARRAY['reminder_sent_at', 'updated_at']
+     )
+  THEN
+    NEW.reminder_sent_at := now();
+    RETURN NEW;
+  END IF;
+
+  -- Installed client builds mark a decision viewed with a direct PATCH.
+  -- Permit only the first null->timestamp transition and own the timestamp.
+  IF v_protected_change
+     AND v_actor_is_client
+     AND OLD.status IN ('pending', 'responded', 'expired')
+     AND NEW.status = OLD.status
+     AND (
+       to_jsonb(NEW) - ARRAY['viewed_at', 'updated_at']
+     ) IS NOT DISTINCT FROM (
+       to_jsonb(OLD) - ARRAY['viewed_at', 'updated_at']
+     )
+  THEN
+    NEW.viewed_at := COALESCE(OLD.viewed_at, now());
+    RETURN NEW;
+  END IF;
+
+  -- Old web builds record consent immediately before apply_decision; installed
+  -- iOS builds historically recorded it immediately after. Both are the
+  -- addressed client's own evidence. Accept a one-time value in either state,
+  -- require an electronic signature when that method is chosen, and replace
+  -- the caller-supplied evidence time with server time.
+  IF v_protected_change
+     AND v_actor_is_client
+     AND OLD.status IN ('pending', 'responded')
+     AND NEW.status = OLD.status
+     AND OLD.coordination_kind = 'selection'
+     AND OLD.court = 'client'
+     AND (
+       OLD.status = 'pending'
+       OR (
+         OLD.selected_by IS NOT DISTINCT FROM auth.uid()
+       )
+     )
+     AND (
+       to_jsonb(NEW) - ARRAY[
+         'client_consent_method', 'client_consented_at',
+         'client_signature', 'updated_at'
+       ]
+     ) IS NOT DISTINCT FROM (
+       to_jsonb(OLD) - ARRAY[
+         'client_consent_method', 'client_consented_at',
+         'client_signature', 'updated_at'
+       ]
+     )
+  THEN
+    IF NEW.client_consent_method IS NULL
+       OR NEW.client_consent_method NOT IN (
+         'electronic_signature', 'click_through'
+       )
+    THEN
+      RAISE EXCEPTION 'invalid client consent method %',
+        NEW.client_consent_method
+        USING ERRCODE = 'check_violation';
+    END IF;
+    IF NEW.client_consent_method = 'electronic_signature' THEN
+      IF btrim(COALESCE(NEW.client_signature, '')) = '' THEN
+        RAISE EXCEPTION 'electronic consent requires a signature'
+          USING ERRCODE = 'check_violation';
+      END IF;
+      IF OLD.status = 'pending'
+         AND char_length(btrim(NEW.client_signature)) < 2
+      THEN
+        -- Pre-apply rollback web consent flows into the canonical core, whose
+        -- signed-name contract is >=2. Installed iOS writes consent after the
+        -- response and historically accepts any non-empty signature.
+        RAISE EXCEPTION
+          'an electronic signature of at least 2 characters is required before apply'
+          USING ERRCODE = 'check_violation';
+      END IF;
+    END IF;
+    NEW.client_signature := CASE
+      WHEN NEW.client_consent_method = 'electronic_signature'
+        THEN btrim(NEW.client_signature)
+      ELSE NULL
+    END;
+
+    IF OLD.client_consent_method IS NULL
+       AND OLD.client_consented_at IS NULL
+       AND OLD.client_signature IS NULL
+    THEN
+      NEW.client_consented_at := now();
+      RETURN NEW;
+    END IF;
+
+    IF NEW.client_consent_method IS NOT DISTINCT FROM OLD.client_consent_method
+       AND NEW.client_signature IS NOT DISTINCT FROM OLD.client_signature
+    THEN
+      NEW.client_consented_at := OLD.client_consented_at;
+      RETURN NEW;
+    END IF;
+  END IF;
 
   IF v_protected_change
      AND NOT v_maintenance
@@ -1319,28 +1814,6 @@ BEGIN
           IS DISTINCT FROM NEW.id::text
      )
   THEN
-    -- Temporary installed-iOS bridge. The authenticated role has UPDATE only
-    -- on viewed_at and these consent columns, and RLS restricts the row to the
-    -- addressed client. Consent may be filled exactly once after the canonical
-    -- apply_decision transition; lifecycle/selection truth remains protected.
-    IF current_user IS NOT DISTINCT FROM 'authenticated'
-       AND OLD.status = 'responded'
-       AND NEW.status = 'responded'
-       AND OLD.client_consent_method IS NULL
-       AND OLD.client_consented_at IS NULL
-       AND OLD.client_signature IS NULL
-       AND NEW.client_consent_method IS NOT NULL
-       AND NEW.client_consented_at IS NOT NULL
-       AND EXISTS (
-         SELECT 1
-         FROM public.designer_clients AS relationship
-         WHERE relationship.id = OLD.designer_client_id
-           AND relationship.client_id = auth.uid()
-       )
-    THEN
-      RETURN NEW;
-    END IF;
-
     RAISE EXCEPTION
       'client decision business truth may only change through a canonical workflow'
       USING ERRCODE = 'check_violation';
@@ -1355,8 +1828,50 @@ REVOKE ALL ON FUNCTION public.guard_client_decision_authority()
 
 DROP TRIGGER IF EXISTS zz_guard_client_decision_authority_trg
   ON public.client_decisions;
--- Expand phase: leave this guard unattached until the extension and rollback
--- web bundles have adopted the canonical decision RPCs.
+CREATE TRIGGER zz_guard_client_decision_authority_trg
+BEFORE INSERT OR UPDATE OR DELETE ON public.client_decisions
+FOR EACH ROW EXECUTE FUNCTION public.guard_client_decision_authority();
+
+-- Legacy draft deletion targets the parent table directly. Its FK actions
+-- clear blocker ids but cannot restore the coupled blocked/status fields that
+-- delete_client_decision_draft owns. Mirror those idempotent side effects in
+-- the same parent DELETE transaction so direct and canonical paths converge.
+CREATE OR REPLACE FUNCTION public.cleanup_client_decision_draft_delete()
+RETURNS trigger
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public, pg_temp
+AS $$
+BEGIN
+  IF OLD.status <> 'draft' THEN
+    RETURN OLD;
+  END IF;
+
+  UPDATE public.project_ffe_items
+  SET blocked = false,
+      blocked_reason = NULL,
+      blocked_by_decision_id = NULL,
+      updated_at = now()
+  WHERE blocked_by_decision_id = OLD.id;
+
+  UPDATE public.project_tasks
+  SET status = 'todo',
+      blocked_by_item_id = NULL,
+      updated_at = now()
+  WHERE blocked_by_item_id = OLD.id;
+
+  RETURN OLD;
+END;
+$$;
+
+REVOKE ALL ON FUNCTION public.cleanup_client_decision_draft_delete()
+  FROM PUBLIC, anon, authenticated, service_role;
+
+DROP TRIGGER IF EXISTS y_cleanup_client_decision_draft_delete_trg
+  ON public.client_decisions;
+CREATE TRIGGER y_cleanup_client_decision_draft_delete_trg
+BEFORE DELETE ON public.client_decisions
+FOR EACH ROW EXECUTE FUNCTION public.cleanup_client_decision_draft_delete();
 
 CREATE OR REPLACE FUNCTION public.guard_client_decision_option_authority()
 RETURNS trigger
@@ -1368,15 +1883,47 @@ DECLARE
   v_decision_id uuid := CASE WHEN TG_OP = 'DELETE' THEN OLD.decision_id
                              ELSE NEW.decision_id END;
   v_decision public.client_decisions%ROWTYPE;
+  v_parent_locked boolean := false;
   v_maintenance boolean := current_user IS NOT DISTINCT FROM 'postgres'
     AND auth.uid() IS NULL
     AND COALESCE(auth.role(), '') NOT IN ('authenticated', 'service_role');
 BEGIN
-  SELECT * INTO v_decision
-  FROM public.client_decisions
-  WHERE id = v_decision_id;
+  IF TG_OP = 'INSERT'
+     AND current_user IS NOT DISTINCT FROM 'authenticated'
+  THEN
+    -- New children have no row for a publisher/apply workflow to lock. Join
+    -- the parent-first protocol explicitly so a concurrent apply completes
+    -- first and this guard rechecks the resulting terminal status.
+    v_parent_locked := public.lock_client_decision_option_parent(
+      v_decision_id, 'studio_option_insert'
+    );
+    SELECT * INTO v_decision
+    FROM public.client_decisions
+    WHERE id = v_decision_id;
+  ELSIF TG_OP = 'INSERT' AND current_user IS DISTINCT FROM 'postgres' THEN
+    -- Preserve trusted non-browser callers while authenticated compatibility
+    -- traffic uses the exact lock helper above.
+    SELECT * INTO v_decision
+    FROM public.client_decisions
+    WHERE id = v_decision_id
+    FOR UPDATE;
+  ELSE
+    SELECT * INTO v_decision
+    FROM public.client_decisions
+    WHERE id = v_decision_id;
+  END IF;
 
   IF NOT FOUND THEN
+    IF TG_OP = 'DELETE'
+       AND pg_trigger_depth() > 1
+       AND current_setting('app.client_decision_delete_cascade_id', true)
+             IS NOT DISTINCT FROM v_decision_id::text
+    THEN
+      -- ON DELETE CASCADE removes options after the permitted parent draft
+      -- delete has made the parent invisible. The parent guard minted this
+      -- exact decision-scoped capability before the cascade began.
+      RETURN OLD;
+    END IF;
     RAISE EXCEPTION 'decision % not found for option write', v_decision_id
       USING ERRCODE = 'foreign_key_violation';
   END IF;
@@ -1397,31 +1944,122 @@ BEGIN
   END IF;
 
   IF TG_OP = 'INSERT' AND current_user IS DISTINCT FROM 'postgres' THEN
-    IF NOT (
-      v_decision.designer_id = auth.uid()
-      OR EXISTS (
-        SELECT 1
-        FROM public.organization_members AS actor_membership
-        JOIN public.organization_members AS owner_membership
-          ON owner_membership.organization_id = actor_membership.organization_id
-        JOIN public.organizations AS organization
-          ON organization.id = actor_membership.organization_id
-        WHERE actor_membership.user_id = auth.uid()
-          AND actor_membership.status = 'active'
-          AND actor_membership.role <> 'guest'
-          AND owner_membership.user_id = v_decision.designer_id
-          AND owner_membership.status = 'active'
-          AND owner_membership.role <> 'guest'
-          AND organization.type = 'design_studio'
-          AND organization.status = 'active'
-      )
-    ) OR v_decision.status NOT IN ('draft', 'pending')
+    -- Direct extension/web births cannot backdate their audit record.
+    NEW.created_at := now();
+
+    IF NOT public.is_design_studio_comember(v_decision.designer_id)
+       OR v_decision.status NOT IN ('draft', 'pending')
+    THEN
+      RAISE EXCEPTION 'not authorized to add an option to decision %', v_decision_id
+        USING ERRCODE = 'insufficient_privilege';
+    END IF;
+    IF current_user IS NOT DISTINCT FROM 'authenticated'
+       AND NOT v_parent_locked
     THEN
       RAISE EXCEPTION 'not authorized to add an option to decision %', v_decision_id
         USING ERRCODE = 'insufficient_privilege';
     END IF;
     IF COALESCE(NEW.selected, false) OR NEW.client_note IS NOT NULL THEN
       RAISE EXCEPTION 'new decision options cannot preload client selection truth'
+        USING ERRCODE = 'check_violation';
+    END IF;
+    IF NEW.quantity IS NOT NULL AND NEW.quantity < 1 THEN
+      RAISE EXCEPTION 'decision option quantity must be at least 1'
+        USING ERRCODE = 'check_violation';
+    END IF;
+    IF v_decision.status = 'pending'
+       AND (
+         v_decision.decision_type IS DISTINCT FROM 'product'
+         OR NEW.sort_order IS DISTINCT FROM 0
+         OR NEW.is_recommended IS DISTINCT FROM true
+         OR NEW.product_id IS NULL
+         OR NEW.quantity IS DISTINCT FROM 1
+         OR EXISTS (
+           SELECT 1
+           FROM public.client_decision_options AS existing_option
+           WHERE existing_option.decision_id = v_decision_id
+         )
+       )
+    THEN
+      RAISE EXCEPTION
+        'pending extension decisions accept only their one canonical captured-product option'
+        USING ERRCODE = 'check_violation';
+    END IF;
+    RETURN NEW;
+  END IF;
+
+  IF TG_OP = 'UPDATE'
+     AND current_user IS NOT DISTINCT FROM 'authenticated'
+     AND v_decision.status = 'expired'
+     AND public.is_design_studio_comember(v_decision.designer_id)
+     AND current_setting('app.client_decision_write_id', true)
+           IS NOT DISTINCT FROM v_decision_id::text
+     AND current_setting('app.client_decision_compat_reopen_id', true)
+           IS NOT DISTINCT FROM v_decision_id::text
+     AND (
+       to_jsonb(NEW) - ARRAY['selected', 'client_note']
+     ) IS NOT DISTINCT FROM (
+       to_jsonb(OLD) - ARRAY['selected', 'client_note']
+     )
+  THEN
+    RETURN NEW;
+  END IF;
+
+  IF TG_OP = 'UPDATE'
+     AND current_user IS NOT DISTINCT FROM 'authenticated'
+     AND v_decision.status = 'draft'
+     AND public.is_design_studio_comember(v_decision.designer_id)
+     AND (
+       to_jsonb(NEW) - ARRAY[
+         'name', 'image_url', 'designer_note', 'is_recommended',
+         'sort_order', 'price', 'quantity', 'cost_delta_cents',
+         'lead_time_days_delta', 'product_id', 'approves'
+       ]
+     ) IS NOT DISTINCT FROM (
+       to_jsonb(OLD) - ARRAY[
+         'name', 'image_url', 'designer_note', 'is_recommended',
+         'sort_order', 'price', 'quantity', 'cost_delta_cents',
+         'lead_time_days_delta', 'product_id', 'approves'
+       ]
+     )
+  THEN
+    IF NEW.quantity IS NOT NULL AND NEW.quantity < 1 THEN
+      RAISE EXCEPTION 'decision option quantity must be at least 1'
+        USING ERRCODE = 'check_violation';
+    END IF;
+    RETURN NEW;
+  END IF;
+
+  IF TG_OP = 'DELETE'
+     AND current_user IS NOT DISTINCT FROM 'authenticated'
+     AND v_decision.status = 'draft'
+     AND public.is_design_studio_comember(v_decision.designer_id)
+  THEN
+    PERFORM set_config(
+      'app.client_decision_option_delete_decision_id',
+      OLD.decision_id::text,
+      true
+    );
+    RETURN OLD;
+  END IF;
+
+  -- Rollback client bundles persist note/quantity immediately before calling
+  -- apply_decision. The row and columns are separately narrowed by RLS/ACL;
+  -- the trigger also verifies the exact addressed client and write shape.
+  IF TG_OP = 'UPDATE'
+     AND current_user IS NOT DISTINCT FROM 'authenticated'
+     AND v_decision.status = 'pending'
+     AND v_decision.coordination_kind = 'selection'
+     AND v_decision.court = 'client'
+     AND public.is_addressed_client_decision(v_decision_id)
+     AND (
+       to_jsonb(NEW) - ARRAY['client_note', 'quantity']
+     ) IS NOT DISTINCT FROM (
+       to_jsonb(OLD) - ARRAY['client_note', 'quantity']
+     )
+  THEN
+    IF NEW.quantity IS NOT NULL AND NEW.quantity < 1 THEN
+      RAISE EXCEPTION 'decision option quantity must be at least 1'
         USING ERRCODE = 'check_violation';
     END IF;
     RETURN NEW;
@@ -1453,8 +2091,105 @@ REVOKE ALL ON FUNCTION public.guard_client_decision_option_authority()
 
 DROP TRIGGER IF EXISTS zz_guard_client_decision_option_authority_trg
   ON public.client_decision_options;
--- Expand phase: leave this guard unattached until the extension and rollback
--- web bundles have adopted the canonical decision RPCs.
+CREATE TRIGGER zz_guard_client_decision_option_authority_trg
+BEFORE INSERT OR UPDATE OR DELETE ON public.client_decision_options
+FOR EACH ROW EXECUTE FUNCTION public.guard_client_decision_option_authority();
+
+-- Legacy studio bundles insert override evidence directly before calling the
+-- compatibility apply wrapper. Keep that path, but own its audit birth time.
+-- acted_by remains constrained to auth.uid() by the exact-studio INSERT RLS
+-- policy below; canonical DEFINER inserts already receive the table default.
+CREATE OR REPLACE FUNCTION public.guard_decision_override_authority()
+RETURNS trigger
+LANGUAGE plpgsql
+SECURITY INVOKER
+SET search_path = public, pg_temp
+AS $$
+DECLARE
+  v_decision public.client_decisions%ROWTYPE;
+  v_parent_locked boolean := false;
+BEGIN
+  IF current_user IS DISTINCT FROM 'postgres' THEN
+    -- Evidence is a child of the lifecycle row. Lock/recheck the parent first
+    -- so it cannot become responded between validation and receipt insertion.
+    IF current_user IS NOT DISTINCT FROM 'authenticated' THEN
+      v_parent_locked := public.lock_client_decision_option_parent(
+        NEW.decision_id, 'studio_override_insert'
+      );
+      SELECT * INTO v_decision
+      FROM public.client_decisions
+      WHERE id = NEW.decision_id;
+    ELSE
+      SELECT * INTO v_decision
+      FROM public.client_decisions
+      WHERE id = NEW.decision_id
+      FOR UPDATE;
+    END IF;
+
+    IF NOT FOUND
+       OR (
+         current_user IS NOT DISTINCT FROM 'authenticated'
+         AND NOT public.is_design_studio_comember(v_decision.designer_id)
+       )
+       OR (
+         current_user IS NOT DISTINCT FROM 'authenticated'
+         AND NEW.acted_by IS DISTINCT FROM auth.uid()
+       )
+    THEN
+      RAISE EXCEPTION 'not authorized to record a decision override'
+        USING ERRCODE = 'insufficient_privilege';
+    END IF;
+    IF v_decision.status <> 'pending' THEN
+      RAISE EXCEPTION 'override evidence requires a pending decision'
+        USING ERRCODE = 'check_violation';
+    END IF;
+    IF v_decision.coordination_kind IS DISTINCT FROM 'selection'
+       OR v_decision.court IS DISTINCT FROM 'client'
+    THEN
+      RAISE EXCEPTION
+        'override evidence requires a client-court selection decision'
+        USING ERRCODE = 'check_violation';
+    END IF;
+    IF current_user IS NOT DISTINCT FROM 'authenticated'
+       AND NOT v_parent_locked
+    THEN
+      RAISE EXCEPTION 'not authorized to record a decision override'
+        USING ERRCODE = 'insufficient_privilege';
+    END IF;
+    IF NEW.option_id IS NULL
+       OR NOT EXISTS (
+         SELECT 1
+         FROM public.client_decision_options AS option
+         WHERE option.id = NEW.option_id
+           AND option.decision_id = NEW.decision_id
+       )
+    THEN
+      RAISE EXCEPTION 'override option must belong to its decision'
+        USING ERRCODE = 'check_violation';
+    END IF;
+    IF NEW.consent_method NOT IN (
+         'verbal', 'written', 'text_excerpt', 'email_excerpt'
+       )
+       OR btrim(COALESCE(NEW.consent_evidence, '')) = ''
+    THEN
+      RAISE EXCEPTION 'valid override consent evidence is required'
+        USING ERRCODE = 'check_violation';
+    END IF;
+    NEW.consent_evidence := btrim(NEW.consent_evidence);
+    NEW.created_at := now();
+  END IF;
+  RETURN NEW;
+END;
+$$;
+
+REVOKE ALL ON FUNCTION public.guard_decision_override_authority()
+  FROM PUBLIC, anon, authenticated, service_role;
+
+DROP TRIGGER IF EXISTS zz_guard_decision_override_authority_trg
+  ON public.decision_overrides;
+CREATE TRIGGER zz_guard_decision_override_authority_trg
+BEFORE INSERT ON public.decision_overrides
+FOR EACH ROW EXECUTE FUNCTION public.guard_decision_override_authority();
 
 -- The recommendation mirror is itself a canonical parent/option workflow.
 -- Make both directions DEFINER-owned and set the exact parent capability.
@@ -1556,13 +2291,19 @@ DROP POLICY IF EXISTS client_decisions_studio_select
   ON public.client_decisions;
 CREATE POLICY client_decisions_studio_select
 ON public.client_decisions FOR SELECT TO authenticated
-USING (public.is_studio_comember(designer_id));
+USING (public.is_design_studio_comember(designer_id));
 
 DROP POLICY IF EXISTS client_decisions_studio_insert
   ON public.client_decisions;
 CREATE POLICY client_decisions_studio_insert
 ON public.client_decisions FOR INSERT TO authenticated
-WITH CHECK (public.is_studio_comember(designer_id));
+WITH CHECK (public.is_design_studio_comember(designer_id));
+
+DROP POLICY IF EXISTS "Clients can view their decisions"
+  ON public.client_decisions;
+CREATE POLICY "Clients can view their decisions"
+ON public.client_decisions FOR SELECT TO authenticated
+USING (public.is_addressed_client_decision(id));
 
 -- Installed Patina iOS builds still PATCH viewed_at and then the three consent
 -- columns after apply_decision. RLS scopes this temporary compatibility path
@@ -1572,20 +2313,12 @@ DROP POLICY IF EXISTS client_decisions_client_compat_update
 CREATE POLICY client_decisions_client_compat_update
 ON public.client_decisions FOR UPDATE TO authenticated
 USING (
-  EXISTS (
-    SELECT 1
-    FROM public.designer_clients AS relationship
-    WHERE relationship.id = client_decisions.designer_client_id
-      AND relationship.client_id = auth.uid()
-  )
+  client_decisions.status IN ('pending', 'responded', 'expired')
+  AND public.is_addressed_client_decision(client_decisions.id)
 )
 WITH CHECK (
-  EXISTS (
-    SELECT 1
-    FROM public.designer_clients AS relationship
-    WHERE relationship.id = client_decisions.designer_client_id
-      AND relationship.client_id = auth.uid()
-  )
+  client_decisions.status IN ('pending', 'responded', 'expired')
+  AND public.is_addressed_client_decision(client_decisions.id)
 );
 
 REVOKE INSERT, UPDATE, DELETE ON TABLE public.client_decisions FROM anon;
@@ -1611,7 +2344,7 @@ USING (
   EXISTS (
     SELECT 1 FROM public.client_decisions AS decision
     WHERE decision.id = client_decision_options.decision_id
-      AND public.is_studio_comember(decision.designer_id)
+      AND public.is_design_studio_comember(decision.designer_id)
   )
 );
 
@@ -1623,9 +2356,15 @@ WITH CHECK (
   EXISTS (
     SELECT 1 FROM public.client_decisions AS decision
     WHERE decision.id = client_decision_options.decision_id
-      AND public.is_studio_comember(decision.designer_id)
+      AND public.is_design_studio_comember(decision.designer_id)
   )
 );
+
+DROP POLICY IF EXISTS "Clients can view their decision options"
+  ON public.client_decision_options;
+CREATE POLICY "Clients can view their decision options"
+ON public.client_decision_options FOR SELECT TO authenticated
+USING (public.is_addressed_client_decision(decision_id));
 
 REVOKE INSERT, UPDATE, DELETE ON TABLE public.client_decision_options FROM anon;
 REVOKE UPDATE, DELETE ON TABLE public.client_decision_options FROM authenticated;
@@ -1637,111 +2376,164 @@ REVOKE INSERT, UPDATE, DELETE ON TABLE public.decision_overrides
 GRANT SELECT ON TABLE public.decision_overrides TO authenticated;
 GRANT ALL ON TABLE public.decision_overrides TO service_role;
 
--- Expand phase: restore the authenticated legacy surfaces after installing the
--- canonical RPCs. Old portal/extension builds are distributed independently,
--- so enforcement moves to a later adoption-gated migration. Anonymous writes
--- remain revoked and the existing RLS ownership boundaries remain in force.
-DROP POLICY IF EXISTS "Designers can manage their decisions"
-  ON public.client_decisions;
-CREATE POLICY "Designers can manage their decisions"
-ON public.client_decisions FOR ALL TO authenticated
+-- Override evidence follows the same studio workspace and addressed-client
+-- visibility boundary as its parent decision. The original 00090 policies
+-- required the exact relationship owner and joined designer_clients directly,
+-- which denied active studio peers and silently hid evidence from clients.
+DROP POLICY IF EXISTS decision_overrides_designer_select
+  ON public.decision_overrides;
+CREATE POLICY decision_overrides_designer_select
+ON public.decision_overrides FOR SELECT TO authenticated
 USING (
   EXISTS (
-    SELECT 1 FROM public.designer_clients AS relationship
-    WHERE relationship.id = client_decisions.designer_client_id
-      AND relationship.designer_id = auth.uid()
+    SELECT 1
+    FROM public.client_decisions AS decision
+    WHERE decision.id = decision_overrides.decision_id
+      AND public.is_design_studio_comember(decision.designer_id)
   )
 );
 
-DROP POLICY IF EXISTS "Clients can respond to their decisions"
+DROP POLICY IF EXISTS decision_overrides_designer_insert
+  ON public.decision_overrides;
+CREATE POLICY decision_overrides_designer_insert
+ON public.decision_overrides FOR INSERT TO authenticated
+WITH CHECK (
+  acted_by = auth.uid()
+  AND EXISTS (
+    SELECT 1
+    FROM public.client_decisions AS decision
+    WHERE decision.id = decision_overrides.decision_id
+      AND public.is_design_studio_comember(decision.designer_id)
+      AND decision.status = 'pending'
+      AND decision.coordination_kind = 'selection'
+      AND decision.court = 'client'
+  )
+);
+
+DROP POLICY IF EXISTS decision_overrides_client_select
+  ON public.decision_overrides;
+CREATE POLICY decision_overrides_client_select
+ON public.decision_overrides FOR SELECT TO authenticated
+USING (public.is_addressed_client_decision(decision_id));
+
+-- Expand compatibility remains deliberately finite. Rollback designer
+-- bundles may edit/publish/delete drafts; installed clients may write only
+-- their own view/consent and pre-apply note/quantity fields. The attached
+-- triggers above enforce the exact column and lifecycle shapes.
+DROP POLICY IF EXISTS client_decisions_studio_legacy_update
   ON public.client_decisions;
-CREATE POLICY "Clients can respond to their decisions"
+CREATE POLICY client_decisions_studio_legacy_update
 ON public.client_decisions FOR UPDATE TO authenticated
 USING (
-  EXISTS (
-    SELECT 1 FROM public.designer_clients AS relationship
-    WHERE relationship.id = client_decisions.designer_client_id
-      AND relationship.client_id = auth.uid()
-  )
+  public.is_design_studio_comember(designer_id)
+  AND status IN ('draft', 'pending', 'expired')
 )
 WITH CHECK (
-  EXISTS (
-    SELECT 1 FROM public.designer_clients AS relationship
-    WHERE relationship.id = client_decisions.designer_client_id
-      AND relationship.client_id = auth.uid()
-  )
+  public.is_design_studio_comember(designer_id)
+  AND status IN ('draft', 'pending', 'expired')
 );
 
-DROP POLICY IF EXISTS "client_decisions_studio_rw"
+DROP POLICY IF EXISTS client_decisions_studio_legacy_draft_delete
   ON public.client_decisions;
-CREATE POLICY "client_decisions_studio_rw"
-ON public.client_decisions FOR ALL TO authenticated
-USING (public.is_studio_comember(designer_id))
-WITH CHECK (public.is_studio_comember(designer_id));
-
-DROP POLICY IF EXISTS "Designers can manage decision options"
-  ON public.client_decision_options;
-CREATE POLICY "Designers can manage decision options"
-ON public.client_decision_options FOR ALL TO authenticated
+CREATE POLICY client_decisions_studio_legacy_draft_delete
+ON public.client_decisions FOR DELETE TO authenticated
 USING (
-  EXISTS (
-    SELECT 1
-    FROM public.client_decisions AS decision
-    JOIN public.designer_clients AS relationship
-      ON relationship.id = decision.designer_client_id
+  public.is_design_studio_comember(designer_id)
+  AND status = 'draft'
+);
+
+DROP POLICY IF EXISTS client_decision_options_studio_legacy_update
+  ON public.client_decision_options;
+
+DROP POLICY IF EXISTS client_decision_options_studio_legacy_draft_delete
+  ON public.client_decision_options;
+CREATE POLICY client_decision_options_studio_legacy_draft_delete
+ON public.client_decision_options FOR DELETE TO authenticated
+USING (
+  public.lock_client_decision_option_parent(
+    client_decision_options.decision_id, 'studio_draft_delete'
+  )
+  AND EXISTS (
+    SELECT 1 FROM public.client_decisions AS decision
     WHERE decision.id = client_decision_options.decision_id
-      AND relationship.designer_id = auth.uid()
+      AND decision.status = 'draft'
+      AND public.is_design_studio_comember(decision.designer_id)
   )
 );
 
-DROP POLICY IF EXISTS "Clients can select decision options"
+DROP POLICY IF EXISTS client_decision_options_client_compat_update
   ON public.client_decision_options;
-CREATE POLICY "Clients can select decision options"
+CREATE POLICY client_decision_options_client_compat_update
 ON public.client_decision_options FOR UPDATE TO authenticated
 USING (
+  public.lock_client_decision_option_parent(
+    client_decision_options.decision_id, 'client_pending_update'
+  )
+  AND public.is_addressed_client_decision(
+    client_decision_options.decision_id
+  )
+  AND
   EXISTS (
     SELECT 1
     FROM public.client_decisions AS decision
-    JOIN public.designer_clients AS relationship
-      ON relationship.id = decision.designer_client_id
     WHERE decision.id = client_decision_options.decision_id
-      AND relationship.client_id = auth.uid()
+      AND decision.status = 'pending'
+      AND decision.coordination_kind = 'selection'
+      AND decision.court = 'client'
   )
 )
 WITH CHECK (
+  public.is_addressed_client_decision(
+    client_decision_options.decision_id
+  )
+  AND
   EXISTS (
     SELECT 1
     FROM public.client_decisions AS decision
-    JOIN public.designer_clients AS relationship
-      ON relationship.id = decision.designer_client_id
     WHERE decision.id = client_decision_options.decision_id
-      AND relationship.client_id = auth.uid()
+      AND decision.status = 'pending'
+      AND decision.coordination_kind = 'selection'
+      AND decision.court = 'client'
   )
 );
 
-DROP POLICY IF EXISTS "client_decision_options_studio_rw"
+DROP POLICY IF EXISTS client_decision_options_studio_compat_reopen_update
   ON public.client_decision_options;
-CREATE POLICY "client_decision_options_studio_rw"
-ON public.client_decision_options FOR ALL TO authenticated
+CREATE POLICY client_decision_options_studio_compat_reopen_update
+ON public.client_decision_options FOR UPDATE TO authenticated
 USING (
-  EXISTS (
+  public.lock_client_decision_option_parent(
+    client_decision_options.decision_id, 'studio_expired_reopen_update'
+  )
+  AND EXISTS (
     SELECT 1 FROM public.client_decisions AS decision
     WHERE decision.id = client_decision_options.decision_id
-      AND public.is_studio_comember(decision.designer_id)
+      AND decision.status = 'expired'
+      AND public.is_design_studio_comember(decision.designer_id)
   )
 )
 WITH CHECK (
   EXISTS (
     SELECT 1 FROM public.client_decisions AS decision
     WHERE decision.id = client_decision_options.decision_id
-      AND public.is_studio_comember(decision.designer_id)
+      AND decision.status = 'expired'
+      AND public.is_design_studio_comember(decision.designer_id)
   )
 );
 
-GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE public.client_decisions
-  TO authenticated;
-GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE public.client_decision_options
-  TO authenticated;
+GRANT UPDATE (
+  title, context, due_date, linked_phase, decision_type, blocking_status,
+  project_id, coordination_kind, court, court_party_id, blocks_kind, phase_id,
+  status, sent_at, reminder_sent_at,
+  viewed_at, client_consent_method, client_consented_at, client_signature
+) ON TABLE public.client_decisions TO authenticated;
+GRANT DELETE ON TABLE public.client_decisions TO authenticated;
+
+GRANT UPDATE (
+  client_note, quantity, selected
+) ON TABLE public.client_decision_options TO authenticated;
+GRANT DELETE ON TABLE public.client_decision_options TO authenticated;
+
 GRANT SELECT, INSERT ON TABLE public.decision_overrides TO authenticated;
 
 -- Decision lifecycle notices are durable effects of the same transaction as
@@ -1846,7 +2638,7 @@ BEGIN
          SELECT 1
          FROM public.client_decisions AS decision
          WHERE decision.id = p_decision_id
-           AND public.is_studio_comember(decision.designer_id)
+           AND public.is_design_studio_comember(decision.designer_id)
        )
      )
   THEN
@@ -1895,7 +2687,7 @@ BEGIN
          WHERE decision.id = p_decision_id
            AND (
              relationship.client_id = auth.uid()
-             OR public.is_studio_comember(decision.designer_id)
+             OR public.is_design_studio_comember(decision.designer_id)
            )
        )
      )
@@ -1924,7 +2716,7 @@ BEGIN
          SELECT 1
          FROM public.client_decisions AS decision
          WHERE decision.id = p_decision_id
-           AND public.is_studio_comember(decision.designer_id)
+           AND public.is_design_studio_comember(decision.designer_id)
        )
      )
   THEN
@@ -2701,6 +3493,15 @@ BEGIN
       USING ERRCODE = 'check_violation';
   END IF;
 
+  -- The parent is already row-locked. Freeze its complete child set before
+  -- crossing the draft -> pending boundary so direct draft option mutations
+  -- serialize before publication, never after it.
+  PERFORM 1
+  FROM public.client_decision_options AS option
+  WHERE option.decision_id = p_decision_id
+  ORDER BY option.id
+  FOR UPDATE;
+
   PERFORM set_config('app.client_decision_write_id', p_decision_id::text, true);
   UPDATE public.client_decisions
   SET status = 'pending', sent_at = COALESCE(sent_at, now()), updated_at = now()
@@ -2756,7 +3557,13 @@ BEGIN
 
   UPDATE public.client_decisions
   SET status = 'pending',
+      due_date = CASE
+        WHEN due_date IS NULL OR due_date > now() THEN due_date
+        ELSE NULL
+      END,
       responded_at = NULL,
+      viewed_at = NULL,
+      reminder_sent_at = NULL,
       selected_by = NULL,
       answer = NULL,
       answered_at = NULL,
@@ -3351,9 +4158,10 @@ REVOKE ALL ON FUNCTION public._apply_client_decision_authorized(
 ) FROM PUBLIC, anon, authenticated, service_role;
 
 -- Compatibility entry point retained for installed/rollback callers. Clients
--- may attribute only themselves. A studio override may attribute only the
--- addressed client and must already have the matching audited override row
--- created by the legacy flow.
+-- may attribute only themselves. A studio override always attributes the real
+-- authenticated studio actor, including when the relationship has a claimed
+-- client. Both shapes require the matching audited override row created by the
+-- legacy flow.
 CREATE OR REPLACE FUNCTION public.apply_decision(
   p_decision_id uuid,
   p_selected_option_id uuid,
@@ -3368,14 +4176,21 @@ DECLARE
   v_actor uuid := auth.uid();
   v_client_id uuid;
   v_designer_id uuid;
+  v_coordination_kind text;
+  v_court text;
+  v_client_consent_method text;
+  v_client_signature text;
 BEGIN
   IF v_actor IS NULL THEN
     RAISE EXCEPTION 'apply_decision requires an authenticated user'
       USING ERRCODE = 'insufficient_privilege';
   END IF;
 
-  SELECT relationship.client_id, decision.designer_id
-  INTO v_client_id, v_designer_id
+  SELECT relationship.client_id, decision.designer_id,
+         decision.coordination_kind, decision.court,
+         decision.client_consent_method, decision.client_signature
+  INTO v_client_id, v_designer_id, v_coordination_kind, v_court,
+       v_client_consent_method, v_client_signature
   FROM public.client_decisions AS decision
   JOIN public.designer_clients AS relationship
     ON relationship.id = decision.designer_client_id
@@ -3384,29 +4199,52 @@ BEGIN
   FOR SHARE OF relationship;
 
   IF v_client_id IS NOT DISTINCT FROM v_actor THEN
+    IF v_coordination_kind IS DISTINCT FROM 'selection'
+       OR v_court IS DISTINCT FROM 'client'
+    THEN
+      RAISE EXCEPTION
+        'only client-court selection decisions may be applied by the addressed client'
+        USING ERRCODE = 'insufficient_privilege';
+    END IF;
     IF p_selected_by IS NOT NULL AND p_selected_by IS DISTINCT FROM v_actor THEN
       RAISE EXCEPTION 'p_selected_by must match the authenticated client'
         USING ERRCODE = 'insufficient_privilege';
     END IF;
 
     PERFORM public._apply_client_decision_authorized(
-      p_decision_id, p_selected_option_id, v_actor, NULL, NULL, NULL, NULL
+      p_decision_id, p_selected_option_id, v_actor,
+      v_client_consent_method, v_client_signature, NULL, NULL
     );
     RETURN;
   END IF;
 
   IF public._can_author_proposal(v_designer_id)
-     AND p_selected_by IS NOT DISTINCT FROM v_client_id
+     AND (
+       v_coordination_kind IS DISTINCT FROM 'selection'
+       OR v_court IS DISTINCT FROM 'client'
+     )
+  THEN
+    RAISE EXCEPTION
+      'only client-court selection decisions may be overridden through an option'
+      USING ERRCODE = 'insufficient_privilege';
+  END IF;
+
+  IF public._can_author_proposal(v_designer_id)
+     AND p_selected_by IS NOT DISTINCT FROM COALESCE(v_client_id, v_actor)
      AND EXISTS (
        SELECT 1
        FROM public.decision_overrides AS override
        WHERE override.decision_id = p_decision_id
          AND override.option_id = p_selected_option_id
          AND override.acted_by = v_actor
+         AND override.consent_method IN (
+           'verbal', 'written', 'text_excerpt', 'email_excerpt'
+         )
+         AND btrim(override.consent_evidence) <> ''
      )
   THEN
     PERFORM public._apply_client_decision_authorized(
-      p_decision_id, p_selected_option_id, v_client_id,
+      p_decision_id, p_selected_option_id, v_actor,
       NULL, NULL, NULL, NULL
     );
     RETURN;
@@ -3440,13 +4278,16 @@ AS $$
 DECLARE
   v_actor uuid := auth.uid();
   v_client_id uuid;
+  v_coordination_kind text;
+  v_court text;
 BEGIN
   IF v_actor IS NULL THEN
     RAISE EXCEPTION 'apply_client_decision requires an authenticated user'
       USING ERRCODE = 'insufficient_privilege';
   END IF;
 
-  SELECT relationship.client_id INTO v_client_id
+  SELECT relationship.client_id, decision.coordination_kind, decision.court
+  INTO v_client_id, v_coordination_kind, v_court
   FROM public.client_decisions AS decision
   JOIN public.designer_clients AS relationship
     ON relationship.id = decision.designer_client_id
@@ -3456,6 +4297,13 @@ BEGIN
 
   IF v_client_id IS DISTINCT FROM v_actor THEN
     RAISE EXCEPTION 'only the addressed client may apply this decision'
+      USING ERRCODE = 'insufficient_privilege';
+  END IF;
+  IF v_coordination_kind IS DISTINCT FROM 'selection'
+     OR v_court IS DISTINCT FROM 'client'
+  THEN
+    RAISE EXCEPTION
+      'only client-court selection decisions may be applied by the addressed client'
       USING ERRCODE = 'insufficient_privilege';
   END IF;
 
@@ -3506,6 +4354,14 @@ BEGIN
 
   IF NOT FOUND OR NOT public._can_author_proposal(v_decision.designer_id) THEN
     RAISE EXCEPTION 'decision % not found or access denied', p_decision_id
+      USING ERRCODE = 'insufficient_privilege';
+  END IF;
+
+  IF v_decision.coordination_kind IS DISTINCT FROM 'selection'
+     OR v_decision.court IS DISTINCT FROM 'client'
+  THEN
+    RAISE EXCEPTION
+      'only client-court selection decisions may be overridden through an option'
       USING ERRCODE = 'insufficient_privilege';
   END IF;
 
@@ -4379,24 +5235,116 @@ $$;
 REVOKE ALL ON FUNCTION public._proposal_phase_main_tail(uuid, text)
   FROM PUBLIC, anon, authenticated, service_role;
 
+-- Rollback browser inserts still target the table directly. Give the trigger
+-- one narrowly executable DEFINER helper that serializes on the proposal,
+-- verifies the existing graph, and returns the only legal predecessor/order.
+-- Calling this helper directly changes no data.
+CREATE OR REPLACE FUNCTION public._prepare_legacy_proposal_phase_insert(
+  p_proposal_id uuid,
+  p_requested_follows_phase_id uuid
+)
+RETURNS TABLE(follows_phase_id uuid, sort_order integer)
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public, pg_temp
+AS $$
+DECLARE
+  v_proposal public.proposals%ROWTYPE;
+  v_tail uuid;
+  v_sort integer;
+BEGIN
+  IF auth.uid() IS NULL THEN
+    RAISE EXCEPTION 'proposal phase insert requires an authenticated user'
+      USING ERRCODE = 'insufficient_privilege';
+  END IF;
+
+  SELECT * INTO v_proposal
+  FROM public.proposals
+  WHERE id = p_proposal_id
+  FOR UPDATE;
+  IF NOT FOUND OR NOT public._can_author_proposal(v_proposal.designer_id) THEN
+    RAISE EXCEPTION 'proposal % not found or access denied', p_proposal_id
+      USING ERRCODE = 'insufficient_privilege';
+  END IF;
+  IF v_proposal.status <> 'draft' THEN
+    RAISE EXCEPTION 'proposal % is %, so its authored copy is immutable',
+      p_proposal_id, v_proposal.status
+      USING ERRCODE = 'check_violation';
+  END IF;
+
+  PERFORM phase.id
+  FROM public.proposal_phases AS phase
+  WHERE phase.proposal_id = p_proposal_id
+  ORDER BY phase.id
+  FOR UPDATE;
+
+  v_tail := public._proposal_phase_main_tail(
+    p_proposal_id, 'legacy proposal phase insert precondition'
+  );
+  IF p_requested_follows_phase_id IS NOT NULL
+     AND p_requested_follows_phase_id IS DISTINCT FROM v_tail
+  THEN
+    RAISE EXCEPTION
+      'legacy proposal phase predecessor must be the canonical main tail'
+      USING ERRCODE = 'check_violation';
+  END IF;
+
+  SELECT COALESCE(max(phase.sort_order), -1) + 1
+  INTO v_sort
+  FROM public.proposal_phases AS phase
+  WHERE phase.proposal_id = p_proposal_id;
+
+  follows_phase_id := v_tail;
+  sort_order := v_sort;
+  RETURN NEXT;
+END;
+$$;
+
+REVOKE ALL ON FUNCTION public._prepare_legacy_proposal_phase_insert(uuid, uuid)
+  FROM PUBLIC, anon, service_role;
+GRANT EXECUTE ON FUNCTION public._prepare_legacy_proposal_phase_insert(uuid, uuid)
+  TO authenticated;
+
 -- Browser inserts and direct topology rewrites cannot bypass the checked
 -- parent-lock protocol. Non-topology draft edits remain available through the
--- existing proposal child policy/guard.
+-- existing proposal child policy/guard and column ACL.
 CREATE OR REPLACE FUNCTION public.guard_proposal_phase_topology_write()
 RETURNS trigger
 LANGUAGE plpgsql
 SECURITY INVOKER
 SET search_path = public, pg_temp
 AS $$
+DECLARE
+  v_prepared record;
 BEGIN
   IF current_user IS NOT DISTINCT FROM 'postgres' THEN
     RETURN NEW;
   END IF;
 
   IF TG_OP = 'INSERT' THEN
-    -- Expand-phase compatibility: rollback builders still insert draft phases
-    -- directly. The earlier draft-only parent guard validates and serializes
-    -- that write; this trigger continues to forbid topology rewrites.
+    IF btrim(COALESCE(NEW.name, '')) = '' THEN
+      RAISE EXCEPTION 'phase name is required'
+        USING ERRCODE = 'check_violation';
+    END IF;
+    IF NEW.lane NOT IN ('main', 'thread') THEN
+      RAISE EXCEPTION 'phase lane must be main or thread'
+        USING ERRCODE = 'invalid_parameter_value';
+    END IF;
+    IF NEW.deliverables IS NOT NULL
+       AND jsonb_typeof(NEW.deliverables) <> 'array'
+    THEN
+      RAISE EXCEPTION 'phase deliverables must be a JSON array'
+        USING ERRCODE = 'invalid_parameter_value';
+    END IF;
+
+    SELECT * INTO STRICT v_prepared
+    FROM public._prepare_legacy_proposal_phase_insert(
+      NEW.proposal_id, NEW.follows_phase_id
+    );
+    NEW.follows_phase_id := v_prepared.follows_phase_id;
+    NEW.sort_order := v_prepared.sort_order;
+    NEW.created_at := now();
+    NEW.updated_at := now();
     RETURN NEW;
   END IF;
   IF NEW.proposal_id IS DISTINCT FROM OLD.proposal_id
@@ -4421,10 +5369,90 @@ BEFORE INSERT OR UPDATE OF proposal_id, lane, follows_phase_id
 ON public.proposal_phases
 FOR EACH ROW EXECUTE FUNCTION public.guard_proposal_phase_topology_write();
 
--- Expand phase retains direct draft phase create/edit/remove for rollback
--- bundles; the topology guard above and 00390 draft-only guard remain active.
-REVOKE INSERT, UPDATE, DELETE ON TABLE public.proposal_phases FROM anon;
-GRANT INSERT, UPDATE, DELETE ON TABLE public.proposal_phases TO authenticated;
+-- Arbitrary rollback deletes are rewired with the same successor semantics as
+-- remove_proposal_phase. A DEFINER trigger is required so its internal child
+-- UPDATE is not blocked by the public topology column ACL.
+CREATE OR REPLACE FUNCTION public.rewire_legacy_proposal_phase_delete()
+RETURNS trigger
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public, pg_temp
+AS $$
+DECLARE
+  v_proposal public.proposals%ROWTYPE;
+BEGIN
+  IF auth.uid() IS NULL THEN
+    RETURN OLD;
+  END IF;
+
+  IF TG_WHEN = 'BEFORE' THEN
+    SELECT * INTO v_proposal
+    FROM public.proposals
+    WHERE id = OLD.proposal_id
+    FOR UPDATE;
+    IF NOT FOUND OR NOT public._can_author_proposal(v_proposal.designer_id) THEN
+      RAISE EXCEPTION 'proposal % not found or access denied', OLD.proposal_id
+        USING ERRCODE = 'insufficient_privilege';
+    END IF;
+    IF v_proposal.status <> 'draft' THEN
+      RAISE EXCEPTION 'proposal % is %, so its authored copy is immutable',
+        OLD.proposal_id, v_proposal.status
+        USING ERRCODE = 'check_violation';
+    END IF;
+
+    PERFORM phase.id
+    FROM public.proposal_phases AS phase
+    WHERE phase.proposal_id = OLD.proposal_id
+    ORDER BY phase.id
+    FOR UPDATE;
+
+    -- Canonical remove_proposal_phase rewires children before issuing DELETE;
+    -- rollback callers do not. This idempotent update safely covers both. The
+    -- AFTER leg asserts the resulting graph and rolls the statement back if
+    -- any pre-existing ambiguity cannot be resolved by removing this node.
+    UPDATE public.proposal_phases
+    SET follows_phase_id = OLD.follows_phase_id,
+        updated_at = now()
+    WHERE proposal_id = OLD.proposal_id
+      AND follows_phase_id = OLD.id;
+    RETURN OLD;
+  END IF;
+
+  PERFORM public._assert_proposal_phase_topology(
+    OLD.proposal_id, 'legacy proposal phase delete result'
+  );
+  IF to_regprocedure('public._recompute_proposal_total_locked(uuid)') IS NOT NULL
+  THEN
+    PERFORM public._recompute_proposal_total_locked(OLD.proposal_id);
+  END IF;
+  RETURN OLD;
+END;
+$$;
+
+REVOKE ALL ON FUNCTION public.rewire_legacy_proposal_phase_delete()
+  FROM PUBLIC, anon, authenticated, service_role;
+
+DROP TRIGGER IF EXISTS x_rewire_legacy_proposal_phase_delete_trg
+  ON public.proposal_phases;
+CREATE TRIGGER x_rewire_legacy_proposal_phase_delete_trg
+BEFORE DELETE ON public.proposal_phases
+FOR EACH ROW EXECUTE FUNCTION public.rewire_legacy_proposal_phase_delete();
+
+DROP TRIGGER IF EXISTS zz_assert_legacy_proposal_phase_delete_trg
+  ON public.proposal_phases;
+CREATE TRIGGER zz_assert_legacy_proposal_phase_delete_trg
+AFTER DELETE ON public.proposal_phases
+FOR EACH ROW EXECUTE FUNCTION public.rewire_legacy_proposal_phase_delete();
+
+-- Expand phase retains only the columns used by the rollback phase editor.
+-- Canonical RPCs execute as DEFINER and are unaffected by this column ACL.
+REVOKE INSERT, UPDATE, DELETE ON TABLE public.proposal_phases
+  FROM anon, authenticated;
+GRANT INSERT, DELETE ON TABLE public.proposal_phases TO authenticated;
+GRANT UPDATE (
+  name, phase_key, duration_weeks, fee_cents, revision_limit,
+  gate_condition, deliverables, duration_days, anchor_date
+) ON TABLE public.proposal_phases TO authenticated;
 
 -- 00316 widened the parent phases/payment schedule to active design-studio
 -- peers but missed the three phase-parented child tables. Keep their existing
@@ -4441,7 +5469,7 @@ USING (
     FROM public.proposal_phases AS phase
     JOIN public.proposals AS proposal ON proposal.id = phase.proposal_id
     WHERE phase.id = proposal_phase_deliverables.phase_id
-      AND public.is_studio_comember(proposal.designer_id)
+      AND public.is_design_studio_comember(proposal.designer_id)
   )
 )
 WITH CHECK (
@@ -4450,7 +5478,7 @@ WITH CHECK (
     FROM public.proposal_phases AS phase
     JOIN public.proposals AS proposal ON proposal.id = phase.proposal_id
     WHERE phase.id = proposal_phase_deliverables.phase_id
-      AND public.is_studio_comember(proposal.designer_id)
+      AND public.is_design_studio_comember(proposal.designer_id)
   )
 );
 
@@ -4465,7 +5493,7 @@ USING (
     FROM public.proposal_phases AS phase
     JOIN public.proposals AS proposal ON proposal.id = phase.proposal_id
     WHERE phase.id = proposal_phase_gates.phase_id
-      AND public.is_studio_comember(proposal.designer_id)
+      AND public.is_design_studio_comember(proposal.designer_id)
   )
 )
 WITH CHECK (
@@ -4474,7 +5502,7 @@ WITH CHECK (
     FROM public.proposal_phases AS phase
     JOIN public.proposals AS proposal ON proposal.id = phase.proposal_id
     WHERE phase.id = proposal_phase_gates.phase_id
-      AND public.is_studio_comember(proposal.designer_id)
+      AND public.is_design_studio_comember(proposal.designer_id)
   )
 );
 
@@ -4489,7 +5517,7 @@ USING (
     FROM public.proposal_phases AS phase
     JOIN public.proposals AS proposal ON proposal.id = phase.proposal_id
     WHERE phase.id = proposal_schedule_milestones.phase_id
-      AND public.is_studio_comember(proposal.designer_id)
+      AND public.is_design_studio_comember(proposal.designer_id)
   )
 )
 WITH CHECK (
@@ -4498,7 +5526,7 @@ WITH CHECK (
     FROM public.proposal_phases AS phase
     JOIN public.proposals AS proposal ON proposal.id = phase.proposal_id
     WHERE phase.id = proposal_schedule_milestones.phase_id
-      AND public.is_studio_comember(proposal.designer_id)
+      AND public.is_design_studio_comember(proposal.designer_id)
   )
 );
 
@@ -4511,14 +5539,14 @@ USING (
   EXISTS (
     SELECT 1 FROM public.proposals AS proposal
     WHERE proposal.id = proposal_palettes.proposal_id
-      AND public.is_studio_comember(proposal.designer_id)
+      AND public.is_design_studio_comember(proposal.designer_id)
   )
 )
 WITH CHECK (
   EXISTS (
     SELECT 1 FROM public.proposals AS proposal
     WHERE proposal.id = proposal_palettes.proposal_id
-      AND public.is_studio_comember(proposal.designer_id)
+      AND public.is_design_studio_comember(proposal.designer_id)
   )
 );
 
@@ -4533,7 +5561,7 @@ USING (
     FROM public.proposal_palettes AS palette
     JOIN public.proposals AS proposal ON proposal.id = palette.proposal_id
     WHERE palette.id = palette_swatches.palette_id
-      AND public.is_studio_comember(proposal.designer_id)
+      AND public.is_design_studio_comember(proposal.designer_id)
   )
 )
 WITH CHECK (
@@ -4542,7 +5570,7 @@ WITH CHECK (
     FROM public.proposal_palettes AS palette
     JOIN public.proposals AS proposal ON proposal.id = palette.proposal_id
     WHERE palette.id = palette_swatches.palette_id
-      AND public.is_studio_comember(proposal.designer_id)
+      AND public.is_design_studio_comember(proposal.designer_id)
   )
 );
 
@@ -4555,14 +5583,14 @@ USING (
   EXISTS (
     SELECT 1 FROM public.proposals AS proposal
     WHERE proposal.id = proposal_team_members.proposal_id
-      AND public.is_studio_comember(proposal.designer_id)
+      AND public.is_design_studio_comember(proposal.designer_id)
   )
 )
 WITH CHECK (
   EXISTS (
     SELECT 1 FROM public.proposals AS proposal
     WHERE proposal.id = proposal_team_members.proposal_id
-      AND public.is_studio_comember(proposal.designer_id)
+      AND public.is_design_studio_comember(proposal.designer_id)
   )
 );
 
@@ -4576,7 +5604,7 @@ USING (
   AND EXISTS (
     SELECT 1 FROM public.proposals AS proposal
     WHERE proposal.id = spec_field_defs.proposal_id
-      AND public.is_studio_comember(proposal.designer_id)
+      AND public.is_design_studio_comember(proposal.designer_id)
   )
 )
 WITH CHECK (
@@ -4584,7 +5612,7 @@ WITH CHECK (
   AND EXISTS (
     SELECT 1 FROM public.proposals AS proposal
     WHERE proposal.id = spec_field_defs.proposal_id
-      AND public.is_studio_comember(proposal.designer_id)
+      AND public.is_design_studio_comember(proposal.designer_id)
   )
 );
 
@@ -4626,6 +5654,33 @@ $$;
 
 REVOKE ALL ON FUNCTION public._recompute_proposal_total_locked(uuid)
   FROM PUBLIC, anon, authenticated, service_role;
+
+-- Rollback builders still mutate phase fees directly and only *then* issue a
+-- best-effort parent-total request. Make the invariant transactional at the
+-- database boundary so a dropped second request cannot leave stale money.
+CREATE OR REPLACE FUNCTION public.sync_proposal_phase_total()
+RETURNS trigger
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public, pg_temp
+AS $$
+BEGIN
+  IF TG_OP = 'UPDATE' AND NEW.fee_cents IS NOT DISTINCT FROM OLD.fee_cents THEN
+    RETURN NEW;
+  END IF;
+  PERFORM public._recompute_proposal_total_locked(NEW.proposal_id);
+  RETURN NEW;
+END;
+$$;
+
+REVOKE ALL ON FUNCTION public.sync_proposal_phase_total()
+  FROM PUBLIC, anon, authenticated, service_role;
+
+DROP TRIGGER IF EXISTS zz_sync_proposal_phase_total_trg
+  ON public.proposal_phases;
+CREATE TRIGGER zz_sync_proposal_phase_total_trg
+AFTER INSERT OR UPDATE OF fee_cents ON public.proposal_phases
+FOR EACH ROW EXECUTE FUNCTION public.sync_proposal_phase_total();
 
 CREATE OR REPLACE FUNCTION public.create_proposal_phase(
   p_proposal_id uuid,

@@ -988,6 +988,7 @@ DECLARE
   v_snapshot record;
   v_current record;
   v_error text;
+  v_rows integer;
 BEGIN
   SELECT * INTO STRICT v_snapshot
   FROM public.get_proposal_send_snapshot(
@@ -997,17 +998,23 @@ BEGIN
   UPDATE public.proposals
   SET total_amount = 200000
   WHERE id = 'b7100000-0000-4000-8000-000000000010';
+  GET DIAGNOSTICS v_rows = ROW_COUNT;
 
   SELECT * INTO STRICT v_current
   FROM public.get_proposal_send_snapshot(
     'b7100000-0000-4000-8000-000000000010'
   );
 
+  ASSERT v_rows = 0
+         AND v_current.proposal_total_amount = v_snapshot.proposal_total_amount
+         AND v_current.proposal_updated_at = v_snapshot.proposal_updated_at,
+    'authenticated direct total PATCH must be a successful no-op';
+
   BEGIN
     PERFORM public.send_proposal(
       'b7100000-0000-4000-8000-000000000010',
       v_current.proposal_updated_at,
-      v_snapshot.proposal_total_amount,
+      v_snapshot.proposal_total_amount + 1,
       v_current.schedule_fingerprint
     );
   EXCEPTION WHEN check_violation THEN

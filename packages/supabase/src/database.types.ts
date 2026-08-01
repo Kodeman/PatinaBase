@@ -21481,6 +21481,13 @@ export type Database = {
           isSetofReturn: false
         }
       }
+      _prepare_legacy_proposal_phase_insert: {
+        Args: { p_proposal_id: string; p_requested_follows_phase_id: string }
+        Returns: {
+          follows_phase_id: string
+          sort_order: number
+        }[]
+      }
       _primary_studio_for: { Args: { p_user: string }; Returns: string }
       _proposal_phase_effect_snapshot: {
         Args: { p_phase_ids: string[]; p_proposal_id: string }
@@ -23695,6 +23702,10 @@ export type Database = {
         Returns: number
       }
       is_active_org_member: { Args: { p_org_id: string }; Returns: boolean }
+      is_addressed_client_decision: {
+        Args: { p_decision_id: string }
+        Returns: boolean
+      }
       is_aesthete_lead: { Args: { p_user_id: string }; Returns: boolean }
       is_comms_admin: { Args: { p_user_id: string }; Returns: boolean }
       is_comms_thread_participant: {
@@ -23705,6 +23716,7 @@ export type Database = {
         Args: { _project_id: string; _user_id?: string }
         Returns: boolean
       }
+      is_design_studio_comember: { Args: { p_owner: string }; Returns: boolean }
       is_org_admin_or_owner: {
         Args: { _organization_id: string; _user_id?: string }
         Returns: boolean
@@ -23863,6 +23875,14 @@ export type Database = {
           scope_rooms_count: number
           title: string
         }[]
+      }
+      lock_client_decision_option_parent: {
+        Args: { p_decision_id: string; p_path: string }
+        Returns: boolean
+      }
+      lock_proposal_authored_parent: {
+        Args: { p_proposal_id: string }
+        Returns: boolean
       }
       log_po_acknowledgment: {
         Args: {
@@ -24732,67 +24752,126 @@ export type Database = {
         Args: { p_project_id: string; p_template_slug: string }
         Returns: string[]
       }
-      send_proposal: {
-        Args: {
-          p_cc_email?: string
-          p_expected_schedule_fingerprint: string
-          p_expected_total_amount: number
-          p_expected_updated_at: string
-          p_personal_message?: string
-          p_proposal_id: string
-          p_valid_until?: string
-        }
-        Returns: {
-          accepted_at: string | null
-          cc_email: string | null
-          client_feedback: string | null
-          client_id: string | null
-          client_visibility_tier: string | null
-          cover_image: string | null
-          created_at: string
-          decline_reason: string | null
-          declined_at: string | null
-          deposit_percent: number | null
-          description: string | null
-          designer_client_id: string | null
-          designer_id: string
-          discount_amount: number | null
-          discount_percent: number | null
-          feedback_enabled: boolean
-          id: string
-          last_nudged_at: string | null
-          nudge_count: number
-          parent_proposal_id: string | null
-          payment_notes: string | null
-          payment_terms: string | null
-          personal_message: string | null
-          project_address: string | null
-          project_id: string | null
-          proposal_send_dispatch_id: string | null
-          revision_summary: string | null
-          sent_at: string | null
-          signed_at: string | null
-          signed_by_name: string | null
-          signed_ip: string | null
-          status: string
-          subtotal: number | null
-          tax_amount: number | null
-          tax_rate: number | null
-          template_id: string | null
-          title: string
-          total_amount: number | null
-          updated_at: string
-          valid_until: string | null
-          version: number | null
-          viewed_at: string | null
-        }
-        SetofOptions: {
-          from: "*"
-          to: "proposals"
-          isOneToOne: true
-          isSetofReturn: false
-        }
-      }
+      send_proposal:
+        | {
+            Args: {
+              p_cc_email?: string
+              p_expected_schedule_fingerprint: string
+              p_expected_total_amount: number
+              p_expected_updated_at: string
+              p_personal_message?: string
+              p_proposal_id: string
+              p_valid_until?: string
+            }
+            Returns: {
+              accepted_at: string | null
+              cc_email: string | null
+              client_feedback: string | null
+              client_id: string | null
+              client_visibility_tier: string | null
+              cover_image: string | null
+              created_at: string
+              decline_reason: string | null
+              declined_at: string | null
+              deposit_percent: number | null
+              description: string | null
+              designer_client_id: string | null
+              designer_id: string
+              discount_amount: number | null
+              discount_percent: number | null
+              feedback_enabled: boolean
+              id: string
+              last_nudged_at: string | null
+              nudge_count: number
+              parent_proposal_id: string | null
+              payment_notes: string | null
+              payment_terms: string | null
+              personal_message: string | null
+              project_address: string | null
+              project_id: string | null
+              proposal_send_dispatch_id: string | null
+              revision_summary: string | null
+              sent_at: string | null
+              signed_at: string | null
+              signed_by_name: string | null
+              signed_ip: string | null
+              status: string
+              subtotal: number | null
+              tax_amount: number | null
+              tax_rate: number | null
+              template_id: string | null
+              title: string
+              total_amount: number | null
+              updated_at: string
+              valid_until: string | null
+              version: number | null
+              viewed_at: string | null
+            }
+            SetofOptions: {
+              from: "*"
+              to: "proposals"
+              isOneToOne: true
+              isSetofReturn: false
+            }
+          }
+        | {
+            Args: {
+              p_cc_email: string
+              p_personal_message: string
+              p_proposal_id: string
+              p_valid_until: string
+            }
+            Returns: {
+              accepted_at: string | null
+              cc_email: string | null
+              client_feedback: string | null
+              client_id: string | null
+              client_visibility_tier: string | null
+              cover_image: string | null
+              created_at: string
+              decline_reason: string | null
+              declined_at: string | null
+              deposit_percent: number | null
+              description: string | null
+              designer_client_id: string | null
+              designer_id: string
+              discount_amount: number | null
+              discount_percent: number | null
+              feedback_enabled: boolean
+              id: string
+              last_nudged_at: string | null
+              nudge_count: number
+              parent_proposal_id: string | null
+              payment_notes: string | null
+              payment_terms: string | null
+              personal_message: string | null
+              project_address: string | null
+              project_id: string | null
+              proposal_send_dispatch_id: string | null
+              revision_summary: string | null
+              sent_at: string | null
+              signed_at: string | null
+              signed_by_name: string | null
+              signed_ip: string | null
+              status: string
+              subtotal: number | null
+              tax_amount: number | null
+              tax_rate: number | null
+              template_id: string | null
+              title: string
+              total_amount: number | null
+              updated_at: string
+              valid_until: string | null
+              version: number | null
+              viewed_at: string | null
+            }
+            SetofOptions: {
+              from: "*"
+              to: "proposals"
+              isOneToOne: true
+              isSetofReturn: false
+            }
+          }
       send_scope_change_request: {
         Args: { p_project_id: string; p_request_id: string }
         Returns: Json
@@ -24947,10 +25026,28 @@ export type Database = {
       }
       show_limit: { Args: never; Returns: number }
       show_trgm: { Args: { "": string }; Returns: string[] }
-      sign_proposal: {
-        Args: { p_proposal_id: string; p_signed_name: string }
-        Returns: Json
-      }
+      sign_proposal:
+        | {
+            Args: { p_proposal_id: string; p_signed_name: string }
+            Returns: Json
+          }
+        | {
+            Args: {
+              p_proposal_id: string
+              p_signed_ip: string
+              p_signed_name: string
+            }
+            Returns: Json
+          }
+        | {
+            Args: {
+              p_auto_activate: boolean
+              p_proposal_id: string
+              p_signed_ip: string
+              p_signed_name: string
+            }
+            Returns: Json
+          }
       sign_proposal_with_trusted_ip: {
         Args: {
           p_client_id: string

@@ -152,8 +152,13 @@ $$;
 
 -- ─── case 2: three-tier backfill (statements verbatim from 00185) ────────────
 
-INSERT INTO projects (id, name, designer_id, created_by)
-VALUES ('dddd0000-0000-4000-8000-000000000041', 'Dual Pricing Backfill Project', '88888888-8888-4888-8888-888888888801', '88888888-8888-4888-8888-888888888801');
+INSERT INTO projects (id, name, designer_id, created_by, client_id)
+VALUES (
+  'dddd0000-0000-4000-8000-000000000041', 'Dual Pricing Backfill Project',
+  '88888888-8888-4888-8888-888888888801',
+  '88888888-8888-4888-8888-888888888801',
+  '88888888-8888-4888-8888-888888888802'
+);
 
 -- Pre-00185-shaped rows (trade_price_cents / markup_percent NULL):
 --   t_a  — proposal-sourced FIXED item still carrying the buggy TRADE price

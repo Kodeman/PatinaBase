@@ -431,9 +431,18 @@ BEGIN
   ASSERT has_table_privilege(
     'authenticated', 'public.proposal_phases', 'INSERT'
   ), 'expand phase must retain rollback phase INSERT';
-  ASSERT has_table_privilege(
+  ASSERT NOT has_table_privilege(
     'authenticated', 'public.proposal_phases', 'UPDATE'
-  ), 'expand phase must retain rollback phase UPDATE';
+  ), 'expand phase must not retain table-wide phase UPDATE';
+  ASSERT has_column_privilege(
+    'authenticated', 'public.proposal_phases', 'name', 'UPDATE'
+  ) AND has_column_privilege(
+    'authenticated', 'public.proposal_phases', 'anchor_date', 'UPDATE'
+  ) AND NOT has_column_privilege(
+    'authenticated', 'public.proposal_phases', 'follows_phase_id', 'UPDATE'
+  ) AND NOT has_column_privilege(
+    'authenticated', 'public.proposal_phases', 'sort_order', 'UPDATE'
+  ), 'rollback phase UPDATE must be column-limited away from topology';
   ASSERT has_table_privilege(
     'authenticated', 'public.proposal_phases', 'DELETE'
   ), 'expand phase must retain rollback phase DELETE';
@@ -442,6 +451,20 @@ BEGIN
     WHERE NOT tgisinternal
       AND tgname = 'y_guard_proposal_phase_topology_write_trg'
   ), 'expand phase must still guard cross-proposal/topology rewrites';
+  ASSERT EXISTS (
+    SELECT 1 FROM pg_trigger
+    WHERE NOT tgisinternal
+      AND tgname = 'x_rewire_legacy_proposal_phase_delete_trg'
+  ) AND EXISTS (
+    SELECT 1 FROM pg_trigger
+    WHERE NOT tgisinternal
+      AND tgname = 'zz_assert_legacy_proposal_phase_delete_trg'
+  ), 'rollback phase DELETE must rewire and assert topology';
+  ASSERT EXISTS (
+    SELECT 1 FROM pg_trigger
+    WHERE NOT tgisinternal
+      AND tgname = 'zz_sync_proposal_phase_total_trg'
+  ), 'direct phase fee births/edits must synchronize proposal total atomically';
   ASSERT NOT has_table_privilege(
     'authenticated', 'public.proposal_phase_template_applications', 'SELECT'
   ), 'authenticated callers must not read private template receipts';
@@ -512,6 +535,136 @@ BEGIN
   ) AND NOT has_table_privilege(
     'anon', 'public.proposal_phases', 'DELETE'
   ), 'anonymous proposal phase writes must remain revoked';
+END;
+$$;
+
+-- Rollback web builds write the phase table directly. Normalize their omitted
+-- predecessor/order to the serialized main tail, reject caller-authored
+-- topology, and rewire an arbitrary middle delete before asserting the graph.
+INSERT INTO public.proposal_phases (
+  id, proposal_id, name, phase_key, fee_cents, sort_order,
+  follows_phase_id, lane, duration_days, deliverables
+) VALUES (
+  'fb060000-0000-4000-8000-000000000001',
+  'fb040000-0000-4000-8000-000000000005',
+  'Legacy direct A', 'consultation', 100, 91, NULL, 'main', 7, '[]'::jsonb
+);
+
+DO $$
+BEGIN
+  ASSERT (SELECT total_amount = 100
+          FROM public.proposals
+          WHERE id = 'fb040000-0000-4000-8000-000000000005'),
+    'legacy direct insert must update proposal total in the same statement';
+END;
+$$;
+
+INSERT INTO public.proposal_phases (
+  id, proposal_id, name, phase_key, fee_cents, sort_order,
+  follows_phase_id, lane, duration_days, deliverables
+) VALUES (
+  'fb060000-0000-4000-8000-000000000002',
+  'fb040000-0000-4000-8000-000000000005',
+  'Legacy direct B', 'concept_development', 200, 92, NULL, 'main', 14, '[]'::jsonb
+);
+
+DO $$
+BEGIN
+  ASSERT (SELECT total_amount = 300
+          FROM public.proposals
+          WHERE id = 'fb040000-0000-4000-8000-000000000005'),
+    'each legacy direct insert must immediately refresh proposal total';
+END;
+$$;
+
+DO $$
+DECLARE
+  v_error text;
+BEGIN
+  BEGIN
+    INSERT INTO public.proposal_phases (
+      id, proposal_id, name, phase_key, fee_cents, sort_order,
+      follows_phase_id, lane, duration_days, deliverables
+    ) VALUES (
+      'fb060000-0000-4000-8000-000000000004',
+      'fb040000-0000-4000-8000-000000000005',
+      'Wrong predecessor', 'procurement', 999, 93,
+      'fb060000-0000-4000-8000-000000000001', 'main', 21, '[]'::jsonb
+    );
+  EXCEPTION WHEN check_violation THEN
+    v_error := SQLERRM;
+  END;
+  ASSERT v_error IS NOT NULL,
+    'legacy insert must reject a predecessor other than the canonical tail';
+  ASSERT (SELECT total_amount = 300
+          FROM public.proposals
+          WHERE id = 'fb040000-0000-4000-8000-000000000005'),
+    'rejected legacy insert must not change proposal total';
+END;
+$$;
+
+INSERT INTO public.proposal_phases (
+  id, proposal_id, name, phase_key, fee_cents, sort_order,
+  follows_phase_id, lane, duration_days, deliverables
+) VALUES (
+  'fb060000-0000-4000-8000-000000000003',
+  'fb040000-0000-4000-8000-000000000005',
+  'Legacy direct C', 'design_refinement', 300, 94, NULL, 'main', 21, '[]'::jsonb
+);
+
+DO $$
+DECLARE
+  v_error text;
+BEGIN
+  ASSERT (SELECT total_amount = 600
+          FROM public.proposals
+          WHERE id = 'fb040000-0000-4000-8000-000000000005'),
+    'legacy tail insert must commit its fee with its topology row';
+  ASSERT (SELECT sort_order = 0 AND follows_phase_id IS NULL
+          FROM public.proposal_phases
+          WHERE id = 'fb060000-0000-4000-8000-000000000001')
+     AND (SELECT sort_order = 1
+                 AND follows_phase_id = 'fb060000-0000-4000-8000-000000000001'
+          FROM public.proposal_phases
+          WHERE id = 'fb060000-0000-4000-8000-000000000002')
+     AND (SELECT sort_order = 2
+                 AND follows_phase_id = 'fb060000-0000-4000-8000-000000000002'
+          FROM public.proposal_phases
+          WHERE id = 'fb060000-0000-4000-8000-000000000003'),
+    'legacy inserts must be normalized into one deterministic main chain';
+
+  UPDATE public.proposal_phases
+  SET name = 'Legacy direct A edited', fee_cents = 125
+  WHERE id = 'fb060000-0000-4000-8000-000000000001';
+  ASSERT (SELECT name = 'Legacy direct A edited' AND fee_cents = 125
+          FROM public.proposal_phases
+          WHERE id = 'fb060000-0000-4000-8000-000000000001'),
+    'rollback phase editor must retain its column-limited direct update';
+  ASSERT (SELECT total_amount = 625
+          FROM public.proposals
+          WHERE id = 'fb040000-0000-4000-8000-000000000005'),
+    'legacy fee edit must update proposal total in the same statement';
+
+  BEGIN
+    UPDATE public.proposal_phases
+    SET follows_phase_id = NULL
+    WHERE id = 'fb060000-0000-4000-8000-000000000003';
+  EXCEPTION WHEN insufficient_privilege THEN
+    v_error := SQLERRM;
+  END;
+  ASSERT v_error IS NOT NULL,
+    'rollback phase editor must not receive direct topology-update authority';
+
+  DELETE FROM public.proposal_phases
+  WHERE id = 'fb060000-0000-4000-8000-000000000002';
+  ASSERT (SELECT follows_phase_id = 'fb060000-0000-4000-8000-000000000001'
+          FROM public.proposal_phases
+          WHERE id = 'fb060000-0000-4000-8000-000000000003'),
+    'legacy middle delete must rewire its successor atomically';
+  ASSERT (SELECT total_amount = 425
+          FROM public.proposals
+          WHERE id = 'fb040000-0000-4000-8000-000000000005'),
+    'legacy delete must recompute the canonical surviving fee total';
 END;
 $$;
 

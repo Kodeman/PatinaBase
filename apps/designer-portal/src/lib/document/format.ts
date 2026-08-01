@@ -20,3 +20,10 @@ export const fmtUsd = (cents: number) =>
 /** Local-timezone `YYYY-MM-DD` for prefilling date inputs with today. */
 export const todayYmd = (d = new Date()) =>
   `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+
+/** Local-timezone next calendar day for actions that must move a deadline. */
+export const tomorrowYmd = (d = new Date()) => {
+  const tomorrow = new Date(d);
+  tomorrow.setDate(tomorrow.getDate() + 1);
+  return todayYmd(tomorrow);
+};
