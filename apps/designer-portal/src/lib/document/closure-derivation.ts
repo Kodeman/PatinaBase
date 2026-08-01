@@ -66,10 +66,19 @@ export interface CloseoutReadinessInput {
   dataReady?: boolean;
   /** Positive contracted value must be backed by collected invoice payments. */
   projectTotalCents?: number | null;
-  ffeItems: ReadonlyArray<{ id: string; status: string | null }>;
+  ffeItems: ReadonlyArray<{
+    id: string;
+    status: string | null;
+    quantity?: number | null;
+    unit_price_cents?: number | null;
+    line_total_cents?: number | null;
+  }>;
   ffeCoverage: Record<
     string,
-    { coverage: 'uninvoiced' | 'invoiced' | 'paid' | string }
+    {
+      coverage: 'uninvoiced' | 'invoiced' | 'paid' | string;
+      billedCents?: number | null;
+    }
   >;
   paymentMilestones: ReadonlyArray<{
     id: string;
@@ -93,7 +102,8 @@ const countLabel = (count: number, singular: string, plural = `${singular}s`) =>
  * milestone rows). Once an operational row exists, completion means:
  *
  *   - every FF&E line is installed;
- *   - every FF&E line's live invoice is fully paid (issued is not collected);
+ *   - every positive-value FF&E line is covered for its canonical sell value
+ *     by a fully-paid live invoice (zero/unpriced installed lines need none);
  *   - every positive-value payment milestone is paid; and
  *   - every non-void invoice has no remaining positive balance; and
  *   - a positive project contract total has been collected across invoices.
@@ -130,9 +140,23 @@ export function deriveCloseoutReadiness(
     });
   }
 
-  const notPaid = input.ffeItems.filter(
-    (item) => input.ffeCoverage[item.id]?.coverage !== 'paid',
-  ).length;
+  const notPaid = input.ffeItems.filter((item) => {
+    // `line_total_cents` is the canonical sell value once present. Older/
+    // partially-composed rows fall back to quantity × unit price. A real zero
+    // or unpriced installed item is operational work, but not a receivable.
+    const expectedSellCents = Math.max(
+      0,
+      item.line_total_cents ??
+        (item.quantity ?? 0) * (item.unit_price_cents ?? 0),
+    );
+    if (expectedSellCents === 0) return false;
+
+    const coverage = input.ffeCoverage[item.id];
+    return (
+      coverage?.coverage !== 'paid' ||
+      (coverage.billedCents ?? 0) < expectedSellCents
+    );
+  }).length;
   if (notPaid > 0) {
     blockers.push({
       code: 'ffe_not_paid',

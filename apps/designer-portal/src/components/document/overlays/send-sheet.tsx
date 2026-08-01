@@ -20,11 +20,11 @@ import { useQueryClient } from '@tanstack/react-query';
 import {
   useProposal,
   useSendProposal,
-  useUpdateProposal,
   useProposalVersions,
 } from '@/hooks/use-proposals';
 import { ClientPicker } from '@/components/portal/client-picker';
 import { useClient, useInviteAndLinkClient } from '@/hooks/use-clients';
+import { useAttachDocumentClient } from '@/hooks/use-attach-client';
 import { useToast } from '@/components/portal/toast-provider';
 import { proposalEvents } from '@/lib/analytics';
 import { DocSheet } from './doc-sheet';
@@ -69,7 +69,7 @@ export function SendSheet({
   // R83 — this sheet renders failures inline at the act site (sendError /
   // linkError bands below); the global mutation toast stays quiet.
   const sendProposal = useSendProposal({ errorSurface: 'inline' });
-  const updateProposal = useUpdateProposal({ errorSurface: 'inline' });
+  const attachClient = useAttachDocumentClient();
   const inviteAndLinkClient = useInviteAndLinkClient();
   const { toast } = useToast();
 
@@ -160,7 +160,7 @@ export function SendSheet({
         clientEmail: capturedHousehold.client_email,
         clientName: capturedHousehold.client_name ?? undefined,
         invite: inviteAndLinkClient.mutateAsync,
-        attach: updateProposal.mutateAsync,
+        attach: attachClient.mutateAsync,
       });
     } catch (err) {
       setLinkError(
@@ -210,7 +210,7 @@ export function SendSheet({
                     name={capturedHousehold.client_name}
                     email={capturedHousehold.client_email}
                     pending={
-                      inviteAndLinkClient.isPending || updateProposal.isPending
+                      inviteAndLinkClient.isPending || attachClient.isPending
                     }
                     onInvite={handleInviteCapturedHousehold}
                   />
@@ -226,10 +226,11 @@ export function SendSheet({
                         value={null}
                         onChange={(clientId) => {
                           setLinkError(null);
-                          updateProposal.mutate(
+                          attachClient.mutate(
                             {
-                              proposalId,
-                              updates: { client_id: clientId },
+                              engagementKind: 'proposal',
+                              targetId: proposalId,
+                              clientId,
                             },
                             {
                               // R83 — inline at the act, in the banner that owns it.

@@ -22037,6 +22037,14 @@ export type Database = {
           source: string
         }[]
       }
+      get_proposal_send_snapshot: {
+        Args: { p_proposal_id: string }
+        Returns: {
+          proposal_total_amount: number
+          proposal_updated_at: string
+          schedule_fingerprint: string
+        }[]
+      }
       get_recommendations: {
         Args: {
           p_category?: string
@@ -22906,6 +22914,9 @@ export type Database = {
       send_proposal: {
         Args: {
           p_cc_email?: string
+          p_expected_schedule_fingerprint: string
+          p_expected_total_amount: number
+          p_expected_updated_at: string
           p_personal_message?: string
           p_proposal_id: string
           p_valid_until?: string

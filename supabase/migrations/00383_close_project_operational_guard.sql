@@ -7,8 +7,9 @@
 --
 -- A checked UI list cannot make unfinished procurement or an outstanding
 -- receivable true. close_project now locks the project and its current
--- operational children, validates the complete seven-item workflow evidence,
--- and refuses completion until installation, FF&E billing, milestones,
+-- operational children in the invoice dependency order, validates the complete
+-- seven-item workflow evidence, and refuses completion until installation,
+-- FF&E billing, milestones,
 -- invoice balances, and positive contract collection all agree. Projects with
 -- no operational rows and no positive contract remain valid (for example, a
 -- nonbillable consultation).
@@ -73,21 +74,17 @@ BEGIN
       USING ERRCODE = 'check_violation';
   END IF;
 
-  -- Lock the operational rows before evaluating them. The project FOR UPDATE
-  -- lock also conflicts with FK key-share locks for new children, so the set
-  -- cannot gain a new milestone/invoice/FF&E row beneath this closeout.
-  PERFORM 1
-  FROM public.project_ffe_items
-  WHERE project_id = p_project_id
-  ORDER BY id
-  FOR UPDATE;
-
-  PERFORM 1
-  FROM public.project_payment_milestones
-  WHERE project_id = p_project_id
-  ORDER BY id
-  FOR UPDATE;
-
+  -- Lock operational rows before evaluating them. The project FOR UPDATE lock
+  -- also conflicts with FK key-share locks for new children, so the set cannot
+  -- gain a new milestone/invoice/FF&E row beneath this closeout.
+  --
+  -- Canonical dependency order is invoice -> line -> milestone -> FF&E:
+  --   * issue_invoice / apply_invoice_payment_effects hold invoice then update
+  --     milestones;
+  --   * void_invoice holds invoice, rewrites lines, then milestones;
+  --   * a line edit locks its line before the FK target's key-share lock.
+  -- Following that same order removes invoice<->milestone and line<->FF&E
+  -- wait cycles. Each set is ordered by id so peers agree within a table.
   PERFORM 1
   FROM public.invoices
   WHERE project_id = p_project_id
@@ -100,6 +97,18 @@ BEGIN
   WHERE invoice.project_id = p_project_id
   ORDER BY line.id
   FOR UPDATE OF line;
+
+  PERFORM 1
+  FROM public.project_payment_milestones
+  WHERE project_id = p_project_id
+  ORDER BY id
+  FOR UPDATE;
+
+  PERFORM 1
+  FROM public.project_ffe_items
+  WHERE project_id = p_project_id
+  ORDER BY id
+  FOR UPDATE;
 
   SELECT count(*) INTO v_blocker_count
   FROM public.project_ffe_items
@@ -115,6 +124,18 @@ BEGIN
   SELECT count(*) INTO v_blocker_count
   FROM public.project_ffe_items AS ffe
   WHERE ffe.project_id = p_project_id
+    -- Installed client-owned / zero-price / not-yet-priced lines are real
+    -- operational rows but are not receivables. Positive-value rows use the
+    -- canonical sell total, with the legacy quantity × unit-price fallback.
+    AND GREATEST(
+      0::bigint,
+      COALESCE(
+        ffe.line_total_cents::bigint,
+        COALESCE(ffe.quantity, 0)::bigint
+          * COALESCE(ffe.unit_price_cents, 0)::bigint,
+        0::bigint
+      )
+    ) > 0
     AND NOT EXISTS (
       SELECT 1
       FROM public.invoice_line_items AS line
@@ -123,6 +144,15 @@ BEGIN
         AND invoice.project_id = p_project_id
         AND invoice.status = 'paid'
         AND invoice.amount_paid_cents >= invoice.total_cents
+        AND line.amount_cents::bigint >= GREATEST(
+          0::bigint,
+          COALESCE(
+            ffe.line_total_cents::bigint,
+            COALESCE(ffe.quantity, 0)::bigint
+              * COALESCE(ffe.unit_price_cents, 0)::bigint,
+            0::bigint
+          )
+        )
     );
 
   IF v_blocker_count > 0 THEN
@@ -189,5 +219,7 @@ GRANT EXECUTE ON FUNCTION public.close_project(uuid, jsonb, jsonb) TO authentica
 
 COMMENT ON FUNCTION public.close_project(uuid, jsonb, jsonb) IS
   'R80 closeout transaction, guarded by the complete workflow checklist and '
-  'authoritative installation/billing/milestone/collection state. Empty '
-  'operational sets are allowed only when no positive contract remains.';
+  'authoritative installation/billing/milestone/collection state. Positive '
+  'FF&E requires fully-paid line coverage of its canonical sell value; installed '
+  'zero/unpriced FF&E needs no invoice. Empty operational sets are allowed only '
+  'when no positive contract remains.';
