@@ -8,6 +8,7 @@ import {
 } from '@/lib/proposal-autosave-registry';
 
 const mockSend = jest.fn();
+const mockRetry = jest.fn();
 const mockUpdate = jest.fn();
 const mockInvalidate = jest.fn();
 const mockUseProposalMirrorData = jest.fn();
@@ -17,31 +18,26 @@ let mockPendingProposalMutation: {
   options: { mutationKey: string[] };
   state: { variables: Record<string, unknown> };
 } | null = null;
+let mockProposal: Record<string, unknown>;
 
 jest.mock('@tanstack/react-query', () => ({
   useQueryClient: () => ({ invalidateQueries: mockInvalidate }),
   useIsMutating: ({ predicate }: { predicate: (mutation: unknown) => boolean }) =>
-    mockPendingProposalMutation && predicate(mockPendingProposalMutation) ? 1 : 0,
+    (mockPendingProposalMutation && predicate(mockPendingProposalMutation)
+      ? 1
+      : 0),
 }));
 
 jest.mock('@/hooks/use-proposals', () => ({
   useProposal: () => ({
-    data: {
-      id: 'proposal-1',
-      title: 'Lakeshore library & lounge',
-      version: 1,
-      total_amount: 1_320_000,
-      client_id: 'client-1',
-      client: {
-        id: 'client-1',
-        full_name: 'Harper Vale',
-        email: 'harper@example.com',
-      },
-      items: [],
-    },
+    data: mockProposal,
   }),
   useProposalVersions: () => ({ data: [] }),
   useSendProposal: () => ({ mutateAsync: mockSend, isPending: false }),
+  useRetryProposalSend: () => ({
+    mutateAsync: mockRetry,
+    isPending: false,
+  }),
   useUpdateProposal: () => ({ mutate: mockUpdate, isPending: false }),
 }));
 
@@ -172,8 +168,34 @@ function SendBarrierHarness({
 }
 
 beforeEach(() => {
+  mockProposal = {
+    id: 'proposal-1',
+    title: 'Lakeshore library & lounge',
+    version: 1,
+    status: 'draft',
+    sent_at: null,
+    proposal_send_dispatch_id: null,
+    total_amount: 1_320_000,
+    client_id: 'client-1',
+    client: {
+      id: 'client-1',
+      full_name: 'Harper Vale',
+      email: 'harper@example.com',
+    },
+    items: [],
+  };
   mockSend.mockReset();
-  mockSend.mockResolvedValue({ _emailDispatched: true });
+  mockSend.mockResolvedValue({
+    _emailDispatched: true,
+    _emailDeliveryState: 'delivered',
+    _emailRetryable: false,
+  });
+  mockRetry.mockReset();
+  mockRetry.mockResolvedValue({
+    _emailDispatched: true,
+    _emailDeliveryState: 'delivered',
+    _emailRetryable: false,
+  });
   mockUpdate.mockReset();
   mockInvalidate.mockReset();
   mockInvalidate.mockResolvedValue(undefined);
@@ -554,9 +576,7 @@ describe('SendSheet canonical client-copy validation', () => {
         name: /I reviewed the missing parts/i,
       }),
     );
-    expect(
-      screen.getByRole('button', { name: 'Send proposal' }),
-    ).toBeEnabled();
+    expect(screen.getByRole('button', { name: 'Send proposal' })).toBeEnabled();
 
     mockUseDraftingState.mockReturnValue({
       gaps: ['mood boards', 'change-order terms'],
@@ -675,5 +695,109 @@ describe('SendSheet canonical client-copy validation', () => {
     expect(mockSend).toHaveBeenCalledWith(
       expect.objectContaining({ expectedSnapshot: refreshedData.sendSnapshot }),
     );
+  });
+
+  it('keeps a retry path when business send commits but edge invocation is pending', async () => {
+    mockUseProposalMirrorData.mockReturnValue(
+      mirror([
+        {
+          id: 'deposit',
+          label: 'Project deposit',
+          percentage: 100,
+          amount_cents: 1_320_000,
+        },
+      ]),
+    );
+    mockSend.mockResolvedValueOnce({
+      sent_at: '2026-07-31T12:01:00.000Z',
+      proposal_send_dispatch_id: 'dispatch-1',
+      _emailDispatched: false,
+      _emailDeliveryState: 'pending',
+      _emailRetryable: true,
+    });
+    const onClose = jest.fn();
+
+    render(<SendSheet proposalId="proposal-1" open onClose={onClose} />);
+    const send = screen.getByRole('button', { name: 'Send proposal' });
+    await waitFor(() => expect(send).toBeEnabled());
+    fireEvent.click(send);
+
+    expect(
+      await screen.findByText(/email is queued but has not been dispatched/i),
+    ).toBeInTheDocument();
+    expect(onClose).not.toHaveBeenCalled();
+    fireEvent.click(
+      screen.getByRole('button', { name: 'Retry email delivery' }),
+    );
+
+    await waitFor(() =>
+      expect(mockRetry).toHaveBeenCalledWith({
+        proposalId: 'proposal-1',
+        dispatchId: 'dispatch-1',
+        sentAt: '2026-07-31T12:01:00.000Z',
+      }),
+    );
+    await waitFor(() => expect(onClose).toHaveBeenCalledTimes(1));
+  });
+
+  it('does not offer a provider resend after the safe retry window ends', async () => {
+    mockUseProposalMirrorData.mockReturnValue(
+      mirror([
+        {
+          id: 'deposit',
+          label: 'Project deposit',
+          percentage: 100,
+          amount_cents: 1_320_000,
+        },
+      ]),
+    );
+    mockSend.mockResolvedValueOnce({
+      sent_at: '2026-07-31T12:01:00.000Z',
+      proposal_send_dispatch_id: 'dispatch-1',
+      _emailDispatched: false,
+      _emailDeliveryState: 'ambiguous',
+      _emailRetryable: false,
+    });
+
+    render(<SendSheet proposalId="proposal-1" open onClose={jest.fn()} />);
+    const send = screen.getByRole('button', { name: 'Send proposal' });
+    await waitFor(() => expect(send).toBeEnabled());
+    fireEvent.click(send);
+
+    expect(
+      await screen.findByText(/safe email retry window has ended/i),
+    ).toBeInTheDocument();
+    expect(
+      screen.queryByRole('button', { name: /retry email delivery/i }),
+    ).not.toBeInTheDocument();
+    expect(mockRetry).not.toHaveBeenCalled();
+  });
+
+  it('reopens an already-sent proposal on its immutable email retry tuple', async () => {
+    mockProposal = {
+      ...mockProposal,
+      status: 'sent',
+      sent_at: '2026-07-31T12:01:00.000Z',
+      proposal_send_dispatch_id: 'dispatch-1',
+    };
+    mockUseProposalMirrorData.mockReturnValue(
+      mirror([
+        {
+          id: 'deposit',
+          label: 'Project deposit',
+          percentage: 100,
+          amount_cents: 1_320_000,
+        },
+      ]),
+    );
+
+    render(<SendSheet proposalId="proposal-1" open onClose={jest.fn()} />);
+
+    expect(
+      await screen.findByRole('button', { name: 'Retry email delivery' }),
+    ).toBeEnabled();
+    expect(
+      screen.queryByRole('button', { name: 'Send proposal' }),
+    ).not.toBeInTheDocument();
   });
 });

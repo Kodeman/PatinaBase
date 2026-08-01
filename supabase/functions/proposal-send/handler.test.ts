@@ -1,5 +1,3 @@
-// Test gateways intentionally satisfy async production interfaces with
-// synchronous fakes.
 // deno-lint-ignore-file require-await
 
 import {
@@ -8,138 +6,199 @@ import {
 } from "https://deno.land/std@0.224.0/assert/mod.ts";
 import {
   createProposalSendHandler,
-  type DispatchClaim,
-  type ProposalEmail,
+  type PersistedProviderRequest,
+  type ProposalDeliveryState,
   type ProposalSendGateway,
-  type ProposalSendRow,
+  type ProposalSendSnapshot,
+  type ProviderResult,
 } from "./handler.ts";
 
 const OWNER_ID = "10000000-0000-4000-8000-000000000001";
 const MEMBER_ID = "10000000-0000-4000-8000-000000000002";
-const CLIENT_ID = "10000000-0000-4000-8000-000000000003";
-const FOREIGN_ID = "10000000-0000-4000-8000-000000000004";
+const FOREIGN_ID = "10000000-0000-4000-8000-000000000003";
+const CLIENT_ID = "10000000-0000-4000-8000-000000000004";
 const PROPOSAL_ID = "20000000-0000-4000-8000-000000000001";
+const DISPATCH_ID = "30000000-0000-4000-8000-000000000001";
 const SENT_AT = "2026-07-31T12:00:00.123456+00:00";
+const IDEMPOTENCY_KEY = `proposal-send/${DISPATCH_ID}`;
 
-function proposal(
-  overrides: Partial<ProposalSendRow> = {},
-): ProposalSendRow {
+function snapshot(): ProposalSendSnapshot {
   return {
-    id: PROPOSAL_ID,
-    title: "Walker Residence",
-    status: "sent",
-    sent_at: SENT_AT,
-    personal_message: "I look forward to your thoughts.",
-    cc_email: null,
-    valid_until: "2026-08-15T00:00:00+00:00",
-    total_amount: 1320000,
-    client_id: CLIENT_ID,
-    designer_client_id: "30000000-0000-4000-8000-000000000001",
-    designer_id: OWNER_ID,
-    project_id: null,
-    designer: { full_name: "Olive Designer", email: "olive@test.invalid" },
-    client: { full_name: "Alex Walker", email: "alex@test.invalid" },
-    ...overrides,
+    id: DISPATCH_ID,
+    proposalId: PROPOSAL_ID,
+    sentAt: SENT_AT,
+    designerId: OWNER_ID,
+    clientId: CLIENT_ID,
+    proposalTitle: "Walker Residence",
+    personalMessage: "I look forward to your thoughts.",
+    validUntil: "2026-08-15T00:00:00+00:00",
+    totalAmount: 1_320_000,
+    recipientEmail: "alex@test.invalid",
+    recipientName: "Alex Walker",
+    designerName: "Olive Designer",
+    senderName: "Olive Studio",
+    studioName: "Olive Studio",
+    studioLogoUrl: "https://assets.test.invalid/original-logo.png",
+    clientPortalPath: `/proposals/${PROPOSAL_ID}`,
   };
 }
 
-type DispatchStatus = "empty" | "claimed" | "delivered" | "failed";
-
 function harness(options: {
   callerId?: string;
-  proposal?: ProposalSendRow;
-  isStudioComember?: boolean;
-  resolveFailures?: number;
-  emailResults?: Array<{
-    success: boolean;
-    suppressed?: boolean;
-    id?: string;
-    error?: string;
-  }>;
+  studioComember?: boolean;
+  exactInstanceMissing?: boolean;
+  initialState?: ProposalDeliveryState;
+  initialAttempts?: number;
+  beginFailure?: string;
+  prepareFailure?: string;
+  suppressed?: string;
+  providerResults?: ProviderResult[];
+  emailLogFailure?: boolean;
+  inAppLogFailure?: boolean;
 } = {}) {
-  let dispatchStatus: DispatchStatus = "empty";
-  let attemptCount = 0;
-  let resolveFailures = options.resolveFailures ?? 0;
-  const notificationIds: string[] = [];
-  const storedNotificationIds = new Set<string>();
-  const emails: ProposalEmail[] = [];
-  const completions: Array<{
-    succeeded: boolean;
-    claimToken: string;
-    error?: string;
-  }> = [];
+  let state = options.initialState ?? "pending";
+  let attempts = options.initialAttempts ?? 0;
+  let claimToken: string | undefined;
+  let storedRequest: PersistedProviderRequest | undefined;
   let gatewayCreations = 0;
   let claims = 0;
+  let prepares = 0;
+  let persists = 0;
+  let releases = 0;
   let studioChecks = 0;
+  const providerRequests: PersistedProviderRequest[] = [];
+  const logCalls = { email: 0, inApp: 0 };
+  const immutableSnapshot = snapshot();
 
   const gateway: ProposalSendGateway = {
-    async loadProposal() {
-      return options.proposal ?? proposal();
+    async loadExactInstance(input) {
+      if (
+        options.exactInstanceMissing || input.dispatchId !== DISPATCH_ID ||
+        input.proposalId !== PROPOSAL_ID || input.sentAt !== SENT_AT
+      ) {
+        throw new Error("nonce/timestamp mismatch");
+      }
+      return {
+        id: DISPATCH_ID,
+        proposalId: PROPOSAL_ID,
+        sentAt: SENT_AT,
+        designerId: OWNER_ID,
+        clientId: CLIENT_ID,
+        deliveryState: state,
+        attemptCount: attempts,
+      };
     },
     async isActiveStudioComember() {
       studioChecks += 1;
-      return options.isStudioComember ?? false;
+      return options.studioComember ?? false;
     },
-    async claimDispatch(_proposalId, sentAt): Promise<DispatchClaim> {
+    async claimDispatch(input) {
       claims += 1;
-      assertEquals(sentAt, SENT_AT);
-      if (dispatchStatus === "delivered") {
+      assertEquals(input, {
+        proposalId: PROPOSAL_ID,
+        sentAt: SENT_AT,
+        dispatchId: DISPATCH_ID,
+      });
+      if (state === "delivered" || state === "suppressed") {
+        return { claimed: false, deliveryState: state, attemptCount: attempts };
+      }
+      if (state === "in_flight") {
+        return { claimed: false, deliveryState: state, attemptCount: attempts };
+      }
+      if ((state === "failed" || state === "ambiguous") && attempts >= 3) {
         return {
           claimed: false,
-          duplicate: true,
-          inFlight: false,
-          notificationLogId: "notification-1",
-          attemptCount,
+          deliveryState: state,
+          attemptCount: attempts,
+          retryExhausted: true,
         };
       }
-      if (dispatchStatus === "claimed") {
-        return {
-          claimed: false,
-          duplicate: true,
-          inFlight: true,
-          notificationLogId: "notification-1",
-          attemptCount,
-        };
-      }
-      attemptCount += 1;
-      dispatchStatus = "claimed";
+      state = "in_flight";
+      claimToken = `claim-${claims}`;
       return {
         claimed: true,
-        duplicate: attemptCount > 1,
-        inFlight: false,
-        claimToken: `claim-${attemptCount}`,
-        notificationLogId: "notification-1",
-        attemptCount,
+        deliveryState: "in_flight",
+        claimToken,
+        attemptCount: attempts,
+        dispatch: immutableSnapshot,
+        request: storedRequest,
+        idempotencyKey: IDEMPOTENCY_KEY,
       };
     },
-    async resolveSender() {
-      if (resolveFailures > 0) {
-        resolveFailures -= 1;
-        throw new Error("studio identity temporarily unavailable");
+    async prepareRequest(input) {
+      prepares += 1;
+      if (options.prepareFailure) throw new Error(options.prepareFailure);
+      if (options.suppressed) {
+        return { state: "suppressed", reason: options.suppressed };
       }
+      const body = JSON.stringify({
+        from: "Olive Studio <hello@test.invalid>",
+        to: [input.dispatch.recipientEmail],
+        subject: input.subject,
+        html: input.html,
+      });
       return {
-        designerName: "Olive Designer",
-        senderName: "Olive Studio",
+        state: "ready",
+        request: {
+          body,
+          from: "Olive Studio <hello@test.invalid>",
+          to: [input.dispatch.recipientEmail],
+          subject: input.subject,
+          idempotencyKey: input.idempotencyKey,
+          dryRun: false,
+        },
       };
     },
-    async ensureInAppNotification(_proposal, notificationLogId) {
-      notificationIds.push(notificationLogId);
-      storedNotificationIds.add(notificationLogId);
+    async persistRequest(input) {
+      persists += 1;
+      assertEquals(input.claimToken, claimToken);
+      if (storedRequest) assertEquals(input.request, storedRequest);
+      storedRequest ??= structuredClone(input.request);
+      return structuredClone(storedRequest);
     },
-    async sendEmail(email) {
-      emails.push(email);
-      return options.emailResults?.shift() ?? {
-        success: true,
+    async beginProviderAttempt(input) {
+      assertEquals(input.claimToken, claimToken);
+      if (options.beginFailure) throw new Error(options.beginFailure);
+      attempts += 1;
+      return {
+        attemptCount: attempts,
+        retryDeadline: "2026-08-01T11:00:00Z",
+      };
+    },
+    async sendPrepared(request) {
+      providerRequests.push(structuredClone(request));
+      return options.providerResults?.shift() ?? {
+        state: "delivered",
         id: "provider-1",
       };
     },
     async completeDispatch(input) {
-      completions.push({
-        succeeded: input.succeeded,
-        claimToken: input.claimToken,
-        error: input.error,
-      });
-      dispatchStatus = input.succeeded ? "delivered" : "failed";
+      assertEquals(input.claimToken, claimToken);
+      state = input.deliveryState;
+      claimToken = undefined;
+      return {
+        deliveryState: state,
+        attemptCount: attempts,
+        retryDeadline: "2026-08-01T11:00:00Z",
+        lastError: input.error,
+      };
+    },
+    async suppressDispatch() {
+      state = "suppressed";
+      claimToken = undefined;
+    },
+    async releaseDispatch() {
+      releases += 1;
+      state = "pending";
+      claimToken = undefined;
+    },
+    async syncEmailLog() {
+      logCalls.email += 1;
+      if (options.emailLogFailure) throw new Error("email log unavailable");
+    },
+    async syncInAppLog() {
+      logCalls.inApp += 1;
+      if (options.inAppLogFailure) throw new Error("in-app log unavailable");
     },
   };
 
@@ -158,15 +217,22 @@ function harness(options: {
 
   return {
     handler,
-    emails,
-    completions,
-    notificationIds,
-    storedNotificationIds,
+    providerRequests,
+    logCalls,
     get gatewayCreations() {
       return gatewayCreations;
     },
     get claims() {
       return claims;
+    },
+    get prepares() {
+      return prepares;
+    },
+    get persists() {
+      return persists;
+    },
+    get releases() {
+      return releases;
     },
     get studioChecks() {
       return studioChecks;
@@ -175,7 +241,11 @@ function harness(options: {
 }
 
 function request(
-  body: unknown = { proposalId: PROPOSAL_ID, sentAt: SENT_AT },
+  body: unknown = {
+    proposalId: PROPOSAL_ID,
+    sentAt: SENT_AT,
+    dispatchId: DISPATCH_ID,
+  },
   authorization = "Bearer valid",
 ): Request {
   return new Request("https://edge.test.invalid/proposal-send", {
@@ -188,13 +258,11 @@ function request(
   });
 }
 
-async function responseBody(
-  response: Response,
-): Promise<Record<string, unknown>> {
+async function body(response: Response): Promise<Record<string, unknown>> {
   return await response.json();
 }
 
-Deno.test("proposal-send keeps browser CORS and authenticates before gateway construction", async () => {
+Deno.test("proposal-send authenticates before constructing service-role gateway", async () => {
   const h = harness();
   const preflight = await h.handler(
     new Request("https://edge.test.invalid/proposal-send", {
@@ -204,134 +272,152 @@ Deno.test("proposal-send keeps browser CORS and authenticates before gateway con
   assertEquals(preflight.status, 200);
   assertEquals(preflight.headers.get("access-control-allow-origin"), "*");
 
-  const unauthenticated = await h.handler(request(undefined, "Bearer invalid"));
-  assertEquals(unauthenticated.status, 401);
+  const response = await h.handler(request(undefined, "Bearer invalid"));
+  assertEquals(response.status, 401);
   assertEquals(h.gatewayCreations, 0);
 });
 
-Deno.test("proposal owner can dispatch the exact sent instance", async () => {
-  const h = harness({ callerId: OWNER_ID });
-  const response = await h.handler(request());
-
-  assertEquals(response.status, 200);
-  assertEquals(h.studioChecks, 0);
-  assertEquals(h.emails.length, 1);
-  assertEquals(h.emails[0].to, "alex@test.invalid");
-  assertEquals(
-    h.emails[0].idempotencyKey,
-    `proposal-send/${PROPOSAL_ID}/${SENT_AT}`,
-  );
-  assertEquals(h.completions, [
-    { succeeded: true, claimToken: "claim-1", error: undefined },
-  ]);
-});
-
-Deno.test("eligible studio co-member can dispatch an owner's proposal", async () => {
-  const h = harness({ callerId: MEMBER_ID, isStudioComember: true });
-  const response = await h.handler(request());
-
-  assertEquals(response.status, 200);
-  assertEquals(h.studioChecks, 1);
-  assertEquals(h.emails.length, 1);
-});
-
-Deno.test("foreign designer and proposal client cannot dispatch", async () => {
-  for (const callerId of [FOREIGN_ID, CLIENT_ID]) {
-    const h = harness({ callerId, isStudioComember: false });
-    const response = await h.handler(request());
-    assertEquals(response.status, 403);
-    assertEquals(await responseBody(response), { error: "not_authorized" });
-    assertEquals(h.claims, 0);
-    assertEquals(h.emails.length, 0);
+Deno.test("proposal-send requires the complete immutable instance tuple", async () => {
+  for (
+    const payload of [
+      {},
+      { proposalId: PROPOSAL_ID, sentAt: SENT_AT },
+      { proposalId: PROPOSAL_ID, dispatchId: DISPATCH_ID },
+    ]
+  ) {
+    const h = harness();
+    const response = await h.handler(request(payload));
+    assertEquals(response.status, 400);
+    assertEquals(h.gatewayCreations, 0);
   }
 });
 
-Deno.test("draft and accepted proposals are not dispatchable", async () => {
-  for (const status of ["draft", "accepted"]) {
-    const h = harness({ proposal: proposal({ status }) });
-    const response = await h.handler(request());
-    assertEquals(response.status, 409);
-    assertEquals(await responseBody(response), { error: "proposal_not_sent" });
-    assertEquals(h.claims, 0);
-  }
-});
-
-Deno.test("handler rejects a delayed request for a different sent instance", async () => {
-  const h = harness();
-  const response = await h.handler(
-    request({
-      proposalId: PROPOSAL_ID,
-      sentAt: "2026-07-31T11:59:00.000000+00:00",
-    }),
-  );
+Deno.test("nonce/timestamp mismatch fails without minting or claiming a row", async () => {
+  const h = harness({ exactInstanceMissing: true });
+  const response = await h.handler(request());
   assertEquals(response.status, 409);
-  assertEquals(await responseBody(response), {
-    error: "proposal_send_instance_changed",
+  assertEquals(await body(response), {
+    error: "proposal_send_instance_mismatch",
   });
   assertEquals(h.claims, 0);
 });
 
-Deno.test("duplicate invocation neither sends nor stacks an in-app notification", async () => {
+Deno.test("only owner or active design-studio co-member may claim", async () => {
+  const foreign = harness({ callerId: FOREIGN_ID });
+  const denied = await foreign.handler(request());
+  assertEquals(denied.status, 403);
+  assertEquals(foreign.claims, 0);
+
+  const member = harness({ callerId: MEMBER_ID, studioComember: true });
+  const allowed = await member.handler(request());
+  assertEquals(allowed.status, 200);
+  assertEquals((await body(allowed)).delivery_state, "delivered");
+  assertEquals(member.studioChecks, 1);
+});
+
+Deno.test("first authorized attempt persists before one provider upload", async () => {
   const h = harness();
-  const first = await h.handler(request());
-  const second = await h.handler(request());
+  const response = await h.handler(request());
+  const result = await body(response);
 
-  assertEquals(first.status, 200);
-  assertEquals(second.status, 200);
-  assertEquals(await responseBody(second), {
-    ok: true,
-    duplicate: true,
-    in_flight: false,
-    attempt_count: 1,
-  });
-  assertEquals(h.emails.length, 1);
-  assertEquals(h.notificationIds, ["notification-1"]);
-  assertEquals(h.storedNotificationIds.size, 1);
+  assertEquals(result.delivery_state, "delivered");
+  assertEquals(result.ok, true);
+  assertEquals(h.prepares, 1);
+  assertEquals(h.persists, 1);
+  assertEquals(h.providerRequests.length, 1);
+  assertEquals(h.providerRequests[0].idempotencyKey, IDEMPOTENCY_KEY);
+  assert(h.providerRequests[0].body.includes("Walker Residence"));
+  assert(h.providerRequests[0].body.includes("original-logo.png"));
 });
 
-Deno.test("pre-send failure releases the lease and retries with the same notification id", async () => {
-  const h = harness({ resolveFailures: 1 });
-  const first = await h.handler(request());
-  const second = await h.handler(request());
-
-  assertEquals(first.status, 502);
-  assertEquals(second.status, 200);
-  assertEquals(h.emails.length, 1);
-  assertEquals(h.notificationIds, ["notification-1", "notification-1"]);
-  assertEquals(h.storedNotificationIds.size, 1);
-  assertEquals(h.completions.map((item) => item.succeeded), [false, true]);
-});
-
-Deno.test("ambiguous provider retry reuses the exact provider idempotency key", async () => {
+Deno.test("ambiguous retries replay byte-identical request and stop at three", async () => {
   const h = harness({
-    emailResults: [
-      { success: false, error: "connection closed after request upload" },
-      { success: true, id: "provider-existing-request" },
+    providerResults: [
+      { state: "ambiguous", error: "timeout one" },
+      { state: "ambiguous", error: "timeout two" },
+      { state: "ambiguous", error: "timeout three" },
     ],
   });
-  const first = await h.handler(request());
-  const second = await h.handler(request());
+  const response = await h.handler(request());
+  const result = await body(response);
 
-  assertEquals(first.status, 502);
-  assertEquals(second.status, 200);
-  assertEquals(h.emails.length, 2);
-  assertEquals(h.emails[0].idempotencyKey, h.emails[1].idempotencyKey);
+  assertEquals(result.delivery_state, "ambiguous");
+  assertEquals(result.retry_exhausted, true);
+  assertEquals(result.retryable, false);
+  assertEquals(h.providerRequests.length, 3);
   assertEquals(
-    h.emails[0].idempotencyKey,
-    `proposal-send/${PROPOSAL_ID}/${SENT_AT}`,
+    new Set(h.providerRequests.map((item) => item.body)).size,
+    1,
   );
-  assertEquals(h.completions.map((item) => item.succeeded), [false, true]);
+  assertEquals(
+    new Set(h.providerRequests.map((item) => item.idempotencyKey)).size,
+    1,
+  );
 });
 
-Deno.test("request must include both proposal id and exact sent timestamp", async () => {
-  const h = harness();
-  for (const body of [{}, { proposalId: PROPOSAL_ID }, { sentAt: SENT_AT }]) {
-    const response = await h.handler(request(body));
-    assertEquals(response.status, 400);
-    assertEquals(await responseBody(response), {
-      error: "proposalId_and_sentAt_required",
-    });
+Deno.test("known provider failure is surfaced as failed and remains retryable", async () => {
+  const h = harness({
+    providerResults: [{ state: "failed", error: "Resend API 503" }],
+  });
+  const response = await h.handler(request());
+  assertEquals(await body(response), {
+    ok: false,
+    delivery_state: "failed",
+    attempt_count: 1,
+    retryable: true,
+    retry_exhausted: false,
+    detail: "Resend API 503",
+  });
+});
+
+Deno.test("suppression is never reported as delivery", async () => {
+  const h = harness({ suppressed: "email_suppressed" });
+  const response = await h.handler(request());
+  const result = await body(response);
+  assertEquals(result.ok, false);
+  assertEquals(result.delivery_state, "suppressed");
+  assertEquals(result.retryable, false);
+  assertEquals(h.providerRequests.length, 0);
+});
+
+Deno.test("policy-read failure fails closed to pending before provider", async () => {
+  const h = harness({ prepareFailure: "email_suppression_check_failed" });
+  const response = await h.handler(request());
+  const result = await body(response);
+  assertEquals(result.delivery_state, "pending");
+  assertEquals(result.ok, false);
+  assertEquals(result.retryable, true);
+  assertEquals(h.releases, 1);
+  assertEquals(h.providerRequests.length, 0);
+});
+
+Deno.test("provider attempt start failure releases to retryable pending", async () => {
+  const h = harness({ beginFailure: "database unavailable" });
+  const response = await h.handler(request());
+  const result = await body(response);
+  assertEquals(result.delivery_state, "pending");
+  assertEquals(result.ok, false);
+  assertEquals(result.retryable, true);
+  assertEquals(result.attempt_count, 0);
+  assertEquals(h.releases, 1);
+  assertEquals(h.providerRequests.length, 0);
+});
+
+Deno.test("delivered and live concurrent instances dedupe without upload", async () => {
+  for (const initialState of ["delivered", "in_flight"] as const) {
+    const h = harness({ initialState, initialAttempts: 1 });
+    const response = await h.handler(request());
+    const result = await body(response);
+    assertEquals(result.delivery_state, initialState);
+    assertEquals(result.ok, initialState === "delivered");
+    assertEquals(h.providerRequests.length, 0);
   }
-  assertEquals(h.gatewayCreations, 0);
-  assert(!h.emails.length);
+});
+
+Deno.test("notification-log failure is isolated from provider delivery", async () => {
+  const h = harness({ emailLogFailure: true, inAppLogFailure: true });
+  const response = await h.handler(request());
+  assertEquals((await body(response)).delivery_state, "delivered");
+  assertEquals(h.providerRequests.length, 1);
+  assertEquals(h.logCalls, { email: 1, inApp: 1 });
 });

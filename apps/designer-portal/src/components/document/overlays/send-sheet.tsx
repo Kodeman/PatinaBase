@@ -20,8 +20,10 @@ import { useIsMutating, useQueryClient } from '@tanstack/react-query';
 import { PROPOSAL_CLIENT_MUTATION_KEY } from '@patina/supabase';
 import {
   useProposal,
+  useRetryProposalSend,
   useSendProposal,
   useProposalVersions,
+  type ProposalEmailDeliveryState,
 } from '@/hooks/use-proposals';
 import { ClientPicker } from '@/components/portal/client-picker';
 import { useClient, useInviteAndLinkClient } from '@/hooks/use-clients';
@@ -84,6 +86,37 @@ function sendReviewFingerprint({
   });
 }
 
+type DeliveryRecovery = {
+  dispatchId: string;
+  sentAt: string;
+  state: ProposalEmailDeliveryState;
+  retryable: boolean;
+  detail?: string;
+};
+
+function deliveryRecoveryMessage(recovery: DeliveryRecovery): string {
+  if (
+    !recovery.retryable &&
+    (recovery.state === 'failed' || recovery.state === 'ambiguous')
+  ) {
+    return 'The proposal is sent, but the safe email retry window has ended. Confirm delivery with the client directly; Patina will not risk sending a duplicate.';
+  }
+  switch (recovery.state) {
+    case 'pending':
+      return 'The proposal is sent. Its email is queued but has not been dispatched yet.';
+    case 'in_flight':
+      return 'The proposal is sent. Email delivery is still being confirmed.';
+    case 'suppressed':
+      return 'The proposal is sent, but this client is currently suppressed from email. Follow up directly or correct their email settings.';
+    case 'failed':
+      return 'The proposal is sent, but the email provider rejected this attempt.';
+    case 'ambiguous':
+      return 'The proposal is sent, but delivery could not be confirmed. Checking again is safe and will not create a second proposal send.';
+    case 'delivered':
+      return 'The proposal email was delivered to the provider.';
+  }
+}
+
 export function SendSheet({
   proposalId,
   open,
@@ -113,6 +146,7 @@ export function SendSheet({
   // R83 — this sheet renders failures inline at the act site (sendError /
   // linkError bands below); the global mutation toast stays quiet.
   const sendProposal = useSendProposal({ errorSurface: 'inline' });
+  const retryProposalSend = useRetryProposalSend({ errorSurface: 'inline' });
   const attachClient = useAttachDocumentClient();
   const inviteAndLinkClient = useInviteAndLinkClient();
   const { toast } = useToast();
@@ -141,6 +175,36 @@ export function SendSheet({
     string | null
   >(null);
   const clientCopyReviewAttempt = useRef(0);
+  const [deliveryRecovery, setDeliveryRecovery] =
+    useState<DeliveryRecovery | null>(null);
+
+  useEffect(() => {
+    if (!open || !proposal || proposal.status === 'draft') {
+      setDeliveryRecovery(null);
+      return;
+    }
+    if (
+      proposal?.status !== 'draft' &&
+      typeof proposal?.sent_at === 'string' &&
+      typeof proposal?.proposal_send_dispatch_id === 'string'
+    ) {
+      setDeliveryRecovery(
+        (current) =>
+          current ?? {
+            dispatchId: proposal.proposal_send_dispatch_id,
+            sentAt: proposal.sent_at,
+            state: 'pending',
+            retryable: true,
+          },
+      );
+    }
+  }, [
+    open,
+    proposalId,
+    proposal?.proposal_send_dispatch_id,
+    proposal?.sent_at,
+    proposal?.status,
+  ]);
 
   const sourceGapsFingerprint = JSON.stringify(draftingState.gaps);
   useEffect(() => {
@@ -315,7 +379,9 @@ export function SendSheet({
   }, [open, reviewFingerprint]);
 
   const canSend = Boolean(
-    proposal?.client_id &&
+    proposal?.status === 'draft' &&
+      !deliveryRecovery &&
+      proposal?.client_id &&
       clientEmail &&
       readiness &&
       reviewFingerprint &&
@@ -388,20 +454,26 @@ export function SendSheet({
         itemCount: proposal?.items?.length ?? 0,
         totalAmount: proposal?.total_amount ?? 0,
       });
-      if (!result._emailDispatched) {
-        toast(
-          'Proposal marked as sent, but the notification email could not be dispatched. Follow up with your client directly.',
-          'warning',
-        );
-      }
       // One act, many surfaces (§5): the send flipped the proposal AND
       // superseded siblings — refetch the document/desk read models so the line
       // stamp, margin, and Desk move together. (useSendProposal already
       // invalidates the proposal keys.)
       void qc.invalidateQueries({ queryKey: ['document-state'] });
       void qc.invalidateQueries({ queryKey: ['desk-engagements'] });
-      onSent?.();
-      onClose();
+      if (result._emailDispatched) {
+        onSent?.();
+        onClose();
+      } else {
+        const recovery: DeliveryRecovery = {
+          dispatchId: result.proposal_send_dispatch_id ?? '',
+          sentAt: result.sent_at ?? '',
+          state: result._emailDeliveryState,
+          retryable: result._emailRetryable,
+          detail: result._emailDispatchDetail,
+        };
+        setDeliveryRecovery(recovery);
+        toast(deliveryRecoveryMessage(recovery), 'warning');
+      }
     } catch (err) {
       console.error('Failed to send proposal:', err);
       if (!clientCopyVerified || err instanceof ProposalAutosaveBarrierError) {
@@ -420,6 +492,36 @@ export function SendSheet({
     } finally {
       sendAttemptInFlight.current = false;
       setIsPreparingSend(false);
+    }
+  };
+
+  const handleRetryDelivery = async () => {
+    if (!deliveryRecovery?.dispatchId || !deliveryRecovery.sentAt) return;
+    setSendError(null);
+    try {
+      const result = await retryProposalSend.mutateAsync({
+        proposalId,
+        dispatchId: deliveryRecovery.dispatchId,
+        sentAt: deliveryRecovery.sentAt,
+      });
+      const next: DeliveryRecovery = {
+        ...deliveryRecovery,
+        state: result._emailDeliveryState,
+        retryable: result._emailRetryable,
+        detail: result._emailDispatchDetail,
+      };
+      setDeliveryRecovery(next);
+      if (result._emailDispatched) {
+        toast('Proposal email delivered to the provider.', 'success');
+        onSent?.();
+        onClose();
+      }
+    } catch (error) {
+      setSendError(
+        error instanceof Error
+          ? error.message
+          : 'Could not check email delivery. Try again.',
+      );
     }
   };
 
@@ -722,6 +824,20 @@ export function SendSheet({
             </div>
 
             {/* Send error */}
+            {deliveryRecovery && (
+              <div
+                role="status"
+                className="rounded-[4px] border border-[rgba(196,124,92,0.4)] bg-[rgba(196,124,92,0.08)] p-3 text-[12.5px] text-[var(--color-clay)]"
+              >
+                <p>{deliveryRecoveryMessage(deliveryRecovery)}</p>
+                {deliveryRecovery.detail && (
+                  <p className="mt-1 text-[11px] opacity-80">
+                    {deliveryRecovery.detail}
+                  </p>
+                )}
+              </div>
+            )}
+
             {sendError && (
               <div
                 role="alert"
@@ -738,24 +854,54 @@ export function SendSheet({
               className="border-t border-[var(--color-pearl)] pt-5"
               aria-label="Send proposal actions"
             >
-              <DocumentAction
-                actionKey="send-proposal"
-                variant="primary"
-                onClick={handleSend}
-                disabled={!canSend}
-                loading={sendProposal.isPending}
-                loadingLabel="Sending…"
-                trailing="→"
-              >
-                Send proposal
-              </DocumentAction>
-              <DocumentAction
-                actionKey="send-later"
-                variant="tertiary"
-                onClick={onClose}
-              >
-                Send later
-              </DocumentAction>
+              {deliveryRecovery ? (
+                <>
+                  {deliveryRecovery.retryable &&
+                    deliveryRecovery.state !== 'suppressed' &&
+                    deliveryRecovery.state !== 'delivered' && (
+                      <DocumentAction
+                        actionKey="retry-proposal-email"
+                        variant="primary"
+                        onClick={handleRetryDelivery}
+                        loading={retryProposalSend.isPending}
+                        loadingLabel="Checking…"
+                        trailing="→"
+                      >
+                        {deliveryRecovery.state === 'in_flight'
+                          ? 'Check delivery'
+                          : 'Retry email delivery'}
+                      </DocumentAction>
+                    )}
+                  <DocumentAction
+                    actionKey="close-send-status"
+                    variant="tertiary"
+                    onClick={onClose}
+                  >
+                    Close
+                  </DocumentAction>
+                </>
+              ) : (
+                <>
+                  <DocumentAction
+                    actionKey="send-proposal"
+                    variant="primary"
+                    onClick={handleSend}
+                    disabled={!canSend}
+                    loading={sendProposal.isPending}
+                    loadingLabel="Sending…"
+                    trailing="→"
+                  >
+                    Send proposal
+                  </DocumentAction>
+                  <DocumentAction
+                    actionKey="send-later"
+                    variant="tertiary"
+                    onClick={onClose}
+                  >
+                    Send later
+                  </DocumentAction>
+                </>
+              )}
             </DocumentActionGroup>
           </div>
         )}
