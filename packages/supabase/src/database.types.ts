@@ -12906,6 +12906,76 @@ export type Database = {
           },
         ]
       }
+      proposal_phase_template_applications: {
+        Row: {
+          created_at: string
+          created_by: string
+          effect_snapshot: Json
+          phase_ids: string[]
+          proposal_id: string
+          request_id: string
+          template_slug: string
+        }
+        Insert: {
+          created_at?: string
+          created_by: string
+          effect_snapshot?: Json
+          phase_ids?: string[]
+          proposal_id: string
+          request_id: string
+          template_slug: string
+        }
+        Update: {
+          created_at?: string
+          created_by?: string
+          effect_snapshot?: Json
+          phase_ids?: string[]
+          proposal_id?: string
+          request_id?: string
+          template_slug?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "proposal_phase_template_applications_proposal_id_fkey"
+            columns: ["proposal_id"]
+            isOneToOne: false
+            referencedRelation: "proposals"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      proposal_phase_topology_diagnostics: {
+        Row: {
+          detail: Json
+          detected_at: string
+          issue_code: string
+          phase_count: number
+          proposal_id: string
+        }
+        Insert: {
+          detail?: Json
+          detected_at?: string
+          issue_code: string
+          phase_count: number
+          proposal_id: string
+        }
+        Update: {
+          detail?: Json
+          detected_at?: string
+          issue_code?: string
+          phase_count?: number
+          proposal_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "proposal_phase_topology_diagnostics_proposal_id_fkey"
+            columns: ["proposal_id"]
+            isOneToOne: true
+            referencedRelation: "proposals"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       proposal_phases: {
         Row: {
           anchor_date: string | null
@@ -20991,6 +21061,10 @@ export type Database = {
       }
     }
     Functions: {
+      _accept_design_request_profile_bound_core: {
+        Args: { p_lead_id: string }
+        Returns: Json
+      }
       _activate_proposal_as_project_authorized: {
         Args: { p_proposal_id: string; p_start_date?: string }
         Returns: string
@@ -21156,8 +21230,28 @@ export type Database = {
         Args: { p_context: string; p_project_id: string }
         Returns: undefined
       }
+      _assert_proposal_phase_topology: {
+        Args: { p_context: string; p_proposal_id: string }
+        Returns: undefined
+      }
       _can_author_proposal: { Args: { p_owner: string }; Returns: boolean }
       _can_manage_invoice_owner: { Args: { p_owner: string }; Returns: boolean }
+      _can_record_proposal_engagement: {
+        Args: {
+          p_event_type: string
+          p_proposal_id: string
+          p_viewer_id: string
+        }
+        Returns: boolean
+      }
+      _clone_proposal_legacy_00399: {
+        Args: {
+          p_mode?: string
+          p_revision_summary?: string
+          p_source_id: string
+        }
+        Returns: string
+      }
       _commit_proposal_send: {
         Args: {
           p_cc_email?: string
@@ -21273,6 +21367,13 @@ export type Database = {
           isSetofReturn: false
         }
       }
+      _enqueue_decision_notification: {
+        Args: {
+          p_decision_id: string
+          p_kind: Database["public"]["Enums"]["decision_notification_kind"]
+        }
+        Returns: string
+      }
       _issue_invoice_authorized_legacy_00397: {
         Args: { p_due_date?: string; p_invoice_id: string }
         Returns: {
@@ -21381,6 +21482,14 @@ export type Database = {
         }
       }
       _primary_studio_for: { Args: { p_user: string }; Returns: string }
+      _proposal_phase_effect_snapshot: {
+        Args: { p_phase_ids: string[]; p_proposal_id: string }
+        Returns: Json
+      }
+      _proposal_phase_main_tail: {
+        Args: { p_context: string; p_proposal_id: string }
+        Returns: string
+      }
       _proposal_review_fingerprint: {
         Args: { p_proposal_id: string }
         Returns: string
@@ -21415,6 +21524,10 @@ export type Database = {
           isSetofReturn: false
         }
       }
+      _recompute_proposal_total_locked: {
+        Args: { p_proposal_id: string }
+        Returns: number
+      }
       _record_invoice_payment_authorized_legacy_00397: {
         Args: {
           p_amount_cents: number
@@ -21447,6 +21560,10 @@ export type Database = {
           isOneToOne: true
           isSetofReturn: false
         }
+      }
+      _repair_legacy_proposal_phase_topology: {
+        Args: { p_proposal_id: string }
+        Returns: boolean
       }
       _resolve_coordination_item_authorized: {
         Args: {
@@ -21565,6 +21682,15 @@ export type Database = {
           isOneToOne: true
           isSetofReturn: false
         }
+      }
+      _sign_proposal_authorized_00400: {
+        Args: {
+          p_client_id: string
+          p_proposal_id: string
+          p_signed_name: string
+          p_trusted_signed_ip?: string
+        }
+        Returns: Json
       }
       _site_request_append_event: {
         Args: {
@@ -21907,10 +22033,19 @@ export type Database = {
         Args: { p_invoice_id: string }
         Returns: undefined
       }
-      apply_phase_template: {
-        Args: { p_proposal_id: string; p_template_slug: string }
-        Returns: string[]
-      }
+      apply_phase_template:
+        | {
+            Args: { p_proposal_id: string; p_template_slug: string }
+            Returns: string[]
+          }
+        | {
+            Args: {
+              p_proposal_id: string
+              p_request_id: string
+              p_template_slug: string
+            }
+            Returns: string[]
+          }
       apply_scope_change: { Args: { p_request_id: string }; Returns: undefined }
       apply_starvation_decay: { Args: never; Returns: Json }
       apply_taste_refit: {
@@ -21930,6 +22065,73 @@ export type Database = {
           p_request_id: string
         }
         Returns: Json
+      }
+      archive_project: {
+        Args: {
+          p_expected_status: Database["public"]["Enums"]["project_status"]
+          p_project_id: string
+        }
+        Returns: {
+          actual_cents: number | null
+          brief_document_url: string | null
+          budget_cents: number | null
+          budget_max: number | null
+          budget_min: number | null
+          change_order_terms: Json | null
+          client_id: string | null
+          client_profile_id: string | null
+          client_visibility_tier: string
+          closure_checklist: Json | null
+          committed_cents: number | null
+          completed_at: string | null
+          created_at: string | null
+          created_by: string
+          current_phase: string | null
+          design_fee_cents: number | null
+          designer_id: string | null
+          expected_completion_date: string | null
+          id: string
+          kickoff_date: string | null
+          kickoff_message: string | null
+          lead_designer_id: string | null
+          name: string
+          notes: string | null
+          portfolio_snapshot: Json | null
+          proposal_id: string | null
+          scope_boundaries: Json | null
+          share_token: string | null
+          site_address: string | null
+          start_date: string | null
+          status: Database["public"]["Enums"]["project_status"] | null
+          studio_id: string | null
+          target_end_date: string | null
+          timeline_end: string | null
+          timeline_start: string | null
+          total_amount_cents: number | null
+          updated_at: string | null
+        }
+        SetofOptions: {
+          from: "*"
+          to: "projects"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
+      assert_client_decision_reference_integrity: {
+        Args: {
+          p_blocks_milestone_id: string
+          p_court_party_id: string
+          p_decision_id: string
+          p_designer_client_id: string
+          p_designer_id: string
+          p_linked_proposal_id: string
+          p_phase_id: string
+          p_project_id: string
+          p_recommended_option_id: string
+          p_room_id: string
+          p_status: string
+        }
+        Returns: undefined
       }
       assign_po_number: {
         Args: { p_po_id: string }
@@ -22318,6 +22520,58 @@ export type Database = {
         }
         Returns: string[]
       }
+      create_client_decision: {
+        Args: {
+          p_blocked_ffe_item_ids?: string[]
+          p_blocked_task_ids?: string[]
+          p_decision_id: string
+          p_options?: Json
+          p_payload: Json
+        }
+        Returns: {
+          answer: string | null
+          answered_at: string | null
+          answered_by: string | null
+          blocking_status: string
+          blocks_kind: string
+          blocks_milestone_id: string | null
+          client_consent_method: string | null
+          client_consented_at: string | null
+          client_signature: string | null
+          context: string | null
+          coordination_kind: string
+          court: string
+          court_party_id: string | null
+          created_at: string
+          decision_kind: string
+          decision_type: string
+          designer_client_id: string
+          designer_id: string
+          due_date: string | null
+          id: string
+          linked_phase: string | null
+          linked_proposal_id: string | null
+          phase_id: string | null
+          project_id: string | null
+          recommended_option_id: string | null
+          reminder_sent_at: string | null
+          responded_at: string | null
+          room_id: string | null
+          section_key: string | null
+          selected_by: string | null
+          sent_at: string | null
+          status: string
+          title: string
+          updated_at: string
+          viewed_at: string | null
+        }
+        SetofOptions: {
+          from: "*"
+          to: "client_decisions"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
       create_client_scope_change_request: {
         Args: {
           p_description: string
@@ -22415,6 +22669,45 @@ export type Database = {
         SetofOptions: {
           from: "*"
           to: "project_phases"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
+      create_proposal_phase: {
+        Args: {
+          p_anchor_date?: string
+          p_deliverables?: Json
+          p_duration_days?: number
+          p_duration_weeks?: number
+          p_fee_cents?: number
+          p_gate_condition?: string
+          p_lane?: string
+          p_name: string
+          p_phase_key?: string
+          p_proposal_id: string
+          p_revision_limit?: number
+        }
+        Returns: {
+          anchor_date: string | null
+          created_at: string
+          deliverables: Json | null
+          duration_days: number | null
+          duration_weeks: number | null
+          fee_cents: number
+          follows_phase_id: string | null
+          gate_condition: string | null
+          id: string
+          lane: string
+          name: string
+          phase_key: string | null
+          proposal_id: string
+          revision_limit: number | null
+          sort_order: number
+          updated_at: string
+        }
+        SetofOptions: {
+          from: "*"
+          to: "proposal_phases"
           isOneToOne: true
           isSetofReturn: false
         }
@@ -22792,6 +23085,56 @@ export type Database = {
       expire_proposals: { Args: never; Returns: number }
       expire_room_scan_associations: { Args: never; Returns: number }
       export_designer_taste: { Args: { p_designer_id: string }; Returns: Json }
+      extend_and_reopen_client_decision: {
+        Args: {
+          p_decision_id: string
+          p_due_date: string
+          p_expected_updated_at: string
+        }
+        Returns: {
+          answer: string | null
+          answered_at: string | null
+          answered_by: string | null
+          blocking_status: string
+          blocks_kind: string
+          blocks_milestone_id: string | null
+          client_consent_method: string | null
+          client_consented_at: string | null
+          client_signature: string | null
+          context: string | null
+          coordination_kind: string
+          court: string
+          court_party_id: string | null
+          created_at: string
+          decision_kind: string
+          decision_type: string
+          designer_client_id: string
+          designer_id: string
+          due_date: string | null
+          id: string
+          linked_phase: string | null
+          linked_proposal_id: string | null
+          phase_id: string | null
+          project_id: string | null
+          recommended_option_id: string | null
+          reminder_sent_at: string | null
+          responded_at: string | null
+          room_id: string | null
+          section_key: string | null
+          selected_by: string | null
+          sent_at: string | null
+          status: string
+          title: string
+          updated_at: string
+          viewed_at: string | null
+        }
+        SetofOptions: {
+          from: "*"
+          to: "client_decisions"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
       fail_invoice_checkout_attempt: {
         Args: {
           p_attempt_id: string
@@ -23817,6 +24160,58 @@ export type Database = {
         Returns: Json
       }
       realtime_project_access: { Args: { topic: string }; Returns: boolean }
+      reassign_project_lead: {
+        Args: {
+          p_expected_designer_id: string
+          p_new_designer_id: string
+          p_project_id: string
+        }
+        Returns: {
+          actual_cents: number | null
+          brief_document_url: string | null
+          budget_cents: number | null
+          budget_max: number | null
+          budget_min: number | null
+          change_order_terms: Json | null
+          client_id: string | null
+          client_profile_id: string | null
+          client_visibility_tier: string
+          closure_checklist: Json | null
+          committed_cents: number | null
+          completed_at: string | null
+          created_at: string | null
+          created_by: string
+          current_phase: string | null
+          design_fee_cents: number | null
+          designer_id: string | null
+          expected_completion_date: string | null
+          id: string
+          kickoff_date: string | null
+          kickoff_message: string | null
+          lead_designer_id: string | null
+          name: string
+          notes: string | null
+          portfolio_snapshot: Json | null
+          proposal_id: string | null
+          scope_boundaries: Json | null
+          share_token: string | null
+          site_address: string | null
+          start_date: string | null
+          status: Database["public"]["Enums"]["project_status"] | null
+          studio_id: string | null
+          target_end_date: string | null
+          timeline_end: string | null
+          timeline_start: string | null
+          total_amount_cents: number | null
+          updated_at: string | null
+        }
+        SetofOptions: {
+          from: "*"
+          to: "projects"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
       recompute_portfolio_centroid: {
         Args: { p_designer_id: string }
         Returns: Json
@@ -23887,6 +24282,37 @@ export type Database = {
       release_proposal_send_dispatch: {
         Args: { p_claim_token: string; p_dispatch_id: string; p_error: string }
         Returns: Json
+      }
+      remove_proposal_phase: {
+        Args: {
+          p_expected_updated_at: string
+          p_phase_id: string
+          p_proposal_id: string
+        }
+        Returns: {
+          anchor_date: string | null
+          created_at: string
+          deliverables: Json | null
+          duration_days: number | null
+          duration_weeks: number | null
+          fee_cents: number
+          follows_phase_id: string | null
+          gate_condition: string | null
+          id: string
+          lane: string
+          name: string
+          phase_key: string | null
+          proposal_id: string
+          revision_limit: number | null
+          sort_order: number
+          updated_at: string
+        }
+        SetofOptions: {
+          from: "*"
+          to: "proposal_phases"
+          isOneToOne: true
+          isSetofReturn: false
+        }
       }
       reopen_client_decision: {
         Args: { p_decision_id: string }
@@ -24439,6 +24865,58 @@ export type Database = {
         }
         Returns: string
       }
+      set_project_operational_status: {
+        Args: {
+          p_expected_status: Database["public"]["Enums"]["project_status"]
+          p_project_id: string
+          p_status: Database["public"]["Enums"]["project_status"]
+        }
+        Returns: {
+          actual_cents: number | null
+          brief_document_url: string | null
+          budget_cents: number | null
+          budget_max: number | null
+          budget_min: number | null
+          change_order_terms: Json | null
+          client_id: string | null
+          client_profile_id: string | null
+          client_visibility_tier: string
+          closure_checklist: Json | null
+          committed_cents: number | null
+          completed_at: string | null
+          created_at: string | null
+          created_by: string
+          current_phase: string | null
+          design_fee_cents: number | null
+          designer_id: string | null
+          expected_completion_date: string | null
+          id: string
+          kickoff_date: string | null
+          kickoff_message: string | null
+          lead_designer_id: string | null
+          name: string
+          notes: string | null
+          portfolio_snapshot: Json | null
+          proposal_id: string | null
+          scope_boundaries: Json | null
+          share_token: string | null
+          site_address: string | null
+          start_date: string | null
+          status: Database["public"]["Enums"]["project_status"] | null
+          studio_id: string | null
+          target_end_date: string | null
+          timeline_end: string | null
+          timeline_start: string | null
+          total_amount_cents: number | null
+          updated_at: string | null
+        }
+        SetofOptions: {
+          from: "*"
+          to: "projects"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
       set_room_emergence: {
         Args: {
           p_has_emergence: boolean
@@ -24470,12 +24948,15 @@ export type Database = {
       show_limit: { Args: never; Returns: number }
       show_trgm: { Args: { "": string }; Returns: string[] }
       sign_proposal: {
+        Args: { p_proposal_id: string; p_signed_name: string }
+        Returns: Json
+      }
+      sign_proposal_with_trusted_ip: {
         Args: {
-          p_auto_activate?: boolean
+          p_client_id: string
           p_proposal_id: string
           p_signed_ip?: string
           p_signed_name: string
-          p_start_date?: string
         }
         Returns: Json
       }
@@ -24893,6 +25374,59 @@ export type Database = {
           isSetofReturn: false
         }
       }
+      update_coordination_item: {
+        Args: {
+          p_blocked_ffe_item_ids: string[]
+          p_blocked_task_ids: string[]
+          p_expected_updated_at: string
+          p_item_id: string
+          p_options: Json
+          p_patch: Json
+        }
+        Returns: {
+          answer: string | null
+          answered_at: string | null
+          answered_by: string | null
+          blocking_status: string
+          blocks_kind: string
+          blocks_milestone_id: string | null
+          client_consent_method: string | null
+          client_consented_at: string | null
+          client_signature: string | null
+          context: string | null
+          coordination_kind: string
+          court: string
+          court_party_id: string | null
+          created_at: string
+          decision_kind: string
+          decision_type: string
+          designer_client_id: string
+          designer_id: string
+          due_date: string | null
+          id: string
+          linked_phase: string | null
+          linked_proposal_id: string | null
+          phase_id: string | null
+          project_id: string | null
+          recommended_option_id: string | null
+          reminder_sent_at: string | null
+          responded_at: string | null
+          room_id: string | null
+          section_key: string | null
+          selected_by: string | null
+          sent_at: string | null
+          status: string
+          title: string
+          updated_at: string
+          viewed_at: string | null
+        }
+        SetofOptions: {
+          from: "*"
+          to: "client_decisions"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
       update_my_biases: { Args: { p_overrides: Json }; Returns: Json }
       update_project_phase: {
         Args: {
@@ -24930,6 +25464,38 @@ export type Database = {
         SetofOptions: {
           from: "*"
           to: "project_phases"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
+      update_proposal_phase: {
+        Args: {
+          p_expected_updated_at: string
+          p_patch: Json
+          p_phase_id: string
+          p_proposal_id: string
+        }
+        Returns: {
+          anchor_date: string | null
+          created_at: string
+          deliverables: Json | null
+          duration_days: number | null
+          duration_weeks: number | null
+          fee_cents: number
+          follows_phase_id: string | null
+          gate_condition: string | null
+          id: string
+          lane: string
+          name: string
+          phase_key: string | null
+          proposal_id: string
+          revision_limit: number | null
+          sort_order: number
+          updated_at: string
+        }
+        SetofOptions: {
+          from: "*"
+          to: "proposal_phases"
           isOneToOne: true
           isSetofReturn: false
         }
