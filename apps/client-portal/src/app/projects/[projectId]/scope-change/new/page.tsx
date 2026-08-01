@@ -13,6 +13,56 @@ import {
 import { ChangeRequestForm, type ChangeRequestFormData } from '@patina/design-system';
 import { QueryFailure } from '@/components/query-failure';
 
+type SubmissionIntent = {
+  version: 1;
+  projectId: string;
+  fingerprint: string;
+  idempotencyKey: string;
+};
+
+const intentStorageKey = (projectId: string) => `patina:scope-change-intent:${projectId}`;
+
+function readSubmissionIntent(projectId: string, fingerprint: string): SubmissionIntent | null {
+  try {
+    const raw = globalThis.sessionStorage?.getItem(intentStorageKey(projectId));
+    if (!raw) return null;
+    const value = JSON.parse(raw) as Partial<SubmissionIntent>;
+    if (
+      value.version !== 1 ||
+      value.projectId !== projectId ||
+      value.fingerprint !== fingerprint ||
+      typeof value.idempotencyKey !== 'string' ||
+      value.idempotencyKey.length === 0
+    ) {
+      return null;
+    }
+    return value as SubmissionIntent;
+  } catch {
+    return null;
+  }
+}
+
+function persistSubmissionIntent(intent: SubmissionIntent): void {
+  try {
+    globalThis.sessionStorage?.setItem(intentStorageKey(intent.projectId), JSON.stringify(intent));
+  } catch {
+    // Storage can be unavailable in hardened/private browser contexts. The
+    // in-memory ref still protects retries for the lifetime of this mount.
+  }
+}
+
+function clearSubmissionIntent(intent: SubmissionIntent): void {
+  try {
+    const persisted = readSubmissionIntent(intent.projectId, intent.fingerprint);
+    if (persisted?.idempotencyKey === intent.idempotencyKey) {
+      globalThis.sessionStorage?.removeItem(intentStorageKey(intent.projectId));
+    }
+  } catch {
+    // The server receipt already proved the commit; stale session data is safe
+    // and will be replaced when the user authors a different fingerprint.
+  }
+}
+
 export default function ClientScopeChangeNewPage({
   params,
 }: {
@@ -24,10 +74,7 @@ export default function ClientScopeChangeNewPage({
   const createRequest = useCreateClientScopeChangeRequest();
   const [submitted, setSubmitted] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const submissionIntentRef = useRef<{
-    fingerprint: string;
-    idempotencyKey: string;
-  } | null>(null);
+  const submissionIntentRef = useRef<SubmissionIntent | null>(null);
   const submittingRef = useRef(false);
 
   async function handleSubmit(data: ChangeRequestFormData) {
@@ -41,10 +88,15 @@ export default function ClientScopeChangeNewPage({
     const fingerprint = JSON.stringify([title, description]);
     let submissionIntent = submissionIntentRef.current;
     if (submissionIntent?.fingerprint !== fingerprint) {
-      submissionIntent = {
-        fingerprint,
-        idempotencyKey: globalThis.crypto.randomUUID(),
-      };
+      submissionIntent =
+        readSubmissionIntent(projectId, fingerprint) ??
+        {
+          version: 1,
+          projectId,
+          fingerprint,
+          idempotencyKey: globalThis.crypto.randomUUID(),
+        };
+      persistSubmissionIntent(submissionIntent);
       submissionIntentRef.current = submissionIntent;
     }
 
@@ -57,7 +109,9 @@ export default function ClientScopeChangeNewPage({
         description,
       });
       // A committed RPC receipt is the only point where this intent key can be
-      // discarded. Network/unknown failures keep it stable for a safe retry.
+      // discarded. Network/unknown failures keep it stable across a reload for
+      // a safe retry of the exact same authored payload.
+      clearSubmissionIntent(submissionIntent);
       submissionIntentRef.current = null;
       setSubmitted(true);
       setTimeout(() => {

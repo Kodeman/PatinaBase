@@ -284,6 +284,27 @@ GRANT EXECUTE ON FUNCTION public.draft_invoice_from_milestone(uuid) TO service_r
 COMMENT ON FUNCTION public.draft_invoice_from_milestone(uuid) IS
   'Atomically creates one draft invoice plus one exact milestone line and latches the milestone. Repairs the historical header-only draft shape under the same milestone lock; notification remains best effort.';
 
+-- Financial acts are narrower than shared-workspace visibility. The general
+-- is_studio_comember helper intentionally treats any shared organization as a
+-- collaboration boundary; issuing, collecting, sending, and voiding a client
+-- receivable require the exact designer or an active non-guest peer in the
+-- same active design_studio.
+CREATE OR REPLACE FUNCTION public._can_manage_invoice_owner(p_owner uuid)
+RETURNS boolean
+LANGUAGE sql
+STABLE
+SECURITY DEFINER
+SET search_path = public, pg_temp
+AS $$
+  SELECT public._can_author_proposal(p_owner);
+$$;
+
+REVOKE ALL ON FUNCTION public._can_manage_invoice_owner(uuid)
+  FROM PUBLIC, anon, authenticated, service_role;
+
+COMMENT ON FUNCTION public._can_manage_invoice_owner(uuid) IS
+  'Private invoice authority: exact designer or active non-guest peer in the same active design_studio; contractor/manufacturer co-membership never grants money authority.';
+
 CREATE OR REPLACE FUNCTION public.generate_milestone_invoice(p_milestone_id uuid)
 RETURNS uuid
 LANGUAGE plpgsql
@@ -300,7 +321,7 @@ BEGIN
   IF NOT FOUND THEN
     RAISE EXCEPTION 'generate_milestone_invoice: milestone % not found', p_milestone_id;
   END IF;
-  IF NOT public.is_studio_comember(v_designer) THEN
+  IF NOT public._can_manage_invoice_owner(v_designer) THEN
     RAISE EXCEPTION 'generate_milestone_invoice: milestone % not found or access denied', p_milestone_id;
   END IF;
   RETURN public.draft_invoice_from_milestone(p_milestone_id);
@@ -320,7 +341,7 @@ AS $$
   SELECT EXISTS (
     SELECT 1 FROM public.invoices i
     WHERE i.id = p_invoice_id
-      AND public.is_studio_comember(i.designer_id)
+      AND public._can_manage_invoice_owner(i.designer_id)
   );
 $$;
 
@@ -328,7 +349,7 @@ REVOKE ALL ON FUNCTION public.can_manage_invoice(uuid) FROM PUBLIC, anon;
 GRANT EXECUTE ON FUNCTION public.can_manage_invoice(uuid) TO authenticated;
 
 COMMENT ON FUNCTION public.can_manage_invoice(uuid) IS
-  'Authenticated capability check shared by invoice-send and tests. True only for the invoice owner or an active non-guest studio co-member.';
+  'Authenticated capability check shared by invoice-send and tests. True only for the invoice owner or an active non-guest peer in the same active design_studio.';
 
 CREATE OR REPLACE FUNCTION public.void_invoice(
   p_invoice_id uuid,
@@ -406,6 +427,126 @@ BEGIN
     AND state IN ('claimed','session_created','processing');
 
   RETURN v_invoice;
+END;
+$$;
+
+REVOKE ALL ON FUNCTION public.void_invoice(uuid, text) FROM PUBLIC, anon;
+GRANT EXECUTE ON FUNCTION public.void_invoice(uuid, text) TO authenticated;
+
+-- Preserve the mature invoice bodies while placing one exact design-studio
+-- gate in front of every browser-callable money transition. The renamed
+-- implementations retain their internal locks and invariants but are private;
+-- only these checked wrappers remain callable by authenticated users.
+ALTER FUNCTION public.issue_invoice(uuid, date)
+  RENAME TO _issue_invoice_authorized_legacy_00397;
+REVOKE ALL ON FUNCTION public._issue_invoice_authorized_legacy_00397(uuid, date)
+  FROM PUBLIC, anon, authenticated, service_role;
+
+CREATE FUNCTION public.issue_invoice(
+  p_invoice_id uuid,
+  p_due_date date DEFAULT NULL
+)
+RETURNS public.invoices
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public, pg_temp
+AS $$
+DECLARE
+  v_invoice public.invoices%ROWTYPE;
+BEGIN
+  SELECT * INTO v_invoice
+  FROM public.invoices
+  WHERE id = p_invoice_id
+  FOR UPDATE;
+
+  IF NOT FOUND OR NOT public._can_manage_invoice_owner(v_invoice.designer_id) THEN
+    RAISE EXCEPTION 'issue_invoice: invoice % not found or access denied', p_invoice_id;
+  END IF;
+
+  RETURN public._issue_invoice_authorized_legacy_00397(p_invoice_id, p_due_date);
+END;
+$$;
+
+REVOKE ALL ON FUNCTION public.issue_invoice(uuid, date) FROM PUBLIC, anon;
+GRANT EXECUTE ON FUNCTION public.issue_invoice(uuid, date) TO authenticated;
+
+ALTER FUNCTION public.record_invoice_payment(
+  uuid, integer, text, text, timestamptz, text
+) RENAME TO _record_invoice_payment_authorized_legacy_00397;
+REVOKE ALL ON FUNCTION public._record_invoice_payment_authorized_legacy_00397(
+  uuid, integer, text, text, timestamptz, text
+) FROM PUBLIC, anon, authenticated, service_role;
+
+CREATE FUNCTION public.record_invoice_payment(
+  p_invoice_id uuid,
+  p_amount_cents integer,
+  p_method text,
+  p_reference text DEFAULT NULL,
+  p_received_at timestamptz DEFAULT now(),
+  p_note text DEFAULT NULL
+)
+RETURNS public.invoice_payments
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public, pg_temp
+AS $$
+DECLARE
+  v_invoice public.invoices%ROWTYPE;
+BEGIN
+  SELECT * INTO v_invoice
+  FROM public.invoices
+  WHERE id = p_invoice_id
+  FOR UPDATE;
+
+  IF NOT FOUND OR NOT public._can_manage_invoice_owner(v_invoice.designer_id) THEN
+    RAISE EXCEPTION 'record_invoice_payment: invoice % not found or access denied', p_invoice_id;
+  END IF;
+
+  RETURN public._record_invoice_payment_authorized_legacy_00397(
+    p_invoice_id,
+    p_amount_cents,
+    p_method,
+    p_reference,
+    p_received_at,
+    p_note
+  );
+END;
+$$;
+
+REVOKE ALL ON FUNCTION public.record_invoice_payment(
+  uuid, integer, text, text, timestamptz, text
+) FROM PUBLIC, anon;
+GRANT EXECUTE ON FUNCTION public.record_invoice_payment(
+  uuid, integer, text, text, timestamptz, text
+) TO authenticated;
+
+ALTER FUNCTION public.void_invoice(uuid, text)
+  RENAME TO _void_invoice_authorized_legacy_00397;
+REVOKE ALL ON FUNCTION public._void_invoice_authorized_legacy_00397(uuid, text)
+  FROM PUBLIC, anon, authenticated, service_role;
+
+CREATE FUNCTION public.void_invoice(
+  p_invoice_id uuid,
+  p_reason text
+)
+RETURNS public.invoices
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public, pg_temp
+AS $$
+DECLARE
+  v_invoice public.invoices%ROWTYPE;
+BEGIN
+  SELECT * INTO v_invoice
+  FROM public.invoices
+  WHERE id = p_invoice_id
+  FOR UPDATE;
+
+  IF NOT FOUND OR NOT public._can_manage_invoice_owner(v_invoice.designer_id) THEN
+    RAISE EXCEPTION 'void_invoice: invoice % not found or access denied', p_invoice_id;
+  END IF;
+
+  RETURN public._void_invoice_authorized_legacy_00397(p_invoice_id, p_reason);
 END;
 $$;
 

@@ -138,7 +138,15 @@ export function InvoiceFolio({
   const canVoid =
     ['draft', 'sent', 'partially_paid'].includes(invoice.status) && invoice.amount_paid_cents === 0;
   const canPrint = !isDraft && invoice.status !== 'void';
-  const hasClientPortalAccount = Boolean(invoice.client_id && invoice.client?.id);
+  // Legacy/project-derived invoices may intentionally leave invoice.client_id
+  // null while the project itself has the authoritative portal client. Match
+  // the invoice-send and checkout resolution path before deciding that the
+  // household needs another invite.
+  const portalClientId = invoice.client_id ?? invoice.project?.client_id ?? null;
+  const portalClientProfile = invoice.client ?? invoice.project?.client ?? null;
+  const hasClientPortalAccount = Boolean(
+    portalClientId && portalClientProfile?.id === portalClientId,
+  );
   const busy =
     issue.isPending || send.isPending || recordPayment.isPending || voidInvoice.isPending;
 

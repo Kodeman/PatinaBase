@@ -188,7 +188,13 @@ export interface Invoice {
   created_at: string;
   updated_at: string;
   // Joined data
-  project?: { id: string; name: string; studio_id?: string | null };
+  project?: {
+    id: string;
+    name: string;
+    studio_id?: string | null;
+    client_id?: string | null;
+    client?: { id: string; full_name: string | null; email: string } | null;
+  };
   client?: { id: string; full_name: string | null; email: string };
   designer?: { id: string; full_name: string | null; business_name: string | null };
   line_items?: InvoiceLineItem[];
@@ -378,7 +384,10 @@ export function useInvoice(invoiceId: string | null | undefined) {
         .select(
           `
           *,
-          project:projects!invoices_project_id_fkey(id, name, studio_id),
+          project:projects!invoices_project_id_fkey(
+            id, name, studio_id, client_id,
+            client:profiles!projects_client_id_fkey(id, full_name, email)
+          ),
           client:profiles!invoices_client_id_fkey(id, full_name, email),
           designer:profiles!invoices_designer_id_fkey(id, full_name, business_name),
           line_items:invoice_line_items(*),

@@ -1,5 +1,5 @@
 import { Suspense } from 'react';
-import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 
 import { useProjectV2 } from '@patina/supabase';
 import ClientScopeChangeNewPage from '../page';
@@ -109,6 +109,7 @@ describe('ClientScopeChangeNewPage', () => {
       configurable: true,
       value: mockRandomUUID,
     });
+    globalThis.sessionStorage.clear();
   });
 
   it.each(['completed', 'archived'])('blocks the direct route for a %s project', async (status) => {
@@ -178,6 +179,31 @@ describe('ClientScopeChangeNewPage', () => {
     expect(mockMutateAsync.mock.calls[1][0].idempotencyKey).toBe(
       '22222222-2222-4222-8222-222222222222',
     );
+  });
+
+  it('restores the same intent UUID after a lost response and full remount', async () => {
+    mockActiveProject();
+    mockMutateAsync
+      .mockRejectedValueOnce(new Error('Response lost after commit'))
+      .mockResolvedValueOnce({
+        id: 'request-1',
+        project_id: 'project-1',
+        status: 'sent',
+        sent_at: '2026-08-01T00:00:00.000Z',
+      });
+
+    await renderPage();
+    fireEvent.click(await screen.findByRole('button', { name: 'Submit original intent' }));
+    expect(await screen.findByRole('alert')).toHaveTextContent('Response lost after commit');
+
+    cleanup();
+    await renderPage();
+    fireEvent.click(await screen.findByRole('button', { name: 'Submit original intent' }));
+    await waitFor(() => expect(mockMutateAsync).toHaveBeenCalledTimes(2));
+
+    expect(mockMutateAsync.mock.calls[1][0]).toEqual(mockMutateAsync.mock.calls[0][0]);
+    expect(mockRandomUUID).toHaveBeenCalledTimes(1);
+    expect(globalThis.sessionStorage.length).toBe(0);
   });
 
   it('closes the same-tick double-submit window before React Query rerenders', async () => {

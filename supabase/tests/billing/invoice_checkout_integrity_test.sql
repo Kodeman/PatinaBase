@@ -31,10 +31,11 @@ ON CONFLICT (id) DO UPDATE
 SET stripe_customer_id = excluded.stripe_customer_id;
 
 INSERT INTO public.organizations (id, type, name, slug)
-VALUES (
-  'b9710000-0000-4000-8000-000000000001',
-  'design_studio', 'Billing Integrity Studio', 'billing-integrity-studio'
-);
+VALUES
+  ('b9710000-0000-4000-8000-000000000001',
+   'design_studio', 'Billing Integrity Studio', 'billing-integrity-studio'),
+  ('b9710000-0000-4000-8000-000000000002',
+   'contractor', 'Billing Shared Contractor', 'billing-shared-contractor');
 
 INSERT INTO public.organization_members (
   id, user_id, organization_id, role, status, joined_at
@@ -45,7 +46,13 @@ VALUES
    'b9710000-0000-4000-8000-000000000001', 'owner', 'active', now()),
   ('b9720000-0000-4000-8000-000000000002',
    'b9700000-0000-4000-8000-000000000002',
-   'b9710000-0000-4000-8000-000000000001', 'member', 'active', now());
+   'b9710000-0000-4000-8000-000000000001', 'member', 'active', now()),
+  ('b9720000-0000-4000-8000-000000000003',
+   'b9700000-0000-4000-8000-000000000001',
+   'b9710000-0000-4000-8000-000000000002', 'member', 'active', now()),
+  ('b9720000-0000-4000-8000-000000000004',
+   'b9700000-0000-4000-8000-000000000003',
+   'b9710000-0000-4000-8000-000000000002', 'member', 'active', now());
 
 INSERT INTO public.projects (
   id, name, designer_id, client_id, created_by, status
@@ -135,6 +142,24 @@ SET invoice_id = 'b9750000-0000-4000-8000-000000000004',
     status = 'outstanding', due_date = current_date
 WHERE id = 'b9740000-0000-4000-8000-000000000004';
 
+-- Two open receivables exercise the exact-studio manual-payment boundary:
+-- one for an allowed design-studio peer and one for a contractor-only peer.
+INSERT INTO public.invoices (
+  id, project_id, designer_id, client_id, invoice_number, status,
+  currency, subtotal_cents, total_cents, amount_paid_cents
+)
+VALUES
+  ('b9750000-0000-4000-8000-000000000005',
+   'b9730000-0000-4000-8000-000000000001',
+   'b9700000-0000-4000-8000-000000000001',
+   'b9700000-0000-4000-8000-000000000004',
+   'INV-BILL-05', 'sent', 'USD', 1000, 1000, 0),
+  ('b9750000-0000-4000-8000-000000000006',
+   'b9730000-0000-4000-8000-000000000001',
+   'b9700000-0000-4000-8000-000000000001',
+   'b9700000-0000-4000-8000-000000000004',
+   'INV-BILL-06', 'sent', 'USD', 1000, 1000, 0);
+
 SET LOCAL ROLE authenticated;
 SELECT pg_temp.assume_billing_actor('b9700000-0000-4000-8000-000000000002');
 DO $$
@@ -164,6 +189,16 @@ DECLARE
   v_first uuid;
   v_redraft uuid;
 BEGIN
+  ASSERT public.can_manage_invoice('b9750000-0000-4000-8000-000000000005'),
+    'active design-studio peer must retain invoice management authority';
+  PERFORM public.record_invoice_payment(
+    'b9750000-0000-4000-8000-000000000005', 1000, 'check', 'peer-positive'
+  );
+  ASSERT (SELECT status = 'paid' AND amount_paid_cents = 1000
+          FROM public.invoices
+          WHERE id = 'b9750000-0000-4000-8000-000000000005'),
+    'active design-studio peer may record an exact offline payment';
+
   v_first := public.generate_milestone_invoice(
     'b9740000-0000-4000-8000-000000000002'
   );
@@ -198,34 +233,50 @@ BEGIN
 END;
 $$;
 
--- Non-member cannot use any shared billing capability.
+-- A contractor-only co-member is visible through the broad workspace helper,
+-- but must never gain client-receivable authority.
 SELECT pg_temp.assume_billing_actor('b9700000-0000-4000-8000-000000000003');
 DO $$
 DECLARE v_error text;
 BEGIN
+  ASSERT public.is_studio_comember('b9700000-0000-4000-8000-000000000001'),
+    'fixture must prove the actor shares a non-studio organization with owner';
   ASSERT NOT public.can_manage_invoice('b9750000-0000-4000-8000-000000000004'),
-    'foreign member must fail the invoice-send capability';
+    'contractor-only peer must fail the invoice-send capability';
   BEGIN
     PERFORM public.generate_milestone_invoice(
       'b9740000-0000-4000-8000-000000000001'
     );
   EXCEPTION WHEN OTHERS THEN v_error := sqlerrm; END;
   ASSERT v_error LIKE '%not found or access denied%',
-    format('foreign generate must reject, got %L', v_error);
+    format('contractor-only generate must reject, got %L', v_error);
 
   v_error := NULL;
   BEGIN
     PERFORM public.issue_invoice('b9750000-0000-4000-8000-000000000004', NULL);
   EXCEPTION WHEN OTHERS THEN v_error := sqlerrm; END;
   ASSERT v_error LIKE '%not found or access denied%',
-    format('foreign issue must reject, got %L', v_error);
+    format('contractor-only issue must reject, got %L', v_error);
 
   v_error := NULL;
   BEGIN
     PERFORM public.void_invoice('b9750000-0000-4000-8000-000000000004', 'forged');
   EXCEPTION WHEN OTHERS THEN v_error := sqlerrm; END;
   ASSERT v_error LIKE '%not found or access denied%',
-    format('foreign void must reject, got %L', v_error);
+    format('contractor-only void must reject, got %L', v_error);
+
+  v_error := NULL;
+  BEGIN
+    PERFORM public.record_invoice_payment(
+      'b9750000-0000-4000-8000-000000000006', 1000, 'check', 'forged'
+    );
+  EXCEPTION WHEN OTHERS THEN v_error := sqlerrm; END;
+  ASSERT v_error LIKE '%not found or access denied%',
+    format('contractor-only record payment must reject, got %L', v_error);
+  ASSERT (SELECT status = 'sent' AND amount_paid_cents = 0
+          FROM public.invoices
+          WHERE id = 'b9750000-0000-4000-8000-000000000006'),
+    'rejected contractor payment must leave the receivable unchanged';
 END;
 $$;
 

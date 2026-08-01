@@ -116,6 +116,42 @@ describe('InvoiceFolio delivery recovery', () => {
     expect(screen.queryByRole('button', { name: /copy client link/i })).not.toBeInTheDocument();
   });
 
+  it('uses the authoritative project client for a legacy nullable-client invoice', async () => {
+    mockInvoice = {
+      ...invoice,
+      client_id: null,
+      client: undefined,
+      project: {
+        id: 'project-1',
+        name: 'Lake House',
+        client_id: 'client-1',
+        client: {
+          id: 'client-1',
+          full_name: 'Client Example',
+          email: 'client@example.com',
+        },
+      },
+    };
+    mockIssue.mockResolvedValue({
+      ...mockInvoice,
+      status: 'sent',
+      invoice_number: 'INV-1043',
+    });
+    mockSend.mockRejectedValue(new Error('provider unavailable'));
+
+    render(<InvoiceFolio invoiceId="invoice-1" />);
+    fireEvent.click(screen.getByRole('button', { name: 'Issue & send' }));
+    const confirmations = screen.getAllByRole('button', { name: 'Issue & send' });
+    fireEvent.click(confirmations[confirmations.length - 1]);
+
+    expect(
+      await screen.findByRole('link', {
+        name: 'http://localhost:3002/invoices/invoice-1',
+      }),
+    ).toBeInTheDocument();
+    expect(screen.queryByText(/has no linked portal account/i)).not.toBeInTheDocument();
+  });
+
   it('announces clipboard failure instead of silently resetting the button', async () => {
     Object.defineProperty(navigator, 'clipboard', {
       configurable: true,

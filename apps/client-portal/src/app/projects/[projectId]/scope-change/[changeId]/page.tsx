@@ -22,7 +22,6 @@ export default function ClientScopeChangeApprovalPage({
   const { projectId, changeId } = use(params);
   const router = useRouter();
   const { user } = useAuth();
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const { data: request, isLoading } = useScopeChangeRequest(changeId) as { data: any; isLoading: boolean };
   const approveChange = useApproveScopeChange();
   const declineChange = useDeclineScopeChange();
@@ -58,17 +57,20 @@ export default function ClientScopeChangeApprovalPage({
   const showApprovalFlow = !isClientRequester && (request.status === 'sent' || request.status === 'viewed');
   // Cancel flow only when the current user is the requester and it hasn't been applied/cancelled.
   const showCancelFlow = isClientRequester && isPending;
-  const isResolved =
-    request.status === 'approved' ||
-    request.status === 'declined' ||
-    request.status === 'cancelled';
+  const hasAuthoredImpact =
+    (request.additional_ffe_budget_cents || 0) !== 0 ||
+    (request.additional_design_fee_cents || 0) !== 0 ||
+    (request.timeline_impact_weeks || 0) !== 0 ||
+    (request.new_total_budget_cents || 0) > 0 ||
+    (request.new_rooms?.length || 0) > 0 ||
+    (request.new_ffe_items?.length || 0) > 0;
 
   return (
     <div className="mx-auto max-w-2xl px-4 py-12">
       {/* Header */}
       <div className="mb-8">
         <p className="mb-2 font-mono text-[0.6rem] uppercase tracking-widest text-gray-400">
-          Scope Change Authorization
+          {isClientRequester ? 'Scope Change Request' : 'Scope Change Authorization'}
         </p>
         <h1 className="mb-2 font-serif text-3xl font-normal tracking-tight text-gray-900">
           {request.title}
@@ -86,8 +88,11 @@ export default function ClientScopeChangeApprovalPage({
         {request.description}
       </p>
 
-      {/* Impact Summary */}
-      <div className="mb-8 rounded-lg border border-gray-200 bg-gray-50 p-6">
+      {/* A client-origin request intentionally carries no invented financial
+          authority. Show impacts only when an authored amendment actually has
+          them; never render a misleading $0 “new project value.” */}
+      {hasAuthoredImpact ? (
+        <div className="mb-8 rounded-lg border border-gray-200 bg-gray-50 p-6">
         <h3 className="mb-4 font-mono text-[0.6rem] uppercase tracking-widest text-gray-500">
           Impact Summary
         </h3>
@@ -125,7 +130,13 @@ export default function ClientScopeChangeApprovalPage({
             </div>
           </div>
         </div>
-      </div>
+        </div>
+      ) : isClientRequester ? (
+        <p className="mb-8 rounded-lg border border-gray-200 bg-gray-50 p-5 font-body text-sm leading-relaxed text-gray-600">
+          This request records what you&rsquo;d like changed. Your designer will document any
+          budget or timeline impact separately before asking you to authorize it.
+        </p>
+      ) : null}
 
       {/* New rooms */}
       {request.new_rooms?.length > 0 && (
@@ -276,8 +287,17 @@ export default function ClientScopeChangeApprovalPage({
       {request.approved_at && (
         <div className="mt-6 rounded-lg border border-green-200 bg-green-50 p-5">
           <p className="font-body text-sm text-green-800">
-            Approved by {request.approved_by_name || 'You'} on{' '}
-            {new Date(request.approved_at).toLocaleDateString()}
+            {isClientRequester ? (
+              <>
+                Accepted by your designer on {new Date(request.approved_at).toLocaleDateString()}.
+                This records their review, not a client authorization.
+              </>
+            ) : (
+              <>
+                Approved by {request.approved_by_name || 'You'} on{' '}
+                {new Date(request.approved_at).toLocaleDateString()}
+              </>
+            )}
           </p>
         </div>
       )}
@@ -297,7 +317,8 @@ export default function ClientScopeChangeApprovalPage({
       {request.applied_at && (
         <div className="mt-6 rounded-lg border border-blue-200 bg-blue-50 p-5">
           <p className="font-body text-sm text-blue-800">
-            Applied to your project on {new Date(request.applied_at).toLocaleDateString()}.
+            {isClientRequester ? 'Marked fulfilled' : 'Applied to your project'} on{' '}
+            {new Date(request.applied_at).toLocaleDateString()}.
           </p>
         </div>
       )}
@@ -315,8 +336,11 @@ function StatusBadge({
   let label = status;
   let cls = 'bg-gray-50 text-gray-700';
   if (status === 'approved') {
-    label = 'Approved';
+    label = isClientRequester ? 'Accepted' : 'Approved';
     cls = 'bg-green-50 text-green-700';
+  } else if (status === 'applied') {
+    label = isClientRequester ? 'Fulfilled' : 'Applied';
+    cls = 'bg-blue-50 text-blue-700';
   } else if (status === 'declined') {
     label = 'Declined';
     cls = 'bg-red-50 text-red-700';
