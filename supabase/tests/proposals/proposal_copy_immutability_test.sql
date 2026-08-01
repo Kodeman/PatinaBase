@@ -402,6 +402,19 @@ BEGIN
 END;
 $$;
 
+CREATE OR REPLACE FUNCTION pg_temp.copy_proposal_signed_ip(
+  p_proposal_id uuid
+)
+RETURNS text
+LANGUAGE sql
+SECURITY DEFINER
+SET search_path = public, pg_temp
+AS $$
+  SELECT proposal.signed_ip
+  FROM public.proposals AS proposal
+  WHERE proposal.id = p_proposal_id
+$$;
+
 CREATE OR REPLACE FUNCTION pg_temp.expect_fingerprint_change(
   p_label text,
   p_sql text
@@ -2070,12 +2083,16 @@ BEGIN
   );
   v_project_id := (v_signed->>'project_id')::uuid;
 
-  ASSERT v_signed->>'status' = 'accepted' AND v_project_id IS NOT NULL,
-    'client signature must accept and auto-activate its exact proposal';
+  ASSERT v_signed->>'status' = 'accepted'
+     AND v_signed->>'newly_signed' = 'true'
+     AND v_project_id IS NOT NULL,
+    'client signature must accept and auto-activate its exact proposal once';
   ASSERT (
     SELECT array_agg(key ORDER BY key)
     FROM jsonb_object_keys(v_signed) AS receipt(key)
-  ) = ARRAY['accepted_at', 'id', 'project_id', 'signed_at', 'status'],
+  ) = ARRAY[
+    'accepted_at', 'id', 'newly_signed', 'project_id', 'signed_at', 'status'
+  ],
     format('signature receipt must be an exact allowlist: %s', v_signed);
   ASSERT (SELECT proposal_id = 'e8440000-0000-4000-8000-000000000003'
                  AND designer_id = 'e8000000-0000-4000-8000-000000000001'
@@ -2083,9 +2100,9 @@ BEGIN
           FROM public.projects
           WHERE id = v_project_id),
     'signature activation must create the exact reciprocal designer/client pair';
-  ASSERT (SELECT signed_ip IS NULL
-          FROM public.proposals
-          WHERE id = 'e8440000-0000-4000-8000-000000000003'),
+  ASSERT pg_temp.copy_proposal_signed_ip(
+    'e8440000-0000-4000-8000-000000000003'
+  ) IS NULL,
     'browser signature surface must never write caller-supplied IP evidence';
 END;
 $$;

@@ -641,8 +641,8 @@ BEGIN
 END;
 $$;
 
--- Completion is terminal table truth. Even the owner cannot directly reopen
--- or archive-hop a completed project after close_project returns.
+-- Completion is terminal project truth. Even the owner cannot directly reopen
+-- it after close_project returns; the only next state is the checked archive act.
 DO $$
 DECLARE
   v_error text;
@@ -654,7 +654,7 @@ BEGIN
   EXCEPTION WHEN check_violation THEN
     v_error := SQLERRM;
   END;
-  ASSERT v_error = 'terminal project status is immutable',
+  ASSERT v_error = 'completed projects may only move to the archive',
     format('direct project reopen should reject, got %L', v_error);
   ASSERT (SELECT status = 'completed'
           FROM public.projects

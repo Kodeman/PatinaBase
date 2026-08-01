@@ -614,8 +614,8 @@ $$;
 
 -- Completion is also the write boundary for runtime gates. A new unresolved
 -- blocker, or converting responded history back into one, must serialize on
--- the phase row and fail after completion. Non-blocking work and responded
--- history remain editable.
+-- the phase row and fail after completion. New non-blocking work remains
+-- allowed, while responded history stays immutable.
 DO $$
 DECLARE
   v_failed boolean := false;
@@ -623,16 +623,18 @@ DECLARE
   v_message text;
 BEGIN
   BEGIN
-    INSERT INTO public.client_decisions (
-      id, designer_client_id, designer_id, project_id, phase_id, title,
-      decision_type, status, blocks_kind, blocking_status
-    ) VALUES (
+    PERFORM public.create_client_decision(
       'ab000000-0000-4000-8000-000000000004',
-      'a9200000-0000-4000-8000-000000000001',
-      'a9000000-0000-4000-8000-000000000001',
-      'a9300000-0000-4000-8000-000000000012',
-      'aa000000-0000-4000-8000-000000000110',
-      'Late unresolved gate', 'approval', 'pending', 'phase', 'non_blocking'
+      jsonb_build_object(
+        'designer_client_id', 'a9200000-0000-4000-8000-000000000001',
+        'project_id', 'a9300000-0000-4000-8000-000000000012',
+        'phase_id', 'aa000000-0000-4000-8000-000000000110',
+        'title', 'Late unresolved gate',
+        'decision_type', 'approval',
+        'status', 'pending',
+        'blocks_kind', 'phase',
+        'blocking_status', 'non_blocking'
+      )
     );
   EXCEPTION WHEN OTHERS THEN
     GET STACKED DIAGNOSTICS
@@ -670,27 +672,42 @@ BEGIN
           WHERE id = 'ab000000-0000-4000-8000-000000000003'),
     'rejected history mutation must preserve responded status';
 
-  PERFORM public.update_client_decision(
-    'ab000000-0000-4000-8000-000000000003',
-    jsonb_build_object(
-      'title', 'Responded runtime gate (history retained)'
-    )
-  );
-  ASSERT (SELECT title = 'Responded runtime gate (history retained)'
+  v_failed := false;
+  BEGIN
+    PERFORM public.update_client_decision(
+      'ab000000-0000-4000-8000-000000000003',
+      jsonb_build_object(
+        'title', 'Responded runtime gate (history rewritten)'
+      )
+    );
+  EXCEPTION WHEN OTHERS THEN
+    GET STACKED DIAGNOSTICS
+      v_state = RETURNED_SQLSTATE,
+      v_message = MESSAGE_TEXT;
+    ASSERT v_state = '23514'
+       AND v_message =
+         'decision ab000000-0000-4000-8000-000000000003 cannot be edited from status responded',
+      format('unexpected responded-history rejection: %s %L', v_state, v_message);
+    v_failed := true;
+  END;
+  ASSERT v_failed, 'responded decision history must be immutable';
+  ASSERT (SELECT title = 'Responded runtime gate'
           FROM public.client_decisions
           WHERE id = 'ab000000-0000-4000-8000-000000000003'),
-    'responded history must remain editable after completion';
+    'rejected history edit must preserve the original title';
 
-  INSERT INTO public.client_decisions (
-    id, designer_client_id, designer_id, project_id, phase_id, title,
-    decision_type, status, blocks_kind, blocking_status
-  ) VALUES (
+  PERFORM public.create_client_decision(
     'ab000000-0000-4000-8000-000000000005',
-    'a9200000-0000-4000-8000-000000000001',
-    'a9000000-0000-4000-8000-000000000001',
-    'a9300000-0000-4000-8000-000000000012',
-    'aa000000-0000-4000-8000-000000000110',
-    'Late non-blocking follow-up', 'approval', 'pending', 'none', 'non_blocking'
+    jsonb_build_object(
+      'designer_client_id', 'a9200000-0000-4000-8000-000000000001',
+      'project_id', 'a9300000-0000-4000-8000-000000000012',
+      'phase_id', 'aa000000-0000-4000-8000-000000000110',
+      'title', 'Late non-blocking follow-up',
+      'decision_type', 'approval',
+      'status', 'pending',
+      'blocks_kind', 'none',
+      'blocking_status', 'non_blocking'
+    )
   );
   ASSERT EXISTS (
     SELECT 1 FROM public.client_decisions
@@ -1867,26 +1884,28 @@ BEGIN
       '{"sub":"ae000000-0000-4000-8000-000000000001","role":"authenticated"}'$claim$
   );
 
-  -- Gate-first ordering: the uncommitted INSERT owns its decision row and the
-  -- phase lock. Completion waits; after commit its rescan sees one blocker.
+  -- Gate-first ordering: the uncommitted checked create owns its decision row
+  -- and the phase lock. Completion waits; after commit its rescan sees one blocker.
   PERFORM extensions.dblink_exec('gate_writer', 'BEGIN');
-  PERFORM extensions.dblink_exec(
+  SELECT result.id INTO STRICT v_remote_id
+  FROM extensions.dblink(
     'gate_writer',
     $gate$
-      INSERT INTO public.client_decisions (
-        id, designer_client_id, designer_id, project_id, phase_id, title,
-        decision_type, status, blocks_kind, blocking_status
-      ) VALUES (
+      SELECT (public.create_client_decision(
         'ae500000-0000-4000-8000-000000000001',
-        'ae200000-0000-4000-8000-000000000001',
-        'ae000000-0000-4000-8000-000000000001',
-        'ae300000-0000-4000-8000-000000000001',
-        'ae400000-0000-4000-8000-000000000001',
-        'Gate committed before completion', 'approval', 'pending',
-        'phase', 'non_blocking'
-      )
+        jsonb_build_object(
+          'designer_client_id', 'ae200000-0000-4000-8000-000000000001',
+          'project_id', 'ae300000-0000-4000-8000-000000000001',
+          'phase_id', 'ae400000-0000-4000-8000-000000000001',
+          'title', 'Gate committed before completion',
+          'decision_type', 'approval',
+          'status', 'pending',
+          'blocks_kind', 'phase',
+          'blocking_status', 'non_blocking'
+        )
+      )).id::text
     $gate$
-  );
+  ) AS result(id text);
   PERFORM extensions.dblink_send_query(
     'gate_phase',
     $phase$SELECT public.advance_project_phase(
@@ -1928,9 +1947,9 @@ BEGIN
       WHERE id = 'ae500000-0000-4000-8000-000000000001'$respond$
   );
 
-  -- Completion-first ordering: keep the successful RPC transaction open while
-  -- the late INSERT waits on its phase lock. After commit, the guard observes
-  -- completed and rejects the new blocker.
+  -- Completion-first ordering: keep the successful phase RPC transaction open
+  -- while the late checked create waits on its phase lock. After commit, the
+  -- guard observes completed and rejects the new blocker.
   PERFORM extensions.dblink_exec('gate_phase', 'BEGIN');
   SELECT result.receipt INTO STRICT v_phase_receipt
   FROM extensions.dblink(
@@ -1947,18 +1966,19 @@ BEGIN
   PERFORM extensions.dblink_send_query(
     'gate_late',
     $late$
-      INSERT INTO public.client_decisions (
-        id, designer_client_id, designer_id, project_id, phase_id, title,
-        decision_type, status, blocks_kind, blocking_status
-      ) VALUES (
+      SELECT (public.create_client_decision(
         'ae500000-0000-4000-8000-000000000002',
-        'ae200000-0000-4000-8000-000000000001',
-        'ae000000-0000-4000-8000-000000000001',
-        'ae300000-0000-4000-8000-000000000001',
-        'ae400000-0000-4000-8000-000000000001',
-        'Gate attempted after completion', 'approval', 'pending',
-        'phase', 'non_blocking'
-      ) RETURNING id::text
+        jsonb_build_object(
+          'designer_client_id', 'ae200000-0000-4000-8000-000000000001',
+          'project_id', 'ae300000-0000-4000-8000-000000000001',
+          'phase_id', 'ae400000-0000-4000-8000-000000000001',
+          'title', 'Gate attempted after completion',
+          'decision_type', 'approval',
+          'status', 'pending',
+          'blocks_kind', 'phase',
+          'blocking_status', 'non_blocking'
+        )
+      )).id::text
     $late$
   );
   PERFORM pg_sleep(0.2);
@@ -1998,6 +2018,11 @@ BEGIN
   PERFORM extensions.dblink_exec(
     'gate_setup',
     $cleanup$
+      DELETE FROM public.client_decisions
+      WHERE id IN (
+        'ae500000-0000-4000-8000-000000000001',
+        'ae500000-0000-4000-8000-000000000002'
+      );
       DELETE FROM public.projects
       WHERE id = 'ae300000-0000-4000-8000-000000000001';
       DELETE FROM public.designer_clients

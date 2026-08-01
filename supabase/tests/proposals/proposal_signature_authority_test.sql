@@ -30,7 +30,11 @@ VALUES
   ('fa000000-0000-4000-8000-000000000002', 'signature-client@test.invalid', 'Signature Client', false, now(), now()),
   ('fa000000-0000-4000-8000-000000000003', 'signature-new-lead@test.invalid', 'Signature New Lead', true, now(), now()),
   ('fa000000-0000-4000-8000-000000000004', 'signature-outsider@test.invalid', 'Signature Outsider', false, now(), now())
-ON CONFLICT (id) DO NOTHING;
+ON CONFLICT (id) DO UPDATE
+SET email = EXCLUDED.email,
+    full_name = EXCLUDED.full_name,
+    is_designer = EXCLUDED.is_designer,
+    updated_at = EXCLUDED.updated_at;
 
 INSERT INTO public.organizations (id, type, name, slug, status)
 VALUES
@@ -50,7 +54,8 @@ INSERT INTO public.organization_members (
 VALUES
   ('fa110000-0000-4000-8000-000000000001',
    'fa000000-0000-4000-8000-000000000001',
-   'fa100000-0000-4000-8000-000000000001', 'owner', 'active', now()),
+   'fa100000-0000-4000-8000-000000000001', 'owner', 'active',
+   now() - interval '1 day'),
   ('fa110000-0000-4000-8000-000000000002',
    'fa000000-0000-4000-8000-000000000003',
    'fa100000-0000-4000-8000-000000000001', 'member', 'active', now()),
@@ -364,10 +369,12 @@ BEGIN
 
   INSERT INTO signature_receipts (
     proposal_id, project_id, signed_at, accepted_at
-  )
-  SELECT id, project_id, signed_at, accepted_at
-  FROM public.proposals
-  WHERE id = 'fa300000-0000-4000-8000-000000000001';
+  ) VALUES (
+    'fa300000-0000-4000-8000-000000000001',
+    (v_receipt->>'project_id')::uuid,
+    (v_receipt->>'signed_at')::timestamptz,
+    (v_receipt->>'accepted_at')::timestamptz
+  );
 END;
 $$;
 
