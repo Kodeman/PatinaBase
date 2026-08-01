@@ -1,114 +1,259 @@
-"use client";
+'use client';
 
 /**
- * The project-wide phase handoff. The schedule can render as either the
- * legacy timeline or the gated Rule/Spine, so advancement lives beside that
- * shared mount instead of inside either renderer.
+ * Project phase actions live beside the shared schedule mount because both the
+ * legacy Timeline and the Rule/Spine render the same project lifecycle.
  *
- * This is deliberately a narrow state machine. A designer may complete the
- * one in-progress phase, or resume the one delayed current phase. Pending
- * phases cannot be skipped into and completed phases never move backwards.
+ * The database owns the phase graph. This component deliberately does not
+ * sort phases, select a successor, or require one globally active phase: main
+ * and thread lanes can progress independently. It sends only the target phase
+ * and expected transition, then renders the authoritative RPC receipt.
  */
 
-import { useEffect, useId, useMemo, useState } from "react";
-import { useQueryClient } from "@tanstack/react-query";
-import { useUpdateProjectPhaseStatus, type Database } from "@patina/supabase";
-import { DocumentAction, DocumentActionGroup } from "./document-action";
+import { useEffect, useId, useMemo, useRef, useState } from 'react';
+import {
+  type CoordinationItem,
+  type Database,
+  type ProjectPhaseTransitionReceipt,
+  useCoordinationItems,
+  useUpdateProjectPhaseStatus,
+} from '@patina/supabase';
+import { DocumentAction, DocumentActionGroup } from './document-action';
 
-type PhaseRow = Database["public"]["Tables"]["project_phases"]["Row"];
+type PhaseRow = Database['public']['Tables']['project_phases']['Row'];
 
-type ReadyHandoff = {
-  kind: "complete_phase" | "resume_phase";
+type ActivePhaseAction = {
   phase: PhaseRow;
-  next: PhaseRow | null;
+  predecessor: PhaseRow | null;
+  blockers: CoordinationItem[];
 };
 
-export type PhaseHandoffState =
-  | ReadyHandoff
-  | { kind: "all_complete" }
-  | { kind: "empty" }
-  | { kind: "blocked"; message: string };
+function isRuntimePhaseBlocker(item: CoordinationItem, phaseId: string) {
+  return (
+    item.phase_id === phaseId &&
+    item.status === 'pending' &&
+    (item.blocks_kind === 'phase' || item.blocking_status === 'blocks_phase')
+  );
+}
 
 /**
- * Legal trunk shape: completed* → one in_progress|delayed → pending*.
- * Anything else is refused rather than guessing which phase owns the work.
+ * Preserve server order and derive chain context only from follows_phase_id.
+ * sort_order is presentation metadata and cannot establish lifecycle topology.
  */
-export function derivePhaseHandoff(
+export function deriveActivePhaseActions(
   rows: readonly PhaseRow[],
-): PhaseHandoffState {
-  const phases = [...rows].sort(
-    (a, b) => (a.sort_order ?? 0) - (b.sort_order ?? 0),
-  );
+  coordinationItems: readonly CoordinationItem[] = [],
+): ActivePhaseAction[] {
+  const phasesById = new Map(rows.map((phase) => [phase.id, phase]));
 
-  if (phases.length === 0) return { kind: "empty" };
-  if (phases.every((phase) => phase.status === "completed")) {
-    return { kind: "all_complete" };
-  }
+  return rows
+    .filter(
+      (phase) =>
+        phase.status === 'in_progress' || phase.status === 'delayed',
+    )
+    .map((phase) => ({
+      phase,
+      predecessor: phase.follows_phase_id
+        ? (phasesById.get(phase.follows_phase_id) ?? null)
+        : null,
+      blockers: coordinationItems.filter((item) =>
+        isRuntimePhaseBlocker(item, phase.id),
+      ),
+    }));
+}
 
-  const inProgress = phases.filter((phase) => phase.status === "in_progress");
-  if (inProgress.length > 1) {
-    return {
-      kind: "blocked",
-      message:
-        "More than one phase is in progress. Settle the duplicate status before advancing.",
-    };
-  }
+type PhaseNotice = { kind: 'success' | 'error'; message: string };
 
-  if (inProgress.length === 0) {
-    const firstUnfinishedIndex = phases.findIndex(
-      (phase) => phase.status !== "completed",
-    );
-    const current = phases[firstUnfinishedIndex];
-    const before = phases.slice(0, firstUnfinishedIndex);
-    const after = phases.slice(firstUnfinishedIndex + 1);
+function noticeForReceipt(
+  action: ActivePhaseAction,
+  receipt: ProjectPhaseTransitionReceipt,
+  phasesById: ReadonlyMap<string, PhaseRow>,
+): PhaseNotice {
+  const completing = action.phase.status === 'in_progress';
 
+  if (!completing) {
     if (
-      current?.status === "delayed" &&
-      before.every((phase) => phase.status === "completed") &&
-      after.every((phase) => phase.status === "pending")
+      receipt.completed_phase_id !== null ||
+      receipt.next_phase_id !== action.phase.id ||
+      receipt.terminal
     ) {
       return {
-        kind: "resume_phase",
-        phase: current,
-        next: after[0] ?? null,
+        kind: 'error',
+        message:
+          'The server returned an invalid resume receipt. Refresh the schedule before trying again.',
       };
     }
 
     return {
-      kind: "blocked",
+      kind: 'success',
+      message: `${action.phase.name} is back in progress.`,
+    };
+  }
+
+  const coherentTerminalReceipt =
+    receipt.completed_phase_id === action.phase.id &&
+    receipt.next_phase_id === null &&
+    receipt.terminal;
+  const coherentSuccessorReceipt =
+    receipt.completed_phase_id === action.phase.id &&
+    receipt.next_phase_id !== null &&
+    !receipt.terminal;
+
+  if (!coherentTerminalReceipt && !coherentSuccessorReceipt) {
+    return {
+      kind: 'error',
       message:
-        "No phase is in progress. Restore the current phase before advancing.",
+        'The server returned an invalid completion receipt. Refresh the schedule before trying again.',
     };
   }
 
-  const current = inProgress[0];
-  const currentIndex = phases.findIndex((phase) => phase.id === current.id);
-  const before = phases.slice(0, currentIndex);
-  const after = phases.slice(currentIndex + 1);
-
-  if (!before.every((phase) => phase.status === "completed")) {
+  if (receipt.terminal) {
     return {
-      kind: "blocked",
-      message: `${current.name} cannot advance while an earlier phase is unfinished.`,
+      kind: 'success',
+      message: `${action.phase.name} is complete. Its lane is now complete.`,
     };
   }
 
-  if (!after.every((phase) => phase.status === "pending")) {
-    return {
-      kind: "blocked",
-      message: `${current.name} cannot advance because later phase statuses are out of order.`,
-    };
-  }
+  const successor = receipt.next_phase_id
+    ? phasesById.get(receipt.next_phase_id)
+    : null;
 
   return {
-    kind: "complete_phase",
-    phase: current,
-    next: after[0] ?? null,
+    kind: 'success',
+    message: successor
+      ? `${action.phase.name} is complete. ${successor.name} is now in progress in this lane.`
+      : `${action.phase.name} is complete. The server advanced this lane to its canonical next phase.`,
   };
 }
 
+function errorMessage(error: unknown) {
+  if (
+    typeof error === 'object' &&
+    error !== null &&
+    'message' in error &&
+    typeof error.message === 'string' &&
+    error.message.trim()
+  ) {
+    return error.message;
+  }
+
+  return 'The server rejected this phase handoff. Refresh the schedule and try again.';
+}
+
+function laneLabel(lane: string) {
+  if (lane === 'main') return 'Main lane';
+  if (lane === 'thread') return 'Thread lane';
+  if (!lane) return 'Phase lane';
+  return `${lane.charAt(0).toUpperCase()}${lane.slice(1)} lane`;
+}
+
 const shellCls =
-  "mb-5 border-y border-[var(--color-pearl)] py-3 text-[var(--color-charcoal)]";
+  'mb-5 border-y border-[var(--color-pearl)] py-3 text-[var(--color-charcoal)]';
+
+function PhaseActionRow({
+  action,
+  disabled,
+  pending,
+  notice,
+  onTransition,
+}: {
+  action: ActivePhaseAction;
+  disabled: boolean;
+  pending: boolean;
+  notice: PhaseNotice | null;
+  onTransition: (action: ActivePhaseAction) => void;
+}) {
+  const descriptionId = useId();
+  const phaseHeadingId = useId();
+  const completing = action.phase.status === 'in_progress';
+  const lane = laneLabel(action.phase.lane);
+  const actionLabel = `${completing ? 'Complete' : 'Resume'} ${action.phase.name} (${lane.toLowerCase()})`;
+
+  return (
+    <li
+      aria-labelledby={phaseHeadingId}
+      aria-busy={pending || undefined}
+      className="flex flex-col items-start justify-between gap-3 border-t border-[var(--color-pearl)] py-3 first:border-t-0 sm:flex-row sm:flex-wrap sm:items-center"
+    >
+      <div className="min-w-0">
+        <h4 id={phaseHeadingId} className="text-[12px] font-semibold">
+          {action.phase.name}
+        </h4>
+        <p
+          id={descriptionId}
+          className="mt-1 text-[11px] leading-relaxed text-[var(--text-muted)]"
+        >
+          {lane} · {completing ? 'In progress' : 'Delayed'}
+          {action.predecessor ? ` · Follows ${action.predecessor.name}` : ''}
+        </p>
+
+        {action.phase.gate_condition ? (
+          <p className="mt-1 text-[11px] leading-relaxed text-[var(--text-muted)]">
+            <b>Configured gate note ·</b> {action.phase.gate_condition}
+          </p>
+        ) : null}
+
+        {action.blockers.length > 0 ? (
+          <div
+            role="note"
+            aria-label={`Open blockers for ${action.phase.name}`}
+            className="mt-1 text-[11px] leading-relaxed text-[var(--color-terracotta)]"
+          >
+            <b>Open phase blockers ·</b>{' '}
+            {action.blockers.map((blocker) => blocker.title).join(' · ')}
+          </div>
+        ) : null}
+      </div>
+
+      <DocumentActionGroup
+        surfaceKey="open-document"
+        regionKey="phase-handoff"
+        aria-label={`${action.phase.name} phase actions`}
+        className="shrink-0"
+      >
+        <DocumentAction
+          actionKey={
+            completing ? 'complete-project-phase' : 'resume-project-phase'
+          }
+          variant="primary"
+          aria-label={actionLabel}
+          aria-describedby={descriptionId}
+          disabled={disabled}
+          loading={pending}
+          loadingLabel={completing ? 'Completing…' : 'Resuming…'}
+          onClick={() => onTransition(action)}
+        >
+          {completing ? 'Complete phase' : 'Resume phase'}
+        </DocumentAction>
+      </DocumentActionGroup>
+
+      {pending ? (
+        <p
+          role="status"
+          aria-live="polite"
+          className="basis-full text-[11px] text-[var(--text-muted)]"
+        >
+          {completing
+            ? `Completing ${action.phase.name}…`
+            : `Resuming ${action.phase.name}…`}
+        </p>
+      ) : null}
+      {notice ? (
+        <p
+          role={notice.kind === 'error' ? 'alert' : 'status'}
+          aria-live={notice.kind === 'success' ? 'polite' : undefined}
+          className={`basis-full text-[11px] ${
+            notice.kind === 'error'
+              ? 'text-[var(--color-terracotta)]'
+              : 'text-[var(--color-sage)]'
+          }`}
+        >
+          {notice.message}
+        </p>
+      ) : null}
+    </li>
+  );
+}
 
 export function PhaseAdvanceControl({
   projectId,
@@ -118,106 +263,94 @@ export function PhaseAdvanceControl({
   phases: readonly PhaseRow[] | undefined;
 }) {
   const headingId = useId();
-  const descriptionId = useId();
-  const queryClient = useQueryClient();
   const updatePhase = useUpdateProjectPhaseStatus();
-  const [feedback, setFeedback] = useState<string | null>(null);
-  const [error, setError] = useState<string | null>(null);
+  const coordination = useCoordinationItems(projectId);
+  const pendingPhaseRef = useRef<string | null>(null);
+  const [pendingPhaseId, setPendingPhaseId] = useState<string | null>(null);
+  const [noticeByPhase, setNoticeByPhase] = useState<
+    Record<string, PhaseNotice | undefined>
+  >({});
 
-  useEffect(() => {
-    setFeedback(null);
-    setError(null);
-  }, [projectId]);
-
-  const handoff = useMemo(
-    () => (phases ? derivePhaseHandoff(phases) : null),
+  const actions = useMemo(
+    () =>
+      phases
+        ? deriveActivePhaseActions(phases, coordination.data ?? [])
+        : null,
+    [coordination.data, phases],
+  );
+  const phasesById = useMemo(
+    () => new Map((phases ?? []).map((phase) => [phase.id, phase])),
     [phases],
   );
+  const authoritativePhaseSignature = JSON.stringify(phases ?? 'loading');
+  const authorityKey = `${projectId}:${authoritativePhaseSignature}`;
+  const authorityKeyRef = useRef(authorityKey);
+  authorityKeyRef.current = authorityKey;
 
-  if (handoff == null) {
+  useEffect(() => {
+    pendingPhaseRef.current = null;
+    setPendingPhaseId(null);
+    setNoticeByPhase({});
+  }, [authoritativePhaseSignature, projectId]);
+
+  if (actions == null) {
     return (
-      <section aria-label="Phase handoff" aria-busy className={shellCls}>
+      <section aria-label="Phase handoffs" aria-busy className={shellCls}>
         <p className="font-mono text-[9px] uppercase tracking-[0.08em] text-[var(--text-muted)]">
-          Reading the phase handoff…
+          Reading phase handoffs…
         </p>
       </section>
     );
   }
 
-  if (handoff.kind === "empty") {
+  if (actions.length === 0) {
     return (
-      <section aria-label="Phase handoff" className={shellCls}>
+      <section aria-label="Phase handoffs" className={shellCls}>
         <p role="status" className="text-[12px] text-[var(--text-muted)]">
-          No project phases are available to advance.
+          No active phase handoffs need attention.
         </p>
       </section>
     );
   }
 
-  if (handoff.kind === "all_complete") {
-    return (
-      <section aria-label="Phase handoff" className={shellCls}>
-        <p role="status" className="text-[12px] text-[var(--color-sage)]">
-          Every project phase is complete. Close the book when the accounts and
-          checklist are settled.
-        </p>
-      </section>
-    );
-  }
+  const transitionPending = pendingPhaseId !== null || updatePhase.isPending;
 
-  if (handoff.kind === "blocked") {
-    return (
-      <section aria-label="Phase handoff" className={shellCls}>
-        <p role="alert" className="text-[12px] text-[var(--color-terracotta)]">
-          <b>Phase handoff paused.</b> {handoff.message}
-        </p>
-      </section>
-    );
-  }
+  const handleTransition = (action: ActivePhaseAction) => {
+    if (pendingPhaseRef.current !== null || updatePhase.isPending) return;
 
-  const completing = handoff.kind === "complete_phase";
-  const actionLabel = completing
-    ? `Complete ${handoff.phase.name}${handoff.next ? ` and begin ${handoff.next.name}` : ""}`
-    : `Resume ${handoff.phase.name}`;
-
-  const handleHandoff = () => {
-    setFeedback(null);
-    setError(null);
+    const phaseId = action.phase.id;
+    const completing = action.phase.status === 'in_progress';
+    const requestAuthorityKey = authorityKey;
+    pendingPhaseRef.current = phaseId;
+    setPendingPhaseId(phaseId);
+    setNoticeByPhase((current) => ({ ...current, [phaseId]: undefined }));
 
     updatePhase.mutate(
       {
-        phaseId: handoff.phase.id,
+        phaseId,
         projectId,
-        status: completing ? "completed" : "in_progress",
-        ...(completing ? { progress: 100 } : {}),
+        status: completing ? 'completed' : 'in_progress',
       },
       {
-        onSuccess: () => {
-          setFeedback(
-            completing
-              ? handoff.next
-                ? `${handoff.phase.name} is complete. ${handoff.next.name} is now in progress.`
-                : `${handoff.phase.name} is complete. Every project phase is settled.`
-              : `${handoff.phase.name} is back in progress.`,
-          );
-          void queryClient.invalidateQueries({ queryKey: ["document-state"] });
-          void queryClient.invalidateQueries({
-            queryKey: ["desk-engagements"],
-          });
+        onSuccess: (receipt) => {
+          pendingPhaseRef.current = null;
+          setPendingPhaseId(null);
+          if (authorityKeyRef.current !== requestAuthorityKey) return;
+
+          setNoticeByPhase((current) => ({
+            ...current,
+            [phaseId]: noticeForReceipt(action, receipt, phasesById),
+          }));
         },
-        onError: () => {
-          setError(
-            "The phase handoff did not finish. Review the schedule and try again.",
-          );
-          // The underlying hook coordinates phase + project rows. Refresh every
-          // reader even on failure so a partial remote write is never hidden.
-          void queryClient.invalidateQueries({
-            queryKey: ["project-phases", projectId],
-          });
-          void queryClient.invalidateQueries({
-            queryKey: ["project-v2", projectId],
-          });
-          void queryClient.invalidateQueries({ queryKey: ["document-state"] });
+        onError: (error) => {
+          pendingPhaseRef.current = null;
+          setPendingPhaseId(null);
+          if (authorityKeyRef.current !== requestAuthorityKey) return;
+
+          setNoticeByPhase((current) => ({
+            ...current,
+            [phaseId]: { kind: 'error', message: errorMessage(error) },
+          }));
         },
       },
     );
@@ -225,74 +358,29 @@ export function PhaseAdvanceControl({
 
   return (
     <section aria-labelledby={headingId} className={shellCls}>
-      <div className="flex flex-col items-start justify-between gap-3 sm:flex-row sm:items-center">
-        <div className="min-w-0">
-          <h3
-            id={headingId}
-            className="font-mono text-[9px] font-semibold uppercase tracking-[0.08em] text-[var(--color-aged-oak)]"
-          >
-            Phase handoff
-          </h3>
-          <p id={descriptionId} className="mt-1 text-[12px] leading-relaxed">
-            <b>{handoff.phase.name}</b>{" "}
-            {completing ? "is in progress." : "is delayed."}
-            {handoff.next ? (
-              <span className="text-[var(--text-muted)]">
-                {" "}
-                Next · {handoff.next.name}
-              </span>
-            ) : null}
-          </p>
-        </div>
+      <h3
+        id={headingId}
+        className="font-mono text-[9px] font-semibold uppercase tracking-[0.08em] text-[var(--color-aged-oak)]"
+      >
+        Phase handoffs
+      </h3>
+      <p className="mt-1 text-[11px] leading-relaxed text-[var(--text-muted)]">
+        Each active lane advances independently. The server verifies blockers
+        and chooses the canonical next phase.
+      </p>
 
-        <DocumentActionGroup
-          surfaceKey="open-document"
-          regionKey="phase-handoff"
-          aria-label="Phase handoff actions"
-          className="shrink-0"
-        >
-          <DocumentAction
-            actionKey={
-              completing ? "complete-project-phase" : "resume-project-phase"
-            }
-            variant="primary"
-            aria-label={actionLabel}
-            aria-describedby={descriptionId}
-            loading={updatePhase.isPending}
-            loadingLabel={completing ? "Advancing…" : "Resuming…"}
-            onClick={handleHandoff}
-          >
-            {completing ? "Complete phase" : "Resume phase"}
-          </DocumentAction>
-        </DocumentActionGroup>
-      </div>
-
-      {updatePhase.isPending ? (
-        <p
-          role="status"
-          aria-live="polite"
-          className="mt-2 text-[11px] text-[var(--text-muted)]"
-        >
-          {completing
-            ? handoff.next
-              ? `Completing ${handoff.phase.name} and beginning ${handoff.next.name}…`
-              : `Completing ${handoff.phase.name}…`
-            : `Resuming ${handoff.phase.name}…`}
-        </p>
-      ) : null}
-      {feedback ? (
-        <p role="status" className="mt-2 text-[11px] text-[var(--color-sage)]">
-          {feedback}
-        </p>
-      ) : null}
-      {error ? (
-        <p
-          role="alert"
-          className="mt-2 text-[11px] text-[var(--color-terracotta)]"
-        >
-          {error}
-        </p>
-      ) : null}
+      <ul className="mt-2">
+        {actions.map((action) => (
+          <PhaseActionRow
+            key={action.phase.id}
+            action={action}
+            disabled={transitionPending}
+            pending={pendingPhaseId === action.phase.id}
+            notice={noticeByPhase[action.phase.id] ?? null}
+            onTransition={handleTransition}
+          />
+        ))}
+      </ul>
     </section>
   );
 }
