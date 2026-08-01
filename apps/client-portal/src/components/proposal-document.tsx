@@ -1,6 +1,6 @@
 'use client';
 
-import { Fragment, useEffect, useRef, useCallback, useMemo } from 'react';
+import { Fragment, useEffect, useRef, useCallback, useMemo, type ReactNode } from 'react';
 import { createBrowserClient } from '@patina/supabase';
 import type {
   Proposal,
@@ -156,7 +156,6 @@ export function ProposalDocument({
 
   useEffect(() => {
     if (!trackEngagement) return;
-    if (!sections || sections.length === 0) return;
 
     const flushActive = () => {
       if (activeSectionRef.current && sectionStartRef.current > 0) {
@@ -199,7 +198,16 @@ export function ProposalDocument({
       observer.disconnect();
       window.removeEventListener('beforeunload', handleUnload);
     };
-  }, [trackEngagement, sections, recordEvent, boardCount]);
+  }, [
+    trackEngagement,
+    sections,
+    recordEvent,
+    boardCount,
+    paymentMilestones.length,
+    phases.length,
+    exclusions.length,
+    scopeRooms.length,
+  ]);
 
   // R86 — the client copy is canonical, tier-governed. The SAME shared gate the
   // Drafting-Room mirror obeys (proposalTierVisibility) decides which money
@@ -254,17 +262,26 @@ export function ProposalDocument({
     return formatVerdictRollup(rollupVerdicts(items.length, verdicts));
   }, [feedbackEnabled, feedbackRows, items.length]);
 
+  // Investment and timeline rows are legacy layout markers, not the authority
+  // for whether the structured proposal data exists. The designer's sent-copy
+  // mirror renders the structured arrays independently; filter those markers
+  // from the narrative stream so the client follows the same contract without
+  // producing duplicate blocks for older proposals that still carry them.
+  const narrativeSections = sections.filter(
+    (section) => section.type !== 'investment' && section.type !== 'timeline',
+  );
+
   // Mood boards render after the `concept` section when one exists, else just
-  // before `selections`, else after the last section. A negative index means
-  // "before all sections" (selections-first or section-less proposals).
-  const conceptIndex = sections.findIndex((s) => s.type === 'concept');
-  const selectionsIndex = sections.findIndex((s) => s.type === 'selections');
+  // before `selections`, else after the last narrative section. A negative index
+  // means "before all sections" (selections-first or section-less proposals).
+  const conceptIndex = narrativeSections.findIndex((s) => s.type === 'concept');
+  const selectionsIndex = narrativeSections.findIndex((s) => s.type === 'selections');
   const boardsAfterIndex =
     conceptIndex >= 0
       ? conceptIndex
       : selectionsIndex >= 0
         ? selectionsIndex - 1
-        : sections.length - 1;
+        : narrativeSections.length - 1;
 
   // One board section, positioned by boardsAfterIndex. `resolvedBoards` (guest)
   // renders directly; otherwise the wrapper fetches by proposalId under RLS.
@@ -342,7 +359,7 @@ export function ProposalDocument({
 
       {boardsAfterIndex < 0 && boardsBlock}
 
-      {sections.map((section, index) => (
+      {narrativeSections.map((section, index) => (
         <Fragment key={section.id}>
         <div data-section-type={section.type}>
           {index > 0 && <StrataMark variant="micro" />}
@@ -396,75 +413,89 @@ export function ProposalDocument({
               />
             )}
 
-            {section.type === 'investment' && (
-              <div className="mt-2">
-                {/* Itemized at 'full'; at 'milestone'/'curated' the gate hands
-                    LineItemsBlock no items, so it renders the single rolled-up
-                    Total row (R86). */}
-                <LineItemsBlock
-                  items={gate.lineItems ? items : []}
-                  totalCents={proposal.total_amount || 0}
-                />
-                {gate.roomBudgets && scopeRooms.length > 0 && (
-                  <div className="mt-6">
-                    <p
-                      className="mb-1 type-meta-small text-[var(--text-muted)]"
-                      style={{ textTransform: 'uppercase', letterSpacing: '0.12em' }}
-                    >
-                      Per-room budgets
-                    </p>
-                    <ScopeRoomsBlock
-                      rooms={scopeRooms.map((r) => ({
-                        name: r.name,
-                        room_type: r.room_type,
-                        budget_cents: r.budget_cents,
-                      }))}
-                    />
-                  </div>
-                )}
-                {gate.paymentSchedule && (
-                  <PaymentScheduleBlock
-                    milestones={paymentMilestones.map((m) => ({
-                      label: m.label,
-                      percentage: m.percentage,
-                      amount_cents: m.amount_cents,
-                      trigger_condition: m.trigger_condition,
-                    }))}
-                    totalCents={proposal.total_amount || 0}
-                  />
-                )}
-                {exclusions.length > 0 && (
-                  <div className="mt-6">
-                    <p
-                      className="mb-1 type-meta-small text-[var(--text-muted)]"
-                      style={{ textTransform: 'uppercase', letterSpacing: '0.12em' }}
-                    >
-                      Not included
-                    </p>
-                    <ExclusionsBlock
-                      exclusions={exclusions.map((e) => ({
-                        description: e.description,
-                        category: e.category,
-                      }))}
-                    />
-                  </div>
-                )}
-              </div>
-            )}
-
-            {section.type === 'timeline' && (
-              <TimelinePhasesBlock
-                phases={phases.map((p) => ({
-                  name: p.name,
-                  duration_weeks: p.duration_weeks,
-                }))}
-              />
-            )}
           </section>
         </div>
         {index === boardsAfterIndex && boardsBlock}
         </Fragment>
       ))}
+
+      {gate.scopeRooms && scopeRooms.length > 0 && (
+        <StructuredProposalSection type="scope" title="In scope">
+          {gate.roomBudgets ? (
+            <ScopeRoomsBlock
+              rooms={scopeRooms.map((room) => ({
+                name: room.name,
+                room_type: room.room_type,
+                budget_cents: room.budget_cents ?? 0,
+              }))}
+            />
+          ) : (
+            <div>
+              {scopeRooms.map((room) => (
+                <div
+                  key={room.id}
+                  className="flex items-baseline justify-between border-b border-dashed border-[var(--border-subtle)] py-2"
+                >
+                  <span className="type-body-small text-[var(--text-primary)]">{room.name}</span>
+                  {room.room_type && (
+                    <span className="type-meta-small uppercase text-[var(--text-muted)]">
+                      {room.room_type}
+                    </span>
+                  )}
+                </div>
+              ))}
+            </div>
+          )}
+        </StructuredProposalSection>
+      )}
+
+      {gate.investmentTotal && (
+        <StructuredProposalSection type="investment" title="Investment">
+          {/* Itemized at 'full'; at 'milestone'/'curated' the gate hands
+              LineItemsBlock no items, so it renders the single rolled-up Total
+              row (R86). */}
+          <LineItemsBlock
+            items={gate.lineItems ? items : []}
+            totalCents={proposal.total_amount || 0}
+          />
+        </StructuredProposalSection>
+      )}
+
+      {gate.paymentSchedule && paymentMilestones.length > 0 && (
+        <StructuredProposalSection type="payment_schedule">
+          <PaymentScheduleBlock
+            milestones={paymentMilestones.map((milestone) => ({
+              label: milestone.label,
+              percentage: milestone.percentage,
+              amount_cents: milestone.amount_cents,
+              trigger_condition: milestone.trigger_condition,
+            }))}
+            totalCents={proposal.total_amount || 0}
+          />
+        </StructuredProposalSection>
+      )}
+
+      {gate.timeline && phases.length > 0 && (
+        <StructuredProposalSection type="timeline" title="Timeline">
+          <TimelinePhasesBlock
+            phases={phases.map((phase) => ({
+              name: phase.name,
+              duration_weeks: phase.duration_weeks,
+            }))}
+          />
+        </StructuredProposalSection>
+      )}
+
+      {gate.exclusions && exclusions.length > 0 && (
+        <StructuredProposalSection type="exclusions" title="Not included">
+          <ExclusionsBlock
+            exclusions={exclusions.map((exclusion) => ({
+              description: exclusion.description,
+              category: exclusion.category,
+            }))}
+          />
+        </StructuredProposalSection>
+      )}
 
       <footer className="mt-12 flex items-baseline justify-between border-t border-[var(--border-subtle)] pt-6">
         <span
@@ -484,6 +515,38 @@ export function ProposalDocument({
         </span>
       </footer>
     </article>
+  );
+}
+
+function StructuredProposalSection({
+  type,
+  title,
+  children,
+}: {
+  type: string;
+  title?: string;
+  children: ReactNode;
+}) {
+  return (
+    <div data-section-type={type}>
+      <StrataMark variant="micro" />
+      <section className="py-8">
+        {title && (
+          <h2
+            style={{
+              fontFamily: 'var(--font-display)',
+              fontWeight: 400,
+              fontSize: '1.4rem',
+              color: 'var(--text-primary)',
+              marginBottom: '1.25rem',
+            }}
+          >
+            {title}
+          </h2>
+        )}
+        {children}
+      </section>
+    </div>
   );
 }
 
