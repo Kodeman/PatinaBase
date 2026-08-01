@@ -146,11 +146,17 @@ export function Select({
 /** A small ✕ remove control reused across the row editors. Scored Ink (I107):
  *  no box at all — the 44px square survives as invisible target, the eye sees
  *  only the glyph darkening when asked. */
-export function RemoveButton({ onClick }: { onClick: () => void }) {
+export function RemoveButton({
+  onClick,
+  label = 'Remove',
+}: {
+  onClick: () => void;
+  label?: string;
+}) {
   return (
     <button
       type="button"
-      aria-label="Remove"
+      aria-label={label}
       onClick={onClick}
       className="da-glyph-btn inline-flex h-11 w-11 shrink-0 items-center justify-center font-mono text-[11px] leading-none"
     >
@@ -349,6 +355,7 @@ export function RowListEditor({
                 >
                   <input
                     type="checkbox"
+                    aria-label={`${c.label}, row ${i + 1}`}
                     checked={Boolean(v)}
                     onChange={(e) => setCell(i, c.key, e.target.checked)}
                   />
@@ -398,7 +405,7 @@ export function RowListEditor({
               </span>
             );
           })}
-          <RemoveButton onClick={() => remove(i)} />
+          <RemoveButton label={`Remove row ${i + 1}`} onClick={() => remove(i)} />
         </div>
       ))}
       <AddRowButton label={addLabel} onClick={add} />

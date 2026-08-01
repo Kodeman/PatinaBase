@@ -42,7 +42,10 @@ import { verdictChipSpec } from '@/lib/document/verdict-chip';
 import { FacetSection } from './facet-section';
 import { ProposalPreviewRail } from '../../drafting/proposal-mirror';
 import { SendSheet } from '../../overlays/send-sheet';
-import { useDraftingState } from '@/hooks/use-drafting-state';
+import {
+  useDraftingState,
+  useDraftingWritesPending,
+} from '@/hooks/use-drafting-state';
 import { familyLabel } from '@/lib/document/family-label';
 import { clearRoomOrigin, readRoomOrigin } from '@/lib/document/room-origin';
 
@@ -103,7 +106,6 @@ const TYPE_CHIP: Record<string, { label: string; color: string; bg: string }> =
 export function DraftingRoom({ proposalId }: { proposalId: string }) {
   useDocumentSurface(DOCUMENT_SURFACE_KEYS.drafting); // R89 — scope help to the Drafting Room
   const router = useRouter();
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const { data: proposal } = useProposal(proposalId) as { data: any };
   const { data: summary } = useScopeBuilderSummary(proposalId);
   // The shared drafting state — the SAME ['drafting-facets', id] read the open
@@ -116,8 +118,8 @@ export function DraftingRoom({ proposalId }: { proposalId: string }) {
     pct,
     state,
     gaps,
-    isRefreshing,
   } = useDraftingState(proposalId);
+  const draftingWritePending = useDraftingWritesPending(proposalId);
   const updateItem = useUpdateProposalItem();
   const queryClient = useQueryClient();
 
@@ -330,7 +332,7 @@ export function DraftingRoom({ proposalId }: { proposalId: string }) {
                   aria-live="polite"
                   className="font-mono text-[0.5rem] uppercase tracking-[0.08em] text-[var(--color-aged-oak)]"
                 >
-                  {isRefreshing ? 'Refreshing saved work…' : ''}
+                  {draftingWritePending ? 'Saving proposal changes…' : ''}
                 </span>
               </div>
             </div>

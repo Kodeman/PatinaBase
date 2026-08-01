@@ -1,7 +1,6 @@
 'use client';
 
 import { useCallback, useMemo, useRef, useState } from 'react';
-import { useQueryClient } from '@tanstack/react-query';
 import {
   ColorPicker,
   ImagePaletteExtractor,
@@ -24,6 +23,7 @@ import {
   type PaletteSwatchRole,
 } from '@patina/supabase';
 import { PaletteSwatchEditor } from './palette-swatch-editor';
+import { useDraftingFacetInvalidation } from '@/hooks/use-drafting-facet-invalidation';
 
 type Tab = 'image' | 'brand' | 'manual';
 
@@ -45,11 +45,7 @@ interface PaletteBuilderProps {
 }
 
 export function PaletteBuilder({ proposalId }: PaletteBuilderProps) {
-  const queryClient = useQueryClient();
-  const refreshDraftingSummary = useCallback(
-    () => queryClient.invalidateQueries({ queryKey: ['drafting-facets', proposalId] }),
-    [proposalId, queryClient],
-  );
+  const refreshDraftingSummary = useDraftingFacetInvalidation(proposalId);
   const { data: palettes = [] } = usePalettes(proposalId);
   const upsertPalette = useUpsertPalette();
   const updatePalette = useUpsertPalette();
@@ -136,7 +132,11 @@ export function PaletteBuilder({ proposalId }: PaletteBuilderProps) {
             <ManualTab paletteId={active.id} onSaved={refreshDraftingSummary} />
           )}
 
-          <SwatchList paletteId={active.id} swatches={active.swatches ?? []} />
+          <SwatchList
+            proposalId={proposalId}
+            paletteId={active.id}
+            swatches={active.swatches ?? []}
+          />
         </div>
       ) : (
         <p className="text-sm text-[var(--text-muted)]">
@@ -458,9 +458,11 @@ function ManualTab({
 }
 
 function SwatchList({
+  proposalId,
   paletteId,
   swatches,
 }: {
+  proposalId: string;
   paletteId: string;
   swatches: NonNullable<ReturnType<typeof usePalette>['data']>['swatches'];
 }) {
@@ -478,7 +480,11 @@ function SwatchList({
   return (
     <div className="mt-4 space-y-2">
       {swatches.map((swatch) => (
-        <PaletteSwatchEditor key={swatch.id} swatch={swatch} />
+        <PaletteSwatchEditor
+          key={swatch.id}
+          proposalId={proposalId}
+          swatch={swatch}
+        />
       ))}
       <ReorderHint paletteId={paletteId} swatches={swatches} reorder={reorder} />
     </div>

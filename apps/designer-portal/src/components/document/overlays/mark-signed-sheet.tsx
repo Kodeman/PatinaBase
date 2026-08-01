@@ -38,6 +38,7 @@ export function MarkSignedSheet({
 
   const [signedName, setSignedName] = useState('');
   const [signedDate, setSignedDate] = useState(todayYmd());
+  const [dateValid, setDateValid] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
   // Fresh form every open, pre-filled with the client's name; clear prior error.
@@ -45,6 +46,7 @@ export function MarkSignedSheet({
     if (open) {
       setSignedName(clientName ?? '');
       setSignedDate(todayYmd());
+      setDateValid(true);
       setError(null);
     }
   }, [open, clientName]);
@@ -52,6 +54,10 @@ export function MarkSignedSheet({
   const submit = (e: React.FormEvent) => {
     e.preventDefault();
     setError(null);
+    if (!dateValid) {
+      setError('Enter a valid signature date in MM/DD/YYYY format.');
+      return;
+    }
 
     record.mutate(
       {
@@ -99,6 +105,7 @@ export function MarkSignedSheet({
               value={signedDate}
               onChange={(value) => setSignedDate(value ?? '')}
               ariaLabel="Date signed"
+              onValidityChange={setDateValid}
               className="w-full border-b border-[var(--color-pearl)] bg-transparent pb-1.5 font-mono text-[12px] text-[var(--color-charcoal)] placeholder:text-[var(--text-faint)] focus:border-[var(--color-clay)] focus:outline-none"
             />
           </Field>
@@ -123,7 +130,7 @@ export function MarkSignedSheet({
             actionKey="record-offline-signature"
             variant="primary"
             type="submit"
-            disabled={signedName.trim().length < 2}
+            disabled={signedName.trim().length < 2 || !dateValid}
             loading={record.isPending}
             loadingLabel="Recording…"
             trailing="→"
