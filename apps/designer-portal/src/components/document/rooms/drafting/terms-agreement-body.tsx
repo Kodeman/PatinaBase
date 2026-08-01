@@ -60,6 +60,7 @@ export function TermsAgreementBody({ proposalId }: { proposalId: string }) {
     string,
     { body: string }
   >({
+    proposalId,
     delay: 800,
     save: useCallback(
       async (_key, next) => {

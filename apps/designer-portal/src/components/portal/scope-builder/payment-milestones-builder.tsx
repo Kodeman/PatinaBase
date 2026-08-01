@@ -83,6 +83,7 @@ export function PaymentMilestonesBuilder({ proposalId, totalCents }: PaymentMile
     string,
     Record<string, unknown>
   >({
+    proposalId,
     delay: 600,
     save: useCallback(
       async (milestoneId, updates) => {

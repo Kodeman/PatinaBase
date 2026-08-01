@@ -200,6 +200,7 @@ export function PhaseBuilder({ proposalId }: PhaseBuilderProps) {
     string,
     Record<string, unknown>
   >({
+    proposalId,
     delay: 600,
     save: useCallback(
       async (phaseId, updates) => {
@@ -682,7 +683,10 @@ export function PhaseBuilder({ proposalId }: PhaseBuilderProps) {
                   </AccordionTrigger>
                   <AccordionContent>
                     <div className="flex flex-col gap-5 pb-4 pt-2">
-                      <DeliverablesEditor phaseId={id} />
+                      <DeliverablesEditor
+                        proposalId={proposalId}
+                        phaseId={id}
+                      />
                       <GateConditionsEditor
                         phaseId={id}
                         allPhases={allPhasesLite}

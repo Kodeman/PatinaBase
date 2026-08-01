@@ -5,8 +5,8 @@
  * /portal/proposals/[id]/send route, ported 1:1 into a charcoal DocSheet (D8)
  * that slides up over the open Proposal — never a route, never an unmount (D1).
  *
- * Same contract as the legacy form: recipient (with a "send to a different
- * address" toggle), CC, expiry, personal message, the link-a-client banner
+ * Same contract as the legacy form: the proposal's linked client is the
+ * recipient, with CC, expiry, personal message, the link-a-client banner
  * (ClientPicker), and the accepted-sibling warning (useProposalVersions).
  *
  * Preview does NOT stamp; only Send mutates (send_proposal RPC via
@@ -15,7 +15,7 @@
  * invalidated so the line stamp, margin, and Desk move in one act (§5).
  */
 
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useIsMutating, useQueryClient } from '@tanstack/react-query';
 import { PROPOSAL_CLIENT_MUTATION_KEY } from '@patina/supabase';
 import {
@@ -32,6 +32,13 @@ import { DocumentAction, DocumentActionGroup } from '../document-action';
 import { useProposalMirrorData } from '../drafting/proposal-mirror';
 import { useDraftingState } from '@/hooks/use-drafting-state';
 import { assessProposalSendReadiness } from '@/lib/document/proposal-send-validation';
+import { useProposalAutosaveBarrier } from '@/hooks/use-proposal-autosave-barrier';
+import {
+  flushProposalAutosaves,
+  getProposalAutosaveSnapshot,
+  isProposalAutosaveSnapshotClean,
+  ProposalAutosaveBarrierError,
+} from '@/lib/proposal-autosave-registry';
 
 const EXPIRY_OPTIONS = [
   { value: '7', label: '7 days' },
@@ -107,11 +114,9 @@ export function SendSheet({
     (v) => v.id !== proposalId && v.status === 'accepted',
   );
 
-  const [recipientEmail, setRecipientEmail] = useState('');
   const [ccEmail, setCcEmail] = useState('');
   const [expiryDays, setExpiryDays] = useState('14');
   const [personalMessage, setPersonalMessage] = useState('');
-  const [showAltAddress, setShowAltAddress] = useState(false);
   const [sendError, setSendError] = useState<string | null>(null);
   const [linkError, setLinkError] = useState<string | null>(null);
   const [acknowledgedIncomplete, setAcknowledgedIncomplete] = useState(false);
@@ -121,6 +126,13 @@ export function SendSheet({
   const [refreshedClientData, setRefreshedClientData] = useState<
     NonNullable<typeof clientPayload.data> | null
   >(null);
+  const [clientCopyReviewState, setClientCopyReviewState] = useState<
+    'idle' | 'flushing' | 'ready' | 'error'
+  >('idle');
+  const [clientCopyReviewError, setClientCopyReviewError] = useState<
+    string | null
+  >(null);
+  const clientCopyReviewAttempt = useRef(0);
 
   const sourceGapsFingerprint = JSON.stringify(draftingState.gaps);
   useEffect(() => {
@@ -133,6 +145,87 @@ export function SendSheet({
 
   const effectiveGaps = refreshedGaps ?? draftingState.gaps;
   const effectiveClientData = refreshedClientData ?? clientPayload.data;
+  const autosaveBarrier = useProposalAutosaveBarrier(proposalId);
+
+  const clientPayloadRef = useRef(clientPayload);
+  clientPayloadRef.current = clientPayload;
+  const draftingVerificationRef = useRef(draftingVerification);
+  draftingVerificationRef.current = draftingVerification;
+
+  const readClientCopyAfterAutosaves = useCallback(async () => {
+    // Flush, then read. If a background control queues another patch during
+    // the reads, repeat so the reviewed snapshot is always bounded by a clean
+    // proposal-scoped autosave barrier.
+    for (let attempt = 0; attempt < 3; attempt += 1) {
+      await flushProposalAutosaves(proposalId);
+      const beforeRead = getProposalAutosaveSnapshot(proposalId);
+      if (!isProposalAutosaveSnapshotClean(beforeRead)) continue;
+
+      const refreshDrafting = draftingVerificationRef.current.refresh;
+      if (!refreshDrafting) {
+        throw new Error(
+          'The proposal readiness check is unavailable. Refresh the page before sending.',
+        );
+      }
+
+      const [freshClientPayload, freshDraftingState] = await Promise.all([
+        clientPayloadRef.current.refetch(),
+        refreshDrafting(),
+      ]);
+      if (freshClientPayload.error) throw freshClientPayload.error;
+      if (!freshClientPayload.data?.sendSnapshot) {
+        throw new Error(
+          'The latest client copy could not be verified. Refresh and review it before sending.',
+        );
+      }
+
+      const afterRead = getProposalAutosaveSnapshot(proposalId);
+      if (isProposalAutosaveSnapshotClean(afterRead)) {
+        return {
+          clientData: freshClientPayload.data,
+          draftingGaps: freshDraftingState.gaps,
+        };
+      }
+    }
+
+    throw new ProposalAutosaveBarrierError(
+      'Proposal edits changed during review. Wait for saving to finish, then review again.',
+    );
+  }, [proposalId]);
+
+  useEffect(() => {
+    const attempt = ++clientCopyReviewAttempt.current;
+    if (!open) {
+      setClientCopyReviewState('idle');
+      setClientCopyReviewError(null);
+      return;
+    }
+
+    setClientCopyReviewState('flushing');
+    setClientCopyReviewError(null);
+    void readClientCopyAfterAutosaves()
+      .then(({ clientData, draftingGaps }) => {
+        if (clientCopyReviewAttempt.current !== attempt) return;
+        setRefreshedClientData(clientData);
+        setRefreshedGaps(draftingGaps);
+        setClientCopyReviewState('ready');
+      })
+      .catch((error) => {
+        if (clientCopyReviewAttempt.current !== attempt) return;
+        setClientCopyReviewState('error');
+        setClientCopyReviewError(
+          error instanceof Error
+            ? error.message
+            : 'Proposal edits could not be saved and reviewed.',
+        );
+      });
+
+    return () => {
+      if (clientCopyReviewAttempt.current === attempt) {
+        clientCopyReviewAttempt.current += 1;
+      }
+    };
+  }, [open, proposalId, readClientCopyAfterAutosaves]);
 
   const proposalWritesPending = useIsMutating({
     predicate: (mutation) => {
@@ -175,12 +268,25 @@ export function SendSheet({
     });
   }, [effectiveClientData, effectiveGaps, proposal, readiness]);
 
+  const autosaveReviewError =
+    autosaveBarrier.error !== null
+      ? `Proposal edits could not be saved: ${autosaveBarrier.error}`
+      : clientCopyReviewState === 'error'
+        ? clientCopyReviewError
+        : null;
+  const checkingAutosaves =
+    !autosaveReviewError &&
+    (clientCopyReviewState === 'idle' ||
+      clientCopyReviewState === 'flushing' ||
+      autosaveBarrier.dirty ||
+      autosaveBarrier.flushing);
   const checkingClientCopy =
     clientPayload.isLoading ||
     clientPayload.isFetching ||
     draftingState.isLoading ||
     draftingVerification.isFetching ||
     proposalWritesPending > 0 ||
+    checkingAutosaves ||
     isPreparingSend;
   const hasBlockers = (readiness?.blockers.length ?? 0) > 0;
   const incompleteIsAcknowledged =
@@ -188,26 +294,21 @@ export function SendSheet({
 
   const clientEmail: string | undefined = proposal?.client?.email ?? undefined;
 
-  // Pre-fill the recipient from the linked client's email once it loads, but
-  // only when the designer hasn't already typed an address.
-  useEffect(() => {
-    if (clientEmail) {
-      setRecipientEmail((prev) => (prev ? prev : clientEmail));
-    }
-  }, [clientEmail]);
-
   useEffect(() => {
     setAcknowledgedIncomplete(false);
   }, [open, reviewFingerprint]);
 
   const canSend = Boolean(
     proposal?.client_id &&
-      recipientEmail &&
+      clientEmail &&
       readiness &&
       reviewFingerprint &&
       effectiveClientData?.sendSnapshot &&
       draftingVerification.refresh &&
+      clientCopyReviewState === 'ready' &&
+      isProposalAutosaveSnapshotClean(autosaveBarrier) &&
       !checkingClientCopy &&
+      !autosaveReviewError &&
       !clientPayload.error &&
       !hasBlockers &&
       incompleteIsAcknowledged,
@@ -219,48 +320,38 @@ export function SendSheet({
     sendAttemptInFlight.current = true;
     setIsPreparingSend(true);
     setSendError(null);
+    setClientCopyReviewState('flushing');
+    setClientCopyReviewError(null);
 
     const validUntil = expiryDays
       ? new Date(Date.now() + parseInt(expiryDays) * 86400000).toISOString()
       : undefined;
 
+    let clientCopyVerified = false;
     try {
-      const refreshDrafting = draftingVerification.refresh;
-      if (!refreshDrafting) {
-        throw new Error(
-          'The proposal readiness check is unavailable. Refresh the page before sending.',
-        );
-      }
-
-      const [freshClientPayload, freshDraftingState] = await Promise.all([
-        clientPayload.refetch(),
-        refreshDrafting(),
-      ]);
-      if (freshClientPayload.error) throw freshClientPayload.error;
-      if (!freshClientPayload.data?.sendSnapshot) {
-        throw new Error(
-          'The latest client copy could not be verified. Refresh and review it before sending.',
-        );
-      }
+      const { clientData: freshClientData, draftingGaps } =
+        await readClientCopyAfterAutosaves();
+      clientCopyVerified = true;
+      setClientCopyReviewState('ready');
 
       const freshReadiness = assessProposalSendReadiness({
         proposalTotalCents: proposal.total_amount ?? 0,
-        clientTotalCents: freshClientPayload.data.totalCents,
-        milestones: freshClientPayload.data.milestones,
-        draftingGaps: freshDraftingState.gaps,
+        clientTotalCents: freshClientData.totalCents,
+        milestones: freshClientData.milestones,
+        draftingGaps,
       });
       const freshReviewFingerprint = sendReviewFingerprint({
         proposalTotalCents: proposal.total_amount ?? 0,
-        clientTotalCents: freshClientPayload.data.totalCents,
-        sendSnapshot: freshClientPayload.data.sendSnapshot,
-        draftingGaps: freshDraftingState.gaps,
+        clientTotalCents: freshClientData.totalCents,
+        sendSnapshot: freshClientData.sendSnapshot,
+        draftingGaps,
         blockers: freshReadiness.blockers,
         warnings: freshReadiness.warnings,
       });
 
       if (freshReviewFingerprint !== reviewFingerprint) {
-        setRefreshedClientData(freshClientPayload.data);
-        setRefreshedGaps(freshDraftingState.gaps);
+        setRefreshedClientData(freshClientData);
+        setRefreshedGaps(draftingGaps);
         setAcknowledgedIncomplete(false);
         setSendError(
           'The client copy changed during the final check. Review the updated details, then send again.',
@@ -270,7 +361,7 @@ export function SendSheet({
 
       const result = await sendProposal.mutateAsync({
         proposalId,
-        expectedSnapshot: freshClientPayload.data.sendSnapshot,
+        expectedSnapshot: freshClientData.sendSnapshot,
         personalMessage: personalMessage || undefined,
         ccEmail: ccEmail || undefined,
         validUntil,
@@ -298,6 +389,14 @@ export function SendSheet({
       onClose();
     } catch (err) {
       console.error('Failed to send proposal:', err);
+      if (!clientCopyVerified || err instanceof ProposalAutosaveBarrierError) {
+        setClientCopyReviewState('error');
+        setClientCopyReviewError(
+          err instanceof Error
+            ? err.message
+            : 'Proposal edits could not be saved and reviewed.',
+        );
+      }
       setSendError(
         err instanceof Error
           ? err.message
@@ -397,9 +496,7 @@ export function SendSheet({
 
             {/* Recipient — the linked client */}
             <div className="flex flex-col gap-1.5">
-              <label className={labelCls} htmlFor="send-sheet-recipient">
-                Recipient
-              </label>
+              <span className={labelCls}>Recipient</span>
               {proposal.client_id ? (
                 <div className="rounded-[4px] border border-[var(--color-pearl)] bg-white px-3 py-2 text-[13px]">
                   <span className="text-[var(--color-charcoal)]">
@@ -417,28 +514,6 @@ export function SendSheet({
                 <p className="text-[12px] italic text-[var(--color-aged-oak)]">
                   Link a client above to set the recipient.
                 </p>
-              )}
-              <DocumentAction
-                actionKey="toggle-alternate-recipient"
-                surfaceKey="open-document"
-                regionKey="send-proposal-sheet"
-                variant="tertiary"
-                onClick={() => setShowAltAddress((s) => !s)}
-                className="mt-0.5 self-start"
-              >
-                {showAltAddress
-                  ? 'Hide alternate address'
-                  : 'Send to a different address'}
-              </DocumentAction>
-              {showAltAddress && (
-                <input
-                  id="send-sheet-recipient"
-                  type="email"
-                  value={recipientEmail}
-                  onChange={(e) => setRecipientEmail(e.target.value)}
-                  placeholder="client@email.com"
-                  className={`${fieldCls} mt-1`}
-                />
               )}
             </div>
 
@@ -510,13 +585,19 @@ export function SendSheet({
                 </p>
               )}
 
-              {!checkingClientCopy && clientPayload.error && (
+              {!checkingClientCopy && autosaveReviewError && (
+                <p role="alert" className="mt-2 text-[12px] text-[var(--color-terracotta)]">
+                  {autosaveReviewError} Sending is blocked until every proposal edit is saved.
+                </p>
+              )}
+
+              {!checkingClientCopy && !autosaveReviewError && clientPayload.error && (
                 <p role="alert" className="mt-2 text-[12px] text-[var(--color-terracotta)]">
                   The client preview could not be verified. Refresh it before sending.
                 </p>
               )}
 
-              {!checkingClientCopy && !clientPayload.error && hasBlockers && (
+              {!checkingClientCopy && !autosaveReviewError && !clientPayload.error && hasBlockers && (
                 <div role="alert" className="mt-2 text-[12px] text-[var(--color-terracotta)]">
                   <p className="font-semibold">Not safe to send yet</p>
                   <ul className="mt-1 list-disc space-y-1 pl-5">
@@ -528,6 +609,7 @@ export function SendSheet({
               )}
 
               {!checkingClientCopy &&
+                !autosaveReviewError &&
                 !clientPayload.error &&
                 !hasBlockers &&
                 readiness?.requiresIncompleteAcknowledgement && (
@@ -553,6 +635,7 @@ export function SendSheet({
                 )}
 
               {!checkingClientCopy &&
+                !autosaveReviewError &&
                 !clientPayload.error &&
                 !hasBlockers &&
                 !readiness?.requiresIncompleteAcknowledgement && (
@@ -562,6 +645,7 @@ export function SendSheet({
                 )}
 
               {!checkingClientCopy &&
+                !autosaveReviewError &&
                 effectiveClientData?.paymentSchedule.storedAmountsMatch === false && (
                   <p role="status" className="mt-2 text-[11px] text-[var(--color-aged-oak)]">
                     Payment amounts will be synchronized to the current proposal total before send.

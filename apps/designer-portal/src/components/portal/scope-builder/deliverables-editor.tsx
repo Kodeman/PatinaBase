@@ -21,6 +21,7 @@ import {
 import type { DragEndEvent } from '@dnd-kit/core';
 
 interface DeliverablesEditorProps {
+  proposalId: string;
   phaseId: string;
 }
 
@@ -145,7 +146,10 @@ function DeliverableRow({
   );
 }
 
-export function DeliverablesEditor({ phaseId }: DeliverablesEditorProps) {
+export function DeliverablesEditor({
+  proposalId,
+  phaseId,
+}: DeliverablesEditorProps) {
   const { data: deliverables = [], isLoading } = usePhaseDeliverables(phaseId);
   const addDeliverable = useAddDeliverable();
   const updateDeliverable = useUpdateDeliverable();
@@ -157,6 +161,7 @@ export function DeliverablesEditor({ phaseId }: DeliverablesEditorProps) {
     string,
     Partial<PhaseDeliverable>
   >({
+    proposalId,
     delay: 600,
     save: useCallback(
       async (deliverableId, updates) => {

@@ -56,6 +56,7 @@ export function ChangeOrderTermsEditor({ proposalId }: ChangeOrderTermsEditorPro
   }, [terms, isLoading, initialized]);
 
   const termsAutosave = useBufferedAutosave<string, LocalTerms>({
+    proposalId,
     delay: 800,
     save: useCallback(
       async (_key, next) => {

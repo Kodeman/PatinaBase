@@ -1,14 +1,22 @@
 import { act, renderHook, waitFor } from '@testing-library/react';
 import { useBufferedAutosave } from '../use-buffered-autosave';
+import { resetProposalAutosaveRegistryForTests } from '@/lib/proposal-autosave-registry';
 
 describe('useBufferedAutosave', () => {
   beforeEach(() => jest.useFakeTimers());
-  afterEach(() => jest.useRealTimers());
+  afterEach(() => {
+    resetProposalAutosaveRegistryForTests();
+    jest.useRealTimers();
+  });
 
   it('merges pending patches for one row before the debounce fires', async () => {
     const save = jest.fn().mockResolvedValue(undefined);
     const { result } = renderHook(() =>
-      useBufferedAutosave<string, Record<string, unknown>>({ save, delay: 600 }),
+      useBufferedAutosave<string, Record<string, unknown>>({
+        proposalId: 'proposal-1',
+        save,
+        delay: 600,
+      }),
     );
 
     act(() => {
@@ -39,7 +47,11 @@ describe('useBufferedAutosave', () => {
       )
       .mockResolvedValue(undefined);
     const { result, unmount } = renderHook(() =>
-      useBufferedAutosave<string, Record<string, unknown>>({ save, delay: 600 }),
+      useBufferedAutosave<string, Record<string, unknown>>({
+        proposalId: 'proposal-1',
+        save,
+        delay: 600,
+      }),
     );
 
     act(() => {
@@ -73,7 +85,11 @@ describe('useBufferedAutosave', () => {
         : Promise.resolve(),
     );
     const { result } = renderHook(() =>
-      useBufferedAutosave<string, Record<string, unknown>>({ save, delay: 600 }),
+      useBufferedAutosave<string, Record<string, unknown>>({
+        proposalId: 'proposal-1',
+        save,
+        delay: 600,
+      }),
     );
 
     act(() => {
@@ -87,5 +103,33 @@ describe('useBufferedAutosave', () => {
 
     expect(result.current.state).toBe('error');
     expect(result.current.error).toBe('row-a failed');
+  });
+
+  it('rejects a proposal-wide flush when a failed patch remains queued', async () => {
+    const save = jest.fn().mockRejectedValue(new Error('save failed'));
+    const { result } = renderHook(() =>
+      useBufferedAutosave<string, Record<string, unknown>>({
+        proposalId: 'proposal-1',
+        save,
+        delay: 600,
+      }),
+    );
+
+    act(() => {
+      result.current.queue('row-1', { name: 'Unsaved' });
+    });
+
+    let failure: unknown;
+    await act(async () => {
+      try {
+        await result.current.flushAll();
+      } catch (error) {
+        failure = error;
+      }
+    });
+
+    expect(failure).toEqual(new Error('save failed'));
+    expect(result.current.state).toBe('error');
+    expect(result.current.error).toBe('save failed');
   });
 });

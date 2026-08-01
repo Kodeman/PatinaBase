@@ -529,14 +529,16 @@ export function useDuplicateBoard() {
 
       return newBoard as ProposalBoard;
     },
-    onSuccess: async (board) => {
-      queryClient.invalidateQueries({ queryKey: ['boards', board.proposal_id] });
+    // The board row and its copied items are separate requests. If the item
+    // insert fails, the board row already exists, so reconcile every mounted
+    // projection on both success and failure instead of leaving a cached
+    // pre-mutation view hiding the persisted partial copy.
+    onSettled: async (_board, _error, variables) => {
+      queryClient.invalidateQueries({ queryKey: ['boards', variables.proposalId] });
       queryClient.invalidateQueries({
-        queryKey: ['boards-with-items', board.proposal_id],
+        queryKey: ['boards-with-items', variables.proposalId],
       });
-      if (board.proposal_id) {
-        await invalidateProposalClientQueries(queryClient, board.proposal_id);
-      }
+      await invalidateProposalClientQueries(queryClient, variables.proposalId);
     },
   });
 }
