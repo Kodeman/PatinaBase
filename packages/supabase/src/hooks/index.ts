@@ -871,6 +871,7 @@ export type {
   ProjectNarrativeSection,
   ProjectPalette,
   ProjectPaletteSwatch,
+  CreateProjectPhaseInput,
   ProjectPhaseTransitionInput,
   ProjectPhaseTransitionReceipt,
   UpdateFFEItemPricingInput,

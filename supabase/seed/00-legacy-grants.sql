@@ -4913,3 +4913,21 @@ DO $g$ BEGIN
   GRANT EXECUTE ON FUNCTION public.advance_project_phase(uuid, uuid, text) TO authenticated;
 EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
 END $g$;
+
+-- 00393_advance_project_phase_atomic_rpc.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.guard_project_phase_chain_write() FROM PUBLIC, anon, authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00393_advance_project_phase_atomic_rpc.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.guard_project_phase_lifecycle_write() FROM PUBLIC, anon, authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00393_advance_project_phase_atomic_rpc.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.guard_client_decision_completed_phase_gate() FROM PUBLIC, anon, authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;

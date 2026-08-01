@@ -206,6 +206,7 @@ export function useUpdateProjectPhaseChain() {
   return useMutation({
     mutationFn: async ({
       phaseId,
+      projectId,
       durationDays,
       anchorDate,
       followsPhaseId,
@@ -234,6 +235,7 @@ export function useUpdateProjectPhaseChain() {
         .from('project_phases')
         .update(updates)
         .eq('id', phaseId)
+        .eq('project_id', projectId)
         .select()
         .single();
       if (error) throw error;

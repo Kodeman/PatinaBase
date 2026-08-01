@@ -434,6 +434,22 @@ export function useProjectPhases(projectId: string) {
   });
 }
 
+export interface CreateProjectPhaseInput {
+  projectId: string;
+  phaseKey: string;
+  name: string;
+  sortOrder?: number;
+  /**
+   * Chain columns (00323/00324 — Schedule Compose). New lifecycle rows always
+   * start pending with zero progress; only advance_project_phase may activate
+   * or complete them.
+   */
+  durationDays?: number;
+  anchorDate?: string;
+  followsPhaseId?: string;
+  lane?: 'main' | 'thread';
+}
+
 export function useCreateProjectPhase() {
   const queryClient = useQueryClient();
   return useMutation({
@@ -442,34 +458,19 @@ export function useCreateProjectPhase() {
       phaseKey,
       name,
       sortOrder,
-      status = 'pending',
       durationDays,
       anchorDate,
       followsPhaseId,
       lane,
-    }: {
-      projectId: string;
-      phaseKey: string;
-      name: string;
-      sortOrder?: number;
-      status?: string;
-      /**
-       * Chain columns (00323/00324 — Schedule Compose). Additive: omit any
-       * of these and the DB default/NULL applies, matching pre-Slice-03
-       * behavior exactly for every existing caller.
-       */
-      durationDays?: number;
-      anchorDate?: string;
-      followsPhaseId?: string;
-      lane?: 'main' | 'thread';
-    }) => {
+    }: CreateProjectPhaseInput) => {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const supabase = getSupabase() as any;
       const insert: Record<string, unknown> = {
         project_id: projectId,
         phase_key: phaseKey,
         name,
-        status,
+        status: 'pending',
+        progress: 0,
       };
       if (sortOrder !== undefined) insert.sort_order = sortOrder;
       if (durationDays !== undefined) insert.duration_days = durationDays;
@@ -502,8 +503,9 @@ export interface ProjectPhaseTransitionInput {
 
 export interface ProjectPhaseTransitionReceipt {
   completed_phase_id: string | null;
-  next_phase_id: string | null;
-  /** No canonical successor in this phase's lane; never means project closeout. */
+  /** Every exact direct follower activated by completion; resume returns the target. */
+  next_phase_ids: string[];
+  /** No direct follower on this target branch; never means project closeout. */
   terminal: boolean;
 }
 
@@ -516,10 +518,11 @@ function isProjectPhaseTransitionReceipt(
   return (
     keys.length === 3 &&
     keys[0] === 'completed_phase_id' &&
-    keys[1] === 'next_phase_id' &&
+    keys[1] === 'next_phase_ids' &&
     keys[2] === 'terminal' &&
     (receipt.completed_phase_id === null || typeof receipt.completed_phase_id === 'string') &&
-    (receipt.next_phase_id === null || typeof receipt.next_phase_id === 'string') &&
+    Array.isArray(receipt.next_phase_ids) &&
+    receipt.next_phase_ids.every((phaseId) => typeof phaseId === 'string') &&
     typeof receipt.terminal === 'boolean'
   );
 }

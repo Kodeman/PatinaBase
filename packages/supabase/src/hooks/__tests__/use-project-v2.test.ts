@@ -119,12 +119,15 @@ import {
   useProjectFinancials,
   useUpdateFFEItemStatus,
   useBulkReassignFfeVendor,
+  useCreateProjectPhase,
   useUpdateProjectPhaseStatus,
 } from '../use-project-v2';
+import { useUpdateProjectPhaseChain } from '../use-schedule-compose';
 import type {
   UpdateFFEItemPricingInput,
   BulkReassignFfeVendorInput,
   BulkReassignFfeVendorResult,
+  CreateProjectPhaseInput,
   ProjectPhaseTransitionInput,
   ProjectPhaseTransitionReceipt,
 } from '../use-project-v2';
@@ -136,6 +139,83 @@ beforeEach(() => {
   supabaseClient.auth.getSession.mockReset();
   supabaseClient.from.mockClear();
   supabaseClient.rpc.mockReset();
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// useCreateProjectPhase — pending-only lifecycle birth
+// ─────────────────────────────────────────────────────────────────────────────
+
+type CreatePhaseMutationConfig = {
+  mutationFn: (input: CreateProjectPhaseInput) => Promise<unknown>;
+};
+
+describe('useCreateProjectPhase', () => {
+  it('always inserts a pending zero-progress row and ignores a runtime status smuggle', async () => {
+    setTableDefault('project_phases', {
+      data: { id: 'phase-new', status: 'pending', progress: 0 },
+      error: null,
+    });
+
+    const config = useCreateProjectPhase() as unknown as CreatePhaseMutationConfig;
+    await config.mutationFn({
+      projectId: 'project-1',
+      phaseKey: 'install',
+      name: 'Installation',
+      durationDays: 5,
+      status: 'completed',
+    } as unknown as CreateProjectPhaseInput);
+
+    const inserts = builders.project_phases.__chain.filter((call) => call.method === 'insert');
+    expect(inserts).toHaveLength(1);
+    expect(inserts[0].args[0]).toEqual({
+      project_id: 'project-1',
+      phase_key: 'install',
+      name: 'Installation',
+      status: 'pending',
+      progress: 0,
+      duration_days: 5,
+    });
+  });
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// useUpdateProjectPhaseChain — exact project/phase repair scope
+// ─────────────────────────────────────────────────────────────────────────────
+
+type UpdatePhaseChainMutationConfig = {
+  mutationFn: (input: {
+    phaseId: string;
+    projectId: string;
+    followsPhaseId?: string | null;
+    lane?: 'main' | 'thread';
+  }) => Promise<unknown>;
+};
+
+describe('useUpdateProjectPhaseChain', () => {
+  it('scopes an exact relink by both phase id and project id', async () => {
+    setTableDefault('project_phases', {
+      data: { id: 'phase-2', project_id: 'project-1' },
+      error: null,
+    });
+
+    const config = useUpdateProjectPhaseChain() as unknown as UpdatePhaseChainMutationConfig;
+    await config.mutationFn({
+      phaseId: 'phase-2',
+      projectId: 'project-1',
+      followsPhaseId: 'phase-1',
+      lane: 'main',
+    });
+
+    const builder = builders.project_phases;
+    expect(builder.__chain.filter((call) => call.method === 'update')[0].args[0]).toEqual({
+      follows_phase_id: 'phase-1',
+      lane: 'main',
+    });
+    expect(builder.__chain.filter((call) => call.method === 'eq').map((call) => call.args)).toEqual([
+      ['id', 'phase-2'],
+      ['project_id', 'project-1'],
+    ]);
+  });
 });
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -154,7 +234,7 @@ describe('useUpdateProjectPhaseStatus', () => {
   it('completes through one RPC with the in_progress CAS token and returns the safe receipt', async () => {
     const receipt: ProjectPhaseTransitionReceipt = {
       completed_phase_id: 'phase-1',
-      next_phase_id: 'phase-2',
+      next_phase_ids: ['phase-2', 'phase-thread'],
       terminal: false,
     };
     supabaseClient.rpc.mockResolvedValue({ data: receipt, error: null });
@@ -181,8 +261,8 @@ describe('useUpdateProjectPhaseStatus', () => {
   it('resumes a delayed phase through the same RPC and exposes the exact resume receipt', async () => {
     const receipt: ProjectPhaseTransitionReceipt = {
       completed_phase_id: null,
-      next_phase_id: 'phase-delayed',
-      terminal: false,
+      next_phase_ids: ['phase-delayed'],
+      terminal: true,
     };
     supabaseClient.rpc.mockResolvedValue({ data: receipt, error: null });
 
@@ -250,7 +330,7 @@ describe('useUpdateProjectPhaseStatus', () => {
     supabaseClient.rpc.mockResolvedValue({
       data: {
         completed_phase_id: 'phase-1',
-        next_phase_id: null,
+        next_phase_ids: [],
         terminal: true,
         project_id: 'must-not-leak',
       },
@@ -271,7 +351,7 @@ describe('useUpdateProjectPhaseStatus', () => {
     const config = useUpdateProjectPhaseStatus() as unknown as PhaseTransitionMutationConfig;
     const receipt: ProjectPhaseTransitionReceipt = {
       completed_phase_id: 'phase-1',
-      next_phase_id: null,
+      next_phase_ids: [],
       terminal: true,
     };
 
