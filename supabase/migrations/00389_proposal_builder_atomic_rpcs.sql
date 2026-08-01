@@ -66,18 +66,19 @@ BEGIN
       USING ERRCODE = 'check_violation';
   END IF;
 
-  IF v_source.scope_room_id IS NOT NULL
-     AND NOT EXISTS (
-       SELECT 1
-       FROM public.proposal_scope_rooms AS room
-       WHERE room.id = v_source.scope_room_id
-         AND room.proposal_id = p_proposal_id
-     )
-  THEN
-    RAISE EXCEPTION
-      'duplicate_proposal_board: board scope room does not belong to proposal %',
-      p_proposal_id
-      USING ERRCODE = 'check_violation';
+  IF v_source.scope_room_id IS NOT NULL THEN
+    PERFORM 1
+    FROM public.proposal_scope_rooms AS room
+    WHERE room.id = v_source.scope_room_id
+      AND room.proposal_id = p_proposal_id
+    FOR UPDATE;
+
+    IF NOT FOUND THEN
+      RAISE EXCEPTION
+        'duplicate_proposal_board: board scope room does not belong to proposal %',
+        p_proposal_id
+        USING ERRCODE = 'check_violation';
+    END IF;
   END IF;
 
   -- Freeze the exact item snapshot. The board FOR UPDATE lock also blocks new
@@ -87,6 +88,31 @@ BEGIN
   FROM public.proposal_board_items AS item
   WHERE item.board_id = p_board_id
   ORDER BY item.id
+  FOR UPDATE;
+
+  -- Stabilize referenced proposal-scoped rows too. Without these locks a
+  -- concurrent author could move a palette/capture to another proposal after
+  -- validation but before the copied item rows are inserted.
+  PERFORM 1
+  FROM public.proposal_palettes AS palette
+  WHERE palette.id IN (
+    SELECT item.palette_id
+    FROM public.proposal_board_items AS item
+    WHERE item.board_id = p_board_id
+      AND item.palette_id IS NOT NULL
+  )
+  ORDER BY palette.id
+  FOR UPDATE;
+
+  PERFORM 1
+  FROM public.proposal_captures AS capture
+  WHERE capture.id IN (
+    SELECT item.capture_id
+    FROM public.proposal_board_items AS item
+    WHERE item.board_id = p_board_id
+      AND item.capture_id IS NOT NULL
+  )
+  ORDER BY capture.id
   FOR UPDATE;
 
   IF EXISTS (

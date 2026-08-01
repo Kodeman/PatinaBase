@@ -1240,9 +1240,8 @@ export {
   // B8 (00272/00273) — project-owned live boards
   useProjectOwnedBoards,
   useContinueBoardInProject,
-  // Pure helpers (00264 — exported for unit tests + reuse)
+  // Pure helper (00264 — exported for unit tests + reuse)
   summarizeBoard,
-  buildDuplicateBoardItemRows,
 } from './use-boards';
 export type {
   BoardItemType,

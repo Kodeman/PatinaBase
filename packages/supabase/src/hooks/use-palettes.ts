@@ -355,7 +355,7 @@ export function useReorderSwatches() {
     mutationKey: [PROPOSAL_CLIENT_MUTATION_KEY],
     mutationFn: async ({
       paletteId,
-      proposalId: _proposalId,
+      proposalId,
       orderedIds,
     }: {
       paletteId: string;
@@ -366,7 +366,7 @@ export function useReorderSwatches() {
       const supabase = getSupabase() as any;
 
       const { error } = await supabase.rpc('reorder_palette_swatches', {
-        p_proposal_id: _proposalId,
+        p_proposal_id: proposalId,
         p_palette_id: paletteId,
         p_ordered_ids: orderedIds,
       });
