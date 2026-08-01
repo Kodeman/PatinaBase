@@ -21795,6 +21795,31 @@ export type Database = {
         Args: { p_milestone_id: string }
         Returns: string
       }
+      duplicate_proposal_board: {
+        Args: { p_board_id: string; p_proposal_id: string }
+        Returns: {
+          background_color: string
+          canvas_height: number
+          canvas_width: number
+          cover_image_url: string | null
+          created_at: string
+          id: string
+          name: string
+          project_id: string | null
+          proposal_id: string | null
+          scope_room_id: string | null
+          sections: Json
+          sort_order: number
+          status: string
+          updated_at: string
+        }
+        SetofOptions: {
+          from: "*"
+          to: "proposal_boards"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
       enqueue_agent_successor_if_owned: {
         Args: {
           p_actor?: string
@@ -22992,6 +23017,14 @@ export type Database = {
           isOneToOne: true
           isSetofReturn: false
         }
+      }
+      reorder_palette_swatches: {
+        Args: {
+          p_ordered_ids: string[]
+          p_palette_id: string
+          p_proposal_id: string
+        }
+        Returns: undefined
       }
       reorder_proposal_items: {
         Args: { p_ordered_ids: string[]; p_proposal_id: string }

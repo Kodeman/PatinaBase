@@ -430,41 +430,11 @@ export function useUpsertBoard() {
 }
 
 /**
- * Build the insert rows for a duplicated board's items. Each row carries a
- * FRESH id (omitted → gen_random_uuid()), the NEW board_id, and `type` — the
- * WITH-CHECK trap: a batch insert whose RLS check joins board_id → the
- * designer's proposal rejects the WHOLE statement if any row omits board_id, so
- * every row must carry it (and type, the other NOT NULL/CHECK column).
- * Geometry + all snapshot fields (incl. `data`, which preserves each item's
- * section_id) are copied verbatim. Pure — exported for the unit test.
- */
-export function buildDuplicateBoardItemRows(
-  newBoardId: string,
-  sourceItems: ProposalBoardItem[],
-): Array<Record<string, unknown>> {
-  return sourceItems.map((it) => ({
-    board_id: newBoardId,
-    type: it.type,
-    x: it.x,
-    y: it.y,
-    width: it.width,
-    height: it.height,
-    z_index: it.z_index,
-    rotation: it.rotation,
-    locked: it.locked,
-    product_id: it.product_id,
-    capture_id: it.capture_id,
-    palette_id: it.palette_id,
-    image_url: it.image_url,
-    content: it.content,
-    data: it.data ?? {},
-  }));
-}
-
-/**
  * Duplicate a board: copies the row (name + " (Copy)", same scope_room,
- * sections, dims, background, cover) and every item (fresh ids). Runs
- * client-side under the designer's RLS. Lands at the end of the board order.
+ * sections, dims, background, cover) and every item (fresh ids). The 00389 RPC
+ * validates the complete proposal relationship graph and performs the board +
+ * item copy in one transaction, so an item failure cannot leave a ghost board.
+ * Lands at the end of the board order.
  */
 export function useDuplicateBoard() {
   const queryClient = useQueryClient();
@@ -481,58 +451,16 @@ export function useDuplicateBoard() {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const supabase = getSupabase() as any;
 
-      // Source board + its items in one read.
-      const { data: src, error: readErr } = await supabase
-        .from('proposal_boards')
-        .select('*, proposal_board_items(*)')
-        .eq('id', boardId)
-        .single();
-      if (readErr) throw readErr;
-      const { proposal_board_items: srcItems, ...board } = src;
-
-      // New board sorts after every existing one.
-      const { data: siblings } = await supabase
-        .from('proposal_boards')
-        .select('sort_order')
-        .eq('proposal_id', proposalId);
-      const maxSort = ((siblings ?? []) as Array<{ sort_order: number }>).reduce(
-        (m, r) => Math.max(m, r.sort_order ?? 0),
-        -1,
-      );
-
-      const { data: newBoard, error: boardErr } = await supabase
-        .from('proposal_boards')
-        .insert({
-          proposal_id: proposalId,
-          name: `${board.name} (Copy)`,
-          scope_room_id: board.scope_room_id ?? null,
-          cover_image_url: board.cover_image_url ?? null,
-          canvas_width: board.canvas_width,
-          canvas_height: board.canvas_height,
-          background_color: board.background_color,
-          sections: board.sections ?? [],
-          status: 'active',
-          sort_order: maxSort + 1,
-        })
-        .select()
-        .single();
-      if (boardErr) throw boardErr;
-
-      const rows = buildDuplicateBoardItemRows(
-        newBoard.id as string,
-        (srcItems ?? []) as ProposalBoardItem[],
-      );
-      if (rows.length > 0) {
-        const { error: itemsErr } = await supabase.from('proposal_board_items').insert(rows);
-        if (itemsErr) throw itemsErr;
-      }
-
-      return newBoard as ProposalBoard;
+      const { data, error } = await supabase.rpc('duplicate_proposal_board', {
+        p_proposal_id: proposalId,
+        p_board_id: boardId,
+      });
+      if (error) throw error;
+      return data as ProposalBoard;
     },
-    // The board row and its copied items are separate requests. If the item
-    // insert fails, the board row already exists, so reconcile every mounted
-    // projection on both success and failure instead of leaving a cached
-    // pre-mutation view hiding the persisted partial copy.
+    // Reconcile every mounted client projection after either outcome. The RPC
+    // is atomic; invalidating on failure still clears any optimistic/mounted
+    // state without implying a partial database write exists.
     onSettled: async (_board, _error, variables) => {
       queryClient.invalidateQueries({ queryKey: ['boards', variables.proposalId] });
       queryClient.invalidateQueries({

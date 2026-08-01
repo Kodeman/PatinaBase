@@ -4398,6 +4398,72 @@ DO $g$ BEGIN
 EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
 END $g$;
 
+-- 00387_project_proposal_authority_boundaries.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.mark_proposal_viewed(uuid) FROM PUBLIC, anon, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00387_project_proposal_authority_boundaries.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.mark_proposal_viewed(uuid) TO authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00387_project_proposal_authority_boundaries.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.decline_proposal(uuid, text) FROM PUBLIC, anon, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00387_project_proposal_authority_boundaries.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.decline_proposal(uuid, text) TO authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00387_project_proposal_authority_boundaries.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.begin_proposal_revision(uuid) FROM PUBLIC, anon, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00387_project_proposal_authority_boundaries.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.begin_proposal_revision(uuid) TO authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00387_project_proposal_authority_boundaries.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.expire_proposals() FROM PUBLIC, anon, authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00387_project_proposal_authority_boundaries.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.sign_proposal(uuid, text, text, boolean, date) FROM PUBLIC, anon, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00387_project_proposal_authority_boundaries.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.sign_proposal(uuid, text, text, boolean, date) TO authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00387_project_proposal_authority_boundaries.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.record_offline_signature(uuid, text, boolean, date) FROM PUBLIC, anon, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00387_project_proposal_authority_boundaries.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.record_offline_signature(uuid, text, boolean, date) TO authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
 -- 00388_proposal_send_dispatch_guard.sql
 DO $g$ BEGIN
   REVOKE ALL ON TABLE public.proposal_send_dispatches FROM PUBLIC, anon, authenticated, service_role;
@@ -4548,68 +4614,26 @@ DO $g$ BEGIN
 EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
 END $g$;
 
--- 00387_project_proposal_authority_boundaries.sql
+-- 00389_proposal_builder_atomic_rpcs.sql
 DO $g$ BEGIN
-  REVOKE ALL ON FUNCTION public.mark_proposal_viewed(uuid) FROM PUBLIC, anon, service_role;
+  REVOKE ALL ON FUNCTION public.duplicate_proposal_board(uuid, uuid) FROM PUBLIC, anon, service_role;
 EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
 END $g$;
 
--- 00387_project_proposal_authority_boundaries.sql
+-- 00389_proposal_builder_atomic_rpcs.sql
 DO $g$ BEGIN
-  GRANT EXECUTE ON FUNCTION public.mark_proposal_viewed(uuid) TO authenticated;
+  GRANT EXECUTE ON FUNCTION public.duplicate_proposal_board(uuid, uuid) TO authenticated;
 EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
 END $g$;
 
--- 00387_project_proposal_authority_boundaries.sql
+-- 00389_proposal_builder_atomic_rpcs.sql
 DO $g$ BEGIN
-  REVOKE ALL ON FUNCTION public.decline_proposal(uuid, text) FROM PUBLIC, anon, service_role;
+  REVOKE ALL ON FUNCTION public.reorder_palette_swatches(uuid, uuid, uuid[]) FROM PUBLIC, anon, service_role;
 EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
 END $g$;
 
--- 00387_project_proposal_authority_boundaries.sql
+-- 00389_proposal_builder_atomic_rpcs.sql
 DO $g$ BEGIN
-  GRANT EXECUTE ON FUNCTION public.decline_proposal(uuid, text) TO authenticated;
-EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
-END $g$;
-
--- 00387_project_proposal_authority_boundaries.sql
-DO $g$ BEGIN
-  REVOKE ALL ON FUNCTION public.begin_proposal_revision(uuid) FROM PUBLIC, anon, service_role;
-EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
-END $g$;
-
--- 00387_project_proposal_authority_boundaries.sql
-DO $g$ BEGIN
-  GRANT EXECUTE ON FUNCTION public.begin_proposal_revision(uuid) TO authenticated;
-EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
-END $g$;
-
--- 00387_project_proposal_authority_boundaries.sql
-DO $g$ BEGIN
-  REVOKE ALL ON FUNCTION public.expire_proposals() FROM PUBLIC, anon, authenticated, service_role;
-EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
-END $g$;
-
--- 00387_project_proposal_authority_boundaries.sql
-DO $g$ BEGIN
-  REVOKE ALL ON FUNCTION public.sign_proposal(uuid, text, text, boolean, date) FROM PUBLIC, anon, service_role;
-EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
-END $g$;
-
--- 00387_project_proposal_authority_boundaries.sql
-DO $g$ BEGIN
-  GRANT EXECUTE ON FUNCTION public.sign_proposal(uuid, text, text, boolean, date) TO authenticated;
-EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
-END $g$;
-
--- 00387_project_proposal_authority_boundaries.sql
-DO $g$ BEGIN
-  REVOKE ALL ON FUNCTION public.record_offline_signature(uuid, text, boolean, date) FROM PUBLIC, anon, service_role;
-EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
-END $g$;
-
--- 00387_project_proposal_authority_boundaries.sql
-DO $g$ BEGIN
-  GRANT EXECUTE ON FUNCTION public.record_offline_signature(uuid, text, boolean, date) TO authenticated;
+  GRANT EXECUTE ON FUNCTION public.reorder_palette_swatches(uuid, uuid, uuid[]) TO authenticated;
 EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
 END $g$;
