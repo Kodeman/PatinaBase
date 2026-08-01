@@ -164,7 +164,7 @@ export function BoardsBuilder({ proposalId, projectId }: BoardsBuilderProps) {
 
   const handleConfirmDelete = useCallback(() => {
     if (!deleteTarget) return;
-    deleteBoard.mutate({ boardId: deleteTarget.id, proposalId: proposalId ?? '' });
+    deleteBoard.mutate({ boardId: deleteTarget.id, proposalId });
     if (activeBoardId === deleteTarget.id) setActiveBoardId(null);
     setDeleteTarget(null);
   }, [deleteBoard, proposalId, activeBoardId, deleteTarget]);

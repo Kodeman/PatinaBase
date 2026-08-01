@@ -1,5 +1,9 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { createBrowserClient } from '../client';
+import {
+  invalidateProposalClientQueries,
+  PROPOSAL_CLIENT_MUTATION_KEY,
+} from '../lib/proposal-client-query-invalidation';
 import type { MilestoneKind, MilestoneStatus } from '@patina/utils';
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -449,6 +453,7 @@ export function useSeedProjectScheduleFromTemplate() {
 export function useCopyScheduleAsBuilt() {
   const queryClient = useQueryClient();
   return useMutation({
+    mutationKey: [PROPOSAL_CLIENT_MUTATION_KEY],
     mutationFn: async ({
       sourceProjectId,
       targetProposalId,
@@ -473,7 +478,7 @@ export function useCopyScheduleAsBuilt() {
       if (error) throw error;
       return (data ?? []) as string[];
     },
-    onSuccess: (_, { targetProposalId, targetProjectId }) => {
+    onSuccess: async (_, { targetProposalId, targetProjectId }) => {
       if (targetProjectId) {
         queryClient.invalidateQueries({ queryKey: ['project-phases', targetProjectId] });
         queryClient.invalidateQueries({ queryKey: ['schedule-milestones', targetProjectId] });
@@ -482,6 +487,7 @@ export function useCopyScheduleAsBuilt() {
         queryClient.invalidateQueries({ queryKey: ['proposal-phases', targetProposalId] });
         queryClient.invalidateQueries({ queryKey: ['scope-builder-summary', targetProposalId] });
         queryClient.invalidateQueries({ queryKey: ['proposal', targetProposalId] });
+        await invalidateProposalClientQueries(queryClient, targetProposalId);
       }
     },
   });

@@ -10,6 +10,10 @@
 
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { createBrowserClient } from '../client';
+import {
+  invalidateProposalClientQueries,
+  PROPOSAL_CLIENT_MUTATION_KEY,
+} from '../lib/proposal-client-query-invalidation';
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const getSupabase = () => createBrowserClient() as any;
@@ -98,6 +102,7 @@ export function useLogSuggestionEvent() {
 export function useSwapLineToProduct() {
   const qc = useQueryClient();
   return useMutation({
+    mutationKey: [PROPOSAL_CLIENT_MUTATION_KEY],
     mutationFn: async (input: {
       proposalItemId: string;
       productId: string;
@@ -115,14 +120,14 @@ export function useSwapLineToProduct() {
       if (error) throw error;
       return data;
     },
-    onSuccess: (_r, input) => {
+    onSuccess: async (_r, input) => {
       qc.invalidateQueries({ queryKey: ['proposals'] });
       qc.invalidateQueries({ queryKey: ['proposal', input.proposalId] });
       qc.invalidateQueries({ queryKey: ['proposal-items-schedule', input.proposalId] });
       qc.invalidateQueries({ queryKey: ['scope-builder-summary', input.proposalId] });
-      qc.invalidateQueries({ queryKey: ['proposal-mirror', input.proposalId] });
       qc.invalidateQueries({ queryKey: ['proposal-feedback', input.proposalId] });
       qc.invalidateQueries({ queryKey: ['item-feedback-thread', input.feedbackId] });
+      await invalidateProposalClientQueries(qc, input.proposalId);
     },
   });
 }

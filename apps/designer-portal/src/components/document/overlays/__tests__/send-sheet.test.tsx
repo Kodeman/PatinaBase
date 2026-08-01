@@ -7,11 +7,15 @@ const mockInvalidate = jest.fn();
 const mockUseProposalMirrorData = jest.fn();
 const mockUseDraftingState = jest.fn();
 const mockRefreshDrafting = jest.fn();
-let mockPaymentMutationsPending = 0;
+let mockPendingProposalMutation: {
+  options: { mutationKey: string[] };
+  state: { variables: Record<string, unknown> };
+} | null = null;
 
 jest.mock('@tanstack/react-query', () => ({
   useQueryClient: () => ({ invalidateQueries: mockInvalidate }),
-  useIsMutating: () => mockPaymentMutationsPending,
+  useIsMutating: ({ predicate }: { predicate: (mutation: unknown) => boolean }) =>
+    mockPendingProposalMutation && predicate(mockPendingProposalMutation) ? 1 : 0,
 }));
 
 jest.mock('@/hooks/use-proposals', () => ({
@@ -122,7 +126,7 @@ beforeEach(() => {
     state: 'Ready to send',
     gaps: [],
   });
-  mockPaymentMutationsPending = 0;
+  mockPendingProposalMutation = null;
   mockUseDraftingState.mockReturnValue({
     gaps: [],
     isLoading: false,
@@ -206,7 +210,10 @@ describe('SendSheet canonical client-copy validation', () => {
         },
       ]),
     );
-    mockPaymentMutationsPending = 1;
+    mockPendingProposalMutation = {
+      options: { mutationKey: ['proposal-payment-schedule'] },
+      state: { variables: { proposalId: 'proposal-1' } },
+    };
 
     render(<SendSheet proposalId="proposal-1" open onClose={jest.fn()} />);
 
@@ -217,6 +224,32 @@ describe('SendSheet canonical client-copy validation', () => {
       screen.getByRole('button', { name: 'Send proposal' }),
     ).toBeDisabled();
     expect(mockSend).not.toHaveBeenCalled();
+  });
+
+  it('blocks send while any client-copy child write is pending', () => {
+    mockUseProposalMirrorData.mockReturnValue(
+      mirror([
+        {
+          id: 'deposit',
+          label: 'Project deposit',
+          percentage: 100,
+          amount_cents: 1_320_000,
+        },
+      ]),
+    );
+    mockPendingProposalMutation = {
+      options: { mutationKey: ['proposal-client-copy'] },
+      state: { variables: { proposalId: 'proposal-1' } },
+    };
+
+    render(<SendSheet proposalId="proposal-1" open onClose={jest.fn()} />);
+
+    expect(
+      screen.getByRole('button', { name: 'Send proposal' }),
+    ).toBeDisabled();
+    expect(
+      screen.getByText(/Checking the latest client preview/i),
+    ).toBeInTheDocument();
   });
 
   it('keeps send blocked while cached complete client data is refetching', async () => {

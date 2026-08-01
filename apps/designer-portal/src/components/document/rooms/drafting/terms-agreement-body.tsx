@@ -16,6 +16,7 @@
 
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { Textarea } from '@/components/ui/controls';
+import { useBufferedAutosave } from '@/hooks/use-buffered-autosave';
 import {
   useProposalSections,
   useUpsertProposalSection,
@@ -34,45 +35,55 @@ export function TermsAgreementBody({ proposalId }: { proposalId: string }) {
 
   const [body, setBody] = useState('');
   const [initialized, setInitialized] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const sectionIdentityRef = useRef<{ id?: string; title: string }>({
+    title: TERMS_TITLE,
+  });
 
   // Seed the local draft once the server row loads (or once we know there is none).
   useEffect(() => {
     if (initialized || isLoading) return;
     setBody(termsSection?.body ?? '');
+    sectionIdentityRef.current = {
+      id: termsSection?.id,
+      title: termsSection?.title ?? TERMS_TITLE,
+    };
     setInitialized(true);
-  }, [initialized, isLoading, termsSection?.body]);
+  }, [
+    initialized,
+    isLoading,
+    termsSection?.body,
+    termsSection?.id,
+    termsSection?.title,
+  ]);
 
-  const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const save = useCallback(
-    (next: string) => {
-      if (timer.current) clearTimeout(timer.current);
-      timer.current = setTimeout(() => {
-        setError(null);
-        upsert.mutate(
-          {
-            id: termsSection?.id,
-            proposalId,
-            type: 'terms',
-            title: termsSection?.title ?? TERMS_TITLE,
-            body: next,
-          },
-          {
-            onError: (e) =>
-              setError(e instanceof Error ? e.message : 'Could not save the agreement text.'),
-          },
-        );
-      }, 800);
-    },
-    [upsert, proposalId, termsSection?.id, termsSection?.title],
-  );
-
-  // Flush a pending save on unmount so a fast exit never drops the last keystrokes.
-  useEffect(() => () => { if (timer.current) clearTimeout(timer.current); }, []);
+  const agreementAutosave = useBufferedAutosave<
+    string,
+    { body: string }
+  >({
+    delay: 800,
+    save: useCallback(
+      async (_key, next) => {
+        const saved = await upsert.mutateAsync({
+          id: sectionIdentityRef.current.id,
+          proposalId,
+          type: 'terms',
+          title: sectionIdentityRef.current.title,
+          body: next.body,
+        });
+        if (saved?.id) {
+          sectionIdentityRef.current = {
+            id: saved.id,
+            title: saved.title ?? sectionIdentityRef.current.title,
+          };
+        }
+      },
+      [proposalId, upsert],
+    ),
+  });
 
   const onChange = (next: string) => {
     setBody(next);
-    save(next);
+    agreementAutosave.queue(proposalId, { body: next });
   };
 
   return (
@@ -92,6 +103,7 @@ export function TermsAgreementBody({ proposalId }: { proposalId: string }) {
         id={`terms-body-${proposalId}`}
         value={body}
         onChange={(e) => onChange(e.target.value)}
+        onBlur={() => void agreementAutosave.flush(proposalId)}
         rows={7}
         placeholder="The agreement text the client reads and signs — scope of services, ownership, cancellation, whatever this engagement needs. Saved as you write."
       />
@@ -99,12 +111,30 @@ export function TermsAgreementBody({ proposalId }: { proposalId: string }) {
         Free-form prose above the structured change-order terms below. Both are part of the
         proposal the client signs.
       </span>
-      {error && (
+      {(agreementAutosave.state === 'dirty' ||
+        agreementAutosave.state === 'saving') && (
+        <p
+          role="status"
+          className="mt-2 text-[0.7rem] leading-snug text-[var(--text-muted)]"
+        >
+          Saving agreement…
+        </p>
+      )}
+      {agreementAutosave.state === 'saved' && (
+        <p
+          role="status"
+          className="mt-2 text-[0.7rem] leading-snug text-[var(--color-sage)]"
+        >
+          Agreement saved
+        </p>
+      )}
+      {agreementAutosave.state === 'error' && (
         <div
           role="alert"
           className="mt-2 rounded-[3px] border border-[var(--color-terracotta,#c77b6e)] bg-[rgba(199,123,110,0.06)] px-2.5 py-1.5 text-[0.7rem] leading-snug text-[var(--color-terracotta,#c77b6e)]"
         >
-          {error} <span className="opacity-80">Keep typing to retry.</span>
+          {agreementAutosave.error ?? 'Could not save the agreement text.'}{' '}
+          <span className="opacity-80">Blur or keep typing to retry.</span>
         </div>
       )}
     </div>

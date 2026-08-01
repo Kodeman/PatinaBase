@@ -2,6 +2,10 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { createBrowserClient } from '../client';
 import { updateProposalTotal } from '../lib/proposal-total';
 import {
+  invalidateProposalClientQueries,
+  PROPOSAL_CLIENT_MUTATION_KEY,
+} from '../lib/proposal-client-query-invalidation';
+import {
   assessProposalPaymentSchedule,
   parseProposalSendSnapshot,
   proposalPaymentScheduleReviewKey,
@@ -371,6 +375,7 @@ export function useUpdateProposal(options?: { errorSurface?: 'inline' }) {
   const queryClient = useQueryClient();
 
   return useMutation({
+    mutationKey: [PROPOSAL_CLIENT_MUTATION_KEY],
     meta: options?.errorSurface ? { errorSurface: options.errorSurface } : undefined,
     mutationFn: async ({
       proposalId,
@@ -392,9 +397,10 @@ export function useUpdateProposal(options?: { errorSurface?: 'inline' }) {
       if (error) throw error;
       return data;
     },
-    onSuccess: (_, { proposalId }) => {
+    onSuccess: async (_, { proposalId }) => {
       queryClient.invalidateQueries({ queryKey: ['proposals'] });
       queryClient.invalidateQueries({ queryKey: ['proposal', proposalId] });
+      await invalidateProposalClientQueries(queryClient, proposalId);
     },
   });
 }
@@ -436,6 +442,7 @@ export function useAddProposalItem() {
   const queryClient = useQueryClient();
 
   return useMutation({
+    mutationKey: [PROPOSAL_CLIENT_MUTATION_KEY],
     mutationFn: async ({
       proposalId,
       productId,
@@ -537,7 +544,7 @@ export function useAddProposalItem() {
 
       return data;
     },
-    onSuccess: (_, { proposalId }) => {
+    onSuccess: async (_, { proposalId }) => {
       queryClient.invalidateQueries({ queryKey: ['proposals'] });
       queryClient.invalidateQueries({ queryKey: ['proposal', proposalId] });
       queryClient.invalidateQueries({ queryKey: ['proposal-stats'] });
@@ -546,6 +553,7 @@ export function useAddProposalItem() {
       // immediately after add/update/remove (mirrors useConsumeCapture).
       queryClient.invalidateQueries({ queryKey: ['proposal-items-schedule', proposalId] });
       queryClient.invalidateQueries({ queryKey: ['scope-builder-summary', proposalId] });
+      await invalidateProposalClientQueries(queryClient, proposalId);
     },
   });
 }
@@ -557,6 +565,7 @@ export function useUpdateProposalItem() {
   const queryClient = useQueryClient();
 
   return useMutation({
+    mutationKey: [PROPOSAL_CLIENT_MUTATION_KEY],
     mutationFn: async ({
       itemId,
       proposalId,
@@ -640,13 +649,14 @@ export function useUpdateProposalItem() {
 
       return data;
     },
-    onSuccess: (_, { proposalId }) => {
+    onSuccess: async (_, { proposalId }) => {
       queryClient.invalidateQueries({ queryKey: ['proposals'] });
       queryClient.invalidateQueries({ queryKey: ['proposal', proposalId] });
       queryClient.invalidateQueries({ queryKey: ['proposal-stats'] });
       // Keep the FF&E schedule + scope summary in sync after an edit.
       queryClient.invalidateQueries({ queryKey: ['proposal-items-schedule', proposalId] });
       queryClient.invalidateQueries({ queryKey: ['scope-builder-summary', proposalId] });
+      await invalidateProposalClientQueries(queryClient, proposalId);
     },
   });
 }
@@ -658,6 +668,7 @@ export function useRemoveProposalItem() {
   const queryClient = useQueryClient();
 
   return useMutation({
+    mutationKey: [PROPOSAL_CLIENT_MUTATION_KEY],
     mutationFn: async ({
       itemId,
       proposalId,
@@ -678,13 +689,14 @@ export function useRemoveProposalItem() {
       // Update proposal total
       await updateProposalTotal(supabase, proposalId);
     },
-    onSuccess: (_, { proposalId }) => {
+    onSuccess: async (_, { proposalId }) => {
       queryClient.invalidateQueries({ queryKey: ['proposals'] });
       queryClient.invalidateQueries({ queryKey: ['proposal', proposalId] });
       queryClient.invalidateQueries({ queryKey: ['proposal-stats'] });
       // Keep the FF&E schedule + scope summary in sync after a removal.
       queryClient.invalidateQueries({ queryKey: ['proposal-items-schedule', proposalId] });
       queryClient.invalidateQueries({ queryKey: ['scope-builder-summary', proposalId] });
+      await invalidateProposalClientQueries(queryClient, proposalId);
     },
   });
 }
@@ -1036,6 +1048,7 @@ export function useUpsertProposalSection(options?: { errorSurface?: 'inline' }) 
   const queryClient = useQueryClient();
 
   return useMutation({
+    mutationKey: [PROPOSAL_CLIENT_MUTATION_KEY],
     meta: options?.errorSurface ? { errorSurface: options.errorSurface } : undefined,
     mutationFn: async ({
       id,
@@ -1098,8 +1111,9 @@ export function useUpsertProposalSection(options?: { errorSurface?: 'inline' }) 
         return data as ProposalSection;
       }
     },
-    onSuccess: (_, { proposalId }) => {
+    onSuccess: async (_, { proposalId }) => {
       queryClient.invalidateQueries({ queryKey: ['proposal-sections', proposalId] });
+      await invalidateProposalClientQueries(queryClient, proposalId);
     },
   });
 }
@@ -1111,6 +1125,7 @@ export function useDeleteProposalSection() {
   const queryClient = useQueryClient();
 
   return useMutation({
+    mutationKey: [PROPOSAL_CLIENT_MUTATION_KEY],
     mutationFn: async ({ sectionId, proposalId }: { sectionId: string; proposalId: string }) => {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const supabase = getSupabase() as any;
@@ -1122,8 +1137,9 @@ export function useDeleteProposalSection() {
 
       if (error) throw error;
     },
-    onSuccess: (_, { proposalId }) => {
+    onSuccess: async (_, { proposalId }) => {
       queryClient.invalidateQueries({ queryKey: ['proposal-sections', proposalId] });
+      await invalidateProposalClientQueries(queryClient, proposalId);
     },
   });
 }

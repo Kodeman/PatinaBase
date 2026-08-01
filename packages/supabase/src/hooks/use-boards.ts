@@ -1,5 +1,9 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { createBrowserClient } from '../client';
+import {
+  invalidateProposalClientQueries,
+  PROPOSAL_CLIENT_MUTATION_KEY,
+} from '../lib/proposal-client-query-invalidation';
 
 const getSupabase = () => createBrowserClient();
 
@@ -150,6 +154,7 @@ export interface UpsertBoardInput {
 
 export interface AddBoardItemInput {
   boardId: string;
+  proposalId?: string;
   type: BoardItemType;
   x?: number;
   y?: number;
@@ -169,6 +174,7 @@ export interface AddBoardItemInput {
 export interface UpdateBoardItemInput {
   itemId: string;
   boardId: string;
+  proposalId?: string;
   x?: number;
   y?: number;
   width?: number;
@@ -340,6 +346,7 @@ export function useUpsertBoard() {
   const queryClient = useQueryClient();
 
   return useMutation({
+    mutationKey: [PROPOSAL_CLIENT_MUTATION_KEY],
     mutationFn: async (input: UpsertBoardInput): Promise<ProposalBoard> => {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const supabase = getSupabase() as any;
@@ -401,12 +408,21 @@ export function useUpsertBoard() {
       if (error) throw error;
       return data as ProposalBoard;
     },
-    onSuccess: (board) => {
+    onSuccess: async (board) => {
       // Refresh whichever owner list the board belongs to (00272).
       if (board.project_id) {
         queryClient.invalidateQueries({ queryKey: ['project-owned-boards', board.project_id] });
       } else {
         queryClient.invalidateQueries({ queryKey: ['boards', board.proposal_id] });
+        queryClient.invalidateQueries({
+          queryKey: ['boards-with-items', board.proposal_id],
+        });
+        if (board.proposal_id) {
+          await invalidateProposalClientQueries(
+            queryClient,
+            board.proposal_id,
+          );
+        }
       }
       queryClient.invalidateQueries({ queryKey: ['board', board.id] });
     },
@@ -454,6 +470,7 @@ export function useDuplicateBoard() {
   const queryClient = useQueryClient();
 
   return useMutation({
+    mutationKey: [PROPOSAL_CLIENT_MUTATION_KEY],
     mutationFn: async ({
       proposalId,
       boardId,
@@ -512,8 +529,14 @@ export function useDuplicateBoard() {
 
       return newBoard as ProposalBoard;
     },
-    onSuccess: (board) => {
+    onSuccess: async (board) => {
       queryClient.invalidateQueries({ queryKey: ['boards', board.proposal_id] });
+      queryClient.invalidateQueries({
+        queryKey: ['boards-with-items', board.proposal_id],
+      });
+      if (board.proposal_id) {
+        await invalidateProposalClientQueries(queryClient, board.proposal_id);
+      }
     },
   });
 }
@@ -525,22 +548,32 @@ export function useDeleteBoard() {
   const queryClient = useQueryClient();
 
   return useMutation({
+    mutationKey: [PROPOSAL_CLIENT_MUTATION_KEY],
     mutationFn: async ({
       boardId,
       proposalId: _proposalId,
     }: {
       boardId: string;
-      proposalId: string;
+      proposalId?: string;
     }): Promise<void> => {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const supabase = getSupabase() as any;
       const { error } = await supabase.from('proposal_boards').delete().eq('id', boardId);
       if (error) throw error;
     },
-    onSuccess: (_data, variables) => {
+    onSuccess: async (_data, variables) => {
       queryClient.invalidateQueries({ queryKey: ['boards', variables.proposalId] });
       queryClient.invalidateQueries({ queryKey: ['project-owned-boards'] });
       queryClient.invalidateQueries({ queryKey: ['board', variables.boardId] });
+      if (variables.proposalId) {
+        queryClient.invalidateQueries({
+          queryKey: ['boards-with-items', variables.proposalId],
+        });
+        await invalidateProposalClientQueries(
+          queryClient,
+          variables.proposalId,
+        );
+      }
     },
   });
 }
@@ -552,6 +585,7 @@ export function useAddBoardItem() {
   const queryClient = useQueryClient();
 
   return useMutation({
+    mutationKey: [PROPOSAL_CLIENT_MUTATION_KEY],
     mutationFn: async (input: AddBoardItemInput): Promise<ProposalBoardItem> => {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const supabase = getSupabase() as any;
@@ -583,12 +617,21 @@ export function useAddBoardItem() {
       if (error) throw error;
       return data as ProposalBoardItem;
     },
-    onSuccess: (item) => {
+    onSuccess: async (item, variables) => {
       queryClient.invalidateQueries({ queryKey: ['board', item.board_id] });
       // Item counts on the list view — we don't know the owner from the item
       // row, so invalidate both owner-list prefixes.
       queryClient.invalidateQueries({ queryKey: ['boards'] });
       queryClient.invalidateQueries({ queryKey: ['project-owned-boards'] });
+      if (variables.proposalId) {
+        queryClient.invalidateQueries({
+          queryKey: ['boards-with-items', variables.proposalId],
+        });
+        await invalidateProposalClientQueries(
+          queryClient,
+          variables.proposalId,
+        );
+      }
     },
   });
 }
@@ -601,6 +644,7 @@ export function useUpdateBoardItem() {
   const queryClient = useQueryClient();
 
   return useMutation({
+    mutationKey: [PROPOSAL_CLIENT_MUTATION_KEY],
     mutationFn: async (input: UpdateBoardItemInput): Promise<ProposalBoardItem> => {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const supabase = getSupabase() as any;
@@ -627,8 +671,17 @@ export function useUpdateBoardItem() {
       if (error) throw error;
       return data as ProposalBoardItem;
     },
-    onSuccess: (_item, variables) => {
+    onSuccess: async (_item, variables) => {
       queryClient.invalidateQueries({ queryKey: ['board', variables.boardId] });
+      if (variables.proposalId) {
+        queryClient.invalidateQueries({
+          queryKey: ['boards-with-items', variables.proposalId],
+        });
+        await invalidateProposalClientQueries(
+          queryClient,
+          variables.proposalId,
+        );
+      }
     },
   });
 }
@@ -640,22 +693,34 @@ export function useDeleteBoardItem() {
   const queryClient = useQueryClient();
 
   return useMutation({
+    mutationKey: [PROPOSAL_CLIENT_MUTATION_KEY],
     mutationFn: async ({
       itemId,
       boardId: _boardId,
+      proposalId: _proposalId,
     }: {
       itemId: string;
       boardId: string;
+      proposalId?: string;
     }): Promise<void> => {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const supabase = getSupabase() as any;
       const { error } = await supabase.from('proposal_board_items').delete().eq('id', itemId);
       if (error) throw error;
     },
-    onSuccess: (_data, variables) => {
+    onSuccess: async (_data, variables) => {
       queryClient.invalidateQueries({ queryKey: ['board', variables.boardId] });
       queryClient.invalidateQueries({ queryKey: ['boards'] });
       queryClient.invalidateQueries({ queryKey: ['project-owned-boards'] });
+      if (variables.proposalId) {
+        queryClient.invalidateQueries({
+          queryKey: ['boards-with-items', variables.proposalId],
+        });
+        await invalidateProposalClientQueries(
+          queryClient,
+          variables.proposalId,
+        );
+      }
     },
   });
 }
@@ -672,11 +737,14 @@ export function useSaveBoardLayout() {
   const queryClient = useQueryClient();
 
   return useMutation({
+    mutationKey: [PROPOSAL_CLIENT_MUTATION_KEY],
     mutationFn: async ({
       boardId: _boardId,
+      proposalId: _proposalId,
       positions,
     }: {
       boardId: string;
+      proposalId?: string;
       positions: BoardLayoutPosition[];
     }): Promise<void> => {
       if (positions.length === 0) return;
@@ -700,8 +768,17 @@ export function useSaveBoardLayout() {
 
       if (error) throw error;
     },
-    onSuccess: (_data, variables) => {
+    onSuccess: async (_data, variables) => {
       queryClient.invalidateQueries({ queryKey: ['board', variables.boardId] });
+      if (variables.proposalId) {
+        queryClient.invalidateQueries({
+          queryKey: ['boards-with-items', variables.proposalId],
+        });
+        await invalidateProposalClientQueries(
+          queryClient,
+          variables.proposalId,
+        );
+      }
     },
   });
 }

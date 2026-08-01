@@ -1,5 +1,9 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { createBrowserClient } from '../client';
+import {
+  invalidateProposalClientQueries,
+  PROPOSAL_CLIENT_MUTATION_KEY,
+} from '../lib/proposal-client-query-invalidation';
 
 const getSupabase = () => createBrowserClient();
 
@@ -136,6 +140,7 @@ export function useConsumeCapture() {
   const queryClient = useQueryClient();
 
   return useMutation({
+    mutationKey: [PROPOSAL_CLIENT_MUTATION_KEY],
     mutationFn: async (input: ConsumeCaptureInput): Promise<ConsumeCaptureResult> => {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const supabase = getSupabase() as any;
@@ -152,11 +157,12 @@ export function useConsumeCapture() {
       // The RPC returns a UUID directly.
       return { proposalItemId: data as string };
     },
-    onSuccess: (_data, variables) => {
+    onSuccess: async (_data, variables) => {
       queryClient.invalidateQueries({ queryKey: ['proposal-captures'] });
       queryClient.invalidateQueries({ queryKey: ['proposal-items-schedule', variables.proposalId] });
       queryClient.invalidateQueries({ queryKey: ['proposal', variables.proposalId] });
       queryClient.invalidateQueries({ queryKey: ['scope-builder-summary', variables.proposalId] });
+      await invalidateProposalClientQueries(queryClient, variables.proposalId);
     },
   });
 }

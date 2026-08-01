@@ -106,10 +106,14 @@ export function PaletteBuilder({ proposalId }: PaletteBuilderProps) {
           </div>
 
           {tab === 'image' && <ImageTab proposalId={proposalId} paletteId={active.id} sourceImageUrl={active.source_image_url} />}
-          {tab === 'brand' && <BrandTab paletteId={active.id} />}
-          {tab === 'manual' && <ManualTab paletteId={active.id} />}
+          {tab === 'brand' && <BrandTab proposalId={proposalId} paletteId={active.id} />}
+          {tab === 'manual' && <ManualTab proposalId={proposalId} paletteId={active.id} />}
 
-          <SwatchList paletteId={active.id} swatches={active.swatches ?? []} />
+          <SwatchList
+            proposalId={proposalId}
+            paletteId={active.id}
+            swatches={active.swatches ?? []}
+          />
         </div>
       ) : (
         <p className="text-sm text-[var(--text-muted)]">
@@ -245,13 +249,14 @@ function ImageTab({ proposalId, paletteId, sourceImageUrl }: { proposalId: strin
     (swatches: ExtractedSwatch[]) => {
       swatches.forEach((s) => {
         upsertSwatch.mutate({
+          proposalId,
           paletteId,
           hex: s.hex,
           sourcePixel: s.sourcePixel,
         });
       });
     },
-    [paletteId, upsertSwatch],
+    [paletteId, proposalId, upsertSwatch],
   );
 
   return (
@@ -285,7 +290,13 @@ function ImageTab({ proposalId, paletteId, sourceImageUrl }: { proposalId: strin
   );
 }
 
-function BrandTab({ paletteId }: { paletteId: string }) {
+function BrandTab({
+  proposalId,
+  paletteId,
+}: {
+  proposalId: string;
+  paletteId: string;
+}) {
   const [query, setQuery] = useState('');
   const [brand, setBrand] = useState<PaintColorBrand | undefined>(undefined);
   const upsertSwatch = useUpsertSwatch();
@@ -316,6 +327,7 @@ function BrandTab({ paletteId }: { paletteId: string }) {
     (color: PaintColorOption | null) => {
       if (!color) return;
       upsertSwatch.mutate({
+        proposalId,
         paletteId,
         hex: color.hex,
         name: color.name,
@@ -324,7 +336,7 @@ function BrandTab({ paletteId }: { paletteId: string }) {
         brandCode: color.code,
       });
     },
-    [paletteId, upsertSwatch],
+    [paletteId, proposalId, upsertSwatch],
   );
 
   return (
@@ -345,13 +357,20 @@ function BrandTab({ paletteId }: { paletteId: string }) {
   );
 }
 
-function ManualTab({ paletteId }: { paletteId: string }) {
+function ManualTab({
+  proposalId,
+  paletteId,
+}: {
+  proposalId: string;
+  paletteId: string;
+}) {
   const [hex, setHex] = useState('#A8B5A6');
   const [role, setRole] = useState<PaletteSwatchRole | ''>('');
   const upsertSwatch = useUpsertSwatch();
 
   const handleAdd = () => {
     upsertSwatch.mutate({
+      proposalId,
       paletteId,
       hex,
       role: role === '' ? null : role,
@@ -385,9 +404,11 @@ function ManualTab({ paletteId }: { paletteId: string }) {
 }
 
 function SwatchList({
+  proposalId,
   paletteId,
   swatches,
 }: {
+  proposalId: string;
   paletteId: string;
   swatches: NonNullable<ReturnType<typeof usePalette>['data']>['swatches'];
 }) {
@@ -405,18 +426,29 @@ function SwatchList({
   return (
     <div className="mt-4 space-y-2">
       {swatches.map((swatch) => (
-        <PaletteSwatchEditor key={swatch.id} swatch={swatch} />
+        <PaletteSwatchEditor
+          key={swatch.id}
+          proposalId={proposalId}
+          swatch={swatch}
+        />
       ))}
-      <ReorderHint paletteId={paletteId} swatches={swatches} reorder={reorder} />
+      <ReorderHint
+        proposalId={proposalId}
+        paletteId={paletteId}
+        swatches={swatches}
+        reorder={reorder}
+      />
     </div>
   );
 }
 
 function ReorderHint({
+  proposalId,
   paletteId,
   swatches,
   reorder,
 }: {
+  proposalId: string;
   paletteId: string;
   swatches: NonNullable<ReturnType<typeof usePalette>['data']>['swatches'];
   reorder: ReturnType<typeof useReorderSwatches>;
@@ -439,7 +471,7 @@ function ReorderHint({
             return lum(b.hex) - lum(a.hex);
           })
           .map((s) => s.id);
-        reorder.mutate({ paletteId, orderedIds: ordered });
+        reorder.mutate({ proposalId, paletteId, orderedIds: ordered });
       }}
     >
       Sort by luminance
