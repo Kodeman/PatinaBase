@@ -101,6 +101,27 @@ describe('PaymentMilestonesBuilder persistence', () => {
     });
   });
 
+  it('flushes pending payment edits during immediate unmount', async () => {
+    const { container, unmount } = render(
+      <PaymentMilestonesBuilder
+        proposalId="proposal-1"
+        totalCents={1_320_000}
+      />,
+    );
+
+    const label = container.querySelector('input[type="text"]');
+    if (!label) throw new Error('milestone label input was not rendered');
+    fireEvent.change(label, { target: { value: 'Final deposit wording' } });
+    unmount();
+
+    await act(async () => Promise.resolve());
+    expect(mutateAsync).toHaveBeenCalledWith({
+      milestoneId: 'milestone-1',
+      proposalId: 'proposal-1',
+      updates: { label: 'Final deposit wording' },
+    });
+  });
+
   it('announces deterministic saving and saved feedback', async () => {
     let resolveSave: (value: unknown) => void = () => {};
     mutateAsync.mockReturnValueOnce(

@@ -23,7 +23,6 @@ import {
   type PaletteSwatchRole,
 } from '@patina/supabase';
 import { PaletteSwatchEditor } from './palette-swatch-editor';
-import { useDraftingFacetInvalidation } from '@/hooks/use-drafting-facet-invalidation';
 
 type Tab = 'image' | 'brand' | 'manual';
 
@@ -45,7 +44,6 @@ interface PaletteBuilderProps {
 }
 
 export function PaletteBuilder({ proposalId }: PaletteBuilderProps) {
-  const refreshDraftingSummary = useDraftingFacetInvalidation(proposalId);
   const { data: palettes = [] } = usePalettes(proposalId);
   const upsertPalette = useUpsertPalette();
   const updatePalette = useUpsertPalette();
@@ -64,8 +62,7 @@ export function PaletteBuilder({ proposalId }: PaletteBuilderProps) {
       isPrimary: palettes.length === 0,
     });
     if (result?.id) setActivePaletteId(result.id);
-    await refreshDraftingSummary();
-  }, [upsertPalette, proposalId, palettes.length, refreshDraftingSummary]);
+  }, [upsertPalette, proposalId, palettes.length]);
 
   const handleSetPrimary = useCallback(
     (palette: ProposalPalette) => {
@@ -88,12 +85,11 @@ export function PaletteBuilder({ proposalId }: PaletteBuilderProps) {
         {
           onSuccess: () => {
             if (activePaletteId === paletteId) setActivePaletteId(null);
-            void refreshDraftingSummary();
           },
         },
       );
     },
-    [deletePalette, proposalId, activePaletteId, refreshDraftingSummary],
+    [deletePalette, proposalId, activePaletteId],
   );
 
   return (
@@ -117,20 +113,9 @@ export function PaletteBuilder({ proposalId }: PaletteBuilderProps) {
             <TabStrip active={tab} onChange={setTab} />
           </div>
 
-          {tab === 'image' && (
-            <ImageTab
-              proposalId={proposalId}
-              paletteId={active.id}
-              sourceImageUrl={active.source_image_url}
-              onSaved={refreshDraftingSummary}
-            />
-          )}
-          {tab === 'brand' && (
-            <BrandTab paletteId={active.id} onSaved={refreshDraftingSummary} />
-          )}
-          {tab === 'manual' && (
-            <ManualTab paletteId={active.id} onSaved={refreshDraftingSummary} />
-          )}
+          {tab === 'image' && <ImageTab proposalId={proposalId} paletteId={active.id} sourceImageUrl={active.source_image_url} />}
+          {tab === 'brand' && <BrandTab proposalId={proposalId} paletteId={active.id} />}
+          {tab === 'manual' && <ManualTab proposalId={proposalId} paletteId={active.id} />}
 
           <SwatchList
             proposalId={proposalId}
@@ -256,12 +241,10 @@ function ImageTab({
   proposalId,
   paletteId,
   sourceImageUrl,
-  onSaved,
 }: {
   proposalId: string;
   paletteId: string;
   sourceImageUrl: string | null;
-  onSaved: () => Promise<unknown>;
 }) {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [uploading, setUploading] = useState(false);
@@ -289,19 +272,17 @@ function ImageTab({
   );
 
   const handleExtracted = useCallback(
-    async (swatches: ExtractedSwatch[]) => {
-      await Promise.all(
-        swatches.map((swatch) =>
-          upsertSwatch.mutateAsync({
-            paletteId,
-            hex: swatch.hex,
-            sourcePixel: swatch.sourcePixel,
-          }),
-        ),
-      );
-      await onSaved();
+    (swatches: ExtractedSwatch[]) => {
+      swatches.forEach((s) => {
+        upsertSwatch.mutate({
+          proposalId,
+          paletteId,
+          hex: s.hex,
+          sourcePixel: s.sourcePixel,
+        });
+      });
     },
-    [paletteId, upsertSwatch, onSaved],
+    [paletteId, proposalId, upsertSwatch],
   );
 
   return (
@@ -336,11 +317,11 @@ function ImageTab({
 }
 
 function BrandTab({
+  proposalId,
   paletteId,
-  onSaved,
 }: {
+  proposalId: string;
   paletteId: string;
-  onSaved: () => Promise<unknown>;
 }) {
   const [query, setQuery] = useState('');
   const [brand, setBrand] = useState<PaintColorBrand | undefined>(undefined);
@@ -371,19 +352,17 @@ function BrandTab({
   const handleChange = useCallback(
     (color: PaintColorOption | null) => {
       if (!color) return;
-      upsertSwatch.mutate(
-        {
-          paletteId,
-          hex: color.hex,
-          name: color.name,
-          paintColorId: color.id,
-          brand: color.brand,
-          brandCode: color.code,
-        },
-        { onSuccess: () => void onSaved() },
-      );
+      upsertSwatch.mutate({
+        proposalId,
+        paletteId,
+        hex: color.hex,
+        name: color.name,
+        paintColorId: color.id,
+        brand: color.brand,
+        brandCode: color.code,
+      });
     },
-    [paletteId, upsertSwatch, onSaved],
+    [paletteId, proposalId, upsertSwatch],
   );
 
   return (
@@ -405,25 +384,23 @@ function BrandTab({
 }
 
 function ManualTab({
+  proposalId,
   paletteId,
-  onSaved,
 }: {
+  proposalId: string;
   paletteId: string;
-  onSaved: () => Promise<unknown>;
 }) {
   const [hex, setHex] = useState('#A8B5A6');
   const [role, setRole] = useState<PaletteSwatchRole | ''>('');
   const upsertSwatch = useUpsertSwatch();
 
   const handleAdd = () => {
-    upsertSwatch.mutate(
-      {
-        paletteId,
-        hex,
-        role: role === '' ? null : role,
-      },
-      { onSuccess: () => void onSaved() },
-    );
+    upsertSwatch.mutate({
+      proposalId,
+      paletteId,
+      hex,
+      role: role === '' ? null : role,
+    });
   };
 
   return (
@@ -486,16 +463,23 @@ function SwatchList({
           swatch={swatch}
         />
       ))}
-      <ReorderHint paletteId={paletteId} swatches={swatches} reorder={reorder} />
+      <ReorderHint
+        proposalId={proposalId}
+        paletteId={paletteId}
+        swatches={swatches}
+        reorder={reorder}
+      />
     </div>
   );
 }
 
 function ReorderHint({
+  proposalId,
   paletteId,
   swatches,
   reorder,
 }: {
+  proposalId: string;
   paletteId: string;
   swatches: NonNullable<ReturnType<typeof usePalette>['data']>['swatches'];
   reorder: ReturnType<typeof useReorderSwatches>;
@@ -518,7 +502,7 @@ function ReorderHint({
             return lum(b.hex) - lum(a.hex);
           })
           .map((s) => s.id);
-        reorder.mutate({ paletteId, orderedIds: ordered });
+        reorder.mutate({ proposalId, paletteId, orderedIds: ordered });
       }}
     >
       Sort by luminance

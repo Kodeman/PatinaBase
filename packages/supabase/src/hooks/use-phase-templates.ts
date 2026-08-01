@@ -1,5 +1,9 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { createBrowserClient } from '../client';
+import {
+  invalidateProposalClientQueries,
+  PROPOSAL_CLIENT_MUTATION_KEY,
+} from '../lib/proposal-client-query-invalidation';
 
 const getSupabase = () => createBrowserClient();
 
@@ -79,6 +83,7 @@ export function useApplyPhaseTemplate() {
     Error,
     { proposalId: string; templateSlug: string }
   >({
+    mutationKey: [PROPOSAL_CLIENT_MUTATION_KEY],
     mutationFn: async ({ proposalId, templateSlug }) => {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const supabase = getSupabase() as any;
@@ -103,12 +108,13 @@ export function useApplyPhaseTemplate() {
       if (data == null) return [];
       return [String(data)];
     },
-    onSuccess: (_phaseIds, { proposalId }) => {
+    onSuccess: async (_phaseIds, { proposalId }) => {
       // Refresh phases + the scope summary + per-phase children.
       queryClient.invalidateQueries({ queryKey: ['proposal-phases', proposalId] });
       queryClient.invalidateQueries({ queryKey: ['scope-builder-summary', proposalId] });
       queryClient.invalidateQueries({ queryKey: ['phase-deliverables'] });
       queryClient.invalidateQueries({ queryKey: ['phase-gates'] });
+      await invalidateProposalClientQueries(queryClient, proposalId);
     },
   });
 }

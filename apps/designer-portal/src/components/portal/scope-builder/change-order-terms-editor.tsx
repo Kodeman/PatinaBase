@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { Button, Textarea } from '@/components/ui/controls';
+import { useBufferedAutosave } from '@/hooks/use-buffered-autosave';
 import {
   useProposalChangeOrderTerms,
   useUpsertChangeOrderTerms,
@@ -30,20 +31,23 @@ const DEFAULT_TERMS: LocalTerms = {
 
 export function ChangeOrderTermsEditor({ proposalId }: ChangeOrderTermsEditorProps) {
   const { data: terms, isLoading } = useProposalChangeOrderTerms(proposalId);
-  const upsert = useUpsertChangeOrderTerms();
+  const upsert = useUpsertChangeOrderTerms({ errorSurface: 'inline' });
 
   const [local, setLocal] = useState<LocalTerms>(DEFAULT_TERMS);
+  const localRef = useRef<LocalTerms>(DEFAULT_TERMS);
   const [initialized, setInitialized] = useState(false);
 
   // Sync server data once loaded
   useEffect(() => {
     if (terms && !initialized) {
-      setLocal({
+      const next = {
         processDescription: terms.process_description ?? DEFAULT_TERMS.processDescription,
         hourlyRateCents: terms.hourly_rate_cents ?? DEFAULT_TERMS.hourlyRateCents,
         minimumFeeCents: terms.minimum_fee_cents ?? DEFAULT_TERMS.minimumFeeCents,
         approvalRequired: terms.approval_required ?? DEFAULT_TERMS.approvalRequired,
-      });
+      };
+      localRef.current = next;
+      setLocal(next);
       setInitialized(true);
     } else if (!terms && !isLoading && !initialized) {
       // No existing terms yet -- keep defaults
@@ -51,28 +55,30 @@ export function ChangeOrderTermsEditor({ proposalId }: ChangeOrderTermsEditorPro
     }
   }, [terms, isLoading, initialized]);
 
-  // Debounced auto-save
-  const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const save = useCallback(
-    (next: LocalTerms) => {
-      if (timer.current) clearTimeout(timer.current);
-      timer.current = setTimeout(() => {
-        upsert.mutate({
+  const termsAutosave = useBufferedAutosave<string, LocalTerms>({
+    delay: 800,
+    save: useCallback(
+      async (_key, next) => {
+        await upsert.mutateAsync({
           proposalId,
           processDescription: next.processDescription,
           hourlyRateCents: next.hourlyRateCents,
           minimumFeeCents: next.minimumFeeCents,
           approvalRequired: next.approvalRequired,
         });
-      }, 800);
-    },
-    [upsert, proposalId]
-  );
+      },
+      [proposalId, upsert],
+    ),
+  });
 
-  function update(patch: Partial<LocalTerms>) {
-    const next = { ...local, ...patch };
+  function update(patch: Partial<LocalTerms>, flush = false) {
+    // Ref-backed merge keeps rapid events lossless even before React commits
+    // the prior setState render.
+    const next = { ...localRef.current, ...patch };
+    localRef.current = next;
     setLocal(next);
-    save(next);
+    termsAutosave.queue(proposalId, next);
+    if (flush) void termsAutosave.flush(proposalId);
   }
 
   if (isLoading) {
@@ -91,8 +97,13 @@ export function ChangeOrderTermsEditor({ proposalId }: ChangeOrderTermsEditorPro
         {!terms && initialized && (
           <Button
             variant="primary"
-            onClick={() => save(local)}
-            disabled={upsert.isPending}
+            onClick={() => {
+              termsAutosave.queue(proposalId, localRef.current);
+              void termsAutosave.flush(proposalId);
+            }}
+            disabled={
+              upsert.isPending || termsAutosave.state === 'saving'
+            }
           >
             Save Terms
           </Button>
@@ -107,8 +118,10 @@ export function ChangeOrderTermsEditor({ proposalId }: ChangeOrderTermsEditorPro
           Process Description
         </label>
         <Textarea
+          id={`change-order-process-${proposalId}`}
           value={local.processDescription}
           onChange={(e) => update({ processDescription: e.target.value })}
+          onBlur={() => void termsAutosave.flush(proposalId)}
           rows={5}
           placeholder="Describe the process for handling work outside the agreed scope..."
         />
@@ -129,6 +142,7 @@ export function ChangeOrderTermsEditor({ proposalId }: ChangeOrderTermsEditorPro
           <div className="flex items-center gap-1 rounded-[3px] border border-[var(--border-default)] px-3 py-2 focus-within:border-[var(--accent-primary)]">
             <span className="font-mono text-[0.82rem] text-[var(--text-muted)]">$</span>
             <input
+              aria-label="Hourly rate (out-of-scope)"
               type="number"
               min={0}
               step={25}
@@ -136,6 +150,7 @@ export function ChangeOrderTermsEditor({ proposalId }: ChangeOrderTermsEditorPro
               onChange={(e) =>
                 update({ hourlyRateCents: Math.round(parseFloat(e.target.value || '0') * 100) })
               }
+              onBlur={() => void termsAutosave.flush(proposalId)}
               className="w-full bg-transparent font-mono text-[0.88rem] text-[var(--text-primary)] outline-none"
             />
             <span className="font-body text-[0.72rem] text-[var(--text-muted)]">/hr</span>
@@ -152,6 +167,7 @@ export function ChangeOrderTermsEditor({ proposalId }: ChangeOrderTermsEditorPro
           <div className="flex items-center gap-1 rounded-[3px] border border-[var(--border-default)] px-3 py-2 focus-within:border-[var(--accent-primary)]">
             <span className="font-mono text-[0.82rem] text-[var(--text-muted)]">$</span>
             <input
+              aria-label="Minimum fee per change order"
               type="number"
               min={0}
               step={50}
@@ -159,6 +175,7 @@ export function ChangeOrderTermsEditor({ proposalId }: ChangeOrderTermsEditorPro
               onChange={(e) =>
                 update({ minimumFeeCents: Math.round(parseFloat(e.target.value || '0') * 100) })
               }
+              onBlur={() => void termsAutosave.flush(proposalId)}
               className="w-full bg-transparent font-mono text-[0.88rem] text-[var(--text-primary)] outline-none"
             />
           </div>
@@ -172,7 +189,9 @@ export function ChangeOrderTermsEditor({ proposalId }: ChangeOrderTermsEditorPro
             type="button"
             role="checkbox"
             aria-checked={local.approvalRequired}
-            onClick={() => update({ approvalRequired: !local.approvalRequired })}
+            onClick={() =>
+              update({ approvalRequired: !localRef.current.approvalRequired }, true)
+            }
             className={`mt-0.5 flex h-[18px] w-[18px] shrink-0 items-center justify-center rounded-[3px] border-[1.5px] transition-colors ${
               local.approvalRequired
                 ? 'border-[var(--color-sage)] bg-[rgba(122,155,118,0.1)] text-[var(--color-sage)]'
@@ -193,10 +212,34 @@ export function ChangeOrderTermsEditor({ proposalId }: ChangeOrderTermsEditorPro
         </label>
       </div>
 
-      {/* Save indicator */}
-      {upsert.isPending && (
-        <div className="mt-4 font-body text-[0.72rem] text-[var(--text-muted)]">Saving...</div>
-      )}
+      <div className="mt-4 min-h-4" aria-live="polite">
+        {(termsAutosave.state === 'dirty' ||
+          termsAutosave.state === 'saving') && (
+          <p
+            role="status"
+            className="font-body text-[0.72rem] text-[var(--text-muted)]"
+          >
+            Saving change-order terms…
+          </p>
+        )}
+        {termsAutosave.state === 'saved' && (
+          <p
+            role="status"
+            className="font-body text-[0.72rem] text-[var(--color-sage)]"
+          >
+            Change-order terms saved
+          </p>
+        )}
+        {termsAutosave.state === 'error' && (
+          <p
+            role="alert"
+            className="font-body text-[0.72rem] text-[var(--color-terracotta)]"
+          >
+            {termsAutosave.error ?? 'Could not save the change-order terms.'}{' '}
+            Your client copy was not updated.
+          </p>
+        )}
+      </div>
     </div>
   );
 }

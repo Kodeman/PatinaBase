@@ -1,7 +1,8 @@
 'use client';
 
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { Button, IconButton } from '@/components/ui/controls';
+import { useBufferedAutosave } from '@/hooks/use-buffered-autosave';
 import {
   usePhaseDeliverables,
   useAddDeliverable,
@@ -23,32 +24,11 @@ interface DeliverablesEditorProps {
   phaseId: string;
 }
 
-function useDebouncedSave(
-  save: (deliverableId: string, updates: Partial<PhaseDeliverable>) => void,
-  delay = 600
-) {
-  const timers = useRef<Map<string, ReturnType<typeof setTimeout>>>(new Map());
-
-  return useCallback(
-    (deliverableId: string, updates: Partial<PhaseDeliverable>) => {
-      const existing = timers.current.get(deliverableId);
-      if (existing) clearTimeout(existing);
-      timers.current.set(
-        deliverableId,
-        setTimeout(() => {
-          save(deliverableId, updates);
-          timers.current.delete(deliverableId);
-        }, delay)
-      );
-    },
-    [save, delay]
-  );
-}
-
 interface DeliverableRowProps {
   deliverable: PhaseDeliverable;
   phaseId: string;
   onLabelChange: (label: string) => void;
+  onLabelBlur: () => void;
   onRequiredChange: (isRequired: boolean) => void;
   onToggleCompleted: () => void;
   onDelete: () => void;
@@ -58,6 +38,7 @@ function DeliverableRow({
   deliverable,
   phaseId: _phaseId,
   onLabelChange,
+  onLabelBlur,
   onRequiredChange,
   onToggleCompleted,
   onDelete,
@@ -128,6 +109,7 @@ function DeliverableRow({
           setLabelLocal(e.target.value);
           onLabelChange(e.target.value);
         }}
+        onBlur={onLabelBlur}
         className="flex-1 border-b border-transparent bg-transparent font-body text-[0.88rem] outline-none focus:border-[var(--accent-primary)]"
         style={{
           color: isCompleted ? 'var(--text-muted)' : 'var(--text-primary)',
@@ -171,14 +153,22 @@ export function DeliverablesEditor({ phaseId }: DeliverablesEditorProps) {
   const reorderDeliverables = useReorderDeliverables();
   const deleteDeliverable = useDeleteDeliverable();
 
-  const debouncedUpdate = useDebouncedSave(
-    useCallback(
-      (deliverableId: string, updates: Partial<PhaseDeliverable>) => {
-        updateDeliverable.mutate({ deliverableId, phaseId, updates });
+  const deliverableAutosave = useBufferedAutosave<
+    string,
+    Partial<PhaseDeliverable>
+  >({
+    delay: 600,
+    save: useCallback(
+      async (deliverableId, updates) => {
+        await updateDeliverable.mutateAsync({
+          deliverableId,
+          phaseId,
+          updates,
+        });
       },
-      [updateDeliverable, phaseId]
-    )
-  );
+      [phaseId, updateDeliverable],
+    ),
+  });
 
   const handleDragEnd = useCallback(
     (event: DragEndEvent) => {
@@ -213,6 +203,25 @@ export function DeliverablesEditor({ phaseId }: DeliverablesEditorProps) {
         </span>
       </div>
 
+      <div className="min-h-4" aria-live="polite">
+        {(deliverableAutosave.state === 'dirty' ||
+          deliverableAutosave.state === 'saving') && (
+          <p role="status" className="type-meta-small text-[var(--text-muted)]">
+            Saving deliverables…
+          </p>
+        )}
+        {deliverableAutosave.state === 'saved' && (
+          <p role="status" className="type-meta-small text-[var(--color-sage)]">
+            Deliverables saved
+          </p>
+        )}
+        {deliverableAutosave.state === 'error' && (
+          <p role="alert" className="type-meta-small text-[var(--color-terracotta)]">
+            {deliverableAutosave.error ?? 'Could not save the deliverable.'}
+          </p>
+        )}
+      </div>
+
       {deliverables.length > 0 && (
         <DragDropContext onDragEnd={handleDragEnd}>
           <SortableList items={deliverables.map((d: PhaseDeliverable) => d.id)}>
@@ -221,7 +230,10 @@ export function DeliverablesEditor({ phaseId }: DeliverablesEditorProps) {
                 key={d.id}
                 deliverable={d}
                 phaseId={phaseId}
-                onLabelChange={(label) => debouncedUpdate(d.id, { label })}
+                onLabelChange={(label) =>
+                  deliverableAutosave.queue(d.id, { label })
+                }
+                onLabelBlur={() => void deliverableAutosave.flush(d.id)}
                 onRequiredChange={(isRequired) =>
                   updateDeliverable.mutate({
                     deliverableId: d.id,

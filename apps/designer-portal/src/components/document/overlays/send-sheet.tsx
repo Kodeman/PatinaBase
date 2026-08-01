@@ -17,6 +17,7 @@
 
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useIsMutating, useQueryClient } from '@tanstack/react-query';
+import { PROPOSAL_CLIENT_MUTATION_KEY } from '@patina/supabase';
 import {
   useProposal,
   useSendProposal,
@@ -139,15 +140,22 @@ export function SendSheet({
   const effectiveGaps = refreshedGaps ?? draftingState.gaps;
   const effectiveClientData = refreshedClientData ?? clientPayload.data;
 
-  const paymentMutationsPending = useIsMutating({
+  const proposalWritesPending = useIsMutating({
     predicate: (mutation) => {
-      if (mutation.options.mutationKey?.[0] !== 'proposal-payment-schedule') {
+      const mutationDomain = mutation.options.mutationKey?.[0];
+      if (
+        mutationDomain !== 'proposal-payment-schedule' &&
+        mutationDomain !== PROPOSAL_CLIENT_MUTATION_KEY
+      ) {
         return false;
       }
       const variables = mutation.state.variables as
-        | { proposalId?: string }
+        | { proposalId?: string; targetProposalId?: string }
         | undefined;
-      return variables?.proposalId === proposalId;
+      return (
+        variables?.proposalId === proposalId ||
+        variables?.targetProposalId === proposalId
+      );
     },
   });
 
@@ -178,7 +186,7 @@ export function SendSheet({
     clientPayload.isFetching ||
     draftingState.isLoading ||
     draftingVerification.isFetching ||
-    paymentMutationsPending > 0 ||
+    proposalWritesPending > 0 ||
     isPreparingSend;
   const hasBlockers = (readiness?.blockers.length ?? 0) > 0;
   const incompleteIsAcknowledged =

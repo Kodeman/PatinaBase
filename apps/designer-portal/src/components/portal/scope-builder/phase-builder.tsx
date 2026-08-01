@@ -1,7 +1,8 @@
 'use client';
 
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Button } from '@/components/ui/controls';
+import { useBufferedAutosave } from '@/hooks/use-buffered-autosave';
 import { proposalEvents } from '@/lib/analytics';
 import { scheduleEvents } from '@/lib/analytics/schedule-events';
 import {
@@ -40,7 +41,6 @@ import { ScheduleEntryField } from '@/components/document/schedule/schedule-entr
 import { AnchorChip } from '@/components/document/schedule/milestone-row';
 import type { GhostAddInput } from '@/components/document/schedule/ghost-add-line';
 import type { PastProjectOption } from '@/components/document/schedule/past-project-picker';
-import { useDraftingFacetInvalidation } from '@/hooks/use-drafting-facet-invalidation';
 
 const PHASE_KEY_OPTIONS = [
   { value: 'consultation', label: 'Consultation' },
@@ -176,30 +176,7 @@ function fmtEffectiveDuration(days: number | null | undefined, weeks: number | n
   return effectiveDays % 7 === 0 ? `${effectiveDays / 7}w` : `${effectiveDays}d`;
 }
 
-function useDebouncedSave(
-  save: (phaseId: string, proposalId: string, updates: Record<string, unknown>) => void,
-  delay = 600
-) {
-  const timers = useRef<Map<string, ReturnType<typeof setTimeout>>>(new Map());
-
-  return useCallback(
-    (phaseId: string, proposalId: string, updates: Record<string, unknown>) => {
-      const existing = timers.current.get(phaseId);
-      if (existing) clearTimeout(existing);
-      timers.current.set(
-        phaseId,
-        setTimeout(() => {
-          save(phaseId, proposalId, updates);
-          timers.current.delete(phaseId);
-        }, delay)
-      );
-    },
-    [save, delay]
-  );
-}
-
 export function PhaseBuilder({ proposalId }: PhaseBuilderProps) {
-  const refreshDraftingSummary = useDraftingFacetInvalidation(proposalId);
   const { data: phases = [], isLoading } = useProposalPhases(proposalId) as {
     data: ProposalPhaseRow[];
     isLoading: boolean;
@@ -267,85 +244,80 @@ export function PhaseBuilder({ proposalId }: PhaseBuilderProps) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [phases]);
 
-  const debouncedUpdate = useDebouncedSave(
-    useCallback(
-      (phaseId: string, propId: string, updates: Record<string, unknown>) => {
-        updatePhase.mutate(
-          { phaseId, proposalId: propId, updates },
-          {
-            onSuccess: () => {
-              proposalEvents.scopeUpdated({ proposalId: propId, field: 'phase', action: 'update' });
-            },
-          }
-        );
+  const phaseAutosave = useBufferedAutosave<
+    string,
+    Record<string, unknown>
+  >({
+    delay: 600,
+    save: useCallback(
+      async (phaseId, updates) => {
+        await updatePhase.mutateAsync({ phaseId, proposalId, updates });
+        proposalEvents.scopeUpdated({
+          proposalId,
+          field: 'phase',
+          action: 'update',
+        });
+        if (Object.prototype.hasOwnProperty.call(updates, 'anchor_date')) {
+          scheduleEvents.scheduleAnchorSet({
+            surface: 'proposal',
+            proposal_id: proposalId,
+            target: 'phase',
+            set: updates.anchor_date !== null,
+          });
+        }
       },
-      [updatePhase]
-    )
-  );
+      [proposalId, updatePhase],
+    ),
+  });
 
   function setField(phaseId: string, field: string, value: unknown) {
     setEdits((prev) => ({
       ...prev,
       [phaseId]: { ...prev[phaseId], [field]: value },
     }));
-    debouncedUpdate(phaseId, proposalId, { [field]: value });
+    phaseAutosave.queue(phaseId, { [field]: value });
   }
 
   // ═══════════════════════════════════════════════════════════════════════
-  // Compose (Slice 03) — the duration/anchor grammar + birth. Direct commits
-  // (no debounce — a ScheduleEntryField fires once on Enter/blur, unlike the
-  // continuous-typing number input it replaces), each firing its own
-  // telemetry on SUCCESS only (R83 — a failed write is never counted).
+  // Compose (Slice 03) — the duration/anchor grammar + birth. A
+  // ScheduleEntryField fires once on Enter/blur, so flush immediately, but
+  // first join the same row buffer. This preserves a name/fee edit made just
+  // before the duration commit and sends one complete per-phase patch.
   // ═══════════════════════════════════════════════════════════════════════
 
   function handleSetPhaseDuration(phaseId: string, days: number) {
     const weeksMirror = Math.round(days / 7); // precedence: days = truth, weeks = kept-in-sync mirror
-    updatePhase.mutate(
-      { phaseId, proposalId, updates: { duration_days: days, duration_weeks: weeksMirror } },
-      {
-        onSuccess: () => {
-          setEdits((prev) => ({
-            ...prev,
-            [phaseId]: { ...prev[phaseId], duration_days: days, duration_weeks: weeksMirror },
-          }));
-          proposalEvents.scopeUpdated({ proposalId, field: 'phase', action: 'update' });
-        },
+    setEdits((prev) => ({
+      ...prev,
+      [phaseId]: {
+        ...prev[phaseId],
+        duration_days: days,
+        duration_weeks: weeksMirror,
       },
-    );
+    }));
+    phaseAutosave.queue(phaseId, {
+      duration_days: days,
+      duration_weeks: weeksMirror,
+    });
+    void phaseAutosave.flush(phaseId);
   }
 
   function handleSetPhaseAnchor(phaseId: string, date: string) {
-    updatePhase.mutate(
-      { phaseId, proposalId, updates: { anchor_date: date } },
-      {
-        onSuccess: () => {
-          setEdits((prev) => ({ ...prev, [phaseId]: { ...prev[phaseId], anchor_date: date } }));
-          scheduleEvents.scheduleAnchorSet({
-            surface: 'proposal',
-            proposal_id: proposalId,
-            target: 'phase',
-            set: true,
-          });
-        },
-      },
-    );
+    setEdits((prev) => ({
+      ...prev,
+      [phaseId]: { ...prev[phaseId], anchor_date: date },
+    }));
+    phaseAutosave.queue(phaseId, { anchor_date: date });
+    void phaseAutosave.flush(phaseId);
   }
 
   function handleUnpinPhaseAnchor(phaseId: string) {
-    updatePhase.mutate(
-      { phaseId, proposalId, updates: { anchor_date: null } },
-      {
-        onSuccess: () => {
-          setEdits((prev) => ({ ...prev, [phaseId]: { ...prev[phaseId], anchor_date: null } }));
-          scheduleEvents.scheduleAnchorSet({
-            surface: 'proposal',
-            proposal_id: proposalId,
-            target: 'phase',
-            set: false,
-          });
-        },
-      },
-    );
+    setEdits((prev) => ({
+      ...prev,
+      [phaseId]: { ...prev[phaseId], anchor_date: null },
+    }));
+    phaseAutosave.queue(phaseId, { anchor_date: null });
+    void phaseAutosave.flush(phaseId);
   }
 
   // Birth support — the designer's past projects with a phase count each
@@ -383,7 +355,6 @@ export function PhaseBuilder({ proposalId }: PhaseBuilderProps) {
             proposal_id: proposalId,
             kind: 'patina_six',
           });
-          void refreshDraftingSummary();
         },
       },
     );
@@ -400,7 +371,6 @@ export function PhaseBuilder({ proposalId }: PhaseBuilderProps) {
             kind: 'past_project',
             source_project_id: sourceProjectId,
           });
-          void refreshDraftingSummary();
         },
       },
     );
@@ -435,7 +405,6 @@ export function PhaseBuilder({ proposalId }: PhaseBuilderProps) {
           }
           proposalEvents.scopeUpdated({ proposalId, field: 'phase', action: 'add' });
           setGhostResetSignal((n) => n + 1);
-          void refreshDraftingSummary();
         },
       },
     );
@@ -462,7 +431,6 @@ export function PhaseBuilder({ proposalId }: PhaseBuilderProps) {
       {
         onSuccess: () => {
           proposalEvents.scopeUpdated({ proposalId, field: 'phase', action: 'add' });
-          void refreshDraftingSummary();
         },
       }
     );
@@ -493,10 +461,8 @@ export function PhaseBuilder({ proposalId }: PhaseBuilderProps) {
             return next;
           });
           proposalEvents.scopeUpdated({ proposalId, field: 'phase', action: 'add' });
-          void refreshDraftingSummary();
         },
       });
-      await refreshDraftingSummary();
     } catch {
       const remaining = defaultsStillMissing.length - addedThisAttempt;
       setPhaseCreateError(
@@ -504,7 +470,6 @@ export function PhaseBuilder({ proposalId }: PhaseBuilderProps) {
           ? `Added ${addedThisAttempt} default ${addedThisAttempt === 1 ? 'phase' : 'phases'}. Retry to add the remaining ${remaining}.`
           : 'Could not add the default phases. Try again.',
       );
-      await refreshDraftingSummary();
     } finally {
       setAddingDefaults(false);
     }
@@ -605,6 +570,35 @@ export function PhaseBuilder({ proposalId }: PhaseBuilderProps) {
           </p>
         ) : null}
 
+        <div className="mb-2 min-h-4" aria-live="polite">
+          {(phaseAutosave.state === 'dirty' ||
+            phaseAutosave.state === 'saving') && (
+            <p
+              role="status"
+              className="font-mono text-[0.68rem] text-[var(--text-muted)]"
+            >
+              Saving phases…
+            </p>
+          )}
+          {phaseAutosave.state === 'saved' && (
+            <p
+              role="status"
+              className="font-mono text-[0.68rem] text-[var(--color-sage)]"
+            >
+              Phases saved
+            </p>
+          )}
+          {phaseAutosave.state === 'error' && (
+            <p
+              role="alert"
+              className="font-mono text-[0.68rem] text-[var(--color-terracotta)]"
+            >
+              {phaseAutosave.error ?? 'Could not save the phase changes.'} Your
+              client preview was not updated.
+            </p>
+          )}
+        </div>
+
         {/* Column headers */}
         {phases.length > 0 && (
           <div
@@ -638,15 +632,19 @@ export function PhaseBuilder({ proposalId }: PhaseBuilderProps) {
                 {/* Name */}
                 <input
                   type="text"
+                  aria-label="Phase name"
                   value={(local.name as string) ?? ''}
                   onChange={(e) => setField(id, 'name', e.target.value)}
+                  onBlur={() => void phaseAutosave.flush(id)}
                   className="w-full border-b border-transparent bg-transparent font-body text-[0.88rem] text-[var(--text-primary)] outline-none focus:border-[var(--accent-primary)]"
                 />
 
                 {/* Phase key select */}
                 <select
+                  aria-label="Phase type"
                   value={(local.phase_key as string) ?? ''}
                   onChange={(e) => setField(id, 'phase_key', e.target.value)}
+                  onBlur={() => void phaseAutosave.flush(id)}
                   className="w-full cursor-pointer border-b border-transparent bg-transparent font-body text-[0.78rem] text-[var(--text-primary)] outline-none focus:border-[var(--accent-primary)]"
                 >
                   <option value="">--</option>
@@ -697,6 +695,7 @@ export function PhaseBuilder({ proposalId }: PhaseBuilderProps) {
                   <span className="font-mono text-[0.78rem] text-[var(--text-muted)]">$</span>
                   <input
                     type="number"
+                    aria-label="Phase fee"
                     min={0}
                     step={100}
                     value={((local.fee_cents as number) ?? 0) / 100}
@@ -707,6 +706,7 @@ export function PhaseBuilder({ proposalId }: PhaseBuilderProps) {
                         Math.round(parseFloat(e.target.value || '0') * 100)
                       )
                     }
+                    onBlur={() => void phaseAutosave.flush(id)}
                     className="w-full border-b border-transparent bg-transparent text-right font-mono text-[0.82rem] text-[var(--text-primary)] outline-none focus:border-[var(--accent-primary)]"
                   />
                 </div>
@@ -753,7 +753,6 @@ export function PhaseBuilder({ proposalId }: PhaseBuilderProps) {
                       {
                         onSuccess: () => {
                           proposalEvents.scopeUpdated({ proposalId, field: 'phase', action: 'remove' });
-                          void refreshDraftingSummary();
                         },
                       }
                     )

@@ -213,8 +213,10 @@ export function BoardEditor({ proposalId, projectId, boardId }: BoardEditorProps
         z_index: i.z_index,
         rotation: Number(i.rotation),
       }));
-    if (positions.length > 0) saveLayoutMutate({ boardId, positions });
-  }, [boardId, saveLayoutMutate]);
+    if (positions.length > 0) {
+      saveLayoutMutate({ boardId, proposalId, positions });
+    }
+  }, [boardId, proposalId, saveLayoutMutate]);
 
   const flushLayoutRef = useRef(flushLayout);
   flushLayoutRef.current = flushLayout;
@@ -260,6 +262,7 @@ export function BoardEditor({ proposalId, projectId, boardId }: BoardEditorProps
       updateItem.mutate({
         itemId,
         boardId,
+        proposalId,
         ...(patch.width !== undefined ? { width: Number(patch.width) } : {}),
         ...(patch.height !== undefined
           ? { height: patch.height === null ? null : Number(patch.height) }
@@ -270,7 +273,7 @@ export function BoardEditor({ proposalId, projectId, boardId }: BoardEditorProps
         ...(patch.rotation !== undefined ? { rotation: Number(patch.rotation) } : {}),
       });
     },
-    [boardId, mergeLocal, updateItem],
+    [boardId, mergeLocal, proposalId, updateItem],
   );
 
   const nextZ = useCallback(
@@ -300,6 +303,7 @@ export function BoardEditor({ proposalId, projectId, boardId }: BoardEditorProps
       addItem.mutate(
         {
           boardId,
+          proposalId,
           x,
           y,
           zIndex: nextZ(),
@@ -315,7 +319,7 @@ export function BoardEditor({ proposalId, projectId, boardId }: BoardEditorProps
         },
       );
     },
-    [addItem, board, boardId, nextZ],
+    [addItem, board, boardId, nextZ, proposalId],
   );
 
   const handleDeleteItem = useCallback(
@@ -324,9 +328,9 @@ export function BoardEditor({ proposalId, projectId, boardId }: BoardEditorProps
       dirtyRef.current.delete(itemId);
       setItems((prev) => prev.filter((i) => i.id !== itemId));
       setSelectedId((sel) => (sel === itemId ? null : sel));
-      deleteItem.mutate({ itemId, boardId });
+      deleteItem.mutate({ itemId, boardId, proposalId });
     },
-    [boardId, deleteItem],
+    [boardId, deleteItem, proposalId],
   );
 
   // ── Sections ──────────────────────────────────────────────────────────────
@@ -350,9 +354,9 @@ export function BoardEditor({ proposalId, projectId, boardId }: BoardEditorProps
       if (!item) return;
       const nextData = { ...(item.data ?? {}), section_id: sectionId };
       mergeLocal(itemId, { data: nextData });
-      updateItem.mutate({ itemId, boardId, data: nextData });
+      updateItem.mutate({ itemId, boardId, proposalId, data: nextData });
     },
-    [boardId, mergeLocal, updateItem],
+    [boardId, mergeLocal, proposalId, updateItem],
   );
 
   /**
@@ -1349,6 +1353,7 @@ function ExtractPalettePanel({
       });
       swatches.forEach((s) => {
         upsertSwatch.mutate({
+          proposalId,
           paletteId: palette.id,
           hex: s.hex,
           sourcePixel: s.sourcePixel,
