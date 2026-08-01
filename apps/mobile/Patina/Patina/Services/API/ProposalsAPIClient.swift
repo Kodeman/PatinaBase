@@ -2,18 +2,11 @@
 //  ProposalsAPIClient.swift
 //  Patina
 //
-//  Client-side proposal read + sign, mirroring the client portal's
-//  `use-proposals` / `use-scope-builder` / `use-boards` hooks and the
-//  `/api/proposals/[id]/sign` route. Everything goes through supabase-swift
-//  against the configured Supabase URL — RLS scopes every read to the
-//  proposal's client (`proposals.client_id = auth.uid()`); non-draft only.
-//
-//  Schema reference (Wave 2 / D.1):
-//   • proposals — 00063 base (+ many). Money columns are integer cents.
-//   • proposal_items / _sections / _phases / _payment_milestones /
-//     _exclusions / _scope_rooms — the document body the client detail renders.
-//   • proposal_boards (+ proposal_board_items) — 00179. Rendered as a
-//     PatinaAsyncImage thumbnail grid (NOT a canvas).
+//  Client-side proposal read + sign, mirroring the client portal. Reads go
+//  exclusively through the client-safe JSON RPC boundary: row-level policies
+//  cannot protect trade pricing or internal columns on authored proposal
+//  tables. The list RPC returns issued copies only; the bundle RPC returns one
+//  immutable, visibility-tier-filtered document.
 //
 //  Sign path: the atomic `sign_proposal` RPC (00210, SECURITY DEFINER,
 //  idempotent). It settles the approval decision, flips the proposal to
@@ -34,11 +27,10 @@ public struct RemoteProposalProjectRef: Codable, Sendable {
     public let name: String?
 }
 
-/// Embedded `products(...)` on a proposal item (catalog-first; may be null).
+/// Immutable, client-safe product snapshot captured when the proposal is issued.
 public struct RemoteProposalProductRef: Codable, Sendable {
-    public let id: String?
+    public let product_id: String?
     public let name: String?
-    /// `products.images` is `text[]`; first entry is the hero image.
     public let images: [String]?
     public let brand: String?
 }
@@ -70,8 +62,12 @@ public struct RemoteProposal: Codable, Sendable, Identifiable {
     public let accepted_at: String?
     public let declined_at: String?
     public let decline_reason: String?
-    /// Embedded via `project:projects(id, name)`.
+    /// Client-safe linked project context embedded by the RPC.
     public let project: RemoteProposalProjectRef?
+    /// Embedded on list responses so Budget never reads the milestone table.
+    public let payment_milestones: [RemoteProposalMilestone]?
+    /// Embedded only on the detail bundle's proposal object.
+    public let items: [RemoteProposalItem]?
 
     /// The client may still sign while sent/viewed and not past expiry.
     public var isSignable: Bool {
@@ -100,26 +96,26 @@ public struct RemoteProposalItem: Codable, Sendable, Identifiable {
     public let item_type: String?
     public let lead_time_weeks: Int?
     public let position: Int?
-    public let product: RemoteProposalProductRef?
+    public let client_product_snapshot: RemoteProposalProductRef?
 
     /// Display name: manual name, else the linked product's name.
     public var resolvedName: String {
         if let name, !name.isEmpty { return name }
-        if let productName = product?.name, !productName.isEmpty { return productName }
+        if let productName = client_product_snapshot?.name, !productName.isEmpty { return productName }
         return "Item"
     }
 
     /// Display image: manual image_url, else the product's hero image.
     public var resolvedImageURL: URL? {
         if let image_url, !image_url.isEmpty, let url = URL(string: image_url) { return url }
-        if let first = product?.images?.first, let url = URL(string: first) { return url }
+        if let first = client_product_snapshot?.images?.first, let url = URL(string: first) { return url }
         return nil
     }
 
     /// Supplier line: manual vendor, else the product brand.
     public var resolvedVendor: String? {
         if let vendor_name, !vendor_name.isEmpty { return vendor_name }
-        if let brand = product?.brand, !brand.isEmpty { return brand }
+        if let brand = client_product_snapshot?.brand, !brand.isEmpty { return brand }
         return nil
     }
 }
@@ -177,15 +173,15 @@ public struct RemoteProposalBoard: Codable, Sendable, Identifiable {
     public let name: String?
     public let cover_image_url: String?
     public let sort_order: Int?
-    /// Decoded from the embedded `proposal_board_items(...)`.
-    public let proposal_board_items: [RemoteProposalBoardItem]?
+    /// Client-safe board items embedded by `get_client_proposal_bundle`.
+    public let items: [RemoteProposalBoardItem]?
 
     /// Image thumbnails for the grid: cover first (if any), then the board's
     /// image items ordered bottom→top (z_index asc), de-duplicated.
     public var thumbnailURLs: [URL] {
         var urls: [String] = []
         if let cover = cover_image_url, !cover.isEmpty { urls.append(cover) }
-        let images = (proposal_board_items ?? [])
+        let images = (items ?? [])
             .filter { $0.type == "image" && !($0.image_url ?? "").isEmpty }
             .sorted { ($0.z_index ?? 0) < ($1.z_index ?? 0) }
             .compactMap { $0.image_url }
@@ -194,7 +190,19 @@ public struct RemoteProposalBoard: Codable, Sendable, Identifiable {
         return urls.filter { seen.insert($0).inserted }.compactMap { URL(string: $0) }
     }
 
-    public var itemCount: Int { proposal_board_items?.count ?? 0 }
+    public var itemCount: Int { items?.count ?? 0 }
+}
+
+/// Atomic client-safe proposal detail payload. All authored child collections
+/// come from the same server-side snapshot boundary as the proposal header.
+public struct RemoteProposalBundle: Codable, Sendable {
+    public let proposal: RemoteProposal
+    public let sections: [RemoteProposalSection]
+    public let payment_milestones: [RemoteProposalMilestone]
+    public let phases: [RemoteProposalPhase]
+    public let exclusions: [RemoteProposalExclusion]
+    public let scope_rooms: [RemoteProposalScopeRoom]
+    public let boards: [RemoteProposalBoard]
 }
 
 // MARK: - Errors
@@ -246,113 +254,29 @@ public actor ProposalsAPIClient {
 
     private var client: SupabaseClient { SupabaseClientManager.shared.client }
 
-    private static let proposalSelect =
-        "id,project_id,designer_id,client_id,title,description,project_address,"
-        + "client_visibility_tier,total_amount,payment_terms,payment_notes,status,"
-        + "valid_until,sent_at,viewed_at,responded_at,created_at,updated_at,version,"
-        + "signed_at,signed_by_name,accepted_at,declined_at,decline_reason,"
-        + "project:projects!proposals_project_id_fkey(id,name)"
+    static let listReadRPC = "list_client_proposals"
+    static let detailReadRPC = "get_client_proposal_bundle"
 
-    private static let itemSelect =
-        "id,proposal_id,product_id,name,description,image_url,category,quantity,"
-        + "unit_sell_price,line_total_cents,vendor_name,item_type,lead_time_weeks,position,"
-        + "product:products(id,name,images,brand)"
+    private struct ClientProposalBundleParams: Encodable {
+        let p_proposal_id: String
+    }
 
     // MARK: Reads
 
-    /// Every proposal visible to this client (RLS: non-draft, own). Newest
-    /// first — mirrors the portal `useProposals` order.
+    /// Every issued proposal visible to this client, newest first. The RPC
+    /// exposes only sent/viewed/accepted/declined/expired immutable copies.
     public func listProposals() async throws -> [RemoteProposal] {
         try await client
-            .from("proposals")
-            .select(Self.proposalSelect)
-            .order("updated_at", ascending: false)
+            .rpc(Self.listReadRPC)
             .execute()
             .value
     }
 
-    public func fetchProposal(id: String) async throws -> RemoteProposal? {
-        let rows: [RemoteProposal] = try await client
-            .from("proposals")
-            .select(Self.proposalSelect)
-            .eq("id", value: id)
-            .limit(1)
-            .execute()
-            .value
-        return rows.first
-    }
-
-    public func fetchItems(proposalId: String) async throws -> [RemoteProposalItem] {
+    /// One atomic proposal document. The function rejects draft/revised copies,
+    /// foreign clients, and unauthenticated callers before building the DTO.
+    public func fetchProposalBundle(id: String) async throws -> RemoteProposalBundle {
         try await client
-            .from("proposal_items")
-            .select(Self.itemSelect)
-            .eq("proposal_id", value: proposalId)
-            .order("position", ascending: true)
-            .execute()
-            .value
-    }
-
-    public func fetchSections(proposalId: String) async throws -> [RemoteProposalSection] {
-        try await client
-            .from("proposal_sections")
-            .select("id,type,title,body,sort_order")
-            .eq("proposal_id", value: proposalId)
-            .order("sort_order", ascending: true)
-            .execute()
-            .value
-    }
-
-    public func fetchPhases(proposalId: String) async throws -> [RemoteProposalPhase] {
-        try await client
-            .from("proposal_phases")
-            .select("id,name,duration_weeks,fee_cents,sort_order")
-            .eq("proposal_id", value: proposalId)
-            .order("sort_order", ascending: true)
-            .execute()
-            .value
-    }
-
-    public func fetchMilestones(proposalId: String) async throws -> [RemoteProposalMilestone] {
-        try await client
-            .from("proposal_payment_milestones")
-            .select("id,label,percentage,amount_cents,trigger_condition,sort_order")
-            .eq("proposal_id", value: proposalId)
-            .order("sort_order", ascending: true)
-            .execute()
-            .value
-    }
-
-    public func fetchExclusions(proposalId: String) async throws -> [RemoteProposalExclusion] {
-        try await client
-            .from("proposal_exclusions")
-            .select("id,description,category,sort_order")
-            .eq("proposal_id", value: proposalId)
-            .order("sort_order", ascending: true)
-            .execute()
-            .value
-    }
-
-    public func fetchScopeRooms(proposalId: String) async throws -> [RemoteProposalScopeRoom] {
-        try await client
-            .from("proposal_scope_rooms")
-            .select("id,name,room_type,dimensions,budget_cents,sort_order")
-            .eq("proposal_id", value: proposalId)
-            .order("sort_order", ascending: true)
-            .execute()
-            .value
-    }
-
-    /// Active boards with just enough embedded item data to build a thumbnail
-    /// grid (image url + type + z-index). RLS restricts board reads to
-    /// non-draft proposals the client is on.
-    public func fetchBoards(proposalId: String) async throws -> [RemoteProposalBoard] {
-        try await client
-            .from("proposal_boards")
-            .select("id,name,cover_image_url,sort_order,proposal_board_items(type,image_url,z_index)")
-            .eq("proposal_id", value: proposalId)
-            .eq("status", value: "active")
-            .order("sort_order", ascending: true)
-            .order("created_at", ascending: true)
+            .rpc(Self.detailReadRPC, params: ClientProposalBundleParams(p_proposal_id: id))
             .execute()
             .value
     }
@@ -360,16 +284,7 @@ public actor ProposalsAPIClient {
     /// The proposal id linked to an activated project (`proposals.project_id`),
     /// if any — powers ProjectDetailView's "view proposal" push.
     public func proposalId(forProject projectId: String) async throws -> String? {
-        struct IdRow: Decodable { let id: String }
-        let rows: [IdRow] = try await client
-            .from("proposals")
-            .select("id")
-            .eq("project_id", value: projectId)
-            .order("updated_at", ascending: false)
-            .limit(1)
-            .execute()
-            .value
-        return rows.first?.id
+        try await listProposals().first { $0.project_id == projectId }?.id
     }
 
     // MARK: Sign

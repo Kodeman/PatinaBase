@@ -8,10 +8,11 @@
 //
 //   • Investment: each ACCEPTED proposal's `total_amount` (cents), grouped by
 //     project — never summed across proposals (portal renders one line each).
-//   • Payment schedule: `proposal_payment_milestones` of each accepted
-//     proposal, display-only (no paid/unpaid state — the real status lives in
-//     the invoices rollup). Amount resolves to the stored `amount_cents`, or a
-//     percentage of the proposal total when that's non-positive.
+//   • Payment schedule: client-safe milestones embedded by
+//     `list_client_proposals`, display-only (no paid/unpaid state — the real
+//     status lives in the invoices rollup). Amount resolves to the stored
+//     `amount_cents`, or a percentage of the proposal total when that's
+//     non-positive.
 //   • Invoices rollup: over VISIBLE invoices (not draft/void),
 //       paid        = Σ amount_paid_cents
 //       outstanding = Σ max(total_cents − amount_paid_cents, 0)
@@ -19,8 +20,9 @@
 //     computed both per-project and as one cross-project summary (the iOS
 //     screen leads with the summary the portal leaves implicit).
 //
-//  Everything is read-only; RLS scopes proposals/invoices/projects to this
-//  client. `BudgetMath` is a pure, unit-tested seam.
+//  Everything is read-only; the proposal RPC boundary plus RLS on invoices and
+//  projects scope the data to this client. `BudgetMath` is a pure, unit-tested
+//  seam.
 //
 
 import Foundation
@@ -183,7 +185,9 @@ final class BudgetViewModel {
         }
 
         let acceptedProposals = (proposals ?? []).filter { $0.status == "accepted" }
-        let milestonesByProposal = await fetchMilestones(for: acceptedProposals)
+        let milestonesByProposal = Dictionary(uniqueKeysWithValues: acceptedProposals.map {
+            ($0.id, $0.payment_milestones ?? [])
+        })
 
         let visibleInvoices = (invoices ?? []).filter(BudgetMath.isVisible)
 
@@ -195,24 +199,6 @@ final class BudgetViewModel {
             visibleInvoices: visibleInvoices
         )
         self.isLoading = false
-    }
-
-    /// Fetch each accepted proposal's payment milestones concurrently.
-    private func fetchMilestones(
-        for proposals: [RemoteProposal]
-    ) async -> [String: [RemoteProposalMilestone]] {
-        await withTaskGroup(of: (String, [RemoteProposalMilestone]).self) { group in
-            for proposal in proposals {
-                group.addTask {
-                    let milestones = (try? await ProposalsAPIClient.shared
-                        .fetchMilestones(proposalId: proposal.id)) ?? []
-                    return (proposal.id, milestones)
-                }
-            }
-            var result: [String: [RemoteProposalMilestone]] = [:]
-            for await (id, milestones) in group { result[id] = milestones }
-            return result
-        }
     }
 
 }
