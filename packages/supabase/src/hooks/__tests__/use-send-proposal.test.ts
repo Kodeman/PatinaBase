@@ -124,7 +124,10 @@ beforeEach(() => {
   proposalReads = [];
   milestoneReads = [];
   snapshotReads = [];
-  sendRpcResult = { data: { id: 'proposal-1' }, error: null };
+  sendRpcResult = {
+    data: { id: 'proposal-1', sent_at: '2026-07-31T12:01:00.000Z' },
+    error: null,
+  };
   reconciliationResult = { data: { id: 'deposit' }, error: null };
   reconciliations.length = 0;
   from.mockReset();
@@ -253,8 +256,36 @@ describe('useSendProposal payment preflight', () => {
       p_valid_until: null,
     });
     expect(invoke).toHaveBeenCalledWith('proposal-send', {
-      body: { proposalId: 'proposal-1' },
+      body: {
+        proposalId: 'proposal-1',
+        sentAt: '2026-07-31T12:01:00.000Z',
+      },
     });
+  });
+
+  it('does not invoke proposal-send without the exact committed sent_at', async () => {
+    const valid = {
+      id: 'deposit',
+      label: 'Project deposit',
+      percentage: 100,
+      amount_cents: 1_320_000,
+      trigger_condition: null,
+      sort_order: 0,
+    };
+    proposalReads.push(
+      { data: { total_amount: 1_320_000 }, error: null },
+      { data: { total_amount: 1_320_000 }, error: null },
+    );
+    milestoneReads.push(
+      { data: [valid], error: null },
+      { data: [valid], error: null },
+    );
+    sendRpcResult = { data: { id: 'proposal-1', sent_at: null }, error: null };
+
+    await expect(
+      config().mutationFn({ proposalId: 'proposal-1', expectedSnapshot }),
+    ).resolves.toMatchObject({ _emailDispatched: false });
+    expect(invoke).not.toHaveBeenCalled();
   });
 
   it('does not overwrite a concurrent edit when reconciliation loses its CAS', async () => {

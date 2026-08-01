@@ -58,6 +58,8 @@ export interface ComplianceSendOptions {
   unsubscribeBaseUrl?: string;
   /** Resend tags. */
   tags?: Array<{ name: string; value: string }>;
+  /** Stable provider key for crash-safe retry of one logical send. */
+  idempotencyKey?: string;
 }
 
 export interface ComplianceSendResult {
@@ -103,6 +105,19 @@ function getResendApiKey(): string {
   const key = Deno.env.get("RESEND_API_KEY");
   if (!key) throw new Error("RESEND_API_KEY environment variable is required");
   return key;
+}
+
+/** Build the authenticated provider headers, including an optional stable key. */
+export function buildResendRequestHeaders(
+  apiKey: string,
+  idempotencyKey?: string,
+): Record<string, string> {
+  const headers: Record<string, string> = {
+    "Content-Type": "application/json",
+    Authorization: `Bearer ${apiKey}`,
+  };
+  if (idempotencyKey) headers["Idempotency-Key"] = idempotencyKey;
+  return headers;
 }
 
 function getDevMode(): "dry_run" | "redirect" | "off" {
@@ -302,10 +317,7 @@ export async function sendCompliantEmail(
   try {
     const res = await fetch("https://api.resend.com/emails", {
       method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${apiKey}`,
-      },
+      headers: buildResendRequestHeaders(apiKey, options.idempotencyKey),
       body: JSON.stringify(payload),
     });
 

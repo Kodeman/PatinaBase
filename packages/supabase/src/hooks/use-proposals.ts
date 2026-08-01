@@ -899,16 +899,21 @@ export function useSendProposal(options?: { errorSurface?: 'inline' }) {
       // (the proposal is already marked sent in the DB). We surface the outcome
       // via `_emailDispatched` so the Send page can warn the designer instead of
       // failing silently; they can resend from the proposal page.
-      let emailDispatched = true;
-      try {
-        const { error: fnError } = await supabase.functions.invoke('proposal-send', {
-          body: { proposalId },
-        });
-        if (fnError) emailDispatched = false;
-      } catch (e) {
-        emailDispatched = false;
-        // eslint-disable-next-line no-console
-        console.warn('proposal-send invocation failed', e);
+      let emailDispatched = typeof data?.sent_at === 'string';
+      if (emailDispatched) {
+        try {
+          const { error: fnError } = await supabase.functions.invoke(
+            'proposal-send',
+            {
+              body: { proposalId, sentAt: data.sent_at },
+            },
+          );
+          if (fnError) emailDispatched = false;
+        } catch (e) {
+          emailDispatched = false;
+          // eslint-disable-next-line no-console
+          console.warn('proposal-send invocation failed', e);
+        }
       }
 
       return { ...data, _emailDispatched: emailDispatched };
