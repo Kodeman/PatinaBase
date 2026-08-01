@@ -11074,6 +11074,48 @@ export type Database = {
           },
         ]
       }
+      project_phase_topology_diagnostics: {
+        Row: {
+          details: Json
+          detected_at: string
+          diagnostic_code: string
+          id: string
+          phase_ids: string[]
+          project_id: string
+        }
+        Insert: {
+          details?: Json
+          detected_at?: string
+          diagnostic_code: string
+          id?: string
+          phase_ids?: string[]
+          project_id: string
+        }
+        Update: {
+          details?: Json
+          detected_at?: string
+          diagnostic_code?: string
+          id?: string
+          phase_ids?: string[]
+          project_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "project_phase_topology_diagnostics_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "field_activity_summary"
+            referencedColumns: ["project_id"]
+          },
+          {
+            foreignKeyName: "project_phase_topology_diagnostics_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       project_phases: {
         Row: {
           anchor_date: string | null
@@ -21044,6 +21086,10 @@ export type Database = {
         Returns: number[]
       }
       _aesthete_utilization: { Args: { p_ratio: number }; Returns: number }
+      _assert_project_phase_topology: {
+        Args: { p_context: string; p_project_id: string }
+        Returns: undefined
+      }
       _can_author_proposal: { Args: { p_owner: string }; Returns: boolean }
       _commit_proposal_send: {
         Args: {
@@ -21962,6 +22008,54 @@ export type Database = {
           token: string
         }[]
       }
+      create_project_phase: {
+        Args: {
+          p_anchor_date?: string
+          p_deliverables?: Json
+          p_duration_days?: number
+          p_duration_weeks?: number
+          p_fee_cents?: number
+          p_follows_phase_id?: string
+          p_lane?: string
+          p_name: string
+          p_phase_key: string
+          p_project_id: string
+          p_revision_limit?: number
+          p_sort_order?: number
+        }
+        Returns: {
+          anchor_date: string | null
+          completed_at: string | null
+          created_at: string
+          deliverables: Json | null
+          duration_days: number | null
+          duration_weeks: number | null
+          estimated_hours: number | null
+          fee_cents: number | null
+          follows_phase_id: string | null
+          gate_condition: string | null
+          id: string
+          lane: string
+          name: string
+          phase_key: string | null
+          progress: number | null
+          project_id: string
+          revision_limit: number | null
+          revisions_used: number | null
+          sort_order: number
+          source_proposal_phase_id: string | null
+          start_date: string | null
+          status: string
+          target_end_date: string | null
+          updated_at: string
+        }
+        SetofOptions: {
+          from: "*"
+          to: "project_phases"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
       create_purchase_order: {
         Args: {
           p_confirmed_eta?: string
@@ -22055,6 +22149,10 @@ export type Database = {
       decrement_room_saved_items: {
         Args: { p_count?: number; p_room_id: string }
         Returns: undefined
+      }
+      delete_project_phase: {
+        Args: { p_phase_id: string; p_project_id: string }
+        Returns: Json
       }
       demote_to_personal: { Args: { p_product_id: string }; Returns: string }
       derive_signature_biases: {
@@ -24130,6 +24228,46 @@ export type Database = {
         Returns: undefined
       }
       update_my_biases: { Args: { p_overrides: Json }; Returns: Json }
+      update_project_phase: {
+        Args: {
+          p_expected_updated_at: string
+          p_patch: Json
+          p_phase_id: string
+          p_project_id: string
+        }
+        Returns: {
+          anchor_date: string | null
+          completed_at: string | null
+          created_at: string
+          deliverables: Json | null
+          duration_days: number | null
+          duration_weeks: number | null
+          estimated_hours: number | null
+          fee_cents: number | null
+          follows_phase_id: string | null
+          gate_condition: string | null
+          id: string
+          lane: string
+          name: string
+          phase_key: string | null
+          progress: number | null
+          project_id: string
+          revision_limit: number | null
+          revisions_used: number | null
+          sort_order: number
+          source_proposal_phase_id: string | null
+          start_date: string | null
+          status: string
+          target_end_date: string | null
+          updated_at: string
+        }
+        SetofOptions: {
+          from: "*"
+          to: "project_phases"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
       user_has_role: {
         Args: { p_role_name: string; p_user_id: string }
         Returns: boolean

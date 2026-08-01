@@ -1123,6 +1123,15 @@ BEGIN
           'a9300000-0000-4000-8000-00000000001c',
           'Illegal null progress insert', 'pending', NULL, 23, 'main'
         );
+      WHEN 'insert_pending' THEN
+        INSERT INTO public.project_phases (
+          id, project_id, name, phase_key, status, progress, sort_order, lane
+        ) VALUES (
+          'aa000000-0000-4000-8000-0000000001b3',
+          'a9300000-0000-4000-8000-00000000001c',
+          'Direct pending insert', 'direct-pending',
+          'pending', 0, 23, 'main'
+        );
       WHEN 'update_status' THEN
         UPDATE public.project_phases
         SET status = 'completed'
@@ -1177,6 +1186,27 @@ BEGIN
         UPDATE public.project_phases
         SET project_id = 'a9300000-0000-4000-8000-000000000001'
         WHERE id = 'aa000000-0000-4000-8000-0000000001a0';
+      WHEN 'update_same_project_topology' THEN
+        UPDATE public.project_phases
+        SET follows_phase_id = 'aa000000-0000-4000-8000-0000000001a0'
+        WHERE id = 'aa000000-0000-4000-8000-0000000001a1';
+      WHEN 'insert_cross_lane' THEN
+        INSERT INTO public.project_phases (
+          id, project_id, name, status, progress, sort_order,
+          follows_phase_id, lane
+        ) VALUES (
+          'aa000000-0000-4000-8000-0000000001b4',
+          'a9300000-0000-4000-8000-00000000001c',
+          'Direct cross-lane insert', 'pending', 0, 24,
+          'aa000000-0000-4000-8000-0000000001a2', 'main'
+        );
+      WHEN 'update_lane' THEN
+        UPDATE public.project_phases
+        SET lane = 'main'
+        WHERE id = 'aa000000-0000-4000-8000-0000000001a2';
+      WHEN 'delete_pending' THEN
+        DELETE FROM public.project_phases
+        WHERE id = 'aa000000-0000-4000-8000-0000000001a1';
       ELSE
         RAISE EXCEPTION 'unknown direct phase test case: %', p_case;
     END CASE;
@@ -1253,23 +1283,13 @@ SELECT pg_temp.expect_direct_phase_failure(
   'project_phases non-pending lifecycle rows cannot be deleted directly'
 );
 
--- Schedule authoring remains open for non-lifecycle fields and valid pending
--- rows. Exact chain references may cross render lanes, but must stay within one
--- project on INSERT/UPDATE, and moving a parent may not strand an existing child.
-INSERT INTO public.project_phases (
-  id, project_id, name, phase_key, status, progress, sort_order, lane
-) VALUES (
-  'aa000000-0000-4000-8000-0000000001b3',
-  'a9300000-0000-4000-8000-00000000001c',
-  'Valid pending direct insert', 'valid-pending-direct',
-  'pending', 0, 23, 'main'
+-- 00398 closes topology identity to direct authenticated writes. Ordinary
+-- schedule/date fields stay directly editable; project_id/phase_key/lane/
+-- follows and all row birth/deletion cross checked RPCs instead.
+SELECT pg_temp.expect_direct_phase_failure(
+  'insert_pending', '42501',
+  'project_phases topology inserts are writable only through create_project_phase'
 );
-DO $$ BEGIN
-  ASSERT (SELECT status = 'pending' AND progress = 0 AND completed_at IS NULL
-          FROM public.project_phases
-          WHERE id = 'aa000000-0000-4000-8000-0000000001b3'),
-    'authenticated pending insert must remain available';
-END $$;
 
 UPDATE public.project_phases
 SET start_date = DATE '2027-01-04',
@@ -1285,15 +1305,10 @@ DO $$ BEGIN
     'ordinary schedule fields must remain directly editable';
 END $$;
 
-UPDATE public.project_phases
-SET follows_phase_id = 'aa000000-0000-4000-8000-0000000001a0'
-WHERE id = 'aa000000-0000-4000-8000-0000000001a1';
-DO $$ BEGIN
-  ASSERT (SELECT follows_phase_id = 'aa000000-0000-4000-8000-0000000001a0'
-          FROM public.project_phases
-          WHERE id = 'aa000000-0000-4000-8000-0000000001a1'),
-    'same-project same-lane relink must remain available';
-END $$;
+SELECT pg_temp.expect_direct_phase_failure(
+  'update_same_project_topology', '42501',
+  'project_phases project_id, phase_key, lane, and follows_phase_id are writable only through checked phase RPCs'
+);
 
 SELECT pg_temp.expect_direct_phase_failure(
   'update_cross_project', '23514',
@@ -1304,55 +1319,28 @@ SELECT pg_temp.expect_direct_phase_failure(
   'project_phases predecessor must belong to the same project'
 );
 SELECT pg_temp.expect_direct_phase_failure(
-  'strand_child_project', '23514',
-  'project_phases followers must remain in the same project'
+  'strand_child_project', '42501',
+  'project_phases project_id, phase_key, lane, and follows_phase_id are writable only through checked phase RPCs'
 );
 
-UPDATE public.project_phases
-SET follows_phase_id = 'aa000000-0000-4000-8000-0000000001a2'
-WHERE id = 'aa000000-0000-4000-8000-0000000001a1';
-INSERT INTO public.project_phases (
-  id, project_id, name, status, progress, sort_order, follows_phase_id, lane
-) VALUES (
-  'aa000000-0000-4000-8000-0000000001b4',
-  'a9300000-0000-4000-8000-00000000001c',
-  'Valid cross-lane insert', 'pending', 0, 24,
-  'aa000000-0000-4000-8000-0000000001a2', 'main'
+SELECT pg_temp.expect_direct_phase_failure(
+  'insert_cross_lane', '42501',
+  'project_phases topology inserts are writable only through create_project_phase'
 );
+SELECT pg_temp.expect_direct_phase_failure(
+  'update_lane', '42501',
+  'project_phases project_id, phase_key, lane, and follows_phase_id are writable only through checked phase RPCs'
+);
+SELECT pg_temp.expect_direct_phase_failure(
+  'delete_pending', '42501',
+  'project_phases rows are deletable only through delete_project_phase'
+);
+
 DO $$ BEGIN
-  ASSERT (SELECT follows_phase_id = 'aa000000-0000-4000-8000-0000000001a2'
+  ASSERT (SELECT follows_phase_id IS NULL
           FROM public.project_phases
           WHERE id = 'aa000000-0000-4000-8000-0000000001a1'),
-    'same-project cross-lane relink must remain available';
-  ASSERT EXISTS (
-    SELECT 1 FROM public.project_phases
-    WHERE id = 'aa000000-0000-4000-8000-0000000001b4'
-  ), 'same-project cross-lane insert must remain available';
-END $$;
-
--- A lane relabel is rendering metadata even when the row has followers.
-UPDATE public.project_phases
-SET lane = 'main'
-WHERE id = 'aa000000-0000-4000-8000-0000000001a2';
-DO $$ BEGIN
-  ASSERT (SELECT lane = 'main' FROM public.project_phases
-          WHERE id = 'aa000000-0000-4000-8000-0000000001a2'),
-    'lane relabel with followers must remain available';
-END $$;
-
-DELETE FROM public.project_phases
-WHERE id IN (
-  'aa000000-0000-4000-8000-0000000001b3',
-  'aa000000-0000-4000-8000-0000000001b4'
-);
-DO $$ BEGIN
-  ASSERT NOT EXISTS (
-    SELECT 1 FROM public.project_phases
-    WHERE id IN (
-      'aa000000-0000-4000-8000-0000000001b3',
-      'aa000000-0000-4000-8000-0000000001b4'
-    )
-  ), 'pending direct delete must remain available';
+    'rejected direct topology write must preserve pending phase';
   ASSERT (SELECT status = 'in_progress' AND progress = 20 AND completed_at IS NULL
           FROM public.project_phases
           WHERE id = 'aa000000-0000-4000-8000-0000000001a2'),

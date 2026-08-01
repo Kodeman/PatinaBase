@@ -450,6 +450,28 @@ export interface CreateProjectPhaseInput {
   lane?: 'main' | 'thread';
 }
 
+type ProjectPhaseRow = Database['public']['Tables']['project_phases']['Row'];
+
+function requireProjectPhaseRpcRow(
+  value: unknown,
+  projectId: string,
+  phaseId?: string,
+): ProjectPhaseRow {
+  if (value == null || typeof value !== 'object' || Array.isArray(value)) {
+    throw new Error('project phase RPC returned an invalid row');
+  }
+  const row = value as Record<string, unknown>;
+  if (
+    typeof row.id !== 'string' ||
+    row.project_id !== projectId ||
+    (phaseId !== undefined && row.id !== phaseId) ||
+    typeof row.updated_at !== 'string'
+  ) {
+    throw new Error('project phase RPC returned an invalid row');
+  }
+  return value as ProjectPhaseRow;
+}
+
 export function useCreateProjectPhase() {
   const queryClient = useQueryClient();
   return useMutation({
@@ -465,25 +487,23 @@ export function useCreateProjectPhase() {
     }: CreateProjectPhaseInput) => {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const supabase = getSupabase() as any;
-      const insert: Record<string, unknown> = {
-        project_id: projectId,
-        phase_key: phaseKey,
-        name,
-        status: 'pending',
-        progress: 0,
+      const args: Record<string, unknown> = {
+        p_project_id: projectId,
+        p_phase_key: phaseKey,
+        p_name: name,
       };
-      if (sortOrder !== undefined) insert.sort_order = sortOrder;
-      if (durationDays !== undefined) insert.duration_days = durationDays;
-      if (anchorDate !== undefined) insert.anchor_date = anchorDate;
-      if (followsPhaseId !== undefined) insert.follows_phase_id = followsPhaseId;
-      if (lane !== undefined) insert.lane = lane;
-      const { data, error } = await supabase
-        .from('project_phases')
-        .insert(insert)
-        .select()
-        .single();
+      if (sortOrder !== undefined) args.p_sort_order = sortOrder;
+      if (durationDays !== undefined) args.p_duration_days = durationDays;
+      if (anchorDate !== undefined) args.p_anchor_date = anchorDate;
+      if (followsPhaseId !== undefined) args.p_follows_phase_id = followsPhaseId;
+      if (lane !== undefined) args.p_lane = lane;
+      const { data, error } = await supabase.rpc('create_project_phase', args);
       if (error) throw error;
-      return data;
+      const row = requireProjectPhaseRpcRow(data, projectId);
+      if (row.status !== 'pending' || row.progress !== 0 || row.completed_at !== null) {
+        throw new Error('useCreateProjectPhase: invalid server-derived lifecycle receipt');
+      }
+      return row;
     },
     onSuccess: (_, { projectId }) => {
       queryClient.invalidateQueries({ queryKey: ['project-phases', projectId] });

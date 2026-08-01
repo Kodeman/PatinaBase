@@ -5097,5 +5097,92 @@ END $g$;
 -- 00397_billing_checkout_integrity.sql
 DO $g$ BEGIN
   GRANT EXECUTE ON FUNCTION public.settle_invoice_checkout_payment(uuid, text, text, integer) TO service_role;
+-- 00398_delete_project_phase_atomic_rpc.sql
+DO $g$ BEGIN
+  REVOKE ALL ON TABLE public.project_phase_topology_diagnostics FROM PUBLIC, anon, authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00398_delete_project_phase_atomic_rpc.sql
+DO $g$ BEGIN
+  GRANT SELECT ON TABLE public.project_phase_topology_diagnostics TO authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00398_delete_project_phase_atomic_rpc.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public._assert_project_phase_topology(uuid, text) FROM PUBLIC, anon, authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00398_delete_project_phase_atomic_rpc.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.create_project_phase( uuid, text, text, integer, integer, date, uuid, text, integer, integer, integer, jsonb ) FROM PUBLIC, anon, authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00398_delete_project_phase_atomic_rpc.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.create_project_phase( uuid, text, text, integer, integer, date, uuid, text, integer, integer, integer, jsonb ) TO authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00398_delete_project_phase_atomic_rpc.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.update_project_phase(uuid, uuid, timestamptz, jsonb) FROM PUBLIC, anon, authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00398_delete_project_phase_atomic_rpc.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.update_project_phase(uuid, uuid, timestamptz, jsonb) TO authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00398_delete_project_phase_atomic_rpc.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.delete_project_phase(uuid, uuid) FROM PUBLIC, anon, authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00398_delete_project_phase_atomic_rpc.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.delete_project_phase(uuid, uuid) TO authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00398_delete_project_phase_atomic_rpc.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.guard_project_phase_topology_write() FROM PUBLIC, anon, authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00398_delete_project_phase_atomic_rpc.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.touch_project_phase_updated_at() FROM PUBLIC, anon, authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00398_delete_project_phase_atomic_rpc.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.seed_project_schedule_from_template(uuid, text) FROM PUBLIC, anon, authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00398_delete_project_phase_atomic_rpc.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.seed_project_schedule_from_template(uuid, text) TO authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00398_delete_project_phase_atomic_rpc.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.copy_schedule_as_built(uuid, uuid, uuid) FROM PUBLIC, anon, authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00398_delete_project_phase_atomic_rpc.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.copy_schedule_as_built(uuid, uuid, uuid) TO authenticated;
 EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
 END $g$;

@@ -122,7 +122,10 @@ import {
   useCreateProjectPhase,
   useUpdateProjectPhaseStatus,
 } from '../use-project-v2';
-import { useUpdateProjectPhaseChain } from '../use-schedule-compose';
+import {
+  useDeletePhaseWithRelink,
+  useUpdateProjectPhaseChain,
+} from '../use-schedule-compose';
 import type {
   UpdateFFEItemPricingInput,
   BulkReassignFfeVendorInput,
@@ -150,9 +153,16 @@ type CreatePhaseMutationConfig = {
 };
 
 describe('useCreateProjectPhase', () => {
-  it('always inserts a pending zero-progress row and ignores a runtime status smuggle', async () => {
-    setTableDefault('project_phases', {
-      data: { id: 'phase-new', status: 'pending', progress: 0 },
+  it('calls the server-derived create boundary and validates pending lifecycle', async () => {
+    supabaseClient.rpc.mockResolvedValueOnce({
+      data: {
+        id: 'phase-new',
+        project_id: 'project-1',
+        status: 'pending',
+        progress: 0,
+        completed_at: null,
+        updated_at: '2026-08-01T12:00:00.000Z',
+      },
       error: null,
     });
 
@@ -162,18 +172,13 @@ describe('useCreateProjectPhase', () => {
       phaseKey: 'install',
       name: 'Installation',
       durationDays: 5,
-      status: 'completed',
-    } as unknown as CreateProjectPhaseInput);
+    });
 
-    const inserts = builders.project_phases.__chain.filter((call) => call.method === 'insert');
-    expect(inserts).toHaveLength(1);
-    expect(inserts[0].args[0]).toEqual({
-      project_id: 'project-1',
-      phase_key: 'install',
-      name: 'Installation',
-      status: 'pending',
-      progress: 0,
-      duration_days: 5,
+    expect(supabaseClient.rpc).toHaveBeenCalledWith('create_project_phase', {
+      p_project_id: 'project-1',
+      p_phase_key: 'install',
+      p_name: 'Installation',
+      p_duration_days: 5,
     });
   });
 });
@@ -186,15 +191,20 @@ type UpdatePhaseChainMutationConfig = {
   mutationFn: (input: {
     phaseId: string;
     projectId: string;
+    expectedUpdatedAt: string;
     followsPhaseId?: string | null;
     lane?: 'main' | 'thread';
   }) => Promise<unknown>;
 };
 
 describe('useUpdateProjectPhaseChain', () => {
-  it('scopes an exact relink by both phase id and project id', async () => {
-    setTableDefault('project_phases', {
-      data: { id: 'phase-2', project_id: 'project-1' },
+  it('passes the caller-observed CAS token and exact topology patch', async () => {
+    supabaseClient.rpc.mockResolvedValueOnce({
+      data: {
+        id: 'phase-2',
+        project_id: 'project-1',
+        updated_at: '2026-08-01T12:00:01.000Z',
+      },
       error: null,
     });
 
@@ -202,19 +212,45 @@ describe('useUpdateProjectPhaseChain', () => {
     await config.mutationFn({
       phaseId: 'phase-2',
       projectId: 'project-1',
+      expectedUpdatedAt: '2026-08-01T12:00:00.000Z',
       followsPhaseId: 'phase-1',
       lane: 'main',
     });
 
-    const builder = builders.project_phases;
-    expect(builder.__chain.filter((call) => call.method === 'update')[0].args[0]).toEqual({
-      follows_phase_id: 'phase-1',
-      lane: 'main',
+    expect(supabaseClient.rpc).toHaveBeenCalledWith('update_project_phase', {
+      p_project_id: 'project-1',
+      p_phase_id: 'phase-2',
+      p_expected_updated_at: '2026-08-01T12:00:00.000Z',
+      p_patch: { follows_phase_id: 'phase-1', lane: 'main' },
     });
-    expect(builder.__chain.filter((call) => call.method === 'eq').map((call) => call.args)).toEqual([
-      ['id', 'phase-2'],
-      ['project_id', 'project-1'],
-    ]);
+  });
+});
+
+describe('useDeletePhaseWithRelink', () => {
+  it('sends no browser-derived follower list and validates the exact receipt', async () => {
+    supabaseClient.rpc.mockResolvedValueOnce({
+      data: {
+        deleted_phase_id: 'phase-2',
+        predecessor_phase_id: 'phase-1',
+        relinked_phase_ids: ['phase-3', 'phase-4'],
+      },
+      error: null,
+    });
+
+    const config = useDeletePhaseWithRelink() as unknown as {
+      mutationFn: (input: { projectId: string; phaseId: string }) => Promise<unknown>;
+    };
+    await expect(
+      config.mutationFn({ projectId: 'project-1', phaseId: 'phase-2' }),
+    ).resolves.toEqual({
+      deleted_phase_id: 'phase-2',
+      predecessor_phase_id: 'phase-1',
+      relinked_phase_ids: ['phase-3', 'phase-4'],
+    });
+    expect(supabaseClient.rpc).toHaveBeenCalledWith('delete_project_phase', {
+      p_project_id: 'project-1',
+      p_phase_id: 'phase-2',
+    });
   });
 });
 

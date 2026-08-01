@@ -70,7 +70,6 @@ import {
   threadsFor,
   type SpinePhaseState,
 } from '@/lib/document/schedule-spine-derivation';
-import { relinkOnDelete } from '@/lib/document/schedule-compose-derivation';
 import {
   blocksText,
   sortItemsBlockingFirst,
@@ -501,8 +500,15 @@ export function ScheduleSpine({
     closeCompose(); // the strip takes over the preview + commit
   };
   const handleUnpinPhase = (phaseId: string) => {
+    const phase = schedule.phases.find((row) => row.id === phaseId);
+    if (!phase?.updated_at) return;
     updateChain.mutate(
-      { phaseId, projectId, anchorDate: null },
+      {
+        phaseId,
+        projectId,
+        expectedUpdatedAt: phase.updated_at,
+        anchorDate: null,
+      },
       {
         onSuccess: () =>
           scheduleEvents.scheduleAnchorSet({
@@ -556,19 +562,10 @@ export function ScheduleSpine({
   };
 
   const handleDeletePhase = (phaseId: string) => {
-    // relink FIRST (followers → deleted phase's own predecessor), then delete —
-    // relinkOnDelete computes the patch the hook applies before the DELETE.
-    const relinkUpdates = relinkOnDelete(
-      schedule.phases.map((r) => ({
-        id: r.id,
-        followsPhaseId: r.follows_phase_id ?? null,
-      })),
-      phaseId,
-    ).map((u) => ({ phaseId: u.id, followsPhaseId: u.followsPhaseId }));
-    // Close ONLY on success — the sequence is not transactional (relinks may
-    // have applied when the delete fails), and the confirm must say so.
+    // Postgres derives and locks every follower, relinks, and deletes atomically.
+    // Close only on a validated exact receipt; an error keeps the confirm open.
     deletePhaseWithRelink.mutate(
-      { projectId, phaseId, relinkUpdates },
+      { projectId, phaseId },
       { onSuccess: closeCompose },
     );
   };
@@ -847,7 +844,7 @@ export function ScheduleSpine({
                       busy={deletePhaseWithRelink.isPending}
                       errorText={
                         deletePhaseWithRelink.isError
-                          ? 'Delete failed — the chain may have been relinked; refresh to see its current state'
+                          ? 'Delete failed — nothing was changed'
                           : null
                       }
                     />
@@ -892,6 +889,7 @@ export function ScheduleSpine({
                       headingActions={
                         <PhaseComposeActions
                           onAddItem={openComposer}
+                          canDelete={row?.status === 'pending'}
                           // Each open resets its mutation's stale error state
                           // (updateChain is shared with the chip unpin) so a
                           // fresh panel never opens wearing an old failure.
