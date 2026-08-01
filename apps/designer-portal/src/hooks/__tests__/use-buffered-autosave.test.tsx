@@ -1,6 +1,9 @@
 import { act, renderHook, waitFor } from '@testing-library/react';
 import { useBufferedAutosave } from '../use-buffered-autosave';
-import { resetProposalAutosaveRegistryForTests } from '@/lib/proposal-autosave-registry';
+import {
+  getProposalAutosaveSnapshot,
+  resetProposalAutosaveRegistryForTests,
+} from '@/lib/proposal-autosave-registry';
 
 describe('useBufferedAutosave', () => {
   beforeEach(() => jest.useFakeTimers());
@@ -172,5 +175,40 @@ describe('useBufferedAutosave', () => {
 
     expect(saveB).toHaveBeenCalledWith('phase-B', { total: 250 });
     expect(totals).toEqual({ A: 100, B: 250 });
+  });
+
+  it('drains and unregisters the prior generation when an editor switches rows in one proposal', async () => {
+    const saveBoardA = jest.fn().mockResolvedValue(undefined);
+    const saveBoardB = jest.fn().mockResolvedValue(undefined);
+    const { result, rerender } = renderHook(
+      ({ generationKey, save }) =>
+        useBufferedAutosave<string, Record<string, unknown>>({
+          proposalId: 'proposal-1',
+          generationKey,
+          save,
+          delay: 60_000,
+        }),
+      {
+        initialProps: { generationKey: 'board-a', save: saveBoardA },
+      },
+    );
+
+    act(() => {
+      result.current.queue('board-a', { x: 120 });
+    });
+    rerender({ generationKey: 'board-b', save: saveBoardB });
+
+    await waitFor(() => expect(saveBoardA).toHaveBeenCalledWith('board-a', { x: 120 }));
+    await waitFor(() => expect(getProposalAutosaveSnapshot('proposal-1').registeredBuffers).toBe(1));
+
+    act(() => {
+      result.current.queue('board-b', { x: 240 });
+    });
+    await act(async () => {
+      await result.current.flushAll();
+    });
+
+    expect(saveBoardB).toHaveBeenCalledWith('board-b', { x: 240 });
+    expect(saveBoardA).toHaveBeenCalledTimes(1);
   });
 });

@@ -3,12 +3,14 @@ import { act, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { BoardEditor } from '../board-editor';
 import { SendSheet } from '@/components/document/overlays/send-sheet';
 import {
+  flushProposalAutosaves,
   getProposalAutosaveSnapshot,
   resetProposalAutosaveRegistryForTests,
 } from '@/lib/proposal-autosave-registry';
 
 const mockSaveLayout = jest.fn();
 const mockLegacySaveLayout = jest.fn();
+const mockDeleteItem = jest.fn();
 const mockSend = jest.fn();
 const mockInvalidate = jest.fn();
 const mockMirrorRefetch = jest.fn();
@@ -77,23 +79,53 @@ jest.mock('@tanstack/react-query', () => ({
 }));
 
 jest.mock('@patina/design-system', () => ({
-  BoardCanvas: ({ onItemsChange }: { onItemsChange: (items: Array<Record<string, unknown>>) => void }) => (
-    <button
-      type="button"
-      onClick={() =>
-        onItemsChange([
-          {
-            id: 'item-1',
-            type: 'note',
-            position: { x: 140, y: 180 },
-            zIndex: 2,
-            rotation: 35,
-          },
-        ])
-      }
-    >
-      Drag and rotate board item
-    </button>
+  BoardCanvas: ({
+    items,
+    onItemsChange,
+    onItemDelete,
+  }: {
+    items: Array<Record<string, unknown>>;
+    onItemsChange: (items: Array<Record<string, unknown>>) => void;
+    onItemDelete: (itemId: string) => void;
+  }) => (
+    <div>
+      <span>{items.length} canvas item</span>
+      <button
+        type="button"
+        onClick={() =>
+          onItemsChange([
+            {
+              id: 'item-1',
+              type: 'note',
+              position: { x: 140, y: 180 },
+              zIndex: 2,
+              rotation: 35,
+            },
+          ])
+        }
+      >
+        Drag and rotate board item
+      </button>
+      <button
+        type="button"
+        onClick={() =>
+          onItemsChange([
+            {
+              id: 'item-1',
+              type: 'note',
+              position: { x: 260, y: 300 },
+              zIndex: 3,
+              rotation: 70,
+            },
+          ])
+        }
+      >
+        Move board item again
+      </button>
+      <button type="button" onClick={() => onItemDelete('item-1')}>
+        Delete board item
+      </button>
+    </div>
   ),
   BoardComposition: () => null,
   ImagePaletteExtractor: () => null,
@@ -108,7 +140,11 @@ jest.mock('@patina/supabase', () => {
     useBoard: () => ({ data: board }),
     useAddBoardItem: mutation,
     useUpdateBoardItem: mutation,
-    useDeleteBoardItem: mutation,
+    useDeleteBoardItem: () => ({
+      mutate: mockDeleteItem,
+      mutateAsync: mockDeleteItem,
+      isPending: false,
+    }),
     useSaveBoardLayout: () => ({
       mutate: mockLegacySaveLayout,
       mutateAsync: mockSaveLayout,
@@ -172,6 +208,7 @@ jest.mock('@/hooks/use-proposals', () => ({
       id: 'proposal-1',
       title: 'Lakeshore library & lounge',
       version: 1,
+      status: 'draft',
       total_amount: 1_320_000,
       client_id: 'client-1',
       client: {
@@ -184,7 +221,23 @@ jest.mock('@/hooks/use-proposals', () => ({
   }),
   useProposalVersions: () => ({ data: [] }),
   useSendProposal: () => ({ mutateAsync: mockSend, isPending: false }),
+  useRetryProposalSend: () => ({ mutateAsync: jest.fn(), isPending: false }),
+  useProposalSendDispatchStatus: () => ({
+    data: undefined,
+    isLoading: false,
+    isError: false,
+    error: null,
+  }),
   useUpdateProposal: () => ({ mutate: jest.fn(), isPending: false }),
+}));
+
+jest.mock('@/hooks/use-clients', () => ({
+  useClient: () => ({ data: null, isLoading: false }),
+  useInviteAndLinkClient: () => ({ mutateAsync: jest.fn(), isPending: false }),
+}));
+
+jest.mock('@/hooks/use-attach-client', () => ({
+  useAttachDocumentClient: () => ({ mutateAsync: jest.fn(), isPending: false }),
 }));
 
 jest.mock('@/hooks/use-drafting-state', () => ({
@@ -259,6 +312,8 @@ beforeEach(() => {
   mockSaveLayout.mockReset();
   mockSaveLayout.mockResolvedValue(undefined);
   mockLegacySaveLayout.mockReset();
+  mockDeleteItem.mockReset();
+  mockDeleteItem.mockResolvedValue(undefined);
   mockSend.mockReset();
   mockSend.mockResolvedValue({ _emailDispatched: true });
   mockInvalidate.mockReset();
@@ -272,6 +327,62 @@ beforeEach(() => {
 afterEach(() => resetProposalAutosaveRegistryForTests());
 
 describe('BoardEditor proposal send barrier', () => {
+  it('waits for a deferred layout save before delete and ignores a late stale canvas update', async () => {
+    let resolveLayout: () => void = () => {};
+    let resolveDelete: () => void = () => {};
+    mockSaveLayout.mockImplementation(
+      () =>
+        new Promise<void>((resolve) => {
+          resolveLayout = resolve;
+        }),
+    );
+    mockDeleteItem.mockImplementation(
+      () =>
+        new Promise<void>((resolve) => {
+          resolveDelete = resolve;
+        }),
+    );
+
+    render(<BoardEditor proposalId="proposal-1" boardId="board-1" />);
+    fireEvent.click(screen.getByRole('button', { name: 'Drag and rotate board item' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Delete board item' }));
+
+    await waitFor(() => expect(mockSaveLayout).toHaveBeenCalledTimes(1));
+    expect(mockDeleteItem).not.toHaveBeenCalled();
+
+    await act(async () => resolveLayout());
+    await waitFor(() => expect(mockDeleteItem).toHaveBeenCalledTimes(1));
+    expect(mockDeleteItem).toHaveBeenCalledWith({
+      itemId: 'item-1',
+      boardId: 'board-1',
+      proposalId: 'proposal-1',
+    });
+
+    // The canvas is still mounted while delete is in flight. Its stale item
+    // callback must not register another upsert that could recreate the row.
+    fireEvent.click(screen.getByRole('button', { name: 'Move board item again' }));
+    expect(mockSaveLayout).toHaveBeenCalledTimes(1);
+
+    await act(async () => resolveDelete());
+    await waitFor(() => expect(screen.getByText('0 canvas item')).toBeInTheDocument());
+    await act(async () => flushProposalAutosaves('proposal-1'));
+    expect(mockSaveLayout).toHaveBeenCalledTimes(1);
+  });
+
+  it('aborts delete and surfaces the failed layout barrier', async () => {
+    mockSaveLayout.mockRejectedValue(new Error('layout save failed'));
+
+    render(<BoardEditor proposalId="proposal-1" boardId="board-1" />);
+    fireEvent.click(screen.getByRole('button', { name: 'Drag and rotate board item' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Delete board item' }));
+
+    expect(await screen.findByRole('alert')).toHaveTextContent(
+      /item could not be deleted.*nothing was changed.*layout save failed/i,
+    );
+    expect(mockDeleteItem).not.toHaveBeenCalled();
+    expect(screen.getByText('1 canvas item')).toBeInTheDocument();
+  });
+
   it('flushes a drag and rotation before the 600ms debounce can review or send', async () => {
     const order: string[] = [];
     const freshData = {

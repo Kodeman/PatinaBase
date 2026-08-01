@@ -33,6 +33,7 @@ const handlesByProposal = new Map<
 const listenersByProposal = new Map<string, Set<() => void>>();
 const snapshotsByProposal = new Map<string, ProposalAutosaveSnapshot>();
 const activeFlushes = new Map<string, Promise<void>>();
+const proposalActionTails = new Map<string, Promise<void>>();
 
 function emptySnapshot(revision = 0): ProposalAutosaveSnapshot {
   return {
@@ -52,9 +53,10 @@ function recomputeProposalAutosaves(
   const bufferSnapshots = handles
     ? [...handles.values()].map((handle) => handle.getSnapshot())
     : [];
+  const actionPending = proposalActionTails.has(proposalId);
   const next: ProposalAutosaveSnapshot = {
-    dirty: bufferSnapshots.some((snapshot) => snapshot.dirty),
-    flushing: bufferSnapshots.some((snapshot) => snapshot.flushing),
+    dirty: actionPending || bufferSnapshots.some((snapshot) => snapshot.dirty),
+    flushing: actionPending || bufferSnapshots.some((snapshot) => snapshot.flushing),
     error:
       bufferSnapshots.find((snapshot) => snapshot.error)?.error ?? null,
     registeredBuffers: bufferSnapshots.length,
@@ -123,9 +125,60 @@ export function isProposalAutosaveSnapshotClean(
 }
 
 /**
- * Flush every buffer registered to a proposal in registration order. The
- * ordering matters when a failed, detached editor and its remounted successor
- * both own a patch for the same row: the newer buffer must write last.
+ * Drain buffered editors without waiting for the proposal action tail. An
+ * action uses this before its mutation, so including its own tail would
+ * deadlock.
+ */
+async function flushRegisteredAutosaves(
+  proposalId: string,
+): Promise<void> {
+  // A patch can be queued while another buffer is draining. Make a bounded
+  // second pass, then fail closed instead of reviewing an unstable draft.
+  for (let pass = 0; pass < 3; pass += 1) {
+    const handles = [
+      ...(handlesByProposal.get(proposalId)?.values() ?? []),
+    ];
+    for (const handle of handles) {
+      try {
+        await handle.flush();
+      } catch (error) {
+        const snapshot = recomputeProposalAutosaves(proposalId);
+        throw new ProposalAutosaveBarrierError(
+          snapshot.error
+            ? `Proposal edits could not be saved: ${snapshot.error}`
+            : 'Proposal edits could not be saved. Review the draft and try again.',
+          { cause: error },
+        );
+      }
+    }
+
+    const bufferSnapshots = [
+      ...(handlesByProposal.get(proposalId)?.values() ?? []),
+    ].map((handle) => handle.getSnapshot());
+    recomputeProposalAutosaves(proposalId);
+    const error = bufferSnapshots.find((snapshot) => snapshot.error)?.error;
+    if (
+      !error &&
+      !bufferSnapshots.some((snapshot) => snapshot.dirty || snapshot.flushing)
+    ) {
+      return;
+    }
+    if (error) {
+      throw new ProposalAutosaveBarrierError(
+        `Proposal edits could not be saved: ${error}`,
+      );
+    }
+  }
+
+  throw new ProposalAutosaveBarrierError(
+    'Proposal edits are still changing. Wait for saving to finish, then review again.',
+  );
+}
+
+/**
+ * Wait for every immediate proposal action, then flush every registered buffer
+ * in registration order. Recheck the tail so an action queued while waiting is
+ * part of the same Send/switch barrier.
  */
 export async function flushProposalAutosaves(
   proposalId: string,
@@ -134,26 +187,23 @@ export async function flushProposalAutosaves(
   if (active) return active;
 
   const run = (async () => {
-    // A patch can be queued while another buffer is draining. Make a bounded
-    // second pass, then fail closed instead of reviewing an unstable draft.
     for (let pass = 0; pass < 3; pass += 1) {
-      const handles = [
-        ...(handlesByProposal.get(proposalId)?.values() ?? []),
-      ];
-      for (const handle of handles) {
+      const actionTail = proposalActionTails.get(proposalId);
+      if (actionTail) {
         try {
-          await handle.flush();
+          await actionTail;
         } catch (error) {
-          const snapshot = recomputeProposalAutosaves(proposalId);
+          recomputeProposalAutosaves(proposalId);
           throw new ProposalAutosaveBarrierError(
-            snapshot.error
-              ? `Proposal edits could not be saved: ${snapshot.error}`
-              : 'Proposal edits could not be saved. Review the draft and try again.',
+            'A proposal change could not be completed. Review the draft and try again.',
             { cause: error },
           );
         }
       }
 
+      await flushRegisteredAutosaves(proposalId);
+
+      if (proposalActionTails.get(proposalId) !== undefined) continue;
       const snapshot = recomputeProposalAutosaves(proposalId);
       if (isProposalAutosaveSnapshotClean(snapshot)) return;
       if (snapshot.error) {
@@ -178,10 +228,38 @@ export async function flushProposalAutosaves(
   }
 }
 
+/**
+ * Serialize an immediate mutation behind the proposal's buffered editors and
+ * keep it visible to concurrent Send/switch barriers until it settles.
+ */
+export async function runProposalAutosaveAction<Result>(
+  proposalId: string,
+  action: () => Promise<Result>,
+): Promise<Result> {
+  const previous = proposalActionTails.get(proposalId) ?? Promise.resolve();
+  const run = previous.catch(() => undefined).then(async () => {
+    await flushRegisteredAutosaves(proposalId);
+    return action();
+  });
+
+  const settled = run.then(() => undefined);
+  proposalActionTails.set(proposalId, settled);
+  recomputeProposalAutosaves(proposalId);
+  const clearSettledTail = () => {
+    if (proposalActionTails.get(proposalId) === settled) {
+      proposalActionTails.delete(proposalId);
+      recomputeProposalAutosaves(proposalId);
+    }
+  };
+  void settled.then(clearSettledTail, clearSettledTail);
+  return run;
+}
+
 /** Test isolation for the module-level external store. */
 export function resetProposalAutosaveRegistryForTests(): void {
   handlesByProposal.clear();
   listenersByProposal.clear();
   snapshotsByProposal.clear();
   activeFlushes.clear();
+  proposalActionTails.clear();
 }

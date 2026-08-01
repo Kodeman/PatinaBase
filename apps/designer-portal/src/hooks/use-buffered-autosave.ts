@@ -12,6 +12,8 @@ export type BufferedAutosaveState =
 
 interface BufferedAutosaveOptions<Key extends string, Patch extends object> {
   proposalId: string;
+  /** Retires the old buffer generation when an editor changes identity. */
+  generationKey?: string;
   save: (key: Key, patch: Patch) => Promise<unknown>;
   delay?: number;
 }
@@ -21,6 +23,7 @@ interface BufferedAutosaveGeneration<
   Patch extends object,
 > {
   proposalId: string;
+  generationKey: string;
   save: (key: Key, patch: Patch) => Promise<unknown>;
   pending: Map<Key, Patch>;
   timers: Map<Key, ReturnType<typeof setTimeout>>;
@@ -34,10 +37,12 @@ interface BufferedAutosaveGeneration<
 
 function createGeneration<Key extends string, Patch extends object>(
   proposalId: string,
+  generationKey: string,
   save: (key: Key, patch: Patch) => Promise<unknown>,
 ): BufferedAutosaveGeneration<Key, Patch> {
   return {
     proposalId,
+    generationKey,
     save,
     pending: new Map(),
     timers: new Map(),
@@ -62,11 +67,13 @@ function firstBufferedError<Key extends string>(
  * Patches queued for the same row are merged, saves for a row are serialized,
  * blur can flush explicitly, and unmount starts a final drain instead of
  * clearing the timer and dropping the designer's last keystrokes. Each
- * proposal owns an isolated generation so a prop change can never drain the
- * old proposal through the new proposal's save callback or registry handle.
+ * proposal/editor identity owns an isolated generation so a prop change can
+ * never drain the old editor through the new editor's save callback or
+ * registry handle.
  */
 export function useBufferedAutosave<Key extends string, Patch extends object>({
   proposalId,
+  generationKey = proposalId,
   save,
   delay = 600,
 }: BufferedAutosaveOptions<Key, Patch>) {
@@ -76,9 +83,10 @@ export function useBufferedAutosave<Key extends string, Patch extends object>({
   > | null>(null);
   if (
     !generationRef.current ||
-    generationRef.current.proposalId !== proposalId
+    generationRef.current.proposalId !== proposalId ||
+    generationRef.current.generationKey !== generationKey
   ) {
-    generationRef.current = createGeneration(proposalId, save);
+    generationRef.current = createGeneration(proposalId, generationKey, save);
   } else {
     // Same proposal, newer render: future drains may use the latest callback.
     // A drain snapshots this callback when it starts, and a proposal change
