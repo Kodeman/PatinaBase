@@ -23,7 +23,11 @@ jest.mock('@/hooks/use-hydrated', () => ({
 }));
 
 jest.mock('@/hooks/use-document-state', () => ({
-  useDocumentEngagement: () => ({ data: undefined, isLoading: false }),
+  useDocumentEngagement: () => ({
+    data: { kind: 'missing' },
+    isLoading: false,
+    isFetching: false,
+  }),
 }));
 
 jest.mock('@/hooks/document-time-provider', () => ({
