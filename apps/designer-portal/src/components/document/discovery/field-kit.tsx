@@ -7,14 +7,16 @@
  * blocks read as one structured surface, not eight bespoke forms.
  */
 
-import React from 'react';
+import React, { createContext, useContext } from 'react';
 import { DocumentAction } from '../document-action';
+import { DateTextInput } from '../date-text-input';
 
 const inputCls =
   'w-full rounded-[4px] border border-[var(--color-pearl)] bg-white px-2.5 py-1.5 text-[12.5px] text-[var(--color-charcoal)] outline-none transition-colors focus:border-[var(--color-clay)]';
 
 const labelCls =
   'mb-1 block font-mono text-[8.5px] uppercase tracking-[0.07em] text-[var(--text-muted)]';
+const FieldLabelContext = createContext<string | undefined>(undefined);
 
 export function Field({
   label,
@@ -26,7 +28,7 @@ export function Field({
   return (
     <label className="block">
       <span className={labelCls}>{label}</span>
-      {children}
+      <FieldLabelContext.Provider value={label}>{children}</FieldLabelContext.Provider>
     </label>
   );
 }
@@ -35,10 +37,12 @@ export function TextInput({
   value,
   onChange,
   placeholder,
+  ariaLabel,
 }: {
   value: string;
   onChange: (v: string) => void;
   placeholder?: string;
+  ariaLabel?: string;
 }) {
   return (
     <input
@@ -46,6 +50,7 @@ export function TextInput({
       className={inputCls}
       value={value}
       placeholder={placeholder}
+      aria-label={ariaLabel}
       onChange={(e) => onChange(e.target.value)}
     />
   );
@@ -56,11 +61,13 @@ export function NumberInput({
   onChange,
   placeholder,
   prefix,
+  ariaLabel,
 }: {
   value: number | null;
   onChange: (v: number | null) => void;
   placeholder?: string;
   prefix?: string;
+  ariaLabel?: string;
 }) {
   return (
     <span className="flex items-center gap-1">
@@ -74,6 +81,7 @@ export function NumberInput({
         className={inputCls}
         value={value ?? ''}
         placeholder={placeholder}
+        aria-label={ariaLabel}
         onChange={(e) =>
           onChange(e.target.value === '' ? null : Number(e.target.value))
         }
@@ -89,12 +97,13 @@ export function DateInput({
   value: string | null;
   onChange: (v: string | null) => void;
 }) {
+  const fieldLabel = useContext(FieldLabelContext);
   return (
-    <input
-      type="date"
+    <DateTextInput
       className={inputCls}
-      value={value ?? ''}
-      onChange={(e) => onChange(e.target.value || null)}
+      value={value}
+      onChange={onChange}
+      ariaLabel={fieldLabel}
     />
   );
 }
@@ -109,16 +118,19 @@ export function Select({
   onChange,
   options,
   placeholder,
+  ariaLabel,
 }: {
   value: string | null;
   onChange: (v: string | null) => void;
   options: Option[];
   placeholder?: string;
+  ariaLabel?: string;
 }) {
   return (
     <select
       className={inputCls}
       value={value ?? ''}
+      aria-label={ariaLabel}
       onChange={(e) => onChange(e.target.value || null)}
     >
       <option value="">{placeholder ?? '—'}</option>
@@ -355,6 +367,7 @@ export function RowListEditor({
                     onChange={(val) => setCell(i, c.key, val)}
                     options={c.options ?? []}
                     placeholder={c.placeholder}
+                    ariaLabel={`${c.label}, row ${i + 1}`}
                   />
                 </span>
               );
@@ -366,6 +379,7 @@ export function RowListEditor({
                     value={(v as number) ?? null}
                     onChange={(val) => setCell(i, c.key, val)}
                     placeholder={c.placeholder}
+                    ariaLabel={`${c.label}, row ${i + 1}`}
                   />
                 </span>
               );
@@ -379,6 +393,7 @@ export function RowListEditor({
                   value={(v as string) ?? ''}
                   onChange={(val) => setCell(i, c.key, val)}
                   placeholder={c.placeholder ?? c.label}
+                  ariaLabel={`${c.label}, row ${i + 1}`}
                 />
               </span>
             );

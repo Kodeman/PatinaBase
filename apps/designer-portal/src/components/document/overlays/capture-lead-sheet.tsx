@@ -147,7 +147,10 @@ export function CaptureLeadSheet({
             />
           </Field>
 
-          <div className="grid grid-cols-1 gap-5 sm:grid-cols-2">
+          <div
+            data-testid="lead-contact-project-fields"
+            className="grid grid-cols-1 gap-5"
+          >
             <Field label="Contact">
               <Input
                 value={contact}
@@ -270,7 +273,7 @@ function Input({
       value={value}
       onChange={(e) => onChange(e.target.value)}
       placeholder={placeholder}
-      className="w-full border-b border-[var(--color-pearl)] bg-transparent pb-1.5 text-[14px] text-[var(--color-charcoal)] placeholder:text-[var(--text-faint)] focus:border-[var(--color-clay)] focus:outline-none"
+      className="min-w-0 w-full border-b border-[var(--color-pearl)] bg-transparent pb-1.5 text-[14px] text-[var(--color-charcoal)] placeholder:text-[var(--text-faint)] focus:border-[var(--color-clay)] focus:outline-none"
     />
   );
 }

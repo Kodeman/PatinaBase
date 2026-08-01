@@ -23,7 +23,7 @@ import {
 import { documentEvents } from '@/lib/analytics/document-events';
 
 export function LogStrip() {
-  const { offer, logOffer, discardOffer } = useDocumentTime();
+  const { offer, heldProjectId, logOffer, discardOffer } = useDocumentTime();
   const [minutes, setMinutes] = useState('');
   const [activity, setActivity] = useState('design');
   const [busy, setBusy] = useState(false);
@@ -51,6 +51,7 @@ export function LogStrip() {
   const parsed = parseInt(minutes, 10);
   const valid = Number.isFinite(parsed) && parsed >= 1;
   const adjusted = valid && isAdjusted(offer, parsed);
+  const crossProject = Boolean(heldProjectId && heldProjectId !== offer.projectId);
 
   const submit = async () => {
     if (!valid || busy) return;
@@ -71,12 +72,17 @@ export function LogStrip() {
   return (
     <div
       role="status"
-      aria-label="Log time offer"
+      aria-label={
+        crossProject ? 'Review time from another project' : 'Review time to log'
+      }
       className="fixed inset-x-0 bottom-[56px] z-50 flex flex-wrap items-center justify-center gap-2.5 border-t border-[var(--color-clay)] bg-[var(--bg-warm)] px-4 py-2 min-[980px]:bottom-[60px]"
     >
+      <span className="font-mono text-[9px] font-semibold uppercase tracking-[0.08em] text-[var(--color-aged-oak)]">
+        {crossProject ? 'Time from another project' : 'Time to review'}
+      </span>
       <p className="text-[12px] text-[var(--text-body)]">
-        <strong className="font-medium text-[var(--text-primary)]">{offer.projectName}</strong> was
-        in hand for{' '}
+        <strong className="font-medium text-[var(--text-primary)]">{offer.projectName}</strong>
+        {crossProject ? ' · carried over' : ''} was in hand for{' '}
         <strong className="font-medium text-[var(--text-primary)]">
           {fmtMinutes(offer.suggestedMinutes)}
         </strong>{' '}
