@@ -15506,6 +15506,7 @@ export type Database = {
           original_spec: Json | null
           project_id: string
           proposal_id: string | null
+          request_origin: string
           requested_by: string
           requested_change: Json | null
           sent_at: string | null
@@ -15538,6 +15539,7 @@ export type Database = {
           original_spec?: Json | null
           project_id: string
           proposal_id?: string | null
+          request_origin?: string
           requested_by: string
           requested_change?: Json | null
           sent_at?: string | null
@@ -15570,6 +15572,7 @@ export type Database = {
           original_spec?: Json | null
           project_id?: string
           proposal_id?: string | null
+          request_origin?: string
           requested_by?: string
           requested_change?: Json | null
           sent_at?: string | null
