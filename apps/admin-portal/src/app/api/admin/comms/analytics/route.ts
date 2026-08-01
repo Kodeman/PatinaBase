@@ -101,7 +101,7 @@ async function getComparison(supabase: any, campaignIds: string[]) {
 async function getAttribution(supabase: any, since: string) {
   const deliveredStatuses = ['delivered', 'opened', 'clicked'];
   const [sentResult, openedResult, clickedResult] = await Promise.all([
-    supabase.from('notification_log').select('*', { count: 'exact', head: true }).gte('created_at', since).in('status', [...deliveredStatuses, 'bounced']),
+    supabase.from('notification_log').select('*', { count: 'exact', head: true }).gte('created_at', since).in('status', [...deliveredStatuses, 'bounced', 'unconfirmed']),
     supabase.from('notification_log').select('*', { count: 'exact', head: true }).gte('created_at', since).not('opened_at', 'is', null),
     supabase.from('notification_log').select('*', { count: 'exact', head: true }).gte('created_at', since).not('clicked_at', 'is', null),
   ]);
