@@ -1,4 +1,4 @@
--- set_document_client relationship-spine consistency regression (00385)
+-- set_document_client relationship-spine authority regression (00385, 00387)
 -- Run:
 --   psql 'postgresql://postgres:postgres@127.0.0.1:54322/postgres' \
 --     -v ON_ERROR_STOP=1 -f supabase/tests/document/set_document_client_consistency_test.sql
@@ -100,6 +100,13 @@ VALUES
     'c7100000-0000-4000-8000-000000000005',
     'c7000000-0000-4000-8000-000000000005',
     'Foreign proposal', 100000, 'draft'
+  ),
+  (
+    'c7200000-0000-4000-8000-000000000004',
+    'c7000000-0000-4000-8000-000000000001',
+    'c7100000-0000-4000-8000-000000000002',
+    'c7000000-0000-4000-8000-000000000002',
+    'Already sent proposal', 100000, 'sent'
   );
 
 CREATE OR REPLACE FUNCTION pg_temp.assume_document_client_owner()
@@ -151,6 +158,37 @@ BEGIN
   ASSERT v_document_client_name = 'New Registered Household',
     format('document-state letterhead should follow the new relationship, got %L',
       v_document_client_name);
+END;
+$$;
+
+-- A table UPDATE is not attachment authority, even when RLS allows the owner
+-- and the caller forges the exact row-scoped GUC used by the RPC.
+DO $$
+DECLARE
+  v_error text;
+BEGIN
+  PERFORM set_config(
+    'app.proposal_identity_id',
+    'c7200000-0000-4000-8000-000000000001',
+    true
+  );
+  BEGIN
+    UPDATE public.proposals
+    SET client_id = NULL
+    WHERE id = 'c7200000-0000-4000-8000-000000000001';
+  EXCEPTION WHEN check_violation THEN
+    v_error := SQLERRM;
+  END;
+  PERFORM set_config('app.proposal_identity_id', '', true);
+
+  ASSERT v_error =
+    'proposal client identity may only change through set_document_client',
+    format('direct one-leg identity update should reject, got %L', v_error);
+  ASSERT (SELECT client_id = 'c7000000-0000-4000-8000-000000000002'
+                 AND designer_client_id = 'c7100000-0000-4000-8000-000000000002'
+          FROM public.proposals
+          WHERE id = 'c7200000-0000-4000-8000-000000000001'),
+    'rejected direct identity update must preserve both legs';
 END;
 $$;
 
@@ -228,6 +266,40 @@ BEGIN
   END;
   ASSERT v_error = 'no proposal owned by you with id c7200000-0000-4000-8000-000000000003',
     format('foreign proposal should be rejected, got %L', v_error);
+END;
+$$;
+
+-- Identity is frozen once a proposal leaves draft, under the same row lock
+-- used to inspect its status.
+DO $$
+DECLARE
+  v_error text;
+BEGIN
+  BEGIN
+    PERFORM public.set_document_client(
+      'proposal',
+      'c7200000-0000-4000-8000-000000000004',
+      NULL
+    );
+  EXCEPTION WHEN check_violation THEN
+    v_error := SQLERRM;
+  END;
+  ASSERT v_error = 'proposal client identity may only change while draft',
+    format('sent proposal identity should be frozen, got %L', v_error);
+END;
+$$;
+
+DO $$
+BEGIN
+  ASSERT has_function_privilege(
+    'authenticated', 'public.set_document_client(text,uuid,uuid)', 'EXECUTE'
+  ), 'authenticated must execute set_document_client';
+  ASSERT NOT has_function_privilege(
+    'anon', 'public.set_document_client(text,uuid,uuid)', 'EXECUTE'
+  ), 'anon must not execute set_document_client';
+  ASSERT NOT has_function_privilege(
+    'public', 'public.set_document_client(text,uuid,uuid)', 'EXECUTE'
+  ), 'PUBLIC must not execute set_document_client';
 END;
 $$;
 

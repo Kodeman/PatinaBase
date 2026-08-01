@@ -254,6 +254,7 @@ export function useCreateProposal(options?: { errorSurface?: 'inline' }) {
       description,
       projectId,
       clientId,
+      designerClientId,
       validUntil,
       templateId,
     }: {
@@ -261,6 +262,7 @@ export function useCreateProposal(options?: { errorSurface?: 'inline' }) {
       description?: string;
       projectId?: string;
       clientId?: string;
+      designerClientId?: string;
       validUntil?: string;
       templateId?: string;
     }) => {
@@ -269,6 +271,11 @@ export function useCreateProposal(options?: { errorSurface?: 'inline' }) {
 
       const { data: user } = await supabase.auth.getUser();
       if (!user.user) throw new Error('Not authenticated');
+      if (!!clientId !== !!designerClientId) {
+        throw new Error(
+          'A proposal client must include both profile and designer relationship identities',
+        );
+      }
 
       const { data, error } = await supabase
         .from('proposals')
@@ -278,6 +285,7 @@ export function useCreateProposal(options?: { errorSurface?: 'inline' }) {
           description,
           project_id: projectId || null,
           client_id: clientId || null,
+          designer_client_id: designerClientId || null,
           valid_until: validUntil || null,
           template_id: templateId || null,
           status: 'draft',
@@ -341,7 +349,7 @@ export function useUpdateProposal(options?: { errorSurface?: 'inline' }) {
       updates,
     }: {
       proposalId: string;
-      updates: Partial<Pick<Proposal, 'title' | 'description' | 'project_address' | 'client_visibility_tier' | 'valid_until' | 'client_id' | 'project_id'>>;
+      updates: Partial<Pick<Proposal, 'title' | 'description' | 'project_address' | 'client_visibility_tier' | 'valid_until' | 'project_id'>>;
     }) => {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const supabase = getSupabase() as any;

@@ -14,6 +14,7 @@ DO $$
 DECLARE
   uid_designer UUID := 'a0000000-0000-0000-0000-000000000004';
   uid_client   UUID := 'a0000000-0000-0000-0000-000000000005';
+  v_designer_client UUID;
   v_accepted   UUID := 'b0000000-0000-0000-0000-000000000001';
   v_sent       UUID := 'b0000000-0000-0000-0000-000000000002';
 BEGIN
@@ -23,12 +24,24 @@ BEGIN
     RETURN;
   END IF;
 
+  SELECT id INTO v_designer_client
+  FROM public.designer_clients
+  WHERE designer_id = uid_designer
+    AND client_id = uid_client
+  ORDER BY (status <> 'lead') DESC, created_at, id
+  LIMIT 1;
+
+  IF v_designer_client IS NULL THEN
+    RAISE NOTICE 'proposals.sql: designer/client relationship missing - run designer-clients.sql first';
+    RETURN;
+  END IF;
+
   -- ── Proposal 1: accepted (activation fast-path) ───────────────────────
   INSERT INTO public.proposals (
-    id, designer_id, client_id, title, description, status,
+    id, designer_id, client_id, designer_client_id, title, description, status,
     subtotal, total_amount, accepted_at, created_at, updated_at
   ) VALUES (
-    v_accepted, uid_designer, uid_client,
+    v_accepted, uid_designer, uid_client, v_designer_client,
     'Sample accepted proposal',
     'Pre-seeded proposal in accepted status. Used to exercise the proposal-to-project activation flow in local dev.',
     'accepted', 10000000, 10000000, NOW(), NOW(), NOW()
@@ -37,11 +50,11 @@ BEGIN
 
   -- ── Proposal 2: sent (client review fixture) ──────────────────────────
   INSERT INTO public.proposals (
-    id, designer_id, client_id, title, description, status,
+    id, designer_id, client_id, designer_client_id, title, description, status,
     subtotal, total_amount, sent_at, valid_until,
     personal_message, created_at, updated_at, version
   ) VALUES (
-    v_sent, uid_designer, uid_client,
+    v_sent, uid_designer, uid_client, v_designer_client,
     'Aspen Loft — Living Room Refresh',
     'Sent fixture: open this from the client portal to exercise the engagement, sign, and activation flow.',
     'sent',
