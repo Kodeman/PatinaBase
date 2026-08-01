@@ -21154,6 +21154,7 @@ export type Database = {
         Returns: undefined
       }
       _can_author_proposal: { Args: { p_owner: string }; Returns: boolean }
+      _can_manage_invoice_owner: { Args: { p_owner: string }; Returns: boolean }
       _commit_proposal_send: {
         Args: {
           p_cc_email?: string
@@ -21269,6 +21270,46 @@ export type Database = {
           isSetofReturn: false
         }
       }
+      _issue_invoice_authorized_legacy_00397: {
+        Args: { p_due_date?: string; p_invoice_id: string }
+        Returns: {
+          amount_paid_cents: number
+          ar_flagged_at: string | null
+          ar_last_chased_at: string | null
+          client_id: string | null
+          created_at: string
+          currency: string
+          designer_id: string
+          due_date: string | null
+          id: string
+          internal_notes: string | null
+          invoice_number: string | null
+          issue_date: string | null
+          last_reminder_at: string | null
+          memo: string | null
+          paid_at: string | null
+          payment_terms_days: number
+          project_id: string
+          reminder_count: number
+          sent_at: string | null
+          status: string
+          stripe_checkout_session_id: string | null
+          studio_id: string | null
+          subtotal_cents: number
+          tax_cents: number
+          tax_rate: number
+          total_cents: number
+          updated_at: string
+          void_reason: string | null
+          voided_at: string | null
+        }
+        SetofOptions: {
+          from: "*"
+          to: "invoices"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
       _item_feedback_gate_impl: {
         Args: {
           p_board_item_id: string
@@ -21367,6 +21408,39 @@ export type Database = {
         SetofOptions: {
           from: "*"
           to: "organizations"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
+      _record_invoice_payment_authorized_legacy_00397: {
+        Args: {
+          p_amount_cents: number
+          p_invoice_id: string
+          p_method: string
+          p_note?: string
+          p_received_at?: string
+          p_reference?: string
+        }
+        Returns: {
+          amount_cents: number
+          checkout_attempt_id: string | null
+          created_at: string
+          id: string
+          invoice_id: string
+          method: string
+          note: string | null
+          received_at: string | null
+          recorded_by: string | null
+          reference: string | null
+          status: string
+          stripe_checkout_session_id: string | null
+          stripe_event_id: string | null
+          stripe_payment_intent_id: string | null
+          updated_at: string
+        }
+        SetofOptions: {
+          from: "*"
+          to: "invoice_payments"
           isOneToOne: true
           isSetofReturn: false
         }
@@ -21586,6 +21660,46 @@ export type Database = {
       _sync_proposal_send_email_log: {
         Args: { p_dispatch_id: string }
         Returns: undefined
+      }
+      _void_invoice_authorized_legacy_00397: {
+        Args: { p_invoice_id: string; p_reason: string }
+        Returns: {
+          amount_paid_cents: number
+          ar_flagged_at: string | null
+          ar_last_chased_at: string | null
+          client_id: string | null
+          created_at: string
+          currency: string
+          designer_id: string
+          due_date: string | null
+          id: string
+          internal_notes: string | null
+          invoice_number: string | null
+          issue_date: string | null
+          last_reminder_at: string | null
+          memo: string | null
+          paid_at: string | null
+          payment_terms_days: number
+          project_id: string
+          reminder_count: number
+          sent_at: string | null
+          status: string
+          stripe_checkout_session_id: string | null
+          studio_id: string | null
+          subtotal_cents: number
+          tax_cents: number
+          tax_rate: number
+          total_cents: number
+          updated_at: string
+          void_reason: string | null
+          voided_at: string | null
+        }
+        SetofOptions: {
+          from: "*"
+          to: "invoices"
+          isOneToOne: true
+          isSetofReturn: false
+        }
       }
       accept_client_scope_change_request: {
         Args: { p_project_id: string; p_request_id: string }
