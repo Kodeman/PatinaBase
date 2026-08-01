@@ -1742,7 +1742,7 @@ VALUES
     'e8000000-0000-4000-8000-000000000001',
     'e8200000-0000-4000-8000-000000000001',
     'e8000000-0000-4000-8000-000000000002',
-    'Canonical activation fixture', 1, 'accepted', now(), now() + interval '30 days'
+    'Canonical activation fixture', 1, 'draft', now(), now() + interval '30 days'
   ),
   (
     'e8440000-0000-4000-8000-000000000003',
@@ -1758,6 +1758,43 @@ VALUES
     'e8000000-0000-4000-8000-000000000002',
     'Studio peer activation fixture', 1, 'accepted', now(), now() + interval '30 days'
   );
+
+-- Materialize an authored two-phase chain while its proposal is still draft,
+-- then use the same exact acceptance capability as the canonical signature
+-- boundary. Activation must copy roots then rewire them under 00398's scoped
+-- project-phase batch capability.
+INSERT INTO public.proposal_phases (
+  id, proposal_id, name, phase_key, duration_weeks, duration_days,
+  fee_cents, revision_limit, deliverables, sort_order, lane, follows_phase_id
+)
+VALUES
+  (
+    'e84a0000-0000-4000-8000-000000000001',
+    'e8440000-0000-4000-8000-000000000002',
+    'Activation discovery', 'activation-discovery', 1, 7,
+    0, 2, '[]'::jsonb, 0, 'main', NULL
+  ),
+  (
+    'e84a0000-0000-4000-8000-000000000002',
+    'e8440000-0000-4000-8000-000000000002',
+    'Activation design', 'activation-design', 2, 14,
+    0, 2, '[]'::jsonb, 1, 'main',
+    'e84a0000-0000-4000-8000-000000000001'
+  );
+
+SELECT set_config(
+  'app.proposal_accept_id',
+  'e8440000-0000-4000-8000-000000000002',
+  true
+);
+UPDATE public.proposals
+SET status = 'accepted',
+    accepted_at = now(),
+    signed_at = now(),
+    signed_by_name = 'Fixture Client',
+    updated_at = now()
+WHERE id = 'e8440000-0000-4000-8000-000000000002';
+SELECT set_config('app.proposal_accept_id', '', true);
 
 INSERT INTO public.projects (
   id, name, created_by, designer_id, client_id, studio_id
@@ -1833,6 +1870,8 @@ DO $$
 DECLARE
   v_activated_project_id uuid;
   v_error text;
+  v_phase_ids uuid[];
+  v_predecessor_ids uuid[];
 BEGIN
   ASSERT has_function_privilege(
            'authenticated',
@@ -1910,11 +1949,38 @@ BEGIN
           FROM public.projects AS project
           WHERE project.id = v_activated_project_id),
     'canonical activation target must point back to its source proposal';
+  SELECT array_agg(phase.id ORDER BY phase.sort_order, phase.id),
+         array_agg(phase.follows_phase_id ORDER BY phase.sort_order, phase.id)
+  INTO v_phase_ids, v_predecessor_ids
+  FROM public.project_phases AS phase
+  WHERE phase.project_id = v_activated_project_id;
+  ASSERT cardinality(v_phase_ids) = 2
+     AND v_predecessor_ids[1] IS NULL
+     AND v_predecessor_ids[2] = v_phase_ids[1],
+    format(
+      'proposal activation must insert then rewire its exact phase chain: %s / %s',
+      v_phase_ids,
+      v_predecessor_ids
+    );
+  ASSERT (SELECT count(*) = 1
+          FROM public.project_phases AS phase
+          WHERE phase.project_id = v_activated_project_id
+            AND phase.status = 'in_progress')
+     AND (SELECT count(*) = 1
+          FROM public.project_phases AS phase
+          WHERE phase.project_id = v_activated_project_id
+            AND phase.status = 'pending'),
+    'proposal activation must preserve one live root and one pending successor';
   ASSERT NULLIF(
            current_setting('app.proposal_activation_id', true),
            ''
          ) IS NULL,
     'canonical activation must clear its scoped authority token';
+  ASSERT NULLIF(
+           current_setting('app.project_phase_batch_token', true),
+           ''
+         ) IS NULL,
+    'canonical activation must clear its scoped phase batch token';
 
   v_error := NULL;
   BEGIN

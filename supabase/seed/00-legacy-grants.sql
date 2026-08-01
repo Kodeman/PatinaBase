@@ -5078,6 +5078,12 @@ END $g$;
 
 -- 00397_billing_checkout_integrity.sql
 DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public._can_manage_invoice_owner(uuid) FROM PUBLIC, anon, authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00397_billing_checkout_integrity.sql
+DO $g$ BEGIN
   REVOKE ALL ON FUNCTION public.generate_milestone_invoice(uuid) FROM PUBLIC, anon;
 EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
 END $g$;
@@ -5097,6 +5103,60 @@ END $g$;
 -- 00397_billing_checkout_integrity.sql
 DO $g$ BEGIN
   GRANT EXECUTE ON FUNCTION public.can_manage_invoice(uuid) TO authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00397_billing_checkout_integrity.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.void_invoice(uuid, text) FROM PUBLIC, anon;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00397_billing_checkout_integrity.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.void_invoice(uuid, text) TO authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00397_billing_checkout_integrity.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public._issue_invoice_authorized_legacy_00397(uuid, date) FROM PUBLIC, anon, authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00397_billing_checkout_integrity.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.issue_invoice(uuid, date) FROM PUBLIC, anon;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00397_billing_checkout_integrity.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.issue_invoice(uuid, date) TO authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00397_billing_checkout_integrity.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public._record_invoice_payment_authorized_legacy_00397( uuid, integer, text, text, timestamptz, text ) FROM PUBLIC, anon, authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00397_billing_checkout_integrity.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.record_invoice_payment( uuid, integer, text, text, timestamptz, text ) FROM PUBLIC, anon;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00397_billing_checkout_integrity.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.record_invoice_payment( uuid, integer, text, text, timestamptz, text ) TO authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00397_billing_checkout_integrity.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public._void_invoice_authorized_legacy_00397(uuid, text) FROM PUBLIC, anon, authenticated, service_role;
 EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
 END $g$;
 
@@ -5252,6 +5312,12 @@ END $g$;
 
 -- 00398_delete_project_phase_atomic_rpc.sql
 DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.guard_project_phase_lifecycle_write() FROM PUBLIC, anon, authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00398_delete_project_phase_atomic_rpc.sql
+DO $g$ BEGIN
   REVOKE ALL ON FUNCTION public.guard_project_phase_topology_write() FROM PUBLIC, anon, authenticated, service_role;
 EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
 END $g$;
@@ -5283,6 +5349,30 @@ END $g$;
 -- 00398_delete_project_phase_atomic_rpc.sql
 DO $g$ BEGIN
   GRANT EXECUTE ON FUNCTION public.copy_schedule_as_built(uuid, uuid, uuid) TO authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00398_delete_project_phase_atomic_rpc.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.guard_project_completion_authority() FROM PUBLIC, anon, authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00398_delete_project_phase_atomic_rpc.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public._activate_proposal_as_project_authorized(uuid, date) FROM PUBLIC, anon, authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00398_delete_project_phase_atomic_rpc.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.activate_project_v2(jsonb) FROM PUBLIC, anon, authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00398_delete_project_phase_atomic_rpc.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.activate_project_v2(jsonb) TO authenticated;
 EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
 END $g$;
 

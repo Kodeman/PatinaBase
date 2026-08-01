@@ -230,6 +230,42 @@ BEGIN
 END;
 $$;
 
+-- Stronger than a browser forgery: execute as the same definer owner as the
+-- real boundaries, but carry a valid project+transaction token for project A
+-- while attempting to write project B. Exact scope must still reject it.
+CREATE OR REPLACE FUNCTION pg_temp.attempt_wrong_scope_phase_batch(
+  p_authorized_project_id uuid,
+  p_write_project_id uuid
+)
+RETURNS void
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public, pg_temp
+AS $$
+BEGIN
+  PERFORM set_config(
+    'app.project_phase_batch_token',
+    format(
+      'project_phase_batch:%s:%s',
+      p_authorized_project_id,
+      pg_catalog.txid_current()
+    ),
+    true
+  );
+
+  INSERT INTO public.project_phases (
+    project_id, phase_key, name, status, progress, lane
+  ) VALUES (
+    p_write_project_id,
+    'wrong-scope',
+    'Wrong-scope batch phase',
+    'pending',
+    0,
+    'main'
+  );
+END;
+$$;
+
 -- ACLs are explicit in both directions; private helpers and diagnostic writes
 -- are never callable by an authenticated browser.
 DO $$
@@ -249,6 +285,14 @@ BEGIN
     'public.delete_project_phase(uuid,uuid)',
     'EXECUTE'
   ), 'authenticated must execute atomic delete';
+  ASSERT has_function_privilege(
+    'authenticated',
+    'public.activate_project_v2(jsonb)',
+    'EXECUTE'
+  ), 'authenticated must execute the activation wizard boundary';
+  ASSERT NOT has_function_privilege(
+    'anon', 'public.activate_project_v2(jsonb)', 'EXECUTE'
+  ), 'anon must not execute the activation wizard boundary';
   ASSERT NOT has_function_privilege(
     'anon', 'public.delete_project_phase(uuid,uuid)', 'EXECUTE'
   ), 'anon must not execute delete';
@@ -283,11 +327,101 @@ BEGIN
       'public.delete_project_phase(uuid,uuid)'::regprocedure
     )
   ) > 0, 'delete boundary must derive exact followers on the server';
+  ASSERT position(
+    'app.project_phase_batch_token' IN pg_get_functiondef(
+      'public._activate_proposal_as_project_authorized(uuid,date)'::regprocedure
+    )
+  ) > 0, 'proposal activation bridge must own a phase batch capability';
+  ASSERT position(
+    '_assert_project_phase_topology' IN pg_get_functiondef(
+      'public._activate_proposal_as_project_authorized(uuid,date)'::regprocedure
+    )
+  ) > 0, 'proposal activation bridge must validate final topology';
+  ASSERT position(
+    'UPDATE public.project_phases' IN pg_get_functiondef(
+      'public.activate_project_v2(jsonb)'::regprocedure
+    )
+  ) > 0, 'activation wizard must rewire its inserted phases';
+  ASSERT position(
+    '_assert_project_phase_topology' IN pg_get_functiondef(
+      'public.activate_project_v2(jsonb)'::regprocedure
+    )
+  ) > 0, 'activation wizard must validate final topology';
 END;
 $$;
 
 SET LOCAL ROLE authenticated;
 SELECT pg_temp.assume_topology_actor('b9000000-0000-4000-8000-000000000001');
+
+-- The direct activation wizard receives one exact creation-batch capability.
+-- Its root inserts and same-project rewires succeed, the final topology is a
+-- stable chain, and the transaction-local token is restored before return.
+DO $$
+DECLARE
+  v_project_id uuid;
+  v_phase_ids uuid[];
+  v_predecessor_ids uuid[];
+BEGIN
+  v_project_id := public.activate_project_v2(jsonb_build_object(
+    'name', 'Topology activation wizard',
+    'kickoff_date', current_date,
+    'phases', jsonb_build_array(
+      jsonb_build_object(
+        'name', 'Discovery',
+        'duration_weeks', 1,
+        'sort_order', 0
+      ),
+      jsonb_build_object(
+        'name', 'Design',
+        'duration_weeks', 2,
+        'sort_order', 1
+      ),
+      jsonb_build_object(
+        'name', 'Procurement',
+        'duration_weeks', 1,
+        'sort_order', 2
+      )
+    )
+  ));
+
+  SELECT array_agg(phase.id ORDER BY phase.sort_order, phase.id),
+         array_agg(phase.follows_phase_id ORDER BY phase.sort_order, phase.id)
+  INTO v_phase_ids, v_predecessor_ids
+  FROM public.project_phases AS phase
+  WHERE phase.project_id = v_project_id;
+
+  ASSERT cardinality(v_phase_ids) = 3,
+    format('activate_project_v2 phase count drifted: %s', v_phase_ids);
+  ASSERT v_predecessor_ids[1] IS NULL
+     AND v_predecessor_ids[2] = v_phase_ids[1]
+     AND v_predecessor_ids[3] = v_phase_ids[2],
+    format(
+      'activate_project_v2 must insert then rewire one exact chain: %s / %s',
+      v_phase_ids,
+      v_predecessor_ids
+    );
+  ASSERT NOT EXISTS (
+    SELECT 1
+    FROM public.project_phases AS phase
+    WHERE phase.project_id = v_project_id
+      AND phase.status <> 'pending'
+  ), 'activate_project_v2 must preserve its pending lifecycle semantics';
+  ASSERT NULLIF(
+           current_setting('app.project_phase_batch_token', true),
+           ''
+         ) IS NULL,
+    'activate_project_v2 must restore its batch token';
+END;
+$$;
+
+SELECT pg_temp.expect_topology_failure(
+  $$SELECT pg_temp.attempt_wrong_scope_phase_batch(
+      'b9300000-0000-4000-8000-000000000004',
+      'b9300000-0000-4000-8000-000000000005'
+    )$$,
+  '42501',
+  'topology inserts are writable only through create_project_phase'
+);
 
 -- Atomic delete relinks every direct follower to the server-read predecessor,
 -- preserves each cross-lane label, and returns exactly three deterministic keys.

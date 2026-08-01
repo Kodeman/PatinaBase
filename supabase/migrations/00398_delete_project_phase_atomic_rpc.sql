@@ -9,6 +9,12 @@
 -- most one live row, and no corrupt edge/cycle elsewhere in the project.
 -- Everything else is preserved and surfaced through an author-scoped RLS
 -- diagnostic instead of being guessed into a chain.
+--
+-- Creation-boundary lineage:
+--   proposal activation bridge: 00390_proposal_copy_immutability.sql
+--   project insert guard:        00390_proposal_copy_immutability.sql
+--   activate_project_v2:         00086_activate_project_rpc.sql
+--   phase lifecycle guard:       00393_advance_project_phase_atomic_rpc.sql
 -- ═══════════════════════════════════════════════════════════════════════════
 
 -- ─── Legacy repair diagnostics ────────────────────────────────────────────
@@ -1007,6 +1013,99 @@ COMMENT ON FUNCTION public.delete_project_phase(uuid, uuid) IS
 
 -- ─── Direct topology-write closure ────────────────────────────────────────
 
+-- 00393 lifecycle lineage, grafted only to admit server-owned creation
+-- batches. The capability is valid for INSERT lifecycle derivation only;
+-- advance_project_phase remains the sole post-creation lifecycle writer.
+CREATE OR REPLACE FUNCTION public.guard_project_phase_lifecycle_write()
+RETURNS trigger
+LANGUAGE plpgsql
+SET search_path = public, pg_temp
+AS $$
+DECLARE
+  v_rpc_owner             text;
+  v_project_id            uuid;
+  v_expected_token        text;
+  v_batch_expected_token  text;
+  v_rpc_authorized        boolean := false;
+  v_batch_authorized      boolean := false;
+  v_owner_maint           boolean := false;
+BEGIN
+  SELECT pg_catalog.pg_get_userbyid(proc.proowner)
+  INTO v_rpc_owner
+  FROM pg_catalog.pg_proc AS proc
+  WHERE proc.oid =
+    'public.advance_project_phase(uuid,uuid,text)'::pg_catalog.regprocedure;
+
+  v_project_id := CASE
+    WHEN TG_OP = 'DELETE' THEN OLD.project_id
+    ELSE NEW.project_id
+  END;
+  v_expected_token := format(
+    'advance_project_phase:%s:%s',
+    v_project_id,
+    pg_catalog.txid_current()
+  );
+  v_batch_expected_token := format(
+    'project_phase_batch:%s:%s',
+    v_project_id,
+    pg_catalog.txid_current()
+  );
+  v_rpc_authorized := current_user = v_rpc_owner
+    AND current_setting('app.advance_project_phase_token', true) =
+        v_expected_token;
+  v_batch_authorized := current_user = v_rpc_owner
+    AND TG_OP = 'INSERT'
+    AND current_setting('app.project_phase_batch_token', true) =
+        v_batch_expected_token;
+  v_owner_maint := current_user = v_rpc_owner
+    AND session_user = v_rpc_owner
+    AND COALESCE(current_setting('role', true), 'none') = 'none';
+
+  IF TG_OP = 'INSERT' THEN
+    IF NOT (v_rpc_authorized OR v_batch_authorized OR v_owner_maint)
+       AND (
+         NEW.status IS DISTINCT FROM 'pending'
+         OR NEW.completed_at IS NOT NULL
+         OR NEW.progress IS DISTINCT FROM 0
+       ) THEN
+      RAISE EXCEPTION
+        'project_phases lifecycle inserts must start pending with zero progress'
+        USING ERRCODE = 'insufficient_privilege';
+    END IF;
+    RETURN NEW;
+  END IF;
+
+  IF TG_OP = 'UPDATE' THEN
+    IF NOT (v_rpc_authorized OR v_owner_maint)
+       AND (
+         NEW.status IS DISTINCT FROM OLD.status
+         OR NEW.completed_at IS DISTINCT FROM OLD.completed_at
+         OR NEW.progress IS DISTINCT FROM OLD.progress
+       ) THEN
+      RAISE EXCEPTION
+        'project_phases lifecycle fields are writable only through advance_project_phase'
+        USING ERRCODE = 'insufficient_privilege';
+    END IF;
+    RETURN NEW;
+  END IF;
+
+  IF OLD.status <> 'pending' AND NOT v_owner_maint THEN
+    RAISE EXCEPTION
+      'project_phases non-pending lifecycle rows cannot be deleted directly'
+      USING ERRCODE = 'insufficient_privilege';
+  END IF;
+  RETURN OLD;
+END;
+$$;
+
+REVOKE ALL ON FUNCTION public.guard_project_phase_lifecycle_write()
+  FROM PUBLIC, anon, authenticated, service_role;
+
+COMMENT ON FUNCTION public.guard_project_phase_lifecycle_write() IS
+  '00393 lifecycle boundary plus exact project+transaction creation-batch '
+  'authority for initial INSERT state. Post-creation lifecycle changes remain '
+  'exclusive to advance_project_phase.';
+
 CREATE OR REPLACE FUNCTION public.guard_project_phase_topology_write()
 RETURNS trigger
 LANGUAGE plpgsql
@@ -1018,7 +1117,9 @@ DECLARE
   v_operation text;
   v_expected_token text;
   v_delete_token text;
+  v_batch_expected_token text;
   v_rpc_authorized boolean := false;
+  v_batch_authorized boolean := false;
   v_owner_maint boolean := false;
 BEGIN
   SELECT pg_catalog.pg_get_userbyid(proc.proowner)
@@ -1047,6 +1148,11 @@ BEGIN
     v_project_id,
     pg_catalog.txid_current()
   );
+  v_batch_expected_token := format(
+    'project_phase_batch:%s:%s',
+    v_project_id,
+    pg_catalog.txid_current()
+  );
   v_rpc_authorized := current_user = v_rpc_owner
     AND (
       current_setting('app.project_phase_topology_token', true) = v_expected_token
@@ -1055,12 +1161,21 @@ BEGIN
         AND current_setting('app.project_phase_topology_token', true) = v_delete_token
       )
     );
+  v_batch_authorized := current_user = v_rpc_owner
+    AND TG_OP IN ('INSERT', 'UPDATE')
+    AND current_setting('app.project_phase_batch_token', true) =
+        v_batch_expected_token
+    AND CASE
+      WHEN TG_OP = 'UPDATE' THEN
+        NEW.project_id IS NOT DISTINCT FROM OLD.project_id
+      ELSE true
+    END;
   v_owner_maint := current_user = v_rpc_owner
     AND session_user = v_rpc_owner
     AND COALESCE(current_setting('role', true), 'none') = 'none';
 
   IF TG_OP = 'INSERT' THEN
-    IF NOT (v_rpc_authorized OR v_owner_maint) THEN
+    IF NOT (v_rpc_authorized OR v_batch_authorized OR v_owner_maint) THEN
       RAISE EXCEPTION
         'project_phases topology inserts are writable only through create_project_phase'
         USING ERRCODE = 'insufficient_privilege';
@@ -1074,7 +1189,9 @@ BEGIN
       OR NEW.phase_key IS DISTINCT FROM OLD.phase_key
       OR NEW.lane IS DISTINCT FROM OLD.lane
       OR NEW.follows_phase_id IS DISTINCT FROM OLD.follows_phase_id
-    ) AND NOT (v_rpc_authorized OR v_owner_maint) THEN
+    ) AND NOT (
+      v_rpc_authorized OR v_batch_authorized OR v_owner_maint
+    ) THEN
       RAISE EXCEPTION
         'project_phases project_id, phase_key, lane, and follows_phase_id are writable only through checked phase RPCs'
         USING ERRCODE = 'insufficient_privilege';
@@ -1126,8 +1243,9 @@ CREATE TRIGGER z_touch_project_phase_updated_at_trg
 COMMENT ON FUNCTION public.guard_project_phase_topology_write() IS
   'Closes direct authenticated INSERT/DELETE and mutations of project_id, '
   'phase_key, lane, or follows_phase_id. Requires the exact checked-RPC owner '
-  'plus its transaction-local operation token; unassumed owner maintenance '
-  'remains available for migrations and deterministic SQL fixtures.';
+  'plus its transaction-local operation token, or the exact project-scoped '
+  'creation-batch capability; unassumed owner maintenance remains available '
+  'for migrations and deterministic SQL fixtures.';
 
 -- ─── 00324 project birth-path regrafts ────────────────────────────────────
 
@@ -1429,3 +1547,444 @@ COMMENT ON FUNCTION public.copy_schedule_as_built(uuid, uuid, uuid) IS
   '00324 as-built duration semantics with stable source locks/order. Project '
   'targets cross create_project_phase for exact author authority and checked '
   'topology; proposal targets preserve the original exact-owner path.';
+
+-- ─── Activation creation-boundary regrafts ───────────────────────────────
+
+-- Lineage: 00390_proposal_copy_immutability.sql. The reciprocal proposal
+-- provenance proof is unchanged. Once it proves the exact new project, it
+-- issues the phase batch capability scoped to that project and transaction.
+CREATE OR REPLACE FUNCTION public.guard_project_completion_authority()
+RETURNS trigger
+LANGUAGE plpgsql
+SECURITY INVOKER
+SET search_path = public, pg_temp
+AS $$
+BEGIN
+  IF TG_OP = 'INSERT' THEN
+    IF current_user IS DISTINCT FROM 'postgres'
+       AND (
+         NEW.status IS NULL
+         OR NEW.status NOT IN ('active', 'draft', 'on_hold')
+         OR NEW.completed_at IS NOT NULL
+       )
+    THEN
+      RAISE EXCEPTION
+        'project inserts cannot start in terminal or completed state'
+        USING ERRCODE = 'check_violation';
+    END IF;
+
+    IF NEW.proposal_id IS NOT NULL AND NOT (
+      current_user IS NOT DISTINCT FROM 'postgres'
+      AND current_setting('app.proposal_activation_id', true)
+          IS NOT DISTINCT FROM NEW.proposal_id::text
+      AND EXISTS (
+        SELECT 1
+        FROM public.proposals AS proposal
+        WHERE proposal.id = NEW.proposal_id
+          AND proposal.status = 'accepted'
+          AND proposal.project_id IS NULL
+          AND proposal.designer_id IS NOT DISTINCT FROM NEW.designer_id
+          AND proposal.client_id IS NOT DISTINCT FROM NEW.client_id
+      )
+    ) THEN
+      RAISE EXCEPTION
+        'project proposal provenance may only be created by activate_proposal_as_project'
+        USING ERRCODE = 'check_violation';
+    END IF;
+
+    IF NEW.proposal_id IS NOT NULL THEN
+      PERFORM set_config(
+        'app.project_phase_batch_token',
+        format(
+          'project_phase_batch:%s:%s',
+          NEW.id,
+          pg_catalog.txid_current()
+        ),
+        true
+      );
+    END IF;
+
+    RETURN NEW;
+  END IF;
+
+  IF NEW.proposal_id IS DISTINCT FROM OLD.proposal_id THEN
+    RAISE EXCEPTION 'project proposal provenance is immutable after activation'
+      USING ERRCODE = 'check_violation';
+  END IF;
+
+  IF NEW.status = 'completed'
+     AND OLD.status IS DISTINCT FROM 'completed'
+     AND (
+       current_user IS DISTINCT FROM 'postgres'
+       OR current_setting('app.project_completion_id', true)
+          IS DISTINCT FROM NEW.id::text
+     )
+  THEN
+    RAISE EXCEPTION
+      'projects may only enter completed through close_project'
+      USING ERRCODE = 'check_violation';
+  END IF;
+
+  IF NEW.completed_at IS DISTINCT FROM OLD.completed_at
+     AND (
+       current_user IS DISTINCT FROM 'postgres'
+       OR current_setting('app.project_completion_id', true)
+          IS DISTINCT FROM NEW.id::text
+     )
+  THEN
+    RAISE EXCEPTION
+      'project completed_at may only change through close_project'
+      USING ERRCODE = 'check_violation';
+  END IF;
+
+  IF NEW.client_id IS DISTINCT FROM OLD.client_id
+     AND (
+       current_user IS DISTINCT FROM 'postgres'
+       OR current_setting('app.project_identity_id', true)
+          IS DISTINCT FROM NEW.id::text
+     )
+  THEN
+    RAISE EXCEPTION
+      'project client identity may only change through set_document_client'
+      USING ERRCODE = 'check_violation';
+  END IF;
+
+  RETURN NEW;
+END;
+$$;
+
+REVOKE ALL ON FUNCTION public.guard_project_completion_authority()
+  FROM PUBLIC, anon, authenticated, service_role;
+
+COMMENT ON FUNCTION public.guard_project_completion_authority() IS
+  '00390 project lifecycle/provenance authority. A validated proposal-backed '
+  'INSERT additionally issues one exact project+transaction phase creation '
+  'batch capability for the private activation bridge.';
+
+-- Lineage: 00390_proposal_copy_immutability.sql. The bridge still owns the
+-- exact proposal token around the untouched long-lived implementation. The
+-- project INSERT guard derives its newly generated project id and issues the
+-- batch token before the implementation inserts or rewires any phases.
+CREATE OR REPLACE FUNCTION public._activate_proposal_as_project_authorized(
+  p_proposal_id uuid,
+  p_start_date date DEFAULT current_date
+)
+RETURNS uuid
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public, pg_temp
+AS $$
+DECLARE
+  v_previous_authority text := current_setting(
+    'app.proposal_activation_id', true
+  );
+  v_previous_phase_batch text := current_setting(
+    'app.project_phase_batch_token', true
+  );
+  v_expected_phase_batch text;
+  v_project_id uuid;
+BEGIN
+  -- Never let a caller-supplied or stale batch token satisfy the bridge's
+  -- postcondition. The validated project INSERT below must issue this batch.
+  PERFORM set_config('app.project_phase_batch_token', '', true);
+  PERFORM set_config(
+    'app.proposal_activation_id', p_proposal_id::text, true
+  );
+
+  v_project_id := public._activate_proposal_as_project_impl(
+    p_proposal_id,
+    p_start_date
+  );
+  v_expected_phase_batch := format(
+    'project_phase_batch:%s:%s',
+    v_project_id,
+    pg_catalog.txid_current()
+  );
+
+  IF current_setting('app.project_phase_batch_token', true)
+     IS DISTINCT FROM v_expected_phase_batch THEN
+    RAISE EXCEPTION
+      'activate_proposal_as_project: phase batch authority was not established'
+      USING ERRCODE = 'check_violation';
+  END IF;
+
+  PERFORM public._assert_project_phase_topology(
+    v_project_id,
+    'activate_proposal_as_project'
+  );
+
+  PERFORM set_config(
+    'app.project_phase_batch_token',
+    COALESCE(v_previous_phase_batch, ''),
+    true
+  );
+  PERFORM set_config(
+    'app.proposal_activation_id', COALESCE(v_previous_authority, ''), true
+  );
+  RETURN v_project_id;
+EXCEPTION WHEN OTHERS THEN
+  PERFORM set_config(
+    'app.project_phase_batch_token',
+    COALESCE(v_previous_phase_batch, ''),
+    true
+  );
+  PERFORM set_config(
+    'app.proposal_activation_id', COALESCE(v_previous_authority, ''), true
+  );
+  RAISE;
+END;
+$$;
+
+REVOKE ALL ON FUNCTION public._activate_proposal_as_project_authorized(uuid, date)
+  FROM PUBLIC, anon, authenticated, service_role;
+
+COMMENT ON FUNCTION public._activate_proposal_as_project_authorized(uuid, date) IS
+  '00390 exact proposal bridge plus 00398 project-scoped phase batch authority '
+  'and final topology validation. Restores both transaction-local capabilities '
+  'on success and failure.';
+
+-- Lineage: 00086_activate_project_rpc.sql. Payload/project semantics remain
+-- unchanged. The function now pre-allocates its project id, owns an exact
+-- project+transaction batch capability, links phase rows in array order, and
+-- validates the completed topology before returning.
+CREATE OR REPLACE FUNCTION public.activate_project_v2(input jsonb)
+RETURNS uuid
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public, pg_temp
+AS $$
+DECLARE
+  v_project_id uuid := extensions.gen_random_uuid();
+  v_caller_id uuid := auth.uid();
+  v_room jsonb;
+  v_phase jsonb;
+  v_milestone jsonb;
+  v_team jsonb;
+  v_kickoff date;
+  v_expected_completion date;
+  v_total_weeks integer := 0;
+  v_phase_running_date date;
+  v_phase_idx integer := 0;
+  v_room_idx integer := 0;
+  v_milestone_idx integer := 0;
+  v_new_phase_id uuid;
+  v_previous_phase_id uuid := NULL;
+  v_previous_phase_batch text := current_setting(
+    'app.project_phase_batch_token', true
+  );
+  v_phase_batch_set boolean := false;
+BEGIN
+  IF v_caller_id IS NULL THEN
+    RAISE EXCEPTION 'activate_project_v2: not authenticated';
+  END IF;
+
+  IF COALESCE(trim(input->>'name'), '') = '' THEN
+    RAISE EXCEPTION 'activate_project_v2: name is required';
+  END IF;
+
+  v_kickoff := COALESCE((input->>'kickoff_date')::date, current_date);
+  SELECT COALESCE(sum((phase->>'duration_weeks')::integer), 0)
+  INTO v_total_weeks
+  FROM jsonb_array_elements(
+    COALESCE(input->'phases', '[]'::jsonb)
+  ) AS phase;
+  v_expected_completion := v_kickoff + (v_total_weeks * 7);
+
+  PERFORM set_config(
+    'app.project_phase_batch_token',
+    format(
+      'project_phase_batch:%s:%s',
+      v_project_id,
+      pg_catalog.txid_current()
+    ),
+    true
+  );
+  v_phase_batch_set := true;
+
+  INSERT INTO public.projects (
+    id,
+    name,
+    status,
+    budget_cents,
+    design_fee_cents,
+    client_visibility_tier,
+    client_id,
+    designer_id,
+    studio_id,
+    start_date,
+    target_end_date,
+    created_by
+  ) VALUES (
+    v_project_id,
+    input->>'name',
+    'active',
+    COALESCE((input->>'budget_total_cents')::integer, 0),
+    COALESCE((input->>'design_fee_cents')::integer, 0),
+    COALESCE(input->>'client_visibility_tier', 'milestone'),
+    NULLIF(input->>'client_id', '')::uuid,
+    v_caller_id,
+    NULLIF(input->>'studio_id', '')::uuid,
+    v_kickoff,
+    v_expected_completion,
+    v_caller_id
+  );
+
+  FOR v_room IN
+    SELECT *
+    FROM jsonb_array_elements(COALESCE(input->'rooms', '[]'::jsonb))
+  LOOP
+    INSERT INTO public.project_rooms (
+      project_id,
+      name,
+      room_type,
+      dimensions,
+      budget_cents,
+      ffe_categories,
+      notes,
+      sort_order
+    ) VALUES (
+      v_project_id,
+      v_room->>'name',
+      NULLIF(v_room->>'room_type', ''),
+      NULLIF(v_room->>'dimensions', ''),
+      COALESCE((v_room->>'budget_cents')::integer, 0),
+      ARRAY(
+        SELECT jsonb_array_elements_text(
+          COALESCE(v_room->'ffe_categories', '[]'::jsonb)
+        )
+      ),
+      NULLIF(v_room->>'notes', ''),
+      COALESCE((v_room->>'sort_order')::integer, v_room_idx)
+    );
+    v_room_idx := v_room_idx + 1;
+  END LOOP;
+
+  v_phase_running_date := v_kickoff;
+  FOR v_phase IN
+    SELECT *
+    FROM jsonb_array_elements(COALESCE(input->'phases', '[]'::jsonb))
+  LOOP
+    INSERT INTO public.project_phases (
+      project_id,
+      name,
+      duration_weeks,
+      fee_cents,
+      gate_condition,
+      start_date,
+      target_end_date,
+      sort_order
+    ) VALUES (
+      v_project_id,
+      v_phase->>'name',
+      COALESCE((v_phase->>'duration_weeks')::integer, 0),
+      COALESCE((v_phase->>'fee_cents')::integer, 0),
+      NULLIF(v_phase->>'gate_condition', ''),
+      v_phase_running_date,
+      v_phase_running_date +
+        (COALESCE((v_phase->>'duration_weeks')::integer, 0) * 7),
+      COALESCE((v_phase->>'sort_order')::integer, v_phase_idx)
+    )
+    RETURNING id INTO v_new_phase_id;
+
+    IF v_previous_phase_id IS NOT NULL THEN
+      UPDATE public.project_phases
+      SET follows_phase_id = v_previous_phase_id
+      WHERE id = v_new_phase_id
+        AND project_id = v_project_id;
+    END IF;
+
+    v_previous_phase_id := v_new_phase_id;
+    v_phase_running_date := v_phase_running_date +
+      (COALESCE((v_phase->>'duration_weeks')::integer, 0) * 7);
+    v_phase_idx := v_phase_idx + 1;
+  END LOOP;
+
+  PERFORM public._assert_project_phase_topology(
+    v_project_id,
+    'activate_project_v2'
+  );
+
+  FOR v_milestone IN
+    SELECT *
+    FROM jsonb_array_elements(COALESCE(input->'milestones', '[]'::jsonb))
+  LOOP
+    INSERT INTO public.project_payment_milestones (
+      project_id,
+      label,
+      percentage,
+      amount_cents,
+      trigger_condition,
+      sort_order
+    ) VALUES (
+      v_project_id,
+      NULLIF(v_milestone->>'label', ''),
+      COALESCE((v_milestone->>'percentage')::numeric, 0),
+      COALESCE((v_milestone->>'amount_cents')::integer, 0),
+      NULLIF(v_milestone->>'trigger_condition', ''),
+      COALESCE((v_milestone->>'sort_order')::integer, v_milestone_idx)
+    );
+    v_milestone_idx := v_milestone_idx + 1;
+  END LOOP;
+
+  INSERT INTO public.project_team_members (
+    project_id,
+    user_id,
+    role,
+    assigned_by
+  ) VALUES (
+    v_project_id,
+    v_caller_id,
+    'lead_designer',
+    v_caller_id
+  )
+  ON CONFLICT DO NOTHING;
+
+  FOR v_team IN
+    SELECT *
+    FROM jsonb_array_elements(COALESCE(input->'team', '[]'::jsonb))
+  LOOP
+    IF NULLIF(v_team->>'user_id', '') IS NOT NULL THEN
+      INSERT INTO public.project_team_members (
+        project_id,
+        user_id,
+        role,
+        assigned_by
+      ) VALUES (
+        v_project_id,
+        (v_team->>'user_id')::uuid,
+        COALESCE(v_team->>'role', 'support_designer'),
+        v_caller_id
+      )
+      ON CONFLICT DO NOTHING;
+    END IF;
+  END LOOP;
+
+  PERFORM set_config(
+    'app.project_phase_batch_token',
+    COALESCE(v_previous_phase_batch, ''),
+    true
+  );
+  v_phase_batch_set := false;
+  RETURN v_project_id;
+EXCEPTION WHEN OTHERS THEN
+  IF v_phase_batch_set THEN
+    PERFORM set_config(
+      'app.project_phase_batch_token',
+      COALESCE(v_previous_phase_batch, ''),
+      true
+    );
+  END IF;
+  RAISE;
+END;
+$$;
+
+REVOKE ALL ON FUNCTION public.activate_project_v2(jsonb)
+  FROM PUBLIC, anon, authenticated, service_role;
+GRANT EXECUTE ON FUNCTION public.activate_project_v2(jsonb)
+  TO authenticated;
+
+COMMENT ON FUNCTION public.activate_project_v2(jsonb) IS
+  'Authenticated activation-wizard project creation. Preserves 00086 payload '
+  'semantics, scopes phase INSERT/rewire authority to the generated project and '
+  'current transaction, validates final topology, and restores the capability '
+  'on success or failure.';
