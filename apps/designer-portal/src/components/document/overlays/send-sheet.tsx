@@ -206,7 +206,6 @@ export function SendSheet({
       readiness &&
       reviewFingerprint &&
       effectiveClientData?.sendSnapshot &&
-      draftingVerification.refresh &&
       !checkingClientCopy &&
       !clientPayload.error &&
       !hasBlockers &&

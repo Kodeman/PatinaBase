@@ -47,6 +47,13 @@ jest.mock('@/hooks/use-clients', () => ({
   }),
 }));
 
+jest.mock('@/hooks/use-attach-client', () => ({
+  useAttachDocumentClient: () => ({
+    mutateAsync: jest.fn(),
+    isPending: false,
+  }),
+}));
+
 jest.mock('@/components/document/drafting/proposal-mirror', () => ({
   useProposalMirrorData: (...args: unknown[]) =>
     mockUseProposalMirrorData(...args),
