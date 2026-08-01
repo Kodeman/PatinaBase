@@ -66,6 +66,13 @@ export function EnhancedTimeline({ projectId, milestones: initialMilestones, onM
   const activeMilestone = useMemo(() => milestones.find(m => m.id === activeMilestoneId), [milestones, activeMilestoneId]);
   const { messages: realtimeMessages } = useMilestoneWebSocket(activeMilestoneId || '');
 
+  // router.refresh() re-runs the server project read after canonical
+  // project_phases changes. Reconcile those refreshed props into the local
+  // interactive copy instead of preserving the mount-time snapshot forever.
+  useEffect(() => {
+    setMilestones(initialMilestones);
+  }, [initialMilestones]);
+
   // Subscribe to WebSocket milestone updates
   useEffect(() => {
     const unsubscribeMilestone = subscribeMilestoneUpdate((update: WebSocketMilestoneUpdate) => {

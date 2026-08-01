@@ -16,6 +16,7 @@ import { ProjectTeamPanel } from '@/components/project/ProjectTeamPanel';
 import { ProjectDocumentsPanel } from '@/components/project/ProjectDocumentsPanel';
 import { FFEPipelinePanel } from '@/components/project/FFEPipelinePanel';
 import type { MilestoneDetail } from '@/types/project';
+import { useProjectPhaseRealtime } from '@/hooks/use-project-phase-realtime';
 
 interface ProjectViewWrapperProps {
   projectId: string;
@@ -39,6 +40,8 @@ export function ProjectViewWrapper({
   const realtimeEnabled = process.env.NEXT_PUBLIC_ENABLE_REAL_TIME_UPDATES !== 'false';
   const effectiveUserId = userId ?? user?.id;
   const effectiveAuthToken = authToken ?? session?.accessToken;
+
+  useProjectPhaseRealtime(projectId, realtimeEnabled);
 
   useEffect(() => {
     clientEvents.projectView(projectId);
