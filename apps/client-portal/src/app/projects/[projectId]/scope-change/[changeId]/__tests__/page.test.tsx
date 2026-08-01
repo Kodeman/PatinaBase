@@ -38,6 +38,7 @@ const clientRequest = (overrides: Record<string, unknown> = {}) => ({
   id: 'change-1',
   project_id: 'project-1',
   requested_by: 'client-1',
+  request_origin: 'client_request',
   title: 'Move the reading light',
   description: 'Please move it beside the chair.',
   status: 'approved',
@@ -88,6 +89,7 @@ describe('client scope-change request semantics', () => {
   it('retains authorization and impact copy for a designer-authored amendment', async () => {
     mockRequest = clientRequest({
       requested_by: 'designer-1',
+      request_origin: 'designer_amendment',
       status: 'sent',
       approved_at: null,
       additional_design_fee_cents: 25_000,
@@ -103,5 +105,24 @@ describe('client scope-change request semantics', () => {
     expect(screen.getByText('Impact Summary')).toBeInTheDocument();
     expect(screen.getByText('New Total Project Value')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Approve Change' })).toBeInTheDocument();
+  });
+
+  it('keeps a prior client request non-authorizing after the project client is reassigned', async () => {
+    mockUserId = 'replacement-client';
+    mockRequest = clientRequest({
+      requested_by: 'original-client',
+      request_origin: 'client_request',
+      status: 'sent',
+    });
+
+    await renderPage();
+
+    expect(screen.getByText('Scope Change Request')).toBeInTheDocument();
+    expect(screen.getByTestId('scope-change-status-badge')).toHaveTextContent('Awaiting Designer');
+    expect(screen.getByText(/records a requested change/i)).toBeInTheDocument();
+    expect(screen.queryByText('Scope Change Authorization')).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Approve Change' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Decline' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Cancel my request' })).not.toBeInTheDocument();
   });
 });

@@ -17,6 +17,8 @@ VALUES
   ('c9500000-0000-4000-8000-000000000003', 'scope-outsider@test.invalid', '', NOW(), NOW(), NOW(),
    '00000000-0000-0000-0000-000000000000', 'authenticated', 'authenticated'),
   ('c9500000-0000-4000-8000-000000000004', 'scope-peer@test.invalid', '', NOW(), NOW(), NOW(),
+   '00000000-0000-0000-0000-000000000000', 'authenticated', 'authenticated'),
+  ('c9500000-0000-4000-8000-000000000005', 'scope-replacement@test.invalid', '', NOW(), NOW(), NOW(),
    '00000000-0000-0000-0000-000000000000', 'authenticated', 'authenticated');
 
 INSERT INTO public.profiles (id, email, full_name, created_at, updated_at)
@@ -24,7 +26,8 @@ VALUES
   ('c9500000-0000-4000-8000-000000000001', 'scope-designer@test.invalid', 'Scope Designer', NOW(), NOW()),
   ('c9500000-0000-4000-8000-000000000002', 'scope-client@test.invalid', 'Scope Client', NOW(), NOW()),
   ('c9500000-0000-4000-8000-000000000003', 'scope-outsider@test.invalid', 'Scope Outsider', NOW(), NOW()),
-  ('c9500000-0000-4000-8000-000000000004', 'scope-peer@test.invalid', 'Scope Studio Peer', NOW(), NOW())
+  ('c9500000-0000-4000-8000-000000000004', 'scope-peer@test.invalid', 'Scope Studio Peer', NOW(), NOW()),
+  ('c9500000-0000-4000-8000-000000000005', 'scope-replacement@test.invalid', 'Scope Replacement', NOW(), NOW())
 ON CONFLICT (id) DO UPDATE
 SET email = EXCLUDED.email,
     full_name = EXCLUDED.full_name,
@@ -59,12 +62,15 @@ VALUES
 INSERT INTO public.designer_clients (
   id, designer_id, client_id, client_name, status, source
 )
-VALUES (
-  'c9510000-0000-4000-8000-000000000001',
-  'c9500000-0000-4000-8000-000000000001',
-  'c9500000-0000-4000-8000-000000000002',
-  'Scope Client', 'active', 'direct'
-);
+VALUES
+  ('c9510000-0000-4000-8000-000000000001',
+   'c9500000-0000-4000-8000-000000000001',
+   'c9500000-0000-4000-8000-000000000002',
+   'Scope Client', 'active', 'direct'),
+  ('c9510000-0000-4000-8000-000000000002',
+   'c9500000-0000-4000-8000-000000000001',
+   'c9500000-0000-4000-8000-000000000005',
+   'Scope Replacement', 'active', 'direct');
 
 INSERT INTO public.projects (
   id, name, designer_id, client_id, created_by, status,
@@ -90,7 +96,7 @@ VALUES
 -- Trusted setup materializes source states. Untrusted direct INSERT/UPDATE
 -- assertions below run through the installed 00395 guard and ACLs.
 INSERT INTO public.scope_change_requests (
-  id, project_id, requested_by, title, description, status, sent_at,
+  id, project_id, requested_by, request_origin, title, description, status, sent_at,
   additional_ffe_budget_cents, additional_design_fee_cents,
   timeline_impact_weeks, new_rooms, new_ffe_items
 )
@@ -98,26 +104,31 @@ VALUES
   ('c9530000-0000-4000-8000-000000000010',
    'c9520000-0000-4000-8000-000000000001',
    'c9500000-0000-4000-8000-000000000004',
+   'designer_amendment',
    'Studio send', 'Studio peer sends this draft.', 'draft', NULL, 0, 0, 0,
    '[]'::jsonb, '[]'::jsonb),
   ('c9530000-0000-4000-8000-000000000011',
    'c9520000-0000-4000-8000-000000000001',
    'c9500000-0000-4000-8000-000000000001',
+   'designer_amendment',
    'Client approve', 'Client approves this sent change.', 'sent', NOW(), 0, 0, 0,
    '[]'::jsonb, '[]'::jsonb),
   ('c9530000-0000-4000-8000-000000000012',
    'c9520000-0000-4000-8000-000000000001',
    'c9500000-0000-4000-8000-000000000001',
+   'designer_amendment',
    'Client decline', 'Client declines this sent change.', 'sent', NOW(), 0, 0, 0,
    '[]'::jsonb, '[]'::jsonb),
   ('c9530000-0000-4000-8000-000000000013',
    'c9520000-0000-4000-8000-000000000001',
    'c9500000-0000-4000-8000-000000000002',
+   'client_request',
    'Client cancel', 'Client cancels their own request.', 'sent', NOW(), 0, 0, 0,
    '[]'::jsonb, '[]'::jsonb),
   ('c9530000-0000-4000-8000-000000000014',
    'c9520000-0000-4000-8000-000000000004',
    'c9500000-0000-4000-8000-000000000001',
+   'designer_amendment',
    'Studio apply', 'Studio peer applies this approved request.',
    'approved', NOW(), 500, 200, 1,
    '[{"name":"Reading Nook","roomType":"living","budgetCents":800,"ffeCategories":["lighting"]}]'::jsonb,
@@ -125,21 +136,25 @@ VALUES
   ('c9530000-0000-4000-8000-000000000015',
    'c9520000-0000-4000-8000-000000000001',
    'c9500000-0000-4000-8000-000000000001',
+   'designer_amendment',
    'Illegal approval source', 'A draft cannot be approved.', 'draft', NULL, 0, 0, 0,
    '[]'::jsonb, '[]'::jsonb),
   ('c9530000-0000-4000-8000-000000000016',
    'c9520000-0000-4000-8000-000000000001',
    'c9500000-0000-4000-8000-000000000001',
+   'designer_amendment',
    'Wrong row token', 'A sibling token cannot send this row.', 'draft', NULL, 0, 0, 0,
    '[]'::jsonb, '[]'::jsonb),
   ('c9530000-0000-4000-8000-000000000018',
    'c9520000-0000-4000-8000-000000000001',
    'c9500000-0000-4000-8000-000000000002',
+   'client_request',
    'Self approval forbidden', 'Client-authored requests are not approvals.',
    'sent', NOW(), 0, 0, 0, '[]'::jsonb, '[]'::jsonb),
   ('c9530000-0000-4000-8000-000000000019',
    'c9520000-0000-4000-8000-000000000005',
    'c9500000-0000-4000-8000-000000000001',
+   'designer_amendment',
    'Canonical apply', 'Canonical snake case remains supported.',
    'approved', NOW(), 700, 300, 2,
    '[{"name":"Library","room_type":"library","budget_cents":1200,"ffe_categories":["seating"],"notes":"Quiet room"}]'::jsonb,
@@ -147,11 +162,13 @@ VALUES
   ('c9530000-0000-4000-8000-000000000022',
    'c9520000-0000-4000-8000-000000000001',
    'c9500000-0000-4000-8000-000000000003',
+   'designer_amendment',
    'Contractor-authored draft', 'A shared contractor org is not a design studio.',
    'draft', NULL, 0, 0, 0, '[]'::jsonb, '[]'::jsonb),
   ('c9530000-0000-4000-8000-000000000025',
    'c9520000-0000-4000-8000-000000000002',
    'c9500000-0000-4000-8000-000000000001',
+   'designer_amendment',
    'Closed apply', 'Even approved work cannot mutate a completed project.',
    'approved', NOW(), 900, 100, 1, '[]'::jsonb, '[]'::jsonb);
 
@@ -276,6 +293,7 @@ BEGIN
     SELECT title = 'Add reading lights'
        AND description = 'Please add one beside each chair.'
        AND requested_by = 'c9500000-0000-4000-8000-000000000002'
+       AND request_origin = 'client_request'
        AND status = 'sent'
        AND sent_at IS NOT NULL
     FROM public.scope_change_requests
@@ -638,6 +656,7 @@ DO $$
 DECLARE
   v_forged_guc_denied boolean := false;
   v_business_rewrite_denied boolean := false;
+  v_origin_rewrite_denied boolean := false;
 BEGIN
   PERFORM set_config(
     'app.scope_change_transition',
@@ -670,6 +689,17 @@ BEGIN
   END;
   ASSERT v_business_rewrite_denied,
     'scope-change identity/business fields must be immutable after insert';
+
+  BEGIN
+    UPDATE public.scope_change_requests
+    SET request_origin = 'client_request'
+    WHERE id = 'c9530000-0000-4000-8000-000000000017';
+  EXCEPTION WHEN check_violation THEN
+    v_origin_rewrite_denied := SQLERRM =
+      'scope_change_request_business_fields_immutable';
+  END;
+  ASSERT v_origin_rewrite_denied,
+    'the persisted request origin must be immutable after insert';
 END;
 $$;
 RESET ROLE;
@@ -761,9 +791,27 @@ DO $$
 DECLARE
   v_double_apply_denied boolean := false;
   v_closed_apply_denied boolean := false;
+  v_origin_forge_denied boolean := false;
   v_retry_receipt jsonb;
   v_original_sent_at timestamptz;
 BEGIN
+  BEGIN
+    INSERT INTO public.scope_change_requests (
+      id, project_id, requested_by, request_origin, title, description
+    ) VALUES (
+      'c9530000-0000-4000-8000-000000000027',
+      'c9520000-0000-4000-8000-000000000001',
+      'c9500000-0000-4000-8000-000000000004',
+      'client_request',
+      'Forged client origin', 'Only the checked client RPC may set this origin.'
+    );
+  EXCEPTION WHEN insufficient_privilege THEN
+    v_origin_forge_denied := SQLERRM =
+      'scope_change_request_direct_insert_origin_forbidden';
+  END;
+  ASSERT v_origin_forge_denied,
+    'browser-composed studio drafts cannot forge client-request provenance';
+
   INSERT INTO public.scope_change_requests (
     id, project_id, requested_by, title, description
   ) VALUES (
@@ -773,7 +821,9 @@ BEGIN
     'Peer browser draft', 'Exact design-studio peers retain draft composition.'
   );
   ASSERT (
-    SELECT status = 'draft' AND sent_at IS NULL
+    SELECT status = 'draft'
+       AND sent_at IS NULL
+       AND request_origin = 'designer_amendment'
     FROM public.scope_change_requests
     WHERE id = 'c9530000-0000-4000-8000-000000000024'
   ), 'an exact active design-studio peer may compose a clean browser draft';
@@ -927,6 +977,81 @@ BEGIN
       AND activity_type = 'scope_change_requested'
       AND metadata->>'change_id' = 'c9530000-0000-4000-8000-000000000001'
   ), 'immediate and post-fulfillment retries must leave one activity record';
+END;
+$$;
+
+-- Origin is historical evidence, not a comparison to the project's current
+-- client. A supported client reassignment must not turn the prior client's
+-- request into a designer-authored authorization for the replacement client.
+SET LOCAL ROLE authenticated;
+SELECT pg_temp.assume_scope_actor('c9500000-0000-4000-8000-000000000002');
+DO $$
+BEGIN
+  PERFORM public.create_client_scope_change_request(
+    'c9520000-0000-4000-8000-000000000001',
+    'c9530000-0000-4000-8000-000000000026',
+    'Keep the reading lights',
+    'This request must retain its client origin after reassignment.'
+  );
+END;
+$$;
+
+SELECT pg_temp.assume_scope_actor('c9500000-0000-4000-8000-000000000001');
+SELECT public.set_document_client(
+  'project',
+  'c9520000-0000-4000-8000-000000000001',
+  'c9500000-0000-4000-8000-000000000005'
+);
+
+SELECT pg_temp.assume_scope_actor('c9500000-0000-4000-8000-000000000005');
+DO $$
+DECLARE
+  v_approve_denied boolean := false;
+  v_decline_denied boolean := false;
+  v_cancel_denied boolean := false;
+BEGIN
+  ASSERT (
+    SELECT request_origin = 'client_request'
+       AND requested_by = 'c9500000-0000-4000-8000-000000000002'
+    FROM public.scope_change_requests
+    WHERE id = 'c9530000-0000-4000-8000-000000000026'
+  ), 'replacement client must read the immutable client-request origin';
+
+  BEGIN
+    PERFORM public.approve_scope_change_request(
+      'c9530000-0000-4000-8000-000000000026',
+      'c9520000-0000-4000-8000-000000000001',
+      'Scope Replacement',
+      NULL
+    );
+  EXCEPTION WHEN check_violation THEN
+    v_approve_denied := true;
+  END;
+  ASSERT v_approve_denied,
+    'replacement client cannot authorize a historical client-origin request';
+
+  BEGIN
+    PERFORM public.decline_scope_change_request(
+      'c9530000-0000-4000-8000-000000000026',
+      'c9520000-0000-4000-8000-000000000001',
+      'A replacement client cannot resolve the prior client request.'
+    );
+  EXCEPTION WHEN check_violation THEN
+    v_decline_denied := true;
+  END;
+  ASSERT v_decline_denied,
+    'replacement client cannot decline a historical client-origin request';
+
+  BEGIN
+    PERFORM public.cancel_scope_change_request(
+      'c9530000-0000-4000-8000-000000000026',
+      'c9520000-0000-4000-8000-000000000001'
+    );
+  EXCEPTION WHEN insufficient_privilege THEN
+    v_cancel_denied := true;
+  END;
+  ASSERT v_cancel_denied,
+    'replacement client cannot cancel a request authored by the prior client';
 END;
 $$;
 

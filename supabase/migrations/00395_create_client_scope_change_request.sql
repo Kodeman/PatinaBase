@@ -8,6 +8,9 @@
 -- caller now supplies a UUID intent key which is also the request primary key:
 -- an identical retry returns the original receipt and never emits a second
 -- client_activity_log row; reusing the key for different input fails closed.
+-- Every request now stores immutable provenance (`client_request` or
+-- `designer_amendment`) so a later project-client reassignment cannot change
+-- which side authored the business act.
 --
 -- The original UPDATE policies also allowed authenticated callers to rewrite
 -- identity/business columns while changing a permitted status. Business input
@@ -56,6 +59,39 @@ $$;
 REVOKE ALL ON FUNCTION public._scope_change_requester_can_author(uuid, uuid)
   FROM PUBLIC, anon, authenticated, service_role;
 
+-- 00395 introduces the first supported client INSERT path. Every row that
+-- predates it came through the designer/studio draft path, so the conservative
+-- historical backfill is designer_amendment. The checked client RPC overrides
+-- the default explicitly for all new inbound requests.
+ALTER TABLE public.scope_change_requests
+  ADD COLUMN IF NOT EXISTS request_origin text;
+
+UPDATE public.scope_change_requests
+SET request_origin = 'designer_amendment'
+WHERE request_origin IS NULL;
+
+ALTER TABLE public.scope_change_requests
+  ALTER COLUMN request_origin SET DEFAULT 'designer_amendment',
+  ALTER COLUMN request_origin SET NOT NULL;
+
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1
+    FROM pg_constraint
+    WHERE conname = 'chk_scope_change_requests_request_origin'
+      AND conrelid = 'public.scope_change_requests'::regclass
+  ) THEN
+    ALTER TABLE public.scope_change_requests
+      ADD CONSTRAINT chk_scope_change_requests_request_origin
+      CHECK (request_origin IN ('client_request', 'designer_amendment'));
+  END IF;
+END;
+$$;
+
+COMMENT ON COLUMN public.scope_change_requests.request_origin IS
+  'Immutable authoring provenance. client_request is created only by create_client_scope_change_request; browser-composed studio rows default to designer_amendment.';
+
 -- A local transition marker alone is not an authority: any database caller can
 -- set a custom GUC. The UPDATE guard also requires the update to execute as the
 -- table owner (the SECURITY DEFINER owner), so authenticated SQL cannot forge
@@ -84,6 +120,13 @@ BEGIN
        AND NEW.requested_by IS DISTINCT FROM auth.uid()
     THEN
       RAISE EXCEPTION 'scope_change_request_requested_by_must_match_actor'
+        USING ERRCODE = 'insufficient_privilege';
+    END IF;
+
+    IF current_user IS DISTINCT FROM v_table_owner
+       AND NEW.request_origin IS DISTINCT FROM 'designer_amendment'
+    THEN
+      RAISE EXCEPTION 'scope_change_request_direct_insert_origin_forbidden'
         USING ERRCODE = 'insufficient_privilege';
     END IF;
 
@@ -157,6 +200,7 @@ BEGIN
     NEW.project_id,
     NEW.proposal_id,
     NEW.requested_by,
+    NEW.request_origin,
     NEW.title,
     NEW.description,
     NEW.additional_ffe_budget_cents,
@@ -175,6 +219,7 @@ BEGIN
     OLD.project_id,
     OLD.proposal_id,
     OLD.requested_by,
+    OLD.request_origin,
     OLD.title,
     OLD.description,
     OLD.additional_ffe_budget_cents,
@@ -531,6 +576,7 @@ BEGIN
   IF FOUND THEN
     IF v_request.project_id IS DISTINCT FROM p_project_id
        OR v_request.requested_by IS DISTINCT FROM v_actor
+       OR v_request.request_origin IS DISTINCT FROM 'client_request'
        OR v_request.title IS DISTINCT FROM v_title
        OR v_request.description IS DISTINCT FROM v_description
        OR v_request.sent_at IS NULL
@@ -574,6 +620,7 @@ BEGIN
     project_id,
     proposal_id,
     requested_by,
+    request_origin,
     title,
     description,
     additional_ffe_budget_cents,
@@ -590,6 +637,7 @@ BEGIN
     v_project.id,
     v_project.proposal_id,
     v_actor,
+    'client_request',
     v_title,
     v_description,
     0,
@@ -617,6 +665,7 @@ BEGIN
     IF NOT FOUND
        OR v_request.project_id IS DISTINCT FROM p_project_id
        OR v_request.requested_by IS DISTINCT FROM v_actor
+       OR v_request.request_origin IS DISTINCT FROM 'client_request'
        OR v_request.title IS DISTINCT FROM v_title
        OR v_request.description IS DISTINCT FROM v_description
        OR v_request.sent_at IS NULL
@@ -744,6 +793,7 @@ BEGIN
 
   IF NOT FOUND
      OR v_request.status <> 'draft'
+     OR v_request.request_origin IS DISTINCT FROM 'designer_amendment'
      OR NOT public._scope_change_requester_can_author(
        v_request.requested_by,
        v_project.designer_id
@@ -823,6 +873,7 @@ BEGIN
   FOR UPDATE;
 
   IF NOT FOUND
+     OR v_request.request_origin IS DISTINCT FROM 'designer_amendment'
      OR v_request.requested_by IS NOT DISTINCT FROM v_actor
      OR NOT public._scope_change_requester_can_author(
        v_request.requested_by,
@@ -908,6 +959,7 @@ BEGIN
   FOR UPDATE;
 
   IF NOT FOUND
+     OR v_request.request_origin IS DISTINCT FROM 'client_request'
      OR v_project.client_id IS NULL
      OR v_request.requested_by IS DISTINCT FROM v_project.client_id
      OR v_request.status NOT IN ('sent', 'viewed')
@@ -991,6 +1043,7 @@ BEGIN
   FOR UPDATE;
 
   IF NOT FOUND
+     OR v_request.request_origin IS DISTINCT FROM 'designer_amendment'
      OR v_request.requested_by IS NOT DISTINCT FROM v_actor
      OR NOT public._scope_change_requester_can_author(
        v_request.requested_by,
@@ -1171,10 +1224,16 @@ BEGIN
   END IF;
 
   IF NOT (
-    v_request.requested_by IS NOT DISTINCT FROM v_project.client_id
-    OR public._scope_change_requester_can_author(
-      v_request.requested_by,
-      v_project.designer_id
+    (
+      v_request.request_origin = 'client_request'
+      AND v_request.requested_by IS NOT DISTINCT FROM v_project.client_id
+    )
+    OR (
+      v_request.request_origin = 'designer_amendment'
+      AND public._scope_change_requester_can_author(
+        v_request.requested_by,
+        v_project.designer_id
+      )
     )
   ) THEN
     RAISE EXCEPTION 'Scope change request % has an invalid requester', p_request_id
