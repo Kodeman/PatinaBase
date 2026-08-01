@@ -27,10 +27,10 @@ import {
 import {
   SHARE_VISIBILITY_FIELDS,
   shareVisibilityForTier,
-  shareLinkUrl,
   type ShareVisibility,
   type ClientVisibilityTier,
 } from '@patina/utils';
+import { guestProposalShareUrl } from '@/lib/client-portal-url';
 import { DocSheet } from './doc-sheet';
 import { DocumentAction, DocumentActionGroup } from '../document-action';
 
@@ -97,14 +97,12 @@ export function ShareSheet({
         label: label.trim() || null,
         visibility,
       });
-      // Local-dev origin heuristic: the designer runs on :3000, the client
-      // portal on :3002. In production the two are distinct hosts and the
-      // replace is a no-op — the token still resolves once the origin is right.
-      const origin =
-        typeof window !== 'undefined'
-          ? window.location.origin.replace(':3000', ':3002')
-          : '';
-      setCreated({ url: shareLinkUrl(origin, res.token) });
+      setCreated({
+        url: guestProposalShareUrl(
+          res.token,
+          typeof window !== 'undefined' ? window.location.origin : undefined,
+        ),
+      });
       setLabel('');
     } catch (err) {
       setError(
