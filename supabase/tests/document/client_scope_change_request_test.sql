@@ -112,7 +112,7 @@ BEGIN
   );
   v_request_id := (v_receipt->>'id')::uuid;
 
-  ASSERT jsonb_object_length(v_receipt) = 4
+  ASSERT (SELECT count(*) FROM jsonb_object_keys(v_receipt)) = 4
      AND v_receipt ?& ARRAY['id', 'project_id', 'status', 'sent_at'],
     format('receipt must expose only safe exact keys, got %s', v_receipt);
   ASSERT v_receipt->>'project_id' = 'c9520000-0000-4000-8000-000000000001'
@@ -127,15 +127,29 @@ BEGIN
     FROM public.scope_change_requests
     WHERE id = v_request_id
   ), 'RPC must trim and persist one sent request for its authenticated client';
+END;
+$$;
+
+-- The client cannot read the designer's private activity log, so verify the
+-- atomic side effect as the migration owner before restoring client context.
+RESET ROLE;
+DO $$
+BEGIN
   ASSERT (
     SELECT count(*) = 1
     FROM public.client_activity_log
     WHERE designer_client_id = 'c9510000-0000-4000-8000-000000000001'
       AND activity_type = 'scope_change_requested'
-      AND metadata->>'change_id' = v_request_id::text
+      AND metadata->>'change_id' IN (
+        SELECT request.id::text
+        FROM public.scope_change_requests AS request
+        WHERE request.project_id = 'c9520000-0000-4000-8000-000000000001'
+      )
   ), 'request and designer activity must land together';
 END;
 $$;
+SET LOCAL ROLE authenticated;
+SELECT pg_temp.assume_scope_actor('c9500000-0000-4000-8000-000000000002');
 
 -- Closed projects reject at the locked authority boundary.
 DO $$
