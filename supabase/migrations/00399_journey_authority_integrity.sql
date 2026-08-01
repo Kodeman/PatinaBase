@@ -612,16 +612,23 @@ BEGIN
     END IF;
 
     IF FOUND THEN
-      UPDATE public.designer_clients
-      SET client_id = NULL,
-          client_name = v_lead.contact_name,
-          client_email = v_lead.contact_email,
-          source = 'lead',
-          lead_id = p_lead_id,
-          status = 'lead',
-          updated_at = now()
-      WHERE id = v_relationship.id
-      RETURNING * INTO v_relationship;
+      IF v_relationship.status = 'lead' THEN
+        UPDATE public.designer_clients
+        SET client_name = v_lead.contact_name,
+            client_email = v_lead.contact_email,
+            source = 'lead',
+            lead_id = p_lead_id,
+            updated_at = now()
+        WHERE id = v_relationship.id
+        RETURNING * INTO v_relationship;
+      ELSE
+        -- A pre-existing progressed direct contact may be associated with this
+        -- lead, but Discovery never rewinds its identity or lifecycle state.
+        UPDATE public.designer_clients
+        SET lead_id = p_lead_id, updated_at = now()
+        WHERE id = v_relationship.id
+        RETURNING * INTO v_relationship;
+      END IF;
     ELSIF v_lead.contact_email IS NOT NULL THEN
       INSERT INTO public.designer_clients (
         designer_id, client_id, client_name, client_email, source, lead_id, status
@@ -632,12 +639,23 @@ BEGIN
       ON CONFLICT (designer_id, client_email)
         WHERE client_email IS NOT NULL AND client_id IS NULL
       DO UPDATE SET
-        client_name = EXCLUDED.client_name,
-        source = 'lead',
+        client_name = CASE
+          WHEN designer_clients.status = 'lead' THEN EXCLUDED.client_name
+          ELSE designer_clients.client_name
+        END,
+        source = CASE
+          WHEN designer_clients.status = 'lead' THEN 'lead'
+          ELSE designer_clients.source
+        END,
         lead_id = EXCLUDED.lead_id,
-        status = 'lead',
         updated_at = now()
+      WHERE designer_clients.lead_id IS NULL
+         OR designer_clients.lead_id = EXCLUDED.lead_id
       RETURNING * INTO v_relationship;
+      IF v_relationship.id IS NULL THEN
+        RAISE EXCEPTION 'contact email is already claimed by another lead'
+          USING ERRCODE = 'unique_violation';
+      END IF;
     ELSE
       INSERT INTO public.designer_clients (
         designer_id, client_id, client_name, client_email, source, lead_id, status

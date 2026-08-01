@@ -109,8 +109,8 @@ VALUES (
   'Repeat Client', 'active', 'direct'
 );
 
--- Profile-less email reuse is preserved, including its prior status-to-lead
--- behavior and NULL client_id partial-index identity.
+-- A progressed profile-less direct contact may be associated with the lead,
+-- but Discovery must preserve its lifecycle and identity fields.
 INSERT INTO public.designer_clients (
   id, designer_id, client_id, client_email, client_name, status, source
 )
@@ -223,12 +223,13 @@ BEGIN
          'd6300000-0000-4000-8000-000000000002',
     'profile-less email match must reuse the existing NULL-client row';
   ASSERT (SELECT client_id IS NULL
-                 AND client_name = 'Profile-less Client'
-                 AND status = 'lead'
+                 AND client_name = 'Old Name'
+                 AND status = 'active'
+                 AND source = 'direct'
                  AND lead_id = 'd6200000-0000-4000-8000-000000000002'
           FROM public.designer_clients
           WHERE id = 'd6300000-0000-4000-8000-000000000002'),
-    'profile-less reuse must preserve NULL client_id and refresh contact fields';
+    'profile-less reuse must associate without rewinding progressed identity';
 
   -- Shape B is an intentional one-profile-leg shape: the proposal keeps the
   -- captured relationship even though that relationship has no auth profile.
