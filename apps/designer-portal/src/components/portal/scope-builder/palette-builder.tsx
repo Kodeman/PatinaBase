@@ -44,13 +44,30 @@ interface PaletteBuilderProps {
 }
 
 export function PaletteBuilder({ proposalId }: PaletteBuilderProps) {
-  const { data: palettes = [] } = usePalettes(proposalId);
+  return <PaletteBuilderState key={proposalId} proposalId={proposalId} />;
+}
+
+function PaletteBuilderState({ proposalId }: PaletteBuilderProps) {
+  const {
+    data: palettes = [],
+    isLoading: palettesLoading,
+    error: palettesError,
+    refetch: refetchPalettes,
+  } = usePalettes(proposalId);
   const upsertPalette = useUpsertPalette();
+  const updatePalette = useUpsertPalette();
   const deletePalette = useDeletePalette();
 
   const [activePaletteId, setActivePaletteId] = useState<string | null>(null);
-  const activeId = activePaletteId ?? palettes[0]?.id ?? null;
-  const { data: active } = usePalette(activeId);
+  const activeId =
+    activePaletteId && palettes.some((palette) => palette.id === activePaletteId)
+      ? activePaletteId
+      : palettes[0]?.id ?? null;
+  const {
+    data: active,
+    error: activeError,
+    refetch: refetchActive,
+  } = usePalette(activeId);
 
   const [tab, setTab] = useState<Tab>('image');
 
@@ -66,24 +83,55 @@ export function PaletteBuilder({ proposalId }: PaletteBuilderProps) {
   const handleSetPrimary = useCallback(
     (palette: ProposalPalette) => {
       if (palette.is_primary) return;
-      upsertPalette.mutate({
+      updatePalette.mutate({
         proposalId,
         paletteId: palette.id,
         name: palette.name,
         isPrimary: true,
       });
     },
-    [upsertPalette, proposalId],
+    [updatePalette, proposalId],
   );
 
   const handleDeletePalette = useCallback(
     (paletteId: string) => {
       if (!confirm('Delete this palette? Swatches will also be removed.')) return;
-      deletePalette.mutate({ paletteId, proposalId });
-      if (activePaletteId === paletteId) setActivePaletteId(null);
+      deletePalette.mutate(
+        { paletteId, proposalId },
+        {
+          onSuccess: () => {
+            if (activePaletteId === paletteId) setActivePaletteId(null);
+          },
+        },
+      );
     },
     [deletePalette, proposalId, activePaletteId],
   );
+
+  if (palettesError || activeError) {
+    return (
+      <div
+        role="alert"
+        className="rounded-[3px] border border-[var(--color-terracotta)] px-3 py-3 text-sm text-[var(--color-terracotta)]"
+      >
+        <p>The palette could not be loaded. Editing is paused to protect this proposal.</p>
+        <button
+          type="button"
+          onClick={() => {
+            void refetchPalettes();
+            if (activeId) void refetchActive();
+          }}
+          className="mt-2 underline underline-offset-4"
+        >
+          Retry palette
+        </button>
+      </div>
+    );
+  }
+
+  if (palettesLoading) {
+    return <p className="py-4 text-sm text-[var(--text-muted)]">Loading palette…</p>;
+  }
 
   return (
     <div className="space-y-6">
@@ -96,6 +144,7 @@ export function PaletteBuilder({ proposalId }: PaletteBuilderProps) {
         onNew={handleNewPalette}
         onSetPrimary={handleSetPrimary}
         onDelete={handleDeletePalette}
+        creating={upsertPalette.isPending}
       />
 
       {active ? (
@@ -106,10 +155,14 @@ export function PaletteBuilder({ proposalId }: PaletteBuilderProps) {
           </div>
 
           {tab === 'image' && <ImageTab proposalId={proposalId} paletteId={active.id} sourceImageUrl={active.source_image_url} />}
-          {tab === 'brand' && <BrandTab paletteId={active.id} />}
-          {tab === 'manual' && <ManualTab paletteId={active.id} />}
+          {tab === 'brand' && <BrandTab proposalId={proposalId} paletteId={active.id} />}
+          {tab === 'manual' && <ManualTab proposalId={proposalId} paletteId={active.id} />}
 
-          <SwatchList paletteId={active.id} swatches={active.swatches ?? []} />
+          <SwatchList
+            proposalId={proposalId}
+            paletteId={active.id}
+            swatches={active.swatches ?? []}
+          />
         </div>
       ) : (
         <p className="text-sm text-[var(--text-muted)]">
@@ -137,9 +190,18 @@ interface PaletteListProps {
   onNew: () => void;
   onSetPrimary: (palette: ProposalPalette) => void;
   onDelete: (paletteId: string) => void;
+  creating: boolean;
 }
 
-function PaletteList({ palettes, activeId, onSelect, onNew, onSetPrimary, onDelete }: PaletteListProps) {
+function PaletteList({
+  palettes,
+  activeId,
+  onSelect,
+  onNew,
+  onSetPrimary,
+  onDelete,
+  creating,
+}: PaletteListProps) {
   return (
     <div className="flex flex-wrap items-center gap-2">
       {palettes.map((p) => (
@@ -179,9 +241,10 @@ function PaletteList({ palettes, activeId, onSelect, onNew, onSetPrimary, onDele
       ))}
       <button
         onClick={onNew}
+        disabled={creating}
         className="rounded-md border border-dashed border-[var(--border-default)] px-3 py-2 text-sm hover:border-[var(--accent-primary)]"
       >
-        + New Palette
+        {creating ? 'Creating palette…' : '+ New Palette'}
       </button>
     </div>
   );
@@ -215,7 +278,15 @@ function TabStrip({ active, onChange }: TabStripProps) {
   );
 }
 
-function ImageTab({ proposalId, paletteId, sourceImageUrl }: { proposalId: string; paletteId: string; sourceImageUrl: string | null }) {
+function ImageTab({
+  proposalId,
+  paletteId,
+  sourceImageUrl,
+}: {
+  proposalId: string;
+  paletteId: string;
+  sourceImageUrl: string | null;
+}) {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [uploading, setUploading] = useState(false);
   const upsertPalette = useUpsertPalette();
@@ -245,13 +316,14 @@ function ImageTab({ proposalId, paletteId, sourceImageUrl }: { proposalId: strin
     (swatches: ExtractedSwatch[]) => {
       swatches.forEach((s) => {
         upsertSwatch.mutate({
+          proposalId,
           paletteId,
           hex: s.hex,
           sourcePixel: s.sourcePixel,
         });
       });
     },
-    [paletteId, upsertSwatch],
+    [paletteId, proposalId, upsertSwatch],
   );
 
   return (
@@ -285,7 +357,13 @@ function ImageTab({ proposalId, paletteId, sourceImageUrl }: { proposalId: strin
   );
 }
 
-function BrandTab({ paletteId }: { paletteId: string }) {
+function BrandTab({
+  proposalId,
+  paletteId,
+}: {
+  proposalId: string;
+  paletteId: string;
+}) {
   const [query, setQuery] = useState('');
   const [brand, setBrand] = useState<PaintColorBrand | undefined>(undefined);
   const upsertSwatch = useUpsertSwatch();
@@ -316,6 +394,7 @@ function BrandTab({ paletteId }: { paletteId: string }) {
     (color: PaintColorOption | null) => {
       if (!color) return;
       upsertSwatch.mutate({
+        proposalId,
         paletteId,
         hex: color.hex,
         name: color.name,
@@ -324,7 +403,7 @@ function BrandTab({ paletteId }: { paletteId: string }) {
         brandCode: color.code,
       });
     },
-    [paletteId, upsertSwatch],
+    [paletteId, proposalId, upsertSwatch],
   );
 
   return (
@@ -345,13 +424,20 @@ function BrandTab({ paletteId }: { paletteId: string }) {
   );
 }
 
-function ManualTab({ paletteId }: { paletteId: string }) {
+function ManualTab({
+  proposalId,
+  paletteId,
+}: {
+  proposalId: string;
+  paletteId: string;
+}) {
   const [hex, setHex] = useState('#A8B5A6');
   const [role, setRole] = useState<PaletteSwatchRole | ''>('');
   const upsertSwatch = useUpsertSwatch();
 
   const handleAdd = () => {
     upsertSwatch.mutate({
+      proposalId,
       paletteId,
       hex,
       role: role === '' ? null : role,
@@ -377,17 +463,24 @@ function ManualTab({ paletteId }: { paletteId: string }) {
           ))}
         </Select>
       </div>
-      <Button variant="primary" size="sm" onClick={handleAdd}>
-        Add swatch
+      <Button
+        variant="primary"
+        size="sm"
+        disabled={upsertSwatch.isPending}
+        onClick={handleAdd}
+      >
+        {upsertSwatch.isPending ? 'Adding swatch…' : 'Add swatch'}
       </Button>
     </div>
   );
 }
 
 function SwatchList({
+  proposalId,
   paletteId,
   swatches,
 }: {
+  proposalId: string;
   paletteId: string;
   swatches: NonNullable<ReturnType<typeof usePalette>['data']>['swatches'];
 }) {
@@ -405,18 +498,29 @@ function SwatchList({
   return (
     <div className="mt-4 space-y-2">
       {swatches.map((swatch) => (
-        <PaletteSwatchEditor key={swatch.id} swatch={swatch} />
+        <PaletteSwatchEditor
+          key={swatch.id}
+          proposalId={proposalId}
+          swatch={swatch}
+        />
       ))}
-      <ReorderHint paletteId={paletteId} swatches={swatches} reorder={reorder} />
+      <ReorderHint
+        proposalId={proposalId}
+        paletteId={paletteId}
+        swatches={swatches}
+        reorder={reorder}
+      />
     </div>
   );
 }
 
 function ReorderHint({
+  proposalId,
   paletteId,
   swatches,
   reorder,
 }: {
+  proposalId: string;
   paletteId: string;
   swatches: NonNullable<ReturnType<typeof usePalette>['data']>['swatches'];
   reorder: ReturnType<typeof useReorderSwatches>;
@@ -439,7 +543,7 @@ function ReorderHint({
             return lum(b.hex) - lum(a.hex);
           })
           .map((s) => s.id);
-        reorder.mutate({ paletteId, orderedIds: ordered });
+        reorder.mutate({ proposalId, paletteId, orderedIds: ordered });
       }}
     >
       Sort by luminance

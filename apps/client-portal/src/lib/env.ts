@@ -3,6 +3,7 @@
  */
 
 const isDevelopment = process.env.NODE_ENV === 'development' || process.env.NEXT_PUBLIC_ENV === 'development';
+const projectDataMode = process.env.NEXT_PUBLIC_CLIENT_PORTAL_DATA_MODE || 'live';
 
 /**
  * Get API URL based on environment
@@ -24,4 +25,7 @@ export const env = {
   // Environment flags
   isDevelopment,
   isProduction: process.env.NODE_ENV === 'production',
+  // Fixture projects are an explicit local-demo mode. A failed live query
+  // must never silently turn into sample households.
+  useProjectFixtures: isDevelopment && projectDataMode === 'fixtures',
 } as const;

@@ -185,16 +185,15 @@ export function buildCapturePayload(input: BuildCapturePayloadInput) {
 // The portal does this via useCreateDecision() in @patina/supabase, but the
 // extension can't call React Query hooks (different React tree, no shared
 // query client — same constraint documented on FFESlotPicker). So we mirror
-// that hook's INSERT shape directly against the extension's Supabase client,
+// its lifecycle RPC payload shape against the extension's Supabase client,
 // adding the room/product linkage columns shipped in migration 00172:
 //
 //   • client_decisions.room_id           → scope the decision to a room
 //   • client_decision_options.product_id → link the option to the catalog row
 //
 // designer_id is NOT set here — the set_decision_designer_id trigger (00064)
-// derives it from designer_clients. status defaults to 'pending' so the
-// decision is sent immediately and the client gets notified (the caller fires
-// notify_decision_required after the insert, matching useCreateDecision).
+// derives it from designer_clients. status defaults to 'pending'; the checked
+// create RPC owns the row, option, and required client notification atomically.
 // ═══════════════════════════════════════════════════════════════════════════
 
 export interface BuildDecisionPayloadInput {

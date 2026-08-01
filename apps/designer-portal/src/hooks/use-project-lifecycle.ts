@@ -35,6 +35,25 @@ function invalidateProjectDocument(qc: QueryClient, projectId: string | null) {
   }
 }
 
+/** Refresh every read model that can become a closeout blocker. This is also
+ *  used after a rejected close so a row created between preflight and the RPC
+ *  replaces the stale optimistic-ready state with current server truth. */
+function invalidateProjectCloseoutTruth(qc: QueryClient, projectId: string) {
+  const keys = [
+    ['project-phases', projectId],
+    ['coordination-items', projectId],
+    ['scope-changes', projectId],
+    ['project-ffe-items', projectId],
+    ['ffe-invoice-coverage', projectId],
+    ['project-payment-milestones', projectId],
+    ['invoices', 'project', projectId],
+  ] as const;
+
+  for (const queryKey of keys) {
+    void qc.invalidateQueries({ queryKey });
+  }
+}
+
 export interface OpenProjectDirectInput {
   /** Client-generated uuid — makes a retried submit return the same project. */
   id: string;
@@ -145,6 +164,17 @@ export function useCloseProject() {
       if (error) throw error;
       return data;
     },
-    onSuccess: (_data, { projectId }) => invalidateProjectDocument(qc, projectId),
+    onSuccess: (_data, { projectId }) => {
+      invalidateProjectDocument(qc, projectId);
+      invalidateProjectCloseoutTruth(qc, projectId);
+      // Completion is what makes a truthful review request available. Refresh
+      // the Care/People candidate list in the same success fan-out.
+      void qc.invalidateQueries({
+        queryKey: ['completed-projects-without-review'],
+      });
+    },
+    onError: (_error, { projectId }) => {
+      invalidateProjectCloseoutTruth(qc, projectId);
+    },
   });
 }

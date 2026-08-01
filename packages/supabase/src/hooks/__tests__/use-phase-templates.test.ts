@@ -144,6 +144,12 @@ describe('usePhaseTemplates', () => {
 // useApplyPhaseTemplate
 // ─────────────────────────────────────────────────────────────────────────────
 
+type ApplyTemplateInput = {
+  proposalId: string;
+  templateSlug: string;
+  requestId: string;
+};
+
 describe('useApplyPhaseTemplate', () => {
   it('calls the apply_phase_template RPC with the proposal id + slug', async () => {
     supabaseClient.rpc.mockResolvedValue({
@@ -152,17 +158,19 @@ describe('useApplyPhaseTemplate', () => {
     });
 
     const config = useApplyPhaseTemplate() as unknown as {
-      mutationFn: (input: { proposalId: string; templateSlug: string }) => Promise<string[]>;
+      mutationFn: (input: ApplyTemplateInput) => Promise<string[]>;
     };
 
     const result = await config.mutationFn({
       proposalId: 'prop-1',
       templateSlug: 'classic_5_phase',
+      requestId: 'request-1',
     });
 
     expect(supabaseClient.rpc).toHaveBeenCalledWith('apply_phase_template', {
       p_proposal_id: 'prop-1',
       p_template_slug: 'classic_5_phase',
+      p_request_id: 'request-1',
     });
     expect(result).toEqual(['p1', 'p2', 'p3']);
   });
@@ -177,12 +185,13 @@ describe('useApplyPhaseTemplate', () => {
     });
 
     const config = useApplyPhaseTemplate() as unknown as {
-      mutationFn: (input: { proposalId: string; templateSlug: string }) => Promise<string[]>;
+      mutationFn: (input: ApplyTemplateInput) => Promise<string[]>;
     };
 
     const result = await config.mutationFn({
       proposalId: 'prop-1',
       templateSlug: 'fast_track',
+      requestId: 'request-2',
     });
 
     expect(result).toEqual(['a', 'b']);
@@ -192,12 +201,13 @@ describe('useApplyPhaseTemplate', () => {
     supabaseClient.rpc.mockResolvedValue({ data: null, error: null });
 
     const config = useApplyPhaseTemplate() as unknown as {
-      mutationFn: (input: { proposalId: string; templateSlug: string }) => Promise<string[]>;
+      mutationFn: (input: ApplyTemplateInput) => Promise<string[]>;
     };
 
     const result = await config.mutationFn({
       proposalId: 'prop-1',
       templateSlug: 'classic_5_phase',
+      requestId: 'request-3',
     });
 
     expect(result).toEqual([]);
@@ -210,11 +220,15 @@ describe('useApplyPhaseTemplate', () => {
     });
 
     const config = useApplyPhaseTemplate() as unknown as {
-      mutationFn: (input: { proposalId: string; templateSlug: string }) => Promise<string[]>;
+      mutationFn: (input: ApplyTemplateInput) => Promise<string[]>;
     };
 
     await expect(
-      config.mutationFn({ proposalId: 'prop-1', templateSlug: 'classic_5_phase' })
+      config.mutationFn({
+        proposalId: 'prop-1',
+        templateSlug: 'classic_5_phase',
+        requestId: 'request-4',
+      })
     ).rejects.toThrow('proposal not found or not owned by caller');
   });
 
@@ -222,11 +236,15 @@ describe('useApplyPhaseTemplate', () => {
     const config = useApplyPhaseTemplate() as unknown as {
       onSuccess: (
         phaseIds: string[],
-        input: { proposalId: string; templateSlug: string }
+        input: ApplyTemplateInput
       ) => void;
     };
 
-    config.onSuccess(['p1'], { proposalId: 'prop-1', templateSlug: 'classic_5_phase' });
+    config.onSuccess(['p1'], {
+      proposalId: 'prop-1',
+      templateSlug: 'classic_5_phase',
+      requestId: 'request-5',
+    });
 
     const calls = invalidateQueries.mock.calls.map((c) => c[0].queryKey);
     expect(calls).toContainEqual(['proposal-phases', 'prop-1']);

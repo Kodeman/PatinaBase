@@ -6,11 +6,18 @@ import { useSendMagicLink, useVerifyOtp } from '@patina/supabase';
 import { Alert, Button, Input } from '@patina/design-system';
 import Link from 'next/link';
 import { authEvents } from '@/lib/analytics/events';
+import {
+  buildAuthCallbackUrl,
+  buildSignInPath,
+  resolveAuthReturnPath,
+} from '@/lib/auth-redirect';
 
 function VerifyOtpContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const email = searchParams.get('email') ?? '';
+  const callbackUrl = resolveAuthReturnPath(searchParams.get('callbackUrl'));
+  const signInUrl = buildSignInPath(callbackUrl);
 
   const verifyOtp = useVerifyOtp();
   const resendMagicLink = useSendMagicLink();
@@ -39,7 +46,7 @@ function VerifyOtpContent() {
               </p>
             </div>
             <Link
-              href="/auth/signin"
+              href={signInUrl}
               className="block w-full text-center text-sm text-primary hover:underline"
             >
               Back to sign in
@@ -59,7 +66,7 @@ function VerifyOtpContent() {
     try {
       await verifyOtp.mutateAsync({ email, token, type: 'email' });
       authEvents.login('magic-link');
-      router.replace('/');
+      router.replace(callbackUrl as any);
     } catch (err) {
       const message =
         err instanceof Error ? err.message : 'Invalid code. Please try again.';
@@ -75,7 +82,10 @@ function VerifyOtpContent() {
     setResendSuccess(false);
 
     try {
-      await resendMagicLink.mutateAsync({ email });
+      await resendMagicLink.mutateAsync({
+        email,
+        redirectTo: buildAuthCallbackUrl(window.location.origin, callbackUrl),
+      });
       setResendSuccess(true);
       setResendCooldown(60);
     } catch (err) {
@@ -183,7 +193,7 @@ function VerifyOtpContent() {
           {/* Footer */}
           <div className="mt-6 text-center">
             <Link
-              href="/auth/signin"
+              href={signInUrl}
               className="text-sm text-muted-foreground hover:text-foreground transition-colors"
             >
               Back to sign in

@@ -68,6 +68,8 @@ export interface MilestoneApproval {
 export interface MilestoneDetail {
   id: string;
   index: number;
+  /** Server-owned phase row version used to reconcile refreshed authority. */
+  authorityVersion?: string;
   title: string;
   phase?: string;
   description?: string;

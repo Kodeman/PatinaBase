@@ -1,45 +1,39 @@
 /**
  * @jest-environment node
  *
- * Tests for POST /api/proposals/[id]/sign.
- *
- * Regression: proposal 2ff78824's `signed_ip` was NULL after a real browser
- * signature. Cause: client-portal's middleware.ts only sets `x-client-ip`
- * for PAGE routes under `/proposals` (`pathname.startsWith('/proposals')`,
- * which `/api/proposals/**` never matches), and `x-forwarded-for` is
- * typically absent on Cloudflare Workers (Cloudflare's own client-IP header
- * is `cf-connecting-ip`). The old header-chain (`x-client-ip` ??
- * `x-forwarded-for`) had no header that was ever actually present in
- * production, so `p_signed_ip` was always null.
- *
- * Fix: `resolveClientIp()` (lib/utils/client-ip.ts — see its own unit tests
- * for the header-priority cases) prefers `cf-connecting-ip`, then the first
- * hop of `x-forwarded-for`, then the legacy `x-client-ip` as a last-resort
- * fallback. This file covers the route's end-to-end wiring: the resolved IP
- * actually reaches `sign_proposal`'s `p_signed_ip` argument.
- *
- * Uses the `node` test env (not jsdom) so `next/server`'s NextRequest can be
- * constructed directly.
+ * Contract tests for POST /api/proposals/[id]/sign. The user-session client
+ * owns the safe proposal preflight and confirmation email; only a service-role
+ * client may forward Cloudflare-derived IP evidence to the database. Browser
+ * payload fields never control signed_ip, activation, or project start date.
  */
 import { NextRequest } from 'next/server';
-import { getUser, createServerClient } from '@patina/supabase/server';
+import {
+  getUser,
+  createServerClient,
+  createServiceClient,
+} from '@patina/supabase/server';
 
 import { POST } from '../route';
 
 jest.mock('@patina/supabase/server', () => ({
   getUser: jest.fn(),
   createServerClient: jest.fn(),
+  createServiceClient: jest.fn(),
 }));
 
 const mockGetUser = getUser as jest.Mock;
 const mockCreateServerClient = createServerClient as jest.Mock;
+const mockCreateServiceClient = createServiceClient as jest.Mock;
 
 describe('POST /api/proposals/[id]/sign', () => {
-  function makeRequest(headers: Record<string, string> = {}): NextRequest {
+  function makeRequest(
+    headers: Record<string, string> = {},
+    body: Record<string, unknown> = { signedByName: 'Jamie Homeowner' },
+  ): NextRequest {
     return new NextRequest('http://localhost:3002/api/proposals/prop-1/sign', {
       method: 'POST',
       headers: { 'content-type': 'application/json', ...headers },
-      body: JSON.stringify({ signedByName: 'Jamie Homeowner' }),
+      body: JSON.stringify(body),
     } as unknown as RequestInit);
   }
 
@@ -47,68 +41,177 @@ describe('POST /api/proposals/[id]/sign', () => {
     return { params: Promise.resolve({ id }) };
   }
 
-  let rpcMock: jest.Mock;
-  let singleMock: jest.Mock;
+  let userRpcMock: jest.Mock;
+  let serviceRpcMock: jest.Mock;
   let invokeMock: jest.Mock;
+  let proposalStatus: 'sent' | 'viewed' | 'accepted';
+  let validUntil: string | null;
 
   beforeEach(() => {
+    jest.clearAllMocks();
     mockGetUser.mockResolvedValue({ id: 'client-1' });
+    proposalStatus = 'sent';
+    validUntil = null;
 
-    singleMock = jest.fn().mockResolvedValue({
-      data: {
-        id: 'prop-1',
-        status: 'sent',
-        client_id: 'client-1',
-        designer_id: 'designer-1',
-        valid_until: null,
-      },
-      error: null,
+    userRpcMock = jest.fn().mockImplementation((name: string) => {
+      if (name === 'get_client_proposal_bundle') {
+        return Promise.resolve({
+          data: {
+            proposal: {
+              id: 'prop-1',
+              status: proposalStatus,
+              designer_id: 'designer-1',
+              valid_until: validUntil,
+            },
+          },
+          error: null,
+        });
+      }
+      return Promise.resolve({ error: null });
     });
-    rpcMock = jest.fn().mockResolvedValue({ error: null });
+    serviceRpcMock = jest
+      .fn()
+      .mockResolvedValue({ data: { newly_signed: true }, error: null });
     invokeMock = jest.fn().mockResolvedValue({ data: null, error: null });
 
-    const fromChain: Record<string, jest.Mock> = {};
-    fromChain.select = jest.fn(() => fromChain);
-    fromChain.eq = jest.fn(() => fromChain);
-    fromChain.single = singleMock;
-
     mockCreateServerClient.mockResolvedValue({
-      from: jest.fn().mockReturnValue(fromChain),
-      rpc: rpcMock,
+      rpc: userRpcMock,
       functions: { invoke: invokeMock },
+    });
+    mockCreateServiceClient.mockReturnValue({ rpc: serviceRpcMock });
+  });
+
+  it('authenticates before constructing a service-role client', async () => {
+    mockGetUser.mockResolvedValue(null);
+
+    const res = await POST(makeRequest(), makeParams());
+
+    expect(res.status).toBe(401);
+    expect(mockCreateServerClient).not.toHaveBeenCalled();
+    expect(mockCreateServiceClient).not.toHaveBeenCalled();
+  });
+
+  it('uses the user-session client only for the safe proposal preflight', async () => {
+    const res = await POST(makeRequest(), makeParams());
+
+    expect(res.status).toBe(200);
+    expect(userRpcMock).toHaveBeenCalledTimes(1);
+    expect(userRpcMock).toHaveBeenCalledWith('get_client_proposal_bundle', {
+      p_proposal_id: 'prop-1',
     });
   });
 
-  it('passes cf-connecting-ip through to sign_proposal as p_signed_ip', async () => {
-    const res = await POST(makeRequest({ 'cf-connecting-ip': '203.0.113.7' }), makeParams());
+  it('passes verified client identity and cf-connecting-ip only to the service RPC', async () => {
+    const res = await POST(
+      makeRequest({ 'cf-connecting-ip': '203.0.113.7' }),
+      makeParams(),
+    );
 
     expect(res.status).toBe(200);
-    expect(rpcMock).toHaveBeenCalledWith(
-      'sign_proposal',
-      expect.objectContaining({ p_signed_ip: '203.0.113.7' }),
+    expect(serviceRpcMock).toHaveBeenCalledWith(
+      'sign_proposal_with_trusted_ip',
+      {
+        p_proposal_id: 'prop-1',
+        p_signed_name: 'Jamie Homeowner',
+        p_client_id: 'client-1',
+        p_signed_ip: '203.0.113.7',
+      },
     );
   });
 
-  it('falls back to x-forwarded-for when cf-connecting-ip is absent (e.g. local dev behind a reverse proxy)', async () => {
+  it('ignores caller-supplied IP, activation, start-date, and client fields', async () => {
+    const res = await POST(
+      makeRequest(
+        { 'cf-connecting-ip': '203.0.113.7' },
+        {
+          signedByName: 'Jamie Homeowner',
+          signedIp: '198.51.100.200',
+          autoActivate: false,
+          startDate: '2040-01-01',
+          clientId: 'attacker-controlled',
+        },
+      ),
+      makeParams(),
+    );
+
+    expect(res.status).toBe(200);
+    expect(serviceRpcMock).toHaveBeenCalledWith(
+      'sign_proposal_with_trusted_ip',
+      {
+        p_proposal_id: 'prop-1',
+        p_signed_name: 'Jamie Homeowner',
+        p_client_id: 'client-1',
+        p_signed_ip: '203.0.113.7',
+      },
+    );
+  });
+
+  it('uses the first x-forwarded-for hop when Cloudflare IP is absent', async () => {
     const res = await POST(
       makeRequest({ 'x-forwarded-for': '198.51.100.1, 10.0.0.1' }),
       makeParams(),
     );
 
     expect(res.status).toBe(200);
-    expect(rpcMock).toHaveBeenCalledWith(
-      'sign_proposal',
+    expect(serviceRpcMock).toHaveBeenCalledWith(
+      'sign_proposal_with_trusted_ip',
       expect.objectContaining({ p_signed_ip: '198.51.100.1' }),
     );
   });
 
-  it('sends null p_signed_ip when no IP header is present — documents the pre-fix production symptom, distinct from silently swallowing an available IP', async () => {
+  it('passes null trusted IP when no server-side address header is present', async () => {
     const res = await POST(makeRequest(), makeParams());
 
     expect(res.status).toBe(200);
-    expect(rpcMock).toHaveBeenCalledWith(
-      'sign_proposal',
+    expect(serviceRpcMock).toHaveBeenCalledWith(
+      'sign_proposal_with_trusted_ip',
       expect.objectContaining({ p_signed_ip: null }),
     );
+  });
+
+  it('allows an accepted retry so the database can repair a missing project', async () => {
+    proposalStatus = 'accepted';
+    validUntil = '2020-01-01T00:00:00.000Z';
+    serviceRpcMock.mockResolvedValue({
+      data: { newly_signed: false },
+      error: null,
+    });
+
+    const res = await POST(makeRequest(), makeParams());
+
+    expect(res.status).toBe(200);
+    expect(serviceRpcMock).toHaveBeenCalledTimes(1);
+    expect(invokeMock).not.toHaveBeenCalled();
+  });
+
+  it('sends confirmation only for the transaction that created the signature', async () => {
+    const res = await POST(makeRequest(), makeParams());
+
+    expect(res.status).toBe(200);
+    expect(invokeMock).toHaveBeenCalledTimes(1);
+    expect(invokeMock).toHaveBeenCalledWith('proposal-sign-confirmation', {
+      body: { proposalId: 'prop-1' },
+    });
+  });
+
+  it('fails closed on a legacy or malformed RPC result without duplicating mail', async () => {
+    serviceRpcMock.mockResolvedValue({ data: {}, error: null });
+
+    const res = await POST(makeRequest(), makeParams());
+
+    expect(res.status).toBe(200);
+    expect(invokeMock).not.toHaveBeenCalled();
+  });
+
+  it('does not send confirmation when the authoritative service RPC fails', async () => {
+    serviceRpcMock.mockResolvedValue({
+      data: null,
+      error: { message: 'proposal approval evidence conflicts' },
+    });
+
+    const res = await POST(makeRequest(), makeParams());
+
+    expect(res.status).toBe(500);
+    expect(invokeMock).not.toHaveBeenCalled();
   });
 });

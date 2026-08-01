@@ -21,6 +21,9 @@ export interface ChangeRequestFormData {
 export interface ChangeRequestFormProps {
   onSubmit: (data: ChangeRequestFormData) => void
   onCancel?: () => void
+  /** Basic hides advanced inputs that a simple title/description API cannot persist. */
+  mode?: 'basic' | 'advanced'
+  isSubmitting?: boolean
   initialData?: Partial<ChangeRequestFormData>
   approvalId?: string
   approvalTitle?: string
@@ -54,8 +57,8 @@ const RESPONSE_TIMES = [
 /**
  * ChangeRequestForm - Structured feedback and change request form
  *
- * Allows clients to submit detailed change requests with categorization,
- * priority levels, attachments, and expected response times.
+ * Advanced mode supports categorization, priority, attachments, and response
+ * preferences. Basic mode intentionally renders only title and description.
  *
  * @example
  * ```tsx
@@ -71,6 +74,8 @@ export const ChangeRequestForm = React.forwardRef<HTMLFormElement, ChangeRequest
   ({
     onSubmit,
     onCancel,
+    mode = 'advanced',
+    isSubmitting = false,
     initialData,
     approvalId,
     approvalTitle,
@@ -115,13 +120,14 @@ export const ChangeRequestForm = React.forwardRef<HTMLFormElement, ChangeRequest
 
     const handleSubmit = (e: React.FormEvent) => {
       e.preventDefault()
+      if (isSubmitting) return
       if (validateForm()) {
         onSubmit(formData)
       }
     }
 
     const handleFileSelect = (files: FileList | null) => {
-      if (!files) return
+      if (!files || isSubmitting) return
 
       const newFiles = Array.from(files).filter(file => {
         const sizeMB = file.size / (1024 * 1024)
@@ -150,6 +156,7 @@ export const ChangeRequestForm = React.forwardRef<HTMLFormElement, ChangeRequest
     const handleDrop = (e: React.DragEvent) => {
       e.preventDefault()
       setIsDragging(false)
+      if (isSubmitting) return
       handleFileSelect(e.dataTransfer.files)
     }
 
@@ -162,6 +169,7 @@ export const ChangeRequestForm = React.forwardRef<HTMLFormElement, ChangeRequest
       <form
         ref={ref}
         onSubmit={handleSubmit}
+        aria-busy={isSubmitting}
         className={cn('space-y-6', className)}
         {...props}
       >
@@ -173,14 +181,15 @@ export const ChangeRequestForm = React.forwardRef<HTMLFormElement, ChangeRequest
           </div>
         )}
 
-        {/* Category Selection */}
-        <div className="space-y-2">
+        {/* Category Selection — advanced persistence only. */}
+        {mode === 'advanced' && <div className="space-y-2">
           <Label htmlFor="category">Change Category</Label>
           <div className="grid grid-cols-2 md:grid-cols-3 gap-2">
             {CATEGORIES.map((cat) => (
               <button
                 key={cat.value}
                 type="button"
+                disabled={isSubmitting}
                 onClick={() => setFormData({ ...formData, category: cat.value })}
                 className={cn(
                   'p-3 rounded-lg border-2 transition-all text-left',
@@ -194,16 +203,17 @@ export const ChangeRequestForm = React.forwardRef<HTMLFormElement, ChangeRequest
               </button>
             ))}
           </div>
-        </div>
+        </div>}
 
-        {/* Priority Level */}
-        <div className="space-y-2">
+        {/* Priority Level — advanced persistence only. */}
+        {mode === 'advanced' && <div className="space-y-2">
           <Label htmlFor="priority">Priority Level</Label>
           <div className="flex gap-2 flex-wrap">
             {PRIORITIES.map((p) => (
               <button
                 key={p.value}
                 type="button"
+                disabled={isSubmitting}
                 onClick={() => setFormData({ ...formData, priority: p.value })}
                 className={cn(
                   'px-4 py-2 rounded-full text-sm font-medium transition-all',
@@ -216,7 +226,7 @@ export const ChangeRequestForm = React.forwardRef<HTMLFormElement, ChangeRequest
               </button>
             ))}
           </div>
-        </div>
+        </div>}
 
         {/* Title */}
         <div className="space-y-2">
@@ -226,6 +236,7 @@ export const ChangeRequestForm = React.forwardRef<HTMLFormElement, ChangeRequest
           <input
             id="title"
             type="text"
+            disabled={isSubmitting}
             value={formData.title}
             onChange={(e) => setFormData({ ...formData, title: e.target.value })}
             className={cn(
@@ -250,6 +261,7 @@ export const ChangeRequestForm = React.forwardRef<HTMLFormElement, ChangeRequest
           </Label>
           <Textarea
             id="description"
+            disabled={isSubmitting}
             value={formData.description}
             onChange={(e) => setFormData({ ...formData, description: e.target.value })}
             rows={6}
@@ -272,8 +284,8 @@ export const ChangeRequestForm = React.forwardRef<HTMLFormElement, ChangeRequest
           </div>
         </div>
 
-        {/* Attachments */}
-        <div className="space-y-2">
+        {/* Attachments — advanced persistence only. */}
+        {mode === 'advanced' && <div className="space-y-2">
           <Label htmlFor="attachments">
             Attachments (Optional)
           </Label>
@@ -291,6 +303,7 @@ export const ChangeRequestForm = React.forwardRef<HTMLFormElement, ChangeRequest
             <input
               ref={fileInputRef}
               type="file"
+              disabled={isSubmitting}
               multiple
               accept="image/*,.pdf,.doc,.docx"
               onChange={(e) => handleFileSelect(e.target.files)}
@@ -302,6 +315,7 @@ export const ChangeRequestForm = React.forwardRef<HTMLFormElement, ChangeRequest
                 Drop files here or{' '}
                 <button
                   type="button"
+                  disabled={isSubmitting}
                   onClick={() => fileInputRef.current?.click()}
                   className="text-primary hover:underline"
                 >
@@ -338,6 +352,7 @@ export const ChangeRequestForm = React.forwardRef<HTMLFormElement, ChangeRequest
                     </span>
                     <button
                       type="button"
+                      disabled={isSubmitting}
                       onClick={() => removeAttachment(index)}
                       className="p-1 hover:bg-background rounded"
                     >
@@ -348,16 +363,17 @@ export const ChangeRequestForm = React.forwardRef<HTMLFormElement, ChangeRequest
               </motion.div>
             )}
           </AnimatePresence>
-        </div>
+        </div>}
 
-        {/* Expected Response Time */}
-        <div className="space-y-2">
+        {/* Expected Response Time — advanced persistence only. */}
+        {mode === 'advanced' && <div className="space-y-2">
           <Label htmlFor="response-time">Expected Response Time</Label>
           <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
             {RESPONSE_TIMES.map((time) => (
               <button
                 key={time.value}
                 type="button"
+                disabled={isSubmitting}
                 onClick={() => setFormData({ ...formData, expectedResponse: time.value })}
                 className={cn(
                   'p-3 rounded-lg border-2 transition-all text-left',
@@ -371,10 +387,10 @@ export const ChangeRequestForm = React.forwardRef<HTMLFormElement, ChangeRequest
               </button>
             ))}
           </div>
-        </div>
+        </div>}
 
-        {/* Info Banner */}
-        <div className="p-4 bg-blue-50 dark:bg-blue-950 rounded-lg border border-blue-200 dark:border-blue-800">
+        {/* Advanced response-time promise; basic mode makes no SLA claim. */}
+        {mode === 'advanced' && <div className="p-4 bg-blue-50 dark:bg-blue-950 rounded-lg border border-blue-200 dark:border-blue-800">
           <div className="flex gap-3">
             <Clock className="h-5 w-5 text-blue-600 dark:text-blue-400 flex-shrink-0 mt-0.5" />
             <div>
@@ -386,18 +402,18 @@ export const ChangeRequestForm = React.forwardRef<HTMLFormElement, ChangeRequest
               </p>
             </div>
           </div>
-        </div>
+        </div>}
 
         {/* Actions */}
         <div className="flex gap-3 justify-end pt-4 border-t">
           {onCancel && (
-            <Button type="button" variant="outline" onClick={onCancel}>
+            <Button type="button" variant="outline" onClick={onCancel} disabled={isSubmitting}>
               Cancel
             </Button>
           )}
-          <Button type="submit" className="px-6">
-            <CheckCircle className="h-4 w-4 mr-2" />
-            Submit Change Request
+          <Button type="submit" className="px-6" disabled={isSubmitting}>
+            {!isSubmitting && <CheckCircle className="h-4 w-4 mr-2" />}
+            {isSubmitting ? 'Sending…' : 'Submit Change Request'}
           </Button>
         </div>
       </form>

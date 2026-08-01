@@ -1,5 +1,9 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { createBrowserClient } from '../client';
+import {
+  invalidateProposalClientQueries,
+  PROPOSAL_CLIENT_MUTATION_KEY,
+} from '../lib/proposal-client-query-invalidation';
 
 const getSupabase = () => createBrowserClient();
 
@@ -59,6 +63,7 @@ export interface UpsertPaletteInput {
 }
 
 export interface UpsertSwatchInput {
+  proposalId: string;
   paletteId: string;
   swatchId?: string;
   hex: string;
@@ -145,6 +150,7 @@ export function useUpsertPalette() {
   const queryClient = useQueryClient();
 
   return useMutation({
+    mutationKey: [PROPOSAL_CLIENT_MUTATION_KEY],
     mutationFn: async (input: UpsertPaletteInput): Promise<ProposalPalette> => {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const supabase = getSupabase() as any;
@@ -205,9 +211,10 @@ export function useUpsertPalette() {
       if (error) throw error;
       return data as ProposalPalette;
     },
-    onSuccess: (palette) => {
+    onSuccess: async (palette) => {
       queryClient.invalidateQueries({ queryKey: ['proposal-palettes', palette.proposal_id] });
       queryClient.invalidateQueries({ queryKey: ['proposal-palette', palette.id] });
+      await invalidateProposalClientQueries(queryClient, palette.proposal_id);
     },
   });
 }
@@ -219,6 +226,7 @@ export function useDeletePalette() {
   const queryClient = useQueryClient();
 
   return useMutation({
+    mutationKey: [PROPOSAL_CLIENT_MUTATION_KEY],
     mutationFn: async ({
       paletteId,
       proposalId: _proposalId,
@@ -231,9 +239,10 @@ export function useDeletePalette() {
       const { error } = await supabase.from('proposal_palettes').delete().eq('id', paletteId);
       if (error) throw error;
     },
-    onSuccess: (_data, variables) => {
+    onSuccess: async (_data, variables) => {
       queryClient.invalidateQueries({ queryKey: ['proposal-palettes', variables.proposalId] });
       queryClient.invalidateQueries({ queryKey: ['proposal-palette', variables.paletteId] });
+      await invalidateProposalClientQueries(queryClient, variables.proposalId);
     },
   });
 }
@@ -245,6 +254,7 @@ export function useUpsertSwatch() {
   const queryClient = useQueryClient();
 
   return useMutation({
+    mutationKey: [PROPOSAL_CLIENT_MUTATION_KEY],
     mutationFn: async (input: UpsertSwatchInput): Promise<PaletteSwatch> => {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const supabase = getSupabase() as any;
@@ -292,12 +302,13 @@ export function useUpsertSwatch() {
       if (error) throw error;
       return data as PaletteSwatch;
     },
-    onSuccess: (swatch) => {
+    onSuccess: async (swatch, variables) => {
       queryClient.invalidateQueries({ queryKey: ['proposal-palette', swatch.palette_id] });
       // Also bust the parent list cache for any consumer that selected
       // by proposal — we don't know the proposal id from the swatch row,
       // so invalidate the broader prefix.
       queryClient.invalidateQueries({ queryKey: ['proposal-palettes'] });
+      await invalidateProposalClientQueries(queryClient, variables.proposalId);
     },
   });
 }
@@ -309,58 +320,63 @@ export function useDeleteSwatch() {
   const queryClient = useQueryClient();
 
   return useMutation({
+    mutationKey: [PROPOSAL_CLIENT_MUTATION_KEY],
     mutationFn: async ({
       swatchId,
       paletteId: _paletteId,
+      proposalId: _proposalId,
     }: {
       swatchId: string;
       paletteId: string;
+      proposalId: string;
     }): Promise<void> => {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const supabase = getSupabase() as any;
       const { error } = await supabase.from('palette_swatches').delete().eq('id', swatchId);
       if (error) throw error;
     },
-    onSuccess: (_data, variables) => {
+    onSuccess: async (_data, variables) => {
       queryClient.invalidateQueries({ queryKey: ['proposal-palette', variables.paletteId] });
       queryClient.invalidateQueries({ queryKey: ['proposal-palettes'] });
+      await invalidateProposalClientQueries(queryClient, variables.proposalId);
     },
   });
 }
 
 /**
- * Reorder all swatches on a palette. Issues one update per swatch in the
- * provided order with `sort_order = i`. We do this client-side rather
- * than via an RPC because the swatch list is small and RLS already
- * scopes the writes to the parent palette.
+ * Reorder the exact swatch set on a palette. The 00389 RPC validates that the
+ * supplied ids contain every palette swatch exactly once and assigns the whole
+ * zero-based order in one transaction.
  */
 export function useReorderSwatches() {
   const queryClient = useQueryClient();
 
   return useMutation({
+    mutationKey: [PROPOSAL_CLIENT_MUTATION_KEY],
     mutationFn: async ({
       paletteId,
+      proposalId,
       orderedIds,
     }: {
       paletteId: string;
+      proposalId: string;
       orderedIds: string[];
     }): Promise<void> => {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const supabase = getSupabase() as any;
 
-      for (let i = 0; i < orderedIds.length; i += 1) {
-        const id = orderedIds[i];
-        const { error } = await supabase
-          .from('palette_swatches')
-          .update({ sort_order: i })
-          .eq('id', id)
-          .eq('palette_id', paletteId);
-        if (error) throw error;
-      }
+      const { error } = await supabase.rpc('reorder_palette_swatches', {
+        p_proposal_id: proposalId,
+        p_palette_id: paletteId,
+        p_ordered_ids: orderedIds,
+      });
+      if (error) throw error;
     },
-    onSuccess: (_data, variables) => {
+    // Keep every mounted projection synchronized after success or rejection.
+    onSettled: async (_data, _error, variables) => {
       queryClient.invalidateQueries({ queryKey: ['proposal-palette', variables.paletteId] });
       queryClient.invalidateQueries({ queryKey: ['proposal-palettes'] });
+      await invalidateProposalClientQueries(queryClient, variables.proposalId);
     },
   });
 }

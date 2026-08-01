@@ -1,28 +1,19 @@
 // Shared email-send helper for Supabase Edge Functions.
 //
-// Single chokepoint that:
-//   1. Performs suppression check (if user_id provided).
-//   2. Auto-injects List-Unsubscribe / List-Unsubscribe-Post headers
-//      (RFC 8058) for non-transactional categories with a JOSE-signed token.
-//   3. Calls Resend.
-//   4. Optionally logs to notification_log with the resulting status.
-//
-// All edge functions that send email should funnel through this module so
-// deliverability headers, suppression, and logging stay consistent.
+// Compliance is separated from provider upload so durable outboxes can persist
+// the exact JSON body before attempt one and replay byte-identical requests.
 
 import type { SupabaseClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { SignJWT } from "https://deno.land/x/jose@v5.2.0/index.ts";
 
 export type SendCategory =
-  | "transactional"   // password reset, account verification, security alerts — never get unsubscribe
-  | "operational"     // proposal sent, decision reminder, invite — tied to a relationship; gets unsubscribe
-  | "engagement"      // price drops, leads, weekly digest — gets unsubscribe
-  | "marketing";      // campaigns — gets unsubscribe
+  | "transactional"
+  | "operational"
+  | "engagement"
+  | "marketing";
 
 export interface EmailAttachment {
-  /** Attachment filename as the recipient sees it, e.g. "po-0001.pdf". */
   filename: string;
-  /** Base64-encoded file content (the Resend JSON API attachment shape). */
   content: string;
 }
 
@@ -34,69 +25,67 @@ export interface ComplianceSendOptions {
   cc?: string | string[];
   replyTo?: string;
   from?: string;
-  /**
-   * Optional file attachments, passed through to Resend's
-   * `attachments[]` payload field ({ filename, content<base64> }).
-   */
   attachments?: EmailAttachment[];
-
-  /** User receiving the email — enables suppression check + unsubscribe token. */
   userId?: string;
-  /** Notification type, e.g. "price_drop". Defaults to "all_marketing". */
   notificationType?: string;
-  /** Category controls whether unsubscribe headers are injected. */
   category: SendCategory;
-
-  /** Template id for notification_log. */
   templateId?: string;
-  /** Extra metadata stored on the log row. */
   metadata?: Record<string, unknown>;
-  /** Skip notification_log writes (default: log when userId present). */
   skipLog?: boolean;
-
-  /** Base URL for unsubscribe link (default: admin.patina.cloud). */
   unsubscribeBaseUrl?: string;
-  /** Resend tags. */
   tags?: Array<{ name: string; value: string }>;
+  idempotencyKey?: string;
+  /** Fail closed when suppression/rate policy storage cannot be read. Durable
+   * sends should enable this; legacy direct callers retain prior behavior. */
+  failClosedPolicyReads?: boolean;
 }
 
 export interface ComplianceSendResult {
   success: boolean;
   id?: string;
   error?: string;
-  /** True if send was skipped because the user is suppressed. */
   suppressed?: boolean;
-  /** notification_log row id, if logged. */
   logId?: string;
 }
+
+/** Exact provider request persisted by durable outboxes before upload. */
+export interface PreparedResendRequest {
+  body: string;
+  from: string;
+  to: string[];
+  cc?: string[];
+  subject: string;
+  idempotencyKey?: string;
+  dryRun: boolean;
+}
+
+export type CompliancePreparationResult =
+  | { state: "ready"; request: PreparedResendRequest }
+  | { state: "suppressed"; reason: string };
+
+export type EmailSuppressionCheckResult =
+  | { state: "clear" }
+  | { state: "suppressed"; reason: "email_suppressed" };
+
+export type PreparedResendResult =
+  | { state: "delivered"; id?: string }
+  | { state: "failed"; error: string }
+  | { state: "ambiguous"; error: string };
 
 const DEFAULT_FROM = "Patina <hello@patina.cloud>";
 const DEFAULT_BASE_URL = "https://admin.patina.cloud";
 
-/**
- * Resolve the sender address for a given send category. Allows operators to
- * split transactional and marketing onto separate verified subdomains
- * (better deliverability + reputation isolation) without code changes.
- */
 function resolveFromAddress(category: SendCategory): string {
-  const transactional =
-    Deno.env.get("RESEND_FROM_TRANSACTIONAL") ||
+  const transactional = Deno.env.get("RESEND_FROM_TRANSACTIONAL") ||
     Deno.env.get("RESEND_FROM") ||
     DEFAULT_FROM;
-  const marketing =
-    Deno.env.get("RESEND_FROM_MARKETING") ||
+  const marketing = Deno.env.get("RESEND_FROM_MARKETING") ||
     Deno.env.get("RESEND_FROM") ||
     DEFAULT_FROM;
 
-  switch (category) {
-    case "marketing":
-    case "engagement":
-      return marketing;
-    case "transactional":
-    case "operational":
-    default:
-      return transactional;
-  }
+  return category === "marketing" || category === "engagement"
+    ? marketing
+    : transactional;
 }
 
 function getResendApiKey(): string {
@@ -105,28 +94,42 @@ function getResendApiKey(): string {
   return key;
 }
 
+export function buildResendRequestHeaders(
+  apiKey: string,
+  idempotencyKey?: string,
+): Record<string, string> {
+  const headers: Record<string, string> = {
+    "Content-Type": "application/json",
+    Authorization: `Bearer ${apiKey}`,
+  };
+  if (idempotencyKey) headers["Idempotency-Key"] = idempotencyKey;
+  return headers;
+}
+
 function getDevMode(): "dry_run" | "redirect" | "off" {
-  const m = Deno.env.get("EMAIL_DEV_MODE")?.toLowerCase();
-  if (m === "dry_run" || m === "redirect") return m;
-  return "off";
+  const mode = Deno.env.get("EMAIL_DEV_MODE")?.toLowerCase();
+  return mode === "dry_run" || mode === "redirect" ? mode : "off";
 }
 
 function getUnsubscribeSecret(): Uint8Array {
-  const secret =
-    Deno.env.get("UNSUBSCRIBE_TOKEN_SECRET") ||
+  const secret = Deno.env.get("UNSUBSCRIBE_TOKEN_SECRET") ||
     Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
   if (!secret) {
-    throw new Error("UNSUBSCRIBE_TOKEN_SECRET or SUPABASE_SERVICE_ROLE_KEY required");
+    throw new Error(
+      "UNSUBSCRIBE_TOKEN_SECRET or SUPABASE_SERVICE_ROLE_KEY required",
+    );
   }
   return new TextEncoder().encode(secret);
 }
 
-/** Sign a one-click unsubscribe token (72h expiry per CAN-SPAM). */
+function errorMessage(error: unknown): string {
+  return error instanceof Error ? error.message : "Unknown send error";
+}
+
 export async function generateUnsubscribeToken(
   userId: string,
   notificationType: string,
 ): Promise<string> {
-  const secretKey = getUnsubscribeSecret();
   return await new SignJWT({
     type: notificationType,
     purpose: "unsubscribe",
@@ -136,40 +139,237 @@ export async function generateUnsubscribeToken(
     .setIssuedAt()
     .setExpirationTime("72h")
     .setIssuer("patina:notifications")
-    .sign(secretKey);
+    .sign(getUnsubscribeSecret());
 }
 
-/** Build RFC 8058 unsubscribe headers. */
-export function buildUnsubscribeHeaders(unsubscribeUrl: string): Record<string, string> {
+export function buildUnsubscribeHeaders(
+  unsubscribeUrl: string,
+): Record<string, string> {
   return {
     "List-Unsubscribe": `<${unsubscribeUrl}>`,
     "List-Unsubscribe-Post": "List-Unsubscribe=One-Click",
   };
 }
 
-/**
- * Generate the full unsubscribe URL (signed token embedded) that should be
- * placed in List-Unsubscribe headers.
- */
 export async function generateUnsubscribeUrl(
   userId: string,
   notificationType: string,
-  baseUrl = "https://admin.patina.cloud",
+  baseUrl = DEFAULT_BASE_URL,
 ): Promise<string> {
   const token = await generateUnsubscribeToken(userId, notificationType);
   return `${baseUrl}/api/unsubscribe?token=${encodeURIComponent(token)}`;
 }
 
 /**
- * Send a single email via Resend with compliance headers, suppression
- * filtering, and optional notification_log writes.
+ * Check only durable bounce/complaint suppression. This intentionally does not
+ * inspect notification_log or apply a rolling rate cap, so an already-
+ * persisted provider request can be replayed without changing its original
+ * eligibility merely because time or unrelated sends have advanced.
  */
+export async function checkEmailSuppression(
+  supabase: SupabaseClient,
+  userId: string,
+  options: { failClosed?: boolean } = {},
+): Promise<EmailSuppressionCheckResult> {
+  const { data: profile, error: profileError } = await supabase
+    .from("profiles")
+    .select("email_suppressed")
+    .eq("id", userId)
+    .maybeSingle();
+
+  if (profileError) {
+    if (options.failClosed) {
+      throw new Error(
+        `email_suppression_check_failed: ${profileError.message}`,
+      );
+    }
+    console.error("send-email: suppression check unavailable", profileError);
+  }
+  if (options.failClosed && !profile) {
+    throw new Error("email_suppression_check_failed: profile missing");
+  }
+  return profile?.email_suppressed
+    ? { state: "suppressed", reason: "email_suppressed" }
+    : { state: "clear" };
+}
+
+/**
+ * Run compliance and serialize the exact provider body without uploading it.
+ * Durable callers can opt into fail-closed suppression/rate-cap reads; the
+ * compatibility wrapper keeps legacy direct-send behavior unless requested.
+ */
+export async function prepareCompliantEmail(
+  supabase: SupabaseClient,
+  options: ComplianceSendOptions,
+): Promise<CompliancePreparationResult> {
+  const devMode = getDevMode();
+  const recipientOverride = Deno.env.get("EMAIL_DEV_REDIRECT_TO");
+  const effectiveTo = devMode === "redirect" && recipientOverride
+    ? recipientOverride
+    : options.to;
+
+  if (options.userId) {
+    const suppression = await checkEmailSuppression(
+      supabase,
+      options.userId,
+      { failClosed: options.failClosedPolicyReads },
+    );
+    if (suppression.state === "suppressed") {
+      return suppression;
+    }
+
+    if (options.category !== "transactional") {
+      const capPerHour = Number(Deno.env.get("EMAIL_USER_CAP_PER_HOUR") || "8");
+      const cutoff = new Date(Date.now() - 60 * 60 * 1000).toISOString();
+      const { count, error: capError } = await supabase
+        .from("notification_log")
+        .select("id", { count: "exact", head: true })
+        .eq("user_id", options.userId)
+        .eq("channel", "email")
+        .in("status", [
+          "delivered",
+          "sending",
+          "opened",
+          "clicked",
+          "unconfirmed",
+        ])
+        .gte("created_at", cutoff);
+      if (capError) {
+        if (options.failClosedPolicyReads) {
+          throw new Error(`email_rate_cap_check_failed: ${capError.message}`);
+        }
+        console.error("send-email: rate-cap check unavailable", capError);
+      }
+      if (options.failClosedPolicyReads && typeof count !== "number") {
+        throw new Error("email_rate_cap_check_failed: count missing");
+      }
+      if ((count ?? 0) >= capPerHour) {
+        return {
+          state: "suppressed",
+          reason: `global_rate_cap (${capPerHour}/hr)`,
+        };
+      }
+    }
+  }
+
+  const headers: Record<string, string> = {};
+  if (options.category !== "transactional" && options.userId) {
+    const unsubscribeUrl = await generateUnsubscribeUrl(
+      options.userId,
+      options.notificationType ?? "all_marketing",
+      options.unsubscribeBaseUrl || DEFAULT_BASE_URL,
+    );
+    Object.assign(headers, buildUnsubscribeHeaders(unsubscribeUrl));
+  }
+
+  const from = options.from || resolveFromAddress(options.category);
+  const subject = devMode === "redirect"
+    ? `[DEV→${effectiveTo}] ${options.subject}`
+    : options.subject;
+  const payload: Record<string, unknown> = {
+    from,
+    to: [effectiveTo],
+    subject,
+    html: options.html,
+    headers,
+  };
+  if (options.text) payload.text = options.text;
+  const cc = options.cc
+    ? (Array.isArray(options.cc) ? options.cc : [options.cc])
+    : undefined;
+  if (cc) payload.cc = cc;
+  if (options.replyTo) payload.reply_to = options.replyTo;
+  if (options.tags) payload.tags = options.tags;
+  if (options.attachments?.length) payload.attachments = options.attachments;
+
+  return {
+    state: "ready",
+    request: {
+      body: JSON.stringify(payload),
+      from,
+      to: [effectiveTo],
+      cc,
+      subject,
+      idempotencyKey: options.idempotencyKey,
+      dryRun: devMode === "dry_run",
+    },
+  };
+}
+
+/**
+ * Upload one already-persisted body. A timeout, transport error, or unreadable
+ * 2xx response is ambiguous because Resend may have accepted the request.
+ */
+export async function sendPreparedResendRequest(
+  request: PreparedResendRequest,
+  options: {
+    timeoutMs?: number | null;
+    fetchImpl?: typeof fetch;
+    apiKey?: string;
+  } = {},
+): Promise<PreparedResendResult> {
+  if (request.dryRun) {
+    console.log("[send-email:dry_run]", request.body);
+    return { state: "delivered", id: `dryrun_${Date.now()}` };
+  }
+
+  const controller = new AbortController();
+  const timeout = options.timeoutMs == null ? undefined : setTimeout(
+    () => controller.abort(),
+    Math.max(1, options.timeoutMs),
+  );
+  try {
+    const response = await (options.fetchImpl ?? fetch)(
+      "https://api.resend.com/emails",
+      {
+        method: "POST",
+        headers: buildResendRequestHeaders(
+          options.apiKey ?? getResendApiKey(),
+          request.idempotencyKey,
+        ),
+        body: request.body,
+        signal: controller.signal,
+      },
+    );
+
+    if (!response.ok) {
+      return {
+        state: "failed",
+        error: `Resend API ${response.status}: ${await response.text()}`,
+      };
+    }
+
+    try {
+      const body = await response.json();
+      if (!body || typeof body.id !== "string") {
+        return {
+          state: "ambiguous",
+          error: "Resend accepted the request but returned no message id",
+        };
+      }
+      return { state: "delivered", id: body.id };
+    } catch (error) {
+      return {
+        state: "ambiguous",
+        error: `Resend success response was unreadable: ${errorMessage(error)}`,
+      };
+    }
+  } catch (error) {
+    return { state: "ambiguous", error: errorMessage(error) };
+  } finally {
+    if (timeout !== undefined) clearTimeout(timeout);
+  }
+}
+
+/** Compatibility chokepoint for non-outbox callers. */
 export async function sendCompliantEmail(
   supabase: SupabaseClient,
   options: ComplianceSendOptions,
 ): Promise<ComplianceSendResult> {
-  const devMode = getDevMode();
-  if (devMode === "dry_run") {
+  // Preserve the legacy chokepoint's no-I/O dry-run behavior for its many
+  // existing callers. Durable outboxes call prepareCompliantEmail directly so
+  // their exact dry-run payload is still persisted and reconciled normally.
+  if (getDevMode() === "dry_run") {
     console.log(
       "[send-email:dry_run]",
       JSON.stringify({
@@ -178,91 +378,31 @@ export async function sendCompliantEmail(
         category: options.category,
         userId: options.userId,
         templateId: options.templateId,
-        attachments: options.attachments?.map((a) => a.filename),
+        attachments: options.attachments?.map((attachment) =>
+          attachment.filename
+        ),
       }),
     );
     return { success: true, id: `dryrun_${Date.now()}` };
   }
-  const recipientOverride = Deno.env.get("EMAIL_DEV_REDIRECT_TO");
-  const effectiveTo =
-    devMode === "redirect" && recipientOverride ? recipientOverride : options.to;
 
-  const apiKey = getResendApiKey();
-  const from = options.from || resolveFromAddress(options.category);
-  const shouldLog = options.userId && !options.skipLog;
+  const prepared = await prepareCompliantEmail(supabase, options);
+  const shouldLog = Boolean(options.userId && !options.skipLog);
 
-  // ─── Suppression check ───────────────────────────────────────────────
-  if (options.userId) {
-    const { data: profile } = await supabase
-      .from("profiles")
-      .select("email_suppressed")
-      .eq("id", options.userId)
-      .maybeSingle();
-
-    if (profile?.email_suppressed) {
-      if (shouldLog) {
-        await supabase.from("notification_log").insert({
-          user_id: options.userId,
-          type: options.notificationType ?? "unknown",
-          channel: "email",
-          status: "suppressed",
-          template_id: options.templateId,
-          metadata: { reason: "email_suppressed", ...options.metadata },
-        });
-      }
-      return { success: false, suppressed: true, error: "email_suppressed" };
+  if (prepared.state === "suppressed") {
+    if (shouldLog) {
+      await supabase.from("notification_log").insert({
+        user_id: options.userId,
+        type: options.notificationType ?? "unknown",
+        channel: "email",
+        status: "suppressed",
+        template_id: options.templateId,
+        metadata: { reason: prepared.reason, ...options.metadata },
+      });
     }
-
-    // Global per-recipient rate cap. Defaults: max 8 emails per 60 minutes
-    // to any single user. Transactional sends bypass — they can't be lost.
-    if (options.category !== "transactional") {
-      const capPerHour = Number(Deno.env.get("EMAIL_USER_CAP_PER_HOUR") || "8");
-      const cutoff = new Date(Date.now() - 60 * 60 * 1000).toISOString();
-      const { count } = await supabase
-        .from("notification_log")
-        .select("id", { count: "exact", head: true })
-        .eq("user_id", options.userId)
-        .eq("channel", "email")
-        .in("status", ["delivered", "sending", "opened", "clicked"])
-        .gte("created_at", cutoff);
-      if ((count ?? 0) >= capPerHour) {
-        if (shouldLog) {
-          await supabase.from("notification_log").insert({
-            user_id: options.userId,
-            type: options.notificationType ?? "unknown",
-            channel: "email",
-            status: "suppressed",
-            template_id: options.templateId,
-            metadata: {
-              reason: "global_rate_cap",
-              cap: capPerHour,
-              window: "60m",
-              ...options.metadata,
-            },
-          });
-        }
-        return {
-          success: false,
-          suppressed: true,
-          error: `global_rate_cap (${capPerHour}/hr)`,
-        };
-      }
-    }
+    return { success: false, suppressed: true, error: prepared.reason };
   }
 
-  // ─── Unsubscribe headers (skip for transactional) ────────────────────
-  const headers: Record<string, string> = {};
-  if (options.category !== "transactional" && options.userId) {
-    const baseUrl = options.unsubscribeBaseUrl || DEFAULT_BASE_URL;
-    const token = await generateUnsubscribeToken(
-      options.userId,
-      options.notificationType ?? "all_marketing",
-    );
-    const unsubscribeUrl = `${baseUrl}/api/unsubscribe?token=${encodeURIComponent(token)}`;
-    Object.assign(headers, buildUnsubscribeHeaders(unsubscribeUrl));
-  }
-
-  // ─── Insert queued log entry (if logging) ────────────────────────────
   let logId: string | undefined;
   if (shouldLog) {
     const { data: logEntry } = await supabase
@@ -280,67 +420,23 @@ export async function sendCompliantEmail(
     logId = logEntry?.id;
   }
 
-  // ─── Send via Resend ─────────────────────────────────────────────────
-  const payload: Record<string, unknown> = {
-    from,
-    to: [effectiveTo],
-    subject:
-      devMode === "redirect"
-        ? `[DEV→${effectiveTo}] ${options.subject}`
-        : options.subject,
-    html: options.html,
-    headers,
-  };
-  if (options.text) payload.text = options.text;
-  if (options.cc) payload.cc = Array.isArray(options.cc) ? options.cc : [options.cc];
-  if (options.replyTo) payload.reply_to = options.replyTo;
-  if (options.tags) payload.tags = options.tags;
-  if (options.attachments?.length) payload.attachments = options.attachments;
-
-  let providerId: string | undefined;
-  let sendError: string | undefined;
-  try {
-    const res = await fetch("https://api.resend.com/emails", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${apiKey}`,
-      },
-      body: JSON.stringify(payload),
-    });
-
-    if (!res.ok) {
-      const text = await res.text();
-      sendError = `Resend API ${res.status}: ${text}`;
-    } else {
-      const body = await res.json();
-      providerId = body.id;
-    }
-  } catch (err) {
-    sendError = err instanceof Error ? err.message : "Unknown send error";
-  }
-
-  // ─── Update log row ──────────────────────────────────────────────────
+  const result = await sendPreparedResendRequest(prepared.request);
   if (logId) {
-    if (sendError) {
-      await supabase
-        .from("notification_log")
-        .update({ status: "failed", error: sendError })
-        .eq("id", logId);
+    if (result.state === "delivered") {
+      await supabase.from("notification_log").update({
+        status: "delivered",
+        provider_id: result.id,
+        sent_at: new Date().toISOString(),
+      }).eq("id", logId);
     } else {
-      await supabase
-        .from("notification_log")
-        .update({
-          status: "delivered",
-          provider_id: providerId,
-          sent_at: new Date().toISOString(),
-        })
-        .eq("id", logId);
+      await supabase.from("notification_log").update({
+        status: "failed",
+        error: result.error,
+      }).eq("id", logId);
     }
   }
 
-  if (sendError) {
-    return { success: false, error: sendError, logId };
-  }
-  return { success: true, id: providerId, logId };
+  return result.state === "delivered"
+    ? { success: true, id: result.id, logId }
+    : { success: false, error: result.error, logId };
 }

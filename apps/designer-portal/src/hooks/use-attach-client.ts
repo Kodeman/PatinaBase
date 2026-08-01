@@ -2,11 +2,11 @@
 
 /**
  * useAttachDocumentClient — point the open document at a client (or unlink it)
- * via the set_document_client RPC (00225). One act, many surfaces (§5): the RPC
- * flips the proposal/project client AND advances the relationship status in one
- * transaction; here we invalidate every read model that carries the client
- * identity so the letterhead, the Desk folder line, and the client mirror move
- * together.
+ * via the set_document_client RPC (00225 → 00385). One act, many surfaces (§5):
+ * the RPC flips the proposal's profile + relationship identity (or the
+ * project's sole client leg) AND advances the selected relationship status in
+ * one transaction; here we invalidate every read model that carries the client
+ * identity so the letterhead, Desk folder line, and client mirror move together.
  */
 
 import { useMutation, useQueryClient } from '@tanstack/react-query';

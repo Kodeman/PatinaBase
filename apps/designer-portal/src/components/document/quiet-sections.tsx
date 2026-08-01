@@ -15,9 +15,11 @@
  * completedLabel prop stays as the dateless fallback.
  */
 
-import { useProjectV2 } from '@patina/supabase';
+import { useState } from 'react';
+import { useCompletedProjectsWithoutReview, useProjectV2 } from '@patina/supabase';
 import { fmtDay } from '@/lib/document/format';
-
+import { DocumentAction } from './document-action';
+import { ReviewRequestSheet } from './people/ops/review-request-sheet';
 
 type AnyRecord = any;
 
@@ -31,6 +33,15 @@ export function CareSection({
   projectId?: string | null;
 }) {
   const { data: project } = useProjectV2(projectId ?? '') as { data: AnyRecord };
+  const { data: reviewCandidates } = useCompletedProjectsWithoutReview();
+  const [reviewOpen, setReviewOpen] = useState(false);
+  const [reviewNotice, setReviewNotice] = useState<string | null>(null);
+
+  const reviewCandidate = projectId
+    ? (reviewCandidates?.find((candidate) => candidate.id === projectId) ?? null)
+    : null;
+  const reviewClient = reviewCandidate?.designer_clients?.[0] ?? null;
+  const reviewClientName = reviewClient?.client_name || reviewClient?.client?.full_name || 'Client';
 
   const snapshot = (project?.portfolio_snapshot ?? null) as {
     headline?: string;
@@ -87,6 +98,41 @@ export function CareSection({
           )}
         </div>
       )}
+
+      {reviewCandidate && reviewClient && (
+        <div className="mt-4 border-t border-dashed border-[var(--color-pearl)] pt-3">
+          <p className="text-[11.5px] leading-relaxed text-[var(--text-body)]">
+            Closeout is complete. Invite {reviewClientName} to share a few words now, or schedule
+            the request for later.
+          </p>
+          <DocumentAction
+            actionKey="request-client-review-after-close"
+            surfaceKey="care"
+            regionKey="post-close-review"
+            variant="primary"
+            onClick={() => setReviewOpen(true)}
+            className="mt-1"
+          >
+            Request client review
+          </DocumentAction>
+        </div>
+      )}
+
+      {reviewNotice && (
+        <p role="status" className="mt-3 text-[11.5px] text-[var(--color-charcoal)]">
+          {reviewNotice}
+        </p>
+      )}
+
+      <ReviewRequestSheet
+        open={reviewOpen}
+        designerClientId={reviewClient?.id ?? null}
+        projectId={projectId}
+        clientName={reviewClientName}
+        projectName={reviewCandidate?.name}
+        onClose={() => setReviewOpen(false)}
+        onRequested={setReviewNotice}
+      />
     </section>
   );
 }

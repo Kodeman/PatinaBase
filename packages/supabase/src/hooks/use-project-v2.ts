@@ -21,7 +21,7 @@ export function useProjectV2(projectId: string) {
           *,
           designer:profiles!projects_designer_id_fkey(id, full_name, email),
           client:profiles!projects_client_id_fkey(id, full_name, email),
-          proposal:proposals!projects_proposal_id_fkey(id, title, status, version, signed_at, signed_by_name, sent_at, created_at, total_amount)
+          proposal:proposals!projects_proposal_id_fkey(id, title, status, version, signed_at, signed_by_name, sent_at, created_at, total_amount, designer_client_id)
         `)
         .eq('id', projectId)
         .single();
@@ -434,6 +434,44 @@ export function useProjectPhases(projectId: string) {
   });
 }
 
+export interface CreateProjectPhaseInput {
+  projectId: string;
+  phaseKey: string;
+  name: string;
+  sortOrder?: number;
+  /**
+   * Chain columns (00323/00324 — Schedule Compose). New lifecycle rows always
+   * start pending with zero progress; only advance_project_phase may activate
+   * or complete them.
+   */
+  durationDays?: number;
+  anchorDate?: string;
+  followsPhaseId?: string;
+  lane?: 'main' | 'thread';
+}
+
+type ProjectPhaseRow = Database['public']['Tables']['project_phases']['Row'];
+
+function requireProjectPhaseRpcRow(
+  value: unknown,
+  projectId: string,
+  phaseId?: string,
+): ProjectPhaseRow {
+  if (value == null || typeof value !== 'object' || Array.isArray(value)) {
+    throw new Error('project phase RPC returned an invalid row');
+  }
+  const row = value as Record<string, unknown>;
+  if (
+    typeof row.id !== 'string' ||
+    row.project_id !== projectId ||
+    (phaseId !== undefined && row.id !== phaseId) ||
+    typeof row.updated_at !== 'string'
+  ) {
+    throw new Error('project phase RPC returned an invalid row');
+  }
+  return value as ProjectPhaseRow;
+}
+
 export function useCreateProjectPhase() {
   const queryClient = useQueryClient();
   return useMutation({
@@ -442,53 +480,71 @@ export function useCreateProjectPhase() {
       phaseKey,
       name,
       sortOrder,
-      status = 'pending',
       durationDays,
       anchorDate,
       followsPhaseId,
       lane,
-    }: {
-      projectId: string;
-      phaseKey: string;
-      name: string;
-      sortOrder?: number;
-      status?: string;
-      /**
-       * Chain columns (00323/00324 — Schedule Compose). Additive: omit any
-       * of these and the DB default/NULL applies, matching pre-Slice-03
-       * behavior exactly for every existing caller.
-       */
-      durationDays?: number;
-      anchorDate?: string;
-      followsPhaseId?: string;
-      lane?: 'main' | 'thread';
-    }) => {
+    }: CreateProjectPhaseInput) => {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const supabase = getSupabase() as any;
-      const insert: Record<string, unknown> = {
-        project_id: projectId,
-        phase_key: phaseKey,
-        name,
-        status,
+      const args: Record<string, unknown> = {
+        p_project_id: projectId,
+        p_phase_key: phaseKey,
+        p_name: name,
       };
-      if (sortOrder !== undefined) insert.sort_order = sortOrder;
-      if (durationDays !== undefined) insert.duration_days = durationDays;
-      if (anchorDate !== undefined) insert.anchor_date = anchorDate;
-      if (followsPhaseId !== undefined) insert.follows_phase_id = followsPhaseId;
-      if (lane !== undefined) insert.lane = lane;
-      const { data, error } = await supabase
-        .from('project_phases')
-        .insert(insert)
-        .select()
-        .single();
+      if (sortOrder !== undefined) args.p_sort_order = sortOrder;
+      if (durationDays !== undefined) args.p_duration_days = durationDays;
+      if (anchorDate !== undefined) args.p_anchor_date = anchorDate;
+      if (followsPhaseId !== undefined) args.p_follows_phase_id = followsPhaseId;
+      if (lane !== undefined) args.p_lane = lane;
+      const { data, error } = await supabase.rpc('create_project_phase', args);
       if (error) throw error;
-      return data;
+      const row = requireProjectPhaseRpcRow(data, projectId);
+      if (row.status !== 'pending' || row.progress !== 0 || row.completed_at !== null) {
+        throw new Error('useCreateProjectPhase: invalid server-derived lifecycle receipt');
+      }
+      return row;
     },
     onSuccess: (_, { projectId }) => {
       queryClient.invalidateQueries({ queryKey: ['project-phases', projectId] });
       queryClient.invalidateQueries({ queryKey: ['project-v2', projectId] });
     },
   });
+}
+
+export interface ProjectPhaseTransitionInput {
+  phaseId: string;
+  projectId: string;
+  /** Complete the observed in-progress phase, or resume the observed delayed phase. */
+  status: 'completed' | 'in_progress';
+  /** Compatibility with the prior completion call shape; only 100 is accepted. */
+  progress?: number;
+}
+
+export interface ProjectPhaseTransitionReceipt {
+  completed_phase_id: string | null;
+  /** Every exact direct follower activated by completion; resume returns the target. */
+  next_phase_ids: string[];
+  /** No direct follower on this target branch; never means project closeout. */
+  terminal: boolean;
+}
+
+function isProjectPhaseTransitionReceipt(
+  value: unknown,
+): value is ProjectPhaseTransitionReceipt {
+  if (value == null || typeof value !== 'object' || Array.isArray(value)) return false;
+  const receipt = value as Record<string, unknown>;
+  const keys = Object.keys(receipt).sort();
+  return (
+    keys.length === 3 &&
+    keys[0] === 'completed_phase_id' &&
+    keys[1] === 'next_phase_ids' &&
+    keys[2] === 'terminal' &&
+    (receipt.completed_phase_id === null || typeof receipt.completed_phase_id === 'string') &&
+    Array.isArray(receipt.next_phase_ids) &&
+    receipt.next_phase_ids.every((phaseId) => typeof phaseId === 'string') &&
+    typeof receipt.terminal === 'boolean'
+  );
 }
 
 export function useUpdateProjectPhaseStatus() {
@@ -499,58 +555,48 @@ export function useUpdateProjectPhaseStatus() {
       projectId,
       status,
       progress,
-    }: {
-      phaseId: string;
-      projectId: string;
-      status?: string;
-      progress?: number;
-    }) => {
+    }: ProjectPhaseTransitionInput): Promise<ProjectPhaseTransitionReceipt> => {
+      if (!phaseId || !projectId) {
+        throw new Error('useUpdateProjectPhaseStatus: projectId and phaseId are required');
+      }
+
+      let expectedStatus: 'in_progress' | 'delayed';
+      if (status === 'completed') {
+        if (progress !== undefined && progress !== 100) {
+          throw new Error(
+            'useUpdateProjectPhaseStatus: completion progress must be 100 when provided',
+          );
+        }
+        expectedStatus = 'in_progress';
+      } else if (status === 'in_progress') {
+        if (progress !== undefined) {
+          throw new Error('useUpdateProjectPhaseStatus: resume does not accept progress');
+        }
+        expectedStatus = 'delayed';
+      } else {
+        throw new Error(
+          'useUpdateProjectPhaseStatus: status must be completed or in_progress',
+        );
+      }
+
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const supabase = getSupabase() as any;
-      const updates: Record<string, unknown> = {};
-      if (status) {
-        updates.status = status;
-        if (status === 'completed') updates.completed_at = new Date().toISOString();
-      }
-      if (progress !== undefined) updates.progress = progress;
-
-      const { data, error } = await supabase
-        .from('project_phases')
-        .update(updates)
-        .eq('id', phaseId)
-        .select()
-        .single();
+      const { data, error } = await supabase.rpc('advance_project_phase', {
+        p_project_id: projectId,
+        p_phase_id: phaseId,
+        p_expected_status: expectedStatus,
+      });
       if (error) throw error;
-
-      // Update project current_phase if advancing
-      if (status === 'completed') {
-        const { data: nextPhase } = await supabase
-          .from('project_phases')
-          .select('phase_key')
-          .eq('project_id', projectId)
-          .eq('status', 'pending')
-          .order('sort_order', { ascending: true })
-          .limit(1);
-
-        if (nextPhase?.[0]) {
-          await supabase
-            .from('project_phases')
-            .update({ status: 'in_progress' })
-            .eq('project_id', projectId)
-            .eq('phase_key', nextPhase[0].phase_key);
-
-          await supabase
-            .from('projects')
-            .update({ current_phase: nextPhase[0].phase_key })
-            .eq('id', projectId);
-        }
+      if (!isProjectPhaseTransitionReceipt(data)) {
+        throw new Error('useUpdateProjectPhaseStatus: invalid transition receipt');
       }
-
       return data;
     },
     onSuccess: (_, { projectId }) => {
       queryClient.invalidateQueries({ queryKey: ['project-phases', projectId] });
       queryClient.invalidateQueries({ queryKey: ['project-v2', projectId] });
+      queryClient.invalidateQueries({ queryKey: ['projects'] });
+      queryClient.invalidateQueries({ queryKey: ['document-state'] });
     },
   });
 }

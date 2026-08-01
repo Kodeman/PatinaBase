@@ -30,12 +30,15 @@ import {
   useProposalScheduleItems,
   useAddProposalItem,
   type ProposalBoardItem,
+  type BoardLayoutPosition,
   type AddBoardItemInput,
   type BoardSection,
   type ProposalPalette,
   type RoomScan,
   type ItemFeedback,
 } from '@patina/supabase';
+import { useBufferedAutosave } from '@/hooks/use-buffered-autosave';
+import { runProposalAutosaveAction } from '@/lib/proposal-autosave-registry';
 import {
   ProductPickerModal,
   type ProductPickResult,
@@ -69,6 +72,20 @@ const SNAP_GRID = 20;
 // the palette swatch editor.
 const LAYOUT_FLUSH_MS = 600;
 
+type BoardLayoutPatch = Record<string, BoardLayoutPosition>;
+
+function layoutPosition(item: ProposalBoardItem): BoardLayoutPosition {
+  return {
+    id: item.id,
+    board_id: item.board_id,
+    type: item.type,
+    x: Number(item.x),
+    y: Number(item.y),
+    z_index: item.z_index,
+    rotation: Number(item.rotation),
+  };
+}
+
 // Default footprint per item type when dropped onto the canvas.
 const DEFAULT_SIZE: Record<string, { width: number; height: number | null }> = {
   product: { width: 220, height: null },
@@ -92,6 +109,8 @@ interface BoardEditorProps {
   proposalId?: string;
   projectId?: string;
   boardId: string;
+  /** Locks pointer-driven edits while a parent board action is in flight. */
+  actionPending?: boolean;
 }
 
 /**
@@ -100,16 +119,16 @@ interface BoardEditorProps {
  * Persistence model:
  *  - Drag/rotate/restack edits land in local state, are marked dirty, and
  *    flush through useSaveBoardLayout on a 600ms debounce.
- *  - Structural ops (add/delete/resize/lock/content/cover) flush any pending
- *    layout save first, then run an immediate mutation with an optimistic
- *    local merge; React Query invalidation re-syncs afterwards.
+ *  - Structural ops (add/delete/resize/lock/content/cover) cross the
+ *    proposal-wide autosave barrier first. A failed barrier aborts the
+ *    mutation and stays visible instead of racing a stale layout upsert.
  *  - Server data only overwrites local state when nothing is dirty, so an
  *    in-flight refetch never clobbers a drag in progress.
  *
- * Mount with `key={boardId}` so switching boards remounts (unmount flushes
- * the pending layout for the previous board).
+ * The layout buffer is generation-keyed by boardId, so switching boards drains
+ * and unregisters the previous board even if a parent forgets to remount it.
  */
-export function BoardEditor({ proposalId, projectId, boardId }: BoardEditorProps) {
+export function BoardEditor({ proposalId, projectId, boardId, actionPending = false }: BoardEditorProps) {
   const isProject = !!projectId;
   // First path segment for board-image uploads (00131 for proposals; 00272 leg
   // for projects). One of the two is always set.
@@ -120,7 +139,7 @@ export function BoardEditor({ proposalId, projectId, boardId }: BoardEditorProps
   const addItem = useAddBoardItem();
   const updateItem = useUpdateBoardItem();
   const deleteItem = useDeleteBoardItem();
-  const saveLayout = useSaveBoardLayout();
+  const { mutateAsync: saveLayoutAsync } = useSaveBoardLayout();
   const upsertBoard = useUpsertBoard();
 
   // B4/B5 — proposal boards only. Board-pin verdicts (read-only chips), live
@@ -135,14 +154,43 @@ export function BoardEditor({ proposalId, projectId, boardId }: BoardEditorProps
   const [pickerOpen, setPickerOpen] = useState(false);
   const [viewMode, setViewMode] = useState<ViewMode>('edit');
   const [snap, setSnap] = useState(false);
+  const [structuralPending, setStructuralPending] = useState(false);
+  const [structuralError, setStructuralError] = useState<string | null>(null);
   // Local mirror of board.sections so section edits feel instant; write-through
   // to the board row happens in persistSections.
   const [sections, setSections] = useState<BoardSection[]>([]);
 
   const itemsRef = useRef<ProposalBoardItem[]>(items);
   itemsRef.current = items;
-  const dirtyRef = useRef<Set<string>>(new Set());
-  const flushTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const parentActionPendingRef = useRef(actionPending);
+  parentActionPendingRef.current = actionPending;
+  const structuralPendingRef = useRef(false);
+  const retiredLayoutItemIdsRef = useRef(new Set<string>());
+
+  useEffect(() => {
+    setStructuralError(null);
+  }, [boardId, ownerId]);
+
+  const runStructuralMutation = useCallback(
+    async (failureMessage: string, mutation: () => Promise<void>): Promise<boolean> => {
+      if (parentActionPendingRef.current || structuralPendingRef.current) return false;
+      structuralPendingRef.current = true;
+      setStructuralPending(true);
+      setStructuralError(null);
+      try {
+        await runProposalAutosaveAction(ownerId, mutation);
+        return true;
+      } catch (error) {
+        const detail = error instanceof Error ? ` ${error.message}` : '';
+        setStructuralError(`${failureMessage} Nothing was changed.${detail}`);
+        return false;
+      } finally {
+        structuralPendingRef.current = false;
+        setStructuralPending(false);
+      }
+    },
+    [ownerId],
+  );
 
   // ── B4/B5 derivations (product/capture pins) ────────────────────────────────
 
@@ -192,41 +240,54 @@ export function BoardEditor({ proposalId, projectId, boardId }: BoardEditorProps
 
   // ── Layout autosave ─────────────────────────────────────────────────────────
 
-  const { mutate: saveLayoutMutate } = saveLayout;
+  const {
+    queue: queueLayoutPatch,
+    state: layoutAutosaveState,
+  } = useBufferedAutosave<string, BoardLayoutPatch>({
+    // Project boards never share a SendSheet, but still use their owner id to
+    // isolate this editor's buffer and retain lossless unmount behavior.
+    proposalId: ownerId,
+    generationKey: boardId,
+    delay: LAYOUT_FLUSH_MS,
+    save: useCallback(
+      async (targetBoardId, positionsById) => {
+        const positions = Object.values(positionsById).filter(
+          (position) => !retiredLayoutItemIdsRef.current.has(position.id),
+        );
+        if (positions.length === 0) return;
+        // mutateAsync is load-bearing: the registry remains in-flight until
+        // persistence and central client-copy invalidations have settled.
+        await saveLayoutAsync({
+          boardId: targetBoardId,
+          proposalId,
+          positions,
+        });
+      },
+      [proposalId, saveLayoutAsync],
+    ),
+  });
 
-  const flushLayout = useCallback(() => {
-    if (flushTimerRef.current) {
-      clearTimeout(flushTimerRef.current);
-      flushTimerRef.current = null;
-    }
-    if (dirtyRef.current.size === 0) return;
-    const ids = new Set(dirtyRef.current);
-    dirtyRef.current.clear();
-    const positions = itemsRef.current
-      .filter((i) => ids.has(i.id))
-      .map((i) => ({
-        id: i.id,
-        board_id: i.board_id,
-        type: i.type,
-        x: Number(i.x),
-        y: Number(i.y),
-        z_index: i.z_index,
-        rotation: Number(i.rotation),
-      }));
-    if (positions.length > 0) saveLayoutMutate({ boardId, positions });
-  }, [boardId, saveLayoutMutate]);
+  const queueLayout = useCallback(
+    (changedItems: ProposalBoardItem[]) => {
+      if (parentActionPendingRef.current || structuralPendingRef.current) return;
+      const activeItems = changedItems.filter(
+        (item) => !retiredLayoutItemIdsRef.current.has(item.id),
+      );
+      if (activeItems.length === 0) return;
+      const patch: BoardLayoutPatch = {};
+      for (const item of activeItems) {
+        patch[item.id] = layoutPosition(item);
+      }
+      queueLayoutPatch(boardId, patch);
+    },
+    [boardId, queueLayoutPatch],
+  );
 
-  const flushLayoutRef = useRef(flushLayout);
-  flushLayoutRef.current = flushLayout;
-
-  const scheduleFlush = useCallback(() => {
-    if (flushTimerRef.current) clearTimeout(flushTimerRef.current);
-    flushTimerRef.current = setTimeout(() => flushLayoutRef.current(), LAYOUT_FLUSH_MS);
-  }, []);
-
-  // Flush any pending positions when the editor unmounts (board switch,
-  // tab change, navigation).
-  useEffect(() => () => flushLayoutRef.current(), []);
+  const layoutAutosaveBlocksSyncRef = useRef(false);
+  layoutAutosaveBlocksSyncRef.current =
+    layoutAutosaveState === 'dirty' ||
+    layoutAutosaveState === 'saving' ||
+    layoutAutosaveState === 'error';
 
   // ── Server → local sync ─────────────────────────────────────────────────────
 
@@ -234,7 +295,7 @@ export function BoardEditor({ proposalId, projectId, boardId }: BoardEditorProps
     if (!board) return;
     // Don't clobber unsaved local moves; the post-flush invalidation will
     // bring us back here once dirty drains.
-    if (dirtyRef.current.size > 0) return;
+    if (layoutAutosaveBlocksSyncRef.current) return;
     setItems(board.items);
   }, [board]);
 
@@ -249,28 +310,58 @@ export function BoardEditor({ proposalId, projectId, boardId }: BoardEditorProps
 
   /** Optimistically merge field updates into local state. */
   const mergeLocal = useCallback((itemId: string, patch: Partial<ProposalBoardItem>) => {
-    setItems((prev) => prev.map((i) => (i.id === itemId ? { ...i, ...patch } : i)));
+    const next = itemsRef.current.map((item) =>
+      item.id === itemId ? { ...item, ...patch } : item,
+    );
+    itemsRef.current = next;
+    setItems(next);
   }, []);
 
-  /** Immediate field mutation (flushes pending layout first). */
+  /** Merge a layout field and synchronously register its persisted snapshot. */
+  const mergeLocalLayout = useCallback(
+    (itemId: string, patch: Partial<ProposalBoardItem>) => {
+      if (
+        parentActionPendingRef.current ||
+        structuralPendingRef.current ||
+        retiredLayoutItemIdsRef.current.has(itemId)
+      ) {
+        return;
+      }
+      let changedItem: ProposalBoardItem | null = null;
+      const next = itemsRef.current.map((item) => {
+        if (item.id !== itemId) return item;
+        changedItem = { ...item, ...patch };
+        return changedItem;
+      });
+      if (!changedItem) return;
+      itemsRef.current = next;
+      setItems(next);
+      queueLayout([changedItem]);
+    },
+    [queueLayout],
+  );
+
+  /** Immediate field mutation after the proposal-wide layout barrier. */
   const commitField = useCallback(
     (itemId: string, patch: Partial<ProposalBoardItem>) => {
-      flushLayoutRef.current();
-      mergeLocal(itemId, patch);
-      updateItem.mutate({
-        itemId,
-        boardId,
-        ...(patch.width !== undefined ? { width: Number(patch.width) } : {}),
-        ...(patch.height !== undefined
-          ? { height: patch.height === null ? null : Number(patch.height) }
-          : {}),
-        ...(patch.locked !== undefined ? { locked: patch.locked } : {}),
-        ...(patch.content !== undefined ? { content: patch.content } : {}),
-        ...(patch.z_index !== undefined ? { zIndex: patch.z_index } : {}),
-        ...(patch.rotation !== undefined ? { rotation: Number(patch.rotation) } : {}),
+      void runStructuralMutation('The item could not be updated.', async () => {
+        await updateItem.mutateAsync({
+          itemId,
+          boardId,
+          proposalId,
+          ...(patch.width !== undefined ? { width: Number(patch.width) } : {}),
+          ...(patch.height !== undefined
+            ? { height: patch.height === null ? null : Number(patch.height) }
+            : {}),
+          ...(patch.locked !== undefined ? { locked: patch.locked } : {}),
+          ...(patch.content !== undefined ? { content: patch.content } : {}),
+          ...(patch.z_index !== undefined ? { zIndex: patch.z_index } : {}),
+          ...(patch.rotation !== undefined ? { rotation: Number(patch.rotation) } : {}),
+        });
+        mergeLocal(itemId, patch);
       });
     },
-    [boardId, mergeLocal, updateItem],
+    [boardId, mergeLocal, proposalId, runStructuralMutation, updateItem],
   );
 
   const nextZ = useCallback(
@@ -286,134 +377,158 @@ export function BoardEditor({ proposalId, projectId, boardId }: BoardEditorProps
   const addItemToBoard = useCallback(
     (input: Omit<AddBoardItemInput, 'boardId' | 'x' | 'y' | 'zIndex'>) => {
       if (!board) return;
-      flushLayoutRef.current();
-      const size = DEFAULT_SIZE[input.type] ?? { width: 240, height: null };
-      const cascade = (itemsRef.current.length % 8) * 32;
-      const x = Math.min(
-        Math.max(0, board.canvas_width / 2 - size.width / 2 + cascade),
-        Math.max(0, board.canvas_width - size.width),
-      );
-      const y = Math.min(
-        Math.max(0, board.canvas_height / 2 - (size.height ?? 220) / 2 + cascade),
-        Math.max(0, board.canvas_height - (size.height ?? 220)),
-      );
-      addItem.mutate(
-        {
+      void runStructuralMutation('The item could not be added.', async () => {
+        const size = DEFAULT_SIZE[input.type] ?? { width: 240, height: null };
+        const cascade = (itemsRef.current.length % 8) * 32;
+        const x = Math.min(
+          Math.max(0, board.canvas_width / 2 - size.width / 2 + cascade),
+          Math.max(0, board.canvas_width - size.width),
+        );
+        const y = Math.min(
+          Math.max(0, board.canvas_height / 2 - (size.height ?? 220) / 2 + cascade),
+          Math.max(0, board.canvas_height - (size.height ?? 220)),
+        );
+        const item = await addItem.mutateAsync({
           boardId,
+          proposalId,
           x,
           y,
           zIndex: nextZ(),
           width: input.width ?? size.width,
           height: input.height !== undefined ? input.height : size.height,
           ...input,
-        },
-        {
-          onSuccess: (item) => {
-            setItems((prev) => (prev.some((p) => p.id === item.id) ? prev : [...prev, item]));
-            setSelectedId(item.id);
-          },
-        },
-      );
+        });
+        setItems((prev) => (prev.some((p) => p.id === item.id) ? prev : [...prev, item]));
+        setSelectedId(item.id);
+      });
     },
-    [addItem, board, boardId, nextZ],
+    [addItem, board, boardId, nextZ, proposalId, runStructuralMutation],
   );
 
   const handleDeleteItem = useCallback(
     (itemId: string) => {
-      flushLayoutRef.current();
-      dirtyRef.current.delete(itemId);
-      setItems((prev) => prev.filter((i) => i.id !== itemId));
-      setSelectedId((sel) => (sel === itemId ? null : sel));
-      deleteItem.mutate({ itemId, boardId });
+      void runStructuralMutation('The item could not be deleted.', async () => {
+        // Retire the id before the delete request. Late canvas callbacks and
+        // detached drains must never upsert the deleted item back into being.
+        retiredLayoutItemIdsRef.current.add(itemId);
+        try {
+          await deleteItem.mutateAsync({ itemId, boardId, proposalId });
+        } catch (error) {
+          retiredLayoutItemIdsRef.current.delete(itemId);
+          throw error;
+        }
+        const next = itemsRef.current.filter((item) => item.id !== itemId);
+        itemsRef.current = next;
+        setItems(next);
+        setSelectedId((selected) => (selected === itemId ? null : selected));
+      });
     },
-    [boardId, deleteItem],
+    [boardId, deleteItem, proposalId, runStructuralMutation],
   );
 
   // ── Sections ──────────────────────────────────────────────────────────────
 
-  const { mutate: upsertBoardMutate } = upsertBoard;
-
-  /** Optimistic local set + write-through to proposal_boards.sections. */
+  /** Persist first, then mirror proposal_boards.sections locally. */
   const persistSections = useCallback(
     (next: BoardSection[]) => {
-      setSections(next);
-      upsertBoardMutate({ proposalId, boardId, sections: next });
+      void runStructuralMutation('The board sections could not be updated.', async () => {
+        await upsertBoard.mutateAsync({ proposalId, boardId, sections: next });
+        setSections(next);
+      });
     },
-    [proposalId, boardId, upsertBoardMutate],
+    [proposalId, boardId, runStructuralMutation, upsertBoard],
   );
 
   /** Assign (or clear, sectionId=null) the selected item's section membership. */
   const assignSection = useCallback(
     (itemId: string, sectionId: string | null) => {
-      flushLayoutRef.current();
       const item = itemsRef.current.find((i) => i.id === itemId);
       if (!item) return;
       const nextData = { ...(item.data ?? {}), section_id: sectionId };
-      mergeLocal(itemId, { data: nextData });
-      updateItem.mutate({ itemId, boardId, data: nextData });
+      void runStructuralMutation('The item section could not be updated.', async () => {
+        await updateItem.mutateAsync({ itemId, boardId, proposalId, data: nextData });
+        mergeLocal(itemId, { data: nextData });
+      });
     },
-    [boardId, mergeLocal, updateItem],
+    [boardId, mergeLocal, proposalId, runStructuralMutation, updateItem],
   );
 
   /**
    * Auto-lay-out every item into a tidy grid (grouped by section when sections
-   * exist). Writes ONLY x/y through the same dirty→debounced-flush path a drag
-   * uses, so freeform editing keeps working afterward.
+   * exist). Persists the full layout batch behind the proposal barrier, then
+   * updates local state only after that write succeeds.
    */
   const handleArrange = useCallback(() => {
     if (!board) return;
-    const arrangeItems: ArrangeItem[] = itemsRef.current.map((it) => ({
-      id: it.id,
-      type: it.type,
-      width: Number(it.width),
-      height: it.height === null ? null : Number(it.height),
-      data: it.data as { section_id?: string | null } | null,
-    }));
-    const positions = arrangeBoardItems(arrangeItems, sections, {
-      canvasWidth: board.canvas_width,
-    });
-    if (positions.length === 0) return;
-    const byId = new Map(positions.map((p) => [p.id, p]));
-    setItems((prev) =>
-      prev.map((it) => {
+    void runStructuralMutation('The board could not be arranged.', async () => {
+      const arrangeItems: ArrangeItem[] = itemsRef.current.map((it) => ({
+        id: it.id,
+        type: it.type,
+        width: Number(it.width),
+        height: it.height === null ? null : Number(it.height),
+        data: it.data as { section_id?: string | null } | null,
+      }));
+      const positions = arrangeBoardItems(arrangeItems, sections, {
+        canvasWidth: board.canvas_width,
+      });
+      if (positions.length === 0) return;
+      const byId = new Map(positions.map((p) => [p.id, p]));
+      const changedItems: ProposalBoardItem[] = [];
+      const nextItems = itemsRef.current.map((it) => {
         const pos = byId.get(it.id);
         if (!pos || (Number(it.x) === pos.x && Number(it.y) === pos.y)) return it;
-        dirtyRef.current.add(it.id);
-        return { ...it, x: pos.x, y: pos.y };
-      }),
-    );
-    scheduleFlush();
-  }, [board, sections, scheduleFlush]);
+        const changed = { ...it, x: pos.x, y: pos.y };
+        changedItems.push(changed);
+        return changed;
+      });
+      if (changedItems.length === 0) return;
+      await saveLayoutAsync({
+        boardId,
+        proposalId,
+        positions: changedItems.map(layoutPosition),
+      });
+      itemsRef.current = nextItems;
+      setItems(nextItems);
+    });
+  }, [board, boardId, proposalId, runStructuralMutation, saveLayoutAsync, sections]);
 
   // ── Canvas callbacks ────────────────────────────────────────────────────────
 
   const handleItemsChange = useCallback(
     (next: BoardItem[]) => {
-      let changed = false;
-      setItems((prev) =>
-        prev.map((p) => {
-          const n = next.find((i) => String(i.id) === p.id);
-          if (!n) return p;
-          const nx = n.position.x;
-          const ny = n.position.y;
-          const nz = n.zIndex ?? 0;
-          const nr = n.rotation ?? 0;
-          if (
-            nx !== Number(p.x) ||
-            ny !== Number(p.y) ||
-            nz !== p.z_index ||
-            nr !== Number(p.rotation)
-          ) {
-            dirtyRef.current.add(p.id);
-            changed = true;
-            return { ...p, x: nx, y: ny, z_index: nz, rotation: nr };
-          }
-          return p;
-        }),
-      );
-      if (changed) scheduleFlush();
+      if (parentActionPendingRef.current || structuralPendingRef.current) return;
+      const changedItems: ProposalBoardItem[] = [];
+      const nextItems = itemsRef.current.map((p) => {
+        const n = next.find((i) => String(i.id) === p.id);
+        if (!n) return p;
+        const nx = n.position.x;
+        const ny = n.position.y;
+        const nz = n.zIndex ?? 0;
+        const nr = n.rotation ?? 0;
+        if (
+          nx !== Number(p.x) ||
+          ny !== Number(p.y) ||
+          nz !== p.z_index ||
+          nr !== Number(p.rotation)
+        ) {
+          const changed = {
+            ...p,
+            x: nx,
+            y: ny,
+            z_index: nz,
+            rotation: nr,
+          };
+          changedItems.push(changed);
+          return changed;
+        }
+        return p;
+      });
+      if (changedItems.length === 0) return;
+      itemsRef.current = nextItems;
+      setItems(nextItems);
+      queueLayout(changedItems);
     },
-    [scheduleFlush],
+    [queueLayout],
   );
 
   const handlePick = useCallback(
@@ -432,6 +547,15 @@ export function BoardEditor({ proposalId, projectId, boardId }: BoardEditorProps
       });
     },
     [addItemToBoard],
+  );
+
+  const handleSetCover = useCallback(
+    (imageUrl: string) => {
+      void runStructuralMutation('The board cover could not be updated.', async () => {
+        await upsertBoard.mutateAsync({ proposalId, boardId, coverImageUrl: imageUrl });
+      });
+    },
+    [boardId, proposalId, runStructuralMutation, upsertBoard],
   );
 
   // ── Render ──────────────────────────────────────────────────────────────────
@@ -494,6 +618,7 @@ export function BoardEditor({ proposalId, projectId, boardId }: BoardEditorProps
   };
 
   const selected = selectedId ? (items.find((i) => i.id === selectedId) ?? null) : null;
+  const mutationLocked = actionPending || structuralPending;
 
   // Quiet per-pin overlay (detail-mode language): the client's latest verdict
   // (B4) + a "price moved" chip when the linked product drifted (B5, detail
@@ -532,6 +657,14 @@ export function BoardEditor({ proposalId, projectId, boardId }: BoardEditorProps
     <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_300px]">
       {/* Canvas column */}
       <div className="space-y-2">
+        {structuralError && (
+          <p
+            role="alert"
+            className="rounded-md border border-red-200 bg-red-50 px-3 py-2 text-xs text-red-800"
+          >
+            {structuralError}
+          </p>
+        )}
         <BoardViewToolbar
           viewMode={viewMode}
           onViewMode={setViewMode}
@@ -539,6 +672,7 @@ export function BoardEditor({ proposalId, projectId, boardId }: BoardEditorProps
           onToggleSnap={() => setSnap((s) => !s)}
           onArrange={handleArrange}
           itemCount={items.length}
+          disabled={mutationLocked}
         />
 
         {viewMode === 'edit' ? (
@@ -552,6 +686,7 @@ export function BoardEditor({ proposalId, projectId, boardId }: BoardEditorProps
               width={board.canvas_width}
               height={board.canvas_height}
               backgroundColor={board.background_color}
+              readOnly={mutationLocked}
               onItemsChange={handleItemsChange}
               onItemClick={(item) => setSelectedId(String(item.id))}
               onItemDelete={(itemId) => handleDeleteItem(String(itemId))}
@@ -588,7 +723,7 @@ export function BoardEditor({ proposalId, projectId, boardId }: BoardEditorProps
       </div>
 
       {/* Sidebar */}
-      <div className="space-y-4">
+      <fieldset disabled={mutationLocked} className="min-w-0 space-y-4 border-0 p-0">
         {viewMode !== 'edit' ? (
           <div className="rounded-md border border-[var(--border-default)] bg-[var(--bg-muted)] px-4 py-3 text-xs text-[var(--text-muted)]">
             Previewing the client&rsquo;s view
@@ -607,17 +742,15 @@ export function BoardEditor({ proposalId, projectId, boardId }: BoardEditorProps
                 onCommitField={commitField}
                 onMergeLocal={(itemId, patch) => {
                   // Rotation drags follow the debounced layout path.
-                  mergeLocal(itemId, patch);
                   if (patch.rotation !== undefined || patch.z_index !== undefined) {
-                    dirtyRef.current.add(itemId);
-                    scheduleFlush();
+                    mergeLocalLayout(itemId, patch);
+                  } else {
+                    mergeLocal(itemId, patch);
                   }
                 }}
                 onAssignSection={assignSection}
                 onDelete={handleDeleteItem}
-                onSetCover={(imageUrl) =>
-                  upsertBoard.mutate({ proposalId, boardId, coverImageUrl: imageUrl })
-                }
+                onSetCover={handleSetCover}
                 sendToSchedule={
                   !isProject &&
                   proposalId &&
@@ -670,7 +803,7 @@ export function BoardEditor({ proposalId, projectId, boardId }: BoardEditorProps
             <AddNoteSection onAdd={addItemToBoard} />
           </>
         )}
-      </div>
+      </fieldset>
 
       <ProductPickerModal
         open={pickerOpen}
@@ -712,6 +845,7 @@ function BoardViewToolbar({
   onToggleSnap,
   onArrange,
   itemCount,
+  disabled,
 }: {
   viewMode: ViewMode;
   onViewMode: (mode: ViewMode) => void;
@@ -719,6 +853,7 @@ function BoardViewToolbar({
   onToggleSnap: () => void;
   onArrange: () => void;
   itemCount: number;
+  disabled: boolean;
 }) {
   return (
     <div className="flex flex-wrap items-center justify-between gap-2">
@@ -747,10 +882,16 @@ function BoardViewToolbar({
             size="sm"
             onClick={onToggleSnap}
             aria-pressed={snap}
+            disabled={disabled}
           >
             {snap ? 'Snap: on' : 'Snap: off'}
           </Button>
-          <Button variant="secondary" size="sm" onClick={onArrange} disabled={itemCount === 0}>
+          <Button
+            variant="secondary"
+            size="sm"
+            onClick={onArrange}
+            disabled={disabled || itemCount === 0}
+          >
             Arrange
           </Button>
         </div>
@@ -1349,6 +1490,7 @@ function ExtractPalettePanel({
       });
       swatches.forEach((s) => {
         upsertSwatch.mutate({
+          proposalId,
           paletteId: palette.id,
           hex: s.hex,
           sourcePixel: s.sourcePixel,

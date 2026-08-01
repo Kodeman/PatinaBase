@@ -234,7 +234,7 @@ async function getSuppressedUserIds(supabase: SupabaseClient): Promise<Set<strin
     .from('notification_log')
     .select('user_id')
     .eq('channel', 'email')
-    .in('status', ['delivered', 'sent', 'sending', 'opened', 'clicked'])
+    .in('status', ['delivered', 'sending', 'opened', 'clicked', 'unconfirmed'])
     .gte('created_at', sevenDaysAgo);
 
   if (recentSends) {

@@ -14,14 +14,17 @@ import { Star } from 'lucide-react';
 
 import { PastReviewCard } from './PastReviewCard';
 import { SubmitReviewDialog } from './SubmitReviewDialog';
+import { QueryFailure } from '@/components/query-failure';
 
 interface ReviewsIndexProps {
   userId: string;
 }
 
 export function ReviewsIndex({ userId }: ReviewsIndexProps) {
-  const { data: pending = [], isLoading: pendingLoading } = useMyPendingReviewRequests(userId);
-  const { data: past = [], isLoading: pastLoading } = useMySubmittedReviews(userId);
+  const pendingQuery = useMyPendingReviewRequests(userId);
+  const pastQuery = useMySubmittedReviews(userId);
+  const { data: pending = [], isLoading: pendingLoading } = pendingQuery;
+  const { data: past = [], isLoading: pastLoading } = pastQuery;
   const [active, setActive] = useState<ClientPendingReview | null>(null);
 
   const isLoading = pendingLoading || pastLoading;
@@ -29,6 +32,17 @@ export function ReviewsIndex({ userId }: ReviewsIndexProps) {
   if (isLoading) {
     return (
       <p className="mt-8 type-body-small text-[var(--text-muted)]">Loading your reviews…</p>
+    );
+  }
+
+  if (pendingQuery.isError || pastQuery.isError) {
+    return (
+      <QueryFailure
+        className="mt-8"
+        title="Unable to load reviews"
+        message="Your review requests and past reviews could not be opened just now."
+        onRetry={() => Promise.all([pendingQuery.refetch(), pastQuery.refetch()])}
+      />
     );
   }
 

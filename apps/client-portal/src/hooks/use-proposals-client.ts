@@ -1,16 +1,22 @@
 'use client';
 
-import { useProposals, useProposal } from '@patina/supabase';
+import {
+  useClientSafeProposalBundle,
+  useClientSafeProposals,
+} from '@patina/supabase';
 import type { Proposal } from '@patina/supabase';
-import { useAuth } from './use-auth';
 
 export function useClientProposals() {
-  const { user } = useAuth();
-  return useProposals(user ? { clientId: user.id } : undefined);
+  return useClientSafeProposals();
 }
 
 export function useClientProposal(proposalId: string) {
-  return useProposal(proposalId);
+  const query = useClientSafeProposalBundle(proposalId);
+  return {
+    ...query,
+    data: query.data?.proposal,
+    bundle: query.data,
+  };
 }
 
 export function partitionProposals(proposals: Proposal[] | undefined) {

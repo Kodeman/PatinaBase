@@ -4,15 +4,18 @@ import { LogStrip } from './log-strip';
 const mockLogOffer = jest.fn().mockResolvedValue(undefined);
 const mockDiscardOffer = jest.fn().mockResolvedValue(undefined);
 let mockOffer: null | {
+  projectId: string;
   projectName: string;
   suggestedMinutes: number;
   rawSeconds: number;
   idleSeconds: number;
 } = null;
+let mockHeldProjectId: string | null = null;
 
 jest.mock('@/hooks/document-time-provider', () => ({
   useDocumentTime: () => ({
     offer: mockOffer,
+    heldProjectId: mockHeldProjectId,
     logOffer: mockLogOffer,
     discardOffer: mockDiscardOffer,
   }),
@@ -29,12 +32,14 @@ jest.mock('@/lib/analytics/document-events', () => ({
 describe('LogStrip', () => {
   beforeEach(() => {
     mockOffer = null;
+    mockHeldProjectId = null;
     mockLogOffer.mockClear();
     mockDiscardOffer.mockClear();
   });
 
   it('becomes the mobile edge owner with readable, full-size form controls', async () => {
     mockOffer = {
+      projectId: 'whitfield-project',
       projectName: 'Whitfield House',
       suggestedMinutes: 26,
       rawSeconds: 1560,
@@ -55,6 +60,7 @@ describe('LogStrip', () => {
 
   it('preserves log and discard behavior through Scored Ink actions', async () => {
     mockOffer = {
+      projectId: 'whitfield-project',
       projectName: 'Whitfield House',
       suggestedMinutes: 26,
       rawSeconds: 1560,
@@ -79,5 +85,37 @@ describe('LogStrip', () => {
       'data-action-key',
       'log-time-offer',
     );
+  });
+
+
+  it('does not overlay an unrelated saved offer on the project in hand', () => {
+    mockHeldProjectId = 'harper-project';
+    mockOffer = {
+      projectId: 'ashford-project',
+      projectName: 'Ashford Heights — main floor refresh',
+      suggestedMinutes: 32,
+      rawSeconds: 32 * 60,
+      idleSeconds: 0,
+    };
+
+    render(<LogStrip />);
+
+    expect(screen.queryByRole('region', { name: 'Log time offer' })).not.toBeInTheDocument();
+    expect(screen.queryByText('Ashford Heights — main floor refresh')).not.toBeInTheDocument();
+  });
+
+  it('resurfaces the saved offer when no different project is in hand', () => {
+    mockOffer = {
+      projectId: 'ashford-project',
+      projectName: 'Ashford Heights — main floor refresh',
+      suggestedMinutes: 32,
+      rawSeconds: 32 * 60,
+      idleSeconds: 0,
+    };
+
+    render(<LogStrip />);
+
+    expect(screen.getByRole('region', { name: 'Log time offer' })).toBeVisible();
+    expect(screen.getByText('Ashford Heights — main floor refresh')).toBeVisible();
   });
 });

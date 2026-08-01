@@ -94,20 +94,23 @@ export function useEscalateNoteToDecision() {
       if (!dc) throw new Error('No designer–client relationship found for this project');
 
       const title = body.length > 70 ? `${body.slice(0, 67)}…` : body;
-      const { data: decision, error: decError } = await supabase
-        .from('client_decisions')
-        .insert({
+      const decisionId = crypto.randomUUID();
+      const { data: decision, error: decError } = await supabase.rpc('create_client_decision', {
+        p_decision_id: decisionId,
+        p_payload: {
           designer_client_id: dc.id,
-          designer_id: project.designer_id,
           project_id: projectId,
           title,
           context: body,
           status: 'draft',
           blocking_status: 'non_blocking',
-        })
-        .select()
-        .single();
+        },
+        p_options: [],
+        p_blocked_ffe_item_ids: [],
+        p_blocked_task_ids: [],
+      });
       if (decError) throw decError;
+      if (!decision) throw new Error('Decision escalation returned no row');
 
       const { error: noteError } = await supabase
         .from('margin_notes')

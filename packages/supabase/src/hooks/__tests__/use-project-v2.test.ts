@@ -99,6 +99,7 @@ function setTableDefault(table: string, result: BuilderResult): MockBuilder {
 const supabaseClient = {
   auth: { getUser: vi.fn(), getSession: vi.fn() },
   from: vi.fn((table: string) => getBuilder(table)),
+  rpc: vi.fn(),
 };
 
 vi.mock('@supabase/ssr', () => ({
@@ -118,11 +119,20 @@ import {
   useProjectFinancials,
   useUpdateFFEItemStatus,
   useBulkReassignFfeVendor,
+  useCreateProjectPhase,
+  useUpdateProjectPhaseStatus,
 } from '../use-project-v2';
+import {
+  useDeletePhaseWithRelink,
+  useUpdateProjectPhaseChain,
+} from '../use-schedule-compose';
 import type {
   UpdateFFEItemPricingInput,
   BulkReassignFfeVendorInput,
   BulkReassignFfeVendorResult,
+  CreateProjectPhaseInput,
+  ProjectPhaseTransitionInput,
+  ProjectPhaseTransitionReceipt,
 } from '../use-project-v2';
 
 beforeEach(() => {
@@ -131,6 +141,270 @@ beforeEach(() => {
   supabaseClient.auth.getUser.mockReset();
   supabaseClient.auth.getSession.mockReset();
   supabaseClient.from.mockClear();
+  supabaseClient.rpc.mockReset();
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// useCreateProjectPhase — pending-only lifecycle birth
+// ─────────────────────────────────────────────────────────────────────────────
+
+type CreatePhaseMutationConfig = {
+  mutationFn: (input: CreateProjectPhaseInput) => Promise<unknown>;
+};
+
+describe('useCreateProjectPhase', () => {
+  it('calls the server-derived create boundary and validates pending lifecycle', async () => {
+    supabaseClient.rpc.mockResolvedValueOnce({
+      data: {
+        id: 'phase-new',
+        project_id: 'project-1',
+        status: 'pending',
+        progress: 0,
+        completed_at: null,
+        updated_at: '2026-08-01T12:00:00.000Z',
+      },
+      error: null,
+    });
+
+    const config = useCreateProjectPhase() as unknown as CreatePhaseMutationConfig;
+    await config.mutationFn({
+      projectId: 'project-1',
+      phaseKey: 'install',
+      name: 'Installation',
+      durationDays: 5,
+    });
+
+    expect(supabaseClient.rpc).toHaveBeenCalledWith('create_project_phase', {
+      p_project_id: 'project-1',
+      p_phase_key: 'install',
+      p_name: 'Installation',
+      p_duration_days: 5,
+    });
+  });
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// useUpdateProjectPhaseChain — exact project/phase repair scope
+// ─────────────────────────────────────────────────────────────────────────────
+
+type UpdatePhaseChainMutationConfig = {
+  mutationFn: (input: {
+    phaseId: string;
+    projectId: string;
+    expectedUpdatedAt: string;
+    followsPhaseId?: string | null;
+    lane?: 'main' | 'thread';
+  }) => Promise<unknown>;
+};
+
+describe('useUpdateProjectPhaseChain', () => {
+  it('passes the caller-observed CAS token and exact topology patch', async () => {
+    supabaseClient.rpc.mockResolvedValueOnce({
+      data: {
+        id: 'phase-2',
+        project_id: 'project-1',
+        updated_at: '2026-08-01T12:00:01.000Z',
+      },
+      error: null,
+    });
+
+    const config = useUpdateProjectPhaseChain() as unknown as UpdatePhaseChainMutationConfig;
+    await config.mutationFn({
+      phaseId: 'phase-2',
+      projectId: 'project-1',
+      expectedUpdatedAt: '2026-08-01T12:00:00.000Z',
+      followsPhaseId: 'phase-1',
+      lane: 'main',
+    });
+
+    expect(supabaseClient.rpc).toHaveBeenCalledWith('update_project_phase', {
+      p_project_id: 'project-1',
+      p_phase_id: 'phase-2',
+      p_expected_updated_at: '2026-08-01T12:00:00.000Z',
+      p_patch: { follows_phase_id: 'phase-1', lane: 'main' },
+    });
+  });
+});
+
+describe('useDeletePhaseWithRelink', () => {
+  it('sends no browser-derived follower list and validates the exact receipt', async () => {
+    supabaseClient.rpc.mockResolvedValueOnce({
+      data: {
+        deleted_phase_id: 'phase-2',
+        predecessor_phase_id: 'phase-1',
+        relinked_phase_ids: ['phase-3', 'phase-4'],
+      },
+      error: null,
+    });
+
+    const config = useDeletePhaseWithRelink() as unknown as {
+      mutationFn: (input: { projectId: string; phaseId: string }) => Promise<unknown>;
+    };
+    await expect(
+      config.mutationFn({ projectId: 'project-1', phaseId: 'phase-2' }),
+    ).resolves.toEqual({
+      deleted_phase_id: 'phase-2',
+      predecessor_phase_id: 'phase-1',
+      relinked_phase_ids: ['phase-3', 'phase-4'],
+    });
+    expect(supabaseClient.rpc).toHaveBeenCalledWith('delete_project_phase', {
+      p_project_id: 'project-1',
+      p_phase_id: 'phase-2',
+    });
+  });
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// useUpdateProjectPhaseStatus — 00393 atomic phase CAS
+// ─────────────────────────────────────────────────────────────────────────────
+
+type PhaseTransitionMutationConfig = {
+  mutationFn: (input: ProjectPhaseTransitionInput) => Promise<ProjectPhaseTransitionReceipt>;
+  onSuccess: (
+    result: ProjectPhaseTransitionReceipt,
+    variables: ProjectPhaseTransitionInput,
+  ) => void;
+};
+
+describe('useUpdateProjectPhaseStatus', () => {
+  it('completes through one RPC with the in_progress CAS token and returns the safe receipt', async () => {
+    const receipt: ProjectPhaseTransitionReceipt = {
+      completed_phase_id: 'phase-1',
+      next_phase_ids: ['phase-2', 'phase-thread'],
+      terminal: false,
+    };
+    supabaseClient.rpc.mockResolvedValue({ data: receipt, error: null });
+
+    const config = useUpdateProjectPhaseStatus() as unknown as PhaseTransitionMutationConfig;
+    await expect(
+      config.mutationFn({
+        projectId: 'project-1',
+        phaseId: 'phase-1',
+        status: 'completed',
+        progress: 100,
+      }),
+    ).resolves.toEqual(receipt);
+
+    expect(supabaseClient.rpc).toHaveBeenCalledTimes(1);
+    expect(supabaseClient.rpc).toHaveBeenCalledWith('advance_project_phase', {
+      p_project_id: 'project-1',
+      p_phase_id: 'phase-1',
+      p_expected_status: 'in_progress',
+    });
+    expect(supabaseClient.from).not.toHaveBeenCalled();
+  });
+
+  it('resumes a delayed phase through the same RPC and exposes the exact resume receipt', async () => {
+    const receipt: ProjectPhaseTransitionReceipt = {
+      completed_phase_id: null,
+      next_phase_ids: ['phase-delayed'],
+      terminal: true,
+    };
+    supabaseClient.rpc.mockResolvedValue({ data: receipt, error: null });
+
+    const config = useUpdateProjectPhaseStatus() as unknown as PhaseTransitionMutationConfig;
+    await expect(
+      config.mutationFn({
+        projectId: 'project-1',
+        phaseId: 'phase-delayed',
+        status: 'in_progress',
+      }),
+    ).resolves.toEqual(receipt);
+
+    expect(supabaseClient.rpc).toHaveBeenCalledWith('advance_project_phase', {
+      p_project_id: 'project-1',
+      p_phase_id: 'phase-delayed',
+      p_expected_status: 'delayed',
+    });
+  });
+
+  it('propagates the Supabase RPC error unchanged', async () => {
+    const rpcError = { code: '40001', message: 'phase status changed' };
+    supabaseClient.rpc.mockResolvedValue({ data: null, error: rpcError });
+
+    const config = useUpdateProjectPhaseStatus() as unknown as PhaseTransitionMutationConfig;
+    await expect(
+      config.mutationFn({
+        projectId: 'project-1',
+        phaseId: 'phase-1',
+        status: 'completed',
+      }),
+    ).rejects.toBe(rpcError);
+  });
+
+  it('rejects unsupported local call shapes before invoking the RPC', async () => {
+    const config = useUpdateProjectPhaseStatus() as unknown as PhaseTransitionMutationConfig;
+
+    await expect(
+      config.mutationFn({
+        projectId: 'project-1',
+        phaseId: 'phase-1',
+        status: 'completed',
+        progress: 75,
+      }),
+    ).rejects.toThrow(/completion progress must be 100/);
+    await expect(
+      config.mutationFn({
+        projectId: 'project-1',
+        phaseId: 'phase-1',
+        status: 'in_progress',
+        progress: 25,
+      }),
+    ).rejects.toThrow(/resume does not accept progress/);
+    await expect(
+      config.mutationFn({
+        projectId: 'project-1',
+        phaseId: 'phase-1',
+        status: 'pending',
+      } as unknown as ProjectPhaseTransitionInput),
+    ).rejects.toThrow(/status must be completed or in_progress/);
+
+    expect(supabaseClient.rpc).not.toHaveBeenCalled();
+  });
+
+  it('rejects a malformed or expanded receipt instead of trusting unsafe JSON', async () => {
+    supabaseClient.rpc.mockResolvedValue({
+      data: {
+        completed_phase_id: 'phase-1',
+        next_phase_ids: [],
+        terminal: true,
+        project_id: 'must-not-leak',
+      },
+      error: null,
+    });
+
+    const config = useUpdateProjectPhaseStatus() as unknown as PhaseTransitionMutationConfig;
+    await expect(
+      config.mutationFn({
+        projectId: 'project-1',
+        phaseId: 'phase-1',
+        status: 'completed',
+      }),
+    ).rejects.toThrow(/invalid transition receipt/);
+  });
+
+  it('invalidates phase, project detail, project list, and document-state readers', () => {
+    const config = useUpdateProjectPhaseStatus() as unknown as PhaseTransitionMutationConfig;
+    const receipt: ProjectPhaseTransitionReceipt = {
+      completed_phase_id: 'phase-1',
+      next_phase_ids: [],
+      terminal: true,
+    };
+
+    config.onSuccess(receipt, {
+      projectId: 'project-7',
+      phaseId: 'phase-1',
+      status: 'completed',
+    });
+
+    const invalidatedKeys = invalidateQueries.mock.calls.map((call) => call[0].queryKey);
+    expect(invalidatedKeys).toEqual([
+      ['project-phases', 'project-7'],
+      ['project-v2', 'project-7'],
+      ['projects'],
+      ['document-state'],
+    ]);
+  });
 });
 
 // ─────────────────────────────────────────────────────────────────────────────

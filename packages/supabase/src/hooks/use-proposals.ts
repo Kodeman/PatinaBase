@@ -1,15 +1,157 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { createBrowserClient } from '../client';
 import { updateProposalTotal } from '../lib/proposal-total';
+import {
+  invalidateProposalClientQueries,
+  PROPOSAL_CLIENT_MUTATION_KEY,
+} from '../lib/proposal-client-query-invalidation';
+import {
+  assessProposalPaymentSchedule,
+  parseProposalSendSnapshot,
+  proposalPaymentScheduleReviewKey,
+  proposalSendSnapshotsMatch,
+  type ProposalSendSnapshot,
+} from '../lib/proposal-payment-schedule';
+import type {
+  ProposalExclusion,
+  ProposalPaymentMilestone,
+  ProposalPhase,
+  ProposalScopeRoom,
+} from './use-scope-builder';
 
 // Lazy client getter to avoid module-level initialization during SSR
 const getSupabase = () => createBrowserClient();
+
+const REVIEWED_PROPOSAL_CHANGED =
+  'Proposal cannot be sent: the proposal changed since it was reviewed. Review the latest client copy and send again.';
+
+export type ProposalEmailDeliveryState =
+  | 'pending'
+  | 'in_flight'
+  | 'delivered'
+  | 'suppressed'
+  | 'failed'
+  | 'ambiguous'
+  | 'unconfirmed';
+
+export interface ProposalEmailDispatchOutcome {
+  _emailDispatched: boolean;
+  _emailDeliveryState: ProposalEmailDeliveryState;
+  _emailRetryable: boolean;
+  _emailDispatchDetail?: string;
+}
+
+export interface ProposalEmailDispatchStatus {
+  dispatchId: string;
+  proposalId: string;
+  sentAt: string;
+  state: ProposalEmailDeliveryState;
+  attemptCount: number;
+  retryable: boolean;
+  detail?: string;
+}
+
+const PROPOSAL_EMAIL_STATES = new Set<ProposalEmailDeliveryState>([
+  'pending',
+  'in_flight',
+  'delivered',
+  'suppressed',
+  'failed',
+  'ambiguous',
+  'unconfirmed',
+]);
+
+async function invokeProposalSendEdge(
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  supabase: any,
+  input: { proposalId: string; sentAt: string; dispatchId: string },
+): Promise<ProposalEmailDispatchOutcome> {
+  try {
+    const { data, error } = await supabase.functions.invoke('proposal-send', {
+      body: input,
+    });
+    const state =
+      data &&
+      typeof data.delivery_state === 'string' &&
+      PROPOSAL_EMAIL_STATES.has(
+        data.delivery_state as ProposalEmailDeliveryState,
+      )
+        ? (data.delivery_state as ProposalEmailDeliveryState)
+        : 'pending';
+    if (error && state === 'pending') {
+      // eslint-disable-next-line no-console
+      console.warn('proposal-send invocation failed', error);
+    }
+    return {
+      _emailDispatched: state === 'delivered',
+      _emailDeliveryState: state,
+      _emailRetryable:
+        typeof data?.retryable === 'boolean'
+          ? data.retryable
+          : state === 'pending' || state === 'in_flight',
+      _emailDispatchDetail:
+        typeof data?.detail === 'string' ? data.detail : undefined,
+    };
+  } catch (error) {
+    // The immutable outbox row already exists. A transport failure is pending,
+    // never success, and can be retried without rerunning send_proposal.
+    // eslint-disable-next-line no-console
+    console.warn('proposal-send invocation failed', error);
+    return {
+      _emailDispatched: false,
+      _emailDeliveryState: 'pending',
+      _emailRetryable: true,
+    };
+  }
+}
+
+async function readProposalSendSnapshot(
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  supabase: any,
+  proposalId: string,
+): Promise<ProposalSendSnapshot> {
+  const { data, error } = await supabase.rpc('get_proposal_send_snapshot', {
+    p_proposal_id: proposalId,
+  });
+  if (error) throw error;
+
+  const snapshot = parseProposalSendSnapshot(data);
+  if (!snapshot) {
+    throw new Error(
+      'Proposal cannot be sent: the reviewed snapshot could not be verified.',
+    );
+  }
+  return snapshot;
+}
+
+function assertReviewedProposalSnapshot(
+  actual: ProposalSendSnapshot,
+  expected: ProposalSendSnapshot,
+) {
+  if (!proposalSendSnapshotsMatch(actual, expected)) {
+    throw new Error(REVIEWED_PROPOSAL_CHANGED);
+  }
+}
 
 // ═══════════════════════════════════════════════════════════════════════════
 // TYPES
 // ═══════════════════════════════════════════════════════════════════════════
 
 export type ProposalItemType = 'fixed' | 'allowance' | 'tbd';
+
+export interface ProposalItemProductSnapshot {
+  product_id?: string;
+  name?: string;
+  images?: string[] | null;
+  brand?: string | null;
+  source_url?: string | null;
+  dimensions?: unknown;
+  materials?: string[] | null;
+  price_retail?: number | null;
+  has_teaching?: boolean;
+  /** Safe DTOs hide completeness when tier-redacted inputs would undercount. */
+  record_completeness_hidden?: boolean;
+}
 
 export interface ProposalItem {
   id: string;
@@ -42,6 +184,8 @@ export interface ProposalItem {
   doc_code?: string | null;
   /** Designer-defined field values, keyed by spec_field_defs.field_key (S6, 00268). */
   custom_fields?: Record<string, unknown> | null;
+  /** Immutable product provenance owned by the proposal edition (00390). */
+  client_product_snapshot?: ProposalItemProductSnapshot | null;
   // Joined data
   product?: {
     id: string;
@@ -55,9 +199,12 @@ export interface ProposalItem {
     dimensions: unknown;
     materials: string[] | null;
     price_retail: number | null;
-    price_trade: number | null;
+    price_trade?: number | null;
     /** PostgREST aggregate embed: [{ count }] — ≥1 style ⇒ the record is "taught". */
     product_styles?: { count: number }[];
+    /** Present when client rendering has normalized the immutable snapshot. */
+    has_teaching?: boolean;
+    record_completeness_hidden?: boolean;
   };
 }
 
@@ -66,6 +213,8 @@ export interface Proposal {
   project_id: string | null;
   designer_id: string;
   client_id: string | null;
+  /** Canonical designer↔household relationship, including no-login clients. */
+  designer_client_id: string | null;
   title: string;
   description: string | null;
   project_address: string | null;
@@ -82,6 +231,8 @@ export interface Proposal {
   status: 'draft' | 'sent' | 'viewed' | 'accepted' | 'declined' | 'expired' | 'revised';
   valid_until: string | null;
   sent_at: string | null;
+  /** Immutable email outbox nonce created atomically by send_proposal (00388). */
+  proposal_send_dispatch_id: string | null;
   viewed_at: string | null;
   responded_at: string | null;
   created_at: string;
@@ -102,12 +253,49 @@ export interface Proposal {
     full_name: string | null;
   };
   items?: ProposalItem[];
+  /** Client-safe list DTO embeds the signed schedule for the budget surface. */
+  payment_milestones?: ProposalPaymentMilestone[];
 }
 
 export interface ProposalFilters {
   status?: string | string[];
   clientId?: string;
   projectId?: string;
+}
+
+export interface ClientProposalBoardItem {
+  id: string;
+  type: string;
+  x: number;
+  y: number;
+  width: number;
+  height: number | null;
+  z_index: number;
+  rotation: number;
+  image_url: string | null;
+  content: string | null;
+  data: Record<string, unknown>;
+}
+
+export interface ClientProposalBoard {
+  id: string;
+  name: string;
+  cover_image_url?: string | null;
+  sort_order?: number;
+  canvas_width: number;
+  canvas_height: number;
+  background_color: string;
+  items: ClientProposalBoardItem[];
+}
+
+export interface ClientProposalBundle {
+  proposal: Proposal;
+  sections: ProposalSection[];
+  payment_milestones: ProposalPaymentMilestone[];
+  phases: ProposalPhase[];
+  exclusions: ProposalExclusion[];
+  scope_rooms: ProposalScopeRoom[];
+  boards: ClientProposalBoard[];
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -199,6 +387,108 @@ export function useProposal(proposalId: string) {
   });
 }
 
+/** Client-only proposal list. The RPC returns an explicit allowlist DTO; raw
+ * proposal rows remain unavailable to authenticated clients. */
+export function useClientSafeProposals() {
+  return useQuery({
+    queryKey: ['proposals', 'client-safe'],
+    queryFn: async () => {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const supabase = getSupabase() as any;
+      const { data, error } = await supabase.rpc('list_client_proposals');
+      if (error) throw error;
+      return (Array.isArray(data) ? data : []) as Proposal[];
+    },
+  });
+}
+
+/** Client-only detail bundle. Parent, items, sections, schedule, rooms, and
+ * boards cross one database-owned allowlist boundary in a single request. */
+export function useClientSafeProposalBundle(proposalId: string) {
+  return useQuery({
+    queryKey: ['proposal', proposalId, 'client-safe'],
+    enabled: !!proposalId,
+    queryFn: async () => {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const supabase = getSupabase() as any;
+      const { data, error } = await supabase.rpc(
+        'get_client_proposal_bundle',
+        { p_proposal_id: proposalId },
+      );
+      if (error) throw error;
+      return data as ClientProposalBundle;
+    },
+  });
+}
+
+export function useProposalSendDispatchStatus({
+  proposalId,
+  dispatchId,
+  sentAt,
+  enabled = true,
+}: {
+  proposalId: string;
+  dispatchId?: string | null;
+  sentAt?: string | null;
+  enabled?: boolean;
+}) {
+  return useQuery({
+    queryKey: ['proposal-send-dispatch-status', proposalId, dispatchId, sentAt],
+    queryFn: async (): Promise<ProposalEmailDispatchStatus> => {
+      if (!dispatchId || !sentAt) {
+        throw new Error(
+          'The proposal delivery instance is incomplete. Refresh before retrying.',
+        );
+      }
+
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const supabase = getSupabase() as any;
+      const { data, error } = await supabase.rpc(
+        'get_proposal_send_dispatch_status',
+        {
+          p_proposal_id: proposalId,
+          p_dispatch_id: dispatchId,
+          p_sent_at: sentAt,
+        },
+      );
+      if (error) throw error;
+
+      const state = data?.delivery_state;
+      if (
+        !data ||
+        typeof state !== 'string' ||
+        !PROPOSAL_EMAIL_STATES.has(state as ProposalEmailDeliveryState) ||
+        typeof data.retryable !== 'boolean'
+      ) {
+        throw new Error(
+          'The proposal delivery status could not be verified. Refresh before retrying.',
+        );
+      }
+
+      const attemptCount = Number(data.attempt_count ?? 0);
+      if (!Number.isInteger(attemptCount) || attemptCount < 0) {
+        throw new Error(
+          'The proposal delivery status could not be verified. Refresh before retrying.',
+        );
+      }
+
+      return {
+        dispatchId,
+        proposalId,
+        sentAt,
+        state: state as ProposalEmailDeliveryState,
+        attemptCount,
+        retryable: data.retryable,
+        detail:
+          typeof data.last_error === 'string' && data.last_error.length > 0
+            ? data.last_error
+            : undefined,
+      };
+    },
+    enabled: Boolean(enabled && proposalId && dispatchId && sentAt),
+  });
+}
+
 /**
  * Get proposal statistics
  */
@@ -252,6 +542,7 @@ export function useCreateProposal(options?: { errorSurface?: 'inline' }) {
       description,
       projectId,
       clientId,
+      designerClientId,
       validUntil,
       templateId,
     }: {
@@ -259,6 +550,7 @@ export function useCreateProposal(options?: { errorSurface?: 'inline' }) {
       description?: string;
       projectId?: string;
       clientId?: string;
+      designerClientId?: string;
       validUntil?: string;
       templateId?: string;
     }) => {
@@ -267,6 +559,11 @@ export function useCreateProposal(options?: { errorSurface?: 'inline' }) {
 
       const { data: user } = await supabase.auth.getUser();
       if (!user.user) throw new Error('Not authenticated');
+      if (!!clientId !== !!designerClientId) {
+        throw new Error(
+          'A proposal client must include both profile and designer relationship identities',
+        );
+      }
 
       const { data, error } = await supabase
         .from('proposals')
@@ -276,6 +573,7 @@ export function useCreateProposal(options?: { errorSurface?: 'inline' }) {
           description,
           project_id: projectId || null,
           client_id: clientId || null,
+          designer_client_id: designerClientId || null,
           valid_until: validUntil || null,
           template_id: templateId || null,
           status: 'draft',
@@ -333,13 +631,14 @@ export function useUpdateProposal(options?: { errorSurface?: 'inline' }) {
   const queryClient = useQueryClient();
 
   return useMutation({
+    mutationKey: [PROPOSAL_CLIENT_MUTATION_KEY],
     meta: options?.errorSurface ? { errorSurface: options.errorSurface } : undefined,
     mutationFn: async ({
       proposalId,
       updates,
     }: {
       proposalId: string;
-      updates: Partial<Pick<Proposal, 'title' | 'description' | 'project_address' | 'client_visibility_tier' | 'valid_until' | 'client_id' | 'project_id'>>;
+      updates: Partial<Pick<Proposal, 'title' | 'description' | 'project_address' | 'client_visibility_tier' | 'valid_until' | 'project_id'>>;
     }) => {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const supabase = getSupabase() as any;
@@ -354,9 +653,10 @@ export function useUpdateProposal(options?: { errorSurface?: 'inline' }) {
       if (error) throw error;
       return data;
     },
-    onSuccess: (_, { proposalId }) => {
+    onSuccess: async (_, { proposalId }) => {
       queryClient.invalidateQueries({ queryKey: ['proposals'] });
       queryClient.invalidateQueries({ queryKey: ['proposal', proposalId] });
+      await invalidateProposalClientQueries(queryClient, proposalId);
     },
   });
 }
@@ -398,6 +698,7 @@ export function useAddProposalItem() {
   const queryClient = useQueryClient();
 
   return useMutation({
+    mutationKey: [PROPOSAL_CLIENT_MUTATION_KEY],
     mutationFn: async ({
       proposalId,
       productId,
@@ -499,7 +800,7 @@ export function useAddProposalItem() {
 
       return data;
     },
-    onSuccess: (_, { proposalId }) => {
+    onSuccess: async (_, { proposalId }) => {
       queryClient.invalidateQueries({ queryKey: ['proposals'] });
       queryClient.invalidateQueries({ queryKey: ['proposal', proposalId] });
       queryClient.invalidateQueries({ queryKey: ['proposal-stats'] });
@@ -508,6 +809,7 @@ export function useAddProposalItem() {
       // immediately after add/update/remove (mirrors useConsumeCapture).
       queryClient.invalidateQueries({ queryKey: ['proposal-items-schedule', proposalId] });
       queryClient.invalidateQueries({ queryKey: ['scope-builder-summary', proposalId] });
+      await invalidateProposalClientQueries(queryClient, proposalId);
     },
   });
 }
@@ -519,6 +821,7 @@ export function useUpdateProposalItem() {
   const queryClient = useQueryClient();
 
   return useMutation({
+    mutationKey: [PROPOSAL_CLIENT_MUTATION_KEY],
     mutationFn: async ({
       itemId,
       proposalId,
@@ -602,13 +905,14 @@ export function useUpdateProposalItem() {
 
       return data;
     },
-    onSuccess: (_, { proposalId }) => {
+    onSuccess: async (_, { proposalId }) => {
       queryClient.invalidateQueries({ queryKey: ['proposals'] });
       queryClient.invalidateQueries({ queryKey: ['proposal', proposalId] });
       queryClient.invalidateQueries({ queryKey: ['proposal-stats'] });
       // Keep the FF&E schedule + scope summary in sync after an edit.
       queryClient.invalidateQueries({ queryKey: ['proposal-items-schedule', proposalId] });
       queryClient.invalidateQueries({ queryKey: ['scope-builder-summary', proposalId] });
+      await invalidateProposalClientQueries(queryClient, proposalId);
     },
   });
 }
@@ -620,6 +924,7 @@ export function useRemoveProposalItem() {
   const queryClient = useQueryClient();
 
   return useMutation({
+    mutationKey: [PROPOSAL_CLIENT_MUTATION_KEY],
     mutationFn: async ({
       itemId,
       proposalId,
@@ -640,13 +945,14 @@ export function useRemoveProposalItem() {
       // Update proposal total
       await updateProposalTotal(supabase, proposalId);
     },
-    onSuccess: (_, { proposalId }) => {
+    onSuccess: async (_, { proposalId }) => {
       queryClient.invalidateQueries({ queryKey: ['proposals'] });
       queryClient.invalidateQueries({ queryKey: ['proposal', proposalId] });
       queryClient.invalidateQueries({ queryKey: ['proposal-stats'] });
       // Keep the FF&E schedule + scope summary in sync after a removal.
       queryClient.invalidateQueries({ queryKey: ['proposal-items-schedule', proposalId] });
       queryClient.invalidateQueries({ queryKey: ['scope-builder-summary', proposalId] });
+      await invalidateProposalClientQueries(queryClient, proposalId);
     },
   });
 }
@@ -666,20 +972,168 @@ export function useSendProposal(options?: { errorSurface?: 'inline' }) {
       personalMessage,
       ccEmail,
       validUntil,
+      expectedSnapshot,
     }: {
       proposalId: string;
       personalMessage?: string;
       ccEmail?: string;
       validUntil?: string;
+      expectedSnapshot: ProposalSendSnapshot;
     }) => {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const supabase = getSupabase() as any;
+
+      if (!expectedSnapshot) {
+        throw new Error(
+          'Proposal cannot be sent: review the latest client copy before sending.',
+        );
+      }
+
+      const snapshotBefore = await readProposalSendSnapshot(
+        supabase,
+        proposalId,
+      );
+      assertReviewedProposalSnapshot(snapshotBefore, expectedSnapshot);
+
+      // Preflight the exact client-facing payload before stamping the proposal
+      // sent. Percentage + the current proposal total are canonical; reconcile
+      // their persisted amount projection so every downstream reader (client
+      // portal, share route, email follow-up) receives the same schedule.
+      const [proposalResult, milestonesResult] = await Promise.all([
+        supabase
+          .from('proposals')
+          .select('total_amount')
+          .eq('id', proposalId)
+          .single(),
+        supabase
+          .from('proposal_payment_milestones')
+          .select('id, label, percentage, amount_cents, trigger_condition, sort_order')
+          .eq('proposal_id', proposalId)
+          .order('sort_order', { ascending: true }),
+      ]);
+
+      if (proposalResult.error) throw proposalResult.error;
+      if (milestonesResult.error) throw milestonesResult.error;
+      if (
+        Number(proposalResult.data?.total_amount ?? 0) !==
+        expectedSnapshot.proposalTotalAmount
+      ) {
+        throw new Error(REVIEWED_PROPOSAL_CHANGED);
+      }
+
+      const reviewedScheduleKey = proposalPaymentScheduleReviewKey(
+        milestonesResult.data ?? [],
+      );
+
+      const paymentSchedule = assessProposalPaymentSchedule(
+        milestonesResult.data ?? [],
+        proposalResult.data?.total_amount ?? 0,
+      );
+      if (!paymentSchedule.safeToSend) {
+        throw new Error(
+          `Proposal cannot be sent: ${paymentSchedule.issues
+            .map((issue) => issue.message)
+            .join(' ')}`,
+        );
+      }
+
+      if (!paymentSchedule.storedAmountsMatch) {
+        const reconciliations = paymentSchedule.milestones
+          .map((milestone, index) => ({ milestone, index }))
+          .filter(
+            ({ milestone, index }) =>
+              milestone.amount_cents !==
+              Number(milestonesResult.data?.[index]?.amount_cents ?? 0),
+          )
+          .map(async ({ milestone, index }) => {
+            if (!milestone.id) {
+              throw new Error(
+                'Proposal cannot be sent: a payment milestone has no id.',
+              );
+            }
+            const original = milestonesResult.data?.[index];
+            if (!original) {
+              throw new Error(
+                'Proposal cannot be sent: the payment schedule changed while it was being checked.',
+              );
+            }
+            const {
+              data: reconciled,
+              error: reconciliationError,
+            } = await supabase
+              .from('proposal_payment_milestones')
+              .update({ amount_cents: milestone.amount_cents })
+              .eq('id', milestone.id)
+              // Compare-and-set: never overwrite a percentage or amount the
+              // designer changed after the preflight read.
+              .eq('percentage', original.percentage)
+              .eq('amount_cents', original.amount_cents)
+              .select('id')
+              .maybeSingle();
+            if (reconciliationError) throw reconciliationError;
+            if (!reconciled) {
+              throw new Error(
+                'Proposal cannot be sent: the payment schedule changed while it was being checked. Review it and send again.',
+              );
+            }
+          });
+        await Promise.all(reconciliations);
+      }
+
+      // A final fail-closed read proves both the total and every persisted
+      // client amount still match after reconciliation. If any concurrent edit
+      // landed, do not stamp or notify—return the designer to review instead.
+      const [verifiedProposalResult, verifiedMilestonesResult] =
+        await Promise.all([
+          supabase
+            .from('proposals')
+            .select('total_amount')
+            .eq('id', proposalId)
+            .single(),
+          supabase
+            .from('proposal_payment_milestones')
+            .select(
+              'id, label, percentage, amount_cents, trigger_condition, sort_order',
+            )
+            .eq('proposal_id', proposalId)
+            .order('sort_order', { ascending: true }),
+        ]);
+      if (verifiedProposalResult.error) throw verifiedProposalResult.error;
+      if (verifiedMilestonesResult.error) throw verifiedMilestonesResult.error;
+
+      const verifiedSchedule = assessProposalPaymentSchedule(
+        verifiedMilestonesResult.data ?? [],
+        verifiedProposalResult.data?.total_amount ?? 0,
+      );
+      const snapshotAfter = await readProposalSendSnapshot(
+        supabase,
+        proposalId,
+      );
+      assertReviewedProposalSnapshot(snapshotAfter, expectedSnapshot);
+      if (
+        Number(verifiedProposalResult.data?.total_amount ?? 0) !==
+          expectedSnapshot.proposalTotalAmount ||
+        proposalPaymentScheduleReviewKey(
+          verifiedMilestonesResult.data ?? [],
+        ) !== reviewedScheduleKey
+      ) {
+        throw new Error(REVIEWED_PROPOSAL_CHANGED);
+      }
+      if (!verifiedSchedule.safeToSend || !verifiedSchedule.storedAmountsMatch) {
+        throw new Error(
+          'Proposal cannot be sent: the client payment schedule changed while it was being checked. Review it and send again.',
+        );
+      }
 
       // send_proposal (00176) flips the target to 'sent' AND atomically
       // supersedes sibling versions in the chain (sent/viewed → 'revised')
       // so a stale version can no longer be signed by the client.
       const { data, error } = await supabase.rpc('send_proposal', {
         p_proposal_id: proposalId,
+        p_expected_updated_at: expectedSnapshot.proposalUpdatedAt,
+        p_expected_total_amount: expectedSnapshot.proposalTotalAmount,
+        p_expected_schedule_fingerprint:
+          expectedSnapshot.scheduleFingerprint,
         p_personal_message: personalMessage ?? null,
         p_cc_email: ccEmail ?? null,
         p_valid_until: validUntil ?? null,
@@ -687,35 +1141,78 @@ export function useSendProposal(options?: { errorSurface?: 'inline' }) {
 
       if (error) throw error;
 
-      // Best-effort email dispatch — failure here does NOT roll back the send
-      // (the proposal is already marked sent in the DB). We surface the outcome
-      // via `_emailDispatched` so the Send page can warn the designer instead of
-      // failing silently; they can resend from the proposal page.
-      let emailDispatched = true;
-      try {
-        const { error: fnError } = await supabase.functions.invoke('proposal-send', {
-          body: { proposalId },
-        });
-        if (fnError) emailDispatched = false;
-      } catch (e) {
-        emailDispatched = false;
-        // eslint-disable-next-line no-console
-        console.warn('proposal-send invocation failed', e);
-      }
+      const hasDispatch =
+        typeof data?.sent_at === 'string' &&
+        typeof data?.proposal_send_dispatch_id === 'string';
+      const delivery = hasDispatch
+        ? await invokeProposalSendEdge(supabase, {
+            proposalId,
+            sentAt: data.sent_at,
+            dispatchId: data.proposal_send_dispatch_id,
+          })
+        : {
+            _emailDispatched: false,
+            _emailDeliveryState: 'pending' as const,
+            _emailRetryable: false,
+            _emailDispatchDetail:
+              'The proposal send instance was not returned. Refresh before retrying.',
+          };
 
-      return { ...data, _emailDispatched: emailDispatched };
+      return { ...data, ...delivery };
     },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['proposals'] });
-      // Prefix-match: sending may also have superseded sibling versions, so
-      // every cached single-proposal view must refetch (not just the target).
-      queryClient.invalidateQueries({ queryKey: ['proposal'] });
-      queryClient.invalidateQueries({ queryKey: ['proposal-stats'] });
-      queryClient.invalidateQueries({ queryKey: ['proposal-versions'] });
+    onSuccess: async (_, { proposalId }) => {
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: ['proposals'] }),
+        queryClient.invalidateQueries({
+          queryKey: ['proposal-send-dispatch-status', proposalId],
+        }),
+        // Prefix-match: sending may also have superseded sibling versions, so
+        // every cached single-proposal view must refetch (not just the target).
+        queryClient.invalidateQueries({ queryKey: ['proposal'] }),
+        queryClient.invalidateQueries({ queryKey: ['proposal-stats'] }),
+        queryClient.invalidateQueries({ queryKey: ['proposal-versions'] }),
+        queryClient.invalidateQueries({
+          queryKey: ['proposal-payment-milestones', proposalId],
+        }),
+        queryClient.invalidateQueries({
+          queryKey: ['proposal-mirror', proposalId],
+        }),
+        queryClient.invalidateQueries({
+          queryKey: ['drafting-facets', proposalId],
+        }),
+      ]);
     },
   });
 }
 
+/** Retry only the durable email outbox. This never calls send_proposal and can
+ * safely recover an invocation that never reached the edge function. */
+export function useRetryProposalSend(options?: { errorSurface?: 'inline' }) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    meta: options?.errorSurface
+      ? { errorSurface: options.errorSurface }
+      : undefined,
+    mutationFn: async (input: {
+      proposalId: string;
+      sentAt: string;
+      dispatchId: string;
+    }) => {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const supabase = getSupabase() as any;
+      return await invokeProposalSendEdge(supabase, input);
+    },
+    onSuccess: async (_, { proposalId }) => {
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: ['proposal', proposalId] }),
+        queryClient.invalidateQueries({ queryKey: ['proposals'] }),
+        queryClient.invalidateQueries({
+          queryKey: ['proposal-send-dispatch-status', proposalId],
+        }),
+      ]);
+    },
+  });
+}
 
 /**
  * Nudge the client about a sent/viewed proposal — a gentle reminder (R71).
@@ -839,6 +1336,7 @@ export function useUpsertProposalSection(options?: { errorSurface?: 'inline' }) 
   const queryClient = useQueryClient();
 
   return useMutation({
+    mutationKey: [PROPOSAL_CLIENT_MUTATION_KEY],
     meta: options?.errorSurface ? { errorSurface: options.errorSurface } : undefined,
     mutationFn: async ({
       id,
@@ -901,8 +1399,9 @@ export function useUpsertProposalSection(options?: { errorSurface?: 'inline' }) 
         return data as ProposalSection;
       }
     },
-    onSuccess: (_, { proposalId }) => {
+    onSuccess: async (_, { proposalId }) => {
       queryClient.invalidateQueries({ queryKey: ['proposal-sections', proposalId] });
+      await invalidateProposalClientQueries(queryClient, proposalId);
     },
   });
 }
@@ -914,6 +1413,7 @@ export function useDeleteProposalSection() {
   const queryClient = useQueryClient();
 
   return useMutation({
+    mutationKey: [PROPOSAL_CLIENT_MUTATION_KEY],
     mutationFn: async ({ sectionId, proposalId }: { sectionId: string; proposalId: string }) => {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const supabase = getSupabase() as any;
@@ -925,8 +1425,9 @@ export function useDeleteProposalSection() {
 
       if (error) throw error;
     },
-    onSuccess: (_, { proposalId }) => {
+    onSuccess: async (_, { proposalId }) => {
       queryClient.invalidateQueries({ queryKey: ['proposal-sections', proposalId] });
+      await invalidateProposalClientQueries(queryClient, proposalId);
     },
   });
 }
@@ -1119,9 +1620,8 @@ export function useProposalVersions(proposalId: string) {
 
 /**
  * Mark a sent/viewed (or declined/expired) proposal as 'revised' — the entry
- * point of the revise flow. Pulls the proposal out of the client's pending
- * list and makes it unsignable (sign route + RLS require sent/viewed); the
- * /revise page's "Cancel Revision" restores it to 'sent'.
+ * point of the revise flow. The RPC is the authoritative lifecycle boundary;
+ * a studio writer cannot forge this terminal transition with a table update.
  */
 export function useEnterRevision() {
   const queryClient = useQueryClient();
@@ -1131,12 +1631,9 @@ export function useEnterRevision() {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const supabase = getSupabase() as any;
 
-      const { data, error } = await supabase
-        .from('proposals')
-        .update({ status: 'revised' })
-        .eq('id', proposalId)
-        .select()
-        .single();
+      const { data, error } = await supabase.rpc('begin_proposal_revision', {
+        p_proposal_id: proposalId,
+      });
 
       if (error) throw error;
       return data as Proposal;
@@ -1241,14 +1738,15 @@ export function useDuplicateProposal() {
 /**
  * Sign a proposal (CLIENT action).
  *
- * Backed by the atomic `sign_proposal` RPC (00210). In one transaction the RPC:
+ * Backed by the atomic `sign_proposal` RPC (00210 → 00400). In one transaction
+ * the RPC:
  *   - settles the linked `client_decisions` approval row (status='responded'),
  *   - flips `proposals.status='accepted'` + the signature fields
- *     (signed_at/signed_by_name/signed_ip/accepted_at),
+ *     (signed_at/signed_by_name/accepted_at; browser RPCs never set signed_ip),
  *   - logs a 'signed' `proposal_engagement` event,
- *   - and (with p_auto_activate=true, the default) calls
- *     `activate_proposal_as_project` so the project opens immediately.
- * Re-signing an already-'accepted' proposal is a no-op (idempotent).
+ *   - and activates the project with a server-owned start date.
+ * Re-signing an already-'accepted' proposal preserves the original evidence
+ * and safely repairs a missing reciprocal project (idempotent).
  *
  * ⚠ AUTH: `sign_proposal` is SECURITY DEFINER but only succeeds when the caller
  * is the proposal's CLIENT (auth.uid() = client_id). It must NOT be invoked from
@@ -1259,6 +1757,10 @@ export function useDuplicateProposal() {
  * Any caller adopting this hook MUST still invoke the `proposal-sign-confirmation`
  * edge function afterward (the client-portal `/api/proposals/[id]/sign` route, the
  * current production sign path, still fires that email itself).
+ *
+ * The browser surface deliberately accepts only proposalId + signedByName.
+ * Trusted IP evidence belongs to the service-only production route; callers
+ * cannot disable activation or choose the project's start date.
  */
 export function useSignProposal() {
   const queryClient = useQueryClient();
@@ -1267,20 +1769,16 @@ export function useSignProposal() {
     mutationFn: async ({
       proposalId,
       signedByName,
-      signedIp,
     }: {
       proposalId: string;
       signedByName: string;
-      signedIp?: string;
     }) => {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const supabase = getSupabase() as any;
 
-      // p_auto_activate defaults to true server-side → the project opens on sign.
       const { data, error } = await supabase.rpc('sign_proposal', {
         p_proposal_id: proposalId,
         p_signed_name: signedByName,
-        p_signed_ip: signedIp || null,
       });
 
       if (error) throw error;
@@ -1290,11 +1788,14 @@ export function useSignProposal() {
       queryClient.invalidateQueries({ queryKey: ['proposals'] });
       queryClient.invalidateQueries({ queryKey: ['proposal', proposalId] });
       queryClient.invalidateQueries({ queryKey: ['proposal-stats'] });
-      // The sign settles a client_decisions row and (auto-activate) opens the
-      // project, so the desk/document surfaces that read those derived views
-      // must refetch too.
+      // The sign settles a client_decisions row and opens the project, so the
+      // desk/document surfaces that read those derived views must refetch too.
       queryClient.invalidateQueries({ queryKey: ['document-state'] });
       queryClient.invalidateQueries({ queryKey: ['desk-engagements'] });
+      queryClient.invalidateQueries({ queryKey: ['projects'] });
+      queryClient.invalidateQueries({
+        queryKey: ['proposal-project', proposalId],
+      });
     },
   });
 }
@@ -1399,8 +1900,8 @@ export function useRequestProposalChange() {
 }
 
 /**
- * Client declines a proposal with optional reason.
- * Backed by RLS policy at migration 00100 — clients can update sent/viewed → declined.
+ * Client declines a proposal with optional reason through the canonical,
+ * row-locked lifecycle RPC.
  */
 export function useDeclineProposal() {
   const queryClient = useQueryClient();
@@ -1416,16 +1917,10 @@ export function useDeclineProposal() {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const supabase = getSupabase() as any;
 
-      const { data, error } = await supabase
-        .from('proposals')
-        .update({
-          status: 'declined',
-          declined_at: new Date().toISOString(),
-          decline_reason: reason?.trim() || null,
-        })
-        .eq('id', proposalId)
-        .select()
-        .single();
+      const { data, error } = await supabase.rpc('decline_proposal', {
+        p_proposal_id: proposalId,
+        p_reason: reason?.trim() || null,
+      });
 
       if (error) throw error;
       return data;

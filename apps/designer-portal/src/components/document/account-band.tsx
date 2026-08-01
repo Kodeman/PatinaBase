@@ -23,9 +23,10 @@ import {
 import type { SectionKey } from '@/lib/document/desk-derivation';
 import { fmtDay, fmtUsd } from '@/lib/document/format';
 import { openLedger } from './command-bar';
-import { openInvoiceComposer } from './accounts/invoice-overlays';
+import { openInvoiceComposer, openInvoiceFolio } from './accounts/invoice-overlays';
 import { AmendmentSheet } from './overlays/amendment-sheet';
 import { DocumentAction, DocumentActionGroup } from './document-action';
+import { AccountsQueryFailure } from './accounts/accounts-query-failure';
 
 const SAGE_INK = '#85947C';
 const TERRACOTTA_INK = '#C4836F';
@@ -39,21 +40,14 @@ const TRIGGER_LABELS: Record<string, string> = {
 
 const GATE_SECTIONS: SectionKey[] = ['project', 'install', 'care'];
 
-function MilestoneRow({
-  m,
-  projectId,
-}: {
-  m: AccountMilestone;
-  projectId: string;
-}) {
+function MilestoneRow({ m, projectId }: { m: AccountMilestone; projectId: string }) {
   const updateTrigger = useUpdateMilestoneTrigger(projectId);
   const generate = useGenerateMilestoneInvoice(projectId);
+  const [invoiceNote, setInvoiceNote] = useState<string | null>(null);
 
   return (
     <div className="grid grid-cols-[1fr_auto] items-baseline gap-2 border-b border-dashed border-[var(--color-pearl)] py-1.5 min-[700px]:grid-cols-[minmax(0,1.2fr)_auto_auto_minmax(0,1.4fr)_auto]">
-      <span className="text-[11.5px] text-[var(--color-charcoal)]">
-        {m.label}
-      </span>
+      <span className="text-[11.5px] text-[var(--color-charcoal)]">{m.label}</span>
       <span className="font-mono text-[10px] text-[var(--color-charcoal)]">
         {fmtUsd(m.amount_cents)}
       </span>
@@ -66,8 +60,7 @@ function MilestoneRow({
           onChange={(e) =>
             updateTrigger.mutate({
               milestoneId: m.id,
-              triggerKind: (e.target.value ||
-                null) as AccountMilestone['trigger_kind'],
+              triggerKind: (e.target.value || null) as AccountMilestone['trigger_kind'],
               triggerSectionKey: m.trigger_section_key,
               dueDate: m.due_date,
             })
@@ -90,8 +83,7 @@ function MilestoneRow({
               updateTrigger.mutate({
                 milestoneId: m.id,
                 triggerKind: 'on_section_settled',
-                triggerSectionKey: (e.target.value ||
-                  null) as SectionKey | null,
+                triggerSectionKey: (e.target.value || null) as SectionKey | null,
               })
             }
             aria-label={`${m.label} section`}
@@ -122,12 +114,15 @@ function MilestoneRow({
         )}
       </span>
       {m.invoice_id ? (
-        <span
-          className="font-mono text-[8.5px] uppercase tracking-[0.05em]"
-          style={{ color: SAGE_INK }}
+        <DocumentAction
+          actionKey="open-milestone-invoice"
+          surfaceKey="accounts"
+          regionKey="payment-milestone"
+          variant="tertiary"
+          onClick={() => openInvoiceFolio(m.invoice_id as string)}
         >
-          invoice drafted
-        </span>
+          Open invoice
+        </DocumentAction>
       ) : (
         <DocumentAction
           actionKey="generate-milestone-invoice"
@@ -137,11 +132,29 @@ function MilestoneRow({
           disabled={generate.isPending}
           loading={generate.isPending}
           loadingLabel="Generating…"
-          onClick={() => generate.mutate(m.id)}
+          onClick={() => {
+            setInvoiceNote(null);
+            generate.mutate(m.id, {
+              onSuccess: (invoiceId) => openInvoiceFolio(invoiceId),
+              onError: (error) =>
+                setInvoiceNote(
+                  error instanceof Error ? error.message : 'Could not draft this invoice.',
+                ),
+            });
+          }}
           className="text-left"
         >
           Generate invoice
         </DocumentAction>
+      )}
+      {invoiceNote && (
+        <p
+          className="col-span-full font-mono text-[8.5px] normal-case tracking-normal"
+          style={{ color: TERRACOTTA_INK }}
+          role="alert"
+        >
+          Could not draft the invoice — {invoiceNote}
+        </p>
       )}
     </div>
   );
@@ -154,12 +167,45 @@ export function AccountBand({
   projectId: string;
   clientName?: string | null;
 }) {
-  const { data } = useAccountPage(projectId);
+  const { data, isLoading, isError, refetch } = useAccountPage(projectId);
   const [open, setOpen] = useState(false);
   const [exportNote, setExportNote] = useState<string | null>(null);
   const [amendmentOpen, setAmendmentOpen] = useState(false);
 
-  if (!data) return null;
+  if (isLoading) {
+    return (
+      <div
+        className="mt-4 rounded-[5px] bg-[rgba(229,226,221,0.32)] px-3 py-2"
+        role="status"
+        aria-live="polite"
+      >
+        <span className="font-heading text-[12.5px] font-medium italic text-[var(--color-charcoal)]">
+          The accounts · this project
+        </span>
+        <span className="ml-3 font-mono text-[9px] uppercase tracking-[0.05em] text-[var(--text-muted)]">
+          opening the ledger…
+        </span>
+      </div>
+    );
+  }
+
+  if (isError) {
+    return (
+      <AccountsQueryFailure
+        title="The project accounts could not be opened."
+        message="Budget, commitments, milestones, and invoice actions are unavailable until this read succeeds."
+        onRetry={refetch}
+      />
+    );
+  }
+
+  if (!data) {
+    return (
+      <p className="mt-4 font-mono text-[9px] uppercase tracking-[0.05em] text-[var(--text-muted)]">
+        No account record is available for this project.
+      </p>
+    );
+  }
 
   const collapsedLine = [
     `${fmtUsd(data.budgetCents)} budget`,
@@ -214,9 +260,7 @@ export function AccountBand({
               className="border-b border-dashed border-[var(--color-pearl)] py-1"
             >
               <div className="grid grid-cols-[1fr_auto_auto_auto] gap-x-4">
-                <span className="text-[11.5px] text-[var(--color-charcoal)]">
-                  {r.roomName}
-                </span>
+                <span className="text-[11.5px] text-[var(--color-charcoal)]">{r.roomName}</span>
                 <span className="text-right font-mono text-[10px] text-[var(--color-charcoal)]">
                   {r.allocatedCents > 0 ? fmtUsd(r.allocatedCents) : '—'}
                 </span>
@@ -237,10 +281,7 @@ export function AccountBand({
               {r.categories.length > 0 && (
                 <p className="mt-px font-mono text-[8.5px] lowercase tracking-[0.03em] text-[var(--text-muted)]">
                   {r.categories
-                    .map(
-                      (c) =>
-                        `${c.name.replace(/_/g, ' ')} ${fmtUsd(c.committedCents)}`,
-                    )
+                    .map((c) => `${c.name.replace(/_/g, ' ')} ${fmtUsd(c.committedCents)}`)
                     .join(' · ')}
                 </p>
               )}
@@ -251,18 +292,15 @@ export function AccountBand({
           <p className="mt-2 text-[11px] text-[var(--color-charcoal)]">
             {data.marginPct != null ? (
               <>
-                Trade {fmtUsd(data.tradeCostCents)} → client{' '}
-                {fmtUsd(data.clientValueCents)} ·{' '}
-                <span style={{ color: SAGE_INK }}>
-                  {data.marginPct}% margin
-                </span>
+                Trade {fmtUsd(data.tradeCostCents)} → client {fmtUsd(data.clientValueCents)} ·{' '}
+                <span style={{ color: SAGE_INK }}>{data.marginPct}% margin</span>
               </>
             ) : (
               'No trade pricing on committed lines yet.'
             )}
             <span className="ml-2 font-mono text-[8.5px] uppercase tracking-[0.05em] text-[var(--text-muted)]">
-              trade cost on {data.tradeCoverage.withTrade} of{' '}
-              {data.tradeCoverage.total} committed lines
+              trade cost on {data.tradeCoverage.withTrade} of {data.tradeCoverage.total} committed
+              lines
             </span>
           </p>
 
@@ -343,9 +381,7 @@ export function AccountBand({
               Amendment
             </DocumentAction>
             {exportNote && (
-              <span className="font-mono text-[8.5px] text-[var(--text-muted)]">
-                {exportNote}
-              </span>
+              <span className="font-mono text-[8.5px] text-[var(--text-muted)]">{exportNote}</span>
             )}
           </DocumentActionGroup>
         </div>

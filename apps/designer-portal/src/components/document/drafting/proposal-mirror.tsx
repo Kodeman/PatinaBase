@@ -26,8 +26,16 @@
  * Zero shadows (D4).
  */
 
+import { useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { createBrowserClient, useUpdateProposal } from '@patina/supabase';
+import {
+  assessProposalPaymentSchedule,
+  createBrowserClient,
+  parseProposalSendSnapshot,
+  proposalSendSnapshotsMatch,
+  type ProposalSendSnapshot,
+  useUpdateProposal,
+} from '@patina/supabase';
 import {
   proposalTierVisibility,
   type ClientVisibilityTier,
@@ -45,38 +53,65 @@ const getSupabase = () => createBrowserClient() as any;
 
 type AnyRow = any;
 
+async function readProposalSendSnapshot(
+  supabase: AnyRow,
+  proposalId: string,
+): Promise<ProposalSendSnapshot> {
+  const { data, error } = await supabase.rpc('get_proposal_send_snapshot', {
+    p_proposal_id: proposalId,
+  });
+  if (error) throw error;
+
+  const snapshot = parseProposalSendSnapshot(data);
+  if (!snapshot) {
+    throw new Error('The client preview snapshot could not be verified.');
+  }
+  return snapshot;
+}
+
 export function useProposalMirrorData(proposalId: string) {
   return useQuery({
     queryKey: ['proposal-mirror', proposalId],
     enabled: !!proposalId,
-    // "The client's copy · LIVE": this bespoke read spans many child tables that
-    // the facet editors mutate through their own keys (which don't invalidate
-    // this one), so a gentle focused-only poll keeps the preview in step as the
-    // designer composes — a piece flipped to TBD drops out here within a tick,
-    // an exclusion / price / tier change reflows immediately.
+    // Mutations invalidate this key directly. Avoid interval polling: cached
+    // complete data must not oscillate between send-enabled and refetching.
     refetchOnWindowFocus: true,
-    refetchInterval: 2000,
-    refetchIntervalInBackground: false,
     staleTime: 0,
     queryFn: async () => {
       const supabase = getSupabase();
+      // Bound the displayed multi-query read with the server's opaque send
+      // token. Equal boundary snapshots prove the proposal and schedule stayed
+      // stable while this exact client copy was materialized.
+      const snapshotBefore = await readProposalSendSnapshot(
+        supabase,
+        proposalId,
+      );
       const [
-        { data: proposal },
-        { data: rooms },
-        { data: rawPieces },
-        { data: palettes },
-        { data: exclusions },
-        { data: milestones },
-        { data: phases },
-        { data: boardsRaw },
+        { data: proposal, error: proposalError },
+        { data: sections, error: sectionsError },
+        { data: rooms, error: roomsError },
+        { data: rawPieces, error: piecesError },
+        { data: palettes, error: palettesError },
+        { data: exclusions, error: exclusionsError },
+        { data: milestones, error: milestonesError },
+        { data: phases, error: phasesError },
+        { data: boardsRaw, error: boardsError },
       ] = await Promise.all([
         // The rolled-up investment number is proposals.total_amount, plus the
         // tier that governs the whole render (R86). NO trade/cost/margin column.
         supabase
           .from('proposals')
-          .select('title, total_amount, client_visibility_tier')
+          .select('title, total_amount, client_visibility_tier, updated_at')
           .eq('id', proposalId)
           .single(),
+        // Narrative is authored in proposal_sections and rendered verbatim by
+        // the client document. Title/body plus concept/space-plan metadata are
+        // therefore part of both this mirror and the reviewed fingerprint.
+        supabase
+          .from('proposal_sections')
+          .select('id, type, title, body, metadata, sort_order')
+          .eq('proposal_id', proposalId)
+          .order('sort_order', { ascending: true }),
         // Rooms in scope — name + type + the client-facing per-room budget
         // (shown only at 'full' via the tier gate; never a trade/cost column).
         supabase
@@ -112,7 +147,7 @@ export function useProposalMirrorData(proposalId: string) {
         supabase
           .from('proposal_payment_milestones')
           .select(
-            'label, percentage, amount_cents, trigger_condition, sort_order',
+            'id, label, percentage, amount_cents, trigger_condition, sort_order',
           )
           .eq('proposal_id', proposalId)
           .order('sort_order', { ascending: true }),
@@ -140,6 +175,41 @@ export function useProposalMirrorData(proposalId: string) {
             referencedTable: 'proposal_board_items',
           }),
       ]);
+
+      const readError = [
+        proposalError,
+        sectionsError,
+        roomsError,
+        piecesError,
+        palettesError,
+        exclusionsError,
+        milestonesError,
+        phasesError,
+        boardsError,
+      ].find(Boolean);
+      if (readError) throw readError;
+
+      const snapshotAfter = await readProposalSendSnapshot(
+        supabase,
+        proposalId,
+      );
+      if (!proposalSendSnapshotsMatch(snapshotBefore, snapshotAfter)) {
+        throw new Error(
+          'The proposal changed while the client preview was being prepared. Refresh and review it again.',
+        );
+      }
+
+      const proposalRow = proposal as AnyRow;
+      if (
+        String(proposalRow?.updated_at ?? '') !==
+          snapshotAfter.proposalUpdatedAt ||
+        Number(proposalRow?.total_amount ?? 0) !==
+          snapshotAfter.proposalTotalAmount
+      ) {
+        throw new Error(
+          'The client preview does not match the proposal snapshot. Refresh and review it again.',
+        );
+      }
 
       const roomNameById = new Map<string, string>(
         ((rooms ?? []) as AnyRow[]).map((r) => [r.id, r.name]),
@@ -195,8 +265,15 @@ export function useProposalMirrorData(proposalId: string) {
         items: (b.proposal_board_items ?? []) as AnyRow[],
       }));
 
+      const totalCents = (proposal as AnyRow)?.total_amount ?? 0;
+      const paymentSchedule = assessProposalPaymentSchedule(
+        (milestones ?? []) as AnyRow[],
+        totalCents,
+      );
+
       return {
         proposal,
+        sections: (sections ?? []) as AnyRow[],
         tier: ((proposal as AnyRow)?.client_visibility_tier ??
           'milestone') as ClientVisibilityTier,
         rooms: (rooms ?? []) as AnyRow[],
@@ -204,10 +281,14 @@ export function useProposalMirrorData(proposalId: string) {
         pieces,
         palette,
         exclusions: (exclusions ?? []) as AnyRow[],
-        milestones: (milestones ?? []) as AnyRow[],
+        // Canonical client payload: percentage + the current signed total own
+        // the amounts. Stored projections are reconciled by the send preflight.
+        milestones: paymentSchedule.milestones,
+        paymentSchedule,
+        sendSnapshot: snapshotAfter,
         phases: (phases ?? []) as AnyRow[],
         boards,
-        totalCents: (proposal as AnyRow)?.total_amount ?? 0,
+        totalCents,
       };
     },
   });
@@ -241,17 +322,32 @@ function TierInstrument({
 }) {
   const update = useUpdateProposal({ errorSurface: 'inline' });
   const qc = useQueryClient();
+  const [feedback, setFeedback] = useState<
+    'idle' | 'saving' | 'saved' | 'error'
+  >('idle');
+  const [feedbackError, setFeedbackError] = useState<string | null>(null);
 
   const choose = (next: ClientVisibilityTier) => {
     if (next === tier || update.isPending) return;
+    setFeedback('saving');
+    setFeedbackError(null);
     update.mutate(
       { proposalId, updates: { client_visibility_tier: next } },
       {
-        onSuccess: () => {
+        onSuccess: async () => {
           // Reflow the preview immediately rather than waiting for its poll tick.
-          void qc.invalidateQueries({
+          await qc.invalidateQueries({
             queryKey: ['proposal-mirror', proposalId],
           });
+          setFeedback('saved');
+        },
+        onError: (error) => {
+          setFeedback('error');
+          setFeedbackError(
+            error instanceof Error
+              ? error.message
+              : 'Could not update the client view.',
+          );
         },
       },
     );
@@ -291,6 +387,23 @@ function TierInstrument({
           },
         )}
       </div>
+      <div className="min-h-4" aria-live="polite">
+        {feedback === 'saving' && (
+          <p role="status" className="font-mono text-[8.5px] text-[var(--text-muted)]">
+            Updating client preview…
+          </p>
+        )}
+        {feedback === 'saved' && (
+          <p role="status" className="font-mono text-[8.5px] text-[var(--color-sage)]">
+            Client preview updated
+          </p>
+        )}
+        {feedback === 'error' && (
+          <p role="alert" className="font-mono text-[8.5px] text-[var(--color-terracotta)]">
+            {feedbackError ?? 'Could not update the client preview.'}
+          </p>
+        )}
+      </div>
     </div>
   );
 }
@@ -302,7 +415,25 @@ export function ProposalPreviewRail({
   proposalId: string;
   clientName?: string;
 }) {
-  const { data } = useProposalMirrorData(proposalId);
+  const { data, error, refetch } = useProposalMirrorData(proposalId);
+
+  if (error) {
+    return (
+      <div
+        role="alert"
+        className="rounded-[3px] border border-[var(--color-terracotta)] px-3 py-3 text-[12px] text-[var(--color-terracotta)]"
+      >
+        <p>The client copy could not be verified. Preview and send remain unavailable.</p>
+        <button
+          type="button"
+          onClick={() => void refetch()}
+          className="mt-2 font-mono text-[9px] uppercase tracking-[0.08em] underline underline-offset-4"
+        >
+          Retry preview
+        </button>
+      </div>
+    );
+  }
 
   if (!data) {
     return (
@@ -332,6 +463,10 @@ export function ProposalPreviewRail({
       <p className="mb-6 mt-1 text-[11px] text-[var(--text-muted)]">
         {clientName ? `Prepared for ${clientName}` : 'Prepared for you'}
       </p>
+
+      {data.sections.map((section) => (
+        <MirrorNarrativeSection key={section.id} section={section} />
+      ))}
 
       {/* In scope — names + types always (scope shape survives every tier); the
           per-room budget column shows only at the tier that reveals it. */}
@@ -464,5 +599,69 @@ export function ProposalPreviewRail({
         </section>
       )}
     </div>
+  );
+}
+
+export function MirrorNarrativeSection({ section }: { section: AnyRow }) {
+  const metadata = (section.metadata ?? {}) as Record<string, unknown>;
+  const moodUrls = (metadata.mood_board_urls as string[] | undefined) ?? [];
+  const colors =
+    (metadata.color_palette as Array<{ hex?: string; name?: string }> | undefined) ?? [];
+  const floorPlanUrl = metadata.floor_plan_url as string | undefined;
+  const clientShowsBody =
+    section.body && section.type !== 'investment' && section.type !== 'timeline';
+
+  return (
+    <section className="mb-6" data-preview-section-type={section.type}>
+      <h2 className="mb-2 font-heading text-[1.05rem] font-normal text-[var(--color-charcoal)]">
+        {section.title}
+      </h2>
+      {clientShowsBody && (
+        <p className="whitespace-pre-wrap text-[12px] leading-6 text-[var(--color-quiet-ink)]">
+          {section.body}
+        </p>
+      )}
+      {section.type === 'concept' && (moodUrls.length > 0 || colors.length > 0) && (
+        <div className="mt-3">
+          {moodUrls.length > 0 && (
+            <div className="mb-3 flex flex-wrap gap-2">
+              {moodUrls.map((url, index) => (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img
+                  key={`${url}-${index}`}
+                  src={url}
+                  alt=""
+                  className="h-[58px] w-[78px] rounded object-cover"
+                />
+              ))}
+            </div>
+          )}
+          {colors.length > 0 && (
+            <div className="flex flex-wrap gap-1.5">
+              {colors.map((color, index) => (
+                <span
+                  key={`${color.hex ?? 'color'}-${index}`}
+                  aria-label={color.name ?? color.hex ?? 'Concept color'}
+                  className="h-8 w-8 rounded border border-[var(--color-pearl)]"
+                  style={{ backgroundColor: color.hex ?? 'transparent' }}
+                />
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+      {section.type === 'space_plan' && (
+        <div className="mt-3 flex h-[140px] items-center justify-center overflow-hidden rounded bg-[var(--color-pearl)]">
+          {floorPlanUrl ? (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img src={floorPlanUrl} alt="Space plan" className="h-full w-full object-contain" />
+          ) : (
+            <span className="font-mono text-[9px] uppercase tracking-[0.06em] text-[var(--text-muted)]">
+              Space plan pending
+            </span>
+          )}
+        </div>
+      )}
+    </section>
   );
 }

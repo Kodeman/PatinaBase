@@ -1,6 +1,14 @@
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import {
+  useQuery,
+  useMutation,
+  useQueryClient,
+  type QueryClient,
+} from '@tanstack/react-query';
 import { createBrowserClient } from '../client';
-import { updateProposalTotal } from '../lib/proposal-total';
+import {
+  invalidateProposalClientQueries,
+  PROPOSAL_CLIENT_MUTATION_KEY,
+} from '../lib/proposal-client-query-invalidation';
 import type { SchedulePhaseInput, ScheduleMilestoneInput, MilestoneKind } from '@patina/utils';
 
 const getSupabase = () => createBrowserClient();
@@ -43,6 +51,7 @@ export interface ProposalPhase {
   follows_phase_id: string | null;
   anchor_date: string | null;
   lane: 'main' | 'thread';
+  updated_at: string;
 }
 
 export interface ProposalExclusion {
@@ -89,6 +98,7 @@ export function useProposalScopeRooms(proposalId: string | null | undefined) {
 export function useAddScopeRoom() {
   const queryClient = useQueryClient();
   return useMutation({
+    mutationKey: [PROPOSAL_CLIENT_MUTATION_KEY],
     mutationFn: async ({
       proposalId,
       name,
@@ -141,9 +151,10 @@ export function useAddScopeRoom() {
       if (error) throw error;
       return data;
     },
-    onSuccess: (_, { proposalId }) => {
+    onSuccess: async (_, { proposalId }) => {
       queryClient.invalidateQueries({ queryKey: ['proposal-scope-rooms', proposalId] });
       queryClient.invalidateQueries({ queryKey: ['scope-builder-summary', proposalId] });
+      await invalidateProposalClientQueries(queryClient, proposalId);
     },
   });
 }
@@ -151,6 +162,7 @@ export function useAddScopeRoom() {
 export function useUpdateScopeRoom() {
   const queryClient = useQueryClient();
   return useMutation({
+    mutationKey: [PROPOSAL_CLIENT_MUTATION_KEY],
     mutationFn: async ({
       roomId,
       proposalId,
@@ -171,9 +183,10 @@ export function useUpdateScopeRoom() {
       if (error) throw error;
       return data;
     },
-    onSuccess: (_, { proposalId }) => {
+    onSuccess: async (_, { proposalId }) => {
       queryClient.invalidateQueries({ queryKey: ['proposal-scope-rooms', proposalId] });
       queryClient.invalidateQueries({ queryKey: ['scope-builder-summary', proposalId] });
+      await invalidateProposalClientQueries(queryClient, proposalId);
     },
   });
 }
@@ -181,15 +194,17 @@ export function useUpdateScopeRoom() {
 export function useRemoveScopeRoom() {
   const queryClient = useQueryClient();
   return useMutation({
+    mutationKey: [PROPOSAL_CLIENT_MUTATION_KEY],
     mutationFn: async ({ roomId, proposalId }: { roomId: string; proposalId: string }) => {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const supabase = getSupabase() as any;
       const { error } = await supabase.from('proposal_scope_rooms').delete().eq('id', roomId);
       if (error) throw error;
     },
-    onSuccess: (_, { proposalId }) => {
+    onSuccess: async (_, { proposalId }) => {
       queryClient.invalidateQueries({ queryKey: ['proposal-scope-rooms', proposalId] });
       queryClient.invalidateQueries({ queryKey: ['scope-builder-summary', proposalId] });
+      await invalidateProposalClientQueries(queryClient, proposalId);
     },
   });
 }
@@ -207,6 +222,7 @@ export function useRemoveScopeRoom() {
 export function useReorderProposalItems() {
   const queryClient = useQueryClient();
   return useMutation({
+    mutationKey: [PROPOSAL_CLIENT_MUTATION_KEY],
     mutationFn: async ({ proposalId, orderedIds }: { proposalId: string; orderedIds: string[] }) => {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const supabase = getSupabase() as any;
@@ -239,9 +255,10 @@ export function useReorderProposalItems() {
         queryClient.setQueryData(context.key, context.previous);
       }
     },
-    onSettled: (_d, _e, { proposalId }) => {
+    onSettled: async (_d, _e, { proposalId }) => {
       queryClient.invalidateQueries({ queryKey: ['proposal-items-schedule', proposalId] });
       queryClient.invalidateQueries({ queryKey: ['scope-builder-summary', proposalId] });
+      await invalidateProposalClientQueries(queryClient, proposalId);
     },
   });
 }
@@ -255,6 +272,7 @@ export function useReorderProposalItems() {
 export function useReorderProposalScopeRooms() {
   const queryClient = useQueryClient();
   return useMutation({
+    mutationKey: [PROPOSAL_CLIENT_MUTATION_KEY],
     mutationFn: async ({ proposalId, orderedIds }: { proposalId: string; orderedIds: string[] }) => {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const supabase = getSupabase() as any;
@@ -287,9 +305,10 @@ export function useReorderProposalScopeRooms() {
         queryClient.setQueryData(context.key, context.previous);
       }
     },
-    onSettled: (_d, _e, { proposalId }) => {
+    onSettled: async (_d, _e, { proposalId }) => {
       queryClient.invalidateQueries({ queryKey: ['proposal-scope-rooms', proposalId] });
       queryClient.invalidateQueries({ queryKey: ['scope-builder-summary', proposalId] });
+      await invalidateProposalClientQueries(queryClient, proposalId);
     },
   });
 }
@@ -319,6 +338,7 @@ export function useProposalPhases(proposalId: string) {
 export function useAddProposalPhase() {
   const queryClient = useQueryClient();
   return useMutation({
+    mutationKey: [PROPOSAL_CLIENT_MUTATION_KEY],
     mutationFn: async ({
       proposalId,
       name,
@@ -330,7 +350,6 @@ export function useAddProposalPhase() {
       deliverables,
       durationDays,
       anchorDate,
-      followsPhaseId,
       lane,
     }: {
       proposalId: string;
@@ -341,57 +360,37 @@ export function useAddProposalPhase() {
       revisionLimit?: number;
       gateCondition?: string;
       deliverables?: Array<{ label: string; type?: string }>;
-      /**
-       * Chain columns (00323/00324 — Schedule Compose). Additive: existing
-       * callers that omit these keep the exact prior insert shape —
-       * duration_days/anchor_date/follows_phase_id NULL, lane 'main' (the
-       * column's own DB default).
-       */
+      /** Chain values authored by the caller; predecessor/sort authority stays
+       *  in create_proposal_phase under the locked proposal parent. */
       durationDays?: number;
       anchorDate?: string;
-      followsPhaseId?: string;
       lane?: 'main' | 'thread';
     }) => {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const supabase = getSupabase() as any;
 
-      const { data: existing } = await supabase
-        .from('proposal_phases')
-        .select('sort_order')
-        .eq('proposal_id', proposalId)
-        .order('sort_order', { ascending: false })
-        .limit(1);
-
-      const nextOrder = (existing?.[0]?.sort_order ?? -1) + 1;
-
-      const { data, error } = await supabase
-        .from('proposal_phases')
-        .insert({
-          proposal_id: proposalId,
-          name,
-          phase_key: phaseKey || null,
-          duration_weeks: durationWeeks || null,
-          fee_cents: feeCents || 0,
-          revision_limit: revisionLimit ?? 2,
-          gate_condition: gateCondition || null,
-          deliverables: deliverables || [],
-          sort_order: nextOrder,
-          duration_days: durationDays ?? null,
-          anchor_date: anchorDate ?? null,
-          follows_phase_id: followsPhaseId ?? null,
-          lane: lane ?? 'main',
-        })
-        .select()
-        .single();
+      const { data, error } = await supabase.rpc('create_proposal_phase', {
+        p_proposal_id: proposalId,
+        p_name: name,
+        p_phase_key: phaseKey ?? null,
+        p_duration_weeks: durationWeeks ?? null,
+        p_fee_cents: feeCents ?? 0,
+        p_revision_limit: revisionLimit ?? 2,
+        p_gate_condition: gateCondition ?? null,
+        p_deliverables: deliverables ?? [],
+        p_duration_days: durationDays ?? null,
+        p_anchor_date: anchorDate ?? null,
+        p_lane: lane ?? 'main',
+      });
       if (error) throw error;
-      // Phase fees count toward proposals.total_amount — keep it in step.
-      await updateProposalTotal(supabase, proposalId);
+      if (!data) throw new Error('Phase creation returned no row');
       return data;
     },
-    onSuccess: (_, { proposalId }) => {
+    onSuccess: async (_, { proposalId }) => {
       queryClient.invalidateQueries({ queryKey: ['proposal-phases', proposalId] });
       queryClient.invalidateQueries({ queryKey: ['scope-builder-summary', proposalId] });
       queryClient.invalidateQueries({ queryKey: ['proposal', proposalId] });
+      await invalidateProposalClientQueries(queryClient, proposalId);
     },
   });
 }
@@ -399,32 +398,35 @@ export function useAddProposalPhase() {
 export function useUpdateProposalPhase() {
   const queryClient = useQueryClient();
   return useMutation({
+    mutationKey: [PROPOSAL_CLIENT_MUTATION_KEY],
     mutationFn: async ({
       phaseId,
       proposalId,
       updates,
+      expectedUpdatedAt,
     }: {
       phaseId: string;
       proposalId: string;
       updates: Record<string, unknown>;
+      expectedUpdatedAt: string;
     }) => {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const supabase = getSupabase() as any;
-      const { data, error } = await supabase
-        .from('proposal_phases')
-        .update(updates)
-        .eq('id', phaseId)
-        .select()
-        .single();
+      const { data, error } = await supabase.rpc('update_proposal_phase', {
+        p_phase_id: phaseId,
+        p_proposal_id: proposalId,
+        p_patch: updates,
+        p_expected_updated_at: expectedUpdatedAt,
+      });
       if (error) throw error;
-      // A fee edit changes proposals.total_amount.
-      await updateProposalTotal(supabase, proposalId);
+      if (!data) throw new Error('Phase update returned no row');
       return data;
     },
-    onSuccess: (_, { proposalId }) => {
+    onSuccess: async (_, { proposalId }) => {
       queryClient.invalidateQueries({ queryKey: ['proposal-phases', proposalId] });
       queryClient.invalidateQueries({ queryKey: ['scope-builder-summary', proposalId] });
       queryClient.invalidateQueries({ queryKey: ['proposal', proposalId] });
+      await invalidateProposalClientQueries(queryClient, proposalId);
     },
   });
 }
@@ -432,18 +434,32 @@ export function useUpdateProposalPhase() {
 export function useRemoveProposalPhase() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: async ({ phaseId, proposalId }: { phaseId: string; proposalId: string }) => {
+    mutationKey: [PROPOSAL_CLIENT_MUTATION_KEY],
+    mutationFn: async ({
+      phaseId,
+      proposalId,
+      expectedUpdatedAt,
+    }: {
+      phaseId: string;
+      proposalId: string;
+      expectedUpdatedAt: string;
+    }) => {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const supabase = getSupabase() as any;
-      const { error } = await supabase.from('proposal_phases').delete().eq('id', phaseId);
+      const { data, error } = await supabase.rpc('remove_proposal_phase', {
+        p_phase_id: phaseId,
+        p_proposal_id: proposalId,
+        p_expected_updated_at: expectedUpdatedAt,
+      });
       if (error) throw error;
-      // Removing a phase drops its fee from proposals.total_amount.
-      await updateProposalTotal(supabase, proposalId);
+      if (!data) throw new Error('Phase removal returned no row');
+      return data;
     },
-    onSuccess: (_, { proposalId }) => {
+    onSuccess: async (_, { proposalId }) => {
       queryClient.invalidateQueries({ queryKey: ['proposal-phases', proposalId] });
       queryClient.invalidateQueries({ queryKey: ['scope-builder-summary', proposalId] });
       queryClient.invalidateQueries({ queryKey: ['proposal', proposalId] });
+      await invalidateProposalClientQueries(queryClient, proposalId);
     },
   });
 }
@@ -497,6 +513,7 @@ export function useProposalScheduleMilestones(proposalId: string | null | undefi
 export function useAddProposalScheduleMilestone() {
   const queryClient = useQueryClient();
   return useMutation({
+    mutationKey: [PROPOSAL_CLIENT_MUTATION_KEY],
     mutationFn: async ({
       phaseId,
       name,
@@ -537,9 +554,10 @@ export function useAddProposalScheduleMilestone() {
       if (error) throw error;
       return data;
     },
-    onSuccess: (_, { proposalId }) => {
+    onSuccess: async (_, { proposalId }) => {
       queryClient.invalidateQueries({ queryKey: ['proposal-schedule-milestones', proposalId] });
       queryClient.invalidateQueries({ queryKey: ['proposal', proposalId] });
+      await invalidateProposalClientQueries(queryClient, proposalId);
     },
   });
 }
@@ -547,6 +565,7 @@ export function useAddProposalScheduleMilestone() {
 export function useUpdateProposalScheduleMilestone() {
   const queryClient = useQueryClient();
   return useMutation({
+    mutationKey: [PROPOSAL_CLIENT_MUTATION_KEY],
     mutationFn: async ({
       milestoneId,
       updates,
@@ -567,9 +586,10 @@ export function useUpdateProposalScheduleMilestone() {
       if (error) throw error;
       return data;
     },
-    onSuccess: (_, { proposalId }) => {
+    onSuccess: async (_, { proposalId }) => {
       queryClient.invalidateQueries({ queryKey: ['proposal-schedule-milestones', proposalId] });
       queryClient.invalidateQueries({ queryKey: ['proposal', proposalId] });
+      await invalidateProposalClientQueries(queryClient, proposalId);
     },
   });
 }
@@ -577,6 +597,7 @@ export function useUpdateProposalScheduleMilestone() {
 export function useRemoveProposalScheduleMilestone() {
   const queryClient = useQueryClient();
   return useMutation({
+    mutationKey: [PROPOSAL_CLIENT_MUTATION_KEY],
     mutationFn: async ({
       milestoneId,
     }: {
@@ -589,9 +610,10 @@ export function useRemoveProposalScheduleMilestone() {
       const { error } = await supabase.from('proposal_schedule_milestones').delete().eq('id', milestoneId);
       if (error) throw error;
     },
-    onSuccess: (_, { proposalId }) => {
+    onSuccess: async (_, { proposalId }) => {
       queryClient.invalidateQueries({ queryKey: ['proposal-schedule-milestones', proposalId] });
       queryClient.invalidateQueries({ queryKey: ['proposal', proposalId] });
+      await invalidateProposalClientQueries(queryClient, proposalId);
     },
   });
 }
@@ -680,6 +702,7 @@ export function useProposalExclusions(proposalId: string) {
 export function useAddExclusion() {
   const queryClient = useQueryClient();
   return useMutation({
+    mutationKey: [PROPOSAL_CLIENT_MUTATION_KEY],
     mutationFn: async ({
       proposalId,
       description,
@@ -714,8 +737,9 @@ export function useAddExclusion() {
       if (error) throw error;
       return data;
     },
-    onSuccess: (_, { proposalId }) => {
+    onSuccess: async (_, { proposalId }) => {
       queryClient.invalidateQueries({ queryKey: ['proposal-exclusions', proposalId] });
+      await invalidateProposalClientQueries(queryClient, proposalId);
     },
   });
 }
@@ -723,14 +747,16 @@ export function useAddExclusion() {
 export function useRemoveExclusion() {
   const queryClient = useQueryClient();
   return useMutation({
+    mutationKey: [PROPOSAL_CLIENT_MUTATION_KEY],
     mutationFn: async ({ exclusionId, proposalId }: { exclusionId: string; proposalId: string }) => {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const supabase = getSupabase() as any;
       const { error } = await supabase.from('proposal_exclusions').delete().eq('id', exclusionId);
       if (error) throw error;
     },
-    onSuccess: (_, { proposalId }) => {
+    onSuccess: async (_, { proposalId }) => {
       queryClient.invalidateQueries({ queryKey: ['proposal-exclusions', proposalId] });
+      await invalidateProposalClientQueries(queryClient, proposalId);
     },
   });
 }
@@ -738,6 +764,18 @@ export function useRemoveExclusion() {
 // ═══════════════════════════════════════════════════════════════════════════
 // PAYMENT MILESTONES
 // ═══════════════════════════════════════════════════════════════════════════
+
+async function invalidateProposalPaymentSchedule(
+  queryClient: QueryClient,
+  proposalId: string,
+) {
+  await Promise.all([
+    queryClient.invalidateQueries({
+      queryKey: ['proposal-payment-milestones', proposalId],
+    }),
+    invalidateProposalClientQueries(queryClient, proposalId),
+  ]);
+}
 
 export function useProposalPaymentMilestones(proposalId: string) {
   return useQuery({
@@ -760,6 +798,7 @@ export function useProposalPaymentMilestones(proposalId: string) {
 export function useAddPaymentMilestone() {
   const queryClient = useQueryClient();
   return useMutation({
+    mutationKey: ['proposal-payment-schedule'],
     mutationFn: async ({
       proposalId,
       phaseId,
@@ -803,8 +842,8 @@ export function useAddPaymentMilestone() {
       if (error) throw error;
       return data;
     },
-    onSuccess: (_, { proposalId }) => {
-      queryClient.invalidateQueries({ queryKey: ['proposal-payment-milestones', proposalId] });
+    onSuccess: async (_, { proposalId }) => {
+      await invalidateProposalPaymentSchedule(queryClient, proposalId);
     },
   });
 }
@@ -812,6 +851,7 @@ export function useAddPaymentMilestone() {
 export function useUpdatePaymentMilestone() {
   const queryClient = useQueryClient();
   return useMutation({
+    mutationKey: ['proposal-payment-schedule'],
     mutationFn: async ({
       milestoneId,
       proposalId,
@@ -832,8 +872,8 @@ export function useUpdatePaymentMilestone() {
       if (error) throw error;
       return data;
     },
-    onSuccess: (_, { proposalId }) => {
-      queryClient.invalidateQueries({ queryKey: ['proposal-payment-milestones', proposalId] });
+    onSuccess: async (_, { proposalId }) => {
+      await invalidateProposalPaymentSchedule(queryClient, proposalId);
     },
   });
 }
@@ -841,14 +881,15 @@ export function useUpdatePaymentMilestone() {
 export function useRemovePaymentMilestone() {
   const queryClient = useQueryClient();
   return useMutation({
+    mutationKey: ['proposal-payment-schedule'],
     mutationFn: async ({ milestoneId, proposalId }: { milestoneId: string; proposalId: string }) => {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const supabase = getSupabase() as any;
       const { error } = await supabase.from('proposal_payment_milestones').delete().eq('id', milestoneId);
       if (error) throw error;
     },
-    onSuccess: (_, { proposalId }) => {
-      queryClient.invalidateQueries({ queryKey: ['proposal-payment-milestones', proposalId] });
+    onSuccess: async (_, { proposalId }) => {
+      await invalidateProposalPaymentSchedule(queryClient, proposalId);
     },
   });
 }
@@ -875,9 +916,15 @@ export function useProposalChangeOrderTerms(proposalId: string) {
   });
 }
 
-export function useUpsertChangeOrderTerms() {
+export function useUpsertChangeOrderTerms(options?: {
+  errorSurface?: 'inline';
+}) {
   const queryClient = useQueryClient();
   return useMutation({
+    mutationKey: [PROPOSAL_CLIENT_MUTATION_KEY],
+    meta: options?.errorSurface
+      ? { errorSurface: options.errorSurface }
+      : undefined,
     mutationFn: async ({
       proposalId,
       processDescription,
@@ -910,8 +957,9 @@ export function useUpsertChangeOrderTerms() {
       if (error) throw error;
       return data;
     },
-    onSuccess: (_, { proposalId }) => {
+    onSuccess: async (_, { proposalId }) => {
       queryClient.invalidateQueries({ queryKey: ['proposal-co-terms', proposalId] });
+      await invalidateProposalClientQueries(queryClient, proposalId);
     },
   });
 }

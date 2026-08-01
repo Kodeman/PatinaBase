@@ -2,9 +2,8 @@
 //  ProposalsMoneyRailTests.swift
 //  PatinaTests
 //
-//  Wave 2 / D.1: pins ProposalsAPIClient's decode paths against the portal
-//  wire shapes, the catalog-product fallback accessors, the sign-name guard,
-//  the sign-error mapping, and the proposal route names.
+//  Pins ProposalsAPIClient's client-safe RPC DTOs, immutable product snapshot
+//  fallbacks, raw-table read prohibition, sign guard, and route names.
 //
 
 import Testing
@@ -34,13 +33,18 @@ struct ProposalsMoneyRailTests {
           "updated_at": "2026-07-01T00:00:00Z", "version": 1,
           "signed_at": null, "signed_by_name": null, "accepted_at": null,
           "declined_at": null, "decline_reason": null,
-          "project": { "id": "proj-1", "name": "Downtown Loft" }
+          "project": { "id": "proj-1", "name": "Downtown Loft" },
+          "payment_milestones": [
+            { "id": "m1", "label": "Deposit", "percentage": 50,
+              "amount_cents": 625000, "sort_order": 0 }
+          ]
         }
         """
         let proposal = try decode(RemoteProposal.self, json)
         #expect(proposal.title == "Living Room Refresh")
         #expect(proposal.total_amount == 1_250_000)
         #expect(proposal.project?.name == "Downtown Loft")
+        #expect(proposal.payment_milestones?.first?.amount_cents == 625_000)
         #expect(proposal.isSignable)
         #expect(!proposal.isSigned)
     }
@@ -65,7 +69,7 @@ struct ProposalsMoneyRailTests {
         #expect(!proposal.isSignable)
     }
 
-    // MARK: - Item catalog-product fallback (00172 parity)
+    // MARK: - Immutable product snapshot fallback
 
     @Test
     func itemFallsBackToLinkedProduct() throws {
@@ -76,8 +80,10 @@ struct ProposalsMoneyRailTests {
           "category": null, "quantity": 2, "unit_sell_price": 50000,
           "line_total_cents": 100000, "vendor_name": null,
           "item_type": "fixed", "lead_time_weeks": 6, "position": 0,
-          "product": { "id": "pr1", "name": "Oak Chair",
-                       "images": ["https://x.test/a.jpg"], "brand": "Acme" }
+          "client_product_snapshot": {
+            "product_id": "pr1", "name": "Oak Chair",
+            "images": ["https://x.test/a.jpg"], "brand": "Acme"
+          }
         }
         """
         let item = try decode(RemoteProposalItem.self, json)
@@ -92,7 +98,10 @@ struct ProposalsMoneyRailTests {
         {
           "id": "i2", "name": "Custom Sofa", "image_url": "https://x.test/s.jpg",
           "vendor_name": "Studio", "quantity": 1, "line_total_cents": 200000,
-          "product": { "id": "p", "name": "Generic Sofa", "images": ["https://x.test/g.jpg"], "brand": "Other" }
+          "client_product_snapshot": {
+            "product_id": "p", "name": "Generic Sofa",
+            "images": ["https://x.test/g.jpg"], "brand": "Other"
+          }
         }
         """
         let item = try decode(RemoteProposalItem.self, json)
@@ -108,7 +117,7 @@ struct ProposalsMoneyRailTests {
         let json = """
         {
           "id": "b1", "name": "Palette", "cover_image_url": null, "sort_order": 0,
-          "proposal_board_items": [
+          "items": [
             { "type": "image", "image_url": "https://x.test/2.jpg", "z_index": 2 },
             { "type": "image", "image_url": "https://x.test/1.jpg", "z_index": 1 },
             { "type": "note", "image_url": null, "z_index": 0 }
@@ -125,7 +134,7 @@ struct ProposalsMoneyRailTests {
         let json = """
         {
           "id": "b2", "name": "Cover", "cover_image_url": "https://x.test/cover.jpg", "sort_order": 0,
-          "proposal_board_items": [
+          "items": [
             { "type": "image", "image_url": "https://x.test/1.jpg", "z_index": 1 }
           ]
         }
@@ -146,6 +155,86 @@ struct ProposalsMoneyRailTests {
         #expect(milestone.label == "Deposit")
         #expect(milestone.amount_cents == 625_000)
         #expect(milestone.percentage == 50)
+    }
+
+    @Test
+    func decodesAtomicClientSafeBundle() throws {
+        let json = """
+        {
+          "proposal": {
+            "id": "prop-1", "project_id": "proj-1", "status": "viewed",
+            "client_visibility_tier": "full",
+            "project": { "id": "proj-1", "name": "Downtown Loft" },
+            "items": [{
+              "id": "i1", "proposal_id": "prop-1", "name": "Oak Chair",
+              "quantity": 1, "unit_sell_price": 50000,
+              "line_total_cents": 50000, "position": 0,
+              "client_product_snapshot": {
+                "product_id": "pr1", "name": "Oak Chair",
+                "images": ["https://x.test/chair.jpg"]
+              }
+            }]
+          },
+          "sections": [{
+            "id": "s1", "proposal_id": "prop-1", "type": "overview",
+            "title": "Overview", "body": "A calm room", "sort_order": 0
+          }],
+          "payment_milestones": [{
+            "id": "m1", "proposal_id": "prop-1", "label": "Deposit",
+            "percentage": 50, "amount_cents": 25000, "sort_order": 0
+          }],
+          "phases": [{
+            "id": "ph1", "proposal_id": "prop-1", "name": "Design",
+            "duration_weeks": 4, "sort_order": 0
+          }],
+          "exclusions": [],
+          "scope_rooms": [{
+            "id": "r1", "proposal_id": "prop-1", "name": "Living Room",
+            "room_type": "living_room", "budget_cents": 50000, "sort_order": 0
+          }],
+          "boards": [{
+            "id": "b1", "name": "Palette", "sort_order": 0,
+            "cover_image_url": "https://x.test/cover.jpg", "items": [{
+              "id": "bi1", "type": "image", "image_url": "https://x.test/chair.jpg",
+              "z_index": 1
+            }]
+          }]
+        }
+        """
+        let bundle = try decode(RemoteProposalBundle.self, json)
+        #expect(bundle.proposal.status == "viewed")
+        #expect(bundle.proposal.project?.name == "Downtown Loft")
+        #expect(bundle.proposal.items?.first?.resolvedName == "Oak Chair")
+        #expect(bundle.payment_milestones.first?.amount_cents == 25_000)
+        #expect(bundle.boards.first?.thumbnailURLs.map(\.absoluteString) == [
+            "https://x.test/cover.jpg", "https://x.test/chair.jpg"
+        ])
+    }
+
+    // MARK: - Client-safe read boundary
+
+    @Test("proposal reads use only the client-safe RPC boundary")
+    func proposalReadsNeverReturnToRawTables() throws {
+        let sourceURL = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent() // PatinaTests
+            .deletingLastPathComponent() // Patina project directory
+            .appendingPathComponent("Patina/Services/API/ProposalsAPIClient.swift")
+        let source = try String(contentsOf: sourceURL, encoding: .utf8)
+        #expect(source.contains("static let listReadRPC = \"list_client_proposals\""))
+        #expect(source.contains("static let detailReadRPC = \"get_client_proposal_bundle\""))
+
+        let uncommented = source.split(separator: "\n")
+            .filter { !$0.trimmingCharacters(in: .whitespaces).hasPrefix("//") }
+            .joined(separator: "\n")
+        let authoredRelations = [
+            "proposals", "proposal_items", "proposal_sections", "proposal_phases",
+            "proposal_payment_milestones", "proposal_exclusions", "proposal_scope_rooms",
+            "proposal_boards", "proposal_board_items", "products"
+        ]
+        for relation in authoredRelations {
+            #expect(!uncommented.contains(".from(\"\(relation)\")"),
+                    "raw client proposal read returned for \(relation)")
+        }
     }
 
     // MARK: - Sign guard + error mapping

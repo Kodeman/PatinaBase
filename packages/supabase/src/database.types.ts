@@ -6398,6 +6398,79 @@ export type Database = {
           },
         ]
       }
+      invoice_checkout_attempts: {
+        Row: {
+          amount_cents: number
+          created_at: string
+          currency: string
+          failure_reason: string | null
+          finalized_at: string | null
+          id: string
+          invoice_id: string
+          payer_id: string
+          state: string
+          stripe_checkout_session_id: string | null
+          stripe_customer_id: string
+          stripe_idempotency_key: string
+          stripe_payment_intent_id: string | null
+          updated_at: string
+        }
+        Insert: {
+          amount_cents: number
+          created_at?: string
+          currency: string
+          failure_reason?: string | null
+          finalized_at?: string | null
+          id?: string
+          invoice_id: string
+          payer_id: string
+          state?: string
+          stripe_checkout_session_id?: string | null
+          stripe_customer_id: string
+          stripe_idempotency_key: string
+          stripe_payment_intent_id?: string | null
+          updated_at?: string
+        }
+        Update: {
+          amount_cents?: number
+          created_at?: string
+          currency?: string
+          failure_reason?: string | null
+          finalized_at?: string | null
+          id?: string
+          invoice_id?: string
+          payer_id?: string
+          state?: string
+          stripe_checkout_session_id?: string | null
+          stripe_customer_id?: string
+          stripe_idempotency_key?: string
+          stripe_payment_intent_id?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "invoice_checkout_attempts_invoice_id_fkey"
+            columns: ["invoice_id"]
+            isOneToOne: false
+            referencedRelation: "invoices"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "invoice_checkout_attempts_payer_id_fkey"
+            columns: ["payer_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "invoice_checkout_attempts_payer_id_fkey"
+            columns: ["payer_id"]
+            isOneToOne: false
+            referencedRelation: "user_engagement_scores"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       invoice_counters: {
         Row: {
           designer_id: string
@@ -6498,6 +6571,7 @@ export type Database = {
       invoice_payments: {
         Row: {
           amount_cents: number
+          checkout_attempt_id: string | null
           created_at: string
           id: string
           invoice_id: string
@@ -6514,6 +6588,7 @@ export type Database = {
         }
         Insert: {
           amount_cents: number
+          checkout_attempt_id?: string | null
           created_at?: string
           id?: string
           invoice_id: string
@@ -6530,6 +6605,7 @@ export type Database = {
         }
         Update: {
           amount_cents?: number
+          checkout_attempt_id?: string | null
           created_at?: string
           id?: string
           invoice_id?: string
@@ -6545,6 +6621,13 @@ export type Database = {
           updated_at?: string
         }
         Relationships: [
+          {
+            foreignKeyName: "invoice_payments_checkout_attempt_id_fkey"
+            columns: ["checkout_attempt_id"]
+            isOneToOne: false
+            referencedRelation: "invoice_checkout_attempts"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "invoice_payments_invoice_id_fkey"
             columns: ["invoice_id"]
@@ -10991,6 +11074,48 @@ export type Database = {
           },
         ]
       }
+      project_phase_topology_diagnostics: {
+        Row: {
+          details: Json
+          detected_at: string
+          diagnostic_code: string
+          id: string
+          phase_ids: string[]
+          project_id: string
+        }
+        Insert: {
+          details?: Json
+          detected_at?: string
+          diagnostic_code: string
+          id?: string
+          phase_ids?: string[]
+          project_id: string
+        }
+        Update: {
+          details?: Json
+          detected_at?: string
+          diagnostic_code?: string
+          id?: string
+          phase_ids?: string[]
+          project_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "project_phase_topology_diagnostics_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "field_activity_summary"
+            referencedColumns: ["project_id"]
+          },
+          {
+            foreignKeyName: "project_phase_topology_diagnostics_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       project_phases: {
         Row: {
           anchor_date: string | null
@@ -12406,6 +12531,7 @@ export type Database = {
           budget_max_cents: number | null
           budget_min_cents: number | null
           category: string | null
+          client_product_snapshot: Json
           created_at: string
           custom_fields: Json
           description: string | null
@@ -12436,6 +12562,7 @@ export type Database = {
           budget_max_cents?: number | null
           budget_min_cents?: number | null
           category?: string | null
+          client_product_snapshot?: Json
           created_at?: string
           custom_fields?: Json
           description?: string | null
@@ -12466,6 +12593,7 @@ export type Database = {
           budget_max_cents?: number | null
           budget_min_cents?: number | null
           category?: string | null
+          client_product_snapshot?: Json
           created_at?: string
           custom_fields?: Json
           description?: string | null
@@ -12778,6 +12906,76 @@ export type Database = {
           },
         ]
       }
+      proposal_phase_template_applications: {
+        Row: {
+          created_at: string
+          created_by: string
+          effect_snapshot: Json
+          phase_ids: string[]
+          proposal_id: string
+          request_id: string
+          template_slug: string
+        }
+        Insert: {
+          created_at?: string
+          created_by: string
+          effect_snapshot?: Json
+          phase_ids?: string[]
+          proposal_id: string
+          request_id: string
+          template_slug: string
+        }
+        Update: {
+          created_at?: string
+          created_by?: string
+          effect_snapshot?: Json
+          phase_ids?: string[]
+          proposal_id?: string
+          request_id?: string
+          template_slug?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "proposal_phase_template_applications_proposal_id_fkey"
+            columns: ["proposal_id"]
+            isOneToOne: false
+            referencedRelation: "proposals"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      proposal_phase_topology_diagnostics: {
+        Row: {
+          detail: Json
+          detected_at: string
+          issue_code: string
+          phase_count: number
+          proposal_id: string
+        }
+        Insert: {
+          detail?: Json
+          detected_at?: string
+          issue_code: string
+          phase_count: number
+          proposal_id: string
+        }
+        Update: {
+          detail?: Json
+          detected_at?: string
+          issue_code?: string
+          phase_count?: number
+          proposal_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "proposal_phase_topology_diagnostics_proposal_id_fkey"
+            columns: ["proposal_id"]
+            isOneToOne: true
+            referencedRelation: "proposals"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       proposal_phases: {
         Row: {
           anchor_date: string | null
@@ -13005,6 +13203,143 @@ export type Database = {
           },
         ]
       }
+      proposal_send_dispatches: {
+        Row: {
+          cc_email: string | null
+          claim_token: string | null
+          claimed_from_state: string | null
+          client_id: string
+          client_portal_path: string
+          created_at: string
+          delivered_at: string | null
+          designer_id: string
+          designer_name: string
+          email_log_id: string
+          id: string
+          in_app_log_id: string
+          last_error: string | null
+          lease_expires_at: string | null
+          personal_message: string | null
+          project_id: string | null
+          proposal_id: string
+          proposal_title: string
+          provider_attempt_count: number
+          provider_cc: string[] | null
+          provider_dry_run: boolean | null
+          provider_from: string | null
+          provider_id: string | null
+          provider_idempotency_key: string
+          provider_request_body: string | null
+          provider_started_at: string | null
+          provider_subject: string | null
+          provider_to: string[] | null
+          recipient_email: string
+          recipient_name: string | null
+          request_persisted_at: string | null
+          retry_deadline: string | null
+          sender_name: string
+          sent_at: string
+          state: string
+          studio_logo_url: string | null
+          studio_name: string | null
+          total_amount: number | null
+          updated_at: string
+          valid_until: string | null
+        }
+        Insert: {
+          cc_email?: string | null
+          claim_token?: string | null
+          claimed_from_state?: string | null
+          client_id: string
+          client_portal_path: string
+          created_at?: string
+          delivered_at?: string | null
+          designer_id: string
+          designer_name: string
+          email_log_id: string
+          id: string
+          in_app_log_id: string
+          last_error?: string | null
+          lease_expires_at?: string | null
+          personal_message?: string | null
+          project_id?: string | null
+          proposal_id: string
+          proposal_title: string
+          provider_attempt_count?: number
+          provider_cc?: string[] | null
+          provider_dry_run?: boolean | null
+          provider_from?: string | null
+          provider_id?: string | null
+          provider_idempotency_key: string
+          provider_request_body?: string | null
+          provider_started_at?: string | null
+          provider_subject?: string | null
+          provider_to?: string[] | null
+          recipient_email: string
+          recipient_name?: string | null
+          request_persisted_at?: string | null
+          retry_deadline?: string | null
+          sender_name: string
+          sent_at: string
+          state?: string
+          studio_logo_url?: string | null
+          studio_name?: string | null
+          total_amount?: number | null
+          updated_at?: string
+          valid_until?: string | null
+        }
+        Update: {
+          cc_email?: string | null
+          claim_token?: string | null
+          claimed_from_state?: string | null
+          client_id?: string
+          client_portal_path?: string
+          created_at?: string
+          delivered_at?: string | null
+          designer_id?: string
+          designer_name?: string
+          email_log_id?: string
+          id?: string
+          in_app_log_id?: string
+          last_error?: string | null
+          lease_expires_at?: string | null
+          personal_message?: string | null
+          project_id?: string | null
+          proposal_id?: string
+          proposal_title?: string
+          provider_attempt_count?: number
+          provider_cc?: string[] | null
+          provider_dry_run?: boolean | null
+          provider_from?: string | null
+          provider_id?: string | null
+          provider_idempotency_key?: string
+          provider_request_body?: string | null
+          provider_started_at?: string | null
+          provider_subject?: string | null
+          provider_to?: string[] | null
+          recipient_email?: string
+          recipient_name?: string | null
+          request_persisted_at?: string | null
+          retry_deadline?: string | null
+          sender_name?: string
+          sent_at?: string
+          state?: string
+          studio_logo_url?: string | null
+          studio_name?: string | null
+          total_amount?: number | null
+          updated_at?: string
+          valid_until?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "proposal_send_dispatches_proposal_id_fkey"
+            columns: ["proposal_id"]
+            isOneToOne: true
+            referencedRelation: "proposals"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       proposal_team_members: {
         Row: {
           created_at: string
@@ -13135,6 +13470,7 @@ export type Database = {
           personal_message: string | null
           project_address: string | null
           project_id: string | null
+          proposal_send_dispatch_id: string | null
           revision_summary: string | null
           sent_at: string | null
           signed_at: string | null
@@ -13178,6 +13514,7 @@ export type Database = {
           personal_message?: string | null
           project_address?: string | null
           project_id?: string | null
+          proposal_send_dispatch_id?: string | null
           revision_summary?: string | null
           sent_at?: string | null
           signed_at?: string | null
@@ -13221,6 +13558,7 @@ export type Database = {
           personal_message?: string | null
           project_address?: string | null
           project_id?: string | null
+          proposal_send_dispatch_id?: string | null
           revision_summary?: string | null
           sent_at?: string | null
           signed_at?: string | null
@@ -13294,6 +13632,13 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "projects"
             referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "proposals_send_dispatch_exact_fk"
+            columns: ["id", "proposal_send_dispatch_id"]
+            isOneToOne: false
+            referencedRelation: "proposal_send_dispatches"
+            referencedColumns: ["proposal_id", "id"]
           },
           {
             foreignKeyName: "proposals_template_id_fkey"
@@ -15231,6 +15576,7 @@ export type Database = {
           original_spec: Json | null
           project_id: string
           proposal_id: string | null
+          request_origin: string
           requested_by: string
           requested_change: Json | null
           sent_at: string | null
@@ -15263,6 +15609,7 @@ export type Database = {
           original_spec?: Json | null
           project_id: string
           proposal_id?: string | null
+          request_origin?: string
           requested_by: string
           requested_change?: Json | null
           sent_at?: string | null
@@ -15295,6 +15642,7 @@ export type Database = {
           original_spec?: Json | null
           project_id?: string
           proposal_id?: string | null
+          request_origin?: string
           requested_by?: string
           requested_change?: Json | null
           sent_at?: string | null
@@ -20713,6 +21061,18 @@ export type Database = {
       }
     }
     Functions: {
+      _accept_design_request_profile_bound_core: {
+        Args: { p_lead_id: string }
+        Returns: Json
+      }
+      _activate_proposal_as_project_authorized: {
+        Args: { p_proposal_id: string; p_start_date?: string }
+        Returns: string
+      }
+      _activate_proposal_as_project_impl: {
+        Args: { p_proposal_id: string; p_start_date?: string }
+        Returns: string
+      }
       _ae_pick_why_phrase: {
         Args: { p_band: string; p_seed: string; p_term: string }
         Returns: string
@@ -20803,8 +21163,337 @@ export type Database = {
         Returns: number[]
       }
       _aesthete_utilization: { Args: { p_ratio: number }; Returns: number }
+      _apply_client_decision_authorized: {
+        Args: {
+          p_actor: string
+          p_client_consent_method?: string
+          p_client_note?: string
+          p_client_signature?: string
+          p_decision_id: string
+          p_quantity?: number
+          p_selected_option_id: string
+        }
+        Returns: {
+          answer: string | null
+          answered_at: string | null
+          answered_by: string | null
+          blocking_status: string
+          blocks_kind: string
+          blocks_milestone_id: string | null
+          client_consent_method: string | null
+          client_consented_at: string | null
+          client_signature: string | null
+          context: string | null
+          coordination_kind: string
+          court: string
+          court_party_id: string | null
+          created_at: string
+          decision_kind: string
+          decision_type: string
+          designer_client_id: string
+          designer_id: string
+          due_date: string | null
+          id: string
+          linked_phase: string | null
+          linked_proposal_id: string | null
+          phase_id: string | null
+          project_id: string | null
+          recommended_option_id: string | null
+          reminder_sent_at: string | null
+          responded_at: string | null
+          room_id: string | null
+          section_key: string | null
+          selected_by: string | null
+          sent_at: string | null
+          status: string
+          title: string
+          updated_at: string
+          viewed_at: string | null
+        }
+        SetofOptions: {
+          from: "*"
+          to: "client_decisions"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
+      _apply_field_effect_legacy_00399: {
+        Args: {
+          p_effect: Json
+          p_party_id: string
+          p_sms_message_id?: string
+          p_source?: string
+        }
+        Returns: Json
+      }
+      _assert_project_phase_topology: {
+        Args: { p_context: string; p_project_id: string }
+        Returns: undefined
+      }
+      _assert_proposal_phase_topology: {
+        Args: { p_context: string; p_proposal_id: string }
+        Returns: undefined
+      }
+      _can_author_proposal: { Args: { p_owner: string }; Returns: boolean }
+      _can_manage_invoice_owner: { Args: { p_owner: string }; Returns: boolean }
+      _can_record_proposal_engagement: {
+        Args: {
+          p_event_type: string
+          p_proposal_id: string
+          p_viewer_id: string
+        }
+        Returns: boolean
+      }
+      _clone_proposal_legacy_00399: {
+        Args: {
+          p_mode?: string
+          p_revision_summary?: string
+          p_source_id: string
+        }
+        Returns: string
+      }
+      _commit_proposal_send: {
+        Args: {
+          p_cc_email?: string
+          p_expected_schedule_fingerprint: string
+          p_expected_total_amount: number
+          p_expected_updated_at: string
+          p_personal_message?: string
+          p_proposal_id: string
+          p_valid_until?: string
+        }
+        Returns: {
+          accepted_at: string | null
+          cc_email: string | null
+          client_feedback: string | null
+          client_id: string | null
+          client_visibility_tier: string | null
+          cover_image: string | null
+          created_at: string
+          decline_reason: string | null
+          declined_at: string | null
+          deposit_percent: number | null
+          description: string | null
+          designer_client_id: string | null
+          designer_id: string
+          discount_amount: number | null
+          discount_percent: number | null
+          feedback_enabled: boolean
+          id: string
+          last_nudged_at: string | null
+          nudge_count: number
+          parent_proposal_id: string | null
+          payment_notes: string | null
+          payment_terms: string | null
+          personal_message: string | null
+          project_address: string | null
+          project_id: string | null
+          proposal_send_dispatch_id: string | null
+          revision_summary: string | null
+          sent_at: string | null
+          signed_at: string | null
+          signed_by_name: string | null
+          signed_ip: string | null
+          status: string
+          subtotal: number | null
+          tax_amount: number | null
+          tax_rate: number | null
+          template_id: string | null
+          title: string
+          total_amount: number | null
+          updated_at: string
+          valid_until: string | null
+          version: number | null
+          viewed_at: string | null
+        }
+        SetofOptions: {
+          from: "*"
+          to: "proposals"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
       _compute_quiz_profile: { Args: { p_answers: Json }; Returns: Json }
+      _decline_proposal_impl: {
+        Args: { p_proposal_id: string; p_reason?: string }
+        Returns: {
+          accepted_at: string | null
+          cc_email: string | null
+          client_feedback: string | null
+          client_id: string | null
+          client_visibility_tier: string | null
+          cover_image: string | null
+          created_at: string
+          decline_reason: string | null
+          declined_at: string | null
+          deposit_percent: number | null
+          description: string | null
+          designer_client_id: string | null
+          designer_id: string
+          discount_amount: number | null
+          discount_percent: number | null
+          feedback_enabled: boolean
+          id: string
+          last_nudged_at: string | null
+          nudge_count: number
+          parent_proposal_id: string | null
+          payment_notes: string | null
+          payment_terms: string | null
+          personal_message: string | null
+          project_address: string | null
+          project_id: string | null
+          proposal_send_dispatch_id: string | null
+          revision_summary: string | null
+          sent_at: string | null
+          signed_at: string | null
+          signed_by_name: string | null
+          signed_ip: string | null
+          status: string
+          subtotal: number | null
+          tax_amount: number | null
+          tax_rate: number | null
+          template_id: string | null
+          title: string
+          total_amount: number | null
+          updated_at: string
+          valid_until: string | null
+          version: number | null
+          viewed_at: string | null
+        }
+        SetofOptions: {
+          from: "*"
+          to: "proposals"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
+      _enqueue_decision_notification: {
+        Args: {
+          p_decision_id: string
+          p_kind: Database["public"]["Enums"]["decision_notification_kind"]
+        }
+        Returns: string
+      }
+      _issue_invoice_authorized_legacy_00397: {
+        Args: { p_due_date?: string; p_invoice_id: string }
+        Returns: {
+          amount_paid_cents: number
+          ar_flagged_at: string | null
+          ar_last_chased_at: string | null
+          client_id: string | null
+          created_at: string
+          currency: string
+          designer_id: string
+          due_date: string | null
+          id: string
+          internal_notes: string | null
+          invoice_number: string | null
+          issue_date: string | null
+          last_reminder_at: string | null
+          memo: string | null
+          paid_at: string | null
+          payment_terms_days: number
+          project_id: string
+          reminder_count: number
+          sent_at: string | null
+          status: string
+          stripe_checkout_session_id: string | null
+          studio_id: string | null
+          subtotal_cents: number
+          tax_cents: number
+          tax_rate: number
+          total_cents: number
+          updated_at: string
+          void_reason: string | null
+          voided_at: string | null
+        }
+        SetofOptions: {
+          from: "*"
+          to: "invoices"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
+      _item_feedback_gate_impl: {
+        Args: {
+          p_board_item_id: string
+          p_ffe_item_id: string
+          p_proposal_item_id: string
+        }
+        Returns: {
+          client_id: string
+          designer_id: string
+          feedback_enabled: boolean
+          proposal_id: string
+          status: string
+        }[]
+      }
+      _mark_proposal_viewed_impl: {
+        Args: { p_proposal_id: string }
+        Returns: {
+          accepted_at: string | null
+          cc_email: string | null
+          client_feedback: string | null
+          client_id: string | null
+          client_visibility_tier: string | null
+          cover_image: string | null
+          created_at: string
+          decline_reason: string | null
+          declined_at: string | null
+          deposit_percent: number | null
+          description: string | null
+          designer_client_id: string | null
+          designer_id: string
+          discount_amount: number | null
+          discount_percent: number | null
+          feedback_enabled: boolean
+          id: string
+          last_nudged_at: string | null
+          nudge_count: number
+          parent_proposal_id: string | null
+          payment_notes: string | null
+          payment_terms: string | null
+          personal_message: string | null
+          project_address: string | null
+          project_id: string | null
+          proposal_send_dispatch_id: string | null
+          revision_summary: string | null
+          sent_at: string | null
+          signed_at: string | null
+          signed_by_name: string | null
+          signed_ip: string | null
+          status: string
+          subtotal: number | null
+          tax_amount: number | null
+          tax_rate: number | null
+          template_id: string | null
+          title: string
+          total_amount: number | null
+          updated_at: string
+          valid_until: string | null
+          version: number | null
+          viewed_at: string | null
+        }
+        SetofOptions: {
+          from: "*"
+          to: "proposals"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
       _primary_studio_for: { Args: { p_user: string }; Returns: string }
+      _proposal_phase_effect_snapshot: {
+        Args: { p_phase_ids: string[]; p_proposal_id: string }
+        Returns: Json
+      }
+      _proposal_phase_main_tail: {
+        Args: { p_context: string; p_proposal_id: string }
+        Returns: string
+      }
+      _proposal_review_fingerprint: {
+        Args: { p_proposal_id: string }
+        Returns: string
+      }
       _provision_studio: {
         Args: { p_name: string; p_user_id: string }
         Returns: {
@@ -20834,6 +21523,174 @@ export type Database = {
           isOneToOne: true
           isSetofReturn: false
         }
+      }
+      _recompute_proposal_total_locked: {
+        Args: { p_proposal_id: string }
+        Returns: number
+      }
+      _record_invoice_payment_authorized_legacy_00397: {
+        Args: {
+          p_amount_cents: number
+          p_invoice_id: string
+          p_method: string
+          p_note?: string
+          p_received_at?: string
+          p_reference?: string
+        }
+        Returns: {
+          amount_cents: number
+          checkout_attempt_id: string | null
+          created_at: string
+          id: string
+          invoice_id: string
+          method: string
+          note: string | null
+          received_at: string | null
+          recorded_by: string | null
+          reference: string | null
+          status: string
+          stripe_checkout_session_id: string | null
+          stripe_event_id: string | null
+          stripe_payment_intent_id: string | null
+          updated_at: string
+        }
+        SetofOptions: {
+          from: "*"
+          to: "invoice_payments"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
+      _repair_legacy_proposal_phase_topology: {
+        Args: { p_proposal_id: string }
+        Returns: boolean
+      }
+      _resolve_coordination_item_authorized: {
+        Args: {
+          p_actor?: string
+          p_answer?: string
+          p_item_id: string
+          p_next_court?: string
+          p_revision_id?: string
+          p_selected_option_id?: string
+        }
+        Returns: {
+          answer: string | null
+          answered_at: string | null
+          answered_by: string | null
+          blocking_status: string
+          blocks_kind: string
+          blocks_milestone_id: string | null
+          client_consent_method: string | null
+          client_consented_at: string | null
+          client_signature: string | null
+          context: string | null
+          coordination_kind: string
+          court: string
+          court_party_id: string | null
+          created_at: string
+          decision_kind: string
+          decision_type: string
+          designer_client_id: string
+          designer_id: string
+          due_date: string | null
+          id: string
+          linked_phase: string | null
+          linked_proposal_id: string | null
+          phase_id: string | null
+          project_id: string | null
+          recommended_option_id: string | null
+          reminder_sent_at: string | null
+          responded_at: string | null
+          room_id: string | null
+          section_key: string | null
+          selected_by: string | null
+          sent_at: string | null
+          status: string
+          title: string
+          updated_at: string
+          viewed_at: string | null
+        }
+        SetofOptions: {
+          from: "*"
+          to: "client_decisions"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
+      _scope_change_requester_can_author: {
+        Args: { p_actor: string; p_owner: string }
+        Returns: boolean
+      }
+      _send_proposal_with_dispatch: {
+        Args: {
+          p_cc_email?: string
+          p_expected_schedule_fingerprint: string
+          p_expected_total_amount: number
+          p_expected_updated_at: string
+          p_personal_message?: string
+          p_proposal_id: string
+          p_valid_until?: string
+        }
+        Returns: {
+          accepted_at: string | null
+          cc_email: string | null
+          client_feedback: string | null
+          client_id: string | null
+          client_visibility_tier: string | null
+          cover_image: string | null
+          created_at: string
+          decline_reason: string | null
+          declined_at: string | null
+          deposit_percent: number | null
+          description: string | null
+          designer_client_id: string | null
+          designer_id: string
+          discount_amount: number | null
+          discount_percent: number | null
+          feedback_enabled: boolean
+          id: string
+          last_nudged_at: string | null
+          nudge_count: number
+          parent_proposal_id: string | null
+          payment_notes: string | null
+          payment_terms: string | null
+          personal_message: string | null
+          project_address: string | null
+          project_id: string | null
+          proposal_send_dispatch_id: string | null
+          revision_summary: string | null
+          sent_at: string | null
+          signed_at: string | null
+          signed_by_name: string | null
+          signed_ip: string | null
+          status: string
+          subtotal: number | null
+          tax_amount: number | null
+          tax_rate: number | null
+          template_id: string | null
+          title: string
+          total_amount: number | null
+          updated_at: string
+          valid_until: string | null
+          version: number | null
+          viewed_at: string | null
+        }
+        SetofOptions: {
+          from: "*"
+          to: "proposals"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
+      _sign_proposal_authorized_00400: {
+        Args: {
+          p_client_id: string
+          p_proposal_id: string
+          p_signed_name: string
+          p_trusted_signed_ip?: string
+        }
+        Returns: Json
       }
       _site_request_append_event: {
         Args: {
@@ -20929,6 +21786,54 @@ export type Database = {
         }
         Returns: Json
       }
+      _sync_proposal_send_email_log: {
+        Args: { p_dispatch_id: string }
+        Returns: undefined
+      }
+      _void_invoice_authorized_legacy_00397: {
+        Args: { p_invoice_id: string; p_reason: string }
+        Returns: {
+          amount_paid_cents: number
+          ar_flagged_at: string | null
+          ar_last_chased_at: string | null
+          client_id: string | null
+          created_at: string
+          currency: string
+          designer_id: string
+          due_date: string | null
+          id: string
+          internal_notes: string | null
+          invoice_number: string | null
+          issue_date: string | null
+          last_reminder_at: string | null
+          memo: string | null
+          paid_at: string | null
+          payment_terms_days: number
+          project_id: string
+          reminder_count: number
+          sent_at: string | null
+          status: string
+          stripe_checkout_session_id: string | null
+          studio_id: string | null
+          subtotal_cents: number
+          tax_cents: number
+          tax_rate: number
+          total_cents: number
+          updated_at: string
+          void_reason: string | null
+          voided_at: string | null
+        }
+        SetofOptions: {
+          from: "*"
+          to: "invoices"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
+      accept_client_scope_change_request: {
+        Args: { p_project_id: string; p_request_id: string }
+        Returns: Json
+      }
       accept_design_request: { Args: { p_lead_id: string }; Returns: Json }
       accept_workspace_invitation: {
         Args: { p_token: string }
@@ -20950,6 +21855,14 @@ export type Database = {
           p_id: string
           p_note?: string
           p_to_stage: string
+        }
+        Returns: Json
+      }
+      advance_project_phase: {
+        Args: {
+          p_expected_status: string
+          p_phase_id: string
+          p_project_id: string
         }
         Returns: Json
       }
@@ -20986,6 +21899,59 @@ export type Database = {
         Returns: undefined
       }
       app_setting: { Args: { p_name: string }; Returns: string }
+      apply_client_decision: {
+        Args: {
+          p_client_consent_method?: string
+          p_client_note?: string
+          p_client_signature?: string
+          p_decision_id: string
+          p_quantity?: number
+          p_selected_option_id: string
+        }
+        Returns: {
+          answer: string | null
+          answered_at: string | null
+          answered_by: string | null
+          blocking_status: string
+          blocks_kind: string
+          blocks_milestone_id: string | null
+          client_consent_method: string | null
+          client_consented_at: string | null
+          client_signature: string | null
+          context: string | null
+          coordination_kind: string
+          court: string
+          court_party_id: string | null
+          created_at: string
+          decision_kind: string
+          decision_type: string
+          designer_client_id: string
+          designer_id: string
+          due_date: string | null
+          id: string
+          linked_phase: string | null
+          linked_proposal_id: string | null
+          phase_id: string | null
+          project_id: string | null
+          recommended_option_id: string | null
+          reminder_sent_at: string | null
+          responded_at: string | null
+          room_id: string | null
+          section_key: string | null
+          selected_by: string | null
+          sent_at: string | null
+          status: string
+          title: string
+          updated_at: string
+          viewed_at: string | null
+        }
+        SetofOptions: {
+          from: "*"
+          to: "client_decisions"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
       apply_decision: {
         Args: {
           p_decision_id: string
@@ -20993,6 +21959,57 @@ export type Database = {
           p_selected_option_id: string
         }
         Returns: undefined
+      }
+      apply_decision_override: {
+        Args: {
+          p_consent_evidence: string
+          p_consent_method: string
+          p_decision_id: string
+          p_selected_option_id: string
+        }
+        Returns: {
+          answer: string | null
+          answered_at: string | null
+          answered_by: string | null
+          blocking_status: string
+          blocks_kind: string
+          blocks_milestone_id: string | null
+          client_consent_method: string | null
+          client_consented_at: string | null
+          client_signature: string | null
+          context: string | null
+          coordination_kind: string
+          court: string
+          court_party_id: string | null
+          created_at: string
+          decision_kind: string
+          decision_type: string
+          designer_client_id: string
+          designer_id: string
+          due_date: string | null
+          id: string
+          linked_phase: string | null
+          linked_proposal_id: string | null
+          phase_id: string | null
+          project_id: string | null
+          recommended_option_id: string | null
+          reminder_sent_at: string | null
+          responded_at: string | null
+          room_id: string | null
+          section_key: string | null
+          selected_by: string | null
+          sent_at: string | null
+          status: string
+          title: string
+          updated_at: string
+          viewed_at: string | null
+        }
+        SetofOptions: {
+          from: "*"
+          to: "client_decisions"
+          isOneToOne: true
+          isSetofReturn: false
+        }
       }
       apply_designer_reliability: {
         Args: {
@@ -21016,10 +22033,19 @@ export type Database = {
         Args: { p_invoice_id: string }
         Returns: undefined
       }
-      apply_phase_template: {
-        Args: { p_proposal_id: string; p_template_slug: string }
-        Returns: string[]
-      }
+      apply_phase_template:
+        | {
+            Args: { p_proposal_id: string; p_template_slug: string }
+            Returns: string[]
+          }
+        | {
+            Args: {
+              p_proposal_id: string
+              p_request_id: string
+              p_template_slug: string
+            }
+            Returns: string[]
+          }
       apply_scope_change: { Args: { p_request_id: string }; Returns: undefined }
       apply_starvation_decay: { Args: never; Returns: Json }
       apply_taste_refit: {
@@ -21030,6 +22056,82 @@ export type Database = {
           p_watermark: string
         }
         Returns: Json
+      }
+      approve_scope_change_request: {
+        Args: {
+          p_approved_by_name: string
+          p_approved_ip?: string
+          p_project_id: string
+          p_request_id: string
+        }
+        Returns: Json
+      }
+      archive_project: {
+        Args: {
+          p_expected_status: Database["public"]["Enums"]["project_status"]
+          p_project_id: string
+        }
+        Returns: {
+          actual_cents: number | null
+          brief_document_url: string | null
+          budget_cents: number | null
+          budget_max: number | null
+          budget_min: number | null
+          change_order_terms: Json | null
+          client_id: string | null
+          client_profile_id: string | null
+          client_visibility_tier: string
+          closure_checklist: Json | null
+          committed_cents: number | null
+          completed_at: string | null
+          created_at: string | null
+          created_by: string
+          current_phase: string | null
+          design_fee_cents: number | null
+          designer_id: string | null
+          expected_completion_date: string | null
+          id: string
+          kickoff_date: string | null
+          kickoff_message: string | null
+          lead_designer_id: string | null
+          name: string
+          notes: string | null
+          portfolio_snapshot: Json | null
+          proposal_id: string | null
+          scope_boundaries: Json | null
+          share_token: string | null
+          site_address: string | null
+          start_date: string | null
+          status: Database["public"]["Enums"]["project_status"] | null
+          studio_id: string | null
+          target_end_date: string | null
+          timeline_end: string | null
+          timeline_start: string | null
+          total_amount_cents: number | null
+          updated_at: string | null
+        }
+        SetofOptions: {
+          from: "*"
+          to: "projects"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
+      assert_client_decision_reference_integrity: {
+        Args: {
+          p_blocks_milestone_id: string
+          p_court_party_id: string
+          p_decision_id: string
+          p_designer_client_id: string
+          p_designer_id: string
+          p_linked_proposal_id: string
+          p_phase_id: string
+          p_project_id: string
+          p_recommended_option_id: string
+          p_room_id: string
+          p_status: string
+        }
+        Returns: undefined
       }
       assign_po_number: {
         Args: { p_po_id: string }
@@ -21066,9 +22168,88 @@ export type Database = {
         Args: { p_designer_client_id: string }
         Returns: string
       }
+      begin_discovery: { Args: { p_lead_id: string }; Returns: Json }
+      begin_proposal_revision: {
+        Args: { p_proposal_id: string }
+        Returns: {
+          accepted_at: string | null
+          cc_email: string | null
+          client_feedback: string | null
+          client_id: string | null
+          client_visibility_tier: string | null
+          cover_image: string | null
+          created_at: string
+          decline_reason: string | null
+          declined_at: string | null
+          deposit_percent: number | null
+          description: string | null
+          designer_client_id: string | null
+          designer_id: string
+          discount_amount: number | null
+          discount_percent: number | null
+          feedback_enabled: boolean
+          id: string
+          last_nudged_at: string | null
+          nudge_count: number
+          parent_proposal_id: string | null
+          payment_notes: string | null
+          payment_terms: string | null
+          personal_message: string | null
+          project_address: string | null
+          project_id: string | null
+          proposal_send_dispatch_id: string | null
+          revision_summary: string | null
+          sent_at: string | null
+          signed_at: string | null
+          signed_by_name: string | null
+          signed_ip: string | null
+          status: string
+          subtotal: number | null
+          tax_amount: number | null
+          tax_rate: number | null
+          template_id: string | null
+          title: string
+          total_amount: number | null
+          updated_at: string
+          valid_until: string | null
+          version: number | null
+          viewed_at: string | null
+        }
+        SetofOptions: {
+          from: "*"
+          to: "proposals"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
+      begin_proposal_send_provider_attempt: {
+        Args: { p_claim_token: string; p_dispatch_id: string }
+        Returns: Json
+      }
       calculate_engagement_score: {
         Args: { p_user_id: string }
         Returns: number
+      }
+      can_access_item_feedback_anchor: {
+        Args: {
+          p_board_item_id: string
+          p_ffe_item_id: string
+          p_proposal_item_id: string
+        }
+        Returns: boolean
+      }
+      can_dispatch_proposal_send: {
+        Args: { p_owner: string }
+        Returns: boolean
+      }
+      can_manage_invoice: { Args: { p_invoice_id: string }; Returns: boolean }
+      can_submit_item_feedback_anchor: {
+        Args: {
+          p_board_item_id: string
+          p_ffe_item_id: string
+          p_proposal_item_id: string
+        }
+        Returns: boolean
       }
       cancel_agent_task: {
         Args: { p_actor: string; p_id: string; p_reason?: string }
@@ -21107,6 +22288,10 @@ export type Database = {
           isOneToOne: true
           isSetofReturn: false
         }
+      }
+      cancel_scope_change_request: {
+        Args: { p_project_id: string; p_request_id: string }
+        Returns: Json
       }
       ceremony_complete: {
         Args: {
@@ -21188,6 +22373,24 @@ export type Database = {
         }
       }
       claim_design_request: { Args: { p_lead_id: string }; Returns: Json }
+      claim_invoice_checkout_attempt: {
+        Args: {
+          p_allow_designer_test?: boolean
+          p_invoice_id: string
+          p_payer_id: string
+          p_stripe_customer_id: string
+        }
+        Returns: Json
+      }
+      claim_proposal_send_dispatch: {
+        Args: {
+          p_dispatch_id: string
+          p_lease_seconds?: number
+          p_proposal_id: string
+          p_sent_at: string
+        }
+        Returns: Json
+      }
       claim_quiz_session: { Args: { p_session_key: string }; Returns: Json }
       client_pick: {
         Args: { p_ceremony_id: string; p_slot_id: string }
@@ -21282,6 +22485,16 @@ export type Database = {
         }
         Returns: undefined
       }
+      complete_proposal_send_dispatch: {
+        Args: {
+          p_claim_token: string
+          p_delivery_state: string
+          p_dispatch_id: string
+          p_error?: string
+          p_provider_id?: string
+        }
+        Returns: Json
+      }
       compute_house_taste_draft: { Args: never; Returns: string }
       concierge_checklist_template: { Args: { p_stage: string }; Returns: Json }
       concierge_damage_photo_checklist: { Args: never; Returns: Json }
@@ -21306,6 +22519,67 @@ export type Database = {
           p_target_proposal_id?: string
         }
         Returns: string[]
+      }
+      create_client_decision: {
+        Args: {
+          p_blocked_ffe_item_ids?: string[]
+          p_blocked_task_ids?: string[]
+          p_decision_id: string
+          p_options?: Json
+          p_payload: Json
+        }
+        Returns: {
+          answer: string | null
+          answered_at: string | null
+          answered_by: string | null
+          blocking_status: string
+          blocks_kind: string
+          blocks_milestone_id: string | null
+          client_consent_method: string | null
+          client_consented_at: string | null
+          client_signature: string | null
+          context: string | null
+          coordination_kind: string
+          court: string
+          court_party_id: string | null
+          created_at: string
+          decision_kind: string
+          decision_type: string
+          designer_client_id: string
+          designer_id: string
+          due_date: string | null
+          id: string
+          linked_phase: string | null
+          linked_proposal_id: string | null
+          phase_id: string | null
+          project_id: string | null
+          recommended_option_id: string | null
+          reminder_sent_at: string | null
+          responded_at: string | null
+          room_id: string | null
+          section_key: string | null
+          selected_by: string | null
+          sent_at: string | null
+          status: string
+          title: string
+          updated_at: string
+          viewed_at: string | null
+        }
+        SetofOptions: {
+          from: "*"
+          to: "client_decisions"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
+      create_client_scope_change_request: {
+        Args: {
+          p_description: string
+          p_idempotency_key: string
+          p_project_id: string
+          p_title: string
+        }
+        Returns: Json
       }
       create_direct_order: {
         Args: { p_product_id: string; p_quantity?: number }
@@ -21350,6 +22624,93 @@ export type Database = {
           id: string
           token: string
         }[]
+      }
+      create_project_phase: {
+        Args: {
+          p_anchor_date?: string
+          p_deliverables?: Json
+          p_duration_days?: number
+          p_duration_weeks?: number
+          p_fee_cents?: number
+          p_follows_phase_id?: string
+          p_lane?: string
+          p_name: string
+          p_phase_key: string
+          p_project_id: string
+          p_revision_limit?: number
+          p_sort_order?: number
+        }
+        Returns: {
+          anchor_date: string | null
+          completed_at: string | null
+          created_at: string
+          deliverables: Json | null
+          duration_days: number | null
+          duration_weeks: number | null
+          estimated_hours: number | null
+          fee_cents: number | null
+          follows_phase_id: string | null
+          gate_condition: string | null
+          id: string
+          lane: string
+          name: string
+          phase_key: string | null
+          progress: number | null
+          project_id: string
+          revision_limit: number | null
+          revisions_used: number | null
+          sort_order: number
+          source_proposal_phase_id: string | null
+          start_date: string | null
+          status: string
+          target_end_date: string | null
+          updated_at: string
+        }
+        SetofOptions: {
+          from: "*"
+          to: "project_phases"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
+      create_proposal_phase: {
+        Args: {
+          p_anchor_date?: string
+          p_deliverables?: Json
+          p_duration_days?: number
+          p_duration_weeks?: number
+          p_fee_cents?: number
+          p_gate_condition?: string
+          p_lane?: string
+          p_name: string
+          p_phase_key?: string
+          p_proposal_id: string
+          p_revision_limit?: number
+        }
+        Returns: {
+          anchor_date: string | null
+          created_at: string
+          deliverables: Json | null
+          duration_days: number | null
+          duration_weeks: number | null
+          fee_cents: number
+          follows_phase_id: string | null
+          gate_condition: string | null
+          id: string
+          lane: string
+          name: string
+          phase_key: string | null
+          proposal_id: string
+          revision_limit: number | null
+          sort_order: number
+          updated_at: string
+        }
+        SetofOptions: {
+          from: "*"
+          to: "proposal_phases"
+          isOneToOne: true
+          isSetofReturn: false
+        }
       }
       create_purchase_order: {
         Args: {
@@ -21433,6 +22794,18 @@ export type Database = {
         Args: { p_project_id: string; p_reason?: string }
         Returns: number
       }
+      decline_proposal: {
+        Args: { p_proposal_id: string; p_reason?: string }
+        Returns: Json
+      }
+      decline_scope_change_request: {
+        Args: {
+          p_decline_reason?: string
+          p_project_id: string
+          p_request_id: string
+        }
+        Returns: Json
+      }
       decline_workspace_invitation: {
         Args: { p_token: string }
         Returns: undefined
@@ -21440,6 +22813,14 @@ export type Database = {
       decrement_room_saved_items: {
         Args: { p_count?: number; p_room_id: string }
         Returns: undefined
+      }
+      delete_client_decision_draft: {
+        Args: { p_decision_id: string }
+        Returns: Json
+      }
+      delete_project_phase: {
+        Args: { p_phase_id: string; p_project_id: string }
+        Returns: Json
       }
       demote_to_personal: { Args: { p_product_id: string }; Returns: string }
       derive_signature_biases: {
@@ -21450,6 +22831,31 @@ export type Database = {
       draft_invoice_from_milestone: {
         Args: { p_milestone_id: string }
         Returns: string
+      }
+      duplicate_proposal_board: {
+        Args: { p_board_id: string; p_proposal_id: string }
+        Returns: {
+          background_color: string
+          canvas_height: number
+          canvas_width: number
+          cover_image_url: string | null
+          created_at: string
+          id: string
+          name: string
+          project_id: string | null
+          proposal_id: string | null
+          scope_room_id: string | null
+          sections: Json
+          sort_order: number
+          status: string
+          updated_at: string
+        }
+        SetofOptions: {
+          from: "*"
+          to: "proposal_boards"
+          isOneToOne: true
+          isSetofReturn: false
+        }
       }
       enqueue_agent_successor_if_owned: {
         Args: {
@@ -21624,12 +23030,132 @@ export type Database = {
         Args: { p_collection_id: string }
         Returns: Json
       }
+      expire_client_decision: {
+        Args: { p_decision_id: string }
+        Returns: {
+          answer: string | null
+          answered_at: string | null
+          answered_by: string | null
+          blocking_status: string
+          blocks_kind: string
+          blocks_milestone_id: string | null
+          client_consent_method: string | null
+          client_consented_at: string | null
+          client_signature: string | null
+          context: string | null
+          coordination_kind: string
+          court: string
+          court_party_id: string | null
+          created_at: string
+          decision_kind: string
+          decision_type: string
+          designer_client_id: string
+          designer_id: string
+          due_date: string | null
+          id: string
+          linked_phase: string | null
+          linked_proposal_id: string | null
+          phase_id: string | null
+          project_id: string | null
+          recommended_option_id: string | null
+          reminder_sent_at: string | null
+          responded_at: string | null
+          room_id: string | null
+          section_key: string | null
+          selected_by: string | null
+          sent_at: string | null
+          status: string
+          title: string
+          updated_at: string
+          viewed_at: string | null
+        }
+        SetofOptions: {
+          from: "*"
+          to: "client_decisions"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
+      expire_due_client_decisions: {
+        Args: { p_cutoff: string }
+        Returns: {
+          id: string
+        }[]
+      }
+      expire_proposals: { Args: never; Returns: number }
       expire_room_scan_associations: { Args: never; Returns: number }
       export_designer_taste: { Args: { p_designer_id: string }; Returns: Json }
+      extend_and_reopen_client_decision: {
+        Args: {
+          p_decision_id: string
+          p_due_date: string
+          p_expected_updated_at: string
+        }
+        Returns: {
+          answer: string | null
+          answered_at: string | null
+          answered_by: string | null
+          blocking_status: string
+          blocks_kind: string
+          blocks_milestone_id: string | null
+          client_consent_method: string | null
+          client_consented_at: string | null
+          client_signature: string | null
+          context: string | null
+          coordination_kind: string
+          court: string
+          court_party_id: string | null
+          created_at: string
+          decision_kind: string
+          decision_type: string
+          designer_client_id: string
+          designer_id: string
+          due_date: string | null
+          id: string
+          linked_phase: string | null
+          linked_proposal_id: string | null
+          phase_id: string | null
+          project_id: string | null
+          recommended_option_id: string | null
+          reminder_sent_at: string | null
+          responded_at: string | null
+          room_id: string | null
+          section_key: string | null
+          selected_by: string | null
+          sent_at: string | null
+          status: string
+          title: string
+          updated_at: string
+          viewed_at: string | null
+        }
+        SetofOptions: {
+          from: "*"
+          to: "client_decisions"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
+      fail_invoice_checkout_attempt: {
+        Args: {
+          p_attempt_id: string
+          p_reason?: string
+          p_stripe_checkout_session_id: string
+        }
+        Returns: boolean
+      }
       ffe_status_rank: { Args: { p_status: string }; Returns: number }
       field_capture_jsonb_text_array: {
         Args: { p_value: Json }
         Returns: string[]
+      }
+      finalize_invoice_checkout_attempt: {
+        Args: {
+          p_attempt_id: string
+          p_payer_id: string
+          p_stripe_checkout_session_id: string
+          p_stripe_customer_id: string
+        }
+        Returns: Json
       }
       finalize_spec_book_issue: {
         Args: { p_revision_id: string }
@@ -21920,6 +23446,27 @@ export type Database = {
           why: Json
         }[]
       }
+      get_client_proposal_bundle: {
+        Args: { p_proposal_id: string }
+        Returns: Json
+      }
+      get_client_proposal_feedback: {
+        Args: { p_board_items?: boolean; p_proposal_id: string }
+        Returns: {
+          board_item_id: string
+          body: string
+          client_id: string
+          created_at: string
+          decision_id: string
+          ffe_item_id: string
+          id: string
+          proposal_item_id: string
+          resolved_at: string
+          resolved_by: string
+          updated_at: string
+          verdict: string
+        }[]
+      }
       get_conversation_history: {
         Args: { p_cursor?: string; p_limit?: number; p_user_id: string }
         Returns: {
@@ -22035,6 +23582,22 @@ export type Database = {
           published_at: string
           retry_count: number
           source: string
+        }[]
+      }
+      get_proposal_send_dispatch_status: {
+        Args: {
+          p_dispatch_id: string
+          p_proposal_id: string
+          p_sent_at: string
+        }
+        Returns: Json
+      }
+      get_proposal_send_snapshot: {
+        Args: { p_proposal_id: string }
+        Returns: {
+          proposal_total_amount: number
+          proposal_updated_at: string
+          schedule_fingerprint: string
         }[]
       }
       get_recommendations: {
@@ -22291,6 +23854,7 @@ export type Database = {
         Args: { p_vendor_id: string }
         Returns: number
       }
+      list_client_proposals: { Args: never; Returns: Json }
       list_designer_open_proposals: {
         Args: { p_designer_id?: string }
         Returns: {
@@ -22339,7 +23903,54 @@ export type Database = {
         Args: { p_capture_id: string }
         Returns: undefined
       }
+      mark_client_decision_viewed: {
+        Args: { p_decision_id: string }
+        Returns: {
+          answer: string | null
+          answered_at: string | null
+          answered_by: string | null
+          blocking_status: string
+          blocks_kind: string
+          blocks_milestone_id: string | null
+          client_consent_method: string | null
+          client_consented_at: string | null
+          client_signature: string | null
+          context: string | null
+          coordination_kind: string
+          court: string
+          court_party_id: string | null
+          created_at: string
+          decision_kind: string
+          decision_type: string
+          designer_client_id: string
+          designer_id: string
+          due_date: string | null
+          id: string
+          linked_phase: string | null
+          linked_proposal_id: string | null
+          phase_id: string | null
+          project_id: string | null
+          recommended_option_id: string | null
+          reminder_sent_at: string | null
+          responded_at: string | null
+          room_id: string | null
+          section_key: string | null
+          selected_by: string | null
+          sent_at: string | null
+          status: string
+          title: string
+          updated_at: string
+          viewed_at: string | null
+        }
+        SetofOptions: {
+          from: "*"
+          to: "client_decisions"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
       mark_feedback_seen: { Args: { p_id: string }; Returns: undefined }
+      mark_proposal_viewed: { Args: { p_proposal_id: string }; Returns: Json }
       mark_room_scan_geometry_error: {
         Args: { p_error: string; p_scan_id: string }
         Returns: undefined
@@ -22421,6 +24032,19 @@ export type Database = {
         }
         Returns: string
       }
+      persist_proposal_send_request: {
+        Args: {
+          p_cc: string[]
+          p_claim_token: string
+          p_dispatch_id: string
+          p_dry_run: boolean
+          p_from: string
+          p_request_body: string
+          p_subject: string
+          p_to: string[]
+        }
+        Returns: Json
+      }
       place_product_in_project: {
         Args: {
           p_category?: string
@@ -22464,6 +24088,52 @@ export type Database = {
         }
         Returns: string
       }
+      publish_client_decision: {
+        Args: { p_decision_id: string }
+        Returns: {
+          answer: string | null
+          answered_at: string | null
+          answered_by: string | null
+          blocking_status: string
+          blocks_kind: string
+          blocks_milestone_id: string | null
+          client_consent_method: string | null
+          client_consented_at: string | null
+          client_signature: string | null
+          context: string | null
+          coordination_kind: string
+          court: string
+          court_party_id: string | null
+          created_at: string
+          decision_kind: string
+          decision_type: string
+          designer_client_id: string
+          designer_id: string
+          due_date: string | null
+          id: string
+          linked_phase: string | null
+          linked_proposal_id: string | null
+          phase_id: string | null
+          project_id: string | null
+          recommended_option_id: string | null
+          reminder_sent_at: string | null
+          responded_at: string | null
+          room_id: string | null
+          section_key: string | null
+          selected_by: string | null
+          sent_at: string | null
+          status: string
+          title: string
+          updated_at: string
+          viewed_at: string | null
+        }
+        SetofOptions: {
+          from: "*"
+          to: "client_decisions"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
       react_to_feedback: {
         Args: { p_emoji: string; p_id: string }
         Returns: {
@@ -22481,7 +24151,67 @@ export type Database = {
           isSetofReturn: false
         }
       }
+      read_proposal_send_dispatch: {
+        Args: {
+          p_dispatch_id: string
+          p_proposal_id: string
+          p_sent_at: string
+        }
+        Returns: Json
+      }
       realtime_project_access: { Args: { topic: string }; Returns: boolean }
+      reassign_project_lead: {
+        Args: {
+          p_expected_designer_id: string
+          p_new_designer_id: string
+          p_project_id: string
+        }
+        Returns: {
+          actual_cents: number | null
+          brief_document_url: string | null
+          budget_cents: number | null
+          budget_max: number | null
+          budget_min: number | null
+          change_order_terms: Json | null
+          client_id: string | null
+          client_profile_id: string | null
+          client_visibility_tier: string
+          closure_checklist: Json | null
+          committed_cents: number | null
+          completed_at: string | null
+          created_at: string | null
+          created_by: string
+          current_phase: string | null
+          design_fee_cents: number | null
+          designer_id: string | null
+          expected_completion_date: string | null
+          id: string
+          kickoff_date: string | null
+          kickoff_message: string | null
+          lead_designer_id: string | null
+          name: string
+          notes: string | null
+          portfolio_snapshot: Json | null
+          proposal_id: string | null
+          scope_boundaries: Json | null
+          share_token: string | null
+          site_address: string | null
+          start_date: string | null
+          status: Database["public"]["Enums"]["project_status"] | null
+          studio_id: string | null
+          target_end_date: string | null
+          timeline_end: string | null
+          timeline_start: string | null
+          total_amount_cents: number | null
+          updated_at: string | null
+        }
+        SetofOptions: {
+          from: "*"
+          to: "projects"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
       recompute_portfolio_centroid: {
         Args: { p_designer_id: string }
         Returns: Json
@@ -22501,6 +24231,7 @@ export type Database = {
         }
         Returns: {
           amount_cents: number
+          checkout_attempt_id: string | null
           created_at: string
           id: string
           invoice_id: string
@@ -22531,6 +24262,15 @@ export type Database = {
         }
         Returns: string
       }
+      recover_invoice_checkout_session_evidence: {
+        Args: {
+          p_attempt_id: string
+          p_payer_id: string
+          p_stripe_checkout_session_id: string
+          p_stripe_customer_id: string
+        }
+        Returns: Json
+      }
       refresh_designer_teaching_stats: { Args: never; Returns: number }
       refresh_marketplace_vitals: { Args: never; Returns: Json }
       refresh_offered_slots: {
@@ -22539,6 +24279,87 @@ export type Database = {
       }
       refresh_product_behavior_stats: { Args: never; Returns: undefined }
       refresh_style_centroids: { Args: never; Returns: number }
+      release_proposal_send_dispatch: {
+        Args: { p_claim_token: string; p_dispatch_id: string; p_error: string }
+        Returns: Json
+      }
+      remove_proposal_phase: {
+        Args: {
+          p_expected_updated_at: string
+          p_phase_id: string
+          p_proposal_id: string
+        }
+        Returns: {
+          anchor_date: string | null
+          created_at: string
+          deliverables: Json | null
+          duration_days: number | null
+          duration_weeks: number | null
+          fee_cents: number
+          follows_phase_id: string | null
+          gate_condition: string | null
+          id: string
+          lane: string
+          name: string
+          phase_key: string | null
+          proposal_id: string
+          revision_limit: number | null
+          sort_order: number
+          updated_at: string
+        }
+        SetofOptions: {
+          from: "*"
+          to: "proposal_phases"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
+      reopen_client_decision: {
+        Args: { p_decision_id: string }
+        Returns: {
+          answer: string | null
+          answered_at: string | null
+          answered_by: string | null
+          blocking_status: string
+          blocks_kind: string
+          blocks_milestone_id: string | null
+          client_consent_method: string | null
+          client_consented_at: string | null
+          client_signature: string | null
+          context: string | null
+          coordination_kind: string
+          court: string
+          court_party_id: string | null
+          created_at: string
+          decision_kind: string
+          decision_type: string
+          designer_client_id: string
+          designer_id: string
+          due_date: string | null
+          id: string
+          linked_phase: string | null
+          linked_proposal_id: string | null
+          phase_id: string | null
+          project_id: string | null
+          recommended_option_id: string | null
+          reminder_sent_at: string | null
+          responded_at: string | null
+          room_id: string | null
+          section_key: string | null
+          selected_by: string | null
+          sent_at: string | null
+          status: string
+          title: string
+          updated_at: string
+          viewed_at: string | null
+        }
+        SetofOptions: {
+          from: "*"
+          to: "client_decisions"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
       reopen_item_feedback: {
         Args: { p_feedback_id: string }
         Returns: {
@@ -22561,6 +24382,14 @@ export type Database = {
           isOneToOne: true
           isSetofReturn: false
         }
+      }
+      reorder_palette_swatches: {
+        Args: {
+          p_ordered_ids: string[]
+          p_palette_id: string
+          p_proposal_id: string
+        }
+        Returns: undefined
       }
       reorder_proposal_items: {
         Args: { p_ordered_ids: string[]; p_proposal_id: string }
@@ -22906,6 +24735,9 @@ export type Database = {
       send_proposal: {
         Args: {
           p_cc_email?: string
+          p_expected_schedule_fingerprint: string
+          p_expected_total_amount: number
+          p_expected_updated_at: string
           p_personal_message?: string
           p_proposal_id: string
           p_valid_until?: string
@@ -22936,6 +24768,7 @@ export type Database = {
           personal_message: string | null
           project_address: string | null
           project_id: string | null
+          proposal_send_dispatch_id: string | null
           revision_summary: string | null
           sent_at: string | null
           signed_at: string | null
@@ -22959,6 +24792,10 @@ export type Database = {
           isOneToOne: true
           isSetofReturn: false
         }
+      }
+      send_scope_change_request: {
+        Args: { p_project_id: string; p_request_id: string }
+        Returns: Json
       }
       send_weekly_pulse: {
         Args: { p_body: string; p_pulse_id: string; p_subject?: string }
@@ -23028,6 +24865,58 @@ export type Database = {
         }
         Returns: string
       }
+      set_project_operational_status: {
+        Args: {
+          p_expected_status: Database["public"]["Enums"]["project_status"]
+          p_project_id: string
+          p_status: Database["public"]["Enums"]["project_status"]
+        }
+        Returns: {
+          actual_cents: number | null
+          brief_document_url: string | null
+          budget_cents: number | null
+          budget_max: number | null
+          budget_min: number | null
+          change_order_terms: Json | null
+          client_id: string | null
+          client_profile_id: string | null
+          client_visibility_tier: string
+          closure_checklist: Json | null
+          committed_cents: number | null
+          completed_at: string | null
+          created_at: string | null
+          created_by: string
+          current_phase: string | null
+          design_fee_cents: number | null
+          designer_id: string | null
+          expected_completion_date: string | null
+          id: string
+          kickoff_date: string | null
+          kickoff_message: string | null
+          lead_designer_id: string | null
+          name: string
+          notes: string | null
+          portfolio_snapshot: Json | null
+          proposal_id: string | null
+          scope_boundaries: Json | null
+          share_token: string | null
+          site_address: string | null
+          start_date: string | null
+          status: Database["public"]["Enums"]["project_status"] | null
+          studio_id: string | null
+          target_end_date: string | null
+          timeline_end: string | null
+          timeline_start: string | null
+          total_amount_cents: number | null
+          updated_at: string | null
+        }
+        SetofOptions: {
+          from: "*"
+          to: "projects"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
       set_room_emergence: {
         Args: {
           p_has_emergence: boolean
@@ -23035,6 +24924,15 @@ export type Database = {
           p_room_id: string
         }
         Returns: undefined
+      }
+      settle_invoice_checkout_payment: {
+        Args: {
+          p_payment_id: string
+          p_reported_amount_cents: number
+          p_stripe_event_id: string
+          p_stripe_payment_intent_id: string
+        }
+        Returns: Json
       }
       share_room_scan: {
         Args: {
@@ -23050,62 +24948,17 @@ export type Database = {
       show_limit: { Args: never; Returns: number }
       show_trgm: { Args: { "": string }; Returns: string[] }
       sign_proposal: {
+        Args: { p_proposal_id: string; p_signed_name: string }
+        Returns: Json
+      }
+      sign_proposal_with_trusted_ip: {
         Args: {
-          p_auto_activate?: boolean
+          p_client_id: string
           p_proposal_id: string
           p_signed_ip?: string
           p_signed_name: string
-          p_start_date?: string
         }
-        Returns: {
-          accepted_at: string | null
-          cc_email: string | null
-          client_feedback: string | null
-          client_id: string | null
-          client_visibility_tier: string | null
-          cover_image: string | null
-          created_at: string
-          decline_reason: string | null
-          declined_at: string | null
-          deposit_percent: number | null
-          description: string | null
-          designer_client_id: string | null
-          designer_id: string
-          discount_amount: number | null
-          discount_percent: number | null
-          feedback_enabled: boolean
-          id: string
-          last_nudged_at: string | null
-          nudge_count: number
-          parent_proposal_id: string | null
-          payment_notes: string | null
-          payment_terms: string | null
-          personal_message: string | null
-          project_address: string | null
-          project_id: string | null
-          revision_summary: string | null
-          sent_at: string | null
-          signed_at: string | null
-          signed_by_name: string | null
-          signed_ip: string | null
-          status: string
-          subtotal: number | null
-          tax_amount: number | null
-          tax_rate: number | null
-          template_id: string | null
-          title: string
-          total_amount: number | null
-          updated_at: string
-          valid_until: string | null
-          version: number | null
-          viewed_at: string | null
-        }
-        SetofOptions: {
-          from: "*"
-          to: "proposals"
-          isOneToOne: true
-          isSetofReturn: false
-        }
+        Returns: Json
       }
       site_request_approve_item: {
         Args: {
@@ -23274,6 +25127,52 @@ export type Database = {
           object_path: string
         }[]
       }
+      stamp_client_decision_reminder: {
+        Args: { p_decision_id: string }
+        Returns: {
+          answer: string | null
+          answered_at: string | null
+          answered_by: string | null
+          blocking_status: string
+          blocks_kind: string
+          blocks_milestone_id: string | null
+          client_consent_method: string | null
+          client_consented_at: string | null
+          client_signature: string | null
+          context: string | null
+          coordination_kind: string
+          court: string
+          court_party_id: string | null
+          created_at: string
+          decision_kind: string
+          decision_type: string
+          designer_client_id: string
+          designer_id: string
+          due_date: string | null
+          id: string
+          linked_phase: string | null
+          linked_proposal_id: string | null
+          phase_id: string | null
+          project_id: string | null
+          recommended_option_id: string | null
+          reminder_sent_at: string | null
+          responded_at: string | null
+          room_id: string | null
+          section_key: string | null
+          selected_by: string | null
+          sent_at: string | null
+          status: string
+          title: string
+          updated_at: string
+          viewed_at: string | null
+        }
+        SetofOptions: {
+          from: "*"
+          to: "client_decisions"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
       stripe_balance_tx_ingest: {
         Args: { p_cursor: string; p_txns: Json }
         Returns: Json
@@ -23352,6 +25251,10 @@ export type Database = {
         }
         Returns: Json
       }
+      suppress_proposal_send_dispatch: {
+        Args: { p_claim_token: string; p_dispatch_id: string; p_reason: string }
+        Returns: Json
+      }
       swap_line_to_product: {
         Args: {
           p_feedback_id: string
@@ -23363,6 +25266,7 @@ export type Database = {
           budget_max_cents: number | null
           budget_min_cents: number | null
           category: string | null
+          client_product_snapshot: Json
           created_at: string
           custom_fields: Json
           description: string | null
@@ -23397,6 +25301,14 @@ export type Database = {
         }
       }
       sweep_scan_pipeline_ingest: { Args: never; Returns: Json }
+      sync_proposal_send_email_log: {
+        Args: { p_dispatch_id: string }
+        Returns: undefined
+      }
+      sync_proposal_send_in_app_log: {
+        Args: { p_dispatch_id: string }
+        Returns: undefined
+      }
       toggle_concierge_checklist_item: {
         Args: {
           p_actor: string
@@ -23411,7 +25323,183 @@ export type Database = {
         Args: { p_new_owner: string; p_org_id: string }
         Returns: undefined
       }
+      update_client_decision: {
+        Args: {
+          p_decision_id: string
+          p_expected_updated_at?: string
+          p_options?: Json
+          p_patch?: Json
+        }
+        Returns: {
+          answer: string | null
+          answered_at: string | null
+          answered_by: string | null
+          blocking_status: string
+          blocks_kind: string
+          blocks_milestone_id: string | null
+          client_consent_method: string | null
+          client_consented_at: string | null
+          client_signature: string | null
+          context: string | null
+          coordination_kind: string
+          court: string
+          court_party_id: string | null
+          created_at: string
+          decision_kind: string
+          decision_type: string
+          designer_client_id: string
+          designer_id: string
+          due_date: string | null
+          id: string
+          linked_phase: string | null
+          linked_proposal_id: string | null
+          phase_id: string | null
+          project_id: string | null
+          recommended_option_id: string | null
+          reminder_sent_at: string | null
+          responded_at: string | null
+          room_id: string | null
+          section_key: string | null
+          selected_by: string | null
+          sent_at: string | null
+          status: string
+          title: string
+          updated_at: string
+          viewed_at: string | null
+        }
+        SetofOptions: {
+          from: "*"
+          to: "client_decisions"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
+      update_coordination_item: {
+        Args: {
+          p_blocked_ffe_item_ids: string[]
+          p_blocked_task_ids: string[]
+          p_expected_updated_at: string
+          p_item_id: string
+          p_options: Json
+          p_patch: Json
+        }
+        Returns: {
+          answer: string | null
+          answered_at: string | null
+          answered_by: string | null
+          blocking_status: string
+          blocks_kind: string
+          blocks_milestone_id: string | null
+          client_consent_method: string | null
+          client_consented_at: string | null
+          client_signature: string | null
+          context: string | null
+          coordination_kind: string
+          court: string
+          court_party_id: string | null
+          created_at: string
+          decision_kind: string
+          decision_type: string
+          designer_client_id: string
+          designer_id: string
+          due_date: string | null
+          id: string
+          linked_phase: string | null
+          linked_proposal_id: string | null
+          phase_id: string | null
+          project_id: string | null
+          recommended_option_id: string | null
+          reminder_sent_at: string | null
+          responded_at: string | null
+          room_id: string | null
+          section_key: string | null
+          selected_by: string | null
+          sent_at: string | null
+          status: string
+          title: string
+          updated_at: string
+          viewed_at: string | null
+        }
+        SetofOptions: {
+          from: "*"
+          to: "client_decisions"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
       update_my_biases: { Args: { p_overrides: Json }; Returns: Json }
+      update_project_phase: {
+        Args: {
+          p_expected_updated_at: string
+          p_patch: Json
+          p_phase_id: string
+          p_project_id: string
+        }
+        Returns: {
+          anchor_date: string | null
+          completed_at: string | null
+          created_at: string
+          deliverables: Json | null
+          duration_days: number | null
+          duration_weeks: number | null
+          estimated_hours: number | null
+          fee_cents: number | null
+          follows_phase_id: string | null
+          gate_condition: string | null
+          id: string
+          lane: string
+          name: string
+          phase_key: string | null
+          progress: number | null
+          project_id: string
+          revision_limit: number | null
+          revisions_used: number | null
+          sort_order: number
+          source_proposal_phase_id: string | null
+          start_date: string | null
+          status: string
+          target_end_date: string | null
+          updated_at: string
+        }
+        SetofOptions: {
+          from: "*"
+          to: "project_phases"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
+      update_proposal_phase: {
+        Args: {
+          p_expected_updated_at: string
+          p_patch: Json
+          p_phase_id: string
+          p_proposal_id: string
+        }
+        Returns: {
+          anchor_date: string | null
+          created_at: string
+          deliverables: Json | null
+          duration_days: number | null
+          duration_weeks: number | null
+          fee_cents: number
+          follows_phase_id: string | null
+          gate_condition: string | null
+          id: string
+          lane: string
+          name: string
+          phase_key: string | null
+          proposal_id: string
+          revision_limit: number | null
+          sort_order: number
+          updated_at: string
+        }
+        SetofOptions: {
+          from: "*"
+          to: "proposal_phases"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
       user_has_role: {
         Args: { p_role_name: string; p_user_id: string }
         Returns: boolean
@@ -23538,6 +25626,7 @@ export type Database = {
         | "bounced"
         | "failed"
         | "suppressed"
+        | "unconfirmed"
       oauth_provider: "apple" | "google"
       organization_status:
         | "active"
@@ -23785,6 +25874,7 @@ export const Constants = {
         "bounced",
         "failed",
         "suppressed",
+        "unconfirmed",
       ],
       oauth_provider: ["apple", "google"],
       organization_status: [

@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useState } from 'react';
+import { useCallback, useRef, useState } from 'react';
 import { Button, IconButton, Input, Select } from '@/components/ui/controls';
 import {
   AlertDialog,
@@ -24,6 +24,7 @@ import {
   type ProposalScopeRoom,
 } from '@patina/supabase';
 import { downloadSpecPdf } from '@/lib/scope/spec-pdf-client';
+import { runProposalAutosaveAction } from '@/lib/proposal-autosave-registry';
 import { BoardEditor } from './board-editor';
 
 type StatusFilter = 'active' | 'archived';
@@ -54,12 +55,38 @@ export function BoardsBuilder({ proposalId, projectId }: BoardsBuilderProps) {
   const upsertBoard = useUpsertBoard();
   const duplicateBoard = useDuplicateBoard();
   const deleteBoard = useDeleteBoard();
+  const ownerId = projectId ?? proposalId;
 
   // The owner arg for INSERTs (new board). Updates key on boardId and ignore it.
   const ownerArg = isProject ? { projectId } : { proposalId };
 
   const [pdfBusy, setPdfBusy] = useState(false);
   const [pdfError, setPdfError] = useState<string | null>(null);
+  const [boardActionPending, setBoardActionPending] = useState(false);
+  const [boardActionError, setBoardActionError] = useState<string | null>(null);
+  const boardActionPendingRef = useRef(false);
+
+  const runBoardAction = useCallback(
+    async (failureMessage: string, action: () => Promise<void>): Promise<boolean> => {
+      if (boardActionPendingRef.current) return false;
+      boardActionPendingRef.current = true;
+      setBoardActionPending(true);
+      setBoardActionError(null);
+      try {
+        if (!ownerId) throw new Error('The board owner is unavailable.');
+        await runProposalAutosaveAction(ownerId, action);
+        return true;
+      } catch (error) {
+        const detail = error instanceof Error ? ` ${error.message}` : '';
+        setBoardActionError(`${failureMessage} Nothing was changed.${detail}`);
+        return false;
+      } finally {
+        boardActionPendingRef.current = false;
+        setBoardActionPending(false);
+      }
+    },
+    [ownerId],
+  );
 
   const [activeBoardId, setActiveBoardId] = useState<string | null>(null);
   const [statusFilter, setStatusFilter] = useState<StatusFilter>('active');
@@ -80,65 +107,69 @@ export function BoardsBuilder({ proposalId, projectId }: BoardsBuilderProps) {
   const active = shown.find((b) => b.id === activeBoardId) ?? shown[0] ?? null;
 
   const handleNewBoard = useCallback(async () => {
-    const result = await upsertBoard.mutateAsync({
-      ...ownerArg,
-      name: `Board ${activeCount + 1}`,
-      sortOrder: boards.length,
+    await runBoardAction('The board could not be created.', async () => {
+      const result = await upsertBoard.mutateAsync({
+        ...ownerArg,
+        name: `Board ${activeCount + 1}`,
+        sortOrder: boards.length,
+      });
+      if (result?.id) {
+        setStatusFilter('active');
+        setActiveBoardId(result.id);
+      }
     });
-    if (result?.id) {
-      setStatusFilter('active');
-      setActiveBoardId(result.id);
-    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [upsertBoard, proposalId, projectId, activeCount, boards.length]);
+  }, [upsertBoard, proposalId, projectId, activeCount, boards.length, runBoardAction]);
 
   const handleDuplicate = useCallback(
     (boardId: string) => {
       // Duplicate is proposal-only (useDuplicateBoard inserts proposal_id).
       if (!proposalId) return;
-      duplicateBoard.mutate(
-        { proposalId, boardId },
-        {
-          onSuccess: (b) => {
-            setStatusFilter('active');
-            setActiveBoardId(b.id);
-          },
-        },
-      );
+      void runBoardAction('The board could not be duplicated.', async () => {
+        const duplicated = await duplicateBoard.mutateAsync({ proposalId, boardId });
+        setStatusFilter('active');
+        setActiveBoardId(duplicated.id);
+      });
     },
-    [duplicateBoard, proposalId],
+    [duplicateBoard, proposalId, runBoardAction],
   );
 
   const handleArchiveToggle = useCallback(
     (board: ProposalBoardSummary) => {
       const next = board.status === 'archived' ? 'active' : 'archived';
-      // Update path — keys on boardId; owner is ignored but passed for typing.
-      upsertBoard.mutate({ ...ownerArg, boardId: board.id, status: next });
-      // Leaving the current filter's view — drop the selection so `active`
-      // falls back to the first still-shown board.
-      if (activeBoardId === board.id) setActiveBoardId(null);
+      void runBoardAction('The board status could not be updated.', async () => {
+        // Update path — keys on boardId; owner is ignored but passed for typing.
+        await upsertBoard.mutateAsync({ ...ownerArg, boardId: board.id, status: next });
+        // Leaving the current filter's view — drop the selection so `active`
+        // falls back to the first still-shown board.
+        if (activeBoardId === board.id) setActiveBoardId(null);
+      });
     },
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [upsertBoard, proposalId, projectId, activeBoardId],
+    [upsertBoard, proposalId, projectId, activeBoardId, runBoardAction],
   );
 
   const handleRename = useCallback(
     (boardId: string, name: string) => {
       const next = name.trim();
       if (!next) return;
-      upsertBoard.mutate({ ...ownerArg, boardId, name: next });
+      void runBoardAction('The board name could not be updated.', async () => {
+        await upsertBoard.mutateAsync({ ...ownerArg, boardId, name: next });
+      });
     },
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [upsertBoard, proposalId, projectId],
+    [upsertBoard, proposalId, projectId, runBoardAction],
   );
 
   const handleLinkRoom = useCallback(
     (boardId: string, scopeRoomId: string | null) => {
       // Linked room is proposal-only (FK targets proposal_scope_rooms).
       if (!proposalId) return;
-      upsertBoard.mutate({ proposalId, boardId, scopeRoomId });
+      void runBoardAction('The linked room could not be updated.', async () => {
+        await upsertBoard.mutateAsync({ proposalId, boardId, scopeRoomId });
+      });
     },
-    [upsertBoard, proposalId],
+    [upsertBoard, proposalId, runBoardAction],
   );
 
   const handleExport = useCallback(
@@ -162,12 +193,35 @@ export function BoardsBuilder({ proposalId, projectId }: BoardsBuilderProps) {
 
   const [deleteTarget, setDeleteTarget] = useState<ProposalBoardSummary | null>(null);
 
-  const handleConfirmDelete = useCallback(() => {
+  const handleConfirmDelete = useCallback(async () => {
     if (!deleteTarget) return;
-    deleteBoard.mutate({ boardId: deleteTarget.id, proposalId: proposalId ?? '' });
-    if (activeBoardId === deleteTarget.id) setActiveBoardId(null);
-    setDeleteTarget(null);
-  }, [deleteBoard, proposalId, activeBoardId, deleteTarget]);
+    await runBoardAction('The board could not be deleted.', async () => {
+      await deleteBoard.mutateAsync({ boardId: deleteTarget.id, proposalId });
+      if (activeBoardId === deleteTarget.id) setActiveBoardId(null);
+      setDeleteTarget(null);
+    });
+  }, [deleteBoard, proposalId, activeBoardId, deleteTarget, runBoardAction]);
+
+  const handleSelectBoard = useCallback(
+    (boardId: string) => {
+      if (boardId === active?.id) return;
+      void runBoardAction('The next board could not be opened.', async () => {
+        setActiveBoardId(boardId);
+      });
+    },
+    [active?.id, runBoardAction],
+  );
+
+  const handleStatusFilter = useCallback(
+    (next: StatusFilter) => {
+      if (next === effectiveFilter) return;
+      void runBoardAction('The board list could not be switched.', async () => {
+        setStatusFilter(next);
+        setActiveBoardId(null);
+      });
+    },
+    [effectiveFilter, runBoardAction],
+  );
 
   if (isLoading) {
     return (
@@ -176,11 +230,32 @@ export function BoardsBuilder({ proposalId, projectId }: BoardsBuilderProps) {
   }
 
   if (boards.length === 0) {
-    return <BoardsEmpty onCreate={() => void handleNewBoard()} creating={upsertBoard.isPending} />;
+    return (
+      <fieldset
+        disabled={boardActionPending}
+        className="min-w-0 space-y-3 border-0 p-0"
+      >
+        {boardActionError && (
+          <p
+            className="rounded-md border border-red-200 bg-red-50 px-3 py-2 text-xs text-red-800"
+            role="alert"
+          >
+            {boardActionError}
+          </p>
+        )}
+        <BoardsEmpty
+          onCreate={() => void handleNewBoard()}
+          creating={boardActionPending || upsertBoard.isPending}
+        />
+      </fieldset>
+    );
   }
 
   return (
-    <div className="space-y-4">
+    <fieldset
+      disabled={boardActionPending}
+      className="min-w-0 space-y-4 border-0 p-0"
+    >
       {archivedCount > 0 && (
         <div className="inline-flex overflow-hidden rounded-md border border-[var(--border-default)] text-xs">
           {(
@@ -193,10 +268,7 @@ export function BoardsBuilder({ proposalId, projectId }: BoardsBuilderProps) {
               key={value}
               type="button"
               aria-pressed={effectiveFilter === value}
-              onClick={() => {
-                setStatusFilter(value);
-                setActiveBoardId(null);
-              }}
+              onClick={() => handleStatusFilter(value)}
               className={`px-3 py-1.5 transition-colors ${
                 effectiveFilter === value
                   ? 'bg-[var(--accent-primary)] text-white'
@@ -213,11 +285,20 @@ export function BoardsBuilder({ proposalId, projectId }: BoardsBuilderProps) {
         boards={shown}
         activeId={active?.id ?? null}
         showNew={effectiveFilter === 'active'}
-        onSelect={setActiveBoardId}
+        onSelect={handleSelectBoard}
         onNew={() => void handleNewBoard()}
         onRename={handleRename}
         onDelete={setDeleteTarget}
       />
+
+      {boardActionError && (
+        <p
+          className="rounded-md border border-red-200 bg-red-50 px-3 py-2 text-xs text-red-800"
+          role="alert"
+        >
+          {boardActionError}
+        </p>
+      )}
 
       {shown.length === 0 && (
         <p className="text-sm text-[var(--text-muted)]">
@@ -243,13 +324,13 @@ export function BoardsBuilder({ proposalId, projectId }: BoardsBuilderProps) {
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel disabled={deleteBoard.isPending}>Cancel</AlertDialogCancel>
+            <AlertDialogCancel disabled={boardActionPending || deleteBoard.isPending}>Cancel</AlertDialogCancel>
             <AlertDialogAction
               onClick={(e) => {
                 e.preventDefault();
                 handleConfirmDelete();
               }}
-              disabled={deleteBoard.isPending}
+              disabled={boardActionPending || deleteBoard.isPending}
               className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
             >
               {deleteBoard.isPending ? 'Deleting…' : 'Delete board'}
@@ -319,17 +400,18 @@ export function BoardsBuilder({ proposalId, projectId }: BoardsBuilderProps) {
             </p>
           )}
 
-          {/* key={id} so switching boards remounts the editor (flushes the
-              previous board's pending layout saves on unmount). */}
+          {/* Include the owner in the key so an owner switch cannot retain the
+              previous editor's registry generation. */}
           <BoardEditor
-            key={active.id}
+            key={`${ownerId ?? 'unknown'}:${active.id}`}
             proposalId={isProject ? undefined : proposalId}
             projectId={projectId}
             boardId={active.id}
+            actionPending={boardActionPending}
           />
         </>
       )}
-    </div>
+    </fieldset>
   );
 }
 

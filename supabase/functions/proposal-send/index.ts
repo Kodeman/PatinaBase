@@ -1,270 +1,362 @@
 // Supabase Edge Function: proposal-send
 //
-// Invoked by useSendProposal after the proposal row flips to status='sent'
-// (the send_proposal RPC already committed that transition — this function's
-// email dispatch is best-effort and does NOT roll back the send on failure).
-// Loads the proposal, designer, and client, then emails the client a link
-// to client.patina.cloud/proposals/{id} via Resend. CC the designer's
-// optional cc_email if set.
-//
-// Also writes an in-app notification_log row (channel: in_app) for the
-// client so the client portal inbox/bell surfaces the waiting proposal —
-// metadata.deep_link (`/proposals/{id}`) is what the bell's dedupe logic
-// (apps/client-portal .../notification-bell.tsx) matches against the derived
-// "awaiting proposal" item. Written regardless of the email outcome (it
-// reflects the SEND, which already happened, not the email) and guarded by
-// an unread-duplicate check so a retried/duplicate invocation doesn't stack
-// duplicate bell entries.
+// The business send and immutable outbox row already exist before this edge
+// boundary runs. This function authenticates, reauthorizes the captured owner,
+// claims the exact nonce/timestamp tuple, and uploads only persisted bytes.
 
-// deno-lint-ignore-file no-explicit-any
-
-import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
+import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import {
-  renderBrandedShell,
-  heading,
-  paragraph,
-  muted,
-  callout,
-  ctaButton,
-  spacer,
-  escapeHtml,
-} from '../_shared/branded-email.ts';
+  checkEmailSuppression,
+  prepareCompliantEmail,
+  sendPreparedResendRequest,
+} from "../_shared/send-email.ts";
 import {
-  resolveStudioIdentity,
-  studioCobrand,
-  studioDisplayName,
-} from '../_shared/studio-identity.ts';
+  createProposalSendHandler,
+  type DispatchClaim,
+  type PersistedProviderRequest,
+  type ProposalDeliveryState,
+  type ProposalSendGateway,
+  type ProposalSendInstance,
+  type ProposalSendSnapshot,
+} from "./handler.ts";
 
-const SUPABASE_URL = Deno.env.get('SUPABASE_URL')!;
-const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
-const RESEND_API_KEY = Deno.env.get('RESEND_API_KEY')!;
-const FROM_ADDRESS = Deno.env.get('RESEND_FROM') ?? 'hello@patina.cloud';
-const CLIENT_PORTAL_URL = Deno.env.get('CLIENT_PORTAL_URL') ?? 'https://client.patina.cloud';
+const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
+const SUPABASE_ANON_KEY = Deno.env.get("SUPABASE_ANON_KEY")!;
+const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
+const CLIENT_PORTAL_URL = Deno.env.get("CLIENT_PORTAL_URL") ??
+  "https://client.patina.cloud";
 
-const corsHeaders = {
-  'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
-};
-
-interface ProposalRow {
-  id: string;
-  title: string;
-  personal_message: string | null;
-  cc_email: string | null;
-  valid_until: string | null;
-  total_amount: number | null;
-  client_id: string | null;
-  designer_id: string | null;
-  project_id: string | null;
-  designer: { full_name: string | null; email: string | null } | null;
-  client: { full_name: string | null; email: string | null } | null;
+function bearerToken(authorization: string): string | null {
+  const match = authorization.match(/^Bearer\s+(.+)$/i);
+  return match?.[1]?.trim() || null;
 }
 
-function formatCurrency(amount: number): string {
-  return new Intl.NumberFormat('en-US', {
-    style: 'currency',
-    currency: 'USD',
-    maximumFractionDigits: 0,
-  }).format(amount / 100); // amount is in cents (proposals.total_amount)
+async function authenticate(
+  authorization: string,
+): Promise<{ userId: string } | null> {
+  const token = bearerToken(authorization);
+  if (!token) return null;
+  const authClient = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
+    auth: { persistSession: false, autoRefreshToken: false },
+    global: { headers: { Authorization: authorization } },
+  });
+  const { data, error } = await authClient.auth.getUser(token);
+  if (error || !data.user) return null;
+  return { userId: data.user.id };
 }
 
-function formatDate(iso: string): string {
-  return new Date(iso).toLocaleDateString('en-US', {
-    year: 'numeric',
-    month: 'long',
-    day: 'numeric',
-  });
+function record(value: unknown, label: string): Record<string, unknown> {
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    throw new Error(`proposal-send: malformed ${label}`);
+  }
+  return value as Record<string, unknown>;
 }
 
-function json(body: unknown, status = 200): Response {
-  return new Response(JSON.stringify(body), {
-    status,
-    headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-  });
+function requiredString(
+  value: Record<string, unknown>,
+  key: string,
+): string {
+  if (typeof value[key] !== "string" || !String(value[key]).trim()) {
+    throw new Error(`proposal-send: ${key} missing`);
+  }
+  return String(value[key]);
 }
 
-Deno.serve(async (req: Request) => {
-  if (req.method === 'OPTIONS') {
-    return new Response('ok', { headers: corsHeaders });
-  }
-  if (req.method !== 'POST') {
-    return json({ error: 'method_not_allowed' }, 405);
-  }
+function optionalString(
+  value: Record<string, unknown>,
+  key: string,
+): string | undefined {
+  return typeof value[key] === "string" ? String(value[key]) : undefined;
+}
 
-  let proposalId: string | undefined;
-  try {
-    const body = await req.json();
-    proposalId = body?.proposalId;
-  } catch {
-    return json({ error: 'invalid_body' }, 400);
-  }
-  if (!proposalId) {
-    return json({ error: 'proposalId_required' }, 400);
-  }
+function stringArray(value: unknown): string[] | undefined {
+  return Array.isArray(value) && value.every((item) => typeof item === "string")
+    ? value as string[]
+    : undefined;
+}
 
-  const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
-
-  const { data, error } = await supabase
-    .from('proposals')
-    .select(
-      `
-      id, title, personal_message, cc_email, valid_until, total_amount, client_id,
-      designer_id, project_id,
-      designer:profiles!designer_id(full_name, email),
-      client:profiles!client_id(full_name, email)
-    `
-    )
-    .eq('id', proposalId)
-    .single();
-
-  if (error || !data) {
-    console.error('proposal-send: lookup failed', error);
-    return json({ error: 'proposal_not_found' }, 404);
-  }
-
-  const proposal = data as unknown as ProposalRow;
-  const recipient = proposal.client?.email;
-  if (!recipient) {
-    console.warn('proposal-send: no client email for proposal', proposalId);
-    return json({ error: 'no_recipient' }, 422);
-  }
-
-  // Studio co-brand (Designer Studios). Proposals are typically sent before
-  // activation into a project (project_id NULL), so resolve by the designer;
-  // pass project_id too so a linked proposal still prefers its studio.
-  const identity = await resolveStudioIdentity(supabase, {
-    projectId: proposal.project_id,
-    designerId: proposal.designer_id,
-  });
-  // Personal designer name stays in the greeting prose; fall back to the
-  // resolver's studio/business name before the generic 'Your designer'.
-  const designerName = proposal.designer?.full_name ?? identity?.name ?? 'Your designer';
-  const senderName = studioDisplayName(identity, designerName);
-  const cobrand = studioCobrand(identity);
-  const clientName = proposal.client?.full_name ?? 'there';
-  const link = `${CLIENT_PORTAL_URL}/proposals/${proposal.id}`;
-  const totalLine = proposal.total_amount
-    ? paragraph(`<strong>Investment:</strong> ${formatCurrency(proposal.total_amount)}`)
-    : '';
-  const expiryLine = proposal.valid_until
-    ? muted(`<em>Please review by ${formatDate(proposal.valid_until)}.</em>`)
-    : '';
-  const personalBlock = proposal.personal_message
-    ? callout(escapeHtml(proposal.personal_message))
-    : '';
-
-  const subject = `${senderName} sent you a proposal: "${proposal.title}"`;
-  const html = renderBrandedShell({
-    title: subject,
-    preview: `${designerName} has prepared a design proposal for you.`,
-    eyebrow: 'Proposal',
-    studioName: cobrand.studioName,
-    studioLogoUrl: cobrand.studioLogoUrl,
-    body: [
-      heading('Your proposal is ready'),
-      paragraph(`Hi ${escapeHtml(clientName)},`),
-      paragraph(
-        `${escapeHtml(designerName)} has prepared a design proposal for you: <strong>${escapeHtml(
-          proposal.title
-        )}</strong>.`
-      ),
-      personalBlock,
-      totalLine,
-      expiryLine,
-      spacer(10),
-      ctaButton(link, 'Review proposal', 'ink'),
-      spacer(),
-      muted(`If the button doesn&rsquo;t work, copy this link:<br>${link}`),
-      muted('— Patina'),
-    ].join(''),
-  });
-
-  const payload: Record<string, unknown> = {
-    from: FROM_ADDRESS,
-    to: recipient,
-    subject,
-    html,
+function mapInstance(value: unknown): ProposalSendInstance {
+  const row = record(value, "dispatch instance");
+  return {
+    id: requiredString(row, "id"),
+    proposalId: requiredString(row, "proposal_id"),
+    sentAt: requiredString(row, "sent_at"),
+    designerId: requiredString(row, "designer_id"),
+    clientId: requiredString(row, "client_id"),
+    deliveryState: requiredString(
+      row,
+      "delivery_state",
+    ) as ProposalDeliveryState,
+    attemptCount: Number(row.attempt_count ?? 0),
   };
-  if (proposal.cc_email) payload.cc = proposal.cc_email;
+}
 
-  const res = await fetch('https://api.resend.com/emails', {
-    method: 'POST',
-    headers: {
-      Authorization: `Bearer ${RESEND_API_KEY}`,
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify(payload),
+function mapSnapshot(value: unknown): ProposalSendSnapshot {
+  const row = record(value, "dispatch snapshot");
+  return {
+    id: requiredString(row, "id"),
+    proposalId: requiredString(row, "proposal_id"),
+    sentAt: requiredString(row, "sent_at"),
+    designerId: requiredString(row, "designer_id"),
+    clientId: requiredString(row, "client_id"),
+    projectId: optionalString(row, "project_id"),
+    proposalTitle: requiredString(row, "proposal_title"),
+    personalMessage: optionalString(row, "personal_message"),
+    ccEmail: optionalString(row, "cc_email"),
+    validUntil: optionalString(row, "valid_until"),
+    totalAmount: typeof row.total_amount === "number"
+      ? row.total_amount
+      : undefined,
+    recipientEmail: requiredString(row, "recipient_email"),
+    recipientName: optionalString(row, "recipient_name"),
+    designerName: requiredString(row, "designer_name"),
+    senderName: requiredString(row, "sender_name"),
+    studioName: optionalString(row, "studio_name"),
+    studioLogoUrl: optionalString(row, "studio_logo_url"),
+    clientPortalPath: requiredString(row, "client_portal_path"),
+  };
+}
+
+function mapPersistedRequest(
+  row: Record<string, unknown>,
+  prefix = "provider_",
+): PersistedProviderRequest | undefined {
+  const bodyKey = prefix === "provider_" ? "provider_request_body" : "body";
+  const keyKey = prefix === "provider_"
+    ? "provider_idempotency_key"
+    : "idempotency_key";
+  if (typeof row[bodyKey] !== "string") return undefined;
+  const to = stringArray(row[`${prefix}to`]);
+  if (!to?.length) {
+    throw new Error("proposal-send: persisted recipient missing");
+  }
+  return {
+    body: requiredString(row, bodyKey),
+    from: requiredString(row, `${prefix}from`),
+    to,
+    cc: stringArray(row[`${prefix}cc`]),
+    subject: requiredString(row, `${prefix}subject`),
+    idempotencyKey: requiredString(row, keyKey),
+    dryRun:
+      row[prefix === "provider_" ? "provider_dry_run" : "dry_run"] === true,
+  };
+}
+
+function mapClaim(value: unknown): DispatchClaim {
+  const row = record(value, "dispatch claim");
+  const idempotencyKey = optionalString(row, "provider_idempotency_key");
+  return {
+    claimed: row.claimed === true,
+    deliveryState: requiredString(
+      row,
+      "delivery_state",
+    ) as ProposalDeliveryState,
+    claimToken: optionalString(row, "claim_token"),
+    attemptCount: Number(row.attempt_count ?? 0),
+    previousDeliveryState: optionalString(
+      row,
+      "previous_delivery_state",
+    ) as DispatchClaim["previousDeliveryState"],
+    retryDeadline: optionalString(row, "retry_deadline"),
+    retryExhausted: row.retry_exhausted === true,
+    lastError: optionalString(row, "last_error"),
+    providerId: optionalString(row, "provider_id"),
+    dispatch: row.dispatch ? mapSnapshot(row.dispatch) : undefined,
+    request: mapPersistedRequest(row),
+    idempotencyKey,
+  };
+}
+
+function mapDispatchResult(value: unknown) {
+  const row = record(value, "dispatch result");
+  return {
+    deliveryState: requiredString(
+      row,
+      "delivery_state",
+    ) as ProposalDeliveryState,
+    attemptCount: Number(row.attempt_count ?? 0),
+    retryDeadline: optionalString(row, "retry_deadline"),
+    retryExhausted: row.retry_exhausted === true,
+    lastError: optionalString(row, "last_error"),
+  };
+}
+
+function createGateway(authorization: string): ProposalSendGateway {
+  const admin = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, {
+    auth: { persistSession: false, autoRefreshToken: false },
+  });
+  const caller = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
+    auth: { persistSession: false, autoRefreshToken: false },
+    global: { headers: { Authorization: authorization } },
   });
 
-  let emailOk = true;
-  let emailErrorDetail: string | undefined;
-  if (!res.ok) {
-    emailErrorDetail = await res.text();
-    console.error('proposal-send: Resend failed', res.status, emailErrorDetail);
-    emailOk = false;
-  }
+  return {
+    async loadExactInstance(input) {
+      const { data, error } = await admin.rpc("read_proposal_send_dispatch", {
+        p_dispatch_id: input.dispatchId,
+        p_proposal_id: input.proposalId,
+        p_sent_at: input.sentAt,
+      });
+      if (error) throw error;
+      return mapInstance(data);
+    },
 
-  // In-app notification: reflects the SEND (already committed by send_proposal
-  // before this function runs), not the email outcome — so this must run on
-  // both the success and failure paths above. Never fails the request; a
-  // notification hiccup must not surface as a send failure to the designer.
-  if (proposal.client_id) {
-    try {
-      const deepLink = `/proposals/${proposal.id}`;
-      const { data: existing, error: existingErr } = await supabase
-        .from('notification_log')
-        .select('id, metadata')
-        .eq('user_id', proposal.client_id)
-        .eq('type', 'proposal_sent')
-        .eq('channel', 'in_app')
-        .contains('metadata', { deep_link: deepLink })
-        .limit(5);
-
-      if (existingErr) {
-        // Best-effort dedupe check — if it fails, fall through to insert
-        // rather than silently dropping the notification.
-        console.error('proposal-send: notification dedupe check failed', existingErr);
+    async isActiveStudioComember(ownerId) {
+      const { data, error } = await caller.rpc("can_dispatch_proposal_send", {
+        p_owner: ownerId,
+      });
+      if (error) {
+        console.error("proposal-send: studio authorization failed", error);
+        return false;
       }
+      return data === true;
+    },
 
-      // Idempotency: skip if an unread row for this exact proposal already
-      // exists, so a retried/duplicate invocation doesn't stack duplicate
-      // unread bell entries. An already-read row means the client already saw
-      // it, so a fresh send (e.g. after a revision) is still allowed through.
-      const hasUnreadDuplicate = ((existing ?? []) as Array<{ metadata: any }>).some(
-        (row) => !row.metadata?.read_at
+    async claimDispatch(input) {
+      const { data, error } = await admin.rpc("claim_proposal_send_dispatch", {
+        p_dispatch_id: input.dispatchId,
+        p_proposal_id: input.proposalId,
+        p_sent_at: input.sentAt,
+        p_lease_seconds: 30,
+      });
+      if (error) throw error;
+      return mapClaim(data);
+    },
+
+    async prepareRequest(input) {
+      const result = await prepareCompliantEmail(admin, {
+        to: input.dispatch.recipientEmail,
+        cc: input.dispatch.ccEmail,
+        subject: input.subject,
+        html: input.html,
+        userId: input.dispatch.clientId,
+        notificationType: "proposal_sent",
+        category: "operational",
+        templateId: "proposal-sent",
+        metadata: {
+          proposal_id: input.dispatch.proposalId,
+          dispatch_id: input.dispatch.id,
+          sent_at: input.dispatch.sentAt,
+          deep_link: input.dispatch.clientPortalPath,
+        },
+        idempotencyKey: input.idempotencyKey,
+        failClosedPolicyReads: true,
+        skipLog: true,
+      });
+      if (result.state === "suppressed") return result;
+      return {
+        state: "ready" as const,
+        request: {
+          ...result.request,
+          idempotencyKey: input.idempotencyKey,
+        },
+      };
+    },
+
+    async checkReplaySuppression(clientId) {
+      return await checkEmailSuppression(admin, clientId, {
+        failClosed: true,
+      });
+    },
+
+    async persistRequest(input) {
+      const { data, error } = await admin.rpc("persist_proposal_send_request", {
+        p_dispatch_id: input.dispatchId,
+        p_claim_token: input.claimToken,
+        p_request_body: input.request.body,
+        p_from: input.request.from,
+        p_to: input.request.to,
+        p_cc: input.request.cc ?? null,
+        p_subject: input.request.subject,
+        p_dry_run: input.request.dryRun,
+      });
+      if (error) throw error;
+      const mapped = mapPersistedRequest(record(data, "persisted request"), "");
+      if (!mapped) throw new Error("proposal-send: request was not persisted");
+      return mapped;
+    },
+
+    async beginProviderAttempt(input) {
+      const { data, error } = await admin.rpc(
+        "begin_proposal_send_provider_attempt",
+        {
+          p_dispatch_id: input.dispatchId,
+          p_claim_token: input.claimToken,
+        },
       );
+      if (error) throw error;
+      const row = record(data, "provider attempt");
+      return {
+        attemptCount: Number(row.attempt_count),
+        retryDeadline: requiredString(row, "retry_deadline"),
+      };
+    },
 
-      if (!hasUnreadDuplicate) {
-        const { error: notifyErr } = await supabase.from('notification_log').insert({
-          user_id: proposal.client_id,
-          type: 'proposal_sent',
-          channel: 'in_app',
-          status: 'delivered',
-          template_id: 'proposal-sent',
-          metadata: {
-            proposal_id: proposal.id,
-            subject: 'Proposal ready for your review',
-            message: proposal.title,
-            deep_link: deepLink,
-          },
-        });
-        if (notifyErr) {
-          console.error('proposal-send: notification insert failed', notifyErr);
-        }
-      }
-    } catch (notifyErr) {
-      console.error('proposal-send: notification insert threw', notifyErr);
-    }
-  } else {
-    console.warn(
-      'proposal-send: proposal has no client_id, skipping in-app notification',
-      proposalId
-    );
-  }
+    async sendPrepared(request) {
+      return await sendPreparedResendRequest(request, { timeoutMs: 6_000 });
+    },
 
-  if (!emailOk) {
-    return json({ error: 'send_failed', detail: emailErrorDetail }, 502);
-  }
+    async completeDispatch(input) {
+      const { data, error } = await admin.rpc(
+        "complete_proposal_send_dispatch",
+        {
+          p_dispatch_id: input.dispatchId,
+          p_claim_token: input.claimToken,
+          p_delivery_state: input.deliveryState,
+          p_provider_id: input.providerId ?? null,
+          p_error: input.error ?? null,
+        },
+      );
+      if (error) throw error;
+      return mapDispatchResult(data);
+    },
 
-  return json({ ok: true });
+    async suppressDispatch(input) {
+      const { data, error } = await admin.rpc(
+        "suppress_proposal_send_dispatch",
+        {
+          p_dispatch_id: input.dispatchId,
+          p_claim_token: input.claimToken,
+          p_reason: input.reason,
+        },
+      );
+      if (error) throw error;
+      return mapDispatchResult(data);
+    },
+
+    async releaseDispatch(input) {
+      const { data, error } = await admin.rpc(
+        "release_proposal_send_dispatch",
+        {
+          p_dispatch_id: input.dispatchId,
+          p_claim_token: input.claimToken,
+          p_error: input.error,
+        },
+      );
+      if (error) throw error;
+      return mapDispatchResult(data);
+    },
+
+    async syncEmailLog(dispatchId) {
+      const { error } = await admin.rpc("sync_proposal_send_email_log", {
+        p_dispatch_id: dispatchId,
+      });
+      if (error) throw error;
+    },
+
+    async syncInAppLog(dispatchId) {
+      const { error } = await admin.rpc("sync_proposal_send_in_app_log", {
+        p_dispatch_id: dispatchId,
+      });
+      if (error) throw error;
+    },
+  };
+}
+
+const handler = createProposalSendHandler({
+  authenticate,
+  createGateway,
+  clientPortalUrl: CLIENT_PORTAL_URL,
 });
+
+Deno.serve(handler);

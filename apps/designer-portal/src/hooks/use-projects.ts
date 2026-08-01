@@ -1039,12 +1039,14 @@ export function useCompleteProject() {
     mutationFn: async ({ id, data }: { id: string; data: unknown }) => {
       if (isUuid(id)) {
         const supabase = getSupabase();
-        const { data: row, error } = await supabase
-          .from('projects')
-          .update({ status: 'completed', ...(data as object) })
-          .eq('id', id)
-          .select()
-          .single();
+        const closeout = (data && typeof data === 'object'
+          ? data
+          : {}) as Record<string, unknown>;
+        const { data: row, error } = await supabase.rpc('close_project', {
+          p_project_id: id,
+          p_closure: closeout.closure_checklist ?? closeout.closure ?? null,
+          p_snapshot: closeout.portfolio_snapshot ?? closeout.snapshot ?? null,
+        });
         if (error) throw error;
         return row;
       }

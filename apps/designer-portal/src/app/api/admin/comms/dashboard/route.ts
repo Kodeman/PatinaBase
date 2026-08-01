@@ -61,7 +61,7 @@ export async function GET(req: NextRequest) {
         .from('notification_log')
         .select('*', { count: 'exact', head: true })
         .gte('created_at', since)
-        .in('status', ['delivered', 'opened', 'clicked']),
+        .in('status', ['delivered', 'opened', 'clicked', 'unconfirmed']),
       supabase
         .from('notification_log')
         .select('*', { count: 'exact', head: true })
@@ -97,7 +97,7 @@ export async function GET(req: NextRequest) {
         .from('notification_log')
         .select('created_at')
         .gte('created_at', since)
-        .in('status', ['delivered', 'opened', 'clicked'])
+        .in('status', ['delivered', 'opened', 'clicked', 'unconfirmed'])
         .order('created_at', { ascending: true }),
     ]);
 

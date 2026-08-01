@@ -2,11 +2,12 @@
 
 /**
  * PhaseComposeActions — the persistent quiet DM-Mono action cluster a phase
- * heading wears in compose (Slice 03 §3, R102 "no hover reveal"). Four real
- * <button>s, always visible (touch exists; a hover-revealed affordance is a
+ * heading wears in compose (Slice 03 §3, R102 "no hover reveal"). The available
+ * actions are always visible (touch exists; a hover-revealed affordance is a
  * lie): + Item (reuses the coordination ItemComposer), + Milestone (reveals
  * MilestoneComposer under the meta), Edit dates (reveals the grammar fields),
- * Delete (swaps in the inline typographic confirm — never a modal, D4).
+ * and, for pending phases only, Delete (swaps in the inline typographic
+ * confirm — never a modal, D4).
  *
  * Pure/stateless: which panel is open lives in the spine (one object across
  * all phases), so this only signals intent.
@@ -19,6 +20,7 @@ export interface PhaseComposeActionsProps {
   onAddMilestone: () => void;
   onEditDates: () => void;
   onDelete: () => void;
+  canDelete: boolean;
 }
 
 export function PhaseComposeActions({
@@ -26,6 +28,7 @@ export function PhaseComposeActions({
   onAddMilestone,
   onEditDates,
   onDelete,
+  canDelete,
 }: PhaseComposeActionsProps) {
   return (
     <DocumentActionGroup
@@ -54,14 +57,16 @@ export function PhaseComposeActions({
       >
         Edit dates
       </DocumentAction>
-      <DocumentAction
-        actionKey="open-delete-phase"
-        variant="tertiary"
-        onClick={onDelete}
-        className="text-[var(--color-terracotta)]"
-      >
-        Delete
-      </DocumentAction>
+      {canDelete && (
+        <DocumentAction
+          actionKey="open-delete-phase"
+          variant="tertiary"
+          onClick={onDelete}
+          className="text-[var(--color-terracotta)]"
+        >
+          Delete
+        </DocumentAction>
+      )}
     </DocumentActionGroup>
   );
 }

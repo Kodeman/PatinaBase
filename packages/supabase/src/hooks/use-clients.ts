@@ -177,13 +177,13 @@ export function useClient(clientId: string) {
 }
 
 /**
- * Resolve the current designer's `designer_clients` row for a given client
- * AUTH user id (profiles.id / auth.users.id). RLS scopes designer_clients to
- * the signed-in designer, so this returns at most one row — the relationship
- * between this designer and that client. Use when you hold a project's
- * `client_id` (an auth user id) but need the `designer_clients.id` it maps to —
- * e.g. opening the decision composer, which keys off designer_client_id and
- * fails RLS if handed a raw auth uid.
+ * Resolve the current designer's most-recent `designer_clients` row for a
+ * given client AUTH user id (profiles.id / auth.users.id). Relationship
+ * history intentionally permits more than one row for the same pair, and
+ * studio RLS can expose rows owned by collaborators, so the lookup must both
+ * scope to the signed-in designer and cap the ordered result before calling
+ * `maybeSingle()`. Use when you hold a project's `client_id` but not its
+ * relationship id — e.g. when opening the decision composer.
  */
 export function useDesignerClientForClientUser(
   clientUserId: string | null | undefined,
@@ -194,21 +194,36 @@ export function useDesignerClientForClientUser(
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const supabase = getSupabase() as any;
 
+      const {
+        data: { user },
+        error: authError,
+      } = await supabase.auth.getUser();
+      if (authError) throw authError;
+      if (!user) return null;
+
       const { data, error } = await supabase
         .from('designer_clients')
         .select('id, designer_id, client_id, lead_id')
         .eq('client_id', clientUserId)
+        .eq('designer_id', user.id)
+        .order('updated_at', { ascending: false })
+        .order('created_at', { ascending: false })
+        .order('id', { ascending: false })
+        .limit(1)
         .maybeSingle();
 
       if (error) throw error;
-      return data as {
+      return (data as {
         id: string;
         designer_id: string;
         client_id: string;
         lead_id: string | null;
-      } | null;
+      } | null) ?? null;
     },
     enabled: !!clientUserId,
+    // This is secondary document context. Consumers already render without it;
+    // a failure must not masquerade as failure of the foreground lifecycle act.
+    meta: { errorSurface: 'silent' },
   });
 }
 

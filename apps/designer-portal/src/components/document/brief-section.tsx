@@ -134,7 +134,11 @@ export function BriefSection({ leadId }: { leadId: string }) {
       {/* R61: the triage act, in the document. Accept → Discovery, Nurture →
           People, Pass → declined. Re-derives the Desk in one act (no reload). */}
       {triageable ? (
-        <TriageBar leadId={leadId} variant="brief" />
+        <TriageBar
+          leadId={leadId}
+          variant="brief"
+          arrivalEligible={Boolean(lead.homeowner_id)}
+        />
       ) : (
         <p className="mt-4 border-t border-[var(--color-pearl)] pt-3.5 font-mono text-[9px] uppercase tracking-[0.06em] text-[var(--text-muted)]">
           {lead.status === 'accepted'

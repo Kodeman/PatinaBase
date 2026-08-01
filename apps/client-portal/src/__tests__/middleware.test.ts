@@ -19,9 +19,17 @@ jest.mock("next/server", () => ({
 
 describe("client middleware Universal Link exemption", () => {
   beforeEach(() => {
+    jest.clearAllMocks();
     (NextResponse.next as jest.Mock).mockReturnValue({
       headers: new Map(),
       cookies: { getAll: () => [] },
+    });
+    (NextResponse.redirect as jest.Mock).mockImplementation((url: URL) => ({
+      url,
+      cookies: { set: jest.fn() },
+    }));
+    (createMiddlewareClient as jest.Mock).mockReturnValue({
+      auth: { getUser: jest.fn().mockResolvedValue({ data: { user: null } }) },
     });
   });
 
@@ -30,10 +38,28 @@ describe("client middleware Universal Link exemption", () => {
       headers: new Headers(),
       nextUrl: {
         pathname: "/.well-known/apple-app-site-association",
+        search: "",
         searchParams: new URLSearchParams(),
       },
     } as never);
     expect(response).toBeDefined();
     expect(createMiddlewareClient).not.toHaveBeenCalled();
+  });
+
+  it("preserves pathname and query in the post-sign-in callback", async () => {
+    await middleware({
+      headers: new Headers({ host: "localhost:3002" }),
+      nextUrl: {
+        pathname: "/invoices/invoice-1",
+        search: "?checkout=success&session_id=cs_1",
+        searchParams: new URLSearchParams("checkout=success&session_id=cs_1"),
+      },
+    } as never);
+
+    const redirectUrl = (NextResponse.redirect as jest.Mock).mock.calls[0][0] as URL;
+    expect(redirectUrl.pathname).toBe("/auth/signin");
+    expect(redirectUrl.searchParams.get("callbackUrl")).toBe(
+      "/invoices/invoice-1?checkout=success&session_id=cs_1",
+    );
   });
 });

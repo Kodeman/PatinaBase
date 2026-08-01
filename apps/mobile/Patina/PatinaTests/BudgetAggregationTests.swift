@@ -144,6 +144,38 @@ struct BudgetAggregationTests {
     }
 
     @Test
+    func paymentScheduleVisibilityFollowsProposalTier() throws {
+        let projects = [try project(#"{"id":"P1","name":"Loft"}"#)]
+        let accepted = [
+            try proposal(#"{"id":"curated","project_id":"P1","status":"accepted","client_visibility_tier":"curated"}"#),
+            try proposal(#"{"id":"milestone","project_id":"P1","status":"accepted","client_visibility_tier":"milestone"}"#),
+            try proposal(#"{"id":"full","project_id":"P1","status":"accepted","client_visibility_tier":"full"}"#)
+        ]
+        let sections = BudgetMath.buildSections(
+            projects: projects,
+            acceptedProposals: accepted,
+            milestonesByProposal: [:],
+            visibleInvoices: []
+        )
+        let proposalsById = Dictionary(
+            uniqueKeysWithValues: (sections.first?.proposals ?? []).map { ($0.id, $0) }
+        )
+        #expect(proposalsById["curated"]?.showsPaymentSchedule == false)
+        #expect(proposalsById["milestone"]?.showsPaymentSchedule == true)
+        #expect(proposalsById["full"]?.showsPaymentSchedule == true)
+    }
+
+    @Test
+    func budgetCardGuardsTheEntirePaymentScheduleSurface() throws {
+        let sourceURL = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent() // PatinaTests
+            .deletingLastPathComponent() // Patina project directory
+            .appendingPathComponent("Patina/Features/Budget/BudgetBlocks.swift")
+        let source = try String(contentsOf: sourceURL, encoding: .utf8)
+        #expect(source.contains("if proposal.showsPaymentSchedule {\n                    scheduleBlock"))
+    }
+
+    @Test
     func orphanMoneyBearingProjectStillGetsASection() throws {
         // A visible invoice whose project isn't in the spine still surfaces,
         // using the embedded project name.

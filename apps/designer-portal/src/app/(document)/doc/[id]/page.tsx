@@ -12,7 +12,11 @@
 import { use, useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { useProjectV2, useProjectPhases, useProposalFeedback } from '@patina/supabase';
+import {
+  useProjectV2,
+  useProjectPhases,
+  useProposalFeedback,
+} from '@patina/supabase';
 import { rollupVerdicts, formatVerdictRollup } from '@patina/utils';
 import { useDocumentEngagement } from '@/hooks/use-document-state';
 import { useHoldDocument } from '@/hooks/document-time-provider';
@@ -25,6 +29,7 @@ import { deriveSections, type SectionLineage } from '@/lib/document/section-deri
 import type { DocumentStateRow, SectionKey } from '@/lib/document/desk-derivation';
 import { sectionAnchorId } from '@/lib/document/section-anchor';
 import { fmtDay, fmtMonthYear, fmtUsd } from '@/lib/document/format';
+import { documentResolutionState } from '@/lib/document/document-resolution-state';
 import { DocSpine } from '@/components/document/doc-spine';
 import { DocLetterhead } from '@/components/document/doc-letterhead';
 import { SettledBar } from '@/components/document/settled-bar';
@@ -46,11 +51,9 @@ import {
 import { useDocumentSurface } from '@/lib/help-system/use-document-surface';
 import { DOCUMENT_SURFACE_KEYS } from '@/lib/help-system/document-surface-keys';
 import { AccountBand } from '@/components/document/account-band';
-import { PhaseTimeline } from '@/components/document/phase-timeline';
-import { ScheduleRule } from '@/components/document/schedule/schedule-rule';
 import { ScheduleNavProvider } from '@/components/document/schedule/schedule-nav-context';
 import { RippleProvider } from '@/components/document/schedule/schedule-ripple-context';
-import { ScheduleConfirmStrip } from '@/components/document/schedule/schedule-confirm-strip';
+import { ProjectScheduleHandoffMount } from '@/components/document/project-schedule-handoff-mount';
 import { LetterheadInstruments } from '@/components/document/letterhead-instruments';
 import { HouseholdChip } from '@/components/document/household-chip';
 import { ProposalInstruments } from '@/components/document/proposal-instruments';
@@ -60,6 +63,7 @@ import { useDocumentRooms } from '@/hooks/use-document-rooms';
 import { gateState, useSectionGates } from '@/hooks/use-section-work';
 import { deriveFillState } from '@/lib/document/fill-state';
 import { useFeatureFlag } from '@/hooks/use-feature-flag';
+import { useHydrated } from '@/hooks/use-hydrated';
 
 const prettyPhase = (phase: string | null) =>
   phase
@@ -99,8 +103,15 @@ export default function DocumentPage({ params }: { params: Promise<{ id: string 
   useDocumentSurface(DOCUMENT_SURFACE_KEYS.doc); // R89 — scope help to the open document
   const { id } = use(params);
   const router = useRouter();
+  const hydrated = useHydrated();
 
-  const { data: resolution, isLoading } = useDocumentEngagement(id);
+  const {
+    data: resolution,
+    isLoading,
+    isFetching,
+    isError,
+    refetch: retryDocumentResolution,
+  } = useDocumentEngagement(id);
   const row = resolution?.kind === 'engagement' ? resolution.row : null;
   const projectId = row?.project_id ?? '';
   const proposalId = row?.proposal_id ?? '';
@@ -109,6 +120,14 @@ export default function DocumentPage({ params }: { params: Promise<{ id: string 
   const { data: phases } = useProjectPhases(projectId) as { data: AnyRecord[] | undefined };
   const { data: liveProposal } = useProposal(proposalId) as { data: any };
   const others = useDocumentPresence(row?.engagement_id ?? null);
+  const designerClientId =
+    row?.engagement_kind === 'relationship'
+      ? row.engagement_id
+      : row?.engagement_kind === 'proposal'
+        ? (liveProposal?.designer_client_id ?? null)
+        : row?.engagement_kind === 'project'
+          ? (project?.proposal?.designer_client_id ?? null)
+          : null;
 
   // C3 — the proposal's per-line client verdicts, rolled up for a quiet
   // letterhead summary on the open proposal ("4 of 12 approved · 1 flagged").
@@ -263,8 +282,17 @@ export default function DocumentPage({ params }: { params: Promise<{ id: string 
   // C7 — the Schedule Spine flip gate. Rules of hooks: called unconditionally
   // above the early returns below, alongside the page's other hooks.
   const spineGate = useFeatureFlag('schedule-spine');
+  const resolutionState = documentResolutionState({
+    resolutionKind: resolution?.kind,
+    isLoading,
+    isFetching,
+    isError,
+  });
 
-  if (isLoading || resolution?.kind === 'redirect') {
+  // SSR always starts with an empty engagement cache, while client navigation
+  // can arrive with a warm React Query cache. Hold the first client paint to
+  // the server's loading tree so those two render contracts cannot diverge.
+  if (!hydrated || resolutionState === 'loading') {
     return (
       <div className="min-h-screen bg-[var(--doc-paper)]" aria-busy>
         <p className="px-10 py-12 font-heading text-[14px] italic text-[var(--text-muted)]">
@@ -274,7 +302,29 @@ export default function DocumentPage({ params }: { params: Promise<{ id: string 
     );
   }
 
-  if (!row) {
+  if (resolutionState === 'error') {
+    return (
+      <div className="min-h-screen bg-[var(--doc-paper)] px-10 py-12">
+        <p className="mb-3 font-heading text-[16px] text-[var(--color-charcoal)]">
+          This document could not be picked up.
+        </p>
+        <div className="flex items-center gap-4 font-mono text-[10px] uppercase tracking-[0.08em]">
+          <button
+            type="button"
+            className="text-[var(--color-clay)]"
+            onClick={() => void retryDocumentResolution()}
+          >
+            Try again
+          </button>
+          <Link href="/desk" className="text-[var(--text-muted)]">
+            Back to the desk
+          </Link>
+        </div>
+      </div>
+    );
+  }
+
+  if (resolutionState === 'missing' || !row) {
     return (
       <div className="min-h-screen bg-[var(--doc-paper)] px-10 py-12">
         <p className="mb-3 font-heading text-[16px] text-[var(--color-charcoal)]">
@@ -347,6 +397,7 @@ export default function DocumentPage({ params }: { params: Promise<{ id: string 
                 projectId={row.project_id}
                 proposalId={row.proposal_id}
                 clientProfileId={row.client_profile_id}
+                designerClientId={designerClientId}
                 clientName={row.client_name}
                 proposalStatus={liveProposal?.status ?? null}
               />
@@ -496,22 +547,14 @@ export default function DocumentPage({ params }: { params: Promise<{ id: string 
                 S2-4 — the Rule flip gate (same spineGate as the C7 gate below):
                 while it's loading (or resolves off) the old PhaseTimeline
                 renders — fail-closed, zero flash for the non-pilot cohort. */}
-            {row.engagement_kind === 'project' &&
-              row.project_id &&
-              (!spineGate.isLoading && spineGate.value ? (
-                <ScheduleRule projectId={row.project_id} projectTitle={row.title} />
-              ) : (
-                <PhaseTimeline projectId={row.project_id} />
-              ))}
-
-            {/* The confirm strip — R100's "one honest sentence" + Commit / Esc ·
-                Revert, rendered directly under the Rule. It is null unless a ripple
-                session is active, and a session only ever arises from the gated
-                Rule/Spine surfaces — so gate-off is byte-identical (no strip, no
-                DOM). Gated on project_id only for the non-null commit target. */}
-            {row.engagement_kind === 'project' && row.project_id && (
-              <ScheduleConfirmStrip projectId={row.project_id} />
-            )}
+            <ProjectScheduleHandoffMount
+              engagementKind={row.engagement_kind}
+              projectId={row.project_id}
+              projectTitle={row.title}
+              projectStatus={project?.status}
+              phases={phases}
+              showScheduleRule={!spineGate.isLoading && spineGate.value}
+            />
 
           {/* The active section — exactly one (§4). */}
           <div
@@ -683,6 +726,7 @@ export default function DocumentPage({ params }: { params: Promise<{ id: string 
           <DocColophon
             projectId={row.project_id}
             designerId={row.designer_id}
+            projectStatus={row.project_status}
             isPaused={row.is_paused}
             handsOnTheWork={others}
           />

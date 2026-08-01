@@ -79,7 +79,7 @@ function NestedSheetHarness() {
 }
 
 describe('DocSheet', () => {
-  it('labels the dialog, isolates scroll, and restores its opener after backdrop close', async () => {
+  it('labels the dialog, isolates scroll, and restores its opener after visible close', async () => {
     render(<SheetHarness />);
     const opener = screen.getByRole('button', { name: 'Open orders' });
     opener.focus();
@@ -103,24 +103,42 @@ describe('DocSheet', () => {
     expect(document.body.style.overflow).toBe('');
   });
 
+
+  it('dismisses from the visible backdrop without trapping pointer state', async () => {
+    render(<SheetHarness />);
+    fireEvent.click(screen.getByRole('button', { name: 'Open orders' }));
+
+    expect(screen.getByRole('dialog', { name: 'Order review' })).toBeInTheDocument();
+    fireEvent.click(screen.getByTestId('doc-sheet-backdrop'));
+
+    await waitFor(() =>
+      expect(
+        screen.queryByRole('dialog', { name: 'Order review' }),
+      ).not.toBeInTheDocument(),
+    );
+    expect(document.body.style.overflow).toBe('');
+  });
+
   it('cycles Tab and Shift+Tab inside the sheet', async () => {
     render(<SheetHarness />);
     fireEvent.click(screen.getByRole('button', { name: 'Open orders' }));
 
     const dialog = screen.getByRole('dialog', { name: 'Order review' });
+    const close = screen.getByRole('button', { name: 'Close sheet' });
     const first = screen.getByRole('button', { name: 'First action' });
     const last = screen.getByRole('button', { name: 'Last action' });
     await waitFor(() => expect(dialog).toHaveFocus());
 
     fireEvent.keyDown(document, { key: 'Tab' });
-    expect(first).toHaveFocus();
+    expect(close).toHaveFocus();
+    expect(first).not.toHaveFocus();
     expect(screen.getByText('Hidden action')).not.toHaveFocus();
 
     last.focus();
     fireEvent.keyDown(document, { key: 'Tab' });
-    expect(first).toHaveFocus();
+    expect(close).toHaveFocus();
 
-    first.focus();
+    close.focus();
     fireEvent.keyDown(document, { key: 'Tab', shiftKey: true });
     expect(last).toHaveFocus();
   });
@@ -205,6 +223,7 @@ describe('DocSheet', () => {
     expect(inner).toHaveAttribute('aria-modal', 'true');
     await waitFor(() => expect(inner).toHaveFocus());
 
+    const nestedClose = screen.getByRole('button', { name: 'Close sheet' });
     const firstNested = screen.getByRole('button', {
       name: 'First nested action',
     });
@@ -212,10 +231,11 @@ describe('DocSheet', () => {
       name: 'Last nested action',
     });
     fireEvent.keyDown(document, { key: 'Tab' });
-    expect(firstNested).toHaveFocus();
+    expect(nestedClose).toHaveFocus();
+    expect(firstNested).not.toHaveFocus();
     lastNested.focus();
     fireEvent.keyDown(document, { key: 'Tab' });
-    expect(firstNested).toHaveFocus();
+    expect(nestedClose).toHaveFocus();
 
     fireEvent.keyDown(document, { key: 'Escape' });
     await waitFor(() => expect(screen.getAllByRole('dialog')).toHaveLength(1));

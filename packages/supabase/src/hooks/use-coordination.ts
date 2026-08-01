@@ -139,6 +139,8 @@ export interface CoordinationItem {
 }
 
 export interface CreateCoordinationItemInput {
+  /** Optional caller-owned idempotency key. Generated when omitted. */
+  itemId?: string;
   designerClientId: string;
   projectId?: string;
   title: string;
@@ -152,7 +154,7 @@ export interface CreateCoordinationItemInput {
   decisionType?: DecisionType;
   /** The project phase (00084 phase_id FK) this item links to. R55. */
   phaseId?: string | null;
-  /** Persist as a draft (default) or publish straight to pending. */
+  /** Publish straight to pending (default) or persist as a draft. */
   status?: 'draft' | 'pending';
   /** Selection options (only meaningful for coordination_kind='selection'). */
   options?: {
@@ -444,33 +446,18 @@ export function useResolveCoordinationItem(projectId: string | null | undefined)
     mutationFn: async (input: ResolveCoordinationItemInput) => {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const supabase = getSupabase() as any;
-      const { data: { user } } = await supabase.auth.getUser();
-
-      const { error: rpcError } = await supabase.rpc('resolve_coordination_item', {
+      const { data, error: rpcError } = await supabase.rpc('resolve_coordination_item', {
         p_item_id: input.itemId,
         p_selected_option_id: input.selectedOptionId ?? null,
         p_answer: input.answer ?? null,
         p_revision_id: input.revisionId ?? null,
         p_next_court: input.nextCourt ?? null,
-        p_resolved_by: input.resolvedBy ?? user?.id ?? null,
+        // Compatibility parameter remains in the SQL signature, but browser
+        // attribution always comes from auth.uid(); never forward a spoofable id.
+        p_resolved_by: null,
       });
       if (rpcError) throw rpcError;
 
-      // The item is now resolved — notify the owning designer. Non-fatal, same
-      // posture as the decision resolve path.
-      const { error: notifyError } = await supabase.rpc('notify_decision_resolved', {
-        p_decision_id: input.itemId,
-      });
-      if (notifyError) {
-        console.warn('useResolveCoordinationItem: notify_decision_resolved failed', notifyError);
-      }
-
-      const { data, error } = await supabase
-        .from('client_decisions')
-        .select('*')
-        .eq('id', input.itemId)
-        .single();
-      if (error) throw error;
       return data as CoordinationItem;
     },
 
@@ -561,10 +548,8 @@ function defaultNextCourt(
 
 /**
  * Raise a coordination item — generalizes useCreateDecision across all five
- * kinds. Inserts a `client_decisions` row carrying coordination_kind / court /
- * blocks_kind, inserts selection options (when any), wires the dependency web
- * (project_ffe_items.blocked_by_decision_id + project_tasks.blocked_by_item_id),
- * and fires notify_decision_required when published. Drafts stay quiet.
+ * kinds. The checked create RPC owns the decision row, selection options,
+ * dependency web, and first notification in one transaction. Drafts stay quiet.
  */
 export function useCreateCoordinationItem(projectId: string | null | undefined) {
   const queryClient = useQueryClient();
@@ -574,91 +559,46 @@ export function useCreateCoordinationItem(projectId: string | null | undefined) 
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const supabase = getSupabase() as any;
       const status = input.status ?? 'pending';
-
-      const { data: item, error: itemError } = await supabase
-        .from('client_decisions')
-        .insert({
-          designer_client_id: input.designerClientId,
-          project_id: input.projectId ?? projectId ?? null,
-          title: input.title,
-          context: input.context || null,
-          due_date: input.dueDate || null,
-          coordination_kind: input.coordinationKind,
-          court: input.court,
-          court_party_id: input.courtPartyId ?? null,
-          blocks_kind: input.blocksKind ?? 'none',
-          // A selection is a 'choice' decision; the other four ride 'choice' too
-          // (the coordination_kind axis carries the real shape — see 00213).
-          decision_kind: 'choice',
-          // R55: the subject-matter taxonomy (00084 decision_type) the composer's
-          // "kind" chips set for a selection; coordination kinds keep the default.
-          decision_type: input.decisionType ?? 'product',
-          phase_id: input.phaseId ?? null,
-          blocking_status: blockingStatusFor(input.blocksKind),
-          status,
-          sent_at: status === 'draft' ? null : new Date().toISOString(),
-        })
-        .select()
-        .single();
-      if (itemError) throw itemError;
-
-      // Selection options (only selections carry them).
-      if (
-        input.coordinationKind === 'selection' &&
-        input.options &&
-        input.options.length > 0
-      ) {
-        const { error: optErr } = await supabase
-          .from('client_decision_options')
-          .insert(
-            input.options.map((opt, i) => ({
-              decision_id: item.id,
+      const itemId = input.itemId ?? crypto.randomUUID();
+      const rpcOptions = input.coordinationKind === 'selection'
+        ? (input.options ?? []).map((opt, i) => ({
               name: opt.name,
-              image_url: opt.imageUrl || null,
-              designer_note: opt.designerNote || null,
-              is_recommended: opt.isRecommended || false,
+              image_url: opt.imageUrl ?? null,
+              designer_note: opt.designerNote ?? null,
+              is_recommended: opt.isRecommended ?? false,
               price: opt.price ?? null,
               quantity: opt.quantity ?? 1,
               cost_delta_cents: opt.costDeltaCents ?? null,
               lead_time_days_delta: opt.leadTimeDaysDelta ?? null,
-              product_id: opt.productId || null,
+              product_id: opt.productId ?? null,
               sort_order: i,
-            })),
-          );
-        if (optErr) throw optErr;
-      }
+            }))
+        : [];
 
-      // Wire the dependency web — FF&E lines this item blocks.
-      if (input.blockedFfeItemIds && input.blockedFfeItemIds.length > 0) {
-        const { error: ffeErr } = await supabase
-          .from('project_ffe_items')
-          .update({ blocked: true, blocked_by_decision_id: item.id })
-          .in('id', input.blockedFfeItemIds);
-        if (ffeErr) {
-          console.warn('useCreateCoordinationItem: failed to tag blocked FF&E items', ffeErr);
-        }
-      }
-
-      // Wire the dependency web — tasks this item blocks (00215 blocked_by_item_id).
-      if (input.blockedTaskIds && input.blockedTaskIds.length > 0) {
-        const { error: taskErr } = await supabase
-          .from('project_tasks')
-          .update({ status: 'blocked', blocked_by_item_id: item.id })
-          .in('id', input.blockedTaskIds);
-        if (taskErr) {
-          console.warn('useCreateCoordinationItem: failed to tag blocked tasks', taskErr);
-        }
-      }
-
-      // Published items knock on the client (or the recorded court). Non-fatal.
-      if (status === 'pending') {
-        const { error: notifyErr } = await supabase.rpc('notify_decision_required', {
-          p_decision_id: item.id,
-        });
-        if (notifyErr) {
-          console.warn('useCreateCoordinationItem: notify_decision_required failed', notifyErr);
-        }
-      }
+      const { data: item, error: itemError } = await supabase.rpc('create_client_decision', {
+        p_decision_id: itemId,
+        p_payload: {
+          designer_client_id: input.designerClientId,
+          project_id: input.projectId ?? projectId ?? null,
+          title: input.title,
+          context: input.context ?? null,
+          due_date: input.dueDate ?? null,
+          coordination_kind: input.coordinationKind,
+          court: input.court,
+          court_party_id: input.courtPartyId ?? null,
+          blocks_kind: input.blocksKind ?? 'none',
+          decision_kind: 'choice',
+          decision_type: input.decisionType ?? 'product',
+          phase_id: input.phaseId ?? null,
+          blocking_status: blockingStatusFor(input.blocksKind),
+          status,
+        },
+        p_options: rpcOptions,
+        p_blocked_ffe_item_ids: input.blockedFfeItemIds ?? [],
+        p_blocked_task_ids: input.blockedTaskIds ?? [],
+      });
+      if (itemError) throw itemError;
+      if (!item) throw new Error('Coordination item creation returned no row');
 
       return item as CoordinationItem;
     },
@@ -693,19 +633,10 @@ export function useNudgeCoordinationItem(projectId: string | null | undefined) {
     mutationFn: async ({ itemId }: { itemId: string }) => {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const supabase = getSupabase() as any;
-      const { data, error } = await supabase
-        .from('client_decisions')
-        .update({ reminder_sent_at: new Date().toISOString() })
-        .eq('id', itemId)
-        .select()
-        .single();
-      if (error) throw error;
-
-      // Re-knock the client/court that the item is waiting on. Non-fatal.
-      const { error: notifyErr } = await supabase.rpc('notify_decision_required', {
+      const { data, error } = await supabase.rpc('stamp_client_decision_reminder', {
         p_decision_id: itemId,
       });
-      if (notifyErr) console.warn('useNudgeCoordinationItem: notify failed', notifyErr);
+      if (error) throw error;
 
       return data as CoordinationItem;
     },
@@ -716,18 +647,28 @@ export function useNudgeCoordinationItem(projectId: string | null | undefined) {
 }
 
 /** Extend — push a waiting item's due date out (reuses the decision update path). */
+export interface ExtendCoordinationItemInput {
+  itemId: string;
+  dueDate: string | null;
+  expectedUpdatedAt: string;
+}
+
 export function useExtendCoordinationItem(projectId: string | null | undefined) {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: async ({ itemId, dueDate }: { itemId: string; dueDate: string | null }) => {
+    mutationFn: async ({
+      itemId,
+      dueDate,
+      expectedUpdatedAt,
+    }: ExtendCoordinationItemInput) => {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const supabase = getSupabase() as any;
-      const { data, error } = await supabase
-        .from('client_decisions')
-        .update({ due_date: dueDate })
-        .eq('id', itemId)
-        .select()
-        .single();
+      const { data, error } = await supabase.rpc('update_client_decision', {
+        p_decision_id: itemId,
+        p_patch: { due_date: dueDate },
+        p_options: null,
+        p_expected_updated_at: expectedUpdatedAt,
+      });
       if (error) throw error;
       return data as CoordinationItem;
     },
@@ -742,6 +683,13 @@ export function useExtendCoordinationItem(projectId: string | null | undefined) 
  * A plain `court` update (+ the concrete party row when gc/vendor). The item
  * stays pending; only whose move it is changes.
  */
+export interface ReassignCoordinationItemInput {
+  itemId: string;
+  court: Court;
+  courtPartyId?: string | null;
+  expectedUpdatedAt: string;
+}
+
 export function useReassignCoordinationItem(projectId: string | null | undefined) {
   const queryClient = useQueryClient();
   return useMutation({
@@ -749,21 +697,18 @@ export function useReassignCoordinationItem(projectId: string | null | undefined
       itemId,
       court,
       courtPartyId,
-    }: {
-      itemId: string;
-      court: Court;
-      courtPartyId?: string | null;
-    }) => {
+      expectedUpdatedAt,
+    }: ReassignCoordinationItemInput) => {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const supabase = getSupabase() as any;
       const patch: Record<string, unknown> = { court };
       if (courtPartyId !== undefined) patch.court_party_id = courtPartyId;
-      const { data, error } = await supabase
-        .from('client_decisions')
-        .update(patch)
-        .eq('id', itemId)
-        .select()
-        .single();
+      const { data, error } = await supabase.rpc('update_client_decision', {
+        p_decision_id: itemId,
+        p_patch: patch,
+        p_options: null,
+        p_expected_updated_at: expectedUpdatedAt,
+      });
       if (error) throw error;
       return data as CoordinationItem;
     },
@@ -779,6 +724,13 @@ export function useReassignCoordinationItem(projectId: string | null | undefined
  * next revision row and leaves the item pending; the resolve RPC later approves a
  * revision id.
  */
+export interface SubmitCoordinationRevisionInput {
+  itemId: string;
+  attachments?: unknown[];
+  note?: string | null;
+  status?: 'submitted' | 'revise_resubmit';
+}
+
 export function useSubmitCoordinationRevision(projectId: string | null | undefined) {
   const queryClient = useQueryClient();
   return useMutation({
@@ -787,21 +739,15 @@ export function useSubmitCoordinationRevision(projectId: string | null | undefin
       attachments,
       note,
       status,
-    }: {
-      itemId: string;
-      attachments?: unknown[];
-      note?: string | null;
-      status?: 'submitted' | 'approved' | 'rejected' | 'revise_resubmit';
-    }) => {
+    }: SubmitCoordinationRevisionInput) => {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const supabase = getSupabase() as any;
-      const { data: { user } } = await supabase.auth.getUser();
       const { data, error } = await supabase.rpc('submit_coordination_revision', {
         p_item_id: itemId,
         p_attachments: attachments ?? [],
         p_note: note ?? null,
         p_status: status ?? 'submitted',
-        p_submitted_by: user?.id ?? null,
+        p_submitted_by: null,
       });
       if (error) throw error;
       return data as CoordinationItemRevision;
@@ -902,8 +848,11 @@ function invalidateCoordination(
 
 export interface UpdateCoordinationItemInput {
   itemId: string;
+  /** Compare-and-swap token from the draft shown in the composer. */
+  expectedUpdatedAt: string;
   /** Carried for cache scoping (the client-decisions key). */
   designerClientId: string;
+  /** Carried for cache scoping; coordination edits cannot move projects. */
   projectId?: string;
   title?: string;
   context?: string | null;
@@ -951,71 +900,34 @@ export function useUpdateCoordinationItem(projectId: string | null | undefined) 
       if (input.decisionType !== undefined) patch.decision_type = input.decisionType;
       if (input.phaseId !== undefined) patch.phase_id = input.phaseId ?? null;
 
-      const { data: item, error: itemError } = await supabase
-        .from('client_decisions')
-        .update(patch)
-        .eq('id', input.itemId)
-        .select()
-        .single();
+      const rpcOptions = input.options === undefined
+        ? null
+        : input.options.map((opt, i) => ({
+            name: opt.name,
+            image_url: opt.imageUrl || null,
+            designer_note: opt.designerNote || null,
+            is_recommended: opt.isRecommended || false,
+            price: opt.price ?? null,
+            quantity: opt.quantity ?? 1,
+            cost_delta_cents: opt.costDeltaCents ?? null,
+            lead_time_days_delta: opt.leadTimeDaysDelta ?? null,
+            product_id: opt.productId || null,
+            sort_order: i,
+          }));
+
+      const { data: item, error: itemError } = await supabase.rpc(
+        'update_coordination_item',
+        {
+          p_item_id: input.itemId,
+          p_patch: patch,
+          p_options: rpcOptions,
+          p_blocked_ffe_item_ids: input.blockedFfeItemIds ?? null,
+          p_blocked_task_ids: input.blockedTaskIds ?? null,
+          p_expected_updated_at: input.expectedUpdatedAt,
+        },
+      );
       if (itemError) throw itemError;
-
-      // 2) Replace the option set when provided (delete-then-insert, like
-      //    useUpdateDecision). Drafts have no client picks to dangle.
-      if (input.options !== undefined) {
-        const { error: delErr } = await supabase
-          .from('client_decision_options')
-          .delete()
-          .eq('decision_id', input.itemId);
-        if (delErr) throw delErr;
-        if (input.options.length > 0) {
-          const { error: insErr } = await supabase
-            .from('client_decision_options')
-            .insert(
-              input.options.map((opt, i) => ({
-                decision_id: input.itemId,
-                name: opt.name,
-                image_url: opt.imageUrl || null,
-                designer_note: opt.designerNote || null,
-                is_recommended: opt.isRecommended || false,
-                price: opt.price ?? null,
-                quantity: opt.quantity ?? 1,
-                cost_delta_cents: opt.costDeltaCents ?? null,
-                lead_time_days_delta: opt.leadTimeDaysDelta ?? null,
-                product_id: opt.productId || null,
-                sort_order: i,
-              })),
-            );
-          if (insErr) throw insErr;
-        }
-      }
-
-      // 3) Re-tag the FF&E gate — clear this item's stale links, set the new set.
-      if (input.blockedFfeItemIds !== undefined) {
-        await supabase
-          .from('project_ffe_items')
-          .update({ blocked: false, blocked_by_decision_id: null })
-          .eq('blocked_by_decision_id', input.itemId);
-        if (input.blockedFfeItemIds.length > 0) {
-          await supabase
-            .from('project_ffe_items')
-            .update({ blocked: true, blocked_by_decision_id: input.itemId })
-            .in('id', input.blockedFfeItemIds);
-        }
-      }
-
-      // 4) Re-tag the task gate the same way (00215 blocked_by_item_id).
-      if (input.blockedTaskIds !== undefined) {
-        await supabase
-          .from('project_tasks')
-          .update({ status: 'todo', blocked_by_item_id: null })
-          .eq('blocked_by_item_id', input.itemId);
-        if (input.blockedTaskIds.length > 0) {
-          await supabase
-            .from('project_tasks')
-            .update({ status: 'blocked', blocked_by_item_id: input.itemId })
-            .in('id', input.blockedTaskIds);
-        }
-      }
+      if (!item) throw new Error('Coordination item update returned no row');
 
       return item as CoordinationItem;
     },
@@ -1031,10 +943,10 @@ export function useUpdateCoordinationItem(projectId: string | null | undefined) 
 
 /**
  * Publish a draft (draft→pending) — the composer's "Publish →" on an existing
- * draft. Flips status + stamps sent_at + knocks on the recorded court. Because a
- * gated FF&E line already carries blocked=true (set at create), flipping the
- * decision to 'pending' is exactly what lights the `decision_due` stamp (§5,
- * R55). Idempotent: a no-op when the row is already past draft.
+ * draft. Its lifecycle RPC owns the status, sent_at stamp, and notification.
+ * Because a gated FF&E line already carries blocked=true (set at create),
+ * flipping the decision to 'pending' lights the `decision_due` stamp (§5, R55).
+ * Idempotent: a no-op when the row is already past draft.
  */
 export function usePublishCoordinationItem(projectId: string | null | undefined) {
   const queryClient = useQueryClient();
@@ -1043,31 +955,17 @@ export function usePublishCoordinationItem(projectId: string | null | undefined)
     mutationFn: async (input: { itemId: string; designerClientId?: string }) => {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const supabase = getSupabase() as any;
-      const { data: item, error } = await supabase
-        .from('client_decisions')
-        .update({ status: 'pending', sent_at: new Date().toISOString() })
-        .eq('id', input.itemId)
-        .eq('status', 'draft')
-        .select()
-        .maybeSingle();
+      const { data: item, error } = await supabase.rpc('publish_client_decision', {
+        p_decision_id: input.itemId,
+      });
       if (error) throw error;
-
-      // Already-published (double-fire) returns no row — quietly idempotent.
-      if (item) {
-        const { error: notifyErr } = await supabase.rpc('notify_decision_required', {
-          p_decision_id: input.itemId,
-        });
-        if (notifyErr) {
-          console.warn('usePublishCoordinationItem: notify_decision_required failed', notifyErr);
-        }
-      }
-      return (item ?? null) as CoordinationItem | null;
+      return item as CoordinationItem;
     },
     onSuccess: (data, input) => {
       invalidateCoordination(
         queryClient,
-        data?.project_id ?? projectId ?? null,
-        data?.designer_client_id ?? input.designerClientId ?? null,
+        data.project_id ?? projectId ?? null,
+        data.designer_client_id ?? input.designerClientId ?? null,
       );
     },
   });
@@ -1088,19 +986,9 @@ export function useDeleteCoordinationItem(projectId: string | null | undefined) 
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const supabase = getSupabase() as any;
 
-      await supabase
-        .from('project_ffe_items')
-        .update({ blocked: false, blocked_by_decision_id: null })
-        .eq('blocked_by_decision_id', input.itemId);
-      await supabase
-        .from('project_tasks')
-        .update({ status: 'todo', blocked_by_item_id: null })
-        .eq('blocked_by_item_id', input.itemId);
-
-      const { error } = await supabase
-        .from('client_decisions')
-        .delete()
-        .eq('id', input.itemId);
+      const { error } = await supabase.rpc('delete_client_decision_draft', {
+        p_decision_id: input.itemId,
+      });
       if (error) throw error;
       return input;
     },

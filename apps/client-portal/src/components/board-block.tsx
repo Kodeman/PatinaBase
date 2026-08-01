@@ -2,7 +2,7 @@
 
 import {
   useBoardsWithItems,
-  useBoardFeedback,
+  useClientBoardFeedback,
   type ProposalBoardSummary,
   type ItemFeedback,
 } from '@patina/supabase';
@@ -52,7 +52,7 @@ export function BoardsBlock({ boards, resolved, proposalId, feedbackEnabled }: B
   const { data } = useBoardsWithItems(resolved ? null : effectiveProposalId);
 
   // Board-pin verdicts for the authed client (inert unless feedback is on).
-  const { data: feedbackRows = [] } = useBoardFeedback(
+  const { data: feedbackRows = [] } = useClientBoardFeedback(
     feedbackEnabled && effectiveProposalId ? effectiveProposalId : undefined,
   );
   const feedbackByPin = groupByBoardItem(feedbackRows);

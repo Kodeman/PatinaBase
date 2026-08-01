@@ -33,12 +33,7 @@ export function useProjectDocuments(projectId: string | null | undefined) {
       const supabase = getSupabase() as any;
 
       const [{ data: proposals }, { data: scopes }] = await Promise.all([
-        supabase
-          .from('proposals')
-          .select('id, title, status, total_amount, signed_at, sent_at, created_at')
-          .eq('project_id', projectId)
-          .in('status', ['sent', 'viewed', 'accepted', 'declined', 'expired'])
-          .order('created_at', { ascending: false }),
+        supabase.rpc('list_client_proposals'),
         supabase
           .from('scope_change_requests')
           .select('id, title, status, sent_at, approved_at, created_at')
@@ -46,7 +41,15 @@ export function useProjectDocuments(projectId: string | null | undefined) {
           .order('created_at', { ascending: false }),
       ]);
 
-      const proposalDocs: ProjectDocument[] = (proposals ?? []).map(
+      const proposalDocs: ProjectDocument[] = (proposals ?? [])
+        .filter(
+          // The RPC already authenticates exact client ownership and issued
+          // statuses. Keep the project predicate here because this hook
+          // composes one project's document cabinet.
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          (p: any) => p.project_id === projectId,
+        )
+        .map(
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         (p: any) => ({
           id: p.id,
@@ -56,7 +59,7 @@ export function useProjectDocuments(projectId: string | null | undefined) {
           status: p.status ?? null,
           total_amount_cents: typeof p.total_amount === 'number' ? p.total_amount : null,
           url: `/proposals/${p.id}`,
-        })
+        }),
       );
 
       const scopeDocs: ProjectDocument[] = (scopes ?? []).map(

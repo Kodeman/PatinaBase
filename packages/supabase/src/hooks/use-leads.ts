@@ -56,14 +56,14 @@ export interface LeadFilters {
 // an existing active/proposal relationship — see 00332-era). A bare
 // pair-scoped `.maybeSingle()` — `.eq('designer_id', d).eq('client_id', c)`
 // with no further predicate — ERRORS ("multiple rows returned") the moment a
-// pair carries a second row. `useAcceptLead` and `useBeginDiscovery` both do
-// this read; both are hardened here via the same shared, ordered
-// `.limit(1)` selection so `.maybeSingle()` never sees more than one row.
+// pair carries a second row. The retained legacy `useAcceptLead` path still
+// needs this browser resolver. `useBeginDiscovery` is now the atomic 00386 RPC
+// and resolves the 00331 duplicate policy under a database row lock.
 // ═══════════════════════════════════════════════════════════════════════════
 
 /**
- * Resolve the ONE designer_clients row a pair-scoped act (accept a lead,
- * begin Discovery) should touch, now that a pair can carry more than one row.
+ * Resolve the ONE designer_clients row the retained accept-a-lead act should
+ * touch, now that a pair can carry more than one row.
  * Three ordered `.limit(1)` reads, each capped so `.maybeSingle()` is safe by
  * construction — priority, not a single query, because PostgREST has no
  * portable "prefer X else Y else Z" ordering expression:
@@ -565,119 +565,16 @@ export function useBeginDiscovery() {
     mutationFn: async (leadId: string) => {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const supabase = getSupabase() as any;
+      const { data, error } = await supabase.rpc('begin_discovery', {
+        p_lead_id: leadId,
+      });
 
-      const { data: lead, error: leadError } = await supabase
-        .from('leads')
-        .select('*')
-        .eq('id', leadId)
-        .single();
-
-      if (leadError) throw leadError;
-
-      const { error: updateError } = await supabase
-        .from('leads')
-        .update({
-          status: 'accepted',
-          accepted_at: new Date().toISOString(),
-        })
-        .eq('id', leadId);
-
-      if (updateError) throw updateError;
-
-      // Upsert the designer_clients relationship at status='lead' (Discovery).
-      // Mirrors useAcceptLead's partial-unique-index handling; the target
-      // status is 'lead' (not 'active') — EXCEPT I65 bug 2 (proven): this
-      // must never downgrade an existing active/proposal relationship to
-      // 'lead'. I65 bug 2 ripple: a pair can now carry >1 row, so the read
-      // goes through the same shared ordered-limit(1) selection as
-      // useAcceptLead.
-      if (lead.homeowner_id) {
-        const existing = await resolvePairDesignerClient(
-          supabase,
-          lead.designer_id,
-          lead.homeowner_id,
-          leadId,
-        );
-
-        if (existing && existing.status === 'lead') {
-          // The pair's existing row is already at the Discovery stage (or a
-          // virgin lead-status row not yet linked to any lead) — attach this
-          // lead to it in place.
-          const { error: clientError } = await supabase
-            .from('designer_clients')
-            .update({ source: 'lead', lead_id: leadId, status: 'lead' })
-            .eq('id', existing.id);
-          if (clientError) throw clientError;
-        } else {
-          // I65 bug 2: `existing` here is either absent, or an ENGAGED
-          // (active/proposal) row — never downgrade it. The re-scoped unique
-          // index now permits a second, engagement-scoped 'lead' row for the
-          // same pair, so insert a fresh one instead — mirrors
-          // ceremony_complete's server-side semantics (create fresh or
-          // refuse, never downgrade).
-          const { error: clientError } = await supabase
-            .from('designer_clients')
-            .insert({
-              designer_id: lead.designer_id,
-              client_id: lead.homeowner_id,
-              source: 'lead',
-              lead_id: leadId,
-              status: 'lead',
-            });
-          if (clientError) throw clientError;
-        }
-      } else {
-        // Profile-less captured lead — same two partial unique indexes apply
-        // (idx_designer_clients_unique_email on (designer_id, client_email)
-        // WHERE client_id IS NULL). Check-then-write; keep client_id null.
-        const { data: existingByLead } = await supabase
-          .from('designer_clients')
-          .select('id')
-          .eq('lead_id', leadId)
-          .maybeSingle();
-
-        let existingId: string | null = existingByLead?.id ?? null;
-
-        if (!existingId && lead.contact_email) {
-          const { data: existingByEmail } = await supabase
-            .from('designer_clients')
-            .select('id')
-            .eq('designer_id', lead.designer_id)
-            .eq('client_email', lead.contact_email)
-            .is('client_id', null)
-            .maybeSingle();
-          existingId = existingByEmail?.id ?? null;
-        }
-
-        if (existingId) {
-          const { error: clientError } = await supabase
-            .from('designer_clients')
-            .update({
-              client_name: lead.contact_name ?? null,
-              client_email: lead.contact_email ?? null,
-              source: 'lead',
-              lead_id: leadId,
-              status: 'lead',
-            })
-            .eq('id', existingId);
-          if (clientError) throw clientError;
-        } else {
-          const { error: clientError } = await supabase
-            .from('designer_clients')
-            .insert({
-              designer_id: lead.designer_id,
-              client_id: null,
-              client_name: lead.contact_name ?? null,
-              client_email: lead.contact_email ?? null,
-              source: 'lead',
-              lead_id: leadId,
-              status: 'lead',
-            });
-          if (clientError) throw clientError;
-        }
+      if (error) throw error;
+      if (!data?.lead || !data?.designerClientId) {
+        throw new Error('Discovery transition did not return its canonical identity');
       }
 
-      return lead;
+      return data as { lead: Lead; designerClientId: string };
     },
     onSuccess: (_, leadId) => {
       queryClient.invalidateQueries({ queryKey: ['leads'] });

@@ -158,7 +158,10 @@ export function PhaseTimelineView({ proposalId }: PhaseTimelineViewProps) {
         if (!isPhaseStatus(phase.status)) return null;
         return (
           <div className="flex flex-col gap-4">
-            <DeliverablesEditor phaseId={phase.id} />
+            <DeliverablesEditor
+              proposalId={proposalId}
+              phaseId={phase.id}
+            />
             <GateConditionsEditor
               phaseId={phase.id}
               allPhases={allPhasesLite}

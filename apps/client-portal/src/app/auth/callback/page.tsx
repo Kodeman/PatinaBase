@@ -4,6 +4,7 @@ import { useEffect, useRef } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { createBrowserClient } from '@patina/supabase';
 import { Suspense } from 'react';
+import { buildSignInPath, resolveAuthReturnPath } from '@/lib/auth-redirect';
 
 function CallbackContent() {
   const router = useRouter();
@@ -17,7 +18,10 @@ function CallbackContent() {
     const handleCallback = async () => {
       const supabase = createBrowserClient();
       const code = searchParams.get('code');
-      const next = searchParams.get('callbackUrl') || searchParams.get('next') || '/';
+      const next = resolveAuthReturnPath(
+        searchParams.get('callbackUrl') ?? searchParams.get('next'),
+      );
+      const retryUrl = buildSignInPath(next, 'OAuthCallback');
 
       try {
         // PKCE flow: GoTrue redirected back with `?code=` — exchange it
@@ -27,7 +31,7 @@ function CallbackContent() {
           const { error } = await supabase.auth.exchangeCodeForSession(code);
           if (error) {
             console.error('[Auth Callback Page] exchangeCodeForSession:', error.message);
-            router.replace('/auth/signin?error=OAuthCallback' as any);
+            router.replace(retryUrl as any);
             return;
           }
           router.replace(next as any);
@@ -38,7 +42,7 @@ function CallbackContent() {
         const { data: { session }, error } = await supabase.auth.getSession();
         if (error) {
           console.error('[Auth Callback Page] Session error:', error.message);
-          router.replace('/auth/signin?error=OAuthCallback' as any);
+          router.replace(retryUrl as any);
           return;
         }
         if (session) {
@@ -46,22 +50,24 @@ function CallbackContent() {
           return;
         }
 
+        let timeoutId: ReturnType<typeof setTimeout> | undefined;
         const { data: { subscription } } = supabase.auth.onAuthStateChange(
           (event, session) => {
             if (event === 'SIGNED_IN' && session) {
+              if (timeoutId) clearTimeout(timeoutId);
               subscription.unsubscribe();
               router.replace(next as any);
             }
           }
         );
 
-        setTimeout(() => {
+        timeoutId = setTimeout(() => {
           subscription.unsubscribe();
-          router.replace('/auth/signin?error=OAuthCallback' as any);
+          router.replace(retryUrl as any);
         }, 5000);
       } catch (err) {
         console.error('[Auth Callback Page] Exception:', err);
-        router.replace('/auth/signin?error=OAuthCallback');
+        router.replace(retryUrl as any);
       }
     };
 

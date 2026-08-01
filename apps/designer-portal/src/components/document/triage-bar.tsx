@@ -65,9 +65,12 @@ function addMonths(months: number): string {
 export function TriageBar({
   leadId,
   variant = 'desk',
+  arrivalEligible = false,
 }: {
   leadId: string;
   variant?: Variant;
+  /** Arrival Ceremony needs a registered homeowner for its thread + notices. */
+  arrivalEligible?: boolean;
 }) {
   const qc = useQueryClient();
   const router = useRouter();
@@ -109,7 +112,7 @@ export function TriageBar({
   };
 
   const onAccept = () => {
-    if (!arcLoading && arrivalArc) {
+    if (!arcLoading && arrivalArc && arrivalEligible) {
       acceptRequest.mutate(leadId, {
         onSuccess: () => {
           refreshDesk();
@@ -118,7 +121,16 @@ export function TriageBar({
       });
       return;
     }
-    beginDiscovery.mutate(leadId, { onSuccess: refreshDesk });
+    beginDiscovery.mutate(leadId, {
+      onSuccess: ({ designerClientId }) => {
+        refreshDesk();
+        const destination = `/doc/${designerClientId}`;
+        // The open Brief is the same engagement before its identity moves, so
+        // replace it. From the Desk this is a new picked-up document.
+        if (variant === 'brief') router.replace(destination);
+        else router.push(destination);
+      },
+    });
   };
   const onPass = () => decline.mutate({ leadId }, { onSuccess: refreshDesk });
   const onReconnect = (reconnectAt: string) =>

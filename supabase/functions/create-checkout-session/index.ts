@@ -17,21 +17,26 @@
 // Shared flow (per payable):
 //   1. Auth: resolve the caller from the Authorization header.
 //   2. Load + authorize the payable (service role). Type-specific:
-//        invoice     — caller must be the invoice's client or designer; guards
-//                      status IN (sent, partially_paid) and amount_due > 0.
+//        invoice     — caller must be the invoice's client. An explicit
+//                      test-only designer override is honored only with a
+//                      Stripe test key; guards status / balance in the DB claim.
 //        po_payment  — caller must be the PO's designer AND the PO must be
 //                      is_patina_catalog; guards state <> 'paid' and
 //                      amount_cents > 0. Non-catalog POs are paid outside
 //                      Patina and are rejected 422.
 //   3. Lazy Stripe customer for the paying caller profile.
-//   4. Session reuse / stale-session cleanup (mirrors per type).
+//   4. Invoice only: atomically claim one payer-bound DB attempt + pending
+//      payment before Stripe, then reuse one stable Stripe idempotency key.
+//      PO/direct-order keep their existing pointer flow.
 //   5. Create the session: mode 'payment', card + us_bank_account, one line
 //      item at the payable amount, metadata { payable_type, … } on BOTH the
 //      session and the payment intent (webhook resolution).
 //   6. Persist the session pointer (+ a pending invoice_payments row for
 //      invoices). The stripe-webhook function settles state from the metadata.
 //
-// Returns: { url: string }
+// Invoice ready returns:
+//   { url, amount_cents, currency, checkout_attempt_id, payment_id,
+//     session_id, reused }
 //
 // Required env (supabase secrets set … in hosted/self-hosted prod):
 //   STRIPE_SECRET_KEY   — sk_live_… / sk_test_…
@@ -44,12 +49,22 @@
 import { createClient, SupabaseClient } from 'https://esm.sh/@supabase/supabase-js@2';
 import Stripe from 'npm:stripe@17';
 import { resolveStudioIdentity } from '../_shared/studio-identity.ts';
+import {
+  type InvoiceCheckoutAttempt,
+  InvoiceCheckoutIntegrityError,
+  type InvoiceCheckoutSession,
+  invoiceCheckoutReturnUrl,
+  runInvoiceCheckout,
+} from './invoice-checkout-core.ts';
 
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL')!;
 const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
 const STRIPE_SECRET_KEY = Deno.env.get('STRIPE_SECRET_KEY');
 const CLIENT_PORTAL_URL = Deno.env.get('CLIENT_PORTAL_URL') ?? 'https://client.patina.cloud';
 const DESIGNER_PORTAL_URL = Deno.env.get('DESIGNER_PORTAL_URL') ?? 'https://app.patina.cloud';
+const INVOICE_CHECKOUT_DESIGNER_TEST_MODE =
+  Deno.env.get('INVOICE_CHECKOUT_DESIGNER_TEST_MODE') === 'true' &&
+  STRIPE_SECRET_KEY?.startsWith('sk_test_') === true;
 
 // Pinned — bump deliberately alongside the npm:stripe major.
 const STRIPE_API_VERSION = '2025-02-24.acacia';
@@ -137,7 +152,7 @@ interface InvoiceRow {
   project: { id: string; name: string; client_id: string | null } | null;
 }
 
-/** Invoice payable — existing behavior, unchanged semantics. */
+/** Invoice payable — client-only, except an explicit Stripe-test-mode override. */
 async function loadInvoicePayable(
   admin: SupabaseClient,
   caller: CallerUser,
@@ -161,15 +176,14 @@ async function loadInvoicePayable(
   }
   const invoice = data as unknown as InvoiceRow | null;
 
-  // The payer is normally the project's client; the designer may also start a
-  // checkout against their own invoice (test-mode walkthroughs). Anything
-  // else — including a real-but-foreign invoice id — collapses to 404 so the
-  // endpoint doesn't confirm foreign ids exist.
-  const isClient =
-    !!invoice &&
-    (caller.id === invoice.client_id || caller.id === invoice.project?.client_id);
-  const isDesigner = !!invoice && caller.id === invoice.designer_id;
-  if (!invoice || (!isClient && !isDesigner)) {
+  // A payable invoice belongs to its snapshotted client (falling back to the
+  // project's client for legacy rows). Designers cannot become the payer by
+  // merely owning the invoice. The sole override is explicit AND test-key-only.
+  // Foreign ids collapse to 404 so this endpoint never confirms existence.
+  const isClient = !!invoice && caller.id === (invoice.client_id ?? invoice.project?.client_id);
+  const isDesignerTest =
+    !!invoice && INVOICE_CHECKOUT_DESIGNER_TEST_MODE && caller.id === invoice.designer_id;
+  if (!invoice || (!isClient && !isDesignerTest)) {
     return json({ error: 'invoice_not_found' }, 404);
   }
 
@@ -184,14 +198,22 @@ async function loadInvoicePayable(
   }
   const amountDue = invoice.total_cents - invoice.amount_paid_cents;
   if (amountDue <= 0) {
-    return json({ error: 'nothing_due', detail: 'This invoice has no remaining balance.' }, 409);
+    return json(
+      {
+        error: 'nothing_due',
+        detail: 'This invoice has no remaining balance.',
+      },
+      409
+    );
   }
 
   // Human-readable line item — append the studio name (Designer Studios) when
   // the resolver returns one. This is TEXT ONLY: no Stripe Connect, and the
   // statement descriptor / merchant identity stay "Patina" (single platform
   // account). projectId path is deterministic for multi-studio designers.
-  const identity = await resolveStudioIdentity(admin, { projectId: invoice.project_id });
+  const identity = await resolveStudioIdentity(admin, {
+    projectId: invoice.project_id,
+  });
   const studioSuffix = identity?.name?.trim() ? ` · ${identity.name.trim()}` : '';
   const label = `Invoice ${invoice.invoice_number ?? invoice.id.slice(0, 8)} — ${
     invoice.project?.name ?? 'Patina project'
@@ -213,7 +235,10 @@ async function loadInvoicePayable(
       // was created) — fail its pending payment row.
       await admin
         .from('invoice_payments')
-        .update({ status: 'failed', note: 'Superseded — checkout session expired (amount changed).' })
+        .update({
+          status: 'failed',
+          note: 'Superseded — checkout session expired (amount changed).',
+        })
         .eq('stripe_checkout_session_id', sessionId)
         .eq('status', 'pending');
     },
@@ -348,18 +373,26 @@ async function loadPoPaymentPayable(
 
   if (payment.state === 'paid') {
     return json(
-      { error: 'po_payment_already_paid', detail: 'This purchase-order payment has already been paid.' },
+      {
+        error: 'po_payment_already_paid',
+        detail: 'This purchase-order payment has already been paid.',
+      },
       409
     );
   }
   if (payment.amount_cents <= 0) {
-    return json({ error: 'nothing_due', detail: 'This purchase-order payment has no balance due.' }, 409);
+    return json(
+      {
+        error: 'nothing_due',
+        detail: 'This purchase-order payment has no balance due.',
+      },
+      409
+    );
   }
 
   const poLabel = po.po_number ?? `PO ${po.id.slice(0, 8)}`;
   const vendorName = po.vendor?.name?.trim() || 'vendor';
-  const kindLabel =
-    payment.label?.trim() || PO_PAYMENT_KIND_LABEL[payment.kind] || 'Payment';
+  const kindLabel = payment.label?.trim() || PO_PAYMENT_KIND_LABEL[payment.kind] || 'Payment';
   const lineItemName = `${poLabel} — ${vendorName} · ${kindLabel}`;
 
   const returnBase = `${DESIGNER_PORTAL_URL}/desk?book=orders&po=${po.id}`;
@@ -454,13 +487,19 @@ async function loadDirectOrderPayable(
 
   if (order.status === 'paid') {
     return json(
-      { error: 'direct_order_already_paid', detail: 'This order has already been paid.' },
+      {
+        error: 'direct_order_already_paid',
+        detail: 'This order has already been paid.',
+      },
       409
     );
   }
   if (order.status === 'canceled') {
     return json(
-      { error: 'direct_order_canceled', detail: 'This order was canceled and can no longer be paid.' },
+      {
+        error: 'direct_order_canceled',
+        detail: 'This order was canceled and can no longer be paid.',
+      },
       409
     );
   }
@@ -478,7 +517,13 @@ async function loadDirectOrderPayable(
     );
   }
   if (order.amount_cents <= 0) {
-    return json({ error: 'nothing_due', detail: 'This order has no balance due.' }, 409);
+    return json(
+      {
+        error: 'nothing_due',
+        detail: 'This order has no balance due.',
+      },
+      409
+    );
   }
 
   return {
@@ -531,13 +576,11 @@ async function loadDirectOrderPayable(
 // Shared driver: ensure Stripe customer → session reuse → create → persist.
 // ─────────────────────────────────────────────────────────────────────────────
 
-async function startCheckout(
+async function ensureStripeCustomer(
   admin: SupabaseClient,
   stripe: Stripe,
-  caller: CallerUser,
-  payable: Payable
-): Promise<Response> {
-  // ── Lazy Stripe customer for the paying profile ──────────────────────────
+  caller: CallerUser
+): Promise<string | Response> {
   const { data: payerProfile, error: payerErr } = await admin
     .from('profiles')
     .select('id, email, full_name, stripe_customer_id')
@@ -548,26 +591,273 @@ async function startCheckout(
     return json({ error: 'payer_profile_not_found' }, 500);
   }
 
-  let customerId: string | null = (payerProfile as any).stripe_customer_id ?? null;
+  let candidate = (payerProfile as any).stripe_customer_id as string | null;
   try {
-    if (!customerId) {
-      const customer = await stripe.customers.create({
-        email: (payerProfile as any).email ?? undefined,
-        name: (payerProfile as any).full_name ?? undefined,
-        metadata: { profile_id: caller.id },
-      });
-      customerId = customer.id;
+    if (!candidate) {
+      const customer = await stripe.customers.create(
+        {
+          email: (payerProfile as any).email ?? undefined,
+          name: (payerProfile as any).full_name ?? undefined,
+          metadata: { profile_id: caller.id },
+        },
+        { idempotencyKey: `patina-profile-customer:${caller.id}` }
+      );
+      candidate = customer.id;
       const { error: persistErr } = await admin
         .from('profiles')
-        .update({ stripe_customer_id: customerId })
+        .update({ stripe_customer_id: candidate })
         .eq('id', caller.id)
         .is('stripe_customer_id', null);
       if (persistErr) {
-        // Non-fatal — worst case we create another customer next time.
         console.error('create-checkout-session: failed to persist stripe_customer_id', persistErr);
+        return json(
+          {
+            error: 'customer_persistence_failed',
+            detail: 'Checkout was not opened.',
+          },
+          500
+        );
       }
     }
 
+    // Use the compare-and-set winner, never an unpersisted candidate customer.
+    const { data: canonical, error: canonicalErr } = await admin
+      .from('profiles')
+      .select('stripe_customer_id')
+      .eq('id', caller.id)
+      .maybeSingle();
+    const customerId = (canonical as any)?.stripe_customer_id as string | null;
+    if (canonicalErr || !customerId) {
+      console.error('create-checkout-session: canonical customer read failed', canonicalErr);
+      return json(
+        {
+          error: 'customer_persistence_failed',
+          detail: 'Checkout was not opened.',
+        },
+        500
+      );
+    }
+    return customerId;
+  } catch (error) {
+    const detail = error instanceof Error ? error.message : 'Stripe customer unavailable.';
+    console.error('create-checkout-session: customer creation failed', detail);
+    return json({ error: 'stripe_error', detail }, 502);
+  }
+}
+
+function stripeSessionView(session: Stripe.Checkout.Session): InvoiceCheckoutSession {
+  const customerId =
+    typeof session.customer === 'string'
+      ? session.customer
+      : session.customer && !('deleted' in session.customer)
+        ? session.customer.id
+        : null;
+  return {
+    id: session.id,
+    status: session.status,
+    paymentStatus: session.payment_status,
+    url: session.url,
+    amountTotal: session.amount_total,
+    currency: session.currency,
+    customerId,
+    metadata: Object.fromEntries(
+      Object.entries(session.metadata ?? {}).filter(
+        (entry): entry is [string, string] => typeof entry[1] === 'string'
+      )
+    ),
+  };
+}
+
+function mapInvoiceAttempt(data: any): InvoiceCheckoutAttempt {
+  if (
+    !data?.attempt_id ||
+    !data?.payment_id ||
+    !data?.invoice_id ||
+    !data?.payer_id ||
+    !data?.stripe_customer_id ||
+    !Number.isInteger(data?.amount_cents) ||
+    !data?.currency ||
+    !data?.stripe_idempotency_key
+  ) {
+    throw new Error('Database returned an invalid invoice Checkout claim.');
+  }
+  return {
+    attemptId: data.attempt_id,
+    paymentId: data.payment_id,
+    invoiceId: data.invoice_id,
+    payerId: data.payer_id,
+    stripeCustomerId: data.stripe_customer_id,
+    amountCents: data.amount_cents,
+    currency: data.currency,
+    state: data.state,
+    stripeIdempotencyKey: data.stripe_idempotency_key,
+    stripeCheckoutSessionId: data.stripe_checkout_session_id ?? null,
+  };
+}
+
+function invoiceAttemptFields(attempt: InvoiceCheckoutAttempt, sessionId?: string | null) {
+  return {
+    amount_cents: attempt.amountCents,
+    currency: attempt.currency,
+    checkout_attempt_id: attempt.attemptId,
+    payment_id: attempt.paymentId,
+    session_id: sessionId ?? attempt.stripeCheckoutSessionId,
+  };
+}
+
+async function startInvoiceCheckout(
+  admin: SupabaseClient,
+  stripe: Stripe,
+  caller: CallerUser,
+  payable: Payable
+): Promise<Response> {
+  const customerResult = await ensureStripeCustomer(admin, stripe, caller);
+  if (customerResult instanceof Response) return customerResult;
+  const customerId = customerResult;
+  const invoiceId = payable.metadata.invoice_id;
+
+  let lastAttempt: InvoiceCheckoutAttempt | null = null;
+  try {
+    const result = await runInvoiceCheckout({
+      async claim() {
+        const { data, error } = await admin.rpc('claim_invoice_checkout_attempt', {
+          p_invoice_id: invoiceId,
+          p_payer_id: caller.id,
+          p_stripe_customer_id: customerId,
+          p_allow_designer_test: INVOICE_CHECKOUT_DESIGNER_TEST_MODE,
+        });
+        if (error) throw error;
+        lastAttempt = mapInvoiceAttempt(data);
+        return lastAttempt;
+      },
+      async retrieveSession(sessionId) {
+        return stripeSessionView(await stripe.checkout.sessions.retrieve(sessionId));
+      },
+      async createSession(attempt) {
+        const metadata = {
+          payable_type: 'invoice',
+          invoice_id: attempt.invoiceId,
+          checkout_attempt_id: attempt.attemptId,
+          payer_id: attempt.payerId,
+        };
+        const session = await stripe.checkout.sessions.create(
+          {
+            mode: 'payment',
+            customer: attempt.stripeCustomerId,
+            payment_method_types: ['card', 'us_bank_account'],
+            payment_method_options: {
+              us_bank_account: { verification_method: 'automatic' },
+            },
+            line_items: [
+              {
+                quantity: 1,
+                price_data: {
+                  currency: attempt.currency,
+                  unit_amount: attempt.amountCents,
+                  product_data: { name: payable.lineItemName },
+                },
+              },
+            ],
+            metadata,
+            payment_intent_data: { metadata },
+            // Return the local claim identity on both paths. A cancellation has
+            // no reliable Checkout session placeholder, so analytics and UI
+            // reconciliation use the exact attempt/payment IDs instead of the
+            // invoice's mutable outstanding balance.
+            success_url: invoiceCheckoutReturnUrl(payable.successUrl, attempt),
+            cancel_url: invoiceCheckoutReturnUrl(payable.cancelUrl, attempt),
+          },
+          { idempotencyKey: attempt.stripeIdempotencyKey }
+        );
+        return stripeSessionView(session);
+      },
+      async finalize(attempt, sessionId) {
+        const { data, error } = await admin.rpc('finalize_invoice_checkout_attempt', {
+          p_attempt_id: attempt.attemptId,
+          p_payer_id: caller.id,
+          p_stripe_customer_id: customerId,
+          p_stripe_checkout_session_id: sessionId,
+        });
+        if (error) throw error;
+        lastAttempt = mapInvoiceAttempt(data);
+        return lastAttempt;
+      },
+      async failExpired(attempt, sessionId) {
+        const { error } = await admin.rpc('fail_invoice_checkout_attempt', {
+          p_attempt_id: attempt.attemptId,
+          p_stripe_checkout_session_id: sessionId,
+          p_reason: 'checkout_session_expired',
+        });
+        if (error) throw error;
+      },
+    });
+
+    if (result.kind === 'processing') {
+      return json(
+        {
+          error: 'payment_processing',
+          detail: payable.processingDetail,
+          ...invoiceAttemptFields(result.attempt, result.session.id),
+        },
+        409
+      );
+    }
+    return json({
+      url: result.url,
+      ...invoiceAttemptFields(result.attempt, result.session.id),
+      reused: result.reused,
+    });
+  } catch (error) {
+    const detail = error instanceof Error ? error.message : 'Invoice Checkout failed.';
+    const dbMessage = (error as any)?.message ?? '';
+    const fields = lastAttempt ? invoiceAttemptFields(lastAttempt) : {};
+
+    if (dbMessage.includes('invoice_checkout_payer_not_allowed')) {
+      return json({ error: 'invoice_not_found' }, 404);
+    }
+    if (dbMessage.includes('invoice_checkout_reconciliation_required')) {
+      return json(
+        {
+          error: 'payment_reconciliation_required',
+          detail,
+          ...fields,
+        },
+        409
+      );
+    }
+    if (
+      dbMessage.includes('invoice_checkout_attempt_payer_mismatch') ||
+      dbMessage.includes('invoice_checkout_customer_mismatch')
+    ) {
+      return json({ error: 'checkout_payer_mismatch', detail, ...fields }, 409);
+    }
+    if (
+      dbMessage.includes('invoice_checkout_not_payable') ||
+      dbMessage.includes('invoice_checkout_nothing_due') ||
+      dbMessage.includes('invoice_checkout_attempt_terminal')
+    ) {
+      return json({ error: 'invoice_not_payable', detail, ...fields }, 409);
+    }
+    if (error instanceof InvoiceCheckoutIntegrityError) {
+      const status = error.code === 'checkout_persistence_failed' ? 500 : 502;
+      return json({ error: error.code, detail: error.message, ...fields }, status);
+    }
+    console.error('create-checkout-session: invoice claim failed', error);
+    return json({ error: 'checkout_claim_failed', detail, ...fields }, 500);
+  }
+}
+
+async function startCheckout(
+  admin: SupabaseClient,
+  stripe: Stripe,
+  caller: CallerUser,
+  payable: Payable
+): Promise<Response> {
+  // ── Lazy Stripe customer for the paying profile ──────────────────────────
+  const customerResult = await ensureStripeCustomer(admin, stripe, caller);
+  if (customerResult instanceof Response) return customerResult;
+  const customerId = customerResult;
+  try {
     // ── Session reuse / stale-session cleanup ────────────────────────────
     if (payable.existingSessionId) {
       let existing: Stripe.Checkout.Session | null = null;
@@ -591,7 +881,13 @@ async function startCheckout(
         await payable.onStaleSession(existing.id);
       } else if (existing?.status === 'complete') {
         if (await payable.hasInFlightPayment(existing.id)) {
-          return json({ error: 'payment_processing', detail: payable.processingDetail }, 409);
+          return json(
+            {
+              error: 'payment_processing',
+              detail: payable.processingDetail,
+            },
+            409
+          );
         }
       }
     }
@@ -630,7 +926,13 @@ async function startCheckout(
 
     if (!session.url) {
       console.error('create-checkout-session: session created without url', session.id);
-      return json({ error: 'stripe_error', detail: 'Checkout session has no URL.' }, 502);
+      return json(
+        {
+          error: 'stripe_error',
+          detail: 'Checkout session has no URL.',
+        },
+        502
+      );
     }
 
     await payable.onSessionCreated(session.id);
@@ -683,8 +985,8 @@ Deno.serve(async (req: Request) => {
   const payableResult = poPaymentId
     ? await loadPoPaymentPayable(admin, caller, poPaymentId)
     : directOrderId
-    ? await loadDirectOrderPayable(admin, caller, directOrderId)
-    : await loadInvoicePayable(admin, caller, invoiceId as string);
+      ? await loadDirectOrderPayable(admin, caller, directOrderId)
+      : await loadInvoicePayable(admin, caller, invoiceId as string);
   if (payableResult instanceof Response) {
     return payableResult;
   }
@@ -694,5 +996,7 @@ Deno.serve(async (req: Request) => {
     httpClient: Stripe.createFetchHttpClient(),
   });
 
-  return startCheckout(admin, stripe, caller, payableResult);
+  return payableResult.payableType === 'invoice'
+    ? startInvoiceCheckout(admin, stripe, caller, payableResult)
+    : startCheckout(admin, stripe, caller, payableResult);
 });

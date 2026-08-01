@@ -68,6 +68,7 @@ import { useSpecFieldDefs } from '@/hooks/use-spec-fields';
 import { withFieldValue, formatFieldValue } from '@/lib/scope/spec-fields';
 import { computeMarkupUpdate } from '@/lib/scope/markup';
 import { downloadSpecPdf } from '@/lib/scope/spec-pdf-client';
+import { useDraftingFacetInvalidation } from '@/hooks/use-drafting-facet-invalidation';
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
@@ -425,7 +426,7 @@ export function ItemEditForm({
 
 // ─── Item row ────────────────────────────────────────────────────────────────
 
-function ItemRow({
+export function ItemRow({
   item,
   proposalId,
   rooms,
@@ -457,6 +458,7 @@ function ItemRow({
   verdictChip?: ReactNode;
 }) {
   const removeItem = useRemoveProposalItem();
+  const refreshDraftingSummary = useDraftingFacetInvalidation(proposalId);
   const lineCost = item.unit_price * item.quantity;
 
   const rangeText =
@@ -467,7 +469,10 @@ function ItemRow({
       : null;
 
   const handleRemove = () => {
-    removeItem.mutate({ itemId: item.id, proposalId });
+    removeItem.mutate(
+      { itemId: item.id, proposalId },
+      { onSuccess: () => void refreshDraftingSummary() },
+    );
   };
 
   const subtitle = item.vendor_name
@@ -855,6 +860,7 @@ export function FFEScheduleBuilder({
   renderVerdictChip,
   initialUnfoldedId,
 }: FFEScheduleBuilderProps) {
+  const refreshDraftingSummary = useDraftingFacetInvalidation(proposalId);
   const { data: rooms = [] } = useProposalScopeRooms(proposalId);
   const { data: categories = [] } = useFFECategories({ proposalId });
 
@@ -928,6 +934,7 @@ export function FFEScheduleBuilder({
         [...selected].map((itemId) => removeItem.mutateAsync({ itemId, proposalId }))
       );
       setSelected(new Set());
+      await refreshDraftingSummary();
     } catch (err) {
       setBulkError(
         err instanceof Error ? err.message : 'Some lines could not be removed — try again.'
@@ -1039,8 +1046,6 @@ export function FFEScheduleBuilder({
     didAutoOpenRef.current = true;
     setUnfoldedItemId(initialUnfoldedId);
     requestAnimationFrame(() => jumpToLine(initialUnfoldedId));
-    // jumpToLine is stable enough; only the loaded set + target matter here.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [initialUnfoldedId, items, renderUnfold]);
 
   // ── S4 — apply search + facets over the loaded lines ──────────────────────
@@ -1183,6 +1188,7 @@ export function FFEScheduleBuilder({
           hasProduct: true,
           lineTotal: r.priceCents ?? 0,
         });
+        return refreshDraftingSummary();
       });
 
   const handleAllowanceSave = (form: AllowanceFormState) => {
@@ -1209,6 +1215,7 @@ export function FFEScheduleBuilder({
           hasProduct: false,
           lineTotal: Math.round((budgetMin + budgetMax) / 2),
         });
+        return refreshDraftingSummary();
       });
   };
 
@@ -1227,6 +1234,7 @@ export function FFEScheduleBuilder({
       })
       .then(() => {
         proposalEvents.itemAdded({ proposalId, itemType: 'tbd', hasProduct: false, lineTotal: 0 });
+        return refreshDraftingSummary();
       });
 
   // One DndContext serves two drag species: capture cards dropped onto room
@@ -1299,6 +1307,7 @@ export function FFEScheduleBuilder({
       {
         onSuccess: () => {
           setCaptureDrop(null);
+          void refreshDraftingSummary();
         },
         onError: (err) => {
           setCaptureDropError(
@@ -1723,7 +1732,6 @@ function useProposalItems(proposalId: string) {
   return useQuery({
     queryKey: ['proposal-items-schedule', proposalId],
     queryFn: async () => {
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const supabase = createBrowserClient() as any;
       const { data, error } = await supabase
         .from('proposal_items')

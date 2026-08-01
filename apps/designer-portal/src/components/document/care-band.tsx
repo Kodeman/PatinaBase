@@ -21,12 +21,23 @@
  */
 
 import { useState } from 'react';
-import { useProjectV2 } from '@patina/supabase';
+import {
+  useCoordinationItems,
+  useFfeInvoiceCoverage,
+  useProjectFFEItems,
+  useProjectInvoices,
+  useProjectPaymentMilestones,
+  useProjectPhases,
+  useProjectV2,
+  useScopeChangeRequests,
+} from '@patina/supabase';
+import { useAuth } from '@/hooks/use-auth';
 import { useCloseProject } from '@/hooks/use-project-lifecycle';
 import {
-  allClosureComplete,
   centsToDollarString,
+  closureReady,
   defaultClosureItems,
+  deriveCloseoutReadiness,
   dollarsToCents,
   seedSnapshot,
   toggleClosureItem,
@@ -42,8 +53,29 @@ const FIELD_CLS =
 const LABEL_CLS =
   'mb-1 block font-mono text-[8px] font-semibold uppercase tracking-[0.08em] text-[var(--color-aged-oak)]';
 
+function closeErrorMessage(error: unknown): string {
+  if (error instanceof Error) return error.message;
+  if (
+    error !== null &&
+    typeof error === 'object' &&
+    'message' in error &&
+    typeof error.message === 'string'
+  ) {
+    return error.message;
+  }
+  return 'Could not close the book. Try again.';
+}
+
 export function CareBand({ projectId }: { projectId: string }) {
   const { data: project } = useProjectV2(projectId) as { data: AnyRecord };
+  const { user, isLoading: authLoading } = useAuth();
+  const phaseQuery = useProjectPhases(projectId);
+  const coordinationQuery = useCoordinationItems(projectId);
+  const scopeChangeQuery = useScopeChangeRequests(projectId);
+  const ffeQuery = useProjectFFEItems(projectId);
+  const coverageQuery = useFfeInvoiceCoverage(projectId);
+  const milestoneQuery = useProjectPaymentMilestones(projectId);
+  const invoiceQuery = useProjectInvoices(projectId);
   const closeProject = useCloseProject();
 
   const nearClose =
@@ -61,11 +93,104 @@ export function CareBand({ projectId }: { projectId: string }) {
   const [closed, setClosed] = useState(false);
 
   if (!project || project.status === 'completed') return null;
+  if (authLoading) return null;
+
+  const isProjectOwner =
+    typeof project.designer_id === 'string' && project.designer_id === user?.id;
+  if (!isProjectOwner) {
+    const ownerName =
+      typeof project.designer?.full_name === 'string' &&
+      project.designer.full_name.trim()
+        ? project.designer.full_name.trim()
+        : 'the project owner';
+
+    return (
+      <section
+        aria-label="Project closeout ownership"
+        className="mt-8 border-l-2 border-[var(--color-sage)] px-3.5 py-2.5"
+      >
+        <p className="font-mono text-[9px] font-semibold uppercase tracking-[0.08em] text-[var(--text-muted)]">
+          Project closeout · owner action
+        </p>
+        <p className="mt-1 text-[11.5px] leading-relaxed text-[var(--color-charcoal)]">
+          Only {ownerName} can close the book. The project stays available for
+          your coordination work until its owner completes closeout.
+        </p>
+      </section>
+    );
+  }
 
   const seed = seedSnapshot(project);
   const open = unfolded || nearClose;
-  const ready = allClosureComplete(items);
-  const done = items.filter((i) => i.completed).length;
+  const operationalDataReady =
+    phaseQuery.data !== undefined &&
+    coordinationQuery.data !== undefined &&
+    scopeChangeQuery.data !== undefined &&
+    ffeQuery.data !== undefined &&
+    coverageQuery.data !== undefined &&
+    milestoneQuery.data !== undefined &&
+    invoiceQuery.data !== undefined &&
+    !phaseQuery.isError &&
+    !coordinationQuery.isError &&
+    !scopeChangeQuery.isError &&
+    !ffeQuery.isError &&
+    !coverageQuery.isError &&
+    !milestoneQuery.isError &&
+    !invoiceQuery.isError;
+  const operational = deriveCloseoutReadiness({
+    dataReady: operationalDataReady,
+    projectTotalCents: project?.total_amount_cents ?? null,
+    projectPhases: (phaseQuery.data ?? []) as Array<{
+      id: string;
+      status: string | null;
+    }>,
+    coordinationItems: (coordinationQuery.data ?? []) as Array<{
+      id: string;
+      status: string | null;
+    }>,
+    scopeChanges: (scopeChangeQuery.data ?? []) as Array<{
+      id: string;
+      status: string | null;
+      applied_at: string | null;
+    }>,
+    ffeItems: (ffeQuery.data ?? []) as Array<{
+      id: string;
+      status: string | null;
+      quantity: number | null;
+      unit_price_cents: number | null;
+      line_total_cents: number | null;
+    }>,
+    ffeCoverage: coverageQuery.data ?? {},
+    paymentMilestones: (milestoneQuery.data ?? []) as Array<{
+      id: string;
+      status: string | null;
+      amount_cents: number | null;
+    }>,
+    invoices: (invoiceQuery.data ?? []) as Array<{
+      id: string;
+      status: string | null;
+      total_cents: number | null;
+      amount_paid_cents: number | null;
+    }>,
+  });
+  const paymentReady =
+    operationalDataReady &&
+    !operational.blockers.some((blocker) =>
+      [
+        'ffe_not_paid',
+        'milestone_unpaid',
+        'invoice_balance_due',
+        'project_balance_due',
+      ].includes(blocker.code),
+    );
+  // Payment is not a self-attestation: it mirrors invoice/milestone truth.
+  const effectiveItems = items.map((item) =>
+    item.key === 'payment'
+      ? { ...item, completed: paymentReady }
+      : item,
+  );
+  const ready = closureReady(effectiveItems, operational);
+  const done = effectiveItems.filter((i) => i.completed).length;
 
   // R51 — the quiet inline confirmation while the read models re-derive.
   if (closed) {
@@ -103,7 +228,7 @@ export function CareBand({ projectId }: { projectId: string }) {
     closeProject.mutate(
       {
         projectId,
-        closure: items,
+        closure: effectiveItems,
         snapshot: {
           headline: headline.trim(),
           description: description.trim(),
@@ -117,12 +242,7 @@ export function CareBand({ projectId }: { projectId: string }) {
       },
       {
         onSuccess: () => setClosed(true),
-        onError: (err) =>
-          setError(
-            err instanceof Error
-              ? err.message
-              : 'Could not close the book. Try again.',
-          ),
+        onError: (err) => setError(closeErrorMessage(err)),
       },
     );
   };
@@ -169,18 +289,39 @@ export function CareBand({ projectId }: { projectId: string }) {
 
       {/* The closure checklist — square ticks that fill sage (the Work
           block's stamp grammar, not a SaaS checkbox). */}
+      {operational.blockers.length > 0 && (
+        <div
+          role="status"
+          className="mt-3 rounded-[3px] border-l-2 border-[var(--color-terracotta)] bg-[rgba(212,160,144,0.08)] px-3.5 py-2.5"
+        >
+          <p className="font-mono text-[9px] font-semibold uppercase tracking-[0.08em] text-[#C4836F]">
+            Operational closeout still open
+          </p>
+          <ul className="mt-1 space-y-0.5 text-[11.5px] text-[var(--color-charcoal)]">
+            {operational.blockers.map((blocker) => (
+              <li key={blocker.code}>· {blocker.label}</li>
+            ))}
+          </ul>
+        </div>
+      )}
       <ul className="mt-3 border-t border-[rgba(139,115,85,0.14)] pt-2">
-        {items.map((item) => (
+        {effectiveItems.map((item) => (
           <li
             key={item.key}
             className="border-b border-dashed border-[rgba(139,115,85,0.14)]"
           >
             <button
               type="button"
+              aria-disabled={item.key === 'payment'}
               onClick={() =>
+                item.key !== 'payment' &&
                 setItems((prev) => toggleClosureItem(prev, item.key))
               }
-              className="grid w-full grid-cols-[auto_1fr] items-baseline gap-2.5 px-1 py-1.5 text-left hover:bg-[rgba(196,165,123,0.06)]"
+              className={`grid w-full grid-cols-[auto_1fr] items-baseline gap-2.5 px-1 py-1.5 text-left ${
+                item.key === 'payment'
+                  ? 'cursor-default'
+                  : 'hover:bg-[rgba(196,165,123,0.06)]'
+              }`}
             >
               <span
                 aria-hidden
@@ -204,7 +345,11 @@ export function CareBand({ projectId }: { projectId: string }) {
                     : 'text-[var(--color-charcoal)]'
                 }`}
               >
-                {item.label}
+                {item.key === 'payment'
+                  ? paymentReady
+                    ? 'No balance due · verified from billing'
+                    : 'Final payment collected · waiting on billing'
+                  : item.label}
               </span>
             </button>
           </li>

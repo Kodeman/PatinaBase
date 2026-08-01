@@ -1,5 +1,9 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { createBrowserClient } from '../client';
+import {
+  invalidateProposalClientQueries,
+  PROPOSAL_CLIENT_MUTATION_KEY,
+} from '../lib/proposal-client-query-invalidation';
 
 const getSupabase = () => createBrowserClient();
 
@@ -150,6 +154,7 @@ export interface UpsertBoardInput {
 
 export interface AddBoardItemInput {
   boardId: string;
+  proposalId?: string;
   type: BoardItemType;
   x?: number;
   y?: number;
@@ -169,6 +174,7 @@ export interface AddBoardItemInput {
 export interface UpdateBoardItemInput {
   itemId: string;
   boardId: string;
+  proposalId?: string;
   x?: number;
   y?: number;
   width?: number;
@@ -340,6 +346,7 @@ export function useUpsertBoard() {
   const queryClient = useQueryClient();
 
   return useMutation({
+    mutationKey: [PROPOSAL_CLIENT_MUTATION_KEY],
     mutationFn: async (input: UpsertBoardInput): Promise<ProposalBoard> => {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const supabase = getSupabase() as any;
@@ -401,12 +408,21 @@ export function useUpsertBoard() {
       if (error) throw error;
       return data as ProposalBoard;
     },
-    onSuccess: (board) => {
+    onSuccess: async (board) => {
       // Refresh whichever owner list the board belongs to (00272).
       if (board.project_id) {
         queryClient.invalidateQueries({ queryKey: ['project-owned-boards', board.project_id] });
       } else {
         queryClient.invalidateQueries({ queryKey: ['boards', board.proposal_id] });
+        queryClient.invalidateQueries({
+          queryKey: ['boards-with-items', board.proposal_id],
+        });
+        if (board.proposal_id) {
+          await invalidateProposalClientQueries(
+            queryClient,
+            board.proposal_id,
+          );
+        }
       }
       queryClient.invalidateQueries({ queryKey: ['board', board.id] });
     },
@@ -414,46 +430,17 @@ export function useUpsertBoard() {
 }
 
 /**
- * Build the insert rows for a duplicated board's items. Each row carries a
- * FRESH id (omitted → gen_random_uuid()), the NEW board_id, and `type` — the
- * WITH-CHECK trap: a batch insert whose RLS check joins board_id → the
- * designer's proposal rejects the WHOLE statement if any row omits board_id, so
- * every row must carry it (and type, the other NOT NULL/CHECK column).
- * Geometry + all snapshot fields (incl. `data`, which preserves each item's
- * section_id) are copied verbatim. Pure — exported for the unit test.
- */
-export function buildDuplicateBoardItemRows(
-  newBoardId: string,
-  sourceItems: ProposalBoardItem[],
-): Array<Record<string, unknown>> {
-  return sourceItems.map((it) => ({
-    board_id: newBoardId,
-    type: it.type,
-    x: it.x,
-    y: it.y,
-    width: it.width,
-    height: it.height,
-    z_index: it.z_index,
-    rotation: it.rotation,
-    locked: it.locked,
-    product_id: it.product_id,
-    capture_id: it.capture_id,
-    palette_id: it.palette_id,
-    image_url: it.image_url,
-    content: it.content,
-    data: it.data ?? {},
-  }));
-}
-
-/**
  * Duplicate a board: copies the row (name + " (Copy)", same scope_room,
- * sections, dims, background, cover) and every item (fresh ids). Runs
- * client-side under the designer's RLS. Lands at the end of the board order.
+ * sections, dims, background, cover) and every item (fresh ids). The 00389 RPC
+ * validates the complete proposal relationship graph and performs the board +
+ * item copy in one transaction, so an item failure cannot leave a ghost board.
+ * Lands at the end of the board order.
  */
 export function useDuplicateBoard() {
   const queryClient = useQueryClient();
 
   return useMutation({
+    mutationKey: [PROPOSAL_CLIENT_MUTATION_KEY],
     mutationFn: async ({
       proposalId,
       boardId,
@@ -464,56 +451,22 @@ export function useDuplicateBoard() {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const supabase = getSupabase() as any;
 
-      // Source board + its items in one read.
-      const { data: src, error: readErr } = await supabase
-        .from('proposal_boards')
-        .select('*, proposal_board_items(*)')
-        .eq('id', boardId)
-        .single();
-      if (readErr) throw readErr;
-      const { proposal_board_items: srcItems, ...board } = src;
-
-      // New board sorts after every existing one.
-      const { data: siblings } = await supabase
-        .from('proposal_boards')
-        .select('sort_order')
-        .eq('proposal_id', proposalId);
-      const maxSort = ((siblings ?? []) as Array<{ sort_order: number }>).reduce(
-        (m, r) => Math.max(m, r.sort_order ?? 0),
-        -1,
-      );
-
-      const { data: newBoard, error: boardErr } = await supabase
-        .from('proposal_boards')
-        .insert({
-          proposal_id: proposalId,
-          name: `${board.name} (Copy)`,
-          scope_room_id: board.scope_room_id ?? null,
-          cover_image_url: board.cover_image_url ?? null,
-          canvas_width: board.canvas_width,
-          canvas_height: board.canvas_height,
-          background_color: board.background_color,
-          sections: board.sections ?? [],
-          status: 'active',
-          sort_order: maxSort + 1,
-        })
-        .select()
-        .single();
-      if (boardErr) throw boardErr;
-
-      const rows = buildDuplicateBoardItemRows(
-        newBoard.id as string,
-        (srcItems ?? []) as ProposalBoardItem[],
-      );
-      if (rows.length > 0) {
-        const { error: itemsErr } = await supabase.from('proposal_board_items').insert(rows);
-        if (itemsErr) throw itemsErr;
-      }
-
-      return newBoard as ProposalBoard;
+      const { data, error } = await supabase.rpc('duplicate_proposal_board', {
+        p_proposal_id: proposalId,
+        p_board_id: boardId,
+      });
+      if (error) throw error;
+      return data as ProposalBoard;
     },
-    onSuccess: (board) => {
-      queryClient.invalidateQueries({ queryKey: ['boards', board.proposal_id] });
+    // Reconcile every mounted client projection after either outcome. The RPC
+    // is atomic; invalidating on failure still clears any optimistic/mounted
+    // state without implying a partial database write exists.
+    onSettled: async (_board, _error, variables) => {
+      queryClient.invalidateQueries({ queryKey: ['boards', variables.proposalId] });
+      queryClient.invalidateQueries({
+        queryKey: ['boards-with-items', variables.proposalId],
+      });
+      await invalidateProposalClientQueries(queryClient, variables.proposalId);
     },
   });
 }
@@ -525,22 +478,32 @@ export function useDeleteBoard() {
   const queryClient = useQueryClient();
 
   return useMutation({
+    mutationKey: [PROPOSAL_CLIENT_MUTATION_KEY],
     mutationFn: async ({
       boardId,
       proposalId: _proposalId,
     }: {
       boardId: string;
-      proposalId: string;
+      proposalId?: string;
     }): Promise<void> => {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const supabase = getSupabase() as any;
       const { error } = await supabase.from('proposal_boards').delete().eq('id', boardId);
       if (error) throw error;
     },
-    onSuccess: (_data, variables) => {
+    onSuccess: async (_data, variables) => {
       queryClient.invalidateQueries({ queryKey: ['boards', variables.proposalId] });
       queryClient.invalidateQueries({ queryKey: ['project-owned-boards'] });
       queryClient.invalidateQueries({ queryKey: ['board', variables.boardId] });
+      if (variables.proposalId) {
+        queryClient.invalidateQueries({
+          queryKey: ['boards-with-items', variables.proposalId],
+        });
+        await invalidateProposalClientQueries(
+          queryClient,
+          variables.proposalId,
+        );
+      }
     },
   });
 }
@@ -552,6 +515,7 @@ export function useAddBoardItem() {
   const queryClient = useQueryClient();
 
   return useMutation({
+    mutationKey: [PROPOSAL_CLIENT_MUTATION_KEY],
     mutationFn: async (input: AddBoardItemInput): Promise<ProposalBoardItem> => {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const supabase = getSupabase() as any;
@@ -583,12 +547,21 @@ export function useAddBoardItem() {
       if (error) throw error;
       return data as ProposalBoardItem;
     },
-    onSuccess: (item) => {
+    onSuccess: async (item, variables) => {
       queryClient.invalidateQueries({ queryKey: ['board', item.board_id] });
       // Item counts on the list view — we don't know the owner from the item
       // row, so invalidate both owner-list prefixes.
       queryClient.invalidateQueries({ queryKey: ['boards'] });
       queryClient.invalidateQueries({ queryKey: ['project-owned-boards'] });
+      if (variables.proposalId) {
+        queryClient.invalidateQueries({
+          queryKey: ['boards-with-items', variables.proposalId],
+        });
+        await invalidateProposalClientQueries(
+          queryClient,
+          variables.proposalId,
+        );
+      }
     },
   });
 }
@@ -601,6 +574,7 @@ export function useUpdateBoardItem() {
   const queryClient = useQueryClient();
 
   return useMutation({
+    mutationKey: [PROPOSAL_CLIENT_MUTATION_KEY],
     mutationFn: async (input: UpdateBoardItemInput): Promise<ProposalBoardItem> => {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const supabase = getSupabase() as any;
@@ -627,8 +601,17 @@ export function useUpdateBoardItem() {
       if (error) throw error;
       return data as ProposalBoardItem;
     },
-    onSuccess: (_item, variables) => {
+    onSuccess: async (_item, variables) => {
       queryClient.invalidateQueries({ queryKey: ['board', variables.boardId] });
+      if (variables.proposalId) {
+        queryClient.invalidateQueries({
+          queryKey: ['boards-with-items', variables.proposalId],
+        });
+        await invalidateProposalClientQueries(
+          queryClient,
+          variables.proposalId,
+        );
+      }
     },
   });
 }
@@ -640,22 +623,34 @@ export function useDeleteBoardItem() {
   const queryClient = useQueryClient();
 
   return useMutation({
+    mutationKey: [PROPOSAL_CLIENT_MUTATION_KEY],
     mutationFn: async ({
       itemId,
       boardId: _boardId,
+      proposalId: _proposalId,
     }: {
       itemId: string;
       boardId: string;
+      proposalId?: string;
     }): Promise<void> => {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const supabase = getSupabase() as any;
       const { error } = await supabase.from('proposal_board_items').delete().eq('id', itemId);
       if (error) throw error;
     },
-    onSuccess: (_data, variables) => {
+    onSuccess: async (_data, variables) => {
       queryClient.invalidateQueries({ queryKey: ['board', variables.boardId] });
       queryClient.invalidateQueries({ queryKey: ['boards'] });
       queryClient.invalidateQueries({ queryKey: ['project-owned-boards'] });
+      if (variables.proposalId) {
+        queryClient.invalidateQueries({
+          queryKey: ['boards-with-items', variables.proposalId],
+        });
+        await invalidateProposalClientQueries(
+          queryClient,
+          variables.proposalId,
+        );
+      }
     },
   });
 }
@@ -672,11 +667,14 @@ export function useSaveBoardLayout() {
   const queryClient = useQueryClient();
 
   return useMutation({
+    mutationKey: [PROPOSAL_CLIENT_MUTATION_KEY],
     mutationFn: async ({
       boardId: _boardId,
+      proposalId: _proposalId,
       positions,
     }: {
       boardId: string;
+      proposalId?: string;
       positions: BoardLayoutPosition[];
     }): Promise<void> => {
       if (positions.length === 0) return;
@@ -700,8 +698,17 @@ export function useSaveBoardLayout() {
 
       if (error) throw error;
     },
-    onSuccess: (_data, variables) => {
+    onSuccess: async (_data, variables) => {
       queryClient.invalidateQueries({ queryKey: ['board', variables.boardId] });
+      if (variables.proposalId) {
+        queryClient.invalidateQueries({
+          queryKey: ['boards-with-items', variables.proposalId],
+        });
+        await invalidateProposalClientQueries(
+          queryClient,
+          variables.proposalId,
+        );
+      }
     },
   });
 }

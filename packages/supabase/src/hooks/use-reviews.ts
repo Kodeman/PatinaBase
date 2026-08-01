@@ -194,6 +194,9 @@ export function useCreateReviewRequest() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['client-reviews'] });
       queryClient.invalidateQueries({ queryKey: ['review-stats'] });
+      queryClient.invalidateQueries({
+        queryKey: ['completed-projects-without-review'],
+      });
     },
   });
 }

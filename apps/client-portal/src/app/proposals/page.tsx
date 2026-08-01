@@ -6,6 +6,7 @@ import type { Proposal } from '@patina/supabase';
 import { formatCurrency } from '@patina/shared';
 import { useClientProposals, partitionProposals } from '@/hooks/use-proposals-client';
 import { StrataMark } from '@/components/strata-mark';
+import { QueryFailure } from '@/components/query-failure';
 
 function formatDate(iso: string): string {
   return new Date(iso).toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
@@ -24,7 +25,7 @@ const statusLabels: Record<Proposal['status'], string> = {
 };
 
 export default function ClientProposalsPage() {
-  const { data, isLoading } = useClientProposals();
+  const { data, isLoading, isError, refetch } = useClientProposals();
   const { pending, accepted, archived } = partitionProposals(data);
 
   return (
@@ -41,7 +42,17 @@ export default function ClientProposalsPage() {
         </div>
       )}
 
+      {isError && !isLoading && (
+        <QueryFailure
+          className="mt-8"
+          title="Unable to load proposals"
+          message="Your proposals are still there, but they could not be opened just now."
+          onRetry={refetch}
+        />
+      )}
+
       {!isLoading &&
+        !isError &&
         pending.length === 0 &&
         accepted.length === 0 &&
         archived.length === 0 && (

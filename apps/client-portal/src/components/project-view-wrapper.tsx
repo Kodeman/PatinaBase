@@ -4,7 +4,7 @@ import { useEffect } from 'react';
 import { WebSocketProvider } from '@/lib/websocket';
 import { useAuth } from '@/hooks/use-auth';
 import { clientEvents } from '@/lib/analytics/events';
-import { EnhancedTimeline } from '@/components/timeline/enhanced-timeline';
+import { AuthoritativeEnhancedTimeline } from '@/components/timeline/enhanced-timeline';
 import { ProjectOverview } from '@/components/project-overview';
 import { ProjectScopeDetails } from '@/components/project-scope-details';
 import { BudgetOverview } from '@/components/budget-overview';
@@ -16,6 +16,7 @@ import { ProjectTeamPanel } from '@/components/project/ProjectTeamPanel';
 import { ProjectDocumentsPanel } from '@/components/project/ProjectDocumentsPanel';
 import { FFEPipelinePanel } from '@/components/project/FFEPipelinePanel';
 import type { MilestoneDetail } from '@/types/project';
+import { useProjectPhaseRealtime } from '@/hooks/use-project-phase-realtime';
 
 interface ProjectViewWrapperProps {
   projectId: string;
@@ -39,6 +40,8 @@ export function ProjectViewWrapper({
   const realtimeEnabled = process.env.NEXT_PUBLIC_ENABLE_REAL_TIME_UPDATES !== 'false';
   const effectiveUserId = userId ?? user?.id;
   const effectiveAuthToken = authToken ?? session?.accessToken;
+
+  useProjectPhaseRealtime(projectId, realtimeEnabled);
 
   useEffect(() => {
     clientEvents.projectView(projectId);
@@ -81,7 +84,7 @@ export function ProjectViewWrapper({
 
       {showOverview && <StrataMark variant="full" />}
 
-      <EnhancedTimeline
+      <AuthoritativeEnhancedTimeline
         projectId={projectId}
         milestones={milestones}
         onMilestoneUpdate={(milestone) => {

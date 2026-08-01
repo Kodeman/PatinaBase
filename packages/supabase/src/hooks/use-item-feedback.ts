@@ -62,6 +62,24 @@ export function useProposalFeedback(proposalId: string | undefined) {
   });
 }
 
+/** Authenticated client proposal-line feed through the client-safe RPC. */
+export function useClientProposalFeedback(proposalId: string | undefined) {
+  return useQuery({
+    queryKey: ['proposal-feedback', proposalId, 'client-safe'],
+    enabled: !!proposalId,
+    queryFn: async (): Promise<ItemFeedback[]> => {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const supabase = getSupabase() as any;
+      const { data, error } = await supabase.rpc(
+        'get_client_proposal_feedback',
+        { p_proposal_id: proposalId, p_board_items: false },
+      );
+      if (error) throw error;
+      return (data ?? []) as ItemFeedback[];
+    },
+  });
+}
+
 /**
  * Every BOARD-PIN verdict on a proposal (via proposal_board_items →
  * proposal_boards → proposal_id). The proposal-line feed above excludes board
@@ -80,6 +98,24 @@ export function useBoardFeedback(proposalId: string | undefined) {
         .select('id, proposal_item_id, ffe_item_id, board_item_id, client_id, verdict, body, resolved_at, resolved_by, created_at, updated_at, proposal_board_items!inner(board_id, proposal_boards!inner(proposal_id))')
         .eq('proposal_board_items.proposal_boards.proposal_id', proposalId)
         .order('created_at', { ascending: true });
+      if (error) throw error;
+      return (data ?? []) as ItemFeedback[];
+    },
+  });
+}
+
+/** Authenticated client board-pin feed through the client-safe RPC. */
+export function useClientBoardFeedback(proposalId: string | undefined) {
+  return useQuery({
+    queryKey: ['board-feedback', proposalId, 'client-safe'],
+    enabled: !!proposalId,
+    queryFn: async (): Promise<ItemFeedback[]> => {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const supabase = getSupabase() as any;
+      const { data, error } = await supabase.rpc(
+        'get_client_proposal_feedback',
+        { p_proposal_id: proposalId, p_board_items: true },
+      );
       if (error) throw error;
       return (data ?? []) as ItemFeedback[];
     },

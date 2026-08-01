@@ -44,7 +44,9 @@ struct BudgetProposalCard: View {
                         .foregroundStyle(PatinaColors.Text.muted)
                 }
 
-                scheduleBlock
+                if proposal.showsPaymentSchedule {
+                    scheduleBlock
+                }
             }
             .padding(16)
             .frame(maxWidth: .infinity, alignment: .leading)

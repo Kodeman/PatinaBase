@@ -337,6 +337,7 @@ export function ItemComposer({
         // sets, incl. empties, so removed gates clear). Then publish if asked.
         await updateItem.mutateAsync({
           itemId: editItem.id,
+          expectedUpdatedAt: editItem.updated_at,
           designerClientId,
           projectId,
           title,

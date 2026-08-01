@@ -17,6 +17,8 @@ export {
   useRemoveProposalItem,
   useReorderProposalItems,
   useSendProposal,
+  useRetryProposalSend,
+  useProposalSendDispatchStatus,
   useNudgeProposal,
   // Sections
   useProposalSections,
@@ -47,4 +49,7 @@ export type {
   ProposalTemplate,
   ProposalEngagementEvent,
   ProposalEngagementStats,
+  ProposalEmailDeliveryState,
+  ProposalEmailDispatchOutcome,
+  ProposalEmailDispatchStatus,
 } from '@patina/supabase';

@@ -7,7 +7,9 @@
 import {
   CLOSURE_ITEM_DEFS,
   allClosureComplete,
+  closureReady,
   centsToDollarString,
+  deriveCloseoutReadiness,
   defaultClosureItems,
   dollarsToCents,
   durationLabel,
@@ -25,7 +27,6 @@ describe('closure checklist', () => {
       'photography',
       'photos',
       'case_study',
-      'review',
     ]);
     expect(items.every((i) => i.completed === false)).toBe(true);
     // The defs are the source of truth; defaults mirror them 1:1.
@@ -50,6 +51,263 @@ describe('closure checklist', () => {
     expect(allClosureComplete(items)).toBe(true);
     // an empty checklist never claims completeness
     expect(allClosureComplete([])).toBe(false);
+  });
+
+  it('cannot claim completion while operational FF&E or billing truth is unsettled', () => {
+    const checklist = defaultClosureItems().map((item) => ({
+      ...item,
+      completed: true,
+    }));
+    const operational = deriveCloseoutReadiness({
+      ffeItems: [
+        {
+          id: 'chair-1',
+          status: 'specified',
+          quantity: 1,
+          unit_price_cents: 320_000,
+          line_total_cents: 320_000,
+        },
+      ],
+      ffeCoverage: {
+        'chair-1': { coverage: 'uninvoiced' },
+      },
+      paymentMilestones: [],
+      invoices: [],
+    });
+
+    expect(operational.ready).toBe(false);
+    expect(operational.blockers.map((blocker) => blocker.code)).toEqual([
+      'ffe_not_installed',
+      'ffe_not_paid',
+    ]);
+    expect(closureReady(checklist, operational)).toBe(false);
+  });
+
+  it('allows a zero-item project to close when no payable balance remains', () => {
+    const operational = deriveCloseoutReadiness({
+      ffeItems: [],
+      ffeCoverage: {},
+      paymentMilestones: [],
+      invoices: [],
+    });
+
+    expect(operational).toEqual({ ready: true, blockers: [] });
+  });
+
+  it('fails closed until every operational read has settled successfully', () => {
+    const operational = deriveCloseoutReadiness({
+      dataReady: false,
+      ffeItems: [],
+      ffeCoverage: {},
+      paymentMilestones: [],
+      invoices: [],
+    });
+
+    expect(operational.ready).toBe(false);
+    expect(operational.blockers[0]?.code).toBe(
+      'operational_data_unavailable',
+    );
+  });
+
+  it('surfaces every unfinished workflow family before closeout', () => {
+    const operational = deriveCloseoutReadiness({
+      projectPhases: [
+        { id: 'complete', status: 'completed' },
+        { id: 'pending', status: 'pending' },
+        { id: 'delayed', status: 'delayed' },
+        { id: 'unknown', status: null },
+      ],
+      coordinationItems: [
+        { id: 'answered', status: 'responded' },
+        { id: 'expired', status: 'expired' },
+        { id: 'draft', status: 'draft' },
+        { id: 'pending', status: 'pending' },
+        { id: 'unknown', status: null },
+      ],
+      scopeChanges: [
+        { id: 'declined', status: 'declined', applied_at: null },
+        { id: 'cancelled', status: 'cancelled', applied_at: null },
+        {
+          id: 'applied',
+          status: 'approved',
+          applied_at: '2026-08-01T12:00:00Z',
+        },
+        { id: 'approved', status: 'approved', applied_at: null },
+        { id: 'sent', status: 'sent', applied_at: null },
+        { id: 'unknown', status: null, applied_at: null },
+      ],
+      ffeItems: [],
+      ffeCoverage: {},
+      paymentMilestones: [],
+      invoices: [],
+    });
+
+    expect(operational.blockers).toEqual([
+      {
+        code: 'phase_unfinished',
+        count: 3,
+        label: '3 project phases not completed',
+      },
+      {
+        code: 'coordination_unresolved',
+        count: 3,
+        label: '3 coordination items unresolved',
+      },
+      {
+        code: 'scope_change_unresolved',
+        count: 3,
+        label: '3 scope changes unresolved',
+      },
+    ]);
+  });
+
+  it('treats only explicit terminal workflow states as closeout-ready', () => {
+    const operational = deriveCloseoutReadiness({
+      projectPhases: [{ id: 'phase', status: 'completed' }],
+      coordinationItems: [
+        { id: 'answered', status: 'responded' },
+        { id: 'expired', status: 'expired' },
+      ],
+      scopeChanges: [
+        { id: 'declined', status: 'declined', applied_at: null },
+        { id: 'cancelled', status: 'cancelled', applied_at: null },
+        {
+          id: 'applied',
+          status: 'approved',
+          applied_at: '2026-08-01T12:00:00Z',
+        },
+      ],
+      ffeItems: [],
+      ffeCoverage: {},
+      paymentMilestones: [],
+      invoices: [],
+    });
+
+    expect(operational).toEqual({ ready: true, blockers: [] });
+  });
+
+  it('does not treat an empty invoice set as settled when the project has a contract value', () => {
+    const operational = deriveCloseoutReadiness({
+      projectTotalCents: 320_000,
+      ffeItems: [],
+      ffeCoverage: {},
+      paymentMilestones: [],
+      invoices: [],
+    });
+
+    expect(operational.ready).toBe(false);
+    expect(operational.blockers.map((blocker) => blocker.code)).toEqual([
+      'project_balance_due',
+    ]);
+  });
+
+  it('requires collected truth, not merely an issued invoice', () => {
+    const operational = deriveCloseoutReadiness({
+      ffeItems: [
+        {
+          id: 'chair-1',
+          status: 'installed',
+          quantity: 1,
+          unit_price_cents: 320_000,
+          line_total_cents: 320_000,
+        },
+      ],
+      ffeCoverage: {
+        'chair-1': { coverage: 'invoiced' },
+      },
+      paymentMilestones: [
+        { id: 'milestone-1', status: 'outstanding', amount_cents: 320_000 },
+      ],
+      invoices: [
+        {
+          id: 'invoice-1',
+          status: 'partially_paid',
+          total_cents: 320_000,
+          amount_paid_cents: 100_000,
+        },
+      ],
+    });
+
+    expect(operational.ready).toBe(false);
+    expect(operational.blockers.map((blocker) => blocker.code)).toEqual([
+      'ffe_not_paid',
+      'milestone_unpaid',
+      'invoice_balance_due',
+    ]);
+  });
+
+  it('rejects a paid invoice line that covers less than the FF&E sell value', () => {
+    const operational = deriveCloseoutReadiness({
+      ffeItems: [
+        {
+          id: 'chair-1',
+          status: 'installed',
+          quantity: 1,
+          unit_price_cents: 100,
+          line_total_cents: 100,
+        },
+      ],
+      ffeCoverage: {
+        'chair-1': { coverage: 'paid', billedCents: 99 },
+      },
+      paymentMilestones: [],
+      invoices: [],
+    });
+
+    expect(operational.ready).toBe(false);
+    expect(operational.blockers.map((blocker) => blocker.code)).toEqual([
+      'ffe_not_paid',
+    ]);
+  });
+
+  it('does not require an invoice for installed zero-value or unpriced FF&E', () => {
+    const operational = deriveCloseoutReadiness({
+      ffeItems: [
+        {
+          id: 'client-owned-chair',
+          status: 'installed',
+          quantity: 2,
+          unit_price_cents: 0,
+          line_total_cents: null,
+        },
+      ],
+      ffeCoverage: {},
+      paymentMilestones: [],
+      invoices: [],
+    });
+
+    expect(operational).toEqual({ ready: true, blockers: [] });
+  });
+
+  it('accepts installed, fully paid operational work', () => {
+    const operational = deriveCloseoutReadiness({
+      projectTotalCents: 320_000,
+      ffeItems: [
+        {
+          id: 'chair-1',
+          status: 'installed',
+          quantity: 1,
+          unit_price_cents: 320_000,
+          line_total_cents: 320_000,
+        },
+      ],
+      ffeCoverage: {
+        'chair-1': { coverage: 'paid', billedCents: 320_000 },
+      },
+      paymentMilestones: [
+        { id: 'milestone-1', status: 'paid', amount_cents: 320_000 },
+      ],
+      invoices: [
+        {
+          id: 'invoice-1',
+          status: 'paid',
+          total_cents: 320_000,
+          amount_paid_cents: 320_000,
+        },
+      ],
+    });
+
+    expect(operational).toEqual({ ready: true, blockers: [] });
   });
 });
 

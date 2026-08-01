@@ -58,15 +58,14 @@ describe('R87 · the surfaces stay wired to the predicates (source contract)', (
   it('the DecisionBody Extend act runs the expired→pending recovery via the predicate', () => {
     // Keyed on the stored status through the shared predicate…
     expect(marginBodies).toMatch(/extendRevivesDecision\(decision\.status\)/);
-    // …and the revive branch runs the 00171 expired→pending transition.
-    expect(marginBodies).toMatch(/updateStatus\.mutateAsync\(/);
-    expect(marginBodies).toMatch(/status:\s*'pending'/);
-    expect(marginBodies).toMatch(/currentStatus:\s*decision\.status/);
+    // …and date + recovery stay inside one CAS lifecycle RPC.
+    expect(marginBodies).toMatch(/extendAndReopen\.mutateAsync\(/);
+    expect(marginBodies).toMatch(/expectedUpdatedAt:\s*decision\.updated_at/);
   });
 
   it('the Extend act opts out of the global toast (R83 inline grammar)', () => {
     expect(marginBodies).toMatch(/useUpdateDecision\(\{\s*errorSurface:\s*'inline'\s*\}\)/);
-    expect(marginBodies).toMatch(/useUpdateDecisionStatus\(\{\s*errorSurface:\s*'inline'\s*\}\)/);
+    expect(marginBodies).toMatch(/useExtendAndReopenDecision\(\{\s*errorSurface:\s*'inline',?\s*\}\)/);
   });
 
   it('the composer delete is gated draft-only via the predicate', () => {

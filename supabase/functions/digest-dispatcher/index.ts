@@ -7,6 +7,7 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { sendCompliantEmail } from "../_shared/send-email.ts";
+import { DIGEST_ELIGIBLE_NOTIFICATION_STATUSES } from "./status.ts";
 import {
   renderBrandedShell,
   heading,
@@ -277,7 +278,7 @@ async function dispatchDigests(
           .select("id, type, template_id, status, metadata, created_at")
           .eq("user_id", raw.user_id)
           .gt("created_at", sinceIso)
-          .in("status", ["delivered", "opened", "clicked", "queued", "sending"])
+          .in("status", [...DIGEST_ELIGIBLE_NOTIFICATION_STATUSES])
           .order("created_at", { ascending: false })
           .limit(200);
 

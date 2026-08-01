@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Button } from '@/components/ui/controls';
+import { useBufferedAutosave } from '@/hooks/use-buffered-autosave';
 import { proposalEvents } from '@/lib/analytics';
 import { scheduleEvents } from '@/lib/analytics/schedule-events';
 import {
@@ -50,44 +51,6 @@ const PHASE_KEY_OPTIONS = [
   { value: 'final_walkthrough', label: 'Final Walkthrough' },
 ] as const;
 
-const DEFAULT_PHASES = [
-  {
-    name: 'Schematic Design',
-    phaseKey: 'concept_development',
-    durationWeeks: 3,
-    feeCents: 250000,
-    revisionLimit: 2,
-  },
-  {
-    name: 'Design Development',
-    phaseKey: 'design_refinement',
-    durationWeeks: 4,
-    feeCents: 350000,
-    revisionLimit: 2,
-  },
-  {
-    name: 'Procurement Management',
-    phaseKey: 'procurement',
-    durationWeeks: 8,
-    feeCents: 200000,
-    revisionLimit: 1,
-  },
-  {
-    name: 'Installation & Styling',
-    phaseKey: 'installation',
-    durationWeeks: 3,
-    feeCents: 150000,
-    revisionLimit: 1,
-  },
-  {
-    name: 'Completion & Handover',
-    phaseKey: 'final_walkthrough',
-    durationWeeks: 1,
-    feeCents: 50000,
-    revisionLimit: 0,
-  },
-];
-
 interface PhaseBuilderProps {
   proposalId: string;
 }
@@ -108,6 +71,7 @@ interface ProposalPhaseRow {
   follows_phase_id: string | null;
   anchor_date: string | null;
   lane: 'main' | 'thread';
+  updated_at: string;
 }
 
 interface ProposalPaymentMilestoneRow {
@@ -132,28 +96,6 @@ function fmtEffectiveDuration(days: number | null | undefined, weeks: number | n
   const effectiveDays = days ?? (weeks != null ? weeks * 7 : null);
   if (effectiveDays == null) return '—';
   return effectiveDays % 7 === 0 ? `${effectiveDays / 7}w` : `${effectiveDays}d`;
-}
-
-function useDebouncedSave(
-  save: (phaseId: string, proposalId: string, updates: Record<string, unknown>) => void,
-  delay = 600
-) {
-  const timers = useRef<Map<string, ReturnType<typeof setTimeout>>>(new Map());
-
-  return useCallback(
-    (phaseId: string, proposalId: string, updates: Record<string, unknown>) => {
-      const existing = timers.current.get(phaseId);
-      if (existing) clearTimeout(existing);
-      timers.current.set(
-        phaseId,
-        setTimeout(() => {
-          save(phaseId, proposalId, updates);
-          timers.current.delete(phaseId);
-        }, delay)
-      );
-    },
-    [save, delay]
-  );
 }
 
 export function PhaseBuilder({ proposalId }: PhaseBuilderProps) {
@@ -186,6 +128,9 @@ export function PhaseBuilder({ proposalId }: PhaseBuilderProps) {
   // Local edit state keyed by phase id (used by the per-phase form rows).
   const [edits, setEdits] = useState<Record<string, Record<string, unknown>>>({});
   const [templatePickerOpen, setTemplatePickerOpen] = useState(false);
+  const [phaseCreateError, setPhaseCreateError] = useState<string | null>(null);
+  const templateApplyInFlight = useRef(false);
+  const phaseVersionRef = useRef<Record<string, string>>({});
   // Bumped on a successful ghost-line create — clears the birth ghost line's kept fields.
   const [ghostResetSignal, setGhostResetSignal] = useState(0);
 
@@ -194,6 +139,10 @@ export function PhaseBuilder({ proposalId }: PhaseBuilderProps) {
     if (phases.length > 0) {
       const next: Record<string, Record<string, unknown>> = {};
       for (const p of phases) {
+        const currentVersion = phaseVersionRef.current[p.id];
+        if (!currentVersion || p.updated_at > currentVersion) {
+          phaseVersionRef.current[p.id] = p.updated_at;
+        }
         if (!edits[p.id]) {
           next[p.id] = {
             name: p.name,
@@ -217,85 +166,93 @@ export function PhaseBuilder({ proposalId }: PhaseBuilderProps) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [phases]);
 
-  const debouncedUpdate = useDebouncedSave(
-    useCallback(
-      (phaseId: string, propId: string, updates: Record<string, unknown>) => {
-        updatePhase.mutate(
-          { phaseId, proposalId: propId, updates },
-          {
-            onSuccess: () => {
-              proposalEvents.scopeUpdated({ proposalId: propId, field: 'phase', action: 'update' });
-            },
-          }
-        );
+  const phaseAutosave = useBufferedAutosave<
+    string,
+    Record<string, unknown>
+  >({
+    proposalId,
+    delay: 600,
+    save: useCallback(
+      async (phaseId, updates) => {
+        const expectedUpdatedAt = phaseVersionRef.current[phaseId];
+        if (!expectedUpdatedAt) {
+          throw new Error('Phase version is unavailable; reload before saving.');
+        }
+        const saved = await updatePhase.mutateAsync({
+          phaseId,
+          proposalId,
+          updates,
+          expectedUpdatedAt,
+        }) as { updated_at?: string };
+        if (saved.updated_at) {
+          phaseVersionRef.current[phaseId] = saved.updated_at;
+        }
+        proposalEvents.scopeUpdated({
+          proposalId,
+          field: 'phase',
+          action: 'update',
+        });
+        if (Object.prototype.hasOwnProperty.call(updates, 'anchor_date')) {
+          scheduleEvents.scheduleAnchorSet({
+            surface: 'proposal',
+            proposal_id: proposalId,
+            target: 'phase',
+            set: updates.anchor_date !== null,
+          });
+        }
       },
-      [updatePhase]
-    )
-  );
+      [proposalId, updatePhase],
+    ),
+  });
 
   function setField(phaseId: string, field: string, value: unknown) {
     setEdits((prev) => ({
       ...prev,
       [phaseId]: { ...prev[phaseId], [field]: value },
     }));
-    debouncedUpdate(phaseId, proposalId, { [field]: value });
+    phaseAutosave.queue(phaseId, { [field]: value });
   }
 
   // ═══════════════════════════════════════════════════════════════════════
-  // Compose (Slice 03) — the duration/anchor grammar + birth. Direct commits
-  // (no debounce — a ScheduleEntryField fires once on Enter/blur, unlike the
-  // continuous-typing number input it replaces), each firing its own
-  // telemetry on SUCCESS only (R83 — a failed write is never counted).
+  // Compose (Slice 03) — the duration/anchor grammar + birth. A
+  // ScheduleEntryField fires once on Enter/blur, so flush immediately, but
+  // first join the same row buffer. This preserves a name/fee edit made just
+  // before the duration commit and sends one complete per-phase patch.
   // ═══════════════════════════════════════════════════════════════════════
 
   function handleSetPhaseDuration(phaseId: string, days: number) {
     const weeksMirror = Math.round(days / 7); // precedence: days = truth, weeks = kept-in-sync mirror
-    updatePhase.mutate(
-      { phaseId, proposalId, updates: { duration_days: days, duration_weeks: weeksMirror } },
-      {
-        onSuccess: () => {
-          setEdits((prev) => ({
-            ...prev,
-            [phaseId]: { ...prev[phaseId], duration_days: days, duration_weeks: weeksMirror },
-          }));
-          proposalEvents.scopeUpdated({ proposalId, field: 'phase', action: 'update' });
-        },
+    setEdits((prev) => ({
+      ...prev,
+      [phaseId]: {
+        ...prev[phaseId],
+        duration_days: days,
+        duration_weeks: weeksMirror,
       },
-    );
+    }));
+    phaseAutosave.queue(phaseId, {
+      duration_days: days,
+      duration_weeks: weeksMirror,
+    });
+    void phaseAutosave.flush(phaseId);
   }
 
   function handleSetPhaseAnchor(phaseId: string, date: string) {
-    updatePhase.mutate(
-      { phaseId, proposalId, updates: { anchor_date: date } },
-      {
-        onSuccess: () => {
-          setEdits((prev) => ({ ...prev, [phaseId]: { ...prev[phaseId], anchor_date: date } }));
-          scheduleEvents.scheduleAnchorSet({
-            surface: 'proposal',
-            proposal_id: proposalId,
-            target: 'phase',
-            set: true,
-          });
-        },
-      },
-    );
+    setEdits((prev) => ({
+      ...prev,
+      [phaseId]: { ...prev[phaseId], anchor_date: date },
+    }));
+    phaseAutosave.queue(phaseId, { anchor_date: date });
+    void phaseAutosave.flush(phaseId);
   }
 
   function handleUnpinPhaseAnchor(phaseId: string) {
-    updatePhase.mutate(
-      { phaseId, proposalId, updates: { anchor_date: null } },
-      {
-        onSuccess: () => {
-          setEdits((prev) => ({ ...prev, [phaseId]: { ...prev[phaseId], anchor_date: null } }));
-          scheduleEvents.scheduleAnchorSet({
-            surface: 'proposal',
-            proposal_id: proposalId,
-            target: 'phase',
-            set: false,
-          });
-        },
-      },
-    );
+    setEdits((prev) => ({
+      ...prev,
+      [phaseId]: { ...prev[phaseId], anchor_date: null },
+    }));
+    phaseAutosave.queue(phaseId, { anchor_date: null });
+    void phaseAutosave.flush(phaseId);
   }
 
   // Birth support — the designer's past projects with a phase count each
@@ -323,32 +280,51 @@ export function PhaseBuilder({ proposalId }: PhaseBuilderProps) {
     [scheduleMilestones],
   );
 
-  function handleSeedPatinaSix() {
-    applyTemplate.mutate(
-      { proposalId, templateSlug: 'patina_six' },
-      {
-        onSuccess: () =>
-          scheduleEvents.scheduleBorn({ surface: 'proposal', proposal_id: proposalId, kind: 'patina_six' }),
-      },
-    );
+  async function handleSeedPatinaSix() {
+    if (templateApplyInFlight.current) return;
+    templateApplyInFlight.current = true;
+    setPhaseCreateError(null);
+    // A proposal can be born into the Patina Six only from its zero state, so
+    // its own UUID is the cross-tab request key. Two tabs and response retries
+    // converge on one durable application receipt instead of appending twice.
+    const requestId = proposalId;
+    try {
+      await applyTemplate.mutateAsync({
+        proposalId,
+        templateSlug: 'patina_six',
+        requestId,
+      });
+      scheduleEvents.scheduleBorn({
+        surface: 'proposal',
+        proposal_id: proposalId,
+        kind: 'patina_six',
+      });
+    } catch {
+      setPhaseCreateError('Couldn’t seed the Patina Six — nothing was saved');
+    } finally {
+      templateApplyInFlight.current = false;
+    }
   }
 
   function handleCopyFromPastProject(sourceProjectId: string) {
+    setPhaseCreateError(null);
     copyAsBuilt.mutate(
       { sourceProjectId, targetProposalId: proposalId },
       {
-        onSuccess: () =>
+        onSuccess: () => {
           scheduleEvents.scheduleBorn({
             surface: 'proposal',
             proposal_id: proposalId,
             kind: 'past_project',
             source_project_id: sourceProjectId,
-          }),
+          });
+        },
       },
     );
   }
 
   function handleGhostAdd(input: GhostAddInput) {
+    setPhaseCreateError(null);
     // Captured before the mutate call — phases.length flips the instant the
     // write lands (see schedule-spine.tsx's handleAddPhase for the same note).
     const wasEmpty = phases.length === 0;
@@ -358,7 +334,6 @@ export function PhaseBuilder({ proposalId }: PhaseBuilderProps) {
         name: input.name,
         durationDays: input.durationDays,
         anchorDate: input.anchorDate,
-        followsPhaseId: phases.length > 0 ? phases[phases.length - 1].id : undefined,
         lane: 'main',
       },
       {
@@ -384,13 +359,15 @@ export function PhaseBuilder({ proposalId }: PhaseBuilderProps) {
 
   const ghostError = addPhase.isError ? 'Add failed — nothing was saved; your entry is kept' : null;
   const birthBusy = applyTemplate.isPending || copyAsBuilt.isPending;
-  const birthError = applyTemplate.isError
-    ? 'Couldn’t seed the Patina Six — nothing was saved'
-    : copyAsBuilt.isError
-      ? 'Couldn’t copy that schedule — nothing was saved'
-      : null;
+  const birthError = phaseCreateError
+    ?? (applyTemplate.isError
+      ? 'Couldn’t seed the Patina Six — nothing was saved'
+      : copyAsBuilt.isError
+        ? 'Couldn’t copy that schedule — nothing was saved'
+        : null);
 
   function handleAddPhase() {
+    setPhaseCreateError(null);
     addPhase.mutate(
       {
         proposalId,
@@ -399,6 +376,7 @@ export function PhaseBuilder({ proposalId }: PhaseBuilderProps) {
         durationWeeks: 2,
         feeCents: 0,
         revisionLimit: 2,
+        lane: 'main',
       },
       {
         onSuccess: () => {
@@ -408,25 +386,48 @@ export function PhaseBuilder({ proposalId }: PhaseBuilderProps) {
     );
   }
 
-  function handleAddDefaults() {
-    DEFAULT_PHASES.forEach((d) => {
-      addPhase.mutate(
-        {
-          proposalId,
-          name: d.name,
-          phaseKey: d.phaseKey,
-          durationWeeks: d.durationWeeks,
-          feeCents: d.feeCents,
-          revisionLimit: d.revisionLimit,
-        },
+  async function handleRemovePhase(phase: ProposalPhaseRow) {
+    setPhaseCreateError(null);
+    try {
+      // A delete must linearize after any buffered edit for this row. The save
+      // response advances phaseVersionRef, which becomes the remove CAS token.
+      await phaseAutosave.flush(phase.id);
+      const expectedUpdatedAt = phaseVersionRef.current[phase.id];
+      if (!expectedUpdatedAt) {
+        throw new Error('Phase version is unavailable; reload before removing.');
+      }
+      removePhase.mutate(
+        { phaseId: phase.id, proposalId, expectedUpdatedAt },
         {
           onSuccess: () => {
-            proposalEvents.scopeUpdated({ proposalId, field: 'phase', action: 'add' });
+            delete phaseVersionRef.current[phase.id];
+            setEdits((current) => {
+              const next = { ...current };
+              delete next[phase.id];
+              return next;
+            });
+            proposalEvents.scopeUpdated({
+              proposalId,
+              field: 'phase',
+              action: 'remove',
+            });
           },
-        }
+          onError: (error) => {
+            setPhaseCreateError(
+              error instanceof Error ? error.message : 'Could not remove that phase.',
+            );
+          },
+        },
       );
-    });
+    } catch (error) {
+      setPhaseCreateError(
+        error instanceof Error ? error.message : 'Could not save before removing that phase.',
+      );
+    }
   }
+
+  const phaseWritePending =
+    addPhase.isPending || removePhase.isPending || applyTemplate.isPending || copyAsBuilt.isPending;
 
   const totalFee = phases.reduce(
     (sum: number, p: ProposalPhaseRow) => sum + (p.fee_cents || 0),
@@ -481,18 +482,56 @@ export function PhaseBuilder({ proposalId }: PhaseBuilderProps) {
         <div className="mb-4 flex items-center justify-between">
           <span className="type-meta">Project Phases</span>
           <div className="flex gap-2">
-            <Button variant="ghost" onClick={() => setTemplatePickerOpen(true)}>
+            <Button
+              variant="ghost"
+              disabled={phaseWritePending}
+              onClick={() => setTemplatePickerOpen(true)}
+            >
               Apply Template
             </Button>
-            {phases.length === 0 && (
-              <Button variant="secondary" onClick={handleAddDefaults}>
-                Add Defaults
-              </Button>
-            )}
-            <Button variant="secondary" onClick={handleAddPhase}>
-              + Add Phase
+            <Button
+              variant="secondary"
+              disabled={phaseWritePending}
+              onClick={handleAddPhase}
+            >
+              {addPhase.isPending ? 'Adding phase…' : '+ Add Phase'}
             </Button>
           </div>
+        </div>
+
+        {phaseCreateError && phases.length > 0 ? (
+          <p role="alert" className="mb-4 text-sm text-[var(--color-terracotta)]">
+            {phaseCreateError}
+          </p>
+        ) : null}
+
+        <div className="mb-2 min-h-4" aria-live="polite">
+          {(phaseAutosave.state === 'dirty' ||
+            phaseAutosave.state === 'saving') && (
+            <p
+              role="status"
+              className="font-mono text-[0.68rem] text-[var(--text-muted)]"
+            >
+              Saving phases…
+            </p>
+          )}
+          {phaseAutosave.state === 'saved' && (
+            <p
+              role="status"
+              className="font-mono text-[0.68rem] text-[var(--color-sage)]"
+            >
+              Phases saved
+            </p>
+          )}
+          {phaseAutosave.state === 'error' && (
+            <p
+              role="alert"
+              className="font-mono text-[0.68rem] text-[var(--color-terracotta)]"
+            >
+              {phaseAutosave.error ?? 'Could not save the phase changes.'} Your
+              client preview was not updated.
+            </p>
+          )}
         </div>
 
         {/* Column headers */}
@@ -528,15 +567,19 @@ export function PhaseBuilder({ proposalId }: PhaseBuilderProps) {
                 {/* Name */}
                 <input
                   type="text"
+                  aria-label="Phase name"
                   value={(local.name as string) ?? ''}
                   onChange={(e) => setField(id, 'name', e.target.value)}
+                  onBlur={() => void phaseAutosave.flush(id)}
                   className="w-full border-b border-transparent bg-transparent font-body text-[0.88rem] text-[var(--text-primary)] outline-none focus:border-[var(--accent-primary)]"
                 />
 
                 {/* Phase key select */}
                 <select
+                  aria-label="Phase type"
                   value={(local.phase_key as string) ?? ''}
                   onChange={(e) => setField(id, 'phase_key', e.target.value)}
+                  onBlur={() => void phaseAutosave.flush(id)}
                   className="w-full cursor-pointer border-b border-transparent bg-transparent font-body text-[0.78rem] text-[var(--text-primary)] outline-none focus:border-[var(--accent-primary)]"
                 >
                   <option value="">--</option>
@@ -587,6 +630,7 @@ export function PhaseBuilder({ proposalId }: PhaseBuilderProps) {
                   <span className="font-mono text-[0.78rem] text-[var(--text-muted)]">$</span>
                   <input
                     type="number"
+                    aria-label="Phase fee"
                     min={0}
                     step={100}
                     value={((local.fee_cents as number) ?? 0) / 100}
@@ -597,6 +641,7 @@ export function PhaseBuilder({ proposalId }: PhaseBuilderProps) {
                         Math.round(parseFloat(e.target.value || '0') * 100)
                       )
                     }
+                    onBlur={() => void phaseAutosave.flush(id)}
                     className="w-full border-b border-transparent bg-transparent text-right font-mono text-[0.82rem] text-[var(--text-primary)] outline-none focus:border-[var(--accent-primary)]"
                   />
                 </div>
@@ -637,16 +682,8 @@ export function PhaseBuilder({ proposalId }: PhaseBuilderProps) {
                   variant="ghost"
                   size="sm"
                   className="h-6 w-6 !px-0 !py-0"
-                  onClick={() =>
-                    removePhase.mutate(
-                      { phaseId: id, proposalId },
-                      {
-                        onSuccess: () => {
-                          proposalEvents.scopeUpdated({ proposalId, field: 'phase', action: 'remove' });
-                        },
-                      }
-                    )
-                  }
+                  disabled={removePhase.isPending}
+                  onClick={() => void handleRemovePhase(phase)}
                   aria-label="Remove phase"
                 >
                   x
@@ -673,7 +710,10 @@ export function PhaseBuilder({ proposalId }: PhaseBuilderProps) {
                   </AccordionTrigger>
                   <AccordionContent>
                     <div className="flex flex-col gap-5 pb-4 pt-2">
-                      <DeliverablesEditor phaseId={id} />
+                      <DeliverablesEditor
+                        proposalId={proposalId}
+                        phaseId={id}
+                      />
                       <GateConditionsEditor
                         phaseId={id}
                         allPhases={allPhasesLite}
@@ -710,9 +750,8 @@ export function PhaseBuilder({ proposalId }: PhaseBuilderProps) {
         )}
 
         {/* Zero-state — ScheduleBirth (Slice 03 §4/§5, R100 "PRIMARY" birth
-            surface). The header's Apply Template / Add Defaults / + Add
-            Phase buttons above stay live escape hatches (existing behavior
-            intact); this is the primary typographic path. */}
+            surface). The header's Apply Template / + Add Phase buttons remain
+            escape hatches; Patina Six has one canonical birth affordance. */}
         {phases.length === 0 && (
           <ScheduleBirth
             surface="proposal"

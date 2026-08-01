@@ -88,31 +88,31 @@ final class ProposalDetailViewModel {
     func load(proposalId: String) async {
         isLoading = true
         error = nil
-        async let proposalTask = try? await ProposalsAPIClient.shared.fetchProposal(id: proposalId)
-        async let itemsTask = (try? await ProposalsAPIClient.shared.fetchItems(proposalId: proposalId)) ?? []
-        async let sectionsTask = (try? await ProposalsAPIClient.shared.fetchSections(proposalId: proposalId)) ?? []
-        async let phasesTask = (try? await ProposalsAPIClient.shared.fetchPhases(proposalId: proposalId)) ?? []
-        async let milestonesTask = (try? await ProposalsAPIClient.shared.fetchMilestones(proposalId: proposalId)) ?? []
-        async let exclusionsTask = (try? await ProposalsAPIClient.shared.fetchExclusions(proposalId: proposalId)) ?? []
-        async let scopeRoomsTask = (try? await ProposalsAPIClient.shared.fetchScopeRooms(proposalId: proposalId)) ?? []
-        async let boardsTask = (try? await ProposalsAPIClient.shared.fetchBoards(proposalId: proposalId)) ?? []
-
-        let loaded = await (
-            proposalTask, itemsTask, sectionsTask, phasesTask,
-            milestonesTask, exclusionsTask, scopeRoomsTask, boardsTask
-        )
-        self.proposal = loaded.0
-        self.items = loaded.1
-        self.sections = loaded.2
-        self.phases = loaded.3
-        self.milestones = loaded.4
-        self.exclusions = loaded.5
-        self.scopeRooms = loaded.6
-        self.boards = loaded.7
-        self.isLoading = false
-        if self.proposal == nil {
+        do {
+            let bundle = try await ProposalsAPIClient.shared.fetchProposalBundle(id: proposalId)
+            self.proposal = bundle.proposal
+            self.items = bundle.proposal.items ?? []
+            self.sections = bundle.sections
+            self.phases = bundle.phases
+            self.milestones = bundle.payment_milestones
+            self.exclusions = bundle.exclusions
+            self.scopeRooms = bundle.scope_rooms
+            self.boards = bundle.boards
+        } catch {
+            self.proposal = nil
+            self.items = []
+            self.sections = []
+            self.phases = []
+            self.milestones = []
+            self.exclusions = []
+            self.scopeRooms = []
+            self.boards = []
             self.error = "Couldn't load this proposal"
+            #if DEBUG
+            PatinaLog.ui.error("[Proposals] detail failed: \(error.localizedDescription)")
+            #endif
         }
+        self.isLoading = false
     }
 
     func beginSigning() {

@@ -74,10 +74,15 @@ import { resolveStudioIdentity, studioCobrand } from '../_shared/studio-identity
 // of this Deno.serve module so they unit-test offline, per the repo's core/index
 // split); used only from ONE new call site after the money-path switch below.
 import {
-  RECONCILE_EVENT_TYPES,
-  MONEY_PATH_TYPES,
   enqueueStripeEventTask,
+  MONEY_PATH_TYPES,
+  RECONCILE_EVENT_TYPES,
 } from './reconcile-emit.ts';
+import {
+  type ClaimedCheckoutAttempt,
+  persistSignedSessionEvidence,
+  resolveExactClaimedPayment,
+} from './invoice-checkout-integrity.ts';
 // BOH fulfillment intake emission (S0) — additive, one new call site below.
 import { enqueueAgentTask, type RpcClient } from '../_shared/agent-queue.ts';
 
@@ -111,6 +116,8 @@ interface PaymentRow {
   amount_cents: number;
   method: string;
   status: string;
+  checkout_attempt_id: string | null;
+  recorded_by: string | null;
   stripe_checkout_session_id: string | null;
   stripe_payment_intent_id: string | null;
 }
@@ -127,7 +134,11 @@ interface InvoiceJoined {
   amount_paid_cents: number;
   project: { id: string; name: string; client_id: string | null } | null;
   client: { id: string; full_name: string | null; email: string | null } | null;
-  designer: { id: string; full_name: string | null; business_name: string | null } | null;
+  designer: {
+    id: string;
+    full_name: string | null;
+    business_name: string | null;
+  } | null;
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -135,7 +146,78 @@ interface InvoiceJoined {
 // ─────────────────────────────────────────────────────────────────────────────
 
 const PAYMENT_COLS =
-  'id, invoice_id, amount_cents, method, status, stripe_checkout_session_id, stripe_payment_intent_id';
+  'id, invoice_id, amount_cents, method, status, checkout_attempt_id, recorded_by, stripe_checkout_session_id, stripe_payment_intent_id';
+
+function stripeObjectId(value: string | { id: string } | null): string | null {
+  return typeof value === 'string' ? value : (value?.id ?? null);
+}
+
+/**
+ * New invoice sessions resolve by their exact attempt before any legacy
+ * session/PI/invoice fallback. Every identity and money field must agree.
+ */
+async function resolveClaimedPaymentRow(
+  admin: SupabaseClient,
+  input: {
+    attemptId: string;
+    invoiceId: string | null;
+    payerId: string | null;
+    sessionId: string | null;
+    paymentIntentId: string | null;
+    customerId: string | null;
+    amountCents: number | null;
+    currency: string | null;
+  }
+): Promise<PaymentRow> {
+  const payment = (await resolveExactClaimedPayment(
+    {
+      async loadAttempt(attemptId) {
+        const { data, error } = await admin
+          .from('invoice_checkout_attempts')
+          .select(
+            'id, invoice_id, payer_id, stripe_customer_id, amount_cents, currency, state, stripe_checkout_session_id, stripe_payment_intent_id'
+          )
+          .eq('id', attemptId)
+          .maybeSingle();
+        if (error) throw new Error(`failed to load Checkout attempt: ${error.message}`);
+        return data as ClaimedCheckoutAttempt | null;
+      },
+      async loadPayment(attemptId) {
+        const { data, error } = await admin
+          .from('invoice_payments')
+          .select(PAYMENT_COLS)
+          .eq('checkout_attempt_id', attemptId)
+          .maybeSingle();
+        if (error) throw new Error(`failed to load claimed payment: ${error.message}`);
+        return data as PaymentRow | null;
+      },
+    },
+    input
+  )) as PaymentRow;
+
+  await persistSignedSessionEvidence(payment, input, {
+    async finalizeActive() {
+      const { error } = await admin.rpc('finalize_invoice_checkout_attempt', {
+        p_attempt_id: input.attemptId,
+        p_payer_id: input.payerId,
+        p_stripe_customer_id: input.customerId,
+        p_stripe_checkout_session_id: input.sessionId,
+      });
+      if (error) throw new Error(`active finalization failed: ${error.message}`);
+    },
+    async recoverTerminal() {
+      const { error } = await admin.rpc('recover_invoice_checkout_session_evidence', {
+        p_attempt_id: input.attemptId,
+        p_payer_id: input.payerId,
+        p_stripe_customer_id: input.customerId,
+        p_stripe_checkout_session_id: input.sessionId,
+      });
+      if (error) throw new Error(`terminal evidence recovery failed: ${error.message}`);
+    },
+  });
+
+  return payment;
+}
 
 /** Resolve the invoice_payments row: session id → PI id → latest pending stripe row on the invoice. */
 async function resolvePaymentRow(
@@ -244,41 +326,36 @@ function designerDisplayName(invoice: InvoiceJoined): string {
 // ─────────────────────────────────────────────────────────────────────────────
 
 /**
- * Flip a pending row to succeeded (concurrency-safe via the status guard).
- * Returns true only when THIS call performed the flip — side effects (receipt
- * email + designer notification) key off that so they fire exactly once.
+ * Settle through the DB money boundary. It locks the invoice, verifies the
+ * Stripe-reported amount, and returns requires_refund rather than applying an
+ * overpayment. Side effects fire only for a fresh, safely-applied success.
  */
 async function markSucceeded(
   admin: SupabaseClient,
   row: PaymentRow,
   eventId: string,
-  paymentIntentId: string | null
-): Promise<boolean> {
-  const patch: Record<string, unknown> = {
-    status: 'succeeded',
-    received_at: new Date().toISOString(),
-    stripe_event_id: eventId,
-  };
-  if (paymentIntentId && !row.stripe_payment_intent_id) {
-    patch.stripe_payment_intent_id = paymentIntentId;
-  }
-  const { data, error } = await admin
-    .from('invoice_payments')
-    .update(patch)
-    .eq('id', row.id)
-    .eq('status', 'pending')
-    .select('id');
+  paymentIntentId: string | null,
+  reportedAmountCents: number | null
+): Promise<'succeeded' | 'requires_refund' | 'unchanged'> {
+  const { data, error } = await admin.rpc('settle_invoice_checkout_payment', {
+    p_payment_id: row.id,
+    p_stripe_event_id: eventId,
+    p_stripe_payment_intent_id: paymentIntentId,
+    p_reported_amount_cents: reportedAmountCents,
+  });
   if (error) {
-    throw new Error(`failed to mark payment ${row.id} succeeded: ${error.message}`);
+    throw new Error(`failed to settle payment ${row.id}: ${error.message}`);
   }
-  return (data ?? []).length > 0;
+  const result = data as { outcome?: string; changed?: boolean } | null;
+  if (result?.outcome === 'requires_refund') return 'requires_refund';
+  if (result?.outcome === 'succeeded' && result.changed === true) {
+    return 'succeeded';
+  }
+  return 'unchanged';
 }
 
 /** Receipt email + designer in_app notification after a successful flip. Never throws. */
-async function sendSuccessSideEffects(
-  admin: SupabaseClient,
-  row: PaymentRow
-): Promise<void> {
+async function sendSuccessSideEffects(admin: SupabaseClient, row: PaymentRow): Promise<void> {
   try {
     // Reload AFTER the flip — the 00178 trigger already rolled up
     // amount_paid_cents/status, so balance here is post-payment truth.
@@ -301,7 +378,7 @@ async function sendSuccessSideEffects(
         await resolveStudioIdentity(admin, {
           projectId: invoice.project_id,
           designerId: invoice.designer_id,
-        }),
+        })
       );
       const rendered = buildPaymentReceiptEmail({
         invoiceNumber,
@@ -358,7 +435,9 @@ async function sendSuccessSideEffects(
         amount_cents: row.amount_cents,
         paid_in_full: paidInFull,
         subject,
-        message: `${projectName}: ${subject.toLowerCase()}${paidInFull ? '' : ` (balance ${formatInvoiceCurrency(balanceCents, invoice.currency)})`}.`,
+        message: `${projectName}: ${subject.toLowerCase()}${
+          paidInFull ? '' : ` (balance ${formatInvoiceCurrency(balanceCents, invoice.currency)})`
+        }.`,
         deep_link: `/desk?book=accounts&page=ledger&invoiceId=${invoice.id}`,
       },
     });
@@ -371,10 +450,7 @@ async function sendSuccessSideEffects(
 }
 
 /** Failure email to the client + designer in_app notification. Never throws. */
-async function sendFailureSideEffects(
-  admin: SupabaseClient,
-  row: PaymentRow
-): Promise<void> {
+async function sendFailureSideEffects(admin: SupabaseClient, row: PaymentRow): Promise<void> {
   try {
     const invoice = await loadInvoiceJoined(admin, row.invoice_id);
     if (!invoice) return;
@@ -392,7 +468,7 @@ async function sendFailureSideEffects(
         await resolveStudioIdentity(admin, {
           projectId: invoice.project_id,
           designerId: invoice.designer_id,
-        }),
+        })
       );
       const rendered = buildPaymentFailedEmail({
         invoiceNumber,
@@ -467,15 +543,12 @@ function sessionIds(session: Stripe.Checkout.Session): {
     paymentIntentId:
       typeof session.payment_intent === 'string'
         ? session.payment_intent
-        : session.payment_intent?.id ?? null,
+        : (session.payment_intent?.id ?? null),
     invoiceId: session.metadata?.invoice_id ?? null,
   };
 }
 
-async function handleSessionCompleted(
-  admin: SupabaseClient,
-  event: Stripe.Event
-): Promise<void> {
+async function handleSessionCompleted(admin: SupabaseClient, event: Stripe.Event): Promise<void> {
   const session = event.data.object as Stripe.Checkout.Session;
   if (payableTypeOf(session) === 'po_payment') {
     return handlePoSessionCompleted(admin, event, session);
@@ -484,11 +557,24 @@ async function handleSessionCompleted(
     return handleDirectOrderSessionCompleted(admin, event, session);
   }
   const { sessionId, paymentIntentId, invoiceId } = sessionIds(session);
+  const checkoutAttemptId = session.metadata?.checkout_attempt_id ?? null;
 
-  let row = await resolvePaymentRow(admin, sessionId, paymentIntentId, invoiceId);
+  let row = checkoutAttemptId
+    ? await resolveClaimedPaymentRow(admin, {
+        attemptId: checkoutAttemptId,
+        invoiceId,
+        payerId: session.metadata?.payer_id ?? null,
+        sessionId,
+        paymentIntentId,
+        customerId: stripeObjectId(session.customer),
+        amountCents: session.amount_total,
+        currency: session.currency,
+      })
+    : await resolvePaymentRow(admin, sessionId, paymentIntentId, invoiceId);
 
-  // Belt-and-suspenders: if create-checkout-session failed to insert the
-  // pending row, recreate it from the session itself.
+  // Legacy sessions predate atomic claims, so preserve their exact-session
+  // fallback. A claimed session must already have its payment row; recreating
+  // it from loose invoice metadata would defeat payer/attempt isolation.
   if (!row && invoiceId && session.amount_total) {
     const { data, error } = await admin
       .from('invoice_payments')
@@ -513,8 +599,14 @@ async function handleSessionCompleted(
   }
 
   if (session.payment_status === 'paid') {
-    const flipped = await markSucceeded(admin, row, event.id, paymentIntentId);
-    if (flipped) await sendSuccessSideEffects(admin, row);
+    const outcome = await markSucceeded(
+      admin,
+      row,
+      event.id,
+      paymentIntentId,
+      session.amount_total
+    );
+    if (outcome === 'succeeded') await sendSuccessSideEffects(admin, row);
   } else if (paymentIntentId && !row.stripe_payment_intent_id) {
     // ACH initiated ('unpaid'): stamp the PI id, leave the row pending. The
     // async_payment_succeeded/failed event settles it in 3–5 business days.
@@ -541,19 +633,28 @@ async function handleAsyncPaymentSucceeded(
     return handleDirectOrderAsyncPaymentSucceeded(admin, event, session);
   }
   const { sessionId, paymentIntentId, invoiceId } = sessionIds(session);
-  const row = await resolvePaymentRow(admin, sessionId, paymentIntentId, invoiceId);
+  const checkoutAttemptId = session.metadata?.checkout_attempt_id ?? null;
+  const row = checkoutAttemptId
+    ? await resolveClaimedPaymentRow(admin, {
+        attemptId: checkoutAttemptId,
+        invoiceId,
+        payerId: session.metadata?.payer_id ?? null,
+        sessionId,
+        paymentIntentId,
+        customerId: stripeObjectId(session.customer),
+        amountCents: session.amount_total,
+        currency: session.currency,
+      })
+    : await resolvePaymentRow(admin, sessionId, paymentIntentId, invoiceId);
   if (!row) {
     console.warn('stripe-webhook: async_payment_succeeded with no payment row', sessionId);
     return;
   }
-  const flipped = await markSucceeded(admin, row, event.id, paymentIntentId);
-  if (flipped) await sendSuccessSideEffects(admin, row);
+  const outcome = await markSucceeded(admin, row, event.id, paymentIntentId, session.amount_total);
+  if (outcome === 'succeeded') await sendSuccessSideEffects(admin, row);
 }
 
-async function handleAsyncPaymentFailed(
-  admin: SupabaseClient,
-  event: Stripe.Event
-): Promise<void> {
+async function handleAsyncPaymentFailed(admin: SupabaseClient, event: Stripe.Event): Promise<void> {
   const session = event.data.object as Stripe.Checkout.Session;
   if (payableTypeOf(session) === 'po_payment') {
     return handlePoAsyncPaymentFailed(admin, event, session);
@@ -562,7 +663,19 @@ async function handleAsyncPaymentFailed(
     return handleDirectOrderAsyncPaymentFailed(admin, event, session);
   }
   const { sessionId, paymentIntentId, invoiceId } = sessionIds(session);
-  const row = await resolvePaymentRow(admin, sessionId, paymentIntentId, invoiceId);
+  const checkoutAttemptId = session.metadata?.checkout_attempt_id ?? null;
+  const row = checkoutAttemptId
+    ? await resolveClaimedPaymentRow(admin, {
+        attemptId: checkoutAttemptId,
+        invoiceId,
+        payerId: session.metadata?.payer_id ?? null,
+        sessionId,
+        paymentIntentId,
+        customerId: stripeObjectId(session.customer),
+        amountCents: session.amount_total,
+        currency: session.currency,
+      })
+    : await resolvePaymentRow(admin, sessionId, paymentIntentId, invoiceId);
   if (!row) {
     console.warn('stripe-webhook: async_payment_failed with no payment row', sessionId);
     return;
@@ -592,7 +705,9 @@ async function handleAsyncPaymentFailed(
     .eq('id', row.invoice_id)
     .eq('stripe_checkout_session_id', sessionId);
   if (clearErr) {
-    throw new Error(`failed to clear session pointer on invoice ${row.invoice_id}: ${clearErr.message}`);
+    throw new Error(
+      `failed to clear session pointer on invoice ${row.invoice_id}: ${clearErr.message}`
+    );
   }
 
   if ((flippedRows ?? []).length > 0) {
@@ -613,12 +728,30 @@ async function handlePaymentIntentSettled(
   if (payableTypeOf(pi) === 'direct_order') {
     return handleDirectOrderPaymentIntentSettled(admin, event, pi, outcome);
   }
-  const row = await resolvePaymentRow(admin, null, pi.id, null);
+  const checkoutAttemptId = pi.metadata?.checkout_attempt_id ?? null;
+  const row = checkoutAttemptId
+    ? await resolveClaimedPaymentRow(admin, {
+        attemptId: checkoutAttemptId,
+        invoiceId: pi.metadata?.invoice_id ?? null,
+        payerId: pi.metadata?.payer_id ?? null,
+        sessionId: null,
+        paymentIntentId: pi.id,
+        customerId: stripeObjectId(pi.customer),
+        amountCents: pi.amount_received || pi.amount,
+        currency: pi.currency,
+      })
+    : await resolvePaymentRow(admin, null, pi.id, null);
   if (!row || row.status !== 'pending') return;
 
   if (outcome === 'succeeded') {
-    const flipped = await markSucceeded(admin, row, event.id, pi.id);
-    if (flipped) await sendSuccessSideEffects(admin, row);
+    const settlement = await markSucceeded(
+      admin,
+      row,
+      event.id,
+      pi.id,
+      pi.amount_received || pi.amount
+    );
+    if (settlement === 'succeeded') await sendSuccessSideEffects(admin, row);
   } else {
     const { error } = await admin
       .from('invoice_payments')
@@ -645,9 +778,9 @@ async function handlePaymentIntentSettled(
 // ─────────────────────────────────────────────────────────────────────────────
 
 /** Which payable a session / payment intent belongs to. Absent = invoice (back-compat). */
-function payableTypeOf(
-  obj: { metadata?: Stripe.Metadata | null }
-): 'invoice' | 'po_payment' | 'direct_order' {
+function payableTypeOf(obj: {
+  metadata?: Stripe.Metadata | null;
+}): 'invoice' | 'po_payment' | 'direct_order' {
   const t = obj.metadata?.payable_type;
   if (t === 'po_payment') return 'po_payment';
   if (t === 'direct_order') return 'direct_order';
@@ -677,7 +810,7 @@ function poSessionIds(session: Stripe.Checkout.Session): {
     paymentIntentId:
       typeof session.payment_intent === 'string'
         ? session.payment_intent
-        : session.payment_intent?.id ?? null,
+        : (session.payment_intent?.id ?? null),
     poPaymentId: session.metadata?.po_payment_id ?? null,
   };
 }
@@ -850,7 +983,10 @@ async function handlePoAsyncPaymentFailed(
   // the session id so a newer session's pointer is never clobbered.
   const { data: cleared, error } = await admin
     .from('po_payments')
-    .update({ stripe_checkout_session_id: null, stripe_payment_intent_id: null })
+    .update({
+      stripe_checkout_session_id: null,
+      stripe_payment_intent_id: null,
+    })
     .eq('id', row.id)
     .eq('stripe_checkout_session_id', sessionId)
     .select('id');
@@ -925,7 +1061,7 @@ function directOrderSessionIds(session: Stripe.Checkout.Session): {
     paymentIntentId:
       typeof session.payment_intent === 'string'
         ? session.payment_intent
-        : session.payment_intent?.id ?? null,
+        : (session.payment_intent?.id ?? null),
     directOrderId: session.metadata?.direct_order_id ?? null,
   };
 }
@@ -974,10 +1110,9 @@ async function resolveDirectOrder(
 function extractDirectOrderShipping(
   session: Stripe.Checkout.Session
 ): Record<string, unknown> | null {
-  const details =
-    (session.shipping_details ??
-      session.collected_information?.shipping_details ??
-      null) as Record<string, unknown> | null;
+  const details = (session.shipping_details ??
+    session.collected_information?.shipping_details ??
+    null) as Record<string, unknown> | null;
   const email = session.customer_details?.email ?? null;
   if (!details && !email) return null;
   return { ...(details ?? {}), ...(email ? { email } : {}) };
@@ -1027,14 +1162,7 @@ function summarizeDirectOrderShipping(shipping: Record<string, unknown> | null):
   if (!shipping || typeof shipping !== 'object') return null;
   const addr = (shipping.address ?? {}) as Record<string, unknown>;
   const cityState = [addr.city, addr.state].filter((p) => p && String(p).trim()).join(', ');
-  const parts = [
-    shipping.name,
-    addr.line1,
-    addr.line2,
-    cityState,
-    addr.postal_code,
-    addr.country,
-  ]
+  const parts = [shipping.name, addr.line1, addr.line2, cityState, addr.postal_code, addr.country]
     .map((p) => (p == null ? '' : String(p).trim()))
     .filter((p) => p.length > 0);
   return parts.length ? parts.join(', ') : null;
@@ -1105,11 +1233,19 @@ async function sendDirectOrderPaidEmails(admin: SupabaseClient, orderId: string)
         <div style="font-family:Inter,Arial,sans-serif;max-width:560px;color:#2c2926;line-height:1.55">
           <p>A direct order was just paid and needs fulfillment.</p>
           <p style="margin:0 0 8px"><strong>Order:</strong> ${escapeHtmlSafe(order.id)}</p>
-          <p style="margin:0 0 8px"><strong>Product:</strong> ${escapeHtmlSafe(order.product_name)}</p>
-          <p style="margin:0 0 8px"><strong>Quantity:</strong> ${escapeHtmlSafe(String(order.quantity))}</p>
+          <p style="margin:0 0 8px"><strong>Product:</strong> ${escapeHtmlSafe(
+            order.product_name
+          )}</p>
+          <p style="margin:0 0 8px"><strong>Quantity:</strong> ${escapeHtmlSafe(
+            String(order.quantity)
+          )}</p>
           <p style="margin:0 0 8px"><strong>Amount:</strong> ${escapeHtmlSafe(amountLabel)}</p>
-          <p style="margin:0 0 8px"><strong>Buyer:</strong> ${escapeHtmlSafe(clientEmail ?? 'unknown')}</p>
-          <p style="margin:0 0 8px"><strong>Ship to:</strong> ${escapeHtmlSafe(shippingSummary ?? 'not collected')}</p>
+          <p style="margin:0 0 8px"><strong>Buyer:</strong> ${escapeHtmlSafe(
+            clientEmail ?? 'unknown'
+          )}</p>
+          <p style="margin:0 0 8px"><strong>Ship to:</strong> ${escapeHtmlSafe(
+            shippingSummary ?? 'not collected'
+          )}</p>
         </div>`;
       const opsResult = await sendCompliantEmail(admin, {
         to: opsEmail,
@@ -1298,7 +1434,10 @@ async function handleDirectOrderAsyncPaymentFailed(
   // session id so a newer session's pointer is never clobbered.
   const { data: clearedRows, error } = await admin
     .from('direct_orders')
-    .update({ stripe_checkout_session_id: null, stripe_payment_intent_id: null })
+    .update({
+      stripe_checkout_session_id: null,
+      stripe_payment_intent_id: null,
+    })
     .eq('id', row.id)
     .eq('stripe_checkout_session_id', sessionId)
     .select('id');
@@ -1355,7 +1494,11 @@ async function handleDirectOrderPaymentIntentSettled(
 // ─────────────────────────────────────────────────────────────────────────────
 
 /** Full vs partial refund on the pinned API version's Charge shape. */
-function isFullRefund(charge: Stripe.Charge): { full: boolean; refunded: number; captured: number } {
+function isFullRefund(charge: Stripe.Charge): {
+  full: boolean;
+  refunded: number;
+  captured: number;
+} {
   // amount_captured is the actually-charged amount (== amount for a fully
   // captured charge); fall back to amount if absent. amount_refunded is the
   // running total refunded across all refunds on the charge.
@@ -1473,22 +1616,29 @@ async function handleInvoiceRefund(
     console.log(
       `stripe-webhook: partial refund ${refundedAmount} on invoice_payment ${row.id} (captured ${capturedAmount}) — no state change (v2)`
     );
-    await sendInvoiceRefundSideEffects(admin, row, { partial: true, refundedAmount });
+    await sendInvoiceRefundSideEffects(admin, row, {
+      partial: true,
+      refundedAmount,
+    });
     return;
   }
-  // FULL: flip succeeded → refunded (guard makes the distinct-event replay a
-  // no-op). The 00277 trigger reverses the accounting.
+  // FULL: flip applied or overpayment-blocked money → refunded. The latter
+  // closes the explicit requires_refund contract without ever crediting the
+  // invoice/earnings. Guard makes distinct-event replay a no-op.
   const { data: flipped, error } = await admin
     .from('invoice_payments')
     .update({ status: 'refunded' })
     .eq('id', row.id)
-    .eq('status', 'succeeded')
+    .in('status', ['succeeded', 'requires_refund'])
     .select('id');
   if (error) {
     throw new Error(`failed to mark invoice_payment ${row.id} refunded: ${error.message}`);
   }
   if ((flipped ?? []).length > 0) {
-    await sendInvoiceRefundSideEffects(admin, row, { partial: false, refundedAmount });
+    await sendInvoiceRefundSideEffects(admin, row, {
+      partial: false,
+      refundedAmount,
+    });
   }
 }
 
@@ -1536,7 +1686,10 @@ async function handleDirectOrderRefund(
     console.log(
       `stripe-webhook: partial refund ${refundedAmount} on direct_order ${row.id} (captured ${capturedAmount}) — status kept (v2)`
     );
-    await sendDirectOrderRefundOpsEmail(admin, row.id, { partial: true, refundedAmount });
+    await sendDirectOrderRefundOpsEmail(admin, row.id, {
+      partial: true,
+      refundedAmount,
+    });
     return;
   }
   // FULL: paid → refunded (guard on 'paid' → distinct-event replay no-ops).
@@ -1550,7 +1703,10 @@ async function handleDirectOrderRefund(
     throw new Error(`failed to mark direct_order ${row.id} refunded: ${error.message}`);
   }
   if ((flipped ?? []).length > 0) {
-    await sendDirectOrderRefundOpsEmail(admin, row.id, { partial: false, refundedAmount });
+    await sendDirectOrderRefundOpsEmail(admin, row.id, {
+      partial: false,
+      refundedAmount,
+    });
   }
 }
 
@@ -1577,10 +1733,16 @@ async function sendDirectOrderRefundOpsEmail(
     // Escape every interpolated value (product_name is user-influenced snapshot).
     const opsHtml = `
       <div style="font-family:Inter,Arial,sans-serif;max-width:560px;color:#2c2926;line-height:1.55">
-        <p>${escapeHtmlSafe(kind)} processed on a direct order${opts.partial ? ' (no status change)' : ''}.</p>
+        <p>${escapeHtmlSafe(kind)} processed on a direct order${
+          opts.partial ? ' (no status change)' : ''
+        }.</p>
         <p style="margin:0 0 8px"><strong>Order:</strong> ${escapeHtmlSafe(order.id)}</p>
-        <p style="margin:0 0 8px"><strong>Product:</strong> ${escapeHtmlSafe(order.product_name)}</p>
-        <p style="margin:0 0 8px"><strong>Refunded:</strong> ${escapeHtmlSafe(refundLabel)} of ${escapeHtmlSafe(amountLabel)}</p>
+        <p style="margin:0 0 8px"><strong>Product:</strong> ${escapeHtmlSafe(
+          order.product_name
+        )}</p>
+        <p style="margin:0 0 8px"><strong>Refunded:</strong> ${escapeHtmlSafe(refundLabel)} of ${escapeHtmlSafe(
+          amountLabel
+        )}</p>
         <p style="margin:0 0 8px"><strong>Status:</strong> ${escapeHtmlSafe(order.status)}</p>
       </div>`;
     const opsResult = await sendCompliantEmail(admin, {
@@ -1613,7 +1775,7 @@ async function handleChargeRefunded(admin: SupabaseClient, event: Stripe.Event):
   const paymentIntentId =
     typeof charge.payment_intent === 'string'
       ? charge.payment_intent
-      : charge.payment_intent?.id ?? null;
+      : (charge.payment_intent?.id ?? null);
   if (!paymentIntentId) {
     console.warn('stripe-webhook: charge.refunded without a payment_intent', event.id);
     return;
@@ -1628,7 +1790,9 @@ async function handleChargeRefunded(admin: SupabaseClient, event: Stripe.Event):
     .eq('stripe_payment_intent_id', paymentIntentId)
     .maybeSingle();
   if (invPayError) {
-    throw new Error(`failed to look up invoice_payments for PI ${paymentIntentId}: ${invPayError.message}`);
+    throw new Error(
+      `failed to look up invoice_payments for PI ${paymentIntentId}: ${invPayError.message}`
+    );
   }
   if (invPay) {
     return handleInvoiceRefund(admin, invPay as PaymentRow, full, refunded, captured);
@@ -1640,7 +1804,9 @@ async function handleChargeRefunded(admin: SupabaseClient, event: Stripe.Event):
     .eq('stripe_payment_intent_id', paymentIntentId)
     .maybeSingle();
   if (poPayError) {
-    throw new Error(`failed to look up po_payments for PI ${paymentIntentId}: ${poPayError.message}`);
+    throw new Error(
+      `failed to look up po_payments for PI ${paymentIntentId}: ${poPayError.message}`
+    );
   }
   if (poPay) {
     return handlePoRefund(admin, poPay as PoPaymentRow, full, refunded, captured);
@@ -1652,14 +1818,20 @@ async function handleChargeRefunded(admin: SupabaseClient, event: Stripe.Event):
     .eq('stripe_payment_intent_id', paymentIntentId)
     .maybeSingle();
   if (directOrdError) {
-    throw new Error(`failed to look up direct_orders for PI ${paymentIntentId}: ${directOrdError.message}`);
+    throw new Error(
+      `failed to look up direct_orders for PI ${paymentIntentId}: ${directOrdError.message}`
+    );
   }
   if (directOrd) {
     return handleDirectOrderRefund(admin, directOrd as DirectOrderRow, full, refunded, captured);
   }
 
   // Unmatched refund (e.g. a charge Patina never recorded) — acknowledge, don't loop.
-  console.warn('stripe-webhook: charge.refunded — no payable row for PI', paymentIntentId, event.id);
+  console.warn(
+    'stripe-webhook: charge.refunded — no payable row for PI',
+    paymentIntentId,
+    event.id
+  );
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -1704,7 +1876,11 @@ Deno.serve(async (req: Request) => {
   const { data: claimed, error: claimErr } = await admin
     .from('stripe_webhook_events')
     .upsert(
-      { id: event.id, type: event.type, payload: event as unknown as Record<string, unknown> },
+      {
+        id: event.id,
+        type: event.type,
+        payload: event as unknown as Record<string, unknown>,
+      },
       { onConflict: 'id', ignoreDuplicates: true }
     )
     .select('id');
@@ -1759,7 +1935,7 @@ Deno.serve(async (req: Request) => {
         } catch (emitErr) {
           console.error(
             `stripe-webhook: reconcile emit for money-path ${event.type} failed (swallowed)`,
-            emitErr,
+            emitErr
           );
         }
       } else {
@@ -1787,7 +1963,10 @@ Deno.serve(async (req: Request) => {
             payload: { payment_intent_id: pi.id, livemode: event.livemode }, // identifiers only
           });
         } catch (bohErr) {
-          console.error('stripe-webhook: BOH fulfillment_intake enqueue failed (swallowed)', bohErr);
+          console.error(
+            'stripe-webhook: BOH fulfillment_intake enqueue failed (swallowed)',
+            bohErr
+          );
         }
       }
     }

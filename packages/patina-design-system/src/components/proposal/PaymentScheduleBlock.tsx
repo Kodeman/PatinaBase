@@ -35,6 +35,28 @@ function currency(dollars: number): string {
  * never implies terms the designer hasn't actually set.
  */
 export function PaymentScheduleBlock({ milestones, totalCents }: PaymentScheduleBlockProps) {
+  // Percentage + the proposal total are the signed terms. `amount_cents` is a
+  // persisted projection that can lag when FF&E or phase fees change, so the
+  // client copy always derives the current amount instead of trusting a stale
+  // positive value. Put any rounding penny on the final positive milestone.
+  const canonicalAmounts = milestones.map((milestone) =>
+    Math.round((totalCents * milestone.percentage) / 100)
+  )
+  const percentageTotal = milestones.reduce(
+    (sum, milestone) => sum + milestone.percentage,
+    0
+  )
+  if (Math.abs(percentageTotal - 100) < 0.000_001 && canonicalAmounts.length > 0) {
+    const projectedTotal = canonicalAmounts.reduce((sum, amount) => sum + amount, 0)
+    const delta = totalCents - projectedTotal
+    for (let index = milestones.length - 1; index >= 0; index -= 1) {
+      if (milestones[index].percentage > 0) {
+        canonicalAmounts[index] += delta
+        break
+      }
+    }
+  }
+
   return (
     <div className="mt-6">
       <p
@@ -51,10 +73,7 @@ export function PaymentScheduleBlock({ milestones, totalCents }: PaymentSchedule
       ) : (
         <ul className="space-y-1.5">
           {milestones.map((m, i) => {
-            const amountCents =
-              m.amount_cents > 0
-                ? m.amount_cents
-                : Math.round((totalCents * m.percentage) / 100)
+            const amountCents = canonicalAmounts[i]
             return (
               <li
                 key={`${m.label}-${i}`}

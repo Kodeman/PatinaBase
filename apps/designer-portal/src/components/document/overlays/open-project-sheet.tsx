@@ -26,10 +26,10 @@ import { useRouter } from 'next/navigation';
 import { ClientPicker } from '@/components/portal/client-picker';
 import { useOpenProjectDirect } from '@/hooks/use-project-lifecycle';
 import { dollarsToCents } from '@/lib/document/closure-derivation';
+import { todayYmd } from '@/lib/document/format';
+import { DateTextInput } from '../date-text-input';
 import { DocSheet } from './doc-sheet';
 import { DocumentAction, DocumentActionGroup } from '../document-action';
-
-const todayYmd = () => new Date().toISOString().slice(0, 10);
 
 export function OpenProjectSheet({
   open,
@@ -48,6 +48,7 @@ export function OpenProjectSheet({
   const [bandMin, setBandMin] = useState('');
   const [bandMax, setBandMax] = useState('');
   const [startDate, setStartDate] = useState(todayYmd());
+  const [dateValid, setDateValid] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
   // Fresh form (and a fresh retry-id) every open; clear any prior error.
@@ -59,6 +60,7 @@ export function OpenProjectSheet({
       setBandMin('');
       setBandMax('');
       setStartDate(todayYmd());
+      setDateValid(true);
       setError(null);
     }
   }, [open]);
@@ -66,6 +68,10 @@ export function OpenProjectSheet({
   const submit = (e: React.FormEvent) => {
     e.preventDefault();
     setError(null);
+    if (!dateValid) {
+      setError('Enter a valid start date in MM/DD/YYYY format.');
+      return;
+    }
 
     const min = dollarsToCents(bandMin);
     const max = dollarsToCents(bandMax);
@@ -156,11 +162,12 @@ export function OpenProjectSheet({
               </div>
             </Field>
             <Field label="Start date">
-              <input
-                type="date"
+              <DateTextInput
                 value={startDate}
-                onChange={(e) => setStartDate(e.target.value)}
-                className="w-full border-b border-[var(--color-pearl)] bg-transparent pb-1.5 font-mono text-[12px] text-[var(--color-charcoal)] focus:border-[var(--color-clay)] focus:outline-none [color-scheme:light]"
+                onChange={(value) => setStartDate(value ?? '')}
+                ariaLabel="Start date"
+                onValidityChange={setDateValid}
+                className="w-full border-b border-[var(--color-pearl)] bg-transparent pb-1.5 font-mono text-[12px] text-[var(--color-charcoal)] placeholder:text-[var(--text-faint)] focus:border-[var(--color-clay)] focus:outline-none"
               />
             </Field>
           </div>
@@ -185,7 +192,7 @@ export function OpenProjectSheet({
             actionKey="create-project"
             variant="primary"
             type="submit"
-            disabled={!title.trim()}
+            disabled={!title.trim() || !dateValid}
             loading={openProject.isPending}
             loadingLabel="Opening…"
             trailing="→"

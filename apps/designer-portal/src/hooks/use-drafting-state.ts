@@ -6,14 +6,15 @@
  * instruments (which echo it to weight "Draft" vs "Send").
  *
  * It owns the eight-facet composite read (lifted out of drafting-room.tsx) under
- * the SAME queryKey `['drafting-facets', proposalId]`, so the Room's 2s
- * focused-poll and the FF&E type-cycle chip's direct invalidation keep both
- * surfaces in lockstep. Derived fields (fill / pct / state / gaps) come from the
- * pure helpers in lib/document/drafting-progress.ts — never a second source of
- * truth for "how far along".
+ * the SAME queryKey `['drafting-facets', proposalId]`, so direct invalidations
+ * from each editor keep both surfaces in lockstep. Derived fields (fill / pct /
+ * state / gaps) come from the pure helpers in
+ * lib/document/drafting-progress.ts — never a second source of truth for "how
+ * far along".
  */
 
-import { useQuery } from '@tanstack/react-query';
+import { useCallback } from 'react';
+import { useIsMutating, useQuery } from '@tanstack/react-query';
 import { createBrowserClient, type ProposalItemType } from '@patina/supabase';
 import {
   draftingFill,
@@ -65,6 +66,21 @@ export interface DraftingState {
   /** what's still open, in plain words */
   gaps: string[];
   isLoading: boolean;
+  /** Any canonical facet read currently in flight. Safe for button gating;
+   * unlike mutation feedback, this is never announced as a user write. */
+  isFetching: boolean;
+  /** Canonical facet reads fail closed; callers must not treat unavailable
+   * rows as an intentionally incomplete draft. */
+  error: Error | null;
+  /** Reconcile every persisted facet, then derive completeness from that fresh
+   * response so callers never have to inspect a stale render closure. */
+  refresh: () => Promise<DraftingRefreshResult>;
+}
+
+export interface DraftingRefreshResult {
+  facets: DraftingFacets;
+  state: DraftingStateLabel;
+  gaps: string[];
 }
 
 const EMPTY_FACETS: DraftingFacets = {
@@ -80,31 +96,19 @@ const EMPTY_FACETS: DraftingFacets = {
 
 /**
  * The facets composite read — the ONLY thing the Room reads itself (the legacy
- * editors own their own reads/writes). Reads eight child tables; the embedded
- * editors mutate through their own keys, so a gentle focused-only poll keeps the
- * Strata Mark, facet ticks, and FF&E type chips live as the designer composes.
+ * editors own their own reads/writes). Reads eight child tables. Every owned
+ * editor invalidates this key after a successful mutation; focus reconciliation
+ * remains as a safety net for writes from another tab.
  */
 function useFacetRead(proposalId: string, enabled: boolean) {
   return useQuery<FacetRead>({
     queryKey: ['drafting-facets', proposalId],
     enabled: !!proposalId && enabled,
     refetchOnWindowFocus: true,
-    refetchInterval: 2000,
-    refetchIntervalInBackground: false,
     staleTime: 0,
     queryFn: async () => {
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const supabase = createBrowserClient() as any;
-      const [
-        { data: rooms },
-        { data: items },
-        { data: palettes },
-        { data: boards },
-        { data: phases },
-        { data: exclusions },
-        { data: payments },
-        { data: coTerms },
-      ] = await Promise.all([
+      const results = await Promise.all([
         supabase.from('proposal_scope_rooms').select('id').eq('proposal_id', proposalId),
         supabase
           .from('proposal_items')
@@ -126,10 +130,22 @@ function useFacetRead(proposalId: string, enabled: boolean) {
           .maybeSingle(),
       ]);
 
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const failed = results.find((result: { error?: unknown }) => result.error);
+      if (failed?.error) throw failed.error;
+
+      const [
+        { data: rooms },
+        { data: items },
+        { data: palettes },
+        { data: boards },
+        { data: phases },
+        { data: exclusions },
+        { data: payments },
+        { data: coTerms },
+      ] = results;
+
       const palRows = (palettes ?? []) as any[];
       const swatches = palRows.reduce((n: number, p: { swatches?: unknown[] }) => n + (p.swatches?.length ?? 0), 0);
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const boardRows = (boards ?? []) as any[];
       const boardsWithItems = boardRows.filter((b) => (b.proposal_board_items?.[0]?.count ?? 0) > 0).length;
       const coWritten = !!(coTerms as { process_description?: string } | null)?.process_description?.trim();
@@ -160,7 +176,6 @@ function useFacetRead(proposalId: string, enabled: boolean) {
       return {
         facets,
         summary,
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
         items: (items ?? []) as any[],
       };
     },
@@ -168,13 +183,23 @@ function useFacetRead(proposalId: string, enabled: boolean) {
 }
 
 export function useDraftingState(proposalId: string, enabled = true): DraftingState {
-  const { data: read, isLoading } = useFacetRead(proposalId, enabled);
+  const { data: read, isLoading, isFetching, error, refetch } = useFacetRead(proposalId, enabled);
 
   const facets = read?.facets ?? EMPTY_FACETS;
   const fill = draftingFill(facets);
   const pct = draftingPct(fill);
   const state = draftingStateLabel(pct);
   const gaps = draftingGaps(facets);
+
+  const refresh = useCallback(async (): Promise<DraftingRefreshResult> => {
+    const result = await refetch({ throwOnError: true });
+    const freshFacets = result.data?.facets ?? EMPTY_FACETS;
+    return {
+      facets: freshFacets,
+      state: draftingStateLabel(draftingPct(draftingFill(freshFacets))),
+      gaps: draftingGaps(freshFacets),
+    };
+  }, [refetch]);
 
   return {
     facets,
@@ -185,5 +210,28 @@ export function useDraftingState(proposalId: string, enabled = true): DraftingSt
     state,
     gaps,
     isLoading,
+    isFetching,
+    error: error instanceof Error ? error : error ? new Error('Proposal readiness could not be verified') : null,
+    refresh,
   };
+}
+
+/**
+ * Explicit proposal writes only. Query refetches never enter TanStack's
+ * mutation cache and are therefore deliberately silent to assistive
+ * technology.
+ */
+export function useDraftingWritesPending(proposalId: string): boolean {
+  const pending = useIsMutating({
+    predicate: (mutation) => {
+      const variables = mutation.state.variables;
+      return (
+        typeof variables === 'object' &&
+        variables !== null &&
+        'proposalId' in variables &&
+        (variables as { proposalId?: unknown }).proposalId === proposalId
+      );
+    },
+  });
+  return pending > 0;
 }

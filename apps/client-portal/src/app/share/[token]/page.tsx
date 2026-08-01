@@ -10,10 +10,21 @@
  * page that does not leak whether a link ever existed.
  */
 
+import type { ComponentProps } from 'react';
 import { createServiceClient } from '@patina/supabase/server';
-import { type BoardsBlockBoard } from '@patina/design-system';
 import { normalizeShareVisibility, guestShareVisibility, isLikelyShareToken } from '@patina/utils';
 import { ProposalDocument } from '@/components/proposal-document';
+import {
+  buildGuestProposalDocumentBundle,
+  GUEST_BOARD_SELECT,
+  GUEST_EXCLUSION_SELECT,
+  GUEST_PAYMENT_MILESTONE_SELECT,
+  GUEST_PHASE_SELECT,
+  GUEST_PROPOSAL_SELECT,
+  GUEST_SCOPE_ROOM_PRIVATE_SELECT,
+  GUEST_SCOPE_ROOM_SELECT,
+  GUEST_SECTION_SELECT,
+} from '@/lib/guest-proposal-document';
 
 // The token is resolved per request (and bumps view stats) — never static.
 export const dynamic = 'force-dynamic';
@@ -44,7 +55,6 @@ export default async function SharePage({ params }: { params: Promise<{ token: s
   // Cheap format gate before any DB round-trip (no existence signal either way).
   if (!isLikelyShareToken(token)) return <DeadLink />;
 
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const admin = createServiceClient() as any;
 
   const { data: resolved, error: resolveError } = await admin.rpc('resolve_document_share', {
@@ -56,35 +66,54 @@ export default async function SharePage({ params }: { params: Promise<{ token: s
   const proposalId = share.proposal_id as string;
   const visibility = guestShareVisibility(normalizeShareVisibility(share.visibility));
 
-  // Fetch the single addressed proposal bundle. Scoped strictly to the resolved
-  // id — the service client bypasses RLS, so we never widen beyond this proposal.
+  // Fetch only the allowlisted source fields needed to build the guest DTO.
+  // The service client bypasses RLS, so each query remains pinned to this one
+  // resolved proposal and visibility-disabled money blocks are not fetched.
   const [
-    { data: proposal },
-    { data: sections },
-    { data: paymentMilestones },
-    { data: phases },
-    { data: exclusions },
-    { data: scopeRooms },
+    { data: proposalRow },
+    { data: sectionRows },
+    { data: paymentMilestoneRows },
+    { data: phaseRows },
+    { data: exclusionRows },
+    { data: scopeRoomRows },
   ] = await Promise.all([
     admin
       .from('proposals')
-      .select(
-        // Guest payload carries the client's NAME (letterhead) but never their
-        // email — this HTML reaches anyone holding the link. Product join widened
-        // for A2 provenance (source host + record-completeness inputs); the count
-        // embed reads under the service client, so a guest carries the same mark.
-        '*, client:profiles!client_id(id,full_name), items:proposal_items(*, product:products(id,name,images,brand,source_url,dimensions,materials,price_retail,price_trade,product_styles(count)))',
-      )
+      .select(GUEST_PROPOSAL_SELECT)
       .eq('id', proposalId)
       .single(),
-    admin.from('proposal_sections').select('*').eq('proposal_id', proposalId).order('sort_order', { ascending: true }),
-    admin.from('proposal_payment_milestones').select('*').eq('proposal_id', proposalId).order('sort_order', { ascending: true }),
-    admin.from('proposal_phases').select('*').eq('proposal_id', proposalId).order('sort_order', { ascending: true }),
-    admin.from('proposal_exclusions').select('*').eq('proposal_id', proposalId).order('sort_order', { ascending: true }),
-    admin.from('proposal_scope_rooms').select('*').eq('proposal_id', proposalId).order('sort_order', { ascending: true }),
+    admin
+      .from('proposal_sections')
+      .select(GUEST_SECTION_SELECT)
+      .eq('proposal_id', proposalId)
+      .order('sort_order', { ascending: true }),
+    visibility.paymentSchedule
+      ? admin
+          .from('proposal_payment_milestones')
+          .select(GUEST_PAYMENT_MILESTONE_SELECT)
+          .eq('proposal_id', proposalId)
+          .order('sort_order', { ascending: true })
+      : Promise.resolve({ data: [] }),
+    admin
+      .from('proposal_phases')
+      .select(GUEST_PHASE_SELECT)
+      .eq('proposal_id', proposalId)
+      .order('sort_order', { ascending: true }),
+    admin
+      .from('proposal_exclusions')
+      .select(GUEST_EXCLUSION_SELECT)
+      .eq('proposal_id', proposalId)
+      .order('sort_order', { ascending: true }),
+    admin
+      .from('proposal_scope_rooms')
+      .select(
+        visibility.roomBudgets ? GUEST_SCOPE_ROOM_SELECT : GUEST_SCOPE_ROOM_PRIVATE_SELECT,
+      )
+      .eq('proposal_id', proposalId)
+      .order('sort_order', { ascending: true }),
   ]);
 
-  if (!proposal) return <DeadLink />;
+  if (!proposalRow) return <DeadLink />;
 
   // Boards ride the share in Wave 3 (B3), but only when itemDetails is on — the
   // same gate that governs the itemized piece list (a board IS the pieces, laid
@@ -94,56 +123,49 @@ export default async function SharePage({ params }: { params: Promise<{ token: s
   // for a guest, so we bypass it. feedbackEnabled stays false, so no verdict
   // affordances ride along — a guest board is view-only, like the rest of the
   // guest surface.
-  let resolvedBoards: BoardsBlockBoard[] = [];
+  let boardRows: unknown[] = [];
   if (visibility.itemDetails) {
-    const { data: boardRows } = await admin
+    const { data } = await admin
       .from('proposal_boards')
-      .select('*, proposal_board_items(*)')
+      .select(GUEST_BOARD_SELECT)
       .eq('proposal_id', proposalId)
       .eq('status', 'active')
       .order('sort_order', { ascending: true })
       .order('created_at', { ascending: true })
       .order('z_index', { ascending: true, referencedTable: 'proposal_board_items' });
-
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    resolvedBoards = ((boardRows ?? []) as any[]).map((row) => {
-      const { proposal_board_items: items, ...board } = row;
-      return {
-        id: board.id as string,
-        name: board.name as string,
-        canvas_width: board.canvas_width as number,
-        canvas_height: board.canvas_height as number,
-        background_color: board.background_color as string,
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        items: ((items ?? []) as any[]).map((it) => ({
-          id: it.id as string,
-          type: it.type as string,
-          x: it.x,
-          y: it.y,
-          width: it.width,
-          height: it.height,
-          z_index: it.z_index,
-          rotation: it.rotation,
-          image_url: it.image_url ?? null,
-          content: it.content ?? null,
-          data: it.data,
-        })),
-      };
-    });
+    boardRows = data ?? [];
   }
+
+  const bundle = buildGuestProposalDocumentBundle({
+    proposal: proposalRow,
+    sections: sectionRows,
+    paymentMilestones: paymentMilestoneRows,
+    phases: phaseRows,
+    exclusions: exclusionRows,
+    scopeRooms: scopeRoomRows,
+    boards: boardRows,
+    visibility,
+  });
+
+  // ProposalDocument also serves authenticated clients and therefore accepts
+  // the wider database model. The guest builder above is intentionally narrower;
+  // this one cast is the audited server-to-client boundary.
+  const documentProps = {
+    proposal: bundle.proposal,
+    sections: bundle.sections,
+    paymentMilestones: bundle.paymentMilestones,
+    phases: bundle.phases,
+    exclusions: bundle.exclusions,
+    scopeRooms: bundle.scopeRooms,
+  } as unknown as ComponentProps<typeof ProposalDocument>;
 
   return (
     <div className="mx-auto max-w-4xl px-6 py-10">
       <ProposalDocument
-        proposal={proposal}
-        sections={sections ?? []}
+        {...documentProps}
         trackEngagement={false}
-        paymentMilestones={paymentMilestones ?? []}
-        phases={phases ?? []}
-        exclusions={exclusions ?? []}
-        scopeRooms={scopeRooms ?? []}
         boards={[]}
-        resolvedBoards={resolvedBoards}
+        resolvedBoards={bundle.resolvedBoards}
         visibility={visibility}
         feedbackEnabled={false}
         sharedByStudio={share.studio_name ?? undefined}

@@ -69,13 +69,7 @@ export function useClientNotifications() {
           .eq('designer_clients.client_id', user.id)
           .order('created_at', { ascending: false })
           .limit(20),
-        supabase
-          .from('proposals')
-          .select('id, title, status, sent_at, created_at')
-          .eq('client_id', user.id)
-          .in('status', ['sent', 'viewed'])
-          .order('created_at', { ascending: false })
-          .limit(20),
+        supabase.rpc('list_client_proposals'),
         supabase
           .from('scope_change_requests')
           .select('id, title, status, requested_by, created_at, project_id')
@@ -98,15 +92,18 @@ export function useClientNotifications() {
         read_at: readMap[`decision-${d.id}`] ?? null,
       }));
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const proposals: ClientNotification[] = ((proposalsRes.data ?? []) as any[]).map((p) => ({
-        id: `proposal-${p.id}`,
-        kind: 'proposal' as const,
-        title: 'Proposal awaiting review',
-        message: p.title,
-        url: `/proposals/${p.id}`,
-        created_at: p.sent_at ?? p.created_at,
-        read_at: readMap[`proposal-${p.id}`] ?? null,
-      }));
+      const proposals: ClientNotification[] = ((proposalsRes.data ?? []) as any[])
+        .filter((p) => p.status === 'sent' || p.status === 'viewed')
+        .slice(0, 20)
+        .map((p) => ({
+          id: `proposal-${p.id}`,
+          kind: 'proposal' as const,
+          title: 'Proposal awaiting review',
+          message: p.title,
+          url: `/proposals/${p.id}`,
+          created_at: p.sent_at ?? p.created_at,
+          read_at: readMap[`proposal-${p.id}`] ?? null,
+        }));
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const scopes: ClientNotification[] = ((scopeRes.data ?? []) as any[]).map((s) => ({
         id: `scope_change-${s.id}`,

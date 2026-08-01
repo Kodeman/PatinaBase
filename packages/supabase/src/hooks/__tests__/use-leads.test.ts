@@ -101,6 +101,7 @@ const supabaseClient = {
   auth: {
     getUser: vi.fn(),
   },
+  rpc: vi.fn(),
   from: vi.fn((table: string) => {
     if (!builders[table]) builders[table] = makeBuilder();
     return builders[table];
@@ -124,6 +125,8 @@ import { useAcceptLead, useBeginDiscovery } from '../use-leads';
 beforeEach(() => {
   Object.keys(builders).forEach((k) => delete builders[k]);
   invalidateQueries.mockReset();
+  supabaseClient.rpc.mockReset();
+  supabaseClient.from.mockClear();
 });
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -229,9 +232,10 @@ describe('useAcceptLead — manual lead, idempotent on idx_designer_clients_uniq
 // ─────────────────────────────────────────────────────────────────────────────
 // I65 bug 2 ripple — the (designer, client) pair can now carry >1
 // designer_clients row, so a bare pair-scoped `.maybeSingle()` would error.
-// Both useAcceptLead and useBeginDiscovery route the read through the shared
+// The retained legacy useAcceptLead path routes the read through the shared
 // `resolvePairDesignerClient` selection (byLead → engaged → newest, each an
-// ordered `.limit(1)` so `.maybeSingle()` never sees >1 row).
+// ordered `.limit(1)` so `.maybeSingle()` never sees >1 row). Begin Discovery
+// moved to its atomic database authority below.
 // ─────────────────────────────────────────────────────────────────────────────
 
 const HOMEOWNER_LEAD = {
@@ -323,83 +327,45 @@ describe('useAcceptLead — homeowner pair, ordered-limit(1) selection (I65 bug 
   });
 });
 
-describe('useBeginDiscovery — homeowner pair, never-downgrade guard (I65 bug 2)', () => {
-  it('an existing lead-status row wins at tier 1 — updates in place, no insert', async () => {
-    setTableQueue('leads', [
-      { data: HOMEOWNER_LEAD, error: null },
-      { data: null, error: null },
-    ]);
-    const dc = setTableQueue('designer_clients', [
-      { data: { id: 'dc-lead', lead_id: 'lead-1', status: 'lead' }, error: null },
-      { data: null, error: null }, // the update
-    ]);
+describe('useBeginDiscovery — atomic authority boundary', () => {
+  it('uses one RPC and returns its canonical post-accept destination', async () => {
+    const acceptedLead = { ...HOMEOWNER_LEAD, status: 'accepted' };
+    supabaseClient.rpc.mockResolvedValue({
+      data: { lead: acceptedLead, designerClientId: 'dc-discovery' },
+      error: null,
+    });
 
     const mutationFn = getBeginDiscoveryFn();
-    await expect(mutationFn('lead-1')).resolves.toBeTruthy();
+    await expect(mutationFn('lead-1')).resolves.toEqual({
+      lead: acceptedLead,
+      designerClientId: 'dc-discovery',
+    });
 
-    expect(dc.__chain.some((c) => c.method === 'insert')).toBe(false);
-    const updateCall = dc.__chain.find((c) => c.method === 'update');
-    expect(updateCall?.args[0]).toEqual({ source: 'lead', lead_id: 'lead-1', status: 'lead' });
-    const updateEq = dc.__chain.filter((c) => c.method === 'eq' && c.args[0] === 'id');
-    expect(updateEq.at(-1)?.args).toEqual(['id', 'dc-lead']);
+    expect(supabaseClient.rpc).toHaveBeenCalledTimes(1);
+    expect(supabaseClient.rpc).toHaveBeenCalledWith('begin_discovery', {
+      p_lead_id: 'lead-1',
+    });
+    expect(supabaseClient.from).not.toHaveBeenCalled();
   });
 
-  it('I65 bug 2: an ENGAGED (active) row for the pair is never downgraded — inserts a fresh lead row instead', async () => {
-    setTableQueue('leads', [
-      { data: HOMEOWNER_LEAD, error: null },
-      { data: null, error: null },
-    ]);
-    const dc = setTableQueue('designer_clients', [
-      { data: null, error: null }, // tier 1 (byLead) miss
-      { data: { id: 'dc-active', lead_id: null, status: 'active' }, error: null }, // tier 2 hit — the seeded relationship
-      { data: null, error: null }, // the insert
-    ]);
+  it('propagates the transactional RPC failure without attempting a browser fallback', async () => {
+    const rpcError = new Error('relationship insert rejected');
+    supabaseClient.rpc.mockResolvedValue({ data: null, error: rpcError });
 
-    const mutationFn = getBeginDiscoveryFn();
-    await expect(mutationFn('lead-1')).resolves.toBeTruthy();
+    await expect(getBeginDiscoveryFn()('lead-1')).rejects.toBe(rpcError);
+    expect(supabaseClient.rpc).toHaveBeenCalledTimes(1);
+    expect(supabaseClient.from).not.toHaveBeenCalled();
+  });
 
-    // The proven I65 bug: the engaged row must NEVER be the target of an
-    // update (that would silently downgrade it to 'lead').
-    const updateCall = dc.__chain.find((c) => c.method === 'update');
-    expect(updateCall).toBeUndefined();
-    const touchedEngagedRow = dc.__chain.some(
-      (c) => c.method === 'eq' && c.args[0] === 'id' && c.args[1] === 'dc-active',
+  it('fails closed when the RPC omits the relationship identity', async () => {
+    supabaseClient.rpc.mockResolvedValue({
+      data: { lead: { ...MANUAL_LEAD, status: 'accepted' } },
+      error: null,
+    });
+
+    await expect(getBeginDiscoveryFn()('lead-1')).rejects.toThrow(
+      'Discovery transition did not return its canonical identity',
     );
-    expect(touchedEngagedRow).toBe(false);
-
-    // Instead: a fresh status='lead' row, mirroring ceremony_complete.
-    const insertCall = dc.__chain.find((c) => c.method === 'insert');
-    expect(insertCall?.args[0]).toEqual({
-      designer_id: 'designer-1',
-      client_id: 'client-1',
-      source: 'lead',
-      lead_id: 'lead-1',
-      status: 'lead',
-    });
-  });
-
-  it('no row at all for the pair — inserts a fresh lead row (unaffected baseline)', async () => {
-    setTableQueue('leads', [
-      { data: HOMEOWNER_LEAD, error: null },
-      { data: null, error: null },
-    ]);
-    const dc = setTableQueue('designer_clients', [
-      { data: null, error: null }, // tier 1
-      { data: null, error: null }, // tier 2
-      { data: null, error: null }, // tier 3
-      { data: null, error: null }, // insert
-    ]);
-
-    const mutationFn = getBeginDiscoveryFn();
-    await expect(mutationFn('lead-1')).resolves.toBeTruthy();
-
-    const insertCall = dc.__chain.find((c) => c.method === 'insert');
-    expect(insertCall?.args[0]).toEqual({
-      designer_id: 'designer-1',
-      client_id: 'client-1',
-      source: 'lead',
-      lead_id: 'lead-1',
-      status: 'lead',
-    });
+    expect(supabaseClient.from).not.toHaveBeenCalled();
   });
 });

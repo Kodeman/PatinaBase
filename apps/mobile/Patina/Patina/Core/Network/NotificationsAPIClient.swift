@@ -30,6 +30,7 @@ public struct RemoteNotification: Codable, Sendable {
 
 public actor NotificationsAPIClient {
     public static let shared = NotificationsAPIClient()
+    static let visibleStatusFilter = "in.(queued,sending,delivered,unconfirmed,opened,clicked)"
 
     private let baseURL = APIConfiguration.apiURL
     private let session = URLSession.shared
@@ -62,7 +63,7 @@ public actor NotificationsAPIClient {
                 URLQueryItem(name: "select", value: "*"),
                 URLQueryItem(name: "order", value: "created_at.desc"),
                 URLQueryItem(name: "channel", value: "in.(in_app,push)"),
-                URLQueryItem(name: "status", value: "in.(queued,sending,delivered,opened,clicked)"),
+                URLQueryItem(name: "status", value: Self.visibleStatusFilter),
                 URLQueryItem(name: "limit", value: String(limit)),
             ])
         var request = URLRequest(url: url)

@@ -23,6 +23,73 @@ interface EnhancedTimelineProps {
   onMilestoneUpdate?: (milestone: MilestoneDetail) => void;
 }
 
+const CONCURRENT_WORKSTREAM_TAG = 'Concurrent workstream';
+
+/**
+ * Compact, deterministic identity for the server-owned timeline snapshot.
+ * Phase updated_at is the primary authority token; the remaining displayed
+ * fields keep fixtures and non-phase milestones refreshable without relying
+ * on a full JSON serialization or a React remount.
+ */
+export function timelineAuthorityFingerprint(
+  projectId: string,
+  milestones: MilestoneDetail[],
+): string {
+  let hash = 0x811c9dc5;
+  const add = (value: unknown) => {
+    const text = value == null ? '' : String(value);
+    for (let index = 0; index < text.length; index += 1) {
+      hash ^= text.charCodeAt(index);
+      hash = Math.imul(hash, 0x01000193);
+    }
+    hash ^= 0xff;
+    hash = Math.imul(hash, 0x01000193);
+  };
+
+  add(projectId);
+  add(milestones.length);
+  for (const milestone of milestones) {
+    add(milestone.id);
+    add(milestone.index);
+    add(milestone.authorityVersion);
+    add(milestone.title);
+    add(milestone.phase);
+    add(milestone.status);
+    add(milestone.startDate);
+    add(milestone.targetDate);
+    add(milestone.completionDate);
+    add(milestone.progressPercentage);
+    for (const tag of milestone.tags ?? []) add(tag);
+    for (const item of milestone.checklist) {
+      add(item.id);
+      add(item.label);
+      add(item.completed);
+      add(item.completedAt);
+    }
+    for (const document of milestone.documents) {
+      add(document.id);
+      add(document.title);
+      add(document.url);
+      add(document.uploadedAt);
+    }
+    for (const message of milestone.messages) {
+      add(message.id);
+      add(message.body);
+      add(message.createdAt);
+    }
+    add(milestone.approval?.id);
+    add(milestone.approval?.status);
+    add(milestone.approval?.decidedAt);
+  }
+
+  return `${milestones.length}:${(hash >>> 0).toString(16).padStart(8, '0')}`;
+}
+
+/** A compatibility wrapper for the server-authoritative timeline boundary. */
+export function AuthoritativeEnhancedTimeline(props: EnhancedTimelineProps) {
+  return <EnhancedTimeline {...props} />;
+}
+
 // Map milestone status to PhaseTimeline status
 function mapStatus(status: string): PhaseTimelineItem['status'] {
   switch (status) {
@@ -41,7 +108,10 @@ function milestoneToPhase(milestone: MilestoneDetail): PhaseTimelineItem {
     ? getPhaseSlugFromLabel(milestone.phase) || milestone.phase.toLowerCase().replace(/\s+/g, '_')
     : '';
   // Use the canonical client label if we matched a slug, otherwise use the milestone title
-  const label = getPhaseLabel(phaseSlug, 'client') || milestone.title;
+  const canonicalLabel = getPhaseLabel(phaseSlug, 'client') || milestone.title;
+  const label = milestone.tags?.includes(CONCURRENT_WORKSTREAM_TAG)
+    ? `${canonicalLabel} · Concurrent workstream`
+    : canonicalLabel;
   return {
     id: milestone.id,
     slug: phaseSlug,
@@ -56,15 +126,44 @@ function milestoneToPhase(milestone: MilestoneDetail): PhaseTimelineItem {
 
 export function EnhancedTimeline({ projectId, milestones: initialMilestones, onMilestoneUpdate }: EnhancedTimelineProps) {
   const [milestones, setMilestones] = useState<MilestoneDetail[]>(initialMilestones);
+  const authorityFingerprint = useMemo(
+    () => timelineAuthorityFingerprint(projectId, initialMilestones),
+    [projectId, initialMilestones],
+  );
+  const [acceptedAuthority, setAcceptedAuthority] = useState(authorityFingerprint);
   const [activeMilestoneId, setActiveMilestoneId] = useState<string | null>(null);
   const [showCelebration, setShowCelebration] = useState(false);
   const [showApprovalTheater, setShowApprovalTheater] = useState(false);
   const [currentApproval, setCurrentApproval] = useState<any>(null);
 
+  // Adopt a changed canonical phase snapshot during reconciliation. React
+  // discards this render and retries before committing, so PhaseTimeline stays
+  // mounted and keeps its manually expanded row.
+  if (acceptedAuthority !== authorityFingerprint) {
+    setAcceptedAuthority(authorityFingerprint);
+    setMilestones(initialMilestones);
+  }
+
   // WebSocket hooks
   const { isConnected, onMilestoneUpdate: subscribeMilestoneUpdate, onMilestoneCompleted } = useWebSocket();
-  const activeMilestone = useMemo(() => milestones.find(m => m.id === activeMilestoneId), [milestones, activeMilestoneId]);
   const { messages: realtimeMessages } = useMilestoneWebSocket(activeMilestoneId || '');
+  const visibleMilestones = useMemo(() => {
+    if (!activeMilestoneId || realtimeMessages.length === 0) return milestones;
+    return milestones.map((milestone) => {
+      if (milestone.id !== activeMilestoneId) return milestone;
+      const existingIds = new Set(milestone.messages.map((message) => message.id));
+      const newMessages = realtimeMessages.filter(
+        (message) => !existingIds.has(message.id),
+      );
+      return newMessages.length === 0
+        ? milestone
+        : { ...milestone, messages: [...milestone.messages, ...newMessages] };
+    });
+  }, [activeMilestoneId, milestones, realtimeMessages]);
+  const activeMilestone = useMemo(
+    () => visibleMilestones.find((milestone) => milestone.id === activeMilestoneId),
+    [activeMilestoneId, visibleMilestones],
+  );
 
   // Subscribe to WebSocket milestone updates
   useEffect(() => {
@@ -95,31 +194,23 @@ export function EnhancedTimeline({ projectId, milestones: initialMilestones, onM
     };
   }, [subscribeMilestoneUpdate, onMilestoneCompleted, onMilestoneUpdate]);
 
-  // Merge real-time messages
-  useEffect(() => {
-    if (activeMilestoneId && realtimeMessages.length > 0) {
-      setMilestones(prev => prev.map(m => {
-        if (m.id === activeMilestoneId) {
-          const existingIds = new Set(m.messages.map(msg => msg.id));
-          const newMessages = realtimeMessages.filter(msg => !existingIds.has(msg.id));
-          return { ...m, messages: [...m.messages, ...newMessages] };
-        }
-        return m;
-      }));
-    }
-  }, [realtimeMessages, activeMilestoneId]);
-
   // Convert milestones to phase items
-  const phases = useMemo(() => milestones.map(milestoneToPhase), [milestones]);
+  const phases = useMemo(
+    () => visibleMilestones.map(milestoneToPhase),
+    [visibleMilestones],
+  );
 
   // Find active phase (first in_progress or attention milestone)
   const defaultActiveId = useMemo(() => {
-    return milestones.find(m => m.status === 'in_progress' || m.status === 'attention')?.id;
-  }, [milestones]);
+    return visibleMilestones.find(
+      (milestone) =>
+        milestone.status === 'in_progress' || milestone.status === 'attention',
+    )?.id;
+  }, [visibleMilestones]);
 
   // Handle approval
   const handleApproval = useCallback(async (milestoneId: string, decision: 'approved' | 'rejected', comment?: string) => {
-    const milestone = milestones.find(m => m.id === milestoneId);
+    const milestone = visibleMilestones.find((row) => row.id === milestoneId);
     if (!milestone?.approval) return;
 
     try {
@@ -147,11 +238,11 @@ export function EnhancedTimeline({ projectId, milestones: initialMilestones, onM
     } catch (error) {
       console.error('Failed to submit approval:', error);
     }
-  }, [milestones, projectId]);
+  }, [projectId, visibleMilestones]);
 
   // Render expanded content for a phase
   const renderExpandedContent = useCallback((phase: PhaseTimelineItem) => {
-    const milestone = milestones.find(m => m.id === phase.id);
+    const milestone = visibleMilestones.find((row) => row.id === phase.id);
     if (!milestone) return null;
 
     return (
@@ -275,7 +366,7 @@ export function EnhancedTimeline({ projectId, milestones: initialMilestones, onM
         )}
       </div>
     );
-  }, [milestones, projectId]);
+  }, [projectId, visibleMilestones]);
 
   return (
     <div className="relative">

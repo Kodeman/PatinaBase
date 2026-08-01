@@ -52,14 +52,22 @@ jest.mock('@patina/design-system', () => ({
 const mockUseProjects = jest.fn();
 const mockUseProposals = jest.fn();
 const mockUseProjectInvoices = jest.fn();
-const mockUseProposalPaymentMilestones = jest.fn();
 
 jest.mock('@patina/supabase', () => ({
   useProjects: () => mockUseProjects(),
-  useProposals: (filters: unknown) => mockUseProposals(filters),
-  useProposal: () => ({ data: undefined, isLoading: false, isError: false }),
   useProjectInvoices: (projectId: string) => mockUseProjectInvoices(projectId),
-  useProposalPaymentMilestones: (proposalId: string) => mockUseProposalPaymentMilestones(proposalId),
+}));
+
+jest.mock('@/hooks/use-proposals-client', () => ({
+  useClientProposals: () => mockUseProposals(),
+  partitionProposals: (proposals: Array<{ status: string }> | undefined) => {
+    const list = proposals ?? [];
+    return {
+      pending: list.filter((proposal) => proposal.status === 'sent' || proposal.status === 'viewed'),
+      accepted: list.filter((proposal) => proposal.status === 'accepted'),
+      archived: list.filter((proposal) => proposal.status === 'declined' || proposal.status === 'expired'),
+    };
+  },
 }));
 
 jest.mock('@/hooks/use-auth', () => ({
@@ -95,6 +103,7 @@ function makeProposal(overrides: Record<string, unknown> = {}) {
     parent_proposal_id: null,
     revision_summary: null,
     client_feedback: null,
+    payment_milestones: [makeMilestone()],
     ...overrides,
   };
 }
@@ -152,11 +161,6 @@ beforeEach(() => {
   mockUseProjects.mockReturnValue({ data: [project1], isLoading: false, isError: false });
   mockUseProposals.mockReturnValue({ data: [makeProposal()], isLoading: false, isError: false });
   mockUseProjectInvoices.mockReturnValue({ data: [], isLoading: false, isError: false });
-  mockUseProposalPaymentMilestones.mockReturnValue({
-    data: [makeMilestone()],
-    isLoading: false,
-    isError: false,
-  });
 });
 
 describe('ClientBudgetPage', () => {
@@ -215,15 +219,15 @@ describe('ClientBudgetPage', () => {
   });
 
   it('passes the milestones and proposal total through to the payment schedule', () => {
-    mockUseProposalPaymentMilestones.mockReturnValue({
-      data: [
-        makeMilestone({
-          label: 'Design deposit',
-          percentage: 50,
-          amount_cents: 2250000,
-          trigger_condition: 'Due at signing',
-        }),
-      ],
+    mockUseProposals.mockReturnValue({
+      data: [makeProposal({
+        payment_milestones: [makeMilestone({
+        label: 'Design deposit',
+        percentage: 50,
+        amount_cents: 2250000,
+        trigger_condition: 'Due at signing',
+      })],
+      })],
       isLoading: false,
       isError: false,
     });
@@ -234,21 +238,36 @@ describe('ClientBudgetPage', () => {
   });
 
   it('falls back to the percentage-of-total amount when a milestone has no amount_cents', () => {
-    mockUseProposalPaymentMilestones.mockReturnValue({
-      data: [
-        makeMilestone({
+    mockUseProposals.mockReturnValue({
+      data: [makeProposal({
+        payment_milestones: [makeMilestone({
           label: 'Final payment',
           percentage: 25,
           amount_cents: 0,
           trigger_condition: null,
-        }),
-      ],
+        })],
+      })],
       isLoading: false,
       isError: false,
     });
     render(<ClientBudgetPage />);
     // 25% of the $45,000.00 (4,500,000 cent) proposal total = $11,250.00 -> 11250 dollars in the stub.
     expect(screen.getByText('11250')).toBeInTheDocument();
+  });
+
+  it('does not render a payment-schedule empty state when the safe tier hides it', () => {
+    mockUseProposals.mockReturnValue({
+      data: [makeProposal({
+        client_visibility_tier: 'curated',
+        payment_milestones: [],
+      })],
+      isLoading: false,
+      isError: false,
+    });
+
+    render(<ClientBudgetPage />);
+    expect(screen.queryByTestId('payment-schedule-block')).not.toBeInTheDocument();
+    expect(screen.queryByText(/payment schedule to be confirmed/i)).not.toBeInTheDocument();
   });
 
   it('shows payment terms and notes on the investment summary when present', () => {

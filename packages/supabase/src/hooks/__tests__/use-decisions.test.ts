@@ -151,6 +151,7 @@ import {
   useDecisionMetrics,
   useCreateDecision,
   useUpdateDecision,
+  useExtendAndReopenDecision,
   useDeleteDecision,
   usePublishDraftDecision,
   useDecisionRealtime,
@@ -261,9 +262,9 @@ describe('useDecisionMetrics', () => {
 });
 
 describe('useCreateDecision', () => {
-  it('inserts with sent_at populated when status is pending (default)', async () => {
-    setTableResult('client_decisions', {
-      data: { id: 'dec-1', designer_client_id: 'dc-1', project_id: null },
+  it('creates the row, options, dependencies, and first notice through one RPC', async () => {
+    supabaseClient.rpc.mockResolvedValueOnce({
+      data: { id: 'dec-1', designer_client_id: 'dc-1', project_id: 'proj-1' },
       error: null,
     });
 
@@ -271,30 +272,39 @@ describe('useCreateDecision', () => {
       mutationFn: (input: unknown) => Promise<unknown>;
     };
     await config.mutationFn({
+      decisionId: 'dec-1',
       designerClientId: 'dc-1',
+      projectId: 'proj-1',
       title: 'Pick a sofa',
-      options: [{ name: 'Velvet' }],
+      blockedFfeItemIds: ['ffe-1'],
+      blockedTaskIds: ['task-1'],
+      options: [{ name: 'Velvet', productId: 'prod-7' }],
     });
 
-    const builder = builders['client_decisions'];
-    const inserts = callsTo(builder, 'insert');
-    expect(inserts).toHaveLength(1);
-    const payload = inserts[0].args[0] as Record<string, unknown>;
-
-    expect(payload).toMatchObject({
-      designer_client_id: 'dc-1',
-      title: 'Pick a sofa',
-      decision_type: 'product', // default
-      blocking_status: 'non_blocking', // default
-      status: 'pending', // default
+    expect(supabaseClient.rpc).toHaveBeenCalledTimes(1);
+    expect(supabaseClient.rpc).toHaveBeenCalledWith('create_client_decision', {
+      p_decision_id: 'dec-1',
+      p_payload: expect.objectContaining({
+        designer_client_id: 'dc-1',
+        project_id: 'proj-1',
+        title: 'Pick a sofa',
+        decision_type: 'product',
+        blocking_status: 'non_blocking',
+        status: 'pending',
+      }),
+      p_options: [expect.objectContaining({
+        name: 'Velvet',
+        product_id: 'prod-7',
+        sort_order: 0,
+      })],
+      p_blocked_ffe_item_ids: ['ffe-1'],
+      p_blocked_task_ids: ['task-1'],
     });
-    // sent_at populated for non-draft
-    expect(typeof payload.sent_at).toBe('string');
-    expect(payload.sent_at).not.toBeNull();
+    expect(supabaseClient.from).not.toHaveBeenCalled();
   });
 
-  it('inserts with sent_at=null when status is draft', async () => {
-    setTableResult('client_decisions', {
+  it('keeps an explicitly reused idempotency key bound to the same payload', async () => {
+    supabaseClient.rpc.mockResolvedValue({
       data: { id: 'dec-2', designer_client_id: 'dc-1', project_id: null },
       error: null,
     });
@@ -302,105 +312,43 @@ describe('useCreateDecision', () => {
     const config = useCreateDecision() as unknown as {
       mutationFn: (input: unknown) => Promise<unknown>;
     };
-    await config.mutationFn({
+    const input = {
+      decisionId: 'dec-2',
       designerClientId: 'dc-1',
       title: 'Draft decision',
-      status: 'draft',
+      status: 'draft' as const,
       options: [],
-    });
+    };
+    await config.mutationFn(input);
+    await config.mutationFn(input);
 
-    const builder = builders['client_decisions'];
-    const payload = callsTo(builder, 'insert')[0].args[0] as Record<string, unknown>;
-    expect(payload.status).toBe('draft');
-    expect(payload.sent_at).toBeNull();
+    expect(supabaseClient.rpc).toHaveBeenCalledTimes(2);
+    expect(supabaseClient.rpc.mock.calls[1]).toEqual(supabaseClient.rpc.mock.calls[0]);
+    const payload = supabaseClient.rpc.mock.calls[0][1] as {
+      p_payload: Record<string, unknown>;
+    };
+    expect(payload.p_payload.status).toBe('draft');
+    expect(payload.p_payload).not.toHaveProperty('sent_at');
   });
 
-  it('writes product_id on options when productId is supplied (parity with useUpdateDecision)', async () => {
-    setTableResult('client_decisions', {
-      data: { id: 'dec-9', designer_client_id: 'dc-1', project_id: null },
-      error: null,
-    });
-    setTableResult('client_decision_options', { data: null, error: null });
-
+  it('surfaces an atomic create failure without fallback writes', async () => {
+    const createError = { code: '23514', message: 'invalid decision' };
+    supabaseClient.rpc.mockResolvedValueOnce({ data: null, error: createError });
     const config = useCreateDecision() as unknown as {
       mutationFn: (input: unknown) => Promise<unknown>;
     };
-    await config.mutationFn({
+    await expect(config.mutationFn({
+      decisionId: 'dec-9',
       designerClientId: 'dc-1',
       title: 'Pick a sofa',
-      options: [{ name: 'Velvet', productId: 'prod-7' }],
-    });
-
-    const optBuilder = builders['client_decision_options'];
-    const inserts = callsTo(optBuilder, 'insert');
-    expect(inserts).toHaveLength(1);
-    expect((inserts[0].args[0] as Record<string, unknown>[])[0]).toMatchObject({
-      decision_id: 'dec-9',
-      name: 'Velvet',
-      product_id: 'prod-7',
-      sort_order: 0,
-    });
+      options: [],
+    })).rejects.toBe(createError);
+    expect(supabaseClient.from).not.toHaveBeenCalled();
   });
 });
 
 describe('useSelectDecisionOption', () => {
-  it('calls apply_decision RPC with the right arg shape', async () => {
-    supabaseClient.auth.getUser.mockResolvedValue({
-      data: { user: { id: 'user-42' } },
-    });
-    setTableResult('client_decisions', {
-      data: makeDecision({ id: 'dec-1' }),
-      error: null,
-    });
-
-    const config = useSelectDecisionOption() as unknown as {
-      mutationFn: (input: unknown) => Promise<unknown>;
-    };
-    await config.mutationFn({
-      optionId: 'opt-7',
-      decisionId: 'dec-1',
-    });
-
-    // apply_decision + notify_decision_resolved.
-    expect(supabaseClient.rpc).toHaveBeenCalledWith('apply_decision', {
-      p_decision_id: 'dec-1',
-      p_selected_option_id: 'opt-7',
-      p_selected_by: 'user-42',
-    });
-    expect(supabaseClient.rpc).toHaveBeenCalledWith('notify_decision_resolved', {
-      p_decision_id: 'dec-1',
-    });
-  });
-
-  it('passes p_selected_by=null when no auth user is present', async () => {
-    supabaseClient.auth.getUser.mockResolvedValue({ data: { user: null } });
-    setTableResult('client_decisions', {
-      data: makeDecision({ id: 'dec-1' }),
-      error: null,
-    });
-
-    const config = useSelectDecisionOption() as unknown as {
-      mutationFn: (input: unknown) => Promise<unknown>;
-    };
-    await config.mutationFn({ optionId: 'opt-7', decisionId: 'dec-1' });
-
-    expect(supabaseClient.rpc).toHaveBeenCalledWith('apply_decision', {
-      p_decision_id: 'dec-1',
-      p_selected_option_id: 'opt-7',
-      p_selected_by: null,
-    });
-  });
-
-  it('persists clientNote/quantity on the option before calling the RPC', async () => {
-    supabaseClient.auth.getUser.mockResolvedValue({
-      data: { user: { id: 'user-1' } },
-    });
-    setTableResult('client_decision_options', { data: null, error: null });
-    setTableResult('client_decisions', {
-      data: makeDecision({ id: 'dec-1' }),
-      error: null,
-    });
-
+  it('submits selection, note, quantity, and consent in one checked RPC', async () => {
     const config = useSelectDecisionOption() as unknown as {
       mutationFn: (input: unknown) => Promise<unknown>;
     };
@@ -409,41 +357,27 @@ describe('useSelectDecisionOption', () => {
       decisionId: 'dec-1',
       clientNote: 'Love it',
       quantity: 3,
+      consent: {
+        method: 'electronic_signature',
+        signature: 'Client Name',
+      },
     });
 
-    const optBuilder = builders['client_decision_options'];
-    const updates = callsTo(optBuilder, 'update');
-    expect(updates).toHaveLength(1);
-    expect(updates[0].args[0]).toEqual({ client_note: 'Love it', quantity: 3 });
-    expect(supabaseClient.rpc).toHaveBeenCalledWith(
-      'apply_decision',
-      expect.objectContaining({ p_decision_id: 'dec-1', p_selected_option_id: 'opt-7' }),
-    );
+    expect(supabaseClient.rpc).toHaveBeenCalledWith('apply_client_decision', {
+      p_decision_id: 'dec-1',
+      p_selected_option_id: 'opt-7',
+      p_client_consent_method: 'electronic_signature',
+      p_client_signature: 'Client Name',
+      p_client_note: 'Love it',
+      p_quantity: 3,
+    });
+    expect(supabaseClient.rpc).toHaveBeenCalledTimes(1);
+    expect(supabaseClient.from).not.toHaveBeenCalledWith('client_decision_options');
   });
 });
 
 describe('useApplyDecisionOverride', () => {
-  it('inserts into decision_overrides AND calls apply_decision RPC', async () => {
-    supabaseClient.auth.getUser.mockResolvedValue({
-      data: { user: { id: 'designer-1' } },
-    });
-
-    // First chain: lookup designer_client_id + nested client_id
-    const lookupResult = {
-      data: {
-        designer_client_id: 'dc-9',
-        designer_clients: { client_id: 'client-99' },
-      },
-      error: null,
-    };
-    // The hook calls `supabase.from('client_decisions')` twice — once to look
-    // up the client_id, once to read the final decision after the RPC.
-    // With our shared per-table builder, both calls resolve to the same data;
-    // the second `select` chain only needs the decision row back, and any
-    // shape works because the hook just returns it.
-    setTableResult('client_decisions', lookupResult);
-    setTableResult('decision_overrides', { data: null, error: null });
-
+  it('records evidence and resolves through one checked RPC', async () => {
     const config = useApplyDecisionOverride() as unknown as {
       mutationFn: (input: unknown) => Promise<unknown>;
     };
@@ -454,91 +388,34 @@ describe('useApplyDecisionOverride', () => {
       consentEvidence: 'Client confirmed by phone 2026-04-28',
     });
 
-    // Override row was inserted with full audit payload.
-    const overrideBuilder = builders['decision_overrides'];
-    const inserts = callsTo(overrideBuilder, 'insert');
-    expect(inserts).toHaveLength(1);
-    expect(inserts[0].args[0]).toMatchObject({
-      decision_id: 'dec-1',
-      option_id: 'opt-7',
-      acted_by: 'designer-1',
-      consent_method: 'verbal',
-      consent_evidence: 'Client confirmed by phone 2026-04-28',
-    });
-
-    // apply_decision fired with p_selected_by = the looked-up client_id,
-    // followed by notify_decision_resolved.
-    expect(supabaseClient.rpc).toHaveBeenCalledWith('apply_decision', {
+    expect(supabaseClient.rpc).toHaveBeenCalledWith('apply_decision_override', {
       p_decision_id: 'dec-1',
       p_selected_option_id: 'opt-7',
-      p_selected_by: 'client-99',
+      p_consent_method: 'verbal',
+      p_consent_evidence: 'Client confirmed by phone 2026-04-28',
     });
-    expect(supabaseClient.rpc).toHaveBeenCalledWith('notify_decision_resolved', {
-      p_decision_id: 'dec-1',
-    });
-  });
-
-  it('falls back to acting designer id when no client_id is linked', async () => {
-    supabaseClient.auth.getUser.mockResolvedValue({
-      data: { user: { id: 'designer-1' } },
-    });
-    setTableResult('client_decisions', {
-      data: { designer_client_id: 'dc-9', designer_clients: { client_id: null } },
-      error: null,
-    });
-    setTableResult('decision_overrides', { data: null, error: null });
-
-    const config = useApplyDecisionOverride() as unknown as {
-      mutationFn: (input: unknown) => Promise<unknown>;
-    };
-    await config.mutationFn({
-      decisionId: 'dec-1',
-      optionId: 'opt-7',
-      consentMethod: 'written',
-      consentEvidence: 'evidence',
-    });
-
-    expect(supabaseClient.rpc).toHaveBeenCalledWith(
-      'apply_decision',
-      expect.objectContaining({ p_selected_by: 'designer-1' }),
-    );
-  });
-
-  it('throws if the user is not authenticated', async () => {
-    supabaseClient.auth.getUser.mockResolvedValue({ data: { user: null } });
-    const config = useApplyDecisionOverride() as unknown as {
-      mutationFn: (input: unknown) => Promise<unknown>;
-    };
-    await expect(
-      config.mutationFn({
-        decisionId: 'dec-1',
-        optionId: 'opt-7',
-        consentMethod: 'verbal',
-        consentEvidence: 'x',
-      }),
-    ).rejects.toThrow(/not authenticated/i);
+    expect(supabaseClient.rpc).toHaveBeenCalledTimes(1);
+    expect(supabaseClient.from).not.toHaveBeenCalledWith('decision_overrides');
   });
 });
 
 describe('useMarkDecisionViewed', () => {
-  it('suppresses PGRST116 (no-row) errors silently', async () => {
-    setTableResult('client_decisions', {
-      data: null,
-      error: { code: 'PGRST116', message: 'No rows' },
+  it('uses the idempotent viewed RPC', async () => {
+    supabaseClient.rpc.mockResolvedValueOnce({
+      data: makeDecision({ id: 'dec-1' }),
+      error: null,
     });
-
     const config = useMarkDecisionViewed() as unknown as {
       mutationFn: (input: unknown) => Promise<unknown>;
     };
-    // Should NOT throw despite the error — the hook treats PGRST116 as a no-op
-    // because the row already had viewed_at set.
-    await expect(
-      config.mutationFn({ decisionId: 'dec-1' }),
-    ).resolves.toBeNull();
+    await expect(config.mutationFn({ decisionId: 'dec-1' })).resolves.toBeTruthy();
+    expect(supabaseClient.rpc).toHaveBeenCalledWith('mark_client_decision_viewed', {
+      p_decision_id: 'dec-1',
+    });
   });
 
-  it('rethrows non-PGRST116 errors', async () => {
-    setTableResult('client_decisions', {
+  it('rethrows RPC errors', async () => {
+    supabaseClient.rpc.mockResolvedValueOnce({
       data: null,
       error: { code: '42501', message: 'permission denied' },
     });
@@ -615,46 +492,6 @@ describe('useAllDecisions filters', () => {
 // PT-D-1-4 — new spine hooks
 // ─────────────────────────────────────────────────────────────────────────────
 
-describe('useCreateDecision notify wiring', () => {
-  it('fires notify_decision_required when status is pending (default)', async () => {
-    setTableResult('client_decisions', {
-      data: { id: 'dec-1', designer_client_id: 'dc-1', project_id: null },
-      error: null,
-    });
-    const config = useCreateDecision() as unknown as {
-      mutationFn: (input: unknown) => Promise<unknown>;
-    };
-    await config.mutationFn({
-      designerClientId: 'dc-1',
-      title: 'Pick a sofa',
-      options: [{ name: 'Velvet' }],
-    });
-    expect(supabaseClient.rpc).toHaveBeenCalledWith('notify_decision_required', {
-      p_decision_id: 'dec-1',
-    });
-  });
-
-  it('does NOT fire notify_decision_required when status is draft', async () => {
-    setTableResult('client_decisions', {
-      data: { id: 'dec-2', designer_client_id: 'dc-1', project_id: null },
-      error: null,
-    });
-    const config = useCreateDecision() as unknown as {
-      mutationFn: (input: unknown) => Promise<unknown>;
-    };
-    await config.mutationFn({
-      designerClientId: 'dc-1',
-      title: 'Draft',
-      status: 'draft',
-      options: [],
-    });
-    expect(supabaseClient.rpc).not.toHaveBeenCalledWith(
-      'notify_decision_required',
-      expect.anything(),
-    );
-  });
-});
-
 describe('isValidDecisionTransition', () => {
   it('accepts the legal transitions', () => {
     expect(isValidDecisionTransition('draft', 'pending')).toBe(true);
@@ -688,8 +525,8 @@ describe('useUpdateDecisionStatus transition validation', () => {
     ).rejects.toThrow(/Invalid decision status transition/);
   });
 
-  it('allows a legal transition and writes the update', async () => {
-    setTableResult('client_decisions', {
+  it('routes draft publishing through its lifecycle RPC', async () => {
+    supabaseClient.rpc.mockResolvedValueOnce({
       data: { id: 'dec-1', designer_client_id: 'dc-1' },
       error: null,
     });
@@ -701,14 +538,13 @@ describe('useUpdateDecisionStatus transition validation', () => {
       status: 'pending',
       currentStatus: 'draft',
     });
-    const builder = builders['client_decisions'];
-    const updates = callsTo(builder, 'update');
-    expect(updates).toHaveLength(1);
-    expect(updates[0].args[0]).toEqual({ status: 'pending' });
+    expect(supabaseClient.rpc).toHaveBeenCalledWith('publish_client_decision', {
+      p_decision_id: 'dec-1',
+    });
   });
 
   it('skips client-side validation when currentStatus is omitted', async () => {
-    setTableResult('client_decisions', {
+    supabaseClient.rpc.mockResolvedValueOnce({
       data: { id: 'dec-1', designer_client_id: 'dc-1' },
       error: null,
     });
@@ -719,114 +555,120 @@ describe('useUpdateDecisionStatus transition validation', () => {
     await expect(
       config.mutationFn({ decisionId: 'dec-1', status: 'expired' }),
     ).resolves.toBeTruthy();
+    expect(supabaseClient.rpc).toHaveBeenCalledWith('expire_client_decision', {
+      p_decision_id: 'dec-1',
+    });
   });
 });
 
 describe('useUpdateDecision', () => {
   it('patches only provided fields and replaces options when supplied', async () => {
-    setTableResult('client_decisions', {
+    supabaseClient.rpc.mockResolvedValueOnce({
       data: { id: 'dec-1', designer_client_id: 'dc-1', project_id: 'proj-1' },
       error: null,
     });
-    setTableResult('client_decision_options', { data: null, error: null });
 
     const config = useUpdateDecision() as unknown as {
       mutationFn: (input: unknown) => Promise<unknown>;
     };
     await config.mutationFn({
       decisionId: 'dec-1',
+      expectedUpdatedAt: '2026-07-01T12:00:00Z',
       designerClientId: 'dc-1',
       title: 'New title',
       dueDate: '2026-07-01T00:00:00Z',
       options: [{ name: 'Option A', productId: 'prod-9' }],
     });
 
-    const decBuilder = builders['client_decisions'];
-    const updates = callsTo(decBuilder, 'update');
-    expect(updates).toHaveLength(1);
-    expect(updates[0].args[0]).toEqual({
-      title: 'New title',
-      due_date: '2026-07-01T00:00:00Z',
+    expect(supabaseClient.rpc).toHaveBeenCalledWith('update_client_decision', {
+      p_decision_id: 'dec-1',
+      p_patch: {
+        title: 'New title',
+        due_date: '2026-07-01T00:00:00Z',
+      },
+      p_options: [expect.objectContaining({
+        name: 'Option A',
+        product_id: 'prod-9',
+        sort_order: 0,
+      })],
+      p_expected_updated_at: '2026-07-01T12:00:00Z',
     });
-
-    const optBuilder = builders['client_decision_options'];
-    expect(callsTo(optBuilder, 'delete')).toHaveLength(1);
-    const inserts = callsTo(optBuilder, 'insert');
-    expect(inserts).toHaveLength(1);
-    expect((inserts[0].args[0] as Record<string, unknown>[])[0]).toMatchObject({
-      decision_id: 'dec-1',
-      name: 'Option A',
-      product_id: 'prod-9',
-      sort_order: 0,
-    });
+    expect(supabaseClient.rpc).toHaveBeenCalledTimes(1);
+    expect(supabaseClient.from).not.toHaveBeenCalled();
   });
 
   it('does not delete/replace options when options is omitted', async () => {
-    setTableResult('client_decisions', {
+    supabaseClient.rpc.mockResolvedValueOnce({
       data: { id: 'dec-1', designer_client_id: 'dc-1', project_id: null },
       error: null,
     });
-    setTableResult('client_decision_options', { data: null, error: null });
 
     const config = useUpdateDecision() as unknown as {
       mutationFn: (input: unknown) => Promise<unknown>;
     };
     await config.mutationFn({
       decisionId: 'dec-1',
+      expectedUpdatedAt: '2026-07-01T12:00:00Z',
       designerClientId: 'dc-1',
       context: 'Updated context',
     });
 
-    const optBuilder = builders['client_decision_options'];
-    expect(callsTo(optBuilder, 'delete')).toHaveLength(0);
-    expect(callsTo(optBuilder, 'insert')).toHaveLength(0);
+    expect(supabaseClient.rpc).toHaveBeenCalledWith('update_client_decision', {
+      p_decision_id: 'dec-1',
+      p_patch: { context: 'Updated context' },
+      p_options: null,
+      p_expected_updated_at: '2026-07-01T12:00:00Z',
+    });
   });
 
-  it('fires notify_decision_updated when the edited decision is pending', async () => {
-    setTableResult('client_decisions', {
-      data: { id: 'dec-1', designer_client_id: 'dc-1', project_id: null, status: 'pending' },
+  it('surfaces an atomic update failure without a follow-up read or notice', async () => {
+    const updateError = {
+      code: '40001',
+      message: 'decision changed since it was loaded',
+    };
+    supabaseClient.rpc.mockResolvedValueOnce({
+      data: null,
+      error: updateError,
+    });
+    const config = useUpdateDecision() as unknown as {
+      mutationFn: (input: unknown) => Promise<unknown>;
+    };
+    await expect(config.mutationFn({
+      decisionId: 'dec-1',
+      expectedUpdatedAt: '2026-07-01T12:00:00Z',
+      designerClientId: 'dc-1',
+      title: 'Edited title',
+    })).rejects.toBe(updateError);
+    expect(supabaseClient.rpc).toHaveBeenCalledTimes(1);
+    expect(supabaseClient.from).not.toHaveBeenCalled();
+  });
+});
+
+describe('useExtendAndReopenDecision', () => {
+  it('moves the date and reopens through one CAS lifecycle RPC', async () => {
+    supabaseClient.rpc.mockResolvedValueOnce({
+      data: { id: 'dec-1', designer_client_id: 'dc-1', project_id: 'proj-1' },
       error: null,
     });
-
-    const config = useUpdateDecision() as unknown as {
+    const config = useExtendAndReopenDecision() as unknown as {
       mutationFn: (input: unknown) => Promise<unknown>;
     };
     await config.mutationFn({
       decisionId: 'dec-1',
-      designerClientId: 'dc-1',
-      title: 'Edited title',
+      dueDate: '2026-08-15',
+      expectedUpdatedAt: '2026-08-01T12:00:00Z',
     });
-
-    expect(supabaseClient.rpc).toHaveBeenCalledWith('notify_decision_updated', {
+    expect(supabaseClient.rpc).toHaveBeenCalledWith('extend_and_reopen_client_decision', {
       p_decision_id: 'dec-1',
+      p_due_date: '2026-08-15',
+      p_expected_updated_at: '2026-08-01T12:00:00Z',
     });
-  });
-
-  it('does NOT fire notify_decision_updated when the edited decision is a draft', async () => {
-    setTableResult('client_decisions', {
-      data: { id: 'dec-2', designer_client_id: 'dc-1', project_id: null, status: 'draft' },
-      error: null,
-    });
-
-    const config = useUpdateDecision() as unknown as {
-      mutationFn: (input: unknown) => Promise<unknown>;
-    };
-    await config.mutationFn({
-      decisionId: 'dec-2',
-      designerClientId: 'dc-1',
-      title: 'Edited draft',
-    });
-
-    expect(supabaseClient.rpc).not.toHaveBeenCalledWith(
-      'notify_decision_updated',
-      expect.anything(),
-    );
+    expect(supabaseClient.rpc).toHaveBeenCalledTimes(1);
   });
 });
 
 describe('useDeleteDecision', () => {
-  it('deletes the decision and returns its ids', async () => {
-    setTableResult('client_decisions', { data: null, error: null });
+  it('uses the checked draft-delete RPC and returns its cache ids', async () => {
     const config = useDeleteDecision() as unknown as {
       mutationFn: (input: unknown) => Promise<unknown>;
     };
@@ -835,10 +677,9 @@ describe('useDeleteDecision', () => {
       designerClientId: 'dc-1',
       projectId: 'proj-1',
     });
-    const builder = builders['client_decisions'];
-    expect(callsTo(builder, 'delete')).toHaveLength(1);
-    const eqs = callsTo(builder, 'eq');
-    expect(eqs[0].args).toEqual(['id', 'dec-1']);
+    expect(supabaseClient.rpc).toHaveBeenCalledWith('delete_client_decision_draft', {
+      p_decision_id: 'dec-1',
+    });
     expect(result).toEqual({
       decisionId: 'dec-1',
       designerClientId: 'dc-1',
@@ -848,8 +689,8 @@ describe('useDeleteDecision', () => {
 });
 
 describe('usePublishDraftDecision', () => {
-  it('flips status to pending, stamps sent_at, and fires notify_decision_required', async () => {
-    setTableResult('client_decisions', {
+  it('publishes through the single notification-owning lifecycle RPC', async () => {
+    supabaseClient.rpc.mockResolvedValueOnce({
       data: { id: 'dec-1', designer_client_id: 'dc-1', project_id: null },
       error: null,
     });
@@ -858,19 +699,10 @@ describe('usePublishDraftDecision', () => {
     };
     await config.mutationFn({ decisionId: 'dec-1' });
 
-    const builder = builders['client_decisions'];
-    const updates = callsTo(builder, 'update');
-    expect(updates).toHaveLength(1);
-    const payload = updates[0].args[0] as Record<string, unknown>;
-    expect(payload.status).toBe('pending');
-    expect(typeof payload.sent_at).toBe('string');
-    // guarded to only flip draft rows
-    const eqs = callsTo(builder, 'eq');
-    expect(eqs.some((c) => c.args[0] === 'status' && c.args[1] === 'draft')).toBe(true);
-
-    expect(supabaseClient.rpc).toHaveBeenCalledWith('notify_decision_required', {
+    expect(supabaseClient.rpc).toHaveBeenCalledWith('publish_client_decision', {
       p_decision_id: 'dec-1',
     });
+    expect(supabaseClient.rpc).toHaveBeenCalledTimes(1);
   });
 });
 

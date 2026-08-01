@@ -236,6 +236,7 @@ export {
   useDecisionMetrics,
   useCreateDecision,
   useUpdateDecision,
+  useExtendAndReopenDecision,
   useDeleteDecision,
   usePublishDraftDecision,
   useDecisionRealtime,
@@ -259,6 +260,7 @@ export type {
   ClientDecisionOption,
   CreateDecisionInput,
   UpdateDecisionInput,
+  ExtendAndReopenDecisionInput,
   DecisionType,
   BlockingStatus,
   DecisionStatus,
@@ -302,6 +304,9 @@ export type {
   CourtCount,
   CreateCoordinationItemInput,
   UpdateCoordinationItemInput,
+  ExtendCoordinationItemInput,
+  ReassignCoordinationItemInput,
+  SubmitCoordinationRevisionInput,
   ResolveCoordinationItemInput,
   AddProjectPartyInput,
 } from './use-coordination';
@@ -362,6 +367,8 @@ export type { ClientActivity, ActivityType } from './use-activity';
 export {
   useProposals,
   useProposal,
+  useClientSafeProposals,
+  useClientSafeProposalBundle,
   useProposalStats,
   useCreateProposal,
   useUpdateProposal,
@@ -370,6 +377,8 @@ export {
   useUpdateProposalItem,
   useRemoveProposalItem,
   useSendProposal,
+  useRetryProposalSend,
+  useProposalSendDispatchStatus,
   useNudgeProposal,
   useDeleteProposal,
   // Sections
@@ -393,8 +402,17 @@ export {
   useRequestProposalChange,
 } from './use-proposals';
 export type {
+  ProposalEmailDeliveryState,
+  ProposalEmailDispatchOutcome,
+  ProposalEmailDispatchStatus,
+} from './use-proposals';
+export type {
   Proposal,
   ProposalItem,
+  ProposalItemProductSnapshot,
+  ClientProposalBundle,
+  ClientProposalBoard,
+  ClientProposalBoardItem,
   ProposalItemType,
   ProposalFilters,
   ProposalSection,
@@ -858,6 +876,9 @@ export type {
   ProjectNarrativeSection,
   ProjectPalette,
   ProjectPaletteSwatch,
+  CreateProjectPhaseInput,
+  ProjectPhaseTransitionInput,
+  ProjectPhaseTransitionReceipt,
   UpdateFFEItemPricingInput,
   BulkReassignFfeVendorInput,
   BulkReassignFfeVendorResult,
@@ -935,16 +956,19 @@ export type {
 } from './use-proposal-team';
 export {
   // Scope Changes
+  COMPLETED_PROJECT_SCOPE_CHANGE_ERROR,
   useScopeChangeRequests,
   useScopeChangeRequest,
   useCreateScopeChangeRequest,
   useSendScopeChangeRequest,
   useApproveScopeChange,
+  useAcceptClientScopeChangeRequest,
   useDeclineScopeChange,
   useApplyScopeChange,
   useCreateClientScopeChangeRequest,
   useCancelClientScopeChangeRequest,
 } from './use-scope-changes';
+export type { ClientScopeChangeRequestReceipt } from './use-scope-changes';
 export { useProjectDocuments } from './use-project-documents';
 export type { ProjectDocument, ProjectDocumentKind } from './use-project-documents';
 export {
@@ -1235,9 +1259,8 @@ export {
   // B8 (00272/00273) — project-owned live boards
   useProjectOwnedBoards,
   useContinueBoardInProject,
-  // Pure helpers (00264 — exported for unit tests + reuse)
+  // Pure helper (00264 — exported for unit tests + reuse)
   summarizeBoard,
-  buildDuplicateBoardItemRows,
 } from './use-boards';
 export type {
   BoardItemType,
@@ -1272,6 +1295,7 @@ export {
   useChaseInvoice,
   useRecordPayment,
   useStartCheckout,
+  InvoiceCheckoutError,
   useVoidInvoice,
   useArAging,
   useFfeInvoiceCoverage,
@@ -1290,6 +1314,8 @@ export type {
   InvoicePayment,
   InvoicePaymentMethod,
   InvoicePaymentStatus,
+  InvoiceCheckoutReceipt,
+  InvoiceCheckoutEvidence,
   InvoiceFilters,
   DraftLineInput,
   CreateDraftInvoiceInput,
@@ -1396,7 +1422,9 @@ export {
 export type { DocumentShare, CreatedShare } from './use-document-shares';
 export {
   useProposalFeedback,
+  useClientProposalFeedback,
   useBoardFeedback,
+  useClientBoardFeedback,
   useItemFeedbackThread,
   useSubmitVerdict,
   useReplyToItemFeedback,
@@ -1448,7 +1476,11 @@ export {
   useCommitScheduleEdit,
   serializeRippleEditForRpc,
 } from './use-schedule-compose';
-export type { PhaseRelinkUpdate, RipplePendingEditInput, SerializedRippleEdit } from './use-schedule-compose';
+export type {
+  DeleteProjectPhaseReceipt,
+  RipplePendingEditInput,
+  SerializedRippleEdit,
+} from './use-schedule-compose';
 
 // The Room View (W2-T2) — The Rooms roster's data hook: room_scan_documents
 // rows + their geometry elements, one query per scan set.

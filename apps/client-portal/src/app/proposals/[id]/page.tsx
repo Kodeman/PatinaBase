@@ -4,12 +4,6 @@ import { use, useRef, useState, type RefObject } from 'react';
 import Link from 'next/link';
 import { ArrowLeft, CheckCircle2, Clock, Download, Loader2 } from 'lucide-react';
 import {
-  useProposalSections,
-  useProposalPaymentMilestones,
-  useProposalPhases,
-  useProposalExclusions,
-  useProposalScopeRooms,
-  useBoards,
   useStudioIdentity,
 } from '@patina/supabase';
 import { FeatureAnnouncementCoachmark, SurfaceKeys } from '@patina/help-system';
@@ -19,6 +13,7 @@ import { ProposalDocument } from '@/components/proposal-document';
 import { ProposalDeclineDialog } from '@/components/proposals/ProposalDeclineDialog';
 import { ProposalRequestChangeDialog } from '@/components/proposals/ProposalRequestChangeDialog';
 import { ProposalClarifyButton } from '@/components/proposals/ProposalClarifyButton';
+import { QueryFailure } from '@/components/query-failure';
 
 function formatDate(iso: string): string {
   return new Date(iso).toLocaleDateString('en-US', {
@@ -34,14 +29,19 @@ export default function ClientProposalDetailPage({
   params: Promise<{ id: string }>;
 }) {
   const { id } = use(params);
-  const { data: proposal, isLoading: proposalLoading } = useClientProposal(id);
-  const { data: sections, isLoading: sectionsLoading } = useProposalSections(id);
-  const { data: paymentMilestones } = useProposalPaymentMilestones(id);
-  const { data: phases } = useProposalPhases(id);
-  const { data: exclusions } = useProposalExclusions(id);
-  const { data: scopeRooms } = useProposalScopeRooms(id);
-  // RLS restricts board reads to non-draft proposals the client is on.
-  const { data: boards } = useBoards(id);
+  const {
+    data: proposal,
+    bundle,
+    isLoading: proposalLoading,
+    isError: proposalError,
+    refetch: refetchProposal,
+  } = useClientProposal(id);
+  const sections = bundle?.sections ?? [];
+  const paymentMilestones = bundle?.payment_milestones ?? [];
+  const phases = bundle?.phases ?? [];
+  const exclusions = bundle?.exclusions ?? [];
+  const scopeRooms = bundle?.scope_rooms ?? [];
+  const boards = bundle?.boards ?? [];
   const { data: identity } = useStudioIdentity(
     proposal?.project_id
       ? { projectId: proposal.project_id }
@@ -59,10 +59,29 @@ export default function ClientProposalDetailPage({
   const helpStateReady = useHelpStateReady();
   const welcomeAnchorRef = useRef<HTMLDivElement>(null);
 
-  if (proposalLoading || sectionsLoading) {
+  if (proposalLoading) {
     return (
       <div className="flex items-center justify-center py-20">
         <Loader2 className="h-6 w-6 animate-spin text-[var(--text-muted)]" />
+      </div>
+    );
+  }
+
+  if (proposalError) {
+    return (
+      <div className="mx-auto max-w-2xl px-6 py-16">
+        <QueryFailure
+          title="Unable to load this proposal"
+          message="The proposal could not be opened just now. Try again before asking your designer for another copy."
+          onRetry={refetchProposal}
+        />
+        <Link
+          href="/proposals"
+          className="mt-4 inline-flex items-center gap-1 type-meta text-[var(--accent-primary)] no-underline hover:underline"
+        >
+          <ArrowLeft className="h-3.5 w-3.5" />
+          Back to proposals
+        </Link>
       </div>
     );
   }
@@ -197,13 +216,14 @@ export default function ClientProposalDetailPage({
 
       <ProposalDocument
         proposal={proposal}
-        sections={sections ?? []}
+        sections={sections}
         trackEngagement={!isSigned}
-        paymentMilestones={paymentMilestones ?? []}
-        phases={phases ?? []}
-        exclusions={exclusions ?? []}
-        scopeRooms={scopeRooms ?? []}
-        boards={boards ?? []}
+        paymentMilestones={paymentMilestones}
+        phases={phases}
+        exclusions={exclusions}
+        scopeRooms={scopeRooms}
+        boards={[]}
+        resolvedBoards={boards}
         feedbackEnabled={feedbackEnabled}
         sharedByStudio={identity?.name ?? undefined}
       />

@@ -1,5 +1,9 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { createBrowserClient } from '../client';
+import {
+  invalidateProposalClientQueries,
+  PROPOSAL_CLIENT_MUTATION_KEY,
+} from '../lib/proposal-client-query-invalidation';
 import type { MilestoneKind, MilestoneStatus } from '@patina/utils';
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -202,6 +206,8 @@ export function useUpdateProjectPhaseChain() {
   return useMutation({
     mutationFn: async ({
       phaseId,
+      projectId,
+      expectedUpdatedAt,
       durationDays,
       anchorDate,
       followsPhaseId,
@@ -209,6 +215,8 @@ export function useUpdateProjectPhaseChain() {
     }: {
       phaseId: string;
       projectId: string;
+      /** Caller-observed project_phases.updated_at compare-and-swap token. */
+      expectedUpdatedAt: string;
       /**
        * Omit to leave a column untouched; pass null to clear it (lane is
        * NOT NULL — omit rather than null it).
@@ -226,13 +234,23 @@ export function useUpdateProjectPhaseChain() {
       if (followsPhaseId !== undefined) updates.follows_phase_id = followsPhaseId;
       if (lane !== undefined) updates.lane = lane;
 
-      const { data, error } = await supabase
-        .from('project_phases')
-        .update(updates)
-        .eq('id', phaseId)
-        .select()
-        .single();
+      const { data, error } = await supabase.rpc('update_project_phase', {
+        p_project_id: projectId,
+        p_phase_id: phaseId,
+        p_expected_updated_at: expectedUpdatedAt,
+        p_patch: updates,
+      });
       if (error) throw error;
+      if (
+        data == null ||
+        typeof data !== 'object' ||
+        Array.isArray(data) ||
+        (data as Record<string, unknown>).id !== phaseId ||
+        (data as Record<string, unknown>).project_id !== projectId ||
+        typeof (data as Record<string, unknown>).updated_at !== 'string'
+      ) {
+        throw new Error('useUpdateProjectPhaseChain: invalid phase receipt');
+      }
       return data;
     },
     onSuccess: (_, { projectId }) => {
@@ -246,54 +264,55 @@ export function useUpdateProjectPhaseChain() {
 // DELETE PHASE WITH RELINK
 // ═══════════════════════════════════════════════════════════════════════════
 
-/** One relink step: point `phaseId`'s follows_phase_id at `followsPhaseId`. */
-export interface PhaseRelinkUpdate {
-  phaseId: string;
-  followsPhaseId: string | null;
+/**
+ * Delete one pending project phase through 00398's atomic server boundary.
+ * The browser supplies no follower list: Postgres locks the complete project
+ * graph, derives every direct follower, relinks them to the deleted phase's
+ * predecessor, and deletes in one transaction.
+ */
+export interface DeleteProjectPhaseReceipt {
+  deleted_phase_id: string;
+  predecessor_phase_id: string | null;
+  relinked_phase_ids: string[];
 }
 
-/**
- * Delete a project_phases row without fragmenting the chain. `relinkUpdates`
- * is computed by the caller from the pure `relinkOnDelete` helper (T22,
- * lib/document/schedule-compose-derivation.ts in the designer portal) — the
- * deleted phase's followers, re-pointed at the deleted phase's own
- * predecessor.
- *
- * Sequence matters: relink FIRST, then delete. project_phases_follows_phase_id_fkey
- * is ON DELETE SET NULL — deleting before relinking would let Postgres null
- * out any follower this array doesn't explicitly cover, silently orphaning
- * it from the chain instead of re-linking it past the deleted phase.
- *
- * NOT transactional: these are sequential awaited PostgREST calls, not one
- * statement. A mid-sequence failure leaves some relinks applied and the
- * phase still present — the thrown error propagates to the caller (no
- * partial-success silent state); the UI must surface it. A future RPC
- * wrapping this in a single plpgsql transaction can harden it.
- */
 export function useDeletePhaseWithRelink() {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: async ({
       phaseId,
-      relinkUpdates,
+      projectId,
     }: {
       projectId: string;
       phaseId: string;
-      relinkUpdates: PhaseRelinkUpdate[];
-    }) => {
+    }): Promise<DeleteProjectPhaseReceipt> => {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const supabase = getSupabase() as any;
 
-      for (const { phaseId: followerId, followsPhaseId } of relinkUpdates) {
-        const { error: relinkError } = await supabase
-          .from('project_phases')
-          .update({ follows_phase_id: followsPhaseId })
-          .eq('id', followerId);
-        if (relinkError) throw relinkError;
+      const { data, error } = await supabase.rpc('delete_project_phase', {
+        p_project_id: projectId,
+        p_phase_id: phaseId,
+      });
+      if (error) throw error;
+      if (data == null || typeof data !== 'object' || Array.isArray(data)) {
+        throw new Error('useDeletePhaseWithRelink: invalid delete receipt');
       }
-
-      const { error: deleteError } = await supabase.from('project_phases').delete().eq('id', phaseId);
-      if (deleteError) throw deleteError;
+      const receipt = data as Record<string, unknown>;
+      const keys = Object.keys(receipt).sort();
+      if (
+        keys.length !== 3 ||
+        keys[0] !== 'deleted_phase_id' ||
+        keys[1] !== 'predecessor_phase_id' ||
+        keys[2] !== 'relinked_phase_ids' ||
+        receipt.deleted_phase_id !== phaseId ||
+        (receipt.predecessor_phase_id !== null &&
+          typeof receipt.predecessor_phase_id !== 'string') ||
+        !Array.isArray(receipt.relinked_phase_ids) ||
+        !receipt.relinked_phase_ids.every((id) => typeof id === 'string')
+      ) {
+        throw new Error('useDeletePhaseWithRelink: invalid delete receipt');
+      }
+      return receipt as unknown as DeleteProjectPhaseReceipt;
     },
     onSuccess: (_, { projectId }) => {
       queryClient.invalidateQueries({ queryKey: ['project-phases', projectId] });
@@ -449,6 +468,7 @@ export function useSeedProjectScheduleFromTemplate() {
 export function useCopyScheduleAsBuilt() {
   const queryClient = useQueryClient();
   return useMutation({
+    mutationKey: [PROPOSAL_CLIENT_MUTATION_KEY],
     mutationFn: async ({
       sourceProjectId,
       targetProposalId,
@@ -473,7 +493,7 @@ export function useCopyScheduleAsBuilt() {
       if (error) throw error;
       return (data ?? []) as string[];
     },
-    onSuccess: (_, { targetProposalId, targetProjectId }) => {
+    onSuccess: async (_, { targetProposalId, targetProjectId }) => {
       if (targetProjectId) {
         queryClient.invalidateQueries({ queryKey: ['project-phases', targetProjectId] });
         queryClient.invalidateQueries({ queryKey: ['schedule-milestones', targetProjectId] });
@@ -482,6 +502,7 @@ export function useCopyScheduleAsBuilt() {
         queryClient.invalidateQueries({ queryKey: ['proposal-phases', targetProposalId] });
         queryClient.invalidateQueries({ queryKey: ['scope-builder-summary', targetProposalId] });
         queryClient.invalidateQueries({ queryKey: ['proposal', targetProposalId] });
+        await invalidateProposalClientQueries(queryClient, targetProposalId);
       }
     },
   });

@@ -45,11 +45,25 @@ function useStudioName(designerId: string | null) {
 function useSetProjectStatus(projectId: string | null) {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: async (status: 'active' | 'on_hold' | 'archived') => {
-      const { error } = await getSupabase()
-        .from('projects')
-        .update({ status })
-        .eq('id', projectId);
+    mutationFn: async ({
+      status,
+      expectedStatus,
+    }: {
+      status: 'active' | 'on_hold' | 'archived';
+      expectedStatus: 'active' | 'on_hold' | 'completed';
+    }) => {
+      if (!projectId) throw new Error('Project is required');
+      const supabase = getSupabase();
+      const { error } = status === 'archived'
+        ? await supabase.rpc('archive_project', {
+            p_project_id: projectId,
+            p_expected_status: expectedStatus,
+          })
+        : await supabase.rpc('set_project_operational_status', {
+            p_project_id: projectId,
+            p_expected_status: expectedStatus,
+            p_status: status,
+          });
       if (error) throw error;
     },
     onSuccess: () => {
@@ -90,11 +104,13 @@ function useAddTeamMemberByEmail(projectId: string | null) {
 export function DocColophon({
   projectId,
   designerId,
+  projectStatus,
   isPaused,
   handsOnTheWork,
 }: {
   projectId: string;
   designerId: string | null;
+  projectStatus: string | null;
   isPaused: boolean;
   /** Presence names (D6) — "you" plus whoever else is in the document. */
   handsOnTheWork: string[];
@@ -111,6 +127,8 @@ export function DocColophon({
 
   const hands =
     handsOnTheWork.length > 0 ? `you · ${handsOnTheWork.join(' · ')}` : 'you';
+  const isCompleted = projectStatus === 'completed';
+  const isArchived = projectStatus === 'archived';
 
   return (
     <footer className="mt-14 border-t border-[var(--color-pearl)] pb-6 pt-3">
@@ -136,27 +154,34 @@ export function DocColophon({
           >
             Brief a vendor
           </DocumentAction>
-          <DocumentAction
-            actionKey={isPaused ? 'resume-project' : 'hold-project'}
-            variant="secondary"
-            disabled={setStatus.isPending}
-            loading={
-              setStatus.isPending &&
-              setStatus.variables === (isPaused ? 'active' : 'on_hold')
-            }
-            loadingLabel={isPaused ? 'Resuming…' : 'Holding…'}
-            onClick={() => setStatus.mutate(isPaused ? 'active' : 'on_hold')}
-          >
-            {isPaused ? 'Resume' : 'Hold'}
-          </DocumentAction>
-          <DocumentAction
-            actionKey="open-archive-confirmation"
-            variant="tertiary"
-            onClick={() => setPane(pane === 'archive' ? null : 'archive')}
-            className="text-[var(--color-terracotta)] decoration-[var(--color-terracotta)]"
-          >
-            Archive
-          </DocumentAction>
+          {!isCompleted && !isArchived && (
+            <DocumentAction
+              actionKey={isPaused ? 'resume-project' : 'hold-project'}
+              variant="secondary"
+              disabled={setStatus.isPending}
+              loading={
+                setStatus.isPending &&
+                setStatus.variables?.status === (isPaused ? 'active' : 'on_hold')
+              }
+              loadingLabel={isPaused ? 'Resuming…' : 'Holding…'}
+              onClick={() => setStatus.mutate({
+                status: isPaused ? 'active' : 'on_hold',
+                expectedStatus: isPaused ? 'on_hold' : 'active',
+              })}
+            >
+              {isPaused ? 'Resume' : 'Hold'}
+            </DocumentAction>
+          )}
+          {!isArchived && (
+            <DocumentAction
+              actionKey="open-archive-confirmation"
+              variant="tertiary"
+              onClick={() => setPane(pane === 'archive' ? null : 'archive')}
+              className="text-[var(--color-terracotta)] decoration-[var(--color-terracotta)]"
+            >
+              Archive
+            </DocumentAction>
+          )}
           <DocumentAction
             actionKey="open-project-team"
             variant="secondary"
@@ -167,7 +192,7 @@ export function DocColophon({
         </DocumentActionGroup>
       </div>
 
-      {pane === 'archive' && (
+      {pane === 'archive' && !isArchived && (
         <div className="mt-2 max-w-[420px] rounded-[4px] border border-[var(--doc-ink-border)] bg-[var(--doc-paper)] p-3">
           <p className="text-[11px] italic text-[var(--color-charcoal)]">
             The document goes to the cabinet — find it any time in ⌘K.
@@ -182,11 +207,16 @@ export function DocColophon({
               actionKey="archive-project"
               variant="danger"
               loading={
-                setStatus.isPending && setStatus.variables === 'archived'
+                setStatus.isPending && setStatus.variables?.status === 'archived'
               }
               loadingLabel="Archiving…"
               onClick={() => {
-                setStatus.mutate('archived', {
+                setStatus.mutate({
+                  status: 'archived',
+                  expectedStatus: isCompleted
+                    ? 'completed'
+                    : isPaused ? 'on_hold' : 'active',
+                }, {
                   onSuccess: () => router.push('/desk'),
                 });
               }}

@@ -24,7 +24,7 @@
  * A Room — full-bleed paper, zero shadows (D4); reuses RoomShell's physics.
  */
 
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useState, type ReactNode } from 'react';
 import { useRouter } from 'next/navigation';
 import { useQueryClient } from '@tanstack/react-query';
 import {
@@ -44,7 +44,10 @@ import { FacetSection } from './facet-section';
 import { ProposalPreviewRail } from '../../drafting/proposal-mirror';
 import { DocSheet } from '../../overlays/doc-sheet';
 import { SendSheet } from '../../overlays/send-sheet';
-import { useDraftingState } from '@/hooks/use-drafting-state';
+import {
+  useDraftingState,
+  useDraftingWritesPending,
+} from '@/hooks/use-drafting-state';
 import type { DraftingFacets } from '@/lib/document/drafting-progress';
 import { familyLabel } from '@/lib/document/family-label';
 import { clearRoomOrigin, readRoomOrigin } from '@/lib/document/room-origin';
@@ -119,9 +122,79 @@ function firstIncompleteDraftingFacet(
 }
 
 export function DraftingRoom({ proposalId }: { proposalId: string }) {
+  const router = useRouter();
+  const {
+    data: proposal,
+    isLoading,
+    error,
+    refetch,
+  } = useProposal(proposalId) as {
+    data?: any;
+    isLoading: boolean;
+    error?: Error | null;
+    refetch: () => unknown;
+  };
+
+  useEffect(() => {
+    if (proposal && proposal.status !== 'draft') {
+      router.replace(`/doc/${proposalId}`);
+    }
+  }, [proposal, proposalId, router]);
+
+  if (isLoading) {
+    return <DraftingRoomGateMessage message="Opening the draft…" />;
+  }
+
+  if (error || !proposal) {
+    return (
+      <DraftingRoomGateMessage
+        message="The draft could not be verified. Editing stays closed until it loads."
+        action={
+          <button
+            type="button"
+            onClick={() => void refetch()}
+            className="doc-type-control underline underline-offset-4"
+          >
+            Retry
+          </button>
+        }
+      />
+    );
+  }
+
+  if (proposal.status !== 'draft') {
+    return (
+      <DraftingRoomGateMessage message="This proposal has already been issued. Returning to its read-only document…" />
+    );
+  }
+
+  return <DraftingRoomEditor proposalId={proposalId} proposal={proposal} />;
+}
+
+function DraftingRoomGateMessage({
+  message,
+  action,
+}: {
+  message: string;
+  action?: ReactNode;
+}) {
+  return (
+    <div className="mx-auto flex min-h-[40vh] max-w-lg flex-col items-center justify-center gap-4 px-6 text-center">
+      <p className="doc-type-body text-[var(--color-quiet-ink)]">{message}</p>
+      {action}
+    </div>
+  );
+}
+
+function DraftingRoomEditor({
+  proposalId,
+  proposal,
+}: {
+  proposalId: string;
+  proposal: any;
+}) {
   useDocumentSurface(DOCUMENT_SURFACE_KEYS.drafting); // R89 — scope help to the Drafting Room
   const router = useRouter();
-  const { data: proposal } = useProposal(proposalId) as { data: any };
   const { data: summary } = useScopeBuilderSummary(proposalId);
   // The shared drafting state — the SAME ['drafting-facets', id] read the open
   // document's proposal instruments echo, so "what's written" agrees everywhere.
@@ -135,6 +208,7 @@ export function DraftingRoom({ proposalId }: { proposalId: string }) {
     gaps,
     isLoading: facetsLoading,
   } = useDraftingState(proposalId);
+  const draftingWritePending = useDraftingWritesPending(proposalId);
   const updateItem = useUpdateProposalItem();
   const queryClient = useQueryClient();
 
@@ -360,6 +434,12 @@ export function DraftingRoom({ proposalId }: { proposalId: string }) {
                 </span>
                 <span className="doc-type-meta uppercase tracking-[0.08em] opacity-70">
                   Scope · The Offer · The Vision
+                </span>
+                <span
+                  aria-live="polite"
+                  className="font-mono text-[0.5rem] uppercase tracking-[0.08em] text-[var(--color-aged-oak)]"
+                >
+                  {draftingWritePending ? 'Saving proposal changes…' : ''}
                 </span>
               </div>
             </div>

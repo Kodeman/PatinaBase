@@ -11,6 +11,7 @@ import {
   formatInvoiceDate,
   invoiceBalanceCents,
 } from '@patina/shared';
+import { QueryFailure } from '@/components/query-failure';
 
 /**
  * Chromeless, printable invoice for the client portal. Ports the designer
@@ -23,7 +24,7 @@ export default function ClientInvoicePrintPage({
   params: Promise<{ invoiceId: string }>;
 }) {
   const { invoiceId } = use(params);
-  const { data: invoice, isLoading } = useInvoice(invoiceId);
+  const { data: invoice, isLoading, isError, refetch } = useInvoice(invoiceId);
   // Studio brand identity (Designer Studios). projectId path; disabled until the
   // invoice resolves. name/logoUrl are nullable — fall back to the designer join.
   const { data: identity } = useStudioIdentity({ projectId: invoice?.project_id });
@@ -32,6 +33,18 @@ export default function ClientInvoicePrintPage({
     return (
       <div className="flex items-center justify-center py-20">
         <Loader2 className="h-6 w-6 animate-spin text-[var(--text-muted)]" />
+      </div>
+    );
+  }
+
+  if (isError) {
+    return (
+      <div className="mx-auto max-w-2xl px-6 py-16">
+        <QueryFailure
+          title="Unable to load this invoice"
+          message="The printable invoice could not be opened just now."
+          onRetry={refetch}
+        />
       </div>
     );
   }

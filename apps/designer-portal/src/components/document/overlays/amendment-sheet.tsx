@@ -26,12 +26,12 @@
  */
 
 import { useEffect, useState } from 'react';
-import { useProjectV2, useScopeChangeRequests } from '@patina/supabase';
 import {
-  useApplyAmendment,
-  useComposeAmendment,
-  useSendAmendment,
-} from '@/hooks/use-amendments';
+  useAcceptClientScopeChangeRequest,
+  useProjectV2,
+  useScopeChangeRequests,
+} from '@patina/supabase';
+import { useApplyAmendment, useComposeAmendment, useSendAmendment } from '@/hooks/use-amendments';
 import {
   amendmentImpactLine,
   amendmentStatusWord,
@@ -52,8 +52,7 @@ const fieldCls =
 const quietBtnCls =
   'inline-flex min-h-11 min-w-11 items-center justify-center font-mono text-[12px] uppercase tracking-[0.06em] text-[var(--text-body)] hover:text-[var(--color-charcoal)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-clay)]';
 
-const fmtMoney = (cents: number) =>
-  `$${Math.round(cents / 100).toLocaleString('en-US')}`;
+const fmtMoney = (cents: number) => `$${Math.round(cents / 100).toLocaleString('en-US')}`;
 
 export interface AmendmentSeed {
   title?: string;
@@ -83,6 +82,9 @@ export function AmendmentSheet({
   const compose = useComposeAmendment();
   const sendAmendment = useSendAmendment();
   const applyAmendment = useApplyAmendment();
+  const acceptClientRequest = useAcceptClientScopeChangeRequest({
+    errorSurface: 'inline',
+  });
 
   // Which existing amendment is under review; null = composing.
   const [reviewingId, setReviewingId] = useState<string | null>(null);
@@ -94,9 +96,7 @@ export function AmendmentSheet({
   const [weeks, setWeeks] = useState('');
   const [roomName, setRoomName] = useState('');
   const [roomBudget, setRoomBudget] = useState('');
-  const [rooms, setRooms] = useState<
-    Array<{ name: string; budgetCents: number }>
-  >([]);
+  const [rooms, setRooms] = useState<Array<{ name: string; budgetCents: number }>>([]);
   const [error, setError] = useState<string | null>(null);
   // R51 — the quiet inline confirmations.
   const [confirmation, setConfirmation] = useState<string | null>(null);
@@ -123,24 +123,21 @@ export function AmendmentSheet({
   const reviewing = reviewingId
     ? ((amendments ?? []).find((a) => a.id === reviewingId) ?? null)
     : null;
+  const reviewingClientRequest = Boolean(
+    reviewing && project?.client_id && reviewing.requested_by === project.client_id,
+  );
 
   const impacts = {
     additionalFfeCents: dollarsToCents(ffeDollars) ?? 0,
     additionalFeeCents: dollarsToCents(feeDollars) ?? 0,
     timelineWeeks: parseInt(weeks, 10) || 0,
   };
-  const { currentCents, newTotalCents } = computeAmendmentTotals(
-    project,
-    impacts,
-  );
+  const { currentCents, newTotalCents } = computeAmendmentTotals(project, impacts);
 
   const addRoom = () => {
     const name = roomName.trim();
     if (!name) return;
-    setRooms((prev) => [
-      ...prev,
-      { name, budgetCents: dollarsToCents(roomBudget) ?? 0 },
-    ]);
+    setRooms((prev) => [...prev, { name, budgetCents: dollarsToCents(roomBudget) ?? 0 }]);
     setRoomName('');
     setRoomBudget('');
   };
@@ -171,9 +168,7 @@ export function AmendmentSheet({
         },
         onError: (err) =>
           setError(
-            err instanceof Error
-              ? err.message
-              : 'Could not compose the amendment. Try again.',
+            err instanceof Error ? err.message : 'Could not compose the amendment. Try again.',
           ),
       },
     );
@@ -197,7 +192,10 @@ export function AmendmentSheet({
                 {reviewing.title}
               </p>
               <span className="whitespace-nowrap font-mono text-[12px] uppercase tracking-[0.06em] text-[var(--color-charcoal)]">
-                {amendmentStatusWord(reviewing)}
+                {reviewingClientRequest &&
+                (reviewing.status === 'sent' || reviewing.status === 'viewed')
+                  ? 'Client request'
+                  : amendmentStatusWord(reviewing)}
               </span>
             </div>
             {reviewing.description && (
@@ -209,10 +207,7 @@ export function AmendmentSheet({
             <dl className="space-y-1 border-t border-[var(--color-pearl)] pt-3">
               <Row k="Impact" v={amendmentImpactLine(reviewing)} />
               {(reviewing.new_total_budget_cents ?? 0) > 0 && (
-                <Row
-                  k="New total"
-                  v={fmtMoney(reviewing.new_total_budget_cents)}
-                />
+                <Row k="New total" v={fmtMoney(reviewing.new_total_budget_cents)} />
               )}
               {(reviewing.new_rooms ?? []).length > 0 && (
                 <Row
@@ -223,9 +218,7 @@ export function AmendmentSheet({
                     .join(', ')}
                 />
               )}
-              {reviewing.sent_at && (
-                <Row k="Sent" v={fmtDay(reviewing.sent_at)} />
-              )}
+              {reviewing.sent_at && <Row k="Sent" v={fmtDay(reviewing.sent_at)} />}
               {reviewing.approved_at && (
                 <Row
                   k="Approved"
@@ -238,23 +231,18 @@ export function AmendmentSheet({
                   v={`${fmtDay(reviewing.declined_at)}${reviewing.decline_reason ? ` — “${reviewing.decline_reason}”` : ''}`}
                 />
               )}
-              {reviewing.applied_at && (
-                <Row k="Applied" v={fmtDay(reviewing.applied_at)} />
-              )}
+              {reviewing.applied_at && <Row k="Applied" v={fmtDay(reviewing.applied_at)} />}
             </dl>
 
             {confirmation && (
-              <p className="text-[14px] text-[var(--color-charcoal)]">
-                {confirmation}
-              </p>
+              <p className="text-[14px] text-[var(--color-charcoal)]">{confirmation}</p>
             )}
             {error && (
               <div
                 role="alert"
                 className="border-l-2 border-[var(--color-terracotta)] p-3 text-[14px] text-[var(--color-charcoal)]"
               >
-                {error}{' '}
-                <span className="opacity-80">The act is safe to retry.</span>
+                {error} <span className="opacity-80">The act is safe to retry.</span>
               </div>
             )}
 
@@ -277,15 +265,9 @@ export function AmendmentSheet({
                       { requestId: reviewing.id, projectId },
                       {
                         onSuccess: () =>
-                          setConfirmation(
-                            `Sent to ${family} — it settles here when they answer.`,
-                          ),
+                          setConfirmation(`Sent to ${family} — it settles here when they answer.`),
                         onError: (err) =>
-                          setError(
-                            err instanceof Error
-                              ? err.message
-                              : 'Could not send it.',
-                          ),
+                          setError(err instanceof Error ? err.message : 'Could not send it.'),
                       },
                     );
                   }}
@@ -295,7 +277,9 @@ export function AmendmentSheet({
               )}
               {reviewing.status === 'approved' && !reviewing.applied_at && (
                 <DocumentAction
-                  actionKey="apply-amendment"
+                  actionKey={
+                    reviewingClientRequest ? 'fulfill-client-scope-request' : 'apply-amendment'
+                  }
                   variant="primary"
                   disabled={applyAmendment.isPending}
                   loading={applyAmendment.isPending}
@@ -308,27 +292,56 @@ export function AmendmentSheet({
                       {
                         onSuccess: () =>
                           setConfirmation(
-                            'Applied — budget, timeline, and any new rooms landed on the project.',
+                            reviewingClientRequest
+                              ? 'Fulfilled — the client request is recorded as complete.'
+                              : 'Applied — budget, timeline, and any new rooms landed on the project.',
                           ),
                         onError: (err) =>
-                          setError(
-                            err instanceof Error
-                              ? err.message
-                              : 'Could not apply it.',
-                          ),
+                          setError(err instanceof Error ? err.message : 'Could not apply it.'),
                       },
                     );
                   }}
                 >
-                  Apply to the project
+                  {reviewingClientRequest ? 'Mark fulfilled' : 'Apply to the project'}
                 </DocumentAction>
               )}
-              {(reviewing.status === 'sent' ||
-                reviewing.status === 'viewed') && (
-                <span className="text-[14px] italic text-[var(--text-body)]">
-                  With {family} — it settles here when they answer.
-                </span>
-              )}
+              {reviewingClientRequest &&
+                (reviewing.status === 'sent' || reviewing.status === 'viewed') && (
+                  <DocumentAction
+                    actionKey="accept-client-scope-request"
+                    variant="primary"
+                    disabled={acceptClientRequest.isPending}
+                    loading={acceptClientRequest.isPending}
+                    loadingLabel="Accepting…"
+                    onClick={() => {
+                      setError(null);
+                      setConfirmation(null);
+                      acceptClientRequest.mutate(
+                        { requestId: reviewing.id, projectId },
+                        {
+                          onSuccess: () =>
+                            setConfirmation(
+                              'Accepted — apply it to mark the requested work fulfilled.',
+                            ),
+                          onError: (err) =>
+                            setError(
+                              err instanceof Error
+                                ? err.message
+                                : 'Could not accept the client request.',
+                            ),
+                        },
+                      );
+                    }}
+                  >
+                    Accept client request
+                  </DocumentAction>
+                )}
+              {!reviewingClientRequest &&
+                (reviewing.status === 'sent' || reviewing.status === 'viewed') && (
+                  <span className="text-[14px] italic text-[var(--text-body)]">
+                    With {family} — it settles here when they answer.
+                  </span>
+                )}
               <DocumentAction
                 actionKey="compose-another-amendment"
                 variant="secondary"
@@ -350,9 +363,8 @@ export function AmendmentSheet({
           /* ── COMPOSE a new amendment ──────────────────────────────────── */
           <div className="mt-1 space-y-5">
             <p className="text-[14px] leading-relaxed text-[var(--color-charcoal)]">
-              A scope change with its fee and timeline impacts — {family}{' '}
-              approve it in their portal, then one act applies it to the
-              project.
+              A scope change with its fee and timeline impacts — {family} approve it in their
+              portal, then one act applies it to the project.
             </p>
 
             <div className="flex flex-col gap-1.5">
@@ -427,9 +439,7 @@ export function AmendmentSheet({
                   id="amendment-weeks"
                   inputMode="numeric"
                   value={weeks}
-                  onChange={(e) =>
-                    setWeeks(e.target.value.replace(/[^0-9-]/g, ''))
-                  }
+                  onChange={(e) => setWeeks(e.target.value.replace(/[^0-9-]/g, ''))}
                   placeholder="+0"
                   className={fieldCls}
                 />
@@ -462,9 +472,7 @@ export function AmendmentSheet({
                   <button
                     type="button"
                     aria-label={`Remove ${room.name}`}
-                    onClick={() =>
-                      setRooms((prev) => prev.filter((_, idx) => idx !== i))
-                    }
+                    onClick={() => setRooms((prev) => prev.filter((_, idx) => idx !== i))}
                     className={quietBtnCls}
                   >
                     ✕
@@ -516,8 +524,7 @@ export function AmendmentSheet({
                 role="alert"
                 className="border-l-2 border-[var(--color-terracotta)] p-3 text-[14px] text-[var(--color-charcoal)]"
               >
-                {error}{' '}
-                <span className="opacity-80">The act is safe to retry.</span>
+                {error} <span className="opacity-80">The act is safe to retry.</span>
               </div>
             )}
 
@@ -529,9 +536,7 @@ export function AmendmentSheet({
               <DocumentAction
                 actionKey="compose-and-send-amendment"
                 variant="primary"
-                disabled={
-                  !title.trim() || !description.trim() || compose.isPending
-                }
+                disabled={!title.trim() || !description.trim() || compose.isPending}
                 loading={compose.isPending}
                 loadingLabel="Composing…"
                 onClick={() => submit(true)}
@@ -588,7 +593,10 @@ export function AmendmentSheet({
                                 : 'var(--color-aged-oak)',
                           }}
                         >
-                          {amendmentStatusWord(a)}
+                          {a.requested_by === project?.client_id &&
+                          (a.status === 'sent' || a.status === 'viewed')
+                            ? 'Client request'
+                            : amendmentStatusWord(a)}
                         </span>
                       </button>
                     </li>
@@ -609,9 +617,7 @@ function Row({ k, v }: { k: string; v: string }) {
       <dt className="font-mono text-[12px] uppercase tracking-[0.06em] text-[var(--color-charcoal)]">
         {k}
       </dt>
-      <dd className="text-right text-[14px] text-[var(--color-charcoal)]">
-        {v}
-      </dd>
+      <dd className="text-right text-[14px] text-[var(--color-charcoal)]">{v}</dd>
     </div>
   );
 }

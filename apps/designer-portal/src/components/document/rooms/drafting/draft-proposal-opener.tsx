@@ -9,8 +9,8 @@
  *
  * Two exports:
  *   • `useOpenDraftProposal()` — the primitive opener. Integration (the ⌘K
- *     "draft a proposal" row) calls `openDraftProposal({ clientId, clientName })`
- *     when it already knows the household.
+ *     "draft a proposal" row) passes both the profile and designer-client
+ *     relationship identities.
  *   • `DraftProposalSheet` — a paper overlay that reuses the R73 ClientPicker
  *     (invite-and-link a captured household included) to pick the household,
  *     then calls the primitive. Mount it from the ⌘K row (integration owns the
@@ -29,6 +29,8 @@ import { rememberRoomOrigin } from '@/lib/document/room-origin';
 export interface OpenDraftProposalArgs {
   /** The household's profiles.id (designer_clients.client_id) — a linked client. */
   clientId: string;
+  /** The household relationship row preserved on proposal.designer_client_id. */
+  designerClientId: string;
   /** Optional display name for the draft's title; falls back to "New proposal". */
   clientName?: string | null;
 }
@@ -46,12 +48,16 @@ export function useOpenDraftProposal() {
   const createProposal = useCreateProposal({ errorSurface: 'inline' });
 
   const openDraftProposal = useCallback(
-    async ({ clientId, clientName }: OpenDraftProposalArgs): Promise<string> => {
+    async ({ clientId, designerClientId, clientName }: OpenDraftProposalArgs): Promise<string> => {
       const trimmed = clientName?.trim();
       const title = trimmed ? `${trimmed} — new proposal` : 'New proposal';
       // No templateId → an empty draft (templates retired, R85). The draft is
       // real from the first keystroke; the Drafting Room self-saves every facet.
-      const proposal = await createProposal.mutateAsync({ title, clientId });
+      const proposal = await createProposal.mutateAsync({
+        title,
+        clientId,
+        designerClientId,
+      });
       // Stash where we came from so "← back" out of the Room returns here.
       rememberRoomOrigin(pathname);
       router.push(`/drafting/${proposal.id}`);
@@ -96,10 +102,18 @@ export function DraftProposalSheet({
     if (!clientId) return;
     setError(null);
     const household = (clients ?? []).find((dc) => dc.client_id === clientId);
+    if (!household) {
+      setError('That household relationship is no longer available. Refresh and try again.');
+      return;
+    }
     const clientName =
       household?.client?.full_name ?? household?.client_name ?? household?.client_email ?? null;
     try {
-      await openDraftProposal({ clientId, clientName });
+      await openDraftProposal({
+        clientId,
+        designerClientId: household.id,
+        clientName,
+      });
       onClose();
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Could not start the draft. Try again.');

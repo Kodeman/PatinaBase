@@ -1,0 +1,349 @@
+import { act, fireEvent, render, screen } from '@testing-library/react';
+import { PhaseBuilder } from '../phase-builder';
+
+const updateMutate = jest.fn();
+const updateMutateAsync = jest.fn();
+const addMutate = jest.fn();
+const addMutateAsync = jest.fn();
+const applyTemplateMutate = jest.fn();
+const applyTemplateMutateAsync = jest.fn();
+const removeMutate = jest.fn();
+
+const phases = [
+  {
+    id: 'phase-1',
+    proposal_id: 'proposal-1',
+    name: 'Concept',
+    phase_key: 'concept_development',
+    duration_weeks: 3,
+    fee_cents: 250_000,
+    revision_limit: 2,
+    gate_condition: null,
+    sort_order: 0,
+    duration_days: 21,
+    follows_phase_id: null,
+    anchor_date: null,
+    lane: 'main',
+    updated_at: '2026-07-31T12:00:00.000Z',
+  },
+];
+const noRows: unknown[] = [];
+let phaseRows = phases;
+
+jest.mock('@patina/supabase', () => ({
+  useProposalPhases: () => ({ data: phaseRows, isLoading: false }),
+  useAddProposalPhase: () => ({
+    mutate: addMutate,
+    mutateAsync: addMutateAsync,
+    isPending: false,
+    isError: false,
+  }),
+  useUpdateProposalPhase: () => ({
+    mutate: updateMutate,
+    mutateAsync: updateMutateAsync,
+    isPending: false,
+    isError: false,
+  }),
+  useRemoveProposalPhase: () => ({ mutate: removeMutate, isPending: false }),
+  useProposalPaymentMilestones: () => ({ data: noRows }),
+  useProposalScheduleMilestones: () => ({ data: noRows }),
+  useProjects: () => ({ data: noRows, isPending: false }),
+  useProjectPhaseCounts: () => ({ data: {}, isPending: false }),
+  useApplyPhaseTemplate: () => ({
+    mutate: applyTemplateMutate,
+    mutateAsync: applyTemplateMutateAsync,
+    isPending: false,
+    isError: false,
+  }),
+  useCopyScheduleAsBuilt: () => ({ mutate: jest.fn(), isPending: false, isError: false }),
+  mapProposalPhaseRowToScheduleInput: (row: unknown) => row,
+  mapProposalScheduleMilestoneRowToScheduleInput: (row: unknown) => row,
+}));
+
+jest.mock('@patina/design-system', () => ({
+  Accordion: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
+  AccordionItem: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
+  AccordionTrigger: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
+  AccordionContent: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
+}));
+
+jest.mock('@/lib/analytics', () => ({
+  proposalEvents: { scopeUpdated: jest.fn() },
+}));
+jest.mock('@/lib/analytics/schedule-events', () => ({
+  scheduleEvents: { scheduleAnchorSet: jest.fn(), scheduleBorn: jest.fn(), schedulePhaseAdded: jest.fn() },
+}));
+jest.mock('../deliverables-editor', () => ({ DeliverablesEditor: () => null }));
+jest.mock('../gate-conditions-editor', () => ({ GateConditionsEditor: () => null }));
+jest.mock('../proposal-milestones-editor', () => ({ ProposalMilestonesEditor: () => null }));
+jest.mock('../phase-template-picker', () => ({ PhaseTemplatePicker: () => null }));
+jest.mock('../phase-timeline-view', () => ({ PhaseTimelineView: () => null }));
+jest.mock('@/components/document/schedule/schedule-birth', () => ({
+  ScheduleBirth: ({
+    onSeedPatinaSix,
+    busy,
+    errorText,
+  }: {
+    onSeedPatinaSix: () => void;
+    busy: boolean;
+    errorText?: string | null;
+  }) => (
+    <div>
+      <button type="button" disabled={busy} onClick={onSeedPatinaSix}>
+        The Patina Six
+      </button>
+      {errorText ? <p role="alert">{errorText}</p> : null}
+    </div>
+  ),
+}));
+jest.mock('@/components/document/schedule/schedule-entry-field', () => ({
+  ScheduleEntryField: ({
+    onCommit,
+  }: {
+    onCommit: (entry: { kind: 'duration'; days: number }) => void;
+  }) => (
+    <button
+      type="button"
+      aria-label="Commit 28 day duration"
+      onClick={() => onCommit({ kind: 'duration', days: 28 })}
+    >
+      Commit duration
+    </button>
+  ),
+}));
+jest.mock('@/components/document/schedule/milestone-row', () => ({ AnchorChip: () => null }));
+
+describe('PhaseBuilder autosave integrity', () => {
+  beforeEach(() => {
+    jest.useFakeTimers();
+    phaseRows = phases;
+    updateMutate.mockReset();
+    updateMutateAsync.mockReset();
+    updateMutateAsync.mockResolvedValue({});
+    addMutate.mockReset();
+    addMutateAsync.mockReset();
+    addMutateAsync.mockResolvedValue({});
+    applyTemplateMutate.mockReset();
+    applyTemplateMutateAsync.mockReset();
+    applyTemplateMutateAsync.mockResolvedValue([]);
+    removeMutate.mockReset();
+  });
+
+  afterEach(() => jest.useRealTimers());
+
+  it('merges rapid name, fee, and duration edits into one phase write', async () => {
+    const { container } = render(<PhaseBuilder proposalId="proposal-1" />);
+    const name = container.querySelector('input[type="text"]');
+    const fee = container.querySelector('input[type="number"]');
+    if (!name || !fee) throw new Error('phase inputs were not rendered');
+
+    fireEvent.change(name, { target: { value: 'Design direction' } });
+    fireEvent.change(fee, { target: { value: '4200' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Commit 28 day duration' }));
+
+    await act(async () => {
+      await Promise.resolve();
+    });
+
+    expect(updateMutateAsync).toHaveBeenCalledTimes(1);
+    expect(updateMutateAsync).toHaveBeenCalledWith({
+      phaseId: 'phase-1',
+      proposalId: 'proposal-1',
+      updates: {
+        name: 'Design direction',
+        fee_cents: 420_000,
+        duration_days: 28,
+        duration_weeks: 4,
+      },
+      expectedUpdatedAt: '2026-07-31T12:00:00.000Z',
+    });
+  });
+
+  it('flushes the final field value immediately on blur', async () => {
+    const { container } = render(<PhaseBuilder proposalId="proposal-1" />);
+    const name = container.querySelector('input[type="text"]');
+    if (!name) throw new Error('phase name was not rendered');
+
+    fireEvent.change(name, { target: { value: 'Final concept' } });
+    fireEvent.blur(name);
+    await act(async () => Promise.resolve());
+
+    expect(updateMutateAsync).toHaveBeenCalledWith({
+      phaseId: 'phase-1',
+      proposalId: 'proposal-1',
+      updates: { name: 'Final concept' },
+      expectedUpdatedAt: '2026-07-31T12:00:00.000Z',
+    });
+  });
+
+  it('flushes pending phase edits when the builder unmounts', async () => {
+    const { container, unmount } = render(<PhaseBuilder proposalId="proposal-1" />);
+    const name = container.querySelector('input[type="text"]');
+    if (!name) throw new Error('phase name was not rendered');
+
+    fireEvent.change(name, { target: { value: 'Kept on navigation' } });
+    unmount();
+    await act(async () => Promise.resolve());
+
+    expect(updateMutateAsync).toHaveBeenCalledWith({
+      phaseId: 'phase-1',
+      proposalId: 'proposal-1',
+      updates: { name: 'Kept on navigation' },
+      expectedUpdatedAt: '2026-07-31T12:00:00.000Z',
+    });
+  });
+
+  it('surfaces saving, saved, and error states inline', async () => {
+    let resolveSave: (value: unknown) => void = () => {};
+    updateMutateAsync.mockReturnValueOnce(
+      new Promise((resolve) => {
+        resolveSave = resolve;
+      }),
+    );
+    const { container } = render(<PhaseBuilder proposalId="proposal-1" />);
+    const name = container.querySelector('input[type="text"]');
+    if (!name) throw new Error('phase name was not rendered');
+
+    fireEvent.change(name, { target: { value: 'Saving phase' } });
+    fireEvent.blur(name);
+    expect(screen.getByRole('status')).toHaveTextContent('Saving phases…');
+
+    await act(async () => {
+      resolveSave({});
+      await Promise.resolve();
+    });
+    expect(screen.getByRole('status')).toHaveTextContent('Phases saved');
+
+    updateMutateAsync.mockRejectedValueOnce(new Error('phase write failed'));
+    fireEvent.change(name, { target: { value: 'Retry phase' } });
+    fireEvent.blur(name);
+    await act(async () => {
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+    expect(screen.getByRole('alert')).toHaveTextContent('phase write failed');
+  });
+
+  it('creates defaults with one canonical Patina Six template mutation', async () => {
+    phaseRows = [];
+    render(<PhaseBuilder proposalId="proposal-1" />);
+
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: 'The Patina Six' }));
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    expect(applyTemplateMutateAsync).toHaveBeenCalledTimes(1);
+    expect(applyTemplateMutateAsync).toHaveBeenCalledWith({
+      proposalId: 'proposal-1',
+      templateSlug: 'patina_six',
+      requestId: expect.any(String),
+    });
+    expect(addMutateAsync).not.toHaveBeenCalled();
+  });
+
+  it('coalesces rapid Patina Six submits while the atomic RPC is in flight', async () => {
+    phaseRows = [];
+    let resolveApply: (value: unknown[]) => void = () => {};
+    applyTemplateMutateAsync.mockReturnValueOnce(
+      new Promise((resolve) => {
+        resolveApply = resolve;
+      }),
+    );
+    render(<PhaseBuilder proposalId="proposal-1" />);
+
+    const seed = screen.getByRole('button', { name: 'The Patina Six' });
+    fireEvent.click(seed);
+    fireEvent.click(seed);
+
+    expect(applyTemplateMutateAsync).toHaveBeenCalledTimes(1);
+    await act(async () => {
+      resolveApply([]);
+      await Promise.resolve();
+    });
+  });
+
+  it('surfaces an atomic template failure without falling back to partial phase writes', async () => {
+    phaseRows = [];
+    applyTemplateMutateAsync.mockRejectedValueOnce(new Error('template unavailable'));
+    render(<PhaseBuilder proposalId="proposal-1" />);
+
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: 'The Patina Six' }));
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    expect(screen.getByRole('alert')).toHaveTextContent(
+      'Couldn’t seed the Patina Six — nothing was saved',
+    );
+    expect(applyTemplateMutateAsync).toHaveBeenCalledTimes(1);
+    expect(addMutateAsync).not.toHaveBeenCalled();
+
+    const firstRequestId = applyTemplateMutateAsync.mock.calls[0][0].requestId;
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: 'The Patina Six' }));
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+    expect(applyTemplateMutateAsync).toHaveBeenCalledTimes(2);
+    expect(applyTemplateMutateAsync.mock.calls[1][0].requestId).toBe(firstRequestId);
+  });
+
+  it('keeps custom phase addition while leaving tail authority to the server', () => {
+    render(<PhaseBuilder proposalId="proposal-1" />);
+
+    expect(screen.queryByRole('button', { name: 'Add Defaults' })).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: '+ Add Phase' }));
+
+    expect(addMutate).toHaveBeenCalledTimes(1);
+    expect(addMutate).toHaveBeenCalledWith(
+      {
+        proposalId: 'proposal-1',
+        name: 'New Phase',
+        phaseKey: 'consultation',
+        durationWeeks: 2,
+        feeCents: 0,
+        revisionLimit: 2,
+        lane: 'main',
+      },
+      expect.objectContaining({ onSuccess: expect.any(Function) }),
+    );
+    expect(applyTemplateMutateAsync).not.toHaveBeenCalled();
+  });
+
+  it('flushes a pending edit and removes with the advanced phase CAS token', async () => {
+    updateMutateAsync.mockResolvedValueOnce({
+      updated_at: '2026-07-31T12:01:00.000Z',
+    });
+    const { container } = render(<PhaseBuilder proposalId="proposal-1" />);
+    const name = container.querySelector('input[type="text"]');
+    if (!name) throw new Error('phase name was not rendered');
+
+    fireEvent.change(name, { target: { value: 'Final phase name' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Remove phase' }));
+    await act(async () => {
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    expect(updateMutateAsync).toHaveBeenCalledWith({
+      phaseId: 'phase-1',
+      proposalId: 'proposal-1',
+      updates: { name: 'Final phase name' },
+      expectedUpdatedAt: '2026-07-31T12:00:00.000Z',
+    });
+    expect(removeMutate).toHaveBeenCalledWith(
+      {
+        phaseId: 'phase-1',
+        proposalId: 'proposal-1',
+        expectedUpdatedAt: '2026-07-31T12:01:00.000Z',
+      },
+      expect.objectContaining({
+        onSuccess: expect.any(Function),
+        onError: expect.any(Function),
+      }),
+    );
+  });
+});

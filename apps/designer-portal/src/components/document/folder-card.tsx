@@ -281,7 +281,13 @@ function FolderFace({
               The bar's buttons stopPropagation so they never trip the card's
               link (D1). Shape C always carries lead_id. */}
           {(need.kind === 'new_lead' || need.kind === 'reconnect_due') &&
-            row.lead_id && <TriageBar leadId={row.lead_id} variant="desk" />}
+            row.lead_id && (
+              <TriageBar
+                leadId={row.lead_id}
+                variant="desk"
+                arrivalEligible={Boolean(row.client_profile_id)}
+              />
+            )}
           {need.actionLabel && (
             <div className="mt-4 flex min-h-11 items-center justify-between gap-3 border-t border-[var(--color-pearl)] pt-3">
               <span className="font-mono text-[12px] font-semibold uppercase tracking-[0.08em] text-[var(--color-charcoal)]">

@@ -51,6 +51,7 @@ const normaliseStatus = (value: unknown): MilestoneStatus => {
     case 'attention':
     case 'attention_needed':
     case 'requires_action':
+    case 'delayed':
       return 'attention';
     case 'blocked':
       return 'blocked';
@@ -104,6 +105,8 @@ const mapApproval = (input: any): MilestoneApproval => ({
 const mapMilestone = (input: any, index: number): MilestoneDetail => ({
   id: asString(input?.id, generateId()),
   index,
+  authorityVersion:
+    typeof input?.authorityVersion === 'string' ? input.authorityVersion : undefined,
   title: asString(input?.title || input?.name || `Milestone ${index + 1}`),
   phase: asString(input?.phase || input?.category),
   description: asString(input?.description || input?.summary),
@@ -354,26 +357,97 @@ const phaseProgress = (phase: any): number => {
   return 0;
 };
 
-const summarisePhases = (
+const phaseLane = (phase: any): 'main' | 'thread' =>
+  String(phase?.lane ?? 'main').toLowerCase() === 'thread' ? 'thread' : 'main';
+
+const isLivePhase = (phase: any): boolean => {
+  const status = String(phase?.status ?? '').toLowerCase();
+  return (
+    status === 'in_progress' ||
+    status === 'in-progress' ||
+    status === 'active' ||
+    status === 'delayed'
+  );
+};
+
+const phaseAuthorityKeys = (phase: any): string[] =>
+  [phase?.id, phase?.phase_key, phase?.name]
+    .filter((value): value is string => typeof value === 'string' && value.trim().length > 0)
+    .map((value) => value.trim().toLowerCase());
+
+/**
+ * Project summary authority is the live main lane selected by
+ * projects.current_phase. Thread phases remain in `phases` for the timeline,
+ * but never influence current/next or progress/completion rollups.
+ */
+export const summariseProjectPhases = (
   phasesInput: unknown,
-): { phases: any[]; progressPercentage: number; currentPhaseLabel: string; completed: number; nextPhase: any | null } => {
+  currentPhaseInput?: unknown,
+): {
+  phases: any[];
+  mainPhases: any[];
+  progressPercentage: number;
+  currentPhaseLabel: string;
+  currentPhase: any | null;
+  completed: number;
+  nextPhase: any | null;
+} => {
   const phases = asArray<any>(phasesInput)
     .slice()
-    .sort((a, b) => asNumber(a?.sort_order) - asNumber(b?.sort_order));
+    .sort((a, b) => {
+      const sortDifference = asNumber(a?.sort_order) - asNumber(b?.sort_order);
+      if (sortDifference !== 0) return sortDifference;
+      return asString(a?.id).localeCompare(asString(b?.id));
+    });
+  const mainPhases = phases.filter((phase) => phaseLane(phase) === 'main');
+  const currentPhasePointer = asString(currentPhaseInput).trim().toLowerCase();
 
   if (phases.length === 0) {
-    return { phases, progressPercentage: 0, currentPhaseLabel: '', completed: 0, nextPhase: null };
+    return {
+      phases,
+      mainPhases,
+      progressPercentage: 0,
+      currentPhaseLabel: asString(currentPhaseInput),
+      currentPhase: null,
+      completed: 0,
+      nextPhase: null,
+    };
   }
 
-  const sum = phases.reduce((acc, p) => acc + phaseProgress(p), 0);
-  const progressPercentage = Math.round(sum / phases.length);
-  const completed = phases.filter((p) => String(p?.status ?? '').toLowerCase() === 'completed').length;
-  const inProgress = phases.find((p) => {
-    const s = String(p?.status ?? '').toLowerCase();
-    return s === 'in_progress' || s === 'in-progress' || s === 'active';
-  });
-  const nextPhase = inProgress ?? phases.find((p) => String(p?.status ?? '').toLowerCase() !== 'completed') ?? null;
-  return { phases, progressPercentage, currentPhaseLabel: asString(inProgress?.name), completed, nextPhase };
+  const sum = mainPhases.reduce((acc, phase) => acc + phaseProgress(phase), 0);
+  const progressPercentage =
+    mainPhases.length === 0 ? 0 : Math.round(sum / mainPhases.length);
+  const completed = mainPhases.filter(
+    (phase) => String(phase?.status ?? '').toLowerCase() === 'completed',
+  ).length;
+  const liveMainPhases = mainPhases.filter(isLivePhase);
+  const pointerMatches = currentPhasePointer
+    ? liveMainPhases.filter((phase) =>
+        phaseAuthorityKeys(phase).includes(currentPhasePointer),
+      )
+    : [];
+  const currentPhase =
+    pointerMatches.length === 1
+      ? pointerMatches[0]
+      : liveMainPhases.length === 1
+        ? liveMainPhases[0]
+        : null;
+  const directMainFollowers = currentPhase
+    ? mainPhases.filter(
+        (phase) => asString(phase?.follows_phase_id) === asString(currentPhase.id),
+      )
+    : [];
+  const nextPhase = directMainFollowers.length === 1 ? directMainFollowers[0] : null;
+
+  return {
+    phases,
+    mainPhases,
+    progressPercentage,
+    currentPhaseLabel: asString(currentPhase?.name || currentPhase?.phase_key),
+    currentPhase,
+    completed,
+    nextPhase,
+  };
 };
 
 // ── Per-project attention counts (approvals + unread messages) ──
@@ -419,14 +493,14 @@ async function countPendingDecisionsByProject(supabase: any, userId: string): Pr
 }
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-async function countAwaitingProposalsByProject(supabase: any, userId: string): Promise<Map<string, number>> {
-  const { data, error } = await supabase
-    .from('proposals')
-    .select('project_id')
-    .eq('client_id', userId)
-    .in('status', ['sent', 'viewed']);
+async function countAwaitingProposalsByProject(supabase: any): Promise<Map<string, number>> {
+  const { data, error } = await supabase.rpc('list_client_proposals');
   if (error) throw error;
-  return tallyByProject(data);
+  return tallyByProject(
+    asArray<any>(data).filter(
+      (proposal) => proposal?.status === 'sent' || proposal?.status === 'viewed',
+    ),
+  );
 }
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -496,7 +570,7 @@ async function computeProjectCounts(
   try {
     const [decisions, proposals, unreadByProject] = await Promise.all([
       countPendingDecisionsByProject(supabase, userId),
-      countAwaitingProposalsByProject(supabase, userId),
+      countAwaitingProposalsByProject(supabase),
       countUnreadMessagesByProject(supabase, userId),
     ]);
     const approvalsByProject = new Map<string, number>();
@@ -513,12 +587,12 @@ async function computeProjectCounts(
 
 const PROJECT_LIST_SELECT =
   'id, name, site_address, status, current_phase, brief_document_url, updated_at, ' +
-  'project_phases(id, name, phase_key, status, sort_order, target_end_date, progress)';
+  'project_phases(id, name, phase_key, status, lane, follows_phase_id, sort_order, target_end_date, progress, updated_at)';
 
 const PROJECT_DETAIL_SELECT =
   'id, name, site_address, status, current_phase, notes, kickoff_message, brief_document_url, ' +
   'start_date, kickoff_date, target_end_date, expected_completion_date, updated_at, ' +
-  'project_phases(id, name, phase_key, status, sort_order, start_date, target_end_date, completed_at, progress)';
+  'project_phases(id, name, phase_key, status, lane, follows_phase_id, sort_order, start_date, target_end_date, completed_at, progress, updated_at)';
 
 // Real "approvals pending" per project = client_decisions still awaiting the
 // client's response (status 'pending'). RLS scopes client_decisions to the
@@ -548,6 +622,8 @@ const fetchPendingApprovalCounts = async (
 };
 
 export const fetchClientProjects = cache(async (): Promise<ProjectListItem[]> => {
+  if (env.useProjectFixtures) return devFallbackProjects;
+
   try {
     const supabase = (await createServerClient()) as any;
     const {
@@ -565,7 +641,10 @@ export const fetchClientProjects = cache(async (): Promise<ProjectListItem[]> =>
     const { approvalsByProject, unreadByProject } = await computeProjectCounts(supabase, user.id);
 
     return asArray<any>(data).map((row) => {
-      const { progressPercentage, currentPhaseLabel, nextPhase } = summarisePhases(row?.project_phases);
+      const { progressPercentage, currentPhaseLabel, nextPhase } = summariseProjectPhases(
+        row?.project_phases,
+        row?.current_phase,
+      );
       const projectId = asString(row?.id);
       return mapProjectListItem({
         id: row?.id,
@@ -573,7 +652,7 @@ export const fetchClientProjects = cache(async (): Promise<ProjectListItem[]> =>
         location: row?.site_address,
         heroImageUrl: row?.brief_document_url,
         status: row?.status,
-        currentPhase: currentPhaseLabel || row?.current_phase,
+        currentPhase: currentPhaseLabel,
         progressPercentage,
         nextMilestoneTitle: nextPhase?.name,
         approvalsPending: approvalsByProject.get(projectId) ?? 0,
@@ -581,15 +660,13 @@ export const fetchClientProjects = cache(async (): Promise<ProjectListItem[]> =>
       });
     });
   } catch (error) {
-    if (env.isDevelopment) {
-      console.warn('[Client Portal] Projects query failed — using fallback data', error);
-      return devFallbackProjects;
-    }
     throw error;
   }
 });
 
-export const fetchClientProjectView = cache(async (projectId: string): Promise<ClientProjectView> => {
+export const fetchClientProjectView = cache(async (projectId: string): Promise<ClientProjectView | null> => {
+  if (env.useProjectFixtures) return devFallbackProjectView(projectId);
+
   try {
     const supabase = (await createServerClient()) as any;
     const {
@@ -604,13 +681,18 @@ export const fetchClientProjectView = cache(async (projectId: string): Promise<C
       .eq('client_id', user.id)
       .maybeSingle();
     if (error) throw error;
-    if (!row) throw new Error('Project not found');
+    if (!row) return null;
 
     const { approvalsByProject, unreadByProject } = await computeProjectCounts(supabase, user.id);
 
-    const { phases, progressPercentage, currentPhaseLabel, completed, nextPhase } = summarisePhases(
-      row.project_phases,
-    );
+    const {
+      phases,
+      mainPhases,
+      progressPercentage,
+      currentPhaseLabel,
+      completed,
+      nextPhase,
+    } = summariseProjectPhases(row.project_phases, row.current_phase);
 
     const pending = await fetchPendingApprovalCounts(supabase, [projectId]);
 
@@ -626,6 +708,8 @@ export const fetchClientProjectView = cache(async (projectId: string): Promise<C
             targetDate: phase?.target_end_date,
             completionDate: phase?.completed_at,
             progressPercentage: phaseProgress(phase),
+            authorityVersion: phase?.updated_at,
+            tags: phaseLane(phase) === 'thread' ? ['Concurrent workstream'] : [],
           },
           index,
         ),
@@ -637,14 +721,14 @@ export const fetchClientProjectView = cache(async (projectId: string): Promise<C
       name: row.name,
       location: row.site_address,
       summary: row.kickoff_message || row.notes,
-      currentPhase: currentPhaseLabel || row.current_phase,
+      currentPhase: currentPhaseLabel,
       status: row.status,
       startDate: row.start_date || row.kickoff_date,
       projectedCompletionDate: row.target_end_date || row.expected_completion_date,
       heroImageUrl: row.brief_document_url,
       progressPercentage,
       completedMilestones: completed,
-      totalMilestones: phases.length,
+      totalMilestones: mainPhases.length,
       approvalsPending: approvalsByProject.get(projectId) ?? 0,
       unreadMessages: unreadByProject.get(projectId) ?? 0,
       nextMilestone: nextPhase
@@ -659,10 +743,6 @@ export const fetchClientProjectView = cache(async (projectId: string): Promise<C
 
     return { project, milestones, lastUpdated: asString(row.updated_at) };
   } catch (error) {
-    if (env.isDevelopment) {
-      console.warn('[Client Portal] Project view query failed — using fallback data for', projectId, error);
-      return devFallbackProjectView(projectId);
-    }
     throw error;
   }
 });

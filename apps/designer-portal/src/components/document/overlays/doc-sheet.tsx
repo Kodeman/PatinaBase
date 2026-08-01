@@ -225,8 +225,8 @@ export function DocSheet({
   /** Forwarded to the standard head's `?` doorway (help-desk Wave 1). */
   helpKey?: string;
 }) {
-  const panelRef = useRef<HTMLDivElement>(null);
   const restoreRef = useRef<HTMLElement | null>(null);
+  const panelRef = useRef<HTMLDivElement | null>(null);
   const titleId = useId();
   const origin = useContext(DocSheetOriginContext);
   const [isTopModal, setIsTopModal] = useState(true);
@@ -324,7 +324,8 @@ export function DocSheet({
           button so a click in the margin puts the sheet back. */}
       <button
         type="button"
-        aria-label="Close sheet"
+        aria-label="Close sheet backdrop"
+        data-testid="doc-sheet-backdrop"
         tabIndex={-1}
         onClick={onClose}
         className="absolute inset-0 h-full w-full cursor-default bg-[rgba(20,18,16,0.55)]"
@@ -351,9 +352,19 @@ export function DocSheet({
             titleId={titleId}
           />
         ) : (
-          <h2 id={titleId} className="sr-only">
-            {title}
-          </h2>
+          <div className="mb-4 flex items-center justify-between">
+            <h2 id={titleId} className="sr-only">
+              {title}
+            </h2>
+            <button
+              type="button"
+              aria-label="Close sheet"
+              onClick={onClose}
+              className="doc-type-meta ml-auto inline-flex min-h-11 items-center px-1 uppercase tracking-[0.1em] text-[var(--color-quiet-ink)] transition-colors hover:text-[var(--color-charcoal)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-clay)]"
+            >
+              Put back · Esc
+            </button>
+          </div>
         )}
         {children}
       </div>
