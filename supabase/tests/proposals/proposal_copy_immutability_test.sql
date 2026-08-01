@@ -2391,36 +2391,23 @@ BEGIN
 END;
 $$;
 
--- The three phase-owned leaves are the only sources whose parent can move
--- between proposals. The public send wrapper locks all three after the target
--- proposal row; this two-session deadlock shape proves a phase move and stale
--- leaf edit cannot both commit across B's send boundary.
+-- Phase topology is now mutated only through checked SECURITY DEFINER RPCs.
+-- An authenticated browser session cannot move a phase directly, so the old
+-- cross-proposal phase-move race is eliminated at the privilege boundary.
 DO $$
 DECLARE
-  v_source text := pg_get_functiondef(
-    'public.send_proposal(uuid,timestamptz,integer,text,text,text,timestamptz)'::regprocedure
-  );
   v_conninfo text := format(
     'hostaddr=%s port=%s dbname=postgres user=postgres password=postgres',
     inet_server_addr(), inet_server_port()
   );
-  v_mover_succeeded boolean := false;
-  v_leaf_succeeded boolean := false;
   v_mover_error text;
-  v_leaf_error text;
-  v_state record;
+  v_phase_owner uuid;
 BEGIN
-  ASSERT position('proposal_phase_deliverables' IN v_source) > 0
-     AND position('FOR UPDATE OF deliverable' IN v_source) > 0
-     AND position('proposal_phase_gates' IN v_source) > 0
-     AND position('FOR UPDATE OF gate' IN v_source) > 0
-     AND position('proposal_schedule_milestones' IN v_source) > 0
-     AND position('FOR UPDATE OF milestone' IN v_source) > 0,
-    'send wrapper must lock every movable phase leaf';
+  ASSERT NOT has_table_privilege(
+    'authenticated', 'public.proposal_phases', 'UPDATE'
+  ), 'authenticated browser sessions must not update proposal topology directly';
 
   PERFORM extensions.dblink_connect('phase_mover', v_conninfo);
-  PERFORM extensions.dblink_connect('phase_leaf_writer', v_conninfo);
-
   PERFORM extensions.dblink_exec('phase_mover', 'BEGIN');
   PERFORM extensions.dblink_exec('phase_mover', 'SET LOCAL ROLE authenticated');
   PERFORM extensions.dblink_exec(
@@ -2428,116 +2415,29 @@ BEGIN
     $sql$SET LOCAL request.jwt.claims =
       '{"sub":"a0000000-0000-0000-0000-000000000004","role":"authenticated"}'$sql$
   );
-  PERFORM extensions.dblink_exec('phase_leaf_writer', 'BEGIN');
-  PERFORM extensions.dblink_exec('phase_leaf_writer', 'SET LOCAL ROLE authenticated');
-  PERFORM extensions.dblink_exec(
-    'phase_leaf_writer',
-    $sql$SET LOCAL request.jwt.claims =
-      '{"sub":"a0000000-0000-0000-0000-000000000004","role":"authenticated"}'$sql$
-  );
-  PERFORM extensions.dblink_exec(
-    'phase_mover',
-    $sql$UPDATE public.proposal_phases
-      SET proposal_id = 'b3900000-0000-4000-8000-000000000002'
-      WHERE id = 'b3900000-0000-4000-8000-000000000003'$sql$
-  );
-
-  PERFORM extensions.dblink_send_query(
-    'phase_leaf_writer',
-    $sql$UPDATE public.proposal_phase_deliverables
-      SET label = label || ' concurrent-edit'
-      WHERE id = 'b3900000-0000-4000-8000-000000000004'$sql$
-  );
-  PERFORM pg_sleep(0.2);
-  ASSERT extensions.dblink_is_busy('phase_leaf_writer') = 1,
-    'leaf writer must wait behind the mover-held source proposal lock';
-
   BEGIN
     PERFORM extensions.dblink_exec(
       'phase_mover',
-      $remote$
-      DO $send$
-      DECLARE
-        v_snapshot record;
-      BEGIN
-        SELECT * INTO STRICT v_snapshot
-        FROM public.get_proposal_send_snapshot(
-          'b3900000-0000-4000-8000-000000000002'
-        );
-        PERFORM public.send_proposal(
-          'b3900000-0000-4000-8000-000000000002',
-          v_snapshot.proposal_updated_at,
-          v_snapshot.proposal_total_amount,
-          v_snapshot.schedule_fingerprint
-        );
-      END;
-      $send$
-      $remote$
+      $sql$UPDATE public.proposal_phases
+        SET proposal_id = 'b3900000-0000-4000-8000-000000000002'
+        WHERE id = 'b3900000-0000-4000-8000-000000000003'$sql$
     );
-    v_mover_succeeded := true;
+    ASSERT false, 'direct authenticated phase move must fail';
   EXCEPTION WHEN OTHERS THEN
     v_mover_error := SQLERRM;
   END;
 
-  PERFORM result.status
-  FROM extensions.dblink_get_result('phase_leaf_writer', false)
-    AS result(status text);
-  v_leaf_error := extensions.dblink_error_message('phase_leaf_writer');
-  -- libpq exposes one final empty result after an asynchronous command. Drain
-  -- it before issuing ROLLBACK on the same connection.
-  PERFORM result.status
-  FROM extensions.dblink_get_result('phase_leaf_writer', false)
-    AS result(status text);
-  v_leaf_succeeded := v_leaf_error = 'OK';
-
-  ASSERT v_mover_succeeded <> v_leaf_succeeded,
-    format(
-      'exactly one racing transaction must survive (mover success=%s error=%L, leaf success=%s error=%L)',
-      v_mover_succeeded, v_mover_error, v_leaf_succeeded, v_leaf_error
-    );
-
-  IF v_mover_succeeded THEN
-    SELECT remote.* INTO STRICT v_state
-    FROM extensions.dblink(
-      'phase_mover',
-      $sql$SELECT proposal.status::text,
-               phase.proposal_id::text,
-               deliverable.label
-        FROM public.proposals AS proposal
-        JOIN public.proposal_phases AS phase
-          ON phase.id = 'b3900000-0000-4000-8000-000000000003'
-        JOIN public.proposal_phase_deliverables AS deliverable
-          ON deliverable.id = 'b3900000-0000-4000-8000-000000000004'
-        WHERE proposal.id = 'b3900000-0000-4000-8000-000000000002'$sql$
-    ) AS remote(status text, phase_owner text, label text);
-    ASSERT v_state.status = 'sent'
-       AND v_state.phase_owner = 'b3900000-0000-4000-8000-000000000002'
-       AND v_state.label = 'Race-safe deliverable',
-      format('send winner must retain its exact locked leaf copy: %s', v_state);
-  ELSE
-    SELECT remote.* INTO STRICT v_state
-    FROM extensions.dblink(
-      'phase_leaf_writer',
-      $sql$SELECT proposal.status::text,
-               phase.proposal_id::text,
-               deliverable.label
-        FROM public.proposals AS proposal
-        JOIN public.proposal_phases AS phase
-          ON phase.id = 'b3900000-0000-4000-8000-000000000003'
-        JOIN public.proposal_phase_deliverables AS deliverable
-          ON deliverable.id = 'b3900000-0000-4000-8000-000000000004'
-        WHERE proposal.id = 'b3900000-0000-4000-8000-000000000002'$sql$
-    ) AS remote(status text, phase_owner text, label text);
-    ASSERT v_state.status = 'draft'
-       AND v_state.phase_owner = 'b3900000-0000-4000-8000-000000000001'
-       AND v_state.label = 'Race-safe deliverable concurrent-edit',
-      format('leaf winner must observe the mover rollback and an unsent target: %s', v_state);
-  END IF;
-
-  PERFORM extensions.dblink_exec('phase_leaf_writer', 'ROLLBACK');
+  ASSERT position('permission denied' IN coalesce(v_mover_error, '')) > 0,
+    format('direct phase move must fail at the table privilege boundary, got %L',
+           v_mover_error);
   PERFORM extensions.dblink_exec('phase_mover', 'ROLLBACK');
-  PERFORM extensions.dblink_disconnect('phase_leaf_writer');
   PERFORM extensions.dblink_disconnect('phase_mover');
+
+  SELECT proposal_id INTO STRICT v_phase_owner
+  FROM public.proposal_phases
+  WHERE id = 'b3900000-0000-4000-8000-000000000003';
+  ASSERT v_phase_owner = 'b3900000-0000-4000-8000-000000000001',
+    'rejected direct move must leave the phase attached to its source proposal';
 END;
 $$;
 

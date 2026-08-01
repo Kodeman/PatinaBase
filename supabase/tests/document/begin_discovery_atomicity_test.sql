@@ -42,6 +42,14 @@ VALUES
   ('d6000000-0000-4000-8000-000000000012', 'begin-invited@test.invalid', 'Invited Client', NOW(), NOW())
 ON CONFLICT (id) DO NOTHING;
 
+UPDATE public.profiles
+SET is_designer = true
+WHERE id IN (
+  'd6000000-0000-4000-8000-000000000001',
+  'd6000000-0000-4000-8000-000000000002',
+  'd6000000-0000-4000-8000-000000000003'
+);
+
 INSERT INTO public.organizations (id, type, name, slug)
 VALUES
   ('d6100000-0000-4000-8000-000000000001', 'design_studio',
@@ -133,6 +141,9 @@ BEGIN
 END;
 $$;
 
+SET LOCAL ROLE authenticated;
+SELECT pg_temp.assume_begin_actor('d6000000-0000-4000-8000-000000000001');
+
 -- Once the relationship advances, lead_id remains the replay key. A retry
 -- returns the progressed row instead of creating a fresh lead relationship.
 DO $$
@@ -221,6 +232,11 @@ BEGIN
     'authenticated',
     'public._accept_design_request_profile_bound_core(uuid)', 'EXECUTE'
   ), 'the pre-eligibility arrival core must remain private';
+  ASSERT NOT (
+    SELECT prosecdef
+    FROM pg_proc
+    WHERE oid = 'public.hydrate_lead_relationship_contact()'::regprocedure
+  ), 'lead contact hydration must execute with the authenticated inserter privileges';
 END;
 $$;
 

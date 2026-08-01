@@ -744,7 +744,7 @@ GRANT EXECUTE ON FUNCTION public.accept_design_request(uuid)
 CREATE OR REPLACE FUNCTION public.hydrate_lead_relationship_contact()
 RETURNS trigger
 LANGUAGE plpgsql
-SECURITY DEFINER
+SECURITY INVOKER
 SET search_path = public, pg_temp
 AS $$
 DECLARE
@@ -1006,6 +1006,157 @@ GRANT EXECUTE ON FUNCTION public.request_proposal_change(uuid, text)
 
 -- ── Decision + option table authority ──────────────────────────────────────
 
+CREATE OR REPLACE FUNCTION public.assert_client_decision_reference_integrity(
+  p_decision_id uuid,
+  p_designer_client_id uuid,
+  p_designer_id uuid,
+  p_project_id uuid,
+  p_status text,
+  p_phase_id uuid,
+  p_room_id uuid,
+  p_blocks_milestone_id uuid,
+  p_court_party_id uuid,
+  p_linked_proposal_id uuid,
+  p_recommended_option_id uuid
+)
+RETURNS void
+LANGUAGE plpgsql
+SECURITY INVOKER
+SET search_path = public, pg_temp
+AS $$
+DECLARE
+  v_relationship_client_id uuid;
+  v_project public.projects%ROWTYPE;
+BEGIN
+  SELECT client_id INTO v_relationship_client_id
+  FROM public.designer_clients
+  WHERE id = p_designer_client_id
+    AND designer_id IS NOT DISTINCT FROM p_designer_id;
+  IF NOT FOUND THEN
+    RAISE EXCEPTION
+      'client decision designer identity does not match its relationship'
+      USING ERRCODE = 'check_violation';
+  END IF;
+
+  IF p_project_id IS NULL THEN
+    IF p_phase_id IS NOT NULL
+       OR p_room_id IS NOT NULL
+       OR p_blocks_milestone_id IS NOT NULL
+       OR p_court_party_id IS NOT NULL
+    THEN
+      RAISE EXCEPTION 'project-scoped decision references require a project'
+        USING ERRCODE = 'check_violation';
+    END IF;
+  ELSE
+    SELECT * INTO v_project
+    FROM public.projects
+    WHERE id = p_project_id;
+    IF NOT FOUND THEN
+      RAISE EXCEPTION 'decision project does not exist'
+        USING ERRCODE = 'foreign_key_violation';
+    END IF;
+    IF v_project.client_id IS DISTINCT FROM v_relationship_client_id THEN
+      RAISE EXCEPTION 'decision project must match its relationship client'
+        USING ERRCODE = 'check_violation';
+    END IF;
+    IF p_linked_proposal_id IS NULL
+       AND v_project.designer_id IS DISTINCT FROM p_designer_id
+    THEN
+      RAISE EXCEPTION 'decision project must match its relationship designer'
+        USING ERRCODE = 'check_violation';
+    END IF;
+    IF p_status IN ('draft', 'pending')
+       AND v_project.status IN ('completed', 'archived')
+    THEN
+      RAISE EXCEPTION 'terminal projects cannot carry open decisions'
+        USING ERRCODE = 'check_violation';
+    END IF;
+  END IF;
+
+  IF p_phase_id IS NOT NULL
+     AND NOT EXISTS (
+       SELECT 1 FROM public.project_phases
+       WHERE id = p_phase_id AND project_id = p_project_id
+     )
+  THEN
+    RAISE EXCEPTION 'decision phase must belong to its project'
+      USING ERRCODE = 'check_violation';
+  END IF;
+
+  IF p_room_id IS NOT NULL
+     AND NOT EXISTS (
+       SELECT 1 FROM public.project_rooms
+       WHERE id = p_room_id AND project_id = p_project_id
+     )
+  THEN
+    RAISE EXCEPTION 'decision room must belong to its project'
+      USING ERRCODE = 'check_violation';
+  END IF;
+
+  IF p_blocks_milestone_id IS NOT NULL
+     AND NOT EXISTS (
+       SELECT 1
+       FROM public.schedule_milestones AS milestone
+       JOIN public.project_phases AS phase ON phase.id = milestone.phase_id
+       WHERE milestone.id = p_blocks_milestone_id
+         AND phase.project_id = p_project_id
+     )
+  THEN
+    RAISE EXCEPTION 'blocked milestone must belong to the decision project'
+      USING ERRCODE = 'check_violation';
+  END IF;
+
+  IF p_court_party_id IS NOT NULL
+     AND NOT EXISTS (
+       SELECT 1 FROM public.project_parties
+       WHERE id = p_court_party_id AND project_id = p_project_id
+     )
+  THEN
+    RAISE EXCEPTION 'court party must belong to the decision project'
+      USING ERRCODE = 'check_violation';
+  END IF;
+
+  IF p_linked_proposal_id IS NOT NULL
+     AND NOT EXISTS (
+       SELECT 1
+       FROM public.proposals AS proposal
+       JOIN public.designer_clients AS relationship
+         ON relationship.id = proposal.designer_client_id
+       WHERE proposal.id = p_linked_proposal_id
+         AND proposal.designer_client_id = p_designer_client_id
+         AND proposal.designer_id IS NOT DISTINCT FROM p_designer_id
+         AND proposal.client_id IS NOT DISTINCT FROM v_relationship_client_id
+         AND relationship.designer_id IS NOT DISTINCT FROM proposal.designer_id
+         AND relationship.client_id IS NOT DISTINCT FROM proposal.client_id
+         AND (
+           p_project_id IS NULL
+           OR proposal.project_id IS NOT DISTINCT FROM p_project_id
+         )
+     )
+  THEN
+    RAISE EXCEPTION 'linked proposal must match the decision relationship and project'
+      USING ERRCODE = 'check_violation';
+  END IF;
+
+  IF p_recommended_option_id IS NOT NULL
+     AND NOT EXISTS (
+       SELECT 1 FROM public.client_decision_options
+       WHERE id = p_recommended_option_id AND decision_id = p_decision_id
+     )
+  THEN
+    RAISE EXCEPTION 'recommended option must belong to its decision'
+      USING ERRCODE = 'check_violation';
+  END IF;
+END;
+$$;
+
+REVOKE ALL ON FUNCTION public.assert_client_decision_reference_integrity(
+  uuid, uuid, uuid, uuid, text, uuid, uuid, uuid, uuid, uuid, uuid
+) FROM PUBLIC, anon, authenticated, service_role;
+GRANT EXECUTE ON FUNCTION public.assert_client_decision_reference_integrity(
+  uuid, uuid, uuid, uuid, text, uuid, uuid, uuid, uuid, uuid, uuid
+) TO authenticated, service_role;
+
 CREATE OR REPLACE FUNCTION public.guard_client_decision_authority()
 RETURNS trigger
 LANGUAGE plpgsql
@@ -1032,6 +1183,20 @@ BEGIN
     END IF;
     RETURN OLD;
   END IF;
+
+  PERFORM public.assert_client_decision_reference_integrity(
+    NEW.id,
+    NEW.designer_client_id,
+    NEW.designer_id,
+    NEW.project_id,
+    NEW.status,
+    NEW.phase_id,
+    NEW.room_id,
+    NEW.blocks_milestone_id,
+    NEW.court_party_id,
+    NEW.linked_proposal_id,
+    NEW.recommended_option_id
+  );
 
   IF TG_OP = 'INSERT' THEN
     -- Every row, including a trusted workflow insert, must bind to the exact
@@ -1425,6 +1590,500 @@ REVOKE INSERT, UPDATE, DELETE ON TABLE public.decision_overrides
 GRANT SELECT ON TABLE public.decision_overrides TO authenticated;
 GRANT ALL ON TABLE public.decision_overrides TO service_role;
 
+-- Decision lifecycle notices are durable effects of the same transaction as
+-- the state change.  Keep the primitive private so a caller cannot forge a
+-- notice for a row they cannot transition.
+CREATE OR REPLACE FUNCTION public._enqueue_decision_notification(
+  p_decision_id uuid,
+  p_kind public.decision_notification_kind
+)
+RETURNS uuid
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public, pg_temp
+AS $$
+DECLARE
+  v_decision public.client_decisions%ROWTYPE;
+  v_client_id uuid;
+  v_recipient_id uuid;
+  v_notification_id uuid;
+BEGIN
+  SELECT decision.*
+  INTO v_decision
+  FROM public.client_decisions AS decision
+  WHERE decision.id = p_decision_id;
+
+  IF NOT FOUND THEN
+    RAISE EXCEPTION 'decision % not found', p_decision_id
+      USING ERRCODE = 'no_data_found';
+  END IF;
+
+  SELECT relationship.client_id INTO v_client_id
+  FROM public.designer_clients AS relationship
+  WHERE relationship.id = v_decision.designer_client_id;
+
+  IF p_kind IN ('decision_required', 'decision_updated') THEN
+    IF v_decision.status <> 'pending' THEN
+      RAISE EXCEPTION '% requires a pending decision', p_kind
+        USING ERRCODE = 'check_violation';
+    END IF;
+    v_recipient_id := v_client_id;
+  ELSIF p_kind = 'decision_overdue' THEN
+    IF v_decision.status <> 'pending'
+       OR v_decision.due_date IS NULL
+       OR v_decision.due_date >= now()
+    THEN
+      RAISE EXCEPTION 'decision_overdue requires an overdue pending decision'
+        USING ERRCODE = 'check_violation';
+    END IF;
+    v_recipient_id := v_client_id;
+  ELSIF p_kind = 'decision_resolved' THEN
+    IF v_decision.status <> 'responded' THEN
+      RAISE EXCEPTION 'decision_resolved requires a responded decision'
+        USING ERRCODE = 'check_violation';
+    END IF;
+    v_recipient_id := v_decision.designer_id;
+  ELSE
+    RAISE EXCEPTION 'unsupported decision notification kind %', p_kind
+      USING ERRCODE = 'invalid_parameter_value';
+  END IF;
+
+  IF v_recipient_id IS NULL THEN
+    RAISE EXCEPTION 'decision % has no notification recipient', p_decision_id
+      USING ERRCODE = 'check_violation';
+  END IF;
+
+  IF p_kind = 'decision_updated' THEN
+    INSERT INTO public.decision_notifications (user_id, decision_id, kind)
+    VALUES (v_recipient_id, p_decision_id, p_kind)
+    RETURNING id INTO v_notification_id;
+  ELSE
+    INSERT INTO public.decision_notifications (user_id, decision_id, kind)
+    VALUES (v_recipient_id, p_decision_id, p_kind)
+    ON CONFLICT (decision_id, kind)
+      WHERE kind <> 'decision_updated'
+    DO UPDATE SET user_id = EXCLUDED.user_id
+    RETURNING id INTO v_notification_id;
+  END IF;
+
+  RETURN v_notification_id;
+END;
+$$;
+
+REVOKE ALL ON FUNCTION public._enqueue_decision_notification(
+  uuid, public.decision_notification_kind
+) FROM PUBLIC, anon, authenticated, service_role;
+
+-- Edge workers retain narrow, status-checked compatibility entry points.
+CREATE OR REPLACE FUNCTION public.notify_decision_required(p_decision_id uuid)
+RETURNS uuid
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public, pg_temp
+AS $$
+BEGIN
+  IF COALESCE(auth.role(), '') <> 'service_role' THEN
+    RAISE EXCEPTION 'notify_decision_required is service-role only'
+      USING ERRCODE = 'insufficient_privilege';
+  END IF;
+  RETURN public._enqueue_decision_notification(
+    p_decision_id, 'decision_required'
+  );
+END;
+$$;
+
+CREATE OR REPLACE FUNCTION public.notify_decision_overdue(p_decision_id uuid)
+RETURNS uuid
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public, pg_temp
+AS $$
+BEGIN
+  IF COALESCE(auth.role(), '') <> 'service_role' THEN
+    RAISE EXCEPTION 'notify_decision_overdue is service-role only'
+      USING ERRCODE = 'insufficient_privilege';
+  END IF;
+  RETURN public._enqueue_decision_notification(
+    p_decision_id, 'decision_overdue'
+  );
+END;
+$$;
+
+CREATE OR REPLACE FUNCTION public.notify_decision_resolved(p_decision_id uuid)
+RETURNS uuid
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public, pg_temp
+AS $$
+BEGIN
+  IF COALESCE(auth.role(), '') <> 'service_role' THEN
+    RAISE EXCEPTION 'notify_decision_resolved is service-role only'
+      USING ERRCODE = 'insufficient_privilege';
+  END IF;
+  RETURN public._enqueue_decision_notification(
+    p_decision_id, 'decision_resolved'
+  );
+END;
+$$;
+
+REVOKE ALL ON FUNCTION public.notify_decision_required(uuid)
+  FROM PUBLIC, anon, authenticated;
+REVOKE ALL ON FUNCTION public.notify_decision_overdue(uuid)
+  FROM PUBLIC, anon, authenticated;
+REVOKE ALL ON FUNCTION public.notify_decision_resolved(uuid)
+  FROM PUBLIC, anon, authenticated;
+GRANT EXECUTE ON FUNCTION public.notify_decision_required(uuid) TO service_role;
+GRANT EXECUTE ON FUNCTION public.notify_decision_overdue(uuid) TO service_role;
+GRANT EXECUTE ON FUNCTION public.notify_decision_resolved(uuid) TO service_role;
+REVOKE ALL ON FUNCTION public.notify_decision_updated(uuid)
+  FROM PUBLIC, anon, authenticated, service_role;
+
+-- One checked create owns the parent row, option children, dependency web and
+-- first notification.  The caller supplies the UUID as an idempotency token.
+CREATE OR REPLACE FUNCTION public.create_client_decision(
+  p_decision_id uuid,
+  p_payload jsonb,
+  p_options jsonb DEFAULT '[]'::jsonb,
+  p_blocked_ffe_item_ids uuid[] DEFAULT '{}'::uuid[],
+  p_blocked_task_ids uuid[] DEFAULT '{}'::uuid[]
+)
+RETURNS public.client_decisions
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public, pg_temp
+AS $$
+DECLARE
+  v_actor uuid := auth.uid();
+  v_relationship public.designer_clients%ROWTYPE;
+  v_decision public.client_decisions%ROWTYPE;
+  v_project_id uuid;
+  v_status text;
+  v_unknown jsonb;
+  v_expected_count integer;
+  v_matched_count integer;
+  v_existing_payload jsonb;
+  v_requested_payload jsonb;
+  v_existing_options jsonb;
+  v_requested_options jsonb;
+  v_existing_ffe_ids uuid[];
+  v_requested_ffe_ids uuid[];
+  v_existing_task_ids uuid[];
+  v_requested_task_ids uuid[];
+BEGIN
+  IF v_actor IS NULL THEN
+    RAISE EXCEPTION 'create_client_decision requires an authenticated user'
+      USING ERRCODE = 'insufficient_privilege';
+  END IF;
+  IF p_decision_id IS NULL THEN
+    RAISE EXCEPTION 'p_decision_id is required'
+      USING ERRCODE = 'invalid_parameter_value';
+  END IF;
+  IF p_payload IS NULL OR jsonb_typeof(p_payload) <> 'object' THEN
+    RAISE EXCEPTION 'p_payload must be a JSON object'
+      USING ERRCODE = 'invalid_parameter_value';
+  END IF;
+  IF jsonb_typeof(COALESCE(p_options, '[]'::jsonb)) <> 'array' THEN
+    RAISE EXCEPTION 'p_options must be a JSON array'
+      USING ERRCODE = 'invalid_parameter_value';
+  END IF;
+
+  v_unknown := p_payload - ARRAY[
+    'designer_client_id', 'project_id', 'title', 'context', 'due_date',
+    'linked_phase', 'phase_id', 'room_id', 'section_key', 'decision_type',
+    'decision_kind', 'coordination_kind', 'blocking_status', 'blocks_kind',
+    'blocks_milestone_id', 'court', 'court_party_id', 'status'
+  ];
+  IF v_unknown <> '{}'::jsonb THEN
+    RAISE EXCEPTION 'unsupported decision payload keys: %', v_unknown
+      USING ERRCODE = 'invalid_parameter_value';
+  END IF;
+
+  IF btrim(COALESCE(p_payload->>'title', '')) = '' THEN
+    RAISE EXCEPTION 'decision title is required'
+      USING ERRCODE = 'check_violation';
+  END IF;
+  v_status := COALESCE(NULLIF(p_payload->>'status', ''), 'pending');
+  IF v_status NOT IN ('draft', 'pending') THEN
+    RAISE EXCEPTION 'new decisions must start draft or pending'
+      USING ERRCODE = 'check_violation';
+  END IF;
+
+  SELECT * INTO v_relationship
+  FROM public.designer_clients
+  WHERE id = NULLIF(p_payload->>'designer_client_id', '')::uuid
+  FOR SHARE;
+  IF NOT FOUND OR NOT public._can_author_proposal(v_relationship.designer_id) THEN
+    RAISE EXCEPTION 'relationship not found or access denied'
+      USING ERRCODE = 'insufficient_privilege';
+  END IF;
+  IF v_status = 'pending' AND v_relationship.client_id IS NULL THEN
+    RAISE EXCEPTION 'pending decisions require a registered client recipient'
+      USING ERRCODE = 'check_violation';
+  END IF;
+
+  v_project_id := NULLIF(p_payload->>'project_id', '')::uuid;
+
+  IF EXISTS (
+    SELECT 1
+    FROM jsonb_array_elements(COALESCE(p_options, '[]'::jsonb)) AS option(value)
+    WHERE jsonb_typeof(option.value) <> 'object'
+       OR btrim(COALESCE(option.value->>'name', '')) = ''
+       OR COALESCE(NULLIF(option.value->>'quantity', '')::integer, 1) < 1
+       OR COALESCE(NULLIF(option.value->>'sort_order', '')::integer, 0) < 0
+       OR COALESCE((option.value->>'selected')::boolean, false)
+       OR option.value ? 'client_note'
+  ) THEN
+    RAISE EXCEPTION 'invalid decision option payload'
+      USING ERRCODE = 'check_violation';
+  END IF;
+
+  -- A reused key is an exact receipt, never permission to overwrite a row.
+  SELECT * INTO v_decision
+  FROM public.client_decisions
+  WHERE id = p_decision_id
+  FOR UPDATE;
+  IF FOUND THEN
+    v_existing_payload := jsonb_build_object(
+      'designer_client_id', v_decision.designer_client_id,
+      'project_id', v_decision.project_id,
+      'title', v_decision.title,
+      'context', v_decision.context,
+      'due_date', v_decision.due_date,
+      'linked_phase', v_decision.linked_phase,
+      'phase_id', v_decision.phase_id,
+      'room_id', v_decision.room_id,
+      'section_key', v_decision.section_key,
+      'decision_type', v_decision.decision_type,
+      'decision_kind', v_decision.decision_kind,
+      'coordination_kind', v_decision.coordination_kind,
+      'blocking_status', v_decision.blocking_status,
+      'blocks_kind', v_decision.blocks_kind,
+      'blocks_milestone_id', v_decision.blocks_milestone_id,
+      'court', v_decision.court,
+      'court_party_id', v_decision.court_party_id,
+      'status', v_decision.status
+    );
+    v_requested_payload := jsonb_build_object(
+      'designer_client_id', v_relationship.id,
+      'project_id', v_project_id,
+      'title', btrim(p_payload->>'title'),
+      'context', p_payload->>'context',
+      'due_date', NULLIF(p_payload->>'due_date', '')::timestamptz,
+      'linked_phase', p_payload->>'linked_phase',
+      'phase_id', NULLIF(p_payload->>'phase_id', '')::uuid,
+      'room_id', NULLIF(p_payload->>'room_id', '')::uuid,
+      'section_key', p_payload->>'section_key',
+      'decision_type', COALESCE(NULLIF(p_payload->>'decision_type', ''), 'product'),
+      'decision_kind', COALESCE(NULLIF(p_payload->>'decision_kind', ''), 'choice'),
+      'coordination_kind', COALESCE(NULLIF(p_payload->>'coordination_kind', ''), 'selection'),
+      'blocking_status', COALESCE(NULLIF(p_payload->>'blocking_status', ''), 'non_blocking'),
+      'blocks_kind', COALESCE(NULLIF(p_payload->>'blocks_kind', ''), 'none'),
+      'blocks_milestone_id', NULLIF(p_payload->>'blocks_milestone_id', '')::uuid,
+      'court', COALESCE(NULLIF(p_payload->>'court', ''), 'client'),
+      'court_party_id', NULLIF(p_payload->>'court_party_id', '')::uuid,
+      'status', v_status
+    );
+
+    SELECT COALESCE(jsonb_agg(jsonb_build_object(
+      'name', option.name,
+      'image_url', option.image_url,
+      'designer_note', option.designer_note,
+      'is_recommended', COALESCE(option.is_recommended, false),
+      'price', option.price,
+      'quantity', COALESCE(option.quantity, 1),
+      'cost_delta_cents', option.cost_delta_cents,
+      'lead_time_days_delta', option.lead_time_days_delta,
+      'product_id', option.product_id,
+      'approves', COALESCE(option.approves, false),
+      'sort_order', COALESCE(option.sort_order, 0)
+    ) ORDER BY option.sort_order, option.id), '[]'::jsonb)
+    INTO v_existing_options
+    FROM public.client_decision_options AS option
+    WHERE option.decision_id = p_decision_id;
+
+    SELECT COALESCE(jsonb_agg(jsonb_build_object(
+      'name', btrim(option.value->>'name'),
+      'image_url', option.value->>'image_url',
+      'designer_note', option.value->>'designer_note',
+      'is_recommended', COALESCE((option.value->>'is_recommended')::boolean, false),
+      'price', NULLIF(option.value->>'price', '')::integer,
+      'quantity', COALESCE(NULLIF(option.value->>'quantity', '')::integer, 1),
+      'cost_delta_cents', NULLIF(option.value->>'cost_delta_cents', '')::integer,
+      'lead_time_days_delta', NULLIF(option.value->>'lead_time_days_delta', '')::integer,
+      'product_id', NULLIF(option.value->>'product_id', '')::uuid,
+      'approves', COALESCE((option.value->>'approves')::boolean, false),
+      'sort_order', COALESCE(NULLIF(option.value->>'sort_order', '')::integer,
+                             option.ordinality::integer - 1)
+    ) ORDER BY COALESCE(NULLIF(option.value->>'sort_order', '')::integer,
+                        option.ordinality::integer - 1)), '[]'::jsonb)
+    INTO v_requested_options
+    FROM jsonb_array_elements(COALESCE(p_options, '[]'::jsonb))
+         WITH ORDINALITY AS option(value, ordinality);
+
+    SELECT COALESCE(array_agg(item.id ORDER BY item.id), '{}'::uuid[])
+    INTO v_existing_ffe_ids
+    FROM public.project_ffe_items AS item
+    WHERE item.blocked_by_decision_id = p_decision_id;
+    SELECT COALESCE(array_agg(DISTINCT id ORDER BY id), '{}'::uuid[])
+    INTO v_requested_ffe_ids
+    FROM unnest(COALESCE(p_blocked_ffe_item_ids, '{}'::uuid[])) AS id;
+    SELECT COALESCE(array_agg(task.id ORDER BY task.id), '{}'::uuid[])
+    INTO v_existing_task_ids
+    FROM public.project_tasks AS task
+    WHERE task.blocked_by_item_id = p_decision_id;
+    SELECT COALESCE(array_agg(DISTINCT id ORDER BY id), '{}'::uuid[])
+    INTO v_requested_task_ids
+    FROM unnest(COALESCE(p_blocked_task_ids, '{}'::uuid[])) AS id;
+
+    IF NOT public._can_author_proposal(v_decision.designer_id)
+       OR v_existing_payload IS DISTINCT FROM v_requested_payload
+       OR v_existing_options IS DISTINCT FROM v_requested_options
+       OR v_existing_ffe_ids IS DISTINCT FROM v_requested_ffe_ids
+       OR v_existing_task_ids IS DISTINCT FROM v_requested_task_ids
+    THEN
+      RAISE EXCEPTION 'p_decision_id was already used for another decision'
+        USING ERRCODE = 'serialization_failure';
+    END IF;
+    IF v_decision.status = 'pending' THEN
+      PERFORM public._enqueue_decision_notification(
+        p_decision_id, 'decision_required'
+      );
+    END IF;
+    RETURN v_decision;
+  END IF;
+
+  PERFORM public.assert_client_decision_reference_integrity(
+    p_decision_id,
+    v_relationship.id,
+    v_relationship.designer_id,
+    v_project_id,
+    v_status,
+    NULLIF(p_payload->>'phase_id', '')::uuid,
+    NULLIF(p_payload->>'room_id', '')::uuid,
+    NULLIF(p_payload->>'blocks_milestone_id', '')::uuid,
+    NULLIF(p_payload->>'court_party_id', '')::uuid,
+    NULL,
+    NULL
+  );
+
+  IF cardinality(COALESCE(p_blocked_ffe_item_ids, '{}'::uuid[])) > 0 THEN
+    PERFORM 1
+    FROM public.project_ffe_items AS item
+    WHERE item.id = ANY(p_blocked_ffe_item_ids)
+    ORDER BY item.id
+    FOR UPDATE;
+    SELECT count(DISTINCT item.id) INTO v_matched_count
+    FROM public.project_ffe_items AS item
+    WHERE item.id = ANY(p_blocked_ffe_item_ids)
+      AND item.project_id IS NOT DISTINCT FROM v_project_id
+      AND (item.blocked_by_decision_id IS NULL
+           OR item.blocked_by_decision_id = p_decision_id);
+    SELECT count(DISTINCT id) INTO v_expected_count
+    FROM unnest(p_blocked_ffe_item_ids) AS id;
+    IF v_project_id IS NULL OR v_matched_count <> v_expected_count THEN
+      RAISE EXCEPTION 'blocked FF&E items must be available in the decision project'
+        USING ERRCODE = 'check_violation';
+    END IF;
+  END IF;
+
+  IF cardinality(COALESCE(p_blocked_task_ids, '{}'::uuid[])) > 0 THEN
+    PERFORM 1
+    FROM public.project_tasks AS task
+    WHERE task.id = ANY(p_blocked_task_ids)
+    ORDER BY task.id
+    FOR UPDATE;
+    SELECT count(DISTINCT task.id) INTO v_matched_count
+    FROM public.project_tasks AS task
+    WHERE task.id = ANY(p_blocked_task_ids)
+      AND task.project_id IS NOT DISTINCT FROM v_project_id
+      AND task.status <> 'done'
+      AND (task.blocked_by_item_id IS NULL
+           OR task.blocked_by_item_id = p_decision_id);
+    SELECT count(DISTINCT id) INTO v_expected_count
+    FROM unnest(p_blocked_task_ids) AS id;
+    IF v_project_id IS NULL OR v_matched_count <> v_expected_count THEN
+      RAISE EXCEPTION 'blocked tasks must be open and available in the decision project'
+        USING ERRCODE = 'check_violation';
+    END IF;
+  END IF;
+
+  INSERT INTO public.client_decisions (
+    id, designer_client_id, designer_id, project_id, title, context,
+    due_date, linked_phase, phase_id, room_id, section_key, decision_type,
+    decision_kind, coordination_kind, blocking_status, blocks_kind,
+    blocks_milestone_id, court, court_party_id, status, sent_at
+  ) VALUES (
+    p_decision_id, v_relationship.id, v_relationship.designer_id, v_project_id,
+    btrim(p_payload->>'title'), p_payload->>'context',
+    NULLIF(p_payload->>'due_date', '')::timestamptz,
+    p_payload->>'linked_phase', NULLIF(p_payload->>'phase_id', '')::uuid,
+    NULLIF(p_payload->>'room_id', '')::uuid, p_payload->>'section_key',
+    COALESCE(NULLIF(p_payload->>'decision_type', ''), 'product'),
+    COALESCE(NULLIF(p_payload->>'decision_kind', ''), 'choice'),
+    COALESCE(NULLIF(p_payload->>'coordination_kind', ''), 'selection'),
+    COALESCE(NULLIF(p_payload->>'blocking_status', ''), 'non_blocking'),
+    COALESCE(NULLIF(p_payload->>'blocks_kind', ''), 'none'),
+    NULLIF(p_payload->>'blocks_milestone_id', '')::uuid,
+    COALESCE(NULLIF(p_payload->>'court', ''), 'client'),
+    NULLIF(p_payload->>'court_party_id', '')::uuid,
+    v_status, CASE WHEN v_status = 'pending' THEN now() ELSE NULL END
+  ) RETURNING * INTO v_decision;
+
+  INSERT INTO public.client_decision_options (
+    decision_id, name, image_url, designer_note, is_recommended,
+    price, quantity, cost_delta_cents, lead_time_days_delta,
+    product_id, approves, selected, client_note, sort_order
+  )
+  SELECT
+    p_decision_id, btrim(option.value->>'name'), option.value->>'image_url',
+    option.value->>'designer_note',
+    COALESCE((option.value->>'is_recommended')::boolean, false),
+    NULLIF(option.value->>'price', '')::integer,
+    COALESCE(NULLIF(option.value->>'quantity', '')::integer, 1),
+    NULLIF(option.value->>'cost_delta_cents', '')::integer,
+    NULLIF(option.value->>'lead_time_days_delta', '')::integer,
+    NULLIF(option.value->>'product_id', '')::uuid,
+    COALESCE((option.value->>'approves')::boolean, false),
+    false, NULL,
+    COALESCE(NULLIF(option.value->>'sort_order', '')::integer,
+             option.ordinality::integer - 1)
+  FROM jsonb_array_elements(COALESCE(p_options, '[]'::jsonb))
+       WITH ORDINALITY AS option(value, ordinality);
+
+  UPDATE public.project_ffe_items
+  SET blocked = true, blocked_by_decision_id = p_decision_id, updated_at = now()
+  WHERE id = ANY(COALESCE(p_blocked_ffe_item_ids, '{}'::uuid[]));
+
+  UPDATE public.project_tasks
+  SET status = 'blocked', blocked_by_item_id = p_decision_id, updated_at = now()
+  WHERE id = ANY(COALESCE(p_blocked_task_ids, '{}'::uuid[]));
+
+  IF v_status = 'pending' THEN
+    PERFORM public._enqueue_decision_notification(
+      p_decision_id, 'decision_required'
+    );
+  END IF;
+
+  SELECT * INTO v_decision FROM public.client_decisions
+  WHERE id = p_decision_id;
+  RETURN v_decision;
+END;
+$$;
+
+REVOKE ALL ON FUNCTION public.create_client_decision(
+  uuid, jsonb, jsonb, uuid[], uuid[]
+) FROM PUBLIC, anon, service_role;
+GRANT EXECUTE ON FUNCTION public.create_client_decision(
+  uuid, jsonb, jsonb, uuid[], uuid[]
+) TO authenticated;
+
+DROP POLICY IF EXISTS client_decisions_studio_insert
+  ON public.client_decisions;
+DROP POLICY IF EXISTS client_decision_options_studio_insert
+  ON public.client_decision_options;
+REVOKE INSERT ON TABLE public.client_decisions FROM authenticated;
+REVOKE INSERT ON TABLE public.client_decision_options FROM authenticated;
+
 -- ── Checked decision edit / publish / reopen / expire / delete paths ────────
 
 CREATE OR REPLACE FUNCTION public.update_client_decision(
@@ -1475,17 +2134,20 @@ BEGIN
     RAISE EXCEPTION 'decision % not found or access denied', p_decision_id
       USING ERRCODE = 'insufficient_privilege';
   END IF;
-  IF v_decision.status NOT IN ('draft', 'pending', 'responded') THEN
+  IF v_decision.status NOT IN ('draft', 'pending') THEN
     RAISE EXCEPTION 'decision % cannot be edited from status %',
       p_decision_id, v_decision.status
       USING ERRCODE = 'check_violation';
   END IF;
-  IF v_decision.status = 'responded' AND p_options IS NOT NULL THEN
-    RAISE EXCEPTION 'responded decision options are immutable'
+  IF v_decision.linked_proposal_id IS NOT NULL THEN
+    RAISE EXCEPTION 'proposal approval decisions are signature-workflow only'
       USING ERRCODE = 'check_violation';
   END IF;
-  IF p_expected_updated_at IS NOT NULL
-     AND v_decision.updated_at IS DISTINCT FROM p_expected_updated_at
+  IF p_expected_updated_at IS NULL THEN
+    RAISE EXCEPTION 'p_expected_updated_at is required'
+      USING ERRCODE = 'invalid_parameter_value';
+  END IF;
+  IF v_decision.updated_at IS DISTINCT FROM p_expected_updated_at
   THEN
     RAISE EXCEPTION 'decision % changed since it was loaded', p_decision_id
       USING ERRCODE = 'serialization_failure';
@@ -1506,6 +2168,16 @@ BEGIN
     WHEN p_patch ? 'project_id' THEN NULLIF(p_patch->>'project_id', '')::uuid
     ELSE v_decision.project_id
   END;
+
+  -- A decision's dependency web, room/phase references, and notification
+  -- history are project-scoped. Moving the parent without atomically moving
+  -- every one of those children creates cross-project blockers. Accept an
+  -- echoed project_id from edit forms, but make actual project identity
+  -- immutable after creation.
+  IF v_target_project_id IS DISTINCT FROM v_decision.project_id THEN
+    RAISE EXCEPTION 'decision project is immutable after creation'
+      USING ERRCODE = 'check_violation';
+  END IF;
 
   IF p_patch ? 'project_id'
      AND v_target_project_id IS NOT NULL
@@ -1620,6 +2292,28 @@ BEGIN
 
   PERFORM set_config('app.client_decision_write_id', '', true);
   SELECT * INTO v_result FROM public.client_decisions WHERE id = p_decision_id;
+
+  PERFORM public.assert_client_decision_reference_integrity(
+    v_result.id,
+    v_result.designer_client_id,
+    v_result.designer_id,
+    v_result.project_id,
+    v_result.status,
+    v_result.phase_id,
+    v_result.room_id,
+    v_result.blocks_milestone_id,
+    v_result.court_party_id,
+    v_result.linked_proposal_id,
+    v_result.recommended_option_id
+  );
+
+  IF v_result.status = 'pending'
+     AND (p_patch <> '{}'::jsonb OR p_options IS NOT NULL)
+  THEN
+    PERFORM public._enqueue_decision_notification(
+      p_decision_id, 'decision_updated'
+    );
+  END IF;
   RETURN v_result;
 END;
 $$;
@@ -1628,6 +2322,140 @@ REVOKE ALL ON FUNCTION public.update_client_decision(uuid, jsonb, jsonb, timesta
   FROM PUBLIC, anon, service_role;
 GRANT EXECUTE ON FUNCTION public.update_client_decision(uuid, jsonb, jsonb, timestamptz)
   TO authenticated;
+
+CREATE OR REPLACE FUNCTION public.update_coordination_item(
+  p_item_id uuid,
+  p_patch jsonb,
+  p_options jsonb,
+  p_blocked_ffe_item_ids uuid[],
+  p_blocked_task_ids uuid[],
+  p_expected_updated_at timestamptz
+)
+RETURNS public.client_decisions
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public, pg_temp
+AS $$
+DECLARE
+  v_item public.client_decisions%ROWTYPE;
+  v_expected_count integer;
+  v_matched_count integer;
+BEGIN
+  IF auth.uid() IS NULL THEN
+    RAISE EXCEPTION 'update_coordination_item requires an authenticated user'
+      USING ERRCODE = 'insufficient_privilege';
+  END IF;
+  IF p_expected_updated_at IS NULL THEN
+    RAISE EXCEPTION 'p_expected_updated_at is required'
+      USING ERRCODE = 'invalid_parameter_value';
+  END IF;
+
+  SELECT * INTO v_item
+  FROM public.client_decisions
+  WHERE id = p_item_id
+  FOR UPDATE;
+  IF NOT FOUND OR NOT public._can_author_proposal(v_item.designer_id) THEN
+    RAISE EXCEPTION 'coordination item % not found or access denied', p_item_id
+      USING ERRCODE = 'insufficient_privilege';
+  END IF;
+  IF v_item.status NOT IN ('draft', 'pending') THEN
+    RAISE EXCEPTION 'coordination item % is immutable from status %',
+      p_item_id, v_item.status
+      USING ERRCODE = 'check_violation';
+  END IF;
+
+  IF p_blocked_ffe_item_ids IS NOT NULL
+     AND cardinality(p_blocked_ffe_item_ids) > 0
+  THEN
+    PERFORM 1
+    FROM public.project_ffe_items AS item
+    WHERE item.id = ANY(p_blocked_ffe_item_ids)
+    ORDER BY item.id
+    FOR UPDATE;
+    SELECT count(DISTINCT item.id) INTO v_matched_count
+    FROM public.project_ffe_items AS item
+    WHERE item.id = ANY(p_blocked_ffe_item_ids)
+      AND item.project_id IS NOT DISTINCT FROM v_item.project_id
+      AND (item.blocked_by_decision_id IS NULL
+           OR item.blocked_by_decision_id = p_item_id);
+    SELECT count(DISTINCT id) INTO v_expected_count
+    FROM unnest(p_blocked_ffe_item_ids) AS id;
+    IF v_item.project_id IS NULL OR v_matched_count <> v_expected_count THEN
+      RAISE EXCEPTION 'blocked FF&E items must be available in the item project'
+        USING ERRCODE = 'check_violation';
+    END IF;
+  END IF;
+
+  IF p_blocked_task_ids IS NOT NULL
+     AND cardinality(p_blocked_task_ids) > 0
+  THEN
+    PERFORM 1
+    FROM public.project_tasks AS task
+    WHERE task.id = ANY(p_blocked_task_ids)
+    ORDER BY task.id
+    FOR UPDATE;
+    SELECT count(DISTINCT task.id) INTO v_matched_count
+    FROM public.project_tasks AS task
+    WHERE task.id = ANY(p_blocked_task_ids)
+      AND task.project_id IS NOT DISTINCT FROM v_item.project_id
+      AND task.status <> 'done'
+      AND (task.blocked_by_item_id IS NULL
+           OR task.blocked_by_item_id = p_item_id);
+    SELECT count(DISTINCT id) INTO v_expected_count
+    FROM unnest(p_blocked_task_ids) AS id;
+    IF v_item.project_id IS NULL OR v_matched_count <> v_expected_count THEN
+      RAISE EXCEPTION 'blocked tasks must be open and available in the item project'
+        USING ERRCODE = 'check_violation';
+    END IF;
+  END IF;
+
+  v_item := public.update_client_decision(
+    p_item_id,
+    COALESCE(p_patch, '{}'::jsonb),
+    p_options,
+    p_expected_updated_at
+  );
+
+  IF p_blocked_ffe_item_ids IS NOT NULL THEN
+    UPDATE public.project_ffe_items
+    SET blocked = false,
+        blocked_reason = NULL,
+        blocked_by_decision_id = NULL,
+        updated_at = now()
+    WHERE blocked_by_decision_id = p_item_id
+      AND NOT (id = ANY(p_blocked_ffe_item_ids));
+
+    UPDATE public.project_ffe_items
+    SET blocked = true,
+        blocked_by_decision_id = p_item_id,
+        updated_at = now()
+    WHERE id = ANY(p_blocked_ffe_item_ids);
+  END IF;
+
+  IF p_blocked_task_ids IS NOT NULL THEN
+    UPDATE public.project_tasks
+    SET status = 'todo', blocked_by_item_id = NULL, updated_at = now()
+    WHERE blocked_by_item_id = p_item_id
+      AND NOT (id = ANY(p_blocked_task_ids));
+
+    UPDATE public.project_tasks
+    SET status = 'blocked', blocked_by_item_id = p_item_id, updated_at = now()
+    WHERE id = ANY(p_blocked_task_ids);
+  END IF;
+
+  SELECT * INTO v_item
+  FROM public.client_decisions
+  WHERE id = p_item_id;
+  RETURN v_item;
+END;
+$$;
+
+REVOKE ALL ON FUNCTION public.update_coordination_item(
+  uuid, jsonb, jsonb, uuid[], uuid[], timestamptz
+) FROM PUBLIC, anon, service_role;
+GRANT EXECUTE ON FUNCTION public.update_coordination_item(
+  uuid, jsonb, jsonb, uuid[], uuid[], timestamptz
+) TO authenticated;
 
 CREATE OR REPLACE FUNCTION public.publish_client_decision(p_decision_id uuid)
 RETURNS public.client_decisions
@@ -1648,6 +2476,9 @@ BEGIN
       USING ERRCODE = 'insufficient_privilege';
   END IF;
   IF v_decision.status = 'pending' THEN
+    PERFORM public._enqueue_decision_notification(
+      p_decision_id, 'decision_required'
+    );
     RETURN v_decision;
   END IF;
   IF v_decision.status <> 'draft' THEN
@@ -1662,6 +2493,9 @@ BEGIN
   WHERE id = p_decision_id
   RETURNING * INTO v_decision;
   PERFORM set_config('app.client_decision_write_id', '', true);
+  PERFORM public._enqueue_decision_notification(
+    p_decision_id, 'decision_required'
+  );
   RETURN v_decision;
 END;
 $$;
@@ -1696,9 +2530,7 @@ BEGIN
       p_decision_id, v_decision.status
       USING ERRCODE = 'check_violation';
   END IF;
-  IF v_decision.decision_type = 'approval'
-     AND v_decision.linked_proposal_id IS NOT NULL
-  THEN
+  IF v_decision.linked_proposal_id IS NOT NULL THEN
     RAISE EXCEPTION 'proposal approval decisions are terminal'
       USING ERRCODE = 'check_violation';
   END IF;
@@ -1722,6 +2554,9 @@ BEGIN
   WHERE id = p_decision_id
   RETURNING * INTO v_decision;
   PERFORM set_config('app.client_decision_write_id', '', true);
+  PERFORM public._enqueue_decision_notification(
+    p_decision_id, 'decision_required'
+  );
   RETURN v_decision;
 END;
 $$;
@@ -1729,6 +2564,124 @@ $$;
 REVOKE ALL ON FUNCTION public.reopen_client_decision(uuid)
   FROM PUBLIC, anon, service_role;
 GRANT EXECUTE ON FUNCTION public.reopen_client_decision(uuid) TO authenticated;
+
+-- Extending an expired item is one lifecycle act, not an editable-field write
+-- followed by a separate reopen.  The old two-call browser path could commit
+-- the new deadline and then fail before restoring pending status (or vice
+-- versa).  A required compare-and-swap token linearizes the act; once the
+-- exact effect exists, a network retry is a receipt rather than a duplicate
+-- lifecycle event/notification.
+CREATE OR REPLACE FUNCTION public.extend_and_reopen_client_decision(
+  p_decision_id uuid,
+  p_due_date timestamptz,
+  p_expected_updated_at timestamptz
+)
+RETURNS public.client_decisions
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public, pg_temp
+AS $$
+DECLARE
+  v_decision public.client_decisions%ROWTYPE;
+BEGIN
+  IF auth.uid() IS NULL THEN
+    RAISE EXCEPTION
+      'extend_and_reopen_client_decision requires an authenticated user'
+      USING ERRCODE = 'insufficient_privilege';
+  END IF;
+  IF p_due_date IS NULL THEN
+    RAISE EXCEPTION 'p_due_date is required'
+      USING ERRCODE = 'invalid_parameter_value';
+  END IF;
+  IF p_expected_updated_at IS NULL THEN
+    RAISE EXCEPTION 'p_expected_updated_at is required'
+      USING ERRCODE = 'invalid_parameter_value';
+  END IF;
+
+  SELECT * INTO v_decision
+  FROM public.client_decisions
+  WHERE id = p_decision_id
+  FOR UPDATE;
+
+  IF NOT FOUND OR NOT public._can_author_proposal(v_decision.designer_id) THEN
+    RAISE EXCEPTION 'decision % not found or access denied', p_decision_id
+      USING ERRCODE = 'insufficient_privilege';
+  END IF;
+  IF v_decision.linked_proposal_id IS NOT NULL THEN
+    RAISE EXCEPTION 'proposal approval decisions are terminal'
+      USING ERRCODE = 'check_violation';
+  END IF;
+
+  -- The only pending state accepted by this RPC is the exact receipt of a
+  -- prior expired->pending call. Ordinary pending deadline edits continue to
+  -- use update_client_decision and its decision_updated notification.
+  IF v_decision.status = 'pending' THEN
+    IF v_decision.due_date IS NOT DISTINCT FROM p_due_date THEN
+      RETURN v_decision;
+    END IF;
+    RAISE EXCEPTION
+      'decision % already reflects a different extend-and-reopen effect',
+      p_decision_id
+      USING ERRCODE = 'serialization_failure';
+  END IF;
+  IF v_decision.status <> 'expired' THEN
+    RAISE EXCEPTION 'decision % cannot extend-and-reopen from status %',
+      p_decision_id, v_decision.status
+      USING ERRCODE = 'check_violation';
+  END IF;
+  IF v_decision.updated_at IS DISTINCT FROM p_expected_updated_at THEN
+    RAISE EXCEPTION 'decision % changed since it was loaded', p_decision_id
+      USING ERRCODE = 'serialization_failure';
+  END IF;
+  IF p_due_date <= now() THEN
+    RAISE EXCEPTION 'an extended due date must be in the future'
+      USING ERRCODE = 'check_violation';
+  END IF;
+
+  PERFORM set_config('app.client_decision_write_id', p_decision_id::text, true);
+  UPDATE public.client_decision_options
+  SET selected = false, client_note = NULL
+  WHERE decision_id = p_decision_id;
+
+  UPDATE public.client_decisions
+  SET status = 'pending',
+      due_date = p_due_date,
+      responded_at = NULL,
+      viewed_at = NULL,
+      reminder_sent_at = NULL,
+      selected_by = NULL,
+      answer = NULL,
+      answered_at = NULL,
+      answered_by = NULL,
+      client_consent_method = NULL,
+      client_consented_at = NULL,
+      client_signature = NULL,
+      updated_at = now()
+  WHERE id = p_decision_id
+  RETURNING * INTO v_decision;
+  PERFORM set_config('app.client_decision_write_id', '', true);
+
+  PERFORM public._enqueue_decision_notification(
+    p_decision_id, 'decision_required'
+  );
+  RETURN v_decision;
+END;
+$$;
+
+REVOKE ALL ON FUNCTION public.extend_and_reopen_client_decision(
+  uuid, timestamptz, timestamptz
+) FROM PUBLIC, anon, service_role;
+GRANT EXECUTE ON FUNCTION public.extend_and_reopen_client_decision(
+  uuid, timestamptz, timestamptz
+) TO authenticated;
+
+COMMENT ON FUNCTION public.extend_and_reopen_client_decision(
+  uuid, timestamptz, timestamptz
+) IS
+  'Atomic expired-decision recovery: CAS-locks the row, installs a future '
+  'deadline, clears prior response/view/reminder evidence, restores pending, '
+  'and owns the single decision_required notice. Exact pending retries return '
+  'the existing effect.';
 
 CREATE OR REPLACE FUNCTION public.expire_client_decision(p_decision_id uuid)
 RETURNS public.client_decisions
@@ -1839,6 +2792,11 @@ BEGIN
       USING ERRCODE = 'insufficient_privilege';
   END IF;
 
+  IF v_decision.status <> 'pending' THEN
+    RAISE EXCEPTION 'only pending decisions may be marked viewed'
+      USING ERRCODE = 'check_violation';
+  END IF;
+
   IF v_decision.viewed_at IS NULL THEN
     PERFORM set_config('app.client_decision_write_id', p_decision_id::text, true);
     UPDATE public.client_decisions
@@ -1864,6 +2822,7 @@ SET search_path = public, pg_temp
 AS $$
 DECLARE
   v_decision public.client_decisions%ROWTYPE;
+  v_client_id uuid;
 BEGIN
   SELECT * INTO v_decision
   FROM public.client_decisions
@@ -1877,6 +2836,37 @@ BEGIN
     RAISE EXCEPTION 'only pending decisions may be reminded'
       USING ERRCODE = 'check_violation';
   END IF;
+  IF v_decision.reminder_sent_at IS NOT NULL
+     AND v_decision.reminder_sent_at > now() - interval '1 hour'
+  THEN
+    RAISE EXCEPTION 'a reminder was sent less than one hour ago'
+      USING ERRCODE = 'check_violation';
+  END IF;
+
+  SELECT relationship.client_id INTO v_client_id
+  FROM public.designer_clients AS relationship
+  WHERE relationship.id = v_decision.designer_client_id;
+  IF v_client_id IS NULL THEN
+    RAISE EXCEPTION 'decision has no registered client reminder recipient'
+      USING ERRCODE = 'check_violation';
+  END IF;
+
+  INSERT INTO public.notification_log (
+    user_id, type, channel, status, template_id, metadata, sent_at
+  ) VALUES (
+    v_client_id,
+    'decision_reminder',
+    'in_app',
+    'delivered',
+    'decision_reminder_v1',
+    jsonb_build_object(
+      'decision_id', p_decision_id,
+      'subject', 'Decision reminder',
+      'preview', v_decision.title,
+      'deep_link', '/decisions/' || p_decision_id::text
+    ),
+    now()
+  );
 
   PERFORM set_config('app.client_decision_write_id', p_decision_id::text, true);
   UPDATE public.client_decisions
@@ -1992,6 +2982,9 @@ BEGIN
     ORDER BY id
     LIMIT 1;
     IF v_selected_option_id IS NOT DISTINCT FROM p_selected_option_id THEN
+      PERFORM public._enqueue_decision_notification(
+        p_decision_id, 'decision_resolved'
+      );
       RETURN v_decision;
     END IF;
     RAISE EXCEPTION 'decision % was already resolved with another option', p_decision_id
@@ -2132,6 +3125,9 @@ BEGIN
   END IF;
 
   PERFORM set_config('app.client_decision_write_id', '', true);
+  PERFORM public._enqueue_decision_notification(
+    p_decision_id, 'decision_resolved'
+  );
   RETURN v_decision;
 END;
 $$;
@@ -2402,6 +3398,14 @@ BEGIN
       p_item_id, v_item.coordination_kind
       USING ERRCODE = 'check_violation';
   END IF;
+  IF v_item.status <> 'pending' THEN
+    RAISE EXCEPTION 'submittal revisions require a pending item'
+      USING ERRCODE = 'check_violation';
+  END IF;
+  IF COALESCE(p_status, 'submitted') NOT IN ('submitted', 'revise_resubmit') THEN
+    RAISE EXCEPTION 'revision submit status must be submitted or revise_resubmit'
+      USING ERRCODE = 'check_violation';
+  END IF;
   IF NOT public.may_resolve_coordination_item(v_item, v_actor) THEN
     RAISE EXCEPTION 'not authorized to record a revision on item %', p_item_id
       USING ERRCODE = 'insufficient_privilege';
@@ -2456,6 +3460,9 @@ DECLARE
   v_client uuid;
   v_authorized_author boolean := false;
   v_retry_authorized boolean := false;
+  v_selected_option_id uuid;
+  v_approved_revision_id uuid;
+  v_revision_status text;
 BEGIN
   SELECT * INTO v_item
   FROM public.client_decisions
@@ -2505,7 +3512,66 @@ BEGIN
       USING ERRCODE = 'insufficient_privilege';
   END IF;
 
+  IF p_next_court IS NOT NULL AND NOT v_authorized_author THEN
+    RAISE EXCEPTION 'only an authorized studio author may override next court'
+      USING ERRCODE = 'insufficient_privilege';
+  END IF;
+
   IF v_item.status = 'responded' THEN
+    IF v_item.coordination_kind = 'selection' THEN
+      SELECT option.id INTO v_selected_option_id
+      FROM public.client_decision_options AS option
+      WHERE option.decision_id = p_item_id AND option.selected = true
+      ORDER BY option.id
+      LIMIT 1;
+      IF p_selected_option_id IS NULL
+         OR p_selected_option_id IS DISTINCT FROM v_selected_option_id
+         OR p_answer IS NOT NULL
+         OR p_revision_id IS NOT NULL
+      THEN
+        RAISE EXCEPTION 'coordination item % was resolved with another selection',
+          p_item_id USING ERRCODE = 'serialization_failure';
+      END IF;
+    ELSIF v_item.coordination_kind = 'rfi' THEN
+      IF btrim(COALESCE(p_answer, '')) = ''
+         OR btrim(p_answer) IS DISTINCT FROM btrim(COALESCE(v_item.answer, ''))
+         OR p_selected_option_id IS NOT NULL
+         OR p_revision_id IS NOT NULL
+      THEN
+        RAISE EXCEPTION 'coordination item % was resolved with another answer',
+          p_item_id USING ERRCODE = 'serialization_failure';
+      END IF;
+    ELSIF v_item.coordination_kind = 'submittal' THEN
+      SELECT revision.id INTO v_approved_revision_id
+      FROM public.coordination_item_revisions AS revision
+      WHERE revision.decision_id = p_item_id
+        AND revision.status = 'approved'
+      ORDER BY revision.reviewed_at DESC NULLS LAST, revision.rev_number DESC
+      LIMIT 1;
+      IF p_revision_id IS NULL
+         OR p_revision_id IS DISTINCT FROM v_approved_revision_id
+         OR btrim(p_answer) IS DISTINCT FROM btrim(v_item.answer)
+         OR p_selected_option_id IS NOT NULL
+      THEN
+        RAISE EXCEPTION 'coordination item % was resolved with another revision',
+          p_item_id USING ERRCODE = 'serialization_failure';
+      END IF;
+    ELSIF btrim(p_answer) IS DISTINCT FROM btrim(v_item.answer)
+          OR p_selected_option_id IS NOT NULL
+          OR p_revision_id IS NOT NULL
+    THEN
+      RAISE EXCEPTION 'coordination item % was resolved with another answer',
+        p_item_id USING ERRCODE = 'serialization_failure';
+    END IF;
+    IF p_next_court IS NOT NULL
+       AND p_next_court IS DISTINCT FROM v_item.court
+    THEN
+      RAISE EXCEPTION 'coordination item % already moved to another court',
+        p_item_id USING ERRCODE = 'serialization_failure';
+    END IF;
+    PERFORM public._enqueue_decision_notification(
+      p_item_id, 'decision_resolved'
+    );
     RETURN v_item;
   END IF;
   IF v_item.status <> 'pending' THEN
@@ -2537,8 +3603,12 @@ BEGIN
     PERFORM set_config('app.client_decision_write_id', p_item_id::text, true);
 
     IF v_item.coordination_kind = 'rfi' THEN
+      IF btrim(COALESCE(p_answer, v_item.answer, '')) = '' THEN
+        RAISE EXCEPTION 'an RFI requires a nonblank answer'
+          USING ERRCODE = 'check_violation';
+      END IF;
       UPDATE public.client_decisions
-      SET answer = COALESCE(p_answer, answer),
+      SET answer = btrim(COALESCE(p_answer, answer)),
           answered_at = now(),
           answered_by = v_actor,
           status = 'responded',
@@ -2547,16 +3617,24 @@ BEGIN
           updated_at = now()
       WHERE id = p_item_id;
     ELSIF v_item.coordination_kind = 'submittal' THEN
-      IF p_revision_id IS NOT NULL THEN
-        UPDATE public.coordination_item_revisions
-        SET status = 'approved', reviewed_by = v_actor, reviewed_at = now()
-        WHERE id = p_revision_id AND decision_id = p_item_id;
-        IF NOT FOUND THEN
-          RAISE EXCEPTION 'revision % does not belong to submittal %',
-            p_revision_id, p_item_id
-            USING ERRCODE = 'check_violation';
-        END IF;
+      IF p_revision_id IS NULL THEN
+        RAISE EXCEPTION 'a submittal requires an eligible revision'
+          USING ERRCODE = 'check_violation';
       END IF;
+      SELECT revision.status INTO v_revision_status
+      FROM public.coordination_item_revisions AS revision
+      WHERE revision.id = p_revision_id
+        AND revision.decision_id = p_item_id
+      FOR UPDATE;
+      IF NOT FOUND OR v_revision_status NOT IN ('submitted', 'revise_resubmit') THEN
+        RAISE EXCEPTION 'revision % is not eligible for submittal %',
+          p_revision_id, p_item_id
+          USING ERRCODE = 'check_violation';
+      END IF;
+
+      UPDATE public.coordination_item_revisions
+      SET status = 'approved', reviewed_by = v_actor, reviewed_at = now()
+      WHERE id = p_revision_id;
 
       UPDATE public.client_decisions
       SET answer = COALESCE(p_answer, answer),
@@ -2611,6 +3689,10 @@ BEGIN
   WHERE id = p_item_id
   RETURNING * INTO v_item;
   PERFORM set_config('app.client_decision_write_id', '', true);
+
+  PERFORM public._enqueue_decision_notification(
+    p_item_id, 'decision_resolved'
+  );
 
   RETURN v_item;
 END;
@@ -2730,7 +3812,1905 @@ REVOKE ALL ON FUNCTION public.apply_field_effect(uuid, jsonb, text, uuid)
 GRANT EXECUTE ON FUNCTION public.apply_field_effect(uuid, jsonb, text, uuid)
   TO service_role;
 
+-- ── Proposal schedule composition is server-serialized ────────────────────
+
+-- Proposal phases feed the one-time proposal→project activation bridge. A
+-- disconnected proposal chain therefore is not merely an editor blemish: it
+-- becomes a late signing/activation failure. Keep a proposal-side assertion
+-- alongside the project assertion introduced in 00398.
+CREATE OR REPLACE FUNCTION public._assert_proposal_phase_topology(
+  p_proposal_id uuid,
+  p_context text
+)
+RETURNS void
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public, pg_temp
+AS $$
+DECLARE
+  v_anchor_main_id uuid;
+BEGIN
+  IF EXISTS (
+    SELECT 1
+    FROM public.proposal_phases AS child
+    JOIN public.proposal_phases AS parent
+      ON parent.id = child.follows_phase_id
+    WHERE (child.proposal_id = p_proposal_id
+           OR parent.proposal_id = p_proposal_id)
+      AND child.proposal_id IS DISTINCT FROM parent.proposal_id
+  ) THEN
+    RAISE EXCEPTION '%: cross-proposal phase topology is unsupported', p_context
+      USING ERRCODE = 'check_violation';
+  END IF;
+
+  IF EXISTS (
+    WITH RECURSIVE predecessor_walk(phase_id, path, cyclic) AS (
+      SELECT phase.id, ARRAY[phase.id]::uuid[], false
+      FROM public.proposal_phases AS phase
+      WHERE phase.proposal_id = p_proposal_id
+
+      UNION ALL
+
+      SELECT parent.id,
+             walk.path || parent.id,
+             parent.id = ANY(walk.path)
+      FROM predecessor_walk AS walk
+      JOIN public.proposal_phases AS child
+        ON child.id = walk.phase_id
+       AND child.proposal_id = p_proposal_id
+      JOIN public.proposal_phases AS parent
+        ON parent.id = child.follows_phase_id
+       AND parent.proposal_id = p_proposal_id
+      WHERE NOT walk.cyclic
+    )
+    SELECT 1 FROM predecessor_walk WHERE cyclic
+  ) THEN
+    RAISE EXCEPTION '%: canonical proposal phase topology is cyclic', p_context
+      USING ERRCODE = 'check_violation';
+  END IF;
+
+  IF EXISTS (
+    SELECT 1
+    FROM public.proposal_phases AS phase
+    WHERE phase.proposal_id = p_proposal_id
+      AND phase.lane = 'main'
+      AND phase.follows_phase_id IS NOT NULL
+    GROUP BY phase.follows_phase_id
+    HAVING count(*) > 1
+  ) THEN
+    RAISE EXCEPTION '%: canonical proposal main successor is ambiguous', p_context
+      USING ERRCODE = 'check_violation';
+  END IF;
+
+  SELECT phase.id INTO v_anchor_main_id
+  FROM public.proposal_phases AS phase
+  WHERE phase.proposal_id = p_proposal_id
+    AND phase.lane = 'main'
+  ORDER BY phase.id
+  LIMIT 1;
+
+  IF v_anchor_main_id IS NOT NULL AND EXISTS (
+    WITH RECURSIVE component(id) AS (
+      SELECT v_anchor_main_id
+
+      UNION
+
+      SELECT neighbor.id
+      FROM component AS component_row
+      JOIN public.proposal_phases AS current_phase
+        ON current_phase.id = component_row.id
+       AND current_phase.proposal_id = p_proposal_id
+      JOIN public.proposal_phases AS neighbor
+        ON neighbor.proposal_id = p_proposal_id
+       AND (
+         neighbor.id = current_phase.follows_phase_id
+         OR neighbor.follows_phase_id = current_phase.id
+       )
+    )
+    SELECT 1
+    FROM public.proposal_phases AS main_phase
+    WHERE main_phase.proposal_id = p_proposal_id
+      AND main_phase.lane = 'main'
+      AND NOT EXISTS (
+        SELECT 1 FROM component WHERE component.id = main_phase.id
+      )
+  ) THEN
+    RAISE EXCEPTION '%: canonical proposal main successor is missing', p_context
+      USING ERRCODE = 'check_violation';
+  END IF;
+END;
+$$;
+
+REVOKE ALL ON FUNCTION public._assert_proposal_phase_topology(uuid, text)
+  FROM PUBLIC, anon, authenticated, service_role;
+
+-- 00324 introduced predecessor links after proposals were already in use.
+-- The only legacy shape that can be repaired without inventing intent is an
+-- all-main, all-null graph with a unique authored sort order. Duplicate order
+-- or any mixed/partial graph is left untouched and diagnosed so activation
+-- continues to fail closed rather than guessing.
+CREATE OR REPLACE FUNCTION public._repair_legacy_proposal_phase_topology(
+  p_proposal_id uuid
+)
+RETURNS boolean
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public, pg_temp
+AS $$
+DECLARE
+  v_count integer;
+  v_all_main boolean;
+  v_all_null boolean;
+  v_unique_sort boolean;
+BEGIN
+  PERFORM proposal.id
+  FROM public.proposals AS proposal
+  WHERE proposal.id = p_proposal_id
+  FOR UPDATE;
+  IF NOT FOUND THEN
+    RAISE EXCEPTION 'proposal % not found', p_proposal_id
+      USING ERRCODE = 'no_data_found';
+  END IF;
+
+  PERFORM phase.id
+  FROM public.proposal_phases AS phase
+  WHERE phase.proposal_id = p_proposal_id
+  ORDER BY phase.id
+  FOR UPDATE;
+
+  SELECT count(*)::integer,
+         COALESCE(bool_and(phase.lane = 'main'), true),
+         COALESCE(bool_and(phase.follows_phase_id IS NULL), true),
+         count(DISTINCT phase.sort_order) = count(*)
+  INTO v_count, v_all_main, v_all_null, v_unique_sort
+  FROM public.proposal_phases AS phase
+  WHERE phase.proposal_id = p_proposal_id;
+
+  IF v_count <= 1 THEN
+    RETURN false;
+  END IF;
+  IF NOT (v_all_main AND v_all_null AND v_unique_sort) THEN
+    RETURN false;
+  END IF;
+
+  WITH ordered AS (
+    SELECT phase.id,
+           lag(phase.id) OVER (
+             ORDER BY phase.sort_order, phase.id
+           ) AS predecessor_id
+    FROM public.proposal_phases AS phase
+    WHERE phase.proposal_id = p_proposal_id
+  )
+  UPDATE public.proposal_phases AS phase
+  SET follows_phase_id = ordered.predecessor_id
+  FROM ordered
+  WHERE phase.id = ordered.id
+    AND phase.follows_phase_id IS DISTINCT FROM ordered.predecessor_id;
+
+  PERFORM public._assert_proposal_phase_topology(
+    p_proposal_id, 'legacy proposal phase repair'
+  );
+  RETURN true;
+END;
+$$;
+
+REVOKE ALL ON FUNCTION public._repair_legacy_proposal_phase_topology(uuid)
+  FROM PUBLIC, anon, authenticated, service_role;
+
+CREATE TABLE IF NOT EXISTS public.proposal_phase_topology_diagnostics (
+  proposal_id uuid PRIMARY KEY
+    REFERENCES public.proposals(id) ON DELETE CASCADE,
+  issue_code text NOT NULL,
+  phase_count integer NOT NULL,
+  detail jsonb NOT NULL DEFAULT '{}'::jsonb,
+  detected_at timestamptz NOT NULL DEFAULT now()
+);
+
+ALTER TABLE public.proposal_phase_topology_diagnostics
+  ENABLE ROW LEVEL SECURITY;
+REVOKE ALL ON TABLE public.proposal_phase_topology_diagnostics
+  FROM PUBLIC, anon, authenticated, service_role;
+GRANT SELECT ON TABLE public.proposal_phase_topology_diagnostics
+  TO service_role;
+
+-- Issued proposal children are intentionally immutable. Take a migration DDL
+-- lock and suspend only that existing user trigger for this one deterministic
+-- normalization pass; any failure rolls the trigger state and writes back.
+BEGIN;
+LOCK TABLE public.proposal_phases IN SHARE ROW EXCLUSIVE MODE;
+ALTER TABLE public.proposal_phases
+  DISABLE TRIGGER z_guard_proposal_copy_draft_only_trg;
+
+DO $$
+DECLARE
+  v_proposal record;
+  v_error text;
+BEGIN
+  FOR v_proposal IN
+    SELECT phase.proposal_id, count(*)::integer AS phase_count
+    FROM public.proposal_phases AS phase
+    GROUP BY phase.proposal_id
+    HAVING count(*) > 1
+    ORDER BY phase.proposal_id
+  LOOP
+    PERFORM public._repair_legacy_proposal_phase_topology(
+      v_proposal.proposal_id
+    );
+
+    BEGIN
+      PERFORM public._assert_proposal_phase_topology(
+        v_proposal.proposal_id, '00399 migration audit'
+      );
+      DELETE FROM public.proposal_phase_topology_diagnostics
+      WHERE proposal_id = v_proposal.proposal_id;
+    EXCEPTION WHEN check_violation THEN
+      GET STACKED DIAGNOSTICS v_error = MESSAGE_TEXT;
+      INSERT INTO public.proposal_phase_topology_diagnostics (
+        proposal_id, issue_code, phase_count, detail, detected_at
+      ) VALUES (
+        v_proposal.proposal_id,
+        CASE
+          WHEN NOT EXISTS (
+            SELECT 1 FROM public.proposal_phases AS phase
+            WHERE phase.proposal_id = v_proposal.proposal_id
+              AND (
+                phase.lane <> 'main'
+                OR phase.follows_phase_id IS NOT NULL
+              )
+          ) THEN 'ambiguous_legacy_order'
+          ELSE 'invalid_graph'
+        END,
+        v_proposal.phase_count,
+        jsonb_build_object('error', v_error),
+        now()
+      )
+      ON CONFLICT (proposal_id) DO UPDATE
+      SET issue_code = EXCLUDED.issue_code,
+          phase_count = EXCLUDED.phase_count,
+          detail = EXCLUDED.detail,
+          detected_at = EXCLUDED.detected_at;
+    END;
+  END LOOP;
+END;
+$$;
+
+ALTER TABLE public.proposal_phases
+  ENABLE TRIGGER z_guard_proposal_copy_draft_only_trg;
+COMMIT;
+
+-- Return the topology-derived main tail, not whichever row happens to carry
+-- MAX(sort_order). A main tail has no later main descendant through the
+-- follows graph; thread phases may branch after it without becoming the main
+-- append point themselves.
+CREATE OR REPLACE FUNCTION public._proposal_phase_main_tail(
+  p_proposal_id uuid,
+  p_context text
+)
+RETURNS uuid
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public, pg_temp
+AS $$
+DECLARE
+  v_tail uuid;
+  v_tail_count integer;
+BEGIN
+  PERFORM public._assert_proposal_phase_topology(p_proposal_id, p_context);
+
+  WITH RECURSIVE descendants(root_id, id) AS (
+    SELECT phase.id, phase.id
+    FROM public.proposal_phases AS phase
+    WHERE phase.proposal_id = p_proposal_id
+      AND phase.lane = 'main'
+
+    UNION ALL
+
+    SELECT descendants.root_id, child.id
+    FROM descendants
+    JOIN public.proposal_phases AS child
+      ON child.follows_phase_id = descendants.id
+     AND child.proposal_id = p_proposal_id
+  ), candidates AS (
+    SELECT main_phase.id
+    FROM public.proposal_phases AS main_phase
+    WHERE main_phase.proposal_id = p_proposal_id
+      AND main_phase.lane = 'main'
+      AND NOT EXISTS (
+        SELECT 1
+        FROM descendants
+        JOIN public.proposal_phases AS descendant_phase
+          ON descendant_phase.id = descendants.id
+        WHERE descendants.root_id = main_phase.id
+          AND descendants.id <> main_phase.id
+          AND descendant_phase.lane = 'main'
+      )
+  )
+  SELECT count(*), (array_agg(id ORDER BY id))[1]
+  INTO v_tail_count, v_tail
+  FROM candidates;
+
+  IF v_tail_count > 1 THEN
+    RAISE EXCEPTION '%: canonical proposal main tail is ambiguous', p_context
+      USING ERRCODE = 'check_violation';
+  END IF;
+  RETURN v_tail;
+END;
+$$;
+
+REVOKE ALL ON FUNCTION public._proposal_phase_main_tail(uuid, text)
+  FROM PUBLIC, anon, authenticated, service_role;
+
+-- Browser inserts and direct topology rewrites cannot bypass the checked
+-- parent-lock protocol. Non-topology draft edits remain available through the
+-- existing proposal child policy/guard.
+CREATE OR REPLACE FUNCTION public.guard_proposal_phase_topology_write()
+RETURNS trigger
+LANGUAGE plpgsql
+SECURITY INVOKER
+SET search_path = public, pg_temp
+AS $$
+BEGIN
+  IF current_user IS NOT DISTINCT FROM 'postgres' THEN
+    RETURN NEW;
+  END IF;
+
+  IF TG_OP = 'INSERT' THEN
+    RAISE EXCEPTION
+      'proposal phases may only be inserted through create_proposal_phase or apply_phase_template'
+      USING ERRCODE = 'insufficient_privilege';
+  END IF;
+  IF NEW.proposal_id IS DISTINCT FROM OLD.proposal_id
+     OR NEW.lane IS DISTINCT FROM OLD.lane
+     OR NEW.follows_phase_id IS DISTINCT FROM OLD.follows_phase_id
+  THEN
+    RAISE EXCEPTION
+      'proposal phase topology may only change through a canonical schedule workflow'
+      USING ERRCODE = 'insufficient_privilege';
+  END IF;
+  RETURN NEW;
+END;
+$$;
+
+REVOKE ALL ON FUNCTION public.guard_proposal_phase_topology_write()
+  FROM PUBLIC, anon, authenticated, service_role;
+
+DROP TRIGGER IF EXISTS y_guard_proposal_phase_topology_write_trg
+  ON public.proposal_phases;
+CREATE TRIGGER y_guard_proposal_phase_topology_write_trg
+BEFORE INSERT OR UPDATE OF proposal_id, lane, follows_phase_id
+ON public.proposal_phases
+FOR EACH ROW EXECUTE FUNCTION public.guard_proposal_phase_topology_write();
+
+REVOKE INSERT, UPDATE, DELETE ON TABLE public.proposal_phases
+  FROM anon, authenticated;
+
+-- 00316 widened the parent phases/payment schedule to active design-studio
+-- peers but missed the three phase-parented child tables. Keep their existing
+-- owner policies and add the same exact studio boundary. The 00390 draft-only
+-- trigger still serializes and rejects every write after issue.
+DROP POLICY IF EXISTS "proposal_phase_deliverables_studio_rw"
+  ON public.proposal_phase_deliverables;
+CREATE POLICY "proposal_phase_deliverables_studio_rw"
+ON public.proposal_phase_deliverables
+FOR ALL TO authenticated
+USING (
+  EXISTS (
+    SELECT 1
+    FROM public.proposal_phases AS phase
+    JOIN public.proposals AS proposal ON proposal.id = phase.proposal_id
+    WHERE phase.id = proposal_phase_deliverables.phase_id
+      AND public.is_studio_comember(proposal.designer_id)
+  )
+)
+WITH CHECK (
+  EXISTS (
+    SELECT 1
+    FROM public.proposal_phases AS phase
+    JOIN public.proposals AS proposal ON proposal.id = phase.proposal_id
+    WHERE phase.id = proposal_phase_deliverables.phase_id
+      AND public.is_studio_comember(proposal.designer_id)
+  )
+);
+
+DROP POLICY IF EXISTS "proposal_phase_gates_studio_rw"
+  ON public.proposal_phase_gates;
+CREATE POLICY "proposal_phase_gates_studio_rw"
+ON public.proposal_phase_gates
+FOR ALL TO authenticated
+USING (
+  EXISTS (
+    SELECT 1
+    FROM public.proposal_phases AS phase
+    JOIN public.proposals AS proposal ON proposal.id = phase.proposal_id
+    WHERE phase.id = proposal_phase_gates.phase_id
+      AND public.is_studio_comember(proposal.designer_id)
+  )
+)
+WITH CHECK (
+  EXISTS (
+    SELECT 1
+    FROM public.proposal_phases AS phase
+    JOIN public.proposals AS proposal ON proposal.id = phase.proposal_id
+    WHERE phase.id = proposal_phase_gates.phase_id
+      AND public.is_studio_comember(proposal.designer_id)
+  )
+);
+
+DROP POLICY IF EXISTS "proposal_schedule_milestones_studio_rw"
+  ON public.proposal_schedule_milestones;
+CREATE POLICY "proposal_schedule_milestones_studio_rw"
+ON public.proposal_schedule_milestones
+FOR ALL TO authenticated
+USING (
+  EXISTS (
+    SELECT 1
+    FROM public.proposal_phases AS phase
+    JOIN public.proposals AS proposal ON proposal.id = phase.proposal_id
+    WHERE phase.id = proposal_schedule_milestones.phase_id
+      AND public.is_studio_comember(proposal.designer_id)
+  )
+)
+WITH CHECK (
+  EXISTS (
+    SELECT 1
+    FROM public.proposal_phases AS phase
+    JOIN public.proposals AS proposal ON proposal.id = phase.proposal_id
+    WHERE phase.id = proposal_schedule_milestones.phase_id
+      AND public.is_studio_comember(proposal.designer_id)
+  )
+);
+
+DROP POLICY IF EXISTS "proposal_palettes_studio_rw"
+  ON public.proposal_palettes;
+CREATE POLICY "proposal_palettes_studio_rw"
+ON public.proposal_palettes
+FOR ALL TO authenticated
+USING (
+  EXISTS (
+    SELECT 1 FROM public.proposals AS proposal
+    WHERE proposal.id = proposal_palettes.proposal_id
+      AND public.is_studio_comember(proposal.designer_id)
+  )
+)
+WITH CHECK (
+  EXISTS (
+    SELECT 1 FROM public.proposals AS proposal
+    WHERE proposal.id = proposal_palettes.proposal_id
+      AND public.is_studio_comember(proposal.designer_id)
+  )
+);
+
+DROP POLICY IF EXISTS "palette_swatches_studio_rw"
+  ON public.palette_swatches;
+CREATE POLICY "palette_swatches_studio_rw"
+ON public.palette_swatches
+FOR ALL TO authenticated
+USING (
+  EXISTS (
+    SELECT 1
+    FROM public.proposal_palettes AS palette
+    JOIN public.proposals AS proposal ON proposal.id = palette.proposal_id
+    WHERE palette.id = palette_swatches.palette_id
+      AND public.is_studio_comember(proposal.designer_id)
+  )
+)
+WITH CHECK (
+  EXISTS (
+    SELECT 1
+    FROM public.proposal_palettes AS palette
+    JOIN public.proposals AS proposal ON proposal.id = palette.proposal_id
+    WHERE palette.id = palette_swatches.palette_id
+      AND public.is_studio_comember(proposal.designer_id)
+  )
+);
+
+DROP POLICY IF EXISTS "proposal_team_members_studio_rw"
+  ON public.proposal_team_members;
+CREATE POLICY "proposal_team_members_studio_rw"
+ON public.proposal_team_members
+FOR ALL TO authenticated
+USING (
+  EXISTS (
+    SELECT 1 FROM public.proposals AS proposal
+    WHERE proposal.id = proposal_team_members.proposal_id
+      AND public.is_studio_comember(proposal.designer_id)
+  )
+)
+WITH CHECK (
+  EXISTS (
+    SELECT 1 FROM public.proposals AS proposal
+    WHERE proposal.id = proposal_team_members.proposal_id
+      AND public.is_studio_comember(proposal.designer_id)
+  )
+);
+
+DROP POLICY IF EXISTS "spec_field_defs_proposal_studio_rw"
+  ON public.spec_field_defs;
+CREATE POLICY "spec_field_defs_proposal_studio_rw"
+ON public.spec_field_defs
+FOR ALL TO authenticated
+USING (
+  proposal_id IS NOT NULL
+  AND EXISTS (
+    SELECT 1 FROM public.proposals AS proposal
+    WHERE proposal.id = spec_field_defs.proposal_id
+      AND public.is_studio_comember(proposal.designer_id)
+  )
+)
+WITH CHECK (
+  proposal_id IS NOT NULL
+  AND EXISTS (
+    SELECT 1 FROM public.proposals AS proposal
+    WHERE proposal.id = spec_field_defs.proposal_id
+      AND public.is_studio_comember(proposal.designer_id)
+  )
+);
+
+CREATE OR REPLACE FUNCTION public._recompute_proposal_total_locked(
+  p_proposal_id uuid
+)
+RETURNS integer
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public, pg_temp
+AS $$
+DECLARE
+  v_total integer;
+BEGIN
+  UPDATE public.proposals
+  SET total_amount = (
+        COALESCE((
+          SELECT sum(item.line_total_cents)
+          FROM public.proposal_items AS item
+          WHERE item.proposal_id = p_proposal_id
+        ), 0)
+        + COALESCE((
+          SELECT sum(phase.fee_cents)
+          FROM public.proposal_phases AS phase
+          WHERE phase.proposal_id = p_proposal_id
+        ), 0)
+      )::integer,
+      updated_at = now()
+  WHERE id = p_proposal_id
+  RETURNING total_amount INTO v_total;
+
+  IF v_total IS NULL THEN
+    RAISE EXCEPTION 'proposal % not found while recomputing total', p_proposal_id
+      USING ERRCODE = 'no_data_found';
+  END IF;
+  RETURN v_total;
+END;
+$$;
+
+REVOKE ALL ON FUNCTION public._recompute_proposal_total_locked(uuid)
+  FROM PUBLIC, anon, authenticated, service_role;
+
+CREATE OR REPLACE FUNCTION public.create_proposal_phase(
+  p_proposal_id uuid,
+  p_name text,
+  p_phase_key text DEFAULT NULL,
+  p_duration_weeks integer DEFAULT NULL,
+  p_fee_cents integer DEFAULT 0,
+  p_revision_limit integer DEFAULT 2,
+  p_gate_condition text DEFAULT NULL,
+  p_deliverables jsonb DEFAULT '[]'::jsonb,
+  p_duration_days integer DEFAULT NULL,
+  p_anchor_date date DEFAULT NULL,
+  p_lane text DEFAULT 'main'
+)
+RETURNS public.proposal_phases
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public, pg_temp
+AS $$
+DECLARE
+  v_actor uuid := auth.uid();
+  v_proposal public.proposals%ROWTYPE;
+  v_phase public.proposal_phases%ROWTYPE;
+  v_tail uuid;
+  v_sort integer;
+BEGIN
+  IF v_actor IS NULL THEN
+    RAISE EXCEPTION 'create_proposal_phase requires an authenticated user'
+      USING ERRCODE = 'insufficient_privilege';
+  END IF;
+  IF btrim(COALESCE(p_name, '')) = '' THEN
+    RAISE EXCEPTION 'phase name is required'
+      USING ERRCODE = 'check_violation';
+  END IF;
+  IF p_lane IS NULL OR p_lane NOT IN ('main', 'thread') THEN
+    RAISE EXCEPTION 'phase lane must be main or thread'
+      USING ERRCODE = 'invalid_parameter_value';
+  END IF;
+  IF p_deliverables IS NULL OR jsonb_typeof(p_deliverables) <> 'array' THEN
+    RAISE EXCEPTION 'p_deliverables must be a JSON array'
+      USING ERRCODE = 'invalid_parameter_value';
+  END IF;
+
+  SELECT * INTO v_proposal
+  FROM public.proposals
+  WHERE id = p_proposal_id
+  FOR UPDATE;
+
+  IF NOT FOUND OR NOT public._can_author_proposal(v_proposal.designer_id) THEN
+    RAISE EXCEPTION 'proposal % not found or access denied', p_proposal_id
+      USING ERRCODE = 'insufficient_privilege';
+  END IF;
+  IF v_proposal.status <> 'draft' THEN
+    RAISE EXCEPTION 'proposal % is %, so its authored copy is immutable',
+      p_proposal_id, v_proposal.status
+      USING ERRCODE = 'check_violation';
+  END IF;
+
+  PERFORM phase.id
+  FROM public.proposal_phases AS phase
+  WHERE phase.proposal_id = p_proposal_id
+  ORDER BY phase.id
+  FOR UPDATE;
+
+  v_tail := public._proposal_phase_main_tail(
+    p_proposal_id, 'create_proposal_phase precondition'
+  );
+  SELECT COALESCE(max(sort_order), -1) + 1 INTO v_sort
+  FROM public.proposal_phases
+  WHERE proposal_id = p_proposal_id;
+
+  INSERT INTO public.proposal_phases (
+    proposal_id, name, phase_key, duration_weeks, fee_cents,
+    revision_limit, gate_condition, deliverables, sort_order,
+    duration_days, anchor_date, follows_phase_id, lane
+  ) VALUES (
+    p_proposal_id, btrim(p_name), NULLIF(btrim(COALESCE(p_phase_key, '')), ''),
+    p_duration_weeks, COALESCE(p_fee_cents, 0),
+    COALESCE(p_revision_limit, 2),
+    NULLIF(btrim(COALESCE(p_gate_condition, '')), ''), p_deliverables, v_sort,
+    p_duration_days, p_anchor_date, v_tail, p_lane
+  )
+  RETURNING * INTO v_phase;
+
+  PERFORM public._assert_proposal_phase_topology(
+    p_proposal_id, 'create_proposal_phase result'
+  );
+
+  -- The parent lock also serializes every proposal-child writer through the
+  -- draft-copy guard. Recompute the client-facing headline from canonical
+  -- children before releasing it so a phase cannot commit without its fee.
+  PERFORM public._recompute_proposal_total_locked(p_proposal_id);
+  RETURN v_phase;
+END;
+$$;
+
+REVOKE ALL ON FUNCTION public.create_proposal_phase(
+  uuid, text, text, integer, integer, integer, text, jsonb,
+  integer, date, text
+) FROM PUBLIC, anon, service_role;
+GRANT EXECUTE ON FUNCTION public.create_proposal_phase(
+  uuid, text, text, integer, integer, integer, text, jsonb,
+  integer, date, text
+) TO authenticated;
+
+CREATE OR REPLACE FUNCTION public.update_proposal_phase(
+  p_phase_id uuid,
+  p_proposal_id uuid,
+  p_patch jsonb,
+  p_expected_updated_at timestamptz
+)
+RETURNS public.proposal_phases
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public, pg_temp
+AS $$
+DECLARE
+  v_proposal public.proposals%ROWTYPE;
+  v_phase public.proposal_phases%ROWTYPE;
+  v_unknown jsonb;
+BEGIN
+  IF auth.uid() IS NULL THEN
+    RAISE EXCEPTION 'update_proposal_phase requires an authenticated user'
+      USING ERRCODE = 'insufficient_privilege';
+  END IF;
+  IF p_patch IS NULL OR jsonb_typeof(p_patch) <> 'object' THEN
+    RAISE EXCEPTION 'p_patch must be a JSON object'
+      USING ERRCODE = 'invalid_parameter_value';
+  END IF;
+  IF p_expected_updated_at IS NULL THEN
+    RAISE EXCEPTION 'p_expected_updated_at is required'
+      USING ERRCODE = 'invalid_parameter_value';
+  END IF;
+  v_unknown := p_patch - ARRAY[
+    'name', 'phase_key', 'duration_weeks', 'fee_cents', 'revision_limit',
+    'gate_condition', 'deliverables', 'duration_days', 'anchor_date'
+  ];
+  IF v_unknown <> '{}'::jsonb THEN
+    RAISE EXCEPTION 'unsupported proposal phase patch keys: %', v_unknown
+      USING ERRCODE = 'invalid_parameter_value';
+  END IF;
+  IF p_patch ? 'name'
+     AND btrim(COALESCE(p_patch->>'name', '')) = ''
+  THEN
+    RAISE EXCEPTION 'phase name is required'
+      USING ERRCODE = 'check_violation';
+  END IF;
+  IF p_patch ? 'fee_cents' AND p_patch->>'fee_cents' IS NULL THEN
+    RAISE EXCEPTION 'phase fee_cents cannot be null'
+      USING ERRCODE = 'check_violation';
+  END IF;
+  IF p_patch ? 'deliverables'
+     AND (
+       p_patch->'deliverables' IS NULL
+       OR jsonb_typeof(p_patch->'deliverables') <> 'array'
+     )
+  THEN
+    RAISE EXCEPTION 'phase deliverables must be a JSON array'
+      USING ERRCODE = 'invalid_parameter_value';
+  END IF;
+
+  SELECT * INTO v_proposal
+  FROM public.proposals
+  WHERE id = p_proposal_id
+  FOR UPDATE;
+  IF NOT FOUND OR NOT public._can_author_proposal(v_proposal.designer_id) THEN
+    RAISE EXCEPTION 'proposal % not found or access denied', p_proposal_id
+      USING ERRCODE = 'insufficient_privilege';
+  END IF;
+  IF v_proposal.status <> 'draft' THEN
+    RAISE EXCEPTION 'proposal % is %, so its authored copy is immutable',
+      p_proposal_id, v_proposal.status
+      USING ERRCODE = 'check_violation';
+  END IF;
+
+  SELECT * INTO v_phase
+  FROM public.proposal_phases
+  WHERE id = p_phase_id
+    AND proposal_id = p_proposal_id
+  FOR UPDATE;
+  IF NOT FOUND THEN
+    RAISE EXCEPTION 'proposal phase % not found in proposal %',
+      p_phase_id, p_proposal_id
+      USING ERRCODE = 'insufficient_privilege';
+  END IF;
+  IF v_phase.updated_at IS DISTINCT FROM p_expected_updated_at THEN
+    RAISE EXCEPTION 'proposal phase % changed since it was loaded', p_phase_id
+      USING ERRCODE = 'serialization_failure';
+  END IF;
+
+  UPDATE public.proposal_phases
+  SET name = CASE WHEN p_patch ? 'name'
+        THEN btrim(p_patch->>'name') ELSE name END,
+      phase_key = CASE WHEN p_patch ? 'phase_key'
+        THEN NULLIF(btrim(COALESCE(p_patch->>'phase_key', '')), '')
+        ELSE phase_key END,
+      duration_weeks = CASE WHEN p_patch ? 'duration_weeks'
+        THEN NULLIF(p_patch->>'duration_weeks', '')::integer
+        ELSE duration_weeks END,
+      fee_cents = CASE WHEN p_patch ? 'fee_cents'
+        THEN (p_patch->>'fee_cents')::integer ELSE fee_cents END,
+      revision_limit = CASE WHEN p_patch ? 'revision_limit'
+        THEN NULLIF(p_patch->>'revision_limit', '')::integer
+        ELSE revision_limit END,
+      gate_condition = CASE WHEN p_patch ? 'gate_condition'
+        THEN NULLIF(btrim(COALESCE(p_patch->>'gate_condition', '')), '')
+        ELSE gate_condition END,
+      deliverables = CASE WHEN p_patch ? 'deliverables'
+        THEN p_patch->'deliverables' ELSE deliverables END,
+      duration_days = CASE WHEN p_patch ? 'duration_days'
+        THEN NULLIF(p_patch->>'duration_days', '')::integer
+        ELSE duration_days END,
+      anchor_date = CASE WHEN p_patch ? 'anchor_date'
+        THEN NULLIF(p_patch->>'anchor_date', '')::date ELSE anchor_date END,
+      updated_at = now()
+  WHERE id = p_phase_id
+    AND proposal_id = p_proposal_id
+  RETURNING * INTO v_phase;
+
+  PERFORM public._assert_proposal_phase_topology(
+    p_proposal_id, 'update_proposal_phase result'
+  );
+  PERFORM public._recompute_proposal_total_locked(p_proposal_id);
+  RETURN v_phase;
+END;
+$$;
+
+REVOKE ALL ON FUNCTION public.update_proposal_phase(
+  uuid, uuid, jsonb, timestamptz
+) FROM PUBLIC, anon, service_role;
+GRANT EXECUTE ON FUNCTION public.update_proposal_phase(
+  uuid, uuid, jsonb, timestamptz
+) TO authenticated;
+
+CREATE OR REPLACE FUNCTION public.remove_proposal_phase(
+  p_phase_id uuid,
+  p_proposal_id uuid,
+  p_expected_updated_at timestamptz
+)
+RETURNS public.proposal_phases
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public, pg_temp
+AS $$
+DECLARE
+  v_proposal public.proposals%ROWTYPE;
+  v_phase public.proposal_phases%ROWTYPE;
+BEGIN
+  IF auth.uid() IS NULL THEN
+    RAISE EXCEPTION 'remove_proposal_phase requires an authenticated user'
+      USING ERRCODE = 'insufficient_privilege';
+  END IF;
+  IF p_expected_updated_at IS NULL THEN
+    RAISE EXCEPTION 'p_expected_updated_at is required'
+      USING ERRCODE = 'invalid_parameter_value';
+  END IF;
+
+  SELECT * INTO v_proposal
+  FROM public.proposals
+  WHERE id = p_proposal_id
+  FOR UPDATE;
+  IF NOT FOUND OR NOT public._can_author_proposal(v_proposal.designer_id) THEN
+    RAISE EXCEPTION 'proposal % not found or access denied', p_proposal_id
+      USING ERRCODE = 'insufficient_privilege';
+  END IF;
+  IF v_proposal.status <> 'draft' THEN
+    RAISE EXCEPTION 'proposal % is %, so its authored copy is immutable',
+      p_proposal_id, v_proposal.status
+      USING ERRCODE = 'check_violation';
+  END IF;
+
+  PERFORM phase.id
+  FROM public.proposal_phases AS phase
+  WHERE phase.proposal_id = p_proposal_id
+  ORDER BY phase.id
+  FOR UPDATE;
+  PERFORM public._assert_proposal_phase_topology(
+    p_proposal_id, 'remove_proposal_phase precondition'
+  );
+
+  SELECT * INTO v_phase
+  FROM public.proposal_phases
+  WHERE id = p_phase_id
+    AND proposal_id = p_proposal_id;
+  IF NOT FOUND THEN
+    RAISE EXCEPTION 'proposal phase % not found in proposal %',
+      p_phase_id, p_proposal_id
+      USING ERRCODE = 'insufficient_privilege';
+  END IF;
+  IF v_phase.updated_at IS DISTINCT FROM p_expected_updated_at THEN
+    RAISE EXCEPTION 'proposal phase % changed since it was loaded', p_phase_id
+      USING ERRCODE = 'serialization_failure';
+  END IF;
+
+  -- Preserve every direct branch. A main successor takes the deleted phase's
+  -- predecessor; thread children are re-anchored to the same predecessor.
+  UPDATE public.proposal_phases
+  SET follows_phase_id = v_phase.follows_phase_id,
+      updated_at = now()
+  WHERE proposal_id = p_proposal_id
+    AND follows_phase_id = p_phase_id;
+
+  DELETE FROM public.proposal_phases
+  WHERE id = p_phase_id
+    AND proposal_id = p_proposal_id;
+
+  PERFORM public._assert_proposal_phase_topology(
+    p_proposal_id, 'remove_proposal_phase result'
+  );
+  PERFORM public._recompute_proposal_total_locked(p_proposal_id);
+  RETURN v_phase;
+END;
+$$;
+
+REVOKE ALL ON FUNCTION public.remove_proposal_phase(
+  uuid, uuid, timestamptz
+) FROM PUBLIC, anon, service_role;
+GRANT EXECUTE ON FUNCTION public.remove_proposal_phase(
+  uuid, uuid, timestamptz
+) TO authenticated;
+
+CREATE OR REPLACE FUNCTION public._proposal_phase_effect_snapshot(
+  p_proposal_id uuid,
+  p_phase_ids uuid[]
+)
+RETURNS jsonb
+LANGUAGE sql
+SECURITY DEFINER
+SET search_path = public, pg_temp
+AS $$
+  SELECT COALESCE(
+    jsonb_agg(
+      jsonb_build_object(
+        'phase', to_jsonb(phase) - ARRAY['created_at', 'updated_at'],
+        'deliverables', COALESCE((
+          SELECT jsonb_agg(
+            to_jsonb(deliverable) - ARRAY['created_at', 'updated_at']
+            ORDER BY deliverable.sort_order, deliverable.id
+          )
+          FROM public.proposal_phase_deliverables AS deliverable
+          WHERE deliverable.phase_id = phase.id
+        ), '[]'::jsonb),
+        'gates', COALESCE((
+          SELECT jsonb_agg(
+            to_jsonb(gate) - ARRAY['created_at', 'updated_at']
+            ORDER BY gate.sort_order, gate.id
+          )
+          FROM public.proposal_phase_gates AS gate
+          WHERE gate.phase_id = phase.id
+        ), '[]'::jsonb)
+      )
+      ORDER BY requested.ordinal
+    ),
+    '[]'::jsonb
+  )
+  FROM unnest(COALESCE(p_phase_ids, '{}'::uuid[]))
+       WITH ORDINALITY AS requested(phase_id, ordinal)
+  JOIN public.proposal_phases AS phase
+    ON phase.id = requested.phase_id
+   AND phase.proposal_id = p_proposal_id
+$$;
+
+REVOKE ALL ON FUNCTION public._proposal_phase_effect_snapshot(uuid, uuid[])
+  FROM PUBLIC, anon, authenticated, service_role;
+
+CREATE TABLE IF NOT EXISTS public.proposal_phase_template_applications (
+  request_id uuid NOT NULL,
+  proposal_id uuid NOT NULL
+    REFERENCES public.proposals(id) ON DELETE CASCADE,
+  template_slug text NOT NULL,
+  phase_ids uuid[] NOT NULL DEFAULT '{}'::uuid[],
+  effect_snapshot jsonb NOT NULL DEFAULT '[]'::jsonb,
+  created_by uuid NOT NULL REFERENCES auth.users(id),
+  created_at timestamptz NOT NULL DEFAULT now(),
+  PRIMARY KEY (proposal_id, request_id)
+);
+
+ALTER TABLE public.proposal_phase_template_applications
+  ENABLE ROW LEVEL SECURITY;
+REVOKE ALL ON TABLE public.proposal_phase_template_applications
+  FROM PUBLIC, anon, authenticated, service_role;
+GRANT SELECT ON TABLE public.proposal_phase_template_applications
+  TO service_role;
+
+-- 00324 lineage, now with one locked parent protocol, canonical studio
+-- authority, and a durable request receipt. Existing phases are preserved and
+-- every template append begins at the topology-derived main tail. The sole
+-- legacy repair recognizes the exact historical Add Defaults prefix (1..5
+-- rows, including fee/revision values, all null-follow), links those rows, and
+-- inserts only that historical list's missing suffix. Arbitrary disconnected
+-- user branches fail closed instead of being silently rewritten.
+CREATE OR REPLACE FUNCTION public.apply_phase_template(
+  p_proposal_id uuid,
+  p_template_slug text,
+  p_request_id uuid
+)
+RETURNS SETOF uuid
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public, pg_temp
+AS $$
+DECLARE
+  v_actor uuid := auth.uid();
+  v_proposal public.proposals%ROWTYPE;
+  v_template public.phase_templates%ROWTYPE;
+  v_receipt public.proposal_phase_template_applications%ROWTYPE;
+  v_phase_data jsonb;
+  v_phase_id uuid;
+  v_prev_phase_id uuid;
+  v_deliverable jsonb;
+  v_gate jsonb;
+  v_max_sort integer;
+  v_existing_count integer;
+  v_prefix_mismatch_count integer;
+  v_recovered_prefix_count integer := 0;
+  v_existing record;
+  v_inserted_phase_ids uuid[] := '{}'::uuid[];
+  v_effect_phase_ids uuid[] := '{}'::uuid[];
+  v_effective_phases jsonb;
+  v_legacy_default_phases jsonb := '[
+    {
+      "name":"Schematic Design",
+      "phase_key":"concept_development",
+      "duration_weeks":3,
+      "fee_cents":250000,
+      "revision_limit":2
+    },
+    {
+      "name":"Design Development",
+      "phase_key":"design_refinement",
+      "duration_weeks":4,
+      "fee_cents":350000,
+      "revision_limit":2
+    },
+    {
+      "name":"Procurement Management",
+      "phase_key":"procurement",
+      "duration_weeks":8,
+      "fee_cents":200000,
+      "revision_limit":1
+    },
+    {
+      "name":"Installation & Styling",
+      "phase_key":"installation",
+      "duration_weeks":3,
+      "fee_cents":150000,
+      "revision_limit":1
+    },
+    {
+      "name":"Completion & Handover",
+      "phase_key":"final_walkthrough",
+      "duration_weeks":1,
+      "fee_cents":50000,
+      "revision_limit":0
+    }
+  ]'::jsonb;
+  v_return_id uuid;
+BEGIN
+  IF v_actor IS NULL THEN
+    RAISE EXCEPTION 'apply_phase_template requires an authenticated user'
+      USING ERRCODE = 'insufficient_privilege';
+  END IF;
+  IF p_request_id IS NULL THEN
+    RAISE EXCEPTION 'p_request_id is required'
+      USING ERRCODE = 'invalid_parameter_value';
+  END IF;
+
+  SELECT * INTO v_proposal
+  FROM public.proposals
+  WHERE id = p_proposal_id
+  FOR UPDATE;
+
+  IF NOT FOUND OR NOT public._can_author_proposal(v_proposal.designer_id) THEN
+    RAISE EXCEPTION 'proposal % not found or access denied', p_proposal_id
+      USING ERRCODE = 'insufficient_privilege';
+  END IF;
+
+  SELECT * INTO v_receipt
+  FROM public.proposal_phase_template_applications
+  WHERE proposal_id = p_proposal_id
+    AND request_id = p_request_id
+  FOR UPDATE;
+  IF FOUND THEN
+    IF v_receipt.template_slug IS DISTINCT FROM p_template_slug
+       OR EXISTS (
+         SELECT 1
+         FROM unnest(v_receipt.phase_ids) AS receipt_phase(id)
+         WHERE NOT EXISTS (
+           SELECT 1
+           FROM public.proposal_phases AS phase
+           WHERE phase.id = receipt_phase.id
+             AND phase.proposal_id = p_proposal_id
+         )
+       )
+       OR v_receipt.effect_snapshot IS DISTINCT FROM
+            public._proposal_phase_effect_snapshot(
+              p_proposal_id, v_receipt.phase_ids
+            )
+    THEN
+      RAISE EXCEPTION 'template request % conflicts with its recorded effect',
+        p_request_id
+        USING ERRCODE = 'serialization_failure';
+    END IF;
+    FOREACH v_return_id IN ARRAY v_receipt.phase_ids LOOP
+      RETURN NEXT v_return_id;
+    END LOOP;
+    RETURN;
+  END IF;
+
+  -- A named template is one compositional act per proposal, even when two
+  -- browser tabs initiate that act with different request UUIDs. The proposal
+  -- row lock above serializes both callers. Preserve the later request as an
+  -- alias to the first durable effect so its retries remain exact as well.
+  SELECT * INTO v_receipt
+  FROM public.proposal_phase_template_applications
+  WHERE proposal_id = p_proposal_id
+    AND template_slug = p_template_slug
+  ORDER BY created_at, request_id
+  LIMIT 1
+  FOR UPDATE;
+  IF FOUND THEN
+    IF EXISTS (
+      SELECT 1
+      FROM unnest(v_receipt.phase_ids) AS receipt_phase(id)
+      WHERE NOT EXISTS (
+        SELECT 1
+        FROM public.proposal_phases AS phase
+        WHERE phase.id = receipt_phase.id
+          AND phase.proposal_id = p_proposal_id
+      )
+    ) OR v_receipt.effect_snapshot IS DISTINCT FROM
+           public._proposal_phase_effect_snapshot(
+             p_proposal_id, v_receipt.phase_ids
+           )
+    THEN
+      RAISE EXCEPTION
+        'template % was already applied but its recorded effect changed',
+        p_template_slug
+        USING ERRCODE = 'serialization_failure';
+    END IF;
+
+    INSERT INTO public.proposal_phase_template_applications (
+      request_id, proposal_id, template_slug, phase_ids,
+      effect_snapshot, created_by
+    ) VALUES (
+      p_request_id, p_proposal_id, p_template_slug,
+      v_receipt.phase_ids, v_receipt.effect_snapshot, v_actor
+    );
+
+    FOREACH v_return_id IN ARRAY v_receipt.phase_ids LOOP
+      RETURN NEXT v_return_id;
+    END LOOP;
+    RETURN;
+  END IF;
+
+  IF v_proposal.status <> 'draft' THEN
+    RAISE EXCEPTION 'proposal % is %, so its authored copy is immutable',
+      p_proposal_id, v_proposal.status
+      USING ERRCODE = 'check_violation';
+  END IF;
+
+  SELECT * INTO v_template
+  FROM public.phase_templates
+  WHERE slug = p_template_slug
+    AND (is_system OR designer_id = v_actor);
+  IF NOT FOUND THEN
+    RAISE EXCEPTION 'template not found or access denied: %', p_template_slug
+      USING ERRCODE = 'insufficient_privilege';
+  END IF;
+  IF jsonb_typeof(v_template.phases) <> 'array'
+     OR jsonb_array_length(v_template.phases) = 0
+  THEN
+    RAISE EXCEPTION 'template % has no valid phases', p_template_slug
+      USING ERRCODE = 'check_violation';
+  END IF;
+  v_effective_phases := v_template.phases;
+
+  PERFORM phase.id
+  FROM public.proposal_phases AS phase
+  WHERE phase.proposal_id = p_proposal_id
+  ORDER BY phase.id
+  FOR UPDATE;
+
+  SELECT count(*) INTO v_existing_count
+  FROM public.proposal_phases
+  WHERE proposal_id = p_proposal_id;
+
+  IF p_template_slug = 'patina_six'
+     AND v_existing_count BETWEEN 1 AND 5
+  THEN
+    WITH ordered_existing AS (
+      SELECT phase.*,
+             row_number() OVER (ORDER BY phase.sort_order, phase.id) AS ordinal,
+             lag(phase.id) OVER (
+               ORDER BY phase.sort_order, phase.id
+             ) AS expected_predecessor_id,
+             bool_and(phase.follows_phase_id IS NULL) OVER () AS all_null_legacy
+      FROM public.proposal_phases AS phase
+      WHERE phase.proposal_id = p_proposal_id
+    )
+    SELECT count(*) INTO v_prefix_mismatch_count
+    FROM ordered_existing AS existing
+    JOIN LATERAL (
+      SELECT blueprint.value
+      FROM jsonb_array_elements(v_legacy_default_phases)
+           WITH ORDINALITY AS blueprint(value, ordinal)
+      WHERE blueprint.ordinal = existing.ordinal
+    ) AS expected ON true
+    WHERE existing.lane <> 'main'
+       OR (
+         NOT existing.all_null_legacy
+         AND existing.follows_phase_id
+               IS DISTINCT FROM existing.expected_predecessor_id
+       )
+       OR existing.sort_order <> existing.ordinal - 1
+       OR existing.name IS DISTINCT FROM expected.value->>'name'
+       OR existing.phase_key IS DISTINCT FROM expected.value->>'phase_key'
+       OR existing.duration_weeks IS DISTINCT FROM
+            (expected.value->>'duration_weeks')::integer
+       OR existing.duration_days IS NOT NULL
+       OR existing.fee_cents IS DISTINCT FROM
+            (expected.value->>'fee_cents')::integer
+       OR existing.revision_limit IS DISTINCT FROM
+            (expected.value->>'revision_limit')::integer;
+
+    IF v_prefix_mismatch_count = 0 THEN
+      v_prev_phase_id := NULL;
+      FOR v_existing IN
+        SELECT phase.id
+        FROM public.proposal_phases AS phase
+        WHERE phase.proposal_id = p_proposal_id
+        ORDER BY phase.sort_order, phase.id
+      LOOP
+        UPDATE public.proposal_phases
+        SET follows_phase_id = v_prev_phase_id
+        WHERE id = v_existing.id;
+        v_prev_phase_id := v_existing.id;
+      END LOOP;
+      v_recovered_prefix_count := v_existing_count;
+      v_effective_phases := v_legacy_default_phases;
+    END IF;
+  END IF;
+
+  IF v_recovered_prefix_count = 0 THEN
+    v_prev_phase_id := public._proposal_phase_main_tail(
+      p_proposal_id, 'apply_phase_template precondition'
+    );
+  ELSE
+    PERFORM public._assert_proposal_phase_topology(
+      p_proposal_id, 'apply_phase_template recovered prefix'
+    );
+  END IF;
+
+  SELECT COALESCE(max(sort_order), -1) INTO v_max_sort
+  FROM public.proposal_phases
+  WHERE proposal_id = p_proposal_id;
+
+  FOR v_phase_data IN
+    SELECT blueprint.value
+    FROM jsonb_array_elements(v_effective_phases)
+         WITH ORDINALITY AS blueprint(value, ordinal)
+    WHERE blueprint.ordinal > v_recovered_prefix_count
+    ORDER BY blueprint.ordinal
+  LOOP
+    IF btrim(COALESCE(v_phase_data->>'name', '')) = '' THEN
+      RAISE EXCEPTION 'every template phase requires a name'
+        USING ERRCODE = 'check_violation';
+    END IF;
+    v_max_sort := v_max_sort + 1;
+
+    INSERT INTO public.proposal_phases (
+      proposal_id, name, phase_key, duration_weeks, duration_days, lane,
+      follows_phase_id, fee_cents, revision_limit, sort_order
+    ) VALUES (
+      p_proposal_id,
+      btrim(v_phase_data->>'name'),
+      NULLIF(v_phase_data->>'phase_key', ''),
+      NULLIF(v_phase_data->>'duration_weeks', '')::integer,
+      NULLIF(v_phase_data->>'duration_days', '')::integer,
+      COALESCE(NULLIF(v_phase_data->>'lane', ''), 'main'),
+      v_prev_phase_id,
+      COALESCE(NULLIF(v_phase_data->>'fee_cents', '')::integer, 0),
+      COALESCE(NULLIF(v_phase_data->>'revision_limit', '')::integer, 0),
+      v_max_sort
+    )
+    RETURNING id INTO v_phase_id;
+
+    v_inserted_phase_ids := array_append(v_inserted_phase_ids, v_phase_id);
+    v_prev_phase_id := v_phase_id;
+
+    IF v_phase_data ? 'deliverables' THEN
+      FOR v_deliverable IN
+        SELECT value FROM jsonb_array_elements(v_phase_data->'deliverables')
+      LOOP
+        INSERT INTO public.proposal_phase_deliverables (
+          phase_id, label, description, is_required, sort_order
+        ) VALUES (
+          v_phase_id,
+          v_deliverable->>'label',
+          v_deliverable->>'description',
+          COALESCE((v_deliverable->>'is_required')::boolean, true),
+          COALESCE((v_deliverable->>'sort_order')::integer, 0)
+        );
+      END LOOP;
+    END IF;
+
+    IF v_phase_data ? 'default_gates' THEN
+      FOR v_gate IN
+        SELECT value FROM jsonb_array_elements(v_phase_data->'default_gates')
+      LOOP
+        INSERT INTO public.proposal_phase_gates (
+          phase_id, gate_kind, payload, sort_order
+        ) VALUES (
+          v_phase_id,
+          v_gate->>'gate_kind',
+          COALESCE(v_gate->'payload', '{}'::jsonb),
+          COALESCE((v_gate->>'sort_order')::integer, 0)
+        );
+      END LOOP;
+    END IF;
+  END LOOP;
+
+  PERFORM public._assert_proposal_phase_topology(
+    p_proposal_id, 'apply_phase_template result'
+  );
+
+  IF v_recovered_prefix_count > 0 THEN
+    SELECT COALESCE(
+             array_agg(phase.id ORDER BY phase.sort_order, phase.id),
+             '{}'::uuid[]
+           )
+    INTO v_effect_phase_ids
+    FROM public.proposal_phases AS phase
+    WHERE phase.proposal_id = p_proposal_id;
+  ELSE
+    v_effect_phase_ids := v_inserted_phase_ids;
+  END IF;
+
+  PERFORM public._recompute_proposal_total_locked(p_proposal_id);
+
+  INSERT INTO public.proposal_phase_template_applications (
+    request_id, proposal_id, template_slug, phase_ids,
+    effect_snapshot, created_by
+  ) VALUES (
+    p_request_id, p_proposal_id, p_template_slug,
+    v_effect_phase_ids,
+    public._proposal_phase_effect_snapshot(
+      p_proposal_id, v_effect_phase_ids
+    ),
+    v_actor
+  );
+
+  FOREACH v_return_id IN ARRAY v_effect_phase_ids LOOP
+    RETURN NEXT v_return_id;
+  END LOOP;
+END;
+$$;
+
+REVOKE ALL ON FUNCTION public.apply_phase_template(uuid, text, uuid)
+  FROM PUBLIC, anon, service_role;
+GRANT EXECUTE ON FUNCTION public.apply_phase_template(uuid, text, uuid)
+  TO authenticated;
+
+-- Backward-compatible internal/older-client bridge. New browser code supplies
+-- a stable request UUID to the three-argument form so a lost response retries
+-- the receipt instead of duplicating scope and fees.
+CREATE OR REPLACE FUNCTION public.apply_phase_template(
+  p_proposal_id uuid,
+  p_template_slug text
+)
+RETURNS SETOF uuid
+LANGUAGE sql
+SECURITY DEFINER
+SET search_path = public, pg_temp
+AS $$
+  SELECT *
+  FROM public.apply_phase_template(
+    p_proposal_id, p_template_slug, gen_random_uuid()
+  )
+$$;
+
+REVOKE ALL ON FUNCTION public.apply_phase_template(uuid, text)
+  FROM PUBLIC, anon, service_role;
+GRANT EXECUTE ON FUNCTION public.apply_phase_template(uuid, text)
+  TO authenticated;
+
+-- 00398 copy lineage with the proposal leg brought under the same canonical
+-- studio/draft/topology/total boundary as the other phase birth paths. Because
+-- copying is an empty-target birth act, an exact already-materialized target
+-- is its idempotent receipt; any other nonempty target still fails closed.
+CREATE OR REPLACE FUNCTION public.copy_schedule_as_built(
+  p_source_project_id uuid,
+  p_target_proposal_id uuid DEFAULT NULL,
+  p_target_project_id uuid DEFAULT NULL
+)
+RETURNS SETOF uuid
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public, pg_temp
+AS $$
+DECLARE
+  v_actor uuid := auth.uid();
+  v_source_project public.projects%ROWTYPE;
+  v_target_project public.projects%ROWTYPE;
+  v_target_proposal public.proposals%ROWTYPE;
+  v_src record;
+  v_duration integer;
+  v_new_phase_id uuid;
+  v_prev_phase_id uuid := NULL;
+  v_sort integer := -1;
+  v_source_count integer;
+  v_exact_replay boolean := false;
+  v_return_id uuid;
+BEGIN
+  IF v_actor IS NULL THEN
+    RAISE EXCEPTION 'copy_schedule_as_built requires an authenticated user'
+      USING ERRCODE = 'insufficient_privilege';
+  END IF;
+  IF (p_target_proposal_id IS NULL) = (p_target_project_id IS NULL) THEN
+    RAISE EXCEPTION
+      'exactly one of p_target_proposal_id / p_target_project_id must be provided'
+      USING ERRCODE = 'invalid_parameter_value';
+  END IF;
+
+  IF p_target_project_id IS NOT NULL THEN
+    PERFORM project.id
+    FROM public.projects AS project
+    WHERE project.id IN (p_source_project_id, p_target_project_id)
+    ORDER BY project.id
+    FOR UPDATE;
+
+    SELECT * INTO v_source_project
+    FROM public.projects WHERE id = p_source_project_id;
+    SELECT * INTO v_target_project
+    FROM public.projects WHERE id = p_target_project_id;
+
+    IF v_source_project.id IS NULL
+       OR NOT public._can_author_proposal(v_source_project.designer_id) THEN
+      RAISE EXCEPTION
+        'copy_schedule_as_built: source project not found or access denied'
+        USING ERRCODE = 'insufficient_privilege';
+    END IF;
+    IF v_target_project.id IS NULL
+       OR NOT public._can_author_proposal(v_target_project.designer_id) THEN
+      RAISE EXCEPTION
+        'copy_schedule_as_built: target project not found or access denied'
+        USING ERRCODE = 'insufficient_privilege';
+    END IF;
+    IF EXISTS (
+      SELECT 1 FROM public.project_phases
+      WHERE project_id = p_target_project_id
+    ) THEN
+      RAISE EXCEPTION
+        'target project % already has phases; the schedule is never rebuilt (R100)',
+        p_target_project_id
+        USING ERRCODE = 'check_violation';
+    END IF;
+  ELSE
+    SELECT * INTO v_source_project
+    FROM public.projects
+    WHERE id = p_source_project_id
+    FOR UPDATE;
+    IF NOT FOUND
+       OR NOT public._can_author_proposal(v_source_project.designer_id) THEN
+      RAISE EXCEPTION
+        'copy_schedule_as_built: source project not found or access denied'
+        USING ERRCODE = 'insufficient_privilege';
+    END IF;
+
+    SELECT * INTO v_target_proposal
+    FROM public.proposals
+    WHERE id = p_target_proposal_id
+    FOR UPDATE;
+    IF NOT FOUND
+       OR NOT public._can_author_proposal(v_target_proposal.designer_id) THEN
+      RAISE EXCEPTION
+        'copy_schedule_as_built: target proposal not found or access denied'
+        USING ERRCODE = 'insufficient_privilege';
+    END IF;
+    IF v_target_proposal.status <> 'draft' THEN
+      RAISE EXCEPTION 'proposal % is %, so its authored copy is immutable',
+        p_target_proposal_id, v_target_proposal.status
+        USING ERRCODE = 'check_violation';
+    END IF;
+
+    PERFORM phase.id
+    FROM public.proposal_phases AS phase
+    WHERE phase.proposal_id = p_target_proposal_id
+    ORDER BY phase.id
+    FOR UPDATE;
+  END IF;
+
+  PERFORM phase.id
+  FROM public.project_phases AS phase
+  WHERE phase.project_id = p_source_project_id
+  ORDER BY phase.id
+  FOR UPDATE;
+  PERFORM public._assert_project_phase_topology(
+    p_source_project_id, 'copy_schedule_as_built source'
+  );
+  SELECT count(*) INTO v_source_count
+  FROM public.project_phases
+  WHERE project_id = p_source_project_id;
+  IF v_source_count = 0 THEN
+    RAISE EXCEPTION 'source project % has no phases to copy', p_source_project_id
+      USING ERRCODE = 'check_violation';
+  END IF;
+
+  IF p_target_proposal_id IS NOT NULL
+     AND EXISTS (
+       SELECT 1 FROM public.proposal_phases
+       WHERE proposal_id = p_target_proposal_id
+     )
+  THEN
+    PERFORM public._assert_proposal_phase_topology(
+      p_target_proposal_id, 'copy_schedule_as_built existing receipt'
+    );
+    WITH source_rows AS (
+      SELECT
+        row_number() OVER (ORDER BY phase.sort_order, phase.id) AS ordinal,
+        phase.name,
+        phase.phase_key,
+        CASE
+          WHEN phase.start_date IS NOT NULL
+           AND COALESCE(phase.completed_at::date, phase.target_end_date) IS NOT NULL
+          THEN GREATEST(
+            1,
+            COALESCE(phase.completed_at::date, phase.target_end_date)
+              - phase.start_date
+          )
+          ELSE COALESCE(
+            phase.duration_days, phase.duration_weeks * 7, 14
+          )
+        END AS duration_days,
+        COALESCE(phase.lane, 'main') AS lane
+      FROM public.project_phases AS phase
+      WHERE phase.project_id = p_source_project_id
+    ), target_rows AS (
+      SELECT
+        row_number() OVER (ORDER BY phase.sort_order, phase.id) AS ordinal,
+        phase.*,
+        lag(phase.id) OVER (ORDER BY phase.sort_order, phase.id) AS prior_id
+      FROM public.proposal_phases AS phase
+      WHERE phase.proposal_id = p_target_proposal_id
+    )
+    SELECT
+      (SELECT count(*) FROM source_rows)
+        = (SELECT count(*) FROM target_rows)
+      AND NOT EXISTS (
+        SELECT 1
+        FROM source_rows AS source
+        FULL JOIN target_rows AS target USING (ordinal)
+        WHERE source.ordinal IS NULL
+           OR target.ordinal IS NULL
+           OR target.name IS DISTINCT FROM source.name
+           OR target.phase_key IS DISTINCT FROM source.phase_key
+           OR target.duration_days IS DISTINCT FROM source.duration_days
+           OR target.lane IS DISTINCT FROM source.lane
+           OR target.sort_order IS DISTINCT FROM source.ordinal - 1
+           OR target.follows_phase_id IS DISTINCT FROM
+                CASE WHEN source.ordinal = 1 THEN NULL ELSE target.prior_id END
+      )
+    INTO v_exact_replay;
+
+    IF NOT v_exact_replay THEN
+      RAISE EXCEPTION
+        'target proposal % already has a different schedule; it is never rebuilt (R100)',
+        p_target_proposal_id
+        USING ERRCODE = 'check_violation';
+    END IF;
+
+    PERFORM public._recompute_proposal_total_locked(p_target_proposal_id);
+    FOR v_return_id IN
+      SELECT phase.id
+      FROM public.proposal_phases AS phase
+      WHERE phase.proposal_id = p_target_proposal_id
+      ORDER BY phase.sort_order, phase.id
+    LOOP
+      RETURN NEXT v_return_id;
+    END LOOP;
+    RETURN;
+  END IF;
+
+  FOR v_src IN
+    SELECT *
+    FROM public.project_phases
+    WHERE project_id = p_source_project_id
+    ORDER BY sort_order, id
+  LOOP
+    v_sort := v_sort + 1;
+    IF v_src.start_date IS NOT NULL
+       AND COALESCE(v_src.completed_at::date, v_src.target_end_date) IS NOT NULL
+    THEN
+      v_duration := GREATEST(
+        1,
+        COALESCE(v_src.completed_at::date, v_src.target_end_date)
+          - v_src.start_date
+      );
+    ELSE
+      v_duration := COALESCE(
+        v_src.duration_days, v_src.duration_weeks * 7, 14
+      );
+    END IF;
+
+    IF p_target_proposal_id IS NOT NULL THEN
+      INSERT INTO public.proposal_phases (
+        proposal_id, name, phase_key, duration_days, lane,
+        follows_phase_id, sort_order
+      ) VALUES (
+        p_target_proposal_id, v_src.name, v_src.phase_key, v_duration,
+        COALESCE(v_src.lane, 'main'), v_prev_phase_id, v_sort
+      )
+      RETURNING id INTO v_new_phase_id;
+    ELSE
+      SELECT created.id INTO v_new_phase_id
+      FROM public.create_project_phase(
+        p_project_id => p_target_project_id,
+        p_phase_key => v_src.phase_key,
+        p_name => v_src.name,
+        p_sort_order => v_sort,
+        p_duration_days => v_duration,
+        p_follows_phase_id => v_prev_phase_id,
+        p_lane => COALESCE(v_src.lane, 'main')
+      ) AS created;
+    END IF;
+
+    RETURN NEXT v_new_phase_id;
+    v_prev_phase_id := v_new_phase_id;
+  END LOOP;
+
+  IF p_target_proposal_id IS NOT NULL THEN
+    PERFORM public._assert_proposal_phase_topology(
+      p_target_proposal_id, 'copy_schedule_as_built result'
+    );
+    PERFORM public._recompute_proposal_total_locked(p_target_proposal_id);
+  END IF;
+END;
+$$;
+
+REVOKE ALL ON FUNCTION public.copy_schedule_as_built(uuid, uuid, uuid)
+  FROM PUBLIC, anon, service_role;
+GRANT EXECUTE ON FUNCTION public.copy_schedule_as_built(uuid, uuid, uuid)
+  TO authenticated;
+
+-- 00327's deep-copy implementation remains the source of truth for every
+-- non-schedule child table, but it was SECURITY INVOKER and predated linked
+-- proposal phases. Freeze it as a private implementation, then expose one
+-- checked wrapper that reconstructs the cloned schedule with the complete
+-- old→new predecessor map before returning the draft.
+ALTER FUNCTION public.clone_proposal(uuid, text, text)
+  RENAME TO _clone_proposal_legacy_00399;
+REVOKE ALL ON FUNCTION public._clone_proposal_legacy_00399(uuid, text, text)
+  FROM PUBLIC, anon, authenticated, service_role;
+
+CREATE OR REPLACE FUNCTION public.clone_proposal(
+  p_source_id uuid,
+  p_mode text DEFAULT 'revision',
+  p_revision_summary text DEFAULT NULL
+)
+RETURNS uuid
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public, pg_temp
+AS $$
+DECLARE
+  v_actor uuid := auth.uid();
+  v_source public.proposals%ROWTYPE;
+  v_target public.proposals%ROWTYPE;
+  v_new_id uuid;
+  v_new_phase_id uuid;
+  v_phase_map jsonb := '{}'::jsonb;
+  v_phase record;
+BEGIN
+  IF v_actor IS NULL THEN
+    RAISE EXCEPTION 'clone_proposal requires an authenticated user'
+      USING ERRCODE = 'insufficient_privilege';
+  END IF;
+  IF p_mode NOT IN ('revision', 'duplicate') THEN
+    RAISE EXCEPTION
+      'clone_proposal: invalid mode %, expected revision|duplicate', p_mode
+      USING ERRCODE = 'invalid_parameter_value';
+  END IF;
+
+  SELECT * INTO v_source
+  FROM public.proposals
+  WHERE id = p_source_id
+  FOR UPDATE;
+  IF NOT FOUND OR NOT public._can_author_proposal(v_source.designer_id) THEN
+    RAISE EXCEPTION
+      'clone_proposal: proposal % not found or access denied', p_source_id
+      USING ERRCODE = 'insufficient_privilege';
+  END IF;
+
+  PERFORM phase.id
+  FROM public.proposal_phases AS phase
+  WHERE phase.proposal_id = p_source_id
+  ORDER BY phase.id
+  FOR UPDATE;
+  PERFORM public._assert_proposal_phase_topology(
+    p_source_id, 'clone_proposal source'
+  );
+
+  v_new_id := public._clone_proposal_legacy_00399(
+    p_source_id, p_mode, p_revision_summary
+  );
+
+  SELECT * INTO STRICT v_target
+  FROM public.proposals
+  WHERE id = v_new_id
+  FOR UPDATE;
+  IF v_target.status <> 'draft'
+     OR v_target.designer_id IS DISTINCT FROM v_source.designer_id
+  THEN
+    RAISE EXCEPTION 'clone_proposal produced an invalid target draft'
+      USING ERRCODE = 'check_violation';
+  END IF;
+
+  -- The frozen implementation created pre-linkage phase rows and copied their
+  -- dependent deliverables/gates/payment milestones. Remove only that target
+  -- schedule material, then rebuild it from the locked source with every
+  -- current chain field. Other deep-copy children remain exactly as 00327.
+  DELETE FROM public.proposal_schedule_milestones AS milestone
+  USING public.proposal_phases AS phase
+  WHERE milestone.phase_id = phase.id
+    AND phase.proposal_id = v_new_id;
+  DELETE FROM public.proposal_payment_milestones
+  WHERE proposal_id = v_new_id;
+  DELETE FROM public.proposal_phases
+  WHERE proposal_id = v_new_id;
+
+  FOR v_phase IN
+    SELECT *
+    FROM public.proposal_phases
+    WHERE proposal_id = p_source_id
+    ORDER BY sort_order, id
+  LOOP
+    INSERT INTO public.proposal_phases (
+      proposal_id, name, phase_key, duration_weeks, duration_days,
+      fee_cents, revision_limit, gate_condition, deliverables,
+      sort_order, follows_phase_id, anchor_date, lane
+    ) VALUES (
+      v_new_id, v_phase.name, v_phase.phase_key, v_phase.duration_weeks,
+      v_phase.duration_days, v_phase.fee_cents, v_phase.revision_limit,
+      v_phase.gate_condition, v_phase.deliverables, v_phase.sort_order,
+      NULL, v_phase.anchor_date, v_phase.lane
+    )
+    RETURNING id INTO v_new_phase_id;
+    v_phase_map := v_phase_map || jsonb_build_object(
+      v_phase.id::text, v_new_phase_id::text
+    );
+  END LOOP;
+
+  FOR v_phase IN
+    SELECT id, follows_phase_id
+    FROM public.proposal_phases
+    WHERE proposal_id = p_source_id
+    ORDER BY sort_order, id
+  LOOP
+    UPDATE public.proposal_phases
+    SET follows_phase_id = CASE
+      WHEN v_phase.follows_phase_id IS NULL THEN NULL
+      ELSE (v_phase_map ->> v_phase.follows_phase_id::text)::uuid
+    END
+    WHERE id = (v_phase_map ->> v_phase.id::text)::uuid;
+  END LOOP;
+
+  INSERT INTO public.proposal_phase_deliverables (
+    phase_id, label, description, is_required,
+    completed_at, completed_by, sort_order
+  )
+  SELECT
+    (v_phase_map ->> deliverable.phase_id::text)::uuid,
+    deliverable.label, deliverable.description, deliverable.is_required,
+    NULL, NULL, deliverable.sort_order
+  FROM public.proposal_phase_deliverables AS deliverable
+  JOIN public.proposal_phases AS phase ON phase.id = deliverable.phase_id
+  WHERE phase.proposal_id = p_source_id
+    AND v_phase_map ? deliverable.phase_id::text;
+
+  INSERT INTO public.proposal_phase_gates (
+    phase_id, gate_kind, payload, satisfied_at, satisfied_by,
+    override_reason, sort_order
+  )
+  SELECT
+    (v_phase_map ->> gate.phase_id::text)::uuid,
+    gate.gate_kind, gate.payload, NULL, NULL, NULL, gate.sort_order
+  FROM public.proposal_phase_gates AS gate
+  JOIN public.proposal_phases AS phase ON phase.id = gate.phase_id
+  WHERE phase.proposal_id = p_source_id
+    AND v_phase_map ? gate.phase_id::text;
+
+  INSERT INTO public.proposal_payment_milestones (
+    proposal_id, phase_id, label, percentage, amount_cents,
+    trigger_condition, sort_order
+  )
+  SELECT
+    v_new_id,
+    CASE
+      WHEN milestone.phase_id IS NULL THEN NULL
+      ELSE (v_phase_map ->> milestone.phase_id::text)::uuid
+    END,
+    milestone.label, milestone.percentage, milestone.amount_cents,
+    milestone.trigger_condition, milestone.sort_order
+  FROM public.proposal_payment_milestones AS milestone
+  WHERE milestone.proposal_id = p_source_id;
+
+  INSERT INTO public.proposal_schedule_milestones (
+    phase_id, name, kind, anchor_date, sort_order
+  )
+  SELECT
+    (v_phase_map ->> milestone.phase_id::text)::uuid,
+    milestone.name, milestone.kind, milestone.anchor_date,
+    milestone.sort_order
+  FROM public.proposal_schedule_milestones AS milestone
+  JOIN public.proposal_phases AS phase ON phase.id = milestone.phase_id
+  WHERE phase.proposal_id = p_source_id
+    AND v_phase_map ? milestone.phase_id::text;
+
+  PERFORM public._assert_proposal_phase_topology(
+    v_new_id, 'clone_proposal target'
+  );
+  PERFORM public._recompute_proposal_total_locked(v_new_id);
+  RETURN v_new_id;
+END;
+$$;
+
+REVOKE ALL ON FUNCTION public.clone_proposal(uuid, text, text)
+  FROM PUBLIC, anon, service_role;
+GRANT EXECUTE ON FUNCTION public.clone_proposal(uuid, text, text)
+  TO authenticated;
+
 -- ── Signature paths bind the proposal's exact relationship ─────────────────
+
+-- Engagement rows are client-writeable for ordinary telemetry such as opens
+-- and section views. Signature event names, however, are durable acceptance
+-- evidence and may only be minted by the exact canonical signature insert.
+-- Preallocating the engagement UUID gives the trigger a row-scoped fact in
+-- addition to the SECURITY DEFINER identity; a browser-set custom GUC alone is
+-- insufficient because its table write still executes as authenticated.
+CREATE OR REPLACE FUNCTION public.guard_proposal_signature_engagement()
+RETURNS trigger
+LANGUAGE plpgsql
+SECURITY INVOKER
+SET search_path = public, pg_temp
+AS $$
+DECLARE
+  v_old_reserved boolean := TG_OP <> 'INSERT'
+    AND OLD.event_type IN ('signed', 'signed_offline');
+  v_new_reserved boolean := TG_OP <> 'DELETE'
+    AND NEW.event_type IN ('signed', 'signed_offline');
+BEGIN
+  IF TG_OP = 'INSERT' AND v_new_reserved THEN
+    IF current_user IS DISTINCT FROM 'postgres'
+       OR current_setting(
+            'app.proposal_signature_engagement_id', true
+          ) IS DISTINCT FROM NEW.id::text
+    THEN
+      RAISE EXCEPTION
+        'signature engagement may only be created by a canonical signature workflow'
+        USING ERRCODE = 'check_violation';
+    END IF;
+    RETURN NEW;
+  END IF;
+
+  IF TG_OP IN ('UPDATE', 'DELETE') AND (v_old_reserved OR v_new_reserved) THEN
+    RAISE EXCEPTION 'signature engagement evidence is immutable'
+      USING ERRCODE = 'check_violation';
+  END IF;
+
+  IF TG_OP = 'DELETE' THEN
+    RETURN OLD;
+  END IF;
+  RETURN NEW;
+END;
+$$;
+
+REVOKE ALL ON FUNCTION public.guard_proposal_signature_engagement()
+  FROM PUBLIC, anon, authenticated, service_role;
+
+DROP TRIGGER IF EXISTS z_guard_proposal_signature_engagement_trg
+  ON public.proposal_engagement;
+CREATE TRIGGER z_guard_proposal_signature_engagement_trg
+BEFORE INSERT OR UPDATE OR DELETE ON public.proposal_engagement
+FOR EACH ROW EXECUTE FUNCTION public.guard_proposal_signature_engagement();
+
+-- Client proposal SELECT moved behind a safe bundle RPC in 00390, so the
+-- legacy policy's subquery can no longer see its proposals under RLS. Restore
+-- only the intended telemetry vocabulary through a narrow definer predicate;
+-- signature and workflow event names remain unavailable to browser inserts.
+CREATE OR REPLACE FUNCTION public._can_record_proposal_engagement(
+  p_proposal_id uuid,
+  p_viewer_id uuid,
+  p_event_type text
+)
+RETURNS boolean
+LANGUAGE sql
+STABLE
+SECURITY DEFINER
+SET search_path = public, pg_temp
+AS $$
+  SELECT auth.uid() IS NOT NULL
+    AND p_viewer_id IS NOT DISTINCT FROM auth.uid()
+    AND p_event_type IN ('opened', 'section_viewed', 'downloaded')
+    AND EXISTS (
+      SELECT 1
+      FROM public.proposals AS proposal
+      WHERE proposal.id = p_proposal_id
+        AND proposal.client_id = auth.uid()
+        AND proposal.status <> 'draft'
+    )
+$$;
+
+REVOKE ALL ON FUNCTION public._can_record_proposal_engagement(uuid, uuid, text)
+  FROM PUBLIC, anon, service_role;
+GRANT EXECUTE ON FUNCTION public._can_record_proposal_engagement(
+  uuid, uuid, text
+) TO authenticated;
+
+DROP POLICY IF EXISTS "Clients can record engagement"
+  ON public.proposal_engagement;
+CREATE POLICY proposal_engagement_client_telemetry_insert
+ON public.proposal_engagement FOR INSERT TO authenticated
+WITH CHECK (
+  public._can_record_proposal_engagement(
+    proposal_id, viewer_id, event_type
+  )
+);
 
 CREATE OR REPLACE FUNCTION public.sign_proposal(
   p_proposal_id uuid,
@@ -2748,6 +5728,10 @@ DECLARE
   v_proposal public.proposals%ROWTYPE;
   v_project_id uuid;
   v_decision_id uuid := gen_random_uuid();
+  v_engagement_id uuid := gen_random_uuid();
+  v_previous_engagement_token text := current_setting(
+    'app.proposal_signature_engagement_id', true
+  );
   v_signed_name text := btrim(COALESCE(p_signed_name, ''));
 BEGIN
   IF auth.uid() IS NULL THEN
@@ -2847,15 +5831,23 @@ BEGIN
   RETURNING * INTO v_proposal;
   PERFORM set_config('app.proposal_accept_id', '', true);
 
+  PERFORM set_config(
+    'app.proposal_signature_engagement_id', v_engagement_id::text, true
+  );
   INSERT INTO public.proposal_engagement (
-    proposal_id, viewer_id, event_type, metadata
+    id, proposal_id, viewer_id, event_type, metadata
   ) VALUES (
-    p_proposal_id, auth.uid(), 'signed',
+    v_engagement_id, p_proposal_id, auth.uid(), 'signed',
     jsonb_build_object(
       'via', 'sign_proposal',
       'signed_by_name', v_signed_name,
       'signed_ip', p_signed_ip
     )
+  );
+  PERFORM set_config(
+    'app.proposal_signature_engagement_id',
+    COALESCE(v_previous_engagement_token, ''),
+    true
   );
 
   IF p_auto_activate AND v_proposal.project_id IS NULL THEN
@@ -2894,6 +5886,10 @@ AS $$
 DECLARE
   v_proposal public.proposals%ROWTYPE;
   v_decision_id uuid := gen_random_uuid();
+  v_engagement_id uuid := gen_random_uuid();
+  v_previous_engagement_token text := current_setting(
+    'app.proposal_signature_engagement_id', true
+  );
   v_signed_name text := btrim(COALESCE(p_signed_name, ''));
 BEGIN
   IF auth.uid() IS NULL THEN
@@ -2983,15 +5979,23 @@ BEGIN
   RETURNING * INTO v_proposal;
   PERFORM set_config('app.proposal_accept_id', '', true);
 
+  PERFORM set_config(
+    'app.proposal_signature_engagement_id', v_engagement_id::text, true
+  );
   INSERT INTO public.proposal_engagement (
-    proposal_id, viewer_id, event_type, metadata
+    id, proposal_id, viewer_id, event_type, metadata
   ) VALUES (
-    p_proposal_id, auth.uid(), 'signed_offline',
+    v_engagement_id, p_proposal_id, auth.uid(), 'signed_offline',
     jsonb_build_object(
       'via', 'record_offline_signature',
       'signed_by_name', v_signed_name,
       'recorded_by', auth.uid()
     )
+  );
+  PERFORM set_config(
+    'app.proposal_signature_engagement_id',
+    COALESCE(v_previous_engagement_token, ''),
+    true
   );
 
   IF v_proposal.project_id IS NOT NULL THEN

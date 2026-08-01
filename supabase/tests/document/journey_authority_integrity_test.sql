@@ -424,7 +424,8 @@ BEGIN
   -- The addressed client may receive the already-resolved coordination receipt
   -- even though its court moved; this never bypasses authorization.
   v_row := public.resolve_coordination_item(
-    'f8100000-0000-4000-8000-000000000005'
+    'f8100000-0000-4000-8000-000000000005', NULL,
+    'Verified field answer'
   );
   ASSERT v_row.status = 'responded', 'authorized retry should return its receipt';
 END;

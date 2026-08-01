@@ -303,8 +303,8 @@ END;
 $$;
 RESET ROLE;
 
--- Active non-guest design-studio peer cannot directly write through the old
--- exact-owner RLS policy, but can use the narrowly authorized definer RPC.
+-- Active non-guest design-studio peers share draft-authoring authority. Direct
+-- child-row writes and the checked multi-row RPC must agree on that boundary.
 SET LOCAL ROLE authenticated;
 SELECT pg_temp.assume_atomic_actor('f8900000-0000-4000-8000-000000000003');
 DO $$
@@ -316,8 +316,8 @@ BEGIN
   SET sort_order = 99
   WHERE id = 'f8960000-0000-4000-8000-000000000001';
   GET DIAGNOSTICS v_direct_rows = ROW_COUNT;
-  ASSERT v_direct_rows = 0,
-    'studio peer direct table update must remain denied by exact-owner RLS';
+  ASSERT v_direct_rows = 1,
+    'active design-studio peer must be able to edit a draft swatch';
 
   PERFORM public.reorder_palette_swatches(
     'f8930000-0000-4000-8000-000000000001',

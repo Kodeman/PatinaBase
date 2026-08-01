@@ -5384,6 +5384,48 @@ END $g$;
 
 -- 00399_journey_authority_integrity.sql
 DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.guard_project_closeout_evidence_insert() FROM PUBLIC, anon, authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00399_journey_authority_integrity.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.set_project_operational_status( uuid, public.project_status, public.project_status ) FROM PUBLIC, anon, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00399_journey_authority_integrity.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.set_project_operational_status( uuid, public.project_status, public.project_status ) TO authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00399_journey_authority_integrity.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.archive_project(uuid, public.project_status) FROM PUBLIC, anon, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00399_journey_authority_integrity.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.archive_project(uuid, public.project_status) TO authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00399_journey_authority_integrity.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.reassign_project_lead(uuid, uuid, uuid) FROM PUBLIC, anon, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00399_journey_authority_integrity.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.reassign_project_lead(uuid, uuid, uuid) TO authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00399_journey_authority_integrity.sql
+DO $g$ BEGIN
   REVOKE ALL ON FUNCTION public.begin_discovery(uuid) FROM PUBLIC, anon;
 EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
 END $g$;
@@ -5391,6 +5433,30 @@ END $g$;
 -- 00399_journey_authority_integrity.sql
 DO $g$ BEGIN
   GRANT EXECUTE ON FUNCTION public.begin_discovery(uuid) TO authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00399_journey_authority_integrity.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public._accept_design_request_profile_bound_core(uuid) FROM PUBLIC, anon, authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00399_journey_authority_integrity.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.accept_design_request(uuid) FROM PUBLIC, anon, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00399_journey_authority_integrity.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.accept_design_request(uuid) TO authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00399_journey_authority_integrity.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.hydrate_lead_relationship_contact() FROM PUBLIC, anon, authenticated, service_role;
 EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
 END $g$;
 
@@ -5421,6 +5487,18 @@ END $g$;
 -- 00399_journey_authority_integrity.sql
 DO $g$ BEGIN
   GRANT EXECUTE ON FUNCTION public.request_proposal_change(uuid, text) TO authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00399_journey_authority_integrity.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.assert_client_decision_reference_integrity( uuid, uuid, uuid, uuid, text, uuid, uuid, uuid, uuid, uuid, uuid ) FROM PUBLIC, anon, authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00399_journey_authority_integrity.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.assert_client_decision_reference_integrity( uuid, uuid, uuid, uuid, text, uuid, uuid, uuid, uuid, uuid, uuid ) TO authenticated, service_role;
 EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
 END $g$;
 
@@ -5516,6 +5594,78 @@ END $g$;
 
 -- 00399_journey_authority_integrity.sql
 DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public._enqueue_decision_notification( uuid, public.decision_notification_kind ) FROM PUBLIC, anon, authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00399_journey_authority_integrity.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.notify_decision_required(uuid) FROM PUBLIC, anon, authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00399_journey_authority_integrity.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.notify_decision_overdue(uuid) FROM PUBLIC, anon, authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00399_journey_authority_integrity.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.notify_decision_resolved(uuid) FROM PUBLIC, anon, authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00399_journey_authority_integrity.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.notify_decision_required(uuid) TO service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00399_journey_authority_integrity.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.notify_decision_overdue(uuid) TO service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00399_journey_authority_integrity.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.notify_decision_resolved(uuid) TO service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00399_journey_authority_integrity.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.notify_decision_updated(uuid) FROM PUBLIC, anon, authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00399_journey_authority_integrity.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.create_client_decision( uuid, jsonb, jsonb, uuid[], uuid[] ) FROM PUBLIC, anon, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00399_journey_authority_integrity.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.create_client_decision( uuid, jsonb, jsonb, uuid[], uuid[] ) TO authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00399_journey_authority_integrity.sql
+DO $g$ BEGIN
+  REVOKE INSERT ON TABLE public.client_decisions FROM authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00399_journey_authority_integrity.sql
+DO $g$ BEGIN
+  REVOKE INSERT ON TABLE public.client_decision_options FROM authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00399_journey_authority_integrity.sql
+DO $g$ BEGIN
   REVOKE ALL ON FUNCTION public.update_client_decision(uuid, jsonb, jsonb, timestamptz) FROM PUBLIC, anon, service_role;
 EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
 END $g$;
@@ -5523,6 +5673,18 @@ END $g$;
 -- 00399_journey_authority_integrity.sql
 DO $g$ BEGIN
   GRANT EXECUTE ON FUNCTION public.update_client_decision(uuid, jsonb, jsonb, timestamptz) TO authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00399_journey_authority_integrity.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.update_coordination_item( uuid, jsonb, jsonb, uuid[], uuid[], timestamptz ) FROM PUBLIC, anon, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00399_journey_authority_integrity.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.update_coordination_item( uuid, jsonb, jsonb, uuid[], uuid[], timestamptz ) TO authenticated;
 EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
 END $g$;
 
@@ -5547,6 +5709,18 @@ END $g$;
 -- 00399_journey_authority_integrity.sql
 DO $g$ BEGIN
   GRANT EXECUTE ON FUNCTION public.reopen_client_decision(uuid) TO authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00399_journey_authority_integrity.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.extend_and_reopen_client_decision( uuid, timestamptz, timestamptz ) FROM PUBLIC, anon, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00399_journey_authority_integrity.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.extend_and_reopen_client_decision( uuid, timestamptz, timestamptz ) TO authenticated;
 EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
 END $g$;
 
@@ -5703,6 +5877,180 @@ END $g$;
 -- 00399_journey_authority_integrity.sql
 DO $g$ BEGIN
   GRANT EXECUTE ON FUNCTION public.apply_field_effect(uuid, jsonb, text, uuid) TO service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00399_journey_authority_integrity.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public._assert_proposal_phase_topology(uuid, text) FROM PUBLIC, anon, authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00399_journey_authority_integrity.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public._repair_legacy_proposal_phase_topology(uuid) FROM PUBLIC, anon, authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00399_journey_authority_integrity.sql
+DO $g$ BEGIN
+  REVOKE ALL ON TABLE public.proposal_phase_topology_diagnostics FROM PUBLIC, anon, authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00399_journey_authority_integrity.sql
+DO $g$ BEGIN
+  GRANT SELECT ON TABLE public.proposal_phase_topology_diagnostics TO service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00399_journey_authority_integrity.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public._proposal_phase_main_tail(uuid, text) FROM PUBLIC, anon, authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00399_journey_authority_integrity.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.guard_proposal_phase_topology_write() FROM PUBLIC, anon, authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00399_journey_authority_integrity.sql
+DO $g$ BEGIN
+  REVOKE INSERT, UPDATE, DELETE ON TABLE public.proposal_phases FROM anon, authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00399_journey_authority_integrity.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public._recompute_proposal_total_locked(uuid) FROM PUBLIC, anon, authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00399_journey_authority_integrity.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.create_proposal_phase( uuid, text, text, integer, integer, integer, text, jsonb, integer, date, text ) FROM PUBLIC, anon, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00399_journey_authority_integrity.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.create_proposal_phase( uuid, text, text, integer, integer, integer, text, jsonb, integer, date, text ) TO authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00399_journey_authority_integrity.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.update_proposal_phase( uuid, uuid, jsonb, timestamptz ) FROM PUBLIC, anon, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00399_journey_authority_integrity.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.update_proposal_phase( uuid, uuid, jsonb, timestamptz ) TO authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00399_journey_authority_integrity.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.remove_proposal_phase( uuid, uuid, timestamptz ) FROM PUBLIC, anon, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00399_journey_authority_integrity.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.remove_proposal_phase( uuid, uuid, timestamptz ) TO authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00399_journey_authority_integrity.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public._proposal_phase_effect_snapshot(uuid, uuid[]) FROM PUBLIC, anon, authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00399_journey_authority_integrity.sql
+DO $g$ BEGIN
+  REVOKE ALL ON TABLE public.proposal_phase_template_applications FROM PUBLIC, anon, authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00399_journey_authority_integrity.sql
+DO $g$ BEGIN
+  GRANT SELECT ON TABLE public.proposal_phase_template_applications TO service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00399_journey_authority_integrity.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.apply_phase_template(uuid, text, uuid) FROM PUBLIC, anon, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00399_journey_authority_integrity.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.apply_phase_template(uuid, text, uuid) TO authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00399_journey_authority_integrity.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.apply_phase_template(uuid, text) FROM PUBLIC, anon, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00399_journey_authority_integrity.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.apply_phase_template(uuid, text) TO authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00399_journey_authority_integrity.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.copy_schedule_as_built(uuid, uuid, uuid) FROM PUBLIC, anon, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00399_journey_authority_integrity.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.copy_schedule_as_built(uuid, uuid, uuid) TO authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00399_journey_authority_integrity.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public._clone_proposal_legacy_00399(uuid, text, text) FROM PUBLIC, anon, authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00399_journey_authority_integrity.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.clone_proposal(uuid, text, text) FROM PUBLIC, anon, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00399_journey_authority_integrity.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.clone_proposal(uuid, text, text) TO authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00399_journey_authority_integrity.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.guard_proposal_signature_engagement() FROM PUBLIC, anon, authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00399_journey_authority_integrity.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public._can_record_proposal_engagement(uuid, uuid, text) FROM PUBLIC, anon, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00399_journey_authority_integrity.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public._can_record_proposal_engagement( uuid, uuid, text ) TO authenticated;
 EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
 END $g$;
 
