@@ -591,6 +591,7 @@ export function useBeginDiscovery() {
       // 'lead'. I65 bug 2 ripple: a pair can now carry >1 row, so the read
       // goes through the same shared ordered-limit(1) selection as
       // useAcceptLead.
+      let designerClientId: string;
       if (lead.homeowner_id) {
         const existing = await resolvePairDesignerClient(
           supabase,
@@ -608,6 +609,7 @@ export function useBeginDiscovery() {
             .update({ source: 'lead', lead_id: leadId, status: 'lead' })
             .eq('id', existing.id);
           if (clientError) throw clientError;
+          designerClientId = existing.id;
         } else {
           // I65 bug 2: `existing` here is either absent, or an ENGAGED
           // (active/proposal) row — never downgrade it. The re-scoped unique
@@ -615,7 +617,7 @@ export function useBeginDiscovery() {
           // same pair, so insert a fresh one instead — mirrors
           // ceremony_complete's server-side semantics (create fresh or
           // refuse, never downgrade).
-          const { error: clientError } = await supabase
+          const { data: inserted, error: clientError } = await supabase
             .from('designer_clients')
             .insert({
               designer_id: lead.designer_id,
@@ -623,8 +625,12 @@ export function useBeginDiscovery() {
               source: 'lead',
               lead_id: leadId,
               status: 'lead',
-            });
+            })
+            .select('id')
+            .single();
           if (clientError) throw clientError;
+          if (!inserted?.id) throw new Error('Discovery relationship was not returned');
+          designerClientId = inserted.id;
         }
       } else {
         // Profile-less captured lead — same two partial unique indexes apply
@@ -661,8 +667,9 @@ export function useBeginDiscovery() {
             })
             .eq('id', existingId);
           if (clientError) throw clientError;
+          designerClientId = existingId;
         } else {
-          const { error: clientError } = await supabase
+          const { data: inserted, error: clientError } = await supabase
             .from('designer_clients')
             .insert({
               designer_id: lead.designer_id,
@@ -672,12 +679,19 @@ export function useBeginDiscovery() {
               source: 'lead',
               lead_id: leadId,
               status: 'lead',
-            });
+            })
+            .select('id')
+            .single();
           if (clientError) throw clientError;
+          if (!inserted?.id) throw new Error('Discovery relationship was not returned');
+          designerClientId = inserted.id;
         }
       }
 
-      return lead;
+      // Return the document's NEW canonical identity so callers can move
+      // directly into Discovery instead of leaving the work hidden under a
+      // stale lead id / Desk refresh.
+      return { lead, designerClientId };
     },
     onSuccess: (_, leadId) => {
       queryClient.invalidateQueries({ queryKey: ['leads'] });

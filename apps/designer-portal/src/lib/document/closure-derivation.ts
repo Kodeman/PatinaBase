@@ -40,6 +40,162 @@ export function allClosureComplete(items: ClosureItem[]): boolean {
   return items.length > 0 && items.every((i) => i.completed);
 }
 
+// ── Operational closeout truth ─────────────────────────────────────────────
+
+export type CloseoutBlockerCode =
+  | 'operational_data_unavailable'
+  | 'ffe_not_installed'
+  | 'ffe_not_paid'
+  | 'milestone_unpaid'
+  | 'invoice_balance_due'
+  | 'project_balance_due';
+
+export interface CloseoutBlocker {
+  code: CloseoutBlockerCode;
+  count: number;
+  label: string;
+}
+
+export interface CloseoutReadiness {
+  ready: boolean;
+  blockers: CloseoutBlocker[];
+}
+
+export interface CloseoutReadinessInput {
+  /** Fail closed while any operational read is pending or failed. */
+  dataReady?: boolean;
+  /** Positive contracted value must be backed by collected invoice payments. */
+  projectTotalCents?: number | null;
+  ffeItems: ReadonlyArray<{ id: string; status: string | null }>;
+  ffeCoverage: Record<
+    string,
+    { coverage: 'uninvoiced' | 'invoiced' | 'paid' | string }
+  >;
+  paymentMilestones: ReadonlyArray<{
+    id: string;
+    status: string | null;
+    amount_cents: number | null;
+  }>;
+  invoices: ReadonlyArray<{
+    id: string;
+    status: string | null;
+    total_cents: number | null;
+    amount_paid_cents: number | null;
+  }>;
+}
+
+const countLabel = (count: number, singular: string, plural = `${singular}s`) =>
+  `${count} ${count === 1 ? singular : plural}`;
+
+/**
+ * Operational truth behind the Care checklist. Empty FF&E/milestone/invoice
+ * sets are valid (a consulting-only project may have no procurement or billable
+ * milestone rows). Once an operational row exists, completion means:
+ *
+ *   - every FF&E line is installed;
+ *   - every FF&E line's live invoice is fully paid (issued is not collected);
+ *   - every positive-value payment milestone is paid; and
+ *   - every non-void invoice has no remaining positive balance; and
+ *   - a positive project contract total has been collected across invoices.
+ *
+ * The server RPC enforces the same predicates atomically; this derivation makes
+ * them visible before submit and never turns a user-authored checkbox into
+ * financial truth.
+ */
+export function deriveCloseoutReadiness(
+  input: CloseoutReadinessInput,
+): CloseoutReadiness {
+  if (input.dataReady === false) {
+    return {
+      ready: false,
+      blockers: [
+        {
+          code: 'operational_data_unavailable',
+          count: 1,
+          label: 'Operational status is still loading — closeout stays locked',
+        },
+      ],
+    };
+  }
+
+  const blockers: CloseoutBlocker[] = [];
+  const notInstalled = input.ffeItems.filter(
+    (item) => item.status !== 'installed',
+  ).length;
+  if (notInstalled > 0) {
+    blockers.push({
+      code: 'ffe_not_installed',
+      count: notInstalled,
+      label: `${countLabel(notInstalled, 'FF&E item')} not installed`,
+    });
+  }
+
+  const notPaid = input.ffeItems.filter(
+    (item) => input.ffeCoverage[item.id]?.coverage !== 'paid',
+  ).length;
+  if (notPaid > 0) {
+    blockers.push({
+      code: 'ffe_not_paid',
+      count: notPaid,
+      label: `${countLabel(notPaid, 'FF&E item')} not fully paid`,
+    });
+  }
+
+  const unpaidMilestones = input.paymentMilestones.filter(
+    (milestone) =>
+      (milestone.amount_cents ?? 0) > 0 && milestone.status !== 'paid',
+  ).length;
+  if (unpaidMilestones > 0) {
+    blockers.push({
+      code: 'milestone_unpaid',
+      count: unpaidMilestones,
+      label: `${countLabel(unpaidMilestones, 'payment milestone')} not paid`,
+    });
+  }
+
+  const invoicesWithBalance = input.invoices.filter(
+    (invoice) =>
+      invoice.status !== 'void' &&
+      (invoice.total_cents ?? 0) > (invoice.amount_paid_cents ?? 0),
+  ).length;
+  if (invoicesWithBalance > 0) {
+    blockers.push({
+      code: 'invoice_balance_due',
+      count: invoicesWithBalance,
+      label: `${countLabel(invoicesWithBalance, 'invoice')} with a balance due`,
+    });
+  }
+
+  const projectTotalCents = input.projectTotalCents ?? 0;
+  const collectedCents = input.invoices
+    .filter((invoice) => invoice.status !== 'void')
+    .reduce(
+      (sum, invoice) =>
+        sum +
+        Math.min(
+          Math.max(0, invoice.total_cents ?? 0),
+          Math.max(0, invoice.amount_paid_cents ?? 0),
+        ),
+      0,
+    );
+  if (projectTotalCents > collectedCents) {
+    blockers.push({
+      code: 'project_balance_due',
+      count: projectTotalCents - collectedCents,
+      label: 'The project contract balance has not been fully collected',
+    });
+  }
+
+  return { ready: blockers.length === 0, blockers };
+}
+
+export function closureReady(
+  items: ClosureItem[],
+  operational: CloseoutReadiness,
+): boolean {
+  return allClosureComplete(items) && operational.ready;
+}
+
 // ── Portfolio snapshot ───────────────────────────────────────────────────────
 
 export interface PortfolioSnapshot {

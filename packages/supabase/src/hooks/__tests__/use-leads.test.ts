@@ -335,7 +335,10 @@ describe('useBeginDiscovery — homeowner pair, never-downgrade guard (I65 bug 2
     ]);
 
     const mutationFn = getBeginDiscoveryFn();
-    await expect(mutationFn('lead-1')).resolves.toBeTruthy();
+    await expect(mutationFn('lead-1')).resolves.toEqual({
+      lead: HOMEOWNER_LEAD,
+      designerClientId: 'dc-lead',
+    });
 
     expect(dc.__chain.some((c) => c.method === 'insert')).toBe(false);
     const updateCall = dc.__chain.find((c) => c.method === 'update');
@@ -352,11 +355,14 @@ describe('useBeginDiscovery — homeowner pair, never-downgrade guard (I65 bug 2
     const dc = setTableQueue('designer_clients', [
       { data: null, error: null }, // tier 1 (byLead) miss
       { data: { id: 'dc-active', lead_id: null, status: 'active' }, error: null }, // tier 2 hit — the seeded relationship
-      { data: null, error: null }, // the insert
+      { data: { id: 'dc-new' }, error: null }, // insert(...).select('id').single()
     ]);
 
     const mutationFn = getBeginDiscoveryFn();
-    await expect(mutationFn('lead-1')).resolves.toBeTruthy();
+    await expect(mutationFn('lead-1')).resolves.toEqual({
+      lead: HOMEOWNER_LEAD,
+      designerClientId: 'dc-new',
+    });
 
     // The proven I65 bug: the engaged row must NEVER be the target of an
     // update (that would silently downgrade it to 'lead').
@@ -387,11 +393,14 @@ describe('useBeginDiscovery — homeowner pair, never-downgrade guard (I65 bug 2
       { data: null, error: null }, // tier 1
       { data: null, error: null }, // tier 2
       { data: null, error: null }, // tier 3
-      { data: null, error: null }, // insert
+      { data: { id: 'dc-new' }, error: null }, // insert(...).select('id').single()
     ]);
 
     const mutationFn = getBeginDiscoveryFn();
-    await expect(mutationFn('lead-1')).resolves.toBeTruthy();
+    await expect(mutationFn('lead-1')).resolves.toEqual({
+      lead: HOMEOWNER_LEAD,
+      designerClientId: 'dc-new',
+    });
 
     const insertCall = dc.__chain.find((c) => c.method === 'insert');
     expect(insertCall?.args[0]).toEqual({
@@ -400,6 +409,27 @@ describe('useBeginDiscovery — homeowner pair, never-downgrade guard (I65 bug 2
       source: 'lead',
       lead_id: 'lead-1',
       status: 'lead',
+    });
+  });
+});
+
+describe('useBeginDiscovery — canonical post-accept destination', () => {
+  it('returns the new profile-less household relationship id for immediate navigation', async () => {
+    setTableQueue('leads', [
+      { data: MANUAL_LEAD, error: null },
+      { data: null, error: null },
+    ]);
+    setTableQueue('designer_clients', [
+      { data: null, error: null }, // lookup by lead
+      { data: null, error: null }, // lookup by email
+      { data: { id: 'dc-harper' }, error: null }, // inserted relationship
+    ]);
+
+    const mutationFn = getBeginDiscoveryFn();
+
+    await expect(mutationFn('lead-1')).resolves.toEqual({
+      lead: MANUAL_LEAD,
+      designerClientId: 'dc-harper',
     });
   });
 });

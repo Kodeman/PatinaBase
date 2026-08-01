@@ -24,9 +24,14 @@ import {
   useProposalVersions,
 } from '@/hooks/use-proposals';
 import { ClientPicker } from '@/components/portal/client-picker';
+import { useClient, useInviteAndLinkClient } from '@/hooks/use-clients';
 import { useToast } from '@/components/portal/toast-provider';
 import { proposalEvents } from '@/lib/analytics';
 import { DocSheet } from './doc-sheet';
+import {
+  CapturedHouseholdInvite,
+  inviteAndAttachCapturedHousehold,
+} from './captured-household-invite';
 import { DocumentAction, DocumentActionGroup } from '../document-action';
 
 const EXPIRY_OPTIONS = [
@@ -59,10 +64,13 @@ export function SendSheet({
   const qc = useQueryClient();
   const { data: proposal } = useProposal(proposalId) as { data: any };
   const { data: versions } = useProposalVersions(proposalId);
+  const { data: capturedHousehold, isLoading: capturedHouseholdLoading } =
+    useClient(proposal?.designer_client_id ?? '');
   // R83 — this sheet renders failures inline at the act site (sendError /
   // linkError bands below); the global mutation toast stays quiet.
   const sendProposal = useSendProposal({ errorSurface: 'inline' });
   const updateProposal = useUpdateProposal({ errorSurface: 'inline' });
+  const inviteAndLinkClient = useInviteAndLinkClient();
   const { toast } = useToast();
 
   // A sibling version already accepted? Sending this one won't affect it.
@@ -135,6 +143,34 @@ export function SendSheet({
     }
   };
 
+  const handleInviteCapturedHousehold = async () => {
+    if (
+      !proposal?.designer_client_id ||
+      !capturedHousehold?.client_email ||
+      inviteAndLinkClient.isPending
+    ) {
+      return;
+    }
+
+    setLinkError(null);
+    try {
+      await inviteAndAttachCapturedHousehold({
+        proposalId,
+        designerClientId: proposal.designer_client_id,
+        clientEmail: capturedHousehold.client_email,
+        clientName: capturedHousehold.client_name ?? undefined,
+        invite: inviteAndLinkClient.mutateAsync,
+        attach: updateProposal.mutateAsync,
+      });
+    } catch (err) {
+      setLinkError(
+        err instanceof Error
+          ? err.message
+          : 'Could not invite and link this client. Try again.',
+      );
+    }
+  };
+
   const total = ((proposal?.total_amount || 0) / 100).toLocaleString();
 
   return (
@@ -165,35 +201,52 @@ export function SendSheet({
                 <p className="mb-1 font-mono text-[9px] font-semibold uppercase tracking-[0.06em] text-[var(--color-clay)]">
                   Link a client to send
                 </p>
-                <p className="mb-3 text-[12.5px] leading-relaxed text-[var(--color-mocha)]">
-                  This proposal isn&rsquo;t linked to a client yet. Choose the
-                  client it belongs to so they receive the proposal and can sign
-                  it.
-                </p>
-                <div className="max-w-[320px]">
-                  <ClientPicker
-                    value={null}
-                    onChange={(clientId) => {
-                      setLinkError(null);
-                      updateProposal.mutate(
-                        {
-                          proposalId,
-                          updates: { client_id: clientId },
-                        },
-                        {
-                          // R83 — inline at the act, in the banner that owns it.
-                          onError: (err) =>
-                            setLinkError(
-                              err instanceof Error
-                                ? err.message
-                                : 'Could not link the client. Try again.',
-                            ),
-                        },
-                      );
-                    }}
-                    placeholder="Link a client…"
+                {proposal.designer_client_id && capturedHouseholdLoading ? (
+                  <p className="text-[12.5px] italic leading-relaxed text-[var(--color-mocha)]">
+                    Loading the captured household…
+                  </p>
+                ) : capturedHousehold?.client_email ? (
+                  <CapturedHouseholdInvite
+                    name={capturedHousehold.client_name}
+                    email={capturedHousehold.client_email}
+                    pending={
+                      inviteAndLinkClient.isPending || updateProposal.isPending
+                    }
+                    onInvite={handleInviteCapturedHousehold}
                   />
-                </div>
+                ) : (
+                  <>
+                    <p className="mb-3 text-[12.5px] leading-relaxed text-[var(--color-mocha)]">
+                      This proposal isn&rsquo;t linked to a client yet. Choose the
+                      client it belongs to so they receive the proposal and can
+                      sign it.
+                    </p>
+                    <div className="max-w-[320px]">
+                      <ClientPicker
+                        value={null}
+                        onChange={(clientId) => {
+                          setLinkError(null);
+                          updateProposal.mutate(
+                            {
+                              proposalId,
+                              updates: { client_id: clientId },
+                            },
+                            {
+                              // R83 — inline at the act, in the banner that owns it.
+                              onError: (err) =>
+                                setLinkError(
+                                  err instanceof Error
+                                    ? err.message
+                                    : 'Could not link the client. Try again.',
+                                ),
+                            },
+                          );
+                        }}
+                        placeholder="Link a client…"
+                      />
+                    </div>
+                  </>
+                )}
                 {linkError && (
                   <p
                     role="alert"

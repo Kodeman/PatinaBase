@@ -47,6 +47,8 @@ export interface HouseholdSheetProps {
   projectId: string | null;
   proposalId: string | null;
   clientProfileId: string | null;
+  /** Canonical designer_clients.id, including profile-less captured households. */
+  designerClientId?: string | null;
   clientName: string;
   /** Proposal status — gates CHANGE to draft so a sent proposal keeps its client. */
   proposalStatus?: string | null;
@@ -59,13 +61,15 @@ export function HouseholdSheet({
   projectId,
   proposalId,
   clientProfileId,
+  designerClientId = null,
   clientName,
   proposalStatus,
 }: HouseholdSheetProps) {
   const { data: rel } = useDesignerClientForClientUser(
     clientProfileId ?? undefined,
   );
-  const { data: client } = useClient(rel?.id ?? '');
+  const relationshipId = designerClientId ?? rel?.id ?? '';
+  const { data: client } = useClient(relationshipId);
   const attach = useAttachDocumentClient();
   const updateContact = useUpdateClientContact();
 
@@ -74,6 +78,7 @@ export function HouseholdSheet({
   const email = client?.client?.email ?? client?.client_email ?? null;
   const phone = client?.client?.phone ?? null;
   const status = client?.status ?? null;
+  const hasHousehold = Boolean(clientProfileId || designerClientId);
 
   // Where an attach/change writes — only proposals & projects carry a client_id.
   const attachTarget: {
@@ -128,10 +133,10 @@ export function HouseholdSheet({
       <div className="mx-auto max-w-xl">
         <p className={labelCls}>The household</p>
         <h2 className="mt-1 font-heading text-xl text-[var(--color-charcoal)]">
-          {clientProfileId ? name : 'No client linked'}
+          {hasHousehold ? name : 'No client linked'}
         </h2>
 
-        {clientProfileId ? (
+        {hasHousehold ? (
           <div className="mt-4 space-y-1.5 border-b border-[var(--color-pearl)] pb-4">
             {email && (
               <p className="text-[13px] text-[var(--color-charcoal)]">
@@ -159,8 +164,8 @@ export function HouseholdSheet({
           </div>
         ) : (
           <p className="mt-3 text-[12.5px] leading-relaxed text-[var(--color-mocha)]">
-            This document isn&rsquo;t linked to a client yet. Choose who it
-            belongs to so they receive the proposal and can sign it.
+            This document isn&rsquo;t linked to a household yet. Choose who it
+            belongs to before it moves forward.
           </p>
         )}
 
@@ -168,7 +173,11 @@ export function HouseholdSheet({
         {attachTarget && (
           <div className="mt-5">
             <p className={`${labelCls} mb-2`}>
-              {clientProfileId ? 'Change who this is for' : 'Link a client'}
+              {clientProfileId
+                ? 'Change who this is for'
+                : designerClientId
+                  ? 'Link their Patina account or change household'
+                  : 'Link a household'}
             </p>
             {canChange ? (
               <div className="max-w-[340px]">
@@ -176,7 +185,11 @@ export function HouseholdSheet({
                   value={clientProfileId}
                   onChange={onPick}
                   placeholder={
-                    clientProfileId ? 'Change client…' : 'Link a client…'
+                    clientProfileId
+                      ? 'Change client…'
+                      : designerClientId
+                        ? 'Invite or choose a client…'
+                        : 'Link a household…'
                   }
                   disabled={attach.isPending}
                 />

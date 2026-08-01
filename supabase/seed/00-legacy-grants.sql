@@ -4265,3 +4265,27 @@ DO $g$ BEGIN
   REVOKE ALL ON FUNCTION public.spec_book_attach_ffe_line() FROM PUBLIC, anon, authenticated, service_role;
 EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
 END $g$;
+
+-- 00383_close_project_operational_guard.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.close_project(uuid, jsonb, jsonb) FROM PUBLIC, anon;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00383_close_project_operational_guard.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.close_project(uuid, jsonb, jsonb) TO authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00384_send_proposal_payment_schedule_guard.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.send_proposal(uuid, text, text, timestamptz) FROM PUBLIC, anon;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00384_send_proposal_payment_schedule_guard.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.send_proposal(uuid, text, text, timestamptz) TO authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;

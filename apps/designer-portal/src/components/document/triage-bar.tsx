@@ -118,7 +118,16 @@ export function TriageBar({
       });
       return;
     }
-    beginDiscovery.mutate(leadId, { onSuccess: refreshDesk });
+    beginDiscovery.mutate(leadId, {
+      onSuccess: ({ designerClientId }) => {
+        refreshDesk();
+        const destination = `/doc/${designerClientId}`;
+        // The open Brief is the same engagement before its identity moves, so
+        // replace it. From the Desk this is a new picked-up document.
+        if (variant === 'brief') router.replace(destination);
+        else router.push(destination);
+      },
+    });
   };
   const onPass = () => decline.mutate({ leadId }, { onSuccess: refreshDesk });
   const onReconnect = (reconnectAt: string) =>

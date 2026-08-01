@@ -25,6 +25,7 @@ import { deriveSections, type SectionLineage } from '@/lib/document/section-deri
 import type { DocumentStateRow, SectionKey } from '@/lib/document/desk-derivation';
 import { sectionAnchorId } from '@/lib/document/section-anchor';
 import { fmtDay, fmtMonthYear, fmtUsd } from '@/lib/document/format';
+import { documentResolutionState } from '@/lib/document/document-resolution-state';
 import { DocSpine } from '@/components/document/doc-spine';
 import { DocLetterhead } from '@/components/document/doc-letterhead';
 import { SettledBar } from '@/components/document/settled-bar';
@@ -97,7 +98,7 @@ export default function DocumentPage({ params }: { params: Promise<{ id: string 
   const { id } = use(params);
   const router = useRouter();
 
-  const { data: resolution, isLoading } = useDocumentEngagement(id);
+  const { data: resolution, isLoading, isFetching } = useDocumentEngagement(id);
   const row = resolution?.kind === 'engagement' ? resolution.row : null;
   const projectId = row?.project_id ?? '';
   const proposalId = row?.proposal_id ?? '';
@@ -106,6 +107,14 @@ export default function DocumentPage({ params }: { params: Promise<{ id: string 
   const { data: phases } = useProjectPhases(projectId) as { data: AnyRecord[] | undefined };
   const { data: liveProposal } = useProposal(proposalId) as { data: any };
   const others = useDocumentPresence(row?.engagement_id ?? null);
+  const designerClientId =
+    row?.engagement_kind === 'relationship'
+      ? row.engagement_id
+      : row?.engagement_kind === 'proposal'
+        ? (liveProposal?.designer_client_id ?? null)
+        : row?.engagement_kind === 'project'
+          ? (project?.proposal?.designer_client_id ?? null)
+          : null;
 
   // C3 — the proposal's per-line client verdicts, rolled up for a quiet
   // letterhead summary on the open proposal ("4 of 12 approved · 1 flagged").
@@ -260,8 +269,13 @@ export default function DocumentPage({ params }: { params: Promise<{ id: string 
   // C7 — the Schedule Spine flip gate. Rules of hooks: called unconditionally
   // above the early returns below, alongside the page's other hooks.
   const spineGate = useFeatureFlag('schedule-spine');
+  const resolutionState = documentResolutionState({
+    resolutionKind: resolution?.kind,
+    isLoading,
+    isFetching,
+  });
 
-  if (isLoading || resolution?.kind === 'redirect') {
+  if (resolutionState === 'loading') {
     return (
       <div className="min-h-screen bg-[var(--doc-paper)]" aria-busy>
         <p className="px-10 py-12 font-heading text-[14px] italic text-[var(--text-muted)]">
@@ -271,7 +285,7 @@ export default function DocumentPage({ params }: { params: Promise<{ id: string 
     );
   }
 
-  if (!row) {
+  if (resolutionState === 'missing' || !row) {
     return (
       <div className="min-h-screen bg-[var(--doc-paper)] px-10 py-12">
         <p className="mb-3 font-heading text-[16px] text-[var(--color-charcoal)]">
@@ -336,6 +350,7 @@ export default function DocumentPage({ params }: { params: Promise<{ id: string 
                 projectId={row.project_id}
                 proposalId={row.proposal_id}
                 clientProfileId={row.client_profile_id}
+                designerClientId={designerClientId}
                 clientName={row.client_name}
                 proposalStatus={liveProposal?.status ?? null}
               />
