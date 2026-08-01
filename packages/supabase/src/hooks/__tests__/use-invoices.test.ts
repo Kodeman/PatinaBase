@@ -10,6 +10,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 
 const supabaseClient = {
   auth: { getUser: vi.fn(), getSession: vi.fn() },
+  functions: { invoke: vi.fn() },
   from: vi.fn(),
   rpc: vi.fn(),
 };
@@ -34,10 +35,12 @@ import {
   useUpsertLineItems,
   useDeleteLineItem,
   useIssueInvoice,
+  useStartCheckout,
   useRecordPayment,
   useVoidInvoice,
   type DraftLineInput,
   type FfeInvoiceCoverageMap,
+  InvoiceCheckoutError,
 } from '../use-invoices';
 
 beforeEach(() => {
@@ -314,5 +317,79 @@ describe('ffe-invoice-coverage invalidation', () => {
     config.onSuccess(undefined, { invoiceId: 'inv-1', lineItemId: 'line-1' });
     expect(invalidatedKeys()).toContainEqual(['invoices']);
     expect(invalidatedKeys()).toContainEqual(['ffe-invoice-coverage']);
+  });
+});
+
+describe('useStartCheckout exact receipt', () => {
+  type CheckoutConfig = {
+    mutationFn: (input: { invoiceId: string }) => Promise<unknown>;
+  };
+
+  it('returns the exact attempt/payment/session evidence from the edge boundary', async () => {
+    supabaseClient.functions.invoke.mockResolvedValue({
+      data: {
+        url: 'https://checkout.stripe.test/cs_1',
+        amount_cents: 12_345,
+        currency: 'usd',
+        checkout_attempt_id: 'attempt-1',
+        payment_id: 'payment-1',
+        session_id: 'cs_1',
+        reused: false,
+      },
+      error: null,
+    });
+
+    const config = useStartCheckout() as unknown as CheckoutConfig;
+    await expect(config.mutationFn({ invoiceId: 'invoice-1' })).resolves.toEqual(
+      expect.objectContaining({
+        amount_cents: 12_345,
+        checkout_attempt_id: 'attempt-1',
+        payment_id: 'payment-1',
+        session_id: 'cs_1',
+      }),
+    );
+  });
+
+  it('preserves a structured processing error and exact attempt evidence', async () => {
+    supabaseClient.functions.invoke.mockResolvedValue({
+      data: null,
+      error: {
+        message: 'Edge Function returned a non-2xx status code',
+        context: {
+          json: vi.fn().mockResolvedValue({
+            error: 'payment_processing',
+            detail: 'The bank transfer is still processing.',
+            amount_cents: 12_345,
+            currency: 'usd',
+            checkout_attempt_id: 'attempt-1',
+            payment_id: 'payment-1',
+            session_id: 'cs_1',
+          }),
+        },
+      },
+    });
+
+    const config = useStartCheckout() as unknown as CheckoutConfig;
+    const thrown = await config.mutationFn({ invoiceId: 'invoice-1' }).catch((error) => error);
+    expect(thrown).toBeInstanceOf(InvoiceCheckoutError);
+    expect(thrown).toMatchObject({
+      code: 'payment_processing',
+      amountCents: 12_345,
+      checkoutAttemptId: 'attempt-1',
+      paymentId: 'payment-1',
+      sessionId: 'cs_1',
+    });
+  });
+
+  it('fails closed when a nominal success omits exact checkout identity', async () => {
+    supabaseClient.functions.invoke.mockResolvedValue({
+      data: { url: 'https://checkout.stripe.test/cs_legacy' },
+      error: null,
+    });
+
+    const config = useStartCheckout() as unknown as CheckoutConfig;
+    await expect(config.mutationFn({ invoiceId: 'invoice-1' })).rejects.toMatchObject({
+      code: 'checkout_malformed_response',
+    });
   });
 });

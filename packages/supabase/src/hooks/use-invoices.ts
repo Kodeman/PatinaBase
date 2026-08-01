@@ -54,6 +54,7 @@ export interface InvoiceLineItem {
 export interface InvoicePayment {
   id: string;
   invoice_id: string;
+  checkout_attempt_id: string | null;
   amount_cents: number;
   method: InvoicePaymentMethod;
   status: InvoicePaymentStatus;
@@ -66,6 +67,92 @@ export interface InvoicePayment {
   received_at: string | null;
   created_at: string;
   updated_at: string;
+}
+
+export interface InvoiceCheckoutReceipt {
+  url: string;
+  amount_cents: number;
+  currency: string;
+  checkout_attempt_id: string;
+  payment_id: string;
+  session_id: string;
+  reused: boolean;
+}
+
+export interface InvoiceCheckoutEvidence {
+  amountCents?: number;
+  currency?: string;
+  checkoutAttemptId?: string;
+  paymentId?: string;
+  sessionId?: string;
+}
+
+/**
+ * A typed failure from the invoice Checkout boundary. Keeping the server's
+ * stable code and exact attempt identifiers lets clients distinguish an
+ * in-flight payment from a generic outage without guessing from message copy.
+ */
+export class InvoiceCheckoutError extends Error implements InvoiceCheckoutEvidence {
+  readonly code: string;
+  readonly amountCents?: number;
+  readonly currency?: string;
+  readonly checkoutAttemptId?: string;
+  readonly paymentId?: string;
+  readonly sessionId?: string;
+
+  constructor(
+    code: string,
+    message: string,
+    evidence: InvoiceCheckoutEvidence = {},
+  ) {
+    super(message);
+    this.name = 'InvoiceCheckoutError';
+    this.code = code;
+    this.amountCents = evidence.amountCents;
+    this.currency = evidence.currency;
+    this.checkoutAttemptId = evidence.checkoutAttemptId;
+    this.paymentId = evidence.paymentId;
+    this.sessionId = evidence.sessionId;
+  }
+}
+
+function checkoutEvidence(value: unknown): InvoiceCheckoutEvidence {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return {};
+  const row = value as Record<string, unknown>;
+  return {
+    amountCents: Number.isInteger(row.amount_cents) ? (row.amount_cents as number) : undefined,
+    currency: typeof row.currency === 'string' ? row.currency : undefined,
+    checkoutAttemptId:
+      typeof row.checkout_attempt_id === 'string' ? row.checkout_attempt_id : undefined,
+    paymentId: typeof row.payment_id === 'string' ? row.payment_id : undefined,
+    sessionId: typeof row.session_id === 'string' ? row.session_id : undefined,
+  };
+}
+
+function parseInvoiceCheckoutReceipt(value: unknown): InvoiceCheckoutReceipt {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) {
+    throw new InvoiceCheckoutError(
+      'checkout_malformed_response',
+      'Checkout returned an invalid response. No redirect was started.',
+    );
+  }
+  const row = value as Record<string, unknown>;
+  if (
+    typeof row.url !== 'string' ||
+    !Number.isInteger(row.amount_cents) ||
+    typeof row.currency !== 'string' ||
+    typeof row.checkout_attempt_id !== 'string' ||
+    typeof row.payment_id !== 'string' ||
+    typeof row.session_id !== 'string' ||
+    typeof row.reused !== 'boolean'
+  ) {
+    throw new InvoiceCheckoutError(
+      'checkout_malformed_response',
+      'Checkout returned an incomplete response. No redirect was started.',
+      checkoutEvidence(row),
+    );
+  }
+  return row as unknown as InvoiceCheckoutReceipt;
 }
 
 export interface Invoice {
@@ -889,32 +976,44 @@ export function useChaseInvoice(options?: { errorSurface?: 'inline' }) {
 /**
  * Starts a Stripe Checkout session for an issued invoice's remaining balance
  * via the create-checkout-session edge function (caller JWT goes along
- * automatically; the function verifies the caller is the invoice's client or
- * designer, reuses a still-open session when the amount matches, and persists
- * a pending stripe payment row). On success redirect to the returned `url`.
+ * automatically; the function verifies the caller is the invoice's client,
+ * claims one exact attempt/payment pair, and reuses its stable Stripe session.
+ * The typed receipt and typed failures preserve that exact attempt identity.
  */
 export function useStartCheckout() {
   return useMutation({
-    mutationFn: async ({ invoiceId }: { invoiceId: string }): Promise<{ url: string }> => {
+    mutationFn: async ({ invoiceId }: { invoiceId: string }): Promise<InvoiceCheckoutReceipt> => {
       const supabase = getSupabase() as any;
       const { data, error } = await supabase.functions.invoke('create-checkout-session', {
         body: { invoiceId },
       });
       if (error) {
-        // FunctionsHttpError carries the response; surface the JSON error code
-        // (e.g. invoice_not_payable, payment_processing) over the generic message.
-        let detail: string | undefined;
+        // FunctionsHttpError carries the response. Preserve the stable code and
+        // exact attempt evidence rather than flattening everything into copy.
+        let body: Record<string, unknown> | undefined;
         try {
-          const body = await (error as { context?: Response }).context?.json();
-          detail = body?.detail ?? body?.error;
+          const parsed = await (error as { context?: Response }).context?.json();
+          if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
+            body = parsed as Record<string, unknown>;
+          }
         } catch {
-          /* fall through to the generic message */
+          /* fall through to the generic typed failure */
         }
-        throw new Error(detail ?? error.message ?? 'Failed to start checkout');
+        const code = typeof body?.error === 'string' ? body.error : 'checkout_request_failed';
+        const detail =
+          typeof body?.detail === 'string'
+            ? body.detail
+            : error.message || 'Failed to start checkout';
+        throw new InvoiceCheckoutError(code, detail, checkoutEvidence(body));
       }
-      if (data?.error) throw new Error(data.detail ?? data.error);
-      if (!data?.url) throw new Error('No checkout URL returned');
-      return data as { url: string };
+      if (data?.error) {
+        throw new InvoiceCheckoutError(
+          String(data.error),
+          typeof data.detail === 'string' ? data.detail : String(data.error),
+          checkoutEvidence(data),
+        );
+      }
+      return parseInvoiceCheckoutReceipt(data);
     },
   });
 }

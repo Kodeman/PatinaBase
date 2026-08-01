@@ -101,7 +101,7 @@ export function InvoiceFolio({
   const [reference, setReference] = useState('');
   const [receivedDate, setReceivedDate] = useState(() => todayYmd());
   const [showClientFallback, setShowClientFallback] = useState(false);
-  const [clientLinkCopied, setClientLinkCopied] = useState(false);
+  const [clientLinkStatus, setClientLinkStatus] = useState<'idle' | 'copied' | 'failed'>('idle');
 
   if (isLoading) {
     return (
@@ -138,6 +138,7 @@ export function InvoiceFolio({
   const canVoid =
     ['draft', 'sent', 'partially_paid'].includes(invoice.status) && invoice.amount_paid_cents === 0;
   const canPrint = !isDraft && invoice.status !== 'void';
+  const hasClientPortalAccount = Boolean(invoice.client_id && invoice.client?.id);
   const busy =
     issue.isPending || send.isPending || recordPayment.isPending || voidInvoice.isPending;
 
@@ -152,7 +153,7 @@ export function InvoiceFolio({
   const doIssueAndSend = async () => {
     setNote(null);
     setShowClientFallback(false);
-    setClientLinkCopied(false);
+    setClientLinkStatus('idle');
     let issued: Invoice;
     try {
       issued = await issue.mutateAsync({
@@ -190,7 +191,7 @@ export function InvoiceFolio({
 
   const doResend = async () => {
     setNote(null);
-    setClientLinkCopied(false);
+    setClientLinkStatus('idle');
     try {
       const result = await send.mutateAsync({
         invoiceId,
@@ -219,9 +220,9 @@ export function InvoiceFolio({
   const copyClientInvoiceUrl = async () => {
     try {
       await navigator.clipboard.writeText(clientInvoiceUrl);
-      setClientLinkCopied(true);
+      setClientLinkStatus('copied');
     } catch {
-      setClientLinkCopied(false);
+      setClientLinkStatus('failed');
     }
   };
 
@@ -563,6 +564,8 @@ export function InvoiceFolio({
                 : 'mt-2 font-mono text-[9px] uppercase tracking-[0.05em]'
             }
             style={{ color: failed ? TERRACOTTA_INK : SAGE_INK }}
+            role={failed ? 'alert' : 'status'}
+            aria-live={failed ? 'assertive' : 'polite'}
           >
             {note}
           </p>
@@ -572,27 +575,42 @@ export function InvoiceFolio({
           <div
             className="mt-2 rounded-[3px] border border-[rgba(196,131,111,0.4)] px-2 py-2"
             role="status"
+            aria-live="polite"
           >
-            <p className="text-[10.5px] text-[var(--color-charcoal)]">
-              Email did not reach the client. The issued invoice is still available at this
-              client-portal link:
-            </p>
-            <a
-              href={clientInvoiceUrl}
-              target="_blank"
-              rel="noreferrer"
-              className="mt-1 block break-all font-mono text-[9px] text-[var(--color-clay)] underline"
-            >
-              {clientInvoiceUrl}
-            </a>
-            <DocumentAction
-              actionKey="copy-client-invoice-link"
-              variant="tertiary"
-              onClick={() => void copyClientInvoiceUrl()}
-              className="mt-1"
-            >
-              {clientLinkCopied ? 'Client link copied' : 'Copy client link'}
-            </DocumentAction>
+            {hasClientPortalAccount ? (
+              <>
+                <p className="text-[10.5px] text-[var(--color-charcoal)]">
+                  Email did not reach the client. Their linked portal account can still open this
+                  issued invoice:
+                </p>
+                <a
+                  href={clientInvoiceUrl}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="mt-1 block break-all font-mono text-[9px] text-[var(--color-clay)] underline"
+                >
+                  {clientInvoiceUrl}
+                </a>
+                <DocumentAction
+                  actionKey="copy-client-invoice-link"
+                  variant="tertiary"
+                  onClick={() => void copyClientInvoiceUrl()}
+                  className="mt-1"
+                >
+                  {clientLinkStatus === 'copied'
+                    ? 'Client link copied'
+                    : clientLinkStatus === 'failed'
+                      ? 'Copy failed — select the link above'
+                      : 'Copy client link'}
+                </DocumentAction>
+              </>
+            ) : (
+              <p className="text-[10.5px] text-[var(--color-charcoal)]">
+                Email did not reach the client, and this household has no linked portal account.
+                Invite or link the client from the Clients book before sharing a portal URL, then
+                resend the invoice.
+              </p>
+            )}
           </div>
         )}
 

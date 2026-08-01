@@ -67,6 +67,18 @@ export class InvoiceCheckoutIntegrityError extends Error {
   }
 }
 
+/** Attach the exact local claim to either Checkout return path. */
+export function invoiceCheckoutReturnUrl(
+  baseUrl: string,
+  attempt: Pick<InvoiceCheckoutAttempt, 'attemptId' | 'paymentId'>
+): string {
+  const separator = baseUrl.includes('?') ? '&' : '?';
+  return (
+    `${baseUrl}${separator}checkout_attempt_id=${encodeURIComponent(attempt.attemptId)}` +
+    `&payment_id=${encodeURIComponent(attempt.paymentId)}`
+  );
+}
+
 export function assertInvoiceSessionIdentity(
   attempt: InvoiceCheckoutAttempt,
   session: InvoiceCheckoutSession

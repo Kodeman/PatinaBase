@@ -7,6 +7,11 @@ import { AuthForm, type AuthFormField, Alert, Button, DevAccountsPanel } from '@
 import { getAccountsForPortal } from '@patina/types';
 import Link from 'next/link';
 import { QRLoginDisplay } from '@/components/auth/QRLoginDisplay';
+import {
+  buildAuthCallbackUrl,
+  buildVerifyOtpPath,
+  resolveAuthReturnPath,
+} from '@/lib/auth-redirect';
 
 const QR_AUTH_BASE_URL = process.env.NEXT_PUBLIC_QR_AUTH_URL || '';
 
@@ -40,7 +45,7 @@ const ERROR_MESSAGES: Record<string, { title: string; description: string }> = {
 function SignInContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const callbackUrl = searchParams.get('callbackUrl') || '/';
+  const callbackUrl = resolveAuthReturnPath(searchParams.get('callbackUrl'));
   const error = searchParams.get('error');
 
   const supabase = createBrowserClient();
@@ -55,6 +60,8 @@ function SignInContent() {
   const sendMagicLink = useSendMagicLink();
 
   const devAccounts = getAccountsForPortal('client');
+
+  const authCallbackUrl = () => buildAuthCallbackUrl(window.location.origin, callbackUrl);
 
   const fields: AuthFormField[] = [
     {
@@ -102,7 +109,7 @@ function SignInContent() {
       const { error: oauthError } = await supabase.auth.signInWithOAuth({
         provider,
         options: {
-          redirectTo: `${window.location.origin}/auth/callback`,
+          redirectTo: authCallbackUrl(),
           ...(provider === 'apple'
             ? { queryParams: { response_mode: 'fragment' } }
             : {}),
@@ -147,8 +154,11 @@ function SignInContent() {
     setFormError(null);
 
     try {
-      await sendMagicLink.mutateAsync({ email: data.email });
-      router.push(`/auth/verify-otp?email=${encodeURIComponent(data.email)}`);
+      await sendMagicLink.mutateAsync({
+        email: data.email,
+        redirectTo: authCallbackUrl(),
+      });
+      router.push(buildVerifyOtpPath(data.email, callbackUrl) as never);
     } catch (err) {
       console.error('[Magic Link] Exception:', err);
       const message =

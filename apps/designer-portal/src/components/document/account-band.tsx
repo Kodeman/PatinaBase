@@ -26,6 +26,7 @@ import { openLedger } from './command-bar';
 import { openInvoiceComposer, openInvoiceFolio } from './accounts/invoice-overlays';
 import { AmendmentSheet } from './overlays/amendment-sheet';
 import { DocumentAction, DocumentActionGroup } from './document-action';
+import { AccountsQueryFailure } from './accounts/accounts-query-failure';
 
 const SAGE_INK = '#85947C';
 const TERRACOTTA_INK = '#C4836F';
@@ -166,12 +167,45 @@ export function AccountBand({
   projectId: string;
   clientName?: string | null;
 }) {
-  const { data } = useAccountPage(projectId);
+  const { data, isLoading, isError, refetch } = useAccountPage(projectId);
   const [open, setOpen] = useState(false);
   const [exportNote, setExportNote] = useState<string | null>(null);
   const [amendmentOpen, setAmendmentOpen] = useState(false);
 
-  if (!data) return null;
+  if (isLoading) {
+    return (
+      <div
+        className="mt-4 rounded-[5px] bg-[rgba(229,226,221,0.32)] px-3 py-2"
+        role="status"
+        aria-live="polite"
+      >
+        <span className="font-heading text-[12.5px] font-medium italic text-[var(--color-charcoal)]">
+          The accounts · this project
+        </span>
+        <span className="ml-3 font-mono text-[9px] uppercase tracking-[0.05em] text-[var(--text-muted)]">
+          opening the ledger…
+        </span>
+      </div>
+    );
+  }
+
+  if (isError) {
+    return (
+      <AccountsQueryFailure
+        title="The project accounts could not be opened."
+        message="Budget, commitments, milestones, and invoice actions are unavailable until this read succeeds."
+        onRetry={refetch}
+      />
+    );
+  }
+
+  if (!data) {
+    return (
+      <p className="mt-4 font-mono text-[9px] uppercase tracking-[0.05em] text-[var(--text-muted)]">
+        No account record is available for this project.
+      </p>
+    );
+  }
 
   const collapsedLine = [
     `${fmtUsd(data.budgetCents)} budget`,

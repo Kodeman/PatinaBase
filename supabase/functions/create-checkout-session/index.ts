@@ -53,6 +53,7 @@ import {
   type InvoiceCheckoutAttempt,
   InvoiceCheckoutIntegrityError,
   type InvoiceCheckoutSession,
+  invoiceCheckoutReturnUrl,
   runInvoiceCheckout,
 } from './invoice-checkout-core.ts';
 
@@ -759,8 +760,12 @@ async function startInvoiceCheckout(
             ],
             metadata,
             payment_intent_data: { metadata },
-            success_url: payable.successUrl,
-            cancel_url: payable.cancelUrl,
+            // Return the local claim identity on both paths. A cancellation has
+            // no reliable Checkout session placeholder, so analytics and UI
+            // reconciliation use the exact attempt/payment IDs instead of the
+            // invoice's mutable outstanding balance.
+            success_url: invoiceCheckoutReturnUrl(payable.successUrl, attempt),
+            cancel_url: invoiceCheckoutReturnUrl(payable.cancelUrl, attempt),
           },
           { idempotencyKey: attempt.stripeIdempotencyKey }
         );

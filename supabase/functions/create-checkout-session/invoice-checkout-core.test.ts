@@ -4,6 +4,7 @@ import {
   type InvoiceCheckoutGateway,
   InvoiceCheckoutIntegrityError,
   type InvoiceCheckoutSession,
+  invoiceCheckoutReturnUrl,
   runInvoiceCheckout,
 } from './invoice-checkout-core.ts';
 
@@ -44,6 +45,18 @@ function sessionFor(
     ...overrides,
   };
 }
+
+Deno.test('invoice Checkout: both return paths carry exact local attempt evidence', () => {
+  const claimed = attempt({ attemptId: 'attempt / one', paymentId: 'payment?one' });
+  assertEquals(
+    invoiceCheckoutReturnUrl('https://client.test/invoices/one?checkout=cancelled', claimed),
+    'https://client.test/invoices/one?checkout=cancelled&checkout_attempt_id=attempt%20%2F%20one&payment_id=payment%3Fone'
+  );
+  assertEquals(
+    invoiceCheckoutReturnUrl('https://client.test/invoices/one', claimed),
+    'https://client.test/invoices/one?checkout_attempt_id=attempt%20%2F%20one&payment_id=payment%3Fone'
+  );
+});
 
 Deno.test(
   'invoice Checkout: concurrent tabs share one claim, idempotency key, session, and payment identity',

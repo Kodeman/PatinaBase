@@ -127,6 +127,7 @@ export async function middleware(req: NextRequest) {
   const host = req.headers.get('x-forwarded-host') || req.headers.get('host') || 'localhost:3002';
   const protocol = req.headers.get('x-forwarded-proto') || 'http';
   const baseUrl = `${protocol}://${host}`;
+  const requestedPath = `${req.nextUrl.pathname}${req.nextUrl.search || ''}`;
 
   if (isApiRoute) return res;
   if (req.headers.get('rsc') === '1' || req.headers.get('next-router-prefetch') === '1') return res;
@@ -192,7 +193,7 @@ export async function middleware(req: NextRequest) {
 
   if (!isAuthenticated && !isAuthPage && !isPublicPage) {
     const loginUrl = new URL('/auth/signin', baseUrl);
-    loginUrl.searchParams.set('callbackUrl', req.nextUrl.pathname);
+    loginUrl.searchParams.set('callbackUrl', requestedPath);
     return redirectWithCookies(loginUrl);
   }
 
@@ -210,7 +211,7 @@ export async function middleware(req: NextRequest) {
   ) {
     const decision = resolvePortalDecision(
       await getClientPortalRoleLookup(user!.id),
-      req.nextUrl.pathname,
+      requestedPath,
     );
     if (decision.action === 'redirect') {
       return redirectWithCookies(new URL(decision.to, baseUrl));

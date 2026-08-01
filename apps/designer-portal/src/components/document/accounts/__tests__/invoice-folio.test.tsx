@@ -45,9 +45,10 @@ const invoice: Invoice = {
   line_items: [],
   payments: [],
 };
+let mockInvoice: Invoice = invoice;
 
 jest.mock('@patina/supabase', () => ({
-  useInvoice: () => ({ data: invoice, isLoading: false }),
+  useInvoice: () => ({ data: mockInvoice, isLoading: false, isError: false, refetch: jest.fn() }),
   useIssueInvoice: () => ({ mutateAsync: mockIssue, isPending: false }),
   useSendInvoice: () => ({ mutateAsync: mockSend, isPending: false }),
   useRecordPayment: () => ({
@@ -62,6 +63,11 @@ jest.mock('@tanstack/react-query', () => ({
 }));
 
 describe('InvoiceFolio delivery recovery', () => {
+  beforeEach(() => {
+    mockInvoice = invoice;
+    jest.clearAllMocks();
+  });
+
   it('keeps the issued invoice reachable when email delivery fails', async () => {
     mockIssue.mockResolvedValue({
       ...invoice,
@@ -87,5 +93,50 @@ describe('InvoiceFolio delivery recovery', () => {
     });
     expect(fallback).toHaveAttribute('href', 'http://localhost:3002/invoices/invoice-1');
     expect(screen.getByRole('button', { name: 'Copy client link' })).toBeInTheDocument();
+  });
+
+  it('does not offer a portal URL to an unlinked household', async () => {
+    mockInvoice = { ...invoice, client_id: null, client: undefined };
+    mockIssue.mockResolvedValue({
+      ...mockInvoice,
+      status: 'sent',
+      invoice_number: 'INV-1043',
+    });
+    mockSend.mockRejectedValue(new Error('provider unavailable'));
+
+    render(<InvoiceFolio invoiceId="invoice-1" />);
+    fireEvent.click(screen.getByRole('button', { name: 'Issue & send' }));
+    const confirmations = screen.getAllByRole('button', { name: 'Issue & send' });
+    fireEvent.click(confirmations[confirmations.length - 1]);
+
+    await waitFor(() =>
+      expect(screen.getByText(/has no linked portal account/i)).toBeInTheDocument(),
+    );
+    expect(screen.queryByRole('link', { name: /invoices\/invoice-1/i })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /copy client link/i })).not.toBeInTheDocument();
+  });
+
+  it('announces clipboard failure instead of silently resetting the button', async () => {
+    Object.defineProperty(navigator, 'clipboard', {
+      configurable: true,
+      value: { writeText: jest.fn().mockRejectedValue(new Error('denied')) },
+    });
+    mockIssue.mockResolvedValue({
+      ...invoice,
+      status: 'sent',
+      invoice_number: 'INV-1044',
+    });
+    mockSend.mockRejectedValue(new Error('provider unavailable'));
+
+    render(<InvoiceFolio invoiceId="invoice-1" />);
+    fireEvent.click(screen.getByRole('button', { name: 'Issue & send' }));
+    const confirmations = screen.getAllByRole('button', { name: 'Issue & send' });
+    fireEvent.click(confirmations[confirmations.length - 1]);
+
+    const copy = await screen.findByRole('button', { name: 'Copy client link' });
+    fireEvent.click(copy);
+    expect(
+      await screen.findByRole('button', { name: 'Copy failed — select the link above' }),
+    ).toBeInTheDocument();
   });
 });
