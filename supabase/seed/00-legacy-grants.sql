@@ -5193,6 +5193,9 @@ END $g$;
 -- 00397_billing_checkout_integrity.sql
 DO $g$ BEGIN
   GRANT EXECUTE ON FUNCTION public.settle_invoice_checkout_payment(uuid, text, text, integer) TO service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
 -- 00398_delete_project_phase_atomic_rpc.sql
 DO $g$ BEGIN
   REVOKE ALL ON TABLE public.project_phase_topology_diagnostics FROM PUBLIC, anon, authenticated, service_role;
