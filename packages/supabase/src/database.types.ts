@@ -13007,52 +13007,133 @@ export type Database = {
       }
       proposal_send_dispatches: {
         Row: {
-          attempt_count: number
-          claim_token: string
-          claimed_at: string
+          cc_email: string | null
+          claim_token: string | null
+          client_id: string
+          client_portal_path: string
           created_at: string
           delivered_at: string | null
+          designer_id: string
+          designer_name: string
+          email_log_id: string
+          id: string
+          in_app_log_id: string
           last_error: string | null
-          notification_log_id: string
+          lease_expires_at: string | null
+          personal_message: string | null
+          project_id: string | null
           proposal_id: string
+          proposal_title: string
+          provider_attempt_count: number
+          provider_cc: string[] | null
+          provider_dry_run: boolean | null
+          provider_from: string | null
           provider_id: string | null
+          provider_idempotency_key: string
+          provider_request_body: string | null
+          provider_started_at: string | null
+          provider_subject: string | null
+          provider_to: string[] | null
+          recipient_email: string
+          recipient_name: string | null
+          request_persisted_at: string | null
+          retry_deadline: string | null
+          sender_name: string
           sent_at: string
-          status: string
+          state: string
+          studio_logo_url: string | null
+          studio_name: string | null
+          total_amount: number | null
           updated_at: string
+          valid_until: string | null
         }
         Insert: {
-          attempt_count?: number
-          claim_token?: string
-          claimed_at?: string
+          cc_email?: string | null
+          claim_token?: string | null
+          client_id: string
+          client_portal_path: string
           created_at?: string
           delivered_at?: string | null
+          designer_id: string
+          designer_name: string
+          email_log_id: string
+          id: string
+          in_app_log_id: string
           last_error?: string | null
-          notification_log_id?: string
+          lease_expires_at?: string | null
+          personal_message?: string | null
+          project_id?: string | null
           proposal_id: string
+          proposal_title: string
+          provider_attempt_count?: number
+          provider_cc?: string[] | null
+          provider_dry_run?: boolean | null
+          provider_from?: string | null
           provider_id?: string | null
+          provider_idempotency_key: string
+          provider_request_body?: string | null
+          provider_started_at?: string | null
+          provider_subject?: string | null
+          provider_to?: string[] | null
+          recipient_email: string
+          recipient_name?: string | null
+          request_persisted_at?: string | null
+          retry_deadline?: string | null
+          sender_name: string
           sent_at: string
-          status?: string
+          state?: string
+          studio_logo_url?: string | null
+          studio_name?: string | null
+          total_amount?: number | null
           updated_at?: string
+          valid_until?: string | null
         }
         Update: {
-          attempt_count?: number
-          claim_token?: string
-          claimed_at?: string
+          cc_email?: string | null
+          claim_token?: string | null
+          client_id?: string
+          client_portal_path?: string
           created_at?: string
           delivered_at?: string | null
+          designer_id?: string
+          designer_name?: string
+          email_log_id?: string
+          id?: string
+          in_app_log_id?: string
           last_error?: string | null
-          notification_log_id?: string
+          lease_expires_at?: string | null
+          personal_message?: string | null
+          project_id?: string | null
           proposal_id?: string
+          proposal_title?: string
+          provider_attempt_count?: number
+          provider_cc?: string[] | null
+          provider_dry_run?: boolean | null
+          provider_from?: string | null
           provider_id?: string | null
+          provider_idempotency_key?: string
+          provider_request_body?: string | null
+          provider_started_at?: string | null
+          provider_subject?: string | null
+          provider_to?: string[] | null
+          recipient_email?: string
+          recipient_name?: string | null
+          request_persisted_at?: string | null
+          retry_deadline?: string | null
+          sender_name?: string
           sent_at?: string
-          status?: string
+          state?: string
+          studio_logo_url?: string | null
+          studio_name?: string | null
+          total_amount?: number | null
           updated_at?: string
+          valid_until?: string | null
         }
         Relationships: [
           {
             foreignKeyName: "proposal_send_dispatches_proposal_id_fkey"
             columns: ["proposal_id"]
-            isOneToOne: false
+            isOneToOne: true
             referencedRelation: "proposals"
             referencedColumns: ["id"]
           },
@@ -13188,6 +13269,7 @@ export type Database = {
           personal_message: string | null
           project_address: string | null
           project_id: string | null
+          proposal_send_dispatch_id: string | null
           revision_summary: string | null
           sent_at: string | null
           signed_at: string | null
@@ -13231,6 +13313,7 @@ export type Database = {
           personal_message?: string | null
           project_address?: string | null
           project_id?: string | null
+          proposal_send_dispatch_id?: string | null
           revision_summary?: string | null
           sent_at?: string | null
           signed_at?: string | null
@@ -13274,6 +13357,7 @@ export type Database = {
           personal_message?: string | null
           project_address?: string | null
           project_id?: string | null
+          proposal_send_dispatch_id?: string | null
           revision_summary?: string | null
           sent_at?: string | null
           signed_at?: string | null
@@ -13347,6 +13431,13 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "projects"
             referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "proposals_send_dispatch_exact_fk"
+            columns: ["id", "proposal_send_dispatch_id"]
+            isOneToOne: false
+            referencedRelation: "proposal_send_dispatches"
+            referencedColumns: ["proposal_id", "id"]
           },
           {
             foreignKeyName: "proposals_template_id_fkey"
@@ -20856,6 +20947,68 @@ export type Database = {
         Returns: number[]
       }
       _aesthete_utilization: { Args: { p_ratio: number }; Returns: number }
+      _can_author_proposal: { Args: { p_owner: string }; Returns: boolean }
+      _commit_proposal_send: {
+        Args: {
+          p_cc_email?: string
+          p_expected_schedule_fingerprint: string
+          p_expected_total_amount: number
+          p_expected_updated_at: string
+          p_personal_message?: string
+          p_proposal_id: string
+          p_valid_until?: string
+        }
+        Returns: {
+          accepted_at: string | null
+          cc_email: string | null
+          client_feedback: string | null
+          client_id: string | null
+          client_visibility_tier: string | null
+          cover_image: string | null
+          created_at: string
+          decline_reason: string | null
+          declined_at: string | null
+          deposit_percent: number | null
+          description: string | null
+          designer_client_id: string | null
+          designer_id: string
+          discount_amount: number | null
+          discount_percent: number | null
+          feedback_enabled: boolean
+          id: string
+          last_nudged_at: string | null
+          nudge_count: number
+          parent_proposal_id: string | null
+          payment_notes: string | null
+          payment_terms: string | null
+          personal_message: string | null
+          project_address: string | null
+          project_id: string | null
+          proposal_send_dispatch_id: string | null
+          revision_summary: string | null
+          sent_at: string | null
+          signed_at: string | null
+          signed_by_name: string | null
+          signed_ip: string | null
+          status: string
+          subtotal: number | null
+          tax_amount: number | null
+          tax_rate: number | null
+          template_id: string | null
+          title: string
+          total_amount: number | null
+          updated_at: string
+          valid_until: string | null
+          version: number | null
+          viewed_at: string | null
+        }
+        SetofOptions: {
+          from: "*"
+          to: "proposals"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
       _compute_quiz_profile: { Args: { p_answers: Json }; Returns: Json }
       _primary_studio_for: { Args: { p_user: string }; Returns: string }
       _proposal_review_fingerprint: {
@@ -21124,6 +21277,63 @@ export type Database = {
         Returns: string
       }
       begin_discovery: { Args: { p_lead_id: string }; Returns: Json }
+      begin_proposal_revision: {
+        Args: { p_proposal_id: string }
+        Returns: {
+          accepted_at: string | null
+          cc_email: string | null
+          client_feedback: string | null
+          client_id: string | null
+          client_visibility_tier: string | null
+          cover_image: string | null
+          created_at: string
+          decline_reason: string | null
+          declined_at: string | null
+          deposit_percent: number | null
+          description: string | null
+          designer_client_id: string | null
+          designer_id: string
+          discount_amount: number | null
+          discount_percent: number | null
+          feedback_enabled: boolean
+          id: string
+          last_nudged_at: string | null
+          nudge_count: number
+          parent_proposal_id: string | null
+          payment_notes: string | null
+          payment_terms: string | null
+          personal_message: string | null
+          project_address: string | null
+          project_id: string | null
+          proposal_send_dispatch_id: string | null
+          revision_summary: string | null
+          sent_at: string | null
+          signed_at: string | null
+          signed_by_name: string | null
+          signed_ip: string | null
+          status: string
+          subtotal: number | null
+          tax_amount: number | null
+          tax_rate: number | null
+          template_id: string | null
+          title: string
+          total_amount: number | null
+          updated_at: string
+          valid_until: string | null
+          version: number | null
+          viewed_at: string | null
+        }
+        SetofOptions: {
+          from: "*"
+          to: "proposals"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
+      begin_proposal_send_provider_attempt: {
+        Args: { p_claim_token: string; p_dispatch_id: string }
+        Returns: Json
+      }
       calculate_engagement_score: {
         Args: { p_user_id: string }
         Returns: number
@@ -21252,9 +21462,10 @@ export type Database = {
       claim_design_request: { Args: { p_lead_id: string }; Returns: Json }
       claim_proposal_send_dispatch: {
         Args: {
+          p_dispatch_id: string
+          p_lease_seconds?: number
           p_proposal_id: string
           p_sent_at: string
-          p_stale_after_seconds?: number
         }
         Returns: Json
       }
@@ -21355,13 +21566,12 @@ export type Database = {
       complete_proposal_send_dispatch: {
         Args: {
           p_claim_token: string
+          p_delivery_state: string
+          p_dispatch_id: string
           p_error?: string
-          p_proposal_id: string
           p_provider_id?: string
-          p_sent_at: string
-          p_succeeded: boolean
         }
-        Returns: undefined
+        Returns: Json
       }
       compute_house_taste_draft: { Args: never; Returns: string }
       concierge_checklist_template: { Args: { p_stage: string }; Returns: Json }
@@ -21514,6 +21724,59 @@ export type Database = {
         Args: { p_project_id: string; p_reason?: string }
         Returns: number
       }
+      decline_proposal: {
+        Args: { p_proposal_id: string; p_reason?: string }
+        Returns: {
+          accepted_at: string | null
+          cc_email: string | null
+          client_feedback: string | null
+          client_id: string | null
+          client_visibility_tier: string | null
+          cover_image: string | null
+          created_at: string
+          decline_reason: string | null
+          declined_at: string | null
+          deposit_percent: number | null
+          description: string | null
+          designer_client_id: string | null
+          designer_id: string
+          discount_amount: number | null
+          discount_percent: number | null
+          feedback_enabled: boolean
+          id: string
+          last_nudged_at: string | null
+          nudge_count: number
+          parent_proposal_id: string | null
+          payment_notes: string | null
+          payment_terms: string | null
+          personal_message: string | null
+          project_address: string | null
+          project_id: string | null
+          proposal_send_dispatch_id: string | null
+          revision_summary: string | null
+          sent_at: string | null
+          signed_at: string | null
+          signed_by_name: string | null
+          signed_ip: string | null
+          status: string
+          subtotal: number | null
+          tax_amount: number | null
+          tax_rate: number | null
+          template_id: string | null
+          title: string
+          total_amount: number | null
+          updated_at: string
+          valid_until: string | null
+          version: number | null
+          viewed_at: string | null
+        }
+        SetofOptions: {
+          from: "*"
+          to: "proposals"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
       decline_workspace_invitation: {
         Args: { p_token: string }
         Returns: undefined
@@ -21531,6 +21794,31 @@ export type Database = {
       draft_invoice_from_milestone: {
         Args: { p_milestone_id: string }
         Returns: string
+      }
+      duplicate_proposal_board: {
+        Args: { p_board_id: string; p_proposal_id: string }
+        Returns: {
+          background_color: string
+          canvas_height: number
+          canvas_width: number
+          cover_image_url: string | null
+          created_at: string
+          id: string
+          name: string
+          project_id: string | null
+          proposal_id: string | null
+          scope_room_id: string | null
+          sections: Json
+          sort_order: number
+          status: string
+          updated_at: string
+        }
+        SetofOptions: {
+          from: "*"
+          to: "proposal_boards"
+          isOneToOne: true
+          isSetofReturn: false
+        }
       }
       enqueue_agent_successor_if_owned: {
         Args: {
@@ -21705,6 +21993,7 @@ export type Database = {
         Args: { p_collection_id: string }
         Returns: Json
       }
+      expire_proposals: { Args: never; Returns: number }
       expire_room_scan_associations: { Args: never; Returns: number }
       export_designer_taste: { Args: { p_designer_id: string }; Returns: Json }
       ffe_status_rank: { Args: { p_status: string }; Returns: number }
@@ -22429,6 +22718,59 @@ export type Database = {
         Returns: undefined
       }
       mark_feedback_seen: { Args: { p_id: string }; Returns: undefined }
+      mark_proposal_viewed: {
+        Args: { p_proposal_id: string }
+        Returns: {
+          accepted_at: string | null
+          cc_email: string | null
+          client_feedback: string | null
+          client_id: string | null
+          client_visibility_tier: string | null
+          cover_image: string | null
+          created_at: string
+          decline_reason: string | null
+          declined_at: string | null
+          deposit_percent: number | null
+          description: string | null
+          designer_client_id: string | null
+          designer_id: string
+          discount_amount: number | null
+          discount_percent: number | null
+          feedback_enabled: boolean
+          id: string
+          last_nudged_at: string | null
+          nudge_count: number
+          parent_proposal_id: string | null
+          payment_notes: string | null
+          payment_terms: string | null
+          personal_message: string | null
+          project_address: string | null
+          project_id: string | null
+          proposal_send_dispatch_id: string | null
+          revision_summary: string | null
+          sent_at: string | null
+          signed_at: string | null
+          signed_by_name: string | null
+          signed_ip: string | null
+          status: string
+          subtotal: number | null
+          tax_amount: number | null
+          tax_rate: number | null
+          template_id: string | null
+          title: string
+          total_amount: number | null
+          updated_at: string
+          valid_until: string | null
+          version: number | null
+          viewed_at: string | null
+        }
+        SetofOptions: {
+          from: "*"
+          to: "proposals"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
       mark_room_scan_geometry_error: {
         Args: { p_error: string; p_scan_id: string }
         Returns: undefined
@@ -22510,6 +22852,19 @@ export type Database = {
         }
         Returns: string
       }
+      persist_proposal_send_request: {
+        Args: {
+          p_cc: string[]
+          p_claim_token: string
+          p_dispatch_id: string
+          p_dry_run: boolean
+          p_from: string
+          p_request_body: string
+          p_subject: string
+          p_to: string[]
+        }
+        Returns: Json
+      }
       place_product_in_project: {
         Args: {
           p_category?: string
@@ -22570,6 +22925,14 @@ export type Database = {
           isSetofReturn: false
         }
       }
+      read_proposal_send_dispatch: {
+        Args: {
+          p_dispatch_id: string
+          p_proposal_id: string
+          p_sent_at: string
+        }
+        Returns: Json
+      }
       realtime_project_access: { Args: { topic: string }; Returns: boolean }
       recompute_portfolio_centroid: {
         Args: { p_designer_id: string }
@@ -22628,6 +22991,10 @@ export type Database = {
       }
       refresh_product_behavior_stats: { Args: never; Returns: undefined }
       refresh_style_centroids: { Args: never; Returns: number }
+      release_proposal_send_dispatch: {
+        Args: { p_claim_token: string; p_dispatch_id: string; p_error: string }
+        Returns: Json
+      }
       reopen_item_feedback: {
         Args: { p_feedback_id: string }
         Returns: {
@@ -22650,6 +23017,14 @@ export type Database = {
           isOneToOne: true
           isSetofReturn: false
         }
+      }
+      reorder_palette_swatches: {
+        Args: {
+          p_ordered_ids: string[]
+          p_palette_id: string
+          p_proposal_id: string
+        }
+        Returns: undefined
       }
       reorder_proposal_items: {
         Args: { p_ordered_ids: string[]; p_proposal_id: string }
@@ -23028,6 +23403,7 @@ export type Database = {
           personal_message: string | null
           project_address: string | null
           project_id: string | null
+          proposal_send_dispatch_id: string | null
           revision_summary: string | null
           sent_at: string | null
           signed_at: string | null
@@ -23175,6 +23551,7 @@ export type Database = {
           personal_message: string | null
           project_address: string | null
           project_id: string | null
+          proposal_send_dispatch_id: string | null
           revision_summary: string | null
           sent_at: string | null
           signed_at: string | null
@@ -23444,6 +23821,10 @@ export type Database = {
         }
         Returns: Json
       }
+      suppress_proposal_send_dispatch: {
+        Args: { p_claim_token: string; p_dispatch_id: string; p_reason: string }
+        Returns: Json
+      }
       swap_line_to_product: {
         Args: {
           p_feedback_id: string
@@ -23489,6 +23870,14 @@ export type Database = {
         }
       }
       sweep_scan_pipeline_ingest: { Args: never; Returns: Json }
+      sync_proposal_send_email_log: {
+        Args: { p_dispatch_id: string }
+        Returns: undefined
+      }
+      sync_proposal_send_in_app_log: {
+        Args: { p_dispatch_id: string }
+        Returns: undefined
+      }
       toggle_concierge_checklist_item: {
         Args: {
           p_actor: string

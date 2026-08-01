@@ -344,10 +344,9 @@ export function useDeleteSwatch() {
 }
 
 /**
- * Reorder all swatches on a palette. Issues one update per swatch in the
- * provided order with `sort_order = i`. We do this client-side rather
- * than via an RPC because the swatch list is small and RLS already
- * scopes the writes to the parent palette.
+ * Reorder the exact swatch set on a palette. The 00389 RPC validates that the
+ * supplied ids contain every palette swatch exactly once and assigns the whole
+ * zero-based order in one transaction.
  */
 export function useReorderSwatches() {
   const queryClient = useQueryClient();
@@ -366,18 +365,14 @@ export function useReorderSwatches() {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const supabase = getSupabase() as any;
 
-      for (let i = 0; i < orderedIds.length; i += 1) {
-        const id = orderedIds[i];
-        const { error } = await supabase
-          .from('palette_swatches')
-          .update({ sort_order: i })
-          .eq('id', id)
-          .eq('palette_id', paletteId);
-        if (error) throw error;
-      }
+      const { error } = await supabase.rpc('reorder_palette_swatches', {
+        p_proposal_id: _proposalId,
+        p_palette_id: paletteId,
+        p_ordered_ids: orderedIds,
+      });
+      if (error) throw error;
     },
-    // Updates are issued sequentially, so a later failure can leave earlier
-    // sort_order writes persisted. Reconcile all projections on failure too.
+    // Keep every mounted projection synchronized after success or rejection.
     onSettled: async (_data, _error, variables) => {
       queryClient.invalidateQueries({ queryKey: ['proposal-palette', variables.paletteId] });
       queryClient.invalidateQueries({ queryKey: ['proposal-palettes'] });

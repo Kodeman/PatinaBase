@@ -4398,54 +4398,6 @@ DO $g$ BEGIN
 EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
 END $g$;
 
--- 00388_proposal_send_dispatch_guard.sql
-DO $g$ BEGIN
-  REVOKE ALL ON TABLE public.proposal_send_dispatches FROM PUBLIC, anon, authenticated;
-EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
-END $g$;
-
--- 00388_proposal_send_dispatch_guard.sql
-DO $g$ BEGIN
-  GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE public.proposal_send_dispatches TO service_role;
-EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
-END $g$;
-
--- 00388_proposal_send_dispatch_guard.sql
-DO $g$ BEGIN
-  REVOKE ALL ON FUNCTION public.can_dispatch_proposal_send(uuid) FROM PUBLIC, anon;
-EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
-END $g$;
-
--- 00388_proposal_send_dispatch_guard.sql
-DO $g$ BEGIN
-  GRANT EXECUTE ON FUNCTION public.can_dispatch_proposal_send(uuid) TO authenticated;
-EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
-END $g$;
-
--- 00388_proposal_send_dispatch_guard.sql
-DO $g$ BEGIN
-  REVOKE ALL ON FUNCTION public.claim_proposal_send_dispatch(uuid, timestamptz, integer) FROM PUBLIC, anon, authenticated;
-EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
-END $g$;
-
--- 00388_proposal_send_dispatch_guard.sql
-DO $g$ BEGIN
-  GRANT EXECUTE ON FUNCTION public.claim_proposal_send_dispatch(uuid, timestamptz, integer) TO service_role;
-EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
-END $g$;
-
--- 00388_proposal_send_dispatch_guard.sql
-DO $g$ BEGIN
-  REVOKE ALL ON FUNCTION public.complete_proposal_send_dispatch(uuid, timestamptz, uuid, boolean, text, text) FROM PUBLIC, anon, authenticated;
-EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
-END $g$;
-
--- 00388_proposal_send_dispatch_guard.sql
-DO $g$ BEGIN
-  GRANT EXECUTE ON FUNCTION public.complete_proposal_send_dispatch(uuid, timestamptz, uuid, boolean, text, text) TO service_role;
-EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
-END $g$;
-
 -- 00387_project_proposal_authority_boundaries.sql
 DO $g$ BEGIN
   REVOKE ALL ON FUNCTION public.mark_proposal_viewed(uuid) FROM PUBLIC, anon, service_role;
@@ -4509,5 +4461,77 @@ END $g$;
 -- 00387_project_proposal_authority_boundaries.sql
 DO $g$ BEGIN
   GRANT EXECUTE ON FUNCTION public.record_offline_signature(uuid, text, boolean, date) TO authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00388_proposal_send_dispatch_guard.sql
+DO $g$ BEGIN
+  REVOKE ALL ON TABLE public.proposal_send_dispatches FROM PUBLIC, anon, authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00388_proposal_send_dispatch_guard.sql
+DO $g$ BEGIN
+  GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE public.proposal_send_dispatches TO service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00388_proposal_send_dispatch_guard.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.can_dispatch_proposal_send(uuid) FROM PUBLIC, anon;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00388_proposal_send_dispatch_guard.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.can_dispatch_proposal_send(uuid) TO authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00388_proposal_send_dispatch_guard.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.claim_proposal_send_dispatch(uuid, timestamptz, integer) FROM PUBLIC, anon, authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00388_proposal_send_dispatch_guard.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.claim_proposal_send_dispatch(uuid, timestamptz, integer) TO service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00388_proposal_send_dispatch_guard.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.complete_proposal_send_dispatch(uuid, timestamptz, uuid, boolean, text, text) FROM PUBLIC, anon, authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00388_proposal_send_dispatch_guard.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.complete_proposal_send_dispatch(uuid, timestamptz, uuid, boolean, text, text) TO service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00389_proposal_builder_atomic_rpcs.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.duplicate_proposal_board(uuid, uuid) FROM PUBLIC, anon, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00389_proposal_builder_atomic_rpcs.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.duplicate_proposal_board(uuid, uuid) TO authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00389_proposal_builder_atomic_rpcs.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.reorder_palette_swatches(uuid, uuid, uuid[]) FROM PUBLIC, anon, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00389_proposal_builder_atomic_rpcs.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.reorder_palette_swatches(uuid, uuid, uuid[]) TO authenticated;
 EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
 END $g$;

@@ -75,7 +75,9 @@ function pushTableResult(table: string, result: BuilderResult): MockBuilder {
   return b;
 }
 
+const rpc = vi.fn();
 const supabaseClient = {
+  rpc,
   from: vi.fn((table: string) => {
     const queue = builderQueues[table];
     if (queue && queue.length > 1) return queue.shift()!;
@@ -111,6 +113,8 @@ import {
 beforeEach(() => {
   Object.keys(builderQueues).forEach((k) => delete builderQueues[k]);
   invalidateQueries.mockReset();
+  rpc.mockReset();
+  supabaseClient.from.mockClear();
 });
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -345,40 +349,30 @@ describe('useDeleteSwatch', () => {
 // ─────────────────────────────────────────────────────────────────────────────
 
 describe('useReorderSwatches', () => {
-  it('updates sort_order for each swatch in order', async () => {
-    // Three sequential update calls land on three separate builders.
-    const b0 = pushTableResult('palette_swatches', { data: null, error: null });
-    const b1 = pushTableResult('palette_swatches', { data: null, error: null });
-    const b2 = pushTableResult('palette_swatches', { data: null, error: null });
-
+  it('sends the exact swatch order to one atomic RPC', async () => {
+    rpc.mockResolvedValueOnce({ data: null, error: null });
     const config = useReorderSwatches() as unknown as {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       mutationFn: (input: any) => Promise<any>;
     };
-    await config.mutationFn({ paletteId: 'pal-1', orderedIds: ['a', 'b', 'c'] });
+    await config.mutationFn({
+      paletteId: 'pal-1',
+      proposalId: 'prop-1',
+      orderedIds: ['a', 'b', 'c'],
+    });
 
-    // Each builder should have an update + eq for id + eq for palette_id.
-    const expectIdAndOrder = (b: typeof b0, id: string, ord: number) => {
-      const update = b.__chain.find((c) => c.method === 'update');
-      expect(update?.args[0]).toEqual({ sort_order: ord });
-      const idEq = b.__chain.filter((c) => c.method === 'eq')[0];
-      expect(idEq?.args).toEqual(['id', id]);
-    };
-
-    expectIdAndOrder(b0, 'a', 0);
-    expectIdAndOrder(b1, 'b', 1);
-    expectIdAndOrder(b2, 'c', 2);
+    expect(rpc).toHaveBeenCalledTimes(1);
+    expect(rpc).toHaveBeenCalledWith('reorder_palette_swatches', {
+      p_proposal_id: 'prop-1',
+      p_palette_id: 'pal-1',
+      p_ordered_ids: ['a', 'b', 'c'],
+    });
+    expect(supabaseClient.from).not.toHaveBeenCalled();
   });
 
-  it('invalidates persisted palette projections after a partial reorder failure', async () => {
-    const firstUpdate = pushTableResult('palette_swatches', {
-      data: null,
-      error: null,
-    });
-    const failedUpdate = pushTableResult('palette_swatches', {
-      data: null,
-      error: new Error('second swatch failed'),
-    });
+  it('surfaces a forced former kth-row failure without issuing sequential updates', async () => {
+    const rpcError = new Error('forced kth-row update failure; transaction rolled back');
+    rpc.mockResolvedValueOnce({ data: null, error: rpcError });
     const variables = {
       paletteId: 'pal-1',
       proposalId: 'prop-1',
@@ -398,9 +392,9 @@ describe('useReorderSwatches', () => {
       (error) => error,
     );
 
-    expect(failure).toEqual(new Error('second swatch failed'));
-    expect(firstUpdate.__chain.some((call) => call.method === 'update')).toBe(true);
-    expect(failedUpdate.__chain.some((call) => call.method === 'update')).toBe(true);
+    expect(failure).toBe(rpcError);
+    expect(rpc).toHaveBeenCalledTimes(1);
+    expect(supabaseClient.from).not.toHaveBeenCalled();
 
     await config.onSettled(undefined, failure, variables);
 

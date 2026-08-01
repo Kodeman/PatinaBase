@@ -82,7 +82,8 @@ const fromSpy = vi.fn((table: string) => {
   return b;
 });
 
-const supabaseClient = { from: fromSpy };
+const rpc = vi.fn();
+const supabaseClient = { from: fromSpy, rpc };
 
 vi.mock('@supabase/ssr', () => ({
   createBrowserClient: () => supabaseClient,
@@ -102,16 +103,15 @@ import {
   useDuplicateBoard,
   useUpsertBoard,
   useProjectOwnedBoards,
-  buildDuplicateBoardItemRows,
   summarizeBoard,
   type BoardLayoutPosition,
-  type ProposalBoardItem,
 } from '../use-boards';
 
 beforeEach(() => {
   Object.keys(builderQueues).forEach((k) => delete builderQueues[k]);
   invalidateQueries.mockReset();
   fromSpy.mockClear();
+  rpc.mockReset();
 });
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -242,139 +242,31 @@ describe('useBoardsWithItems', () => {
   });
 });
 
-// ─────────────────────────────────────────────────────────────────────────────
-// buildDuplicateBoardItemRows — the duplicate-board payload shape.
-//
-// Same WITH-CHECK trap as the layout upsert: a batch INSERT whose RLS check
-// joins board_id → the designer's proposal rejects the WHOLE statement if any
-// row omits board_id, so every duplicated item row MUST carry board_id + type.
-// Fresh rows omit `id` (gen_random_uuid()) and preserve the data snapshot
-// (incl. section_id).
-// ─────────────────────────────────────────────────────────────────────────────
+describe('useDuplicateBoard atomic RPC', () => {
+  it('delegates the complete board + item copy to one RPC', async () => {
+    rpc.mockResolvedValueOnce({
+      data: { id: 'copy-1', proposal_id: 'prop-1', name: 'Living room (Copy)' },
+      error: null,
+    });
+    const variables = { proposalId: 'prop-1', boardId: 'source-board' };
+    const config = useDuplicateBoard() as unknown as {
+      mutationFn: (input: typeof variables) => Promise<{ id: string }>;
+    };
 
-describe('buildDuplicateBoardItemRows', () => {
-  const source: ProposalBoardItem[] = [
-    {
-      id: 'src-1',
-      board_id: 'old-board',
-      type: 'product',
-      x: 10,
-      y: 20,
-      width: 220,
-      height: null,
-      z_index: 0,
-      rotation: 0,
-      locked: false,
-      product_id: 'prod-1',
-      capture_id: null,
-      palette_id: null,
-      image_url: 'https://cdn/x.jpg',
-      content: null,
-      data: { name: 'Chair', section_id: 'sec-a' },
-      created_at: '',
-      updated_at: '',
-    },
-    {
-      id: 'src-2',
-      board_id: 'old-board',
-      type: 'note',
-      x: 40,
-      y: 60,
-      width: 200,
-      height: 150,
-      z_index: 1,
-      rotation: 12,
-      locked: true,
-      product_id: null,
-      capture_id: null,
-      palette_id: null,
-      image_url: null,
-      content: 'hello',
-      data: {},
-      created_at: '',
-      updated_at: '',
-    },
-  ];
-
-  it('carries board_id + type on every row, drops ids, preserves data', () => {
-    const rows = buildDuplicateBoardItemRows('new-board', source);
-    expect(rows).toHaveLength(2);
-    for (const row of rows) {
-      expect(row.board_id, 'every row must carry the NEW board_id').toBe('new-board');
-      expect(typeof row.type, 'every row must carry type').toBe('string');
-      expect(row, 'a fresh row must not carry the source id').not.toHaveProperty('id');
-    }
-    // Geometry + snapshot copied verbatim; section_id inside data survives.
-    expect(rows[0]).toEqual(
-      expect.objectContaining({
-        type: 'product',
-        x: 10,
-        y: 20,
-        width: 220,
-        height: null,
-        z_index: 0,
-        locked: false,
-        product_id: 'prod-1',
-        image_url: 'https://cdn/x.jpg',
-        data: { name: 'Chair', section_id: 'sec-a' },
-      }),
+    await expect(config.mutationFn(variables)).resolves.toEqual(
+      expect.objectContaining({ id: 'copy-1' }),
     );
-    expect(rows[1].data).toEqual({});
+    expect(rpc).toHaveBeenCalledTimes(1);
+    expect(rpc).toHaveBeenCalledWith('duplicate_proposal_board', {
+      p_proposal_id: 'prop-1',
+      p_board_id: 'source-board',
+    });
+    expect(fromSpy).not.toHaveBeenCalled();
   });
 
-  it('returns an empty array for a board with no items', () => {
-    expect(buildDuplicateBoardItemRows('new-board', [])).toEqual([]);
-  });
-});
-
-describe('useDuplicateBoard cache recovery', () => {
-  it('invalidates persisted board projections when copying items fails after board creation', async () => {
-    pushTableResult('proposal_boards', {
-      data: {
-        id: 'source-board',
-        proposal_id: 'prop-1',
-        name: 'Living room',
-        scope_room_id: null,
-        cover_image_url: null,
-        canvas_width: 1200,
-        canvas_height: 800,
-        background_color: '#FAF8F5',
-        sections: [],
-        proposal_board_items: [
-          {
-            id: 'source-item',
-            board_id: 'source-board',
-            type: 'note',
-            x: 0,
-            y: 0,
-            width: 200,
-            height: 100,
-            z_index: 0,
-            rotation: 0,
-            locked: false,
-            product_id: null,
-            capture_id: null,
-            palette_id: null,
-            image_url: null,
-            content: 'Keep me',
-            data: {},
-          },
-        ],
-      },
-      error: null,
-    });
-    pushTableResult('proposal_boards', {
-      data: [{ sort_order: 0 }],
-      error: null,
-    });
-    const boardInsert = pushTableResult('proposal_boards', {
-      data: { id: 'ghost-copy', proposal_id: 'prop-1' },
-      error: null,
-    });
-    const itemInsert = pushTableResult('proposal_board_items', {
-      data: null,
-      error: new Error('item copy failed'),
-    });
+  it('surfaces a forced former second-leg failure without issuing a browser-side insert', async () => {
+    const rpcError = new Error('forced copied-item insert failure; transaction rolled back');
+    rpc.mockResolvedValueOnce({ data: null, error: rpcError });
     const variables = { proposalId: 'prop-1', boardId: 'source-board' };
     const config = useDuplicateBoard() as unknown as {
       mutationFn: (input: typeof variables) => Promise<unknown>;
@@ -390,9 +282,9 @@ describe('useDuplicateBoard cache recovery', () => {
       (error) => error,
     );
 
-    expect(failure).toEqual(new Error('item copy failed'));
-    expect(boardInsert.__chain.some((call) => call.method === 'insert')).toBe(true);
-    expect(itemInsert.__chain.some((call) => call.method === 'insert')).toBe(true);
+    expect(failure).toBe(rpcError);
+    expect(rpc).toHaveBeenCalledTimes(1);
+    expect(fromSpy).not.toHaveBeenCalled();
 
     await config.onSettled(undefined, failure, variables);
 
