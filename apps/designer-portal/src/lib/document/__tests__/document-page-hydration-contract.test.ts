@@ -15,11 +15,11 @@ describe('open document hydration render contract', () => {
   it('gates a warm cached engagement behind useHydrated before early returns', () => {
     expect(page).toContain("import { useHydrated } from '@/hooks/use-hydrated';");
     expect(page).toMatch(/const hydrated = useHydrated\(\);/);
-    expect(page).toMatch(/if \(!hydrated \|\| isLoading \|\| resolution\?\.kind === 'redirect'\)/);
+    expect(page).toMatch(/if \(!hydrated \|\| resolutionState === 'loading'\)/);
 
     const hook = page.indexOf('const hydrated = useHydrated()');
-    const loadingReturn = page.indexOf('if (!hydrated || isLoading');
-    const missingReturn = page.indexOf('if (!row)');
+    const loadingReturn = page.indexOf("if (!hydrated || resolutionState === 'loading')");
+    const missingReturn = page.indexOf("if (resolutionState === 'missing' || !row)");
     expect(hook).toBeGreaterThan(-1);
     expect(loadingReturn).toBeGreaterThan(hook);
     expect(missingReturn).toBeGreaterThan(loadingReturn);
