@@ -1,22 +1,22 @@
 // Supabase Edge Function: proposal-send
 //
-// Business state is committed by the guarded send_proposal RPC first. This
-// boundary validates the caller again, verifies that exact sent instance, then
-// claims a durable dispatch row before sending through sendCompliantEmail.
+// The business send and immutable outbox row already exist before this edge
+// boundary runs. This function authenticates, reauthorizes the captured owner,
+// claims the exact nonce/timestamp tuple, and uploads only persisted bytes.
 
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
-import { sendCompliantEmail } from "../_shared/send-email.ts";
 import {
-  resolveStudioIdentity,
-  studioCobrand,
-  studioDisplayName,
-} from "../_shared/studio-identity.ts";
+  prepareCompliantEmail,
+  sendPreparedResendRequest,
+} from "../_shared/send-email.ts";
 import {
   createProposalSendHandler,
   type DispatchClaim,
-  type ProposalEmail,
+  type PersistedProviderRequest,
+  type ProposalDeliveryState,
   type ProposalSendGateway,
-  type ProposalSendRow,
+  type ProposalSendInstance,
+  type ProposalSendSnapshot,
 } from "./handler.ts";
 
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
@@ -44,8 +44,125 @@ async function authenticate(
   return { userId: data.user.id };
 }
 
+function record(value: unknown, label: string): Record<string, unknown> {
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    throw new Error(`proposal-send: malformed ${label}`);
+  }
+  return value as Record<string, unknown>;
+}
+
+function requiredString(
+  value: Record<string, unknown>,
+  key: string,
+): string {
+  if (typeof value[key] !== "string" || !String(value[key]).trim()) {
+    throw new Error(`proposal-send: ${key} missing`);
+  }
+  return String(value[key]);
+}
+
+function optionalString(
+  value: Record<string, unknown>,
+  key: string,
+): string | undefined {
+  return typeof value[key] === "string" ? String(value[key]) : undefined;
+}
+
+function stringArray(value: unknown): string[] | undefined {
+  return Array.isArray(value) && value.every((item) => typeof item === "string")
+    ? value as string[]
+    : undefined;
+}
+
+function mapInstance(value: unknown): ProposalSendInstance {
+  const row = record(value, "dispatch instance");
+  return {
+    id: requiredString(row, "id"),
+    proposalId: requiredString(row, "proposal_id"),
+    sentAt: requiredString(row, "sent_at"),
+    designerId: requiredString(row, "designer_id"),
+    clientId: requiredString(row, "client_id"),
+    deliveryState: requiredString(
+      row,
+      "delivery_state",
+    ) as ProposalDeliveryState,
+    attemptCount: Number(row.attempt_count ?? 0),
+  };
+}
+
+function mapSnapshot(value: unknown): ProposalSendSnapshot {
+  const row = record(value, "dispatch snapshot");
+  return {
+    id: requiredString(row, "id"),
+    proposalId: requiredString(row, "proposal_id"),
+    sentAt: requiredString(row, "sent_at"),
+    designerId: requiredString(row, "designer_id"),
+    clientId: requiredString(row, "client_id"),
+    projectId: optionalString(row, "project_id"),
+    proposalTitle: requiredString(row, "proposal_title"),
+    personalMessage: optionalString(row, "personal_message"),
+    ccEmail: optionalString(row, "cc_email"),
+    validUntil: optionalString(row, "valid_until"),
+    totalAmount: typeof row.total_amount === "number"
+      ? row.total_amount
+      : undefined,
+    recipientEmail: requiredString(row, "recipient_email"),
+    recipientName: optionalString(row, "recipient_name"),
+    designerName: requiredString(row, "designer_name"),
+    senderName: requiredString(row, "sender_name"),
+    studioName: optionalString(row, "studio_name"),
+    studioLogoUrl: optionalString(row, "studio_logo_url"),
+    clientPortalPath: requiredString(row, "client_portal_path"),
+  };
+}
+
+function mapPersistedRequest(
+  row: Record<string, unknown>,
+  prefix = "provider_",
+): PersistedProviderRequest | undefined {
+  const bodyKey = prefix === "provider_" ? "provider_request_body" : "body";
+  const keyKey = prefix === "provider_"
+    ? "provider_idempotency_key"
+    : "idempotency_key";
+  if (typeof row[bodyKey] !== "string") return undefined;
+  const to = stringArray(row[`${prefix}to`]);
+  if (!to?.length) {
+    throw new Error("proposal-send: persisted recipient missing");
+  }
+  return {
+    body: requiredString(row, bodyKey),
+    from: requiredString(row, `${prefix}from`),
+    to,
+    cc: stringArray(row[`${prefix}cc`]),
+    subject: requiredString(row, `${prefix}subject`),
+    idempotencyKey: requiredString(row, keyKey),
+    dryRun:
+      row[prefix === "provider_" ? "provider_dry_run" : "dry_run"] === true,
+  };
+}
+
+function mapClaim(value: unknown): DispatchClaim {
+  const row = record(value, "dispatch claim");
+  const idempotencyKey = optionalString(row, "provider_idempotency_key");
+  return {
+    claimed: row.claimed === true,
+    deliveryState: requiredString(
+      row,
+      "delivery_state",
+    ) as ProposalDeliveryState,
+    claimToken: optionalString(row, "claim_token"),
+    attemptCount: Number(row.attempt_count ?? 0),
+    retryDeadline: optionalString(row, "retry_deadline"),
+    retryExhausted: row.retry_exhausted === true,
+    lastError: optionalString(row, "last_error"),
+    providerId: optionalString(row, "provider_id"),
+    dispatch: row.dispatch ? mapSnapshot(row.dispatch) : undefined,
+    request: mapPersistedRequest(row),
+    idempotencyKey,
+  };
+}
+
 function createGateway(authorization: string): ProposalSendGateway {
-  // Called only after authenticate() succeeds in the request handler.
   const admin = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, {
     auth: { persistSession: false, autoRefreshToken: false },
   });
@@ -55,24 +172,17 @@ function createGateway(authorization: string): ProposalSendGateway {
   });
 
   return {
-    async loadProposal(proposalId: string): Promise<ProposalSendRow | null> {
-      const { data, error } = await admin
-        .from("proposals")
-        .select(
-          `
-          id, title, status, sent_at, personal_message, cc_email, valid_until,
-          total_amount, client_id, designer_client_id, designer_id, project_id,
-          designer:profiles!designer_id(full_name, email),
-          client:profiles!client_id(full_name, email)
-        `,
-        )
-        .eq("id", proposalId)
-        .maybeSingle();
+    async loadExactInstance(input) {
+      const { data, error } = await admin.rpc("read_proposal_send_dispatch", {
+        p_dispatch_id: input.dispatchId,
+        p_proposal_id: input.proposalId,
+        p_sent_at: input.sentAt,
+      });
       if (error) throw error;
-      return (data as unknown as ProposalSendRow | null) ?? null;
+      return mapInstance(data);
     },
 
-    async isActiveStudioComember(ownerId: string): Promise<boolean> {
+    async isActiveStudioComember(ownerId) {
       const { data, error } = await caller.rpc("can_dispatch_proposal_send", {
         p_owner: ownerId,
       });
@@ -83,102 +193,136 @@ function createGateway(authorization: string): ProposalSendGateway {
       return data === true;
     },
 
-    async claimDispatch(
-      proposalId: string,
-      sentAt: string,
-    ): Promise<DispatchClaim> {
+    async claimDispatch(input) {
       const { data, error } = await admin.rpc("claim_proposal_send_dispatch", {
-        p_proposal_id: proposalId,
-        p_sent_at: sentAt,
-        p_stale_after_seconds: 300,
+        p_dispatch_id: input.dispatchId,
+        p_proposal_id: input.proposalId,
+        p_sent_at: input.sentAt,
+        p_lease_seconds: 30,
       });
       if (error) throw error;
-      if (!data || typeof data !== "object" || Array.isArray(data)) {
-        throw new Error("proposal-send: malformed dispatch claim");
-      }
-      const claim = data as Record<string, unknown>;
-      if (
-        typeof claim.claimed !== "boolean" ||
-        typeof claim.notification_log_id !== "string"
-      ) {
-        throw new Error("proposal-send: incomplete dispatch claim");
-      }
-      return {
-        claimed: claim.claimed === true,
-        duplicate: claim.duplicate === true,
-        inFlight: claim.in_flight === true,
-        claimToken: typeof claim.claim_token === "string"
-          ? claim.claim_token
-          : undefined,
-        notificationLogId: String(claim.notification_log_id),
-        attemptCount: Number(claim.attempt_count ?? 1),
-      };
+      return mapClaim(data);
     },
 
-    async resolveSender(proposal: ProposalSendRow) {
-      const identity = await resolveStudioIdentity(admin, {
-        projectId: proposal.project_id,
-        designerId: proposal.designer_id,
-      });
-      const designerName = proposal.designer?.full_name ?? identity?.name ??
-        "Your designer";
-      const cobrand = studioCobrand(identity);
-      return {
-        designerName,
-        senderName: studioDisplayName(identity, designerName),
-        studioName: cobrand.studioName,
-        studioLogoUrl: cobrand.studioLogoUrl,
-      };
-    },
-
-    async ensureInAppNotification(
-      proposal: ProposalSendRow,
-      notificationLogId: string,
-    ): Promise<void> {
-      const { error } = await admin.from("notification_log").upsert(
-        {
-          id: notificationLogId,
-          user_id: proposal.client_id,
-          type: "proposal_sent",
-          channel: "in_app",
-          status: "delivered",
-          template_id: "proposal-sent",
-          metadata: {
-            proposal_id: proposal.id,
-            sent_at: proposal.sent_at,
-            subject: "Proposal ready for your review",
-            message: proposal.title,
-            deep_link: `/proposals/${proposal.id}`,
-          },
-        },
-        { onConflict: "id", ignoreDuplicates: true },
-      );
-      if (error) throw error;
-    },
-
-    async sendEmail(email: ProposalEmail) {
-      return await sendCompliantEmail(admin, {
-        to: email.to,
-        cc: email.cc,
-        subject: email.subject,
-        html: email.html,
-        userId: email.userId,
+    async prepareRequest(input) {
+      const result = await prepareCompliantEmail(admin, {
+        to: input.dispatch.recipientEmail,
+        cc: input.dispatch.ccEmail,
+        subject: input.subject,
+        html: input.html,
+        userId: input.dispatch.clientId,
         notificationType: "proposal_sent",
         category: "operational",
         templateId: "proposal-sent",
-        metadata: email.metadata,
-        idempotencyKey: email.idempotencyKey,
+        metadata: {
+          proposal_id: input.dispatch.proposalId,
+          dispatch_id: input.dispatch.id,
+          sent_at: input.dispatch.sentAt,
+          deep_link: input.dispatch.clientPortalPath,
+        },
+        idempotencyKey: input.idempotencyKey,
+        failClosedPolicyReads: true,
+        skipLog: true,
       });
+      if (result.state === "suppressed") return result;
+      return {
+        state: "ready" as const,
+        request: {
+          ...result.request,
+          idempotencyKey: input.idempotencyKey,
+        },
+      };
+    },
+
+    async persistRequest(input) {
+      const { data, error } = await admin.rpc("persist_proposal_send_request", {
+        p_dispatch_id: input.dispatchId,
+        p_claim_token: input.claimToken,
+        p_request_body: input.request.body,
+        p_from: input.request.from,
+        p_to: input.request.to,
+        p_cc: input.request.cc ?? null,
+        p_subject: input.request.subject,
+        p_dry_run: input.request.dryRun,
+      });
+      if (error) throw error;
+      const mapped = mapPersistedRequest(record(data, "persisted request"), "");
+      if (!mapped) throw new Error("proposal-send: request was not persisted");
+      return mapped;
+    },
+
+    async beginProviderAttempt(input) {
+      const { data, error } = await admin.rpc(
+        "begin_proposal_send_provider_attempt",
+        {
+          p_dispatch_id: input.dispatchId,
+          p_claim_token: input.claimToken,
+        },
+      );
+      if (error) throw error;
+      const row = record(data, "provider attempt");
+      return {
+        attemptCount: Number(row.attempt_count),
+        retryDeadline: requiredString(row, "retry_deadline"),
+      };
+    },
+
+    async sendPrepared(request) {
+      return await sendPreparedResendRequest(request, { timeoutMs: 6_000 });
     },
 
     async completeDispatch(input) {
-      const { error } = await admin.rpc("complete_proposal_send_dispatch", {
-        p_proposal_id: input.proposalId,
-        p_sent_at: input.sentAt,
+      const { data, error } = await admin.rpc(
+        "complete_proposal_send_dispatch",
+        {
+          p_dispatch_id: input.dispatchId,
+          p_claim_token: input.claimToken,
+          p_delivery_state: input.deliveryState,
+          p_provider_id: input.providerId ?? null,
+          p_error: input.error ?? null,
+        },
+      );
+      if (error) throw error;
+      const row = record(data, "dispatch completion");
+      return {
+        deliveryState: requiredString(
+          row,
+          "delivery_state",
+        ) as ProposalDeliveryState,
+        attemptCount: Number(row.attempt_count ?? 0),
+        retryDeadline: optionalString(row, "retry_deadline"),
+        lastError: optionalString(row, "last_error"),
+      };
+    },
+
+    async suppressDispatch(input) {
+      const { error } = await admin.rpc("suppress_proposal_send_dispatch", {
+        p_dispatch_id: input.dispatchId,
         p_claim_token: input.claimToken,
-        p_succeeded: input.succeeded,
-        p_provider_id: input.providerId ?? null,
-        p_error: input.error ?? null,
+        p_reason: input.reason,
+      });
+      if (error) throw error;
+    },
+
+    async releaseDispatch(input) {
+      const { error } = await admin.rpc("release_proposal_send_dispatch", {
+        p_dispatch_id: input.dispatchId,
+        p_claim_token: input.claimToken,
+        p_error: input.error,
+      });
+      if (error) throw error;
+    },
+
+    async syncEmailLog(dispatchId) {
+      const { error } = await admin.rpc("sync_proposal_send_email_log", {
+        p_dispatch_id: dispatchId,
+      });
+      if (error) throw error;
+    },
+
+    async syncInAppLog(dispatchId) {
+      const { error } = await admin.rpc("sync_proposal_send_in_app_log", {
+        p_dispatch_id: dispatchId,
       });
       if (error) throw error;
     },

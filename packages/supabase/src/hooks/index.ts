@@ -370,6 +370,7 @@ export {
   useUpdateProposalItem,
   useRemoveProposalItem,
   useSendProposal,
+  useRetryProposalSend,
   useNudgeProposal,
   useDeleteProposal,
   // Sections
@@ -391,6 +392,10 @@ export {
   useRecordOfflineSignature,
   useDeclineProposal,
   useRequestProposalChange,
+} from './use-proposals';
+export type {
+  ProposalEmailDeliveryState,
+  ProposalEmailDispatchOutcome,
 } from './use-proposals';
 export type {
   Proposal,

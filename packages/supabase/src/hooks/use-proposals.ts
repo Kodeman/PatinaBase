@@ -19,6 +19,69 @@ const getSupabase = () => createBrowserClient();
 const REVIEWED_PROPOSAL_CHANGED =
   'Proposal cannot be sent: the proposal changed since it was reviewed. Review the latest client copy and send again.';
 
+export type ProposalEmailDeliveryState =
+  'pending' | 'in_flight' | 'delivered' | 'suppressed' | 'failed' | 'ambiguous';
+
+export interface ProposalEmailDispatchOutcome {
+  _emailDispatched: boolean;
+  _emailDeliveryState: ProposalEmailDeliveryState;
+  _emailRetryable: boolean;
+  _emailDispatchDetail?: string;
+}
+
+const PROPOSAL_EMAIL_STATES = new Set<ProposalEmailDeliveryState>([
+  'pending',
+  'in_flight',
+  'delivered',
+  'suppressed',
+  'failed',
+  'ambiguous',
+]);
+
+async function invokeProposalSendEdge(
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  supabase: any,
+  input: { proposalId: string; sentAt: string; dispatchId: string },
+): Promise<ProposalEmailDispatchOutcome> {
+  try {
+    const { data, error } = await supabase.functions.invoke('proposal-send', {
+      body: input,
+    });
+    const state =
+      data &&
+      typeof data.delivery_state === 'string' &&
+      PROPOSAL_EMAIL_STATES.has(
+        data.delivery_state as ProposalEmailDeliveryState,
+      )
+        ? (data.delivery_state as ProposalEmailDeliveryState)
+        : 'pending';
+    if (error && state === 'pending') {
+      // eslint-disable-next-line no-console
+      console.warn('proposal-send invocation failed', error);
+    }
+    return {
+      _emailDispatched: state === 'delivered',
+      _emailDeliveryState: state,
+      _emailRetryable:
+        typeof data?.retryable === 'boolean'
+          ? data.retryable
+          : state === 'pending' || state === 'in_flight',
+      _emailDispatchDetail:
+        typeof data?.detail === 'string' ? data.detail : undefined,
+    };
+  } catch (error) {
+    // The immutable outbox row already exists. A transport failure is pending,
+    // never success, and can be retried without rerunning send_proposal.
+    // eslint-disable-next-line no-console
+    console.warn('proposal-send invocation failed', error);
+    return {
+      _emailDispatched: false,
+      _emailDeliveryState: 'pending',
+      _emailRetryable: true,
+    };
+  }
+}
+
 async function readProposalSendSnapshot(
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   supabase: any,
@@ -126,6 +189,8 @@ export interface Proposal {
   status: 'draft' | 'sent' | 'viewed' | 'accepted' | 'declined' | 'expired' | 'revised';
   valid_until: string | null;
   sent_at: string | null;
+  /** Immutable email outbox nonce created atomically by send_proposal (00388). */
+  proposal_send_dispatch_id: string | null;
   viewed_at: string | null;
   responded_at: string | null;
   created_at: string;
@@ -895,28 +960,24 @@ export function useSendProposal(options?: { errorSurface?: 'inline' }) {
 
       if (error) throw error;
 
-      // Best-effort email dispatch — failure here does NOT roll back the send
-      // (the proposal is already marked sent in the DB). We surface the outcome
-      // via `_emailDispatched` so the Send page can warn the designer instead of
-      // failing silently; they can resend from the proposal page.
-      let emailDispatched = typeof data?.sent_at === 'string';
-      if (emailDispatched) {
-        try {
-          const { error: fnError } = await supabase.functions.invoke(
-            'proposal-send',
-            {
-              body: { proposalId, sentAt: data.sent_at },
-            },
-          );
-          if (fnError) emailDispatched = false;
-        } catch (e) {
-          emailDispatched = false;
-          // eslint-disable-next-line no-console
-          console.warn('proposal-send invocation failed', e);
-        }
-      }
+      const hasDispatch =
+        typeof data?.sent_at === 'string' &&
+        typeof data?.proposal_send_dispatch_id === 'string';
+      const delivery = hasDispatch
+        ? await invokeProposalSendEdge(supabase, {
+            proposalId,
+            sentAt: data.sent_at,
+            dispatchId: data.proposal_send_dispatch_id,
+          })
+        : {
+            _emailDispatched: false,
+            _emailDeliveryState: 'pending' as const,
+            _emailRetryable: false,
+            _emailDispatchDetail:
+              'The proposal send instance was not returned. Refresh before retrying.',
+          };
 
-      return { ...data, _emailDispatched: emailDispatched };
+      return { ...data, ...delivery };
     },
     onSuccess: async (_, { proposalId }) => {
       await Promise.all([
@@ -940,6 +1001,31 @@ export function useSendProposal(options?: { errorSurface?: 'inline' }) {
   });
 }
 
+/** Retry only the durable email outbox. This never calls send_proposal and can
+ * safely recover an invocation that never reached the edge function. */
+export function useRetryProposalSend(options?: { errorSurface?: 'inline' }) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    meta: options?.errorSurface
+      ? { errorSurface: options.errorSurface }
+      : undefined,
+    mutationFn: async (input: {
+      proposalId: string;
+      sentAt: string;
+      dispatchId: string;
+    }) => {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const supabase = getSupabase() as any;
+      return await invokeProposalSendEdge(supabase, input);
+    },
+    onSuccess: async (_, { proposalId }) => {
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: ['proposal', proposalId] }),
+        queryClient.invalidateQueries({ queryKey: ['proposals'] }),
+      ]);
+    },
+  });
+}
 
 /**
  * Nudge the client about a sent/viewed proposal — a gentle reminder (R71).

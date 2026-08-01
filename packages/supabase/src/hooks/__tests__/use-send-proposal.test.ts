@@ -25,7 +25,7 @@ vi.mock('@tanstack/react-query', () => ({
   useQueryClient: () => ({ invalidateQueries }),
 }));
 
-import { useSendProposal } from '../use-proposals';
+import { useRetryProposalSend, useSendProposal } from '../use-proposals';
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type MutationConfig = any;
@@ -48,9 +48,10 @@ const expectedSnapshot = {
 let snapshotReads: Array<{ data: unknown; error: unknown }>;
 let sendRpcResult: { data: unknown; error: unknown };
 
-function snapshotResult(
-  snapshot = expectedSnapshot,
-): { data: unknown; error: unknown } {
+function snapshotResult(snapshot = expectedSnapshot): {
+  data: unknown;
+  error: unknown;
+} {
   return {
     data: [
       {
@@ -125,7 +126,11 @@ beforeEach(() => {
   milestoneReads = [];
   snapshotReads = [];
   sendRpcResult = {
-    data: { id: 'proposal-1', sent_at: '2026-07-31T12:01:00.000Z' },
+    data: {
+      id: 'proposal-1',
+      sent_at: '2026-07-31T12:01:00.000Z',
+      proposal_send_dispatch_id: 'dispatch-1',
+    },
     error: null,
   };
   reconciliationResult = { data: { id: 'deposit' }, error: null };
@@ -141,13 +146,20 @@ beforeEach(() => {
       : sendRpcResult,
   );
   invoke.mockReset();
-  invoke.mockResolvedValue({ error: null });
+  invoke.mockResolvedValue({
+    data: { delivery_state: 'delivered', retryable: false },
+    error: null,
+  });
   invalidateQueries.mockReset();
   invalidateQueries.mockResolvedValue(undefined);
 });
 
 function config(): MutationConfig {
   return useSendProposal({ errorSurface: 'inline' }) as MutationConfig;
+}
+
+function retryConfig(): MutationConfig {
+  return useRetryProposalSend({ errorSurface: 'inline' }) as MutationConfig;
 }
 
 describe('useSendProposal payment preflight', () => {
@@ -187,10 +199,7 @@ describe('useSendProposal payment preflight', () => {
         expectedSnapshot,
       }),
     ).rejects.toThrow('must total 100%');
-    expect(rpc).not.toHaveBeenCalledWith(
-      'send_proposal',
-      expect.anything(),
-    );
+    expect(rpc).not.toHaveBeenCalledWith('send_proposal', expect.anything());
     expect(invoke).not.toHaveBeenCalled();
   });
 
@@ -249,8 +258,7 @@ describe('useSendProposal payment preflight', () => {
       p_proposal_id: 'proposal-1',
       p_expected_updated_at: expectedSnapshot.proposalUpdatedAt,
       p_expected_total_amount: expectedSnapshot.proposalTotalAmount,
-      p_expected_schedule_fingerprint:
-        expectedSnapshot.scheduleFingerprint,
+      p_expected_schedule_fingerprint: expectedSnapshot.scheduleFingerprint,
       p_personal_message: null,
       p_cc_email: null,
       p_valid_until: null,
@@ -259,8 +267,101 @@ describe('useSendProposal payment preflight', () => {
       body: {
         proposalId: 'proposal-1',
         sentAt: '2026-07-31T12:01:00.000Z',
+        dispatchId: 'dispatch-1',
       },
     });
+  });
+
+  it('consumes the edge body and never maps pending or suppressed as success', async () => {
+    const valid = {
+      id: 'deposit',
+      label: 'Project deposit',
+      percentage: 100,
+      amount_cents: 1_320_000,
+      trigger_condition: null,
+      sort_order: 0,
+    };
+
+    for (const deliveryState of ['pending', 'suppressed'] as const) {
+      proposalReads.push(
+        { data: { total_amount: 1_320_000 }, error: null },
+        { data: { total_amount: 1_320_000 }, error: null },
+      );
+      milestoneReads.push(
+        { data: [valid], error: null },
+        { data: [valid], error: null },
+      );
+      invoke.mockResolvedValueOnce({
+        data: {
+          delivery_state: deliveryState,
+          retryable: deliveryState === 'pending',
+        },
+        error: null,
+      });
+
+      await expect(
+        config().mutationFn({ proposalId: 'proposal-1', expectedSnapshot }),
+      ).resolves.toMatchObject({
+        _emailDispatched: false,
+        _emailDeliveryState: deliveryState,
+        _emailRetryable: deliveryState === 'pending',
+      });
+    }
+  });
+
+  it('returns a retryable pending outbox when edge invocation never starts', async () => {
+    const valid = {
+      id: 'deposit',
+      label: 'Project deposit',
+      percentage: 100,
+      amount_cents: 1_320_000,
+      trigger_condition: null,
+      sort_order: 0,
+    };
+    proposalReads.push(
+      { data: { total_amount: 1_320_000 }, error: null },
+      { data: { total_amount: 1_320_000 }, error: null },
+    );
+    milestoneReads.push(
+      { data: [valid], error: null },
+      { data: [valid], error: null },
+    );
+    invoke.mockRejectedValueOnce(new Error('network unavailable'));
+
+    await expect(
+      config().mutationFn({ proposalId: 'proposal-1', expectedSnapshot }),
+    ).resolves.toMatchObject({
+      _emailDispatched: false,
+      _emailDeliveryState: 'pending',
+      _emailRetryable: true,
+      proposal_send_dispatch_id: 'dispatch-1',
+    });
+  });
+
+  it('retries the exact outbox tuple without rerunning the business send RPC', async () => {
+    invoke.mockResolvedValueOnce({
+      data: { delivery_state: 'delivered', retryable: false },
+      error: null,
+    });
+
+    await expect(
+      retryConfig().mutationFn({
+        proposalId: 'proposal-1',
+        sentAt: '2026-07-31T12:01:00.000Z',
+        dispatchId: 'dispatch-1',
+      }),
+    ).resolves.toMatchObject({
+      _emailDispatched: true,
+      _emailDeliveryState: 'delivered',
+    });
+    expect(invoke).toHaveBeenCalledWith('proposal-send', {
+      body: {
+        proposalId: 'proposal-1',
+        sentAt: '2026-07-31T12:01:00.000Z',
+        dispatchId: 'dispatch-1',
+      },
+    });
+    expect(rpc).not.toHaveBeenCalled();
   });
 
   it('does not invoke proposal-send without the exact committed sent_at', async () => {
@@ -280,7 +381,14 @@ describe('useSendProposal payment preflight', () => {
       { data: [valid], error: null },
       { data: [valid], error: null },
     );
-    sendRpcResult = { data: { id: 'proposal-1', sent_at: null }, error: null };
+    sendRpcResult = {
+      data: {
+        id: 'proposal-1',
+        sent_at: null,
+        proposal_send_dispatch_id: 'dispatch-1',
+      },
+      error: null,
+    };
 
     await expect(
       config().mutationFn({ proposalId: 'proposal-1', expectedSnapshot }),
@@ -311,10 +419,7 @@ describe('useSendProposal payment preflight', () => {
         expectedSnapshot,
       }),
     ).rejects.toThrow('changed while it was being checked');
-    expect(rpc).not.toHaveBeenCalledWith(
-      'send_proposal',
-      expect.anything(),
-    );
+    expect(rpc).not.toHaveBeenCalledWith('send_proposal', expect.anything());
   });
 
   it('CAS-compares the original row when only a later milestone is stale', async () => {
@@ -404,10 +509,7 @@ describe('useSendProposal payment preflight', () => {
         expectedSnapshot,
       }),
     ).rejects.toThrow('changed since it was reviewed');
-    expect(rpc).not.toHaveBeenCalledWith(
-      'send_proposal',
-      expect.anything(),
-    );
+    expect(rpc).not.toHaveBeenCalledWith('send_proposal', expect.anything());
   });
 
   it('rejects a valid concurrent schedule edit before calling the send RPC', async () => {
@@ -442,10 +544,7 @@ describe('useSendProposal payment preflight', () => {
         expectedSnapshot,
       }),
     ).rejects.toThrow('changed since it was reviewed');
-    expect(rpc).not.toHaveBeenCalledWith(
-      'send_proposal',
-      expect.anything(),
-    );
+    expect(rpc).not.toHaveBeenCalledWith('send_proposal', expect.anything());
   });
 
   it('rejects when the authoritative snapshot changes before the send RPC', async () => {
@@ -479,10 +578,7 @@ describe('useSendProposal payment preflight', () => {
         expectedSnapshot,
       }),
     ).rejects.toThrow('changed since it was reviewed');
-    expect(rpc).not.toHaveBeenCalledWith(
-      'send_proposal',
-      expect.anything(),
-    );
+    expect(rpc).not.toHaveBeenCalledWith('send_proposal', expect.anything());
   });
 
   it('preserves the authoritative locked-snapshot mismatch for the inline send sheet', async () => {

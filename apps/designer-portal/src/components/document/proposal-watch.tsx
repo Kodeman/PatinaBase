@@ -316,11 +316,18 @@ export function ProposalWatch({
               variant="secondary"
               onClick={() => setResendOpen(true)}
             >
-              Resend · new expiry
+              Email delivery status
             </DocumentAction>
           </>
         ) : (
           <>
+            <DocumentAction
+              actionKey="proposal-email-delivery"
+              variant="secondary"
+              onClick={() => setResendOpen(true)}
+            >
+              Email delivery
+            </DocumentAction>
             <DocumentAction
               actionKey="revise-proposal"
               variant="secondary"
