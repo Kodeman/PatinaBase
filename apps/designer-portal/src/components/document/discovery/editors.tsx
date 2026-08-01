@@ -107,8 +107,8 @@ export function ScopeEditor({ draft, commit }: { draft: DiscoveryDraft; commit: 
           addLabel="Add a room"
           columns={[
             { key: 'name', label: 'Room', type: 'text', placeholder: 'Living', className: 'min-w-[120px] flex-1' },
-            { key: 'room_type', label: 'Type', type: 'select', options: ROOM_TYPES, className: 'min-w-[110px]' },
-            { key: 'floor_area_sqft', label: 'Sq ft', type: 'number', placeholder: 'sq ft', className: 'w-[78px]' },
+            { key: 'room_type', label: 'Room type', type: 'select', options: ROOM_TYPES, className: 'min-w-[110px]' },
+            { key: 'floor_area_sqft', label: 'Square footage', type: 'number', placeholder: 'sq ft', className: 'w-[78px]' },
             { key: 'keep_as_is', label: 'Keep', type: 'checkbox' },
           ]}
         />
@@ -233,7 +233,7 @@ export function LifestyleEditor({ draft, commit }: { draft: DiscoveryDraft; comm
         onChange={(rows) => commit({ lifestyle: rows as unknown as LifestyleRow[] })}
         addLabel="Add a room / the household"
         columns={[
-          { key: 'room', label: 'Room', type: 'select', options: roomOpts, className: 'min-w-[120px]' },
+          { key: 'room', label: 'Household or room', type: 'select', options: roomOpts, className: 'min-w-[120px]' },
           { key: 'who', label: 'Who', type: 'text', placeholder: '2 adults, toddler, dog', className: 'min-w-[140px] flex-1' },
           { key: 'how', label: 'How', type: 'text', placeholder: 'movie nights, hosts 8–10', className: 'min-w-[140px] flex-1' },
         ]}

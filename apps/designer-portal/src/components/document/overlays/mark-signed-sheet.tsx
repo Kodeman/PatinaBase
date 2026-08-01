@@ -16,10 +16,10 @@
 
 import { useEffect, useState } from 'react';
 import { useRecordOfflineSignature } from '@/hooks/use-proposals';
+import { todayYmd } from '@/lib/document/format';
+import { DateTextInput } from '../date-text-input';
 import { DocSheet } from './doc-sheet';
 import { DocumentAction, DocumentActionGroup } from '../document-action';
-
-const todayYmd = () => new Date().toISOString().slice(0, 10);
 
 export function MarkSignedSheet({
   proposalId,
@@ -95,11 +95,11 @@ export function MarkSignedSheet({
             />
           </Field>
           <Field label="Date signed">
-            <input
-              type="date"
+            <DateTextInput
               value={signedDate}
-              onChange={(e) => setSignedDate(e.target.value)}
-              className="w-full border-b border-[var(--color-pearl)] bg-transparent pb-1.5 font-mono text-[12px] text-[var(--color-charcoal)] focus:border-[var(--color-clay)] focus:outline-none [color-scheme:light]"
+              onChange={(value) => setSignedDate(value ?? '')}
+              ariaLabel="Date signed"
+              className="w-full border-b border-[var(--color-pearl)] bg-transparent pb-1.5 font-mono text-[12px] text-[var(--color-charcoal)] placeholder:text-[var(--text-faint)] focus:border-[var(--color-clay)] focus:outline-none"
             />
           </Field>
         </div>

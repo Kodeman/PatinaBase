@@ -26,10 +26,10 @@ import { useRouter } from 'next/navigation';
 import { ClientPicker } from '@/components/portal/client-picker';
 import { useOpenProjectDirect } from '@/hooks/use-project-lifecycle';
 import { dollarsToCents } from '@/lib/document/closure-derivation';
+import { todayYmd } from '@/lib/document/format';
+import { DateTextInput } from '../date-text-input';
 import { DocSheet } from './doc-sheet';
 import { DocumentAction, DocumentActionGroup } from '../document-action';
-
-const todayYmd = () => new Date().toISOString().slice(0, 10);
 
 export function OpenProjectSheet({
   open,
@@ -156,11 +156,11 @@ export function OpenProjectSheet({
               </div>
             </Field>
             <Field label="Start date">
-              <input
-                type="date"
+              <DateTextInput
                 value={startDate}
-                onChange={(e) => setStartDate(e.target.value)}
-                className="w-full border-b border-[var(--color-pearl)] bg-transparent pb-1.5 font-mono text-[12px] text-[var(--color-charcoal)] focus:border-[var(--color-clay)] focus:outline-none [color-scheme:light]"
+                onChange={(value) => setStartDate(value ?? '')}
+                ariaLabel="Start date"
+                className="w-full border-b border-[var(--color-pearl)] bg-transparent pb-1.5 font-mono text-[12px] text-[var(--color-charcoal)] placeholder:text-[var(--text-faint)] focus:border-[var(--color-clay)] focus:outline-none"
               />
             </Field>
           </div>

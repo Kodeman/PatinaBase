@@ -103,6 +103,7 @@ export function DocSheetHead({
         {onClose ? (
           <button
             type="button"
+            aria-label="Close sheet"
             onClick={onClose}
             className="shrink-0 font-mono text-[10px] uppercase tracking-[0.1em] text-[var(--color-aged-oak)] transition-colors hover:text-[var(--color-charcoal)]"
           >
@@ -181,12 +182,13 @@ export function DocSheet({
 
   return (
     <div className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto p-4 sm:p-12">
-      {/* Warm veil over the desk (matches the paper-folio scrim), a backdrop
-          button so a click in the margin puts the sheet back. */}
-      <button
-        type="button"
-        aria-label="Close sheet"
-        onClick={onClose}
+      {/* Warm veil over the desk. Pointer-down in the visible margin dismisses
+          immediately; this element is presentation-only, because the actual
+          keyboard-operable close control lives inside the dialog. */}
+      <div
+        data-testid="doc-sheet-backdrop"
+        aria-hidden="true"
+        onPointerDown={onClose}
         className="absolute inset-0 h-full w-full cursor-default bg-[rgba(20,18,16,0.55)]"
       />
       <div
@@ -207,7 +209,18 @@ export function DocSheet({
             onClose={onClose}
             helpKey={helpKey}
           />
-        ) : null}
+        ) : (
+          <div className="mb-4 flex justify-end">
+            <button
+              type="button"
+              aria-label="Close sheet"
+              onClick={onClose}
+              className="font-mono text-[10px] uppercase tracking-[0.1em] text-[var(--color-aged-oak)] transition-colors hover:text-[var(--color-charcoal)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-clay)]"
+            >
+              Put back · Esc
+            </button>
+          </div>
+        )}
         {children}
       </div>
     </div>

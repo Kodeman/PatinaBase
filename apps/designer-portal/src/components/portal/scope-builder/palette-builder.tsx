@@ -1,6 +1,7 @@
 'use client';
 
 import { useCallback, useMemo, useRef, useState } from 'react';
+import { useQueryClient } from '@tanstack/react-query';
 import {
   ColorPicker,
   ImagePaletteExtractor,
@@ -44,8 +45,14 @@ interface PaletteBuilderProps {
 }
 
 export function PaletteBuilder({ proposalId }: PaletteBuilderProps) {
+  const queryClient = useQueryClient();
+  const refreshDraftingSummary = useCallback(
+    () => queryClient.invalidateQueries({ queryKey: ['drafting-facets', proposalId] }),
+    [proposalId, queryClient],
+  );
   const { data: palettes = [] } = usePalettes(proposalId);
   const upsertPalette = useUpsertPalette();
+  const updatePalette = useUpsertPalette();
   const deletePalette = useDeletePalette();
 
   const [activePaletteId, setActivePaletteId] = useState<string | null>(null);
@@ -61,28 +68,36 @@ export function PaletteBuilder({ proposalId }: PaletteBuilderProps) {
       isPrimary: palettes.length === 0,
     });
     if (result?.id) setActivePaletteId(result.id);
-  }, [upsertPalette, proposalId, palettes.length]);
+    await refreshDraftingSummary();
+  }, [upsertPalette, proposalId, palettes.length, refreshDraftingSummary]);
 
   const handleSetPrimary = useCallback(
     (palette: ProposalPalette) => {
       if (palette.is_primary) return;
-      upsertPalette.mutate({
+      updatePalette.mutate({
         proposalId,
         paletteId: palette.id,
         name: palette.name,
         isPrimary: true,
       });
     },
-    [upsertPalette, proposalId],
+    [updatePalette, proposalId],
   );
 
   const handleDeletePalette = useCallback(
     (paletteId: string) => {
       if (!confirm('Delete this palette? Swatches will also be removed.')) return;
-      deletePalette.mutate({ paletteId, proposalId });
-      if (activePaletteId === paletteId) setActivePaletteId(null);
+      deletePalette.mutate(
+        { paletteId, proposalId },
+        {
+          onSuccess: () => {
+            if (activePaletteId === paletteId) setActivePaletteId(null);
+            void refreshDraftingSummary();
+          },
+        },
+      );
     },
-    [deletePalette, proposalId, activePaletteId],
+    [deletePalette, proposalId, activePaletteId, refreshDraftingSummary],
   );
 
   return (
@@ -96,6 +111,7 @@ export function PaletteBuilder({ proposalId }: PaletteBuilderProps) {
         onNew={handleNewPalette}
         onSetPrimary={handleSetPrimary}
         onDelete={handleDeletePalette}
+        creating={upsertPalette.isPending}
       />
 
       {active ? (
@@ -105,9 +121,20 @@ export function PaletteBuilder({ proposalId }: PaletteBuilderProps) {
             <TabStrip active={tab} onChange={setTab} />
           </div>
 
-          {tab === 'image' && <ImageTab proposalId={proposalId} paletteId={active.id} sourceImageUrl={active.source_image_url} />}
-          {tab === 'brand' && <BrandTab paletteId={active.id} />}
-          {tab === 'manual' && <ManualTab paletteId={active.id} />}
+          {tab === 'image' && (
+            <ImageTab
+              proposalId={proposalId}
+              paletteId={active.id}
+              sourceImageUrl={active.source_image_url}
+              onSaved={refreshDraftingSummary}
+            />
+          )}
+          {tab === 'brand' && (
+            <BrandTab paletteId={active.id} onSaved={refreshDraftingSummary} />
+          )}
+          {tab === 'manual' && (
+            <ManualTab paletteId={active.id} onSaved={refreshDraftingSummary} />
+          )}
 
           <SwatchList paletteId={active.id} swatches={active.swatches ?? []} />
         </div>
@@ -137,9 +164,18 @@ interface PaletteListProps {
   onNew: () => void;
   onSetPrimary: (palette: ProposalPalette) => void;
   onDelete: (paletteId: string) => void;
+  creating: boolean;
 }
 
-function PaletteList({ palettes, activeId, onSelect, onNew, onSetPrimary, onDelete }: PaletteListProps) {
+function PaletteList({
+  palettes,
+  activeId,
+  onSelect,
+  onNew,
+  onSetPrimary,
+  onDelete,
+  creating,
+}: PaletteListProps) {
   return (
     <div className="flex flex-wrap items-center gap-2">
       {palettes.map((p) => (
@@ -179,9 +215,10 @@ function PaletteList({ palettes, activeId, onSelect, onNew, onSetPrimary, onDele
       ))}
       <button
         onClick={onNew}
+        disabled={creating}
         className="rounded-md border border-dashed border-[var(--border-default)] px-3 py-2 text-sm hover:border-[var(--accent-primary)]"
       >
-        + New Palette
+        {creating ? 'Creating palette…' : '+ New Palette'}
       </button>
     </div>
   );
@@ -215,7 +252,17 @@ function TabStrip({ active, onChange }: TabStripProps) {
   );
 }
 
-function ImageTab({ proposalId, paletteId, sourceImageUrl }: { proposalId: string; paletteId: string; sourceImageUrl: string | null }) {
+function ImageTab({
+  proposalId,
+  paletteId,
+  sourceImageUrl,
+  onSaved,
+}: {
+  proposalId: string;
+  paletteId: string;
+  sourceImageUrl: string | null;
+  onSaved: () => Promise<unknown>;
+}) {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [uploading, setUploading] = useState(false);
   const upsertPalette = useUpsertPalette();
@@ -242,16 +289,19 @@ function ImageTab({ proposalId, paletteId, sourceImageUrl }: { proposalId: strin
   );
 
   const handleExtracted = useCallback(
-    (swatches: ExtractedSwatch[]) => {
-      swatches.forEach((s) => {
-        upsertSwatch.mutate({
-          paletteId,
-          hex: s.hex,
-          sourcePixel: s.sourcePixel,
-        });
-      });
+    async (swatches: ExtractedSwatch[]) => {
+      await Promise.all(
+        swatches.map((swatch) =>
+          upsertSwatch.mutateAsync({
+            paletteId,
+            hex: swatch.hex,
+            sourcePixel: swatch.sourcePixel,
+          }),
+        ),
+      );
+      await onSaved();
     },
-    [paletteId, upsertSwatch],
+    [paletteId, upsertSwatch, onSaved],
   );
 
   return (
@@ -285,7 +335,13 @@ function ImageTab({ proposalId, paletteId, sourceImageUrl }: { proposalId: strin
   );
 }
 
-function BrandTab({ paletteId }: { paletteId: string }) {
+function BrandTab({
+  paletteId,
+  onSaved,
+}: {
+  paletteId: string;
+  onSaved: () => Promise<unknown>;
+}) {
   const [query, setQuery] = useState('');
   const [brand, setBrand] = useState<PaintColorBrand | undefined>(undefined);
   const upsertSwatch = useUpsertSwatch();
@@ -315,16 +371,19 @@ function BrandTab({ paletteId }: { paletteId: string }) {
   const handleChange = useCallback(
     (color: PaintColorOption | null) => {
       if (!color) return;
-      upsertSwatch.mutate({
-        paletteId,
-        hex: color.hex,
-        name: color.name,
-        paintColorId: color.id,
-        brand: color.brand,
-        brandCode: color.code,
-      });
+      upsertSwatch.mutate(
+        {
+          paletteId,
+          hex: color.hex,
+          name: color.name,
+          paintColorId: color.id,
+          brand: color.brand,
+          brandCode: color.code,
+        },
+        { onSuccess: () => void onSaved() },
+      );
     },
-    [paletteId, upsertSwatch],
+    [paletteId, upsertSwatch, onSaved],
   );
 
   return (
@@ -345,17 +404,26 @@ function BrandTab({ paletteId }: { paletteId: string }) {
   );
 }
 
-function ManualTab({ paletteId }: { paletteId: string }) {
+function ManualTab({
+  paletteId,
+  onSaved,
+}: {
+  paletteId: string;
+  onSaved: () => Promise<unknown>;
+}) {
   const [hex, setHex] = useState('#A8B5A6');
   const [role, setRole] = useState<PaletteSwatchRole | ''>('');
   const upsertSwatch = useUpsertSwatch();
 
   const handleAdd = () => {
-    upsertSwatch.mutate({
-      paletteId,
-      hex,
-      role: role === '' ? null : role,
-    });
+    upsertSwatch.mutate(
+      {
+        paletteId,
+        hex,
+        role: role === '' ? null : role,
+      },
+      { onSuccess: () => void onSaved() },
+    );
   };
 
   return (
@@ -377,8 +445,13 @@ function ManualTab({ paletteId }: { paletteId: string }) {
           ))}
         </Select>
       </div>
-      <Button variant="primary" size="sm" onClick={handleAdd}>
-        Add swatch
+      <Button
+        variant="primary"
+        size="sm"
+        disabled={upsertSwatch.isPending}
+        onClick={handleAdd}
+      >
+        {upsertSwatch.isPending ? 'Adding swatch…' : 'Add swatch'}
       </Button>
     </div>
   );

@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useMemo, useRef, useEffect, type ReactNode } from 'react';
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import {
   DndContext,
   useDroppable,
@@ -855,6 +855,9 @@ export function FFEScheduleBuilder({
   renderVerdictChip,
   initialUnfoldedId,
 }: FFEScheduleBuilderProps) {
+  const queryClient = useQueryClient();
+  const refreshDraftingSummary = () =>
+    queryClient.invalidateQueries({ queryKey: ['drafting-facets', proposalId] });
   const { data: rooms = [] } = useProposalScopeRooms(proposalId);
   const { data: categories = [] } = useFFECategories({ proposalId });
 
@@ -928,6 +931,7 @@ export function FFEScheduleBuilder({
         [...selected].map((itemId) => removeItem.mutateAsync({ itemId, proposalId }))
       );
       setSelected(new Set());
+      await refreshDraftingSummary();
     } catch (err) {
       setBulkError(
         err instanceof Error ? err.message : 'Some lines could not be removed — try again.'
@@ -1183,6 +1187,7 @@ export function FFEScheduleBuilder({
           hasProduct: true,
           lineTotal: r.priceCents ?? 0,
         });
+        return refreshDraftingSummary();
       });
 
   const handleAllowanceSave = (form: AllowanceFormState) => {
@@ -1209,6 +1214,7 @@ export function FFEScheduleBuilder({
           hasProduct: false,
           lineTotal: Math.round((budgetMin + budgetMax) / 2),
         });
+        return refreshDraftingSummary();
       });
   };
 
@@ -1227,6 +1233,7 @@ export function FFEScheduleBuilder({
       })
       .then(() => {
         proposalEvents.itemAdded({ proposalId, itemType: 'tbd', hasProduct: false, lineTotal: 0 });
+        return refreshDraftingSummary();
       });
 
   // One DndContext serves two drag species: capture cards dropped onto room
@@ -1299,6 +1306,7 @@ export function FFEScheduleBuilder({
       {
         onSuccess: () => {
           setCaptureDrop(null);
+          void refreshDraftingSummary();
         },
         onError: (err) => {
           setCaptureDropError(

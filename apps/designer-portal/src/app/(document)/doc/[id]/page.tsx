@@ -57,6 +57,7 @@ import { useDocumentRooms } from '@/hooks/use-document-rooms';
 import { gateState, useSectionGates } from '@/hooks/use-section-work';
 import { deriveFillState } from '@/lib/document/fill-state';
 import { useFeatureFlag } from '@/hooks/use-feature-flag';
+import { useHydrated } from '@/hooks/use-hydrated';
 
 const prettyPhase = (phase: string | null) =>
   phase
@@ -96,6 +97,7 @@ export default function DocumentPage({ params }: { params: Promise<{ id: string 
   useDocumentSurface(DOCUMENT_SURFACE_KEYS.doc); // R89 — scope help to the open document
   const { id } = use(params);
   const router = useRouter();
+  const hydrated = useHydrated();
 
   const { data: resolution, isLoading } = useDocumentEngagement(id);
   const row = resolution?.kind === 'engagement' ? resolution.row : null;
@@ -261,7 +263,10 @@ export default function DocumentPage({ params }: { params: Promise<{ id: string 
   // above the early returns below, alongside the page's other hooks.
   const spineGate = useFeatureFlag('schedule-spine');
 
-  if (isLoading || resolution?.kind === 'redirect') {
+  // SSR always starts with an empty engagement cache, while client navigation
+  // can arrive with a warm React Query cache. Hold the first client paint to
+  // the server's loading tree so those two render contracts cannot diverge.
+  if (!hydrated || isLoading || resolution?.kind === 'redirect') {
     return (
       <div className="min-h-screen bg-[var(--doc-paper)]" aria-busy>
         <p className="px-10 py-12 font-heading text-[14px] italic text-[var(--text-muted)]">

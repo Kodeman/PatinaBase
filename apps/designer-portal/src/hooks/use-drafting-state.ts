@@ -65,6 +65,8 @@ export interface DraftingState {
   /** what's still open, in plain words */
   gaps: string[];
   isLoading: boolean;
+  /** A background reconciliation is running after an editor write. */
+  isRefreshing: boolean;
 }
 
 const EMPTY_FACETS: DraftingFacets = {
@@ -168,7 +170,7 @@ function useFacetRead(proposalId: string, enabled: boolean) {
 }
 
 export function useDraftingState(proposalId: string, enabled = true): DraftingState {
-  const { data: read, isLoading } = useFacetRead(proposalId, enabled);
+  const { data: read, isLoading, isFetching } = useFacetRead(proposalId, enabled);
 
   const facets = read?.facets ?? EMPTY_FACETS;
   const fill = draftingFill(facets);
@@ -185,5 +187,6 @@ export function useDraftingState(proposalId: string, enabled = true): DraftingSt
     state,
     gaps,
     isLoading,
+    isRefreshing: isFetching && !isLoading,
   };
 }

@@ -116,6 +116,7 @@ export function DraftingRoom({ proposalId }: { proposalId: string }) {
     pct,
     state,
     gaps,
+    isRefreshing,
   } = useDraftingState(proposalId);
   const updateItem = useUpdateProposalItem();
   const queryClient = useQueryClient();
@@ -324,6 +325,12 @@ export function DraftingRoom({ proposalId }: { proposalId: string }) {
                 </span>
                 <span className="font-mono text-[0.5rem] uppercase tracking-[0.08em] text-[var(--color-aged-oak)] opacity-70">
                   Scope · The Offer · The Vision
+                </span>
+                <span
+                  aria-live="polite"
+                  className="font-mono text-[0.5rem] uppercase tracking-[0.08em] text-[var(--color-aged-oak)]"
+                >
+                  {isRefreshing ? 'Refreshing saved work…' : ''}
                 </span>
               </div>
             </div>

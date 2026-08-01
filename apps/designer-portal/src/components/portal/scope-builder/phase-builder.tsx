@@ -1,6 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useQueryClient } from '@tanstack/react-query';
 import { Button } from '@/components/ui/controls';
 import { proposalEvents } from '@/lib/analytics';
 import { scheduleEvents } from '@/lib/analytics/schedule-events';
@@ -157,6 +158,9 @@ function useDebouncedSave(
 }
 
 export function PhaseBuilder({ proposalId }: PhaseBuilderProps) {
+  const queryClient = useQueryClient();
+  const refreshDraftingSummary = () =>
+    queryClient.invalidateQueries({ queryKey: ['drafting-facets', proposalId] });
   const { data: phases = [], isLoading } = useProposalPhases(proposalId) as {
     data: ProposalPhaseRow[];
     isLoading: boolean;
@@ -186,6 +190,8 @@ export function PhaseBuilder({ proposalId }: PhaseBuilderProps) {
   // Local edit state keyed by phase id (used by the per-phase form rows).
   const [edits, setEdits] = useState<Record<string, Record<string, unknown>>>({});
   const [templatePickerOpen, setTemplatePickerOpen] = useState(false);
+  const [addingDefaults, setAddingDefaults] = useState(false);
+  const [phaseCreateError, setPhaseCreateError] = useState<string | null>(null);
   // Bumped on a successful ghost-line create — clears the birth ghost line's kept fields.
   const [ghostResetSignal, setGhostResetSignal] = useState(0);
 
@@ -327,8 +333,14 @@ export function PhaseBuilder({ proposalId }: PhaseBuilderProps) {
     applyTemplate.mutate(
       { proposalId, templateSlug: 'patina_six' },
       {
-        onSuccess: () =>
-          scheduleEvents.scheduleBorn({ surface: 'proposal', proposal_id: proposalId, kind: 'patina_six' }),
+        onSuccess: () => {
+          scheduleEvents.scheduleBorn({
+            surface: 'proposal',
+            proposal_id: proposalId,
+            kind: 'patina_six',
+          });
+          void refreshDraftingSummary();
+        },
       },
     );
   }
@@ -337,13 +349,15 @@ export function PhaseBuilder({ proposalId }: PhaseBuilderProps) {
     copyAsBuilt.mutate(
       { sourceProjectId, targetProposalId: proposalId },
       {
-        onSuccess: () =>
+        onSuccess: () => {
           scheduleEvents.scheduleBorn({
             surface: 'proposal',
             proposal_id: proposalId,
             kind: 'past_project',
             source_project_id: sourceProjectId,
-          }),
+          });
+          void refreshDraftingSummary();
+        },
       },
     );
   }
@@ -377,6 +391,7 @@ export function PhaseBuilder({ proposalId }: PhaseBuilderProps) {
           }
           proposalEvents.scopeUpdated({ proposalId, field: 'phase', action: 'add' });
           setGhostResetSignal((n) => n + 1);
+          void refreshDraftingSummary();
         },
       },
     );
@@ -403,30 +418,43 @@ export function PhaseBuilder({ proposalId }: PhaseBuilderProps) {
       {
         onSuccess: () => {
           proposalEvents.scopeUpdated({ proposalId, field: 'phase', action: 'add' });
+          void refreshDraftingSummary();
         },
       }
     );
   }
 
-  function handleAddDefaults() {
-    DEFAULT_PHASES.forEach((d) => {
-      addPhase.mutate(
-        {
-          proposalId,
-          name: d.name,
-          phaseKey: d.phaseKey,
-          durationWeeks: d.durationWeeks,
-          feeCents: d.feeCents,
-          revisionLimit: d.revisionLimit,
-        },
-        {
-          onSuccess: () => {
-            proposalEvents.scopeUpdated({ proposalId, field: 'phase', action: 'add' });
-          },
-        }
+  async function handleAddDefaults() {
+    if (addingDefaults || addPhase.isPending) return;
+    setAddingDefaults(true);
+    setPhaseCreateError(null);
+    try {
+      await Promise.all(
+        DEFAULT_PHASES.map((phase) =>
+          addPhase.mutateAsync({
+            proposalId,
+            name: phase.name,
+            phaseKey: phase.phaseKey,
+            durationWeeks: phase.durationWeeks,
+            feeCents: phase.feeCents,
+            revisionLimit: phase.revisionLimit,
+          }),
+        ),
       );
-    });
+      DEFAULT_PHASES.forEach(() => {
+        proposalEvents.scopeUpdated({ proposalId, field: 'phase', action: 'add' });
+      });
+      await refreshDraftingSummary();
+    } catch (error) {
+      setPhaseCreateError(
+        error instanceof Error ? error.message : 'Could not add the default phases. Try again.',
+      );
+    } finally {
+      setAddingDefaults(false);
+    }
   }
+
+  const phaseWritePending = addPhase.isPending || addingDefaults;
 
   const totalFee = phases.reduce(
     (sum: number, p: ProposalPhaseRow) => sum + (p.fee_cents || 0),
@@ -481,19 +509,37 @@ export function PhaseBuilder({ proposalId }: PhaseBuilderProps) {
         <div className="mb-4 flex items-center justify-between">
           <span className="type-meta">Project Phases</span>
           <div className="flex gap-2">
-            <Button variant="ghost" onClick={() => setTemplatePickerOpen(true)}>
+            <Button
+              variant="ghost"
+              disabled={phaseWritePending}
+              onClick={() => setTemplatePickerOpen(true)}
+            >
               Apply Template
             </Button>
             {phases.length === 0 && (
-              <Button variant="secondary" onClick={handleAddDefaults}>
-                Add Defaults
+              <Button
+                variant="secondary"
+                disabled={phaseWritePending}
+                onClick={() => void handleAddDefaults()}
+              >
+                {addingDefaults ? 'Adding defaults…' : 'Add Defaults'}
               </Button>
             )}
-            <Button variant="secondary" onClick={handleAddPhase}>
-              + Add Phase
+            <Button
+              variant="secondary"
+              disabled={phaseWritePending}
+              onClick={handleAddPhase}
+            >
+              {addPhase.isPending && !addingDefaults ? 'Adding phase…' : '+ Add Phase'}
             </Button>
           </div>
         </div>
+
+        {phaseCreateError ? (
+          <p role="alert" className="mb-4 text-sm text-[var(--color-terracotta)]">
+            {phaseCreateError}
+          </p>
+        ) : null}
 
         {/* Column headers */}
         {phases.length > 0 && (
@@ -643,6 +689,7 @@ export function PhaseBuilder({ proposalId }: PhaseBuilderProps) {
                       {
                         onSuccess: () => {
                           proposalEvents.scopeUpdated({ proposalId, field: 'phase', action: 'remove' });
+                          void refreshDraftingSummary();
                         },
                       }
                     )
