@@ -40,6 +40,7 @@ import { Stamp } from '../stamp';
 import { todayYmd } from '@/lib/document/format';
 import { dollarsToCents } from '@/lib/document/invoice-composer';
 import { resolveClientPortalOrigin } from '@/lib/client-portal-url';
+import { AccountsQueryFailure } from './accounts-query-failure';
 
 const SAGE_INK = '#85947C';
 const TERRACOTTA_INK = '#C4836F';
@@ -84,7 +85,7 @@ export function InvoiceFolio({
   onOpenDocument?: (projectId: string) => void;
 }) {
   const qc = useQueryClient();
-  const { data: invoice, isLoading } = useInvoice(invoiceId);
+  const { data: invoice, isLoading, isError, refetch } = useInvoice(invoiceId);
   const issue = useIssueInvoice({ errorSurface: 'inline' });
   const send = useSendInvoice({ errorSurface: 'inline' });
   const recordPayment = useRecordPayment({ errorSurface: 'inline' });
@@ -102,10 +103,28 @@ export function InvoiceFolio({
   const [showClientFallback, setShowClientFallback] = useState(false);
   const [clientLinkCopied, setClientLinkCopied] = useState(false);
 
-  if (isLoading || !invoice) {
+  if (isLoading) {
     return (
       <p className="py-8 text-center font-heading text-[13px] italic text-[var(--text-muted)]">
-        {isLoading ? 'Opening the folio…' : 'Invoice not found.'}
+        Opening the folio…
+      </p>
+    );
+  }
+
+  if (isError) {
+    return (
+      <AccountsQueryFailure
+        title="The invoice folio could not be opened."
+        message="The invoice is still held in the studio book. Try opening it again."
+        onRetry={refetch}
+      />
+    );
+  }
+
+  if (!invoice) {
+    return (
+      <p className="py-8 text-center font-heading text-[13px] italic text-[var(--text-muted)]">
+        Invoice not found.
       </p>
     );
   }

@@ -35,6 +35,7 @@ import { AccountsEarningsPage } from './accounts-earnings-page';
 import { DocSheetHead } from '../overlays/doc-sheet';
 import { STUDIO_LEDGERS } from '@/lib/document/registry';
 import { DOCUMENT_SURFACE_KEYS } from '@/lib/help-system/document-surface-keys';
+import { AccountsQueryFailure } from './accounts-query-failure';
 
 // R96 — the registry is the single source of the surface icon (no drift).
 const ACCOUNTS_ICON = STUDIO_LEDGERS.find((l) => l.key === 'accounts')!.icon;
@@ -55,7 +56,7 @@ export function AccountsBook({
   initialContext?: OpenLedgerContext | null;
 }) {
   const router = useRouter();
-  const { data: invoices, isLoading } = useInvoices();
+  const { data: invoices, isLoading, isError, refetch } = useInvoices();
   const { aging } = useArAging();
   const { data: earnings } = useEarningsStats();
   const margin = useStudioMargin();
@@ -143,8 +144,15 @@ export function AccountsBook({
         ))}
       </div>
 
-      {/* Front-matter (I23): Revenue · A/R · margin — the studio's opening lens. */}
-      {isLoading ? (
+      {/* A failed ledger read must not become a zero-revenue front matter or
+          an empty Ledger / Receivables page. */}
+      {isError ? (
+        <AccountsQueryFailure
+          title="The studio book could not be opened."
+          message="Invoices and receivables are still held in place. Try the account read again."
+          onRetry={refetch}
+        />
+      ) : isLoading ? (
         <p className="py-3 text-[12px] italic text-[var(--color-aged-oak)]">Opening the book…</p>
       ) : (
         <>
@@ -162,21 +170,21 @@ export function AccountsBook({
             <span className="text-[var(--color-charcoal)]">{fmtUsd(pledgeYtd)} returned</span>
             <span className="text-[var(--color-clay)] opacity-70">→ Library ↗</span>
           </button>
-        </>
-      )}
 
-      {page === 'ledger' && (
-        <AccountsLedgerPage invoices={invoices ?? []} onOpenDocument={openDocument} />
-      )}
-      {page === 'receivables' && (
-        <AccountsReceivablesPage
-          aging={aging}
-          highlightInvoiceId={initialContext?.invoiceId ?? null}
-          onOpenDocument={openDocument}
-        />
-      )}
-      {page === 'earnings' && (
-        <AccountsEarningsPage stats={earnings} pledgeEvents={pledgeEvents} pledgeYtd={pledgeYtd} />
+          {page === 'ledger' && (
+            <AccountsLedgerPage invoices={invoices ?? []} onOpenDocument={openDocument} />
+          )}
+          {page === 'receivables' && (
+            <AccountsReceivablesPage
+              aging={aging}
+              highlightInvoiceId={initialContext?.invoiceId ?? null}
+              onOpenDocument={openDocument}
+            />
+          )}
+          {page === 'earnings' && (
+            <AccountsEarningsPage stats={earnings} pledgeEvents={pledgeEvents} pledgeYtd={pledgeYtd} />
+          )}
+        </>
       )}
     </div>
   );
