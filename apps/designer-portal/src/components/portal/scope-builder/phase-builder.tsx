@@ -51,85 +51,6 @@ const PHASE_KEY_OPTIONS = [
   { value: 'final_walkthrough', label: 'Final Walkthrough' },
 ] as const;
 
-export const DEFAULT_PHASES = [
-  {
-    name: 'Schematic Design',
-    phaseKey: 'concept_development',
-    durationWeeks: 3,
-    feeCents: 250000,
-    revisionLimit: 2,
-  },
-  {
-    name: 'Design Development',
-    phaseKey: 'design_refinement',
-    durationWeeks: 4,
-    feeCents: 350000,
-    revisionLimit: 2,
-  },
-  {
-    name: 'Procurement Management',
-    phaseKey: 'procurement',
-    durationWeeks: 8,
-    feeCents: 200000,
-    revisionLimit: 1,
-  },
-  {
-    name: 'Installation & Styling',
-    phaseKey: 'installation',
-    durationWeeks: 3,
-    feeCents: 150000,
-    revisionLimit: 1,
-  },
-  {
-    name: 'Completion & Handover',
-    phaseKey: 'final_walkthrough',
-    durationWeeks: 1,
-    feeCents: 50000,
-    revisionLimit: 0,
-  },
-] as const;
-
-type DefaultPhase = (typeof DEFAULT_PHASES)[number];
-
-type PhaseIdentityInput = {
-  name: string;
-  phaseKey?: string | null;
-  phase_key?: string | null;
-};
-
-/** A phase key survives harmless label edits; the normalized name is the
- * fallback for phases created before keys were consistently persisted. */
-export function defaultPhaseIdentity(phase: PhaseIdentityInput): string {
-  const phaseKey = phase.phaseKey ?? phase.phase_key;
-  return phaseKey?.trim() || `name:${phase.name.trim().toLocaleLowerCase('en-US')}`;
-}
-
-export function missingDefaultPhases(
-  existing: readonly PhaseIdentityInput[],
-  optimisticallyAdded: ReadonlySet<string> = new Set(),
-): DefaultPhase[] {
-  const present = new Set(optimisticallyAdded);
-  existing.forEach((phase) => present.add(defaultPhaseIdentity(phase)));
-  return DEFAULT_PHASES.filter((phase) => !present.has(defaultPhaseIdentity(phase)));
-}
-
-/** Defaults are intentionally sequential: each add computes the next sort
- * order, so concurrent writes can collide and make partial recovery opaque. */
-export async function addDefaultPhasesSequentially({
-  phases,
-  add,
-  onAdded,
-}: {
-  phases: readonly DefaultPhase[];
-  add: (phase: DefaultPhase) => Promise<unknown>;
-  onAdded: (phase: DefaultPhase) => void | Promise<void>;
-}): Promise<void> {
-  for (const phase of phases) {
-    await add(phase);
-    await onAdded(phase);
-  }
-}
-
 interface PhaseBuilderProps {
   proposalId: string;
 }
@@ -207,14 +128,9 @@ export function PhaseBuilder({ proposalId }: PhaseBuilderProps) {
   const [edits, setEdits] = useState<Record<string, Record<string, unknown>>>({});
   const [templatePickerOpen, setTemplatePickerOpen] = useState(false);
   const [addingDefaults, setAddingDefaults] = useState(false);
-  const [addedDefaultKeys, setAddedDefaultKeys] = useState<Set<string>>(() => new Set());
   const [phaseCreateError, setPhaseCreateError] = useState<string | null>(null);
   // Bumped on a successful ghost-line create — clears the birth ghost line's kept fields.
   const [ghostResetSignal, setGhostResetSignal] = useState(0);
-
-  useEffect(() => {
-    setAddedDefaultKeys(new Set());
-  }, [proposalId]);
 
   // Sync server data into local state when phases load.
   useEffect(() => {
@@ -347,6 +263,7 @@ export function PhaseBuilder({ proposalId }: PhaseBuilderProps) {
   );
 
   function handleSeedPatinaSix() {
+    setPhaseCreateError(null);
     applyTemplate.mutate(
       { proposalId, templateSlug: 'patina_six' },
       {
@@ -362,6 +279,7 @@ export function PhaseBuilder({ proposalId }: PhaseBuilderProps) {
   }
 
   function handleCopyFromPastProject(sourceProjectId: string) {
+    setPhaseCreateError(null);
     copyAsBuilt.mutate(
       { sourceProjectId, targetProposalId: proposalId },
       {
@@ -378,6 +296,7 @@ export function PhaseBuilder({ proposalId }: PhaseBuilderProps) {
   }
 
   function handleGhostAdd(input: GhostAddInput) {
+    setPhaseCreateError(null);
     // Captured before the mutate call — phases.length flips the instant the
     // write lands (see schedule-spine.tsx's handleAddPhase for the same note).
     const wasEmpty = phases.length === 0;
@@ -413,13 +332,14 @@ export function PhaseBuilder({ proposalId }: PhaseBuilderProps) {
 
   const ghostError = addPhase.isError ? 'Add failed — nothing was saved; your entry is kept' : null;
   const birthBusy = applyTemplate.isPending || copyAsBuilt.isPending;
-  const birthError = applyTemplate.isError
+  const birthError = !phaseCreateError && applyTemplate.isError
     ? 'Couldn’t seed the Patina Six — nothing was saved'
     : copyAsBuilt.isError
       ? 'Couldn’t copy that schedule — nothing was saved'
       : null;
 
   function handleAddPhase() {
+    setPhaseCreateError(null);
     addPhase.mutate(
       {
         proposalId,
@@ -428,6 +348,8 @@ export function PhaseBuilder({ proposalId }: PhaseBuilderProps) {
         durationWeeks: 2,
         feeCents: 0,
         revisionLimit: 2,
+        followsPhaseId: phases.length > 0 ? phases[phases.length - 1].id : undefined,
+        lane: 'main',
       },
       {
         onSuccess: () => {
@@ -438,49 +360,33 @@ export function PhaseBuilder({ proposalId }: PhaseBuilderProps) {
   }
 
   async function handleAddDefaults() {
-    if (addingDefaults || addPhase.isPending) return;
+    if (addingDefaults || addPhase.isPending || applyTemplate.isPending) return;
     setAddingDefaults(true);
     setPhaseCreateError(null);
-    let addedThisAttempt = 0;
     try {
-      await addDefaultPhasesSequentially({
-        phases: defaultsStillMissing,
-        add: (phase) =>
-          addPhase.mutateAsync({
-            proposalId,
-            name: phase.name,
-            phaseKey: phase.phaseKey,
-            durationWeeks: phase.durationWeeks,
-            feeCents: phase.feeCents,
-            revisionLimit: phase.revisionLimit,
-          }),
-        onAdded: (phase) => {
-          addedThisAttempt += 1;
-          setAddedDefaultKeys((current) => {
-            const next = new Set(current);
-            next.add(defaultPhaseIdentity(phase));
-            return next;
-          });
-          proposalEvents.scopeUpdated({ proposalId, field: 'phase', action: 'add' });
-        },
+      await applyTemplate.mutateAsync({
+        proposalId,
+        templateSlug: 'patina_six',
       });
+      scheduleEvents.scheduleBorn({
+        surface: 'proposal',
+        proposal_id: proposalId,
+        kind: 'patina_six',
+      });
+      proposalEvents.scopeUpdated({ proposalId, field: 'phase', action: 'add' });
     } catch {
-      const remaining = defaultsStillMissing.length - addedThisAttempt;
-      setPhaseCreateError(
-        addedThisAttempt > 0
-          ? `Added ${addedThisAttempt} default ${addedThisAttempt === 1 ? 'phase' : 'phases'}. Retry to add the remaining ${remaining}.`
-          : 'Could not add the default phases. Try again.',
-      );
+      setPhaseCreateError('Couldn’t seed the Patina Six — nothing was saved');
     } finally {
       setAddingDefaults(false);
     }
   }
 
-  const phaseWritePending = addPhase.isPending || addingDefaults;
-  const defaultsStillMissing = missingDefaultPhases(phases, addedDefaultKeys);
-  const defaultPhasesPresent = DEFAULT_PHASES.length - defaultsStillMissing.length;
-  const canAddDefaults =
-    defaultsStillMissing.length > 0 && (phases.length === 0 || defaultPhasesPresent > 0);
+  const phaseWritePending =
+    addPhase.isPending || addingDefaults || applyTemplate.isPending || copyAsBuilt.isPending;
+  // The canonical template RPC creates one root and a linear follows chain.
+  // It is only safe as a birth operation: appending it to an existing schedule
+  // would create another root, so the legacy "remaining defaults" path is gone.
+  const canAddDefaults = phases.length === 0;
 
   const totalFee = phases.reduce(
     (sum: number, p: ProposalPhaseRow) => sum + (p.fee_cents || 0),
@@ -548,11 +454,7 @@ export function PhaseBuilder({ proposalId }: PhaseBuilderProps) {
                 disabled={phaseWritePending}
                 onClick={() => void handleAddDefaults()}
               >
-                {addingDefaults
-                  ? 'Adding defaults…'
-                  : defaultPhasesPresent > 0
-                    ? 'Add remaining defaults'
-                    : 'Add Defaults'}
+                {addingDefaults ? 'Adding defaults…' : 'Add Defaults'}
               </Button>
             )}
             <Button

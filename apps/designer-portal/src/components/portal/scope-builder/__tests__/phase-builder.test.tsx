@@ -3,6 +3,10 @@ import { PhaseBuilder } from '../phase-builder';
 
 const updateMutate = jest.fn();
 const updateMutateAsync = jest.fn();
+const addMutate = jest.fn();
+const addMutateAsync = jest.fn();
+const applyTemplateMutate = jest.fn();
+const applyTemplateMutateAsync = jest.fn();
 
 const phases = [
   {
@@ -22,10 +26,16 @@ const phases = [
   },
 ];
 const noRows: unknown[] = [];
+let phaseRows = phases;
 
 jest.mock('@patina/supabase', () => ({
-  useProposalPhases: () => ({ data: phases, isLoading: false }),
-  useAddProposalPhase: () => ({ mutate: jest.fn(), isPending: false, isError: false }),
+  useProposalPhases: () => ({ data: phaseRows, isLoading: false }),
+  useAddProposalPhase: () => ({
+    mutate: addMutate,
+    mutateAsync: addMutateAsync,
+    isPending: false,
+    isError: false,
+  }),
   useUpdateProposalPhase: () => ({
     mutate: updateMutate,
     mutateAsync: updateMutateAsync,
@@ -37,7 +47,12 @@ jest.mock('@patina/supabase', () => ({
   useProposalScheduleMilestones: () => ({ data: noRows }),
   useProjects: () => ({ data: noRows, isPending: false }),
   useProjectPhaseCounts: () => ({ data: {}, isPending: false }),
-  useApplyPhaseTemplate: () => ({ mutate: jest.fn(), isPending: false, isError: false }),
+  useApplyPhaseTemplate: () => ({
+    mutate: applyTemplateMutate,
+    mutateAsync: applyTemplateMutateAsync,
+    isPending: false,
+    isError: false,
+  }),
   useCopyScheduleAsBuilt: () => ({ mutate: jest.fn(), isPending: false, isError: false }),
   mapProposalPhaseRowToScheduleInput: (row: unknown) => row,
   mapProposalScheduleMilestoneRowToScheduleInput: (row: unknown) => row,
@@ -82,9 +97,16 @@ jest.mock('@/components/document/schedule/milestone-row', () => ({ AnchorChip: (
 describe('PhaseBuilder autosave integrity', () => {
   beforeEach(() => {
     jest.useFakeTimers();
+    phaseRows = phases;
     updateMutate.mockReset();
     updateMutateAsync.mockReset();
     updateMutateAsync.mockResolvedValue({});
+    addMutate.mockReset();
+    addMutateAsync.mockReset();
+    addMutateAsync.mockResolvedValue({});
+    applyTemplateMutate.mockReset();
+    applyTemplateMutateAsync.mockReset();
+    applyTemplateMutateAsync.mockResolvedValue([]);
   });
 
   afterEach(() => jest.useRealTimers());
@@ -177,5 +199,64 @@ describe('PhaseBuilder autosave integrity', () => {
       await Promise.resolve();
     });
     expect(screen.getByRole('alert')).toHaveTextContent('phase write failed');
+  });
+
+  it('creates defaults with one canonical Patina Six template mutation', async () => {
+    phaseRows = [];
+    render(<PhaseBuilder proposalId="proposal-1" />);
+
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: 'Add Defaults' }));
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    expect(applyTemplateMutateAsync).toHaveBeenCalledTimes(1);
+    expect(applyTemplateMutateAsync).toHaveBeenCalledWith({
+      proposalId: 'proposal-1',
+      templateSlug: 'patina_six',
+    });
+    expect(addMutateAsync).not.toHaveBeenCalled();
+  });
+
+  it('surfaces an atomic template failure without falling back to partial phase writes', async () => {
+    phaseRows = [];
+    applyTemplateMutateAsync.mockRejectedValueOnce(new Error('template unavailable'));
+    render(<PhaseBuilder proposalId="proposal-1" />);
+
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: 'Add Defaults' }));
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    expect(screen.getByRole('alert')).toHaveTextContent(
+      'Couldn’t seed the Patina Six — nothing was saved',
+    );
+    expect(applyTemplateMutateAsync).toHaveBeenCalledTimes(1);
+    expect(addMutateAsync).not.toHaveBeenCalled();
+  });
+
+  it('keeps custom phase addition and links it to the current tail', () => {
+    render(<PhaseBuilder proposalId="proposal-1" />);
+
+    expect(screen.queryByRole('button', { name: 'Add Defaults' })).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: '+ Add Phase' }));
+
+    expect(addMutate).toHaveBeenCalledTimes(1);
+    expect(addMutate).toHaveBeenCalledWith(
+      {
+        proposalId: 'proposal-1',
+        name: 'New Phase',
+        phaseKey: 'consultation',
+        durationWeeks: 2,
+        feeCents: 0,
+        revisionLimit: 2,
+        followsPhaseId: 'phase-1',
+        lane: 'main',
+      },
+      expect.objectContaining({ onSuccess: expect.any(Function) }),
+    );
+    expect(applyTemplateMutateAsync).not.toHaveBeenCalled();
   });
 });
