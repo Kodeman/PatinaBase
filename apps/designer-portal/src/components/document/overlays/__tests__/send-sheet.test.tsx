@@ -9,6 +9,7 @@ import {
 
 const mockSend = jest.fn();
 const mockRetry = jest.fn();
+const mockUseProposalSendDispatchStatus = jest.fn();
 const mockUpdate = jest.fn();
 const mockInvalidate = jest.fn();
 const mockUseProposalMirrorData = jest.fn();
@@ -19,6 +20,7 @@ let mockPendingProposalMutation: {
   state: { variables: Record<string, unknown> };
 } | null = null;
 let mockProposal: Record<string, unknown>;
+let mockProposalLoadError: Error | null = null;
 
 jest.mock('@tanstack/react-query', () => ({
   useQueryClient: () => ({ invalidateQueries: mockInvalidate }),
@@ -31,6 +33,8 @@ jest.mock('@tanstack/react-query', () => ({
 jest.mock('@/hooks/use-proposals', () => ({
   useProposal: () => ({
     data: mockProposal,
+    isError: Boolean(mockProposalLoadError),
+    error: mockProposalLoadError,
   }),
   useProposalVersions: () => ({ data: [] }),
   useSendProposal: () => ({ mutateAsync: mockSend, isPending: false }),
@@ -38,6 +42,8 @@ jest.mock('@/hooks/use-proposals', () => ({
     mutateAsync: mockRetry,
     isPending: false,
   }),
+  useProposalSendDispatchStatus: (...args: unknown[]) =>
+    mockUseProposalSendDispatchStatus(...args),
   useUpdateProposal: () => ({ mutate: mockUpdate, isPending: false }),
 }));
 
@@ -184,6 +190,7 @@ beforeEach(() => {
     },
     items: [],
   };
+  mockProposalLoadError = null;
   mockSend.mockReset();
   mockSend.mockResolvedValue({
     _emailDispatched: true,
@@ -191,6 +198,13 @@ beforeEach(() => {
     _emailRetryable: false,
   });
   mockRetry.mockReset();
+  mockUseProposalSendDispatchStatus.mockReset();
+  mockUseProposalSendDispatchStatus.mockReturnValue({
+    data: undefined,
+    isLoading: false,
+    isError: false,
+    error: null,
+  });
   mockRetry.mockResolvedValue({
     _emailDispatched: true,
     _emailDeliveryState: 'delivered',
@@ -790,6 +804,20 @@ describe('SendSheet canonical client-copy validation', () => {
         },
       ]),
     );
+    mockUseProposalSendDispatchStatus.mockReturnValue({
+      data: {
+        proposalId: 'proposal-1',
+        dispatchId: 'dispatch-1',
+        sentAt: '2026-07-31T12:01:00.000Z',
+        state: 'failed',
+        attemptCount: 1,
+        retryable: true,
+        detail: 'provider rejected the first attempt',
+      },
+      isLoading: false,
+      isError: false,
+      error: null,
+    });
 
     render(<SendSheet proposalId="proposal-1" open onClose={jest.fn()} />);
 
@@ -799,5 +827,162 @@ describe('SendSheet canonical client-copy validation', () => {
     expect(
       screen.queryByRole('button', { name: 'Send proposal' }),
     ).not.toBeInTheDocument();
+  });
+
+  it('blocks a malformed CC address before changing proposal state', async () => {
+    mockUseProposalMirrorData.mockReturnValue(
+      mirror([
+        {
+          id: 'deposit',
+          label: 'Project deposit',
+          percentage: 100,
+          amount_cents: 1_320_000,
+        },
+      ]),
+    );
+
+    render(<SendSheet proposalId="proposal-1" open onClose={jest.fn()} />);
+
+    const send = await screen.findByRole('button', { name: 'Send proposal' });
+    await waitFor(() => expect(send).toBeEnabled());
+    fireEvent.change(screen.getByRole('textbox', { name: 'CC (optional)' }), {
+      target: { value: 'not-an-email' },
+    });
+
+    expect(
+      screen.getByText('Enter a valid CC email address before sending.'),
+    ).toBeInTheDocument();
+    expect(send).toBeDisabled();
+    fireEvent.click(send);
+    expect(mockSend).not.toHaveBeenCalled();
+  });
+
+  it('normalizes optional CC whitespace before the immutable send', async () => {
+    mockUseProposalMirrorData.mockReturnValue(
+      mirror([
+        {
+          id: 'deposit',
+          label: 'Project deposit',
+          percentage: 100,
+          amount_cents: 1_320_000,
+        },
+      ]),
+    );
+
+    render(<SendSheet proposalId="proposal-1" open onClose={jest.fn()} />);
+
+    fireEvent.change(screen.getByRole('textbox', { name: 'CC (optional)' }), {
+      target: { value: '  partner@example.com  ' },
+    });
+    const send = await screen.findByRole('button', { name: 'Send proposal' });
+    await waitFor(() => expect(send).toBeEnabled());
+    fireEvent.click(send);
+
+    await waitFor(() =>
+      expect(mockSend).toHaveBeenCalledWith(
+        expect.objectContaining({ ccEmail: 'partner@example.com' }),
+      ),
+    );
+  });
+
+  it('shows the durable unconfirmed terminal state without offering a retry', async () => {
+    mockProposal = {
+      ...mockProposal,
+      status: 'sent',
+      sent_at: '2026-07-31T12:01:00.000Z',
+      proposal_send_dispatch_id: 'dispatch-1',
+    };
+    mockUseProposalMirrorData.mockReturnValue(
+      mirror([
+        {
+          id: 'deposit',
+          label: 'Project deposit',
+          percentage: 100,
+          amount_cents: 1_320_000,
+        },
+      ]),
+    );
+    mockUseProposalSendDispatchStatus.mockReturnValue({
+      data: {
+        proposalId: 'proposal-1',
+        dispatchId: 'dispatch-1',
+        sentAt: '2026-07-31T12:01:00.000Z',
+        state: 'unconfirmed',
+        attemptCount: 3,
+        retryable: false,
+        detail: 'provider response was not confirmed',
+      },
+      isLoading: false,
+      isError: false,
+      error: null,
+    });
+
+    render(<SendSheet proposalId="proposal-1" open onClose={jest.fn()} />);
+
+    expect(
+      await screen.findByText(/delivery could not be confirmed/i),
+    ).toBeInTheDocument();
+    expect(
+      screen.queryByRole('button', { name: /retry|check delivery/i }),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole('button', { name: 'Send proposal' }),
+    ).not.toBeInTheDocument();
+  });
+
+  it('fails closed when a sent proposal delivery status cannot be verified', async () => {
+    mockProposal = {
+      ...mockProposal,
+      status: 'sent',
+      sent_at: '2026-07-31T12:01:00.000Z',
+      proposal_send_dispatch_id: 'dispatch-1',
+    };
+    mockUseProposalMirrorData.mockReturnValue(
+      mirror([
+        {
+          id: 'deposit',
+          label: 'Project deposit',
+          percentage: 100,
+          amount_cents: 1_320_000,
+        },
+      ]),
+    );
+    mockUseProposalSendDispatchStatus.mockReturnValue({
+      data: undefined,
+      isLoading: false,
+      isError: true,
+      error: new Error('status unavailable'),
+    });
+
+    render(<SendSheet proposalId="proposal-1" open onClose={jest.fn()} />);
+
+    expect(
+      await screen.findByText(/delivery status could not be verified/i),
+    ).toBeInTheDocument();
+    expect(screen.queryByText(/email is queued/i)).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole('button', { name: /retry|check delivery/i }),
+    ).not.toBeInTheDocument();
+  });
+
+  it('renders a proposal load failure instead of perpetual loading', () => {
+    mockProposalLoadError = new Error('proposal unavailable');
+    mockUseProposalMirrorData.mockReturnValue(
+      mirror([
+        {
+          id: 'deposit',
+          label: 'Project deposit',
+          percentage: 100,
+          amount_cents: 1_320_000,
+        },
+      ]),
+    );
+
+    render(<SendSheet proposalId="proposal-1" open onClose={jest.fn()} />);
+
+    expect(
+      screen.getByText(/proposal could not be loaded/i),
+    ).toBeInTheDocument();
+    expect(screen.queryByText('Loading…')).not.toBeInTheDocument();
   });
 });

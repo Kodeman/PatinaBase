@@ -371,6 +371,7 @@ export {
   useRemoveProposalItem,
   useSendProposal,
   useRetryProposalSend,
+  useProposalSendDispatchStatus,
   useNudgeProposal,
   useDeleteProposal,
   // Sections
@@ -396,6 +397,7 @@ export {
 export type {
   ProposalEmailDeliveryState,
   ProposalEmailDispatchOutcome,
+  ProposalEmailDispatchStatus,
 } from './use-proposals';
 export type {
   Proposal,

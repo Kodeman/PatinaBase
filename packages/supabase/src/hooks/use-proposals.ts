@@ -20,13 +20,29 @@ const REVIEWED_PROPOSAL_CHANGED =
   'Proposal cannot be sent: the proposal changed since it was reviewed. Review the latest client copy and send again.';
 
 export type ProposalEmailDeliveryState =
-  'pending' | 'in_flight' | 'delivered' | 'suppressed' | 'failed' | 'ambiguous';
+  | 'pending'
+  | 'in_flight'
+  | 'delivered'
+  | 'suppressed'
+  | 'failed'
+  | 'ambiguous'
+  | 'unconfirmed';
 
 export interface ProposalEmailDispatchOutcome {
   _emailDispatched: boolean;
   _emailDeliveryState: ProposalEmailDeliveryState;
   _emailRetryable: boolean;
   _emailDispatchDetail?: string;
+}
+
+export interface ProposalEmailDispatchStatus {
+  dispatchId: string;
+  proposalId: string;
+  sentAt: string;
+  state: ProposalEmailDeliveryState;
+  attemptCount: number;
+  retryable: boolean;
+  detail?: string;
 }
 
 const PROPOSAL_EMAIL_STATES = new Set<ProposalEmailDeliveryState>([
@@ -36,6 +52,7 @@ const PROPOSAL_EMAIL_STATES = new Set<ProposalEmailDeliveryState>([
   'suppressed',
   'failed',
   'ambiguous',
+  'unconfirmed',
 ]);
 
 async function invokeProposalSendEdge(
@@ -305,6 +322,74 @@ export function useProposal(proposalId: string) {
       return data as Proposal;
     },
     enabled: !!proposalId,
+  });
+}
+
+export function useProposalSendDispatchStatus({
+  proposalId,
+  dispatchId,
+  sentAt,
+  enabled = true,
+}: {
+  proposalId: string;
+  dispatchId?: string | null;
+  sentAt?: string | null;
+  enabled?: boolean;
+}) {
+  return useQuery({
+    queryKey: ['proposal-send-dispatch-status', proposalId, dispatchId, sentAt],
+    queryFn: async (): Promise<ProposalEmailDispatchStatus> => {
+      if (!dispatchId || !sentAt) {
+        throw new Error(
+          'The proposal delivery instance is incomplete. Refresh before retrying.',
+        );
+      }
+
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const supabase = getSupabase() as any;
+      const { data, error } = await supabase.rpc(
+        'get_proposal_send_dispatch_status',
+        {
+          p_proposal_id: proposalId,
+          p_dispatch_id: dispatchId,
+          p_sent_at: sentAt,
+        },
+      );
+      if (error) throw error;
+
+      const state = data?.delivery_state;
+      if (
+        !data ||
+        typeof state !== 'string' ||
+        !PROPOSAL_EMAIL_STATES.has(state as ProposalEmailDeliveryState) ||
+        typeof data.retryable !== 'boolean'
+      ) {
+        throw new Error(
+          'The proposal delivery status could not be verified. Refresh before retrying.',
+        );
+      }
+
+      const attemptCount = Number(data.attempt_count ?? 0);
+      if (!Number.isInteger(attemptCount) || attemptCount < 0) {
+        throw new Error(
+          'The proposal delivery status could not be verified. Refresh before retrying.',
+        );
+      }
+
+      return {
+        dispatchId,
+        proposalId,
+        sentAt,
+        state: state as ProposalEmailDeliveryState,
+        attemptCount,
+        retryable: data.retryable,
+        detail:
+          typeof data.last_error === 'string' && data.last_error.length > 0
+            ? data.last_error
+            : undefined,
+      };
+    },
+    enabled: Boolean(enabled && proposalId && dispatchId && sentAt),
   });
 }
 
@@ -982,6 +1067,9 @@ export function useSendProposal(options?: { errorSurface?: 'inline' }) {
     onSuccess: async (_, { proposalId }) => {
       await Promise.all([
         queryClient.invalidateQueries({ queryKey: ['proposals'] }),
+        queryClient.invalidateQueries({
+          queryKey: ['proposal-send-dispatch-status', proposalId],
+        }),
         // Prefix-match: sending may also have superseded sibling versions, so
         // every cached single-proposal view must refetch (not just the target).
         queryClient.invalidateQueries({ queryKey: ['proposal'] }),
@@ -1022,6 +1110,9 @@ export function useRetryProposalSend(options?: { errorSurface?: 'inline' }) {
       await Promise.all([
         queryClient.invalidateQueries({ queryKey: ['proposal', proposalId] }),
         queryClient.invalidateQueries({ queryKey: ['proposals'] }),
+        queryClient.invalidateQueries({
+          queryKey: ['proposal-send-dispatch-status', proposalId],
+        }),
       ]);
     },
   });
