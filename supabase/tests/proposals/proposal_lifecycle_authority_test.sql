@@ -396,11 +396,12 @@ BEGIN
 
   v_signed := public.sign_proposal(
     'e7300000-0000-4000-8000-000000000004',
-    'Lifecycle Client', '203.0.113.42', false, current_date
+    'Lifecycle Client'
   );
   ASSERT v_signed->>'status' = 'accepted'
          AND v_signed->>'accepted_at' IS NOT NULL
-         AND v_signed->>'signed_at' IS NOT NULL,
+         AND v_signed->>'signed_at' IS NOT NULL
+         AND v_signed->>'project_id' IS NOT NULL,
     'canonical electronic signature must return safe accepted state';
 
   FOREACH v_forbidden IN ARRAY ARRAY[
@@ -428,7 +429,7 @@ BEGIN
           WHERE id = 'e7300000-0000-4000-8000-000000000003'),
     'canonical decline must persist its normalized reason internally';
   ASSERT (SELECT signed_by_name = 'Lifecycle Client'
-                 AND signed_ip = '203.0.113.42'
+                 AND signed_ip IS NULL
                  AND signed_at IS NOT NULL
                  AND accepted_at IS NOT NULL
           FROM public.proposals
@@ -543,7 +544,7 @@ BEGIN
     'authenticated', 'public.decline_proposal(uuid,text)', 'EXECUTE'
   ), 'authenticated must execute decline_proposal';
   ASSERT has_function_privilege(
-    'authenticated', 'public.sign_proposal(uuid,text,text,boolean,date)', 'EXECUTE'
+    'authenticated', 'public.sign_proposal(uuid,text)', 'EXECUTE'
   ), 'authenticated must execute sign_proposal';
   ASSERT pg_get_function_result(
            'public.mark_proposal_viewed(uuid)'::regprocedure
@@ -552,9 +553,24 @@ BEGIN
            'public.decline_proposal(uuid,text)'::regprocedure
          ) = 'jsonb'
      AND pg_get_function_result(
-           'public.sign_proposal(uuid,text,text,boolean,date)'::regprocedure
+           'public.sign_proposal(uuid,text)'::regprocedure
          ) = 'jsonb',
     'client lifecycle authorities must never return raw proposal composites';
+  ASSERT to_regprocedure(
+           'public.sign_proposal(uuid,text,text,boolean,date)'
+         ) IS NULL,
+    'legacy caller-controlled signature overload must not exist';
+  ASSERT has_function_privilege(
+           'service_role',
+           'public.sign_proposal_with_trusted_ip(uuid,text,uuid,text)',
+           'EXECUTE'
+         )
+     AND NOT has_function_privilege(
+           'authenticated',
+           'public.sign_proposal_with_trusted_ip(uuid,text,uuid,text)',
+           'EXECUTE'
+         ),
+    'trusted signature evidence path must be service-role only';
   ASSERT NOT has_function_privilege(
     'authenticated', 'public._mark_proposal_viewed_impl(uuid)', 'EXECUTE'
   ), 'authenticated must not execute the raw view implementation';

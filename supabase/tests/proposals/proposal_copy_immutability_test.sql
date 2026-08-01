@@ -688,7 +688,7 @@ BEGIN
          )
      AND has_function_privilege(
            'authenticated',
-           'public.sign_proposal(uuid,text,text,boolean,date)',
+           'public.sign_proposal(uuid,text)',
            'EXECUTE'
          ), 'authenticated clients require only safe proposal RPC surfaces';
 
@@ -699,9 +699,25 @@ BEGIN
            'public.decline_proposal(uuid,text)'::regprocedure
          ) = 'jsonb'
      AND pg_get_function_result(
-           'public.sign_proposal(uuid,text,text,boolean,date)'::regprocedure
+           'public.sign_proposal(uuid,text)'::regprocedure
          ) = 'jsonb',
     'client lifecycle RPCs must return explicit JSON receipts, never table rows';
+
+  ASSERT to_regprocedure(
+           'public.sign_proposal(uuid,text,text,boolean,date)'
+         ) IS NULL,
+    'caller-controlled IP/activation/start-date signature overload must be gone';
+  ASSERT has_function_privilege(
+           'service_role',
+           'public.sign_proposal_with_trusted_ip(uuid,text,uuid,text)',
+           'EXECUTE'
+         )
+     AND NOT has_function_privilege(
+           'authenticated',
+           'public.sign_proposal_with_trusted_ip(uuid,text,uuid,text)',
+           'EXECUTE'
+         ),
+    'trusted IP signature authority must be exact to service_role';
 
   FOREACH v_role IN ARRAY ARRAY['anon', 'service_role'] LOOP
     ASSERT NOT has_function_privilege(
@@ -724,6 +740,11 @@ BEGIN
        AND NOT has_function_privilege(
                  v_role,
                  'public._activate_proposal_as_project_authorized(uuid,date)',
+                 'EXECUTE'
+               )
+       AND NOT has_function_privilege(
+                 v_role,
+                 'public._sign_proposal_authorized_00400(uuid,text,uuid,text)',
                  'EXECUTE'
                )
        AND NOT has_function_privilege(
@@ -2045,10 +2066,7 @@ DECLARE
 BEGIN
   v_signed := public.sign_proposal(
     'e8440000-0000-4000-8000-000000000003',
-    'Copy Client',
-    '203.0.113.9',
-    true,
-    current_date
+    'Copy Client'
   );
   v_project_id := (v_signed->>'project_id')::uuid;
 
@@ -2065,6 +2083,10 @@ BEGIN
           FROM public.projects
           WHERE id = v_project_id),
     'signature activation must create the exact reciprocal designer/client pair';
+  ASSERT (SELECT signed_ip IS NULL
+          FROM public.proposals
+          WHERE id = 'e8440000-0000-4000-8000-000000000003'),
+    'browser signature surface must never write caller-supplied IP evidence';
 END;
 $$;
 

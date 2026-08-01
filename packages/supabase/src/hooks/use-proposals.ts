@@ -1738,14 +1738,15 @@ export function useDuplicateProposal() {
 /**
  * Sign a proposal (CLIENT action).
  *
- * Backed by the atomic `sign_proposal` RPC (00210). In one transaction the RPC:
+ * Backed by the atomic `sign_proposal` RPC (00210 → 00400). In one transaction
+ * the RPC:
  *   - settles the linked `client_decisions` approval row (status='responded'),
  *   - flips `proposals.status='accepted'` + the signature fields
- *     (signed_at/signed_by_name/signed_ip/accepted_at),
+ *     (signed_at/signed_by_name/accepted_at; browser RPCs never set signed_ip),
  *   - logs a 'signed' `proposal_engagement` event,
- *   - and (with p_auto_activate=true, the default) calls
- *     `activate_proposal_as_project` so the project opens immediately.
- * Re-signing an already-'accepted' proposal is a no-op (idempotent).
+ *   - and activates the project with a server-owned start date.
+ * Re-signing an already-'accepted' proposal preserves the original evidence
+ * and safely repairs a missing reciprocal project (idempotent).
  *
  * ⚠ AUTH: `sign_proposal` is SECURITY DEFINER but only succeeds when the caller
  * is the proposal's CLIENT (auth.uid() = client_id). It must NOT be invoked from
@@ -1756,6 +1757,10 @@ export function useDuplicateProposal() {
  * Any caller adopting this hook MUST still invoke the `proposal-sign-confirmation`
  * edge function afterward (the client-portal `/api/proposals/[id]/sign` route, the
  * current production sign path, still fires that email itself).
+ *
+ * The browser surface deliberately accepts only proposalId + signedByName.
+ * Trusted IP evidence belongs to the service-only production route; callers
+ * cannot disable activation or choose the project's start date.
  */
 export function useSignProposal() {
   const queryClient = useQueryClient();
@@ -1764,20 +1769,16 @@ export function useSignProposal() {
     mutationFn: async ({
       proposalId,
       signedByName,
-      signedIp,
     }: {
       proposalId: string;
       signedByName: string;
-      signedIp?: string;
     }) => {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const supabase = getSupabase() as any;
 
-      // p_auto_activate defaults to true server-side → the project opens on sign.
       const { data, error } = await supabase.rpc('sign_proposal', {
         p_proposal_id: proposalId,
         p_signed_name: signedByName,
-        p_signed_ip: signedIp || null,
       });
 
       if (error) throw error;
@@ -1787,11 +1788,14 @@ export function useSignProposal() {
       queryClient.invalidateQueries({ queryKey: ['proposals'] });
       queryClient.invalidateQueries({ queryKey: ['proposal', proposalId] });
       queryClient.invalidateQueries({ queryKey: ['proposal-stats'] });
-      // The sign settles a client_decisions row and (auto-activate) opens the
-      // project, so the desk/document surfaces that read those derived views
-      // must refetch too.
+      // The sign settles a client_decisions row and opens the project, so the
+      // desk/document surfaces that read those derived views must refetch too.
       queryClient.invalidateQueries({ queryKey: ['document-state'] });
       queryClient.invalidateQueries({ queryKey: ['desk-engagements'] });
+      queryClient.invalidateQueries({ queryKey: ['projects'] });
+      queryClient.invalidateQueries({
+        queryKey: ['proposal-project', proposalId],
+      });
     },
   });
 }

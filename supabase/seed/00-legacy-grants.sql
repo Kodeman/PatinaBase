@@ -5741,3 +5741,33 @@ DO $g$ BEGIN
   GRANT EXECUTE ON FUNCTION public.close_project(uuid, jsonb, jsonb) TO authenticated;
 EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
 END $g$;
+
+-- 00400_proposal_signature_authority.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public._sign_proposal_authorized_00400( uuid, text, uuid, text ) FROM PUBLIC, anon, authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00400_proposal_signature_authority.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.sign_proposal(uuid, text) FROM PUBLIC, anon, authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00400_proposal_signature_authority.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.sign_proposal(uuid, text) TO authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00400_proposal_signature_authority.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.sign_proposal_with_trusted_ip( uuid, text, uuid, text ) FROM PUBLIC, anon, authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00400_proposal_signature_authority.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.sign_proposal_with_trusted_ip( uuid, text, uuid, text ) TO service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
