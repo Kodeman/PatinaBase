@@ -1,4 +1,4 @@
--- close_project operational-truth regression (00383)
+-- close_project operational-truth + authority regression (00383, 00387)
 -- Run:
 --   psql 'postgresql://postgres:postgres@127.0.0.1:54322/postgres' \
 --     -v ON_ERROR_STOP=1 -f supabase/tests/document/close_project_readiness_test.sql
@@ -33,7 +33,9 @@ VALUES
   ('a7100000-0000-4000-8000-000000000003', 'Outstanding invoice closeout',
    'a7000000-0000-4000-8000-000000000001', 'a7000000-0000-4000-8000-000000000001', 100000),
   ('a7100000-0000-4000-8000-000000000004', 'Uncollected contract closeout',
-   'a7000000-0000-4000-8000-000000000001', 'a7000000-0000-4000-8000-000000000001', 100000);
+   'a7000000-0000-4000-8000-000000000001', 'a7000000-0000-4000-8000-000000000001', 100000),
+  ('a7100000-0000-4000-8000-000000000005', 'Stale draft invoice header',
+   'a7000000-0000-4000-8000-000000000001', 'a7000000-0000-4000-8000-000000000001', NULL);
 
 INSERT INTO public.project_ffe_items (
   id, project_id, name, status, quantity, unit_price_cents, line_total_cents
@@ -63,11 +65,27 @@ INSERT INTO public.invoices (
   id, project_id, designer_id, invoice_number, status, subtotal_cents,
   total_cents, amount_paid_cents, paid_at
 )
+VALUES
+  (
+    'a7400000-0000-4000-8000-000000000003',
+    'a7100000-0000-4000-8000-000000000003',
+    'a7000000-0000-4000-8000-000000000001',
+    'CLOSE-PARTIAL', 'partially_paid', 100000, 100000, 25000, NULL
+  ),
+  (
+    'a7400000-0000-4000-8000-000000000005',
+    'a7100000-0000-4000-8000-000000000005',
+    'a7000000-0000-4000-8000-000000000001',
+    NULL, 'draft', 0, 0, 0, NULL
+  );
+
+INSERT INTO public.invoice_line_items (
+  id, invoice_id, kind, description, quantity, unit_amount_cents, amount_cents
+)
 VALUES (
-  'a7400000-0000-4000-8000-000000000003',
-  'a7100000-0000-4000-8000-000000000003',
-  'a7000000-0000-4000-8000-000000000001',
-  'CLOSE-PARTIAL', 'partially_paid', 100000, 100000, 25000, NULL
+  'a7500000-0000-4000-8000-000000000005',
+  'a7400000-0000-4000-8000-000000000005',
+  'adhoc', 'Real work on a stale draft header', 1, 50000, 50000
 );
 
 CREATE OR REPLACE FUNCTION pg_temp.assume_closeout_owner()
@@ -128,6 +146,45 @@ $$;
 
 SET LOCAL ROLE authenticated;
 SELECT pg_temp.assume_closeout_owner();
+
+-- RLS update access is not completion authority. Even a forged row-scoped GUC
+-- is insufficient because a browser caller remains current_user=authenticated.
+DO $$
+DECLARE
+  v_error text;
+BEGIN
+  PERFORM set_config(
+    'app.project_completion_id',
+    'a7100000-0000-4000-8000-000000000002',
+    true
+  );
+  BEGIN
+    UPDATE public.projects
+    SET status = 'completed'
+    WHERE id = 'a7100000-0000-4000-8000-000000000002';
+  EXCEPTION WHEN check_violation THEN
+    v_error := SQLERRM;
+  END;
+  PERFORM set_config('app.project_completion_id', '', true);
+
+  ASSERT v_error = 'projects may only enter completed through close_project',
+    format('direct completion should be rejected despite forged GUC, got %L', v_error);
+  ASSERT (SELECT status <> 'completed' FROM public.projects
+          WHERE id = 'a7100000-0000-4000-8000-000000000002'),
+    'direct bypass must leave project open';
+END;
+$$;
+
+DO $$
+DECLARE
+  v_source text := pg_get_functiondef(
+    'public.settle_section_on_gate_approval()'::regprocedure
+  );
+BEGIN
+  ASSERT v_source NOT LIKE '%set status = ''completed''%',
+    'install gate settlement must not retain a project-completion writer';
+END;
+$$;
 
 -- close_project shares rows with issue_invoice, record_invoice_payment /
 -- apply_invoice_payment_effects, void_invoice, and direct invoice-line edits.
@@ -289,6 +346,13 @@ SELECT pg_temp.expect_close_failure(
 SELECT pg_temp.expect_close_failure(
   'a7100000-0000-4000-8000-000000000004',
   'project cannot close: contract total is not fully collected'
+);
+
+-- Header total_cents is advisory for a nonempty draft. Positive canonical
+-- lines must block closeout even when the stale header still says zero.
+SELECT pg_temp.expect_close_failure(
+  'a7100000-0000-4000-8000-000000000005',
+  'project cannot close: 1 invoice(s) still carry a balance'
 );
 
 ROLLBACK;

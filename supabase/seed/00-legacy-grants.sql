@@ -4313,3 +4313,87 @@ DO $g$ BEGIN
   GRANT EXECUTE ON FUNCTION public.set_document_client(text, uuid, uuid) TO authenticated;
 EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
 END $g$;
+
+-- 00386_begin_discovery_atomic_rpc.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.begin_discovery(uuid) FROM PUBLIC, anon;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00386_begin_discovery_atomic_rpc.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.begin_discovery(uuid) TO authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00387_project_proposal_authority_boundaries.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.guard_project_completion_authority() FROM PUBLIC, anon, authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00387_project_proposal_authority_boundaries.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.close_project(uuid, jsonb, jsonb) FROM PUBLIC, anon;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00387_project_proposal_authority_boundaries.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.close_project(uuid, jsonb, jsonb) TO authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00387_project_proposal_authority_boundaries.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public._proposal_review_fingerprint(uuid) FROM PUBLIC, anon, authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00387_project_proposal_authority_boundaries.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public._can_author_proposal(uuid) FROM PUBLIC, anon, authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00387_project_proposal_authority_boundaries.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.get_proposal_send_snapshot(uuid) FROM PUBLIC, anon;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00387_project_proposal_authority_boundaries.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.get_proposal_send_snapshot(uuid) TO authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00387_project_proposal_authority_boundaries.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.guard_proposal_authority() FROM PUBLIC, anon, authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00387_project_proposal_authority_boundaries.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.send_proposal( uuid, timestamptz, integer, text, text, text, timestamptz ) FROM PUBLIC, anon;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00387_project_proposal_authority_boundaries.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.send_proposal( uuid, timestamptz, integer, text, text, text, timestamptz ) TO authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00387_project_proposal_authority_boundaries.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.set_document_client(text, uuid, uuid) FROM PUBLIC, anon;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00387_project_proposal_authority_boundaries.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.set_document_client(text, uuid, uuid) TO authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
