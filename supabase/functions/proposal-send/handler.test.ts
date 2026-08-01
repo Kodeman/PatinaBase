@@ -470,6 +470,23 @@ Deno.test("failed replay checks suppression only and reuses exact persisted byte
   }]);
 });
 
+Deno.test("persisted pre-attempt recovery rechecks new suppression", async () => {
+  const h = harness({
+    initialState: "pending",
+    initialAttempts: 0,
+    persistedRequest: true,
+    replaySuppressed: "email_suppressed",
+  });
+  const response = await h.handler(request());
+  const result = await body(response);
+  assertEquals(result.delivery_state, "suppressed");
+  assertEquals(result.retryable, false);
+  assertEquals(h.replaySuppressionChecks, 1);
+  assertEquals(h.prepares, 0);
+  assertEquals(h.persists, 0);
+  assertEquals(h.providerRequests.length, 0);
+});
+
 Deno.test("new suppression terminalizes a definitively failed replay", async () => {
   const h = harness({
     initialState: "failed",

@@ -364,7 +364,7 @@ export function createProposalSendHandler(deps: ProposalSendDependencies) {
     }
 
     let request = claim.request;
-    if (request && claim.attemptCount > 0) {
+    if (request) {
       let suppression:
         | { state: "clear" }
         | { state: "suppressed"; reason: string };
