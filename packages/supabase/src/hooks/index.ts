@@ -871,6 +871,8 @@ export type {
   ProjectNarrativeSection,
   ProjectPalette,
   ProjectPaletteSwatch,
+  ProjectPhaseTransitionInput,
+  ProjectPhaseTransitionReceipt,
   UpdateFFEItemPricingInput,
   BulkReassignFfeVendorInput,
   BulkReassignFfeVendorResult,

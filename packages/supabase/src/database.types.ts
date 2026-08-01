@@ -21362,6 +21362,14 @@ export type Database = {
         }
         Returns: Json
       }
+      advance_project_phase: {
+        Args: {
+          p_expected_status: string
+          p_phase_id: string
+          p_project_id: string
+        }
+        Returns: Json
+      }
       aesthete_ask_knn: {
         Args: { p_embedding: string; p_filters?: Json }
         Returns: {
