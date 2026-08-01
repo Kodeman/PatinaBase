@@ -1,7 +1,7 @@
 import { render, screen } from '@testing-library/react';
 
 import type { MilestoneDetail } from '@/types/project';
-import { EnhancedTimeline } from '../enhanced-timeline';
+import { AuthoritativeEnhancedTimeline } from '../enhanced-timeline';
 
 jest.mock('@/lib/websocket', () => ({
   useWebSocket: () => ({
@@ -50,15 +50,21 @@ function milestone(status: MilestoneDetail['status']): MilestoneDetail {
 }
 
 describe('EnhancedTimeline refreshed props', () => {
-  it('reconciles refreshed server milestones into its local interactive state', () => {
+  it('remounts local interactive state from a refreshed canonical snapshot', () => {
     const { rerender } = render(
-      <EnhancedTimeline projectId="project-1" milestones={[milestone('upcoming')]} />,
+      <AuthoritativeEnhancedTimeline
+        projectId="project-1"
+        milestones={[milestone('upcoming')]}
+      />,
     );
 
     expect(screen.getByTestId('phase-phase-1')).toHaveTextContent('pending');
 
     rerender(
-      <EnhancedTimeline projectId="project-1" milestones={[milestone('completed')]} />,
+      <AuthoritativeEnhancedTimeline
+        projectId="project-1"
+        milestones={[milestone('completed')]}
+      />,
     );
 
     expect(screen.getByTestId('phase-phase-1')).toHaveTextContent('completed');

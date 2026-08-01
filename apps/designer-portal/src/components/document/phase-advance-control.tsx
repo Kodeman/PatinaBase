@@ -5,9 +5,9 @@
  * legacy Timeline and the Rule/Spine render the same project lifecycle.
  *
  * The database owns the phase graph. This component deliberately does not
- * sort phases, select a successor, or require one globally active phase: main
- * and thread lanes can progress independently. It sends only the target phase
- * and expected transition, then renders the authoritative RPC receipt.
+ * sort phases or infer successors from display lanes: direct edges may branch
+ * and may cross main/thread labels. It sends only the target phase and expected
+ * transition, then renders every successor in the authoritative RPC receipt.
  */
 
 import { useEffect, useId, useMemo, useRef, useState } from 'react';
@@ -74,8 +74,8 @@ function noticeForReceipt(
   if (!completing) {
     if (
       receipt.completed_phase_id !== null ||
-      receipt.next_phase_id !== action.phase.id ||
-      receipt.terminal
+      receipt.next_phase_ids.length !== 1 ||
+      receipt.next_phase_ids[0] !== action.phase.id
     ) {
       return {
         kind: 'error',
@@ -90,16 +90,11 @@ function noticeForReceipt(
     };
   }
 
-  const coherentTerminalReceipt =
+  const coherentCompletionReceipt =
     receipt.completed_phase_id === action.phase.id &&
-    receipt.next_phase_id === null &&
-    receipt.terminal;
-  const coherentSuccessorReceipt =
-    receipt.completed_phase_id === action.phase.id &&
-    receipt.next_phase_id !== null &&
-    !receipt.terminal;
+    receipt.terminal === (receipt.next_phase_ids.length === 0);
 
-  if (!coherentTerminalReceipt && !coherentSuccessorReceipt) {
+  if (!coherentCompletionReceipt) {
     return {
       kind: 'error',
       message:
@@ -110,19 +105,34 @@ function noticeForReceipt(
   if (receipt.terminal) {
     return {
       kind: 'success',
-      message: `${action.phase.name} is complete. Its lane is now complete.`,
+      message: `${action.phase.name} is complete. No direct phases follow it.`,
     };
   }
 
-  const successor = receipt.next_phase_id
-    ? phasesById.get(receipt.next_phase_id)
-    : null;
+  const successorNames = receipt.next_phase_ids
+    .map((phaseId) => phasesById.get(phaseId)?.name)
+    .filter((name): name is string => Boolean(name));
+  const namesAreComplete =
+    successorNames.length === receipt.next_phase_ids.length;
+
+  if (receipt.next_phase_ids.length === 1) {
+    return {
+      kind: 'success',
+      message: namesAreComplete
+        ? `${action.phase.name} is complete. ${successorNames[0]} is now in progress.`
+        : `${action.phase.name} is complete. Its direct next phase is now in progress.`,
+    };
+  }
+
+  const finalName = successorNames.at(-1);
+  const precedingNames = successorNames.slice(0, -1);
+  const successorLabel = namesAreComplete
+    ? `${precedingNames.join(', ')}${precedingNames.length > 0 ? ' and ' : ''}${finalName}`
+    : `${receipt.next_phase_ids.length} direct phases`;
 
   return {
     kind: 'success',
-    message: successor
-      ? `${action.phase.name} is complete. ${successor.name} is now in progress in this lane.`
-      : `${action.phase.name} is complete. The server advanced this lane to its canonical next phase.`,
+    message: `${action.phase.name} is complete. ${successorLabel} are now in progress.`,
   };
 }
 
@@ -365,8 +375,8 @@ export function PhaseAdvanceControl({
         Phase handoffs
       </h3>
       <p className="mt-1 text-[11px] leading-relaxed text-[var(--text-muted)]">
-        Each active lane advances independently. The server verifies blockers
-        and chooses the canonical next phase.
+        Completing a phase activates every direct follower in the project
+        graph. The server verifies blockers and the exact transition.
       </p>
 
       <ul className="mt-2">

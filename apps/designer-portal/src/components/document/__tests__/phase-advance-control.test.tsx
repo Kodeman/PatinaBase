@@ -118,7 +118,7 @@ const mainActive = phase({
 });
 const terminalMainReceipt: ProjectPhaseTransitionReceipt = {
   completed_phase_id: 'main-active',
-  next_phase_id: null,
+  next_phase_ids: [],
   terminal: true,
 };
 
@@ -205,7 +205,7 @@ describe('PhaseAdvanceControl', () => {
       (_variables: unknown, options: MutationOptions) =>
         options.onSuccess({
           completed_phase_id: 'current',
-          next_phase_id: 'canonical',
+          next_phase_ids: ['canonical'],
           terminal: false,
         }),
     );
@@ -237,7 +237,7 @@ describe('PhaseAdvanceControl', () => {
       }),
     );
     expect(screen.getByRole('status')).toHaveTextContent(
-      'Design Development is complete. Installation is now in progress in this lane.',
+      'Design Development is complete. Installation is now in progress.',
     );
     expect(screen.queryByText('Wrong by Sort')).not.toBeInTheDocument();
   });
@@ -253,8 +253,8 @@ describe('PhaseAdvanceControl', () => {
       (_variables: unknown, options: MutationOptions) =>
         options.onSuccess({
           completed_phase_id: null,
-          next_phase_id: 'delayed',
-          terminal: false,
+          next_phase_ids: ['delayed'],
+          terminal: true,
         }),
     );
 
@@ -276,6 +276,72 @@ describe('PhaseAdvanceControl', () => {
     expect(screen.getByRole('status')).toHaveTextContent(
       'Custom Drapery is back in progress.',
     );
+  });
+
+  it('announces every direct follower when completion branches across lane labels', () => {
+    const current = phase({
+      id: 'current',
+      name: 'Design Development',
+      status: 'in_progress',
+      lane: 'main',
+    });
+    const procurement = phase({
+      id: 'procurement',
+      name: 'Procurement',
+      status: 'pending',
+      lane: 'main',
+      followsPhaseId: 'current',
+    });
+    const customDrapery = phase({
+      id: 'custom-drapery',
+      name: 'Custom Drapery',
+      status: 'pending',
+      lane: 'thread',
+      followsPhaseId: 'current',
+    });
+    mockMutate.mockImplementation(
+      (_variables: unknown, options: MutationOptions) =>
+        options.onSuccess({
+          completed_phase_id: 'current',
+          next_phase_ids: ['custom-drapery', 'procurement'],
+          terminal: false,
+        }),
+    );
+
+    render(
+      <PhaseAdvanceControl
+        projectId="project-1"
+        phases={[current, procurement, customDrapery]}
+      />,
+    );
+    fireEvent.click(
+      screen.getByRole('button', {
+        name: 'Complete Design Development (main lane)',
+      }),
+    );
+
+    expect(screen.getByRole('status')).toHaveTextContent(
+      'Design Development is complete. Custom Drapery and Procurement are now in progress.',
+    );
+  });
+
+  it('rejects a completion receipt whose terminal flag contradicts its followers', () => {
+    mockMutate.mockImplementation(
+      (_variables: unknown, options: MutationOptions) =>
+        options.onSuccess({
+          completed_phase_id: 'main-active',
+          next_phase_ids: [],
+          terminal: false,
+        }),
+    );
+
+    render(<PhaseAdvanceControl projectId="project-1" phases={[mainActive]} />);
+    fireEvent.click(completeDevelopmentButton());
+
+    expect(screen.getByRole('alert')).toHaveTextContent(
+      /invalid completion receipt/i,
+    );
+    expect(screen.queryByText(/No direct phases follow it/)).not.toBeInTheDocument();
   });
 
   it('surfaces configured gates and both forms of pending runtime blocker context', () => {
@@ -356,7 +422,7 @@ describe('PhaseAdvanceControl', () => {
     fireEvent.click(action);
     expect(screen.queryByRole('alert')).not.toBeInTheDocument();
     expect(screen.getByRole('status')).toHaveTextContent(
-      'Design Development is complete. Its lane is now complete.',
+      'Design Development is complete. No direct phases follow it.',
     );
   });
 
@@ -370,7 +436,7 @@ describe('PhaseAdvanceControl', () => {
     );
     fireEvent.click(completeDevelopmentButton());
     expect(screen.getByRole('status')).toHaveTextContent(
-      'Design Development is complete. Its lane is now complete.',
+      'Design Development is complete. No direct phases follow it.',
     );
 
     rerender(
@@ -379,7 +445,7 @@ describe('PhaseAdvanceControl', () => {
         phases={[{ ...mainActive, project_id: 'project-2' }]}
       />,
     );
-    expect(screen.queryByText(/Its lane is now complete/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/No direct phases follow it/)).not.toBeInTheDocument();
 
     rerender(
       <PhaseAdvanceControl
@@ -416,7 +482,7 @@ describe('PhaseAdvanceControl', () => {
       pendingOptions?.onSuccess(terminalMainReceipt);
     });
 
-    expect(screen.queryByText(/Its lane is now complete/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/No direct phases follow it/)).not.toBeInTheDocument();
     expect(screen.queryByRole('alert')).not.toBeInTheDocument();
   });
 });

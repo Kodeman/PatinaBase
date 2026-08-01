@@ -16,7 +16,7 @@ jest.mock('@patina/supabase', () => ({
 const mockCreateBrowserClient = createBrowserClient as jest.Mock;
 
 describe('useProjectPhaseRealtime', () => {
-  let changeHandler: (() => void) | undefined;
+  let changeHandlers: Array<() => void>;
   let channel: {
     on: jest.Mock;
     subscribe: jest.Mock;
@@ -26,11 +26,11 @@ describe('useProjectPhaseRealtime', () => {
   beforeEach(() => {
     jest.useFakeTimers();
     refresh.mockReset();
-    changeHandler = undefined;
+    changeHandlers = [];
     removeChannel = jest.fn().mockResolvedValue(undefined);
     channel = {
       on: jest.fn((_event, _filter, handler: () => void) => {
-        changeHandler = handler;
+        changeHandlers.push(handler);
         return channel;
       }),
       subscribe: jest.fn(() => channel),
@@ -45,19 +45,23 @@ describe('useProjectPhaseRealtime', () => {
     jest.useRealTimers();
   });
 
-  it('subscribes to canonical project_phases changes for only this project', () => {
+  it('subscribes to filtered creates and transitions, but never unfiltered deletes', () => {
     renderHook(() => useProjectPhaseRealtime('project-1'));
 
-    expect(channel.on).toHaveBeenCalledWith(
-      'postgres_changes',
+    expect(channel.on.mock.calls.map((call) => call[1])).toEqual([
       {
-        event: '*',
+        event: 'INSERT',
         schema: 'public',
         table: 'project_phases',
         filter: 'project_id=eq.project-1',
       },
-      expect.any(Function),
-    );
+      {
+        event: 'UPDATE',
+        schema: 'public',
+        table: 'project_phases',
+        filter: 'project_id=eq.project-1',
+      },
+    ]);
     expect(channel.subscribe).toHaveBeenCalledTimes(1);
   });
 
@@ -65,7 +69,7 @@ describe('useProjectPhaseRealtime', () => {
     renderHook(() => useProjectPhaseRealtime('project-1'));
 
     act(() => {
-      (changeHandler as unknown as (payload: unknown) => void)({
+      (changeHandlers[1] as unknown as (payload: unknown) => void)({
         unexpected: 'payload',
         old: null,
         new: { any: 'shape' },
@@ -80,9 +84,9 @@ describe('useProjectPhaseRealtime', () => {
     const { unmount } = renderHook(() => useProjectPhaseRealtime('project-1'));
 
     act(() => {
-      changeHandler?.();
-      changeHandler?.();
-      changeHandler?.();
+      changeHandlers[0]?.();
+      changeHandlers[1]?.();
+      changeHandlers[1]?.();
       jest.advanceTimersByTime(75);
     });
 

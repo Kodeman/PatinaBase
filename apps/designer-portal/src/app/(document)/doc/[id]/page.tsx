@@ -13,7 +13,6 @@ import { use, useCallback, useEffect, useMemo, useRef, useState, type ReactNode 
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import {
-  type Database,
   useProjectV2,
   useProjectPhases,
   useProposalFeedback,
@@ -52,12 +51,9 @@ import {
 import { useDocumentSurface } from '@/lib/help-system/use-document-surface';
 import { DOCUMENT_SURFACE_KEYS } from '@/lib/help-system/document-surface-keys';
 import { AccountBand } from '@/components/document/account-band';
-import { PhaseTimeline } from '@/components/document/phase-timeline';
-import { PhaseAdvanceControl } from '@/components/document/phase-advance-control';
-import { ScheduleRule } from '@/components/document/schedule/schedule-rule';
 import { ScheduleNavProvider } from '@/components/document/schedule/schedule-nav-context';
 import { RippleProvider } from '@/components/document/schedule/schedule-ripple-context';
-import { ScheduleConfirmStrip } from '@/components/document/schedule/schedule-confirm-strip';
+import { ProjectScheduleHandoffMount } from '@/components/document/project-schedule-handoff-mount';
 import { LetterheadInstruments } from '@/components/document/letterhead-instruments';
 import { HouseholdChip } from '@/components/document/household-chip';
 import { ProposalInstruments } from '@/components/document/proposal-instruments';
@@ -78,7 +74,6 @@ const prettyPhase = (phase: string | null) =>
     : null;
 
 type AnyRecord = any;
-type ProjectPhaseRow = Database['public']['Tables']['project_phases']['Row'];
 
 function vitalsFor(row: DocumentStateRow, project: AnyRecord, proposal: AnyRecord): string {
   // Project + proposal carry the client as a first-class subtitle (the
@@ -102,44 +97,6 @@ function vitalsFor(row: DocumentStateRow, project: AnyRecord, proposal: AnyRecor
     return [row.client_name, 'New inquiry'].filter(Boolean).join(' · ');
   }
   return [row.client_name, 'In discovery'].filter(Boolean).join(' · ');
-}
-
-/**
- * The project schedule and lifecycle action share one mount so the handoff is
- * present under both schedule renderers, but never leaks onto proposal/lead
- * documents. Non-active projects keep their schedule visible and expose no
- * phase mutation control.
- */
-export function ProjectScheduleHandoffMount({
-  engagementKind,
-  projectId,
-  projectTitle,
-  projectStatus,
-  phases,
-  showScheduleRule,
-}: {
-  engagementKind: string;
-  projectId: string | null;
-  projectTitle: string;
-  projectStatus: string | null | undefined;
-  phases: readonly ProjectPhaseRow[] | undefined;
-  showScheduleRule: boolean;
-}) {
-  if (engagementKind !== 'project' || !projectId) return null;
-
-  return (
-    <>
-      {showScheduleRule ? (
-        <ScheduleRule projectId={projectId} projectTitle={projectTitle} />
-      ) : (
-        <PhaseTimeline projectId={projectId} />
-      )}
-      <ScheduleConfirmStrip projectId={projectId} />
-      {projectStatus === 'active' ? (
-        <PhaseAdvanceControl projectId={projectId} phases={phases} />
-      ) : null}
-    </>
-  );
 }
 
 export default function DocumentPage({ params }: { params: Promise<{ id: string }> }) {

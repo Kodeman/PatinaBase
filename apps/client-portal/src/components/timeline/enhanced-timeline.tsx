@@ -23,6 +23,16 @@ interface EnhancedTimelineProps {
   onMilestoneUpdate?: (milestone: MilestoneDetail) => void;
 }
 
+/**
+ * A refreshed server project view is a new canonical timeline snapshot. Key
+ * the interactive timeline by that snapshot so React remounts its local
+ * websocket state when router.refresh() delivers changed phase rows.
+ */
+export function AuthoritativeEnhancedTimeline(props: EnhancedTimelineProps) {
+  const authorityKey = `${props.projectId}:${JSON.stringify(props.milestones)}`;
+  return <EnhancedTimeline key={authorityKey} {...props} />;
+}
+
 // Map milestone status to PhaseTimeline status
 function mapStatus(status: string): PhaseTimelineItem['status'] {
   switch (status) {
@@ -65,13 +75,6 @@ export function EnhancedTimeline({ projectId, milestones: initialMilestones, onM
   const { isConnected, onMilestoneUpdate: subscribeMilestoneUpdate, onMilestoneCompleted } = useWebSocket();
   const activeMilestone = useMemo(() => milestones.find(m => m.id === activeMilestoneId), [milestones, activeMilestoneId]);
   const { messages: realtimeMessages } = useMilestoneWebSocket(activeMilestoneId || '');
-
-  // router.refresh() re-runs the server project read after canonical
-  // project_phases changes. Reconcile those refreshed props into the local
-  // interactive copy instead of preserving the mount-time snapshot forever.
-  useEffect(() => {
-    setMilestones(initialMilestones);
-  }, [initialMilestones]);
 
   // Subscribe to WebSocket milestone updates
   useEffect(() => {
