@@ -23,6 +23,10 @@ VALUES
   ('d6000000-0000-4000-8000-000000000007', 'begin-suspended@test.invalid', '', NOW(), NOW(), NOW(),
    '00000000-0000-0000-0000-000000000000', 'authenticated', 'authenticated'),
   ('d6000000-0000-4000-8000-000000000010', 'begin-client@test.invalid', '', NOW(), NOW(), NOW(),
+   '00000000-0000-0000-0000-000000000000', 'authenticated', 'authenticated'),
+  ('d6000000-0000-4000-8000-000000000011', 'begin-progressed@test.invalid', '', NOW(), NOW(), NOW(),
+   '00000000-0000-0000-0000-000000000000', 'authenticated', 'authenticated'),
+  ('d6000000-0000-4000-8000-000000000012', 'begin-invited@test.invalid', '', NOW(), NOW(), NOW(),
    '00000000-0000-0000-0000-000000000000', 'authenticated', 'authenticated');
 
 INSERT INTO public.profiles (id, email, full_name, created_at, updated_at)
@@ -33,7 +37,9 @@ VALUES
   ('d6000000-0000-4000-8000-000000000005', 'begin-contractor@test.invalid', 'Begin Contractor', NOW(), NOW()),
   ('d6000000-0000-4000-8000-000000000006', 'begin-guest@test.invalid', 'Begin Guest', NOW(), NOW()),
   ('d6000000-0000-4000-8000-000000000007', 'begin-suspended@test.invalid', 'Begin Suspended', NOW(), NOW()),
-  ('d6000000-0000-4000-8000-000000000010', 'begin-client@test.invalid', 'Repeat Client', NOW(), NOW())
+  ('d6000000-0000-4000-8000-000000000010', 'begin-client@test.invalid', 'Repeat Client', NOW(), NOW()),
+  ('d6000000-0000-4000-8000-000000000011', 'begin-progressed@test.invalid', 'Progressed Client', NOW(), NOW()),
+  ('d6000000-0000-4000-8000-000000000012', 'begin-invited@test.invalid', 'Invited Client', NOW(), NOW())
 ON CONFLICT (id) DO NOTHING;
 
 INSERT INTO public.organizations (id, type, name, slug)
@@ -86,7 +92,10 @@ VALUES
    'Guest Boundary Lead', 'guest-boundary@test.invalid'),
   ('d6200000-0000-4000-8000-000000000008', NULL,
    'd6000000-0000-4000-8000-000000000001', 'consultation', 'new',
-   'Suspended Boundary Lead', 'suspended-boundary@test.invalid');
+   'Suspended Boundary Lead', 'suspended-boundary@test.invalid'),
+  ('d6200000-0000-4000-8000-000000000009', 'd6000000-0000-4000-8000-000000000011',
+   'd6000000-0000-4000-8000-000000000001', 'consultation', 'new',
+   'Progressed Client', 'begin-progressed@test.invalid');
 
 -- A repeat-client canonical relationship must survive unchanged while the new
 -- lead receives its own Discovery-stage engagement (00331 duplicate policy).
@@ -121,6 +130,34 @@ BEGIN
     json_build_object('sub', p_actor, 'role', 'authenticated')::text,
     true
   );
+END;
+$$;
+
+-- Once the relationship advances, lead_id remains the replay key. A retry
+-- returns the progressed row instead of creating a fresh lead relationship.
+DO $$
+DECLARE
+  v_relationship_id uuid;
+BEGIN
+  v_relationship_id := (
+    public.begin_discovery('d6200000-0000-4000-8000-000000000009')
+    ->>'designerClientId'
+  )::uuid;
+  UPDATE public.designer_clients
+  SET status = 'active', source = 'proposal', updated_at = now()
+  WHERE id = v_relationship_id;
+
+  ASSERT (
+    public.begin_discovery('d6200000-0000-4000-8000-000000000009')
+    ->>'designerClientId'
+  )::uuid = v_relationship_id,
+    'progressed registered retry must return the exact lead relationship';
+  ASSERT (SELECT status = 'active' AND source = 'proposal'
+          FROM public.designer_clients WHERE id = v_relationship_id),
+    'progressed registered retry must not downgrade relationship state';
+  ASSERT (SELECT count(*) = 1 FROM public.designer_clients
+          WHERE lead_id = 'd6200000-0000-4000-8000-000000000009'),
+    'progressed registered retry must not duplicate the engagement';
 END;
 $$;
 
@@ -241,6 +278,23 @@ BEGIN
                  AND parent_proposal_id IS NULL
           FROM public.proposals WHERE id = v_duplicate_id),
     'profileless duplicate clone must preserve its Shape-B relationship';
+
+  -- The invite route links the existing lead-scoped row in place. A stale
+  -- begin_discovery retry must preserve that client identity and progression.
+  UPDATE public.designer_clients
+  SET client_id = 'd6000000-0000-4000-8000-000000000012',
+      status = 'active', updated_at = now()
+  WHERE id = 'd6300000-0000-4000-8000-000000000002';
+  ASSERT (
+    public.begin_discovery('d6200000-0000-4000-8000-000000000002')
+    ->>'designerClientId'
+  )::uuid = 'd6300000-0000-4000-8000-000000000002',
+    'invite-linked retry must return the existing relationship';
+  ASSERT (SELECT client_id = 'd6000000-0000-4000-8000-000000000012'
+                 AND status = 'active'
+          FROM public.designer_clients
+          WHERE id = 'd6300000-0000-4000-8000-000000000002'),
+    'invite-linked retry must not clear the client or downgrade status';
 END;
 $$;
 

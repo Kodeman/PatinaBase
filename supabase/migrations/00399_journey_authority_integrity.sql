@@ -554,58 +554,58 @@ BEGIN
   WHERE id = p_lead_id
   RETURNING * INTO v_lead;
 
+  -- The lead_id is the durable idempotency key. A later invite or proposal can
+  -- legitimately link a profile and advance this relationship beyond `lead`;
+  -- retries must return that exact progressed row without normalizing it back.
+  SELECT * INTO v_relationship
+  FROM public.designer_clients
+  WHERE designer_id = v_lead.designer_id
+    AND lead_id = p_lead_id
+  ORDER BY created_at, id
+  LIMIT 1
+  FOR UPDATE;
+
+  IF FOUND THEN
+    RETURN jsonb_build_object(
+      'lead', to_jsonb(v_lead),
+      'designerClientId', v_relationship.id
+    );
+  END IF;
+
   IF v_lead.homeowner_id IS NOT NULL THEN
     SELECT * INTO v_relationship
     FROM public.designer_clients
     WHERE designer_id = v_lead.designer_id
-      AND lead_id = p_lead_id
+      AND client_id = v_lead.homeowner_id
       AND status = 'lead'
+      AND lead_id IS NULL
     ORDER BY created_at, id
     LIMIT 1
     FOR UPDATE;
 
-    IF NOT FOUND THEN
-      SELECT * INTO v_relationship
-      FROM public.designer_clients
-      WHERE designer_id = v_lead.designer_id
-        AND client_id = v_lead.homeowner_id
-        AND status = 'lead'
-        AND lead_id IS NULL
-      ORDER BY created_at, id
-      LIMIT 1
-      FOR UPDATE;
-
-      IF FOUND THEN
-        UPDATE public.designer_clients
-        SET source = 'lead',
-            lead_id = p_lead_id,
-            updated_at = now()
-        WHERE id = v_relationship.id
-        RETURNING * INTO v_relationship;
-      ELSE
-        INSERT INTO public.designer_clients (
-          designer_id, client_id, source, lead_id, status
-        ) VALUES (
-          v_lead.designer_id, v_lead.homeowner_id, 'lead', p_lead_id, 'lead'
-        )
-        RETURNING * INTO v_relationship;
-      END IF;
+    IF FOUND THEN
+      UPDATE public.designer_clients
+      SET source = 'lead',
+          lead_id = p_lead_id,
+          updated_at = now()
+      WHERE id = v_relationship.id
+      RETURNING * INTO v_relationship;
+    ELSE
+      INSERT INTO public.designer_clients (
+        designer_id, client_id, source, lead_id, status
+      ) VALUES (
+        v_lead.designer_id, v_lead.homeowner_id, 'lead', p_lead_id, 'lead'
+      )
+      RETURNING * INTO v_relationship;
     END IF;
   ELSE
-    SELECT * INTO v_relationship
-    FROM public.designer_clients
-    WHERE designer_id = v_lead.designer_id
-      AND lead_id = p_lead_id
-    ORDER BY created_at, id
-    LIMIT 1
-    FOR UPDATE;
-
-    IF NOT FOUND AND v_lead.contact_email IS NOT NULL THEN
+    IF v_lead.contact_email IS NOT NULL THEN
       SELECT * INTO v_relationship
       FROM public.designer_clients
       WHERE designer_id = v_lead.designer_id
         AND client_email = v_lead.contact_email
         AND client_id IS NULL
+        AND lead_id IS NULL
       ORDER BY created_at, id
       LIMIT 1
       FOR UPDATE;
