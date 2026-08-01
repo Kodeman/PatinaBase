@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { fireEvent, render, screen } from '@testing-library/react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { PaletteSwatchEditor } from './palette-swatch-editor';
 
@@ -23,11 +23,8 @@ describe('Palette drafting facet reconciliation', () => {
     jest.restoreAllMocks();
   });
 
-  it('invalidates the exact drafting summary when the final swatch is deleted', async () => {
+  it('passes proposal identity to the canonical invalidating delete mutation', () => {
     const queryClient = new QueryClient();
-    const invalidate = jest
-      .spyOn(queryClient, 'invalidateQueries')
-      .mockResolvedValue(undefined);
 
     render(
       <QueryClientProvider client={queryClient}>
@@ -54,10 +51,10 @@ describe('Palette drafting facet reconciliation', () => {
 
     fireEvent.click(screen.getByRole('button', { name: 'Delete swatch' }));
 
-    await waitFor(() =>
-      expect(invalidate).toHaveBeenCalledWith({
-        queryKey: ['drafting-facets', 'proposal-1'],
-      }),
-    );
+    expect(deleteSwatchMutate).toHaveBeenCalledWith({
+      proposalId: 'proposal-1',
+      swatchId: 'swatch-1',
+      paletteId: 'palette-1',
+    });
   });
 });
