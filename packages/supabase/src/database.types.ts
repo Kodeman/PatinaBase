@@ -6398,6 +6398,79 @@ export type Database = {
           },
         ]
       }
+      invoice_checkout_attempts: {
+        Row: {
+          amount_cents: number
+          created_at: string
+          currency: string
+          failure_reason: string | null
+          finalized_at: string | null
+          id: string
+          invoice_id: string
+          payer_id: string
+          state: string
+          stripe_checkout_session_id: string | null
+          stripe_customer_id: string
+          stripe_idempotency_key: string
+          stripe_payment_intent_id: string | null
+          updated_at: string
+        }
+        Insert: {
+          amount_cents: number
+          created_at?: string
+          currency: string
+          failure_reason?: string | null
+          finalized_at?: string | null
+          id?: string
+          invoice_id: string
+          payer_id: string
+          state?: string
+          stripe_checkout_session_id?: string | null
+          stripe_customer_id: string
+          stripe_idempotency_key: string
+          stripe_payment_intent_id?: string | null
+          updated_at?: string
+        }
+        Update: {
+          amount_cents?: number
+          created_at?: string
+          currency?: string
+          failure_reason?: string | null
+          finalized_at?: string | null
+          id?: string
+          invoice_id?: string
+          payer_id?: string
+          state?: string
+          stripe_checkout_session_id?: string | null
+          stripe_customer_id?: string
+          stripe_idempotency_key?: string
+          stripe_payment_intent_id?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "invoice_checkout_attempts_invoice_id_fkey"
+            columns: ["invoice_id"]
+            isOneToOne: false
+            referencedRelation: "invoices"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "invoice_checkout_attempts_payer_id_fkey"
+            columns: ["payer_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "invoice_checkout_attempts_payer_id_fkey"
+            columns: ["payer_id"]
+            isOneToOne: false
+            referencedRelation: "user_engagement_scores"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       invoice_counters: {
         Row: {
           designer_id: string
@@ -6498,6 +6571,7 @@ export type Database = {
       invoice_payments: {
         Row: {
           amount_cents: number
+          checkout_attempt_id: string | null
           created_at: string
           id: string
           invoice_id: string
@@ -6514,6 +6588,7 @@ export type Database = {
         }
         Insert: {
           amount_cents: number
+          checkout_attempt_id?: string | null
           created_at?: string
           id?: string
           invoice_id: string
@@ -6530,6 +6605,7 @@ export type Database = {
         }
         Update: {
           amount_cents?: number
+          checkout_attempt_id?: string | null
           created_at?: string
           id?: string
           invoice_id?: string
@@ -6545,6 +6621,13 @@ export type Database = {
           updated_at?: string
         }
         Relationships: [
+          {
+            foreignKeyName: "invoice_payments_checkout_attempt_id_fkey"
+            columns: ["checkout_attempt_id"]
+            isOneToOne: false
+            referencedRelation: "invoice_checkout_attempts"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "invoice_payments_invoice_id_fkey"
             columns: ["invoice_id"]
@@ -21557,6 +21640,7 @@ export type Database = {
         Args: { p_owner: string }
         Returns: boolean
       }
+      can_manage_invoice: { Args: { p_invoice_id: string }; Returns: boolean }
       can_submit_item_feedback_anchor: {
         Args: {
           p_board_item_id: string
@@ -21683,6 +21767,15 @@ export type Database = {
         }
       }
       claim_design_request: { Args: { p_lead_id: string }; Returns: Json }
+      claim_invoice_checkout_attempt: {
+        Args: {
+          p_allow_designer_test?: boolean
+          p_invoice_id: string
+          p_payer_id: string
+          p_stripe_customer_id: string
+        }
+        Returns: Json
+      }
       claim_proposal_send_dispatch: {
         Args: {
           p_dispatch_id: string
@@ -22174,10 +22267,27 @@ export type Database = {
       expire_proposals: { Args: never; Returns: number }
       expire_room_scan_associations: { Args: never; Returns: number }
       export_designer_taste: { Args: { p_designer_id: string }; Returns: Json }
+      fail_invoice_checkout_attempt: {
+        Args: {
+          p_attempt_id: string
+          p_reason?: string
+          p_stripe_checkout_session_id: string
+        }
+        Returns: boolean
+      }
       ffe_status_rank: { Args: { p_status: string }; Returns: number }
       field_capture_jsonb_text_array: {
         Args: { p_value: Json }
         Returns: string[]
+      }
+      finalize_invoice_checkout_attempt: {
+        Args: {
+          p_attempt_id: string
+          p_payer_id: string
+          p_stripe_checkout_session_id: string
+          p_stripe_customer_id: string
+        }
+        Returns: Json
       }
       finalize_spec_book_issue: {
         Args: { p_revision_id: string }
@@ -23109,6 +23219,7 @@ export type Database = {
         }
         Returns: {
           amount_cents: number
+          checkout_attempt_id: string | null
           created_at: string
           id: string
           invoice_id: string
@@ -23138,6 +23249,15 @@ export type Database = {
           p_start_date?: string
         }
         Returns: string
+      }
+      recover_invoice_checkout_session_evidence: {
+        Args: {
+          p_attempt_id: string
+          p_payer_id: string
+          p_stripe_checkout_session_id: string
+          p_stripe_customer_id: string
+        }
+        Returns: Json
       }
       refresh_designer_teaching_stats: { Args: never; Returns: number }
       refresh_marketplace_vitals: { Args: never; Returns: Json }
@@ -23659,6 +23779,15 @@ export type Database = {
           p_room_id: string
         }
         Returns: undefined
+      }
+      settle_invoice_checkout_payment: {
+        Args: {
+          p_payment_id: string
+          p_reported_amount_cents: number
+          p_stripe_event_id: string
+          p_stripe_payment_intent_id: string
+        }
+        Returns: Json
       }
       share_room_scan: {
         Args: {

@@ -29,7 +29,12 @@ export type InvoicePaymentMethod =
   | 'cash'
   | 'other';
 
-export type InvoicePaymentStatus = 'pending' | 'succeeded' | 'failed' | 'refunded';
+export type InvoicePaymentStatus =
+  | 'pending'
+  | 'succeeded'
+  | 'failed'
+  | 'refunded'
+  | 'requires_refund';
 
 export interface InvoiceLineItem {
   id: string;

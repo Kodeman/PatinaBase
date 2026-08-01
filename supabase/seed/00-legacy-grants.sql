@@ -4955,3 +4955,147 @@ DO $g$ BEGIN
   GRANT EXECUTE ON FUNCTION public.create_client_scope_change_request(uuid, text, text) TO authenticated;
 EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
 END $g$;
+
+-- 00397_billing_checkout_integrity.sql
+DO $g$ BEGIN
+  REVOKE ALL ON TABLE public.invoice_checkout_attempts FROM PUBLIC, anon, authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00397_billing_checkout_integrity.sql
+DO $g$ BEGIN
+  GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE public.invoice_checkout_attempts TO service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00397_billing_checkout_integrity.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.draft_invoice_from_milestone(uuid) FROM PUBLIC, anon, authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00397_billing_checkout_integrity.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.draft_invoice_from_milestone(uuid) TO service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00397_billing_checkout_integrity.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.generate_milestone_invoice(uuid) FROM PUBLIC, anon;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00397_billing_checkout_integrity.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.generate_milestone_invoice(uuid) TO authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00397_billing_checkout_integrity.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.can_manage_invoice(uuid) FROM PUBLIC, anon;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00397_billing_checkout_integrity.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.can_manage_invoice(uuid) TO authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00397_billing_checkout_integrity.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.void_invoice(uuid, text) FROM PUBLIC, anon;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00397_billing_checkout_integrity.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.void_invoice(uuid, text) TO authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00397_billing_checkout_integrity.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.claim_invoice_checkout_attempt(uuid, uuid, text, boolean) FROM PUBLIC, anon, authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00397_billing_checkout_integrity.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.claim_invoice_checkout_attempt(uuid, uuid, text, boolean) TO service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00397_billing_checkout_integrity.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.finalize_invoice_checkout_attempt(uuid, uuid, text, text) FROM PUBLIC, anon, authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00397_billing_checkout_integrity.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.finalize_invoice_checkout_attempt(uuid, uuid, text, text) TO service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00397_billing_checkout_integrity.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.fail_invoice_checkout_attempt(uuid, text, text) FROM PUBLIC, anon, authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00397_billing_checkout_integrity.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.fail_invoice_checkout_attempt(uuid, text, text) TO service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00397_billing_checkout_integrity.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.recover_invoice_checkout_session_evidence(uuid, uuid, text, text) FROM PUBLIC, anon, authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00397_billing_checkout_integrity.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.recover_invoice_checkout_session_evidence(uuid, uuid, text, text) TO service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00397_billing_checkout_integrity.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.guard_invoice_payment_overpayment() FROM PUBLIC, anon, authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00397_billing_checkout_integrity.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.guard_invoice_payment_overpayment() TO service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00397_billing_checkout_integrity.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.sync_invoice_checkout_attempt() FROM PUBLIC, anon, authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00397_billing_checkout_integrity.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.sync_invoice_checkout_attempt() TO service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00397_billing_checkout_integrity.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.settle_invoice_checkout_payment(uuid, text, text, integer) FROM PUBLIC, anon, authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00397_billing_checkout_integrity.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.settle_invoice_checkout_payment(uuid, text, text, integer) TO service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
