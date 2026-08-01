@@ -407,6 +407,7 @@ export function BoardsBuilder({ proposalId, projectId }: BoardsBuilderProps) {
             proposalId={isProject ? undefined : proposalId}
             projectId={projectId}
             boardId={active.id}
+            actionPending={boardActionPending}
           />
         </>
       )}

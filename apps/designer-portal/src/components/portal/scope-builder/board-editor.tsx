@@ -109,6 +109,8 @@ interface BoardEditorProps {
   proposalId?: string;
   projectId?: string;
   boardId: string;
+  /** Locks pointer-driven edits while a parent board action is in flight. */
+  actionPending?: boolean;
 }
 
 /**
@@ -126,7 +128,7 @@ interface BoardEditorProps {
  * The layout buffer is generation-keyed by boardId, so switching boards drains
  * and unregisters the previous board even if a parent forgets to remount it.
  */
-export function BoardEditor({ proposalId, projectId, boardId }: BoardEditorProps) {
+export function BoardEditor({ proposalId, projectId, boardId, actionPending = false }: BoardEditorProps) {
   const isProject = !!projectId;
   // First path segment for board-image uploads (00131 for proposals; 00272 leg
   // for projects). One of the two is always set.
@@ -160,6 +162,8 @@ export function BoardEditor({ proposalId, projectId, boardId }: BoardEditorProps
 
   const itemsRef = useRef<ProposalBoardItem[]>(items);
   itemsRef.current = items;
+  const parentActionPendingRef = useRef(actionPending);
+  parentActionPendingRef.current = actionPending;
   const structuralPendingRef = useRef(false);
   const retiredLayoutItemIdsRef = useRef(new Set<string>());
 
@@ -169,7 +173,7 @@ export function BoardEditor({ proposalId, projectId, boardId }: BoardEditorProps
 
   const runStructuralMutation = useCallback(
     async (failureMessage: string, mutation: () => Promise<void>): Promise<boolean> => {
-      if (structuralPendingRef.current) return false;
+      if (parentActionPendingRef.current || structuralPendingRef.current) return false;
       structuralPendingRef.current = true;
       setStructuralPending(true);
       setStructuralError(null);
@@ -265,6 +269,7 @@ export function BoardEditor({ proposalId, projectId, boardId }: BoardEditorProps
 
   const queueLayout = useCallback(
     (changedItems: ProposalBoardItem[]) => {
+      if (parentActionPendingRef.current || structuralPendingRef.current) return;
       const activeItems = changedItems.filter(
         (item) => !retiredLayoutItemIdsRef.current.has(item.id),
       );
@@ -316,6 +321,7 @@ export function BoardEditor({ proposalId, projectId, boardId }: BoardEditorProps
   const mergeLocalLayout = useCallback(
     (itemId: string, patch: Partial<ProposalBoardItem>) => {
       if (
+        parentActionPendingRef.current ||
         structuralPendingRef.current ||
         retiredLayoutItemIdsRef.current.has(itemId)
       ) {
@@ -490,7 +496,7 @@ export function BoardEditor({ proposalId, projectId, boardId }: BoardEditorProps
 
   const handleItemsChange = useCallback(
     (next: BoardItem[]) => {
-      if (structuralPendingRef.current) return;
+      if (parentActionPendingRef.current || structuralPendingRef.current) return;
       const changedItems: ProposalBoardItem[] = [];
       const nextItems = itemsRef.current.map((p) => {
         const n = next.find((i) => String(i.id) === p.id);
@@ -612,6 +618,7 @@ export function BoardEditor({ proposalId, projectId, boardId }: BoardEditorProps
   };
 
   const selected = selectedId ? (items.find((i) => i.id === selectedId) ?? null) : null;
+  const mutationLocked = actionPending || structuralPending;
 
   // Quiet per-pin overlay (detail-mode language): the client's latest verdict
   // (B4) + a "price moved" chip when the linked product drifted (B5, detail
@@ -665,7 +672,7 @@ export function BoardEditor({ proposalId, projectId, boardId }: BoardEditorProps
           onToggleSnap={() => setSnap((s) => !s)}
           onArrange={handleArrange}
           itemCount={items.length}
-          disabled={structuralPending}
+          disabled={mutationLocked}
         />
 
         {viewMode === 'edit' ? (
@@ -679,6 +686,7 @@ export function BoardEditor({ proposalId, projectId, boardId }: BoardEditorProps
               width={board.canvas_width}
               height={board.canvas_height}
               backgroundColor={board.background_color}
+              readOnly={mutationLocked}
               onItemsChange={handleItemsChange}
               onItemClick={(item) => setSelectedId(String(item.id))}
               onItemDelete={(itemId) => handleDeleteItem(String(itemId))}
@@ -715,7 +723,7 @@ export function BoardEditor({ proposalId, projectId, boardId }: BoardEditorProps
       </div>
 
       {/* Sidebar */}
-      <fieldset disabled={structuralPending} className="min-w-0 space-y-4 border-0 p-0">
+      <fieldset disabled={mutationLocked} className="min-w-0 space-y-4 border-0 p-0">
         {viewMode !== 'edit' ? (
           <div className="rounded-md border border-[var(--border-default)] bg-[var(--bg-muted)] px-4 py-3 text-xs text-[var(--text-muted)]">
             Previewing the client&rsquo;s view
