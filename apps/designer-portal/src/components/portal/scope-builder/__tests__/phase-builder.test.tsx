@@ -7,6 +7,7 @@ const addMutate = jest.fn();
 const addMutateAsync = jest.fn();
 const applyTemplateMutate = jest.fn();
 const applyTemplateMutateAsync = jest.fn();
+const removeMutate = jest.fn();
 
 const phases = [
   {
@@ -23,6 +24,7 @@ const phases = [
     follows_phase_id: null,
     anchor_date: null,
     lane: 'main',
+    updated_at: '2026-07-31T12:00:00.000Z',
   },
 ];
 const noRows: unknown[] = [];
@@ -42,7 +44,7 @@ jest.mock('@patina/supabase', () => ({
     isPending: false,
     isError: false,
   }),
-  useRemoveProposalPhase: () => ({ mutate: jest.fn(), isPending: false }),
+  useRemoveProposalPhase: () => ({ mutate: removeMutate, isPending: false }),
   useProposalPaymentMilestones: () => ({ data: noRows }),
   useProposalScheduleMilestones: () => ({ data: noRows }),
   useProjects: () => ({ data: noRows, isPending: false }),
@@ -124,6 +126,7 @@ describe('PhaseBuilder autosave integrity', () => {
     applyTemplateMutate.mockReset();
     applyTemplateMutateAsync.mockReset();
     applyTemplateMutateAsync.mockResolvedValue([]);
+    removeMutate.mockReset();
   });
 
   afterEach(() => jest.useRealTimers());
@@ -152,6 +155,7 @@ describe('PhaseBuilder autosave integrity', () => {
         duration_days: 28,
         duration_weeks: 4,
       },
+      expectedUpdatedAt: '2026-07-31T12:00:00.000Z',
     });
   });
 
@@ -168,6 +172,7 @@ describe('PhaseBuilder autosave integrity', () => {
       phaseId: 'phase-1',
       proposalId: 'proposal-1',
       updates: { name: 'Final concept' },
+      expectedUpdatedAt: '2026-07-31T12:00:00.000Z',
     });
   });
 
@@ -184,6 +189,7 @@ describe('PhaseBuilder autosave integrity', () => {
       phaseId: 'phase-1',
       proposalId: 'proposal-1',
       updates: { name: 'Kept on navigation' },
+      expectedUpdatedAt: '2026-07-31T12:00:00.000Z',
     });
   });
 
@@ -232,6 +238,7 @@ describe('PhaseBuilder autosave integrity', () => {
     expect(applyTemplateMutateAsync).toHaveBeenCalledWith({
       proposalId: 'proposal-1',
       templateSlug: 'patina_six',
+      requestId: expect.any(String),
     });
     expect(addMutateAsync).not.toHaveBeenCalled();
   });
@@ -273,6 +280,15 @@ describe('PhaseBuilder autosave integrity', () => {
     );
     expect(applyTemplateMutateAsync).toHaveBeenCalledTimes(1);
     expect(addMutateAsync).not.toHaveBeenCalled();
+
+    const firstRequestId = applyTemplateMutateAsync.mock.calls[0][0].requestId;
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: 'The Patina Six' }));
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+    expect(applyTemplateMutateAsync).toHaveBeenCalledTimes(2);
+    expect(applyTemplateMutateAsync.mock.calls[1][0].requestId).toBe(firstRequestId);
   });
 
   it('keeps custom phase addition while leaving tail authority to the server', () => {
@@ -295,5 +311,39 @@ describe('PhaseBuilder autosave integrity', () => {
       expect.objectContaining({ onSuccess: expect.any(Function) }),
     );
     expect(applyTemplateMutateAsync).not.toHaveBeenCalled();
+  });
+
+  it('flushes a pending edit and removes with the advanced phase CAS token', async () => {
+    updateMutateAsync.mockResolvedValueOnce({
+      updated_at: '2026-07-31T12:01:00.000Z',
+    });
+    const { container } = render(<PhaseBuilder proposalId="proposal-1" />);
+    const name = container.querySelector('input[type="text"]');
+    if (!name) throw new Error('phase name was not rendered');
+
+    fireEvent.change(name, { target: { value: 'Final phase name' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Remove phase' }));
+    await act(async () => {
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    expect(updateMutateAsync).toHaveBeenCalledWith({
+      phaseId: 'phase-1',
+      proposalId: 'proposal-1',
+      updates: { name: 'Final phase name' },
+      expectedUpdatedAt: '2026-07-31T12:00:00.000Z',
+    });
+    expect(removeMutate).toHaveBeenCalledWith(
+      {
+        phaseId: 'phase-1',
+        proposalId: 'proposal-1',
+        expectedUpdatedAt: '2026-07-31T12:01:00.000Z',
+      },
+      expect.objectContaining({
+        onSuccess: expect.any(Function),
+        onError: expect.any(Function),
+      }),
+    );
   });
 });

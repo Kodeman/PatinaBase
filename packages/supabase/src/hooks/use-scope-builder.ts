@@ -5,7 +5,6 @@ import {
   type QueryClient,
 } from '@tanstack/react-query';
 import { createBrowserClient } from '../client';
-import { updateProposalTotal } from '../lib/proposal-total';
 import {
   invalidateProposalClientQueries,
   PROPOSAL_CLIENT_MUTATION_KEY,
@@ -52,6 +51,7 @@ export interface ProposalPhase {
   follows_phase_id: string | null;
   anchor_date: string | null;
   lane: 'main' | 'thread';
+  updated_at: string;
 }
 
 export interface ProposalExclusion {
@@ -403,22 +403,23 @@ export function useUpdateProposalPhase() {
       phaseId,
       proposalId,
       updates,
+      expectedUpdatedAt,
     }: {
       phaseId: string;
       proposalId: string;
       updates: Record<string, unknown>;
+      expectedUpdatedAt: string;
     }) => {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const supabase = getSupabase() as any;
-      const { data, error } = await supabase
-        .from('proposal_phases')
-        .update(updates)
-        .eq('id', phaseId)
-        .select()
-        .single();
+      const { data, error } = await supabase.rpc('update_proposal_phase', {
+        p_phase_id: phaseId,
+        p_proposal_id: proposalId,
+        p_patch: updates,
+        p_expected_updated_at: expectedUpdatedAt,
+      });
       if (error) throw error;
-      // A fee edit changes proposals.total_amount.
-      await updateProposalTotal(supabase, proposalId);
+      if (!data) throw new Error('Phase update returned no row');
       return data;
     },
     onSuccess: async (_, { proposalId }) => {
@@ -434,13 +435,25 @@ export function useRemoveProposalPhase() {
   const queryClient = useQueryClient();
   return useMutation({
     mutationKey: [PROPOSAL_CLIENT_MUTATION_KEY],
-    mutationFn: async ({ phaseId, proposalId }: { phaseId: string; proposalId: string }) => {
+    mutationFn: async ({
+      phaseId,
+      proposalId,
+      expectedUpdatedAt,
+    }: {
+      phaseId: string;
+      proposalId: string;
+      expectedUpdatedAt: string;
+    }) => {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const supabase = getSupabase() as any;
-      const { error } = await supabase.from('proposal_phases').delete().eq('id', phaseId);
+      const { data, error } = await supabase.rpc('remove_proposal_phase', {
+        p_phase_id: phaseId,
+        p_proposal_id: proposalId,
+        p_expected_updated_at: expectedUpdatedAt,
+      });
       if (error) throw error;
-      // Removing a phase drops its fee from proposals.total_amount.
-      await updateProposalTotal(supabase, proposalId);
+      if (!data) throw new Error('Phase removal returned no row');
+      return data;
     },
     onSuccess: async (_, { proposalId }) => {
       queryClient.invalidateQueries({ queryKey: ['proposal-phases', proposalId] });

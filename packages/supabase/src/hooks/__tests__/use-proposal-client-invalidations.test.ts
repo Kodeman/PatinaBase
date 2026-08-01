@@ -138,6 +138,8 @@ describe('proposal child mutation invalidation contract', () => {
       () =>
         (useApplyPhaseTemplate() as MutationConfig).onSuccess?.([], {
           proposalId: PROPOSAL_ID,
+          templateSlug: 'patina_six',
+          requestId: 'application-1',
         }),
     ],
     [

@@ -23,6 +23,7 @@ import {
   DialogTitle,
 } from '@patina/design-system';
 import { Button } from '@/components/ui/controls';
+import { createBrowserUuid } from '@/lib/browser-uuid';
 import {
   usePhaseTemplates,
   useApplyPhaseTemplate,
@@ -70,22 +71,56 @@ export function PhaseTemplatePicker({
   // cancel to disarm.
   const [armedSlug, setArmedSlug] = useState<string | null>(null);
   const applyInFlight = useRef(false);
+  const applicationRef = useRef<{
+    proposalId: string;
+    slug: string;
+    requestId: string;
+  } | null>(null);
 
   // Keep the armed state in sync with modal open/close.
   function handleOpenChange(next: boolean) {
-    if (!next) setArmedSlug(null);
+    if (!next) {
+      setArmedSlug(null);
+      applicationRef.current = null;
+    }
     onOpenChange(next);
+  }
+
+  function handleArm(slug: string) {
+    applicationRef.current = {
+      proposalId,
+      slug,
+      requestId: slug === 'patina_six' ? proposalId : createBrowserUuid(),
+    };
+    setArmedSlug(slug);
+  }
+
+  function handleDisarm() {
+    applicationRef.current = null;
+    setArmedSlug(null);
   }
 
   async function handleApply(template: PhaseTemplate) {
     if (applyInFlight.current) return;
     applyInFlight.current = true;
+    const application =
+      applicationRef.current?.proposalId === proposalId &&
+      applicationRef.current.slug === template.slug
+        ? applicationRef.current
+        : {
+            proposalId,
+            slug: template.slug,
+            requestId:
+              template.slug === 'patina_six' ? proposalId : createBrowserUuid(),
+          };
+    applicationRef.current = application;
     try {
       const phaseIds = await applyMutation.mutateAsync({
         proposalId,
         templateSlug: template.slug,
+        requestId: application.requestId,
       });
-      setArmedSlug(null);
+      handleDisarm();
       onOpenChange(false);
       onApplied?.(phaseIds);
     } catch (err) {
@@ -176,7 +211,7 @@ export function PhaseTemplatePicker({
                     {!isArmed && (
                       <Button
                         variant="secondary"
-                        onClick={() => setArmedSlug(template.slug)}
+                        onClick={() => handleArm(template.slug)}
                         disabled={applyMutation.isPending}
                       >
                         Apply
@@ -193,7 +228,7 @@ export function PhaseTemplatePicker({
                         </Button>
                         <Button
                           variant="ghost"
-                          onClick={() => setArmedSlug(null)}
+                          onClick={handleDisarm}
                           disabled={applyMutation.isPending}
                         >
                           Cancel

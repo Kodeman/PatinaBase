@@ -71,6 +71,7 @@ interface ProposalPhaseRow {
   follows_phase_id: string | null;
   anchor_date: string | null;
   lane: 'main' | 'thread';
+  updated_at: string;
 }
 
 interface ProposalPaymentMilestoneRow {
@@ -129,6 +130,7 @@ export function PhaseBuilder({ proposalId }: PhaseBuilderProps) {
   const [templatePickerOpen, setTemplatePickerOpen] = useState(false);
   const [phaseCreateError, setPhaseCreateError] = useState<string | null>(null);
   const templateApplyInFlight = useRef(false);
+  const phaseVersionRef = useRef<Record<string, string>>({});
   // Bumped on a successful ghost-line create — clears the birth ghost line's kept fields.
   const [ghostResetSignal, setGhostResetSignal] = useState(0);
 
@@ -137,6 +139,10 @@ export function PhaseBuilder({ proposalId }: PhaseBuilderProps) {
     if (phases.length > 0) {
       const next: Record<string, Record<string, unknown>> = {};
       for (const p of phases) {
+        const currentVersion = phaseVersionRef.current[p.id];
+        if (!currentVersion || p.updated_at > currentVersion) {
+          phaseVersionRef.current[p.id] = p.updated_at;
+        }
         if (!edits[p.id]) {
           next[p.id] = {
             name: p.name,
@@ -168,7 +174,19 @@ export function PhaseBuilder({ proposalId }: PhaseBuilderProps) {
     delay: 600,
     save: useCallback(
       async (phaseId, updates) => {
-        await updatePhase.mutateAsync({ phaseId, proposalId, updates });
+        const expectedUpdatedAt = phaseVersionRef.current[phaseId];
+        if (!expectedUpdatedAt) {
+          throw new Error('Phase version is unavailable; reload before saving.');
+        }
+        const saved = await updatePhase.mutateAsync({
+          phaseId,
+          proposalId,
+          updates,
+          expectedUpdatedAt,
+        }) as { updated_at?: string };
+        if (saved.updated_at) {
+          phaseVersionRef.current[phaseId] = saved.updated_at;
+        }
         proposalEvents.scopeUpdated({
           proposalId,
           field: 'phase',
@@ -266,10 +284,15 @@ export function PhaseBuilder({ proposalId }: PhaseBuilderProps) {
     if (templateApplyInFlight.current) return;
     templateApplyInFlight.current = true;
     setPhaseCreateError(null);
+    // A proposal can be born into the Patina Six only from its zero state, so
+    // its own UUID is the cross-tab request key. Two tabs and response retries
+    // converge on one durable application receipt instead of appending twice.
+    const requestId = proposalId;
     try {
       await applyTemplate.mutateAsync({
         proposalId,
         templateSlug: 'patina_six',
+        requestId,
       });
       scheduleEvents.scheduleBorn({
         surface: 'proposal',
@@ -363,8 +386,48 @@ export function PhaseBuilder({ proposalId }: PhaseBuilderProps) {
     );
   }
 
+  async function handleRemovePhase(phase: ProposalPhaseRow) {
+    setPhaseCreateError(null);
+    try {
+      // A delete must linearize after any buffered edit for this row. The save
+      // response advances phaseVersionRef, which becomes the remove CAS token.
+      await phaseAutosave.flush(phase.id);
+      const expectedUpdatedAt = phaseVersionRef.current[phase.id];
+      if (!expectedUpdatedAt) {
+        throw new Error('Phase version is unavailable; reload before removing.');
+      }
+      removePhase.mutate(
+        { phaseId: phase.id, proposalId, expectedUpdatedAt },
+        {
+          onSuccess: () => {
+            delete phaseVersionRef.current[phase.id];
+            setEdits((current) => {
+              const next = { ...current };
+              delete next[phase.id];
+              return next;
+            });
+            proposalEvents.scopeUpdated({
+              proposalId,
+              field: 'phase',
+              action: 'remove',
+            });
+          },
+          onError: (error) => {
+            setPhaseCreateError(
+              error instanceof Error ? error.message : 'Could not remove that phase.',
+            );
+          },
+        },
+      );
+    } catch (error) {
+      setPhaseCreateError(
+        error instanceof Error ? error.message : 'Could not save before removing that phase.',
+      );
+    }
+  }
+
   const phaseWritePending =
-    addPhase.isPending || applyTemplate.isPending || copyAsBuilt.isPending;
+    addPhase.isPending || removePhase.isPending || applyTemplate.isPending || copyAsBuilt.isPending;
 
   const totalFee = phases.reduce(
     (sum: number, p: ProposalPhaseRow) => sum + (p.fee_cents || 0),
@@ -619,16 +682,8 @@ export function PhaseBuilder({ proposalId }: PhaseBuilderProps) {
                   variant="ghost"
                   size="sm"
                   className="h-6 w-6 !px-0 !py-0"
-                  onClick={() =>
-                    removePhase.mutate(
-                      { phaseId: id, proposalId },
-                      {
-                        onSuccess: () => {
-                          proposalEvents.scopeUpdated({ proposalId, field: 'phase', action: 'remove' });
-                        },
-                      }
-                    )
-                  }
+                  disabled={removePhase.isPending}
+                  onClick={() => void handleRemovePhase(phase)}
                   aria-label="Remove phase"
                 >
                   x

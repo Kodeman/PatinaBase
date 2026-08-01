@@ -14,7 +14,11 @@ vi.mock('@tanstack/react-query', () => ({
   useQueryClient: () => ({ invalidateQueries }),
 }));
 
-import { useAddProposalPhase } from '../use-scope-builder';
+import {
+  useAddProposalPhase,
+  useRemoveProposalPhase,
+  useUpdateProposalPhase,
+} from '../use-scope-builder';
 
 type AddPhaseInput = {
   proposalId: string;
@@ -32,6 +36,23 @@ type AddPhaseInput = {
 
 type MutationConfig = {
   mutationFn: (input: AddPhaseInput) => Promise<unknown>;
+};
+
+type UpdateMutationConfig = {
+  mutationFn: (input: {
+    phaseId: string;
+    proposalId: string;
+    updates: Record<string, unknown>;
+    expectedUpdatedAt: string;
+  }) => Promise<unknown>;
+};
+
+type RemoveMutationConfig = {
+  mutationFn: (input: {
+    phaseId: string;
+    proposalId: string;
+    expectedUpdatedAt: string;
+  }) => Promise<unknown>;
 };
 
 describe('useAddProposalPhase authority boundary', () => {
@@ -93,6 +114,55 @@ describe('useAddProposalPhase authority boundary', () => {
     await expect(
       config.mutationFn({ proposalId: 'proposal-1', name: 'New Phase' }),
     ).rejects.toThrow('proposal phase topology is ambiguous');
+    expect(from).not.toHaveBeenCalled();
+  });
+
+  it('routes editable fields through the checked CAS update RPC', async () => {
+    const row = {
+      id: 'phase-1',
+      proposal_id: 'proposal-1',
+      fee_cents: 225_000,
+      updated_at: '2026-07-31T12:01:00.000Z',
+    };
+    rpc.mockResolvedValue({ data: row, error: null });
+    const config = useUpdateProposalPhase() as unknown as UpdateMutationConfig;
+
+    await expect(
+      config.mutationFn({
+        phaseId: 'phase-1',
+        proposalId: 'proposal-1',
+        updates: { fee_cents: 225_000 },
+        expectedUpdatedAt: '2026-07-31T12:00:00.000Z',
+      }),
+    ).resolves.toEqual(row);
+
+    expect(rpc).toHaveBeenCalledWith('update_proposal_phase', {
+      p_phase_id: 'phase-1',
+      p_proposal_id: 'proposal-1',
+      p_patch: { fee_cents: 225_000 },
+      p_expected_updated_at: '2026-07-31T12:00:00.000Z',
+    });
+    expect(from).not.toHaveBeenCalled();
+  });
+
+  it('routes phase removal through the checked rewire-and-total RPC', async () => {
+    const removed = { id: 'phase-1', proposal_id: 'proposal-1' };
+    rpc.mockResolvedValue({ data: removed, error: null });
+    const config = useRemoveProposalPhase() as unknown as RemoveMutationConfig;
+
+    await expect(
+      config.mutationFn({
+        phaseId: 'phase-1',
+        proposalId: 'proposal-1',
+        expectedUpdatedAt: '2026-07-31T12:00:00.000Z',
+      }),
+    ).resolves.toEqual(removed);
+
+    expect(rpc).toHaveBeenCalledWith('remove_proposal_phase', {
+      p_phase_id: 'phase-1',
+      p_proposal_id: 'proposal-1',
+      p_expected_updated_at: '2026-07-31T12:00:00.000Z',
+    });
     expect(from).not.toHaveBeenCalled();
   });
 });

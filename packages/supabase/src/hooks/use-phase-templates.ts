@@ -81,15 +81,16 @@ export function useApplyPhaseTemplate() {
   return useMutation<
     string[],
     Error,
-    { proposalId: string; templateSlug: string }
+    { proposalId: string; templateSlug: string; requestId: string }
   >({
     mutationKey: [PROPOSAL_CLIENT_MUTATION_KEY],
-    mutationFn: async ({ proposalId, templateSlug }) => {
+    mutationFn: async ({ proposalId, templateSlug, requestId }) => {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const supabase = getSupabase() as any;
       const { data, error } = await supabase.rpc('apply_phase_template', {
         p_proposal_id: proposalId,
         p_template_slug: templateSlug,
+        p_request_id: requestId,
       });
       if (error) throw error;
 
