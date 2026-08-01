@@ -132,4 +132,45 @@ describe('useBufferedAutosave', () => {
     expect(result.current.state).toBe('error');
     expect(result.current.error).toBe('save failed');
   });
+
+  it('flushes proposal A with A\'s save callback when the hook rerenders for proposal B', async () => {
+    const totals = { A: 0, B: 0 };
+    const saveA = jest.fn(async (_key: string, patch: { total: number }) => {
+      totals.A = patch.total;
+    });
+    const saveB = jest.fn(async (_key: string, patch: { total: number }) => {
+      totals.B = patch.total;
+    });
+    const { result, rerender } = renderHook(
+      ({ proposalId, save }) =>
+        useBufferedAutosave<string, { total: number }>({
+          proposalId,
+          save,
+          delay: 60_000,
+        }),
+      {
+        initialProps: { proposalId: 'proposal-A', save: saveA },
+      },
+    );
+
+    act(() => {
+      result.current.queue('phase-A', { total: 100 });
+    });
+    rerender({ proposalId: 'proposal-B', save: saveB });
+
+    await waitFor(() => expect(saveA).toHaveBeenCalledTimes(1));
+    expect(saveA).toHaveBeenCalledWith('phase-A', { total: 100 });
+    expect(saveB).not.toHaveBeenCalled();
+    expect(totals).toEqual({ A: 100, B: 0 });
+
+    act(() => {
+      result.current.queue('phase-B', { total: 250 });
+    });
+    await act(async () => {
+      await result.current.flushAll();
+    });
+
+    expect(saveB).toHaveBeenCalledWith('phase-B', { total: 250 });
+    expect(totals).toEqual({ A: 100, B: 250 });
+  });
 });

@@ -2,7 +2,10 @@ import { useState } from 'react';
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { SendSheet } from '../send-sheet';
 import { useBufferedAutosave } from '@/hooks/use-buffered-autosave';
-import { resetProposalAutosaveRegistryForTests } from '@/lib/proposal-autosave-registry';
+import {
+  registerProposalAutosave,
+  resetProposalAutosaveRegistryForTests,
+} from '@/lib/proposal-autosave-registry';
 
 const mockSend = jest.fn();
 const mockUpdate = jest.fn();
@@ -252,6 +255,47 @@ describe('SendSheet canonical client-copy validation', () => {
     ).toBeDisabled();
     expect(reviewedMirror.refetch).not.toHaveBeenCalled();
     expect(mockSend).not.toHaveBeenCalled();
+  });
+
+  it('retries review when the autosave registry changes clean-to-clean during the mirror read', async () => {
+    const reviewedMirror = mirror([
+      {
+        id: 'deposit',
+        label: 'Project deposit',
+        percentage: 100,
+        amount_cents: 1_320_000,
+      },
+    ]);
+    const freshData = {
+      ...reviewedMirror.data,
+      sendSnapshot: {
+        ...reviewedMirror.data.sendSnapshot,
+        scheduleFingerprint: 'after-clean-registry-change',
+      },
+    };
+    const registration = registerProposalAutosave('proposal-1', {
+      getSnapshot: () => ({ dirty: false, flushing: false, error: null }),
+      flush: async () => {},
+    });
+    reviewedMirror.refetch
+      .mockImplementationOnce(async () => {
+        registration.notify();
+        return { data: reviewedMirror.data, error: null };
+      })
+      .mockResolvedValue({ data: freshData, error: null });
+    mockUseProposalMirrorData.mockReturnValue(reviewedMirror);
+
+    render(<SendSheet proposalId="proposal-1" open onClose={jest.fn()} />);
+
+    const send = screen.getByRole('button', { name: 'Send proposal' });
+    await waitFor(() => expect(send).toBeEnabled());
+    expect(reviewedMirror.refetch).toHaveBeenCalledTimes(2);
+
+    fireEvent.click(send);
+    await waitFor(() => expect(mockSend).toHaveBeenCalledTimes(1));
+    expect(mockSend).toHaveBeenCalledWith(
+      expect.objectContaining({ expectedSnapshot: freshData.sendSnapshot }),
+    );
   });
 
   it('blocks the exact New Milestone 0%/$0 client payload', async () => {

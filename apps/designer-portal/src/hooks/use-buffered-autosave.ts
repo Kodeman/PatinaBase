@@ -16,6 +16,40 @@ interface BufferedAutosaveOptions<Key extends string, Patch extends object> {
   delay?: number;
 }
 
+interface BufferedAutosaveGeneration<
+  Key extends string,
+  Patch extends object,
+> {
+  proposalId: string;
+  save: (key: Key, patch: Patch) => Promise<unknown>;
+  pending: Map<Key, Patch>;
+  timers: Map<Key, ReturnType<typeof setTimeout>>;
+  inFlight: Map<Key, Promise<void>>;
+  errors: Map<Key, string>;
+  mounted: boolean;
+  notify: () => void;
+  flush: (key: Key) => Promise<void>;
+  flushAll: () => Promise<void>;
+}
+
+function createGeneration<Key extends string, Patch extends object>(
+  proposalId: string,
+  save: (key: Key, patch: Patch) => Promise<unknown>,
+): BufferedAutosaveGeneration<Key, Patch> {
+  return {
+    proposalId,
+    save,
+    pending: new Map(),
+    timers: new Map(),
+    inFlight: new Map(),
+    errors: new Map(),
+    mounted: false,
+    notify: () => {},
+    flush: async () => {},
+    flushAll: async () => {},
+  };
+}
+
 function firstBufferedError<Key extends string>(
   errors: Map<Key, string>,
 ): string | null {
@@ -27,192 +61,220 @@ function firstBufferedError<Key extends string>(
  *
  * Patches queued for the same row are merged, saves for a row are serialized,
  * blur can flush explicitly, and unmount starts a final drain instead of
- * clearing the timer and dropping the designer's last keystrokes.
+ * clearing the timer and dropping the designer's last keystrokes. Each
+ * proposal owns an isolated generation so a prop change can never drain the
+ * old proposal through the new proposal's save callback or registry handle.
  */
 export function useBufferedAutosave<Key extends string, Patch extends object>({
   proposalId,
   save,
   delay = 600,
 }: BufferedAutosaveOptions<Key, Patch>) {
-  const saveRef = useRef(save);
-  saveRef.current = save;
-
-  const pendingRef = useRef(new Map<Key, Patch>());
-  const timersRef = useRef(
-    new Map<Key, ReturnType<typeof setTimeout>>(),
-  );
-  const inFlightRef = useRef(new Map<Key, Promise<void>>());
-  const errorsRef = useRef(new Map<Key, string>());
-  const mountedRef = useRef(false);
-  const flushRef = useRef<(key: Key) => Promise<void>>(async () => {});
-  const flushAllRef = useRef<() => Promise<void>>(async () => {});
-  const registryNotifyRef = useRef<() => void>(() => {});
+  const generationRef = useRef<BufferedAutosaveGeneration<
+    Key,
+    Patch
+  > | null>(null);
+  if (
+    !generationRef.current ||
+    generationRef.current.proposalId !== proposalId
+  ) {
+    generationRef.current = createGeneration(proposalId, save);
+  } else {
+    // Same proposal, newer render: future drains may use the latest callback.
+    // A drain snapshots this callback when it starts, and a proposal change
+    // allocates another generation before this assignment can touch the old.
+    generationRef.current.save = save;
+  }
+  const generation = generationRef.current;
+  const activeGenerationRef = useRef(generation);
+  activeGenerationRef.current = generation;
 
   const [state, setState] = useState<BufferedAutosaveState>('idle');
   const [error, setError] = useState<string | null>(null);
 
-  const flush = useCallback(async (key: Key): Promise<void> => {
-    const timer = timersRef.current.get(key);
-    if (timer) clearTimeout(timer);
-    timersRef.current.delete(key);
-
-    const active = inFlightRef.current.get(key);
-    if (active) {
-      await active;
-      // A patch can arrive after the active drain's final `has(key)` check but
-      // before its promise settles. Re-enter after awaiting so blur, flushAll,
-      // and unmount cannot strand that last patch with its timer cleared.
-      if (pendingRef.current.has(key)) {
-        await flushRef.current(key);
+  const updateMountedState = useCallback(
+    (
+      target: BufferedAutosaveGeneration<Key, Patch>,
+      nextState: BufferedAutosaveState,
+      nextError: string | null,
+    ) => {
+      if (
+        target.mounted &&
+        activeGenerationRef.current === target
+      ) {
+        setState(nextState);
+        setError(nextError);
       }
-      return;
-    }
-    if (!pendingRef.current.has(key)) return;
+    },
+    [],
+  );
 
-    errorsRef.current.delete(key);
-    registryNotifyRef.current();
-    if (mountedRef.current) {
-      const remainingError = firstBufferedError(errorsRef.current);
-      setState(remainingError ? 'error' : 'saving');
-      setError(remainingError);
-    }
+  const flush = useCallback(
+    async (key: Key): Promise<void> => {
+      const timer = generation.timers.get(key);
+      if (timer) clearTimeout(timer);
+      generation.timers.delete(key);
 
-    const drain = async () => {
-      while (pendingRef.current.has(key)) {
-        const patch = pendingRef.current.get(key)!;
-        pendingRef.current.delete(key);
-        try {
-          await saveRef.current(key, patch);
-        } catch (saveError) {
-          // Keep the failed fields queued. Any newer values win so a retry can
-          // never roll the row back to the older failed patch.
-          pendingRef.current.set(key, {
-            ...patch,
-            ...pendingRef.current.get(key),
-          });
-          const message =
-            saveError instanceof Error
-              ? saveError.message
-              : 'The latest changes could not be saved.';
-          errorsRef.current.set(key, message);
-          registryNotifyRef.current();
-          if (mountedRef.current) {
-            setState('error');
-            setError(message);
-          }
-          return;
+      const active = generation.inFlight.get(key);
+      if (active) {
+        await active;
+        // A patch can arrive after the active drain's final `has(key)` check
+        // but before its promise settles. Re-enter so no final patch strands.
+        if (generation.pending.has(key)) {
+          await generation.flush(key);
         }
+        return;
       }
+      if (!generation.pending.has(key)) return;
 
-      if (mountedRef.current) {
-        const remainingError = firstBufferedError(errorsRef.current);
-        const otherRowsAreSaving = [...inFlightRef.current.keys()].some(
+      generation.errors.delete(key);
+      generation.notify();
+      const remainingError = firstBufferedError(generation.errors);
+      updateMountedState(
+        generation,
+        remainingError ? 'error' : 'saving',
+        remainingError,
+      );
+
+      // Bind this entire serialized drain to the callback active for this
+      // proposal generation when the drain began. A rerender cannot redirect
+      // an already queued proposal A patch through proposal B's callback.
+      const saveForDrain = generation.save;
+      const drain = async () => {
+        while (generation.pending.has(key)) {
+          const patch = generation.pending.get(key)!;
+          generation.pending.delete(key);
+          try {
+            await saveForDrain(key, patch);
+          } catch (saveError) {
+            // Keep failed fields queued. Any newer values win on retry.
+            generation.pending.set(key, {
+              ...patch,
+              ...generation.pending.get(key),
+            });
+            const message =
+              saveError instanceof Error
+                ? saveError.message
+                : 'The latest changes could not be saved.';
+            generation.errors.set(key, message);
+            generation.notify();
+            updateMountedState(generation, 'error', message);
+            return;
+          }
+        }
+
+        const finalError = firstBufferedError(generation.errors);
+        const otherRowsAreSaving = [...generation.inFlight.keys()].some(
           (activeKey) => activeKey !== key,
         );
-        setState(
-          remainingError
+        updateMountedState(
+          generation,
+          finalError
             ? 'error'
-            : otherRowsAreSaving || pendingRef.current.size > 0
+            : otherRowsAreSaving || generation.pending.size > 0
               ? 'saving'
               : 'saved',
+          finalError,
         );
-        setError(remainingError);
-      }
-    };
+      };
 
-    const promise = drain().finally(() => {
-      if (inFlightRef.current.get(key) === promise) {
-        inFlightRef.current.delete(key);
-      }
-      registryNotifyRef.current();
-    });
-    inFlightRef.current.set(key, promise);
-    registryNotifyRef.current();
-    await promise;
-  }, []);
-
-  flushRef.current = flush;
+      const promise = drain().finally(() => {
+        if (generation.inFlight.get(key) === promise) {
+          generation.inFlight.delete(key);
+        }
+        generation.notify();
+      });
+      generation.inFlight.set(key, promise);
+      generation.notify();
+      await promise;
+    },
+    [generation, updateMountedState],
+  );
+  generation.flush = flush;
 
   const queue = useCallback(
     (key: Key, patch: Patch) => {
-      pendingRef.current.set(key, {
-        ...pendingRef.current.get(key),
+      generation.pending.set(key, {
+        ...generation.pending.get(key),
         ...patch,
       });
-      errorsRef.current.delete(key);
-      registryNotifyRef.current();
-      if (mountedRef.current) {
-        const remainingError = firstBufferedError(errorsRef.current);
-        setState(
-          remainingError
-            ? 'error'
-            : inFlightRef.current.has(key)
-              ? 'saving'
-              : 'dirty',
-        );
-        setError(remainingError);
-      }
+      generation.errors.delete(key);
+      generation.notify();
+      const remainingError = firstBufferedError(generation.errors);
+      updateMountedState(
+        generation,
+        remainingError
+          ? 'error'
+          : generation.inFlight.has(key)
+            ? 'saving'
+            : 'dirty',
+        remainingError,
+      );
 
-      const timer = timersRef.current.get(key);
+      const timer = generation.timers.get(key);
       if (timer) clearTimeout(timer);
-      timersRef.current.set(
+      generation.timers.set(
         key,
         setTimeout(() => {
-          void flushRef.current(key);
+          void generation.flush(key);
         }, delay),
       );
     },
-    [delay],
+    [delay, generation, updateMountedState],
   );
 
   const flushAll = useCallback(async () => {
     const keys = new Set<Key>([
-      ...pendingRef.current.keys(),
-      ...inFlightRef.current.keys(),
+      ...generation.pending.keys(),
+      ...generation.inFlight.keys(),
     ]);
-    await Promise.all([...keys].map((key) => flushRef.current(key)));
-    const bufferedError = firstBufferedError(errorsRef.current);
+    await Promise.all([...keys].map((key) => generation.flush(key)));
+    const bufferedError = firstBufferedError(generation.errors);
     if (bufferedError) throw new Error(bufferedError);
-    if (pendingRef.current.size > 0 || inFlightRef.current.size > 0) {
+    if (generation.pending.size > 0 || generation.inFlight.size > 0) {
       throw new Error('Proposal edits are still being saved.');
     }
-  }, []);
-
-  flushAllRef.current = flushAll;
+  }, [generation]);
+  generation.flushAll = flushAll;
 
   useEffect(() => {
-    const timers = timersRef.current;
     let detached = false;
     let registration: ReturnType<typeof registerProposalAutosave>;
     const handle = {
       getSnapshot: () => ({
-        dirty: pendingRef.current.size > 0,
-        flushing: inFlightRef.current.size > 0,
-        error: firstBufferedError(errorsRef.current),
+        // An in-flight patch is still unsaved until persistence resolves.
+        dirty: generation.pending.size > 0 || generation.inFlight.size > 0,
+        flushing: generation.inFlight.size > 0,
+        error: firstBufferedError(generation.errors),
       }),
       flush: async () => {
         registration.notify();
         try {
-          await flushAllRef.current();
+          await generation.flushAll();
           if (detached) registration.unregister();
         } finally {
           registration.notify();
         }
       },
     };
-    registration = registerProposalAutosave(proposalId, handle);
-    registryNotifyRef.current = registration.notify;
-    mountedRef.current = true;
+    registration = registerProposalAutosave(generation.proposalId, handle);
+    generation.notify = registration.notify;
+    generation.mounted = true;
+    if (activeGenerationRef.current === generation) {
+      setState('idle');
+      setError(null);
+    }
+
     return () => {
-      mountedRef.current = false;
+      generation.mounted = false;
       detached = true;
-      for (const timer of timers.values()) clearTimeout(timer);
-      timers.clear();
-      // Keep a detached, failed buffer registered. The SendSheet barrier can
-      // retry it; unregister only after its final patch reaches persistence.
+      for (const timer of generation.timers.values()) clearTimeout(timer);
+      generation.timers.clear();
+      // Keep a detached, failed generation registered. The SendSheet barrier
+      // can retry it; unregister only after its final patch persists.
       void handle.flush().catch(() => registration.notify());
     };
-  }, [proposalId]);
+  }, [generation]);
 
   return { queue, flush, flushAll, state, error };
 }
