@@ -21,6 +21,7 @@ import { PROPOSAL_CLIENT_MUTATION_KEY } from '@patina/supabase';
 import {
   useProposal,
   useRetryProposalSend,
+  useProposalSendDispatchStatus,
   useSendProposal,
   useProposalVersions,
   type ProposalEmailDeliveryState,
@@ -60,6 +61,20 @@ const labelCls =
 
 const fieldCls =
   'w-full rounded-[4px] border border-[var(--color-pearl)] bg-white px-3 py-2 text-[13px] text-[var(--color-charcoal)] outline-none transition-colors placeholder:italic placeholder:text-[var(--text-faint)] focus:border-[var(--color-clay)]';
+
+function normalizeOptionalCcEmail(value: string): string | undefined {
+  const normalized = value.trim();
+  return normalized.length > 0 ? normalized : undefined;
+}
+
+function isValidOptionalCcEmail(value: string): boolean {
+  const normalized = normalizeOptionalCcEmail(value);
+  return (
+    !normalized ||
+    (normalized.length <= 254 &&
+      /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(normalized))
+  );
+}
 
 function sendReviewFingerprint({
   proposalTotalCents,
@@ -114,6 +129,8 @@ function deliveryRecoveryMessage(recovery: DeliveryRecovery): string {
       return 'The proposal is sent, but delivery could not be confirmed. Checking again is safe and will not create a second proposal send.';
     case 'delivered':
       return 'The proposal email was delivered to the provider.';
+    case 'unconfirmed':
+      return 'The proposal is sent, but email delivery could not be confirmed and the safe retry window has ended. Confirm with the client directly; Patina will not risk a duplicate.';
   }
 }
 
@@ -131,7 +148,8 @@ export function SendSheet({
   onSent?: () => void;
 }) {
   const qc = useQueryClient();
-  const { data: proposal } = useProposal(proposalId) as { data: any };
+  const proposalQuery = useProposal(proposalId);
+  const proposal = proposalQuery.data as any;
   const { data: versions } = useProposalVersions(proposalId);
   const { data: capturedHousehold, isLoading: capturedHouseholdLoading } =
     useClient(proposal?.designer_client_id ?? '');
@@ -177,33 +195,48 @@ export function SendSheet({
   const clientCopyReviewAttempt = useRef(0);
   const [deliveryRecovery, setDeliveryRecovery] =
     useState<DeliveryRecovery | null>(null);
+  const committedDispatchId =
+    typeof proposal?.proposal_send_dispatch_id === 'string'
+      ? proposal.proposal_send_dispatch_id
+      : null;
+  const committedSentAt =
+    typeof proposal?.sent_at === 'string' ? proposal.sent_at : null;
+  const shouldReadDeliveryStatus =
+    open &&
+    Boolean(proposal && proposal.status !== 'draft') &&
+    Boolean(committedDispatchId && committedSentAt);
+  const deliveryStatus = useProposalSendDispatchStatus({
+    proposalId,
+    dispatchId: committedDispatchId,
+    sentAt: committedSentAt,
+    enabled: shouldReadDeliveryStatus,
+  });
+
+  useEffect(() => {
+    setDeliveryRecovery(null);
+  }, [proposalId]);
 
   useEffect(() => {
     if (!open || !proposal || proposal.status === 'draft') {
       setDeliveryRecovery(null);
       return;
     }
-    if (
-      proposal?.status !== 'draft' &&
-      typeof proposal?.sent_at === 'string' &&
-      typeof proposal?.proposal_send_dispatch_id === 'string'
-    ) {
-      setDeliveryRecovery(
-        (current) =>
-          current ?? {
-            dispatchId: proposal.proposal_send_dispatch_id,
-            sentAt: proposal.sent_at,
-            state: 'pending',
-            retryable: true,
-          },
-      );
+    if (deliveryStatus.data) {
+      setDeliveryRecovery({
+        dispatchId: deliveryStatus.data.dispatchId,
+        sentAt: deliveryStatus.data.sentAt,
+        state: deliveryStatus.data.state,
+        retryable: deliveryStatus.data.retryable,
+        detail: deliveryStatus.data.detail,
+      });
+    } else if (deliveryStatus.isError) {
+      setDeliveryRecovery(null);
     }
   }, [
+    deliveryStatus.data,
+    deliveryStatus.isError,
     open,
-    proposalId,
-    proposal?.proposal_send_dispatch_id,
-    proposal?.sent_at,
-    proposal?.status,
+    proposal,
   ]);
 
   const sourceGapsFingerprint = JSON.stringify(draftingState.gaps);
@@ -373,6 +406,17 @@ export function SendSheet({
     !readiness?.requiresIncompleteAcknowledgement || acknowledgedIncomplete;
 
   const clientEmail: string | undefined = proposal?.client?.email ?? undefined;
+  const normalizedCcEmail = normalizeOptionalCcEmail(ccEmail);
+  const ccEmailError = isValidOptionalCcEmail(ccEmail)
+    ? null
+    : 'Enter a valid CC email address before sending.';
+  const sentProposalNeedsDeliveryStatus =
+    Boolean(proposal && proposal.status !== 'draft') && !deliveryRecovery;
+  const deliveryStatusLoadError =
+    sentProposalNeedsDeliveryStatus &&
+    (deliveryStatus.isError ||
+      !committedDispatchId ||
+      !committedSentAt);
 
   useEffect(() => {
     setAcknowledgedIncomplete(false);
@@ -391,6 +435,7 @@ export function SendSheet({
       !checkingClientCopy &&
       !autosaveReviewError &&
       !clientCopyError &&
+      !ccEmailError &&
       !hasBlockers &&
       incompleteIsAcknowledged,
   );
@@ -444,13 +489,13 @@ export function SendSheet({
         proposalId,
         expectedSnapshot: freshClientData.sendSnapshot,
         personalMessage: personalMessage || undefined,
-        ccEmail: ccEmail || undefined,
+        ccEmail: normalizedCcEmail,
         validUntil,
       });
       proposalEvents.sent({
         proposalId,
         hasPersonalMessage: !!personalMessage,
-        hasCcEmail: !!ccEmail,
+        hasCcEmail: !!normalizedCcEmail,
         itemCount: proposal?.items?.length ?? 0,
         totalAmount: proposal?.total_amount ?? 0,
       });
@@ -571,8 +616,18 @@ export function SendSheet({
           you&rsquo;re notified when they open, view, and sign.
         </p>
 
-        {!proposal ? (
-          <p className="mt-6 text-[12.5px] italic text-[var(--color-aged-oak)]">
+        {proposalQuery.isError ? (
+          <p
+            role="alert"
+            className="mt-6 text-[12.5px] text-[var(--color-terracotta)]"
+          >
+            This proposal could not be loaded. Close this panel and try again.
+          </p>
+        ) : !proposal ? (
+          <p
+            role="status"
+            className="mt-6 text-[12.5px] italic text-[var(--color-aged-oak)]"
+          >
             Loading…
           </p>
         ) : (
@@ -699,8 +754,22 @@ export function SendSheet({
                   value={ccEmail}
                   onChange={(e) => setCcEmail(e.target.value)}
                   placeholder="partner@email.com"
+                  maxLength={254}
+                  aria-invalid={ccEmailError ? true : undefined}
+                  aria-describedby={
+                    ccEmailError ? 'send-sheet-cc-error' : undefined
+                  }
                   className={fieldCls}
                 />
+                {ccEmailError && (
+                  <p
+                    id="send-sheet-cc-error"
+                    role="alert"
+                    className="text-[11px] text-[var(--color-terracotta)]"
+                  >
+                    {ccEmailError}
+                  </p>
+                )}
               </div>
 
               {/* Expiry */}
@@ -823,7 +892,29 @@ export function SendSheet({
                 )}
             </div>
 
-            {/* Send error */}
+            {/* Send status and recovery */}
+            {sentProposalNeedsDeliveryStatus &&
+              !deliveryStatusLoadError &&
+              deliveryStatus.isLoading && (
+                <div
+                  role="status"
+                  className="rounded-[4px] border border-[var(--color-pearl)] bg-white/70 p-3 text-[12.5px] text-[var(--color-mocha)]"
+                >
+                  The proposal is sent. Checking its email delivery status…
+                </div>
+              )}
+
+            {deliveryStatusLoadError && (
+              <div
+                role="alert"
+                className="rounded-[4px] border border-[rgba(196,124,92,0.4)] bg-[rgba(196,124,92,0.08)] p-3 text-[12.5px] text-[var(--color-clay)]"
+              >
+                The proposal is sent, but its email delivery status could not
+                be verified. Refresh before retrying so Patina does not risk a
+                duplicate email.
+              </div>
+            )}
+
             {deliveryRecovery && (
               <div
                 role="status"
@@ -854,9 +945,9 @@ export function SendSheet({
               className="border-t border-[var(--color-pearl)] pt-5"
               aria-label="Send proposal actions"
             >
-              {deliveryRecovery ? (
+              {proposal.status !== 'draft' || deliveryRecovery ? (
                 <>
-                  {deliveryRecovery.retryable &&
+                  {deliveryRecovery?.retryable &&
                     deliveryRecovery.state !== 'suppressed' &&
                     deliveryRecovery.state !== 'delivered' && (
                       <DocumentAction

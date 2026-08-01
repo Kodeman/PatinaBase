@@ -25,7 +25,11 @@ vi.mock('@tanstack/react-query', () => ({
   useQueryClient: () => ({ invalidateQueries }),
 }));
 
-import { useRetryProposalSend, useSendProposal } from '../use-proposals';
+import {
+  useProposalSendDispatchStatus,
+  useRetryProposalSend,
+  useSendProposal,
+} from '../use-proposals';
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type MutationConfig = any;
@@ -162,6 +166,14 @@ function retryConfig(): MutationConfig {
   return useRetryProposalSend({ errorSurface: 'inline' }) as MutationConfig;
 }
 
+function deliveryStatusConfig(): MutationConfig {
+  return useProposalSendDispatchStatus({
+    proposalId: 'proposal-1',
+    dispatchId: 'dispatch-1',
+    sentAt: '2026-07-31T12:01:00.000Z',
+  }) as MutationConfig;
+}
+
 describe('useSendProposal payment preflight', () => {
   it('invalidates the editor, mirror, and drafting reads after send', async () => {
     await config().onSuccess({}, { proposalId: 'proposal-1' });
@@ -174,6 +186,9 @@ describe('useSendProposal payment preflight', () => {
     });
     expect(invalidateQueries).toHaveBeenCalledWith({
       queryKey: ['drafting-facets', 'proposal-1'],
+    });
+    expect(invalidateQueries).toHaveBeenCalledWith({
+      queryKey: ['proposal-send-dispatch-status', 'proposal-1'],
     });
   });
 
@@ -614,5 +629,48 @@ describe('useSendProposal payment preflight', () => {
       'proposal changed after send review; refresh and review again',
     );
     expect(invoke).not.toHaveBeenCalled();
+  });
+
+  it('reads and preserves the exact durable terminal delivery status', async () => {
+    rpc.mockResolvedValueOnce({
+      data: {
+        delivery_state: 'unconfirmed',
+        attempt_count: 3,
+        retryable: false,
+        retry_exhausted: true,
+        last_error: 'provider response was not confirmed',
+      },
+      error: null,
+    });
+
+    await expect(deliveryStatusConfig().queryFn()).resolves.toEqual({
+      dispatchId: 'dispatch-1',
+      proposalId: 'proposal-1',
+      sentAt: '2026-07-31T12:01:00.000Z',
+      state: 'unconfirmed',
+      attemptCount: 3,
+      retryable: false,
+      detail: 'provider response was not confirmed',
+    });
+    expect(rpc).toHaveBeenCalledWith('get_proposal_send_dispatch_status', {
+      p_proposal_id: 'proposal-1',
+      p_dispatch_id: 'dispatch-1',
+      p_sent_at: '2026-07-31T12:01:00.000Z',
+    });
+  });
+
+  it('fails closed when the durable delivery status payload is malformed', async () => {
+    rpc.mockResolvedValueOnce({
+      data: {
+        delivery_state: 'mystery',
+        attempt_count: 1,
+        retryable: true,
+      },
+      error: null,
+    });
+
+    await expect(deliveryStatusConfig().queryFn()).rejects.toThrow(
+      'delivery status could not be verified',
+    );
   });
 });
