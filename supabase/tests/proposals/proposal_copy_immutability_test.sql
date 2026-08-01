@@ -962,11 +962,23 @@ BEGIN
   UPDATE public.proposal_payment_milestones
   SET amount_cents = amount_cents + 1
   WHERE id = 'e83a0000-0000-4000-8000-000000000001';
+  PERFORM set_config(
+    'app.proposal_feedback_id',
+    'e8300000-0000-4000-8000-000000000001',
+    true
+  );
+  PERFORM set_config(
+    'app.proposal_nudge_id',
+    'e8300000-0000-4000-8000-000000000001',
+    true
+  );
   UPDATE public.proposals
   SET client_feedback = 'Operational feedback',
       last_nudged_at = now() - interval '10 days',
       nudge_count = 2
   WHERE id = 'e8300000-0000-4000-8000-000000000001';
+  PERFORM set_config('app.proposal_feedback_id', '', true);
+  PERFORM set_config('app.proposal_nudge_id', '', true);
   INSERT INTO public.proposal_engagement (
     proposal_id, viewer_id, event_type, metadata
   ) VALUES (

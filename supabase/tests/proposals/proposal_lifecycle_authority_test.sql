@@ -44,12 +44,21 @@ VALUES
 INSERT INTO public.designer_clients (
   id, designer_id, client_id, client_name, status, source
 )
-VALUES (
-  'e7200000-0000-4000-8000-000000000001',
-  'e7000000-0000-4000-8000-000000000001',
-  'e7000000-0000-4000-8000-000000000002',
-  'Lifecycle Client', 'proposal', 'direct'
-);
+VALUES
+  (
+    'e7200000-0000-4000-8000-000000000001',
+    'e7000000-0000-4000-8000-000000000001',
+    'e7000000-0000-4000-8000-000000000002',
+    'Lifecycle Client', 'proposal', 'direct'
+  ),
+  (
+    -- Same pair, different engagement. Its lower id reproduces the old
+    -- arbitrary ORDER BY created_at,id lookup choosing the wrong relation.
+    'e7190000-0000-4000-8000-000000000001',
+    'e7000000-0000-4000-8000-000000000001',
+    'e7000000-0000-4000-8000-000000000002',
+    'Lifecycle Client Duplicate', 'lead', 'direct'
+  );
 
 -- Trusted fixture setup may materialize historical lifecycle states; every
 -- untrusted UPDATE below still passes through the installed table guard.
@@ -232,6 +241,63 @@ BEGIN
 END;
 $$;
 
+-- Feedback and reminder metadata have their own exact row capabilities. An
+-- authenticated proposal writer cannot forge those capabilities directly;
+-- the row-locked reminder RPC remains functional and enforces cooldown.
+DO $$
+DECLARE
+  v_error text;
+  v_stamp timestamptz;
+BEGIN
+  PERFORM set_config(
+    'app.proposal_feedback_id',
+    'e7300000-0000-4000-8000-000000000001', true
+  );
+  BEGIN
+    UPDATE public.proposals
+    SET client_feedback = 'forged feedback'
+    WHERE id = 'e7300000-0000-4000-8000-000000000001';
+  EXCEPTION WHEN check_violation THEN
+    v_error := SQLERRM;
+  END;
+  PERFORM set_config('app.proposal_feedback_id', '', true);
+  ASSERT v_error =
+    'proposal client feedback may only change through request_proposal_change',
+    format('direct feedback metadata should reject, got %L', v_error);
+
+  v_error := NULL;
+  PERFORM set_config(
+    'app.proposal_nudge_id',
+    'e7300000-0000-4000-8000-000000000007', true
+  );
+  BEGIN
+    UPDATE public.proposals
+    SET last_nudged_at = now(), nudge_count = 99
+    WHERE id = 'e7300000-0000-4000-8000-000000000007';
+  EXCEPTION WHEN check_violation THEN
+    v_error := SQLERRM;
+  END;
+  PERFORM set_config('app.proposal_nudge_id', '', true);
+  ASSERT v_error = 'proposal nudge state may only change through nudge_proposal',
+    format('direct nudge metadata should reject, got %L', v_error);
+
+  v_stamp := public.nudge_proposal(
+    'e7300000-0000-4000-8000-000000000007'
+  );
+  ASSERT v_stamp IS NOT NULL, 'canonical nudge must return its timestamp receipt';
+  v_error := NULL;
+  BEGIN
+    PERFORM public.nudge_proposal(
+      'e7300000-0000-4000-8000-000000000007'
+    );
+  EXCEPTION WHEN check_violation THEN
+    v_error := SQLERRM;
+  END;
+  ASSERT v_error LIKE 'nudge_proposal: proposal % wait before nudging again',
+    format('nudge cooldown should reject the retry, got %L', v_error);
+END;
+$$;
+
 -- A studio peer remains authenticated at the invoker guard. The exact accept
 -- token cannot be used to seize lifecycle authority.
 SELECT pg_temp.assume_proposal_lifecycle_actor(
@@ -323,6 +389,11 @@ BEGIN
          AND v_declined->>'declined_at' IS NOT NULL,
     'canonical decline must atomically stamp decline state';
 
+  PERFORM public.request_proposal_change(
+    'e7300000-0000-4000-8000-000000000009',
+    '  Please revise the install allowance  '
+  );
+
   v_signed := public.sign_proposal(
     'e7300000-0000-4000-8000-000000000004',
     'Lifecycle Client', '203.0.113.42', false, current_date
@@ -363,6 +434,20 @@ BEGIN
           FROM public.proposals
           WHERE id = 'e7300000-0000-4000-8000-000000000004'),
     'canonical signature must persist legal/audit fields internally';
+  ASSERT (SELECT client_feedback = 'Please revise the install allowance'
+          FROM public.proposals
+          WHERE id = 'e7300000-0000-4000-8000-000000000009'),
+    'canonical change request must persist normalized client feedback';
+  ASSERT (SELECT last_nudged_at IS NOT NULL AND nudge_count = 1
+          FROM public.proposals
+          WHERE id = 'e7300000-0000-4000-8000-000000000007'),
+    'canonical nudge must persist exactly one reminder stamp';
+  ASSERT (SELECT designer_client_id =
+                 'e7200000-0000-4000-8000-000000000001'
+          FROM public.client_decisions
+          WHERE linked_proposal_id = 'e7300000-0000-4000-8000-000000000004'
+            AND decision_type = 'approval'),
+    'electronic signature must bind the proposal exact relationship';
 END;
 $$;
 SET LOCAL ROLE service_role;
@@ -425,6 +510,12 @@ BEGIN
           FROM public.proposals
           WHERE id = 'e7300000-0000-4000-8000-000000000005'),
     'canonical offline signature must retain accepted/signature state';
+  ASSERT (SELECT designer_client_id =
+                 'e7200000-0000-4000-8000-000000000001'
+          FROM public.client_decisions
+          WHERE linked_proposal_id = 'e7300000-0000-4000-8000-000000000005'
+            AND decision_type = 'approval'),
+    'paper signature must bind the proposal exact relationship';
 END;
 $$;
 

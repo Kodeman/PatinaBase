@@ -540,12 +540,25 @@ export function useUpdateDecisionStatus(options?: { errorSurface?: 'inline' }) {
         );
       }
 
-      const { data, error } = await supabase
-        .from('client_decisions')
-        .update({ status })
-        .eq('id', decisionId)
-        .select()
-        .single();
+      let rpcName:
+        | 'publish_client_decision'
+        | 'reopen_client_decision'
+        | 'expire_client_decision';
+      if (status === 'pending') {
+        rpcName = currentStatus === 'draft'
+          ? 'publish_client_decision'
+          : 'reopen_client_decision';
+      } else if (status === 'expired') {
+        rpcName = 'expire_client_decision';
+      } else {
+        throw new Error(
+          `Decision status ${status} requires its dedicated resolve workflow`,
+        );
+      }
+
+      const { data, error } = await supabase.rpc(rpcName, {
+        p_decision_id: decisionId,
+      });
 
       if (error) throw error;
       return data as ClientDecision;
@@ -588,43 +601,28 @@ export function useUpdateDecision(options?: { errorSurface?: 'inline' }) {
       if (input.blockingStatus !== undefined) patch.blocking_status = input.blockingStatus;
       if (input.projectId !== undefined) patch.project_id = input.projectId;
 
-      if (Object.keys(patch).length > 0) {
-        const { error: updateError } = await supabase
-          .from('client_decisions')
-          .update(patch)
-          .eq('id', input.decisionId);
-        if (updateError) throw updateError;
-      }
+      const rpcOptions = input.options === undefined
+        ? null
+        : input.options.map((opt, i) => ({
+            name: opt.name,
+            image_url: opt.imageUrl || null,
+            designer_note: opt.designerNote || null,
+            is_recommended: opt.isRecommended || false,
+            price: opt.price ?? null,
+            quantity: opt.quantity ?? 1,
+            cost_delta_cents: opt.costDeltaCents ?? null,
+            lead_time_days_delta: opt.leadTimeDaysDelta ?? null,
+            product_id: opt.productId || null,
+            sort_order: i,
+          }));
 
-      // Replace options when supplied.
-      if (input.options !== undefined) {
-        const { error: deleteError } = await supabase
-          .from('client_decision_options')
-          .delete()
-          .eq('decision_id', input.decisionId);
-        if (deleteError) throw deleteError;
-
-        if (input.options.length > 0) {
-          const { error: optionsError } = await supabase
-            .from('client_decision_options')
-            .insert(
-              input.options.map((opt, i) => ({
-                decision_id: input.decisionId,
-                name: opt.name,
-                image_url: opt.imageUrl || null,
-                designer_note: opt.designerNote || null,
-                is_recommended: opt.isRecommended || false,
-                price: opt.price ?? null,
-                quantity: opt.quantity ?? 1,
-                cost_delta_cents: opt.costDeltaCents ?? null,
-                lead_time_days_delta: opt.leadTimeDaysDelta ?? null,
-                product_id: opt.productId || null,
-                sort_order: i,
-              })),
-            );
-          if (optionsError) throw optionsError;
-        }
-      }
+      const { error: updateError } = await supabase.rpc('update_client_decision', {
+        p_decision_id: input.decisionId,
+        p_patch: patch,
+        p_options: rpcOptions,
+        p_expected_updated_at: null,
+      });
+      if (updateError) throw updateError;
 
       const { data, error } = await supabase
         .from('client_decisions')
@@ -683,10 +681,9 @@ export function useDeleteDecision() {
     }) => {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const supabase = getSupabase() as any;
-      const { error } = await supabase
-        .from('client_decisions')
-        .delete()
-        .eq('id', decisionId);
+      const { error } = await supabase.rpc('delete_client_decision_draft', {
+        p_decision_id: decisionId,
+      });
       if (error) throw error;
       return { decisionId, designerClientId, projectId };
     },
@@ -715,13 +712,9 @@ export function usePublishDraftDecision() {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const supabase = getSupabase() as any;
 
-      const { data, error } = await supabase
-        .from('client_decisions')
-        .update({ status: 'pending', sent_at: new Date().toISOString() })
-        .eq('id', decisionId)
-        .eq('status', 'draft')
-        .select()
-        .single();
+      const { data, error } = await supabase.rpc('publish_client_decision', {
+        p_decision_id: decisionId,
+      });
       if (error) throw error;
 
       const { error: notifyError } = await supabase.rpc('notify_decision_required', {
@@ -809,7 +802,7 @@ export function useDecisionRealtime(decisionId: string | undefined) {
 /**
  * Select a decision option (client responds).
  *
- * Calls the `apply_decision` RPC which atomically:
+ * Calls the `apply_client_decision` RPC which atomically:
  *  - deselects all sibling options, selects the chosen one,
  *  - flips the decision to status='responded' with responded_at + selected_by,
  *  - clears blocked_by_decision_id on any FF&E items linked to this decision.
@@ -837,38 +830,13 @@ export function useSelectDecisionOption() {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const supabase = getSupabase() as any;
 
-      const { data: { user } } = await supabase.auth.getUser();
-
-      // Persist the client's note + quantity on the chosen option before we
-      // call the RPC (the RPC itself doesn't accept these fields).
-      if (clientNote !== undefined || quantity !== undefined) {
-        const patch: Record<string, unknown> = {};
-        if (clientNote !== undefined) patch.client_note = clientNote || null;
-        if (quantity !== undefined) patch.quantity = quantity ?? 1;
-        const { error: optErr } = await supabase
-          .from('client_decision_options')
-          .update(patch)
-          .eq('id', optionId);
-        if (optErr) throw optErr;
-      }
-
-      // Persist client consent on the decision row before applying.
-      if (consent) {
-        const { error: consentErr } = await supabase
-          .from('client_decisions')
-          .update({
-            client_consent_method: consent.method,
-            client_signature: consent.signature,
-            client_consented_at: new Date().toISOString(),
-          })
-          .eq('id', decisionId);
-        if (consentErr) throw consentErr;
-      }
-
-      const { error: rpcError } = await supabase.rpc('apply_decision', {
+      const { data, error: rpcError } = await supabase.rpc('apply_client_decision', {
         p_decision_id: decisionId,
         p_selected_option_id: optionId,
-        p_selected_by: user?.id ?? null,
+        p_client_consent_method: consent?.method ?? null,
+        p_client_signature: consent?.signature ?? null,
+        p_client_note: clientNote ?? null,
+        p_quantity: quantity ?? null,
       });
       if (rpcError) throw rpcError;
 
@@ -880,13 +848,6 @@ export function useSelectDecisionOption() {
         console.warn('useSelectDecisionOption: notify_decision_resolved failed', notifyError);
       }
 
-      const { data, error } = await supabase
-        .from('client_decisions')
-        .select('*')
-        .eq('id', decisionId)
-        .single();
-
-      if (error) throw error;
       return data as ClientDecision;
     },
     onSuccess: (data) => {
@@ -927,35 +888,11 @@ export function useApplyDecisionOverride() {
     }) => {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const supabase = getSupabase() as any;
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user) throw new Error('Not authenticated');
-
-      // Look up the client_id so the override is attributed correctly inside apply_decision.
-      const { data: dec, error: decErr } = await supabase
-        .from('client_decisions')
-        .select('designer_client_id, designer_clients!inner(client_id)')
-        .eq('id', decisionId)
-        .single();
-      if (decErr) throw decErr;
-      const clientUserId =
-        (dec as { designer_clients?: { client_id?: string | null } | null })
-          ?.designer_clients?.client_id ?? null;
-
-      const { error: overrideErr } = await supabase
-        .from('decision_overrides')
-        .insert({
-          decision_id: decisionId,
-          option_id: optionId,
-          acted_by: user.id,
-          consent_method: consentMethod,
-          consent_evidence: consentEvidence,
-        });
-      if (overrideErr) throw overrideErr;
-
-      const { error: rpcError } = await supabase.rpc('apply_decision', {
+      const { data, error: rpcError } = await supabase.rpc('apply_decision_override', {
         p_decision_id: decisionId,
         p_selected_option_id: optionId,
-        p_selected_by: clientUserId ?? user.id,
+        p_consent_method: consentMethod,
+        p_consent_evidence: consentEvidence,
       });
       if (rpcError) throw rpcError;
 
@@ -967,12 +904,6 @@ export function useApplyDecisionOverride() {
         console.warn('useApplyDecisionOverride: notify_decision_resolved failed', notifyError);
       }
 
-      const { data, error } = await supabase
-        .from('client_decisions')
-        .select('*')
-        .eq('id', decisionId)
-        .single();
-      if (error) throw error;
       return data as ClientDecision;
     },
     onSuccess: (data) => {
@@ -1213,12 +1144,9 @@ export function useSendDecisionReminder() {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const supabase = getSupabase() as any;
 
-      const { data, error } = await supabase
-        .from('client_decisions')
-        .update({ reminder_sent_at: new Date().toISOString() })
-        .eq('id', decisionId)
-        .select()
-        .single();
+      const { data, error } = await supabase.rpc('stamp_client_decision_reminder', {
+        p_decision_id: decisionId,
+      });
 
       if (error) throw error;
       return data as ClientDecision;
@@ -1242,16 +1170,12 @@ export function useMarkDecisionViewed() {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const supabase = getSupabase() as any;
 
-      const { data, error } = await supabase
-        .from('client_decisions')
-        .update({ viewed_at: new Date().toISOString() })
-        .eq('id', decisionId)
-        .is('viewed_at', null)
-        .select()
-        .single();
+      const { data, error } = await supabase.rpc('mark_client_decision_viewed', {
+        p_decision_id: decisionId,
+      });
 
-      if (error && error.code !== 'PGRST116') throw error;
-      return data as ClientDecision | null;
+      if (error) throw error;
+      return data as ClientDecision;
     },
     onSuccess: (data) => {
       if (data) {

@@ -444,15 +444,15 @@ export function useResolveCoordinationItem(projectId: string | null | undefined)
     mutationFn: async (input: ResolveCoordinationItemInput) => {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const supabase = getSupabase() as any;
-      const { data: { user } } = await supabase.auth.getUser();
-
-      const { error: rpcError } = await supabase.rpc('resolve_coordination_item', {
+      const { data, error: rpcError } = await supabase.rpc('resolve_coordination_item', {
         p_item_id: input.itemId,
         p_selected_option_id: input.selectedOptionId ?? null,
         p_answer: input.answer ?? null,
         p_revision_id: input.revisionId ?? null,
         p_next_court: input.nextCourt ?? null,
-        p_resolved_by: input.resolvedBy ?? user?.id ?? null,
+        // Compatibility parameter remains in the SQL signature, but browser
+        // attribution always comes from auth.uid(); never forward a spoofable id.
+        p_resolved_by: null,
       });
       if (rpcError) throw rpcError;
 
@@ -465,12 +465,6 @@ export function useResolveCoordinationItem(projectId: string | null | undefined)
         console.warn('useResolveCoordinationItem: notify_decision_resolved failed', notifyError);
       }
 
-      const { data, error } = await supabase
-        .from('client_decisions')
-        .select('*')
-        .eq('id', input.itemId)
-        .single();
-      if (error) throw error;
       return data as CoordinationItem;
     },
 
@@ -693,12 +687,9 @@ export function useNudgeCoordinationItem(projectId: string | null | undefined) {
     mutationFn: async ({ itemId }: { itemId: string }) => {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const supabase = getSupabase() as any;
-      const { data, error } = await supabase
-        .from('client_decisions')
-        .update({ reminder_sent_at: new Date().toISOString() })
-        .eq('id', itemId)
-        .select()
-        .single();
+      const { data, error } = await supabase.rpc('stamp_client_decision_reminder', {
+        p_decision_id: itemId,
+      });
       if (error) throw error;
 
       // Re-knock the client/court that the item is waiting on. Non-fatal.
@@ -722,12 +713,12 @@ export function useExtendCoordinationItem(projectId: string | null | undefined) 
     mutationFn: async ({ itemId, dueDate }: { itemId: string; dueDate: string | null }) => {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const supabase = getSupabase() as any;
-      const { data, error } = await supabase
-        .from('client_decisions')
-        .update({ due_date: dueDate })
-        .eq('id', itemId)
-        .select()
-        .single();
+      const { data, error } = await supabase.rpc('update_client_decision', {
+        p_decision_id: itemId,
+        p_patch: { due_date: dueDate },
+        p_options: null,
+        p_expected_updated_at: null,
+      });
       if (error) throw error;
       return data as CoordinationItem;
     },
@@ -758,12 +749,12 @@ export function useReassignCoordinationItem(projectId: string | null | undefined
       const supabase = getSupabase() as any;
       const patch: Record<string, unknown> = { court };
       if (courtPartyId !== undefined) patch.court_party_id = courtPartyId;
-      const { data, error } = await supabase
-        .from('client_decisions')
-        .update(patch)
-        .eq('id', itemId)
-        .select()
-        .single();
+      const { data, error } = await supabase.rpc('update_client_decision', {
+        p_decision_id: itemId,
+        p_patch: patch,
+        p_options: null,
+        p_expected_updated_at: null,
+      });
       if (error) throw error;
       return data as CoordinationItem;
     },
@@ -951,45 +942,33 @@ export function useUpdateCoordinationItem(projectId: string | null | undefined) 
       if (input.decisionType !== undefined) patch.decision_type = input.decisionType;
       if (input.phaseId !== undefined) patch.phase_id = input.phaseId ?? null;
 
-      const { data: item, error: itemError } = await supabase
-        .from('client_decisions')
-        .update(patch)
-        .eq('id', input.itemId)
-        .select()
-        .single();
+      const rpcOptions = input.options === undefined
+        ? null
+        : input.options.map((opt, i) => ({
+            name: opt.name,
+            image_url: opt.imageUrl || null,
+            designer_note: opt.designerNote || null,
+            is_recommended: opt.isRecommended || false,
+            price: opt.price ?? null,
+            quantity: opt.quantity ?? 1,
+            cost_delta_cents: opt.costDeltaCents ?? null,
+            lead_time_days_delta: opt.leadTimeDaysDelta ?? null,
+            product_id: opt.productId || null,
+            sort_order: i,
+          }));
+
+      const { data: item, error: itemError } = await supabase.rpc(
+        'update_client_decision',
+        {
+          p_decision_id: input.itemId,
+          p_patch: patch,
+          p_options: rpcOptions,
+          p_expected_updated_at: null,
+        },
+      );
       if (itemError) throw itemError;
 
-      // 2) Replace the option set when provided (delete-then-insert, like
-      //    useUpdateDecision). Drafts have no client picks to dangle.
-      if (input.options !== undefined) {
-        const { error: delErr } = await supabase
-          .from('client_decision_options')
-          .delete()
-          .eq('decision_id', input.itemId);
-        if (delErr) throw delErr;
-        if (input.options.length > 0) {
-          const { error: insErr } = await supabase
-            .from('client_decision_options')
-            .insert(
-              input.options.map((opt, i) => ({
-                decision_id: input.itemId,
-                name: opt.name,
-                image_url: opt.imageUrl || null,
-                designer_note: opt.designerNote || null,
-                is_recommended: opt.isRecommended || false,
-                price: opt.price ?? null,
-                quantity: opt.quantity ?? 1,
-                cost_delta_cents: opt.costDeltaCents ?? null,
-                lead_time_days_delta: opt.leadTimeDaysDelta ?? null,
-                product_id: opt.productId || null,
-                sort_order: i,
-              })),
-            );
-          if (insErr) throw insErr;
-        }
-      }
-
-      // 3) Re-tag the FF&E gate — clear this item's stale links, set the new set.
+      // 2) Re-tag the FF&E gate — clear this item's stale links, set the new set.
       if (input.blockedFfeItemIds !== undefined) {
         await supabase
           .from('project_ffe_items')
@@ -1003,7 +982,7 @@ export function useUpdateCoordinationItem(projectId: string | null | undefined) 
         }
       }
 
-      // 4) Re-tag the task gate the same way (00215 blocked_by_item_id).
+      // 3) Re-tag the task gate the same way (00215 blocked_by_item_id).
       if (input.blockedTaskIds !== undefined) {
         await supabase
           .from('project_tasks')
@@ -1043,31 +1022,26 @@ export function usePublishCoordinationItem(projectId: string | null | undefined)
     mutationFn: async (input: { itemId: string; designerClientId?: string }) => {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const supabase = getSupabase() as any;
-      const { data: item, error } = await supabase
-        .from('client_decisions')
-        .update({ status: 'pending', sent_at: new Date().toISOString() })
-        .eq('id', input.itemId)
-        .eq('status', 'draft')
-        .select()
-        .maybeSingle();
+      const { data: item, error } = await supabase.rpc('publish_client_decision', {
+        p_decision_id: input.itemId,
+      });
       if (error) throw error;
 
-      // Already-published (double-fire) returns no row — quietly idempotent.
-      if (item) {
-        const { error: notifyErr } = await supabase.rpc('notify_decision_required', {
-          p_decision_id: input.itemId,
-        });
-        if (notifyErr) {
-          console.warn('usePublishCoordinationItem: notify_decision_required failed', notifyErr);
-        }
+      // The notification RPC owns its own idempotency key, so retrying an
+      // already-published item cannot duplicate the client-facing notice.
+      const { error: notifyErr } = await supabase.rpc('notify_decision_required', {
+        p_decision_id: input.itemId,
+      });
+      if (notifyErr) {
+        console.warn('usePublishCoordinationItem: notify_decision_required failed', notifyErr);
       }
-      return (item ?? null) as CoordinationItem | null;
+      return item as CoordinationItem;
     },
     onSuccess: (data, input) => {
       invalidateCoordination(
         queryClient,
-        data?.project_id ?? projectId ?? null,
-        data?.designer_client_id ?? input.designerClientId ?? null,
+        data.project_id ?? projectId ?? null,
+        data.designer_client_id ?? input.designerClientId ?? null,
       );
     },
   });
@@ -1088,19 +1062,9 @@ export function useDeleteCoordinationItem(projectId: string | null | undefined) 
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const supabase = getSupabase() as any;
 
-      await supabase
-        .from('project_ffe_items')
-        .update({ blocked: false, blocked_by_decision_id: null })
-        .eq('blocked_by_decision_id', input.itemId);
-      await supabase
-        .from('project_tasks')
-        .update({ status: 'todo', blocked_by_item_id: null })
-        .eq('blocked_by_item_id', input.itemId);
-
-      const { error } = await supabase
-        .from('client_decisions')
-        .delete()
-        .eq('id', input.itemId);
+      const { error } = await supabase.rpc('delete_client_decision_draft', {
+        p_decision_id: input.itemId,
+      });
       if (error) throw error;
       return input;
     },

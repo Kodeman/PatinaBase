@@ -107,6 +107,13 @@ VALUES
     'c7100000-0000-4000-8000-000000000002',
     'c7000000-0000-4000-8000-000000000002',
     'Already sent proposal', 100000, 'sent'
+  ),
+  (
+    'c7200000-0000-4000-8000-000000000005',
+    'c7000000-0000-4000-8000-000000000001',
+    'c7100000-0000-4000-8000-000000000002',
+    'c7000000-0000-4000-8000-000000000002',
+    'Activated proposal identity', 100000, 'accepted'
   );
 
 INSERT INTO public.projects (
@@ -120,6 +127,27 @@ VALUES (
   'c7000000-0000-4000-8000-000000000001',
   'active'
 );
+
+-- Materialize an activation-provenance fixture through the same row-scoped
+-- capability required by the project table boundary. The source proposal is
+-- exact to client/relationship c700...002 / c710...002.
+SELECT set_config(
+  'app.proposal_activation_id',
+  'c7200000-0000-4000-8000-000000000005', true
+);
+INSERT INTO public.projects (
+  id, name, designer_id, client_id, created_by, status, proposal_id
+)
+VALUES (
+  'c7300000-0000-4000-8000-000000000002',
+  'Activated project household',
+  'c7000000-0000-4000-8000-000000000001',
+  'c7000000-0000-4000-8000-000000000002',
+  'c7000000-0000-4000-8000-000000000001',
+  'active',
+  'c7200000-0000-4000-8000-000000000005'
+);
+SELECT set_config('app.proposal_activation_id', '', true);
 
 CREATE OR REPLACE FUNCTION pg_temp.assume_document_client_owner()
 RETURNS void
@@ -192,6 +220,32 @@ BEGIN
           FROM public.projects
           WHERE id = 'c7300000-0000-4000-8000-000000000001'),
     'canonical project attachment must still succeed';
+END;
+$$;
+
+-- Once a project carries proposal provenance, set_document_client cannot make
+-- the activated project diverge from that proposal's exact client/relation.
+DO $$
+DECLARE
+  v_error text;
+BEGIN
+  BEGIN
+    PERFORM public.set_document_client(
+      'project',
+      'c7300000-0000-4000-8000-000000000002',
+      'c7000000-0000-4000-8000-000000000003'
+    );
+  EXCEPTION WHEN check_violation THEN
+    v_error := SQLERRM;
+  END;
+  ASSERT v_error =
+    'activated project client must match its proposal relationship',
+    format('activated project divergence should reject, got %L', v_error);
+  ASSERT (SELECT client_id = 'c7000000-0000-4000-8000-000000000002'
+                 AND proposal_id = 'c7200000-0000-4000-8000-000000000005'
+          FROM public.projects
+          WHERE id = 'c7300000-0000-4000-8000-000000000002'),
+    'rejected activated identity change must preserve proposal/client truth';
 END;
 $$;
 

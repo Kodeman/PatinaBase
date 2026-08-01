@@ -21086,6 +21086,69 @@ export type Database = {
         Returns: number[]
       }
       _aesthete_utilization: { Args: { p_ratio: number }; Returns: number }
+      _apply_client_decision_authorized: {
+        Args: {
+          p_actor: string
+          p_client_consent_method?: string
+          p_client_note?: string
+          p_client_signature?: string
+          p_decision_id: string
+          p_quantity?: number
+          p_selected_option_id: string
+        }
+        Returns: {
+          answer: string | null
+          answered_at: string | null
+          answered_by: string | null
+          blocking_status: string
+          blocks_kind: string
+          blocks_milestone_id: string | null
+          client_consent_method: string | null
+          client_consented_at: string | null
+          client_signature: string | null
+          context: string | null
+          coordination_kind: string
+          court: string
+          court_party_id: string | null
+          created_at: string
+          decision_kind: string
+          decision_type: string
+          designer_client_id: string
+          designer_id: string
+          due_date: string | null
+          id: string
+          linked_phase: string | null
+          linked_proposal_id: string | null
+          phase_id: string | null
+          project_id: string | null
+          recommended_option_id: string | null
+          reminder_sent_at: string | null
+          responded_at: string | null
+          room_id: string | null
+          section_key: string | null
+          selected_by: string | null
+          sent_at: string | null
+          status: string
+          title: string
+          updated_at: string
+          viewed_at: string | null
+        }
+        SetofOptions: {
+          from: "*"
+          to: "client_decisions"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
+      _apply_field_effect_legacy_00399: {
+        Args: {
+          p_effect: Json
+          p_party_id: string
+          p_sms_message_id?: string
+          p_source?: string
+        }
+        Returns: Json
+      }
       _assert_project_phase_topology: {
         Args: { p_context: string; p_project_id: string }
         Returns: undefined
@@ -21304,6 +21367,59 @@ export type Database = {
         SetofOptions: {
           from: "*"
           to: "organizations"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
+      _resolve_coordination_item_authorized: {
+        Args: {
+          p_actor?: string
+          p_answer?: string
+          p_item_id: string
+          p_next_court?: string
+          p_revision_id?: string
+          p_selected_option_id?: string
+        }
+        Returns: {
+          answer: string | null
+          answered_at: string | null
+          answered_by: string | null
+          blocking_status: string
+          blocks_kind: string
+          blocks_milestone_id: string | null
+          client_consent_method: string | null
+          client_consented_at: string | null
+          client_signature: string | null
+          context: string | null
+          coordination_kind: string
+          court: string
+          court_party_id: string | null
+          created_at: string
+          decision_kind: string
+          decision_type: string
+          designer_client_id: string
+          designer_id: string
+          due_date: string | null
+          id: string
+          linked_phase: string | null
+          linked_proposal_id: string | null
+          phase_id: string | null
+          project_id: string | null
+          recommended_option_id: string | null
+          reminder_sent_at: string | null
+          responded_at: string | null
+          room_id: string | null
+          section_key: string | null
+          selected_by: string | null
+          sent_at: string | null
+          status: string
+          title: string
+          updated_at: string
+          viewed_at: string | null
+        }
+        SetofOptions: {
+          from: "*"
+          to: "client_decisions"
           isOneToOne: true
           isSetofReturn: false
         }
@@ -21540,6 +21656,59 @@ export type Database = {
         Returns: undefined
       }
       app_setting: { Args: { p_name: string }; Returns: string }
+      apply_client_decision: {
+        Args: {
+          p_client_consent_method?: string
+          p_client_note?: string
+          p_client_signature?: string
+          p_decision_id: string
+          p_quantity?: number
+          p_selected_option_id: string
+        }
+        Returns: {
+          answer: string | null
+          answered_at: string | null
+          answered_by: string | null
+          blocking_status: string
+          blocks_kind: string
+          blocks_milestone_id: string | null
+          client_consent_method: string | null
+          client_consented_at: string | null
+          client_signature: string | null
+          context: string | null
+          coordination_kind: string
+          court: string
+          court_party_id: string | null
+          created_at: string
+          decision_kind: string
+          decision_type: string
+          designer_client_id: string
+          designer_id: string
+          due_date: string | null
+          id: string
+          linked_phase: string | null
+          linked_proposal_id: string | null
+          phase_id: string | null
+          project_id: string | null
+          recommended_option_id: string | null
+          reminder_sent_at: string | null
+          responded_at: string | null
+          room_id: string | null
+          section_key: string | null
+          selected_by: string | null
+          sent_at: string | null
+          status: string
+          title: string
+          updated_at: string
+          viewed_at: string | null
+        }
+        SetofOptions: {
+          from: "*"
+          to: "client_decisions"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
       apply_decision: {
         Args: {
           p_decision_id: string
@@ -21547,6 +21716,57 @@ export type Database = {
           p_selected_option_id: string
         }
         Returns: undefined
+      }
+      apply_decision_override: {
+        Args: {
+          p_consent_evidence: string
+          p_consent_method: string
+          p_decision_id: string
+          p_selected_option_id: string
+        }
+        Returns: {
+          answer: string | null
+          answered_at: string | null
+          answered_by: string | null
+          blocking_status: string
+          blocks_kind: string
+          blocks_milestone_id: string | null
+          client_consent_method: string | null
+          client_consented_at: string | null
+          client_signature: string | null
+          context: string | null
+          coordination_kind: string
+          court: string
+          court_party_id: string | null
+          created_at: string
+          decision_kind: string
+          decision_type: string
+          designer_client_id: string
+          designer_id: string
+          due_date: string | null
+          id: string
+          linked_phase: string | null
+          linked_proposal_id: string | null
+          phase_id: string | null
+          project_id: string | null
+          recommended_option_id: string | null
+          reminder_sent_at: string | null
+          responded_at: string | null
+          room_id: string | null
+          section_key: string | null
+          selected_by: string | null
+          sent_at: string | null
+          status: string
+          title: string
+          updated_at: string
+          viewed_at: string | null
+        }
+        SetofOptions: {
+          from: "*"
+          to: "client_decisions"
+          isOneToOne: true
+          isSetofReturn: false
+        }
       }
       apply_designer_reliability: {
         Args: {
@@ -22184,6 +22404,10 @@ export type Database = {
         Args: { p_count?: number; p_room_id: string }
         Returns: undefined
       }
+      delete_client_decision_draft: {
+        Args: { p_decision_id: string }
+        Returns: Json
+      }
       delete_project_phase: {
         Args: { p_phase_id: string; p_project_id: string }
         Returns: Json
@@ -22395,6 +22619,58 @@ export type Database = {
       evaluate_collection_rules: {
         Args: { p_collection_id: string }
         Returns: Json
+      }
+      expire_client_decision: {
+        Args: { p_decision_id: string }
+        Returns: {
+          answer: string | null
+          answered_at: string | null
+          answered_by: string | null
+          blocking_status: string
+          blocks_kind: string
+          blocks_milestone_id: string | null
+          client_consent_method: string | null
+          client_consented_at: string | null
+          client_signature: string | null
+          context: string | null
+          coordination_kind: string
+          court: string
+          court_party_id: string | null
+          created_at: string
+          decision_kind: string
+          decision_type: string
+          designer_client_id: string
+          designer_id: string
+          due_date: string | null
+          id: string
+          linked_phase: string | null
+          linked_proposal_id: string | null
+          phase_id: string | null
+          project_id: string | null
+          recommended_option_id: string | null
+          reminder_sent_at: string | null
+          responded_at: string | null
+          room_id: string | null
+          section_key: string | null
+          selected_by: string | null
+          sent_at: string | null
+          status: string
+          title: string
+          updated_at: string
+          viewed_at: string | null
+        }
+        SetofOptions: {
+          from: "*"
+          to: "client_decisions"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
+      expire_due_client_decisions: {
+        Args: { p_cutoff: string }
+        Returns: {
+          id: string
+        }[]
       }
       expire_proposals: { Args: never; Returns: number }
       expire_room_scan_associations: { Args: never; Returns: number }
@@ -23167,6 +23443,52 @@ export type Database = {
         Args: { p_capture_id: string }
         Returns: undefined
       }
+      mark_client_decision_viewed: {
+        Args: { p_decision_id: string }
+        Returns: {
+          answer: string | null
+          answered_at: string | null
+          answered_by: string | null
+          blocking_status: string
+          blocks_kind: string
+          blocks_milestone_id: string | null
+          client_consent_method: string | null
+          client_consented_at: string | null
+          client_signature: string | null
+          context: string | null
+          coordination_kind: string
+          court: string
+          court_party_id: string | null
+          created_at: string
+          decision_kind: string
+          decision_type: string
+          designer_client_id: string
+          designer_id: string
+          due_date: string | null
+          id: string
+          linked_phase: string | null
+          linked_proposal_id: string | null
+          phase_id: string | null
+          project_id: string | null
+          recommended_option_id: string | null
+          reminder_sent_at: string | null
+          responded_at: string | null
+          room_id: string | null
+          section_key: string | null
+          selected_by: string | null
+          sent_at: string | null
+          status: string
+          title: string
+          updated_at: string
+          viewed_at: string | null
+        }
+        SetofOptions: {
+          from: "*"
+          to: "client_decisions"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
       mark_feedback_seen: { Args: { p_id: string }; Returns: undefined }
       mark_proposal_viewed: { Args: { p_proposal_id: string }; Returns: Json }
       mark_room_scan_geometry_error: {
@@ -23306,6 +23628,52 @@ export type Database = {
         }
         Returns: string
       }
+      publish_client_decision: {
+        Args: { p_decision_id: string }
+        Returns: {
+          answer: string | null
+          answered_at: string | null
+          answered_by: string | null
+          blocking_status: string
+          blocks_kind: string
+          blocks_milestone_id: string | null
+          client_consent_method: string | null
+          client_consented_at: string | null
+          client_signature: string | null
+          context: string | null
+          coordination_kind: string
+          court: string
+          court_party_id: string | null
+          created_at: string
+          decision_kind: string
+          decision_type: string
+          designer_client_id: string
+          designer_id: string
+          due_date: string | null
+          id: string
+          linked_phase: string | null
+          linked_proposal_id: string | null
+          phase_id: string | null
+          project_id: string | null
+          recommended_option_id: string | null
+          reminder_sent_at: string | null
+          responded_at: string | null
+          room_id: string | null
+          section_key: string | null
+          selected_by: string | null
+          sent_at: string | null
+          status: string
+          title: string
+          updated_at: string
+          viewed_at: string | null
+        }
+        SetofOptions: {
+          from: "*"
+          to: "client_decisions"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
       react_to_feedback: {
         Args: { p_emoji: string; p_id: string }
         Returns: {
@@ -23402,6 +23770,52 @@ export type Database = {
       release_proposal_send_dispatch: {
         Args: { p_claim_token: string; p_dispatch_id: string; p_error: string }
         Returns: Json
+      }
+      reopen_client_decision: {
+        Args: { p_decision_id: string }
+        Returns: {
+          answer: string | null
+          answered_at: string | null
+          answered_by: string | null
+          blocking_status: string
+          blocks_kind: string
+          blocks_milestone_id: string | null
+          client_consent_method: string | null
+          client_consented_at: string | null
+          client_signature: string | null
+          context: string | null
+          coordination_kind: string
+          court: string
+          court_party_id: string | null
+          created_at: string
+          decision_kind: string
+          decision_type: string
+          designer_client_id: string
+          designer_id: string
+          due_date: string | null
+          id: string
+          linked_phase: string | null
+          linked_proposal_id: string | null
+          phase_id: string | null
+          project_id: string | null
+          recommended_option_id: string | null
+          reminder_sent_at: string | null
+          responded_at: string | null
+          room_id: string | null
+          section_key: string | null
+          selected_by: string | null
+          sent_at: string | null
+          status: string
+          title: string
+          updated_at: string
+          viewed_at: string | null
+        }
+        SetofOptions: {
+          from: "*"
+          to: "client_decisions"
+          isOneToOne: true
+          isSetofReturn: false
+        }
       }
       reopen_item_feedback: {
         Args: { p_feedback_id: string }
@@ -24115,6 +24529,52 @@ export type Database = {
           object_path: string
         }[]
       }
+      stamp_client_decision_reminder: {
+        Args: { p_decision_id: string }
+        Returns: {
+          answer: string | null
+          answered_at: string | null
+          answered_by: string | null
+          blocking_status: string
+          blocks_kind: string
+          blocks_milestone_id: string | null
+          client_consent_method: string | null
+          client_consented_at: string | null
+          client_signature: string | null
+          context: string | null
+          coordination_kind: string
+          court: string
+          court_party_id: string | null
+          created_at: string
+          decision_kind: string
+          decision_type: string
+          designer_client_id: string
+          designer_id: string
+          due_date: string | null
+          id: string
+          linked_phase: string | null
+          linked_proposal_id: string | null
+          phase_id: string | null
+          project_id: string | null
+          recommended_option_id: string | null
+          reminder_sent_at: string | null
+          responded_at: string | null
+          room_id: string | null
+          section_key: string | null
+          selected_by: string | null
+          sent_at: string | null
+          status: string
+          title: string
+          updated_at: string
+          viewed_at: string | null
+        }
+        SetofOptions: {
+          from: "*"
+          to: "client_decisions"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
       stripe_balance_tx_ingest: {
         Args: { p_cursor: string; p_txns: Json }
         Returns: Json
@@ -24264,6 +24724,57 @@ export type Database = {
       transfer_studio_ownership: {
         Args: { p_new_owner: string; p_org_id: string }
         Returns: undefined
+      }
+      update_client_decision: {
+        Args: {
+          p_decision_id: string
+          p_expected_updated_at?: string
+          p_options?: Json
+          p_patch?: Json
+        }
+        Returns: {
+          answer: string | null
+          answered_at: string | null
+          answered_by: string | null
+          blocking_status: string
+          blocks_kind: string
+          blocks_milestone_id: string | null
+          client_consent_method: string | null
+          client_consented_at: string | null
+          client_signature: string | null
+          context: string | null
+          coordination_kind: string
+          court: string
+          court_party_id: string | null
+          created_at: string
+          decision_kind: string
+          decision_type: string
+          designer_client_id: string
+          designer_id: string
+          due_date: string | null
+          id: string
+          linked_phase: string | null
+          linked_proposal_id: string | null
+          phase_id: string | null
+          project_id: string | null
+          recommended_option_id: string | null
+          reminder_sent_at: string | null
+          responded_at: string | null
+          room_id: string | null
+          section_key: string | null
+          selected_by: string | null
+          sent_at: string | null
+          status: string
+          title: string
+          updated_at: string
+          viewed_at: string | null
+        }
+        SetofOptions: {
+          from: "*"
+          to: "client_decisions"
+          isOneToOne: true
+          isSetofReturn: false
+        }
       }
       update_my_biases: { Args: { p_overrides: Json }; Returns: Json }
       update_project_phase: {

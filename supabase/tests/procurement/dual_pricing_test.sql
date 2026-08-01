@@ -61,6 +61,17 @@ $$;
 GRANT EXECUTE ON FUNCTION pg_temp.assume_dual_pricing_designer()
   TO authenticated;
 
+CREATE OR REPLACE FUNCTION pg_temp.assume_dual_pricing_client()
+RETURNS void
+LANGUAGE sql
+AS $$
+  SELECT set_config(
+    'request.jwt.claims',
+    '{"sub":"88888888-8888-4888-8888-888888888802","role":"authenticated"}',
+    true
+  )::void
+$$;
+
 -- Products: one with a catalog trade price, one without.
 INSERT INTO products (id, name, source_url, captured_by, captured_at, price_retail, price_trade)
 VALUES
@@ -251,7 +262,8 @@ VALUES
   ('dddd0000-0000-4000-8000-000000000071', 'dddd0000-0000-4000-8000-000000000061', 'Chair option', 'dddd0000-0000-4000-8000-000000000011', 100000, 2),
   ('dddd0000-0000-4000-8000-000000000072', 'dddd0000-0000-4000-8000-000000000061', 'Lamp alternative', 'dddd0000-0000-4000-8000-000000000012', 90000, 1);
 
-SELECT apply_decision('dddd0000-0000-4000-8000-000000000061'::uuid, 'dddd0000-0000-4000-8000-000000000071'::uuid, '88888888-8888-4888-8888-888888888801'::uuid);
+SELECT pg_temp.assume_dual_pricing_client();
+SELECT apply_decision('dddd0000-0000-4000-8000-000000000061'::uuid, 'dddd0000-0000-4000-8000-000000000071'::uuid, '88888888-8888-4888-8888-888888888802'::uuid);
 
 DO $$
 DECLARE
@@ -281,7 +293,7 @@ VALUES ('dddd0000-0000-4000-8000-000000000062', 'dddd0000-0000-4000-8000-0000000
 INSERT INTO client_decision_options (id, decision_id, name, product_id, price, quantity)
 VALUES ('dddd0000-0000-4000-8000-000000000073', 'dddd0000-0000-4000-8000-000000000062', 'Lamp option', 'dddd0000-0000-4000-8000-000000000012', 60000, 1);
 
-SELECT apply_decision('dddd0000-0000-4000-8000-000000000062'::uuid, 'dddd0000-0000-4000-8000-000000000073'::uuid, '88888888-8888-4888-8888-888888888801'::uuid);
+SELECT apply_decision('dddd0000-0000-4000-8000-000000000062'::uuid, 'dddd0000-0000-4000-8000-000000000073'::uuid, '88888888-8888-4888-8888-888888888802'::uuid);
 
 DO $$
 DECLARE
@@ -302,13 +314,16 @@ BEGIN
 END
 $$;
 
--- Re-apply: reopen d1 (responded → pending is a legal 00171 transition) and
+-- Re-apply: reopen d1 (responded → pending is a legal transition) and
 -- choose the no-trade-price alternative — the SAME line must be updated with
 -- the new option's dual pricing.
-UPDATE client_decisions SET status = 'pending'
- WHERE id = 'dddd0000-0000-4000-8000-000000000061';
+SELECT pg_temp.assume_dual_pricing_designer();
+SELECT reopen_client_decision(
+  'dddd0000-0000-4000-8000-000000000061'
+);
 
-SELECT apply_decision('dddd0000-0000-4000-8000-000000000061'::uuid, 'dddd0000-0000-4000-8000-000000000072'::uuid, '88888888-8888-4888-8888-888888888801'::uuid);
+SELECT pg_temp.assume_dual_pricing_client();
+SELECT apply_decision('dddd0000-0000-4000-8000-000000000061'::uuid, 'dddd0000-0000-4000-8000-000000000072'::uuid, '88888888-8888-4888-8888-888888888802'::uuid);
 
 DO $$
 DECLARE

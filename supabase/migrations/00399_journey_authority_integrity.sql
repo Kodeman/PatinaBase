@@ -248,14 +248,39 @@ AS $$
 BEGIN
   IF TG_OP = 'INSERT' THEN
     IF current_user IS DISTINCT FROM 'postgres'
+       AND (NEW.last_nudged_at IS NOT NULL OR NEW.nudge_count <> 0)
+    THEN
+      RAISE EXCEPTION
+        'proposal nudge state cannot be preloaded'
+        USING ERRCODE = 'check_violation';
+    END IF;
+
+    -- clone_proposal is SECURITY INVOKER and carries the client's prior
+    -- feedback into a draft revision. Permit only an exact value already
+    -- present on the same relationship and root chain; a direct INSERT still
+    -- cannot invent client-authored feedback.
+    IF current_user IS DISTINCT FROM 'postgres'
+       AND NEW.client_feedback IS NOT NULL
        AND (
-         NEW.client_feedback IS NOT NULL
-         OR NEW.last_nudged_at IS NOT NULL
-         OR NEW.nudge_count <> 0
+         NEW.status <> 'draft'
+         OR NEW.parent_proposal_id IS NULL
+         OR NOT EXISTS (
+           SELECT 1
+           FROM public.proposals AS source
+           WHERE (
+             source.id = NEW.parent_proposal_id
+             OR source.parent_proposal_id = NEW.parent_proposal_id
+           )
+             AND source.designer_id IS NOT DISTINCT FROM NEW.designer_id
+             AND source.client_id IS NOT DISTINCT FROM NEW.client_id
+             AND source.designer_client_id
+                   IS NOT DISTINCT FROM NEW.designer_client_id
+             AND source.client_feedback IS NOT DISTINCT FROM NEW.client_feedback
+         )
        )
     THEN
       RAISE EXCEPTION
-        'proposal feedback and nudge state cannot be preloaded'
+        'proposal client feedback may only be copied from its revision chain'
         USING ERRCODE = 'check_violation';
     END IF;
     RETURN NEW;
@@ -496,7 +521,25 @@ BEGIN
     END IF;
 
     IF current_user IS DISTINCT FROM 'postgres' THEN
-      IF NOT public._can_author_proposal(NEW.designer_id) THEN
+      IF NOT (
+        NEW.designer_id = auth.uid()
+        OR EXISTS (
+          SELECT 1
+          FROM public.organization_members AS actor_membership
+          JOIN public.organization_members AS owner_membership
+            ON owner_membership.organization_id = actor_membership.organization_id
+          JOIN public.organizations AS organization
+            ON organization.id = actor_membership.organization_id
+          WHERE actor_membership.user_id = auth.uid()
+            AND actor_membership.status = 'active'
+            AND actor_membership.role <> 'guest'
+            AND owner_membership.user_id = NEW.designer_id
+            AND owner_membership.status = 'active'
+            AND owner_membership.role <> 'guest'
+            AND organization.type = 'design_studio'
+            AND organization.status = 'active'
+        )
+      ) THEN
         RAISE EXCEPTION 'not authorized to create a client decision'
           USING ERRCODE = 'insufficient_privilege';
       END IF;
@@ -607,9 +650,34 @@ BEGIN
     RETURN NEW;
   END IF;
 
+  -- SECURITY DEFINER workflows and direct database maintenance execute as
+  -- postgres even when a JWT claim remains set on the transaction. Their
+  -- function bodies own option creation; end-user table inserts execute as
+  -- authenticated and still take the exact-author branch below.
+  IF TG_OP = 'INSERT' AND current_user IS NOT DISTINCT FROM 'postgres' THEN
+    RETURN NEW;
+  END IF;
+
   IF TG_OP = 'INSERT' AND current_user IS DISTINCT FROM 'postgres' THEN
-    IF NOT public._can_author_proposal(v_decision.designer_id)
-       OR v_decision.status NOT IN ('draft', 'pending')
+    IF NOT (
+      v_decision.designer_id = auth.uid()
+      OR EXISTS (
+        SELECT 1
+        FROM public.organization_members AS actor_membership
+        JOIN public.organization_members AS owner_membership
+          ON owner_membership.organization_id = actor_membership.organization_id
+        JOIN public.organizations AS organization
+          ON organization.id = actor_membership.organization_id
+        WHERE actor_membership.user_id = auth.uid()
+          AND actor_membership.status = 'active'
+          AND actor_membership.role <> 'guest'
+          AND owner_membership.user_id = v_decision.designer_id
+          AND owner_membership.status = 'active'
+          AND owner_membership.role <> 'guest'
+          AND organization.type = 'design_studio'
+          AND organization.status = 'active'
+      )
+    ) OR v_decision.status NOT IN ('draft', 'pending')
     THEN
       RAISE EXCEPTION 'not authorized to add an option to decision %', v_decision_id
         USING ERRCODE = 'insufficient_privilege';
@@ -855,9 +923,13 @@ BEGIN
     RAISE EXCEPTION 'decision % not found or access denied', p_decision_id
       USING ERRCODE = 'insufficient_privilege';
   END IF;
-  IF v_decision.status NOT IN ('draft', 'pending') THEN
+  IF v_decision.status NOT IN ('draft', 'pending', 'responded') THEN
     RAISE EXCEPTION 'decision % cannot be edited from status %',
       p_decision_id, v_decision.status
+      USING ERRCODE = 'check_violation';
+  END IF;
+  IF v_decision.status = 'responded' AND p_options IS NOT NULL THEN
+    RAISE EXCEPTION 'responded decision options are immutable'
       USING ERRCODE = 'check_violation';
   END IF;
   IF p_expected_updated_at IS NOT NULL
@@ -1073,7 +1145,7 @@ BEGIN
       USING ERRCODE = 'check_violation';
   END IF;
   IF v_decision.decision_type = 'approval'
-     OR v_decision.linked_proposal_id IS NOT NULL
+     AND v_decision.linked_proposal_id IS NOT NULL
   THEN
     RAISE EXCEPTION 'proposal approval decisions are terminal'
       USING ERRCODE = 'check_violation';
@@ -1811,13 +1883,13 @@ GRANT EXECUTE ON FUNCTION public.submit_coordination_revision(
   uuid, jsonb, text, text, uuid
 ) TO authenticated;
 
-CREATE OR REPLACE FUNCTION public.resolve_coordination_item(
+CREATE OR REPLACE FUNCTION public._resolve_coordination_item_authorized(
   p_item_id uuid,
   p_selected_option_id uuid DEFAULT NULL,
   p_answer text DEFAULT NULL,
   p_revision_id uuid DEFAULT NULL,
   p_next_court text DEFAULT NULL,
-  p_resolved_by uuid DEFAULT NULL
+  p_actor uuid DEFAULT NULL
 )
 RETURNS public.client_decisions
 LANGUAGE plpgsql
@@ -1826,10 +1898,11 @@ SET search_path = public, pg_temp
 AS $$
 DECLARE
   v_item public.client_decisions%ROWTYPE;
-  v_actor uuid;
+  v_actor uuid := p_actor;
   v_next text;
   v_owner uuid;
   v_client uuid;
+  v_authorized_author boolean := false;
   v_retry_authorized boolean := false;
 BEGIN
   SELECT * INTO v_item
@@ -1842,14 +1915,8 @@ BEGIN
       USING ERRCODE = 'no_data_found';
   END IF;
 
-  IF auth.uid() IS NOT NULL THEN
-    -- Compatibility: old callers pass p_resolved_by. It is never trusted for a
-    -- browser act; the real JWT actor is authoritative and is what gets stored.
-    v_actor := auth.uid();
-  ELSIF COALESCE(auth.role(), '') = 'service_role' THEN
-    v_actor := p_resolved_by;
-  ELSE
-    RAISE EXCEPTION 'resolve_coordination_item requires an authenticated actor'
+  IF v_actor IS NULL THEN
+    RAISE EXCEPTION 'coordination resolution requires an actor'
       USING ERRCODE = 'insufficient_privilege';
   END IF;
 
@@ -1859,18 +1926,27 @@ BEGIN
   FROM public.designer_clients AS relationship
   WHERE relationship.id = v_item.designer_client_id;
 
+  v_authorized_author := v_actor = v_owner OR EXISTS (
+    SELECT 1
+    FROM public.organization_members AS actor_membership
+    JOIN public.organization_members AS owner_membership
+      ON owner_membership.organization_id = actor_membership.organization_id
+    JOIN public.organizations AS organization
+      ON organization.id = actor_membership.organization_id
+    WHERE actor_membership.user_id = v_actor
+      AND actor_membership.status = 'active'
+      AND actor_membership.role <> 'guest'
+      AND owner_membership.user_id = v_owner
+      AND owner_membership.status = 'active'
+      AND owner_membership.role <> 'guest'
+      AND organization.type = 'design_studio'
+      AND organization.status = 'active'
+  );
+
   -- Authorization precedes the idempotent receipt. Otherwise anyone who knew
-  -- the UUID of an already-resolved row could use this DEFINER function as a
-  -- read bypass after the court had moved.
-  IF auth.uid() IS NOT NULL THEN
-    v_retry_authorized := v_actor = auth.uid()
-      AND (
-        public._can_author_proposal(v_owner)
-        OR v_actor = v_client
-      );
-  ELSIF COALESCE(auth.role(), '') = 'service_role' THEN
-    v_retry_authorized := v_actor = v_owner;
-  END IF;
+  -- the UUID of an already-resolved row could use this DEFINER core as a read
+  -- bypass after the court had moved.
+  v_retry_authorized := v_authorized_author OR v_actor = v_client;
 
   IF NOT v_retry_authorized THEN
     RAISE EXCEPTION 'not authorized to access coordination item %', p_item_id
@@ -1885,7 +1961,14 @@ BEGIN
       p_item_id, v_item.status
       USING ERRCODE = 'check_violation';
   END IF;
-  IF NOT public.may_resolve_coordination_item(v_item, v_actor) THEN
+  IF NOT (
+    v_authorized_author
+    OR (
+      v_actor = v_client
+      AND v_item.court = 'client'
+      AND v_item.coordination_kind IN ('selection', 'signoff')
+    )
+  ) THEN
     RAISE EXCEPTION 'not authorized to resolve coordination item %', p_item_id
       USING ERRCODE = 'insufficient_privilege';
   END IF;
@@ -1978,6 +2061,61 @@ BEGIN
   PERFORM set_config('app.client_decision_write_id', '', true);
 
   RETURN v_item;
+END;
+$$;
+
+REVOKE ALL ON FUNCTION public._resolve_coordination_item_authorized(
+  uuid, uuid, text, uuid, text, uuid
+) FROM PUBLIC, anon, authenticated, service_role;
+
+CREATE OR REPLACE FUNCTION public.resolve_coordination_item(
+  p_item_id uuid,
+  p_selected_option_id uuid DEFAULT NULL,
+  p_answer text DEFAULT NULL,
+  p_revision_id uuid DEFAULT NULL,
+  p_next_court text DEFAULT NULL,
+  p_resolved_by uuid DEFAULT NULL
+)
+RETURNS public.client_decisions
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public, pg_temp
+AS $$
+DECLARE
+  v_actor uuid;
+  v_calling_role text := current_setting('role', true);
+BEGIN
+  -- Browser and authenticated review acts are always attributed to auth.uid(),
+  -- so the legacy p_resolved_by value cannot spoof stored evidence. The
+  -- service-only field/SMS choke point has no login identity and may attribute
+  -- its owning designer. A direct postgres maintenance/test session is the
+  -- other trusted no-JWT path. current_setting('role') retains the caller role
+  -- across this DEFINER boundary, unlike current_user.
+  IF auth.uid() IS NOT NULL THEN
+    v_actor := auth.uid();
+  ELSIF COALESCE(auth.role(), '') = 'service_role'
+        AND v_calling_role = 'service_role'
+  THEN
+    v_actor := p_resolved_by;
+  ELSIF session_user IS NOT DISTINCT FROM 'postgres'
+        AND COALESCE(v_calling_role, 'none') IN ('none', 'postgres')
+  THEN
+    v_actor := p_resolved_by;
+  END IF;
+
+  IF v_actor IS NULL THEN
+    RAISE EXCEPTION 'resolve_coordination_item requires an authenticated actor'
+      USING ERRCODE = 'insufficient_privilege';
+  END IF;
+
+  RETURN public._resolve_coordination_item_authorized(
+    p_item_id,
+    p_selected_option_id,
+    p_answer,
+    p_revision_id,
+    p_next_court,
+    v_actor
+  );
 END;
 $$;
 

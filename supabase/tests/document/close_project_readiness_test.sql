@@ -492,18 +492,18 @@ SELECT pg_temp.expect_close_failure(
   'project cannot close: 1 coordination/decision item(s) are unresolved'
 );
 
-UPDATE public.client_decisions
-SET status = 'pending'
-WHERE id = 'a7160000-0000-4000-8000-000000000001';
+SELECT public.publish_client_decision(
+  'a7160000-0000-4000-8000-000000000001'
+);
 
 SELECT pg_temp.expect_close_failure(
   'a7100000-0000-4000-8000-000000000011',
   'project cannot close: 1 coordination/decision item(s) are unresolved'
 );
 
-UPDATE public.client_decisions
-SET status = 'expired'
-WHERE id = 'a7160000-0000-4000-8000-000000000001';
+SELECT public.expire_client_decision(
+  'a7160000-0000-4000-8000-000000000001'
+);
 
 DO $$
 DECLARE v_project public.projects;
@@ -524,12 +524,9 @@ SELECT pg_temp.expect_close_failure(
   'project cannot close: 1 scope change request(s) are unresolved'
 );
 
-RESET ROLE;
-UPDATE public.scope_change_requests
-SET applied_at = now()
-WHERE id = 'a7170000-0000-4000-8000-000000000001';
-SET LOCAL ROLE authenticated;
-SELECT pg_temp.assume_closeout_owner();
+SELECT public.apply_scope_change(
+  'a7170000-0000-4000-8000-000000000001'
+);
 
 DO $$
 DECLARE v_project public.projects;
@@ -594,16 +591,27 @@ SELECT pg_temp.expect_close_failure(
 );
 
 RESET ROLE;
-UPDATE public.invoice_line_items
-SET unit_amount_cents = 320000,
-    amount_cents = 320000
-WHERE id = 'a7500000-0000-4000-8000-000000000001';
+-- Reproduce a historical/imported split-line shape. The current UI's unique
+-- live-slot index prevents creating it prospectively; closeout must still sum
+-- such rows if they exist in migrated business data. The surrounding test
+-- transaction restores the index at ROLLBACK.
+DROP INDEX public.uniq_invoice_line_items_ffe_item;
+INSERT INTO public.invoice_line_items (
+  id, invoice_id, kind, ffe_item_id, description, quantity,
+  unit_amount_cents, amount_cents
+)
+VALUES (
+  'a7500000-0000-4000-8000-000000000002',
+  'a7400000-0000-4000-8000-000000000001',
+  'ffe', 'a7200000-0000-4000-8000-000000000001',
+  'Closeout chair adjustment', 1, 1, 1
+);
 SET LOCAL ROLE authenticated;
 SELECT pg_temp.assume_closeout_owner();
 
--- Full positive-value line coverage does not erase an explicit unpaid project
--- milestone. The installed zero/unpriced FF&E row has no invoice by design and
--- does not add a billing blocker.
+-- Paid coverage is cumulative across split lines: neither line alone reaches
+-- 320000, but 319999 + 1 fully covers the FF&E item. The next truthful blocker
+-- is therefore the explicit unpaid milestone, not a false invoice dead end.
 SELECT pg_temp.expect_close_failure(
   'a7100000-0000-4000-8000-000000000001',
   'project cannot close: 1 positive payment milestone(s) are not paid'
@@ -626,6 +634,28 @@ BEGIN
     'installed + invoiced + collected work should close';
   ASSERT v_project.portfolio_snapshot->>'headline' = 'Operationally complete',
     'close_project must still atomically persist the portfolio snapshot';
+END;
+$$;
+
+-- Completion is terminal table truth. Even the owner cannot directly reopen
+-- or archive-hop a completed project after close_project returns.
+DO $$
+DECLARE
+  v_error text;
+BEGIN
+  BEGIN
+    UPDATE public.projects
+    SET status = 'active'
+    WHERE id = 'a7100000-0000-4000-8000-000000000001';
+  EXCEPTION WHEN check_violation THEN
+    v_error := SQLERRM;
+  END;
+  ASSERT v_error = 'terminal project status is immutable',
+    format('direct project reopen should reject, got %L', v_error);
+  ASSERT (SELECT status = 'completed'
+          FROM public.projects
+          WHERE id = 'a7100000-0000-4000-8000-000000000001'),
+    'rejected reopen must preserve completed state';
 END;
 $$;
 

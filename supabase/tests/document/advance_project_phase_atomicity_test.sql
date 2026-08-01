@@ -652,9 +652,9 @@ BEGIN
 
   v_failed := false;
   BEGIN
-    UPDATE public.client_decisions
-    SET status = 'pending'
-    WHERE id = 'ab000000-0000-4000-8000-000000000003';
+    PERFORM public.reopen_client_decision(
+      'ab000000-0000-4000-8000-000000000003'
+    );
   EXCEPTION WHEN OTHERS THEN
     GET STACKED DIAGNOSTICS
       v_state = RETURNED_SQLSTATE,
@@ -670,9 +670,12 @@ BEGIN
           WHERE id = 'ab000000-0000-4000-8000-000000000003'),
     'rejected history mutation must preserve responded status';
 
-  UPDATE public.client_decisions
-  SET title = 'Responded runtime gate (history retained)'
-  WHERE id = 'ab000000-0000-4000-8000-000000000003';
+  PERFORM public.update_client_decision(
+    'ab000000-0000-4000-8000-000000000003',
+    jsonb_build_object(
+      'title', 'Responded runtime gate (history retained)'
+    )
+  );
   ASSERT (SELECT title = 'Responded runtime gate (history retained)'
           FROM public.client_decisions
           WHERE id = 'ab000000-0000-4000-8000-000000000003'),

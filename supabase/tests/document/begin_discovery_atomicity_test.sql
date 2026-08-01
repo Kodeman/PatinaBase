@@ -16,6 +16,12 @@ VALUES
    '00000000-0000-0000-0000-000000000000', 'authenticated', 'authenticated'),
   ('d6000000-0000-4000-8000-000000000003', 'begin-foreign@test.invalid', '', NOW(), NOW(), NOW(),
    '00000000-0000-0000-0000-000000000000', 'authenticated', 'authenticated'),
+  ('d6000000-0000-4000-8000-000000000005', 'begin-contractor@test.invalid', '', NOW(), NOW(), NOW(),
+   '00000000-0000-0000-0000-000000000000', 'authenticated', 'authenticated'),
+  ('d6000000-0000-4000-8000-000000000006', 'begin-guest@test.invalid', '', NOW(), NOW(), NOW(),
+   '00000000-0000-0000-0000-000000000000', 'authenticated', 'authenticated'),
+  ('d6000000-0000-4000-8000-000000000007', 'begin-suspended@test.invalid', '', NOW(), NOW(), NOW(),
+   '00000000-0000-0000-0000-000000000000', 'authenticated', 'authenticated'),
   ('d6000000-0000-4000-8000-000000000010', 'begin-client@test.invalid', '', NOW(), NOW(), NOW(),
    '00000000-0000-0000-0000-000000000000', 'authenticated', 'authenticated');
 
@@ -24,14 +30,18 @@ VALUES
   ('d6000000-0000-4000-8000-000000000001', 'begin-owner@test.invalid', 'Begin Owner', NOW(), NOW()),
   ('d6000000-0000-4000-8000-000000000002', 'begin-coworker@test.invalid', 'Begin Coworker', NOW(), NOW()),
   ('d6000000-0000-4000-8000-000000000003', 'begin-foreign@test.invalid', 'Begin Foreign', NOW(), NOW()),
+  ('d6000000-0000-4000-8000-000000000005', 'begin-contractor@test.invalid', 'Begin Contractor', NOW(), NOW()),
+  ('d6000000-0000-4000-8000-000000000006', 'begin-guest@test.invalid', 'Begin Guest', NOW(), NOW()),
+  ('d6000000-0000-4000-8000-000000000007', 'begin-suspended@test.invalid', 'Begin Suspended', NOW(), NOW()),
   ('d6000000-0000-4000-8000-000000000010', 'begin-client@test.invalid', 'Repeat Client', NOW(), NOW())
 ON CONFLICT (id) DO NOTHING;
 
 INSERT INTO public.organizations (id, type, name, slug)
-VALUES (
-  'd6100000-0000-4000-8000-000000000001', 'design_studio',
-  'Begin Discovery Studio', 'begin-discovery-studio'
-);
+VALUES
+  ('d6100000-0000-4000-8000-000000000001', 'design_studio',
+   'Begin Discovery Studio', 'begin-discovery-studio'),
+  ('d6100000-0000-4000-8000-000000000002', 'contractor',
+   'Begin Shared Contractor', 'begin-shared-contractor');
 
 INSERT INTO public.organization_members (
   id, user_id, organization_id, role, status, joined_at
@@ -40,7 +50,15 @@ VALUES
   ('d6110000-0000-4000-8000-000000000001', 'd6000000-0000-4000-8000-000000000001',
    'd6100000-0000-4000-8000-000000000001', 'owner', 'active', NOW()),
   ('d6110000-0000-4000-8000-000000000002', 'd6000000-0000-4000-8000-000000000002',
-   'd6100000-0000-4000-8000-000000000001', 'member', 'active', NOW());
+   'd6100000-0000-4000-8000-000000000001', 'member', 'active', NOW()),
+  ('d6110000-0000-4000-8000-000000000003', 'd6000000-0000-4000-8000-000000000001',
+   'd6100000-0000-4000-8000-000000000002', 'owner', 'active', NOW()),
+  ('d6110000-0000-4000-8000-000000000004', 'd6000000-0000-4000-8000-000000000005',
+   'd6100000-0000-4000-8000-000000000002', 'member', 'active', NOW()),
+  ('d6110000-0000-4000-8000-000000000005', 'd6000000-0000-4000-8000-000000000006',
+   'd6100000-0000-4000-8000-000000000001', 'guest', 'active', NOW()),
+  ('d6110000-0000-4000-8000-000000000006', 'd6000000-0000-4000-8000-000000000007',
+   'd6100000-0000-4000-8000-000000000001', 'member', 'suspended', NOW());
 
 INSERT INTO public.leads (
   id, homeowner_id, designer_id, project_type, status, contact_name, contact_email
@@ -59,7 +77,16 @@ VALUES
    'Studio Lead', 'studio-lead@test.invalid'),
   ('d6200000-0000-4000-8000-000000000005', NULL,
    'd6000000-0000-4000-8000-000000000001', 'consultation', 'new',
-   'Rollback Lead', 'rollback-lead@test.invalid');
+   'Rollback Lead', 'rollback-lead@test.invalid'),
+  ('d6200000-0000-4000-8000-000000000006', NULL,
+   'd6000000-0000-4000-8000-000000000001', 'consultation', 'new',
+   'Contractor Boundary Lead', 'contractor-boundary@test.invalid'),
+  ('d6200000-0000-4000-8000-000000000007', NULL,
+   'd6000000-0000-4000-8000-000000000001', 'consultation', 'new',
+   'Guest Boundary Lead', 'guest-boundary@test.invalid'),
+  ('d6200000-0000-4000-8000-000000000008', NULL,
+   'd6000000-0000-4000-8000-000000000001', 'consultation', 'new',
+   'Suspended Boundary Lead', 'suspended-boundary@test.invalid');
 
 -- A repeat-client canonical relationship must survive unchanged while the new
 -- lead receives its own Discovery-stage engagement (00331 duplicate policy).
@@ -230,6 +257,41 @@ BEGIN
   ASSERT v_error =
     'lead d6200000-0000-4000-8000-000000000003 not found or access denied',
     format('foreign lead should be denied, got %L', v_error);
+END;
+$$;
+
+-- Sharing a contractor org, being a studio guest, or holding a suspended
+-- studio membership is visibility context—not Brief→Discovery authority.
+DO $$
+DECLARE
+  v_case record;
+  v_error text;
+BEGIN
+  FOR v_case IN
+    SELECT * FROM (VALUES
+      ('d6000000-0000-4000-8000-000000000005'::uuid,
+       'd6200000-0000-4000-8000-000000000006'::uuid,
+       'shared contractor organization'),
+      ('d6000000-0000-4000-8000-000000000006'::uuid,
+       'd6200000-0000-4000-8000-000000000007'::uuid,
+       'design-studio guest membership'),
+      ('d6000000-0000-4000-8000-000000000007'::uuid,
+       'd6200000-0000-4000-8000-000000000008'::uuid,
+       'suspended design-studio membership')
+    ) AS denied(actor_id, lead_id, label)
+  LOOP
+    PERFORM pg_temp.assume_begin_actor(v_case.actor_id);
+    v_error := NULL;
+    BEGIN
+      PERFORM public.begin_discovery(v_case.lead_id);
+    EXCEPTION WHEN insufficient_privilege THEN
+      v_error := SQLERRM;
+    END;
+    ASSERT v_error = format(
+      'lead %s not found or access denied', v_case.lead_id
+    ), format('%s must not confer Discovery authority, got %L',
+              v_case.label, v_error);
+  END LOOP;
 END;
 $$;
 
