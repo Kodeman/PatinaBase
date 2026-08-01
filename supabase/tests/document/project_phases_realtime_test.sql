@@ -5,19 +5,16 @@
 
 BEGIN;
 
-SELECT plan(1);
-
-SELECT ok(
-  EXISTS (
+DO $$
+BEGIN
+  ASSERT EXISTS (
     SELECT 1
     FROM pg_publication_tables
     WHERE pubname = 'supabase_realtime'
       AND schemaname = 'public'
       AND tablename = 'project_phases'
-  ),
-  'public.project_phases is published through supabase_realtime'
-);
-
-SELECT * FROM finish();
+  ), 'public.project_phases is published through supabase_realtime';
+END;
+$$;
 
 ROLLBACK;
