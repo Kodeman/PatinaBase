@@ -104,6 +104,7 @@ enum BudgetMath {
                         totalCents: proposal.total_amount ?? 0,
                         paymentTerms: proposal.payment_terms,
                         paymentNotes: proposal.payment_notes,
+                        showsPaymentSchedule: proposal.client_visibility_tier != "curated",
                         milestones: (milestonesByProposal[proposal.id] ?? [])
                             .sorted { ($0.sort_order ?? 0) < ($1.sort_order ?? 0) }
                     )
@@ -141,6 +142,8 @@ struct BudgetProposal: Identifiable {
     let totalCents: Int
     let paymentTerms: String?
     let paymentNotes: String?
+    /// Curated proposal copies intentionally hide the entire schedule surface.
+    let showsPaymentSchedule: Bool
     let milestones: [RemoteProposalMilestone]
 }
 
