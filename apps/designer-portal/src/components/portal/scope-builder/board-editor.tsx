@@ -38,10 +38,8 @@ import {
   type ItemFeedback,
 } from '@patina/supabase';
 import { useBufferedAutosave } from '@/hooks/use-buffered-autosave';
-import {
-  ProductPickerModal,
-  type ProductPickResult,
-} from '../proposals/product-picker-modal';
+import { runProposalAutosaveAction } from '@/lib/proposal-autosave-registry';
+import { ProductPickerModal, type ProductPickResult } from '../proposals/product-picker-modal';
 import { verdictChipSpec } from '@/lib/document/verdict-chip';
 import {
   buildSendToScheduleArgs,
@@ -116,14 +114,14 @@ interface BoardEditorProps {
  * Persistence model:
  *  - Drag/rotate/restack edits land in local state, are marked dirty, and
  *    flush through useSaveBoardLayout on a 600ms debounce.
- *  - Structural ops (add/delete/resize/lock/content/cover) flush any pending
- *    layout save first, then run an immediate mutation with an optimistic
- *    local merge; React Query invalidation re-syncs afterwards.
+ *  - Structural ops (add/delete/resize/lock/content/cover) cross the
+ *    proposal-wide autosave barrier first. A failed barrier aborts the
+ *    mutation and stays visible instead of racing a stale layout upsert.
  *  - Server data only overwrites local state when nothing is dirty, so an
  *    in-flight refetch never clobbers a drag in progress.
  *
- * Mount with `key={boardId}` so switching boards remounts (unmount flushes
- * the pending layout for the previous board).
+ * The layout buffer is generation-keyed by boardId, so switching boards drains
+ * and unregisters the previous board even if a parent forgets to remount it.
  */
 export function BoardEditor({ proposalId, projectId, boardId }: BoardEditorProps) {
   const isProject = !!projectId;
@@ -142,21 +140,48 @@ export function BoardEditor({ proposalId, projectId, boardId }: BoardEditorProps
   // B4/B5 — proposal boards only. Board-pin verdicts (read-only chips), live
   // product prices for the drift badge, and the schedule for twin detection.
   const { data: pinVerdicts = [] } = useBoardFeedback(isProject ? undefined : proposalId);
-  const { data: scheduleItems = [] } = useProposalScheduleItems(
-    isProject ? undefined : proposalId,
-  );
+  const { data: scheduleItems = [] } = useProposalScheduleItems(isProject ? undefined : proposalId);
 
   const [items, setItems] = useState<ProposalBoardItem[]>([]);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [pickerOpen, setPickerOpen] = useState(false);
   const [viewMode, setViewMode] = useState<ViewMode>('edit');
   const [snap, setSnap] = useState(false);
+  const [structuralPending, setStructuralPending] = useState(false);
+  const [structuralError, setStructuralError] = useState<string | null>(null);
   // Local mirror of board.sections so section edits feel instant; write-through
   // to the board row happens in persistSections.
   const [sections, setSections] = useState<BoardSection[]>([]);
 
   const itemsRef = useRef<ProposalBoardItem[]>(items);
   itemsRef.current = items;
+  const structuralPendingRef = useRef(false);
+  const retiredLayoutItemIdsRef = useRef(new Set<string>());
+
+  useEffect(() => {
+    setStructuralError(null);
+  }, [boardId, ownerId]);
+
+  const runStructuralMutation = useCallback(
+    async (failureMessage: string, mutation: () => Promise<void>): Promise<boolean> => {
+      if (structuralPendingRef.current) return false;
+      structuralPendingRef.current = true;
+      setStructuralPending(true);
+      setStructuralError(null);
+      try {
+        await runProposalAutosaveAction(ownerId, mutation);
+        return true;
+      } catch (error) {
+        const detail = error instanceof Error ? ` ${error.message}` : '';
+        setStructuralError(`${failureMessage} Nothing was changed.${detail}`);
+        return false;
+      } finally {
+        structuralPendingRef.current = false;
+        setStructuralPending(false);
+      }
+    },
+    [ownerId],
+  );
 
   // ── B4/B5 derivations (product/capture pins) ────────────────────────────────
 
@@ -192,7 +217,11 @@ export function BoardEditor({ proposalId, projectId, boardId }: BoardEditorProps
   const pinSnapshotByItem = useMemo(() => {
     const m = new Map<string, PinScheduleSnapshot>();
     for (const it of items) {
-      const d = (it.data ?? {}) as { name?: string; price_cents?: number; image_url?: string };
+      const d = (it.data ?? {}) as {
+        name?: string;
+        price_cents?: number;
+        image_url?: string;
+      };
       m.set(it.id, {
         type: it.type,
         productId: it.product_id,
@@ -206,18 +235,17 @@ export function BoardEditor({ proposalId, projectId, boardId }: BoardEditorProps
 
   // ── Layout autosave ─────────────────────────────────────────────────────────
 
-  const {
-    queue: queueLayoutPatch,
-    flush: flushLayoutPatch,
-    state: layoutAutosaveState,
-  } = useBufferedAutosave<string, BoardLayoutPatch>({
+  const { queue: queueLayoutPatch, state: layoutAutosaveState } = useBufferedAutosave<string, BoardLayoutPatch>({
     // Project boards never share a SendSheet, but still use their owner id to
     // isolate this editor's buffer and retain lossless unmount behavior.
     proposalId: ownerId,
+    generationKey: boardId,
     delay: LAYOUT_FLUSH_MS,
     save: useCallback(
       async (targetBoardId, positionsById) => {
-        const positions = Object.values(positionsById);
+        const positions = Object.values(positionsById).filter(
+          (position) => !retiredLayoutItemIdsRef.current.has(position.id),
+        );
         if (positions.length === 0) return;
         // mutateAsync is load-bearing: the registry remains in-flight until
         // persistence and central client-copy invalidations have settled.
@@ -233,9 +261,10 @@ export function BoardEditor({ proposalId, projectId, boardId }: BoardEditorProps
 
   const queueLayout = useCallback(
     (changedItems: ProposalBoardItem[]) => {
-      if (changedItems.length === 0) return;
+      const activeItems = changedItems.filter((item) => !retiredLayoutItemIdsRef.current.has(item.id));
+      if (activeItems.length === 0) return;
       const patch: BoardLayoutPatch = {};
-      for (const item of changedItems) {
+      for (const item of activeItems) {
         patch[item.id] = layoutPosition(item);
       }
       queueLayoutPatch(boardId, patch);
@@ -243,18 +272,9 @@ export function BoardEditor({ proposalId, projectId, boardId }: BoardEditorProps
     [boardId, queueLayoutPatch],
   );
 
-  const flushLayout = useCallback(
-    () => flushLayoutPatch(boardId),
-    [boardId, flushLayoutPatch],
-  );
-
-  const flushLayoutRef = useRef(flushLayout);
-  flushLayoutRef.current = flushLayout;
   const layoutAutosaveBlocksSyncRef = useRef(false);
   layoutAutosaveBlocksSyncRef.current =
-    layoutAutosaveState === 'dirty' ||
-    layoutAutosaveState === 'saving' ||
-    layoutAutosaveState === 'error';
+    layoutAutosaveState === 'dirty' || layoutAutosaveState === 'saving' || layoutAutosaveState === 'error';
 
   // ── Server → local sync ─────────────────────────────────────────────────────
 
@@ -277,9 +297,7 @@ export function BoardEditor({ proposalId, projectId, boardId }: BoardEditorProps
 
   /** Optimistically merge field updates into local state. */
   const mergeLocal = useCallback((itemId: string, patch: Partial<ProposalBoardItem>) => {
-    const next = itemsRef.current.map((item) =>
-      item.id === itemId ? { ...item, ...patch } : item,
-    );
+    const next = itemsRef.current.map((item) => (item.id === itemId ? { ...item, ...patch } : item));
     itemsRef.current = next;
     setItems(next);
   }, []);
@@ -287,6 +305,9 @@ export function BoardEditor({ proposalId, projectId, boardId }: BoardEditorProps
   /** Merge a layout field and synchronously register its persisted snapshot. */
   const mergeLocalLayout = useCallback(
     (itemId: string, patch: Partial<ProposalBoardItem>) => {
+      if (structuralPendingRef.current || retiredLayoutItemIdsRef.current.has(itemId)) {
+        return;
+      }
       let changedItem: ProposalBoardItem | null = null;
       const next = itemsRef.current.map((item) => {
         if (item.id !== itemId) return item;
@@ -301,32 +322,28 @@ export function BoardEditor({ proposalId, projectId, boardId }: BoardEditorProps
     [queueLayout],
   );
 
-  /** Immediate field mutation (flushes pending layout first). */
+  /** Immediate field mutation after the proposal-wide layout barrier. */
   const commitField = useCallback(
     (itemId: string, patch: Partial<ProposalBoardItem>) => {
-      void flushLayoutRef.current();
-      mergeLocal(itemId, patch);
-      updateItem.mutate({
-        itemId,
-        boardId,
-        proposalId,
-        ...(patch.width !== undefined ? { width: Number(patch.width) } : {}),
-        ...(patch.height !== undefined
-          ? { height: patch.height === null ? null : Number(patch.height) }
-          : {}),
-        ...(patch.locked !== undefined ? { locked: patch.locked } : {}),
-        ...(patch.content !== undefined ? { content: patch.content } : {}),
-        ...(patch.z_index !== undefined ? { zIndex: patch.z_index } : {}),
-        ...(patch.rotation !== undefined ? { rotation: Number(patch.rotation) } : {}),
+      void runStructuralMutation('The item could not be updated.', async () => {
+        await updateItem.mutateAsync({
+          itemId,
+          boardId,
+          proposalId,
+          ...(patch.width !== undefined ? { width: Number(patch.width) } : {}),
+          ...(patch.height !== undefined ? { height: patch.height === null ? null : Number(patch.height) } : {}),
+          ...(patch.locked !== undefined ? { locked: patch.locked } : {}),
+          ...(patch.content !== undefined ? { content: patch.content } : {}),
+          ...(patch.z_index !== undefined ? { zIndex: patch.z_index } : {}),
+          ...(patch.rotation !== undefined ? { rotation: Number(patch.rotation) } : {}),
+        });
+        mergeLocal(itemId, patch);
       });
     },
-    [boardId, mergeLocal, proposalId, updateItem],
+    [boardId, mergeLocal, proposalId, runStructuralMutation, updateItem],
   );
 
-  const nextZ = useCallback(
-    () => itemsRef.current.reduce((max, i) => Math.max(max, i.z_index), 0) + 1,
-    [],
-  );
+  const nextZ = useCallback(() => itemsRef.current.reduce((max, i) => Math.max(max, i.z_index), 0) + 1, []);
 
   /**
    * Add an item near the canvas center, cascading each new item 32px
@@ -336,19 +353,18 @@ export function BoardEditor({ proposalId, projectId, boardId }: BoardEditorProps
   const addItemToBoard = useCallback(
     (input: Omit<AddBoardItemInput, 'boardId' | 'x' | 'y' | 'zIndex'>) => {
       if (!board) return;
-      void flushLayoutRef.current();
-      const size = DEFAULT_SIZE[input.type] ?? { width: 240, height: null };
-      const cascade = (itemsRef.current.length % 8) * 32;
-      const x = Math.min(
-        Math.max(0, board.canvas_width / 2 - size.width / 2 + cascade),
-        Math.max(0, board.canvas_width - size.width),
-      );
-      const y = Math.min(
-        Math.max(0, board.canvas_height / 2 - (size.height ?? 220) / 2 + cascade),
-        Math.max(0, board.canvas_height - (size.height ?? 220)),
-      );
-      addItem.mutate(
-        {
+      void runStructuralMutation('The item could not be added.', async () => {
+        const size = DEFAULT_SIZE[input.type] ?? { width: 240, height: null };
+        const cascade = (itemsRef.current.length % 8) * 32;
+        const x = Math.min(
+          Math.max(0, board.canvas_width / 2 - size.width / 2 + cascade),
+          Math.max(0, board.canvas_width - size.width),
+        );
+        const y = Math.min(
+          Math.max(0, board.canvas_height / 2 - (size.height ?? 220) / 2 + cascade),
+          Math.max(0, board.canvas_height - (size.height ?? 220)),
+        );
+        const item = await addItem.mutateAsync({
           boardId,
           proposalId,
           x,
@@ -357,90 +373,118 @@ export function BoardEditor({ proposalId, projectId, boardId }: BoardEditorProps
           width: input.width ?? size.width,
           height: input.height !== undefined ? input.height : size.height,
           ...input,
-        },
-        {
-          onSuccess: (item) => {
-            setItems((prev) => (prev.some((p) => p.id === item.id) ? prev : [...prev, item]));
-            setSelectedId(item.id);
-          },
-        },
-      );
+        });
+        setItems((prev) => (prev.some((p) => p.id === item.id) ? prev : [...prev, item]));
+        setSelectedId(item.id);
+      });
     },
-    [addItem, board, boardId, nextZ, proposalId],
+    [addItem, board, boardId, nextZ, proposalId, runStructuralMutation],
   );
 
   const handleDeleteItem = useCallback(
     (itemId: string) => {
-      void flushLayoutRef.current();
-      setItems((prev) => prev.filter((i) => i.id !== itemId));
-      setSelectedId((sel) => (sel === itemId ? null : sel));
-      deleteItem.mutate({ itemId, boardId, proposalId });
+      void runStructuralMutation('The item could not be deleted.', async () => {
+        // Retire the id before the delete request. Any late BoardCanvas event
+        // or detached drain is filtered from the layout upsert, so the deleted
+        // row cannot be recreated after the mutation wins.
+        retiredLayoutItemIdsRef.current.add(itemId);
+        try {
+          await deleteItem.mutateAsync({ itemId, boardId, proposalId });
+        } catch (error) {
+          retiredLayoutItemIdsRef.current.delete(itemId);
+          throw error;
+        }
+        const next = itemsRef.current.filter((item) => item.id !== itemId);
+        itemsRef.current = next;
+        setItems(next);
+        setSelectedId((selected) => (selected === itemId ? null : selected));
+      });
     },
-    [boardId, deleteItem, proposalId],
+    [boardId, deleteItem, proposalId, runStructuralMutation],
   );
 
   // ── Sections ──────────────────────────────────────────────────────────────
 
-  const { mutate: upsertBoardMutate } = upsertBoard;
-
-  /** Optimistic local set + write-through to proposal_boards.sections. */
+  /** Persist first, then mirror proposal_boards.sections locally. */
   const persistSections = useCallback(
     (next: BoardSection[]) => {
-      setSections(next);
-      upsertBoardMutate({ proposalId, boardId, sections: next });
+      void runStructuralMutation('The board sections could not be updated.', async () => {
+        await upsertBoard.mutateAsync({
+          proposalId,
+          boardId,
+          sections: next,
+        });
+        setSections(next);
+      });
     },
-    [proposalId, boardId, upsertBoardMutate],
+    [proposalId, boardId, runStructuralMutation, upsertBoard],
   );
 
   /** Assign (or clear, sectionId=null) the selected item's section membership. */
   const assignSection = useCallback(
     (itemId: string, sectionId: string | null) => {
-      void flushLayoutRef.current();
       const item = itemsRef.current.find((i) => i.id === itemId);
       if (!item) return;
       const nextData = { ...(item.data ?? {}), section_id: sectionId };
-      mergeLocal(itemId, { data: nextData });
-      updateItem.mutate({ itemId, boardId, proposalId, data: nextData });
+      void runStructuralMutation('The item section could not be updated.', async () => {
+        await updateItem.mutateAsync({
+          itemId,
+          boardId,
+          proposalId,
+          data: nextData,
+        });
+        mergeLocal(itemId, { data: nextData });
+      });
     },
-    [boardId, mergeLocal, proposalId, updateItem],
+    [boardId, mergeLocal, proposalId, runStructuralMutation, updateItem],
   );
 
   /**
    * Auto-lay-out every item into a tidy grid (grouped by section when sections
-   * exist). Writes ONLY x/y through the same dirty→debounced-flush path a drag
-   * uses, so freeform editing keeps working afterward.
+   * exist). Persists the full layout batch behind the proposal barrier, then
+   * updates local state only after that write succeeds.
    */
   const handleArrange = useCallback(() => {
     if (!board) return;
-    const arrangeItems: ArrangeItem[] = itemsRef.current.map((it) => ({
-      id: it.id,
-      type: it.type,
-      width: Number(it.width),
-      height: it.height === null ? null : Number(it.height),
-      data: it.data as { section_id?: string | null } | null,
-    }));
-    const positions = arrangeBoardItems(arrangeItems, sections, {
-      canvasWidth: board.canvas_width,
+    void runStructuralMutation('The board could not be arranged.', async () => {
+      const arrangeItems: ArrangeItem[] = itemsRef.current.map((it) => ({
+        id: it.id,
+        type: it.type,
+        width: Number(it.width),
+        height: it.height === null ? null : Number(it.height),
+        data: it.data as { section_id?: string | null } | null,
+      }));
+      const positions = arrangeBoardItems(arrangeItems, sections, {
+        canvasWidth: board.canvas_width,
+      });
+      if (positions.length === 0) return;
+      const byId = new Map(positions.map((position) => [position.id, position]));
+      const changedItems: ProposalBoardItem[] = [];
+      const nextItems = itemsRef.current.map((item) => {
+        const position = byId.get(item.id);
+        if (!position || (Number(item.x) === position.x && Number(item.y) === position.y)) {
+          return item;
+        }
+        const changed = { ...item, x: position.x, y: position.y };
+        changedItems.push(changed);
+        return changed;
+      });
+      if (changedItems.length === 0) return;
+      await saveLayoutAsync({
+        boardId,
+        proposalId,
+        positions: changedItems.map(layoutPosition),
+      });
+      itemsRef.current = nextItems;
+      setItems(nextItems);
     });
-    if (positions.length === 0) return;
-    const byId = new Map(positions.map((p) => [p.id, p]));
-    const changedItems: ProposalBoardItem[] = [];
-    const nextItems = itemsRef.current.map((it) => {
-      const pos = byId.get(it.id);
-      if (!pos || (Number(it.x) === pos.x && Number(it.y) === pos.y)) return it;
-      const changed = { ...it, x: pos.x, y: pos.y };
-      changedItems.push(changed);
-      return changed;
-    });
-    itemsRef.current = nextItems;
-    setItems(nextItems);
-    queueLayout(changedItems);
-  }, [board, queueLayout, sections]);
+  }, [board, boardId, proposalId, runStructuralMutation, saveLayoutAsync, sections]);
 
   // ── Canvas callbacks ────────────────────────────────────────────────────────
 
   const handleItemsChange = useCallback(
     (next: BoardItem[]) => {
+      if (structuralPendingRef.current) return;
       const changedItems: ProposalBoardItem[] = [];
       const nextItems = itemsRef.current.map((p) => {
         const n = next.find((i) => String(i.id) === p.id);
@@ -449,12 +493,7 @@ export function BoardEditor({ proposalId, projectId, boardId }: BoardEditorProps
         const ny = n.position.y;
         const nz = n.zIndex ?? 0;
         const nr = n.rotation ?? 0;
-        if (
-          nx !== Number(p.x) ||
-          ny !== Number(p.y) ||
-          nz !== p.z_index ||
-          nr !== Number(p.rotation)
-        ) {
+        if (nx !== Number(p.x) || ny !== Number(p.y) || nz !== p.z_index || nr !== Number(p.rotation)) {
           const changed = {
             ...p,
             x: nx,
@@ -491,6 +530,19 @@ export function BoardEditor({ proposalId, projectId, boardId }: BoardEditorProps
       });
     },
     [addItemToBoard],
+  );
+
+  const handleSetCover = useCallback(
+    (imageUrl: string) => {
+      void runStructuralMutation('The board cover could not be updated.', async () => {
+        await upsertBoard.mutateAsync({
+          proposalId,
+          boardId,
+          coverImageUrl: imageUrl,
+        });
+      });
+    },
+    [boardId, proposalId, runStructuralMutation, upsertBoard],
   );
 
   // ── Render ──────────────────────────────────────────────────────────────────
@@ -591,6 +643,11 @@ export function BoardEditor({ proposalId, projectId, boardId }: BoardEditorProps
     <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_300px]">
       {/* Canvas column */}
       <div className="space-y-2">
+        {structuralError && (
+          <p role="alert" className="rounded-md border border-red-200 bg-red-50 px-3 py-2 text-xs text-red-800">
+            {structuralError}
+          </p>
+        )}
         <BoardViewToolbar
           viewMode={viewMode}
           onViewMode={setViewMode}
@@ -598,6 +655,7 @@ export function BoardEditor({ proposalId, projectId, boardId }: BoardEditorProps
           onToggleSnap={() => setSnap((s) => !s)}
           onArrange={handleArrange}
           itemCount={items.length}
+          disabled={structuralPending}
         />
 
         {viewMode === 'edit' ? (
@@ -647,7 +705,7 @@ export function BoardEditor({ proposalId, projectId, boardId }: BoardEditorProps
       </div>
 
       {/* Sidebar */}
-      <div className="space-y-4">
+      <fieldset disabled={structuralPending} className="min-w-0 space-y-4 border-0 p-0">
         {viewMode !== 'edit' ? (
           <div className="rounded-md border border-[var(--border-default)] bg-[var(--bg-muted)] px-4 py-3 text-xs text-[var(--text-muted)]">
             Previewing the client&rsquo;s view
@@ -674,13 +732,10 @@ export function BoardEditor({ proposalId, projectId, boardId }: BoardEditorProps
                 }}
                 onAssignSection={assignSection}
                 onDelete={handleDeleteItem}
-                onSetCover={(imageUrl) =>
-                  upsertBoard.mutate({ proposalId, boardId, coverImageUrl: imageUrl })
-                }
+                onSetCover={handleSetCover}
+                disabled={structuralPending}
                 sendToSchedule={
-                  !isProject &&
-                  proposalId &&
-                  (selected.type === 'product' || selected.type === 'capture') ? (
+                  !isProject && proposalId && (selected.type === 'product' || selected.type === 'capture') ? (
                     <SendToScheduleControl
                       proposalId={proposalId}
                       snap={pinSnapshotByItem.get(selected.id)!}
@@ -729,7 +784,7 @@ export function BoardEditor({ proposalId, projectId, boardId }: BoardEditorProps
             <AddNoteSection onAdd={addItemToBoard} />
           </>
         )}
-      </div>
+      </fieldset>
 
       <ProductPickerModal
         open={pickerOpen}
@@ -771,6 +826,7 @@ function BoardViewToolbar({
   onToggleSnap,
   onArrange,
   itemCount,
+  disabled,
 }: {
   viewMode: ViewMode;
   onViewMode: (mode: ViewMode) => void;
@@ -778,6 +834,7 @@ function BoardViewToolbar({
   onToggleSnap: () => void;
   onArrange: () => void;
   itemCount: number;
+  disabled: boolean;
 }) {
   return (
     <div className="flex flex-wrap items-center justify-between gap-2">
@@ -806,10 +863,11 @@ function BoardViewToolbar({
             size="sm"
             onClick={onToggleSnap}
             aria-pressed={snap}
+            disabled={disabled}
           >
             {snap ? 'Snap: on' : 'Snap: off'}
           </Button>
-          <Button variant="secondary" size="sm" onClick={onArrange} disabled={itemCount === 0}>
+          <Button variant="secondary" size="sm" onClick={onArrange} disabled={disabled || itemCount === 0}>
             Arrange
           </Button>
         </div>
@@ -848,11 +906,7 @@ function BoardSectionsPanel({
           ))}
         </div>
       )}
-      <Button
-        variant="ghost"
-        size="sm"
-        onClick={() => onChange(addSection(sections, ''))}
-      >
+      <Button variant="ghost" size="sm" onClick={() => onChange(addSection(sections, ''))}>
         + Add section
       </Button>
     </SidebarSection>
@@ -942,9 +996,13 @@ function AddPaletteSection({
           paletteId: palette.id,
           data: {
             name: palette.name,
-            swatches: ((swatches ?? []) as Array<{ hex: string; role: string | null; name: string | null }>).map(
-              (s) => ({ hex: s.hex, role: s.role, name: s.name }),
-            ),
+            swatches: (
+              (swatches ?? []) as Array<{
+                hex: string;
+                role: string | null;
+                name: string | null;
+              }>
+            ).map((s) => ({ hex: s.hex, role: s.role, name: s.name })),
           },
         });
       } finally {
@@ -967,12 +1025,7 @@ function AddPaletteSection({
           {palettes.map((p) => (
             <div key={p.id} className="flex items-center justify-between gap-2">
               <span className="truncate text-sm">{p.name}</span>
-              <Button
-                variant="ghost"
-                size="sm"
-                disabled={addingId === p.id}
-                onClick={() => void handleAdd(p)}
-              >
+              <Button variant="ghost" size="sm" disabled={addingId === p.id} onClick={() => void handleAdd(p)}>
                 {addingId === p.id ? 'Adding…' : 'Add'}
               </Button>
             </div>
@@ -1041,18 +1094,11 @@ function RoomScansSection({
             style={{ aspectRatio: '4 / 3' }}
           >
             {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img
-              src={scan.thumbnail_url ?? ''}
-              alt={scan.name}
-              loading="lazy"
-              className="h-full w-full object-cover"
-            />
+            <img src={scan.thumbnail_url ?? ''} alt={scan.name} loading="lazy" className="h-full w-full object-cover" />
           </button>
         ))}
       </div>
-      <p className="mt-2 text-[0.65rem] text-[var(--text-muted)]">
-        Click a scan to drop it on the board.
-      </p>
+      <p className="mt-2 text-[0.65rem] text-[var(--text-muted)]">Click a scan to drop it on the board.</p>
     </SidebarSection>
   );
 }
@@ -1111,12 +1157,7 @@ function UploadImageSection({
           e.target.value = '';
         }}
       />
-      <Button
-        variant="secondary"
-        size="sm"
-        disabled={uploading}
-        onClick={() => fileInputRef.current?.click()}
-      >
+      <Button variant="secondary" size="sm" disabled={uploading} onClick={() => fileInputRef.current?.click()}>
         {uploading ? 'Uploading…' : '+ Upload image'}
       </Button>
       {errorMessage && (
@@ -1172,6 +1213,7 @@ interface ItemInspectorProps {
   onAssignSection: (itemId: string, sectionId: string | null) => void;
   onDelete: (itemId: string) => void;
   onSetCover: (imageUrl: string) => void;
+  disabled: boolean;
   /** "Send to the schedule" control for product/capture pins (B5); parent-built. */
   sendToSchedule?: React.ReactNode;
 }
@@ -1194,11 +1236,11 @@ function ItemInspector({
   onAssignSection,
   onDelete,
   onSetCover,
+  disabled,
   sendToSchedule,
 }: ItemInspectorProps) {
   const imageUrl = itemImageUrl(item);
-  const currentSectionId =
-    (item.data as { section_id?: string | null } | null)?.section_id ?? '';
+  const currentSectionId = (item.data as { section_id?: string | null } | null)?.section_id ?? '';
 
   const bringForward = () => {
     const maxZ = items.reduce((m, i) => Math.max(m, i.z_index), 0);
@@ -1231,7 +1273,7 @@ function ItemInspector({
         </IconButton>
       </div>
 
-      <div className="space-y-3">
+      <fieldset disabled={disabled} className="space-y-3">
         {/* Size */}
         <div>
           <span className="mb-1 block text-xs text-[var(--text-muted)]">Size</span>
@@ -1322,11 +1364,7 @@ function ItemInspector({
 
         {/* Lock / cover / delete */}
         <div className="flex flex-wrap gap-1.5 border-t border-[var(--border-default)] pt-3">
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={() => onCommitField(item.id, { locked: !item.locked })}
-          >
+          <Button variant="ghost" size="sm" onClick={() => onCommitField(item.id, { locked: !item.locked })}>
             {item.locked ? 'Unlock' : 'Lock'}
           </Button>
           {imageUrl && (
@@ -1334,38 +1372,25 @@ function ItemInspector({
               Set as cover
             </Button>
           )}
-          <Button
-            variant="ghost"
-            size="sm"
-            className="!text-red-700"
-            onClick={() => onDelete(item.id)}
-          >
+          <Button variant="ghost" size="sm" className="!text-red-700" onClick={() => onDelete(item.id)}>
             Delete
           </Button>
         </div>
 
         {/* Send this pin to the schedule (B5) — parent supplies the control for
             product/capture pins on a proposal board. */}
-        {sendToSchedule && (
-          <div className="border-t border-[var(--border-default)] pt-3">{sendToSchedule}</div>
-        )}
+        {sendToSchedule && <div className="border-t border-[var(--border-default)] pt-3">{sendToSchedule}</div>}
 
         {/* Extract palette from image-bearing items (proposal boards only) */}
         {imageUrl && proposalId && (
           <ExtractPalettePanel proposalId={proposalId} boardName={boardName} imageUrl={imageUrl} />
         )}
-      </div>
+      </fieldset>
     </div>
   );
 }
 
-function NoteContentEditor({
-  content,
-  onCommit,
-}: {
-  content: string;
-  onCommit: (next: string) => void;
-}) {
+function NoteContentEditor({ content, onCommit }: { content: string; onCommit: (next: string) => void }) {
   const [draft, setDraft] = useState(content);
   return (
     <div>
@@ -1426,11 +1451,7 @@ function ExtractPalettePanel({
       </Button>
       {open && (
         <div className="mt-2">
-          <ImagePaletteExtractor
-            imageUrl={imageUrl}
-            k={5}
-            onExtracted={(swatches) => void handleExtracted(swatches)}
-          />
+          <ImagePaletteExtractor imageUrl={imageUrl} k={5} onExtracted={(swatches) => void handleExtracted(swatches)} />
           {created && (
             <p className="mt-2 text-xs text-[var(--text-muted)]">
               Saved as “{boardName} palette” — see the Palette tab.
@@ -1459,7 +1480,15 @@ function VerdictPill({ label, color }: { label: string; color: string }) {
         border: '1px solid var(--border-default)',
       }}
     >
-      <span aria-hidden style={{ width: 6, height: 6, borderRadius: 9999, backgroundColor: color }} />
+      <span
+        aria-hidden
+        style={{
+          width: 6,
+          height: 6,
+          borderRadius: 9999,
+          backgroundColor: color,
+        }}
+      />
       {label}
     </span>
   );
@@ -1505,9 +1534,11 @@ function SendToScheduleControl({
   scheduleItems: ScheduleLineRef[];
 }) {
   const addItem = useAddProposalItem();
-  const [status, setStatus] = useState<
-    null | { kind: 'added' | 'exists'; docCode: string | null; name: string | null }
-  >(null);
+  const [status, setStatus] = useState<null | {
+    kind: 'added' | 'exists';
+    docCode: string | null;
+    name: string | null;
+  }>(null);
   const [error, setError] = useState<string | null>(null);
 
   // A line already on this schedule for this product in this room (idempotence).
@@ -1544,12 +1575,7 @@ function SendToScheduleControl({
 
   return (
     <div>
-      <Button
-        variant="ghost"
-        size="sm"
-        disabled={addItem.isPending}
-        onClick={() => void handleSend()}
-      >
+      <Button variant="ghost" size="sm" disabled={addItem.isPending} onClick={() => void handleSend()}>
         {addItem.isPending ? 'Sending…' : twin ? 'Already on the schedule' : 'Send to the schedule'}
       </Button>
       {error && (

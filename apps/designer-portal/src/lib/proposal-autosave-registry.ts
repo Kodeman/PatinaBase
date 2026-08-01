@@ -26,13 +26,11 @@ export class ProposalAutosaveBarrierError extends Error {
   }
 }
 
-const handlesByProposal = new Map<
-  string,
-  Map<symbol, ProposalAutosaveHandle>
->();
+const handlesByProposal = new Map<string, Map<symbol, ProposalAutosaveHandle>>();
 const listenersByProposal = new Map<string, Set<() => void>>();
 const snapshotsByProposal = new Map<string, ProposalAutosaveSnapshot>();
 const activeFlushes = new Map<string, Promise<void>>();
+const proposalActionTails = new Map<string, Promise<void>>();
 
 function emptySnapshot(revision = 0): ProposalAutosaveSnapshot {
   return {
@@ -44,19 +42,14 @@ function emptySnapshot(revision = 0): ProposalAutosaveSnapshot {
   };
 }
 
-function recomputeProposalAutosaves(
-  proposalId: string,
-): ProposalAutosaveSnapshot {
+function recomputeProposalAutosaves(proposalId: string): ProposalAutosaveSnapshot {
   const handles = handlesByProposal.get(proposalId);
   const previous = snapshotsByProposal.get(proposalId) ?? emptySnapshot();
-  const bufferSnapshots = handles
-    ? [...handles.values()].map((handle) => handle.getSnapshot())
-    : [];
+  const bufferSnapshots = handles ? [...handles.values()].map((handle) => handle.getSnapshot()) : [];
   const next: ProposalAutosaveSnapshot = {
     dirty: bufferSnapshots.some((snapshot) => snapshot.dirty),
     flushing: bufferSnapshots.some((snapshot) => snapshot.flushing),
-    error:
-      bufferSnapshots.find((snapshot) => snapshot.error)?.error ?? null,
+    error: bufferSnapshots.find((snapshot) => snapshot.error)?.error ?? null,
     registeredBuffers: bufferSnapshots.length,
     revision: previous.revision + 1,
   };
@@ -93,10 +86,7 @@ export function registerProposalAutosave(
   };
 }
 
-export function subscribeToProposalAutosaves(
-  proposalId: string,
-  listener: () => void,
-): () => void {
+export function subscribeToProposalAutosaves(proposalId: string, listener: () => void): () => void {
   const listeners = listenersByProposal.get(proposalId) ?? new Set();
   listeners.add(listener);
   listenersByProposal.set(proposalId, listeners);
@@ -106,9 +96,7 @@ export function subscribeToProposalAutosaves(
   };
 }
 
-export function getProposalAutosaveSnapshot(
-  proposalId: string,
-): ProposalAutosaveSnapshot {
+export function getProposalAutosaveSnapshot(proposalId: string): ProposalAutosaveSnapshot {
   const existing = snapshotsByProposal.get(proposalId);
   if (existing) return existing;
   const initial = emptySnapshot();
@@ -116,9 +104,7 @@ export function getProposalAutosaveSnapshot(
   return initial;
 }
 
-export function isProposalAutosaveSnapshotClean(
-  snapshot: ProposalAutosaveSnapshot,
-): boolean {
+export function isProposalAutosaveSnapshotClean(snapshot: ProposalAutosaveSnapshot): boolean {
   return !snapshot.dirty && !snapshot.flushing && !snapshot.error;
 }
 
@@ -127,9 +113,7 @@ export function isProposalAutosaveSnapshotClean(
  * ordering matters when a failed, detached editor and its remounted successor
  * both own a patch for the same row: the newer buffer must write last.
  */
-export async function flushProposalAutosaves(
-  proposalId: string,
-): Promise<void> {
+export async function flushProposalAutosaves(proposalId: string): Promise<void> {
   const active = activeFlushes.get(proposalId);
   if (active) return active;
 
@@ -137,9 +121,7 @@ export async function flushProposalAutosaves(
     // A patch can be queued while another buffer is draining. Make a bounded
     // second pass, then fail closed instead of reviewing an unstable draft.
     for (let pass = 0; pass < 3; pass += 1) {
-      const handles = [
-        ...(handlesByProposal.get(proposalId)?.values() ?? []),
-      ];
+      const handles = [...(handlesByProposal.get(proposalId)?.values() ?? [])];
       for (const handle of handles) {
         try {
           await handle.flush();
@@ -157,9 +139,7 @@ export async function flushProposalAutosaves(
       const snapshot = recomputeProposalAutosaves(proposalId);
       if (isProposalAutosaveSnapshotClean(snapshot)) return;
       if (snapshot.error) {
-        throw new ProposalAutosaveBarrierError(
-          `Proposal edits could not be saved: ${snapshot.error}`,
-        );
+        throw new ProposalAutosaveBarrierError(`Proposal edits could not be saved: ${snapshot.error}`);
       }
     }
 
@@ -178,10 +158,59 @@ export async function flushProposalAutosaves(
   }
 }
 
+/**
+ * Serialize an immediate proposal mutation behind every buffered editor, then
+ * expose that mutation as a temporary barrier handle until it settles. This
+ * keeps board/item structural actions ordered with each other and prevents a
+ * concurrent Send or board switch from passing while an immediate write is in
+ * flight.
+ */
+export async function runProposalAutosaveAction<Result>(
+  proposalId: string,
+  action: () => Promise<Result>,
+): Promise<Result> {
+  const previous = proposalActionTails.get(proposalId) ?? Promise.resolve();
+
+  const run = previous
+    .catch(() => undefined)
+    .then(async () => {
+      await flushProposalAutosaves(proposalId);
+
+      let actionPromise!: Promise<Result>;
+      const registration = registerProposalAutosave(proposalId, {
+        getSnapshot: () => ({ dirty: true, flushing: true, error: null }),
+        flush: async () => {
+          await actionPromise;
+        },
+      });
+      actionPromise = Promise.resolve().then(action);
+
+      try {
+        return await actionPromise;
+      } finally {
+        registration.unregister();
+      }
+    });
+
+  const settled = run.then(
+    () => undefined,
+    () => undefined,
+  );
+  proposalActionTails.set(proposalId, settled);
+  try {
+    return await run;
+  } finally {
+    if (proposalActionTails.get(proposalId) === settled) {
+      proposalActionTails.delete(proposalId);
+    }
+  }
+}
+
 /** Test isolation for the module-level external store. */
 export function resetProposalAutosaveRegistryForTests(): void {
   handlesByProposal.clear();
   listenersByProposal.clear();
   snapshotsByProposal.clear();
   activeFlushes.clear();
+  proposalActionTails.clear();
 }

@@ -3,24 +3,23 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { registerProposalAutosave } from '@/lib/proposal-autosave-registry';
 
-export type BufferedAutosaveState =
-  | 'idle'
-  | 'dirty'
-  | 'saving'
-  | 'saved'
-  | 'error';
+export type BufferedAutosaveState = 'idle' | 'dirty' | 'saving' | 'saved' | 'error';
 
 interface BufferedAutosaveOptions<Key extends string, Patch extends object> {
   proposalId: string;
+  /**
+   * Optional editor identity within a proposal. Changing it retires the old
+   * buffer generation (after a final drain) instead of letting row keys from
+   * the previous editor share the new editor's save callback.
+   */
+  generationKey?: string;
   save: (key: Key, patch: Patch) => Promise<unknown>;
   delay?: number;
 }
 
-interface BufferedAutosaveGeneration<
-  Key extends string,
-  Patch extends object,
-> {
+interface BufferedAutosaveGeneration<Key extends string, Patch extends object> {
   proposalId: string;
+  generationKey: string;
   save: (key: Key, patch: Patch) => Promise<unknown>;
   pending: Map<Key, Patch>;
   timers: Map<Key, ReturnType<typeof setTimeout>>;
@@ -34,10 +33,12 @@ interface BufferedAutosaveGeneration<
 
 function createGeneration<Key extends string, Patch extends object>(
   proposalId: string,
+  generationKey: string,
   save: (key: Key, patch: Patch) => Promise<unknown>,
 ): BufferedAutosaveGeneration<Key, Patch> {
   return {
     proposalId,
+    generationKey,
     save,
     pending: new Map(),
     timers: new Map(),
@@ -50,9 +51,7 @@ function createGeneration<Key extends string, Patch extends object>(
   };
 }
 
-function firstBufferedError<Key extends string>(
-  errors: Map<Key, string>,
-): string | null {
+function firstBufferedError<Key extends string>(errors: Map<Key, string>): string | null {
   return errors.values().next().value ?? null;
 }
 
@@ -62,23 +61,23 @@ function firstBufferedError<Key extends string>(
  * Patches queued for the same row are merged, saves for a row are serialized,
  * blur can flush explicitly, and unmount starts a final drain instead of
  * clearing the timer and dropping the designer's last keystrokes. Each
- * proposal owns an isolated generation so a prop change can never drain the
- * old proposal through the new proposal's save callback or registry handle.
+ * Each proposal/editor identity owns an isolated generation so a prop change
+ * can never drain the old editor through the new editor's save callback or
+ * registry handle.
  */
 export function useBufferedAutosave<Key extends string, Patch extends object>({
   proposalId,
+  generationKey = proposalId,
   save,
   delay = 600,
 }: BufferedAutosaveOptions<Key, Patch>) {
-  const generationRef = useRef<BufferedAutosaveGeneration<
-    Key,
-    Patch
-  > | null>(null);
+  const generationRef = useRef<BufferedAutosaveGeneration<Key, Patch> | null>(null);
   if (
     !generationRef.current ||
-    generationRef.current.proposalId !== proposalId
+    generationRef.current.proposalId !== proposalId ||
+    generationRef.current.generationKey !== generationKey
   ) {
-    generationRef.current = createGeneration(proposalId, save);
+    generationRef.current = createGeneration(proposalId, generationKey, save);
   } else {
     // Same proposal, newer render: future drains may use the latest callback.
     // A drain snapshots this callback when it starts, and a proposal change
@@ -93,15 +92,8 @@ export function useBufferedAutosave<Key extends string, Patch extends object>({
   const [error, setError] = useState<string | null>(null);
 
   const updateMountedState = useCallback(
-    (
-      target: BufferedAutosaveGeneration<Key, Patch>,
-      nextState: BufferedAutosaveState,
-      nextError: string | null,
-    ) => {
-      if (
-        target.mounted &&
-        activeGenerationRef.current === target
-      ) {
+    (target: BufferedAutosaveGeneration<Key, Patch>, nextState: BufferedAutosaveState, nextError: string | null) => {
+      if (target.mounted && activeGenerationRef.current === target) {
         setState(nextState);
         setError(nextError);
       }
@@ -130,11 +122,7 @@ export function useBufferedAutosave<Key extends string, Patch extends object>({
       generation.errors.delete(key);
       generation.notify();
       const remainingError = firstBufferedError(generation.errors);
-      updateMountedState(
-        generation,
-        remainingError ? 'error' : 'saving',
-        remainingError,
-      );
+      updateMountedState(generation, remainingError ? 'error' : 'saving', remainingError);
 
       // Bind this entire serialized drain to the callback active for this
       // proposal generation when the drain began. A rerender cannot redirect
@@ -152,10 +140,7 @@ export function useBufferedAutosave<Key extends string, Patch extends object>({
               ...patch,
               ...generation.pending.get(key),
             });
-            const message =
-              saveError instanceof Error
-                ? saveError.message
-                : 'The latest changes could not be saved.';
+            const message = saveError instanceof Error ? saveError.message : 'The latest changes could not be saved.';
             generation.errors.set(key, message);
             generation.notify();
             updateMountedState(generation, 'error', message);
@@ -164,16 +149,10 @@ export function useBufferedAutosave<Key extends string, Patch extends object>({
         }
 
         const finalError = firstBufferedError(generation.errors);
-        const otherRowsAreSaving = [...generation.inFlight.keys()].some(
-          (activeKey) => activeKey !== key,
-        );
+        const otherRowsAreSaving = [...generation.inFlight.keys()].some((activeKey) => activeKey !== key);
         updateMountedState(
           generation,
-          finalError
-            ? 'error'
-            : otherRowsAreSaving || generation.pending.size > 0
-              ? 'saving'
-              : 'saved',
+          finalError ? 'error' : otherRowsAreSaving || generation.pending.size > 0 ? 'saving' : 'saved',
           finalError,
         );
       };
@@ -203,11 +182,7 @@ export function useBufferedAutosave<Key extends string, Patch extends object>({
       const remainingError = firstBufferedError(generation.errors);
       updateMountedState(
         generation,
-        remainingError
-          ? 'error'
-          : generation.inFlight.has(key)
-            ? 'saving'
-            : 'dirty',
+        remainingError ? 'error' : generation.inFlight.has(key) ? 'saving' : 'dirty',
         remainingError,
       );
 
@@ -224,10 +199,7 @@ export function useBufferedAutosave<Key extends string, Patch extends object>({
   );
 
   const flushAll = useCallback(async () => {
-    const keys = new Set<Key>([
-      ...generation.pending.keys(),
-      ...generation.inFlight.keys(),
-    ]);
+    const keys = new Set<Key>([...generation.pending.keys(), ...generation.inFlight.keys()]);
     await Promise.all([...keys].map((key) => generation.flush(key)));
     const bufferedError = firstBufferedError(generation.errors);
     if (bufferedError) throw new Error(bufferedError);

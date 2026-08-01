@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useState } from 'react';
+import { useCallback, useRef, useState } from 'react';
 import { Button, IconButton, Input, Select } from '@/components/ui/controls';
 import {
   AlertDialog,
@@ -24,6 +24,7 @@ import {
   type ProposalScopeRoom,
 } from '@patina/supabase';
 import { downloadSpecPdf } from '@/lib/scope/spec-pdf-client';
+import { runProposalAutosaveAction } from '@/lib/proposal-autosave-registry';
 import { BoardEditor } from './board-editor';
 
 type StatusFilter = 'active' | 'archived';
@@ -54,12 +55,38 @@ export function BoardsBuilder({ proposalId, projectId }: BoardsBuilderProps) {
   const upsertBoard = useUpsertBoard();
   const duplicateBoard = useDuplicateBoard();
   const deleteBoard = useDeleteBoard();
+  const ownerId = projectId ?? proposalId;
 
   // The owner arg for INSERTs (new board). Updates key on boardId and ignore it.
   const ownerArg = isProject ? { projectId } : { proposalId };
 
   const [pdfBusy, setPdfBusy] = useState(false);
   const [pdfError, setPdfError] = useState<string | null>(null);
+  const [boardActionPending, setBoardActionPending] = useState(false);
+  const [boardActionError, setBoardActionError] = useState<string | null>(null);
+  const boardActionPendingRef = useRef(false);
+
+  const runBoardAction = useCallback(
+    async (failureMessage: string, action: () => Promise<void>): Promise<boolean> => {
+      if (boardActionPendingRef.current) return false;
+      boardActionPendingRef.current = true;
+      setBoardActionPending(true);
+      setBoardActionError(null);
+      try {
+        if (!ownerId) throw new Error('The board owner is unavailable.');
+        await runProposalAutosaveAction(ownerId, action);
+        return true;
+      } catch (error) {
+        const detail = error instanceof Error ? ` ${error.message}` : '';
+        setBoardActionError(`${failureMessage} Nothing was changed.${detail}`);
+        return false;
+      } finally {
+        boardActionPendingRef.current = false;
+        setBoardActionPending(false);
+      }
+    },
+    [ownerId],
+  );
 
   const [activeBoardId, setActiveBoardId] = useState<string | null>(null);
   const [statusFilter, setStatusFilter] = useState<StatusFilter>('active');
@@ -80,65 +107,76 @@ export function BoardsBuilder({ proposalId, projectId }: BoardsBuilderProps) {
   const active = shown.find((b) => b.id === activeBoardId) ?? shown[0] ?? null;
 
   const handleNewBoard = useCallback(async () => {
-    const result = await upsertBoard.mutateAsync({
-      ...ownerArg,
-      name: `Board ${activeCount + 1}`,
-      sortOrder: boards.length,
+    await runBoardAction('The board could not be created.', async () => {
+      const result = await upsertBoard.mutateAsync({
+        ...ownerArg,
+        name: `Board ${activeCount + 1}`,
+        sortOrder: boards.length,
+      });
+      if (result?.id) {
+        setStatusFilter('active');
+        setActiveBoardId(result.id);
+      }
     });
-    if (result?.id) {
-      setStatusFilter('active');
-      setActiveBoardId(result.id);
-    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [upsertBoard, proposalId, projectId, activeCount, boards.length]);
+  }, [upsertBoard, proposalId, projectId, activeCount, boards.length, runBoardAction]);
 
   const handleDuplicate = useCallback(
     (boardId: string) => {
       // Duplicate is proposal-only (useDuplicateBoard inserts proposal_id).
       if (!proposalId) return;
-      duplicateBoard.mutate(
-        { proposalId, boardId },
-        {
-          onSuccess: (b) => {
-            setStatusFilter('active');
-            setActiveBoardId(b.id);
-          },
-        },
-      );
+      void runBoardAction('The board could not be duplicated.', async () => {
+        const duplicated = await duplicateBoard.mutateAsync({
+          proposalId,
+          boardId,
+        });
+        setStatusFilter('active');
+        setActiveBoardId(duplicated.id);
+      });
     },
-    [duplicateBoard, proposalId],
+    [duplicateBoard, proposalId, runBoardAction],
   );
 
   const handleArchiveToggle = useCallback(
     (board: ProposalBoardSummary) => {
       const next = board.status === 'archived' ? 'active' : 'archived';
-      // Update path — keys on boardId; owner is ignored but passed for typing.
-      upsertBoard.mutate({ ...ownerArg, boardId: board.id, status: next });
-      // Leaving the current filter's view — drop the selection so `active`
-      // falls back to the first still-shown board.
-      if (activeBoardId === board.id) setActiveBoardId(null);
+      void runBoardAction('The board status could not be updated.', async () => {
+        // Update path — keys on boardId; owner is ignored but passed for typing.
+        await upsertBoard.mutateAsync({
+          ...ownerArg,
+          boardId: board.id,
+          status: next,
+        });
+        // Leaving the current filter's view — drop the selection so `active`
+        // falls back to the first still-shown board.
+        if (activeBoardId === board.id) setActiveBoardId(null);
+      });
     },
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [upsertBoard, proposalId, projectId, activeBoardId],
+    [upsertBoard, proposalId, projectId, activeBoardId, runBoardAction],
   );
 
   const handleRename = useCallback(
     (boardId: string, name: string) => {
       const next = name.trim();
       if (!next) return;
-      upsertBoard.mutate({ ...ownerArg, boardId, name: next });
+      void runBoardAction('The board name could not be updated.', async () => {
+        await upsertBoard.mutateAsync({ ...ownerArg, boardId, name: next });
+      });
     },
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [upsertBoard, proposalId, projectId],
+    [upsertBoard, proposalId, projectId, runBoardAction],
   );
 
   const handleLinkRoom = useCallback(
     (boardId: string, scopeRoomId: string | null) => {
       // Linked room is proposal-only (FK targets proposal_scope_rooms).
       if (!proposalId) return;
-      upsertBoard.mutate({ proposalId, boardId, scopeRoomId });
+      void runBoardAction('The linked room could not be updated.', async () => {
+        await upsertBoard.mutateAsync({ proposalId, boardId, scopeRoomId });
+      });
     },
-    [upsertBoard, proposalId],
+    [upsertBoard, proposalId, runBoardAction],
   );
 
   const handleExport = useCallback(
@@ -146,10 +184,7 @@ export function BoardsBuilder({ proposalId, projectId }: BoardsBuilderProps) {
       setPdfBusy(true);
       setPdfError(null);
       try {
-        await downloadSpecPdf(
-          { kind: 'board', ...ownerArg, boardId: board.id },
-          `board-${board.name || board.id}.pdf`,
-        );
+        await downloadSpecPdf({ kind: 'board', ...ownerArg, boardId: board.id }, `board-${board.name || board.id}.pdf`);
       } catch (err) {
         setPdfError(err instanceof Error ? err.message : 'Could not export the board.');
       } finally {
@@ -162,21 +197,54 @@ export function BoardsBuilder({ proposalId, projectId }: BoardsBuilderProps) {
 
   const [deleteTarget, setDeleteTarget] = useState<ProposalBoardSummary | null>(null);
 
-  const handleConfirmDelete = useCallback(() => {
+  const handleConfirmDelete = useCallback(async () => {
     if (!deleteTarget) return;
-    deleteBoard.mutate({ boardId: deleteTarget.id, proposalId });
-    if (activeBoardId === deleteTarget.id) setActiveBoardId(null);
-    setDeleteTarget(null);
-  }, [deleteBoard, proposalId, activeBoardId, deleteTarget]);
+    await runBoardAction('The board could not be deleted.', async () => {
+      await deleteBoard.mutateAsync({ boardId: deleteTarget.id, proposalId });
+      if (activeBoardId === deleteTarget.id) setActiveBoardId(null);
+      setDeleteTarget(null);
+    });
+  }, [deleteBoard, proposalId, activeBoardId, deleteTarget, runBoardAction]);
+
+  const handleSelectBoard = useCallback(
+    (boardId: string) => {
+      if (boardId === active?.id) return;
+      void runBoardAction('The next board could not be opened.', async () => {
+        setActiveBoardId(boardId);
+      });
+    },
+    [active?.id, runBoardAction],
+  );
+
+  const handleStatusFilter = useCallback(
+    (next: StatusFilter) => {
+      if (next === effectiveFilter) return;
+      void runBoardAction('The board list could not be switched.', async () => {
+        setStatusFilter(next);
+        setActiveBoardId(null);
+      });
+    },
+    [effectiveFilter, runBoardAction],
+  );
 
   if (isLoading) {
-    return (
-      <p className="text-sm text-[var(--text-muted)]">Loading boards…</p>
-    );
+    return <p className="text-sm text-[var(--text-muted)]">Loading boards…</p>;
   }
 
   if (boards.length === 0) {
-    return <BoardsEmpty onCreate={() => void handleNewBoard()} creating={upsertBoard.isPending} />;
+    return (
+      <div className="space-y-3">
+        {boardActionError && (
+          <p className="rounded-md border border-red-200 bg-red-50 px-3 py-2 text-xs text-red-800" role="alert">
+            {boardActionError}
+          </p>
+        )}
+        <BoardsEmpty
+          onCreate={() => void handleNewBoard()}
+          creating={boardActionPending || upsertBoard.isPending}
+        />
+      </div>
+    );
   }
 
   return (
@@ -193,10 +261,8 @@ export function BoardsBuilder({ proposalId, projectId }: BoardsBuilderProps) {
               key={value}
               type="button"
               aria-pressed={effectiveFilter === value}
-              onClick={() => {
-                setStatusFilter(value);
-                setActiveBoardId(null);
-              }}
+              onClick={() => handleStatusFilter(value)}
+              disabled={boardActionPending}
               className={`px-3 py-1.5 transition-colors ${
                 effectiveFilter === value
                   ? 'bg-[var(--accent-primary)] text-white'
@@ -213,17 +279,20 @@ export function BoardsBuilder({ proposalId, projectId }: BoardsBuilderProps) {
         boards={shown}
         activeId={active?.id ?? null}
         showNew={effectiveFilter === 'active'}
-        onSelect={setActiveBoardId}
+        onSelect={handleSelectBoard}
         onNew={() => void handleNewBoard()}
         onRename={handleRename}
         onDelete={setDeleteTarget}
+        disabled={boardActionPending}
       />
 
-      {shown.length === 0 && (
-        <p className="text-sm text-[var(--text-muted)]">
-          No {effectiveFilter} boards.
+      {boardActionError && (
+        <p className="rounded-md border border-red-200 bg-red-50 px-3 py-2 text-xs text-red-800" role="alert">
+          {boardActionError}
         </p>
       )}
+
+      {shown.length === 0 && <p className="text-sm text-[var(--text-muted)]">No {effectiveFilter} boards.</p>}
 
       <AlertDialog
         open={deleteTarget !== null}
@@ -236,20 +305,18 @@ export function BoardsBuilder({ proposalId, projectId }: BoardsBuilderProps) {
             <AlertDialogTitle>Delete board</AlertDialogTitle>
             <AlertDialogDescription>
               Delete <strong>{deleteTarget?.name}</strong>? Its{' '}
-              {deleteTarget?.item_count === 1
-                ? 'item'
-                : `${deleteTarget?.item_count ?? 0} items`}{' '}
-              will also be removed. This cannot be undone.
+              {deleteTarget?.item_count === 1 ? 'item' : `${deleteTarget?.item_count ?? 0} items`} will also be removed.
+              This cannot be undone.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel disabled={deleteBoard.isPending}>Cancel</AlertDialogCancel>
+            <AlertDialogCancel disabled={boardActionPending || deleteBoard.isPending}>Cancel</AlertDialogCancel>
             <AlertDialogAction
               onClick={(e) => {
                 e.preventDefault();
                 handleConfirmDelete();
               }}
-              disabled={deleteBoard.isPending}
+              disabled={boardActionPending || deleteBoard.isPending}
               className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
             >
               {deleteBoard.isPending ? 'Deleting…' : 'Delete board'}
@@ -277,6 +344,7 @@ export function BoardsBuilder({ proposalId, projectId }: BoardsBuilderProps) {
                   value={active.scope_room_id ?? ''}
                   onChange={(e) => handleLinkRoom(active.id, e.target.value || null)}
                   wrapperClassName="w-auto"
+                  disabled={boardActionPending}
                 >
                   <option value="">Whole home (no room)</option>
                   {rooms.map((r) => (
@@ -292,7 +360,7 @@ export function BoardsBuilder({ proposalId, projectId }: BoardsBuilderProps) {
               <Button
                 variant="ghost"
                 size="sm"
-                disabled={pdfBusy}
+                disabled={boardActionPending || pdfBusy}
                 onClick={() => void handleExport(active)}
               >
                 {pdfBusy ? 'Exporting…' : 'Export PDF'}
@@ -301,13 +369,18 @@ export function BoardsBuilder({ proposalId, projectId }: BoardsBuilderProps) {
                 <Button
                   variant="ghost"
                   size="sm"
-                  disabled={duplicateBoard.isPending}
+                  disabled={boardActionPending || duplicateBoard.isPending}
                   onClick={() => handleDuplicate(active.id)}
                 >
                   {duplicateBoard.isPending ? 'Duplicating…' : 'Duplicate'}
                 </Button>
               )}
-              <Button variant="ghost" size="sm" onClick={() => handleArchiveToggle(active)}>
+              <Button
+                variant="ghost"
+                size="sm"
+                disabled={boardActionPending}
+                onClick={() => handleArchiveToggle(active)}
+              >
                 {active.status === 'archived' ? 'Unarchive' : 'Archive'}
               </Button>
             </div>
@@ -319,10 +392,10 @@ export function BoardsBuilder({ proposalId, projectId }: BoardsBuilderProps) {
             </p>
           )}
 
-          {/* key={id} so switching boards remounts the editor (flushes the
-              previous board's pending layout saves on unmount). */}
+          {/* Include the owner in the key so a proposal/project switch cannot
+              retain an editor or registry generation from the previous owner. */}
           <BoardEditor
-            key={active.id}
+            key={`${ownerId ?? 'unknown'}:${active.id}`}
             proposalId={isProject ? undefined : proposalId}
             projectId={projectId}
             boardId={active.id}
@@ -343,9 +416,10 @@ interface BoardListProps {
   onNew: () => void;
   onRename: (boardId: string, name: string) => void;
   onDelete: (board: ProposalBoardSummary) => void;
+  disabled: boolean;
 }
 
-function BoardList({ boards, activeId, showNew, onSelect, onNew, onRename, onDelete }: BoardListProps) {
+function BoardList({ boards, activeId, showNew, onSelect, onNew, onRename, onDelete, disabled }: BoardListProps) {
   const [renamingId, setRenamingId] = useState<string | null>(null);
   const [nameDraft, setNameDraft] = useState('');
 
@@ -369,6 +443,7 @@ function BoardList({ boards, activeId, showNew, onSelect, onNew, onRename, onDel
           {renamingId === b.id ? (
             <Input
               autoFocus
+              disabled={disabled}
               value={nameDraft}
               onChange={(e) => setNameDraft(e.target.value)}
               onBlur={() => commitRename(b.id)}
@@ -380,7 +455,7 @@ function BoardList({ boards, activeId, showNew, onSelect, onNew, onRename, onDel
               aria-label="Board name"
             />
           ) : (
-            <button onClick={() => onSelect(b.id)} className="font-medium">
+            <button onClick={() => onSelect(b.id)} className="font-medium" disabled={disabled}>
               {b.name}
             </button>
           )}
@@ -391,6 +466,7 @@ function BoardList({ boards, activeId, showNew, onSelect, onNew, onRename, onDel
             <Button
               variant="ghost"
               size="sm"
+              disabled={disabled}
               onClick={() => {
                 setRenamingId(b.id);
                 setNameDraft(b.name);
@@ -399,12 +475,7 @@ function BoardList({ boards, activeId, showNew, onSelect, onNew, onRename, onDel
               Rename
             </Button>
           )}
-          <IconButton
-            label="Delete board"
-            variant="ghost"
-            size="sm"
-            onClick={() => onDelete(b)}
-          >
+          <IconButton label="Delete board" variant="ghost" size="sm" onClick={() => onDelete(b)} disabled={disabled}>
             ×
           </IconButton>
         </div>
@@ -412,6 +483,7 @@ function BoardList({ boards, activeId, showNew, onSelect, onNew, onRename, onDel
       {showNew && (
         <button
           onClick={onNew}
+          disabled={disabled}
           className="rounded-md border border-dashed border-[var(--border-default)] px-3 py-2 text-sm hover:border-[var(--accent-primary)]"
         >
           + New Board
@@ -458,8 +530,8 @@ function BoardsEmpty({ onCreate, creating }: { onCreate: () => void; creating: b
         <>
           <h4 className="font-display text-lg">No mood boards yet</h4>
           <p className="mx-auto mt-1 max-w-md type-body-small text-[var(--text-muted)]">
-            Boards are freeform canvases for products, captures, palettes, room scans, and
-            notes — one per room, or one for the whole home.
+            Boards are freeform canvases for products, captures, palettes, room scans, and notes — one per room, or one
+            for the whole home.
           </p>
         </>
       )}
