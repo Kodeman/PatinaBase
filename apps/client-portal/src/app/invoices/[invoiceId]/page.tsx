@@ -1,6 +1,6 @@
 'use client';
 
-import { use, useEffect, useRef, useState } from 'react';
+import { use, useEffect, useMemo, useRef, useState } from 'react';
 import Link from 'next/link';
 import { ArrowLeft, CheckCircle2, CreditCard, Loader2, Printer, X } from 'lucide-react';
 import {
@@ -19,6 +19,7 @@ import {
   timeLineHoursLabel,
 } from '@patina/shared';
 import { clientEvents } from '@/lib/analytics/events';
+import { resolveReturnedCheckoutPayment } from './checkout-return';
 
 // Client-facing invoice detail. RLS only exposes issued (non-draft) invoices
 // on the client's own projects, with their lines and payments. Online payment
@@ -38,7 +39,12 @@ function statusHeadline(invoice: Invoice, overdue: boolean): string {
   return 'Awaiting payment';
 }
 
-type ConfirmState = 'confirming' | 'confirmed' | 'ach_pending' | null;
+type ConfirmState = 'confirming' | 'confirmed' | 'processing' | 'unconfirmed' | 'failed' | null;
+
+type CheckoutReturn = {
+  outcome: 'success' | 'cancelled';
+  sessionId: string | null;
+};
 
 export default function ClientInvoiceDetailPage({
   params,
@@ -46,11 +52,13 @@ export default function ClientInvoiceDetailPage({
   params: Promise<{ invoiceId: string }>;
 }) {
   const { invoiceId } = use(params);
-  const { data: invoice, isLoading, refetch } = useInvoice(invoiceId);
+  const { data: invoice, isLoading, isError, error: invoiceError, refetch } = useInvoice(invoiceId);
   const startCheckout = useStartCheckout();
   // Studio brand identity (Designer Studios). projectId path; disabled until the
   // invoice resolves. name is nullable — fall back to the designer join below.
-  const { data: identity } = useStudioIdentity({ projectId: invoice?.project_id });
+  const { data: identity } = useStudioIdentity({
+    projectId: invoice?.project_id,
+  });
 
   // client_invoice_view — fires once, the first time the invoice resolves.
   const invoiceViewCaptured = useRef(false);
@@ -63,59 +71,83 @@ export default function ClientInvoiceDetailPage({
   // ── Checkout return handling (?checkout=success|cancelled) ───────────────
   // Read from window.location in an effect (not useSearchParams) so the page
   // needs no Suspense boundary; strip the params so a refresh doesn't replay.
-  const [confirmState, setConfirmState] = useState<ConfirmState>(null);
-  const [showCancelled, setShowCancelled] = useState(false);
   const [payError, setPayError] = useState<string | null>(null);
-  const [checkoutOutcome, setCheckoutOutcome] = useState<'success' | 'cancelled' | null>(null);
+  const [checkoutReturn, setCheckoutReturn] = useState<CheckoutReturn | null>(null);
+  const [cancelDismissed, setCancelDismissed] = useState(false);
+  const [confirmTimedOut, setConfirmTimedOut] = useState(false);
 
   useEffect(() => {
     const url = new URL(window.location.href);
     const checkout = url.searchParams.get('checkout');
     if (!checkout) return;
     if (checkout === 'success') {
-      setConfirmState('confirming');
-      setCheckoutOutcome('success');
+      // Reading the browser return URL is an external-system synchronization.
+      // eslint-disable-next-line react-hooks/set-state-in-effect
+      setCheckoutReturn({
+        outcome: 'success',
+        sessionId: url.searchParams.get('session_id'),
+      });
     }
     if (checkout === 'cancelled') {
-      setShowCancelled(true);
-      setCheckoutOutcome('cancelled');
+      setCheckoutReturn({ outcome: 'cancelled', sessionId: null });
     }
     url.searchParams.delete('checkout');
     url.searchParams.delete('session_id');
     window.history.replaceState({}, '', url.pathname + url.search);
   }, []);
 
-  // client_payment_completed / client_payment_cancelled — fire once the
-  // checkout return outcome is known, waiting for the invoice fetch to
-  // settle so `amount` is populated when available.
+  const returnedCheckout = useMemo(
+    () => resolveReturnedCheckoutPayment(invoice?.payments, checkoutReturn?.sessionId ?? null),
+    [invoice?.payments, checkoutReturn?.sessionId],
+  );
+
+  // A return URL says only that Checkout handed the browser back. Derive the
+  // display directly from the exact webhook-backed payment row instead of
+  // copying query state into component state.
+  const confirmState: ConfirmState =
+    checkoutReturn?.outcome !== 'success'
+      ? null
+      : returnedCheckout.state === 'confirmed'
+        ? 'confirmed'
+        : returnedCheckout.state === 'processing'
+          ? 'processing'
+          : returnedCheckout.state === 'failed'
+            ? 'failed'
+            : confirmTimedOut
+              ? 'unconfirmed'
+              : 'confirming';
+
+  // client_payment_completed fires only after the exact returned Checkout
+  // payment is settled. Cancellation uses the current outstanding balance,
+  // never the invoice's historical total.
   const paymentOutcomeCaptured = useRef(false);
   useEffect(() => {
-    if (!checkoutOutcome || paymentOutcomeCaptured.current || isLoading) return;
-    paymentOutcomeCaptured.current = true;
-    const props = { invoiceId, amountCents: invoice?.total_cents };
-    if (checkoutOutcome === 'success') {
-      clientEvents.paymentCompleted(props);
-    } else {
-      clientEvents.paymentCancelled(props);
+    if (!checkoutReturn || paymentOutcomeCaptured.current || isLoading) return;
+    if (checkoutReturn.outcome === 'cancelled') {
+      paymentOutcomeCaptured.current = true;
+      clientEvents.paymentCancelled({
+        invoiceId,
+        amountCents: invoice ? invoiceBalanceCents(invoice) : undefined,
+      });
+      return;
     }
-  }, [checkoutOutcome, isLoading, invoice, invoiceId]);
+    if (returnedCheckout.state === 'confirmed' && returnedCheckout.payment) {
+      paymentOutcomeCaptured.current = true;
+      clientEvents.paymentCompleted({
+        invoiceId,
+        amountCents: returnedCheckout.payment.amount_cents,
+      });
+    }
+  }, [checkoutReturn, isLoading, invoice, invoiceId, returnedCheckout]);
 
-  // A succeeded Stripe payment (or a fully paid invoice) resolves confirmation.
-  const stripeSettled =
-    invoice?.status === 'paid' ||
-    (invoice?.payments ?? []).some((p) => p.method === 'stripe' && p.status === 'succeeded');
-
-  useEffect(() => {
-    if (confirmState === 'confirming' && stripeSettled) setConfirmState('confirmed');
-  }, [confirmState, stripeSettled]);
-
-  // Poll while confirming: every 3s, up to 30s; then assume ACH (3–5 days).
+  // Poll briefly for webhook truth. A timeout is explicitly unconfirmed; it
+  // does not imply a bank transfer or a successful payment.
   useEffect(() => {
     if (confirmState !== 'confirming') return;
     const startedAt = Date.now();
     const timer = setInterval(() => {
       if (Date.now() - startedAt >= CONFIRM_POLL_TIMEOUT_MS) {
-        setConfirmState((s) => (s === 'confirming' ? 'ach_pending' : s));
+        setConfirmTimedOut(true);
         clearInterval(timer);
         return;
       }
@@ -128,7 +160,9 @@ export default function ClientInvoiceDetailPage({
     if (!invoice) return;
     setPayError(null);
     try {
-      const { url } = await startCheckout.mutateAsync({ invoiceId: invoice.id });
+      const { url } = await startCheckout.mutateAsync({
+        invoiceId: invoice.id,
+      });
       clientEvents.paymentStarted({
         invoiceId: invoice.id,
         amountCents: invoiceBalanceCents(invoice),
@@ -143,6 +177,24 @@ export default function ClientInvoiceDetailPage({
     return (
       <div className="flex items-center justify-center py-20">
         <Loader2 className="h-6 w-6 animate-spin text-[var(--text-muted)]" />
+      </div>
+    );
+  }
+
+  if (isError) {
+    return (
+      <div className="mx-auto max-w-2xl px-6 py-16 text-center">
+        <p className="type-body-small" role="alert">
+          We couldn&rsquo;t load this invoice.{' '}
+          {invoiceError instanceof Error ? invoiceError.message : 'Please try again.'}
+        </p>
+        <button
+          type="button"
+          onClick={() => void refetch()}
+          className="type-meta mt-4 text-[var(--accent-primary)] underline"
+        >
+          Try again
+        </button>
       </div>
     );
   }
@@ -170,7 +222,7 @@ export default function ClientInvoiceDetailPage({
   // and stamped the payment intent (ACH debit in flight). A pending row with
   // no PI is just an abandoned/unfinished checkout session — ignore it.
   const processingPayments = pendingPayments.filter(
-    (p) => p.method !== 'stripe' || !!p.stripe_payment_intent_id
+    (p) => p.method !== 'stripe' || !!p.stripe_payment_intent_id,
   );
   const hasProcessingStripe = processingPayments.some((p) => p.method === 'stripe');
   const designerName =
@@ -184,7 +236,9 @@ export default function ClientInvoiceDetailPage({
     (invoice.status === 'sent' || invoice.status === 'partially_paid') &&
     balance > 0 &&
     !hasProcessingStripe &&
-    confirmState !== 'confirming';
+    confirmState !== 'confirming' &&
+    confirmState !== 'processing' &&
+    confirmState !== 'unconfirmed';
 
   return (
     <div className="mx-auto max-w-3xl px-6 py-10">
@@ -206,21 +260,48 @@ export default function ClientInvoiceDetailPage({
       {confirmState === 'confirmed' && (
         <div className="type-body-small mt-6 flex items-center gap-3 rounded-md border border-[var(--border-default)] bg-[var(--bg-surface)] p-4">
           <CheckCircle2 className="h-4 w-4 shrink-0 text-[var(--accent-primary)]" aria-hidden />
-          <span>Payment received — thank you! A receipt is on its way to your inbox.</span>
+          <span>Payment confirmed — thank you. Your invoice has been updated.</span>
         </div>
       )}
-      {confirmState === 'ach_pending' && (
+      {confirmState === 'processing' && (
         <div className="type-body-small mt-6 rounded-md border border-[var(--border-default)] bg-[var(--bg-surface)] p-4">
-          Your bank transfer has been started. Bank transfers take 3&ndash;5 business days to
-          clear &mdash; we&rsquo;ll email your receipt as soon as it lands.
+          Your payment provider is still processing this payment. The balance will update after
+          Patina receives confirmation.
         </div>
       )}
-      {showCancelled && (
-        <div className="type-body-small mt-6 flex items-start justify-between gap-3 rounded-md border border-[var(--border-default)] bg-[var(--bg-surface)] p-4">
-          <span>Checkout was cancelled &mdash; no payment was made. You can pay whenever you&rsquo;re ready.</span>
+      {confirmState === 'unconfirmed' && (
+        <div className="type-body-small mt-6 rounded-md border border-[var(--border-default)] bg-[var(--bg-surface)] p-4">
+          <p>
+            Checkout returned, but Patina has not confirmed a payment yet. Do not submit another
+            payment until the status is known.
+          </p>
           <button
             type="button"
-            onClick={() => setShowCancelled(false)}
+            onClick={() => void refetch()}
+            className="type-meta mt-2 text-[var(--accent-primary)] underline"
+          >
+            Check payment status
+          </button>
+        </div>
+      )}
+      {confirmState === 'failed' && (
+        <div
+          className="type-body-small mt-6 rounded-md border border-[var(--border-default)] bg-[var(--bg-surface)] p-4"
+          style={{ color: 'var(--color-terracotta, #C77B6E)' }}
+          role="alert"
+        >
+          This payment was not completed. No confirmed payment was applied; you can try again.
+        </div>
+      )}
+      {checkoutReturn?.outcome === 'cancelled' && !cancelDismissed && (
+        <div className="type-body-small mt-6 flex items-start justify-between gap-3 rounded-md border border-[var(--border-default)] bg-[var(--bg-surface)] p-4">
+          <span>
+            Checkout was cancelled &mdash; no payment was made. You can pay whenever you&rsquo;re
+            ready.
+          </span>
+          <button
+            type="button"
+            onClick={() => setCancelDismissed(true)}
             aria-label="Dismiss"
             className="shrink-0 rounded p-0.5 text-[var(--text-muted)] transition hover:text-[var(--text-primary)]"
           >
@@ -233,7 +314,9 @@ export default function ClientInvoiceDetailPage({
         <div>
           <p
             className="type-meta"
-            style={{ color: overdue ? 'var(--color-terracotta, #C77B6E)' : 'var(--text-muted)' }}
+            style={{
+              color: overdue ? 'var(--color-terracotta, #C77B6E)' : 'var(--text-muted)',
+            }}
           >
             {statusHeadline(invoice, overdue)}
           </p>
@@ -302,7 +385,9 @@ export default function ClientInvoiceDetailPage({
           {invoice.due_date && balance > 0 && invoice.status !== 'void' && (
             <p
               className="type-meta-small mt-1"
-              style={{ color: overdue ? 'var(--color-terracotta, #C77B6E)' : 'var(--text-muted)' }}
+              style={{
+                color: overdue ? 'var(--color-terracotta, #C77B6E)' : 'var(--text-muted)',
+              }}
             >
               Due {formatInvoiceDate(invoice.due_date)}
             </p>
@@ -315,10 +400,10 @@ export default function ClientInvoiceDetailPage({
           A payment of{' '}
           {formatCurrency(
             processingPayments.reduce((sum, p) => sum + p.amount_cents, 0),
-            invoice.currency
+            invoice.currency,
           )}{' '}
           is processing. The balance above will update once it clears.
-          {hasProcessingStripe && ' Bank transfers take 3–5 business days.'}
+          {hasProcessingStripe && ' Patina will confirm it as soon as the provider settles it.'}
         </p>
       )}
 
@@ -345,7 +430,8 @@ export default function ClientInvoiceDetailPage({
                 ) : (
                   Number(line.quantity) !== 1 && (
                     <p className="type-meta-small mt-0.5 text-[var(--text-muted)]">
-                      {Number(line.quantity)} × {formatCurrency(line.unit_amount_cents, invoice.currency)}
+                      {Number(line.quantity)} ×{' '}
+                      {formatCurrency(line.unit_amount_cents, invoice.currency)}
                     </p>
                   )
                 )}
@@ -403,16 +489,15 @@ export default function ClientInvoiceDetailPage({
             ))}
           </div>
         ) : (
-          <p className="type-body-small mt-3 text-[var(--text-muted)]">
-            No payments recorded yet.
-          </p>
+          <p className="type-body-small mt-3 text-[var(--text-muted)]">No payments recorded yet.</p>
         )}
       </section>
 
       {invoice.status === 'void' && (
         <p className="type-body-small mt-10 text-[var(--text-muted)]">
-          This invoice was voided{invoice.voided_at ? ` on ${formatInvoiceDate(invoice.voided_at)}` : ''}
-          {' '}— nothing is owed on it. Reach out to {designerName} with any questions.
+          This invoice was voided
+          {invoice.voided_at ? ` on ${formatInvoiceDate(invoice.voided_at)}` : ''} — nothing is owed
+          on it. Reach out to {designerName} with any questions.
         </p>
       )}
     </div>

@@ -39,15 +39,13 @@ import { DocumentAction, DocumentActionGroup } from '../document-action';
 import { Stamp } from '../stamp';
 import { todayYmd } from '@/lib/document/format';
 import { dollarsToCents } from '@/lib/document/invoice-composer';
+import { resolveClientPortalOrigin } from '@/lib/client-portal-url';
 
 const SAGE_INK = '#85947C';
 const TERRACOTTA_INK = '#C4836F';
 
 /** Paper-ink stamp palette (the ledger page's dark palette re-inked for cream). */
-const FOLIO_STAMP: Record<
-  string,
-  { label: string; color: string; ink?: string }
-> = {
+const FOLIO_STAMP: Record<string, { label: string; color: string; ink?: string }> = {
   draft: { label: 'draft', color: '#C9C2B6', ink: 'var(--text-muted)' },
   sent: { label: 'sent', color: 'var(--color-dusty-blue)', ink: '#7E8FA6' },
   partially_paid: {
@@ -71,8 +69,7 @@ const MANUAL_METHODS: Exclude<InvoicePaymentMethod, 'stripe'>[] = [
   'other',
 ];
 
-const LABEL =
-  'font-mono text-[8px] uppercase tracking-[0.08em] text-[var(--text-muted)]';
+const LABEL = 'font-mono text-[8px] uppercase tracking-[0.08em] text-[var(--text-muted)]';
 const INPUT =
   'rounded-[3px] border border-[var(--color-pearl)] bg-transparent px-2 py-1.5 text-[11.5px] text-[var(--color-charcoal)] focus:border-[var(--color-clay)] focus:outline-none';
 
@@ -99,10 +96,11 @@ export function InvoiceFolio({
   const [message, setMessage] = useState('');
   const [voidReason, setVoidReason] = useState('');
   const [amountDollars, setAmountDollars] = useState('');
-  const [method, setMethod] =
-    useState<Exclude<InvoicePaymentMethod, 'stripe'>>('check');
+  const [method, setMethod] = useState<Exclude<InvoicePaymentMethod, 'stripe'>>('check');
   const [reference, setReference] = useState('');
   const [receivedDate, setReceivedDate] = useState(() => todayYmd());
+  const [showClientFallback, setShowClientFallback] = useState(false);
+  const [clientLinkCopied, setClientLinkCopied] = useState(false);
 
   if (isLoading || !invoice) {
     return (
@@ -116,18 +114,13 @@ export function InvoiceFolio({
   const overdue = isInvoiceOverdue(invoice);
   const balance = invoiceBalanceCents(invoice);
   const isDraft = invoice.status === 'draft';
-  const canRecordPayment =
-    invoice.status === 'sent' || invoice.status === 'partially_paid';
+  const canRecordPayment = invoice.status === 'sent' || invoice.status === 'partially_paid';
   const canResend = canRecordPayment;
   const canVoid =
-    ['draft', 'sent', 'partially_paid'].includes(invoice.status) &&
-    invoice.amount_paid_cents === 0;
+    ['draft', 'sent', 'partially_paid'].includes(invoice.status) && invoice.amount_paid_cents === 0;
   const canPrint = !isDraft && invoice.status !== 'void';
   const busy =
-    issue.isPending ||
-    send.isPending ||
-    recordPayment.isPending ||
-    voidInvoice.isPending;
+    issue.isPending || send.isPending || recordPayment.isPending || voidInvoice.isPending;
 
   const openPanel = (panel: ActPanel) => {
     setNote(null);
@@ -139,6 +132,8 @@ export function InvoiceFolio({
   // — the folio re-reads as issued and Resend carries the retry (old page 1:1).
   const doIssueAndSend = async () => {
     setNote(null);
+    setShowClientFallback(false);
+    setClientLinkCopied(false);
     let issued: Invoice;
     try {
       issued = await issue.mutateAsync({
@@ -146,9 +141,7 @@ export function InvoiceFolio({
         projectId: invoice.project_id,
       });
     } catch (e) {
-      setNote(
-        `Could not issue — ${e instanceof Error ? e.message : 'try again'}`,
-      );
+      setNote(`Could not issue — ${e instanceof Error ? e.message : 'try again'}`);
       return;
     }
     try {
@@ -162,6 +155,7 @@ export function InvoiceFolio({
           ? `Invoice ${issued.invoice_number ?? ''} issued · emailed ${result.recipient}`.trim()
           : `Invoice ${issued.invoice_number ?? ''} issued · email skipped`.trim(),
       );
+      setShowClientFallback(!result.emailSent);
       setAct(null);
       setMessage('');
     } catch (e) {
@@ -170,12 +164,14 @@ export function InvoiceFolio({
           e instanceof Error ? e.message : 'the email failed'
         }. Resend to retry.`,
       );
+      setShowClientFallback(true);
       setAct(null);
     }
   };
 
   const doResend = async () => {
     setNote(null);
+    setClientLinkCopied(false);
     try {
       const result = await send.mutateAsync({
         invoiceId,
@@ -183,22 +179,35 @@ export function InvoiceFolio({
         message: message.trim() || undefined,
       });
       setNote(
-        result.emailSent
-          ? `emailed ${result.recipient}`
-          : 'Could not send — recipient suppressed',
+        result.emailSent ? `emailed ${result.recipient}` : 'Could not send — recipient suppressed',
       );
+      setShowClientFallback(!result.emailSent);
       setAct(null);
       setMessage('');
     } catch (e) {
-      setNote(
-        `Could not send — ${e instanceof Error ? e.message : 'try again'}`,
-      );
+      setNote(`Could not send — ${e instanceof Error ? e.message : 'try again'}`);
+      setShowClientFallback(true);
+    }
+  };
+
+  // This fallback renders only after a client-side send attempt, so the
+  // current origin can preserve localhost → :3002 routing when no env
+  // override is configured. Production still uses the explicit portal var.
+  const clientInvoiceUrl = `${resolveClientPortalOrigin(
+    typeof window === 'undefined' ? undefined : window.location.origin,
+  )}/invoices/${invoiceId}`;
+
+  const copyClientInvoiceUrl = async () => {
+    try {
+      await navigator.clipboard.writeText(clientInvoiceUrl);
+      setClientLinkCopied(true);
+    } catch {
+      setClientLinkCopied(false);
     }
   };
 
   const amountCents = dollarsToCents(amountDollars);
-  const paymentValid =
-    amountCents > 0 && amountCents <= balance && !!receivedDate;
+  const paymentValid = amountCents > 0 && amountCents <= balance && !!receivedDate;
 
   const doRecordPayment = async () => {
     if (!paymentValid) return;
@@ -219,9 +228,7 @@ export function InvoiceFolio({
       // The Desk reads receivables under its own key — one act, every surface.
       void qc.invalidateQueries({ queryKey: ['document-state'] });
     } catch (e) {
-      setNote(
-        `Could not record — ${e instanceof Error ? e.message : 'try again'}`,
-      );
+      setNote(`Could not record — ${e instanceof Error ? e.message : 'try again'}`);
     }
   };
 
@@ -239,9 +246,7 @@ export function InvoiceFolio({
       setVoidReason('');
       void qc.invalidateQueries({ queryKey: ['document-state'] });
     } catch (e) {
-      setNote(
-        `Could not void — ${e instanceof Error ? e.message : 'try again'}`,
-      );
+      setNote(`Could not void — ${e instanceof Error ? e.message : 'try again'}`);
     }
   };
 
@@ -263,23 +268,17 @@ export function InvoiceFolio({
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0">
           <h2 className="font-heading text-[20px] font-medium text-[var(--color-charcoal)]">
-            {invoice.invoice_number
-              ? `Invoice ${invoice.invoice_number}`
-              : 'Draft invoice'}
+            {invoice.invoice_number ? `Invoice ${invoice.invoice_number}` : 'Draft invoice'}
           </h2>
           <p className="mt-0.5 truncate font-mono text-[9px] uppercase tracking-[0.06em] text-[var(--text-muted)]">
             {[
               invoice.client?.full_name ?? invoice.client?.email,
               invoice.project?.name,
-              overdue
-                ? null
-                : INVOICE_STATUS_LABELS[invoice.status].toLowerCase(),
+              overdue ? null : INVOICE_STATUS_LABELS[invoice.status].toLowerCase(),
             ]
               .filter(Boolean)
               .join(' · ')}
-            {overdue && (
-              <span style={{ color: TERRACOTTA_INK }}> · overdue</span>
-            )}
+            {overdue && <span style={{ color: TERRACOTTA_INK }}> · overdue</span>}
           </p>
         </div>
         <div className="flex shrink-0 items-center gap-2.5">
@@ -344,9 +343,7 @@ export function InvoiceFolio({
                     : SAGE_INK,
             }}
           >
-            {invoice.status === 'void'
-              ? '—'
-              : formatCurrency(balance, invoice.currency)}
+            {invoice.status === 'void' ? '—' : formatCurrency(balance, invoice.currency)}
           </span>
         </span>
       </div>
@@ -414,10 +411,7 @@ export function InvoiceFolio({
           </div>
           <div className="flex justify-between py-0.5">
             <span className={LABEL}>
-              tax (
-              {(Number(invoice.tax_rate) * 100)
-                .toFixed(2)
-                .replace(/\.?0+$/, '') || '0'}
+              tax ({(Number(invoice.tax_rate) * 100).toFixed(2).replace(/\.?0+$/, '') || '0'}
               %)
             </span>
             <span className="font-mono text-[10.5px] text-[var(--color-charcoal)]">
@@ -434,9 +428,7 @@ export function InvoiceFolio({
       </div>
 
       {invoice.memo && (
-        <p className="mt-3 text-[11px] italic text-[var(--text-muted)]">
-          {invoice.memo}
-        </p>
+        <p className="mt-3 text-[11px] italic text-[var(--text-muted)]">{invoice.memo}</p>
       )}
 
       {/* ── Payment history ─────────────────────────────────────────────── */}
@@ -455,14 +447,10 @@ export function InvoiceFolio({
                 <span className="min-w-0 truncate text-[11px] text-[var(--color-charcoal)]">
                   {INVOICE_PAYMENT_METHOD_LABELS[p.method]}
                   {p.reference && (
-                    <span className="ml-1.5 text-[var(--text-muted)]">
-                      {p.reference}
-                    </span>
+                    <span className="ml-1.5 text-[var(--text-muted)]">{p.reference}</span>
                   )}
                   {p.note && (
-                    <span className="ml-1.5 italic text-[var(--text-muted)]">
-                      {p.note}
-                    </span>
+                    <span className="ml-1.5 italic text-[var(--text-muted)]">{p.note}</span>
                   )}
                 </span>
                 <span
@@ -561,6 +549,34 @@ export function InvoiceFolio({
           </p>
         )}
 
+        {showClientFallback && (
+          <div
+            className="mt-2 rounded-[3px] border border-[rgba(196,131,111,0.4)] px-2 py-2"
+            role="status"
+          >
+            <p className="text-[10.5px] text-[var(--color-charcoal)]">
+              Email did not reach the client. The issued invoice is still available at this
+              client-portal link:
+            </p>
+            <a
+              href={clientInvoiceUrl}
+              target="_blank"
+              rel="noreferrer"
+              className="mt-1 block break-all font-mono text-[9px] text-[var(--color-clay)] underline"
+            >
+              {clientInvoiceUrl}
+            </a>
+            <DocumentAction
+              actionKey="copy-client-invoice-link"
+              variant="tertiary"
+              onClick={() => void copyClientInvoiceUrl()}
+              className="mt-1"
+            >
+              {clientLinkCopied ? 'Client link copied' : 'Copy client link'}
+            </DocumentAction>
+          </div>
+        )}
+
         {/* ── Inline act panels — one at a time, never a modal-on-modal ── */}
         {(act === 'send' || act === 'resend') && (
           <div className="mt-3 border-t border-dashed border-[var(--color-pearl)] pt-2.5">
@@ -571,8 +587,7 @@ export function InvoiceFolio({
               {invoice.client?.email ? (
                 <>
                   {' '}
-                  — to{' '}
-                  <span className="font-medium">{invoice.client.email}</span>.
+                  — to <span className="font-medium">{invoice.client.email}</span>.
                 </>
               ) : (
                 <> — to the client on this project.</>
@@ -592,16 +607,12 @@ export function InvoiceFolio({
               className="mt-1.5"
             >
               <DocumentAction
-                actionKey={
-                  act === 'send' ? 'confirm-issue-and-send' : 'confirm-resend'
-                }
+                actionKey={act === 'send' ? 'confirm-issue-and-send' : 'confirm-resend'}
                 variant="primary"
                 disabled={busy}
                 loading={busy}
                 loadingLabel="Sending…"
-                onClick={() =>
-                  void (act === 'send' ? doIssueAndSend() : doResend())
-                }
+                onClick={() => void (act === 'send' ? doIssueAndSend() : doResend())}
               >
                 {act === 'send' ? 'Issue & send' : 'Resend email'}
               </DocumentAction>
@@ -619,8 +630,8 @@ export function InvoiceFolio({
         {act === 'payment' && (
           <div className="mt-3 border-t border-dashed border-[var(--color-pearl)] pt-2.5">
             <p className="text-[11px] text-[var(--color-charcoal)]">
-              Balance {formatCurrency(balance, invoice.currency)} — record a
-              payment received outside Stripe.
+              Balance {formatCurrency(balance, invoice.currency)} — record a payment received
+              outside Stripe.
             </p>
             <div className="mt-1.5 grid grid-cols-2 gap-2 sm:grid-cols-4">
               <label className="flex flex-col gap-0.5">
@@ -639,9 +650,7 @@ export function InvoiceFolio({
                 <select
                   value={method}
                   onChange={(e) =>
-                    setMethod(
-                      e.target.value as Exclude<InvoicePaymentMethod, 'stripe'>,
-                    )
+                    setMethod(e.target.value as Exclude<InvoicePaymentMethod, 'stripe'>)
                   }
                   className={`${INPUT} [&_option]:bg-[var(--doc-paper,#FAF7F2)]`}
                 >
@@ -708,8 +717,8 @@ export function InvoiceFolio({
         {act === 'void' && (
           <div className="mt-3 border-t border-dashed border-[var(--color-pearl)] pt-2.5">
             <p className="text-[11px] text-[var(--color-charcoal)]">
-              Voiding releases any linked payment milestones and time entries so
-              they can be billed again. This cannot be undone.
+              Voiding releases any linked payment milestones and time entries so they can be billed
+              again. This cannot be undone.
             </p>
             <textarea
               autoFocus
