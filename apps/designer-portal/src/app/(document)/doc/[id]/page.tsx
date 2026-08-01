@@ -12,7 +12,12 @@
 import { use, useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { useProjectV2, useProjectPhases, useProposalFeedback } from '@patina/supabase';
+import {
+  type Database,
+  useProjectV2,
+  useProjectPhases,
+  useProposalFeedback,
+} from '@patina/supabase';
 import { rollupVerdicts, formatVerdictRollup } from '@patina/utils';
 import { useDocumentEngagement } from '@/hooks/use-document-state';
 import { useHoldDocument } from '@/hooks/document-time-provider';
@@ -73,6 +78,7 @@ const prettyPhase = (phase: string | null) =>
     : null;
 
 type AnyRecord = any;
+type ProjectPhaseRow = Database['public']['Tables']['project_phases']['Row'];
 
 function vitalsFor(row: DocumentStateRow, project: AnyRecord, proposal: AnyRecord): string {
   // Project + proposal carry the client as a first-class subtitle (the
@@ -96,6 +102,44 @@ function vitalsFor(row: DocumentStateRow, project: AnyRecord, proposal: AnyRecor
     return [row.client_name, 'New inquiry'].filter(Boolean).join(' · ');
   }
   return [row.client_name, 'In discovery'].filter(Boolean).join(' · ');
+}
+
+/**
+ * The project schedule and lifecycle action share one mount so the handoff is
+ * present under both schedule renderers, but never leaks onto proposal/lead
+ * documents. Non-active projects keep their schedule visible and expose no
+ * phase mutation control.
+ */
+export function ProjectScheduleHandoffMount({
+  engagementKind,
+  projectId,
+  projectTitle,
+  projectStatus,
+  phases,
+  showScheduleRule,
+}: {
+  engagementKind: string;
+  projectId: string | null;
+  projectTitle: string;
+  projectStatus: string | null | undefined;
+  phases: readonly ProjectPhaseRow[] | undefined;
+  showScheduleRule: boolean;
+}) {
+  if (engagementKind !== 'project' || !projectId) return null;
+
+  return (
+    <>
+      {showScheduleRule ? (
+        <ScheduleRule projectId={projectId} projectTitle={projectTitle} />
+      ) : (
+        <PhaseTimeline projectId={projectId} />
+      )}
+      <ScheduleConfirmStrip projectId={projectId} />
+      {projectStatus === 'active' ? (
+        <PhaseAdvanceControl projectId={projectId} phases={phases} />
+      ) : null}
+    </>
+  );
 }
 
 export default function DocumentPage({ params }: { params: Promise<{ id: string }> }) {
@@ -546,31 +590,14 @@ export default function DocumentPage({ params }: { params: Promise<{ id: string 
                 S2-4 — the Rule flip gate (same spineGate as the C7 gate below):
                 while it's loading (or resolves off) the old PhaseTimeline
                 renders — fail-closed, zero flash for the non-pilot cohort. */}
-            {row.engagement_kind === 'project' &&
-              row.project_id &&
-              (!spineGate.isLoading && spineGate.value ? (
-                <ScheduleRule projectId={row.project_id} projectTitle={row.title} />
-              ) : (
-                <PhaseTimeline projectId={row.project_id} />
-              ))}
-
-            {/* The confirm strip — R100's "one honest sentence" + Commit / Esc ·
-                Revert, rendered directly under the Rule. It is null unless a ripple
-                session is active, and a session only ever arises from the gated
-                Rule/Spine surfaces — so gate-off is byte-identical (no strip, no
-                DOM). Gated on project_id only for the non-null commit target. */}
-            {row.engagement_kind === 'project' && row.project_id && (
-              <ScheduleConfirmStrip projectId={row.project_id} />
-            )}
-
-            {/* The phase handoff belongs to the project, not to either schedule
-                renderer. Keeping it below their shared mount makes it reachable
-                through Project and Install, with the Spine flag on or off. */}
-            {row.engagement_kind === 'project' &&
-              row.project_id &&
-              project?.status === 'active' && (
-                <PhaseAdvanceControl projectId={row.project_id} phases={phases} />
-              )}
+            <ProjectScheduleHandoffMount
+              engagementKind={row.engagement_kind}
+              projectId={row.project_id}
+              projectTitle={row.title}
+              projectStatus={project?.status}
+              phases={phases}
+              showScheduleRule={!spineGate.isLoading && spineGate.value}
+            />
 
           {/* The active section — exactly one (§4). */}
           <div
