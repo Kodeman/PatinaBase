@@ -188,7 +188,13 @@ export function SendSheet({
       }
 
       const afterRead = getProposalAutosaveSnapshot(proposalId);
-      if (isProposalAutosaveSnapshotClean(afterRead)) {
+      // Clean alone is not sufficient: a buffer can become dirty, save, and
+      // return to clean while these reads are in flight. Its revision proves
+      // whether the reviewed mirror was bounded by one stable registry state.
+      if (
+        isProposalAutosaveSnapshotClean(afterRead) &&
+        afterRead.revision === beforeRead.revision
+      ) {
         return {
           clientData: freshClientPayload.data,
           draftingGaps: freshDraftingState.gaps,

@@ -30,12 +30,14 @@ import {
   useProposalScheduleItems,
   useAddProposalItem,
   type ProposalBoardItem,
+  type BoardLayoutPosition,
   type AddBoardItemInput,
   type BoardSection,
   type ProposalPalette,
   type RoomScan,
   type ItemFeedback,
 } from '@patina/supabase';
+import { useBufferedAutosave } from '@/hooks/use-buffered-autosave';
 import {
   ProductPickerModal,
   type ProductPickResult,
@@ -68,6 +70,20 @@ const SNAP_GRID = 20;
 // Debounced layout autosave interval — mirrors the blur/600ms idiom used by
 // the palette swatch editor.
 const LAYOUT_FLUSH_MS = 600;
+
+type BoardLayoutPatch = Record<string, BoardLayoutPosition>;
+
+function layoutPosition(item: ProposalBoardItem): BoardLayoutPosition {
+  return {
+    id: item.id,
+    board_id: item.board_id,
+    type: item.type,
+    x: Number(item.x),
+    y: Number(item.y),
+    z_index: item.z_index,
+    rotation: Number(item.rotation),
+  };
+}
 
 // Default footprint per item type when dropped onto the canvas.
 const DEFAULT_SIZE: Record<string, { width: number; height: number | null }> = {
@@ -120,7 +136,7 @@ export function BoardEditor({ proposalId, projectId, boardId }: BoardEditorProps
   const addItem = useAddBoardItem();
   const updateItem = useUpdateBoardItem();
   const deleteItem = useDeleteBoardItem();
-  const saveLayout = useSaveBoardLayout();
+  const { mutateAsync: saveLayoutAsync } = useSaveBoardLayout();
   const upsertBoard = useUpsertBoard();
 
   // B4/B5 — proposal boards only. Board-pin verdicts (read-only chips), live
@@ -141,8 +157,6 @@ export function BoardEditor({ proposalId, projectId, boardId }: BoardEditorProps
 
   const itemsRef = useRef<ProposalBoardItem[]>(items);
   itemsRef.current = items;
-  const dirtyRef = useRef<Set<string>>(new Set());
-  const flushTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // ── B4/B5 derivations (product/capture pins) ────────────────────────────────
 
@@ -192,43 +206,55 @@ export function BoardEditor({ proposalId, projectId, boardId }: BoardEditorProps
 
   // ── Layout autosave ─────────────────────────────────────────────────────────
 
-  const { mutate: saveLayoutMutate } = saveLayout;
+  const {
+    queue: queueLayoutPatch,
+    flush: flushLayoutPatch,
+    state: layoutAutosaveState,
+  } = useBufferedAutosave<string, BoardLayoutPatch>({
+    // Project boards never share a SendSheet, but still use their owner id to
+    // isolate this editor's buffer and retain lossless unmount behavior.
+    proposalId: ownerId,
+    delay: LAYOUT_FLUSH_MS,
+    save: useCallback(
+      async (targetBoardId, positionsById) => {
+        const positions = Object.values(positionsById);
+        if (positions.length === 0) return;
+        // mutateAsync is load-bearing: the registry remains in-flight until
+        // persistence and central client-copy invalidations have settled.
+        await saveLayoutAsync({
+          boardId: targetBoardId,
+          proposalId,
+          positions,
+        });
+      },
+      [proposalId, saveLayoutAsync],
+    ),
+  });
 
-  const flushLayout = useCallback(() => {
-    if (flushTimerRef.current) {
-      clearTimeout(flushTimerRef.current);
-      flushTimerRef.current = null;
-    }
-    if (dirtyRef.current.size === 0) return;
-    const ids = new Set(dirtyRef.current);
-    dirtyRef.current.clear();
-    const positions = itemsRef.current
-      .filter((i) => ids.has(i.id))
-      .map((i) => ({
-        id: i.id,
-        board_id: i.board_id,
-        type: i.type,
-        x: Number(i.x),
-        y: Number(i.y),
-        z_index: i.z_index,
-        rotation: Number(i.rotation),
-      }));
-    if (positions.length > 0) {
-      saveLayoutMutate({ boardId, proposalId, positions });
-    }
-  }, [boardId, proposalId, saveLayoutMutate]);
+  const queueLayout = useCallback(
+    (changedItems: ProposalBoardItem[]) => {
+      if (changedItems.length === 0) return;
+      const patch: BoardLayoutPatch = {};
+      for (const item of changedItems) {
+        patch[item.id] = layoutPosition(item);
+      }
+      queueLayoutPatch(boardId, patch);
+    },
+    [boardId, queueLayoutPatch],
+  );
+
+  const flushLayout = useCallback(
+    () => flushLayoutPatch(boardId),
+    [boardId, flushLayoutPatch],
+  );
 
   const flushLayoutRef = useRef(flushLayout);
   flushLayoutRef.current = flushLayout;
-
-  const scheduleFlush = useCallback(() => {
-    if (flushTimerRef.current) clearTimeout(flushTimerRef.current);
-    flushTimerRef.current = setTimeout(() => flushLayoutRef.current(), LAYOUT_FLUSH_MS);
-  }, []);
-
-  // Flush any pending positions when the editor unmounts (board switch,
-  // tab change, navigation).
-  useEffect(() => () => flushLayoutRef.current(), []);
+  const layoutAutosaveBlocksSyncRef = useRef(false);
+  layoutAutosaveBlocksSyncRef.current =
+    layoutAutosaveState === 'dirty' ||
+    layoutAutosaveState === 'saving' ||
+    layoutAutosaveState === 'error';
 
   // ── Server → local sync ─────────────────────────────────────────────────────
 
@@ -236,7 +262,7 @@ export function BoardEditor({ proposalId, projectId, boardId }: BoardEditorProps
     if (!board) return;
     // Don't clobber unsaved local moves; the post-flush invalidation will
     // bring us back here once dirty drains.
-    if (dirtyRef.current.size > 0) return;
+    if (layoutAutosaveBlocksSyncRef.current) return;
     setItems(board.items);
   }, [board]);
 
@@ -251,13 +277,34 @@ export function BoardEditor({ proposalId, projectId, boardId }: BoardEditorProps
 
   /** Optimistically merge field updates into local state. */
   const mergeLocal = useCallback((itemId: string, patch: Partial<ProposalBoardItem>) => {
-    setItems((prev) => prev.map((i) => (i.id === itemId ? { ...i, ...patch } : i)));
+    const next = itemsRef.current.map((item) =>
+      item.id === itemId ? { ...item, ...patch } : item,
+    );
+    itemsRef.current = next;
+    setItems(next);
   }, []);
+
+  /** Merge a layout field and synchronously register its persisted snapshot. */
+  const mergeLocalLayout = useCallback(
+    (itemId: string, patch: Partial<ProposalBoardItem>) => {
+      let changedItem: ProposalBoardItem | null = null;
+      const next = itemsRef.current.map((item) => {
+        if (item.id !== itemId) return item;
+        changedItem = { ...item, ...patch };
+        return changedItem;
+      });
+      if (!changedItem) return;
+      itemsRef.current = next;
+      setItems(next);
+      queueLayout([changedItem]);
+    },
+    [queueLayout],
+  );
 
   /** Immediate field mutation (flushes pending layout first). */
   const commitField = useCallback(
     (itemId: string, patch: Partial<ProposalBoardItem>) => {
-      flushLayoutRef.current();
+      void flushLayoutRef.current();
       mergeLocal(itemId, patch);
       updateItem.mutate({
         itemId,
@@ -289,7 +336,7 @@ export function BoardEditor({ proposalId, projectId, boardId }: BoardEditorProps
   const addItemToBoard = useCallback(
     (input: Omit<AddBoardItemInput, 'boardId' | 'x' | 'y' | 'zIndex'>) => {
       if (!board) return;
-      flushLayoutRef.current();
+      void flushLayoutRef.current();
       const size = DEFAULT_SIZE[input.type] ?? { width: 240, height: null };
       const cascade = (itemsRef.current.length % 8) * 32;
       const x = Math.min(
@@ -324,8 +371,7 @@ export function BoardEditor({ proposalId, projectId, boardId }: BoardEditorProps
 
   const handleDeleteItem = useCallback(
     (itemId: string) => {
-      flushLayoutRef.current();
-      dirtyRef.current.delete(itemId);
+      void flushLayoutRef.current();
       setItems((prev) => prev.filter((i) => i.id !== itemId));
       setSelectedId((sel) => (sel === itemId ? null : sel));
       deleteItem.mutate({ itemId, boardId, proposalId });
@@ -349,7 +395,7 @@ export function BoardEditor({ proposalId, projectId, boardId }: BoardEditorProps
   /** Assign (or clear, sectionId=null) the selected item's section membership. */
   const assignSection = useCallback(
     (itemId: string, sectionId: string | null) => {
-      flushLayoutRef.current();
+      void flushLayoutRef.current();
       const item = itemsRef.current.find((i) => i.id === itemId);
       if (!item) return;
       const nextData = { ...(item.data ?? {}), section_id: sectionId };
@@ -378,46 +424,55 @@ export function BoardEditor({ proposalId, projectId, boardId }: BoardEditorProps
     });
     if (positions.length === 0) return;
     const byId = new Map(positions.map((p) => [p.id, p]));
-    setItems((prev) =>
-      prev.map((it) => {
-        const pos = byId.get(it.id);
-        if (!pos || (Number(it.x) === pos.x && Number(it.y) === pos.y)) return it;
-        dirtyRef.current.add(it.id);
-        return { ...it, x: pos.x, y: pos.y };
-      }),
-    );
-    scheduleFlush();
-  }, [board, sections, scheduleFlush]);
+    const changedItems: ProposalBoardItem[] = [];
+    const nextItems = itemsRef.current.map((it) => {
+      const pos = byId.get(it.id);
+      if (!pos || (Number(it.x) === pos.x && Number(it.y) === pos.y)) return it;
+      const changed = { ...it, x: pos.x, y: pos.y };
+      changedItems.push(changed);
+      return changed;
+    });
+    itemsRef.current = nextItems;
+    setItems(nextItems);
+    queueLayout(changedItems);
+  }, [board, queueLayout, sections]);
 
   // ── Canvas callbacks ────────────────────────────────────────────────────────
 
   const handleItemsChange = useCallback(
     (next: BoardItem[]) => {
-      let changed = false;
-      setItems((prev) =>
-        prev.map((p) => {
-          const n = next.find((i) => String(i.id) === p.id);
-          if (!n) return p;
-          const nx = n.position.x;
-          const ny = n.position.y;
-          const nz = n.zIndex ?? 0;
-          const nr = n.rotation ?? 0;
-          if (
-            nx !== Number(p.x) ||
-            ny !== Number(p.y) ||
-            nz !== p.z_index ||
-            nr !== Number(p.rotation)
-          ) {
-            dirtyRef.current.add(p.id);
-            changed = true;
-            return { ...p, x: nx, y: ny, z_index: nz, rotation: nr };
-          }
-          return p;
-        }),
-      );
-      if (changed) scheduleFlush();
+      const changedItems: ProposalBoardItem[] = [];
+      const nextItems = itemsRef.current.map((p) => {
+        const n = next.find((i) => String(i.id) === p.id);
+        if (!n) return p;
+        const nx = n.position.x;
+        const ny = n.position.y;
+        const nz = n.zIndex ?? 0;
+        const nr = n.rotation ?? 0;
+        if (
+          nx !== Number(p.x) ||
+          ny !== Number(p.y) ||
+          nz !== p.z_index ||
+          nr !== Number(p.rotation)
+        ) {
+          const changed = {
+            ...p,
+            x: nx,
+            y: ny,
+            z_index: nz,
+            rotation: nr,
+          };
+          changedItems.push(changed);
+          return changed;
+        }
+        return p;
+      });
+      if (changedItems.length === 0) return;
+      itemsRef.current = nextItems;
+      setItems(nextItems);
+      queueLayout(changedItems);
     },
-    [scheduleFlush],
+    [queueLayout],
   );
 
   const handlePick = useCallback(
@@ -611,10 +666,10 @@ export function BoardEditor({ proposalId, projectId, boardId }: BoardEditorProps
                 onCommitField={commitField}
                 onMergeLocal={(itemId, patch) => {
                   // Rotation drags follow the debounced layout path.
-                  mergeLocal(itemId, patch);
                   if (patch.rotation !== undefined || patch.z_index !== undefined) {
-                    dirtyRef.current.add(itemId);
-                    scheduleFlush();
+                    mergeLocalLayout(itemId, patch);
+                  } else {
+                    mergeLocal(itemId, patch);
                   }
                 }}
                 onAssignSection={assignSection}
