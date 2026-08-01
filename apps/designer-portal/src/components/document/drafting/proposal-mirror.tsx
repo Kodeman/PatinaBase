@@ -26,8 +26,13 @@
  * Zero shadows (D4).
  */
 
+import { useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { createBrowserClient, useUpdateProposal } from '@patina/supabase';
+import {
+  assessProposalPaymentSchedule,
+  createBrowserClient,
+  useUpdateProposal,
+} from '@patina/supabase';
 import {
   proposalTierVisibility,
   type ClientVisibilityTier,
@@ -61,14 +66,14 @@ export function useProposalMirrorData(proposalId: string) {
     queryFn: async () => {
       const supabase = getSupabase();
       const [
-        { data: proposal },
-        { data: rooms },
-        { data: rawPieces },
-        { data: palettes },
-        { data: exclusions },
-        { data: milestones },
-        { data: phases },
-        { data: boardsRaw },
+        { data: proposal, error: proposalError },
+        { data: rooms, error: roomsError },
+        { data: rawPieces, error: piecesError },
+        { data: palettes, error: palettesError },
+        { data: exclusions, error: exclusionsError },
+        { data: milestones, error: milestonesError },
+        { data: phases, error: phasesError },
+        { data: boardsRaw, error: boardsError },
       ] = await Promise.all([
         // The rolled-up investment number is proposals.total_amount, plus the
         // tier that governs the whole render (R86). NO trade/cost/margin column.
@@ -141,6 +146,18 @@ export function useProposalMirrorData(proposalId: string) {
           }),
       ]);
 
+      const readError = [
+        proposalError,
+        roomsError,
+        piecesError,
+        palettesError,
+        exclusionsError,
+        milestonesError,
+        phasesError,
+        boardsError,
+      ].find(Boolean);
+      if (readError) throw readError;
+
       const roomNameById = new Map<string, string>(
         ((rooms ?? []) as AnyRow[]).map((r) => [r.id, r.name]),
       );
@@ -195,6 +212,12 @@ export function useProposalMirrorData(proposalId: string) {
         items: (b.proposal_board_items ?? []) as AnyRow[],
       }));
 
+      const totalCents = (proposal as AnyRow)?.total_amount ?? 0;
+      const paymentSchedule = assessProposalPaymentSchedule(
+        (milestones ?? []) as AnyRow[],
+        totalCents,
+      );
+
       return {
         proposal,
         tier: ((proposal as AnyRow)?.client_visibility_tier ??
@@ -204,10 +227,13 @@ export function useProposalMirrorData(proposalId: string) {
         pieces,
         palette,
         exclusions: (exclusions ?? []) as AnyRow[],
-        milestones: (milestones ?? []) as AnyRow[],
+        // Canonical client payload: percentage + the current signed total own
+        // the amounts. Stored projections are reconciled by the send preflight.
+        milestones: paymentSchedule.milestones,
+        paymentSchedule,
         phases: (phases ?? []) as AnyRow[],
         boards,
-        totalCents: (proposal as AnyRow)?.total_amount ?? 0,
+        totalCents,
       };
     },
   });
@@ -241,17 +267,32 @@ function TierInstrument({
 }) {
   const update = useUpdateProposal({ errorSurface: 'inline' });
   const qc = useQueryClient();
+  const [feedback, setFeedback] = useState<
+    'idle' | 'saving' | 'saved' | 'error'
+  >('idle');
+  const [feedbackError, setFeedbackError] = useState<string | null>(null);
 
   const choose = (next: ClientVisibilityTier) => {
     if (next === tier || update.isPending) return;
+    setFeedback('saving');
+    setFeedbackError(null);
     update.mutate(
       { proposalId, updates: { client_visibility_tier: next } },
       {
-        onSuccess: () => {
+        onSuccess: async () => {
           // Reflow the preview immediately rather than waiting for its poll tick.
-          void qc.invalidateQueries({
+          await qc.invalidateQueries({
             queryKey: ['proposal-mirror', proposalId],
           });
+          setFeedback('saved');
+        },
+        onError: (error) => {
+          setFeedback('error');
+          setFeedbackError(
+            error instanceof Error
+              ? error.message
+              : 'Could not update the client view.',
+          );
         },
       },
     );
@@ -289,6 +330,23 @@ function TierInstrument({
               </button>
             );
           },
+        )}
+      </div>
+      <div className="min-h-4" aria-live="polite">
+        {feedback === 'saving' && (
+          <p role="status" className="font-mono text-[8.5px] text-[var(--text-muted)]">
+            Updating client preview…
+          </p>
+        )}
+        {feedback === 'saved' && (
+          <p role="status" className="font-mono text-[8.5px] text-[var(--color-sage)]">
+            Client preview updated
+          </p>
+        )}
+        {feedback === 'error' && (
+          <p role="alert" className="font-mono text-[8.5px] text-[var(--color-terracotta)]">
+            {feedbackError ?? 'Could not update the client preview.'}
+          </p>
         )}
       </div>
     </div>

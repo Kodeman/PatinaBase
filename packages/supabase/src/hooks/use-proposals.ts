@@ -1,6 +1,7 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { createBrowserClient } from '../client';
 import { updateProposalTotal } from '../lib/proposal-total';
+import { assessProposalPaymentSchedule } from '../lib/proposal-payment-schedule';
 
 // Lazy client getter to avoid module-level initialization during SSR
 const getSupabase = () => createBrowserClient();
@@ -677,6 +678,112 @@ export function useSendProposal(options?: { errorSurface?: 'inline' }) {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const supabase = getSupabase() as any;
 
+      // Preflight the exact client-facing payload before stamping the proposal
+      // sent. Percentage + the current proposal total are canonical; reconcile
+      // their persisted amount projection so every downstream reader (client
+      // portal, share route, email follow-up) receives the same schedule.
+      const [proposalResult, milestonesResult] = await Promise.all([
+        supabase
+          .from('proposals')
+          .select('total_amount')
+          .eq('id', proposalId)
+          .single(),
+        supabase
+          .from('proposal_payment_milestones')
+          .select('id, label, percentage, amount_cents, trigger_condition, sort_order')
+          .eq('proposal_id', proposalId)
+          .order('sort_order', { ascending: true }),
+      ]);
+
+      if (proposalResult.error) throw proposalResult.error;
+      if (milestonesResult.error) throw milestonesResult.error;
+
+      const paymentSchedule = assessProposalPaymentSchedule(
+        milestonesResult.data ?? [],
+        proposalResult.data?.total_amount ?? 0,
+      );
+      if (!paymentSchedule.safeToSend) {
+        throw new Error(
+          `Proposal cannot be sent: ${paymentSchedule.issues
+            .map((issue) => issue.message)
+            .join(' ')}`,
+        );
+      }
+
+      if (!paymentSchedule.storedAmountsMatch) {
+        const reconciliations = paymentSchedule.milestones
+          .map((milestone, index) => ({ milestone, index }))
+          .filter(
+            ({ milestone, index }) =>
+              milestone.amount_cents !==
+              Number(milestonesResult.data?.[index]?.amount_cents ?? 0),
+          )
+          .map(async ({ milestone, index }) => {
+            if (!milestone.id) {
+              throw new Error(
+                'Proposal cannot be sent: a payment milestone has no id.',
+              );
+            }
+            const original = milestonesResult.data?.[index];
+            if (!original) {
+              throw new Error(
+                'Proposal cannot be sent: the payment schedule changed while it was being checked.',
+              );
+            }
+            const {
+              data: reconciled,
+              error: reconciliationError,
+            } = await supabase
+              .from('proposal_payment_milestones')
+              .update({ amount_cents: milestone.amount_cents })
+              .eq('id', milestone.id)
+              // Compare-and-set: never overwrite a percentage or amount the
+              // designer changed after the preflight read.
+              .eq('percentage', original.percentage)
+              .eq('amount_cents', original.amount_cents)
+              .select('id')
+              .maybeSingle();
+            if (reconciliationError) throw reconciliationError;
+            if (!reconciled) {
+              throw new Error(
+                'Proposal cannot be sent: the payment schedule changed while it was being checked. Review it and send again.',
+              );
+            }
+          });
+        await Promise.all(reconciliations);
+      }
+
+      // A final fail-closed read proves both the total and every persisted
+      // client amount still match after reconciliation. If any concurrent edit
+      // landed, do not stamp or notify—return the designer to review instead.
+      const [verifiedProposalResult, verifiedMilestonesResult] =
+        await Promise.all([
+          supabase
+            .from('proposals')
+            .select('total_amount')
+            .eq('id', proposalId)
+            .single(),
+          supabase
+            .from('proposal_payment_milestones')
+            .select(
+              'id, label, percentage, amount_cents, trigger_condition, sort_order',
+            )
+            .eq('proposal_id', proposalId)
+            .order('sort_order', { ascending: true }),
+        ]);
+      if (verifiedProposalResult.error) throw verifiedProposalResult.error;
+      if (verifiedMilestonesResult.error) throw verifiedMilestonesResult.error;
+
+      const verifiedSchedule = assessProposalPaymentSchedule(
+        verifiedMilestonesResult.data ?? [],
+        verifiedProposalResult.data?.total_amount ?? 0,
+      );
+      if (!verifiedSchedule.safeToSend || !verifiedSchedule.storedAmountsMatch) {
+        throw new Error(
+          'Proposal cannot be sent: the client payment schedule changed while it was being checked. Review it and send again.',
+        );
+      }
+
       // send_proposal (00176) flips the target to 'sent' AND atomically
       // supersedes sibling versions in the chain (sent/viewed → 'revised')
       // so a stale version can no longer be signed by the client.
@@ -707,13 +814,24 @@ export function useSendProposal(options?: { errorSurface?: 'inline' }) {
 
       return { ...data, _emailDispatched: emailDispatched };
     },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['proposals'] });
-      // Prefix-match: sending may also have superseded sibling versions, so
-      // every cached single-proposal view must refetch (not just the target).
-      queryClient.invalidateQueries({ queryKey: ['proposal'] });
-      queryClient.invalidateQueries({ queryKey: ['proposal-stats'] });
-      queryClient.invalidateQueries({ queryKey: ['proposal-versions'] });
+    onSuccess: async (_, { proposalId }) => {
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: ['proposals'] }),
+        // Prefix-match: sending may also have superseded sibling versions, so
+        // every cached single-proposal view must refetch (not just the target).
+        queryClient.invalidateQueries({ queryKey: ['proposal'] }),
+        queryClient.invalidateQueries({ queryKey: ['proposal-stats'] }),
+        queryClient.invalidateQueries({ queryKey: ['proposal-versions'] }),
+        queryClient.invalidateQueries({
+          queryKey: ['proposal-payment-milestones', proposalId],
+        }),
+        queryClient.invalidateQueries({
+          queryKey: ['proposal-mirror', proposalId],
+        }),
+        queryClient.invalidateQueries({
+          queryKey: ['drafting-facets', proposalId],
+        }),
+      ]);
     },
   });
 }

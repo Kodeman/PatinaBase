@@ -1,4 +1,9 @@
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import {
+  useQuery,
+  useMutation,
+  useQueryClient,
+  type QueryClient,
+} from '@tanstack/react-query';
 import { createBrowserClient } from '../client';
 import { updateProposalTotal } from '../lib/proposal-total';
 import type { SchedulePhaseInput, ScheduleMilestoneInput, MilestoneKind } from '@patina/utils';
@@ -739,6 +744,23 @@ export function useRemoveExclusion() {
 // PAYMENT MILESTONES
 // ═══════════════════════════════════════════════════════════════════════════
 
+async function invalidateProposalPaymentSchedule(
+  queryClient: QueryClient,
+  proposalId: string,
+) {
+  await Promise.all([
+    queryClient.invalidateQueries({
+      queryKey: ['proposal-payment-milestones', proposalId],
+    }),
+    queryClient.invalidateQueries({
+      queryKey: ['proposal-mirror', proposalId],
+    }),
+    queryClient.invalidateQueries({
+      queryKey: ['drafting-facets', proposalId],
+    }),
+  ]);
+}
+
 export function useProposalPaymentMilestones(proposalId: string) {
   return useQuery({
     queryKey: ['proposal-payment-milestones', proposalId],
@@ -760,6 +782,7 @@ export function useProposalPaymentMilestones(proposalId: string) {
 export function useAddPaymentMilestone() {
   const queryClient = useQueryClient();
   return useMutation({
+    mutationKey: ['proposal-payment-schedule'],
     mutationFn: async ({
       proposalId,
       phaseId,
@@ -803,8 +826,8 @@ export function useAddPaymentMilestone() {
       if (error) throw error;
       return data;
     },
-    onSuccess: (_, { proposalId }) => {
-      queryClient.invalidateQueries({ queryKey: ['proposal-payment-milestones', proposalId] });
+    onSuccess: async (_, { proposalId }) => {
+      await invalidateProposalPaymentSchedule(queryClient, proposalId);
     },
   });
 }
@@ -812,6 +835,7 @@ export function useAddPaymentMilestone() {
 export function useUpdatePaymentMilestone() {
   const queryClient = useQueryClient();
   return useMutation({
+    mutationKey: ['proposal-payment-schedule'],
     mutationFn: async ({
       milestoneId,
       proposalId,
@@ -832,8 +856,8 @@ export function useUpdatePaymentMilestone() {
       if (error) throw error;
       return data;
     },
-    onSuccess: (_, { proposalId }) => {
-      queryClient.invalidateQueries({ queryKey: ['proposal-payment-milestones', proposalId] });
+    onSuccess: async (_, { proposalId }) => {
+      await invalidateProposalPaymentSchedule(queryClient, proposalId);
     },
   });
 }
@@ -841,14 +865,15 @@ export function useUpdatePaymentMilestone() {
 export function useRemovePaymentMilestone() {
   const queryClient = useQueryClient();
   return useMutation({
+    mutationKey: ['proposal-payment-schedule'],
     mutationFn: async ({ milestoneId, proposalId }: { milestoneId: string; proposalId: string }) => {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const supabase = getSupabase() as any;
       const { error } = await supabase.from('proposal_payment_milestones').delete().eq('id', milestoneId);
       if (error) throw error;
     },
-    onSuccess: (_, { proposalId }) => {
-      queryClient.invalidateQueries({ queryKey: ['proposal-payment-milestones', proposalId] });
+    onSuccess: async (_, { proposalId }) => {
+      await invalidateProposalPaymentSchedule(queryClient, proposalId);
     },
   });
 }
