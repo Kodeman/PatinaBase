@@ -66,7 +66,7 @@ export async function POST(
   // schedule anchoring.
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const service = createServiceClient() as any;
-  const { error: signError } = await service.rpc(
+  const { data: signResult, error: signError } = await service.rpc(
     'sign_proposal_with_trusted_ip',
     {
       p_proposal_id: id,
@@ -83,13 +83,17 @@ export async function POST(
     );
   }
 
-  // CARRY-FORWARD: the signing RPC does NOT send the confirmation email — fire
-  // it here, best-effort (does not block sign success).
-  void supabase.functions
-    .invoke('proposal-sign-confirmation', { body: { proposalId: id } })
-    .catch(() => {
-      // Silent — confirmation email failure should not block sign
-    });
+  // Only the transaction that created the durable signature may emit the
+  // confirmation side effect. Accepted retries (including a sent→accepted
+  // race that waited on the proposal lock) return `newly_signed=false`, so a
+  // lost response or double submit cannot send duplicate client/designer mail.
+  if (signResult?.newly_signed === true) {
+    void supabase.functions
+      .invoke('proposal-sign-confirmation', { body: { proposalId: id } })
+      .catch(() => {
+        // Silent — confirmation email failure should not block sign
+      });
+  }
 
   return NextResponse.json({ ok: true });
 }

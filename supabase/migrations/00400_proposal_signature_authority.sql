@@ -40,18 +40,24 @@ SET search_path = public, pg_temp
 AS $$
 DECLARE
   v_proposal public.proposals%ROWTYPE;
+  v_approval public.client_decisions%ROWTYPE;
   v_project_id uuid;
   v_existing_project_id uuid;
   v_existing_project_client_id uuid;
   v_decision_id uuid := gen_random_uuid();
+  v_engagement_id uuid := gen_random_uuid();
   v_signed_name text := btrim(COALESCE(p_signed_name, ''));
   v_signed_ip text := NULLIF(btrim(COALESCE(p_trusted_signed_ip, '')), '');
+  v_newly_signed boolean := false;
   v_previous_decision_insert text := current_setting(
     'app.client_decision_insert_id', true
   );
   v_previous_accept text := current_setting('app.proposal_accept_id', true);
   v_previous_activation text := current_setting(
     'app.proposal_activation_id', true
+  );
+  v_previous_signature_engagement text := current_setting(
+    'app.proposal_signature_engagement_id', true
   );
 BEGIN
   IF p_client_id IS NULL THEN
@@ -151,61 +157,101 @@ BEGIN
       'app.proposal_accept_id', COALESCE(v_previous_accept, ''), true
     );
 
+    -- 00399 reserves signature evidence rows to the canonical signing paths.
+    -- Preallocate the exact row id and expose only that transaction-local
+    -- capability while inserting the immutable engagement receipt.
+    PERFORM set_config(
+      'app.proposal_signature_engagement_id', v_engagement_id::text, true
+    );
     INSERT INTO public.proposal_engagement (
-      proposal_id, viewer_id, event_type, metadata
+      id, proposal_id, viewer_id, event_type, metadata
     ) VALUES (
-      p_proposal_id, p_client_id, 'signed',
+      v_engagement_id, p_proposal_id, p_client_id, 'signed',
       jsonb_build_object(
         'via', 'sign_proposal',
         'signed_by_name', v_signed_name,
         'signed_ip', v_signed_ip
       )
     );
+    PERFORM set_config(
+      'app.proposal_signature_engagement_id',
+      COALESCE(v_previous_signature_engagement, ''),
+      true
+    );
+    v_newly_signed := true;
   END IF;
 
   -- Fresh signatures and accepted retries must both prove the exact immutable
   -- approval record.  A forged accepted row cannot be used as activation input.
-  IF NOT EXISTS (
-    SELECT 1
-    FROM public.client_decisions AS approval
-    WHERE approval.linked_proposal_id = p_proposal_id
-      AND approval.decision_type = 'approval'
-      AND approval.designer_client_id = v_proposal.designer_client_id
-      AND approval.designer_id = v_proposal.designer_id
-      AND approval.status = 'responded'
-      AND approval.client_signature IS NOT DISTINCT FROM v_proposal.signed_by_name
-      AND approval.client_consented_at IS NOT NULL
-      AND approval.responded_at IS NOT NULL
-  ) THEN
+  SELECT approval.* INTO v_approval
+  FROM public.client_decisions AS approval
+  WHERE approval.linked_proposal_id = p_proposal_id
+    AND approval.decision_type = 'approval'
+  FOR UPDATE;
+
+  IF v_approval.id IS NULL
+     OR v_approval.designer_client_id
+          IS DISTINCT FROM v_proposal.designer_client_id
+     OR v_approval.designer_id IS DISTINCT FROM v_proposal.designer_id
+     OR v_approval.status IS DISTINCT FROM 'responded'
+     OR v_approval.client_signature
+          IS DISTINCT FROM v_proposal.signed_by_name
+     OR v_approval.client_consented_at IS DISTINCT FROM v_proposal.signed_at
+     OR v_approval.responded_at IS DISTINCT FROM v_proposal.accepted_at
+     OR v_approval.sent_at IS DISTINCT FROM v_proposal.signed_at
+     OR NOT (
+       (
+         v_approval.client_consent_method
+           IS NOT DISTINCT FROM 'electronic_signature'
+         AND v_approval.selected_by IS NOT DISTINCT FROM v_proposal.client_id
+         AND EXISTS (
+           SELECT 1
+           FROM public.proposal_engagement AS engagement
+           WHERE engagement.proposal_id = p_proposal_id
+             AND engagement.event_type = 'signed'
+             AND engagement.viewer_id IS NOT DISTINCT FROM v_proposal.client_id
+             AND engagement.created_at IS NOT DISTINCT FROM v_proposal.signed_at
+             AND engagement.metadata->>'via' = 'sign_proposal'
+             AND engagement.metadata->>'signed_by_name'
+                   IS NOT DISTINCT FROM v_proposal.signed_by_name
+             AND engagement.metadata->>'signed_ip'
+                   IS NOT DISTINCT FROM v_proposal.signed_ip
+         )
+       )
+       OR
+       (
+         v_approval.client_consent_method IS NOT DISTINCT FROM 'paper'
+         AND v_approval.selected_by IS NOT NULL
+         AND EXISTS (
+           SELECT 1
+           FROM public.proposal_engagement AS engagement
+           WHERE engagement.proposal_id = p_proposal_id
+             AND engagement.event_type = 'signed_offline'
+             AND engagement.viewer_id IS NOT DISTINCT FROM v_approval.selected_by
+             AND engagement.created_at IS NOT DISTINCT FROM v_proposal.signed_at
+             AND engagement.metadata->>'via' = 'record_offline_signature'
+             AND engagement.metadata->>'signed_by_name'
+                   IS NOT DISTINCT FROM v_proposal.signed_by_name
+             AND engagement.metadata->>'recorded_by'
+                   IS NOT DISTINCT FROM v_approval.selected_by::text
+         )
+       )
+     )
+  THEN
     RAISE EXCEPTION 'proposal approval evidence conflicts with proposal identity'
       USING ERRCODE = 'check_violation';
   END IF;
 
   IF v_proposal.project_id IS NOT NULL THEN
-    -- The proposal remains the immutable authorship record. A project's current
-    -- lead may have changed through the checked studio reassignment RPC, so
-    -- reciprocity binds the exact proposal and client without requiring the
-    -- current lead to equal the historical proposal author. The historical
-    -- author must have a membership record in that studio, but need not remain
-    -- active after an authorized handoff; the current lead must remain active.
+    -- This is an idempotent receipt, not a new authority decision. The proposal
+    -- and project guards made this reciprocal link write-once, so later mutable
+    -- studio state (a departed historical author, paused studio, or suspended
+    -- current lead) must not turn a valid accepted retry into a failure.
     PERFORM 1
     FROM public.projects AS project
-    JOIN public.organizations AS studio
-      ON studio.id = project.studio_id
-     AND studio.type = 'design_studio'
-     AND studio.status = 'active'
-    JOIN public.organization_members AS historical_author
-      ON historical_author.organization_id = studio.id
-     AND historical_author.user_id = v_proposal.designer_id
-    JOIN public.organization_members AS current_lead
-      ON current_lead.organization_id = studio.id
-     AND current_lead.user_id = project.designer_id
-     AND current_lead.status = 'active'
-     AND current_lead.role <> 'guest'
     WHERE project.id = v_proposal.project_id
       AND project.proposal_id = v_proposal.id
       AND project.client_id IS NOT DISTINCT FROM v_proposal.client_id
-      AND project.created_by IS NOT DISTINCT FROM v_proposal.designer_id
     FOR SHARE;
     IF NOT FOUND THEN
       RAISE EXCEPTION 'proposal % has a conflicting project link', p_proposal_id
@@ -282,27 +328,14 @@ BEGIN
     END IF;
   END IF;
 
-  -- Canonical activation, detached repair, and ordinary retries all leave the
-  -- same reciprocal postcondition. Checking after the branch also prevents a
-  -- fresh activation from returning a project with missing studio provenance.
+  -- Every path must leave the immutable proposal/project identity reciprocal.
+  -- This check intentionally does not revisit mutable studio/member state for
+  -- an already-linked receipt; that state can change after a valid acceptance.
   PERFORM 1
   FROM public.projects AS project
-  JOIN public.organizations AS studio
-    ON studio.id = project.studio_id
-   AND studio.type = 'design_studio'
-   AND studio.status = 'active'
-  JOIN public.organization_members AS historical_author
-    ON historical_author.organization_id = studio.id
-   AND historical_author.user_id = v_proposal.designer_id
-  JOIN public.organization_members AS current_lead
-    ON current_lead.organization_id = studio.id
-   AND current_lead.user_id = project.designer_id
-   AND current_lead.status = 'active'
-   AND current_lead.role <> 'guest'
   WHERE project.id = v_project_id
     AND project.proposal_id = v_proposal.id
     AND project.client_id IS NOT DISTINCT FROM v_proposal.client_id
-    AND project.created_by IS NOT DISTINCT FROM v_proposal.designer_id
   FOR SHARE;
   IF NOT FOUND THEN
     RAISE EXCEPTION 'proposal % failed canonical project reciprocity',
@@ -310,12 +343,42 @@ BEGIN
       USING ERRCODE = 'check_violation';
   END IF;
 
+  -- Fresh activation and detached legacy repair still require live studio
+  -- provenance at the moment authority creates or adopts the reciprocal link.
+  -- `v_proposal.project_id` is the locked pre-activation value, so NULL
+  -- identifies exactly those two paths even after the database write succeeds.
+  IF v_proposal.project_id IS NULL THEN
+    PERFORM 1
+    FROM public.projects AS project
+    JOIN public.organizations AS studio
+      ON studio.id = project.studio_id
+     AND studio.type = 'design_studio'
+     AND studio.status = 'active'
+    JOIN public.organization_members AS historical_author
+      ON historical_author.organization_id = studio.id
+     AND historical_author.user_id = v_proposal.designer_id
+    JOIN public.organization_members AS current_lead
+      ON current_lead.organization_id = studio.id
+     AND current_lead.user_id = project.designer_id
+     AND current_lead.status = 'active'
+     AND current_lead.role <> 'guest'
+    WHERE project.id = v_project_id
+      AND project.created_by IS NOT DISTINCT FROM v_proposal.designer_id
+    FOR SHARE;
+    IF NOT FOUND THEN
+      RAISE EXCEPTION 'proposal % failed canonical project provenance',
+        p_proposal_id
+        USING ERRCODE = 'check_violation';
+    END IF;
+  END IF;
+
   RETURN jsonb_build_object(
     'id', v_proposal.id,
     'status', v_proposal.status,
     'signed_at', v_proposal.signed_at,
     'accepted_at', v_proposal.accepted_at,
-    'project_id', v_project_id
+    'project_id', v_project_id,
+    'newly_signed', v_newly_signed
   );
 EXCEPTION WHEN OTHERS THEN
   PERFORM set_config(
@@ -328,6 +391,11 @@ EXCEPTION WHEN OTHERS THEN
   );
   PERFORM set_config(
     'app.proposal_activation_id', COALESCE(v_previous_activation, ''), true
+  );
+  PERFORM set_config(
+    'app.proposal_signature_engagement_id',
+    COALESCE(v_previous_signature_engagement, ''),
+    true
   );
   RAISE;
 END;
@@ -385,18 +453,40 @@ LANGUAGE plpgsql
 SECURITY DEFINER
 SET search_path = public, pg_temp
 AS $$
+DECLARE
+  v_previous_claims text := current_setting('request.jwt.claims', true);
+  v_result jsonb;
 BEGIN
   IF COALESCE(auth.role(), '') <> 'service_role' THEN
     RAISE EXCEPTION 'sign_proposal_with_trusted_ip requires service_role'
       USING ERRCODE = 'insufficient_privilege';
   END IF;
 
-  RETURN public._sign_proposal_authorized_00400(
+  -- The service client is used only to carry edge-derived IP evidence and has
+  -- no user `sub`. Canonical activation still needs the verified client actor
+  -- for schedule-revision provenance. Delegate that exact identity only after
+  -- the service-role check; the private core re-checks proposal ownership, and
+  -- this transaction-local claim is restored before returning or rethrowing.
+  PERFORM set_config(
+    'request.jwt.claims',
+    jsonb_build_object(
+      'sub', p_client_id,
+      'role', 'authenticated'
+    )::text,
+    true
+  );
+
+  v_result := public._sign_proposal_authorized_00400(
     p_proposal_id,
     p_signed_name,
     p_client_id,
     p_signed_ip
   );
+  PERFORM set_config('request.jwt.claims', v_previous_claims, true);
+  RETURN v_result;
+EXCEPTION WHEN OTHERS THEN
+  PERFORM set_config('request.jwt.claims', v_previous_claims, true);
+  RAISE;
 END;
 $$;
 

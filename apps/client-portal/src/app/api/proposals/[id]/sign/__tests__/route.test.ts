@@ -69,7 +69,9 @@ describe('POST /api/proposals/[id]/sign', () => {
       }
       return Promise.resolve({ error: null });
     });
-    serviceRpcMock = jest.fn().mockResolvedValue({ data: {}, error: null });
+    serviceRpcMock = jest
+      .fn()
+      .mockResolvedValue({ data: { newly_signed: true }, error: null });
     invokeMock = jest.fn().mockResolvedValue({ data: null, error: null });
 
     mockCreateServerClient.mockResolvedValue({
@@ -170,11 +172,35 @@ describe('POST /api/proposals/[id]/sign', () => {
   it('allows an accepted retry so the database can repair a missing project', async () => {
     proposalStatus = 'accepted';
     validUntil = '2020-01-01T00:00:00.000Z';
+    serviceRpcMock.mockResolvedValue({
+      data: { newly_signed: false },
+      error: null,
+    });
 
     const res = await POST(makeRequest(), makeParams());
 
     expect(res.status).toBe(200);
     expect(serviceRpcMock).toHaveBeenCalledTimes(1);
+    expect(invokeMock).not.toHaveBeenCalled();
+  });
+
+  it('sends confirmation only for the transaction that created the signature', async () => {
+    const res = await POST(makeRequest(), makeParams());
+
+    expect(res.status).toBe(200);
+    expect(invokeMock).toHaveBeenCalledTimes(1);
+    expect(invokeMock).toHaveBeenCalledWith('proposal-sign-confirmation', {
+      body: { proposalId: 'prop-1' },
+    });
+  });
+
+  it('fails closed on a legacy or malformed RPC result without duplicating mail', async () => {
+    serviceRpcMock.mockResolvedValue({ data: {}, error: null });
+
+    const res = await POST(makeRequest(), makeParams());
+
+    expect(res.status).toBe(200);
+    expect(invokeMock).not.toHaveBeenCalled();
   });
 
   it('does not send confirmation when the authoritative service RPC fails', async () => {
