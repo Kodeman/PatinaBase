@@ -10,18 +10,16 @@ export function documentResolutionState({
   resolutionKind,
   isLoading,
   isFetching,
+  isError,
 }: {
   resolutionKind: 'engagement' | 'redirect' | 'missing' | undefined;
   isLoading: boolean;
   isFetching: boolean;
-}): 'loading' | 'missing' | 'ready' {
+  isError: boolean;
+}): 'loading' | 'missing' | 'ready' | 'error' {
   if (resolutionKind === 'engagement') return 'ready';
-  if (
-    isLoading ||
-    isFetching ||
-    resolutionKind === 'redirect' ||
-    resolutionKind === undefined
-  ) {
+  if (isError) return 'error';
+  if (isLoading || isFetching || resolutionKind === 'redirect') {
     return 'loading';
   }
   return 'missing';

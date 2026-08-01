@@ -100,7 +100,13 @@ export default function DocumentPage({ params }: { params: Promise<{ id: string 
   const router = useRouter();
   const hydrated = useHydrated();
 
-  const { data: resolution, isLoading, isFetching } = useDocumentEngagement(id);
+  const {
+    data: resolution,
+    isLoading,
+    isFetching,
+    isError,
+    refetch: retryDocumentResolution,
+  } = useDocumentEngagement(id);
   const row = resolution?.kind === 'engagement' ? resolution.row : null;
   const projectId = row?.project_id ?? '';
   const proposalId = row?.proposal_id ?? '';
@@ -275,6 +281,7 @@ export default function DocumentPage({ params }: { params: Promise<{ id: string 
     resolutionKind: resolution?.kind,
     isLoading,
     isFetching,
+    isError,
   });
 
   // SSR always starts with an empty engagement cache, while client navigation
@@ -286,6 +293,28 @@ export default function DocumentPage({ params }: { params: Promise<{ id: string 
         <p className="px-10 py-12 font-heading text-[14px] italic text-[var(--text-muted)]">
           Picking up…
         </p>
+      </div>
+    );
+  }
+
+  if (resolutionState === 'error') {
+    return (
+      <div className="min-h-screen bg-[var(--doc-paper)] px-10 py-12">
+        <p className="mb-3 font-heading text-[16px] text-[var(--color-charcoal)]">
+          This document could not be picked up.
+        </p>
+        <div className="flex items-center gap-4 font-mono text-[10px] uppercase tracking-[0.08em]">
+          <button
+            type="button"
+            className="text-[var(--color-clay)]"
+            onClick={() => void retryDocumentResolution()}
+          >
+            Try again
+          </button>
+          <Link href="/desk" className="text-[var(--text-muted)]">
+            Back to the desk
+          </Link>
+        </div>
       </div>
     );
   }

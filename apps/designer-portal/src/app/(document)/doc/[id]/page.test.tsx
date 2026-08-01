@@ -1,7 +1,9 @@
-import { render, screen } from '@testing-library/react';
+import { fireEvent, render, screen } from '@testing-library/react';
 import DocumentPage from './page';
 
 let mockHydrated = false;
+const mockRetryDocumentResolution = jest.fn();
+let mockDocumentQuery: Record<string, unknown>;
 
 jest.mock('@portabletext/react', () => ({
   PortableText: () => null,
@@ -23,11 +25,7 @@ jest.mock('@/hooks/use-hydrated', () => ({
 }));
 
 jest.mock('@/hooks/use-document-state', () => ({
-  useDocumentEngagement: () => ({
-    data: { kind: 'missing' },
-    isLoading: false,
-    isFetching: false,
-  }),
+  useDocumentEngagement: () => mockDocumentQuery,
 }));
 
 jest.mock('@/hooks/document-time-provider', () => ({
@@ -76,6 +74,14 @@ const fulfilledParams = {
 describe('DocumentPage hydration render behavior', () => {
   beforeEach(() => {
     mockHydrated = false;
+    mockRetryDocumentResolution.mockReset();
+    mockDocumentQuery = {
+      data: { kind: 'missing' },
+      isLoading: false,
+      isFetching: false,
+      isError: false,
+      refetch: mockRetryDocumentResolution,
+    };
   });
 
   it('keeps a warm non-loading client result on the server loading tree until hydration', () => {
@@ -89,5 +95,23 @@ describe('DocumentPage hydration render behavior', () => {
 
     expect(screen.queryByText('Picking up…')).not.toBeInTheDocument();
     expect(screen.getByText('No document answers to this name.')).toBeVisible();
+  });
+
+  it('offers a retry instead of hanging when document resolution fails', () => {
+    mockHydrated = true;
+    mockDocumentQuery = {
+      data: undefined,
+      isLoading: false,
+      isFetching: false,
+      isError: true,
+      refetch: mockRetryDocumentResolution,
+    };
+
+    render(<DocumentPage params={fulfilledParams} />);
+
+    expect(screen.queryByText('Picking up…')).not.toBeInTheDocument();
+    expect(screen.getByText('This document could not be picked up.')).toBeVisible();
+    fireEvent.click(screen.getByRole('button', { name: 'Try again' }));
+    expect(mockRetryDocumentResolution).toHaveBeenCalledTimes(1);
   });
 });
