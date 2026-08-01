@@ -599,8 +599,13 @@ function SelectionsList({
         const sourceHost =
           showSourceUrls && product?.source_url ? hostOf(product.source_url) : null;
         const hasTeaching = (product?.product_styles?.[0]?.count ?? 0) > 0;
-        const fill = product ? recordCompletenessFill(product, hasTeaching) : null;
-        const pct = product ? recordCompletenessPct(product, hasTeaching) : null;
+        const completenessHidden =
+          (product as { record_completeness_hidden?: boolean } | undefined)
+            ?.record_completeness_hidden === true;
+        const fill =
+          product && !completenessHidden ? recordCompletenessFill(product, hasTeaching) : null;
+        const pct =
+          product && !completenessHidden ? recordCompletenessPct(product, hasTeaching) : null;
         return (
           <li
             key={item.id}
