@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useState } from "react";
 import {
   ArrowRight,
   Check,
@@ -40,6 +40,20 @@ type EvidenceRun = {
 
 type KnownLimit = {
   surface: string;
+  status: string;
+  detail: string;
+};
+
+type JourneyProof = {
+  id: string;
+  title: string;
+  body: string;
+  evidence: string;
+};
+
+type LateFix = {
+  id: string;
+  title: string;
   status: string;
   detail: string;
 };
@@ -92,7 +106,7 @@ const findings: Finding[] = [
     remediation:
       "Bind send to the exact reviewed snapshot. Reconcile canonical amounts on the server, reject changed tokens, and remove the unsafe legacy send overload.",
     verification:
-      "Builder, mirror, send-sheet, hook, schedule-library and SQL coverage is recorded; final combined DB replay remains pending.",
+      "The clean SQL replay passed, and Chrome carried a six-phase $1,000 proposal with one 100% Final payment through guest review, client signature, invoice and paid readback.",
   },
   {
     id: "F02",
@@ -104,7 +118,7 @@ const findings: Finding[] = [
     remediation:
       "Derive readiness from locked project, invoice, line, milestone and FF&E rows. Reject partial invoice coverage and allow only genuine zero-value exceptions.",
     verification:
-      "Closeout derivation and SQL coverage is recorded for partial and zero-value cases; final combined DB replay remains pending.",
+      "Chrome could close the book only after six completed phases and a paid $1,000 invoice; billing then auto-verified no balance before archive.",
   },
   {
     id: "F03",
@@ -116,7 +130,7 @@ const findings: Finding[] = [
     remediation:
       "Move client reassignment into one atomic database operation so client, designer relationship and document household stay aligned without downgrading an existing engagement.",
     verification:
-      "Lead-hook and relationship-consistency SQL coverage is recorded for captured and registered households; final combined DB replay remains pending.",
+      "Journey Proof 1785606377249 moved from Brief through all five Discovery essentials into Direction, then linked client@patina.dev and signed without losing project identity.",
   },
   {
     id: "F05",
@@ -128,7 +142,7 @@ const findings: Finding[] = [
     remediation:
       "Use direct MM/DD/YYYY date-only entry and guarded parsing rather than UTC timestamp defaults or stale invalid values.",
     verification:
-      "Timezone-boundary, signature and project-open interaction coverage is recorded; final local Chrome replay remains pending.",
+      "Timezone-boundary and project-open coverage passed on the integrated head; the accepted signature and paid invoice retained their August 1, 2026 evidence in database and client readback.",
   },
   {
     id: "F07",
@@ -140,7 +154,7 @@ const findings: Finding[] = [
     remediation:
       "Gate every active refetch, refresh drafting state before send, reset acknowledgement when gaps change, and require a second reviewed click after any snapshot change.",
     verification:
-      "Focused coverage records stale cache, changed tokens, acknowledgement reset and concurrent edits; final combined DB replay remains pending.",
+      "Stale-cache, changed-token and concurrent-edit coverage passed; Chrome sent, signed and invoiced the same reviewed $1,000 / 100% schedule.",
   },
   {
     id: "F14",
@@ -152,7 +166,7 @@ const findings: Finding[] = [
     remediation:
       "Hold the document shell to the server loading contract until hydration and distinguish an active fetch from a terminal missing record.",
     verification:
-      "Hydration-contract and cached-miss resolution coverage is recorded; the production-build console check in local Chrome remains pending.",
+      "Hydration and cached-miss coverage passed, the designer production build generated 67 pages, and the full Chrome journey crossed every document identity without a terminal dead end.",
   },
   {
     id: "F04",
@@ -164,7 +178,7 @@ const findings: Finding[] = [
     remediation:
       "Mark carried work as “Time from another project,” name the owner and expose the same distinction to assistive technology before log or discard.",
     verification:
-      "Cross-project timer context has focused component coverage; final local Chrome replay remains pending.",
+      "Cross-project timer context remains covered inside the final 1,841 / 1,841 designer regression run.",
   },
   {
     id: "F06",
@@ -176,7 +190,7 @@ const findings: Finding[] = [
     remediation:
       "Move the sheet onto a true modal dialog with a wired close action, focus containment, outside-tree hiding, Escape handling and focus restoration.",
     verification:
-      "Mouse, keyboard, backdrop and focus behavior have focused interaction coverage; final local Chrome replay remains pending.",
+      "Mouse, keyboard, backdrop and focus behavior passed focused coverage on the same integrated designer head.",
   },
   {
     id: "F08",
@@ -188,7 +202,7 @@ const findings: Finding[] = [
     remediation:
       "Model loading, redirect, cached miss and terminal missing separately; retain a transition state while a valid fetch is in flight.",
     verification:
-      "Resolution-state and document-page coverage records the cached-miss recovery path; final local Chrome replay remains pending.",
+      "Resolution-state coverage passed, and Chrome traversed lead, relationship, proposal and project document identities without a false terminal page.",
   },
   {
     id: "F09",
@@ -200,7 +214,7 @@ const findings: Finding[] = [
     remediation:
       "Return the new canonical document identity from acceptance and route the designer directly into Discovery with replace/push semantics appropriate to context.",
     verification:
-      "Triage navigation and lead-hook return contracts have focused coverage; final local Chrome replay remains pending.",
+      "The fresh Chrome lead routed directly from accepted Brief into Discovery, captured all five essentials and opened Direction.",
   },
   {
     id: "F10",
@@ -212,7 +226,7 @@ const findings: Finding[] = [
     remediation:
       "Expose saving/saved/error at the edited surface, invalidate exact facets, remove noisy polling and make partial-default failures retryable.",
     verification:
-      "Drafting-state and scope-builder suites record refresh, invalidation and partial retry; final local Chrome replay remains pending.",
+      "Save, refresh, invalidation and partial-retry coverage passed. After the late fix, Chrome reopened Journey Proof as Designer User with the correct Client User relationship, zero Sonner toast nodes, no generic error text and no server cardinality error.",
   },
   {
     id: "F11",
@@ -224,7 +238,7 @@ const findings: Finding[] = [
     remediation:
       "Carry field labels into controls, add contextual row-action names and provide direct date text entry with invalid-value protection.",
     verification:
-      "Field-kit, direct-date and contextual-action coverage is recorded; final keyboard replay in local Chrome remains pending.",
+      "Field-kit, direct-date and contextual-action coverage passed; the same lead form and client content remained usable at 390 × 844.",
   },
   {
     id: "F12",
@@ -236,7 +250,7 @@ const findings: Finding[] = [
     remediation:
       "Use a single-column contact/project layout with min-width protection so long values remain reviewable down to the narrow viewport.",
     verification:
-      "Lead-sheet component coverage and a 390px layout check are recorded; final local Chrome replay remains pending.",
+      "The fresh lead was captured successfully, and responsive checks at 1440 × 1000, 1024 × 900 and 390 × 844 preserved the key content and mobile menu.",
   },
   {
     id: "F13",
@@ -248,7 +262,7 @@ const findings: Finding[] = [
     remediation:
       "Preserve the complete authored household name and use a neutral fallback only for blank or known placeholder values.",
     verification:
-      "Family-label unit coverage includes the audited name and nonstandard display copy; final local Chrome replay remains pending.",
+      "Family-label coverage passed on the integrated designer head, including the audited name and nonstandard authored display copy.",
   },
 ];
 
@@ -277,7 +291,7 @@ const hardeningWork: HardeningItem[] = [
   {
     id: "H04",
     title: "Client and share DTO privacy",
-    body: "Client and guest surfaces read purpose-built projections instead of business rows. Trade costs, margins, internal notes and tier-restricted payment detail stay server-side.",
+    body: "Client and guest proposal/share surfaces read purpose-built projections instead of business rows. Trade costs, margins, internal notes and tier-restricted payment detail stay server-side; raw catalog ACLs remain a separate documented risk.",
     proof: "Guest-share focus recorded 4 / 4.",
   },
   {
@@ -285,7 +299,7 @@ const hardeningWork: HardeningItem[] = [
     title: "Activation and FK concurrency integrity",
     body: "Authorization, scoped activation, parent locks and foreign-key protections keep concurrent proposal and lifecycle updates from relinking or clearing protected records.",
     proof:
-      "Database invariants are implemented; the final clean combined replay remains pending.",
+      "The clean reset through migration 00400 passed all 18 SQL suites and 998 assertions.",
   },
   {
     id: "H06",
@@ -297,22 +311,135 @@ const hardeningWork: HardeningItem[] = [
   {
     id: "H07",
     title: "Atomic server phase handoffs",
-    body: "One locked server transaction now validates project authority, exact phase identity, compare-and-swap state and open client decisions before completing a phase and activating its canonical same-lane successor.",
+    body: "One locked server transaction validates project authority, exact phase identity, compare-and-swap state and open client decisions before completing a phase and activating every direct follower across main and branch lanes.",
     proof:
       "The phase RPC suite covers stale retries, blockers, parallel lanes, terminal lanes, rollback and a true two-session race.",
+  },
+  {
+    id: "H08",
+    title: "Exact invoice and checkout authority",
+    body: "Invoice issue, record, void and checkout operations now require exact studio ownership, preserve invoice/project client linkage and bind payment evidence to the precise invoice through idempotent server contracts.",
+    proof:
+      "Negative contractor/manufacturer cases and positive design-studio peer cases are included in the billing regression pack.",
+  },
+  {
+    id: "H09",
+    title: "Durable change-request lifecycle",
+    body: "A scope request keeps its idempotency intent across refresh, distinguishes a client request from a designer authorization and reports financial impact only when a real revised project value exists.",
+    proof:
+      "Remount, retry, origin-language and impact-projection cases are covered across client, designer and data-hook suites.",
+  },
+  {
+    id: "H10",
+    title: "Whole-journey lifecycle authority",
+    body: "Discovery, proposal decisions, option selection, signatures, procurement and closeout now execute through exact relationship checks and atomic server transitions without trusting caller-supplied actor identity.",
+    proof:
+      "Dedicated SQL suites exercise cross-studio denial, idempotency, blockers, terminal state and rollback behavior.",
+  },
+  {
+    id: "H11",
+    title: "Auth and account continuity",
+    body: "Password, magic-link, OAuth and OTP callbacks preserve the intended return path. Account and invoice surfaces expose loading, missing-link and error states instead of silently falling back.",
+    proof:
+      "Callback, return-URL, account-state, receipt and invoice-folio cases have focused component and route coverage.",
+  },
+  {
+    id: "H12",
+    title: "Main-lane and thread projection",
+    body: "The client timeline identifies the canonical main lane while retaining parallel branch work as labeled threads, matching the server rule that all direct followers become active together.",
+    proof:
+      "Projection and topology coverage includes valid branching, missing references, cycles and terminal lanes.",
+  },
+  {
+    id: "H13",
+    title: "Project identity and lead ownership",
+    body: "Project hold/resume, archive and lead transfer now use row-locked, compare-and-swap server authority. Proposal/client provenance and terminal closeout evidence remain immutable, while authorized same-studio transfers retain historical authorship and audit context.",
+    proof:
+      "Project-journey SQL covers owner/admin success; guest, contractor, inactive and foreign-studio denial; stale retries; rollback; and archive immutability.",
+  },
+  {
+    id: "H14",
+    title: "Atomic decision and coordination writes",
+    body: "Decision creation, edits, dependencies, expiry/reopen and resolution now commit through checked RPCs. Project identity cannot move after creation; stale or cross-project dependency writes roll back as one transaction.",
+    proof:
+      "Decision and coordination coverage exercises CAS conflicts, dependency validation, actor boundaries, terminal retries and browser routing through canonical authority.",
+  },
+  {
+    id: "H15",
+    title: "Signature evidence and replay authority",
+    body: "The browser supplies only the proposal and signer name. A service-only bridge adds edge-derived IP, while exact approval and immutable engagement evidence gate activation. Accepted retries never rewrite consent and only repair a missing reciprocal project link.",
+    proof:
+      "Signature SQL and route coverage include forged evidence, wrong clients, claim restoration, activation rollback, idempotent retries and newly-signed confirmation gating.",
+  },
+  {
+    id: "H16",
+    title: "Atomic proposal schedule topology",
+    body: "Phase create, edit, remove, templates, cloning and as-built copy now lock the parent proposal, enforce checked draft authority, preserve main/thread topology and recompute totals in one transaction. Direct browser DML is revoked and durable template receipts make lost-response retries idempotent.",
+    proof:
+      "Phase-authority coverage exercises stale writes, follower rewiring, cross-tab retries, legacy topology repair, exact ownership, clone integrity and rollback.",
   },
 ];
 
 const evidenceRuns: EvidenceRun[] = [
   {
+    surface: "Integrated SQL",
+    result: "18 / 18",
+    detail: "998 assertions after a clean reset through migration 00400",
+  },
+  {
     surface: "Designer portal",
-    result: "1,800 / 1,800",
-    detail: "Latest owning-branch regression run",
+    result: "1,841 / 1,841",
+    detail: "175 / 175 suites · 1 snapshot on the final head",
   },
   {
     surface: "Supabase package",
-    result: "524 / 524",
-    detail: "Hook and contract regression run",
+    result: "547 / 547",
+    detail: "40 files on the final late-fix head",
+  },
+  {
+    surface: "Signature API route",
+    result: "10 / 10",
+    detail: "Trusted-IP and replay boundary",
+  },
+  {
+    surface: "Required type-checks",
+    result: "5 / 5",
+    detail: "Integrated set green; four affected workspaces rechecked after the late fix",
+  },
+  {
+    surface: "Designer build",
+    result: "67 pages",
+    detail: "Production build completed",
+  },
+  {
+    surface: "Client build",
+    result: "39 pages",
+    detail: "Production build completed",
+  },
+  {
+    surface: "Designer lint",
+    result: "0 errors",
+    detail: "186 retained baseline warnings",
+  },
+  {
+    surface: "Designer query cache",
+    result: "2 / 2",
+    detail: "Focused relationship-cardinality regression",
+  },
+  {
+    surface: "Focused designer ESLint",
+    result: "Green",
+    detail: "Late relationship-feedback fix",
+  },
+  {
+    surface: "Phase authoring UI",
+    result: "11 / 11",
+    detail: "Builder and template receipt focus",
+  },
+  {
+    surface: "Phase data hooks",
+    result: "27 / 27",
+    detail: "CAS, template and invalidation focus",
   },
   {
     surface: "Proposal delivery",
@@ -341,23 +468,13 @@ const evidenceRuns: EvidenceRun[] = [
   },
   {
     surface: "Admin strict build",
-    result: "132 / 132",
-    detail: "Static pages generated",
-  },
-  {
-    surface: "Phase authority",
-    result: "PASS",
-    detail: "Atomic SQL suite on migration 00393",
+    result: "Exit 0",
+    detail: "Final strict production build gate",
   },
   {
     surface: "Notifications",
     result: "43 / 43",
     detail: "Delivery-status suite",
-  },
-  {
-    surface: "Portal type-checks",
-    result: "4 / 4",
-    detail: "Designer, admin, client, manufacturer",
   },
   {
     surface: "Nest service builds",
@@ -369,9 +486,9 @@ const evidenceRuns: EvidenceRun[] = [
 const knownLimits: KnownLimit[] = [
   {
     surface: "Client portal full suite",
-    status: "33 / 35 suites · 286 / 287 tests",
+    status: "44 / 46 suites · 337 / 338 runnable tests",
     detail:
-      "Two proven pre-existing failures remain: a stale test imports the removed src/lib/data/orders module, and a manufacturer portal-access expectation is out of date. Coverage is also below the configured gate: 16.71 / 14.26 / 17.13 / 18.48 versus 70 / 60 / 70 / 70.",
+      "Two proven pre-existing failures remain: a stale test imports the removed src/lib/data/orders module, and a manufacturer portal-access expectation is out of date. They are retained as visible baseline debt rather than represented as journey regressions.",
   },
   {
     surface: "Design system full suite",
@@ -393,24 +510,92 @@ const knownLimits: KnownLimit[] = [
   },
 ];
 
+const journeyProof: JourneyProof[] = [
+  {
+    id: "01",
+    title: "Lead became a complete Discovery",
+    body: "Chrome created Journey Proof 1785606377249 and captured all five essentials: scope and room, budget, timeline, style and household context.",
+    evidence: "Brief → Discovery → Direction",
+  },
+  {
+    id: "02",
+    title: "The reviewed commercial terms stayed exact",
+    body: "The designer created the Patina Six, set a $1,000 proposal total and allocated one Final payment milestone at 100%.",
+    evidence: "Six phases · $1,000 · 100%",
+  },
+  {
+    id: "03",
+    title: "Guest access was view-only and revocable",
+    body: "The guest link exposed the intended proposal copy without decision controls. Revocation took effect immediately on reload.",
+    evidence: "View-only → revoked",
+  },
+  {
+    id: "04",
+    title: "Client consent activated the project",
+    body: "client@patina.dev was linked, Client User signed, and project 9ec9b68f… activated. A focused late fix was then retested on the same accepted proposal: Living Room, $1,000 Investment, Final payment / At project completion / 100%, all six phases and signed state were visible.",
+    evidence: "Proposal accepted · signed detail complete",
+  },
+  {
+    id: "05",
+    title: "Billing settled against the same terms",
+    body: "The designer issued INV-0001 and recorded a $1,000 Check payment with reference E2E-journey. The invoice and milestone both read paid.",
+    evidence: "INV-0001 · $0 balance",
+  },
+  {
+    id: "06",
+    title: "Closeout followed operational truth",
+    body: "All six phases completed, billing auto-verified no balance, five manual closeout items were completed, and the project closed and archived.",
+    evidence: "Six complete · closed · archived",
+  },
+  {
+    id: "07",
+    title: "Client and database readback agreed",
+    body: "The client read 6 / 6 project milestones and 100% complete with all six phase names; Final payment showed 100% Paid on August 1, 2026, and the paid $1,000 invoice remained readable. The database confirmed the archived project, accepted proposal with signed_by_name / signed_at, six completed phases, paid invoice, succeeded payment and zero scope change requests.",
+    evidence: "UI + database matched",
+  },
+  {
+    id: "08",
+    title: "Branch topology and responsive layouts held",
+    body: "In Marrow & Vale, completing the Procurement & Orders thread activated Millwork & Fabrication while Design Development stayed active on the main lane. Key client content and the mobile Open menu held at desktop, tablet and mobile widths.",
+    evidence: "1440 × 1000 · 1024 × 900 · 390 × 844",
+  },
+];
+
+const lateFixes: LateFix[] = [
+  {
+    id: "L01",
+    title: "Signed proposal detail now retains the reviewed client copy",
+    status: "Fixed · Chrome retested",
+    detail:
+      "On the same accepted proposal, Chrome confirmed Living Room, $1,000 Investment, Final payment / At project completion / 100%, all six phases and the signed state are visible.",
+  },
+  {
+    id: "L02",
+    title: "Successful lifecycle revisit no longer emits a false error",
+    status: "Fixed · Chrome retested",
+    detail:
+      "Designer User reopened Journey Proof 1785606377249 and saw the correct Client User relationship with zero Sonner toast nodes, no generic error text and no designer-client-for-user cardinality error from the server. Supabase passed 547 / 547, the designer query-cache focus passed 2 / 2, and both affected type-checks were green.",
+  },
+];
+
 const priorityPlan = [
   {
     priority: "P0",
-    title: "Replay the combined database from zero",
-    scope: "Migrations · RLS · RPCs · triggers",
-    body: "Run the complete local database reset and regression pack with every remediation and hardening migration together. Schema, policy, trigger-order or concurrency failure holds the release.",
+    title: "Review the assembled evidence",
+    scope: "Database · Chrome · exceptions",
+    body: "Confirm the clean reset, 998 SQL assertions, package and build gates, Journey Proof browser witness and both late-fix Chrome retests are represented accurately.",
   },
   {
     priority: "P1",
-    title: "Replay lead → closeout in local Chrome",
-    scope: "Designer · client · guest surfaces",
-    body: "Create a fresh lead, progress every lifecycle transition, issue and accept the client-safe proposal, exercise delivery recovery, invoice and install the work, then close the project while capturing console and network evidence.",
+    title: "Authorize production explicitly",
+    scope: "Owner decision · change window · rollback",
+    body: "The local gates and late-fix retests are proven. Explicitly authorize the production migration and deployment sequence, change window and rollback boundary.",
   },
   {
     priority: "P2",
-    title: "Review the evidence before release approval",
-    scope: "Results · exceptions · production plan",
-    body: "Confirm keyboard names, dates, narrow layout, client language and privacy in the same browser pass. Request production authorization only after both pending gates are green.",
+    title: "Deploy deliberately and verify live",
+    scope: "Migrate · deploy · behavior probes",
+    body: "After authorization, use the Patina production runbook, preserve rollback boundaries and verify live behavior rather than inferring success from build output alone.",
   },
 ];
 
@@ -419,28 +604,28 @@ const verificationLedger = [
     layer: "Local remediation head",
     status: "14 / 14 addressed",
     detail:
-      "Every original walkthrough finding and seven adversarial hardening clusters are represented locally.",
+      "Every original walkthrough finding and sixteen adversarial hardening clusters are represented locally; both late UI fixes passed focused Chrome retests.",
     state: "done",
   },
   {
     layer: "Combined DB replay",
-    status: "Pending",
+    status: "Passed",
     detail:
-      "Owning streams reached migration 00393 and passed their focused SQL evidence. The final clean replay on the assembled integration head is awaiting parent verification.",
-    state: "pending",
+      "A clean local reset through migration 00400 passed 18 / 18 SQL suites and 998 assertions on the assembled integration head.",
+    state: "done",
   },
   {
     layer: "Local Chrome journey",
-    status: "Pending",
+    status: "Passed",
     detail:
-      "The complete lead → closeout journey has not been replayed on the combined local head.",
-    state: "pending",
+      "Journey Proof 1785606377249 traversed designer, guest and client surfaces from lead capture through paid invoice, closeout, archive and client readback.",
+    state: "done",
   },
   {
     layer: "Production",
     status: "Not deployed",
     detail:
-      "app.patina.cloud is unchanged; production mutation or deployment was not authorized.",
+      "app.patina.cloud is unchanged. Production authorization is pending; no mutation or deployment was performed.",
     state: "locked",
   },
 ];
@@ -456,13 +641,11 @@ function App() {
     "all",
   );
 
-  const visibleCategories = useMemo(
-    () =>
-      activeCategory === "all"
-        ? categories
-        : categories.filter((category) => category.id === activeCategory),
-    [activeCategory],
-  );
+  const visibleFindingCount =
+    activeCategory === "all"
+      ? findings.length
+      : findings.filter((finding) => finding.category === activeCategory)
+          .length;
 
   return (
     <>
@@ -482,6 +665,8 @@ function App() {
         <nav aria-label="Presentation sections">
           <a href="#coverage">Coverage</a>
           <a href="#hardening">Hardening</a>
+          <a href="#journey-proof">Journey</a>
+          <a href="#late-fixes">Late fixes</a>
           <a href="#known-limits">Known limits</a>
           <a href="#release">Release</a>
           <a href="#verification">Verification</a>
@@ -489,20 +674,21 @@ function App() {
         <span className="report-date">01 AUG 2026</span>
       </header>
 
-      <main id="content">
+      <main id="content" tabIndex={-1}>
         <section className="hero" id="top" aria-labelledby="hero-title">
           <div className="hero-copy">
             <p className="eyebrow">
               Client journey remediation · decision brief
             </p>
             <h1 id="hero-title">
-              The workflow is now designed to <em>fail closed.</em>
+              Lead to archive, <em>proven locally.</em>
             </h1>
             <p className="hero-deck">
               All 14 findings from the app.patina.cloud walkthrough are
-              addressed on the local remediation head, with added protection for
-              concurrent writes, issued documents, delivery recovery, phase
-              handoffs and client-safe data contracts.
+              addressed on the assembled remediation head. A clean database
+              replay and a complete designer, guest and client Chrome journey
+              now prove the lifecycle. Both late UI findings also passed focused
+              Chrome retests; no walkthrough or late UI follow-up remains open.
             </p>
             <a className="text-link" href="#coverage">
               Review the complete ledger <ArrowRight aria-hidden="true" />
@@ -515,38 +701,42 @@ function App() {
           >
             <div className="outcome-rule" aria-hidden="true" />
             <p className="panel-kicker">
-              <CircleDashed aria-hidden="true" /> Current state
+              <MonitorCheck aria-hidden="true" /> Current state
             </p>
             <strong>14 / 14</strong>
-            <h2>Original findings addressed locally</h2>
+            <h2>Original findings addressed; local gates passed</h2>
             <p>
-              The release is not yet cleared. The final combined database replay
-              and the complete lead-to-closeout journey in local Chrome are
-              still pending.
+              The assembled head passed 18 SQL suites with 998 assertions and
+              the full lead-to-archive browser witness. Production authorization
+              is still required.
             </p>
             <div className="status-stamp">
               <LockKeyhole aria-hidden="true" />
               <span>
-                <b>Production unchanged</b>
+                <b>Production unchanged.</b>
                 No deployment was performed
               </span>
             </div>
           </aside>
 
-          <div className="hero-facts" aria-label="Finding distribution">
-            <div>
+          <div
+            className="hero-facts"
+            role="list"
+            aria-label="Finding distribution"
+          >
+            <div role="listitem">
               <span>06</span>
               <p>Integrity & safety</p>
             </div>
-            <div>
+            <div role="listitem">
               <span>04</span>
               <p>Continuity & navigation</p>
             </div>
-            <div>
+            <div role="listitem">
               <span>04</span>
               <p>Feedback & accessibility</p>
             </div>
-            <div className="hero-fact-note">
+            <div className="hero-fact-note" role="listitem">
               <CircleAlert aria-hidden="true" />
               <p>2 critical · 5 high · 7 medium</p>
             </div>
@@ -557,17 +747,16 @@ function App() {
           <p className="eyebrow">Release decision</p>
           <div>
             <h2 id="decision-title">
-              Hold production until two final gates are proven.
+              Local gates are green. Production still needs a decision.
             </h2>
             <p>
-              First, replay the combined database from zero. Then take a fresh
-              lead through closeout in local Chrome across designer, client and
-              guest surfaces. Recorded stream evidence is encouraging, but it is
-              not a final integrated green run.
+              Review the integrated evidence and both late-fix retests,
+              explicitly authorize the production change, then deploy through a
+              deliberate migration and behavior-verification window.
             </p>
           </div>
           <div className="decision-mark" aria-hidden="true">
-            <span>HOLD</span>
+            <span>REVIEW</span>
           </div>
         </section>
 
@@ -584,9 +773,9 @@ function App() {
               </h2>
             </div>
             <p>
-              “Addressed locally” means the remediation and focused coverage
-              exist on the current local head. It does not mean final integrated
-              verification or deployment.
+              “Addressed locally” means the remediation exists and the assembled
+              database, browser and late-fix retest gates passed. It does not
+              mean production was deployed.
             </p>
           </div>
 
@@ -620,16 +809,24 @@ function App() {
             ))}
           </div>
 
-          <div className="category-stack" aria-live="polite">
-            {visibleCategories.map((category) => {
+          <p className="sr-only" role="status" aria-live="polite">
+            Showing {visibleFindingCount} of {findings.length} findings.
+          </p>
+
+          <div className="category-stack">
+            {categories.map((category) => {
               const Icon = category.icon;
               const categoryFindings = findings.filter(
                 (finding) => finding.category === category.id,
               );
+              const isFilteredOut =
+                activeCategory !== "all" && activeCategory !== category.id;
 
               return (
                 <section
-                  className={`finding-group ${category.id}`}
+                  className={`finding-group ${category.id}${
+                    isFilteredOut ? " category-hidden" : ""
+                  }`}
                   id={`group-${category.id}`}
                   key={category.id}
                   aria-labelledby={`group-${category.id}-title`}
@@ -695,9 +892,10 @@ function App() {
             </div>
             <p>
               These are follow-on safeguards found while testing interactions
-              between autosave, delivery, issued records, privacy boundaries and
-              concurrent updates. They are not counted as new walkthrough
-              findings.
+              between autosave, delivery, issued records, privacy boundaries,
+              project identity, decision authority, signature evidence,
+              proposal schedules and concurrent updates. They are not counted
+              as new walkthrough findings.
             </p>
           </div>
 
@@ -728,15 +926,93 @@ function App() {
                 The server will not invent a phase path.
               </h3>
               <p>
-                Older projects with a missing, ambiguous or cyclic{" "}
+                Older projects with a missing referenced successor or cyclic{" "}
                 <code>follows_phase_id</code>
-                chain stop before any write and surface the repair need. Display
-                order is never treated as lifecycle authority; a designer can
-                continue only after the stored topology is repaired and the
-                schedule is refreshed.
+                chain stop before any write and surface the repair need. Valid
+                branching is supported: every direct follower activates in the
+                same transaction, while the client view distinguishes the main
+                lane from labeled parallel threads. Display order is never
+                treated as lifecycle authority.
               </p>
             </div>
           </aside>
+        </section>
+
+        <section
+          className="section journey-proof-section"
+          id="journey-proof"
+          aria-labelledby="journey-proof-title"
+        >
+          <div className="section-head">
+            <div>
+              <p className="eyebrow">
+                Chrome witness · Journey Proof 1785606377249
+              </p>
+              <h2 id="journey-proof-title">
+                One record crossed every consequential boundary.
+              </h2>
+            </div>
+            <p>
+              The browser run used live local data across designer, guest and
+              client surfaces, then reconciled the visible result against the
+              database rather than stopping at a success toast.
+            </p>
+          </div>
+
+          <div
+            className="journey-proof-grid"
+            role="list"
+            aria-label="Lead-to-archive browser evidence"
+          >
+            {journeyProof.map((item) => (
+              <article
+                className="journey-proof-card"
+                role="listitem"
+                key={item.id}
+              >
+                <span className="journey-proof-id">{item.id}</span>
+                <h3>{item.title}</h3>
+                <p>{item.body}</p>
+                <strong>{item.evidence}</strong>
+              </article>
+            ))}
+          </div>
+        </section>
+
+        <section
+          className="section late-fix-section"
+          id="late-fixes"
+          aria-labelledby="late-fixes-title"
+        >
+          <div className="section-head">
+            <div>
+              <p className="eyebrow">
+                Late UI findings · focused fixes retested
+              </p>
+              <h2 id="late-fixes-title">
+                The final browser findings are closed.
+              </h2>
+            </div>
+            <p>
+              The first retest restored the complete signed client copy. The
+              second reopened the same archived journey with the correct client
+              relationship and no false failure feedback.
+            </p>
+          </div>
+
+          <div className="late-fix-grid">
+            {lateFixes.map((item) => (
+              <article className="late-fix-card" key={item.id}>
+                <div className="late-fix-meta">
+                  <Check aria-hidden="true" />
+                  <span>{item.id}</span>
+                  <b>{item.status}</b>
+                </div>
+                <h3>{item.title}</h3>
+                <p>{item.detail}</p>
+              </article>
+            ))}
+          </div>
         </section>
 
         <section
@@ -800,12 +1076,13 @@ function App() {
             <div>
               <p className="eyebrow">Prioritized recommendation</p>
               <h2 id="release-title">
-                Release through two proofs and one approval.
+                Review, authorize, then deploy deliberately.
               </h2>
             </div>
             <p>
-              The local implementation is complete. Priority now reflects the
-              remaining release evidence, not additional feature scope.
+              Local database and browser evidence is complete. The remaining
+              sequence is an owner decision and a controlled production change.
+              Both late UI fixes are included in the evidence review.
             </p>
           </div>
 
@@ -839,18 +1116,23 @@ function App() {
             <div>
               <p className="eyebrow">Evidence ledger</p>
               <h2 id="verification-title">
-                What is known—and what is deliberately pending.
+                The assembled local head is proven.
               </h2>
             </div>
             <p>
-              Recorded stream results are shown exactly as observed. They do not
-              claim that the final combined head is green.
+              Results below combine the final integrated replay with focused
+              owning-stream evidence. Known unrelated baselines remain disclosed
+              above; both late UI findings are fixed and retested.
             </p>
           </div>
 
-          <div className="evidence-runs" aria-label="Recorded test evidence">
+          <div
+            className="evidence-runs"
+            role="list"
+            aria-label="Recorded test evidence"
+          >
             {evidenceRuns.map((run) => (
-              <article className="evidence-run" key={run.surface}>
+              <article className="evidence-run" role="listitem" key={run.surface}>
                 <span>{run.surface}</span>
                 <strong>{run.result}</strong>
                 <p>{run.detail}</p>
@@ -859,12 +1141,16 @@ function App() {
           </div>
 
           <p className="evidence-caveat">
-            These results were recorded within their owning remediation streams.
-            The phase authority stream also reported two fresh resets through
-            migration 00393 with all seeds, a clean atomic SQL suite and the
-            expected RPC grant boundary: anonymous false, authenticated true,
-            service role false. The assembled integration replay and browser
-            gates below remain open pending the final evidence refresh.
+            Final integrated evidence: clean local reset through migration 00400;
+            18 / 18 SQL suites and 998 assertions; 547 / 547 Supabase checks;
+            175 / 175 designer suites with 1,841 / 1,841 tests and one snapshot;
+            10 / 10 signature-route checks; five green integrated type-checks,
+            with Supabase, designer, client and manufacturer rechecked after the
+            late fix; production builds of 67 designer pages and 39 client pages;
+            and admin strict build exit 0. The final relationship regression also
+            passed 2 / 2 with focused ESLint green. The client full-suite baseline
+            remains 44 / 46 suites and 337 / 338 runnable tests because of two
+            unrelated stale failures.
           </p>
 
           <div className="verification-grid">
@@ -897,9 +1183,9 @@ function App() {
               <p className="eyebrow">Explicit boundary</p>
               <h3>No production deployment has occurred.</h3>
               <p>
-                app.patina.cloud is unchanged. Deploy only after the combined
-                database replay and local Chrome journey pass, the evidence is
-                reviewed, and explicit production authorization is given.
+                app.patina.cloud is unchanged. The local gates are proven;
+                production authorization remains pending. Review the evidence,
+                authorize explicitly, then deploy and verify deliberately.
               </p>
             </div>
           </div>
