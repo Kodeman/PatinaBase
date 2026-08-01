@@ -726,6 +726,7 @@ export default function DocumentPage({ params }: { params: Promise<{ id: string 
           <DocColophon
             projectId={row.project_id}
             designerId={row.designer_id}
+            projectStatus={row.project_status}
             isPaused={row.is_paused}
             handsOnTheWork={others}
           />

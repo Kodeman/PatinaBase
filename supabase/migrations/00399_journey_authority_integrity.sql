@@ -39,22 +39,87 @@ SECURITY INVOKER
 SET search_path = public, pg_temp
 AS $$
 BEGIN
-  IF OLD.status IN ('completed', 'archived')
+  IF OLD.status = 'archived'
      AND NEW.status IS DISTINCT FROM OLD.status
   THEN
     RAISE EXCEPTION 'terminal project status is immutable'
       USING ERRCODE = 'check_violation';
   END IF;
 
-  IF NEW.client_id IS DISTINCT FROM OLD.client_id
-     AND NEW.proposal_id IS NOT NULL
+  IF OLD.status = 'completed'
+     AND NEW.status IS DISTINCT FROM OLD.status
+     AND NOT (
+       NEW.status = 'archived'
+       AND current_user IS NOT DISTINCT FROM 'postgres'
+       AND current_setting('app.project_archive_id', true)
+           IS NOT DISTINCT FROM NEW.id::text
+     )
+  THEN
+    RAISE EXCEPTION 'completed projects may only move to the archive'
+      USING ERRCODE = 'check_violation';
+  END IF;
+
+  IF (
+       NEW.closure_checklist IS DISTINCT FROM OLD.closure_checklist
+       OR NEW.portfolio_snapshot IS DISTINCT FROM OLD.portfolio_snapshot
+     )
+     AND (
+       current_user IS DISTINCT FROM 'postgres'
+       OR current_setting('app.project_completion_id', true)
+          IS DISTINCT FROM NEW.id::text
+     )
+  THEN
+    RAISE EXCEPTION 'project closeout evidence may only change through close_project'
+      USING ERRCODE = 'check_violation';
+  END IF;
+
+  IF NEW.status IS DISTINCT FROM OLD.status
+     AND NEW.status = 'archived'
+     AND (
+       current_user IS DISTINCT FROM 'postgres'
+       OR current_setting('app.project_archive_id', true)
+          IS DISTINCT FROM NEW.id::text
+     )
+  THEN
+    RAISE EXCEPTION 'projects may only enter archived through archive_project'
+      USING ERRCODE = 'check_violation';
+  END IF;
+
+  IF NEW.status IS DISTINCT FROM OLD.status
+     AND NEW.status IN ('active', 'on_hold')
+     AND (
+       current_user IS DISTINCT FROM 'postgres'
+       OR current_setting('app.project_operational_status_id', true)
+          IS DISTINCT FROM NEW.id::text
+     )
+  THEN
+    RAISE EXCEPTION
+      'project hold and resume transitions require set_project_operational_status'
+      USING ERRCODE = 'check_violation';
+  END IF;
+
+  IF NEW.designer_id IS DISTINCT FROM OLD.designer_id
+     AND (
+       current_user IS DISTINCT FROM 'postgres'
+       OR current_setting('app.project_reassignment_id', true)
+          IS DISTINCT FROM NEW.id::text
+     )
+  THEN
+    RAISE EXCEPTION 'project lead may only change through reassign_project_lead'
+      USING ERRCODE = 'check_violation';
+  END IF;
+
+  -- The proposal designer is historical provenance after an authorized lead
+  -- transfer. The proposal/client relationship itself never changes: a project
+  -- update must still preserve the source proposal, source designer, and client.
+  IF NEW.proposal_id IS NOT NULL
      AND NOT EXISTS (
        SELECT 1
        FROM public.proposals AS proposal
        JOIN public.designer_clients AS relationship
          ON relationship.id = proposal.designer_client_id
        WHERE proposal.id = NEW.proposal_id
-         AND proposal.designer_id IS NOT DISTINCT FROM NEW.designer_id
+         AND proposal.project_id IS NOT DISTINCT FROM NEW.id
          AND proposal.client_id IS NOT DISTINCT FROM NEW.client_id
          AND relationship.designer_id IS NOT DISTINCT FROM proposal.designer_id
          AND relationship.client_id IS NOT DISTINCT FROM proposal.client_id
@@ -75,13 +140,375 @@ REVOKE ALL ON FUNCTION public.guard_project_terminal_identity_integrity()
 DROP TRIGGER IF EXISTS guard_project_terminal_identity_integrity_trg
   ON public.projects;
 CREATE TRIGGER guard_project_terminal_identity_integrity_trg
-BEFORE UPDATE OF status, client_id, proposal_id ON public.projects
+BEFORE UPDATE OF
+  status, client_id, designer_id, proposal_id,
+  closure_checklist, portfolio_snapshot
+ON public.projects
 FOR EACH ROW EXECUTE FUNCTION public.guard_project_terminal_identity_integrity();
 
 COMMENT ON FUNCTION public.guard_project_terminal_identity_integrity() IS
-  'Independent project table boundary: completed/archived states cannot exit, '
-  'and an activated project client change must retain the exact linked '
-  'proposal client_id/designer_client_id relationship.';
+  'Independent project table boundary: terminal state/evidence, archive/hold '
+  'transitions, and lead reassignment require exact row-scoped capabilities; '
+  'proposal-backed projects always preserve their historical relationship.';
+
+CREATE OR REPLACE FUNCTION public.guard_project_closeout_evidence_insert()
+RETURNS trigger
+LANGUAGE plpgsql
+SECURITY INVOKER
+SET search_path = public, pg_temp
+AS $$
+BEGIN
+  IF current_user IS DISTINCT FROM 'postgres'
+     AND (
+       NEW.closure_checklist IS NOT NULL
+       OR NEW.portfolio_snapshot IS NOT NULL
+     )
+  THEN
+    RAISE EXCEPTION 'project closeout evidence may only be created by close_project'
+      USING ERRCODE = 'check_violation';
+  END IF;
+  RETURN NEW;
+END;
+$$;
+
+REVOKE ALL ON FUNCTION public.guard_project_closeout_evidence_insert()
+  FROM PUBLIC, anon, authenticated, service_role;
+
+DROP TRIGGER IF EXISTS guard_project_closeout_evidence_insert_trg
+  ON public.projects;
+CREATE TRIGGER guard_project_closeout_evidence_insert_trg
+BEFORE INSERT ON public.projects
+FOR EACH ROW EXECUTE FUNCTION public.guard_project_closeout_evidence_insert();
+
+CREATE OR REPLACE FUNCTION public.set_project_operational_status(
+  p_project_id uuid,
+  p_expected_status public.project_status,
+  p_status public.project_status
+)
+RETURNS public.projects
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public, pg_temp
+AS $$
+DECLARE
+  v_project public.projects%ROWTYPE;
+BEGIN
+  IF auth.uid() IS NULL THEN
+    RAISE EXCEPTION 'set_project_operational_status requires an authenticated user'
+      USING ERRCODE = 'insufficient_privilege';
+  END IF;
+  IF p_status NOT IN ('active', 'on_hold') THEN
+    RAISE EXCEPTION 'operational status must be active or on_hold'
+      USING ERRCODE = 'invalid_parameter_value';
+  END IF;
+
+  SELECT * INTO v_project
+  FROM public.projects
+  WHERE id = p_project_id
+  FOR UPDATE;
+
+  IF NOT FOUND OR NOT public._can_author_proposal(v_project.designer_id) THEN
+    RAISE EXCEPTION 'project % not found or access denied', p_project_id
+      USING ERRCODE = 'insufficient_privilege';
+  END IF;
+  IF v_project.status IS DISTINCT FROM p_expected_status THEN
+    RAISE EXCEPTION 'project % changed since it was loaded', p_project_id
+      USING ERRCODE = 'serialization_failure';
+  END IF;
+  IF v_project.status = p_status THEN
+    RETURN v_project;
+  END IF;
+  IF (v_project.status, p_status) NOT IN (
+    ('active'::public.project_status, 'on_hold'::public.project_status),
+    ('on_hold'::public.project_status, 'active'::public.project_status)
+  ) THEN
+    RAISE EXCEPTION 'project % cannot move from % to %',
+      p_project_id, v_project.status, p_status
+      USING ERRCODE = 'check_violation';
+  END IF;
+
+  PERFORM set_config('app.project_operational_status_id', p_project_id::text, true);
+  UPDATE public.projects
+  SET status = p_status, updated_at = now()
+  WHERE id = p_project_id
+  RETURNING * INTO v_project;
+  PERFORM set_config('app.project_operational_status_id', '', true);
+  RETURN v_project;
+END;
+$$;
+
+REVOKE ALL ON FUNCTION public.set_project_operational_status(
+  uuid, public.project_status, public.project_status
+) FROM PUBLIC, anon, service_role;
+GRANT EXECUTE ON FUNCTION public.set_project_operational_status(
+  uuid, public.project_status, public.project_status
+) TO authenticated;
+
+CREATE OR REPLACE FUNCTION public.archive_project(
+  p_project_id uuid,
+  p_expected_status public.project_status
+)
+RETURNS public.projects
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public, pg_temp
+AS $$
+DECLARE
+  v_project public.projects%ROWTYPE;
+BEGIN
+  IF auth.uid() IS NULL THEN
+    RAISE EXCEPTION 'archive_project requires an authenticated user'
+      USING ERRCODE = 'insufficient_privilege';
+  END IF;
+
+  SELECT * INTO v_project
+  FROM public.projects
+  WHERE id = p_project_id
+  FOR UPDATE;
+
+  IF NOT FOUND OR NOT public._can_author_proposal(v_project.designer_id) THEN
+    RAISE EXCEPTION 'project % not found or access denied', p_project_id
+      USING ERRCODE = 'insufficient_privilege';
+  END IF;
+  IF v_project.status = 'archived' THEN
+    RETURN v_project;
+  END IF;
+  IF v_project.status IS DISTINCT FROM p_expected_status THEN
+    RAISE EXCEPTION 'project % changed since it was loaded', p_project_id
+      USING ERRCODE = 'serialization_failure';
+  END IF;
+  IF v_project.status NOT IN ('active', 'on_hold', 'completed') THEN
+    RAISE EXCEPTION 'project % cannot be archived from status %',
+      p_project_id, v_project.status
+      USING ERRCODE = 'check_violation';
+  END IF;
+
+  PERFORM set_config('app.project_archive_id', p_project_id::text, true);
+  UPDATE public.projects
+  SET status = 'archived', updated_at = now()
+  WHERE id = p_project_id
+  RETURNING * INTO v_project;
+  PERFORM set_config('app.project_archive_id', '', true);
+  RETURN v_project;
+END;
+$$;
+
+REVOKE ALL ON FUNCTION public.archive_project(uuid, public.project_status)
+  FROM PUBLIC, anon, service_role;
+GRANT EXECUTE ON FUNCTION public.archive_project(uuid, public.project_status)
+  TO authenticated;
+
+CREATE OR REPLACE FUNCTION public.reassign_project_lead(
+  p_project_id uuid,
+  p_expected_designer_id uuid,
+  p_new_designer_id uuid
+)
+RETURNS public.projects
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public, pg_temp
+AS $$
+DECLARE
+  v_actor uuid := auth.uid();
+  v_project public.projects%ROWTYPE;
+  v_old_relationship public.designer_clients%ROWTYPE;
+  v_new_relationship_id uuid;
+  v_studio_id uuid;
+  v_actor_name text;
+  v_decision record;
+BEGIN
+  IF v_actor IS NULL THEN
+    RAISE EXCEPTION 'reassign_project_lead requires an authenticated user'
+      USING ERRCODE = 'insufficient_privilege';
+  END IF;
+  IF p_new_designer_id IS NULL THEN
+    RAISE EXCEPTION 'a new lead designer is required'
+      USING ERRCODE = 'invalid_parameter_value';
+  END IF;
+
+  SELECT * INTO v_project
+  FROM public.projects
+  WHERE id = p_project_id
+  FOR UPDATE;
+
+  IF NOT FOUND THEN
+    RAISE EXCEPTION 'project % not found or access denied', p_project_id
+      USING ERRCODE = 'insufficient_privilege';
+  END IF;
+  IF v_project.designer_id IS DISTINCT FROM p_expected_designer_id THEN
+    RAISE EXCEPTION 'project % lead changed since it was loaded', p_project_id
+      USING ERRCODE = 'serialization_failure';
+  END IF;
+  IF v_project.status IN ('completed', 'archived') THEN
+    RAISE EXCEPTION 'terminal project lead is immutable'
+      USING ERRCODE = 'check_violation';
+  END IF;
+  SELECT organization.id INTO v_studio_id
+    FROM public.organizations AS organization
+    JOIN public.organization_members AS old_membership
+      ON old_membership.organization_id = organization.id
+    JOIN public.organization_members AS new_membership
+      ON new_membership.organization_id = organization.id
+    WHERE organization.id = v_project.studio_id
+      AND old_membership.user_id = v_project.designer_id
+      AND old_membership.status = 'active'
+      AND old_membership.role <> 'guest'
+      AND new_membership.user_id = p_new_designer_id
+      AND new_membership.status = 'active'
+      AND new_membership.role <> 'guest'
+      AND organization.type = 'design_studio'
+      AND organization.status = 'active'
+      AND (
+        v_actor = v_project.designer_id
+        OR EXISTS (
+          SELECT 1
+          FROM public.organization_members AS actor_membership
+          WHERE actor_membership.organization_id = organization.id
+            AND actor_membership.user_id = v_actor
+            AND actor_membership.status = 'active'
+            AND actor_membership.role IN ('owner', 'admin')
+        )
+      )
+    ORDER BY organization.id
+    LIMIT 1;
+
+  IF v_studio_id IS NULL
+     OR NOT EXISTS (
+       SELECT 1 FROM public.profiles
+       WHERE id = p_new_designer_id AND is_designer IS TRUE
+     )
+  THEN
+    RAISE EXCEPTION
+      'lead reassignment requires the current lead or an exact-studio owner/admin and an active designer target'
+      USING ERRCODE = 'insufficient_privilege';
+  END IF;
+  IF p_new_designer_id = v_project.designer_id THEN
+    RETURN v_project;
+  END IF;
+
+  SELECT * INTO v_old_relationship
+  FROM public.designer_clients
+  WHERE (
+      v_project.proposal_id IS NOT NULL
+      AND id = (
+        SELECT proposal.designer_client_id
+        FROM public.proposals AS proposal
+        WHERE proposal.id = v_project.proposal_id
+      )
+    ) OR (
+      v_project.proposal_id IS NULL
+      AND designer_id = v_project.designer_id
+      AND client_id = v_project.client_id
+    )
+  ORDER BY (status <> 'lead') DESC, created_at, id
+  LIMIT 1
+  FOR UPDATE;
+
+  IF NOT FOUND THEN
+    RAISE EXCEPTION 'project has no canonical designer-client relationship'
+      USING ERRCODE = 'check_violation';
+  END IF;
+
+  INSERT INTO public.designer_clients (
+    designer_id, client_id, client_name, client_email, nickname,
+    status, source, first_project_at, last_project_at
+  ) VALUES (
+    p_new_designer_id, v_project.client_id,
+    v_old_relationship.client_name, v_old_relationship.client_email,
+    v_old_relationship.nickname, 'active',
+    COALESCE(v_old_relationship.source, 'direct'),
+    COALESCE(v_old_relationship.first_project_at, now()), now()
+  )
+  ON CONFLICT (designer_id, client_id)
+    WHERE client_id IS NOT NULL AND status <> 'lead'
+  DO UPDATE SET last_project_at = now(), updated_at = now()
+  RETURNING id INTO v_new_relationship_id;
+
+  INSERT INTO public.project_team_members (
+    project_id, user_id, role, assigned_by, removed_at
+  ) VALUES (
+    p_project_id, v_project.designer_id, 'previous_lead', v_actor, NULL
+  )
+  ON CONFLICT (project_id, user_id, role)
+  DO UPDATE SET removed_at = NULL, assigned_by = EXCLUDED.assigned_by,
+                updated_at = now();
+
+  UPDATE public.project_team_members
+  SET removed_at = now(), updated_at = now()
+  WHERE project_id = p_project_id
+    AND user_id = v_project.designer_id
+    AND role = 'lead_designer'
+    AND removed_at IS NULL;
+
+  INSERT INTO public.project_team_members (
+    project_id, user_id, role, assigned_by, removed_at
+  ) VALUES (
+    p_project_id, p_new_designer_id, 'lead_designer', v_actor, NULL
+  )
+  ON CONFLICT (project_id, user_id, role)
+  DO UPDATE SET removed_at = NULL, assigned_by = EXCLUDED.assigned_by,
+                updated_at = now();
+
+  SELECT full_name INTO v_actor_name
+  FROM public.profiles
+  WHERE id = v_actor;
+
+  INSERT INTO public.client_activity_log (
+    designer_client_id, activity_type, title, metadata, actor_name
+  ) VALUES (
+    v_old_relationship.id, 'lead_reassigned', 'Lead designer reassigned',
+    jsonb_build_object(
+      'project_id', p_project_id,
+      'old_designer_id', v_project.designer_id,
+      'new_designer_id', p_new_designer_id
+    ),
+    COALESCE(v_actor_name, 'Unknown')
+  );
+
+  INSERT INTO public.audit_logs (
+    user_id, organization_id, action, resource_type, resource_id,
+    old_values, new_values, metadata
+  ) VALUES (
+    v_actor, v_studio_id, 'project.lead_reassigned', 'project', p_project_id,
+    jsonb_build_object('designer_id', v_project.designer_id),
+    jsonb_build_object('designer_id', p_new_designer_id),
+    jsonb_build_object('via', 'reassign_project_lead')
+  );
+
+  PERFORM set_config('app.project_reassignment_id', p_project_id::text, true);
+  UPDATE public.projects
+  SET designer_id = p_new_designer_id, updated_at = now()
+  WHERE id = p_project_id
+  RETURNING * INTO v_project;
+  PERFORM set_config('app.project_reassignment_id', '', true);
+
+  -- Proposal approvals retain the source proposal relationship as historical
+  -- evidence. Other project decisions follow the current lead atomically.
+  FOR v_decision IN
+    SELECT id
+    FROM public.client_decisions
+    WHERE project_id = p_project_id
+      AND linked_proposal_id IS NULL
+    ORDER BY id
+    FOR UPDATE
+  LOOP
+    PERFORM set_config('app.client_decision_write_id', v_decision.id::text, true);
+    UPDATE public.client_decisions
+    SET designer_id = p_new_designer_id,
+        designer_client_id = v_new_relationship_id,
+        updated_at = now()
+    WHERE id = v_decision.id;
+  END LOOP;
+  PERFORM set_config('app.client_decision_write_id', '', true);
+
+  RETURN v_project;
+END;
+$$;
+
+REVOKE ALL ON FUNCTION public.reassign_project_lead(uuid, uuid, uuid)
+  FROM PUBLIC, anon, service_role;
+GRANT EXECUTE ON FUNCTION public.reassign_project_lead(uuid, uuid, uuid)
+  TO authenticated;
 
 -- ── Brief → Discovery exact design-studio authority ────────────────────────
 
