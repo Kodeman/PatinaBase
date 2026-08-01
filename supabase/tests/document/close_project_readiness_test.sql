@@ -144,8 +144,76 @@ BEGIN
 END;
 $$;
 
+CREATE OR REPLACE FUNCTION pg_temp.expect_project_insert_failure(
+  p_project_id uuid,
+  p_status public.project_status,
+  p_completed_at timestamptz,
+  p_forge_guc boolean,
+  p_label text
+)
+RETURNS void
+LANGUAGE plpgsql
+AS $$
+DECLARE
+  v_error text;
+BEGIN
+  PERFORM set_config(
+    'app.project_completion_id',
+    CASE WHEN p_forge_guc THEN p_project_id::text ELSE '' END,
+    true
+  );
+  BEGIN
+    INSERT INTO public.projects (
+      id, name, designer_id, created_by, status, completed_at
+    ) VALUES (
+      p_project_id,
+      p_label,
+      'a7000000-0000-4000-8000-000000000001',
+      'a7000000-0000-4000-8000-000000000001',
+      p_status,
+      p_completed_at
+    );
+  EXCEPTION WHEN check_violation THEN
+    v_error := SQLERRM;
+  END;
+  PERFORM set_config('app.project_completion_id', '', true);
+
+  ASSERT v_error = 'project inserts cannot start in terminal or completed state',
+    format('%s should reject, got %L', p_label, v_error);
+  ASSERT NOT EXISTS (
+    SELECT 1 FROM public.projects WHERE id = p_project_id
+  ), format('%s rejected insert must leave no row', p_label);
+END;
+$$;
+
 SET LOCAL ROLE authenticated;
 SELECT pg_temp.assume_closeout_owner();
+
+-- RLS-valid project creation stays available, but no browser writer may start
+-- at a terminal state or pre-stamp completion. The exact completion GUC alone
+-- remains forgeable and therefore cannot authorize an INSERT.
+INSERT INTO public.projects (
+  id, name, designer_id, created_by, status
+)
+VALUES (
+  'a7100000-0000-4000-8000-000000000009',
+  'Valid active project',
+  'a7000000-0000-4000-8000-000000000001',
+  'a7000000-0000-4000-8000-000000000001',
+  'active'
+);
+SELECT pg_temp.expect_project_insert_failure(
+  'a7100000-0000-4000-8000-000000000006',
+  'completed', NULL, true, 'forged completed insert'
+);
+SELECT pg_temp.expect_project_insert_failure(
+  'a7100000-0000-4000-8000-000000000007',
+  'archived', NULL, false, 'archived insert'
+);
+SELECT pg_temp.expect_project_insert_failure(
+  'a7100000-0000-4000-8000-000000000008',
+  'active', now(), false, 'pre-stamped active insert'
+);
 
 -- RLS update access is not completion authority. Even a forged row-scoped GUC
 -- is insufficient because a browser caller remains current_user=authenticated.

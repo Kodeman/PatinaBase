@@ -5,6 +5,7 @@ const select = vi.fn();
 const single = vi.fn();
 const from = vi.fn();
 const getUser = vi.fn();
+const rpc = vi.fn();
 
 const builder = { insert, select, single };
 insert.mockReturnValue(builder);
@@ -13,6 +14,7 @@ select.mockReturnValue(builder);
 const supabaseClient = {
   auth: { getUser },
   from,
+  rpc,
 };
 
 vi.mock("@supabase/ssr", () => ({
@@ -25,7 +27,11 @@ vi.mock("@tanstack/react-query", () => ({
   useQueryClient: () => ({ invalidateQueries: vi.fn() }),
 }));
 
-import { useCreateProposal } from "../use-proposals";
+import {
+  useCreateProposal,
+  useDeclineProposal,
+  useEnterRevision,
+} from "../use-proposals";
 
 beforeEach(() => {
   vi.clearAllMocks();
@@ -34,6 +40,7 @@ beforeEach(() => {
   from.mockReturnValue(builder);
   getUser.mockResolvedValue({ data: { user: { id: "designer-1" } } });
   single.mockResolvedValue({ data: { id: "proposal-1" }, error: null });
+  rpc.mockResolvedValue({ data: { id: "proposal-1" }, error: null });
 });
 
 function createProposalMutation() {
@@ -89,5 +96,41 @@ describe("useCreateProposal client relationship identity", () => {
         designer_client_id: null,
       }),
     );
+  });
+});
+
+describe("proposal lifecycle mutations", () => {
+  it("enters revision through the canonical RPC instead of a table update", async () => {
+    const mutation = (
+      useEnterRevision() as unknown as {
+        mutationFn: (input: { proposalId: string }) => Promise<unknown>;
+      }
+    ).mutationFn;
+
+    await mutation({ proposalId: "proposal-1" });
+
+    expect(rpc).toHaveBeenCalledWith("begin_proposal_revision", {
+      p_proposal_id: "proposal-1",
+    });
+    expect(from).not.toHaveBeenCalled();
+  });
+
+  it("declines through the canonical RPC with a normalized optional reason", async () => {
+    const mutation = (
+      useDeclineProposal() as unknown as {
+        mutationFn: (input: {
+          proposalId: string;
+          reason?: string;
+        }) => Promise<unknown>;
+      }
+    ).mutationFn;
+
+    await mutation({ proposalId: "proposal-1", reason: "  Not ready  " });
+
+    expect(rpc).toHaveBeenCalledWith("decline_proposal", {
+      p_proposal_id: "proposal-1",
+      p_reason: "Not ready",
+    });
+    expect(from).not.toHaveBeenCalled();
   });
 });

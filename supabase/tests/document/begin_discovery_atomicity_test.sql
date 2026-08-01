@@ -150,6 +150,9 @@ $$;
 DO $$
 DECLARE
   v_result jsonb;
+  v_direction_id uuid;
+  v_revision_id uuid;
+  v_duplicate_id uuid;
 BEGIN
   v_result := public.begin_discovery('d6200000-0000-4000-8000-000000000002');
   ASSERT (v_result->>'designerClientId')::uuid =
@@ -162,6 +165,55 @@ BEGIN
           FROM public.designer_clients
           WHERE id = 'd6300000-0000-4000-8000-000000000002'),
     'profile-less reuse must preserve NULL client_id and refresh contact fields';
+
+  -- Shape B is an intentional one-profile-leg shape: the proposal keeps the
+  -- captured relationship even though that relationship has no auth profile.
+  -- Exercise the real authenticated Discovery→Direction writer, then both clone
+  -- modes, so the table boundary cannot regress this household to a dead end.
+  INSERT INTO public.client_discovery (
+    designer_client_id, designer_id, project_type, rooms,
+    budget_min_cents, budget_max_cents, target_date,
+    style_keywords, lifestyle
+  ) VALUES (
+    'd6300000-0000-4000-8000-000000000002',
+    'd6000000-0000-4000-8000-000000000001',
+    'full_service',
+    '[{"name":"Living room","room_type":"living"}]'::jsonb,
+    100000, 200000, current_date + 60,
+    ARRAY['warm', 'quiet'], '["family"]'::jsonb
+  );
+
+  v_direction_id := public.begin_direction_from_discovery(
+    'd6300000-0000-4000-8000-000000000002'
+  );
+  ASSERT (SELECT status = 'draft'
+                 AND client_id IS NULL
+                 AND designer_client_id = 'd6300000-0000-4000-8000-000000000002'
+          FROM public.proposals WHERE id = v_direction_id),
+    'authenticated begin_direction must admit the canonical profileless Shape-B draft';
+  ASSERT public.begin_direction_from_discovery(
+           'd6300000-0000-4000-8000-000000000002'
+         ) = v_direction_id,
+    'profileless begin_direction retry must remain idempotent';
+
+  v_revision_id := public.clone_proposal(
+    v_direction_id, 'revision', 'Profileless revision'
+  );
+  v_duplicate_id := public.clone_proposal(
+    v_direction_id, 'duplicate', NULL
+  );
+  ASSERT (SELECT status = 'draft'
+                 AND client_id IS NULL
+                 AND designer_client_id = 'd6300000-0000-4000-8000-000000000002'
+                 AND parent_proposal_id = v_direction_id
+          FROM public.proposals WHERE id = v_revision_id),
+    'profileless revision clone must preserve its Shape-B relationship';
+  ASSERT (SELECT status = 'draft'
+                 AND client_id IS NULL
+                 AND designer_client_id = 'd6300000-0000-4000-8000-000000000002'
+                 AND parent_proposal_id IS NULL
+          FROM public.proposals WHERE id = v_duplicate_id),
+    'profileless duplicate clone must preserve its Shape-B relationship';
 END;
 $$;
 
