@@ -61,6 +61,7 @@ export function CaptureLeadSheet({
   const [project, setProject] = useState('');
   const [source, setSource] = useState('');
   const [error, setError] = useState<string | null>(null);
+  const [touched, setTouched] = useState({ name: false, project: false });
 
   // Fresh form every open; clear any prior error.
   useEffect(() => {
@@ -70,12 +71,23 @@ export function CaptureLeadSheet({
       setProject('');
       setSource('');
       setError(null);
+      setTouched({ name: false, project: false });
     }
   }, [open]);
+
+  const nameMissing = name.trim() === '';
+  const projectMissing = project.trim() === '';
+  const canSubmit = !nameMissing && !projectMissing;
 
   const submit = (e: React.FormEvent) => {
     e.preventDefault();
     setError(null);
+
+    if (!canSubmit) {
+      setTouched({ name: true, project: true });
+      setError('Add a name and a one-line project note before beginning the Brief.');
+      return;
+    }
 
     const trimmedContact = contact.trim();
     const contactIsEmail =
@@ -137,17 +149,27 @@ export function CaptureLeadSheet({
           Who just came in?
         </h2>
         <p className="mt-1.5 text-[14px] leading-relaxed text-[var(--color-charcoal)]">
-          Just enough to begin. The Brief fills in as you go — nothing else is
-          required.
+          A name and one-line project note are enough to begin. Contact and
+          source can come later.
         </p>
 
         <div className="mt-7 space-y-5">
-          <Field label="Name">
+          <Field
+            id="capture-lead-name"
+            label="Name"
+            required
+            error={touched.name && nameMissing ? 'Add the client or household name.' : undefined}
+          >
             <Input
+              id="capture-lead-name"
               autoFocus
               value={name}
               onChange={setName}
+              onBlur={() => setTouched((current) => ({ ...current, name: true }))}
               placeholder="e.g. The Okafors"
+              required
+              invalid={touched.name && nameMissing}
+              describedBy={touched.name && nameMissing ? 'capture-lead-name-error' : undefined}
             />
           </Field>
 
@@ -155,24 +177,42 @@ export function CaptureLeadSheet({
             data-testid="lead-contact-project-fields"
             className="grid grid-cols-1 gap-5"
           >
-            <Field label="Contact">
+            <Field id="capture-lead-contact" label="Contact">
               <Input
+                id="capture-lead-contact"
                 value={contact}
                 onChange={setContact}
                 placeholder="email or phone"
               />
             </Field>
-            <Field label="The project (one line)">
+            <Field
+              id="capture-lead-project"
+              label="The project (one line)"
+              required
+              error={
+                touched.project && projectMissing
+                  ? 'Add a one-line note about the project.'
+                  : undefined
+              }
+            >
               <Input
+                id="capture-lead-project"
                 value={project}
                 onChange={setProject}
+                onBlur={() => setTouched((current) => ({ ...current, project: true }))}
                 placeholder="e.g. Downtown loft refresh"
+                required
+                invalid={touched.project && projectMissing}
+                describedBy={
+                  touched.project && projectMissing ? 'capture-lead-project-error' : undefined
+                }
               />
             </Field>
           </div>
 
-          <Field label="Where from">
+          <Field id="capture-lead-source" label="Where from">
             <Input
+              id="capture-lead-source"
               value={source}
               onChange={setSource}
               placeholder="how they found you"
@@ -219,9 +259,11 @@ export function CaptureLeadSheet({
             actionKey="begin-brief"
             variant="primary"
             type="submit"
+            disabled={!canSubmit || createLead.isPending}
             loading={createLead.isPending}
             loadingLabel="Beginning…"
             trailing="→"
+            aria-describedby={!canSubmit ? 'capture-lead-requirements' : undefined}
           >
             Begin the Brief
           </DocumentAction>
@@ -236,46 +278,91 @@ export function CaptureLeadSheet({
             opens the Brief
           </span>
         </DocumentActionGroup>
+        {!canSubmit && (
+          <p
+            id="capture-lead-requirements"
+            role="status"
+            className="mt-2 text-[12px] text-[var(--color-aged-oak)]"
+          >
+            Add a name and one-line project note to begin.
+          </p>
+        )}
       </form>
     </DocSheet>
   );
 }
 
 function Field({
+  id,
   label,
+  required = false,
+  error,
   children,
 }: {
+  id: string;
   label: string;
+  required?: boolean;
+  error?: string;
   children: React.ReactNode;
 }) {
   return (
-    <label className="block">
-      <span className="mb-1.5 block font-mono text-[12px] uppercase tracking-[0.1em] text-[var(--color-charcoal)]">
+    <div className="block">
+      <label
+        htmlFor={id}
+        className="mb-1.5 block font-mono text-[12px] uppercase tracking-[0.1em] text-[var(--color-charcoal)]"
+      >
         {label}
-      </span>
+        {required && (
+          <span className="ml-1 text-[var(--color-terracotta)]">required</span>
+        )}
+      </label>
       {children}
-    </label>
+      {error && (
+        <p
+          id={`${id}-error`}
+          role="alert"
+          className="mt-1.5 text-[12px] text-[var(--color-terracotta)]"
+        >
+          {error}
+        </p>
+      )}
+    </div>
   );
 }
 
 function Input({
+  id,
   value,
   onChange,
+  onBlur,
   placeholder,
   autoFocus,
+  required = false,
+  invalid = false,
+  describedBy,
 }: {
+  id: string;
   value: string;
   onChange: (v: string) => void;
+  onBlur?: () => void;
   placeholder?: string;
   autoFocus?: boolean;
+  required?: boolean;
+  invalid?: boolean;
+  describedBy?: string;
 }) {
   return (
     <input
+      id={id}
       type="text"
       autoFocus={autoFocus}
       value={value}
       onChange={(e) => onChange(e.target.value)}
+      onBlur={onBlur}
       placeholder={placeholder}
+      required={required}
+      aria-invalid={invalid || undefined}
+      aria-describedby={describedBy}
       className="min-h-11 min-w-0 w-full border-b border-[var(--color-pearl)] bg-transparent px-1 py-2 text-[16px] text-[var(--color-charcoal)] placeholder:text-[var(--text-faint)] focus:border-[var(--color-clay)] focus:outline-none focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-clay)]"
     />
   );
