@@ -48,6 +48,7 @@ import { useDocumentSurface } from '@/lib/help-system/use-document-surface';
 import { DOCUMENT_SURFACE_KEYS } from '@/lib/help-system/document-surface-keys';
 import { AccountBand } from '@/components/document/account-band';
 import { PhaseTimeline } from '@/components/document/phase-timeline';
+import { PhaseAdvanceControl } from '@/components/document/phase-advance-control';
 import { ScheduleRule } from '@/components/document/schedule/schedule-rule';
 import { ScheduleNavProvider } from '@/components/document/schedule/schedule-nav-context';
 import { RippleProvider } from '@/components/document/schedule/schedule-ripple-context';
@@ -561,6 +562,15 @@ export default function DocumentPage({ params }: { params: Promise<{ id: string 
             {row.engagement_kind === 'project' && row.project_id && (
               <ScheduleConfirmStrip projectId={row.project_id} />
             )}
+
+            {/* The phase handoff belongs to the project, not to either schedule
+                renderer. Keeping it below their shared mount makes it reachable
+                through Project and Install, with the Spine flag on or off. */}
+            {row.engagement_kind === 'project' &&
+              row.project_id &&
+              project?.status === 'active' && (
+                <PhaseAdvanceControl projectId={row.project_id} phases={phases} />
+              )}
 
           {/* The active section — exactly one (§4). */}
           <div
