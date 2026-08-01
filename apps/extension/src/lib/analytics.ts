@@ -24,9 +24,12 @@ export function getPostHog() {
     ip: false,
   });
 
-  // `surface` super-property — every event carries it. Primary dashboard key
-  // (designer = designer-web ∪ extension ∪ field-ios).
-  posthogInstance.register({ surface: 'extension' });
+  // Super-properties are attached to every event. Read the installed manifest
+  // so adoption telemetry describes the binary actually running in Chrome.
+  posthogInstance.register({
+    surface: 'extension',
+    app_version: chrome.runtime.getManifest().version,
+  });
 
   return posthogInstance;
 }
