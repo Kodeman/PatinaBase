@@ -369,4 +369,52 @@ describe('useReorderSwatches', () => {
     expectIdAndOrder(b1, 'b', 1);
     expectIdAndOrder(b2, 'c', 2);
   });
+
+  it('invalidates persisted palette projections after a partial reorder failure', async () => {
+    const firstUpdate = pushTableResult('palette_swatches', {
+      data: null,
+      error: null,
+    });
+    const failedUpdate = pushTableResult('palette_swatches', {
+      data: null,
+      error: new Error('second swatch failed'),
+    });
+    const variables = {
+      paletteId: 'pal-1',
+      proposalId: 'prop-1',
+      orderedIds: ['a', 'b', 'c'],
+    };
+    const config = useReorderSwatches() as unknown as {
+      mutationFn: (input: typeof variables) => Promise<void>;
+      onSettled: (
+        data: unknown,
+        error: unknown,
+        input: typeof variables,
+      ) => Promise<void>;
+    };
+
+    const failure = await config.mutationFn(variables).then(
+      () => null,
+      (error) => error,
+    );
+
+    expect(failure).toEqual(new Error('second swatch failed'));
+    expect(firstUpdate.__chain.some((call) => call.method === 'update')).toBe(true);
+    expect(failedUpdate.__chain.some((call) => call.method === 'update')).toBe(true);
+
+    await config.onSettled(undefined, failure, variables);
+
+    expect(invalidateQueries).toHaveBeenCalledWith({
+      queryKey: ['proposal-palette', 'pal-1'],
+    });
+    expect(invalidateQueries).toHaveBeenCalledWith({
+      queryKey: ['proposal-palettes'],
+    });
+    expect(invalidateQueries).toHaveBeenCalledWith({
+      queryKey: ['drafting-facets', 'prop-1'],
+    });
+    expect(invalidateQueries).toHaveBeenCalledWith({
+      queryKey: ['proposal-mirror', 'prop-1'],
+    });
+  });
 });

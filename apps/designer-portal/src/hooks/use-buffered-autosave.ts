@@ -1,6 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { registerProposalAutosave } from '@/lib/proposal-autosave-registry';
 
 export type BufferedAutosaveState =
   | 'idle'
@@ -10,6 +11,7 @@ export type BufferedAutosaveState =
   | 'error';
 
 interface BufferedAutosaveOptions<Key extends string, Patch extends object> {
+  proposalId: string;
   save: (key: Key, patch: Patch) => Promise<unknown>;
   delay?: number;
 }
@@ -28,6 +30,7 @@ function firstBufferedError<Key extends string>(
  * clearing the timer and dropping the designer's last keystrokes.
  */
 export function useBufferedAutosave<Key extends string, Patch extends object>({
+  proposalId,
   save,
   delay = 600,
 }: BufferedAutosaveOptions<Key, Patch>) {
@@ -42,6 +45,8 @@ export function useBufferedAutosave<Key extends string, Patch extends object>({
   const errorsRef = useRef(new Map<Key, string>());
   const mountedRef = useRef(false);
   const flushRef = useRef<(key: Key) => Promise<void>>(async () => {});
+  const flushAllRef = useRef<() => Promise<void>>(async () => {});
+  const registryNotifyRef = useRef<() => void>(() => {});
 
   const [state, setState] = useState<BufferedAutosaveState>('idle');
   const [error, setError] = useState<string | null>(null);
@@ -65,6 +70,7 @@ export function useBufferedAutosave<Key extends string, Patch extends object>({
     if (!pendingRef.current.has(key)) return;
 
     errorsRef.current.delete(key);
+    registryNotifyRef.current();
     if (mountedRef.current) {
       const remainingError = firstBufferedError(errorsRef.current);
       setState(remainingError ? 'error' : 'saving');
@@ -89,6 +95,7 @@ export function useBufferedAutosave<Key extends string, Patch extends object>({
               ? saveError.message
               : 'The latest changes could not be saved.';
           errorsRef.current.set(key, message);
+          registryNotifyRef.current();
           if (mountedRef.current) {
             setState('error');
             setError(message);
@@ -117,8 +124,10 @@ export function useBufferedAutosave<Key extends string, Patch extends object>({
       if (inFlightRef.current.get(key) === promise) {
         inFlightRef.current.delete(key);
       }
+      registryNotifyRef.current();
     });
     inFlightRef.current.set(key, promise);
+    registryNotifyRef.current();
     await promise;
   }, []);
 
@@ -131,6 +140,7 @@ export function useBufferedAutosave<Key extends string, Patch extends object>({
         ...patch,
       });
       errorsRef.current.delete(key);
+      registryNotifyRef.current();
       if (mountedRef.current) {
         const remainingError = firstBufferedError(errorsRef.current);
         setState(
@@ -161,23 +171,48 @@ export function useBufferedAutosave<Key extends string, Patch extends object>({
       ...inFlightRef.current.keys(),
     ]);
     await Promise.all([...keys].map((key) => flushRef.current(key)));
+    const bufferedError = firstBufferedError(errorsRef.current);
+    if (bufferedError) throw new Error(bufferedError);
+    if (pendingRef.current.size > 0 || inFlightRef.current.size > 0) {
+      throw new Error('Proposal edits are still being saved.');
+    }
   }, []);
+
+  flushAllRef.current = flushAll;
 
   useEffect(() => {
     const timers = timersRef.current;
-    const pending = pendingRef.current;
+    let detached = false;
+    let registration: ReturnType<typeof registerProposalAutosave>;
+    const handle = {
+      getSnapshot: () => ({
+        dirty: pendingRef.current.size > 0,
+        flushing: inFlightRef.current.size > 0,
+        error: firstBufferedError(errorsRef.current),
+      }),
+      flush: async () => {
+        registration.notify();
+        try {
+          await flushAllRef.current();
+          if (detached) registration.unregister();
+        } finally {
+          registration.notify();
+        }
+      },
+    };
+    registration = registerProposalAutosave(proposalId, handle);
+    registryNotifyRef.current = registration.notify;
     mountedRef.current = true;
     return () => {
       mountedRef.current = false;
+      detached = true;
       for (const timer of timers.values()) clearTimeout(timer);
       timers.clear();
-      // React Query mutations outlive their observer. Start every outstanding
-      // write before the component releases its hook instance.
-      for (const key of pending.keys()) {
-        void flushRef.current(key);
-      }
+      // Keep a detached, failed buffer registered. The SendSheet barrier can
+      // retry it; unregister only after its final patch reaches persistence.
+      void handle.flush().catch(() => registration.notify());
     };
-  }, []);
+  }, [proposalId]);
 
   return { queue, flush, flushAll, state, error };
 }

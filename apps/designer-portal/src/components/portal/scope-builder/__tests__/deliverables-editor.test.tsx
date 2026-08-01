@@ -54,7 +54,9 @@ describe('DeliverablesEditor autosave integrity', () => {
   afterEach(() => jest.useRealTimers());
 
   it('flushes the final label when the editor unmounts before debounce', async () => {
-    const { unmount } = render(<DeliverablesEditor phaseId="phase-1" />);
+    const { unmount } = render(
+      <DeliverablesEditor proposalId="proposal-1" phaseId="phase-1" />,
+    );
 
     fireEvent.change(screen.getByDisplayValue('Floor plan'), {
       target: { value: 'Final floor plan' },

@@ -99,6 +99,7 @@ vi.mock('@tanstack/react-query', () => ({
 import {
   useSaveBoardLayout,
   useBoardsWithItems,
+  useDuplicateBoard,
   useUpsertBoard,
   useProjectOwnedBoards,
   buildDuplicateBoardItemRows,
@@ -323,6 +324,90 @@ describe('buildDuplicateBoardItemRows', () => {
 
   it('returns an empty array for a board with no items', () => {
     expect(buildDuplicateBoardItemRows('new-board', [])).toEqual([]);
+  });
+});
+
+describe('useDuplicateBoard cache recovery', () => {
+  it('invalidates persisted board projections when copying items fails after board creation', async () => {
+    pushTableResult('proposal_boards', {
+      data: {
+        id: 'source-board',
+        proposal_id: 'prop-1',
+        name: 'Living room',
+        scope_room_id: null,
+        cover_image_url: null,
+        canvas_width: 1200,
+        canvas_height: 800,
+        background_color: '#FAF8F5',
+        sections: [],
+        proposal_board_items: [
+          {
+            id: 'source-item',
+            board_id: 'source-board',
+            type: 'note',
+            x: 0,
+            y: 0,
+            width: 200,
+            height: 100,
+            z_index: 0,
+            rotation: 0,
+            locked: false,
+            product_id: null,
+            capture_id: null,
+            palette_id: null,
+            image_url: null,
+            content: 'Keep me',
+            data: {},
+          },
+        ],
+      },
+      error: null,
+    });
+    pushTableResult('proposal_boards', {
+      data: [{ sort_order: 0 }],
+      error: null,
+    });
+    const boardInsert = pushTableResult('proposal_boards', {
+      data: { id: 'ghost-copy', proposal_id: 'prop-1' },
+      error: null,
+    });
+    const itemInsert = pushTableResult('proposal_board_items', {
+      data: null,
+      error: new Error('item copy failed'),
+    });
+    const variables = { proposalId: 'prop-1', boardId: 'source-board' };
+    const config = useDuplicateBoard() as unknown as {
+      mutationFn: (input: typeof variables) => Promise<unknown>;
+      onSettled: (
+        data: unknown,
+        error: unknown,
+        input: typeof variables,
+      ) => Promise<void>;
+    };
+
+    const failure = await config.mutationFn(variables).then(
+      () => null,
+      (error) => error,
+    );
+
+    expect(failure).toEqual(new Error('item copy failed'));
+    expect(boardInsert.__chain.some((call) => call.method === 'insert')).toBe(true);
+    expect(itemInsert.__chain.some((call) => call.method === 'insert')).toBe(true);
+
+    await config.onSettled(undefined, failure, variables);
+
+    expect(invalidateQueries).toHaveBeenCalledWith({
+      queryKey: ['boards', 'prop-1'],
+    });
+    expect(invalidateQueries).toHaveBeenCalledWith({
+      queryKey: ['boards-with-items', 'prop-1'],
+    });
+    expect(invalidateQueries).toHaveBeenCalledWith({
+      queryKey: ['drafting-facets', 'prop-1'],
+    });
+    expect(invalidateQueries).toHaveBeenCalledWith({
+      queryKey: ['proposal-mirror', 'prop-1'],
+    });
   });
 });
 

@@ -1,5 +1,8 @@
+import { useState } from 'react';
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { SendSheet } from '../send-sheet';
+import { useBufferedAutosave } from '@/hooks/use-buffered-autosave';
+import { resetProposalAutosaveRegistryForTests } from '@/lib/proposal-autosave-registry';
 
 const mockSend = jest.fn();
 const mockUpdate = jest.fn();
@@ -128,6 +131,43 @@ function mirror(milestones: Array<Record<string, unknown>>) {
   };
 }
 
+function SendBarrierHarness({
+  save,
+}: {
+  save: (key: string, patch: { revision_limit: number }) => Promise<unknown>;
+}) {
+  const [open, setOpen] = useState(false);
+  const autosave = useBufferedAutosave<
+    string,
+    { revision_limit: number }
+  >({
+    proposalId: 'proposal-1',
+    delay: 60_000,
+    save,
+  });
+
+  return (
+    <>
+      <button
+        type="button"
+        onClick={() =>
+          autosave.queue('phase-1', { revision_limit: 3 })
+        }
+      >
+        Queue phase revision
+      </button>
+      <button type="button" onClick={() => setOpen(true)}>
+        Open send sheet
+      </button>
+      <SendSheet
+        proposalId="proposal-1"
+        open={open}
+        onClose={() => setOpen(false)}
+      />
+    </>
+  );
+}
+
 beforeEach(() => {
   mockSend.mockReset();
   mockSend.mockResolvedValue({ _emailDispatched: true });
@@ -151,7 +191,84 @@ beforeEach(() => {
   mockUseProposalMirrorData.mockReset();
 });
 
+afterEach(() => resetProposalAutosaveRegistryForTests());
+
 describe('SendSheet canonical client-copy validation', () => {
+  it('flushes a debounced proposal edit before opening review and sending', async () => {
+    const reviewedMirror = mirror([
+      {
+        id: 'deposit',
+        label: 'Project deposit',
+        percentage: 100,
+        amount_cents: 1_320_000,
+      },
+    ]);
+    const freshData = {
+      ...reviewedMirror.data,
+      sendSnapshot: {
+        ...reviewedMirror.data.sendSnapshot,
+        scheduleFingerprint: 'after-phase-autosave',
+      },
+    };
+    const order: string[] = [];
+    let persisted = false;
+    reviewedMirror.refetch.mockImplementation(async () => {
+      order.push('refetch');
+      return {
+        data: persisted ? freshData : reviewedMirror.data,
+        error: null,
+      };
+    });
+    mockUseProposalMirrorData.mockReturnValue(reviewedMirror);
+    const save = jest.fn(async () => {
+      order.push('save');
+      persisted = true;
+    });
+
+    render(<SendBarrierHarness save={save} />);
+    fireEvent.click(screen.getByRole('button', { name: 'Queue phase revision' }));
+    expect(save).not.toHaveBeenCalled();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Open send sheet' }));
+
+    const send = await screen.findByRole('button', { name: 'Send proposal' });
+    await waitFor(() => expect(send).toBeEnabled());
+    expect(
+      screen.queryByRole('button', { name: /different address/i }),
+    ).not.toBeInTheDocument();
+    expect(order.slice(0, 2)).toEqual(['save', 'refetch']);
+
+    fireEvent.click(send);
+    await waitFor(() => expect(mockSend).toHaveBeenCalledTimes(1));
+    expect(mockSend).toHaveBeenCalledWith(
+      expect.objectContaining({ expectedSnapshot: freshData.sendSnapshot }),
+    );
+  });
+
+  it('fails closed when a debounced proposal edit cannot be saved', async () => {
+    const reviewedMirror = mirror([
+      {
+        id: 'deposit',
+        label: 'Project deposit',
+        percentage: 100,
+        amount_cents: 1_320_000,
+      },
+    ]);
+    mockUseProposalMirrorData.mockReturnValue(reviewedMirror);
+    const save = jest.fn().mockRejectedValue(new Error('phase save failed'));
+
+    render(<SendBarrierHarness save={save} />);
+    fireEvent.click(screen.getByRole('button', { name: 'Queue phase revision' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Open send sheet' }));
+
+    expect(await screen.findByText(/phase save failed/i)).toBeInTheDocument();
+    expect(
+      screen.getByRole('button', { name: 'Send proposal' }),
+    ).toBeDisabled();
+    expect(reviewedMirror.refetch).not.toHaveBeenCalled();
+    expect(mockSend).not.toHaveBeenCalled();
+  });
+
   it('blocks the exact New Milestone 0%/$0 client payload', async () => {
     mockUseProposalMirrorData.mockReturnValue(
       mirror([
@@ -200,11 +317,12 @@ describe('SendSheet canonical client-copy validation', () => {
     render(<SendSheet proposalId="proposal-1" open onClose={jest.fn()} />);
 
     const send = screen.getByRole('button', { name: 'Send proposal' });
-    await waitFor(() => expect(send).toBeDisabled());
-    expect(screen.getByText('Still missing: mood boards.')).toBeInTheDocument();
+    expect(
+      await screen.findByText('Still missing: mood boards.'),
+    ).toBeInTheDocument();
 
     fireEvent.click(
-      screen.getByRole('checkbox', {
+      await screen.findByRole('checkbox', {
         name: /I reviewed the missing parts/i,
       }),
     );
@@ -281,9 +399,11 @@ describe('SendSheet canonical client-copy validation', () => {
     const { rerender } = render(
       <SendSheet proposalId="proposal-1" open onClose={jest.fn()} />,
     );
-    expect(
-      screen.getByRole('button', { name: 'Send proposal' }),
-    ).toBeEnabled();
+    await waitFor(() =>
+      expect(
+        screen.getByRole('button', { name: 'Send proposal' }),
+      ).toBeEnabled(),
+    );
 
     mockUseProposalMirrorData.mockReturnValue({
       ...cachedMirror,
@@ -376,12 +496,17 @@ describe('SendSheet canonical client-copy validation', () => {
       isFetching: false,
       refresh: mockRefreshDrafting,
     });
+    mockRefreshDrafting.mockResolvedValue({
+      facets: {},
+      state: 'Drafting',
+      gaps: ['mood boards'],
+    });
 
     const { rerender } = render(
       <SendSheet proposalId="proposal-1" open onClose={jest.fn()} />,
     );
     fireEvent.click(
-      screen.getByRole('checkbox', {
+      await screen.findByRole('checkbox', {
         name: /I reviewed the missing parts/i,
       }),
     );
@@ -420,17 +545,19 @@ describe('SendSheet canonical client-copy validation', () => {
         },
       ]),
     );
+    render(<SendSheet proposalId="proposal-1" open onClose={jest.fn()} />);
+
+    const send = screen.getByRole('button', { name: 'Send proposal' });
+    await waitFor(() => expect(send).toBeEnabled());
     mockRefreshDrafting.mockResolvedValueOnce({
       facets: {},
       state: 'Drafting',
       gaps: ['change-order terms'],
     });
 
-    render(<SendSheet proposalId="proposal-1" open onClose={jest.fn()} />);
+    fireEvent.click(send);
 
-    fireEvent.click(screen.getByRole('button', { name: 'Send proposal' }));
-
-    await waitFor(() => expect(mockRefreshDrafting).toHaveBeenCalledTimes(1));
+    await waitFor(() => expect(mockRefreshDrafting).toHaveBeenCalledTimes(2));
     expect(mockSend).not.toHaveBeenCalled();
     expect(
       await screen.findByText('Still missing: change-order terms.'),
@@ -453,10 +580,15 @@ describe('SendSheet canonical client-copy validation', () => {
         scheduleFingerprint: 'schedule-fingerprint-v2',
       },
     };
-    reviewedMirror.refetch.mockResolvedValue({
-      data: refreshedData,
-      error: null,
-    });
+    reviewedMirror.refetch
+      .mockResolvedValueOnce({
+        data: reviewedMirror.data,
+        error: null,
+      })
+      .mockResolvedValue({
+        data: refreshedData,
+        error: null,
+      });
     mockUseProposalMirrorData.mockReturnValue(reviewedMirror);
     mockUseDraftingState.mockReturnValue({
       gaps: ['mood boards'],
@@ -472,7 +604,7 @@ describe('SendSheet canonical client-copy validation', () => {
 
     render(<SendSheet proposalId="proposal-1" open onClose={jest.fn()} />);
     fireEvent.click(
-      screen.getByRole('checkbox', {
+      await screen.findByRole('checkbox', {
         name: /I reviewed the missing parts/i,
       }),
     );

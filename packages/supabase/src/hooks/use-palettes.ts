@@ -376,7 +376,9 @@ export function useReorderSwatches() {
         if (error) throw error;
       }
     },
-    onSuccess: async (_data, variables) => {
+    // Updates are issued sequentially, so a later failure can leave earlier
+    // sort_order writes persisted. Reconcile all projections on failure too.
+    onSettled: async (_data, _error, variables) => {
       queryClient.invalidateQueries({ queryKey: ['proposal-palette', variables.paletteId] });
       queryClient.invalidateQueries({ queryKey: ['proposal-palettes'] });
       await invalidateProposalClientQueries(queryClient, variables.proposalId);
