@@ -1347,9 +1347,8 @@ export function useProposalVersions(proposalId: string) {
 
 /**
  * Mark a sent/viewed (or declined/expired) proposal as 'revised' — the entry
- * point of the revise flow. Pulls the proposal out of the client's pending
- * list and makes it unsignable (sign route + RLS require sent/viewed); the
- * /revise page's "Cancel Revision" restores it to 'sent'.
+ * point of the revise flow. The RPC is the authoritative lifecycle boundary;
+ * a studio writer cannot forge this terminal transition with a table update.
  */
 export function useEnterRevision() {
   const queryClient = useQueryClient();
@@ -1359,12 +1358,9 @@ export function useEnterRevision() {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const supabase = getSupabase() as any;
 
-      const { data, error } = await supabase
-        .from('proposals')
-        .update({ status: 'revised' })
-        .eq('id', proposalId)
-        .select()
-        .single();
+      const { data, error } = await supabase.rpc('begin_proposal_revision', {
+        p_proposal_id: proposalId,
+      });
 
       if (error) throw error;
       return data as Proposal;
@@ -1627,8 +1623,8 @@ export function useRequestProposalChange() {
 }
 
 /**
- * Client declines a proposal with optional reason.
- * Backed by RLS policy at migration 00100 — clients can update sent/viewed → declined.
+ * Client declines a proposal with optional reason through the canonical,
+ * row-locked lifecycle RPC.
  */
 export function useDeclineProposal() {
   const queryClient = useQueryClient();
@@ -1644,16 +1640,10 @@ export function useDeclineProposal() {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const supabase = getSupabase() as any;
 
-      const { data, error } = await supabase
-        .from('proposals')
-        .update({
-          status: 'declined',
-          declined_at: new Date().toISOString(),
-          decline_reason: reason?.trim() || null,
-        })
-        .eq('id', proposalId)
-        .select()
-        .single();
+      const { data, error } = await supabase.rpc('decline_proposal', {
+        p_proposal_id: proposalId,
+        p_reason: reason?.trim() || null,
+      });
 
       if (error) throw error;
       return data;

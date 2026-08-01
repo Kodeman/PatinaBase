@@ -1,5 +1,5 @@
 -- ════════════════════════════════════════════════════════════════════════
--- 00387 — authoritative project completion, proposal send, and identity
+-- 00387 — authoritative project/proposal lifecycle and document identity
 --
 -- RLS answers who may edit a row; it cannot prove that an irreversible state
 -- transition passed its domain checks. These guards require two independent
@@ -8,17 +8,20 @@
 --   2. that RPC set a transaction-local, row-scoped authority GUC.
 -- Authenticated callers can forge a custom GUC, but cannot become postgres.
 -- The trigger functions remain SECURITY INVOKER so current_user is meaningful.
--- The proposal guard protects API insert state, entry into sent, and every
--- sent_at rewrite. 00388 binds outbound email to the immutable send instance,
--- so a writer must never fabricate or replace that business timestamp.
+-- The proposal guard protects API insert/ownership/identity state and every
+-- lifecycle status or timestamp. 00388 binds outbound email to the immutable
+-- send instance, so no writer may fabricate or replace that business state.
 --
 -- Function-body lineage:
 --   close_project:       00238 → 00383 → 00387
 --   send_proposal:       00176 → 00384 → 00387
 --   set_document_client: 00225 → 00385 → 00387
+--   sign_proposal:       00210 → 00387
+--   offline signature:   00254 → 00387
+--   proposal expiry:     00098 direct cron → 00387 private authority
 -- ══════════════════════════════════════════════════════════════════════
 
--- ── Project completion authority ───────────────────────────────────────────────
+-- ── Project completion + identity authority ────────────────────────────────────────
 
 CREATE OR REPLACE FUNCTION public.guard_project_completion_authority()
 RETURNS trigger
@@ -27,6 +30,25 @@ SECURITY INVOKER
 SET search_path = public, pg_temp
 AS $$
 BEGIN
+  IF TG_OP = 'INSERT' THEN
+    -- A browser may open a normal active/draft project, but it cannot insert a
+    -- row that has already skipped the closeout readiness census. Archived is
+    -- terminal just like completed for this initial-state boundary.
+    IF current_user IS DISTINCT FROM 'postgres'
+       AND (
+         NEW.status IS NULL
+         OR NEW.status NOT IN ('active', 'draft', 'on_hold')
+         OR NEW.completed_at IS NOT NULL
+       )
+    THEN
+      RAISE EXCEPTION
+        'project inserts cannot start in terminal or completed state'
+        USING ERRCODE = 'check_violation';
+    END IF;
+
+    RETURN NEW;
+  END IF;
+
   IF NEW.status = 'completed'
      AND OLD.status IS DISTINCT FROM 'completed'
      AND (
@@ -39,6 +61,31 @@ BEGIN
       'projects may only enter completed through close_project'
       USING ERRCODE = 'check_violation';
   END IF;
+
+  IF NEW.completed_at IS DISTINCT FROM OLD.completed_at
+     AND (
+       current_user IS DISTINCT FROM 'postgres'
+       OR current_setting('app.project_completion_id', true)
+          IS DISTINCT FROM NEW.id::text
+     )
+  THEN
+    RAISE EXCEPTION
+      'project completed_at may only change through close_project'
+      USING ERRCODE = 'check_violation';
+  END IF;
+
+  IF NEW.client_id IS DISTINCT FROM OLD.client_id
+     AND (
+       current_user IS DISTINCT FROM 'postgres'
+       OR current_setting('app.project_identity_id', true)
+          IS DISTINCT FROM NEW.id::text
+     )
+  THEN
+    RAISE EXCEPTION
+      'project client identity may only change through set_document_client'
+      USING ERRCODE = 'check_violation';
+  END IF;
+
   RETURN NEW;
 END;
 $$;
@@ -46,10 +93,22 @@ $$;
 REVOKE ALL ON FUNCTION public.guard_project_completion_authority()
   FROM PUBLIC, anon, authenticated, service_role;
 
+COMMENT ON FUNCTION public.guard_project_completion_authority() IS
+  'SECURITY INVOKER table boundary: API inserts are nonterminal, completed '
+  'status/time require close_project, and client changes require exact '
+  'set_document_client project authority.';
+
 DROP TRIGGER IF EXISTS guard_project_completion_authority_trg
   ON public.projects;
+DROP TRIGGER IF EXISTS guard_project_authority_insert_trg
+  ON public.projects;
+CREATE TRIGGER guard_project_authority_insert_trg
+BEFORE INSERT ON public.projects
+FOR EACH ROW
+EXECUTE FUNCTION public.guard_project_completion_authority();
+
 CREATE TRIGGER guard_project_completion_authority_trg
-BEFORE UPDATE OF status ON public.projects
+BEFORE UPDATE OF status, completed_at, client_id ON public.projects
 FOR EACH ROW
 EXECUTE FUNCTION public.guard_project_completion_authority();
 
@@ -564,6 +623,8 @@ LANGUAGE plpgsql
 SECURITY INVOKER
 SET search_path = public, pg_temp
 AS $$
+DECLARE
+  v_status_authorized boolean := false;
 BEGIN
   IF TG_OP = 'INSERT' THEN
     -- API writers may create only an inert draft. Trusted postgres-owned
@@ -571,24 +632,36 @@ BEGIN
     -- fixtures, but an authenticated/RLS writer cannot fabricate sent or
     -- terminal business state at insert time.
     IF current_user IS DISTINCT FROM 'postgres' THEN
-      IF NEW.status IS DISTINCT FROM 'draft' OR NEW.sent_at IS NOT NULL THEN
+      IF NEW.status IS DISTINCT FROM 'draft'
+         OR NEW.sent_at IS NOT NULL
+         OR NEW.viewed_at IS NOT NULL
+         OR NEW.accepted_at IS NOT NULL
+         OR NEW.declined_at IS NOT NULL
+         OR NEW.signed_at IS NOT NULL
+         OR NEW.decline_reason IS NOT NULL
+         OR NEW.signed_by_name IS NOT NULL
+         OR NEW.signed_ip IS NOT NULL
+      THEN
         RAISE EXCEPTION
-          'proposal inserts must start as draft with sent_at null'
+          'proposal inserts must start as draft without lifecycle state'
           USING ERRCODE = 'check_violation';
       END IF;
 
-      IF (NEW.client_id IS NULL) <> (NEW.designer_client_id IS NULL) THEN
+      IF NEW.client_id IS NOT NULL AND NEW.designer_client_id IS NULL THEN
         RAISE EXCEPTION
-          'proposal client_id and designer_client_id must be linked or cleared together'
+          'proposal client_id requires a matching designer_client_id'
           USING ERRCODE = 'check_violation';
       END IF;
 
-      IF NEW.client_id IS NOT NULL AND NOT EXISTS (
+      -- Shape B intentionally permits a captured/no-login household:
+      -- client_id NULL + a relationship whose own client_id is NULL. Registered
+      -- households carry both legs. IS NOT DISTINCT FROM expresses both shapes.
+      IF NEW.designer_client_id IS NOT NULL AND NOT EXISTS (
         SELECT 1
         FROM public.designer_clients AS relationship
         WHERE relationship.id = NEW.designer_client_id
           AND relationship.designer_id = NEW.designer_id
-          AND relationship.client_id = NEW.client_id
+          AND relationship.client_id IS NOT DISTINCT FROM NEW.client_id
       ) THEN
         RAISE EXCEPTION
           'proposal client identity does not match its designer relationship'
@@ -599,16 +672,43 @@ BEGIN
     RETURN NEW;
   END IF;
 
-  IF NEW.status = 'sent'
-     AND OLD.status IS DISTINCT FROM 'sent'
-     AND (
-       current_user IS DISTINCT FROM 'postgres'
-       OR current_setting('app.proposal_send_id', true)
-          IS DISTINCT FROM NEW.id::text
-     )
+  IF NEW.designer_id IS DISTINCT FROM OLD.designer_id
+     AND current_user IS DISTINCT FROM 'postgres'
   THEN
-    RAISE EXCEPTION 'proposals may only enter sent through send_proposal'
+    RAISE EXCEPTION
+      'proposal designer ownership may only change through trusted transfer authority'
       USING ERRCODE = 'check_violation';
+  END IF;
+
+  IF NEW.status IS DISTINCT FROM OLD.status THEN
+    v_status_authorized := current_user IS NOT DISTINCT FROM 'postgres'
+      AND CASE NEW.status
+        WHEN 'sent' THEN
+          current_setting('app.proposal_send_id', true) IS NOT DISTINCT FROM NEW.id::text
+        WHEN 'viewed' THEN
+          current_setting('app.proposal_view_id', true) IS NOT DISTINCT FROM NEW.id::text
+        WHEN 'accepted' THEN
+          current_setting('app.proposal_accept_id', true) IS NOT DISTINCT FROM NEW.id::text
+        WHEN 'declined' THEN
+          current_setting('app.proposal_decline_id', true) IS NOT DISTINCT FROM NEW.id::text
+        WHEN 'expired' THEN
+          current_setting('app.proposal_expire_id', true) IS NOT DISTINCT FROM NEW.id::text
+        WHEN 'revised' THEN
+          current_setting('app.proposal_revision_id', true) IS NOT DISTINCT FROM NEW.id::text
+          OR current_setting('app.proposal_send_id', true) IS NOT DISTINCT FROM NEW.id::text
+        ELSE false
+      END;
+
+    IF NOT v_status_authorized THEN
+      IF NEW.status = 'sent' THEN
+        RAISE EXCEPTION 'proposals may only enter sent through send_proposal'
+          USING ERRCODE = 'check_violation';
+      END IF;
+
+      RAISE EXCEPTION
+        'proposal status may only change through its canonical lifecycle authority'
+        USING ERRCODE = 'check_violation';
+    END IF;
   END IF;
 
   IF NEW.sent_at IS DISTINCT FROM OLD.sent_at
@@ -622,6 +722,45 @@ BEGIN
       USING ERRCODE = 'check_violation';
   END IF;
 
+  IF NEW.viewed_at IS DISTINCT FROM OLD.viewed_at
+     AND (
+       current_user IS DISTINCT FROM 'postgres'
+       OR current_setting('app.proposal_view_id', true)
+          IS DISTINCT FROM NEW.id::text
+     )
+  THEN
+    RAISE EXCEPTION 'proposal viewed_at may only change through mark_proposal_viewed'
+      USING ERRCODE = 'check_violation';
+  END IF;
+
+  IF NEW.accepted_at IS DISTINCT FROM OLD.accepted_at
+     OR NEW.signed_at IS DISTINCT FROM OLD.signed_at
+     OR NEW.signed_by_name IS DISTINCT FROM OLD.signed_by_name
+     OR NEW.signed_ip IS DISTINCT FROM OLD.signed_ip
+  THEN
+    IF current_user IS DISTINCT FROM 'postgres'
+       OR current_setting('app.proposal_accept_id', true)
+          IS DISTINCT FROM NEW.id::text
+    THEN
+      RAISE EXCEPTION
+        'proposal acceptance state may only change through canonical signature authority'
+        USING ERRCODE = 'check_violation';
+    END IF;
+  END IF;
+
+  IF NEW.declined_at IS DISTINCT FROM OLD.declined_at
+     OR NEW.decline_reason IS DISTINCT FROM OLD.decline_reason
+  THEN
+    IF current_user IS DISTINCT FROM 'postgres'
+       OR current_setting('app.proposal_decline_id', true)
+          IS DISTINCT FROM NEW.id::text
+    THEN
+      RAISE EXCEPTION
+        'proposal decline state may only change through decline_proposal'
+        USING ERRCODE = 'check_violation';
+    END IF;
+  END IF;
+
   IF NEW.client_id IS DISTINCT FROM OLD.client_id
      OR NEW.designer_client_id IS DISTINCT FROM OLD.designer_client_id
   THEN
@@ -631,21 +770,26 @@ BEGIN
     THEN
       RAISE EXCEPTION
         'proposal client identity may only change through set_document_client'
-        USING ERRCODE = 'check_violation';
+      USING ERRCODE = 'check_violation';
     END IF;
+  END IF;
 
-    IF (NEW.client_id IS NULL) <> (NEW.designer_client_id IS NULL) THEN
+  IF NEW.designer_id IS DISTINCT FROM OLD.designer_id
+     OR NEW.client_id IS DISTINCT FROM OLD.client_id
+     OR NEW.designer_client_id IS DISTINCT FROM OLD.designer_client_id
+  THEN
+    IF NEW.client_id IS NOT NULL AND NEW.designer_client_id IS NULL THEN
       RAISE EXCEPTION
-        'proposal client_id and designer_client_id must be linked or cleared together'
+        'proposal client_id requires a matching designer_client_id'
         USING ERRCODE = 'check_violation';
     END IF;
 
-    IF NEW.client_id IS NOT NULL AND NOT EXISTS (
+    IF NEW.designer_client_id IS NOT NULL AND NOT EXISTS (
       SELECT 1
       FROM public.designer_clients AS relationship
       WHERE relationship.id = NEW.designer_client_id
         AND relationship.designer_id = NEW.designer_id
-        AND relationship.client_id = NEW.client_id
+        AND relationship.client_id IS NOT DISTINCT FROM NEW.client_id
     ) THEN
       RAISE EXCEPTION
         'proposal client identity does not match its designer relationship'
@@ -662,8 +806,9 @@ REVOKE ALL ON FUNCTION public.guard_proposal_authority()
 
 COMMENT ON FUNCTION public.guard_proposal_authority() IS
   'SECURITY INVOKER table boundary: API inserts are draft-only with canonical '
-  'client identity; sent_at and entry into sent require the exact postgres '
-  'send authority, and later identity changes require set_document_client.';
+  'registered/profileless client identity; ownership, every lifecycle status '
+  'and timestamp, send state, and later identity changes require their exact '
+  'postgres row authority.';
 
 DROP TRIGGER IF EXISTS guard_proposal_authority_trg ON public.proposals;
 DROP TRIGGER IF EXISTS guard_proposal_authority_insert_trg ON public.proposals;
@@ -673,7 +818,10 @@ FOR EACH ROW
 EXECUTE FUNCTION public.guard_proposal_authority();
 
 CREATE TRIGGER guard_proposal_authority_trg
-BEFORE UPDATE OF status, sent_at, client_id, designer_client_id ON public.proposals
+BEFORE UPDATE OF designer_id, status, sent_at, viewed_at, accepted_at,
+  declined_at, decline_reason, signed_at, signed_by_name, signed_ip,
+  client_id, designer_client_id
+ON public.proposals
 FOR EACH ROW
 EXECUTE FUNCTION public.guard_proposal_authority();
 
@@ -704,6 +852,7 @@ DECLARE
   v_canonical_cents bigint;
   v_persisted_cents bigint;
   v_review_fingerprint text;
+  v_sibling_id uuid;
 BEGIN
   IF v_actor IS NULL THEN
     RAISE EXCEPTION 'send_proposal requires an authenticated user'
@@ -901,11 +1050,23 @@ BEGIN
   RETURNING * INTO v_target;
   PERFORM set_config('app.proposal_send_id', '', true);
 
-  UPDATE public.proposals
-  SET status = 'revised', updated_at = now()
-  WHERE (id = v_root_id OR parent_proposal_id = v_root_id)
-    AND id <> p_proposal_id
-    AND status IN ('sent', 'viewed', 'revised');
+  -- Every superseded sibling is independently authorized with its exact row id.
+  -- A single target-scoped token must never become chain-wide table authority.
+  FOR v_sibling_id IN
+    SELECT id
+    FROM public.proposals
+    WHERE (id = v_root_id OR parent_proposal_id = v_root_id)
+      AND id <> p_proposal_id
+      AND status IN ('sent', 'viewed', 'revised')
+    ORDER BY id
+    FOR UPDATE
+  LOOP
+    PERFORM set_config('app.proposal_send_id', v_sibling_id::text, true);
+    UPDATE public.proposals
+    SET status = 'revised', updated_at = now()
+    WHERE id = v_sibling_id;
+    PERFORM set_config('app.proposal_send_id', '', true);
+  END LOOP;
 
   RETURN v_target;
 END;
@@ -1005,9 +1166,11 @@ BEGIN
   END IF;
 
   IF p_engagement_kind = 'project' THEN
+    PERFORM set_config('app.project_identity_id', p_target_id::text, true);
     UPDATE public.projects
     SET client_id = p_client_id, updated_at = now()
     WHERE id = p_target_id;
+    PERFORM set_config('app.project_identity_id', '', true);
   ELSE
     PERFORM set_config('app.proposal_identity_id', p_target_id::text, true);
     UPDATE public.proposals
@@ -1055,4 +1218,545 @@ GRANT EXECUTE ON FUNCTION public.set_document_client(text, uuid, uuid)
 COMMENT ON FUNCTION public.set_document_client(text, uuid, uuid) IS
   'Owner-scoped document attachment. Proposal identity may change only while '
   'draft and only as matching client_id/designer_client_id legs under the same '
-  'proposal row lock; app.proposal_identity_id authorizes that exact update.';
+  'proposal row lock; exact app.project_identity_id/app.proposal_identity_id '
+  'tokens authorize only the chosen document update.';
+
+-- ── Canonical proposal lifecycle authorities ───────────────────────────────────
+
+CREATE OR REPLACE FUNCTION public.mark_proposal_viewed(p_proposal_id uuid)
+RETURNS public.proposals
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public, pg_temp
+AS $$
+DECLARE
+  v_actor uuid := auth.uid();
+  v_proposal public.proposals;
+BEGIN
+  IF v_actor IS NULL THEN
+    RAISE EXCEPTION 'mark_proposal_viewed requires an authenticated user'
+      USING ERRCODE = 'insufficient_privilege';
+  END IF;
+
+  SELECT * INTO v_proposal
+  FROM public.proposals
+  WHERE id = p_proposal_id
+  FOR UPDATE;
+
+  IF NOT FOUND THEN
+    RAISE EXCEPTION 'proposal % not found', p_proposal_id
+      USING ERRCODE = 'no_data_found';
+  END IF;
+
+  IF v_proposal.client_id IS DISTINCT FROM v_actor THEN
+    RAISE EXCEPTION 'proposal % may only be viewed by its client', p_proposal_id
+      USING ERRCODE = 'insufficient_privilege';
+  END IF;
+
+  IF v_proposal.status = 'viewed' THEN
+    RETURN v_proposal;
+  END IF;
+
+  IF v_proposal.status <> 'sent' THEN
+    RAISE EXCEPTION 'proposal % is not viewable in status %',
+      p_proposal_id, v_proposal.status
+      USING ERRCODE = 'check_violation';
+  END IF;
+
+  PERFORM set_config('app.proposal_view_id', p_proposal_id::text, true);
+  UPDATE public.proposals
+  SET status = 'viewed',
+      viewed_at = COALESCE(viewed_at, now()),
+      updated_at = now()
+  WHERE id = p_proposal_id
+  RETURNING * INTO v_proposal;
+  PERFORM set_config('app.proposal_view_id', '', true);
+
+  RETURN v_proposal;
+END;
+$$;
+
+REVOKE ALL ON FUNCTION public.mark_proposal_viewed(uuid)
+  FROM PUBLIC, anon, service_role;
+GRANT EXECUTE ON FUNCTION public.mark_proposal_viewed(uuid)
+  TO authenticated;
+
+COMMENT ON FUNCTION public.mark_proposal_viewed(uuid) IS
+  'Client-owned sent→viewed authority. Row-locks the proposal and sets the '
+  'exact app.proposal_view_id only around the first viewed_at/status stamp.';
+
+CREATE OR REPLACE FUNCTION public.decline_proposal(
+  p_proposal_id uuid,
+  p_reason text DEFAULT NULL
+)
+RETURNS public.proposals
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public, pg_temp
+AS $$
+DECLARE
+  v_actor uuid := auth.uid();
+  v_proposal public.proposals;
+  v_reason text := NULLIF(btrim(COALESCE(p_reason, '')), '');
+BEGIN
+  IF v_actor IS NULL THEN
+    RAISE EXCEPTION 'decline_proposal requires an authenticated user'
+      USING ERRCODE = 'insufficient_privilege';
+  END IF;
+
+  SELECT * INTO v_proposal
+  FROM public.proposals
+  WHERE id = p_proposal_id
+  FOR UPDATE;
+
+  IF NOT FOUND THEN
+    RAISE EXCEPTION 'proposal % not found', p_proposal_id
+      USING ERRCODE = 'no_data_found';
+  END IF;
+
+  IF v_proposal.client_id IS DISTINCT FROM v_actor THEN
+    RAISE EXCEPTION 'proposal % may only be declined by its client', p_proposal_id
+      USING ERRCODE = 'insufficient_privilege';
+  END IF;
+
+  IF v_proposal.status = 'declined' THEN
+    RETURN v_proposal;
+  END IF;
+
+  IF v_proposal.status NOT IN ('sent', 'viewed') THEN
+    RAISE EXCEPTION 'proposal % is not declinable in status %',
+      p_proposal_id, v_proposal.status
+      USING ERRCODE = 'check_violation';
+  END IF;
+
+  PERFORM set_config('app.proposal_decline_id', p_proposal_id::text, true);
+  UPDATE public.proposals
+  SET status = 'declined',
+      declined_at = now(),
+      decline_reason = v_reason,
+      updated_at = now()
+  WHERE id = p_proposal_id
+  RETURNING * INTO v_proposal;
+  PERFORM set_config('app.proposal_decline_id', '', true);
+
+  RETURN v_proposal;
+END;
+$$;
+
+REVOKE ALL ON FUNCTION public.decline_proposal(uuid, text)
+  FROM PUBLIC, anon, service_role;
+GRANT EXECUTE ON FUNCTION public.decline_proposal(uuid, text)
+  TO authenticated;
+
+COMMENT ON FUNCTION public.decline_proposal(uuid, text) IS
+  'Client-owned sent/viewed→declined authority. Row-locks the proposal and '
+  'sets exact app.proposal_decline_id around status, declined_at, and reason.';
+
+CREATE OR REPLACE FUNCTION public.begin_proposal_revision(p_proposal_id uuid)
+RETURNS public.proposals
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public, pg_temp
+AS $$
+DECLARE
+  v_actor uuid := auth.uid();
+  v_proposal public.proposals;
+BEGIN
+  IF v_actor IS NULL THEN
+    RAISE EXCEPTION 'begin_proposal_revision requires an authenticated user'
+      USING ERRCODE = 'insufficient_privilege';
+  END IF;
+
+  SELECT * INTO v_proposal
+  FROM public.proposals
+  WHERE id = p_proposal_id
+  FOR UPDATE;
+
+  IF NOT FOUND OR NOT public._can_author_proposal(v_proposal.designer_id) THEN
+    RAISE EXCEPTION
+      'begin_proposal_revision: proposal % not found or access denied', p_proposal_id
+      USING ERRCODE = 'insufficient_privilege';
+  END IF;
+
+  IF v_proposal.status = 'revised' THEN
+    RETURN v_proposal;
+  END IF;
+
+  IF v_proposal.status NOT IN ('sent', 'viewed', 'declined', 'expired') THEN
+    RAISE EXCEPTION 'proposal % cannot begin revision from status %',
+      p_proposal_id, v_proposal.status
+      USING ERRCODE = 'check_violation';
+  END IF;
+
+  PERFORM set_config('app.proposal_revision_id', p_proposal_id::text, true);
+  UPDATE public.proposals
+  SET status = 'revised', updated_at = now()
+  WHERE id = p_proposal_id
+  RETURNING * INTO v_proposal;
+  PERFORM set_config('app.proposal_revision_id', '', true);
+
+  RETURN v_proposal;
+END;
+$$;
+
+REVOKE ALL ON FUNCTION public.begin_proposal_revision(uuid)
+  FROM PUBLIC, anon, service_role;
+GRANT EXECUTE ON FUNCTION public.begin_proposal_revision(uuid)
+  TO authenticated;
+
+COMMENT ON FUNCTION public.begin_proposal_revision(uuid) IS
+  'Studio-authorized open/declined/expired→revised authority. Sets exact '
+  'app.proposal_revision_id only around the locked source transition.';
+
+CREATE OR REPLACE FUNCTION public.expire_proposals()
+RETURNS integer
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public, pg_temp
+AS $$
+DECLARE
+  v_proposal_id uuid;
+  v_expired integer := 0;
+BEGIN
+  FOR v_proposal_id IN
+    SELECT id
+    FROM public.proposals
+    WHERE status IN ('sent', 'viewed')
+      AND valid_until IS NOT NULL
+      AND valid_until < now()
+    ORDER BY id
+    FOR UPDATE
+  LOOP
+    PERFORM set_config('app.proposal_expire_id', v_proposal_id::text, true);
+    UPDATE public.proposals
+    SET status = 'expired', updated_at = now()
+    WHERE id = v_proposal_id;
+    PERFORM set_config('app.proposal_expire_id', '', true);
+    v_expired := v_expired + 1;
+  END LOOP;
+
+  RETURN v_expired;
+END;
+$$;
+
+REVOKE ALL ON FUNCTION public.expire_proposals()
+  FROM PUBLIC, anon, authenticated, service_role;
+
+COMMENT ON FUNCTION public.expire_proposals() IS
+  'Private cron authority for due sent/viewed proposals. Locks in id order and '
+  'sets exact app.proposal_expire_id around each expired transition.';
+
+DO $schedule$
+BEGIN
+  IF EXISTS (
+    SELECT 1 FROM cron.job WHERE jobname = 'expire-proposals-daily'
+  ) THEN
+    PERFORM cron.unschedule('expire-proposals-daily');
+  END IF;
+
+  PERFORM cron.schedule(
+    'expire-proposals-daily',
+    '0 3 * * *',
+    $job$SELECT public.expire_proposals();$job$
+  );
+END;
+$schedule$;
+
+-- Latest 00210 body, preserving its client guards/decision/event/activation
+-- transaction and adding only the exact acceptance authority around the row.
+CREATE OR REPLACE FUNCTION public.sign_proposal(
+  p_proposal_id uuid,
+  p_signed_name text,
+  p_signed_ip text DEFAULT NULL,
+  p_auto_activate boolean DEFAULT true,
+  p_start_date date DEFAULT current_date
+)
+RETURNS public.proposals
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public, pg_temp
+AS $$
+DECLARE
+  v_proposal public.proposals;
+  v_designer_client_id uuid;
+  v_signed_name text := btrim(COALESCE(p_signed_name, ''));
+BEGIN
+  IF auth.uid() IS NULL THEN
+    RAISE EXCEPTION 'sign_proposal requires an authenticated user'
+      USING ERRCODE = 'insufficient_privilege';
+  END IF;
+
+  IF char_length(v_signed_name) < 2 THEN
+    RAISE EXCEPTION 'a signature name of at least 2 characters is required'
+      USING ERRCODE = 'check_violation';
+  END IF;
+
+  SELECT * INTO v_proposal
+  FROM public.proposals
+  WHERE id = p_proposal_id
+  FOR UPDATE;
+
+  IF NOT FOUND THEN
+    RAISE EXCEPTION 'proposal % not found', p_proposal_id
+      USING ERRCODE = 'no_data_found';
+  END IF;
+
+  IF v_proposal.client_id IS DISTINCT FROM auth.uid() THEN
+    RAISE EXCEPTION 'proposal % may only be signed by its client', p_proposal_id
+      USING ERRCODE = 'insufficient_privilege';
+  END IF;
+
+  IF v_proposal.status = 'accepted' THEN
+    RETURN v_proposal;
+  END IF;
+
+  IF v_proposal.status NOT IN ('sent', 'viewed') THEN
+    RAISE EXCEPTION 'proposal % is not in a signable status (%)',
+      p_proposal_id, v_proposal.status
+      USING ERRCODE = 'check_violation';
+  END IF;
+
+  IF v_proposal.valid_until IS NOT NULL AND v_proposal.valid_until < now() THEN
+    RAISE EXCEPTION 'proposal % has expired', p_proposal_id
+      USING ERRCODE = 'check_violation';
+  END IF;
+
+  SELECT id INTO v_designer_client_id
+  FROM public.designer_clients
+  WHERE designer_id = v_proposal.designer_id
+    AND client_id = v_proposal.client_id;
+
+  IF v_designer_client_id IS NULL THEN
+    RAISE EXCEPTION 'no designer↔client relationship for proposal %', p_proposal_id
+      USING ERRCODE = 'no_data_found';
+  END IF;
+
+  INSERT INTO public.client_decisions (
+    designer_client_id,
+    designer_id,
+    project_id,
+    linked_proposal_id,
+    title,
+    decision_type,
+    blocking_status,
+    status,
+    client_consent_method,
+    client_signature,
+    client_consented_at,
+    sent_at,
+    responded_at,
+    selected_by
+  )
+  VALUES (
+    v_designer_client_id,
+    v_proposal.designer_id,
+    v_proposal.project_id,
+    p_proposal_id,
+    'Proposal approval',
+    'approval',
+    'non_blocking',
+    'responded',
+    'electronic_signature',
+    v_signed_name,
+    now(),
+    now(),
+    now(),
+    auth.uid()
+  )
+  ON CONFLICT (linked_proposal_id)
+    WHERE decision_type = 'approval' AND linked_proposal_id IS NOT NULL
+    DO NOTHING;
+
+  PERFORM set_config('app.proposal_accept_id', p_proposal_id::text, true);
+  UPDATE public.proposals
+  SET status = 'accepted',
+      signed_at = now(),
+      signed_by_name = v_signed_name,
+      signed_ip = p_signed_ip,
+      accepted_at = now(),
+      updated_at = now()
+  WHERE id = p_proposal_id
+  RETURNING * INTO v_proposal;
+  PERFORM set_config('app.proposal_accept_id', '', true);
+
+  INSERT INTO public.proposal_engagement (
+    proposal_id, viewer_id, event_type, metadata
+  )
+  VALUES (
+    p_proposal_id,
+    auth.uid(),
+    'signed',
+    jsonb_build_object(
+      'via', 'sign_proposal',
+      'signed_by_name', v_signed_name,
+      'signed_ip', p_signed_ip
+    )
+  );
+
+  IF p_auto_activate AND v_proposal.project_id IS NULL THEN
+    PERFORM public.activate_proposal_as_project(p_proposal_id, p_start_date);
+  END IF;
+
+  RETURN v_proposal;
+END;
+$$;
+
+REVOKE ALL ON FUNCTION public.sign_proposal(uuid, text, text, boolean, date)
+  FROM PUBLIC, anon, service_role;
+GRANT EXECUTE ON FUNCTION public.sign_proposal(uuid, text, text, boolean, date)
+  TO authenticated;
+
+COMMENT ON FUNCTION public.sign_proposal(uuid, text, text, boolean, date) IS
+  'Client-owned signature authority (00210 semantics). Locks and validates a '
+  'live, unexpired proposal, records consent/event, and sets exact '
+  'app.proposal_accept_id around accepted/signature state before optional activation.';
+
+-- Latest 00254 body, preserving paper-consent and optional activation while
+-- adding only the exact acceptance authority around the proposal transition.
+CREATE OR REPLACE FUNCTION public.record_offline_signature(
+  p_proposal_id uuid,
+  p_signed_name text,
+  p_auto_activate boolean DEFAULT true,
+  p_start_date date DEFAULT current_date
+)
+RETURNS uuid
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public, pg_temp
+AS $$
+DECLARE
+  v_proposal public.proposals;
+  v_designer_client_id uuid;
+  v_signed_name text := btrim(COALESCE(p_signed_name, ''));
+BEGIN
+  IF auth.uid() IS NULL THEN
+    RAISE EXCEPTION 'record_offline_signature requires an authenticated user'
+      USING ERRCODE = 'insufficient_privilege';
+  END IF;
+
+  IF char_length(v_signed_name) < 2 THEN
+    RAISE EXCEPTION 'a signature name of at least 2 characters is required'
+      USING ERRCODE = 'check_violation';
+  END IF;
+
+  SELECT * INTO v_proposal
+  FROM public.proposals
+  WHERE id = p_proposal_id
+  FOR UPDATE;
+
+  IF NOT FOUND THEN
+    RAISE EXCEPTION 'proposal % not found', p_proposal_id
+      USING ERRCODE = 'no_data_found';
+  END IF;
+
+  IF v_proposal.designer_id IS DISTINCT FROM auth.uid() THEN
+    RAISE EXCEPTION 'proposal % may only be recorded by its designer', p_proposal_id
+      USING ERRCODE = 'insufficient_privilege';
+  END IF;
+
+  IF v_proposal.status = 'accepted' THEN
+    RETURN v_proposal.project_id;
+  END IF;
+
+  IF v_proposal.status NOT IN ('sent', 'viewed', 'expired') THEN
+    RAISE EXCEPTION 'proposal % is not in a recordable status (%)',
+      p_proposal_id, v_proposal.status
+      USING ERRCODE = 'check_violation';
+  END IF;
+
+  IF v_proposal.client_id IS NULL THEN
+    RAISE EXCEPTION 'proposal % has no client to attribute the signature to', p_proposal_id
+      USING ERRCODE = 'no_data_found';
+  END IF;
+
+  SELECT id INTO v_designer_client_id
+  FROM public.designer_clients
+  WHERE designer_id = v_proposal.designer_id
+    AND client_id = v_proposal.client_id;
+
+  IF v_designer_client_id IS NULL THEN
+    RAISE EXCEPTION 'no designer↔client relationship for proposal %', p_proposal_id
+      USING ERRCODE = 'no_data_found';
+  END IF;
+
+  INSERT INTO public.client_decisions (
+    designer_client_id,
+    designer_id,
+    project_id,
+    linked_proposal_id,
+    title,
+    decision_type,
+    blocking_status,
+    status,
+    client_consent_method,
+    client_signature,
+    client_consented_at,
+    sent_at,
+    responded_at,
+    selected_by
+  )
+  VALUES (
+    v_designer_client_id,
+    v_proposal.designer_id,
+    v_proposal.project_id,
+    p_proposal_id,
+    'Proposal approval',
+    'approval',
+    'non_blocking',
+    'responded',
+    'paper',
+    v_signed_name,
+    now(),
+    now(),
+    now(),
+    auth.uid()
+  )
+  ON CONFLICT (linked_proposal_id)
+    WHERE decision_type = 'approval' AND linked_proposal_id IS NOT NULL
+    DO NOTHING;
+
+  PERFORM set_config('app.proposal_accept_id', p_proposal_id::text, true);
+  UPDATE public.proposals
+  SET status = 'accepted',
+      signed_at = now(),
+      signed_by_name = v_signed_name,
+      signed_ip = NULL,
+      accepted_at = now(),
+      updated_at = now()
+  WHERE id = p_proposal_id
+  RETURNING * INTO v_proposal;
+  PERFORM set_config('app.proposal_accept_id', '', true);
+
+  INSERT INTO public.proposal_engagement (
+    proposal_id, viewer_id, event_type, metadata
+  )
+  VALUES (
+    p_proposal_id,
+    auth.uid(),
+    'signed_offline',
+    jsonb_build_object(
+      'via', 'record_offline_signature',
+      'signed_by_name', v_signed_name,
+      'recorded_by', auth.uid()
+    )
+  );
+
+  IF v_proposal.project_id IS NOT NULL THEN
+    RETURN v_proposal.project_id;
+  ELSIF p_auto_activate THEN
+    RETURN public.activate_proposal_as_project(p_proposal_id, p_start_date);
+  ELSE
+    RETURN NULL;
+  END IF;
+END;
+$$;
+
+REVOKE ALL ON FUNCTION public.record_offline_signature(uuid, text, boolean, date)
+  FROM PUBLIC, anon, service_role;
+GRANT EXECUTE ON FUNCTION public.record_offline_signature(uuid, text, boolean, date)
+  TO authenticated;
+
+COMMENT ON FUNCTION public.record_offline_signature(uuid, text, boolean, date) IS
+  'Designer-owned paper-signature authority (00254 semantics). Locks and '
+  'validates an issued proposal, records paper consent/event, and sets exact '
+  'app.proposal_accept_id around accepted/signature state before optional activation.';

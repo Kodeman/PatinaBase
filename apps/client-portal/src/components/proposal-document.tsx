@@ -139,10 +139,9 @@ export function ProposalDocument({
         try {
           // eslint-disable-next-line @typescript-eslint/no-explicit-any
           const supabase = createBrowserClient() as any;
-          await supabase
-            .from('proposals')
-            .update({ status: 'viewed', viewed_at: new Date().toISOString() })
-            .eq('id', proposal.id);
+          await supabase.rpc('mark_proposal_viewed', {
+            p_proposal_id: proposal.id,
+          });
         } catch {
           // Silent
         }
@@ -659,4 +658,3 @@ function SelectionsList({
     </ul>
   );
 }
-

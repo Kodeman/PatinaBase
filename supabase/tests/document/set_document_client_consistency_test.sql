@@ -109,6 +109,18 @@ VALUES
     'Already sent proposal', 100000, 'sent'
   );
 
+INSERT INTO public.projects (
+  id, name, designer_id, client_id, created_by, status
+)
+VALUES (
+  'c7300000-0000-4000-8000-000000000001',
+  'Attach project household',
+  'c7000000-0000-4000-8000-000000000001',
+  NULL,
+  'c7000000-0000-4000-8000-000000000001',
+  'active'
+);
+
 CREATE OR REPLACE FUNCTION pg_temp.assume_document_client_owner()
 RETURNS void
 LANGUAGE plpgsql
@@ -127,6 +139,61 @@ $$;
 
 SET LOCAL ROLE authenticated;
 SELECT pg_temp.assume_document_client_owner();
+
+-- Project client identity has the same two-factor table boundary. An owner is
+-- still current_user=authenticated, so neither a direct write nor the exact
+-- forged row token is sufficient; the owner-scoped RPC remains functional.
+DO $$
+DECLARE
+  v_error text;
+BEGIN
+  BEGIN
+    UPDATE public.projects
+    SET client_id = 'c7000000-0000-4000-8000-000000000002'
+    WHERE id = 'c7300000-0000-4000-8000-000000000001';
+  EXCEPTION WHEN check_violation THEN
+    v_error := SQLERRM;
+  END;
+  ASSERT v_error =
+    'project client identity may only change through set_document_client',
+    format('direct project attachment should reject, got %L', v_error);
+
+  v_error := NULL;
+  PERFORM set_config(
+    'app.project_identity_id',
+    'c7300000-0000-4000-8000-000000000001',
+    true
+  );
+  BEGIN
+    UPDATE public.projects
+    SET client_id = 'c7000000-0000-4000-8000-000000000002'
+    WHERE id = 'c7300000-0000-4000-8000-000000000001';
+  EXCEPTION WHEN check_violation THEN
+    v_error := SQLERRM;
+  END;
+  PERFORM set_config('app.project_identity_id', '', true);
+  ASSERT v_error =
+    'project client identity may only change through set_document_client',
+    format('forged project attachment should reject, got %L', v_error);
+  ASSERT (SELECT client_id IS NULL FROM public.projects
+          WHERE id = 'c7300000-0000-4000-8000-000000000001'),
+    'rejected project attachment must preserve the original client';
+END;
+$$;
+
+SELECT public.set_document_client(
+  'project',
+  'c7300000-0000-4000-8000-000000000001',
+  'c7000000-0000-4000-8000-000000000002'
+);
+DO $$
+BEGIN
+  ASSERT (SELECT client_id = 'c7000000-0000-4000-8000-000000000002'
+          FROM public.projects
+          WHERE id = 'c7300000-0000-4000-8000-000000000001'),
+    'canonical project attachment must still succeed';
+END;
+$$;
 
 -- Reassigning a captured proposal to a different registered client updates
 -- both legs of the relationship spine in the same transaction.

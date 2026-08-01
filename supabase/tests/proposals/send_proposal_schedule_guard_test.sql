@@ -442,7 +442,7 @@ SELECT pg_temp.expect_proposal_insert_failure(
   'b7000000-0000-4000-8000-000000000002',
   'b7050000-0000-4000-8000-000000000001',
   now(),
-  'proposal inserts must start as draft with sent_at null'
+  'proposal inserts must start as draft without lifecycle state'
 );
 SELECT pg_temp.expect_proposal_insert_failure(
   'b7100000-0000-4000-8000-000000000020',
@@ -450,7 +450,7 @@ SELECT pg_temp.expect_proposal_insert_failure(
   'b7000000-0000-4000-8000-000000000002',
   'b7050000-0000-4000-8000-000000000001',
   NULL,
-  'proposal inserts must start as draft with sent_at null'
+  'proposal inserts must start as draft without lifecycle state'
 );
 SELECT pg_temp.expect_proposal_insert_failure(
   'b7100000-0000-4000-8000-000000000021',
@@ -458,7 +458,7 @@ SELECT pg_temp.expect_proposal_insert_failure(
   'b7000000-0000-4000-8000-000000000002',
   'b7050000-0000-4000-8000-000000000001',
   now(),
-  'proposal inserts must start as draft with sent_at null'
+  'proposal inserts must start as draft without lifecycle state'
 );
 SELECT pg_temp.expect_proposal_insert_failure(
   'b7100000-0000-4000-8000-000000000022',
@@ -466,7 +466,7 @@ SELECT pg_temp.expect_proposal_insert_failure(
   'b7000000-0000-4000-8000-000000000002',
   NULL,
   NULL,
-  'proposal client_id and designer_client_id must be linked or cleared together'
+  'proposal client_id requires a matching designer_client_id'
 );
 SELECT pg_temp.expect_proposal_insert_failure(
   'b7100000-0000-4000-8000-000000000023',
@@ -474,7 +474,7 @@ SELECT pg_temp.expect_proposal_insert_failure(
   NULL,
   'b7050000-0000-4000-8000-000000000001',
   NULL,
-  'proposal client_id and designer_client_id must be linked or cleared together'
+  'proposal client identity does not match its designer relationship'
 );
 SELECT pg_temp.expect_proposal_insert_failure(
   'b7100000-0000-4000-8000-000000000024',
@@ -484,6 +484,41 @@ SELECT pg_temp.expect_proposal_insert_failure(
   NULL,
   'proposal client identity does not match its designer relationship'
 );
+
+-- Studio RLS intentionally permits co-authoring, but it must not permit a peer
+-- to rewrite the proposal's canonical owner. Even a forged identity token is
+-- only a string; the peer remains current_user=authenticated at the trigger.
+SELECT pg_temp.assume_proposal_actor(
+  'b7000000-0000-4000-8000-000000000003'
+);
+DO $$
+DECLARE
+  v_error text;
+BEGIN
+  PERFORM set_config(
+    'app.proposal_identity_id',
+    'b7100000-0000-4000-8000-000000000018',
+    true
+  );
+  BEGIN
+    UPDATE public.proposals
+    SET designer_id = 'b7000000-0000-4000-8000-000000000003'
+    WHERE id = 'b7100000-0000-4000-8000-000000000018';
+  EXCEPTION WHEN check_violation THEN
+    v_error := SQLERRM;
+  END;
+  PERFORM set_config('app.proposal_identity_id', '', true);
+
+  ASSERT v_error =
+    'proposal designer ownership may only change through trusted transfer authority',
+    format('studio peer ownership takeover should reject, got %L', v_error);
+  ASSERT (SELECT designer_id = 'b7000000-0000-4000-8000-000000000001'
+          FROM public.proposals
+          WHERE id = 'b7100000-0000-4000-8000-000000000018'),
+    'rejected studio takeover must preserve the proposal owner';
+END;
+$$;
+SELECT pg_temp.assume_proposal_owner();
 
 -- Authoring authority is intentionally narrower than shared-workspace RLS:
 -- owner access remains available to a solo designer, while peer access exists
