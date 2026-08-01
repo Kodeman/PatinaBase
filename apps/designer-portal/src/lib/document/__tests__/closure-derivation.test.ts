@@ -60,7 +60,15 @@ describe('closure checklist', () => {
       completed: true,
     }));
     const operational = deriveCloseoutReadiness({
-      ffeItems: [{ id: 'chair-1', status: 'specified' }],
+      ffeItems: [
+        {
+          id: 'chair-1',
+          status: 'specified',
+          quantity: 1,
+          unit_price_cents: 320_000,
+          line_total_cents: 320_000,
+        },
+      ],
       ffeCoverage: {
         'chair-1': { coverage: 'uninvoiced' },
       },
@@ -119,7 +127,15 @@ describe('closure checklist', () => {
 
   it('requires collected truth, not merely an issued invoice', () => {
     const operational = deriveCloseoutReadiness({
-      ffeItems: [{ id: 'chair-1', status: 'installed' }],
+      ffeItems: [
+        {
+          id: 'chair-1',
+          status: 'installed',
+          quantity: 1,
+          unit_price_cents: 320_000,
+          line_total_cents: 320_000,
+        },
+      ],
       ffeCoverage: {
         'chair-1': { coverage: 'invoiced' },
       },
@@ -144,12 +160,63 @@ describe('closure checklist', () => {
     ]);
   });
 
+  it('rejects a paid invoice line that covers less than the FF&E sell value', () => {
+    const operational = deriveCloseoutReadiness({
+      ffeItems: [
+        {
+          id: 'chair-1',
+          status: 'installed',
+          quantity: 1,
+          unit_price_cents: 100,
+          line_total_cents: 100,
+        },
+      ],
+      ffeCoverage: {
+        'chair-1': { coverage: 'paid', billedCents: 99 },
+      },
+      paymentMilestones: [],
+      invoices: [],
+    });
+
+    expect(operational.ready).toBe(false);
+    expect(operational.blockers.map((blocker) => blocker.code)).toEqual([
+      'ffe_not_paid',
+    ]);
+  });
+
+  it('does not require an invoice for installed zero-value or unpriced FF&E', () => {
+    const operational = deriveCloseoutReadiness({
+      ffeItems: [
+        {
+          id: 'client-owned-chair',
+          status: 'installed',
+          quantity: 2,
+          unit_price_cents: 0,
+          line_total_cents: null,
+        },
+      ],
+      ffeCoverage: {},
+      paymentMilestones: [],
+      invoices: [],
+    });
+
+    expect(operational).toEqual({ ready: true, blockers: [] });
+  });
+
   it('accepts installed, fully paid operational work', () => {
     const operational = deriveCloseoutReadiness({
       projectTotalCents: 320_000,
-      ffeItems: [{ id: 'chair-1', status: 'installed' }],
+      ffeItems: [
+        {
+          id: 'chair-1',
+          status: 'installed',
+          quantity: 1,
+          unit_price_cents: 320_000,
+          line_total_cents: 320_000,
+        },
+      ],
       ffeCoverage: {
-        'chair-1': { coverage: 'paid' },
+        'chair-1': { coverage: 'paid', billedCents: 320_000 },
       },
       paymentMilestones: [
         { id: 'milestone-1', status: 'paid', amount_cents: 320_000 },

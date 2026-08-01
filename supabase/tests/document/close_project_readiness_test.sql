@@ -38,11 +38,17 @@ VALUES
 INSERT INTO public.project_ffe_items (
   id, project_id, name, status, quantity, unit_price_cents, line_total_cents
 )
-VALUES (
-  'a7200000-0000-4000-8000-000000000001',
-  'a7100000-0000-4000-8000-000000000001',
-  'Closeout chair', 'specified', 1, 320000, 320000
-);
+VALUES
+  (
+    'a7200000-0000-4000-8000-000000000001',
+    'a7100000-0000-4000-8000-000000000001',
+    'Closeout chair', 'specified', 1, 320000, 320000
+  ),
+  (
+    'a7200000-0000-4000-8000-000000000002',
+    'a7100000-0000-4000-8000-000000000001',
+    'Client-owned zero-price chair', 'installed', 1, 0, NULL
+  );
 
 INSERT INTO public.project_payment_milestones (
   id, project_id, label, percentage, amount_cents, status
@@ -123,6 +129,47 @@ $$;
 SET LOCAL ROLE authenticated;
 SELECT pg_temp.assume_closeout_owner();
 
+-- close_project shares rows with issue_invoice, record_invoice_payment /
+-- apply_invoice_payment_effects, void_invoice, and direct invoice-line edits.
+-- Lock them in the canonical dependency direction so two valid operations do
+-- not form invoice<->milestone or line<->FF&E deadlock cycles.
+DO $$
+DECLARE
+  v_source text := pg_get_functiondef(
+    'public.close_project(uuid,jsonb,jsonb)'::regprocedure
+  );
+  v_invoice_pos integer;
+  v_line_pos integer;
+  v_milestone_pos integer;
+  v_ffe_pos integer;
+BEGIN
+  v_invoice_pos := position(
+    E'FROM public.invoices\n  WHERE project_id = p_project_id\n  ORDER BY id\n  FOR UPDATE'
+    IN v_source
+  );
+  v_line_pos := position(
+    E'FROM public.invoice_line_items AS line\n  JOIN public.invoices AS invoice ON invoice.id = line.invoice_id\n  WHERE invoice.project_id = p_project_id\n  ORDER BY line.id\n  FOR UPDATE OF line'
+    IN v_source
+  );
+  v_milestone_pos := position(
+    E'FROM public.project_payment_milestones\n  WHERE project_id = p_project_id\n  ORDER BY id\n  FOR UPDATE'
+    IN v_source
+  );
+  v_ffe_pos := position(
+    E'FROM public.project_ffe_items\n  WHERE project_id = p_project_id\n  ORDER BY id\n  FOR UPDATE'
+    IN v_source
+  );
+
+  ASSERT v_invoice_pos > 0 AND v_line_pos > 0
+      AND v_milestone_pos > 0 AND v_ffe_pos > 0,
+    'close_project must retain explicit ordered child locks';
+  ASSERT v_invoice_pos < v_line_pos
+      AND v_line_pos < v_milestone_pos
+      AND v_milestone_pos < v_ffe_pos,
+    'close_project lock order must be invoice -> line -> milestone -> FF&E';
+END;
+$$;
+
 -- A checklist is workflow evidence, not an optional payload.
 SELECT pg_temp.expect_close_failure(
   'a7100000-0000-4000-8000-000000000002',
@@ -185,12 +232,28 @@ VALUES (
   'a7500000-0000-4000-8000-000000000001',
   'a7400000-0000-4000-8000-000000000001',
   'ffe', 'a7200000-0000-4000-8000-000000000001',
-  'Closeout chair', 1, 320000, 320000
+  'Closeout chair', 1, 319999, 319999
 );
 SET LOCAL ROLE authenticated;
 SELECT pg_temp.assume_closeout_owner();
 
--- Paid FF&E does not erase an explicit unpaid project milestone.
+-- A paid header does not make a one-cent/partial FF&E line complete.
+SELECT pg_temp.expect_close_failure(
+  'a7100000-0000-4000-8000-000000000001',
+  'project cannot close: 1 FF&E item(s) are not fully invoiced and paid'
+);
+
+RESET ROLE;
+UPDATE public.invoice_line_items
+SET unit_amount_cents = 320000,
+    amount_cents = 320000
+WHERE id = 'a7500000-0000-4000-8000-000000000001';
+SET LOCAL ROLE authenticated;
+SELECT pg_temp.assume_closeout_owner();
+
+-- Full positive-value line coverage does not erase an explicit unpaid project
+-- milestone. The installed zero/unpriced FF&E row has no invoice by design and
+-- does not add a billing blocker.
 SELECT pg_temp.expect_close_failure(
   'a7100000-0000-4000-8000-000000000001',
   'project cannot close: 1 positive payment milestone(s) are not paid'

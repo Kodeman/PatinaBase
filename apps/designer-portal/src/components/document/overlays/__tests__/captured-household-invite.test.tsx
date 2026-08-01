@@ -54,8 +54,9 @@ describe('CapturedHouseholdInvite', () => {
       clientName: 'Harper Vale',
     });
     expect(attach).toHaveBeenCalledWith({
-      proposalId: 'proposal-1',
-      updates: { client_id: 'profile-1' },
+      engagementKind: 'proposal',
+      targetId: 'proposal-1',
+      clientId: 'profile-1',
     });
   });
 

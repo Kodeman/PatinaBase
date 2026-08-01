@@ -4280,12 +4280,36 @@ END $g$;
 
 -- 00384_send_proposal_payment_schedule_guard.sql
 DO $g$ BEGIN
-  REVOKE ALL ON FUNCTION public.send_proposal(uuid, text, text, timestamptz) FROM PUBLIC, anon;
+  REVOKE ALL ON FUNCTION public.get_proposal_send_snapshot(uuid) FROM PUBLIC, anon;
 EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
 END $g$;
 
 -- 00384_send_proposal_payment_schedule_guard.sql
 DO $g$ BEGIN
-  GRANT EXECUTE ON FUNCTION public.send_proposal(uuid, text, text, timestamptz) TO authenticated;
+  GRANT EXECUTE ON FUNCTION public.get_proposal_send_snapshot(uuid) TO authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00384_send_proposal_payment_schedule_guard.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.send_proposal( uuid, timestamptz, integer, text, text, text, timestamptz ) FROM PUBLIC, anon;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00384_send_proposal_payment_schedule_guard.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.send_proposal( uuid, timestamptz, integer, text, text, text, timestamptz ) TO authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00385_set_document_client_relationship_consistency.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.set_document_client(text, uuid, uuid) FROM PUBLIC, anon;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00385_set_document_client_relationship_consistency.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.set_document_client(text, uuid, uuid) TO authenticated;
 EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
 END $g$;

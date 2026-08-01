@@ -20,8 +20,9 @@ export async function inviteAndAttachCapturedHousehold({
     clientName?: string;
   }) => Promise<{ profileId: string | null }>;
   attach: (input: {
-    proposalId: string;
-    updates: { client_id: string };
+    engagementKind: 'proposal';
+    targetId: string;
+    clientId: string;
   }) => Promise<unknown>;
 }): Promise<string> {
   const result = await invite({ designerClientId, clientEmail, clientName });
@@ -29,8 +30,9 @@ export async function inviteAndAttachCapturedHousehold({
     throw new Error('The invite went out but no client account came back.');
   }
   await attach({
-    proposalId,
-    updates: { client_id: result.profileId },
+    engagementKind: 'proposal',
+    targetId: proposalId,
+    clientId: result.profileId,
   });
   return result.profileId;
 }

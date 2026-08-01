@@ -90,6 +90,9 @@ export function CareBand({ projectId }: { projectId: string }) {
     ffeItems: (ffeQuery.data ?? []) as Array<{
       id: string;
       status: string | null;
+      quantity: number | null;
+      unit_price_cents: number | null;
+      line_total_cents: number | null;
     }>,
     ffeCoverage: coverageQuery.data ?? {},
     paymentMilestones: (milestoneQuery.data ?? []) as Array<{
