@@ -5,10 +5,11 @@
  * timer); the drawer is the desk's book list (its six books open the
  * existing charcoal DocSheet ledgers via the open-ledger event — Library,
  * People, and Rooms are Rooms, so the same event walks them in instead). One
- * scrim, scrim-tap dismiss; no shadows (D4). Shown below 980px only.
+ * scrim, scrim-tap dismiss; no shadows (D4). Document/drawer sheets stop at
+ * 1180px; the timer alone remains the compact spine's sheet through 1439px.
  */
 
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useMarginItems } from '@/hooks/use-margin-items';
 import { useDocumentTime } from '@/hooks/document-time-provider';
@@ -26,7 +27,38 @@ import { openLedger } from '../command-bar';
 import { openAccount } from '../account/account-sheet';
 import { MobileAccountHeader } from '../account/mobile-account-header';
 import { DocumentAction, DocumentActionRow } from '../document-action';
+import { lockBodyScroll } from '../overlays/body-scroll-lock';
+import {
+  isElementRendered,
+  topActiveModalDialog,
+} from '../overlays/active-dialog';
 import { useMobileShell } from './mobile-shell';
+
+const SHEET_FOCUSABLE = [
+  'a[href]:not([tabindex="-1"])',
+  'button:not([disabled]):not([tabindex="-1"])',
+  'input:not([disabled]):not([type="hidden"]):not([tabindex="-1"])',
+  'select:not([disabled]):not([tabindex="-1"])',
+  'textarea:not([disabled]):not([tabindex="-1"])',
+  '[contenteditable="true"]:not([tabindex="-1"])',
+  '[tabindex]:not([tabindex="-1"])',
+].join(',');
+
+function focusableSheetControls(panel: HTMLElement) {
+  return Array.from(
+    panel.querySelectorAll<HTMLElement>(SHEET_FOCUSABLE),
+  ).filter((control) => {
+    const style = window.getComputedStyle(control);
+    return (
+      !control.hidden &&
+      !control.matches(':disabled') &&
+      control.getAttribute('aria-disabled') !== 'true' &&
+      !control.closest('[hidden], [aria-hidden="true"], [inert]') &&
+      style.display !== 'none' &&
+      style.visibility !== 'hidden'
+    );
+  });
+}
 
 const LEDGERS: {
   key: string;
@@ -82,32 +114,163 @@ const LEDGERS: {
   },
 ];
 
+const MOBILE_MORE_DOORWAY =
+  '[data-mobile-edge-owner="document-bar"] [aria-label="More studio actions"]';
+
+const SHEET_RETURN_FALLBACKS: Record<
+  'drawer' | 'timer' | 'spine' | 'margin-item',
+  readonly string[]
+> = {
+  drawer: ['[data-studio-books-doorway]', MOBILE_MORE_DOORWAY],
+  timer: [
+    '[data-compact-spine-timer-doorway]',
+    '[data-full-spine-timer] [data-action-key="open-manual-time-entry"]',
+    MOBILE_MORE_DOORWAY,
+    '[data-studio-books-doorway]',
+  ],
+  spine: ['[data-document-spine] button', MOBILE_MORE_DOORWAY],
+  'margin-item': [
+    '[data-margin-trigger]',
+    '[data-document-spine] button',
+    MOBILE_MORE_DOORWAY,
+  ],
+};
+
+function focusMobileMoreDoorway() {
+  document
+    .querySelector<HTMLButtonElement>(MOBILE_MORE_DOORWAY)
+    ?.focus({ preventScroll: true });
+}
+
+function restoreSheetFocus(
+  kind: keyof typeof SHEET_RETURN_FALLBACKS,
+  captured: HTMLElement | null,
+) {
+  window.requestAnimationFrame(() => {
+    // A drawer action may replace this sheet with a DocSheet in the same
+    // commit. That new modal owns focus; never pull it back to shell chrome.
+    if (topActiveModalDialog()) return;
+
+    const candidates = [
+      captured,
+      ...SHEET_RETURN_FALLBACKS[kind].flatMap((selector) =>
+        Array.from(document.querySelectorAll<HTMLElement>(selector)),
+      ),
+    ];
+    const target = candidates.find((candidate): candidate is HTMLElement =>
+      Boolean(candidate?.isConnected && isElementRendered(candidate)),
+    );
+    target?.focus({ preventScroll: true });
+  });
+}
+
 function Sheet({
   tone,
+  kind,
   onClose,
   children,
 }: {
   tone: 'paper' | 'dark';
+  kind: 'drawer' | 'timer' | 'spine' | 'margin-item';
   onClose: () => void;
   children: React.ReactNode;
 }) {
+  const compactTimer = kind === 'timer';
+  const dialogRef = useRef<HTMLDivElement>(null);
+  const panelRef = useRef<HTMLDivElement>(null);
+  const closeRef = useRef(onClose);
+  const kindRef = useRef(kind);
+  closeRef.current = onClose;
+  kindRef.current = kind;
+
+  useEffect(() => {
+    const activeElement = document.activeElement;
+    const returnFocusTarget =
+      activeElement instanceof HTMLElement && activeElement !== document.body
+        ? activeElement
+        : null;
+    const unlockBodyScroll = lockBodyScroll();
+    const focusFrame = window.requestAnimationFrame(() => {
+      panelRef.current?.focus({ preventScroll: true });
+    });
+    const onKeyDown = (event: KeyboardEvent) => {
+      const dialog = dialogRef.current;
+      const panel = panelRef.current;
+      if (!dialog || !panel || topActiveModalDialog() !== dialog) return;
+
+      if (event.key === 'Escape') {
+        event.preventDefault();
+        event.stopPropagation();
+        closeRef.current();
+        return;
+      }
+
+      if (event.key !== 'Tab' || event.defaultPrevented) return;
+      const controls = focusableSheetControls(panel);
+      if (controls.length === 0) {
+        event.preventDefault();
+        panel.focus({ preventScroll: true });
+        return;
+      }
+
+      const first = controls[0];
+      const last = controls[controls.length - 1];
+      const active = document.activeElement;
+      if (active === panel || !panel.contains(active)) {
+        event.preventDefault();
+        (event.shiftKey ? last : first).focus();
+      } else if (event.shiftKey && active === first) {
+        event.preventDefault();
+        last.focus();
+      } else if (!event.shiftKey && active === last) {
+        event.preventDefault();
+        first.focus();
+      }
+    };
+
+    document.addEventListener('keydown', onKeyDown, true);
+    return () => {
+      window.cancelAnimationFrame(focusFrame);
+      document.removeEventListener('keydown', onKeyDown, true);
+      unlockBodyScroll();
+      restoreSheetFocus(kindRef.current, returnFocusTarget);
+    };
+  }, []);
+
   return (
     <div
-      className="fixed inset-0 z-[58] min-[980px]:hidden"
+      ref={dialogRef}
+      id={compactTimer ? 'mobile-timer-sheet' : undefined}
+      data-mobile-sheet-kind={kind}
+      data-mobile-sheet-regime={
+        compactTimer ? 'through-1439' : 'below-1180-only'
+      }
+      className={`fixed inset-0 z-[58] ${
+        compactTimer ? 'min-[1440px]:hidden' : 'min-[1180px]:hidden'
+      }`}
       role="dialog"
+      aria-label={compactTimer ? 'Time in hand' : undefined}
       aria-modal="true"
     >
       <button
         type="button"
         aria-label="Dismiss"
+        tabIndex={-1}
         onClick={onClose}
         className="absolute inset-0 cursor-default bg-[rgba(44,41,38,0.5)]"
       />
       <div
+        ref={panelRef}
+        tabIndex={-1}
+        data-mobile-sheet-panel
         className={`absolute inset-x-0 bottom-0 max-h-[80%] overflow-y-auto rounded-t-[14px] pb-[max(0.9rem,env(safe-area-inset-bottom))] motion-safe:animate-[doc-sheet-up_250ms_var(--ease-editorial)] ${
           tone === 'paper'
             ? 'border-t border-[var(--doc-ink-border)] bg-[var(--doc-paper)]'
             : 'border-t border-[rgba(250,247,242,0.18)] bg-[var(--color-charcoal)]'
+        } ${
+          compactTimer
+            ? 'min-[1180px]:left-14 min-[1180px]:right-auto min-[1180px]:w-[28rem] min-[1180px]:rounded-tr-[14px]'
+            : ''
         }`}
       >
         <div
@@ -136,18 +299,35 @@ export function MobileSheets() {
     [items],
   );
   const allItems = useMemo(() => [...raised, ...settled], [raised, settled]);
+  const sheetKind = sheet?.kind ?? null;
+
+  useEffect(() => {
+    if (!sheetKind) return;
+
+    const validRegime = window.matchMedia(
+      sheetKind === 'timer' ? '(max-width: 1439px)' : '(max-width: 1179px)',
+    );
+    const closeOutsideRegime = () => {
+      if (!validRegime.matches) closeSheet();
+    };
+
+    closeOutsideRegime();
+    validRegime.addEventListener('change', closeOutsideRegime);
+    return () => validRegime.removeEventListener('change', closeOutsideRegime);
+  }, [closeSheet, sheetKind]);
 
   if (!sheet) return null;
 
   // ── Drawer: the six books ──
   if (sheet.kind === 'drawer') {
     return (
-      <Sheet tone="dark" onClose={closeSheet}>
+      <Sheet tone="dark" kind="drawer" onClose={closeSheet}>
         {/* The maker's nameplate — tap to open the Account sheet (identity,
             status, settings, sign out). Distinct from the money "Accounts" book
             in the list below. */}
         <MobileAccountHeader
           onOpen={() => {
+            focusMobileMoreDoorway();
             closeSheet();
             openAccount();
           }}
@@ -156,7 +336,7 @@ export function MobileSheets() {
           The drawer{' '}
           <em className="italic text-[var(--color-clay)]">· six books</em>
         </h2>
-        <p className="mt-0.5 text-[11.5px] text-[rgba(250,247,242,0.45)]">
+        <p className="mt-0.5 text-[14px] text-[rgba(250,247,242,0.58)]">
           Pulled over whatever you&apos;re holding. Put back when done.
         </p>
         <ul className="mt-2">
@@ -165,10 +345,11 @@ export function MobileSheets() {
               <button
                 type="button"
                 onClick={() => {
+                  focusMobileMoreDoorway();
                   closeSheet();
                   openLedger(l.name);
                 }}
-                className="flex w-full items-center gap-3 border-b border-[rgba(250,247,242,0.08)] py-2.5 text-left"
+                className="flex w-full items-center gap-3 border-b border-[rgba(250,247,242,0.08)] py-2.5 text-left focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-[-3px] focus-visible:outline-[var(--color-clay)]"
               >
                 {l.weight === 'room' ? (
                   <span
@@ -187,18 +368,18 @@ export function MobileSheets() {
                   />
                 )}
                 <span className="min-w-0 flex-1">
-                  <span className="block font-heading text-[13px] font-medium text-[rgba(250,247,242,0.9)]">
+                  <span className="block font-heading text-[14px] font-medium text-[rgba(250,247,242,0.9)]">
                     {l.name}
                     {l.weight === 'room' && (
                       <span
                         aria-hidden
-                        className="ml-1.5 font-mono text-[11px] text-[var(--color-clay)] opacity-70"
+                        className="ml-1.5 font-mono text-[12px] text-[var(--color-clay)] opacity-70"
                       >
                         ↗
                       </span>
                     )}
                   </span>
-                  <span className="block font-mono text-[8.5px] uppercase tracking-[0.05em] text-[rgba(250,247,242,0.4)]">
+                  <span className="block font-mono text-[12px] uppercase tracking-[0.05em] text-[rgba(250,247,242,0.58)]">
                     {l.count}
                   </span>
                 </span>
@@ -213,7 +394,7 @@ export function MobileSheets() {
   // ── Timer (paper) ──
   if (sheet.kind === 'timer') {
     return (
-      <Sheet tone="paper" onClose={closeSheet}>
+      <Sheet tone="paper" kind="timer" onClose={closeSheet}>
         <MobileTimerSheet />
       </Sheet>
     );
@@ -223,14 +404,14 @@ export function MobileSheets() {
   if (sheet.kind === 'spine') {
     const open = allItems.filter((i) => i.kind !== 'time');
     return (
-      <Sheet tone="paper" onClose={closeSheet}>
+      <Sheet tone="paper" kind="spine" onClose={closeSheet}>
         <button
           type="button"
           onClick={() => {
             closeSheet();
             router.push('/desk');
           }}
-          className="block w-full border-b border-[var(--color-pearl)] py-2 text-left font-mono text-[10px] uppercase tracking-[0.08em] text-[var(--color-aged-oak)]"
+          className="block min-h-11 w-full border-b border-[var(--color-pearl)] py-2 text-left font-mono text-[12px] uppercase tracking-[0.08em] text-[var(--color-aged-oak)]"
         >
           ← Put down · back to the Desk
         </button>
@@ -245,7 +426,7 @@ export function MobileSheets() {
                 />
                 <span className={s.state === 'future' ? 'opacity-45' : ''}>
                   <span
-                    className={`block text-[13px] ${
+                    className={`block text-[14px] ${
                       s.state === 'active'
                         ? 'font-semibold text-[var(--color-charcoal)]'
                         : s.state === 'settled'
@@ -255,7 +436,7 @@ export function MobileSheets() {
                   >
                     {s.label}
                   </span>
-                  <span className="block font-mono text-[8.5px] uppercase tracking-[0.05em] text-[var(--text-muted)]">
+                  <span className="block font-mono text-[12px] uppercase tracking-[0.05em] text-[var(--text-muted)]">
                     {s.sub}
                   </span>
                 </span>
@@ -291,7 +472,7 @@ export function MobileSheets() {
         {/* R25: room headings as jump rows — tap lands on the heading. */}
         {(activeDoc?.rooms ?? []).length > 0 && (
           <>
-            <p className="mt-3 border-t border-[var(--color-pearl)] pt-2.5 font-mono text-[9px] font-semibold uppercase tracking-[0.1em] text-[var(--color-aged-oak)]">
+            <p className="mt-3 border-t border-[var(--color-pearl)] pt-2.5 font-mono text-[12px] font-semibold uppercase tracking-[0.1em] text-[var(--color-aged-oak)]">
               Rooms
             </p>
             <ul className="mt-1">
@@ -318,11 +499,11 @@ export function MobileSheets() {
           </>
         )}
 
-        <p className="mt-3 border-t border-[var(--color-pearl)] pt-2.5 font-mono text-[9px] font-semibold uppercase tracking-[0.1em] text-[var(--color-aged-oak)]">
+        <p className="mt-3 border-t border-[var(--color-pearl)] pt-2.5 font-mono text-[12px] font-semibold uppercase tracking-[0.1em] text-[var(--color-aged-oak)]">
           In the margin · {raised.length}
         </p>
         {open.length === 0 ? (
-          <p className="py-1.5 text-[11px] italic text-[var(--text-muted)]">
+          <p className="py-1.5 text-[14px] italic text-[var(--text-muted)]">
             The margin — decisions, messages, and money gather here.
           </p>
         ) : (
@@ -338,12 +519,12 @@ export function MobileSheets() {
                   }}
                 >
                   <span
-                    className="mt-px shrink-0 font-mono text-[8px] font-semibold uppercase tracking-[0.06em]"
+                    className="mt-px shrink-0 font-mono text-[12px] font-semibold uppercase tracking-[0.06em]"
                     style={{ color: marginAccent(row.kind).label }}
                   >
                     {deriveKindLine(row)}
                   </span>
-                  <span className="text-[11.5px] leading-snug text-[var(--color-charcoal)]">
+                  <span className="text-[14px] leading-snug text-[var(--color-charcoal)]">
                     {row.title}
                   </span>
                 </button>
@@ -364,9 +545,9 @@ export function MobileSheets() {
       return null;
     }
     return (
-      <Sheet tone="paper" onClose={closeSheet}>
+      <Sheet tone="paper" kind="margin-item" onClose={closeSheet}>
         <span
-          className="mb-1 block font-mono text-[9px] font-semibold uppercase tracking-[0.08em]"
+          className="mb-1 block font-mono text-[12px] font-semibold uppercase tracking-[0.08em]"
           style={{ color: marginAccent(row.kind).label }}
         >
           {deriveKindLine(row)}
@@ -414,8 +595,8 @@ function MobileTimerSheet() {
   const valid = Number.isFinite(parsed) && parsed >= 1;
 
   return (
-    <div>
-      <span className="font-mono text-[10px] font-semibold uppercase tracking-[0.08em] text-[var(--color-clay)]">
+    <div data-mobile-timer-sheet-content>
+      <span className="doc-type-meta font-semibold uppercase tracking-[0.08em] text-[var(--color-quiet-ink)]">
         In hand{paused ? ' · paused' : ''}
       </span>
       <p className="mb-2 mt-1 font-mono text-[26px] tracking-[0.04em] text-[var(--color-charcoal)]">
@@ -459,13 +640,13 @@ function MobileTimerSheet() {
             aria-label="Minutes"
             value={minutes}
             onChange={(e) => setMinutes(e.target.value)}
-            className="w-full rounded-[5px] border border-[var(--color-pearl)] bg-white px-2.5 py-2 text-[13px] text-[var(--color-charcoal)] focus:border-[var(--color-clay)] focus:outline-none"
+            className="doc-type-control min-h-11 w-full rounded-[5px] border border-[var(--color-pearl)] bg-white px-2.5 py-2 text-[var(--color-charcoal)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-quiet-ink)]"
           />
           <select
             aria-label="Activity"
             value={activity}
             onChange={(e) => setActivity(e.target.value)}
-            className="w-full rounded-[5px] border border-[var(--color-pearl)] bg-white px-2.5 py-2 text-[13px] text-[var(--color-charcoal)] focus:border-[var(--color-clay)] focus:outline-none"
+            className="doc-type-control min-h-11 w-full rounded-[5px] border border-[var(--color-pearl)] bg-white px-2.5 py-2 text-[var(--color-charcoal)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-quiet-ink)]"
           >
             {ACTIVITIES.map((a) => (
               <option key={a.key} value={a.key}>
@@ -500,7 +681,7 @@ function MobileTimerSheet() {
           </DocumentActionRow>
         </div>
       )}
-      <p className="mt-3 text-[11px] italic text-[var(--text-muted)]">
+      <p className="mt-3 text-[14px] italic text-[var(--text-muted)]">
         Pick up = clock in. Put down = you decide what logs. Nothing bills
         itself.
       </p>
@@ -509,4 +690,4 @@ function MobileTimerSheet() {
 }
 
 const BTN =
-  'rounded-[4px] border border-[var(--color-pearl)] px-3 py-1.5 text-[12px] font-medium text-[var(--color-charcoal)] active:border-[var(--color-clay)]';
+  'doc-type-meta min-h-11 min-w-11 rounded-[4px] border border-[var(--color-pearl)] px-3 py-2 font-medium text-[var(--color-charcoal)] active:border-[var(--color-clay)]';

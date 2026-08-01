@@ -45,11 +45,11 @@ export default function DocumentLayout({
   children: React.ReactNode;
 }) {
   return (
-    <div className="min-h-screen bg-[var(--bg-primary)]">
+    <div className="document-route-shell min-h-screen bg-[var(--bg-primary)]">
       {/* One time system above the Desk and every document (R4): the
           log-offer strip rides across navigation inside the provider. */}
       <DocumentTimeProvider>
-        {/* D13: the phone's physics live in the shell (below 980px). */}
+        {/* D13: compact document physics live in the shell below 1180px. */}
         <MobileShellProvider>
           {/* R97 — the Supabase help-state backend (tour/announcement records,
               cross-device via profiles.help_state) is re-homed to the desk

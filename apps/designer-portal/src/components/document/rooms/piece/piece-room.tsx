@@ -137,7 +137,18 @@ const PAYMENT_OPTIONS = [
   { value: 'custom_milestones', label: 'Custom milestones' },
 ];
 
-const ALL_FACETS = [
+type PieceFacetId =
+  | 'identity'
+  | 'piece'
+  | 'story'
+  | 'categorization'
+  | 'commerce'
+  | 'lifecycle'
+  | 'sourcing'
+  | 'seo'
+  | 'eye';
+
+const PIECE_FACET_ORDER: PieceFacetId[] = [
   'identity',
   'piece',
   'story',
@@ -148,6 +159,17 @@ const ALL_FACETS = [
   'seo',
   'eye',
 ];
+
+function firstIncompletePieceFacet(
+  completion: Record<PieceFacetId, boolean>,
+  visibleFacets: readonly PieceFacetId[] = PIECE_FACET_ORDER,
+): PieceFacetId {
+  return (
+    visibleFacets.find((id) => !completion[id]) ??
+    visibleFacets[0] ??
+    'identity'
+  );
+}
 
 export function PieceRoom({ productId }: { productId: string }) {
   const { data, isLoading, error, refetch } = useProduct(productId);
@@ -198,14 +220,56 @@ export function PieceRoom({ productId }: { productId: string }) {
     return false;
   }, [p, isSuperAdmin, user, studioIds]);
   const readOnly = !canEdit;
-
-  const [open, setOpen] = useState<Set<string>>(new Set(ALL_FACETS));
-  const toggle = (id: string) =>
-    setOpen((prev) => {
-      const next = new Set(prev);
-      next.has(id) ? next.delete(id) : next.add(id);
-      return next;
-    });
+  const hasTeaching = (p?.product_styles?.length ?? 0) > 0;
+  const loadedSections = p ? pieceSections(p, hasTeaching) : null;
+  const showSeo = layer === 'catalog' || isSuperAdmin;
+  const studioNeeds = layer === 'studio';
+  const visibleFacets: PieceFacetId[] = [
+    'identity',
+    'piece',
+    'story',
+    'categorization',
+    'commerce',
+    ...(canEdit ? (['lifecycle'] as const) : []),
+    'sourcing',
+    ...(showSeo ? (['seo'] as const) : []),
+    'eye',
+  ];
+  const facetCompletion: Record<PieceFacetId, boolean> = {
+    identity: loadedSections?.identity ?? false,
+    piece: loadedSections?.piece ?? false,
+    story: !!(p?.short_description || p?.description),
+    categorization: !!p?.category,
+    commerce: loadedSections?.commerce ?? false,
+    lifecycle: p?.status === 'published',
+    sourcing: !!(p?.vendor_id && p?.lead_time_weeks && p?.payment_terms),
+    seo: !!p?.seo_title,
+    eye: hasTeaching,
+  };
+  const initialFacet = firstIncompletePieceFacet(
+    facetCompletion,
+    visibleFacets,
+  );
+  const [facetSelection, setFacetSelection] = useState<{
+    productId: string;
+    facetId: PieceFacetId;
+  } | null>(null);
+  useEffect(() => {
+    if (!p || readOnly) return;
+    setFacetSelection((current) =>
+      current?.productId === p.id
+        ? current
+        : { productId: p.id, facetId: initialFacet },
+    );
+  }, [initialFacet, p, readOnly]);
+  const activeFacet =
+    facetSelection && facetSelection.productId === p?.id
+      ? facetSelection.facetId
+      : initialFacet;
+  const selectFacet = (facetId: PieceFacetId) => {
+    if (!p) return;
+    setFacetSelection({ productId: p.id, facetId });
+  };
 
   const [deepOpen, setDeepOpen] = useState(false);
   const [promoteOpen, setPromoteOpen] = useState(false);
@@ -239,7 +303,7 @@ export function PieceRoom({ productId }: { productId: string }) {
       </RoomShell>
     );
   }
-  if (error || !p) {
+  if (error || !p || !loadedSections) {
     return (
       <RoomShell title="A piece" backTo="/library" backLabel="the Library">
         <div
@@ -271,8 +335,7 @@ export function PieceRoom({ productId }: { productId: string }) {
     );
   }
 
-  const hasTeaching = (p.product_styles?.length ?? 0) > 0;
-  const sections = pieceSections(p, hasTeaching);
+  const sections = loadedSections;
   const fill = pieceFill(sections);
   const pct = piecePct(fill);
   const state = pieceStateLabel(pct);
@@ -295,9 +358,6 @@ export function PieceRoom({ productId }: { productId: string }) {
   const taughtStyles = (p.product_styles ?? [])
     .map((s) => s.style?.name)
     .filter(Boolean) as string[];
-
-  const showSeo = layer === 'catalog' || isSuperAdmin;
-  const studioNeeds = layer === 'studio';
 
   const saveToMyLibrary = async () => {
     if (!user) {
@@ -356,7 +416,7 @@ export function PieceRoom({ productId }: { productId: string }) {
               </p>
             )}
             {(p.category || p.subcategory) && (
-              <p className="mt-1 font-mono text-[0.6rem] uppercase tracking-[0.12em] text-[var(--color-aged-oak)]">
+              <p className="doc-type-meta mt-1 uppercase tracking-[0.12em]">
                 {[p.category, p.subcategory].filter(Boolean).join(' · ')}
               </p>
             )}
@@ -365,7 +425,7 @@ export function PieceRoom({ productId }: { productId: string }) {
               <p className="mt-3 text-[0.92rem] text-[var(--color-charcoal)]">
                 {retail && <span className="font-medium">{retail}</span>}
                 {retail && (
-                  <span className="text-[0.7rem] text-[var(--color-aged-oak)]">
+                  <span className="doc-type-meta text-[var(--color-quiet-ink)]">
                     {' '}
                     retail
                   </span>
@@ -373,7 +433,7 @@ export function PieceRoom({ productId }: { productId: string }) {
                 {trade && (
                   <span className="text-[var(--color-aged-oak)]">
                     {retail ? '  ·  ' : ''}
-                    {trade} <span className="text-[0.7rem]">trade</span>
+                    {trade} <span className="doc-type-meta">trade</span>
                   </span>
                 )}
               </p>
@@ -381,7 +441,7 @@ export function PieceRoom({ productId }: { productId: string }) {
 
             <div className="mt-4 flex items-center gap-3">
               <StrataMark size="lg" fill={fill} label={`${pct}% complete`} />
-              <span className="font-mono text-[0.6rem] tracking-[0.04em] text-[var(--color-aged-oak)]">
+              <span className="doc-type-meta tracking-[0.04em]">
                 <b className="font-heading text-[0.95rem] text-[var(--color-charcoal)]">
                   {pct}
                 </b>
@@ -443,7 +503,7 @@ export function PieceRoom({ productId }: { productId: string }) {
               )}
             </DocumentActionGroup>
             {readOnly && layer === 'catalog' && (
-              <p className="mt-3 max-w-[44ch] text-[0.72rem] italic text-[var(--color-aged-oak)]">
+              <p className="doc-type-body mt-3 max-w-[44ch] italic text-[var(--color-quiet-ink)]">
                 A maker’s piece, curated by Patina. Save a copy to your library
                 to adapt it, or add it straight to a project.
               </p>
@@ -461,8 +521,8 @@ export function PieceRoom({ productId }: { productId: string }) {
             name="Identity"
             status={sections.identity ? 'on file' : 'partly written'}
             done={sections.identity}
-            open={open.has('identity')}
-            onToggle={() => toggle('identity')}
+            open={activeFacet === 'identity'}
+            onToggle={() => selectFacet('identity')}
             readOnly={readOnly}
           >
             <FacetText
@@ -504,12 +564,10 @@ export function PieceRoom({ productId }: { productId: string }) {
             />
             {p.slug && (
               <div className="mt-3">
-                <span className="mb-1 block font-mono text-[0.5rem] font-semibold uppercase tracking-[0.08em] text-[var(--color-aged-oak)]">
+                <span className="doc-type-meta mb-1 block font-semibold uppercase tracking-[0.08em]">
                   Slug
                 </span>
-                <p className="font-mono text-[0.72rem] text-[var(--color-aged-oak)]">
-                  {p.slug}
-                </p>
+                <p className="doc-type-meta">{p.slug}</p>
               </div>
             )}
           </PieceFacet>
@@ -518,8 +576,8 @@ export function PieceRoom({ productId }: { productId: string }) {
             name="The piece"
             status={sections.piece ? 'measured' : 'not yet measured'}
             done={sections.piece}
-            open={open.has('piece')}
-            onToggle={() => toggle('piece')}
+            open={activeFacet === 'piece'}
+            onToggle={() => selectFacet('piece')}
             readOnly={readOnly}
           >
             <FacetDimensions
@@ -567,8 +625,8 @@ export function PieceRoom({ productId }: { productId: string }) {
               p.short_description || p.description ? 'written' : 'unwritten'
             }
             done={!!(p.short_description || p.description)}
-            open={open.has('story')}
-            onToggle={() => toggle('story')}
+            open={activeFacet === 'story'}
+            onToggle={() => selectFacet('story')}
             readOnly={readOnly}
           >
             <FacetTextarea
@@ -595,8 +653,8 @@ export function PieceRoom({ productId }: { productId: string }) {
             name="Categorization"
             status={p.category ? p.category : 'uncategorized'}
             done={!!p.category}
-            open={open.has('categorization')}
-            onToggle={() => toggle('categorization')}
+            open={activeFacet === 'categorization'}
+            onToggle={() => selectFacet('categorization')}
             readOnly={readOnly}
           >
             <FacetSelect
@@ -649,8 +707,8 @@ export function PieceRoom({ productId }: { productId: string }) {
             name="Commerce"
             status={sections.commerce ? 'priced' : 'no price yet'}
             done={sections.commerce}
-            open={open.has('commerce')}
-            onToggle={() => toggle('commerce')}
+            open={activeFacet === 'commerce'}
+            onToggle={() => selectFacet('commerce')}
             readOnly={readOnly}
           >
             <div className="flex flex-col gap-0 sm:flex-row sm:gap-3">
@@ -692,8 +750,8 @@ export function PieceRoom({ productId }: { productId: string }) {
               name="Lifecycle"
               status={labelStatus(p.status)}
               done={p.status === 'published'}
-              open={open.has('lifecycle')}
-              onToggle={() => toggle('lifecycle')}
+              open={activeFacet === 'lifecycle'}
+              onToggle={() => selectFacet('lifecycle')}
               readOnly={false}
             >
               <FacetSelect
@@ -718,8 +776,8 @@ export function PieceRoom({ productId }: { productId: string }) {
                   : 'optional'
             }
             done={!!(p.vendor_id && p.lead_time_weeks && p.payment_terms)}
-            open={open.has('sourcing')}
-            onToggle={() => toggle('sourcing')}
+            open={activeFacet === 'sourcing'}
+            onToggle={() => selectFacet('sourcing')}
             readOnly={readOnly}
           >
             <FacetVendorPicker
@@ -788,8 +846,8 @@ export function PieceRoom({ productId }: { productId: string }) {
               name="Listing metadata"
               status={p.seo_title ? 'set' : 'optional'}
               done={!!p.seo_title}
-              open={open.has('seo')}
-              onToggle={() => toggle('seo')}
+              open={activeFacet === 'seo'}
+              onToggle={() => selectFacet('seo')}
               readOnly={readOnly}
             >
               <FacetText
@@ -825,16 +883,16 @@ export function PieceRoom({ productId }: { productId: string }) {
                 : 'untaught'
             }
             done={hasTeaching}
-            open={open.has('eye')}
-            onToggle={() => toggle('eye')}
-            readOnly={false}
+            open={activeFacet === 'eye'}
+            onToggle={() => selectFacet('eye')}
+            readOnly={readOnly}
           >
             {taughtStyles.length > 0 ? (
               <div className="mt-3 flex flex-wrap gap-1.5">
                 {taughtStyles.map((s) => (
                   <span
                     key={s}
-                    className="rounded-[14px] border border-[var(--color-clay)] bg-[rgba(196,165,123,0.1)] px-2.5 py-1 text-[0.7rem] text-[var(--color-mocha)]"
+                    className="doc-type-meta rounded-[14px] border border-[var(--color-clay)] bg-[rgba(196,165,123,0.1)] px-2.5 py-1 text-[var(--color-quiet-ink)]"
                   >
                     {s}
                   </span>
@@ -860,12 +918,12 @@ export function PieceRoom({ productId }: { productId: string }) {
                 {hasTeaching ? 'Deepen the eye →' : 'Teach this piece →'}
               </DocumentAction>
               {p.quality_score != null && (
-                <span className="font-mono text-[0.6rem] uppercase tracking-[0.06em] text-[var(--color-aged-oak)]">
+                <span className="doc-type-meta uppercase tracking-[0.06em]">
                   Aesthete read · {p.quality_score}
                 </span>
               )}
             </DocumentActionGroup>
-            <p className="mt-3 border-t border-[var(--doc-ink-border)] pt-2.5 text-[0.7rem] italic text-[var(--color-aged-oak)]">
+            <p className="doc-type-body mt-3 border-t border-[var(--doc-ink-border)] pt-2.5 italic text-[var(--color-quiet-ink)]">
               The teaching is the same act as Quick Tags on the shelf — here,
               the full sitting.
             </p>
@@ -921,7 +979,7 @@ export function PieceRoom({ productId }: { productId: string }) {
         <div
           role="status"
           aria-live="polite"
-          className="fixed bottom-[72px] left-1/2 z-[65] -translate-x-1/2 rounded-[8px] border border-[rgba(196,165,123,0.3)] bg-[var(--color-charcoal)] px-4 py-2.5 text-[0.74rem] text-[var(--color-off-white)] motion-safe:animate-[doc-fade_200ms_ease-out]"
+          className="doc-type-body fixed bottom-[var(--doc-shell-floating-bottom)] left-1/2 z-[65] -translate-x-1/2 rounded-[8px] border border-[rgba(196,165,123,0.3)] bg-[var(--color-charcoal)] px-4 py-2.5 text-[var(--color-off-white)] motion-safe:animate-[doc-fade_200ms_ease-out]"
         >
           {toast}
         </div>
@@ -944,7 +1002,7 @@ function Chip({
 }) {
   return (
     <span
-      className="rounded-[3px] border px-2 py-0.5 font-mono text-[0.5rem] uppercase tracking-[0.1em]"
+      className="doc-type-meta rounded-[3px] border px-2 py-0.5 uppercase tracking-[0.1em]"
       style={
         tone === 'sage'
           ? {
@@ -1060,10 +1118,10 @@ function RefreshFromSource({
     <div className="mt-4 border-t border-[var(--doc-ink-border)] pt-3">
       <div className="flex items-center justify-between gap-3">
         <div className="min-w-0">
-          <span className="mb-1 block font-mono text-[0.5rem] font-semibold uppercase tracking-[0.08em] text-[var(--color-aged-oak)]">
+          <span className="doc-type-meta mb-1 block font-semibold uppercase tracking-[0.08em]">
             Refresh from source
           </span>
-          <p className="text-[0.72rem] text-[var(--color-aged-oak)]">
+          <p className="doc-type-body text-[var(--color-quiet-ink)]">
             {source
               ? 'Re-read the source page and choose what to update.'
               : 'Add a source URL to enable a refresh.'}
@@ -1084,16 +1142,13 @@ function RefreshFromSource({
       </div>
 
       {error && (
-        <p
-          role="alert"
-          className="mt-2 text-[0.72rem] text-[var(--color-clay)]"
-        >
+        <p role="alert" className="doc-type-body mt-2 text-[var(--color-clay)]">
           {error}
         </p>
       )}
 
       {ranOnce && changes && changes.length === 0 && (
-        <p className="mt-3 text-[0.72rem] italic text-[var(--color-aged-oak)]">
+        <p className="doc-type-body mt-3 italic text-[var(--color-quiet-ink)]">
           Already up to date with the source.
         </p>
       )}
@@ -1108,10 +1163,10 @@ function RefreshFromSource({
                 className="flex items-start justify-between gap-3 rounded-[5px] border border-[var(--doc-ink-border)] p-2.5"
               >
                 <div className="min-w-0">
-                  <span className="mb-1 block font-mono text-[0.5rem] font-semibold uppercase tracking-[0.08em] text-[var(--color-aged-oak)]">
+                  <span className="doc-type-meta mb-1 block font-semibold uppercase tracking-[0.08em]">
                     {c.label}
                   </span>
-                  <div className="text-[0.76rem] leading-snug text-[var(--color-charcoal)]">
+                  <div className="doc-type-body leading-snug text-[var(--color-charcoal)]">
                     <span className="text-[var(--color-aged-oak)] line-through">
                       {formatChangeValue(c.field, c.before)}
                     </span>
@@ -1125,7 +1180,7 @@ function RefreshFromSource({
                   </div>
                 </div>
                 {isAccepted ? (
-                  <span className="shrink-0 self-center font-mono text-[0.5rem] uppercase tracking-[0.08em] text-[var(--color-sage)]">
+                  <span className="doc-type-meta shrink-0 self-center uppercase tracking-[0.08em] text-[var(--color-sage)]">
                     Accepted
                   </span>
                 ) : (
@@ -1149,10 +1204,7 @@ function RefreshFromSource({
       )}
 
       {applyError && (
-        <p
-          role="alert"
-          className="mt-2 text-[0.72rem] text-[var(--color-clay)]"
-        >
+        <p role="alert" className="doc-type-body mt-2 text-[var(--color-clay)]">
           {applyError}
         </p>
       )}
@@ -1182,7 +1234,7 @@ function Movement({
         <h2 className="font-heading text-[1.2rem] font-medium italic text-[var(--color-charcoal)]">
           {name}
         </h2>
-        <span className="ml-auto font-mono text-[0.5rem] uppercase tracking-[0.06em] text-[var(--color-aged-oak)]">
+        <span className="doc-type-meta ml-auto uppercase tracking-[0.06em]">
           {meta}
         </span>
       </div>
@@ -1220,7 +1272,7 @@ function Colophon({ p }: { p: PieceProduct }) {
         type="button"
         onClick={() => setOpen((v) => !v)}
         aria-expanded={open}
-        className={`flex min-h-11 min-w-11 items-center gap-2 font-mono text-[0.5rem] font-semibold uppercase tracking-[0.1em] transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-clay)] ${
+        className={`doc-type-meta flex min-h-11 min-w-11 items-center gap-2 font-semibold uppercase tracking-[0.1em] transition-colors motion-reduce:transition-none focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-quiet-ink)] ${
           open
             ? 'text-[var(--color-charcoal)]'
             : 'text-[var(--color-aged-oak)] hover:text-[var(--color-charcoal)]'
@@ -1228,7 +1280,7 @@ function Colophon({ p }: { p: PieceProduct }) {
       >
         <span
           aria-hidden
-          className={`transition-transform ${open ? 'rotate-90' : ''}`}
+          className={`transition-transform motion-reduce:transition-none ${open ? 'rotate-90' : ''}`}
         >
           ▸
         </span>
@@ -1242,10 +1294,10 @@ function Colophon({ p }: { p: PieceProduct }) {
             .filter(([, v]) => v != null)
             .map(([k, v]) => (
               <div key={k}>
-                <dt className="font-mono text-[0.46rem] uppercase tracking-[0.08em] text-[var(--color-aged-oak)]">
+                <dt className="doc-type-meta uppercase tracking-[0.08em]">
                   {k}
                 </dt>
-                <dd className="text-[0.78rem] text-[var(--color-mocha)]">
+                <dd className="doc-type-body text-[var(--color-quiet-ink)]">
                   {v}
                 </dd>
               </div>

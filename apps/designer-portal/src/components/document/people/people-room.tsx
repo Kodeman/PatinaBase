@@ -2,10 +2,10 @@
 
 /**
  * The People Room (R50 / R57) — the unified relationship layer as a walk-in
- * Room (D14), the second tenant of the reusable Rooms shell. A left rail of
- * Strata-ruled VIEWS over one directory of every party; an ask bar over people
- * + history; the foot carries a live Engine nudge derived from the nurture
- * queue. Zero shadows (D4), typography-first, put-down returns to origin.
+ * Room (D14), the second tenant of the reusable Rooms shell. A grouped
+ * relationship index becomes a compact disclosure below the desktop canvas;
+ * an ask line searches people + history, and a live Engine nudge derives from
+ * the nurture queue. Zero shadows (D4), typography-first, origin preserved.
  *
  * Track A owns the shell, the ask bar, and the Directory. The Directory's role
  * filter is LIFTED here (controlled) so the ask bar can route "makers" straight
@@ -40,29 +40,18 @@ import { YourEyePanel } from './profile/your-eye';
 import { AskBar, routePeopleAsk } from './directory/ask-bar';
 import { AddPersonSheet } from './directory/add-person-sheet';
 import type { PeopleView, PeopleViewProps } from './types';
+import {
+  PeopleCompactSelector,
+  PeopleDesktopRail,
+  peopleViewFromParam,
+} from './view-shell';
 import { useDocumentSurface } from '@/lib/help-system/use-document-surface';
 import { DOCUMENT_SURFACE_KEYS } from '@/lib/help-system/document-surface-keys';
 import { DocumentAction, DocumentActionGroup } from '../document-action';
 import { useMobilePrimaryAction } from '../mobile/mobile-shell';
 
-const VIEWS: Array<{ key: PeopleView; name: string }> = [
-  { key: 'directory', name: 'Directory' },
-  { key: 'threads', name: 'Threads' },
-  { key: 'nurture', name: 'Nurture' },
-  { key: 'reviews', name: 'Reviews' },
-  { key: 'portfolio', name: 'Portfolio' },
-  { key: 'outreach', name: 'Outreach' },
-  // R21 dissolve — Your Eye's rehousing (see PeopleView in ./types).
-  { key: 'your-eye', name: 'Your Eye' },
-];
-
-/** R21 dissolve — the URL surface for the rail. `/people?view=<key>` lands on
- *  a view directly; every permanent redirect off the dead zone tree
- *  (/portal/messages → ?view=threads, /portal/nurture, /portal/reviews,
- *  /portal/portfolio, /portal/communications* → ?view=outreach,
- *  /portal/teaching/your-eye → ?view=your-eye) rides this. */
-const VIEW_KEYS: readonly PeopleView[] = VIEWS.map((v) => v.key);
-
+// R21 dissolve — `/people?view=<key>` still receives every permanent redirect
+// off the retired zone tree. `peopleViewFromParam` owns that stable key map.
 /** Roles a BARE `?role=` may filter the Directory to — /portal/clients and
  *  /portal/vendors redirect to `?role=client` / `?role=maker` with no person.
  *  Mirrors DirectoryRole (PartyRole | 'all' | 'field'). */
@@ -78,20 +67,6 @@ const DIRECTORY_ROLES: readonly DirectoryRole[] = [
   'installer',
   'receiver',
 ];
-
-/** The quiet descending mark beside a view row (prototype .vr-mark). */
-function RailMark() {
-  return (
-    <span
-      aria-hidden
-      className="flex w-[11px] shrink-0 flex-col items-start gap-[1.5px]"
-    >
-      <i className="block h-[2px] w-[11px] rounded-[1px] bg-[var(--color-clay)]" />
-      <i className="block h-[2px] w-[8px] rounded-[1px] bg-[var(--color-clay)] opacity-60" />
-      <i className="block h-[2px] w-[5px] rounded-[1px] bg-[var(--color-clay)] opacity-30" />
-    </span>
-  );
-}
 
 export function PeopleRoom() {
   useDocumentSurface(DOCUMENT_SURFACE_KEYS.people); // R89 — scope help to the People room
@@ -243,10 +218,7 @@ export function PeopleRoom() {
       // Directory, which is what /portal/clients and /portal/vendors became.
       // Both together (`?view=directory&role=maker`) is coherent, so neither
       // clobbers the other; an unknown value is ignored in silence.
-      const wantedView =
-        viewParam && (VIEW_KEYS as readonly string[]).includes(viewParam)
-          ? (viewParam as PeopleView)
-          : null;
+      const wantedView = peopleViewFromParam(viewParam);
       const wantedRole =
         roleParam && (DIRECTORY_ROLES as readonly string[]).includes(roleParam)
           ? (roleParam as DirectoryRole)
@@ -256,7 +228,7 @@ export function PeopleRoom() {
       else if (wantedRole) setView('directory');
       stripHandledParams(['view', 'role']);
     }
-  }, [all]);
+  }, [all, router]);
 
   // The live Engine nudge: the strongest dormant tie from the nurture queue.
   const nudge = useMemo(() => {
@@ -401,66 +373,30 @@ export function PeopleRoom() {
       {/* Ask bar — over people + history (derivation-backed v1). */}
       <AskBar value={ask} onChange={setAsk} onAsk={askEngine} />
 
-      <div className="mx-auto flex max-w-[1100px] gap-0">
-        {/* Left rail — Strata-ruled views (not tabs). */}
-        <aside className="w-[160px] shrink-0 border-r border-[var(--doc-ink-border)]/40 py-3 sm:w-[188px]">
-          <div className="mb-2 px-4 font-mono text-[0.44rem] uppercase tracking-[0.1em] text-[var(--color-aged-oak)]">
-            In this room
-          </div>
-          {VIEWS.map((v) => {
-            const on = !openPerson && view === v.key;
-            return (
-              <button
-                key={v.key}
-                type="button"
-                onClick={() => nav.goView(v.key)}
-                className={`relative flex w-full items-center gap-2.5 px-4 py-2 text-left transition-colors ${
-                  on
-                    ? 'bg-[rgba(196,165,123,0.11)]'
-                    : 'hover:bg-[rgba(196,165,123,0.06)]'
-                }`}
-              >
-                {on && (
-                  <span
-                    aria-hidden
-                    className="absolute inset-y-0 left-0 w-[2.5px] bg-[var(--color-clay)]"
-                  />
-                )}
-                <RailMark />
-                <span className="flex-1 text-[0.8rem] font-medium text-[var(--color-charcoal)]">
-                  {v.name}
-                </span>
-                {v.key === 'directory' && all && (
-                  <span className="font-mono text-[0.5rem] text-[var(--color-aged-oak)]">
-                    {all.length}
-                  </span>
-                )}
-              </button>
-            );
-          })}
+      <PeopleCompactSelector
+        currentView={view}
+        profileOpen={!!openPerson}
+        directoryCount={all?.length}
+        nudge={nudge}
+        onSelect={nav.goView}
+      />
 
-          {nudge && (
-            <button
-              type="button"
-              onClick={() => nav.goView('nurture')}
-              className="mx-3 mt-4 block rounded-[8px] border border-[rgba(196,165,123,0.3)] bg-[rgba(196,165,123,0.07)] px-3 py-2.5 text-left"
-            >
-              <span className="mb-1 block font-mono text-[0.42rem] font-semibold uppercase tracking-[0.08em] text-[var(--color-clay)]">
-                ✦ The Engine
-              </span>
-              <span className="block text-[0.66rem] leading-relaxed text-[var(--color-mocha)]">
-                <b className="font-semibold text-[var(--color-charcoal)]">
-                  {nudge.count} {nudge.count === 1 ? 'person' : 'people'}
-                </b>{' '}
-                drifting out of touch. {nudge.name} is your strongest dormant
-                tie ({nudge.since}).
-              </span>
-            </button>
-          )}
-        </aside>
-
+      <div
+        data-people-layout
+        data-people-current-view={openPerson ? 'profile' : view}
+        className="mx-auto flex w-full max-w-[1100px]"
+      >
+        <PeopleDesktopRail
+          activeView={openPerson ? null : view}
+          directoryCount={all?.length}
+          nudge={nudge}
+          onSelect={nav.goView}
+        />
         {/* Main panel. */}
-        <main className="min-w-0 flex-1 px-5 py-4 sm:px-8">
+        <main
+          data-people-main-panel
+          className="min-w-0 w-full flex-1 px-4 py-6 sm:px-6 min-[1180px]:px-8"
+        >
           <div className="mx-auto max-w-[760px]">{body}</div>
         </main>
       </div>
@@ -494,7 +430,8 @@ export function PeopleRoom() {
         <div
           role="status"
           aria-live="polite"
-          className="fixed bottom-[72px] left-1/2 z-[65] max-w-[80%] -translate-x-1/2 rounded-[8px] border border-[rgba(196,165,123,0.3)] bg-[var(--color-charcoal)] px-4 py-2.5 text-[0.74rem] text-[var(--color-off-white)] motion-safe:animate-[doc-fade_200ms_ease-out]"
+          data-people-status
+          className="fixed bottom-[var(--doc-shell-floating-bottom)] left-1/2 z-[65] w-[min(38rem,calc(100vw-2rem))] -translate-x-1/2 rounded-[4px] border border-[rgba(250,247,242,0.18)] bg-[var(--color-charcoal)] px-4 py-3 font-body text-[14px] leading-relaxed text-[var(--color-off-white)] motion-safe:animate-[doc-fade_200ms_ease-out]"
         >
           {toast}
         </div>

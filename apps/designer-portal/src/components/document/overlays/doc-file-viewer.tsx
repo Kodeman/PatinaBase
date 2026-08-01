@@ -1,19 +1,23 @@
 'use client';
 
 /**
- * DocFileViewer (R24) — the folio's full-screen paper viewer. A file opens
- * over the document, never in a new tab: full-bleed paper (D12), a quiet
- * mono headline, Esc/backdrop to put it back. Zero shadows (D4). Also the
- * scan's viewer (R27) — one component, two doors.
+ * DocFileViewer (R24) — the folio's full-screen paper viewer. Signed URL and
+ * preview behavior stay file-specific; dialog ownership lives in the shared
+ * full-screen viewer ground.
  */
 
-import { useEffect, useRef, useState } from 'react';
-import { folioSignedUrl, type FolioFile } from '@/hooks/use-folio';
+import { useEffect, useState } from 'react';
+import { folioSignedUrl } from '@/hooks/use-folio';
 import { fmtDay } from '@/lib/document/format';
+import {
+  FullScreenViewerShell,
+  FullScreenViewerState,
+} from './full-screen-viewer-shell';
 
 const fmtSize = (bytes: number | null) => {
   if (!bytes) return '';
-  if (bytes < 1024 * 1024) return `${Math.max(1, Math.round(bytes / 1024))} KB`;
+  if (bytes < 1024 * 1024)
+    return `${Math.max(1, Math.round(bytes / 1024))} KB`;
   return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
 };
 
@@ -23,97 +27,104 @@ export function DocFileViewer({
   /** Pre-resolved URL (the scan card passes its public image directly). */
   url: directUrl,
 }: {
-  file: { title: string; doc_type?: string | null; size_bytes?: number | null; created_at?: string | null; storage_path?: string | null };
+  file: {
+    title: string;
+    doc_type?: string | null;
+    size_bytes?: number | null;
+    created_at?: string | null;
+    storage_path?: string | null;
+  };
   onClose: () => void;
   url?: string | null;
 }) {
   const [url, setUrl] = useState<string | null>(directUrl ?? null);
-  const restoreRef = useRef<HTMLElement | null>(null);
+  const [settled, setSettled] = useState(Boolean(directUrl));
 
   useEffect(() => {
-    restoreRef.current = document.activeElement as HTMLElement | null;
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') {
-        e.stopPropagation();
-        onClose();
-      }
-    };
-    document.addEventListener('keydown', onKey, true);
-    return () => {
-      document.removeEventListener('keydown', onKey, true);
-      restoreRef.current?.focus?.();
-    };
-  }, [onClose]);
-
-  useEffect(() => {
-    if (directUrl) return;
     let live = true;
-    if (file.storage_path) {
-      void folioSignedUrl(file.storage_path).then((u) => {
-        if (live) setUrl(u);
-      });
+    if (directUrl) {
+      setUrl(directUrl);
+      setSettled(true);
+      return;
     }
+
+    setUrl(null);
+    setSettled(false);
+    if (!file.storage_path) {
+      setSettled(true);
+      return;
+    }
+
+    void folioSignedUrl(file.storage_path)
+      .then((signedUrl) => {
+        if (!live) return;
+        setUrl(signedUrl);
+        setSettled(true);
+      })
+      .catch(() => {
+        if (live) setSettled(true);
+      });
     return () => {
       live = false;
     };
   }, [file.storage_path, directUrl]);
 
-  const isImage = (file.doc_type ?? '') === 'img' || /\.(png|jpe?g|webp|gif|heic)$/i.test(file.title);
-  const isPdf = (file.doc_type ?? '') === 'pdf' || /\.pdf$/i.test(file.title);
+  const isImage =
+    (file.doc_type ?? '') === 'img' ||
+    /\.(png|jpe?g|webp|gif|heic)$/i.test(file.title);
+  const isPdf =
+    (file.doc_type ?? '') === 'pdf' || /\.pdf$/i.test(file.title);
+  const meta = [
+    fmtSize(file.size_bytes ?? null),
+    file.created_at ? fmtDay(file.created_at) : null,
+  ]
+    .filter(Boolean)
+    .join(' · ');
 
   return (
-    <div
-      role="dialog"
-      aria-modal="true"
-      aria-label={file.title}
-      className="fixed inset-0 z-[60] flex flex-col bg-[var(--doc-paper)] motion-safe:animate-[doc-fade_200ms_ease-out]"
+    <FullScreenViewerShell
+      title={file.title}
+      meta={meta || undefined}
+      onClose={onClose}
+      actionKey="close-file-viewer"
     >
-      <div className="flex items-baseline justify-between border-b border-[var(--color-pearl)] px-7 py-3">
-        <p className="font-mono text-[10px] uppercase tracking-[0.08em] text-[var(--color-charcoal)]">
-          {file.title}
-          <span className="ml-3 text-[var(--text-muted)]">
-            {[fmtSize(file.size_bytes ?? null), file.created_at ? fmtDay(file.created_at) : null]
-              .filter(Boolean)
-              .join(' · ')}
-          </span>
-        </p>
-        <button
-          type="button"
-          onClick={onClose}
-          className="font-mono text-[10px] uppercase tracking-[0.08em] text-[var(--color-clay)] hover:opacity-80"
-        >
-          ← Back to the document
-        </button>
-      </div>
-
-      <div className="flex min-h-0 flex-1 items-center justify-center overflow-auto p-6">
-        {!url && <p className="text-[12px] italic text-[var(--text-muted)]">Opening…</p>}
-        {url && isImage && (
-           
+      <div
+        data-overlay-file-viewer
+        className="flex min-h-0 flex-1 items-center justify-center overflow-auto p-4 sm:p-6"
+      >
+        {!settled ? (
+          <FullScreenViewerState>Opening the file…</FullScreenViewerState>
+        ) : !url ? (
+          <FullScreenViewerState error>
+            This file could not be opened. Put it back and try again.
+          </FullScreenViewerState>
+        ) : isImage ? (
           <img
             src={url}
             alt={file.title}
-            className="max-h-full max-w-full border border-[var(--doc-ink-border)]"
+            className="max-h-full max-w-full border border-[var(--doc-ink-border)] object-contain"
           />
-        )}
-        {url && isPdf && (
-          <iframe title={file.title} src={url} className="h-full w-full border border-[var(--doc-ink-border)] bg-white" />
-        )}
-        {url && !isImage && !isPdf && (
+        ) : isPdf ? (
+          <iframe
+            title={file.title}
+            src={url}
+            className="h-full min-h-[60dvh] w-full border border-[var(--doc-ink-border)] bg-white"
+          />
+        ) : (
           <div className="text-center">
-            <p className="mb-2 text-[12.5px] text-[var(--color-charcoal)]">
-              No inline preview for this kind of file.
+            <p className="mb-3 text-[14px] text-[var(--color-charcoal)]">
+              No inline preview is available for this file type.
             </p>
             <a
               href={url}
               download={file.title}
-              className="font-mono text-[10px] uppercase tracking-[0.08em] text-[var(--color-clay)]"
+              className="inline-flex min-h-11 min-w-11 items-center justify-center px-2 font-mono text-[12px] uppercase tracking-[0.08em] text-[var(--color-charcoal)] underline decoration-[var(--color-clay)] underline-offset-4 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-clay)]"
             >
               Download {file.title}
             </a>
           </div>
         )}
       </div>
-    </div>
+    </FullScreenViewerShell>
   );
 }

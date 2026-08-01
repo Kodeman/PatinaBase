@@ -19,7 +19,6 @@ import {
   detectInstallCollisions,
 } from '@/lib/procurement/delivery-conflicts';
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
 type AnyRecord = any;
 
 const getSupabase = () => createBrowserClient() as AnyRecord;
@@ -28,7 +27,9 @@ const WEEKS_ACROSS = 8;
 const DAY_MS = 86_400_000;
 
 const mondayOf = (d: Date): Date => {
-  const out = new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate()));
+  const out = new Date(
+    Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate()),
+  );
   const dow = out.getUTCDay();
   out.setUTCDate(out.getUTCDate() - (dow === 0 ? 6 : dow - 1));
   return out;
@@ -46,7 +47,7 @@ const dayOfMonth = (isoDate: string) => String(Number(isoDate.slice(8, 10)));
 // The .wk-ev pill recipe (HTML §7): 2.5px left border + tinted bg + radius.
 // Three tones — clay (expected), sage (received), terracotta (conflict).
 const WK_EV_BASE =
-  'mb-px inline-block rounded-[3px] border-l-[2.5px] px-1.5 py-px text-[9px] leading-tight text-[var(--color-charcoal)]';
+  'doc-type-meta mb-1 inline-block rounded-[3px] border-l-[2.5px] px-1.5 py-1 leading-tight text-[var(--color-charcoal)]';
 const WK_EV_TONE = {
   clay: 'border-l-[var(--color-clay)] bg-[rgba(196,165,123,0.10)]',
   sage: 'border-l-[var(--color-sage)] bg-[rgba(168,181,160,0.12)]',
@@ -73,16 +74,28 @@ function useWeekEvents() {
 export function WeekBookPage() {
   const { data: events, isLoading } = useWeekEvents();
 
-  const { weeks, projects, cells, collisionWeeksByProject, conflictWeeksByProject, hasConflicts } =
-    useMemo(() => {
+  const {
+    weeks,
+    projects,
+    cells,
+    collisionWeeksByProject,
+    conflictWeeksByProject,
+    hasConflicts,
+  } = useMemo(() => {
     const start = mondayOf(new Date());
     const weeks: string[] = Array.from({ length: WEEKS_ACROSS }, (_, i) =>
       iso(new Date(start.getTime() + i * 7 * DAY_MS)),
     );
 
-    const byProject = new Map<string, { name: string; events: DeliveryEvent[] }>();
+    const byProject = new Map<
+      string,
+      { name: string; events: DeliveryEvent[] }
+    >();
     for (const e of events ?? []) {
-      const entry = byProject.get(e.project_id) ?? { name: e.project_name, events: [] };
+      const entry = byProject.get(e.project_id) ?? {
+        name: e.project_name,
+        events: [],
+      };
       entry.events.push(e);
       byProject.set(e.project_id, entry);
     }
@@ -94,7 +107,9 @@ export function WeekBookPage() {
     const cells = new Map<string, DeliveryEvent[]>();
     for (const e of events ?? []) {
       if (!e.event_date) continue;
-      const week = iso(mondayOf(new Date(`${e.event_date.slice(0, 10)}T00:00:00Z`)));
+      const week = iso(
+        mondayOf(new Date(`${e.event_date.slice(0, 10)}T00:00:00Z`)),
+      );
       const key = `${e.project_id}|${week}`;
       const list = cells.get(key) ?? [];
       list.push(e);
@@ -109,29 +124,43 @@ export function WeekBookPage() {
     const conflicts = detectDeliveryConflicts(events ?? []);
     const collisionWeeksByProject = new Set<string>();
     for (const col of collisions) {
-      for (const pid of col.projectIds) collisionWeeksByProject.add(`${pid}|${col.weekOf}`);
+      for (const pid of col.projectIds)
+        collisionWeeksByProject.add(`${pid}|${col.weekOf}`);
     }
     const conflictWeeksByProject = new Set<string>(collisionWeeksByProject);
     for (const c of conflicts) {
       for (const e of [c.eventA, c.eventB]) {
         if (!e.event_date) continue;
-        const week = iso(mondayOf(new Date(`${e.event_date.slice(0, 10)}T00:00:00Z`)));
+        const week = iso(
+          mondayOf(new Date(`${e.event_date.slice(0, 10)}T00:00:00Z`)),
+        );
         conflictWeeksByProject.add(`${e.project_id}|${week}`);
       }
     }
 
     const hasConflicts = collisions.length + conflicts.length > 0;
 
-    return { weeks, projects, cells, collisionWeeksByProject, conflictWeeksByProject, hasConflicts };
+    return {
+      weeks,
+      projects,
+      cells,
+      collisionWeeksByProject,
+      conflictWeeksByProject,
+      hasConflicts,
+    };
   }, [events]);
 
   if (isLoading) {
-    return <p className="py-3 text-[12px] italic text-[var(--color-aged-oak)]">Opening the week…</p>;
+    return (
+      <p className="doc-type-body py-3 italic text-[var(--color-quiet-ink)]">
+        Opening the week…
+      </p>
+    );
   }
 
   if (projects.length === 0) {
     return (
-      <p className="py-3 text-[12px] italic text-[var(--color-aged-oak)]">
+      <p className="doc-type-body py-3 italic text-[var(--color-quiet-ink)]">
         Nothing on the calendar — no dated deliveries or installs in the next{' '}
         {WEEKS_ACROSS} weeks.
       </p>
@@ -139,22 +168,32 @@ export function WeekBookPage() {
   }
 
   const received = (e: DeliveryEvent) =>
-    e.po_status === 'delivered' || e.delivered_date != null || e.inspection_id != null;
+    e.po_status === 'delivered' ||
+    e.delivered_date != null ||
+    e.inspection_id != null;
 
   return (
-    <div>
-      <div className="overflow-x-auto">
-        <table className="w-full border-collapse">
+    <div className="min-w-0">
+      <div
+        role="region"
+        aria-label="Eight-week delivery calendar"
+        tabIndex={0}
+        data-orders-week-scroll
+        className="max-w-full overflow-x-auto overscroll-x-contain focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-quiet-ink)]"
+      >
+        <table className="w-full min-w-[760px] border-collapse">
           <thead>
             <tr>
-              <th className="border-b border-[var(--color-pearl)] px-1 pb-1 text-left font-mono text-[8px] font-semibold uppercase tracking-[0.08em] text-[var(--color-aged-oak)]">
+              <th className="doc-type-meta border-b border-[var(--color-pearl)] px-1 pb-2 text-left font-semibold uppercase tracking-[0.08em] text-[var(--color-quiet-ink)]">
                 Project
               </th>
               {weeks.map((w, i) => (
                 <th
                   key={w}
-                  className={`border-b border-[var(--color-pearl)] px-1 pb-1 text-left font-mono text-[8px] font-semibold uppercase tracking-[0.08em] ${
-                    i === 0 ? 'text-[var(--color-clay)]' : 'text-[var(--color-aged-oak)]'
+                  className={`doc-type-meta border-b border-[var(--color-pearl)] px-1 pb-2 text-left font-semibold uppercase tracking-[0.08em] ${
+                    i === 0
+                      ? 'text-[var(--color-charcoal)]'
+                      : 'text-[var(--color-quiet-ink)]'
                   }`}
                 >
                   {fmtShort(w)}
@@ -165,7 +204,7 @@ export function WeekBookPage() {
           <tbody>
             {projects.map((p) => (
               <tr key={p.id}>
-                <td className="max-w-[140px] truncate border-b border-[var(--color-pearl)] py-1.5 pr-2 text-[11px] text-[var(--color-charcoal)]">
+                <td className="doc-type-body max-w-[140px] truncate border-b border-[var(--color-pearl)] py-2 pr-2 text-[var(--color-charcoal)]">
                   {p.name}
                 </td>
                 {weeks.map((w) => {
@@ -177,7 +216,9 @@ export function WeekBookPage() {
                     <td
                       key={w}
                       className={`border-b border-[var(--color-pearl)] px-1 py-1.5 align-top ${
-                        conflicted ? 'border-l-2 border-l-[var(--color-terracotta)]' : ''
+                        conflicted
+                          ? 'border-l-2 border-l-[var(--color-terracotta)]'
+                          : ''
                       }`}
                     >
                       {cellEvents.map((e) => {
@@ -196,7 +237,10 @@ export function WeekBookPage() {
                           ? `Install ·${dayOfMonth(e.event_date!)}${collides ? ' ⚠ collides' : ''}`
                           : `${e.vendor_name ?? 'Delivery'} ·${dayOfMonth(e.event_date!)}${received(e) ? ' ✓ recvd' : ''}`;
                         return (
-                          <span key={e.event_id} className={`${WK_EV_BASE} ${WK_EV_TONE[tone]}`}>
+                          <span
+                            key={e.event_id}
+                            className={`${WK_EV_BASE} ${WK_EV_TONE[tone]}`}
+                          >
                             {label}
                           </span>
                         );
@@ -212,12 +256,14 @@ export function WeekBookPage() {
 
       {/* The legend (HTML §7). The actionable conflicts rise on the Desk as
           need lines (R28) — the page marks them; the Desk carries the act. */}
-      <p className="mt-2 font-mono text-[8px] uppercase tracking-[0.08em] text-[var(--color-aged-oak)]">
+      <p className="doc-type-meta mt-3 uppercase tracking-[0.08em] text-[var(--color-quiet-ink)]">
         Expected · <span className="text-[var(--color-sage)]">received</span>
         {hasConflicts && (
           <>
             {' · '}
-            <span className="text-[var(--color-terracotta)]">conflict — also on your Desk</span>
+            <span className="text-[var(--color-terracotta)]">
+              conflict — also on your Desk
+            </span>
           </>
         )}
       </p>

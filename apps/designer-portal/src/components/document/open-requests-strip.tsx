@@ -126,7 +126,7 @@ function RequestCard({
       {/* Status tab — dusty blue: informational/awaiting, distinct from the
           mocha "new lead" tab (this isn't anyone's lead yet). */}
       <div
-        className="absolute -top-[26px] left-0 flex h-[26px] items-center rounded-t-[7px] px-3.5 font-mono text-[10px] font-semibold uppercase tracking-[0.08em] text-white"
+        className="absolute -top-[26px] left-0 flex h-[26px] items-center rounded-t-[7px] px-3.5 font-mono text-[12px] font-semibold uppercase tracking-[0.08em] text-white"
         style={{ background: 'var(--color-dusty-blue)' }}
       >
         Open request
@@ -134,7 +134,6 @@ function RequestCard({
 
       <div className="flex gap-4 rounded-[0_8px_8px_8px] border border-[var(--border-default)] bg-[var(--bg-surface)] p-6">
         {request.thumbnail_url ? (
-          // eslint-disable-next-line @next/next/no-img-element
           <img
             src={request.thumbnail_url}
             alt=""
@@ -152,7 +151,7 @@ function RequestCard({
                 : 'Design request'}
             </h3>
             {request.created_at && (
-              <span className="shrink-0 font-mono text-[9px] uppercase tracking-[0.06em] text-[var(--text-muted)]">
+              <span className="doc-type-meta shrink-0 uppercase tracking-[0.06em]">
                 {relTime(request.created_at)}
               </span>
             )}
@@ -163,40 +162,36 @@ function RequestCard({
               {chips.map((c) => (
                 <span
                   key={c}
-                  className="rounded-[3px] border border-[var(--color-pearl)] bg-[var(--doc-paper)] px-2 py-0.5 text-[11px] text-[var(--color-charcoal)]"
+                  className="doc-type-meta rounded-[3px] border border-[var(--color-pearl)] bg-[var(--doc-paper)] px-2 py-0.5 text-[var(--color-charcoal)]"
                 >
                   {c}
                 </span>
               ))}
-              {location && (
-                <span className="text-[11px] text-[var(--text-muted)]">
-                  {location}
-                </span>
-              )}
+              {location && <span className="doc-type-meta">{location}</span>}
             </div>
           )}
 
           {request.project_description && (
-            <p className="mt-2 line-clamp-2 text-[13px] leading-relaxed text-[var(--text-body)]">
+            <p className="doc-type-body mt-2 line-clamp-2">
               {request.project_description}
             </p>
           )}
 
           <div className="mt-3.5 flex items-center justify-between gap-3 border-t border-[var(--border-default)] pt-3">
-            <span className="font-mono text-[9px] uppercase tracking-[0.06em] text-[var(--text-muted)]">
+            <span className="doc-type-meta uppercase tracking-[0.06em]">
               {request.scan_count === 1
                 ? '1 scan'
                 : `${request.scan_count ?? 0} scans`}
             </span>
 
             {taken ? (
-              <span className="font-mono text-[10px] uppercase tracking-[0.06em] text-[var(--text-muted)]">
+              <span className="doc-type-meta uppercase tracking-[0.06em]">
                 Taken by another designer
               </span>
             ) : (
               <div className="flex items-center gap-2.5">
                 {otherError && (
-                  <span className="text-[11px] text-[var(--color-terracotta)]">
+                  <span className="doc-type-meta text-[var(--color-terracotta)]">
                     Couldn’t claim — try again.
                   </span>
                 )}
@@ -221,7 +216,19 @@ function RequestCard({
   );
 }
 
-export function OpenRequestsStrip() {
+export interface OpenRequestsDeskPopulation {
+  requests: OpenDesignRequest[];
+  ceremonyPath: boolean;
+  isLoading: boolean;
+  isError: boolean;
+}
+
+/**
+ * Owns the open-request flags and query once. Studio Pulse consumes this
+ * population for its truthful count and passes the same rows back to the
+ * renderer when the fold opens.
+ */
+export function useOpenRequestsDeskPopulation(): OpenRequestsDeskPopulation {
   // Fail-closed while the flag resolves — never flash the pool to a
   // non-pilot designer (matches procurement-workspace-pilot's gate). All
   // hooks stay above the render branch below (hook-order stability).
@@ -233,28 +240,43 @@ export function OpenRequestsStrip() {
   // the claim → /doc path below stays byte-identical.
   const { value: arrivalArc, isLoading: arcLoading } =
     useFeatureFlag('arrival-arc');
-  const { data: requests } = useOpenDesignRequests({
+  const requestsQuery = useOpenDesignRequests({
     enabled: !flagLoading && enabled,
   });
 
-  if (flagLoading || !enabled) return null;
+  return {
+    requests: !flagLoading && enabled ? (requestsQuery.data ?? []) : [],
+    ceremonyPath: !arcLoading && arrivalArc,
+    isLoading:
+      flagLoading || (!flagLoading && enabled && requestsQuery.isLoading),
+    isError: !flagLoading && enabled && requestsQuery.isError,
+  };
+}
+
+export function OpenRequestsStrip({
+  population,
+  withinPulse = false,
+}: {
+  population: OpenRequestsDeskPopulation;
+  withinPulse?: boolean;
+}) {
+  const { requests, ceremonyPath } = population;
 
   // No empty-state noise on the Desk — a transient population, not standing
   // front matter.
-  if (!requests || requests.length === 0) return null;
+  if (requests.length === 0) return null;
 
   return (
-    <section aria-labelledby="open-requests" className="mt-14">
+    <section
+      aria-labelledby="open-requests"
+      className={withinPulse ? '' : 'mt-14'}
+    >
       <SectionEyebrow count={requests.length}>
         <span id="open-requests">Open requests</span>
       </SectionEyebrow>
       <div className="grid grid-cols-1 gap-x-10 gap-y-[46px] xl:grid-cols-2">
         {requests.map((r) => (
-          <RequestCard
-            key={r.id}
-            request={r}
-            ceremonyPath={!arcLoading && arrivalArc}
-          />
+          <RequestCard key={r.id} request={r} ceremonyPath={ceremonyPath} />
         ))}
       </div>
     </section>

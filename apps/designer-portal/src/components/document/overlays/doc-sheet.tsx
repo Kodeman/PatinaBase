@@ -5,10 +5,10 @@
  *
  * Both the historic 'sheet' (bottom slide-up) and 'center' variants have
  * converged onto the paper-folio treatment: a warm veil over the desk and a
- * CENTERED laid-paper panel that slides over whatever the designer is holding
- * (D8) without ever unmounting it (D1). Depth is value contrast + a single
- * 1px rule edge — zero shadow (D4). The panel is `--doc-paper`, so every sheet
- * content reads as ink on paper, not chrome on charcoal.
+ * laid-paper panel that centers when it fits and begins at the safe viewport
+ * edge when it does not (D8), without ever unmounting the work beneath (D1).
+ * Depth is value contrast + a single 1px rule edge — zero shadow (D4). The
+ * panel is `--doc-paper`, so every sheet reads as ink on paper, not chrome.
  *
  * The `variant` prop is retained for backward compatibility (callers still pass
  * it) but no longer changes the ground — both are the same paper sheet. Ledgers
@@ -16,21 +16,76 @@
  * DM-mono title + page + "put back · esc") renders when an `icon` is supplied;
  * consumers that already render their own header simply omit it.
  *
- * Built directly on Radix Dialog rather than the design-system's styled
- * overlay (DECISIONS.md I5). This keeps the document's shadowless laid-paper
- * treatment while providing a modal focus scope, outside-tree hiding, scroll
- * lock, ordered Escape dismissal, and focus restoration. Navigation invariant
- * (§3): an overlay, never a route — the surface beneath must not unmount.
+ * Built without design-system overlay primitives (DECISIONS.md I5): labelled
+ * dialog semantics, trapped focus, Esc/backdrop dismiss, scroll isolation,
+ * and focus restoration. Navigation invariant (§3): an overlay, never a route
+ * — the surface beneath must not unmount.
  */
 
-import { useRef } from 'react';
-import * as DialogPrimitive from '@radix-ui/react-dialog';
+import {
+  createContext,
+  useContext,
+  useEffect,
+  useId,
+  useRef,
+  useState,
+} from 'react';
+import { createPortal } from 'react-dom';
 import type { LucideIcon } from 'lucide-react';
 import { openHelp, type HelpOpenSource } from '@/lib/help-system/open-help';
+import { lockBodyScroll } from './body-scroll-lock';
+import {
+  isElementRendered,
+  registerManagedModalDialog,
+  topActiveModalDialog,
+} from './active-dialog';
+
+const FOCUSABLE_SELECTOR = [
+  'a[href]:not([tabindex="-1"])',
+  'button:not([disabled]):not([tabindex="-1"])',
+  'input:not([disabled]):not([type="hidden"]):not([tabindex="-1"])',
+  'select:not([disabled]):not([tabindex="-1"])',
+  'textarea:not([disabled]):not([tabindex="-1"])',
+  '[contenteditable="true"]:not([tabindex="-1"])',
+  '[tabindex]:not([tabindex="-1"])',
+].join(',');
+
+type DocSheetOrigin = 'document' | 'margin';
+const DocSheetOriginContext = createContext<DocSheetOrigin>('document');
+
+export function DocSheetOriginProvider({
+  origin,
+  children,
+}: {
+  origin: DocSheetOrigin;
+  children: React.ReactNode;
+}) {
+  return (
+    <DocSheetOriginContext.Provider value={origin}>
+      {children}
+    </DocSheetOriginContext.Provider>
+  );
+}
+
+function getFocusableElements(panel: HTMLElement) {
+  return Array.from(
+    panel.querySelectorAll<HTMLElement>(FOCUSABLE_SELECTOR),
+  ).filter((element) => {
+    const style = window.getComputedStyle(element);
+    return (
+      !element.hidden &&
+      !element.matches(':disabled') &&
+      element.getAttribute('aria-disabled') !== 'true' &&
+      !element.closest('[hidden], [aria-hidden="true"], [inert]') &&
+      style.display !== 'none' &&
+      style.visibility !== 'hidden'
+    );
+  });
+}
 
 /**
  * The `?` doorway (help-desk Wave 1) — the reactive-help glyph: a quiet
- * DM-mono question mark in aged-oak, no circle, no border, hover → charcoal.
+ * DM-mono question mark in Quiet Ink, no circle, no border, hover → charcoal.
  * Clicking opens the ContextualHelpPanel scoped to `helpKey` via
  * `openHelp({ source, surfaceKey })`. Exported so the ledger front-matter and
  * the court bar render the exact same doorway without re-deriving its idiom.
@@ -54,7 +109,7 @@ export function HelpGlyph({
       type="button"
       aria-label={label}
       onClick={() => openHelp({ source, surfaceKey: helpKey })}
-      className={`shrink-0 rounded-[3px] px-1 font-mono text-[11px] text-[var(--color-aged-oak)] transition-colors hover:text-[var(--color-charcoal)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-clay)] ${className ?? ''}`}
+      className={`doc-type-meta -my-2 inline-flex min-h-11 min-w-11 shrink-0 items-center justify-center rounded-[3px] text-[var(--color-quiet-ink)] transition-colors hover:text-[var(--color-charcoal)] ${className ?? ''}`}
     >
       ?
     </button>
@@ -76,6 +131,7 @@ export function DocSheetHead({
   pageLabel,
   onClose,
   helpKey,
+  titleId,
 }: {
   icon: LucideIcon;
   title: string;
@@ -84,6 +140,8 @@ export function DocSheetHead({
   /** When set, the head carries the `?` doorway → openHelp({ source:
    *  'sheet-head', surfaceKey: helpKey }). */
   helpKey?: string;
+  /** Connects the visible title to an owning dialog's aria-labelledby. */
+  titleId?: string;
 }) {
   return (
     <div className="mb-5 flex items-center justify-between gap-4 border-b border-[var(--color-pearl)] pb-3">
@@ -93,28 +151,44 @@ export function DocSheetHead({
           strokeWidth={1.5}
           aria-hidden
         />
-        <span className="truncate font-mono text-[11px] font-semibold uppercase tracking-[0.14em] text-[var(--color-charcoal)]">
-          {title}
+        <span
+          className="doc-type-meta truncate font-semibold uppercase tracking-[0.14em] text-[var(--color-charcoal)]"
+          data-doc-sheet-title-line
+        >
+          <span id={titleId} data-doc-sheet-title>
+            {title}
+          </span>
           {pageLabel ? (
-            <span className="font-normal text-[var(--color-aged-oak)]"> · {pageLabel}</span>
+            <span
+              className="hidden font-normal text-[var(--color-quiet-ink)] sm:inline"
+              data-doc-sheet-page-label
+            >
+              {' '}
+              · {pageLabel}
+            </span>
           ) : null}
         </span>
       </span>
-      <span className="flex shrink-0 items-center gap-2.5">
+      <span className="flex shrink-0 items-center gap-1 sm:gap-2.5">
         {helpKey ? <HelpGlyph helpKey={helpKey} source="sheet-head" /> : null}
         {onClose ? (
           <button
             type="button"
-            aria-label="Close sheet"
             onClick={onClose}
-            className="shrink-0 font-mono text-[10px] uppercase tracking-[0.1em] text-[var(--color-aged-oak)] transition-colors hover:text-[var(--color-charcoal)]"
+            aria-label="Put back · Esc"
+            className="doc-type-meta -my-2 inline-flex min-h-11 shrink-0 items-center px-1 uppercase tracking-[0.1em] text-[var(--color-quiet-ink)] transition-colors hover:text-[var(--color-charcoal)]"
           >
-            Put back · Esc
+            <span aria-hidden className="sm:hidden">
+              Close
+            </span>
+            <span aria-hidden className="hidden sm:inline">
+              Put back · Esc
+            </span>
           </button>
         ) : (
           <span
             aria-hidden
-            className="shrink-0 font-mono text-[10px] uppercase tracking-[0.1em] text-[var(--color-aged-oak)]"
+            className="doc-type-meta shrink-0 uppercase tracking-[0.1em] text-[var(--color-quiet-ink)]"
           >
             Put back · Esc
           </span>
@@ -152,69 +226,149 @@ export function DocSheet({
   helpKey?: string;
 }) {
   const restoreRef = useRef<HTMLElement | null>(null);
+  const panelRef = useRef<HTMLDivElement | null>(null);
+  const titleId = useId();
+  const origin = useContext(DocSheetOriginContext);
+  const [isTopModal, setIsTopModal] = useState(true);
 
-  return (
-    <DialogPrimitive.Root
-      open={open}
-      onOpenChange={(nextOpen) => {
-        if (!nextOpen) onClose();
-      }}
+  useEffect(() => {
+    const panel = panelRef.current;
+    if (!open || !panel) return;
+    return registerManagedModalDialog(panel, setIsTopModal);
+  }, [open]);
+
+  // Focus in on open, restore on close. Depends on the open state and stable
+  // origin — never onClose — so a caller's unstable onClose identity (recreated
+  // each render) can't steal focus from a field mid-typing.
+  useEffect(() => {
+    if (!open) return;
+    const activeElement = document.activeElement;
+    restoreRef.current =
+      activeElement instanceof HTMLElement && activeElement !== document.body
+        ? activeElement
+        : null;
+    if (panelRef.current) {
+      panelRef.current.dataset.docSheetOrigin = origin;
+    }
+    const unlockBodyScroll = lockBodyScroll();
+    const focusFrame = window.requestAnimationFrame(() => {
+      panelRef.current?.focus({ preventScroll: true });
+    });
+
+    return () => {
+      window.cancelAnimationFrame(focusFrame);
+      unlockBodyScroll();
+      const focusTarget = restoreRef.current;
+      restoreRef.current = null;
+      if (!focusTarget?.isConnected) return;
+      window.requestAnimationFrame(() => {
+        if (focusTarget.isConnected && isElementRendered(focusTarget)) {
+          focusTarget.focus({ preventScroll: true });
+        }
+      });
+    };
+  }, [open, origin]);
+
+  // Keep keyboard focus on the laid sheet and let Escape put it back.
+  useEffect(() => {
+    if (!open) return;
+    const onKey = (e: KeyboardEvent) => {
+      const panel = panelRef.current;
+      if (!panel || topActiveModalDialog() !== panel) return;
+
+      if (e.key === 'Escape' && !e.defaultPrevented) {
+        e.preventDefault();
+        e.stopPropagation();
+        onClose();
+        return;
+      }
+
+      if (e.key !== 'Tab' || e.defaultPrevented) return;
+      const focusable = getFocusableElements(panel);
+      if (focusable.length === 0) {
+        e.preventDefault();
+        panel.focus({ preventScroll: true });
+        return;
+      }
+
+      const first = focusable[0];
+      const last = focusable[focusable.length - 1];
+      const active = document.activeElement;
+
+      if (active === panel || !panel.contains(active)) {
+        e.preventDefault();
+        (e.shiftKey ? last : first).focus();
+      } else if (!e.shiftKey && active === last) {
+        e.preventDefault();
+        first.focus();
+      } else if (e.shiftKey && active === first) {
+        e.preventDefault();
+        last.focus();
+      }
+    };
+    document.addEventListener('keydown', onKey);
+    return () => document.removeEventListener('keydown', onKey);
+  }, [open, onClose]);
+
+  if (!open || typeof document === 'undefined') return null;
+
+  return createPortal(
+    <div
+      data-doc-sheet-layer
+      data-doc-sheet-stack-state={isTopModal ? 'top' : 'covered'}
+      aria-hidden={isTopModal ? undefined : true}
+      inert={isTopModal ? undefined : true}
+      className="doc-sheet-layer fixed inset-0 z-50 box-border flex items-start justify-center overflow-hidden overscroll-contain pb-[var(--doc-sheet-inset-bottom)] pl-[var(--doc-sheet-inset-left)] pr-[var(--doc-sheet-inset-right)] pt-[var(--doc-sheet-inset-top)]"
     >
-      <DialogPrimitive.Portal>
-        {/* The primitive owns outside-pointer dismissal and body scroll lock;
-            this node only supplies the document's warm veil. */}
-        <DialogPrimitive.Overlay
-          data-testid="doc-sheet-backdrop"
-          className="fixed inset-0 z-50 h-full w-full cursor-default bg-[rgba(20,18,16,0.55)]"
-        />
-        <div className="pointer-events-none fixed inset-0 z-50 flex items-start justify-center overflow-y-auto p-4 sm:p-12">
-          <DialogPrimitive.Content
-            aria-modal="true"
-            aria-describedby={undefined}
-            onOpenAutoFocus={() => {
-              // DocSheet is externally controlled and has no Radix Trigger, so
-              // remember the caller's active element before Radix focuses the
-              // first sheet control.
-              restoreRef.current = document.activeElement as HTMLElement | null;
-            }}
-            onCloseAutoFocus={(event) => {
-              event.preventDefault();
-              restoreRef.current?.focus?.();
-              restoreRef.current = null;
-            }}
-            onEscapeKeyDown={(event) => {
-              // Radix listens in capture phase. Stop the key here so document
-              // shortcuts beneath the modal cannot also act on this Escape;
-              // the primitive still continues with its top-layer dismissal.
-              event.stopPropagation();
-            }}
-            className={`pointer-events-auto relative w-full ${
-              wide ? 'max-w-[760px]' : 'max-w-[640px]'
-            } max-h-[82vh] overflow-y-auto rounded-[5px] border border-[var(--color-rule-strong,#D8CCB8)] bg-[var(--doc-paper,#FAF7F2)] px-6 pb-8 pt-6 outline-none motion-safe:animate-[doc-fade_200ms_ease-out] sm:px-9`}
-          >
-            <DialogPrimitive.Title className="sr-only">{title}</DialogPrimitive.Title>
-            {icon ? (
-              <DocSheetHead
-                icon={icon}
-                title={title}
-                pageLabel={pageLabel}
-                onClose={onClose}
-                helpKey={helpKey}
-              />
-            ) : (
-              <div className="mb-4 flex justify-end">
-                <DialogPrimitive.Close
-                  aria-label="Close sheet"
-                  className="font-mono text-[10px] uppercase tracking-[0.1em] text-[var(--color-aged-oak)] transition-colors hover:text-[var(--color-charcoal)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-clay)]"
-                >
-                  Put back · Esc
-                </DialogPrimitive.Close>
-              </div>
-            )}
-            {children}
-          </DialogPrimitive.Content>
-        </div>
-      </DialogPrimitive.Portal>
-    </DialogPrimitive.Root>
+      {/* Warm veil over the desk (matches the paper-folio scrim), a backdrop
+          button so a click in the margin puts the sheet back. */}
+      <button
+        type="button"
+        aria-label="Close sheet backdrop"
+        data-testid="doc-sheet-backdrop"
+        tabIndex={-1}
+        onClick={onClose}
+        className="absolute inset-0 h-full w-full cursor-default bg-[rgba(20,18,16,0.55)]"
+      />
+      <div
+        ref={panelRef}
+        role="dialog"
+        aria-modal={isTopModal ? true : undefined}
+        aria-labelledby={titleId}
+        tabIndex={-1}
+        data-doc-sheet-panel
+        data-doc-sheet-scroll-region
+        className={`doc-sheet-panel relative my-auto max-h-[calc(100dvh_-_var(--doc-sheet-inset-top)_-_var(--doc-sheet-inset-bottom))] min-w-0 w-full ${
+          wide ? 'max-w-[760px]' : 'max-w-[640px]'
+        } overflow-y-auto overscroll-contain rounded-[5px] border border-[var(--color-rule-strong,#D8CCB8)] bg-[var(--doc-paper,#FAF7F2)] px-6 pb-8 pt-6 outline-none sm:px-9`}
+      >
+        {icon ? (
+          <DocSheetHead
+            icon={icon}
+            title={title}
+            pageLabel={pageLabel}
+            onClose={onClose}
+            helpKey={helpKey}
+            titleId={titleId}
+          />
+        ) : (
+          <div className="mb-4 flex items-center justify-between">
+            <h2 id={titleId} className="sr-only">
+              {title}
+            </h2>
+            <button
+              type="button"
+              aria-label="Close sheet"
+              onClick={onClose}
+              className="doc-type-meta ml-auto inline-flex min-h-11 items-center px-1 uppercase tracking-[0.1em] text-[var(--color-quiet-ink)] transition-colors hover:text-[var(--color-charcoal)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-clay)]"
+            >
+              Put back · Esc
+            </button>
+          </div>
+        )}
+        {children}
+      </div>
+    </div>,
+    document.body,
   );
 }

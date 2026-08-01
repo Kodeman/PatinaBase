@@ -125,14 +125,18 @@ export function CaptureLeadSheet({
 
   return (
     <DocSheet open={open} onClose={onClose} title="Capture a lead">
-      <form onSubmit={submit} className="mx-auto w-full max-w-[34rem]">
-        <span className="font-mono text-[9px] uppercase tracking-[0.14em] text-[var(--color-clay)]">
+      <form
+        onSubmit={submit}
+        data-overlay-capture-lead
+        className="mx-auto w-full max-w-[34rem]"
+      >
+        <span className="font-mono text-[12px] uppercase tracking-[0.14em] text-[var(--color-clay)]">
           New lead · begin a Brief
         </span>
         <h2 className="mt-2 font-heading text-[1.5rem] italic text-[var(--color-charcoal)]">
           Who just came in?
         </h2>
-        <p className="mt-1.5 text-[13px] leading-relaxed text-[var(--color-mocha)]">
+        <p className="mt-1.5 text-[14px] leading-relaxed text-[var(--color-charcoal)]">
           Just enough to begin. The Brief fills in as you go — nothing else is
           required.
         </p>
@@ -182,7 +186,7 @@ export function CaptureLeadSheet({
                     type="button"
                     aria-pressed={on}
                     onClick={() => setSource(s)}
-                    className={`min-h-11 rounded-[4px] border px-3 py-1.5 font-mono text-[10px] uppercase tracking-[0.06em] transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-clay)] ${
+                    className={`min-h-11 min-w-11 rounded-[4px] border px-3 py-1.5 font-mono text-[12px] uppercase tracking-[0.06em] transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-clay)] motion-reduce:transition-none ${
                       on
                         ? 'border-[var(--color-clay)] bg-[rgba(196,165,123,0.18)] text-[var(--color-charcoal)]'
                         : 'border-[var(--color-pearl)] text-[var(--color-aged-oak)] hover:border-[var(--color-clay)]'
@@ -198,7 +202,7 @@ export function CaptureLeadSheet({
 
         {error && (
           <p
-            className="mt-5 text-[12px] text-[var(--color-terracotta)]"
+            className="mt-5 border-l-2 border-[var(--color-terracotta)] pl-3 text-[14px] text-[var(--color-charcoal)]"
             role="alert"
           >
             {error}
@@ -228,7 +232,7 @@ export function CaptureLeadSheet({
           >
             Cancel
           </DocumentAction>
-          <span className="ml-auto font-mono text-[9px] uppercase tracking-[0.06em] text-[var(--color-aged-oak)]">
+          <span className="ml-auto font-mono text-[12px] uppercase tracking-[0.06em] text-[var(--text-body)]">
             opens the Brief
           </span>
         </DocumentActionGroup>
@@ -246,7 +250,7 @@ function Field({
 }) {
   return (
     <label className="block">
-      <span className="mb-1.5 block font-mono text-[10px] uppercase tracking-[0.1em] text-[var(--color-aged-oak)]">
+      <span className="mb-1.5 block font-mono text-[12px] uppercase tracking-[0.1em] text-[var(--color-charcoal)]">
         {label}
       </span>
       {children}
@@ -268,12 +272,11 @@ function Input({
   return (
     <input
       type="text"
-      // eslint-disable-next-line jsx-a11y/no-autofocus
       autoFocus={autoFocus}
       value={value}
       onChange={(e) => onChange(e.target.value)}
       placeholder={placeholder}
-      className="min-w-0 w-full border-b border-[var(--color-pearl)] bg-transparent pb-1.5 text-[14px] text-[var(--color-charcoal)] placeholder:text-[var(--text-faint)] focus:border-[var(--color-clay)] focus:outline-none"
+      className="min-h-11 min-w-0 w-full border-b border-[var(--color-pearl)] bg-transparent px-1 py-2 text-[16px] text-[var(--color-charcoal)] placeholder:text-[var(--text-faint)] focus:border-[var(--color-clay)] focus:outline-none focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-clay)]"
     />
   );
 }

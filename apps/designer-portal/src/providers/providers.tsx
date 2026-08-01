@@ -29,23 +29,25 @@ const VARIANT_MAP: Record<
 
 export function Providers({ children }: { children: ReactNode }) {
   useEffect(() => {
-    setToastFunction(({ title, description, variant = 'default', duration }) => {
-      dsToast({
-        title,
-        description,
-        variant: VARIANT_MAP[variant] ?? 'default',
-        ...(duration ? { duration } : {}),
-      });
-    });
+    setToastFunction(
+      ({ title, description, variant = 'default', duration }) => {
+        dsToast({
+          title,
+          description,
+          variant: VARIANT_MAP[variant] ?? 'default',
+          ...(duration ? { duration } : {}),
+        });
+      },
+    );
   }, []);
 
   return (
     <QueryClientProvider client={queryClient}>
-      <PostHogAnalyticsProvider>
-        {children}
-      </PostHogAnalyticsProvider>
+      <PostHogAnalyticsProvider>{children}</PostHogAnalyticsProvider>
       <Toaster />
-      <div className="hidden md:block">
+      {/* Keep development chrome out of the protected paper/mobile regimes;
+          it can otherwise sit over the single edge owner at tablet widths. */}
+      <div className="hidden min-[1440px]:block">
         <ReactQueryDevtools initialIsOpen={false} />
       </div>
     </QueryClientProvider>

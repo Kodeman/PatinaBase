@@ -23,25 +23,50 @@ import { useMemo } from 'react';
 import Link from 'next/link';
 import { usePeopleDirectory } from '@patina/supabase';
 import { deriveNurtureQueue } from '@/lib/document/people-derivation';
-import { deriveReconnectNeeds } from '@/lib/document/desk-derivation';
+import {
+  deriveReconnectNeeds,
+  type ReconnectNeed,
+} from '@/lib/document/desk-derivation';
 import { SectionEyebrow } from '@/components/document/section-eyebrow';
 
-export function DeskReconnect() {
+export interface DeskReconnectPopulation {
+  reconnects: ReconnectNeed[];
+  isLoading: boolean;
+  isError: boolean;
+}
+
+export function useDeskReconnectPopulation(): DeskReconnectPopulation {
   // R53: the reconnect surface reads the whole directory once (per-designer,
   // small) and ranks it with the People Room's nurture queue — single-source
   // ranking. Never fails the Desk: while loading or empty, it renders nothing.
-  const { data } = usePeopleDirectory({ role: 'all' });
+  const query = usePeopleDirectory({ role: 'all' });
   const now = useMemo(() => new Date(), []);
 
   const reconnects = useMemo(() => {
-    if (!data) return [];
-    return deriveReconnectNeeds(deriveNurtureQueue(data, now), now);
-  }, [data, now]);
+    if (!query.data) return [];
+    return deriveReconnectNeeds(deriveNurtureQueue(query.data, now), now);
+  }, [now, query.data]);
+
+  return {
+    reconnects,
+    isLoading: query.isLoading,
+    isError: query.isError,
+  };
+}
+
+export function DeskReconnect({
+  population,
+  withinPulse = false,
+}: {
+  population: DeskReconnectPopulation;
+  withinPulse?: boolean;
+}) {
+  const { reconnects } = population;
 
   if (reconnects.length === 0) return null;
 
   return (
-    <section aria-labelledby="reconnect" className="mt-14">
+    <section aria-labelledby="reconnect" className={withinPulse ? '' : 'mt-14'}>
       <SectionEyebrow count={reconnects.length}>
         <span id="reconnect">Worth reconnecting</span>
       </SectionEyebrow>
@@ -51,9 +76,11 @@ export function DeskReconnect() {
             <Link
               href="/people"
               data-reconnect-role={r.role}
-              className="group flex items-baseline gap-2 text-[13px] leading-snug text-[var(--text-muted)] transition-colors hover:text-[var(--text-body)]"
+              className="doc-type-body group flex min-h-11 items-center gap-2 transition-colors hover:text-[var(--text-primary)] motion-reduce:transition-none"
             >
-              <span className="font-heading italic text-[var(--text-primary)]">{r.name}</span>
+              <span className="font-heading text-[16px] italic text-[var(--text-primary)]">
+                {r.name}
+              </span>
               <span aria-hidden className="text-[var(--text-subtle)]">
                 —
               </span>

@@ -14,7 +14,7 @@ export function BulkActionBar({ count, onClear, children }: BulkActionBarProps) 
 
   return (
     <div
-      className="pointer-events-auto fixed bottom-6 left-1/2 z-40 -translate-x-1/2 rounded-md border bg-[var(--bg-surface)] px-4 py-2 shadow-lg"
+      className="pointer-events-auto fixed bottom-[var(--doc-shell-floating-bottom,1.5rem)] left-1/2 z-40 max-w-[calc(100vw-2rem)] -translate-x-1/2 overflow-x-auto overscroll-x-contain rounded-md border bg-[var(--bg-surface)] px-4 py-2 shadow-lg"
       style={{ borderColor: 'var(--border-default)' }}
       role="region"
       aria-label="Bulk actions"

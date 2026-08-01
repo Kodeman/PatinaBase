@@ -36,10 +36,7 @@ async function expectMinTarget(
     .toBeGreaterThanOrEqual(44);
 }
 
-/**
- * The mobile dock passes `min-h-12 w-full`, so its own row — not the halo —
- * must stay at least 48px tall.
- */
+/** Mobile-bar actions carry their own 44px row as well as Scored Ink's halo. */
 async function expectMinRow(
   action: ReturnType<AuthenticatedPage['locator']>,
   pixels: number,
@@ -76,17 +73,19 @@ async function expectInlinePrimary(
   return primary;
 }
 
-async function expectMobileDock(
+async function expectMobileBar(
   page: AuthenticatedPage,
   actionKey: string,
   label: string | RegExp,
 ) {
-  const dock = page.getByTestId('mobile-action-dock');
-  await expect(dock).toBeVisible();
-  const action = dock.locator(`[data-action-key="${actionKey}"]`);
+  const bar = page.getByTestId('mobile-bar');
+  await expect(bar).toBeVisible();
+  await expect(page.locator('[data-mobile-edge-owner]')).toHaveCount(1);
+  await expect(bar).toHaveAttribute('data-mobile-edge-owner', 'document-bar');
+  const action = bar.locator(`[data-action-key="${actionKey}"]`);
   await expect(action).toHaveCount(1);
   await expect(action).toContainText(label);
-  await expectMinRow(action, 48);
+  await expectMinRow(action, 44);
 }
 
 test.describe('Inked Instruments action visibility', () => {
@@ -98,7 +97,7 @@ test.describe('Inked Instruments action visibility', () => {
 
     await page.goto('/desk', { waitUntil: 'domcontentloaded' });
     await expectInlinePrimary(page, 'desk-head', 'Capture a lead');
-    await expect(page.getByTestId('mobile-action-dock')).toBeHidden();
+    await expect(page.getByTestId('mobile-bar')).toBeHidden();
 
     const folioAction = page
       .locator(
@@ -126,17 +125,14 @@ test.describe('Inked Instruments action visibility', () => {
     await expectInlinePrimary(page, 'room-head', /^Send/);
   });
 
-  test('390px surfaces mirror the active primary in a separate dock', async ({
+  test('390px surfaces place context, primary, and More in one edge owner', async ({
     authenticatedPage: page,
   }) => {
     test.setTimeout(120_000);
     await page.setViewportSize({ width: 390, height: 844 });
 
     await page.goto('/desk', { waitUntil: 'domcontentloaded' });
-    await expectMobileDock(page, 'capture-lead', 'Capture a lead');
-    await expect(
-      page.getByTestId('mobile-action-dock-clearance'),
-    ).toBeVisible();
+    await expectMobileBar(page, 'capture-lead', 'Capture a lead');
 
     // Regression: the first client-journey form must remain usable without
     // sideways scrolling at the smallest supported phone width.
@@ -172,17 +168,17 @@ test.describe('Inked Instruments action visibility', () => {
     await page.goto(`/doc/${SENT_PROPOSAL_ID}`, {
       waitUntil: 'domcontentloaded',
     });
-    await expectMobileDock(page, 'mark-proposal-signed', 'Mark signed');
+    await expectMobileBar(page, 'mark-proposal-signed', 'Mark signed');
 
     await page.goto('/library', { waitUntil: 'domcontentloaded' });
-    await expectMobileDock(page, 'capture-piece', 'Capture');
+    await expectMobileBar(page, 'capture-piece', 'Capture');
 
     await page.goto('/people', { waitUntil: 'domcontentloaded' });
-    await expectMobileDock(page, 'add-person', 'Add person');
+    await expectMobileBar(page, 'add-person', 'Add person');
 
     await page.goto(`/drafting/${SENT_PROPOSAL_ID}`, {
       waitUntil: 'domcontentloaded',
     });
-    await expectMobileDock(page, 'send-proposal', /^Send/);
+    await expectMobileBar(page, 'send-proposal', /^Send/);
   });
 });

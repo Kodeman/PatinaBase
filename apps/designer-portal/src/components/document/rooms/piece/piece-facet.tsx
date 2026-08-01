@@ -28,22 +28,32 @@ export function PieceFacet({
 }) {
   if (readOnly) {
     return (
-      <section className="mb-2.5 overflow-hidden rounded-[8px] border border-[var(--color-pearl)] bg-white">
-        <div className="flex items-center gap-3 px-4 py-3">
-          <span className="text-[0.86rem] font-semibold text-[var(--color-charcoal)]">{name}</span>
+      <section className="mb-2.5 overflow-hidden rounded-[8px] border border-[var(--color-pearl)] bg-[var(--doc-paper)]">
+        <div className="flex min-h-11 items-center gap-3 px-4 py-2.5">
+          <span className="doc-type-body font-semibold leading-tight text-[var(--color-charcoal)]">
+            {name}
+          </span>
           {status && (
-            <span className="ml-auto font-mono text-[0.55rem] italic tracking-[0.04em] text-[var(--color-aged-oak)] opacity-70">
+            <span className="doc-type-meta ml-auto truncate italic leading-tight opacity-70">
               {status}
             </span>
           )}
         </div>
-        <div className="border-t border-[var(--doc-ink-border)] px-4 pb-4 pt-1">{children}</div>
+        <div className="border-t border-[var(--doc-ink-border)] px-4 pb-4 pt-1">
+          {children}
+        </div>
       </section>
     );
   }
 
   return (
-    <ComposeSection name={name} status={status} done={done} open={open} onToggle={onToggle}>
+    <ComposeSection
+      name={name}
+      status={status}
+      done={done}
+      open={open}
+      onToggle={onToggle}
+    >
       {children}
     </ComposeSection>
   );

@@ -33,10 +33,13 @@ export function MobileAccountHeader({ onOpen }: { onOpen: () => void }) {
   // Realtime sync lives in the always-mounted AccountSheet; read shared cache.
   const { data: status } = useAvailability();
 
-  const name = profile?.display_name || profile?.full_name || user?.name || null;
+  const name =
+    profile?.display_name || profile?.full_name || user?.name || null;
   const email = user?.email ?? '';
   const studio = activeStudio(orgs);
-  const current: AvailabilityStatus = hydrated ? (status ?? 'online') : 'offline';
+  const current: AvailabilityStatus = hydrated
+    ? (status ?? 'online')
+    : 'offline';
 
   return (
     <button
@@ -44,12 +47,16 @@ export function MobileAccountHeader({ onOpen }: { onOpen: () => void }) {
       onClick={onOpen}
       aria-label="Account and settings"
       aria-haspopup="dialog"
-      className="flex w-full items-center gap-3 rounded-[6px] border border-[rgba(250,247,242,0.12)] bg-[rgba(250,247,242,0.04)] px-3 py-2.5 text-left active:border-[rgba(196,165,123,0.45)]"
+      className="flex w-full items-center gap-3 rounded-[6px] border border-[rgba(250,247,242,0.12)] bg-[rgba(250,247,242,0.04)] px-3 py-2.5 text-left active:border-[rgba(196,165,123,0.45)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-clay)]"
     >
       <span className="relative inline-flex h-9 w-9 shrink-0 items-center justify-center overflow-hidden rounded-full bg-[rgba(250,247,242,0.08)] font-mono text-[11px] uppercase tracking-wider text-[var(--color-pearl)]">
         {profile?.avatar_url ? (
           // eslint-disable-next-line @next/next/no-img-element
-          <img src={profile.avatar_url} alt="" className="h-full w-full object-cover" />
+          <img
+            src={profile.avatar_url}
+            alt=""
+            className="h-full w-full object-cover"
+          />
         ) : (
           monogramOf(name, email)
         )}
@@ -67,7 +74,10 @@ export function MobileAccountHeader({ onOpen }: { onOpen: () => void }) {
           {studio ? studio.name : email}
         </span>
       </span>
-      <span aria-hidden className="font-mono text-[14px] text-[var(--color-clay)] opacity-70">
+      <span
+        aria-hidden
+        className="font-mono text-[14px] text-[var(--color-clay)] opacity-70"
+      >
         ›
       </span>
     </button>

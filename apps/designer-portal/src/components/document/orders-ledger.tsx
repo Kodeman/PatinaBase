@@ -65,10 +65,9 @@ interface POForThroughput {
   acknowledged_at: string | null;
 }
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
 type AnyRecord = any;
 
-/** PRC-06: one lens option — quiet DM-mono text, clay when worn (R28). */
+/** PRC-06: one lens option — quiet scored ink, held when worn (R28). */
 function LensLink({
   active,
   onClick,
@@ -83,10 +82,10 @@ function LensLink({
       type="button"
       onClick={onClick}
       aria-pressed={active}
-      className={`min-h-11 min-w-11 font-mono text-[8.5px] uppercase tracking-[0.06em] transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-clay)] ${
+      className={`da-score-hover doc-type-meta inline-flex min-h-11 min-w-11 items-center uppercase tracking-[0.06em] transition-colors motion-reduce:transition-none focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-quiet-ink)] ${
         active
-          ? 'text-[var(--color-clay)]'
-          : 'text-[var(--color-aged-oak)] hover:text-[var(--color-charcoal)]'
+          ? 'da-score-on text-[var(--color-charcoal)]'
+          : 'text-[var(--color-quiet-ink)] hover:text-[var(--color-charcoal)]'
       }`}
     >
       {children}
@@ -137,6 +136,7 @@ export function OrdersLedger({
   );
   // R18: send / resend through the shared preview-confirm.
   const [previewPo, setPreviewPo] = useState<AnyRecord | null>(null);
+  const [bulkMode, setBulkMode] = useState(false);
   const [selected, setSelected] = useState<string[]>([]);
   const [truckEta, setTruckEta] = useState(todayYmd());
   const [batchBusy, setBatchBusy] = useState(false);
@@ -211,6 +211,21 @@ export function OrdersLedger({
     router.push(`/doc/${projectId}`);
   };
 
+  const clearBulkSelection = () => {
+    setSelected([]);
+    setTruckEta(todayYmd());
+  };
+
+  const exitBulkMode = () => {
+    setBulkMode(false);
+    clearBulkSelection();
+  };
+
+  const openPage = (nextPage: BookPage) => {
+    if (nextPage !== 'ledger') exitBulkMode();
+    setPage(nextPage);
+  };
+
   const sameTruck = async () => {
     if (!truckEta || selected.length < 2) return;
     setBatchBusy(true);
@@ -235,7 +250,7 @@ export function OrdersLedger({
   };
 
   return (
-    <div className="mx-auto max-w-3xl">
+    <div className="mx-auto w-full min-w-0 max-w-3xl" data-orders-book>
       <DocSheetHead
         icon={ORDERS_ICON}
         title="Orders"
@@ -243,35 +258,32 @@ export function OrdersLedger({
         onClose={onClose}
         helpKey={HELP_KEY_BY_PAGE[page]}
       />
-      <div className="mb-3">
-        <h2 className="font-heading text-xl text-[var(--color-charcoal)]">
-          Orders{' '}
-          <em className="italic text-[var(--color-clay)]">· the studio book</em>
-        </h2>
-        <p className="mt-0.5 text-[11px] text-[var(--color-aged-oak)]">
-          A lens over every document — pulled over whatever you&apos;re holding,
-          put back when done.
-        </p>
-      </div>
+      <p className="doc-type-body mb-2 text-[var(--color-quiet-ink)]">
+        Every project&apos;s purchase orders, gathered in one studio register.
+      </p>
 
       {/* R28: the book's pages — DM-mono links, never tabs. */}
-      <div className="mb-4 flex flex-wrap items-baseline gap-x-4 border-b border-[var(--color-pearl)] pb-2">
+      <nav
+        aria-label="Orders book pages"
+        data-orders-page-links
+        className="mb-4 flex flex-wrap items-center gap-x-4 border-b border-[var(--color-pearl)]"
+      >
         {PAGES.map((p) => (
           <button
             key={p.key}
             type="button"
-            onClick={() => setPage(p.key)}
+            onClick={() => openPage(p.key)}
             aria-current={page === p.key ? 'page' : undefined}
-            className={`font-mono text-[9.5px] uppercase tracking-[0.08em] transition-colors ${
+            className={`da-score-hover doc-type-meta inline-flex min-h-11 min-w-11 items-center uppercase tracking-[0.08em] transition-colors motion-reduce:transition-none focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-quiet-ink)] ${
               page === p.key
-                ? 'text-[var(--color-clay)]'
-                : 'text-[var(--color-aged-oak)] hover:text-[var(--color-charcoal)]'
+                ? 'da-score-on text-[var(--color-charcoal)]'
+                : 'text-[var(--color-quiet-ink)] hover:text-[var(--color-charcoal)]'
             }`}
           >
             {p.label}
           </button>
         ))}
-      </div>
+      </nav>
 
       {page === 'vendors' && (
         <VendorsBookPage
@@ -299,7 +311,7 @@ export function OrdersLedger({
             />
           )}
           {isLoading && (
-            <p className="py-3 text-[12px] italic text-[var(--color-aged-oak)]">
+            <p className="doc-type-body py-3 italic text-[var(--color-quiet-ink)]">
               Opening the book…
             </p>
           )}
@@ -307,15 +319,21 @@ export function OrdersLedger({
               facets as DM-mono text, never FilterPills. The front matter
               stays the whole book's opening; the lens narrows the rows. */}
           {!isLoading && live.length > 0 && (
-            <div className="mb-4 flex flex-wrap items-baseline gap-x-2.5 gap-y-1">
+            <div
+              data-orders-lenses
+              className="mb-4 flex flex-wrap items-center gap-x-2.5 gap-y-1 border-b border-[var(--color-pearl)] pb-1"
+            >
               {projectOptions.length > 1 && (
                 <>
-                  <span className="font-mono text-[8px] uppercase tracking-[0.08em] text-[var(--color-aged-oak)]">
+                  <span className="doc-type-meta uppercase tracking-[0.08em]">
                     project ·
                   </span>
                   <LensLink
                     active={!projectLens}
-                    onClick={() => setProjectLens(null)}
+                    onClick={() => {
+                      clearBulkSelection();
+                      setProjectLens(null);
+                    }}
                   >
                     all
                   </LensLink>
@@ -323,9 +341,10 @@ export function OrdersLedger({
                     <LensLink
                       key={p.id}
                       active={projectLens === p.id}
-                      onClick={() =>
-                        setProjectLens((cur) => (cur === p.id ? null : p.id))
-                      }
+                      onClick={() => {
+                        clearBulkSelection();
+                        setProjectLens((cur) => (cur === p.id ? null : p.id));
+                      }}
                     >
                       {p.name}
                     </LensLink>
@@ -333,12 +352,15 @@ export function OrdersLedger({
                   <span className="mx-1.5" aria-hidden />
                 </>
               )}
-              <span className="font-mono text-[8px] uppercase tracking-[0.08em] text-[var(--color-aged-oak)]">
+              <span className="doc-type-meta uppercase tracking-[0.08em]">
                 payment ·
               </span>
               <LensLink
                 active={!paymentLens}
-                onClick={() => setPaymentLens(null)}
+                onClick={() => {
+                  clearBulkSelection();
+                  setPaymentLens(null);
+                }}
               >
                 all
               </LensLink>
@@ -346,20 +368,32 @@ export function OrdersLedger({
                 <LensLink
                   key={s}
                   active={paymentLens === s}
-                  onClick={() =>
-                    setPaymentLens((cur) => (cur === s ? null : s))
-                  }
+                  onClick={() => {
+                    clearBulkSelection();
+                    setPaymentLens((cur) => (cur === s ? null : s));
+                  }}
                 >
                   {s}
                 </LensLink>
               ))}
+              <button
+                type="button"
+                data-orders-bulk-toggle
+                aria-pressed={bulkMode}
+                onClick={() => (bulkMode ? exitBulkMode() : setBulkMode(true))}
+                className={`da-score-hover doc-type-meta ml-auto inline-flex min-h-11 min-w-11 items-center uppercase tracking-[0.06em] text-[var(--color-quiet-ink)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-quiet-ink)] ${bulkMode ? 'da-score-on text-[var(--color-charcoal)]' : ''}`}
+              >
+                {bulkMode
+                  ? `Done selecting${selected.length ? ` · ${selected.length}` : ''}`
+                  : 'Select multiple'}
+              </button>
             </div>
           )}
           {!isLoading &&
             live.length > 0 &&
             groups.length === 0 &&
             (projectLens || paymentLens) && (
-              <p className="py-2 text-[11px] italic text-[var(--color-aged-oak)]">
+              <p className="doc-type-body py-2 italic text-[var(--color-quiet-ink)]">
                 Nothing under this lens.
               </p>
             )}
@@ -370,7 +404,7 @@ export function OrdersLedger({
               <p className="font-heading text-[15px] italic text-[var(--color-charcoal)]">
                 No purchase orders yet
               </p>
-              <p className="mt-1.5 max-w-[52ch] text-[12px] leading-relaxed text-[var(--color-aged-oak)]">
+              <p className="doc-type-body mt-1.5 max-w-[52ch] text-[var(--color-quiet-ink)]">
                 When you order what a proposal specifies, each PO lands here and
                 tracks itself from production to your door. Draw the first from
                 a project&apos;s schedule.
@@ -379,7 +413,7 @@ export function OrdersLedger({
           )}
           {groups.map((g) => (
             <section key={g.vendorId} className="mb-4">
-              <p className="mb-1 font-mono text-[9px] font-semibold uppercase tracking-[0.07em] text-[var(--color-clay)]">
+              <p className="doc-type-meta mb-1 font-semibold uppercase tracking-[0.07em] text-[var(--color-quiet-ink)]">
                 {g.vendorName}
               </p>
               <ul>
@@ -395,27 +429,68 @@ export function OrdersLedger({
                     po.status !== 'cancelled';
                   return (
                     <Fragment key={po.id}>
-                      <li className="grid grid-cols-[auto_1fr_auto_auto_auto_auto] items-center gap-3 border-b border-[var(--color-pearl)] px-1 py-2.5">
-                        <input
-                          type="checkbox"
-                          aria-label={`Select ${po.vendor_po_number ?? po.sidemark ?? 'PO'}`}
-                          checked={selected.includes(po.id)}
-                          onChange={(e) =>
-                            setSelected((prev) =>
-                              e.target.checked
-                                ? [...prev, po.id]
-                                : prev.filter((x) => x !== po.id),
-                            )
-                          }
-                        />
-                        <div>
-                          <p className="text-[12.5px] font-medium text-[var(--color-charcoal)]">
+                      <li
+                        data-orders-po-row
+                        className="border-b border-[var(--color-pearl)] px-1 py-3"
+                      >
+                        <div
+                          data-orders-po-primary
+                          className="flex min-w-0 flex-wrap items-center gap-x-3 gap-y-2"
+                        >
+                          {bulkMode && (
+                            <label className="inline-flex min-h-11 min-w-11 shrink-0 items-center justify-center">
+                              <input
+                                type="checkbox"
+                                data-orders-checkbox
+                                aria-label={`Select ${po.vendor_po_number ?? po.sidemark ?? 'PO'}`}
+                                checked={selected.includes(po.id)}
+                                onChange={(e) =>
+                                  setSelected((prev) =>
+                                    e.target.checked
+                                      ? [...prev, po.id]
+                                      : prev.filter((x) => x !== po.id),
+                                  )
+                                }
+                              />
+                            </label>
+                          )}
+                          <p className="doc-type-body min-w-[11rem] flex-1 font-medium text-[var(--color-charcoal)]">
                             {po.po_number ??
                               po.vendor_po_number ??
                               po.sidemark ??
                               'PO drafted'}
                           </p>
-                          <p className="font-mono text-[9px] uppercase tracking-[0.05em] text-[var(--color-aged-oak)]">
+                          <div className="ml-auto flex min-h-11 shrink-0 items-center gap-3">
+                            <Stamp
+                              label={po.status.replace(/_/g, ' ')}
+                              color={stamp.color}
+                              ink={stamp.ink}
+                            />
+                            <span
+                              data-orders-unscheduled={
+                                !po.confirmed_eta && po.status === 'shipped'
+                                  ? ''
+                                  : undefined
+                              }
+                              className={`doc-type-meta whitespace-nowrap font-heading ${
+                                !po.confirmed_eta && po.status === 'shipped'
+                                  ? 'font-mono uppercase tracking-[0.05em] text-[#D8BE56]'
+                                  : 'text-[var(--color-charcoal)]'
+                              }`}
+                            >
+                              {po.confirmed_eta
+                                ? `~${fmtDay(po.confirmed_eta)}`
+                                : po.status === 'shipped'
+                                  ? 'NO DATE'
+                                  : '—'}
+                            </span>
+                          </div>
+                        </div>
+                        <div
+                          data-orders-po-secondary
+                          className={`mt-1 flex min-w-0 flex-wrap items-center gap-x-3 gap-y-1 ${bulkMode ? 'pl-11' : ''}`}
+                        >
+                          <p className="doc-type-meta min-w-[12rem] flex-1 uppercase tracking-[0.05em] text-[var(--color-quiet-ink)]">
                             {[
                               po.project?.name ?? 'Project',
                               po.total_cents != null
@@ -426,79 +501,59 @@ export function OrdersLedger({
                                 ? `sent ${fmtDay(po.sent_at)}${po.acknowledged_at ? ' · ack' : ' · no ack'}`
                                 : 'not sent',
                             ].join(' · ')}
-                            {canAck && (
-                              <>
-                                {' · '}
-                                <button
-                                  type="button"
-                                  onClick={() =>
-                                    setAckPoId((cur) =>
-                                      cur === po.id ? null : po.id,
-                                    )
-                                  }
-                                  aria-expanded={ackPoId === po.id}
-                                  className="inline-flex min-h-11 min-w-11 items-center uppercase tracking-[0.05em] text-[var(--color-clay)] hover:underline focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-clay)]"
-                                >
-                                  log ack {ackPoId === po.id ? '↑' : '↓'}
-                                </button>
-                              </>
-                            )}
                           </p>
-                        </div>
-                        <Stamp
-                          label={po.status.replace(/_/g, ' ')}
-                          color={stamp.color}
-                          ink={stamp.ink}
-                        />
-                        <span
-                          className="whitespace-nowrap font-heading text-[12.5px]"
-                          style={
-                            // R18: unscheduled shipment — a quiet row mark, never a banner.
-                            !po.confirmed_eta && po.status === 'shipped'
-                              ? {
-                                  color: '#D8BE56',
-                                  fontFamily: 'var(--font-mono, monospace)',
-                                  fontSize: '10px',
-                                  letterSpacing: '0.05em',
+                          <div
+                            data-orders-po-actions
+                            className="flex flex-wrap items-center gap-x-3"
+                          >
+                            {canAck && (
+                              <button
+                                type="button"
+                                onClick={() =>
+                                  setAckPoId((cur) =>
+                                    cur === po.id ? null : po.id,
+                                  )
                                 }
-                              : { color: 'var(--color-charcoal)' }
-                          }
-                        >
-                          {po.confirmed_eta
-                            ? `~${fmtDay(po.confirmed_eta)}`
-                            : po.status === 'shipped'
-                              ? 'NO DATE'
-                              : '—'}
-                        </span>
-                        <DocumentAction
-                          actionKey="open-purchase-order-preview"
-                          surfaceKey="orders"
-                          regionKey={`purchase-order-row-${index + 1}`}
-                          variant="secondary"
-                          onClick={() => setPreviewPo(po)}
-                        >
-                          {po.sent_at
-                            ? 'resend'
-                            : po.status === 'draft'
-                              ? 'send →'
-                              : 'pdf'}
-                        </DocumentAction>
-                        <button
-                          type="button"
-                          onClick={() =>
-                            openDocument(
-                              po.project_id ?? po.project?.id ?? null,
-                            )
-                          }
-                          className="min-h-11 min-w-11 whitespace-nowrap text-[10.5px] text-[var(--color-clay)] hover:underline focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-clay)]"
-                        >
-                          open document →
-                        </button>
+                                aria-expanded={ackPoId === po.id}
+                                className="da-score-hover doc-type-meta inline-flex min-h-11 min-w-11 items-center uppercase tracking-[0.05em] text-[var(--color-quiet-ink)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-quiet-ink)]"
+                              >
+                                log ack {ackPoId === po.id ? '↑' : '↓'}
+                              </button>
+                            )}
+                            <DocumentAction
+                              actionKey="open-purchase-order-preview"
+                              surfaceKey="orders"
+                              regionKey={`purchase-order-row-${index + 1}`}
+                              variant="secondary"
+                              onClick={() => setPreviewPo(po)}
+                            >
+                              {po.sent_at
+                                ? 'resend'
+                                : po.status === 'draft'
+                                  ? 'send →'
+                                  : 'pdf'}
+                            </DocumentAction>
+                            <button
+                              type="button"
+                              onClick={() =>
+                                openDocument(
+                                  po.project_id ?? po.project?.id ?? null,
+                                )
+                              }
+                              className="da-score-hover doc-type-meta inline-flex min-h-11 min-w-11 items-center whitespace-nowrap text-[var(--color-quiet-ink)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-quiet-ink)]"
+                            >
+                              open document →
+                            </button>
+                          </div>
+                        </div>
                       </li>
                       {/* PRC-07: the unfolded log-acknowledgment band — quiet
                         act under the row, closed by logging or refolding. */}
                       {canAck && ackPoId === po.id && (
-                        <li className="border-b border-[var(--color-pearl)] py-2.5 pl-8 pr-1">
+                        <li
+                          data-orders-ack-unfold
+                          className="border-b border-[var(--color-pearl)] px-1 py-3 sm:pl-12"
+                        >
                           <LogAckInline
                             purchaseOrderId={po.id}
                             vendorPoNumber={po.vendor_po_number}
@@ -540,20 +595,22 @@ export function OrdersLedger({
             />
           )}
 
-          {selected.length >= 2 && (
-            <div className="mt-3 flex flex-wrap items-center gap-2 rounded-[5px] border border-[rgba(196,165,123,0.3)] bg-[rgba(196,165,123,0.05)] px-3 py-2.5">
-              <p className="text-[11.5px] text-[var(--color-charcoal)]">
-                {selected.length} orders{' '}
+          {bulkMode && selected.length >= 2 && (
+            <div
+              data-orders-bulk-bar
+              className="mt-3 flex flex-wrap items-center gap-2 border-y border-[var(--color-pearl)] px-1 py-3"
+            >
+              <p className="doc-type-body min-w-[14rem] flex-1 text-[var(--color-charcoal)]">
                 {selectedVendor
-                  ? '— same truck?'
-                  : '— pick one vendor to batch'}
+                  ? `${selected.length} orders · align one confirmed ETA`
+                  : `${selected.length} orders · select orders from one vendor to align an ETA`}
               </p>
               {selectedVendor && (
                 <>
                   <input
                     type="date"
                     aria-label="Shared ETA"
-                    className="rounded-[4px] border border-[var(--color-pearl)] bg-transparent px-2 py-1 text-[11px] text-[var(--color-charcoal)]"
+                    className="doc-type-control min-h-11 rounded-[4px] border border-[var(--color-pearl)] bg-transparent px-2 text-[var(--color-charcoal)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-quiet-ink)]"
                     value={truckEta}
                     onChange={(e) => setTruckEta(e.target.value)}
                   />

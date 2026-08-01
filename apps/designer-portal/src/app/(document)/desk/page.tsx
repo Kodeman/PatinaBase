@@ -2,10 +2,9 @@
 
 /**
  * The Desk (spec v1.1 §7) — read-only in Slice 1.
- * Date + the ⌘K affordance are the only chrome. Two populations, nothing
- * else: the needs-your-hand stack (actionable engagements, one need line
- * each) and the in-motion chips (quiet, capped, never a feed). No metric
- * tiles, no badges, no dashboard furniture.
+ * Date + the ⌘K affordance are the only chrome. Needs-your-hand keeps four
+ * folios in reach; the secondary workstreams share one folded Studio Pulse.
+ * No metric tiles, badges, feeds, or dashboard furniture.
  */
 
 import { useEffect, useState } from 'react';
@@ -19,13 +18,10 @@ import {
   openProjectPending,
 } from '@/components/document/command-bar';
 import { documentEvents } from '@/lib/analytics/document-events';
-import { FolderCard } from '@/components/document/folder-card';
-import { OpenRequestsStrip } from '@/components/document/open-requests-strip';
-import { InMotionChip } from '@/components/document/in-motion-chip';
+import { NeedsYourHandFolios } from '@/components/document/folder-card';
 import { SectionEyebrow } from '@/components/document/section-eyebrow';
-import { DeskReconnect } from '@/components/document/desk-reconnect';
-import { FieldDesk } from '@/components/document/field/field-desk';
 import { DeskContents } from '@/components/document/desk-contents';
+import { StudioPulse } from '@/components/document/studio-pulse';
 import { MarginNote } from '@/components/document/margin-note';
 import {
   START_DESK_WALKTHROUGH_EVENT,
@@ -163,7 +159,7 @@ export default function DeskPage() {
               <>{greetingWord}.</>
             )}
           </h1>
-          <p className="mt-1 font-mono text-[11px] uppercase tracking-[0.09em] text-[var(--text-muted)]">
+          <p className="doc-type-meta mt-1 uppercase tracking-[0.09em]">
             {dateLabel || ' '}
           </p>
         </div>
@@ -226,7 +222,7 @@ export default function DeskPage() {
           <p className="font-heading text-[15px] italic text-[var(--text-muted)]">
             The desk could not be read.
           </p>
-          <p className="mt-2 text-[13px] leading-relaxed text-[var(--text-body)]">
+          <p className="doc-type-body mt-2">
             Something interrupted the read — often a session that needs
             refreshing. Try again, or reload the page.
           </p>
@@ -284,7 +280,7 @@ export default function DeskPage() {
                     new CustomEvent(START_DESK_WALKTHROUGH_EVENT),
                   )
                 }
-                className="font-heading text-[15px] italic text-[var(--color-aged-oak)] underline decoration-[var(--color-aged-oak)] decoration-1 underline-offset-2 transition-colors hover:text-[var(--color-clay)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-clay)]"
+                className="inline-flex min-h-11 items-center font-heading text-[15px] italic text-[var(--color-aged-oak)] underline decoration-[var(--color-aged-oak)] decoration-1 underline-offset-2 transition-colors hover:text-[var(--color-clay)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-clay)] motion-reduce:transition-none"
               >
                 The walkthrough is six quick stops
               </button>{' '}
@@ -326,64 +322,25 @@ export default function DeskPage() {
             )}
 
             {data && data.folders.length > 0 && (
-              <div className="grid grid-cols-1 gap-x-10 gap-y-[46px] xl:grid-cols-2">
-                {data.folders.map((folder, index) =>
-                  index === 0 ? (
-                    // R97 desk-folio anchor (first-folder placement) — a transparent
-                    // wrapper so the coachmark can point at the first real folder.
-                    <div
-                      key={folder.row.engagement_id}
-                      data-tour-anchor="desk-folio"
-                    >
-                      <FolderCard folder={folder} />
-                    </div>
-                  ) : (
-                    <FolderCard
-                      key={folder.row.engagement_id}
-                      folder={folder}
-                    />
-                  ),
-                )}
-              </div>
+              <NeedsYourHandFolios folders={data.folders} />
             )}
           </section>
 
-          {/* Designer Handoff (Wave 1B) — the open request pool, between the
-              needs-hand stack and in-motion. Its own population; renders nothing
-              off-flag or when the pool is empty. */}
-          <OpenRequestsStrip />
+          {/* The secondary register: each population keeps its own data owner,
+              actions, flags, errors, and deep links; Pulse only folds their
+              presentation and states the known count before anything is hidden. */}
+          <StudioPulse
+            chips={data?.chips ?? []}
+            engagementsResolved={Boolean(data) && !isLoading}
+          />
 
           {/* R95 — on a quiet Desk the Studio index rises here, at full weight, to
               fill the space the folders would occupy. */}
           {deskEmpty && <DeskContents prominent />}
 
-          {data && data.chips.length > 0 && (
-            <section aria-labelledby="in-motion" className="mt-14">
-              <SectionEyebrow count={data.chips.length}>
-                <span id="in-motion">In motion</span>
-              </SectionEyebrow>
-              <ul className="space-y-2.5">
-                {data.chips.map((chip) => (
-                  <InMotionChip key={chip.row.engagement_id} chip={chip} />
-                ))}
-              </ul>
-            </section>
-          )}
-
-          {/* R53 — People on the Desk: the quiet reconnect surface. Its own
-              population over the unified directory; renders nothing when no tie is
-              due, so it never adds noise to a clean Desk. */}
-          <DeskReconnect />
-
-          {/* Field Coordination — "In the field": needs-review text triage + the
-              softer field need-lines (opt-ins owed, field tasks overdue). Its own
-              populations over the SMS/field read models; when there is no field work
-              it teaches in the pencil idiom rather than vanishing (R94). */}
-          <FieldDesk />
-
           {/* R95 — the Studio Contents page: book-style front matter (Rooms /
               Ledgers / Begin), labels + doorways only. On a working Desk it sits
-              here as quiet front matter after the field rollup; on a quiet Desk it
+              here as quiet front matter after Studio Pulse; on a quiet Desk it
               has already risen above (deskEmpty), so it renders in exactly one place. */}
           {!deskEmpty && <DeskContents />}
         </>

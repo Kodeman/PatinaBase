@@ -55,32 +55,43 @@ export function AskBar({
   onAsk: () => void;
 }) {
   return (
-    <div className="mx-auto w-full max-w-[1100px] px-4 pt-3 sm:px-6">
-      <div className="flex w-full max-w-[460px] items-center gap-2.5 rounded-[24px] border border-[var(--color-pearl)] bg-white px-4 py-2.5 transition-colors focus-within:border-[var(--color-clay)]">
-        <span aria-hidden className="text-[0.8rem] text-[var(--color-clay)]">
-          ✦
-        </span>
-        <input
-          value={value}
-          onChange={(e) => onChange(e.target.value)}
-          onKeyDown={(e) => {
-            if (e.key === 'Enter') onAsk();
-          }}
-          aria-label="Ask the Engine about your people"
-          placeholder="Find someone — or ask the Engine who to reconnect with"
-          className="min-w-0 flex-1 bg-transparent text-[0.78rem] text-[var(--color-charcoal)] outline-none placeholder:text-[var(--color-aged-oak)]"
-        />
-        {value.trim() && (
-          <button
-            type="button"
-            onClick={onAsk}
-            aria-label="Ask"
-            className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-[var(--color-clay)] text-[0.72rem] text-white transition-opacity hover:opacity-85 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-charcoal)]"
-          >
-            →
-          </button>
-        )}
-      </div>
+    <div
+      data-people-ask-bar
+      className="mx-auto w-full max-w-[1100px] px-4 pt-4 sm:px-6"
+    >
+      <form
+        className="w-full max-w-[640px]"
+        onSubmit={(event) => {
+          event.preventDefault();
+          onAsk();
+        }}
+      >
+        <label
+          htmlFor="people-engine-ask"
+          className="doc-type-meta block font-semibold uppercase tracking-[0.1em]"
+        >
+          Ask the Engine
+        </label>
+        <div className="mt-1 flex min-h-12 items-center gap-2 border-b border-[var(--border-default)] transition-colors focus-within:border-[var(--color-charcoal)] motion-reduce:transition-none">
+          <input
+            id="people-engine-ask"
+            data-people-ask-input
+            value={value}
+            onChange={(e) => onChange(e.target.value)}
+            placeholder="Find someone, or ask who to reconnect with"
+            className="doc-type-control min-h-11 min-w-0 flex-1 bg-transparent px-1 text-[var(--text-primary)] placeholder:text-[var(--color-quiet-ink)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-clay)]"
+          />
+          {value.trim() && (
+            <button
+              type="submit"
+              aria-label="Ask the Engine"
+              className="doc-type-control flex min-h-11 min-w-11 shrink-0 items-center justify-center text-[var(--text-primary)] transition-colors hover:text-[var(--color-clay)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-clay)] motion-reduce:transition-none"
+            >
+              →
+            </button>
+          )}
+        </div>
+      </form>
     </div>
   );
 }

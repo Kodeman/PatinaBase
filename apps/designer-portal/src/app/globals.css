@@ -13,6 +13,9 @@
   --color-aged-oak: #8B7355;
   --color-mocha: #5C4A3C;
   --color-charcoal: #2C2926;
+  /* Quiet Ink carries small explanatory copy at 6.3:1+ on Patina paper.
+     Aged Oak and Clay remain material pigments for rules, washes, and marks. */
+  --color-quiet-ink: #65594E;
 
   /* — Extended Palette — */
   --color-sage: #A8B5A0;
@@ -39,8 +42,16 @@
 
   --text-primary: var(--color-charcoal);
   --text-body: var(--color-mocha);
-  --text-muted: var(--color-aged-oak);
-  --text-subtle: var(--color-pearl);
+  --text-muted: var(--color-quiet-ink);
+  --text-subtle: var(--color-quiet-ink);
+
+  /* — Quiet type floors —
+     These are roles, not a blanket rewrite. Adopt the matching class when a
+     screen is being quieted so metadata, prose, and controls keep distinct
+     jobs without slipping below an accessible reading size. */
+  --type-metadata-min: 12px;
+  --type-body-min: 14px;
+  --type-control-min: 16px;
 
   --accent-primary: var(--color-clay);
   --accent-hover: var(--color-aged-oak);
@@ -54,7 +65,8 @@
      ad-hoc across portal components. Use these instead of raw hexes so
      the warm-neutral ramp stays consistent and centrally tunable. */
   --color-taupe: #A3927C;   /* warm mid-tone between aged-oak and clay */
-  --text-faint: #7A736C;    /* below --text-muted */
+  /* Text hierarchy comes from type role, not low contrast. */
+  --text-faint: var(--color-quiet-ink);
   --bg-subtle: #F5F1ED;     /* panel tint between off-white and pearl */
   --bg-warm: #EEE6DB;       /* warm light fill */
   --color-bark: #4A453F;    /* dark warm gray between mocha and charcoal */
@@ -99,6 +111,24 @@
   --space-16: 4rem;
   --space-20: 5rem;
   --space-24: 6rem;
+}
+
+/* The Document owns one persistent viewport edge at every width: MobileBar
+   below 1180px and the 60px Studio Drawer above it. Floating actions inherit
+   this contract so they clear the active chrome (and the mobile safe area)
+   without changing their legacy-portal position outside this route group. */
+.document-route-shell {
+  --doc-shell-bottom-inset: max(
+    64px,
+    calc(52px + env(safe-area-inset-bottom))
+  );
+  --doc-shell-floating-bottom: calc(var(--doc-shell-bottom-inset) + 1.5rem);
+}
+
+@media (min-width: 1180px) {
+  .document-route-shell {
+    --doc-shell-bottom-inset: 60px;
+  }
 }
 
 /* The Document motion (spec v1.1 §10): vertical settle only — paper never
@@ -221,8 +251,8 @@
 }
 
 /* The Scored Ink (I107) — DocumentAction grammar. Proof Sheet No 001 Proof VI.
-   Interaction-triggered only (R15); no shadows (D4); the 44px target lives on
-   the .da-hit halo.
+   Interaction-triggered only (R15); no shadows (D4); .da-act owns the honest
+   44px target while .da-hit remains its invisible contract witness.
 
    A proofreader never boxes a word — they rule under it, and the rule is the
    instruction. One score marks the word for attention; two press harder. So
@@ -238,29 +268,31 @@
 .da-act {
   position: relative;
   isolation: isolate;
+  min-width: 44px;
+  min-height: 44px;
   border: 0;
   background: none;
   cursor: pointer;
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
   transition:
     transform var(--press-out) var(--ease-editorial),
     color 150ms var(--ease-editorial);
 }
 
-/* ── the target · the halo Fitts wants, and nothing the eye gets ─────────── */
+/* ── the target witness · the parent is the real 44px interactive box ───── */
 .da-hit {
   position: absolute;
-  left: 50%;
-  top: 50%;
-  width: max(100%, 44px);
-  height: max(100%, 44px);
-  transform: translate(-50%, -50%);
+  inset: 0;
   pointer-events: none;
 }
 
 /* ── the ink · floor of this control's own stacking context ──────────────── */
 .da-pool {
   position: absolute;
-  inset: 0;
+  /* Keep the visible ink close to the word while the parent owns an honest
+     44px target. The action remains a scored line, never a filled button. */
+  inset: 8px 2px;
   z-index: 0;
   border-radius: 2px;
   pointer-events: none;
@@ -273,7 +305,7 @@
   position: relative;
   z-index: 1;
   display: inline-block;
-  line-height: 11px;
+  line-height: 12px;
 }
 .da-label::before,
 .da-label::after {
@@ -301,10 +333,10 @@
 .da-trailing {
   position: relative;
   z-index: 1;
-  /* the same 11px box the word keeps, so a glyph never lifts the control taller
+  /* the same 12px box the word keeps, so a glyph never lifts the control taller
      than its unmarked neighbours and the scores stay on one line across a row */
-  line-height: 11px;
-  color: var(--color-aged-oak);
+  line-height: 12px;
+  color: var(--color-quiet-ink);
   transition:
     color 120ms linear 60ms,
     transform 150ms var(--ease-editorial);
@@ -348,11 +380,11 @@
 /* ── TERTIARY · unscored until asked, and never inked at all ──────────────
    it carries no .da-pool in the markup; a whisper does not flood. */
 .da-tertiary {
-  color: var(--color-aged-oak);
+  color: var(--color-quiet-ink);
 }
 .da-tertiary .da-label::before {
   height: 1px;
-  background-color: var(--color-aged-oak);
+  background-color: var(--color-quiet-ink);
   transform: scaleX(0);
   transition:
     transform 300ms var(--ease-editorial),
@@ -465,14 +497,15 @@
      opacity:0 does not exempt it. */
   content: '\2038' / '';
   position: absolute;
-  left: -0.9em;
-  top: 2px;
+  left: 1px;
+  top: 50%;
   z-index: 2;
   font-size: 14px;
   line-height: 1;
-  color: var(--color-clay);
+  color: var(--color-quiet-ink);
   opacity: 0;
   pointer-events: none;
+  transform: translateY(-50%);
   transition: opacity 140ms linear;
 }
 .da-act:focus-visible::before {
@@ -610,6 +643,30 @@
 
 /* ===== Portal Utility Classes ===== */
 @layer components {
+  /* Quiet Work type roles. Serif still names the place; sans carries the
+     conversation; mono is reserved for state, time, and provenance. */
+  .doc-type-meta {
+    color: var(--color-quiet-ink);
+    font-family: var(--font-meta);
+    font-size: max(var(--type-metadata-min), 0.667rem);
+    line-height: 1.5;
+    letter-spacing: 0.06em;
+  }
+
+  .doc-type-body {
+    color: var(--text-body);
+    font-family: var(--font-body);
+    font-size: max(var(--type-body-min), 0.875rem);
+    line-height: 1.65;
+  }
+
+  .doc-type-control {
+    color: var(--text-primary);
+    font-family: var(--font-body);
+    font-size: max(var(--type-control-min), 0.889rem);
+    line-height: 1.4;
+  }
+
   /* Divider patterns */
   .divider {
     border-bottom: 1px solid var(--border-default);
@@ -713,16 +770,30 @@
 
   /* Focus visible styles */
   *:focus-visible {
-    @apply outline-none ring-2 ring-ring ring-offset-2 ring-offset-background;
+    outline: 2px solid var(--color-quiet-ink);
+    outline-offset: 3px;
   }
 
-  /* Smooth transitions */
+  /* Quiet transitions: only properties that communicate state are animated. */
   button,
   a,
   input,
   textarea,
   select {
-    @apply transition-all duration-200 ease-in-out;
+    transition-duration: var(--duration-fast);
+    transition-property:
+      color, background-color, border-color, opacity, transform;
+    transition-timing-function: var(--ease-default);
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    button,
+    a,
+    input,
+    textarea,
+    select {
+      transition-duration: 0ms;
+    }
   }
 
   /* Custom scrollbar styles */
@@ -1006,6 +1077,49 @@
       transform: none !important;
       clip-path: none !important;
     }
+  }
+}
+
+/* The laid sheet owns the safe-area geometry so every caller gets the same
+   calm margin. `100dvh` keeps the paper inside the visible mobile viewport. */
+.doc-sheet-layer {
+  --doc-sheet-inset-top: max(1rem, env(safe-area-inset-top));
+  --doc-sheet-inset-right: max(1rem, env(safe-area-inset-right));
+  --doc-sheet-inset-bottom: max(1rem, env(safe-area-inset-bottom));
+  --doc-sheet-inset-left: max(1rem, env(safe-area-inset-left));
+  padding: var(--doc-sheet-inset-top) var(--doc-sheet-inset-right)
+    var(--doc-sheet-inset-bottom) var(--doc-sheet-inset-left);
+}
+
+.doc-sheet-panel {
+  max-height: calc(
+    100dvh - var(--doc-sheet-inset-top) - var(--doc-sheet-inset-bottom)
+  );
+  overscroll-behavior: contain;
+  scrollbar-gutter: stable;
+  animation: doc-fade 200ms var(--ease-editorial) both;
+}
+
+@supports not (height: 100dvh) {
+  .doc-sheet-panel {
+    max-height: calc(
+      100vh - var(--doc-sheet-inset-top) - var(--doc-sheet-inset-bottom)
+    );
+  }
+}
+
+@media (min-width: 640px) {
+  .doc-sheet-layer {
+    --doc-sheet-inset-top: max(3rem, env(safe-area-inset-top));
+    --doc-sheet-inset-right: max(3rem, env(safe-area-inset-right));
+    --doc-sheet-inset-bottom: max(3rem, env(safe-area-inset-bottom));
+    --doc-sheet-inset-left: max(3rem, env(safe-area-inset-left));
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .doc-sheet-panel {
+    animation: none;
   }
 }
 
