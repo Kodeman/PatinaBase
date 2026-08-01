@@ -957,6 +957,7 @@ export {
   useCreateScopeChangeRequest,
   useSendScopeChangeRequest,
   useApproveScopeChange,
+  useAcceptClientScopeChangeRequest,
   useDeclineScopeChange,
   useApplyScopeChange,
   useCreateClientScopeChangeRequest,

@@ -21308,6 +21308,10 @@ export type Database = {
           isSetofReturn: false
         }
       }
+      _scope_change_requester_can_author: {
+        Args: { p_actor: string; p_owner: string }
+        Returns: boolean
+      }
       _send_proposal_with_dispatch: {
         Args: {
           p_cc_email?: string
@@ -21467,6 +21471,10 @@ export type Database = {
         Args: { p_dispatch_id: string }
         Returns: undefined
       }
+      accept_client_scope_change_request: {
+        Args: { p_project_id: string; p_request_id: string }
+        Returns: Json
+      }
       accept_design_request: { Args: { p_lead_id: string }; Returns: Json }
       accept_workspace_invitation: {
         Args: { p_token: string }
@@ -21574,6 +21582,15 @@ export type Database = {
           p_diagnostics?: Json
           p_theta: number[]
           p_watermark: string
+        }
+        Returns: Json
+      }
+      approve_scope_change_request: {
+        Args: {
+          p_approved_by_name: string
+          p_approved_ip?: string
+          p_project_id: string
+          p_request_id: string
         }
         Returns: Json
       }
@@ -21732,6 +21749,10 @@ export type Database = {
           isOneToOne: true
           isSetofReturn: false
         }
+      }
+      cancel_scope_change_request: {
+        Args: { p_project_id: string; p_request_id: string }
+        Returns: Json
       }
       ceremony_complete: {
         Args: {
@@ -21961,7 +21982,12 @@ export type Database = {
         Returns: string[]
       }
       create_client_scope_change_request: {
-        Args: { p_description: string; p_project_id: string; p_title: string }
+        Args: {
+          p_description: string
+          p_idempotency_key: string
+          p_project_id: string
+          p_title: string
+        }
         Returns: Json
       }
       create_direct_order: {
@@ -22140,6 +22166,14 @@ export type Database = {
       }
       decline_proposal: {
         Args: { p_proposal_id: string; p_reason?: string }
+        Returns: Json
+      }
+      decline_scope_change_request: {
+        Args: {
+          p_decline_reason?: string
+          p_project_id: string
+          p_request_id: string
+        }
         Returns: Json
       }
       decline_workspace_invitation: {
@@ -23801,6 +23835,10 @@ export type Database = {
           isOneToOne: true
           isSetofReturn: false
         }
+      }
+      send_scope_change_request: {
+        Args: { p_project_id: string; p_request_id: string }
+        Returns: Json
       }
       send_weekly_pulse: {
         Args: { p_body: string; p_pulse_id: string; p_subject?: string }

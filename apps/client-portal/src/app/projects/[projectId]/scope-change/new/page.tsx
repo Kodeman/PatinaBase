@@ -1,6 +1,6 @@
 'use client';
 
-import { use, useState } from 'react';
+import { use, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { Loader2 } from 'lucide-react';
@@ -24,21 +24,49 @@ export default function ClientScopeChangeNewPage({
   const createRequest = useCreateClientScopeChangeRequest();
   const [submitted, setSubmitted] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const submissionIntentRef = useRef<{
+    fingerprint: string;
+    idempotencyKey: string;
+  } | null>(null);
+  const submittingRef = useRef(false);
 
   async function handleSubmit(data: ChangeRequestFormData) {
+    // React Query's isPending reaches the next render; the ref closes the
+    // same-tick double-click window before that render occurs.
+    if (submittingRef.current) return;
+    submittingRef.current = true;
+
+    const title = data.title.trim();
+    const description = data.description.trim();
+    const fingerprint = JSON.stringify([title, description]);
+    let submissionIntent = submissionIntentRef.current;
+    if (submissionIntent?.fingerprint !== fingerprint) {
+      submissionIntent = {
+        fingerprint,
+        idempotencyKey: globalThis.crypto.randomUUID(),
+      };
+      submissionIntentRef.current = submissionIntent;
+    }
+
     setError(null);
     try {
       await createRequest.mutateAsync({
         projectId,
-        title: data.title.trim(),
-        description: data.description.trim(),
+        idempotencyKey: submissionIntent.idempotencyKey,
+        title,
+        description,
       });
+      // A committed RPC receipt is the only point where this intent key can be
+      // discarded. Network/unknown failures keep it stable for a safe retry.
+      submissionIntentRef.current = null;
       setSubmitted(true);
       setTimeout(() => {
         router.push(`/projects/${projectId}`);
       }, 2500);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Something went wrong. Please try again.');
+    } finally {
+      submittingRef.current = false;
     }
   }
 
@@ -73,10 +101,7 @@ export default function ClientScopeChangeNewPage({
     );
   }
 
-  if (
-    projectQuery.data.status === 'completed' ||
-    projectQuery.data.status === 'archived'
-  ) {
+  if (projectQuery.data.status === 'completed' || projectQuery.data.status === 'archived') {
     return (
       <div className="mx-auto max-w-2xl px-4 py-12 text-center">
         <p className="mb-2 font-mono text-[0.6rem] uppercase tracking-widest text-gray-400">
@@ -99,7 +124,11 @@ export default function ClientScopeChangeNewPage({
   if (submitted) {
     return (
       <div className="mx-auto max-w-2xl px-4 py-12">
-        <div className="rounded-lg border border-gray-200 bg-gray-50 p-8 text-center">
+        <div
+          className="rounded-lg border border-gray-200 bg-gray-50 p-8 text-center"
+          role="status"
+          aria-live="polite"
+        >
           <p className="mb-2 font-mono text-[0.6rem] uppercase tracking-widest text-gray-400">
             Request sent
           </p>
@@ -123,27 +152,39 @@ export default function ClientScopeChangeNewPage({
           Tell us what you&rsquo;d like to change
         </h1>
         <p className="font-body text-sm leading-relaxed text-gray-500">
-          Describe the change you have in mind. Your designer will review your request and follow
-          up with any budget or timeline impact.
+          Describe the change you have in mind. Your designer will review your request and follow up
+          with any budget or timeline impact.
         </p>
       </div>
 
       {error && (
-        <div className="mb-6 rounded-md border border-red-200 bg-red-50 px-4 py-3">
+        <div
+          className="mb-6 rounded-md border border-red-200 bg-red-50 px-4 py-3"
+          role="alert"
+          aria-live="assertive"
+        >
           <p className="font-body text-sm text-red-700">{error}</p>
         </div>
       )}
 
+      <p className="sr-only" role="status" aria-live="polite">
+        {createRequest.isPending ? 'Sending your change request…' : ''}
+      </p>
+
       <ChangeRequestForm
+        mode="basic"
+        isSubmitting={createRequest.isPending}
         onSubmit={handleSubmit}
         onCancel={() => router.push(`/projects/${projectId}`)}
       />
 
-      <p className="mt-4 text-xs text-gray-500">
-        <Link href={`/projects/${projectId}`} className="underline">
-          Cancel and return to your project
-        </Link>
-      </p>
+      {!createRequest.isPending && (
+        <p className="mt-4 text-xs text-gray-500">
+          <Link href={`/projects/${projectId}`} className="underline">
+            Cancel and return to your project
+          </Link>
+        </p>
+      )}
     </div>
   );
 }

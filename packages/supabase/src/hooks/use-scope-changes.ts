@@ -142,24 +142,13 @@ export function useSendScopeChangeRequest(options?: { errorSurface?: 'inline' })
   return useMutation({
     // R83 — see useCreateScopeChangeRequest.
     meta: options?.errorSurface ? { errorSurface: options.errorSurface } : undefined,
-    mutationFn: async ({
-      requestId,
-      projectId,
-    }: {
-      requestId: string;
-      projectId: string;
-    }) => {
+    mutationFn: async ({ requestId, projectId }: { requestId: string; projectId: string }) => {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const supabase = getSupabase() as any;
-      const { data, error } = await supabase
-        .from('scope_change_requests')
-        .update({
-          status: 'sent',
-          sent_at: new Date().toISOString(),
-        })
-        .eq('id', requestId)
-        .select()
-        .single();
+      const { data, error } = await supabase.rpc('send_scope_change_request', {
+        p_request_id: requestId,
+        p_project_id: projectId,
+      });
       if (error) throw error;
       return data;
     },
@@ -189,25 +178,42 @@ export function useApproveScopeChange() {
     }) => {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const supabase = getSupabase() as any;
-      const { data: user } = await supabase.auth.getUser();
-
-      const { data, error } = await supabase
-        .from('scope_change_requests')
-        .update({
-          status: 'approved',
-          approved_at: new Date().toISOString(),
-          approved_by: user.user?.id || null,
-          approved_by_name: approvedByName,
-          approved_ip: approvedIp || null,
-        })
-        .eq('id', requestId)
-        .select()
-        .single();
+      const { data, error } = await supabase.rpc('approve_scope_change_request', {
+        p_request_id: requestId,
+        p_project_id: projectId,
+        p_approved_by_name: approvedByName,
+        p_approved_ip: approvedIp || null,
+      });
       if (error) throw error;
       return data;
     },
     onSuccess: (_, { projectId }) => {
       queryClient.invalidateQueries({ queryKey: ['scope-changes', projectId] });
+    },
+  });
+}
+
+/**
+ * A project designer/design-studio peer accepts a client-origin request.
+ * The approved artifact can then be fulfilled through useApplyScopeChange.
+ */
+export function useAcceptClientScopeChangeRequest(options?: { errorSurface?: 'inline' }) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    meta: options?.errorSurface ? { errorSurface: options.errorSurface } : undefined,
+    mutationFn: async ({ requestId, projectId }: { requestId: string; projectId: string }) => {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const supabase = getSupabase() as any;
+      const { data, error } = await supabase.rpc('accept_client_scope_change_request', {
+        p_request_id: requestId,
+        p_project_id: projectId,
+      });
+      if (error) throw error;
+      return data;
+    },
+    onSuccess: (_, { projectId, requestId }) => {
+      queryClient.invalidateQueries({ queryKey: ['scope-changes', projectId] });
+      queryClient.invalidateQueries({ queryKey: ['scope-change', requestId] });
     },
   });
 }
@@ -226,16 +232,11 @@ export function useDeclineScopeChange() {
     }) => {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const supabase = getSupabase() as any;
-      const { data, error } = await supabase
-        .from('scope_change_requests')
-        .update({
-          status: 'declined',
-          declined_at: new Date().toISOString(),
-          decline_reason: declineReason || null,
-        })
-        .eq('id', requestId)
-        .select()
-        .single();
+      const { data, error } = await supabase.rpc('decline_scope_change_request', {
+        p_request_id: requestId,
+        p_project_id: projectId,
+        p_decline_reason: declineReason || null,
+      });
       if (error) throw error;
       return data;
     },
@@ -259,10 +260,12 @@ export function useCreateClientScopeChangeRequest() {
   return useMutation({
     mutationFn: async ({
       projectId,
+      idempotencyKey,
       title,
       description,
     }: {
       projectId: string;
+      idempotencyKey: string;
       title: string;
       description: string;
     }) => {
@@ -270,6 +273,7 @@ export function useCreateClientScopeChangeRequest() {
       const supabase = getSupabase() as any;
       const { data, error } = await supabase.rpc('create_client_scope_change_request', {
         p_project_id: projectId,
+        p_idempotency_key: idempotencyKey,
         p_title: title,
         p_description: description,
       });
@@ -283,34 +287,30 @@ export function useCreateClientScopeChangeRequest() {
       return parseClientScopeChangeReceipt(data);
     },
     onSuccess: (_, vars) => {
-      queryClient.invalidateQueries({ queryKey: ['scope-changes', vars.projectId] });
-      queryClient.invalidateQueries({ queryKey: ['project-activity-from-log', vars.projectId] });
+      queryClient.invalidateQueries({
+        queryKey: ['scope-changes', vars.projectId],
+      });
+      queryClient.invalidateQueries({
+        queryKey: ['project-activity-from-log', vars.projectId],
+      });
     },
   });
 }
 
 /**
- * Client cancels their own scope-change request while still in draft/sent/viewed state.
- * Backed by RLS policy at migration 00114.
+ * A requester cancels their own scope-change request while it is still open.
+ * 00395 proves the exact project relationship, requester, and source state.
  */
 export function useCancelClientScopeChangeRequest() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: async ({
-      requestId,
-      projectId,
-    }: {
-      requestId: string;
-      projectId: string;
-    }) => {
+    mutationFn: async ({ requestId, projectId }: { requestId: string; projectId: string }) => {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const supabase = getSupabase() as any;
-      const { data, error } = await supabase
-        .from('scope_change_requests')
-        .update({ status: 'cancelled' })
-        .eq('id', requestId)
-        .select()
-        .single();
+      const { data, error } = await supabase.rpc('cancel_scope_change_request', {
+        p_request_id: requestId,
+        p_project_id: projectId,
+      });
       if (error) throw error;
       return data;
     },
@@ -322,97 +322,33 @@ export function useCancelClientScopeChangeRequest() {
 }
 
 /**
- * Apply an approved scope change to the project.
- * Materializes new rooms and FFE items, updates budget/timeline.
+ * Atomically apply an approved scope change through the checked 00395 RPC.
+ * The database materializes rooms/items and updates budget/timeline exactly once.
  */
 export function useApplyScopeChange() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: async ({
-      requestId,
-      projectId,
-    }: {
-      requestId: string;
-      projectId: string;
-    }) => {
+    mutationFn: async ({ requestId, projectId }: { requestId: string; projectId: string }) => {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const supabase = getSupabase() as any;
-
-      // Fetch the request
-      const { data: request, error: fetchErr } = await supabase
-        .from('scope_change_requests')
-        .select('*')
-        .eq('id', requestId)
-        .single();
-      if (fetchErr) throw fetchErr;
-      if (request.status !== 'approved') throw new Error('Scope change must be approved before applying');
-
-      // Add new rooms
-      const newRooms = request.new_rooms || [];
-      const roomIdMap: Record<string, string> = {};
-      for (const room of newRooms) {
-        const { data: newRoom } = await supabase
-          .from('project_rooms')
-          .insert({
-            project_id: projectId,
-            name: room.name,
-            room_type: room.roomType || room.room_type || null,
-            dimensions: room.dimensions || null,
-            budget_cents: room.budgetCents || room.budget_cents || 0,
-            ffe_categories: room.ffeCategories || room.ffe_categories || [],
-          })
-          .select()
-          .single();
-        if (newRoom) roomIdMap[room.name] = newRoom.id;
-      }
-
-      // Add new FFE items
-      const newItems = request.new_ffe_items || [];
-      for (const item of newItems) {
-        await supabase.from('project_ffe_items').insert({
-          project_id: projectId,
-          project_room_id: item.roomName ? roomIdMap[item.roomName] || null : null,
-          name: item.name,
-          ffe_category: item.ffeCategory || item.ffe_category || null,
-          item_type: item.itemType || item.item_type || 'tbd',
-          status: 'specified',
-          quantity: item.quantity || 1,
-          unit_price_cents: item.unitPriceCents || item.unit_price_cents || 0,
-          line_total_cents: (item.unitPriceCents || item.unit_price_cents || 0) * (item.quantity || 1),
-        });
-      }
-
-      // Update project budget
-      const { data: project } = await supabase
-        .from('projects')
-        .select('budget_cents, design_fee_cents')
-        .eq('id', projectId)
-        .single();
-
-      if (project) {
-        await supabase
-          .from('projects')
-          .update({
-            budget_cents: (project.budget_cents || 0) + (request.additional_ffe_budget_cents || 0) + (request.additional_design_fee_cents || 0),
-            design_fee_cents: (project.design_fee_cents || 0) + (request.additional_design_fee_cents || 0),
-          })
-          .eq('id', projectId);
-      }
-
-      // Mark as applied
-      await supabase
-        .from('scope_change_requests')
-        .update({ applied_at: new Date().toISOString() })
-        .eq('id', requestId);
+      const { error } = await supabase.rpc('apply_scope_change', {
+        p_request_id: requestId,
+      });
+      if (error) throw error;
 
       return { projectId, requestId };
     },
-    onSuccess: (_, { projectId }) => {
+    onSuccess: (_, { projectId, requestId }) => {
       queryClient.invalidateQueries({ queryKey: ['scope-changes', projectId] });
+      queryClient.invalidateQueries({ queryKey: ['scope-change', requestId] });
       queryClient.invalidateQueries({ queryKey: ['project-v2', projectId] });
       queryClient.invalidateQueries({ queryKey: ['project-rooms', projectId] });
-      queryClient.invalidateQueries({ queryKey: ['project-ffe-items', projectId] });
-      queryClient.invalidateQueries({ queryKey: ['project-financials', projectId] });
+      queryClient.invalidateQueries({
+        queryKey: ['project-ffe-items', projectId],
+      });
+      queryClient.invalidateQueries({
+        queryKey: ['project-financials', projectId],
+      });
     },
   });
 }

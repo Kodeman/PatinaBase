@@ -4946,13 +4946,109 @@ END $g$;
 
 -- 00395_create_client_scope_change_request.sql
 DO $g$ BEGIN
-  REVOKE ALL ON FUNCTION public.create_client_scope_change_request(uuid, text, text) FROM PUBLIC, anon;
+  REVOKE ALL ON FUNCTION public._scope_change_requester_can_author(uuid, uuid) FROM PUBLIC, anon, authenticated, service_role;
 EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
 END $g$;
 
 -- 00395_create_client_scope_change_request.sql
 DO $g$ BEGIN
-  GRANT EXECUTE ON FUNCTION public.create_client_scope_change_request(uuid, text, text) TO authenticated;
+  REVOKE ALL ON FUNCTION public.guard_scope_change_request_integrity() FROM PUBLIC, anon, authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00395_create_client_scope_change_request.sql
+DO $g$ BEGIN
+  GRANT SELECT, INSERT ON TABLE public.scope_change_requests TO authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00395_create_client_scope_change_request.sql
+DO $g$ BEGIN
+  REVOKE UPDATE, DELETE ON TABLE public.scope_change_requests FROM anon, authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00395_create_client_scope_change_request.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.create_client_scope_change_request(uuid, uuid, text, text) FROM PUBLIC, anon, authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00395_create_client_scope_change_request.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.create_client_scope_change_request(uuid, uuid, text, text) TO authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00395_create_client_scope_change_request.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.send_scope_change_request(uuid, uuid) FROM PUBLIC, anon, authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00395_create_client_scope_change_request.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.send_scope_change_request(uuid, uuid) TO authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00395_create_client_scope_change_request.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.approve_scope_change_request(uuid, uuid, text, text) FROM PUBLIC, anon, authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00395_create_client_scope_change_request.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.approve_scope_change_request(uuid, uuid, text, text) TO authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00395_create_client_scope_change_request.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.accept_client_scope_change_request(uuid, uuid) FROM PUBLIC, anon, authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00395_create_client_scope_change_request.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.accept_client_scope_change_request(uuid, uuid) TO authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00395_create_client_scope_change_request.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.decline_scope_change_request(uuid, uuid, text) FROM PUBLIC, anon, authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00395_create_client_scope_change_request.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.decline_scope_change_request(uuid, uuid, text) TO authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00395_create_client_scope_change_request.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.cancel_scope_change_request(uuid, uuid) FROM PUBLIC, anon, authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00395_create_client_scope_change_request.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.cancel_scope_change_request(uuid, uuid) TO authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00395_create_client_scope_change_request.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.apply_scope_change(uuid) FROM PUBLIC, anon, authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00395_create_client_scope_change_request.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.apply_scope_change(uuid) TO authenticated, service_role;
 EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
 END $g$;
 
