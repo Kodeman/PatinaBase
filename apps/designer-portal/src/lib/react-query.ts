@@ -19,6 +19,11 @@ import {
  */
 declare module '@tanstack/react-query' {
   interface Register {
+    queryMeta: {
+      /** 'silent' = supporting/background context; log, but do not toast. */
+      errorSurface?: 'silent';
+      [key: string]: unknown;
+    };
     mutationMeta: {
       /** 'inline' = the caller renders the failure inline (R83); no global toast. */
       errorSurface?: 'inline';
@@ -56,6 +61,12 @@ const queryCache = new QueryCache({
       // Auth-shaped but not a clear session-expiry (e.g. a 403 forbidden).
       // Leave it to the individual query's UI rather than bouncing the user.
       console.warn('Authentication error in query:', query.queryKey);
+      return;
+    }
+
+    // Supporting context queries can opt out of the global destructive toast.
+    // They remain logged above, and auth/session errors still take precedence.
+    if (query.meta?.errorSurface === 'silent') {
       return;
     }
 
