@@ -180,6 +180,50 @@ FOR EACH ROW EXECUTE FUNCTION pg_temp.reject_rollback_relationship();
 SET LOCAL ROLE authenticated;
 SELECT pg_temp.assume_begin_actor('d6000000-0000-4000-8000-000000000001');
 
+-- Arrival Ceremony is intentionally profile-bound: its threshold act creates
+-- a direct thread and recipient notifications. Captured leads remain viable by
+-- taking begin_discovery, and failed arrival eligibility leaves no stub/state.
+DO $$
+DECLARE
+  v_error text;
+BEGIN
+  BEGIN
+    PERFORM public.accept_design_request(
+      'd6200000-0000-4000-8000-000000000006'
+    );
+  EXCEPTION WHEN OTHERS THEN
+    v_error := SQLERRM;
+  END;
+  ASSERT v_error = 'arrival_requires_client_profile',
+    format('profileless arrival must fail explicitly, got %L', v_error);
+  ASSERT (SELECT status = 'new' AND accepted_at IS NULL
+          FROM public.leads
+          WHERE id = 'd6200000-0000-4000-8000-000000000006'),
+    'arrival eligibility failure must not mutate the lead';
+  ASSERT NOT EXISTS (
+    SELECT 1 FROM public.match_ceremonies
+    WHERE lead_id = 'd6200000-0000-4000-8000-000000000006'
+  ), 'arrival eligibility failure must not create a ceremony stub';
+
+  INSERT INTO public.designer_clients (
+    id, designer_id, client_id, source, lead_id, status
+  ) VALUES (
+    'd6300000-0000-4000-8000-000000000006',
+    'd6000000-0000-4000-8000-000000000001', NULL,
+    'design_request', 'd6200000-0000-4000-8000-000000000006', 'lead'
+  );
+  ASSERT (SELECT client_name = 'Contractor Boundary Lead'
+                 AND client_email = 'contractor-boundary@test.invalid'
+          FROM public.designer_clients
+          WHERE id = 'd6300000-0000-4000-8000-000000000006'),
+    'lead-scoped relationships must preserve captured contact identity';
+  ASSERT NOT has_function_privilege(
+    'authenticated',
+    'public._accept_design_request_profile_bound_core(uuid)', 'EXECUTE'
+  ), 'the pre-eligibility arrival core must remain private';
+END;
+$$;
+
 DO $$
 DECLARE
   v_result jsonb;

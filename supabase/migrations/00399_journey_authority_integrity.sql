@@ -682,6 +682,113 @@ COMMENT ON FUNCTION public.begin_discovery(uuid) IS
   'non-guest peer in the same active design_studio may act; contractor, '
   'manufacturer, inactive, and guest co-memberships confer no authority.';
 
+-- Arrival Ceremony requires a real recipient because its threshold act creates
+-- a direct thread and recipient-addressed notifications. Preserve the shipped
+-- implementation as a private core and put the eligibility check before it so
+-- a captured profileless lead takes begin_discovery instead of dead-ending.
+DO $$
+BEGIN
+  IF to_regprocedure(
+       'public._accept_design_request_profile_bound_core(uuid)'
+     ) IS NULL
+  THEN
+    ALTER FUNCTION public.accept_design_request(uuid)
+      RENAME TO _accept_design_request_profile_bound_core;
+  END IF;
+END;
+$$;
+
+REVOKE ALL ON FUNCTION public._accept_design_request_profile_bound_core(uuid)
+  FROM PUBLIC, anon, authenticated, service_role;
+
+CREATE OR REPLACE FUNCTION public.accept_design_request(p_lead_id uuid)
+RETURNS jsonb
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public, pg_temp
+AS $$
+DECLARE
+  v_actor uuid := auth.uid();
+  v_homeowner_id uuid;
+BEGIN
+  IF v_actor IS NULL THEN
+    RAISE EXCEPTION 'not_authenticated' USING DETAIL = 'auth.uid() is null';
+  END IF;
+  IF NOT EXISTS (
+    SELECT 1 FROM public.profiles
+    WHERE id = v_actor AND is_designer IS TRUE
+  ) THEN
+    RAISE EXCEPTION 'not_designer' USING DETAIL = v_actor::text;
+  END IF;
+
+  SELECT homeowner_id INTO v_homeowner_id
+  FROM public.leads
+  WHERE id = p_lead_id;
+  IF NOT FOUND THEN
+    RAISE EXCEPTION 'request_not_found' USING DETAIL = p_lead_id::text;
+  END IF;
+  IF v_homeowner_id IS NULL THEN
+    RAISE EXCEPTION 'arrival_requires_client_profile'
+      USING DETAIL = 'captured profileless leads must begin Discovery directly';
+  END IF;
+
+  RETURN public._accept_design_request_profile_bound_core(p_lead_id);
+END;
+$$;
+
+REVOKE ALL ON FUNCTION public.accept_design_request(uuid)
+  FROM PUBLIC, anon, service_role;
+GRANT EXECUTE ON FUNCTION public.accept_design_request(uuid)
+  TO authenticated;
+
+CREATE OR REPLACE FUNCTION public.hydrate_lead_relationship_contact()
+RETURNS trigger
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public, pg_temp
+AS $$
+DECLARE
+  v_contact_name text;
+  v_contact_email text;
+BEGIN
+  IF NEW.lead_id IS NOT NULL
+     AND (NEW.client_name IS NULL OR NEW.client_email IS NULL)
+  THEN
+    SELECT contact_name, contact_email
+    INTO v_contact_name, v_contact_email
+    FROM public.leads
+    WHERE id = NEW.lead_id
+      AND designer_id IS NOT DISTINCT FROM NEW.designer_id;
+
+    NEW.client_name := COALESCE(NEW.client_name, v_contact_name);
+    NEW.client_email := COALESCE(NEW.client_email, v_contact_email);
+  END IF;
+  RETURN NEW;
+END;
+$$;
+
+REVOKE ALL ON FUNCTION public.hydrate_lead_relationship_contact()
+  FROM PUBLIC, anon, authenticated, service_role;
+
+DROP TRIGGER IF EXISTS hydrate_lead_relationship_contact_trg
+  ON public.designer_clients;
+CREATE TRIGGER hydrate_lead_relationship_contact_trg
+BEFORE INSERT OR UPDATE OF lead_id, designer_id, client_name, client_email
+ON public.designer_clients
+FOR EACH ROW EXECUTE FUNCTION public.hydrate_lead_relationship_contact();
+
+UPDATE public.designer_clients AS relationship
+SET client_name = COALESCE(relationship.client_name, lead.contact_name),
+    client_email = COALESCE(relationship.client_email, lead.contact_email),
+    updated_at = now()
+FROM public.leads AS lead
+WHERE lead.id = relationship.lead_id
+  AND lead.designer_id IS NOT DISTINCT FROM relationship.designer_id
+  AND (
+    (relationship.client_name IS NULL AND lead.contact_name IS NOT NULL)
+    OR (relationship.client_email IS NULL AND lead.contact_email IS NOT NULL)
+  );
+
 -- ── Proposal feedback + nudge metadata table authority ─────────────────────
 
 CREATE OR REPLACE FUNCTION public.guard_proposal_feedback_nudge_authority()

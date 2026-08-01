@@ -65,9 +65,12 @@ function addMonths(months: number): string {
 export function TriageBar({
   leadId,
   variant = 'desk',
+  arrivalEligible = false,
 }: {
   leadId: string;
   variant?: Variant;
+  /** Arrival Ceremony needs a registered homeowner for its thread + notices. */
+  arrivalEligible?: boolean;
 }) {
   const qc = useQueryClient();
   const router = useRouter();
@@ -109,7 +112,7 @@ export function TriageBar({
   };
 
   const onAccept = () => {
-    if (!arcLoading && arrivalArc) {
+    if (!arcLoading && arrivalArc && arrivalEligible) {
       acceptRequest.mutate(leadId, {
         onSuccess: () => {
           refreshDesk();
