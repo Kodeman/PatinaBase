@@ -44,6 +44,27 @@ function emptyFacetClient() {
   return { client: { from }, from };
 }
 
+function failedFacetClient() {
+  const failure = new Error('proposal items unavailable');
+  const from = jest.fn((table: string) => {
+    const response = {
+      data: table === 'proposal_change_order_terms' ? null : [],
+      error: table === 'proposal_items' ? failure : null,
+    };
+    const builder: Record<string, unknown> = {};
+    for (const method of ['select', 'eq', 'order']) {
+      builder[method] = jest.fn(() => builder);
+    }
+    builder.maybeSingle = jest.fn(() => Promise.resolve(response));
+    builder.then = (
+      resolve: (value: typeof response) => unknown,
+      reject: (reason: unknown) => unknown,
+    ) => Promise.resolve(response).then(resolve, reject);
+    return builder;
+  });
+  return { client: { from }, failure };
+}
+
 function FeedbackHarness() {
   const [releaseQuery, setReleaseQuery] = useState<(() => void) | null>(null);
   const [releaseMutation, setReleaseMutation] = useState<(() => void) | null>(null);
@@ -162,5 +183,22 @@ describe('drafting mutation feedback', () => {
         'mood boards',
       ],
     });
+  });
+
+  it('rejects a facet read error instead of fabricating an incomplete draft', async () => {
+    const queryClient = new QueryClient({
+      defaultOptions: { queries: { retry: false } },
+    });
+    const { client, failure } = failedFacetClient();
+    mockCreateBrowserClient.mockReturnValue(client);
+    const wrapper = ({ children }: { children: React.ReactNode }) => (
+      <QueryClientProvider client={queryClient}>{children}</QueryClientProvider>
+    );
+    const { result } = renderHook(() => useDraftingState('proposal-1'), { wrapper });
+
+    await waitFor(() => expect(result.current.isLoading).toBe(false));
+    expect(result.current.error).toBe(failure);
+
+    await expect(result.current.refresh()).rejects.toBe(failure);
   });
 });

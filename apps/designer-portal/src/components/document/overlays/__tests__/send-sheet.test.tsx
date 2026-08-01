@@ -293,6 +293,39 @@ describe('SendSheet canonical client-copy validation', () => {
     expect(mockSend).not.toHaveBeenCalled();
   });
 
+  it('fails closed when a canonical drafting facet cannot be read', () => {
+    mockUseProposalMirrorData.mockReturnValue(
+      mirror([
+        {
+          id: 'deposit',
+          label: 'Project deposit',
+          percentage: 100,
+          amount_cents: 1_320_000,
+        },
+      ]),
+    );
+    mockUseDraftingState.mockReturnValue({
+      gaps: [],
+      isLoading: false,
+      isFetching: false,
+      error: new Error('proposal items unavailable'),
+      refresh: mockRefreshDrafting,
+    });
+
+    render(<SendSheet proposalId="proposal-1" open onClose={jest.fn()} />);
+
+    expect(screen.getByRole('alert')).toHaveTextContent(
+      /proposal readiness could not be verified/i,
+    );
+    expect(
+      screen.getByRole('button', { name: 'Send proposal' }),
+    ).toBeDisabled();
+    expect(
+      screen.queryByRole('button', { name: /different address/i }),
+    ).not.toBeInTheDocument();
+    expect(mockSend).not.toHaveBeenCalled();
+  });
+
   it('resets incomplete acknowledgement when the missing-part fingerprint changes', async () => {
     mockUseProposalMirrorData.mockReturnValue(
       mirror([

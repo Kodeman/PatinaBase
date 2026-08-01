@@ -69,6 +69,9 @@ export interface DraftingState {
   /** Any canonical facet read currently in flight. Safe for button gating;
    * unlike mutation feedback, this is never announced as a user write. */
   isFetching: boolean;
+  /** Canonical facet reads fail closed; callers must not treat unavailable
+   * rows as an intentionally incomplete draft. */
+  error: Error | null;
   /** Reconcile every persisted facet, then derive completeness from that fresh
    * response so callers never have to inspect a stale render closure. */
   refresh: () => Promise<DraftingRefreshResult>;
@@ -105,16 +108,7 @@ function useFacetRead(proposalId: string, enabled: boolean) {
     staleTime: 0,
     queryFn: async () => {
       const supabase = createBrowserClient() as any;
-      const [
-        { data: rooms },
-        { data: items },
-        { data: palettes },
-        { data: boards },
-        { data: phases },
-        { data: exclusions },
-        { data: payments },
-        { data: coTerms },
-      ] = await Promise.all([
+      const results = await Promise.all([
         supabase.from('proposal_scope_rooms').select('id').eq('proposal_id', proposalId),
         supabase
           .from('proposal_items')
@@ -135,6 +129,20 @@ function useFacetRead(proposalId: string, enabled: boolean) {
           .eq('proposal_id', proposalId)
           .maybeSingle(),
       ]);
+
+      const failed = results.find((result: { error?: unknown }) => result.error);
+      if (failed?.error) throw failed.error;
+
+      const [
+        { data: rooms },
+        { data: items },
+        { data: palettes },
+        { data: boards },
+        { data: phases },
+        { data: exclusions },
+        { data: payments },
+        { data: coTerms },
+      ] = results;
 
       const palRows = (palettes ?? []) as any[];
       const swatches = palRows.reduce((n: number, p: { swatches?: unknown[] }) => n + (p.swatches?.length ?? 0), 0);
@@ -175,7 +183,7 @@ function useFacetRead(proposalId: string, enabled: boolean) {
 }
 
 export function useDraftingState(proposalId: string, enabled = true): DraftingState {
-  const { data: read, isLoading, isFetching, refetch } = useFacetRead(proposalId, enabled);
+  const { data: read, isLoading, isFetching, error, refetch } = useFacetRead(proposalId, enabled);
 
   const facets = read?.facets ?? EMPTY_FACETS;
   const fill = draftingFill(facets);
@@ -203,6 +211,7 @@ export function useDraftingState(proposalId: string, enabled = true): DraftingSt
     gaps,
     isLoading,
     isFetching,
+    error: error instanceof Error ? error : error ? new Error('Proposal readiness could not be verified') : null,
     refresh,
   };
 }

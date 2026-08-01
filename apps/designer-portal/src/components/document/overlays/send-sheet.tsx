@@ -114,11 +114,9 @@ export function SendSheet({
     (v) => v.id !== proposalId && v.status === 'accepted',
   );
 
-  const [recipientEmail, setRecipientEmail] = useState('');
   const [ccEmail, setCcEmail] = useState('');
   const [expiryDays, setExpiryDays] = useState('14');
   const [personalMessage, setPersonalMessage] = useState('');
-  const [showAltAddress, setShowAltAddress] = useState(false);
   const [sendError, setSendError] = useState<string | null>(null);
   const [linkError, setLinkError] = useState<string | null>(null);
   const [acknowledgedIncomplete, setAcknowledgedIncomplete] = useState(false);
@@ -187,14 +185,7 @@ export function SendSheet({
     !readiness?.requiresIncompleteAcknowledgement || acknowledgedIncomplete;
 
   const clientEmail: string | undefined = proposal?.client?.email ?? undefined;
-
-  // Pre-fill the recipient from the linked client's email once it loads, but
-  // only when the designer hasn't already typed an address.
-  useEffect(() => {
-    if (clientEmail) {
-      setRecipientEmail((prev) => (prev ? prev : clientEmail));
-    }
-  }, [clientEmail]);
+  const clientCopyError = clientPayload.error || draftingState.error;
 
   useEffect(() => {
     setAcknowledgedIncomplete(false);
@@ -202,12 +193,12 @@ export function SendSheet({
 
   const canSend = Boolean(
     proposal?.client_id &&
-      recipientEmail &&
+      clientEmail &&
       readiness &&
       reviewFingerprint &&
       effectiveClientData?.sendSnapshot &&
       !checkingClientCopy &&
-      !clientPayload.error &&
+      !clientCopyError &&
       !hasBlockers &&
       incompleteIsAcknowledged,
   );
@@ -442,9 +433,9 @@ export function SendSheet({
 
             {/* Recipient — the linked client */}
             <div className="flex flex-col gap-1.5">
-              <label className={labelCls} htmlFor="send-sheet-recipient">
+              <p className={labelCls}>
                 Recipient
-              </label>
+              </p>
               {proposal.client_id ? (
                 <div className="rounded-[4px] border border-[var(--color-pearl)] bg-white px-3 py-2 text-[13px]">
                   <span className="text-[var(--color-charcoal)]">
@@ -463,27 +454,10 @@ export function SendSheet({
                   Link a client above to set the recipient.
                 </p>
               )}
-              <DocumentAction
-                actionKey="toggle-alternate-recipient"
-                surfaceKey="open-document"
-                regionKey="send-proposal-sheet"
-                variant="tertiary"
-                onClick={() => setShowAltAddress((s) => !s)}
-                className="mt-0.5 self-start"
-              >
-                {showAltAddress
-                  ? 'Hide alternate address'
-                  : 'Send to a different address'}
-              </DocumentAction>
-              {showAltAddress && (
-                <input
-                  id="send-sheet-recipient"
-                  type="email"
-                  value={recipientEmail}
-                  onChange={(e) => setRecipientEmail(e.target.value)}
-                  placeholder="client@email.com"
-                  className={`${fieldCls} mt-1`}
-                />
+              {proposal.client_id && !clientEmail && (
+                <p role="alert" className="text-[12px] text-[var(--color-terracotta)]">
+                  Add an email to the linked client before sending.
+                </p>
               )}
             </div>
 
@@ -555,13 +529,13 @@ export function SendSheet({
                 </p>
               )}
 
-              {!checkingClientCopy && clientPayload.error && (
+              {!checkingClientCopy && clientCopyError && (
                 <p role="alert" className="mt-2 text-[12px] text-[var(--color-terracotta)]">
-                  The client preview could not be verified. Refresh it before sending.
+                  The client preview or proposal readiness could not be verified. Refresh before sending.
                 </p>
               )}
 
-              {!checkingClientCopy && !clientPayload.error && hasBlockers && (
+              {!checkingClientCopy && !clientCopyError && hasBlockers && (
                 <div role="alert" className="mt-2 text-[12px] text-[var(--color-terracotta)]">
                   <p className="font-semibold">Not safe to send yet</p>
                   <ul className="mt-1 list-disc space-y-1 pl-5">
@@ -573,7 +547,7 @@ export function SendSheet({
               )}
 
               {!checkingClientCopy &&
-                !clientPayload.error &&
+                !clientCopyError &&
                 !hasBlockers &&
                 readiness?.requiresIncompleteAcknowledgement && (
                   <div className="mt-2 text-[12px] text-[var(--color-mocha)]">
@@ -598,7 +572,7 @@ export function SendSheet({
                 )}
 
               {!checkingClientCopy &&
-                !clientPayload.error &&
+                !clientCopyError &&
                 !hasBlockers &&
                 !readiness?.requiresIncompleteAcknowledgement && (
                   <p role="status" className="mt-2 text-[12px] text-[var(--color-sage)]">
