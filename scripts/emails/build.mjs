@@ -35,7 +35,7 @@ const REWRITE_APPLIED = process.env.EMAILS_REWRITE_APPLIED === "1";
 // The current re-bake target. Once this migration has shipped, bump it to the
 // next free number (ls supabase/migrations | sort | tail -1) before re-running —
 // same rule as packages/email/scripts/render-db-templates.ts.
-const REBAKE_MIGRATION = "00383_harden_email_templates_outlook_m365.sql";
+const REBAKE_MIGRATION = "00405_harden_email_templates_outlook_m365.sql";
 
 // Footer/nav merge-tags every DB template inherits from brandDefaults().
 const BRAND_VARS = [
@@ -333,7 +333,7 @@ const arrivalExpr = ARRIVAL_REWRITES.reduce((inner, [from, to], i) => {
 const rebakeSql = `-- ═══════════════════════════════════════════════════════════════════════════
 -- ${REBAKE_MIGRATION.replace(/_.*/, "")} — Harden the remaining email_templates rows for Outlook/M365
 --
--- Companion to 00382 (which re-baked the 17 designer-onboarding drip rows from
+-- Companion to 00404 (which re-baked the 17 designer-onboarding drip rows from
 -- the fixed packages/email React templates). This one covers every OTHER live
 -- row: the ${ALL_BRANDED.length} branded slugs seeded by 00309/00311/00312 and the ${ARRIVAL_SLUGS.length} hand-authored
 -- "arrival" rows seeded by 00336.

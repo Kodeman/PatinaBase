@@ -1,7 +1,7 @@
 -- ═══════════════════════════════════════════════════════════════════════════
--- 00383 — Harden the remaining email_templates rows for Outlook/M365
+-- 00405 — Harden the remaining email_templates rows for Outlook/M365
 --
--- Companion to 00382 (which re-baked the 17 designer-onboarding drip rows from
+-- Companion to 00404 (which re-baked the 17 designer-onboarding drip rows from
 -- the fixed packages/email React templates). This one covers every OTHER live
 -- row: the 17 branded slugs seeded by 00309/00311/00312 and the 3 hand-authored
 -- "arrival" rows seeded by 00336.

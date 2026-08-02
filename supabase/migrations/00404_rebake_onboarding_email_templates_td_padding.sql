@@ -1,5 +1,5 @@
 -- ═══════════════════════════════════════════════════════════════════════════
--- 00382 — Re-bake designer-onboarding email templates: padding onto <td>
+-- 00404 — Re-bake designer-onboarding email templates: padding onto <td>
 -- (fixes voided section padding under border-collapse:collapse)
 --
 -- Refreshes the same 17 email_templates rows seeded by
