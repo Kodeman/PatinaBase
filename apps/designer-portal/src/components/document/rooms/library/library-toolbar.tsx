@@ -1,8 +1,10 @@
-'use client';
+"use client";
 
-import { useEffect, useRef, useState, type KeyboardEvent } from 'react';
-import type { LayerProductLayer } from '@patina/supabase';
-import { DocumentAction } from '../../document-action';
+import { useEffect, useRef, useState, type KeyboardEvent } from "react";
+import type { LayerProductLayer } from "@patina/supabase";
+import { DocumentAction } from "../../document-action";
+import { FilterPill } from "@/components/ui/controls";
+import type { LibraryCapabilityFilter } from "./library-configuration-summary";
 
 interface LayerCounts {
   personal: number;
@@ -15,14 +17,29 @@ const LENSES: Array<{
   label: string;
   countKey: keyof LayerCounts;
 }> = [
-  { layer: 'personal', label: 'Mine', countKey: 'personal' },
-  { layer: 'studio', label: 'Studio', countKey: 'studio' },
-  { layer: 'catalog', label: 'Patina', countKey: 'catalog' },
+  { layer: "personal", label: "Mine", countKey: "personal" },
+  { layer: "studio", label: "Studio", countKey: "studio" },
+  { layer: "catalog", label: "Patina", countKey: "catalog" },
+];
+
+const CAPABILITY_FILTERS: Array<{
+  value: LibraryCapabilityFilter;
+  label: string;
+}> = [
+  { value: "all", label: "All pieces" },
+  { value: "standard", label: "One spec" },
+  { value: "variant", label: "Variants" },
+  { value: "configured", label: "Options" },
+  { value: "modular", label: "Modular" },
+  { value: "custom", label: "Custom" },
 ];
 
 function ActiveStrata() {
   return (
-    <span aria-hidden className="inline-flex w-3 flex-col gap-[2px] text-[var(--color-clay)]">
+    <span
+      aria-hidden
+      className="inline-flex w-3 flex-col gap-[2px] text-[var(--color-clay)]"
+    >
       <i className="h-px w-3 bg-current" />
       <i className="h-px w-2 bg-current opacity-65" />
       <i className="h-px w-1 bg-current opacity-35" />
@@ -36,12 +53,16 @@ export function LibraryToolbar({
   onLayerChange,
   onCompose,
   onImport,
+  activeCapability = "all",
+  onCapabilityChange,
 }: {
   activeLayer: LayerProductLayer;
   counts?: LayerCounts | null;
   onLayerChange: (layer: LayerProductLayer) => void;
   onCompose: () => void;
   onImport: () => void;
+  activeCapability?: LibraryCapabilityFilter;
+  onCapabilityChange?: (capability: LibraryCapabilityFilter) => void;
 }) {
   const [addOpen, setAddOpen] = useState(false);
   const addRootRef = useRef<HTMLDivElement>(null);
@@ -51,42 +72,44 @@ export function LibraryToolbar({
   useEffect(() => {
     if (!addOpen) return;
 
-    const focusFrame = window.requestAnimationFrame(() => firstAddActionRef.current?.focus());
+    const focusFrame = window.requestAnimationFrame(() =>
+      firstAddActionRef.current?.focus(),
+    );
     const onPointerDown = (event: PointerEvent) => {
-      if (!addRootRef.current?.contains(event.target as Node)) setAddOpen(false);
+      if (!addRootRef.current?.contains(event.target as Node))
+        setAddOpen(false);
     };
     const onKeyDown = (event: globalThis.KeyboardEvent) => {
-      if (event.key !== 'Escape') return;
+      if (event.key !== "Escape") return;
       event.preventDefault();
       event.stopPropagation();
       setAddOpen(false);
       window.requestAnimationFrame(() => addTriggerRef.current?.focus());
     };
 
-    document.addEventListener('pointerdown', onPointerDown);
-    document.addEventListener('keydown', onKeyDown);
+    document.addEventListener("pointerdown", onPointerDown);
+    document.addEventListener("keydown", onKeyDown);
     return () => {
       window.cancelAnimationFrame(focusFrame);
-      document.removeEventListener('pointerdown', onPointerDown);
-      document.removeEventListener('keydown', onKeyDown);
+      document.removeEventListener("pointerdown", onPointerDown);
+      document.removeEventListener("keydown", onKeyDown);
     };
   }, [addOpen]);
 
   const moveLens = (event: KeyboardEvent<HTMLButtonElement>, index: number) => {
     let next = index;
-    if (event.key === 'ArrowRight') next = (index + 1) % LENSES.length;
-    else if (event.key === 'ArrowLeft') next = (index - 1 + LENSES.length) % LENSES.length;
-    else if (event.key === 'Home') next = 0;
-    else if (event.key === 'End') next = LENSES.length - 1;
+    if (event.key === "ArrowRight") next = (index + 1) % LENSES.length;
+    else if (event.key === "ArrowLeft")
+      next = (index - 1 + LENSES.length) % LENSES.length;
+    else if (event.key === "Home") next = 0;
+    else if (event.key === "End") next = LENSES.length - 1;
     else return;
 
     event.preventDefault();
     const tablist = event.currentTarget.parentElement;
     onLayerChange(LENSES[next].layer);
     window.requestAnimationFrame(() => {
-      const tabs = tablist?.querySelectorAll<HTMLButtonElement>(
-        '[role="tab"]',
-      );
+      const tabs = tablist?.querySelectorAll<HTMLButtonElement>('[role="tab"]');
       tabs?.[next]?.focus();
     });
   };
@@ -120,21 +143,23 @@ export function LibraryToolbar({
               role="tab"
               aria-selected={selected}
               aria-controls="library-shelf-panel"
-              aria-label={`${lens.label}${count == null ? '' : `, ${count} pieces`}`}
+              aria-label={`${lens.label}${count == null ? "" : `, ${count} pieces`}`}
               tabIndex={selected ? 0 : -1}
               leading={selected ? <ActiveStrata /> : undefined}
               data-library-lens={lens.layer}
               className={
                 selected
-                  ? 'font-medium text-[var(--color-charcoal)]'
-                  : 'text-[var(--text-body)]'
+                  ? "font-medium text-[var(--color-charcoal)]"
+                  : "text-[var(--text-body)]"
               }
               onClick={() => onLayerChange(lens.layer)}
               onKeyDown={(event) => moveLens(event, index)}
             >
               {lens.label}
               {count != null && (
-                <span className="ml-1 font-normal text-[var(--text-body)]">· {count}</span>
+                <span className="ml-1 font-normal text-[var(--text-body)]">
+                  · {count}
+                </span>
               )}
             </DocumentAction>
           );
@@ -150,7 +175,7 @@ export function LibraryToolbar({
           variant="secondary"
           aria-expanded={addOpen}
           aria-controls="library-add-options"
-          trailing={addOpen ? '↑' : '↓'}
+          trailing={addOpen ? "↑" : "↓"}
           data-library-add-trigger
           onClick={() => setAddOpen((value) => !value)}
         >
@@ -193,6 +218,25 @@ export function LibraryToolbar({
             </div>
           </div>
         )}
+      </div>
+
+      <div
+        role="group"
+        aria-label="Filter by configuration capability"
+        className="order-last flex w-full flex-wrap items-center gap-1.5 border-t border-[var(--doc-ink-border)] pt-2"
+      >
+        <span className="mr-1 font-mono text-[10px] uppercase tracking-[0.08em] text-[var(--color-quiet-ink)]">
+          Can be ordered as
+        </span>
+        {CAPABILITY_FILTERS.map((filter) => (
+          <FilterPill
+            key={filter.value}
+            active={activeCapability === filter.value}
+            onClick={() => onCapabilityChange?.(filter.value)}
+          >
+            {filter.label}
+          </FilterPill>
+        ))}
       </div>
     </div>
   );

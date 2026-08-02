@@ -1,4 +1,4 @@
-'use client';
+"use client";
 
 /**
  * LibraryCard — a piece on a shelf, in the document's paper grammar (R32/R39):
@@ -10,17 +10,22 @@
  * truthfully carries.
  */
 
-import { useState } from 'react';
-import Link from 'next/link';
+import { useState } from "react";
+import Link from "next/link";
 import {
   useStyleArchetypes,
   useAssignStyle,
   useProductStyles,
   useSubmitValidation,
   type LayerProductLayer,
-} from '@patina/supabase';
-import { StrataSweep } from '@/components/ui/strata-sweep';
-import { DocumentAction, DocumentActionRow } from '../../document-action';
+} from "@patina/supabase";
+import { StrataSweep } from "@/components/ui/strata-sweep";
+import { DocumentAction, DocumentActionRow } from "../../document-action";
+import {
+  capabilityLabels,
+  readLibraryConfigurationSummary,
+} from "./library-configuration-summary";
+import type { ConfigurationMode } from "../piece/piece-configuration-model";
 
 export interface LibraryItem {
   id: string;
@@ -30,6 +35,9 @@ export interface LibraryItem {
   source_url: string | null;
   category: string | null;
   layer: LayerProductLayer;
+  price_retail?: number | null;
+  configuration_mode?: ConfigurationMode | null;
+  configuration_summary?: unknown;
 }
 
 interface StyleArchetype {
@@ -39,9 +47,9 @@ interface StyleArchetype {
 }
 
 const SOURCE_HINT: Record<string, string> = {
-  chrome_extension: 'via the extension',
-  mobile_photo: 'from a photo',
-  url_paste: 'pasted',
+  chrome_extension: "via the extension",
+  mobile_photo: "from a photo",
+  url_paste: "pasted",
 };
 
 export function LibraryCard({
@@ -70,7 +78,9 @@ export function LibraryCard({
   const sub =
     item.brand ||
     (item.source_url ? hostOf(item.source_url) : null) ||
-    'unknown maker';
+    "unknown maker";
+  const configuration = readLibraryConfigurationSummary(item);
+  const configurationLabels = capabilityLabels(configuration);
 
   return (
     <article className="group relative overflow-hidden rounded-[8px] border border-[var(--doc-ink-border)] bg-white transition-colors duration-200 hover:border-[var(--color-clay)] motion-reduce:transition-none">
@@ -88,24 +98,30 @@ export function LibraryCard({
           />
         ) : (
           <span className="font-mono text-[12px] uppercase tracking-[0.1em] text-[var(--color-charcoal)]">
-            {item.category ?? 'piece'}
+            {item.category ?? "piece"}
           </span>
         )}
 
         {needsValidation ? (
           <span className="absolute left-2 top-2 inline-flex items-center gap-1.5 rounded-[3px] border border-[var(--color-pearl)] bg-[rgba(252,250,246,0.94)] px-1.5 py-0.5 font-mono text-[12px] font-semibold uppercase tracking-[0.06em] text-[var(--color-charcoal)]">
-            <i aria-hidden className="h-1.5 w-1.5 rounded-full bg-[var(--color-dusty-blue)]" />
+            <i
+              aria-hidden
+              className="h-1.5 w-1.5 rounded-full bg-[var(--color-dusty-blue)]"
+            />
             Needs a look
           </span>
         ) : (
           needsTeaching && (
             <span className="absolute left-2 top-2 inline-flex items-center gap-1.5 rounded-[3px] border border-[var(--color-pearl)] bg-[rgba(252,250,246,0.94)] px-1.5 py-0.5 font-mono text-[12px] font-semibold uppercase tracking-[0.06em] text-[var(--color-charcoal)]">
-              <i aria-hidden className="h-1.5 w-1.5 rounded-full bg-[#d2ad2f]" />
+              <i
+                aria-hidden
+                className="h-1.5 w-1.5 rounded-full bg-[#d2ad2f]"
+              />
               Needs teaching
             </span>
           )
         )}
-        {item.layer === 'catalog' && (
+        {item.layer === "catalog" && (
           <span className="absolute right-2 top-2 inline-flex items-center gap-1 rounded-[3px] border border-[rgba(196,165,123,0.5)] bg-[rgba(252,250,246,0.92)] px-1.5 py-0.5 font-mono text-[12px] font-semibold uppercase tracking-[0.06em] text-[var(--color-charcoal)]">
             <span aria-hidden className="inline-flex flex-col gap-[1px]">
               <i className="block h-px w-2 bg-[var(--color-clay)]" />
@@ -128,6 +144,20 @@ export function LibraryCard({
           {sub}
         </div>
 
+        <ul
+          aria-label="Configuration capabilities"
+          className="mt-2 flex flex-wrap gap-1"
+        >
+          {configurationLabels.map((label) => (
+            <li
+              key={label}
+              className="rounded-[3px] border border-[var(--doc-ink-border)] bg-[var(--doc-sheet-2)] px-1.5 py-0.5 font-mono text-[10px] uppercase tracking-[0.04em] text-[var(--color-charcoal)]"
+            >
+              {label}
+            </li>
+          ))}
+        </ul>
+
         <div className="mt-2.5 flex items-center justify-between gap-2">
           <span className="font-mono text-[12px] uppercase tracking-[0.06em] text-[var(--color-charcoal)]">
             {LAYER_FOOT[item.layer]}
@@ -138,7 +168,7 @@ export function LibraryCard({
                 actionKey="open-piece-teaching"
                 onClick={() => setOpen((v) => !v)}
               >
-                {open ? 'Close' : needsValidation ? 'Validate →' : 'Teach →'}
+                {open ? "Close" : needsValidation ? "Validate →" : "Teach →"}
               </CardLink>
             )}
             {onPromote && (
@@ -182,9 +212,9 @@ export function LibraryCard({
 }
 
 const LAYER_FOOT: Record<LayerProductLayer, string> = {
-  personal: 'My Library',
-  studio: 'Studio',
-  catalog: 'Patina Catalog',
+  personal: "My Library",
+  studio: "Studio",
+  catalog: "Patina Catalog",
 };
 
 function CardLink({
@@ -205,7 +235,7 @@ function CardLink({
       regionKey="library-card"
       variant="secondary"
       onClick={onClick}
-      className={subtle ? 'text-[var(--text-body)]' : undefined}
+      className={subtle ? "text-[var(--text-body)]" : undefined}
     >
       {children}
     </DocumentAction>
@@ -259,12 +289,12 @@ function InlineQuickTags({
               onClick={() => setPicked((p) => (p === s.id ? null : s.id))}
               className={`inline-flex min-h-11 min-w-11 items-center justify-center px-2.5 py-1 text-[12px] transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-clay)] motion-reduce:transition-none ${
                 picked === s.id
-                  ? 'text-[var(--color-charcoal)]'
-                  : 'text-[var(--text-body)] hover:text-[var(--color-charcoal)]'
+                  ? "text-[var(--color-charcoal)]"
+                  : "text-[var(--text-body)] hover:text-[var(--color-charcoal)]"
               }`}
             >
               <span
-                className={`da-score-hover ${picked === s.id ? 'da-score-on' : ''}`}
+                className={`da-score-hover ${picked === s.id ? "da-score-on" : ""}`}
               >
                 {s.name}
               </span>
@@ -314,8 +344,8 @@ function InlineValidate({
   onDeep: () => void;
 }) {
   const { data: styleRows, isLoading } = useProductStyles(productId);
-  const submit = useSubmitValidation({ errorSurface: 'inline' });
-  const [done, setDone] = useState<null | 'confirm' | 'flag'>(null);
+  const submit = useSubmitValidation({ errorSurface: "inline" });
+  const [done, setDone] = useState<null | "confirm" | "flag">(null);
   const [error, setError] = useState<string | null>(null);
 
   const read = (
@@ -328,14 +358,14 @@ function InlineValidate({
     .filter((r): r is { name: string; primary: boolean } => !!r.name)
     .sort((a, b) => Number(b.primary) - Number(a.primary));
 
-  const vote = async (v: 'confirm' | 'flag') => {
+  const vote = async (v: "confirm" | "flag") => {
     setError(null);
     try {
       await submit.mutateAsync({ productId, vote: v });
       setDone(v);
     } catch (e) {
       setError(
-        e instanceof Error ? e.message : 'Could not record your judgment.',
+        e instanceof Error ? e.message : "Could not record your judgment.",
       );
     }
   };
@@ -355,12 +385,12 @@ function InlineValidate({
               key={r.name}
               className={`rounded-[14px] border px-2.5 py-1 text-[12px] ${
                 r.primary
-                  ? 'border-[var(--color-dusty-blue)] text-[var(--color-charcoal)]'
-                  : 'border-[var(--color-pearl)] text-[var(--text-body)]'
+                  ? "border-[var(--color-dusty-blue)] text-[var(--color-charcoal)]"
+                  : "border-[var(--color-pearl)] text-[var(--text-body)]"
               }`}
             >
               {r.name}
-              {r.primary ? ' · primary' : ''}
+              {r.primary ? " · primary" : ""}
             </span>
           ))}
         </div>
@@ -373,9 +403,9 @@ function InlineValidate({
 
       {done ? (
         <p className="mt-3 text-[14px] italic text-[var(--color-charcoal)]">
-          {done === 'confirm'
-            ? 'Recorded — thank you for weighing in.'
-            : 'Flagged for another eye.'}
+          {done === "confirm"
+            ? "Recorded — thank you for weighing in."
+            : "Flagged for another eye."}
         </p>
       ) : (
         <DocumentActionRow
@@ -387,10 +417,10 @@ function InlineValidate({
           <DocumentAction
             actionKey="confirm-piece-read"
             variant="primary"
-            loading={submit.isPending && submit.variables?.vote === 'confirm'}
+            loading={submit.isPending && submit.variables?.vote === "confirm"}
             disabled={submit.isPending}
             loadingLabel="Recording…"
-            onClick={() => void vote('confirm')}
+            onClick={() => void vote("confirm")}
           >
             Agree
           </DocumentAction>
@@ -398,9 +428,9 @@ function InlineValidate({
             actionKey="flag-piece-read"
             variant="secondary"
             disabled={submit.isPending}
-            loading={submit.isPending && submit.variables?.vote === 'flag'}
+            loading={submit.isPending && submit.variables?.vote === "flag"}
             loadingLabel="Recording…"
-            onClick={() => void vote('flag')}
+            onClick={() => void vote("flag")}
           >
             Disagree
           </DocumentAction>
@@ -426,7 +456,7 @@ function InlineValidate({
 
 function hostOf(url: string): string | null {
   try {
-    return new URL(url).hostname.replace(/^www\./, '');
+    return new URL(url).hostname.replace(/^www\./, "");
   } catch {
     return null;
   }

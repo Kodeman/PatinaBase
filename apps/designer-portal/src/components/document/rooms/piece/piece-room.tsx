@@ -1,4 +1,4 @@
-'use client';
+"use client";
 
 /**
  * The Piece (R40 grammar, view + edit of one library item). You pull a piece off
@@ -11,22 +11,28 @@
  * Zero shadows (D4); the Strata Mark is the only progress device.
  */
 
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   useProduct,
   useUserWithRoles,
   useOrganizations,
   useCaptureProduct,
   useCaptureFromUrl,
-} from '@patina/supabase';
-import { buildRefreshDiff, type RefreshFieldChange } from '@patina/utils';
-import { usePieceField } from '@/hooks/use-piece-field';
-import { DocumentAction, DocumentActionGroup } from '../../document-action';
-import { useMobilePrimaryAction } from '../../mobile/mobile-shell';
-import { RoomShell } from '../room-shell';
-import { StrataMark } from '@/components/document/strata-mark';
-import { StrataSweep } from '@/components/ui/strata-sweep';
-import { PieceFacet } from './piece-facet';
+  useEvaluateProductConfiguration,
+  useProductConfigurationDefinition,
+  useSavedProductConfigurations,
+  useSaveProductConfiguration,
+  useUpsertProductConfigurationDefinition,
+} from "@patina/supabase";
+import type { ProductConfigurationMode } from "@patina/types";
+import { buildRefreshDiff, type RefreshFieldChange } from "@patina/utils";
+import { usePieceField } from "@/hooks/use-piece-field";
+import { DocumentAction, DocumentActionGroup } from "../../document-action";
+import { useMobilePrimaryAction } from "../../mobile/mobile-shell";
+import { RoomShell } from "../room-shell";
+import { StrataMark } from "@/components/document/strata-mark";
+import { StrataSweep } from "@/components/ui/strata-sweep";
+import { PieceFacet } from "./piece-facet";
 import {
   FacetText,
   FacetTextarea,
@@ -37,21 +43,41 @@ import {
   FacetDimensions,
   FacetVendorContact,
   FacetVendorPicker,
-} from './facet-field';
-import { PieceFolio } from './piece-folio';
-import { AddToProjectSheet } from './add-to-project-sheet';
-import { DeepAnalysisSheet } from '../library/deep-analysis-sheet';
-import { PromoteToStudioModal } from '@/components/products/promotion/promote-to-studio-modal';
-import { NominateToCatalogModal } from '@/components/products/nomination/nominate-to-catalog-modal';
+} from "./facet-field";
+import { PieceFolio } from "./piece-folio";
+import { AddToProjectSheet } from "./add-to-project-sheet";
+import {
+  configurationDefinitionToView,
+  configurationDraftToSaveInput,
+  configurationViewToUpsertInput,
+  evaluationToAuthoritative,
+  savedConfigurationToView,
+  selectionToEvaluationInput,
+} from "./piece-configuration-adapter";
+import {
+  PieceConfigurationWorkspace,
+  type AuthoritativeConfigurationResolution,
+  type SaveConfigurationDraft,
+} from "./piece-configuration-workspace";
+import type {
+  FlatPieceConfigurationSource,
+  DimensionValue,
+  PieceConfigurationDefinitionView,
+  PieceConfigurationSelectionView,
+} from "./piece-configuration-model";
+import { DeepAnalysisSheet } from "../library/deep-analysis-sheet";
+import { PromoteToStudioModal } from "@/components/products/promotion/promote-to-studio-modal";
+import { NominateToCatalogModal } from "@/components/products/nomination/nominate-to-catalog-modal";
 import {
   pieceSections,
   pieceFill,
   piecePct,
   pieceStateLabel,
   type PieceRow,
-} from '@/lib/document/piece-progress';
+} from "@/lib/document/piece-progress";
+import { useHydrated } from "@/hooks/use-hydrated";
 
-type Layer = 'personal' | 'studio' | 'catalog';
+type Layer = "personal" | "studio" | "catalog";
 
 interface PieceProduct extends PieceRow {
   id: string;
@@ -99,65 +125,66 @@ interface PieceProduct extends PieceRow {
   updated_at: string | null;
   published_at: string | null;
   embedding_updated_at: string | null;
+  configuration_mode?: ProductConfigurationMode | null;
   vendor?: { id: string; name: string } | null;
   retailer?: { id: string; name: string } | null;
   product_styles?: Array<{ style: { id: string; name: string } | null }> | null;
 }
 
 const LAYER_LABEL: Record<Layer, string> = {
-  personal: 'My Library',
-  studio: 'Studio Library',
-  catalog: 'Patina Catalog',
+  personal: "My Library",
+  studio: "Studio Library",
+  catalog: "Patina Catalog",
 };
 
 const CATEGORY_OPTIONS = [
-  'sofa',
-  'chair',
-  'table',
-  'bed',
-  'storage',
-  'lighting',
-  'decor',
-  'outdoor',
+  "sofa",
+  "chair",
+  "table",
+  "bed",
+  "storage",
+  "lighting",
+  "decor",
+  "outdoor",
 ].map((c) => ({ value: c, label: c[0].toUpperCase() + c.slice(1) }));
 
 const STATUS_OPTIONS = [
-  { value: 'draft', label: 'Draft' },
-  { value: 'in_review', label: 'In review' },
-  { value: 'published', label: 'Published' },
-  { value: 'deprecated', label: 'Deprecated' },
-  { value: 'archived', label: 'Archived' },
+  { value: "draft", label: "Draft" },
+  { value: "in_review", label: "In review" },
+  { value: "published", label: "Published" },
+  { value: "deprecated", label: "Deprecated" },
+  { value: "archived", label: "Archived" },
 ];
 
 const PAYMENT_OPTIONS = [
-  { value: 'fifty_fifty', label: '50 / 50' },
-  { value: 'thirty_seventy', label: '30 / 70' },
-  { value: 'full_upfront', label: 'Full upfront' },
-  { value: 'net_30', label: 'Net 30' },
-  { value: 'custom_milestones', label: 'Custom milestones' },
+  { value: "fifty_fifty", label: "50 / 50" },
+  { value: "thirty_seventy", label: "30 / 70" },
+  { value: "full_upfront", label: "Full upfront" },
+  { value: "net_30", label: "Net 30" },
+  { value: "custom_milestones", label: "Custom milestones" },
 ];
 
 type PieceFacetId =
-  | 'identity'
-  | 'piece'
-  | 'story'
-  | 'categorization'
-  | 'commerce'
-  | 'lifecycle'
-  | 'sourcing'
-  | 'seo'
-  | 'eye';
+  | "identity"
+  | "piece"
+  | "story"
+  | "categorization"
+  | "commerce"
+  | "lifecycle"
+  | "sourcing"
+  | "seo"
+  | "eye";
 
 const PIECE_FACET_ORDER: PieceFacetId[] = [
-  'identity',
-  'piece',
-  'story',
-  'categorization',
-  'commerce',
-  'lifecycle',
-  'sourcing',
-  'seo',
-  'eye',
+  "identity",
+  "piece",
+  "story",
+  "categorization",
+  "commerce",
+  "lifecycle",
+  "sourcing",
+  "seo",
+  "eye",
 ];
 
 function firstIncompletePieceFacet(
@@ -167,18 +194,41 @@ function firstIncompletePieceFacet(
   return (
     visibleFacets.find((id) => !completion[id]) ??
     visibleFacets[0] ??
-    'identity'
+    "identity"
   );
 }
 
 export function PieceRoom({ productId }: { productId: string }) {
+  const hydrated = useHydrated();
   const { data, isLoading, error, refetch } = useProduct(productId);
   const { user, isSuperAdmin } = useUserWithRoles();
   const { data: orgs } = useOrganizations();
   const capture = useCaptureProduct();
+  const configurationDefinition = useProductConfigurationDefinition(productId);
+  const savedConfigurations = useSavedProductConfigurations(productId);
+  const upsertConfigurationDefinition =
+    useUpsertProductConfigurationDefinition(productId);
+  const evaluateConfiguration = useEvaluateProductConfiguration();
+  const saveConfiguration = useSaveProductConfiguration();
 
   const p = data as PieceProduct | undefined;
-  const layer = (p?.layer ?? 'personal') as Layer;
+  const configurationPiece = useMemo(
+    () => pieceToConfigurationSource(p, productId),
+    [p, productId],
+  );
+  const configurationView = useMemo(
+    () =>
+      configurationDefinitionToView(
+        configurationDefinition.data,
+        configurationPiece,
+      ),
+    [configurationDefinition.data, configurationPiece],
+  );
+  const savedConfigurationViews = useMemo(
+    () => (savedConfigurations.data ?? []).map(savedConfigurationToView),
+    [savedConfigurations.data],
+  );
+  const layer = (p?.layer ?? "personal") as Layer;
 
   // Only non-guest memberships may write a studio row (matches the
   // products_studio_update RLS policy in 00152) — guests can read but not edit,
@@ -194,7 +244,7 @@ export function PieceRoom({ productId }: { productId: string }) {
           }>
         )
           .filter((o) =>
-            ['owner', 'admin', 'member'].includes(o.membership?.role ?? ''),
+            ["owner", "admin", "member"].includes(o.membership?.role ?? ""),
           )
           .map((o) => o.id ?? o.organization_id)
           .filter(Boolean) as string[],
@@ -207,33 +257,33 @@ export function PieceRoom({ productId }: { productId: string }) {
       organization_id?: string;
       type?: string;
     }>;
-    const studio = list.find((o) => o.type === 'design_studio') ?? list[0];
+    const studio = list.find((o) => o.type === "design_studio") ?? list[0];
     return studio?.id ?? studio?.organization_id ?? null;
   }, [orgs]);
 
   const canEdit = useMemo(() => {
     if (!p) return false;
     if (isSuperAdmin) return true;
-    if (p.layer === 'personal') return !!user && p.owner_user_id === user.id;
-    if (p.layer === 'studio')
+    if (p.layer === "personal") return !!user && p.owner_user_id === user.id;
+    if (p.layer === "studio")
       return !!p.studio_id && studioIds.has(p.studio_id);
     return false;
   }, [p, isSuperAdmin, user, studioIds]);
   const readOnly = !canEdit;
   const hasTeaching = (p?.product_styles?.length ?? 0) > 0;
   const loadedSections = p ? pieceSections(p, hasTeaching) : null;
-  const showSeo = layer === 'catalog' || isSuperAdmin;
-  const studioNeeds = layer === 'studio';
+  const showSeo = layer === "catalog" || isSuperAdmin;
+  const studioNeeds = layer === "studio";
   const visibleFacets: PieceFacetId[] = [
-    'identity',
-    'piece',
-    'story',
-    'categorization',
-    'commerce',
-    ...(canEdit ? (['lifecycle'] as const) : []),
-    'sourcing',
-    ...(showSeo ? (['seo'] as const) : []),
-    'eye',
+    "identity",
+    "piece",
+    "story",
+    "categorization",
+    "commerce",
+    ...(canEdit ? (["lifecycle"] as const) : []),
+    "sourcing",
+    ...(showSeo ? (["seo"] as const) : []),
+    "eye",
   ];
   const facetCompletion: Record<PieceFacetId, boolean> = {
     identity: loadedSections?.identity ?? false,
@@ -241,7 +291,7 @@ export function PieceRoom({ productId }: { productId: string }) {
     story: !!(p?.short_description || p?.description),
     categorization: !!p?.category,
     commerce: loadedSections?.commerce ?? false,
-    lifecycle: p?.status === 'published',
+    lifecycle: p?.status === "published",
     sourcing: !!(p?.vendor_id && p?.lead_time_weeks && p?.payment_terms),
     seo: !!p?.seo_title,
     eye: hasTeaching,
@@ -275,15 +325,89 @@ export function PieceRoom({ productId }: { productId: string }) {
   const [promoteOpen, setPromoteOpen] = useState(false);
   const [nominateOpen, setNominateOpen] = useState(false);
   const [addOpen, setAddOpen] = useState(false);
+  const [placementConfigurationId, setPlacementConfigurationId] = useState<
+    string | null
+  >(null);
+  const [authoritativeConfiguration, setAuthoritativeConfiguration] =
+    useState<AuthoritativeConfigurationResolution | null>(null);
   const [toast, setToast] = useState<string | null>(null);
+  const evaluationSequence = useRef(0);
+
+  const evaluateSelection = useCallback(
+    (selection: PieceConfigurationSelectionView) => {
+      const sequence = ++evaluationSequence.current;
+      void evaluateConfiguration
+        .mutateAsync(selectionToEvaluationInput(productId, selection))
+        .then((evaluation) => {
+          if (sequence !== evaluationSequence.current) return;
+          setAuthoritativeConfiguration(
+            evaluationToAuthoritative(evaluation, selection),
+          );
+        })
+        .catch(() => {
+          if (sequence !== evaluationSequence.current) return;
+          setAuthoritativeConfiguration(null);
+          setToast("Could not confirm the maker’s configuration rules.");
+        });
+    },
+    [evaluateConfiguration, productId],
+  );
+
+  const saveDefinition = useCallback(
+    async (definition: PieceConfigurationDefinitionView) => {
+      await upsertConfigurationDefinition.mutateAsync(
+        configurationViewToUpsertInput(
+          definition,
+          configurationDefinition.data,
+        ),
+      );
+      setAuthoritativeConfiguration(null);
+      setToast("Choices saved to this Library piece.");
+    },
+    [configurationDefinition.data, upsertConfigurationDefinition],
+  );
+
+  const saveConfiguredPiece = useCallback(
+    async (draft: SaveConfigurationDraft) => {
+      const result = await saveConfiguration.mutateAsync(
+        configurationDraftToSaveInput({
+          piece: configurationPiece,
+          definition: configurationView,
+          draft,
+        }),
+      );
+      setToast("Configuration saved with its current maker-rule result.");
+      return { id: result.configuration.id };
+    },
+    [configurationPiece, configurationView, saveConfiguration],
+  );
+
+  const openPlacement = useCallback((configurationId: string | null) => {
+    setPlacementConfigurationId(configurationId);
+    setAddOpen(true);
+  }, []);
+
+  const openPrimaryPlacement = useCallback(() => {
+    if (configurationView.mode === "standard") {
+      openPlacement(null);
+      return;
+    }
+    document
+      .getElementById("piece-configuration")
+      ?.scrollIntoView({ behavior: "smooth", block: "start" });
+  }, [configurationView.mode, openPlacement]);
+
   useMobilePrimaryAction(
     p
       ? {
-          actionKey: 'add-piece-to-project',
-          surfaceKey: 'piece',
-          regionKey: 'piece-head',
-          label: 'Add to a project',
-          target: { kind: 'press', onPress: () => setAddOpen(true) },
+          actionKey: "add-piece-to-project",
+          surfaceKey: "piece",
+          regionKey: "piece-head",
+          label:
+            configurationView.mode === "standard"
+              ? "Add to a project"
+              : "Configure for a project",
+          target: { kind: "press", onPress: openPrimaryPlacement },
         }
       : null,
   );
@@ -294,7 +418,7 @@ export function PieceRoom({ productId }: { productId: string }) {
   }, [toast]);
 
   // ── Loading / not found ───────────────────────────────────────────────────
-  if (isLoading) {
+  if (!hydrated || isLoading) {
     return (
       <RoomShell title="A piece" backTo="/library" backLabel="the Library">
         <div className="flex min-h-[40vh] items-center justify-center">
@@ -342,16 +466,16 @@ export function PieceRoom({ productId }: { productId: string }) {
 
   const retail =
     p.price_retail != null
-      ? (p.price_retail / 100).toLocaleString('en-US', {
-          style: 'currency',
-          currency: 'USD',
+      ? (p.price_retail / 100).toLocaleString("en-US", {
+          style: "currency",
+          currency: "USD",
         })
       : null;
   const trade =
     p.price_trade != null
-      ? (p.price_trade / 100).toLocaleString('en-US', {
-          style: 'currency',
-          currency: 'USD',
+      ? (p.price_trade / 100).toLocaleString("en-US", {
+          style: "currency",
+          currency: "USD",
         })
       : null;
 
@@ -361,7 +485,7 @@ export function PieceRoom({ productId }: { productId: string }) {
 
   const saveToMyLibrary = async () => {
     if (!user) {
-      setToast('Sign in to save to your library.');
+      setToast("Sign in to save to your library.");
       return;
     }
     try {
@@ -374,19 +498,19 @@ export function PieceRoom({ productId }: { productId: string }) {
         description: p.description ?? undefined,
         detectedVendorName: p.vendor?.name ?? p.brand ?? undefined,
         ownerUserId: user.id,
-        captureSource: 'manual',
+        captureSource: "manual",
       });
       setToast(
-        'Saved to My Library — a copy is on your shelf to edit and teach.',
+        "Saved to My Library — a copy is on your shelf to edit and teach.",
       );
     } catch {
-      setToast('Could not save to your library just now.');
+      setToast("Could not save to your library just now.");
     }
   };
 
   return (
     <RoomShell
-      title={p.name || 'A piece'}
+      title={p.name || "A piece"}
       count={`${LAYER_LABEL[layer]} · ${pct}%`}
       backTo="/library"
       backLabel="the Library"
@@ -399,10 +523,10 @@ export function PieceRoom({ productId }: { productId: string }) {
           <div className="min-w-0">
             <div className="flex flex-wrap items-center gap-2">
               <Chip>{LAYER_LABEL[layer]}</Chip>
-              <Chip tone={p.status === 'published' ? 'sage' : 'oak'}>
+              <Chip tone={p.status === "published" ? "sage" : "oak"}>
                 {labelStatus(p.status)}
               </Chip>
-              {readOnly && layer === 'catalog' && (
+              {readOnly && layer === "catalog" && (
                 <Chip tone="oak">read only</Chip>
               )}
             </div>
@@ -417,7 +541,7 @@ export function PieceRoom({ productId }: { productId: string }) {
             )}
             {(p.category || p.subcategory) && (
               <p className="doc-type-meta mt-1 uppercase tracking-[0.12em]">
-                {[p.category, p.subcategory].filter(Boolean).join(' · ')}
+                {[p.category, p.subcategory].filter(Boolean).join(" · ")}
               </p>
             )}
 
@@ -426,13 +550,13 @@ export function PieceRoom({ productId }: { productId: string }) {
                 {retail && <span className="font-medium">{retail}</span>}
                 {retail && (
                   <span className="doc-type-meta text-[var(--color-quiet-ink)]">
-                    {' '}
+                    {" "}
                     retail
                   </span>
                 )}
                 {trade && (
                   <span className="text-[var(--color-aged-oak)]">
-                    {retail ? '  ·  ' : ''}
+                    {retail ? "  ·  " : ""}
                     {trade} <span className="doc-type-meta">trade</span>
                   </span>
                 )}
@@ -458,11 +582,13 @@ export function PieceRoom({ productId }: { productId: string }) {
               <DocumentAction
                 actionKey="add-piece-to-project"
                 variant="primary"
-                onClick={() => setAddOpen(true)}
+                onClick={openPrimaryPlacement}
               >
-                Add to a project
+                {configurationView.mode === "standard"
+                  ? "Add to a project"
+                  : "Configure for a project"}
               </DocumentAction>
-              {layer !== 'personal' && (
+              {layer !== "personal" && (
                 <DocumentAction
                   actionKey="save-to-my-library"
                   variant="secondary"
@@ -473,7 +599,7 @@ export function PieceRoom({ productId }: { productId: string }) {
                   Save to My Library
                 </DocumentAction>
               )}
-              {layer === 'personal' && canEdit && (
+              {layer === "personal" && canEdit && (
                 <DocumentAction
                   actionKey="promote-to-studio"
                   variant="secondary"
@@ -482,17 +608,17 @@ export function PieceRoom({ productId }: { productId: string }) {
                   Promote to Studio
                 </DocumentAction>
               )}
-              {layer === 'studio' && canEdit && (
+              {layer === "studio" && canEdit && (
                 <DocumentAction
                   actionKey="nominate-maker"
                   variant="secondary"
                   onClick={() => {
                     if (!p.vendor_id) {
-                      setToast('This piece has no maker on file to nominate.');
+                      setToast("This piece has no maker on file to nominate.");
                       return;
                     }
                     if (!studioId) {
-                      setToast('Nominating a maker needs a studio on file.');
+                      setToast("Nominating a maker needs a studio on file.");
                       return;
                     }
                     setNominateOpen(true);
@@ -502,7 +628,7 @@ export function PieceRoom({ productId }: { productId: string }) {
                 </DocumentAction>
               )}
             </DocumentActionGroup>
-            {readOnly && layer === 'catalog' && (
+            {readOnly && layer === "catalog" && (
               <p className="doc-type-body mt-3 max-w-[44ch] italic text-[var(--color-quiet-ink)]">
                 A maker’s piece, curated by Patina. Save a copy to your library
                 to adapt it, or add it straight to a project.
@@ -510,6 +636,23 @@ export function PieceRoom({ productId }: { productId: string }) {
             )}
           </div>
         </section>
+
+        <PieceConfigurationWorkspace
+          piece={configurationPiece}
+          definition={configurationView}
+          readOnly={readOnly}
+          definitionLoading={configurationDefinition.isLoading}
+          evaluating={evaluateConfiguration.isPending}
+          savingDefinition={upsertConfigurationDefinition.isPending}
+          savingConfiguration={saveConfiguration.isPending}
+          authoritativeResolution={authoritativeConfiguration}
+          savedConfigurations={savedConfigurationViews}
+          onDefinitionChange={() => setAuthoritativeConfiguration(null)}
+          onSaveDefinition={canEdit ? saveDefinition : undefined}
+          onEvaluate={evaluateSelection}
+          onSaveConfiguration={user ? saveConfiguredPiece : undefined}
+          onPlace={(configurationId) => openPlacement(configurationId)}
+        />
 
         {/* ── Movement 1 · The record ── */}
         <Movement
@@ -519,10 +662,10 @@ export function PieceRoom({ productId }: { productId: string }) {
         >
           <PieceFacet
             name="Identity"
-            status={sections.identity ? 'on file' : 'partly written'}
+            status={sections.identity ? "on file" : "partly written"}
             done={sections.identity}
-            open={activeFacet === 'identity'}
-            onToggle={() => selectFacet('identity')}
+            open={activeFacet === "identity"}
+            onToggle={() => selectFacet("identity")}
             readOnly={readOnly}
           >
             <FacetText
@@ -574,10 +717,10 @@ export function PieceRoom({ productId }: { productId: string }) {
 
           <PieceFacet
             name="The piece"
-            status={sections.piece ? 'measured' : 'not yet measured'}
+            status={sections.piece ? "measured" : "not yet measured"}
             done={sections.piece}
-            open={activeFacet === 'piece'}
-            onToggle={() => selectFacet('piece')}
+            open={activeFacet === "piece"}
+            onToggle={() => selectFacet("piece")}
             readOnly={readOnly}
           >
             <FacetDimensions
@@ -622,11 +765,11 @@ export function PieceRoom({ productId }: { productId: string }) {
           <PieceFacet
             name="The story"
             status={
-              p.short_description || p.description ? 'written' : 'unwritten'
+              p.short_description || p.description ? "written" : "unwritten"
             }
             done={!!(p.short_description || p.description)}
-            open={activeFacet === 'story'}
-            onToggle={() => selectFacet('story')}
+            open={activeFacet === "story"}
+            onToggle={() => selectFacet("story")}
             readOnly={readOnly}
           >
             <FacetTextarea
@@ -651,10 +794,10 @@ export function PieceRoom({ productId }: { productId: string }) {
 
           <PieceFacet
             name="Categorization"
-            status={p.category ? p.category : 'uncategorized'}
+            status={p.category ? p.category : "uncategorized"}
             done={!!p.category}
-            open={activeFacet === 'categorization'}
-            onToggle={() => selectFacet('categorization')}
+            open={activeFacet === "categorization"}
+            onToggle={() => selectFacet("categorization")}
             readOnly={readOnly}
           >
             <FacetSelect
@@ -705,10 +848,10 @@ export function PieceRoom({ productId }: { productId: string }) {
         >
           <PieceFacet
             name="Commerce"
-            status={sections.commerce ? 'priced' : 'no price yet'}
+            status={sections.commerce ? "priced" : "no price yet"}
             done={sections.commerce}
-            open={activeFacet === 'commerce'}
-            onToggle={() => selectFacet('commerce')}
+            open={activeFacet === "commerce"}
+            onToggle={() => selectFacet("commerce")}
             readOnly={readOnly}
           >
             <div className="flex flex-col gap-0 sm:flex-row sm:gap-3">
@@ -749,9 +892,9 @@ export function PieceRoom({ productId }: { productId: string }) {
             <PieceFacet
               name="Lifecycle"
               status={labelStatus(p.status)}
-              done={p.status === 'published'}
-              open={activeFacet === 'lifecycle'}
-              onToggle={() => selectFacet('lifecycle')}
+              done={p.status === "published"}
+              open={activeFacet === "lifecycle"}
+              onToggle={() => selectFacet("lifecycle")}
               readOnly={false}
             >
               <FacetSelect
@@ -770,14 +913,14 @@ export function PieceRoom({ productId }: { productId: string }) {
             name="Sourcing"
             status={
               p.vendor_id || p.lead_time_weeks
-                ? 'sourced'
+                ? "sourced"
                 : studioNeeds
-                  ? 'needed to share'
-                  : 'optional'
+                  ? "needed to share"
+                  : "optional"
             }
             done={!!(p.vendor_id && p.lead_time_weeks && p.payment_terms)}
-            open={activeFacet === 'sourcing'}
-            onToggle={() => selectFacet('sourcing')}
+            open={activeFacet === "sourcing"}
+            onToggle={() => selectFacet("sourcing")}
             readOnly={readOnly}
           >
             <FacetVendorPicker
@@ -844,10 +987,10 @@ export function PieceRoom({ productId }: { productId: string }) {
           {showSeo && (
             <PieceFacet
               name="Listing metadata"
-              status={p.seo_title ? 'set' : 'optional'}
+              status={p.seo_title ? "set" : "optional"}
               done={!!p.seo_title}
-              open={activeFacet === 'seo'}
-              onToggle={() => selectFacet('seo')}
+              open={activeFacet === "seo"}
+              onToggle={() => selectFacet("seo")}
               readOnly={readOnly}
             >
               <FacetText
@@ -879,12 +1022,12 @@ export function PieceRoom({ productId }: { productId: string }) {
             name="Style & character"
             status={
               hasTeaching
-                ? `taught · ${taughtStyles.length} trait${taughtStyles.length > 1 ? 's' : ''}`
-                : 'untaught'
+                ? `taught · ${taughtStyles.length} trait${taughtStyles.length > 1 ? "s" : ""}`
+                : "untaught"
             }
             done={hasTeaching}
-            open={activeFacet === 'eye'}
-            onToggle={() => selectFacet('eye')}
+            open={activeFacet === "eye"}
+            onToggle={() => selectFacet("eye")}
             readOnly={readOnly}
           >
             {taughtStyles.length > 0 ? (
@@ -910,12 +1053,12 @@ export function PieceRoom({ productId }: { productId: string }) {
             >
               <DocumentAction
                 actionKey={
-                  hasTeaching ? 'deepen-piece-teaching' : 'teach-piece'
+                  hasTeaching ? "deepen-piece-teaching" : "teach-piece"
                 }
                 variant="primary"
                 onClick={() => setDeepOpen(true)}
               >
-                {hasTeaching ? 'Deepen the eye →' : 'Teach this piece →'}
+                {hasTeaching ? "Deepen the eye →" : "Teach this piece →"}
               </DocumentAction>
               {p.quality_score != null && (
                 <span className="doc-type-meta uppercase tracking-[0.06em]">
@@ -951,7 +1094,7 @@ export function PieceRoom({ productId }: { productId: string }) {
         onClose={() => setPromoteOpen(false)}
         onSuccess={() =>
           setToast(
-            'Promoted to the Studio Library — proven, and shared with the studio.',
+            "Promoted to the Studio Library — proven, and shared with the studio.",
           )
         }
       />
@@ -961,11 +1104,15 @@ export function PieceRoom({ productId }: { productId: string }) {
         studioId={studioId}
         asSheet
         onClose={() => setNominateOpen(false)}
-        onSubmitted={() => setToast('Maker nominated to the Patina Catalog.')}
+        onSubmitted={() => setToast("Maker nominated to the Patina Catalog.")}
       />
       <AddToProjectSheet
         open={addOpen}
-        onClose={() => setAddOpen(false)}
+        onClose={() => {
+          setAddOpen(false);
+          setPlacementConfigurationId(null);
+        }}
+        configurationId={placementConfigurationId}
         piece={{
           id: p.id,
           name: p.name,
@@ -989,30 +1136,62 @@ export function PieceRoom({ productId }: { productId: string }) {
 }
 
 // ── helpers ───────────────────────────────────────────────────────────────
+function pieceToConfigurationSource(
+  product: PieceProduct | undefined,
+  productId: string,
+): FlatPieceConfigurationSource {
+  return {
+    id: product?.id ?? productId,
+    name: product?.name ?? "A piece",
+    configurationMode: product?.configuration_mode ?? "standard",
+    sku: product?.sku ?? null,
+    priceRetailCents: product?.price_retail ?? null,
+    priceTradeCents: product?.price_trade ?? null,
+    leadTimeWeeks: product?.lead_time_weeks ?? null,
+    dimensions: configurationDimensions(product?.dimensions),
+    materials: product?.materials ?? null,
+    colors: product?.colors ?? null,
+    availableColors: product?.available_colors ?? null,
+    finish: product?.finish ?? null,
+  };
+}
+
+function configurationDimensions(
+  value: unknown,
+): Record<string, DimensionValue> | null {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return null;
+  return Object.fromEntries(
+    Object.entries(value).filter(
+      ([, item]) =>
+        typeof item === "string" || typeof item === "number" || item === null,
+    ),
+  ) as Record<string, DimensionValue>;
+}
+
 function labelStatus(s: string): string {
   return STATUS_OPTIONS.find((o) => o.value === s)?.label ?? s;
 }
 
 function Chip({
   children,
-  tone = 'oak',
+  tone = "oak",
 }: {
   children: React.ReactNode;
-  tone?: 'oak' | 'sage';
+  tone?: "oak" | "sage";
 }) {
   return (
     <span
       className="doc-type-meta rounded-[3px] border px-2 py-0.5 uppercase tracking-[0.1em]"
       style={
-        tone === 'sage'
+        tone === "sage"
           ? {
-              color: 'var(--color-sage)',
-              borderColor: 'var(--color-sage)',
-              background: 'rgba(168,181,160,0.12)',
+              color: "var(--color-sage)",
+              borderColor: "var(--color-sage)",
+              background: "rgba(168,181,160,0.12)",
             }
           : {
-              color: 'var(--color-aged-oak)',
-              borderColor: 'var(--color-pearl)',
+              color: "var(--color-aged-oak)",
+              borderColor: "var(--color-pearl)",
             }
       }
     >
@@ -1026,16 +1205,16 @@ function formatChangeValue(
   field: string,
   value: string | number | string[] | null,
 ): string {
-  if (value == null) return '—';
+  if (value == null) return "—";
   if (Array.isArray(value)) {
     return value.length === 0
-      ? '—'
-      : `${value.length} image${value.length > 1 ? 's' : ''}`;
+      ? "—"
+      : `${value.length} image${value.length > 1 ? "s" : ""}`;
   }
-  if (field === 'price_retail' && typeof value === 'number') {
-    return (value / 100).toLocaleString('en-US', {
-      style: 'currency',
-      currency: 'USD',
+  if (field === "price_retail" && typeof value === "number") {
+    return (value / 100).toLocaleString("en-US", {
+      style: "currency",
+      currency: "USD",
     });
   }
   const s = String(value);
@@ -1066,7 +1245,7 @@ function RefreshFromSource({
   const [accepted, setAccepted] = useState<Set<string>>(new Set());
   const [applyError, setApplyError] = useState<string | null>(null);
 
-  const source = product.source_url?.trim() || '';
+  const source = product.source_url?.trim() || "";
   const disabled = !source || refresh.isPending;
 
   const run = async () => {
@@ -1079,7 +1258,7 @@ function RefreshFromSource({
     try {
       const extracted = await refresh.mutateAsync({
         url: source,
-        mode: 'refresh',
+        mode: "refresh",
         productId: product.id,
       });
       const diff = buildRefreshDiff(
@@ -1096,7 +1275,7 @@ function RefreshFromSource({
       setRanOnce(true);
     } catch (e) {
       setError(
-        e instanceof Error ? e.message : 'Could not read the source just now.',
+        e instanceof Error ? e.message : "Could not read the source just now.",
       );
     }
   };
@@ -1109,7 +1288,7 @@ function RefreshFromSource({
       onRefetch();
     } catch (e) {
       setApplyError(
-        e instanceof Error ? e.message : 'Could not apply that change.',
+        e instanceof Error ? e.message : "Could not apply that change.",
       );
     }
   };
@@ -1123,8 +1302,8 @@ function RefreshFromSource({
           </span>
           <p className="doc-type-body text-[var(--color-quiet-ink)]">
             {source
-              ? 'Re-read the source page and choose what to update.'
-              : 'Add a source URL to enable a refresh.'}
+              ? "Re-read the source page and choose what to update."
+              : "Add a source URL to enable a refresh."}
           </p>
         </div>
         <DocumentAction
@@ -1248,19 +1427,19 @@ function Movement({
 function Colophon({ p }: { p: PieceProduct }) {
   const [open, setOpen] = useState(false);
   const fmt = (d: string | null) =>
-    d ? new Date(d).toLocaleDateString('en-US', { dateStyle: 'medium' }) : null;
+    d ? new Date(d).toLocaleDateString("en-US", { dateStyle: "medium" }) : null;
 
   const rows: Array<[string, string | null]> = [
-    ['Layer', LAYER_LABEL[(p.layer as Layer) ?? 'personal']],
-    ['Status', labelStatus(p.status)],
-    ['Patina-managed', p.patina_managed ? 'yes' : 'no'],
-    ['Captured', fmt(p.captured_at)],
-    ['Created', fmt(p.created_at)],
-    ['Updated', fmt(p.updated_at)],
-    ['Published', fmt(p.published_at)],
-    ['Promoted', fmt(p.promoted_at)],
-    ['Aesthete read', p.quality_score != null ? String(p.quality_score) : null],
-    ['Embedding refreshed', fmt(p.embedding_updated_at)],
+    ["Layer", LAYER_LABEL[(p.layer as Layer) ?? "personal"]],
+    ["Status", labelStatus(p.status)],
+    ["Patina-managed", p.patina_managed ? "yes" : "no"],
+    ["Captured", fmt(p.captured_at)],
+    ["Created", fmt(p.created_at)],
+    ["Updated", fmt(p.updated_at)],
+    ["Published", fmt(p.published_at)],
+    ["Promoted", fmt(p.promoted_at)],
+    ["Aesthete read", p.quality_score != null ? String(p.quality_score) : null],
+    ["Embedding refreshed", fmt(p.embedding_updated_at)],
   ];
 
   return (
@@ -1274,17 +1453,17 @@ function Colophon({ p }: { p: PieceProduct }) {
         aria-expanded={open}
         className={`doc-type-meta flex min-h-11 min-w-11 items-center gap-2 font-semibold uppercase tracking-[0.1em] transition-colors motion-reduce:transition-none focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-quiet-ink)] ${
           open
-            ? 'text-[var(--color-charcoal)]'
-            : 'text-[var(--color-aged-oak)] hover:text-[var(--color-charcoal)]'
+            ? "text-[var(--color-charcoal)]"
+            : "text-[var(--color-aged-oak)] hover:text-[var(--color-charcoal)]"
         }`}
       >
         <span
           aria-hidden
-          className={`transition-transform motion-reduce:transition-none ${open ? 'rotate-90' : ''}`}
+          className={`transition-transform motion-reduce:transition-none ${open ? "rotate-90" : ""}`}
         >
           ▸
         </span>
-        <span className={`da-score-hover ${open ? 'da-score-on' : ''}`}>
+        <span className={`da-score-hover ${open ? "da-score-on" : ""}`}>
           Colophon · provenance &amp; lifecycle
         </span>
       </button>

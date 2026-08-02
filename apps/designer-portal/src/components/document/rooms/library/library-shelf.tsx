@@ -1,4 +1,4 @@
-'use client';
+"use client";
 
 /**
  * LibraryShelf — the Library's currently selected shelf (R32/R39), separated
@@ -7,9 +7,15 @@
  * the marketplace. The header is Playfair-italic (typography-first, never tabs).
  */
 
-import { useLayerProducts, type LayerProductLayer } from '@patina/supabase';
-import { StrataSweep } from '@/components/ui/strata-sweep';
-import { LibraryCard } from './library-card';
+import { useLayerProducts, type LayerProductLayer } from "@patina/supabase";
+import { StrataSweep } from "@/components/ui/strata-sweep";
+import { LibraryCard } from "./library-card";
+import {
+  matchesCapabilityFilter,
+  readLibraryConfigurationSummary,
+  type LibraryCapabilityFilter,
+  type LibraryConfigurationProduct,
+} from "./library-configuration-summary";
 
 export function LibraryShelf({
   layer,
@@ -22,6 +28,7 @@ export function LibraryShelf({
   onDeep,
   onPromote,
   onNominate,
+  capability = "all",
 }: {
   layer: LayerProductLayer;
   name: string;
@@ -34,9 +41,16 @@ export function LibraryShelf({
   onDeep: (productId: string, name: string) => void;
   onPromote?: (productId: string) => void;
   onNominate?: (productId: string) => void;
+  capability?: LibraryCapabilityFilter;
 }) {
   const { data, isLoading, isError } = useLayerProducts({ layer });
   const items = data ?? [];
+  const visibleItems = items.filter((item) =>
+    matchesCapabilityFilter(
+      readLibraryConfigurationSummary(item as LibraryConfigurationProduct),
+      capability,
+    ),
+  );
 
   return (
     <section
@@ -80,35 +94,43 @@ export function LibraryShelf({
         </p>
       )}
 
-      {!isLoading && !isError && items.length === 0 && (
+      {!isLoading && !isError && visibleItems.length === 0 && (
         <p className="py-6 font-heading text-[14px] italic text-[var(--color-charcoal)]">
-          {layer === 'personal'
-            ? 'Nothing captured yet. Bring something in — it lands here, raw.'
-            : 'This shelf is empty.'}
+          {items.length > 0
+            ? "No pieces on this shelf match that configuration capability."
+            : layer === "personal"
+              ? "Nothing captured yet. Bring something in — it lands here, raw."
+              : "This shelf is empty."}
         </p>
       )}
 
-      {items.length > 0 && (
+      {visibleItems.length > 0 && (
         <div className="grid grid-cols-[repeat(auto-fill,minmax(150px,1fr))] gap-4 min-[700px]:grid-cols-[repeat(auto-fill,minmax(210px,1fr))] min-[700px]:gap-5">
-          {items.map((it) => (
-            <LibraryCard
-              key={it.id}
-              item={{
-                id: it.id,
-                name: it.name,
-                brand: it.brand,
-                images: it.images,
-                source_url: it.source_url,
-                category: it.category,
-                layer: it.layer,
-              }}
-              needsTeaching={teachingIds.has(it.id)}
-              needsValidation={validationIds?.has(it.id) ?? false}
-              onDeep={onDeep}
-              onPromote={onPromote}
-              onNominate={onNominate}
-            />
-          ))}
+          {visibleItems.map((it) => {
+            const configured = it as typeof it & LibraryConfigurationProduct;
+            return (
+              <LibraryCard
+                key={it.id}
+                item={{
+                  id: it.id,
+                  name: it.name,
+                  brand: it.brand,
+                  images: it.images,
+                  source_url: it.source_url,
+                  category: it.category,
+                  layer: it.layer,
+                  price_retail: it.price_retail,
+                  configuration_mode: configured.configuration_mode,
+                  configuration_summary: configured.configuration_summary,
+                }}
+                needsTeaching={teachingIds.has(it.id)}
+                needsValidation={validationIds?.has(it.id) ?? false}
+                onDeep={onDeep}
+                onPromote={onPromote}
+                onNominate={onNominate}
+              />
+            );
+          })}
         </div>
       )}
     </section>

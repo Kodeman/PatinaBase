@@ -1,11 +1,15 @@
-'use client';
+"use client";
 
-import { useQuery } from '@tanstack/react-query';
-import { createBrowserClient } from '../client';
+import { useQuery } from "@tanstack/react-query";
+import { createBrowserClient } from "../client";
+import type {
+  ProductConfigurationMode,
+  ProductConfigurationSummary,
+} from "@patina/types";
 
 const getSupabase = () => createBrowserClient();
 
-export type LayerProductLayer = 'personal' | 'studio' | 'catalog';
+export type LayerProductLayer = "personal" | "studio" | "catalog";
 
 export interface UseLayerProductsOptions {
   layer: LayerProductLayer;
@@ -16,7 +20,7 @@ export interface UseLayerProductsOptions {
   /**
    * Filter by `products.status` (draft / in_review / published / deprecated).
    */
-  status?: 'draft' | 'in_review' | 'published' | 'deprecated';
+  status?: "draft" | "in_review" | "published" | "deprecated";
   /**
    * Result limit. Default 60.
    */
@@ -24,7 +28,7 @@ export interface UseLayerProductsOptions {
   /**
    * Sort. Default `recent` (created_at desc).
    */
-  sort?: 'recent' | 'name';
+  sort?: "recent" | "name";
   /**
    * Disable the query (e.g. while auth is resolving).
    */
@@ -42,6 +46,8 @@ export interface LayerProductRow {
   source_url: string | null;
   status: string | null;
   category: string | null;
+  configuration_mode: ProductConfigurationMode;
+  configuration_summary: ProductConfigurationSummary | null;
   layer: LayerProductLayer;
   owner_user_id: string | null;
   studio_id: string | null;
@@ -60,23 +66,30 @@ export interface LayerProductRow {
  * RLS-safe through the same policies.
  */
 export function useLayerProducts(opts: UseLayerProductsOptions) {
-  const { layer, search, status, limit = 60, sort = 'recent', enabled = true } = opts;
+  const {
+    layer,
+    search,
+    status,
+    limit = 60,
+    sort = "recent",
+    enabled = true,
+  } = opts;
 
   return useQuery({
-    queryKey: ['layer-products', layer, { search, status, limit, sort }],
+    queryKey: ["layer-products", layer, { search, status, limit, sort }],
     enabled,
     queryFn: async (): Promise<LayerProductRow[]> => {
       const supabase = getSupabase();
       let query = supabase
-        .from('products')
+        .from("products")
         .select(
-          'id, name, brand, price_retail, price_trade, images, source_url, status, category, layer, owner_user_id, studio_id, created_at',
+          "id, name, brand, price_retail, price_trade, images, source_url, status, category, configuration_mode, configuration_summary, layer, owner_user_id, studio_id, created_at",
         )
-        .eq('layer', layer)
+        .eq("layer", layer)
         .limit(limit);
 
       if (status) {
-        query = query.eq('status', status);
+        query = query.eq("status", status);
       }
 
       if (search && search.trim().length > 0) {
@@ -85,10 +98,10 @@ export function useLayerProducts(opts: UseLayerProductsOptions) {
         query = query.or(`name.ilike.${term},brand.ilike.${term}`);
       }
 
-      if (sort === 'recent') {
-        query = query.order('created_at', { ascending: false });
+      if (sort === "recent") {
+        query = query.order("created_at", { ascending: false });
       } else {
-        query = query.order('name', { ascending: true });
+        query = query.order("name", { ascending: true });
       }
 
       const { data, error } = await query;
@@ -107,11 +120,11 @@ export function useLayerProducts(opts: UseLayerProductsOptions) {
  */
 export function useLayerCounts(enabled = true) {
   return useQuery({
-    queryKey: ['layer-counts'],
+    queryKey: ["layer-counts"],
     enabled,
     queryFn: async (): Promise<Record<LayerProductLayer, number>> => {
       const supabase = getSupabase();
-      const layers: LayerProductLayer[] = ['personal', 'studio', 'catalog'];
+      const layers: LayerProductLayer[] = ["personal", "studio", "catalog"];
       const counts: Record<LayerProductLayer, number> = {
         personal: 0,
         studio: 0,
@@ -123,9 +136,9 @@ export function useLayerCounts(enabled = true) {
       await Promise.all(
         layers.map(async (l) => {
           const { count, error } = await supabase
-            .from('products')
-            .select('id', { count: 'exact', head: true })
-            .eq('layer', l);
+            .from("products")
+            .select("id", { count: "exact", head: true })
+            .eq("layer", l);
           if (error) {
             throw new Error(`useLayerCounts(${l}): ${error.message}`);
           }

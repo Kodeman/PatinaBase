@@ -1,4 +1,4 @@
-'use client';
+"use client";
 
 /**
  * The Library Room (R32 / R39) — the first tenant of the reusable Rooms shell.
@@ -9,8 +9,8 @@
  * compresses teaching to one quiet line. No mock data, nothing gamified.
  */
 
-import { useEffect, useMemo, useState } from 'react';
-import { useRouter } from 'next/navigation';
+import { useEffect, useMemo, useState } from "react";
+import { useRouter } from "next/navigation";
 import {
   useLayerCounts,
   useTeachingQueue,
@@ -18,37 +18,35 @@ import {
   useOrganizations,
   createBrowserClient,
   type LayerProductLayer,
-} from '@patina/supabase';
-import { RoomShell } from '../room-shell';
-import { LibrarianBar } from './librarian-bar';
-import { LibraryShelf } from './library-shelf';
-import { LibraryToolbar } from './library-toolbar';
-import { LibraryFoot } from './library-foot';
-import { CaptureSheet } from './capture-sheet';
-import { ImportSheet } from './import-sheet';
-import { DeepAnalysisSheet } from './deep-analysis-sheet';
-import { PromoteToStudioModal } from '@/components/products/promotion/promote-to-studio-modal';
-import { NominateToCatalogModal } from '@/components/products/nomination/nominate-to-catalog-modal';
-import { useDocumentSurface } from '@/lib/help-system/use-document-surface';
-import { DOCUMENT_SURFACE_KEYS } from '@/lib/help-system/document-surface-keys';
-import {
-  DocumentAction,
-  DocumentActionGroup,
-} from '../../document-action';
-import { useMobilePrimaryAction } from '../../mobile/mobile-shell';
+} from "@patina/supabase";
+import { RoomShell } from "../room-shell";
+import { LibrarianBar } from "./librarian-bar";
+import { LibraryShelf } from "./library-shelf";
+import { LibraryToolbar } from "./library-toolbar";
+import { LibraryFoot } from "./library-foot";
+import { CaptureSheet } from "./capture-sheet";
+import { ImportSheet } from "./import-sheet";
+import { DeepAnalysisSheet } from "./deep-analysis-sheet";
+import { PromoteToStudioModal } from "@/components/products/promotion/promote-to-studio-modal";
+import { NominateToCatalogModal } from "@/components/products/nomination/nominate-to-catalog-modal";
+import { useDocumentSurface } from "@/lib/help-system/use-document-surface";
+import { DOCUMENT_SURFACE_KEYS } from "@/lib/help-system/document-surface-keys";
+import { DocumentAction, DocumentActionGroup } from "../../document-action";
+import { useMobilePrimaryAction } from "../../mobile/mobile-shell";
+import type { LibraryCapabilityFilter } from "./library-configuration-summary";
 
 const SHELF_COPY: Record<LayerProductLayer, { name: string; meta: string }> = {
   personal: {
-    name: 'My Library',
-    meta: 'raw captures · from the extension, photos, paste',
+    name: "My Library",
+    meta: "raw captures · from the extension, photos, paste",
   },
   studio: {
-    name: 'Studio Library',
-    meta: 'proven · promoted from captures',
+    name: "Studio Library",
+    meta: "proven · promoted from captures",
   },
   catalog: {
-    name: 'Patina Catalog',
-    meta: 'maker pieces · order through Patina · nominate a maker',
+    name: "Patina Catalog",
+    meta: "maker pieces · order through Patina · nominate a maker",
   },
 };
 
@@ -64,7 +62,7 @@ export function LibraryRoom() {
   // RoomShell's backTo returns it here. (No rememberRoomOrigin — it no-ops on a
   // Room path; the stashed origin still holds the surface before the Library.)
   const enterCompose = () => {
-    router.push('/compose');
+    router.push("/compose");
   };
 
   const studioId = useMemo(() => {
@@ -100,18 +98,20 @@ export function LibraryRoom() {
 
   const [captureOpen, setCaptureOpen] = useState(false);
   const [importOpen, setImportOpen] = useState(false);
-  const [activeLayer, setActiveLayer] = useState<LayerProductLayer>('personal');
+  const [activeLayer, setActiveLayer] = useState<LayerProductLayer>("personal");
+  const [activeCapability, setActiveCapability] =
+    useState<LibraryCapabilityFilter>("all");
   const [deep, setDeep] = useState<{ id: string; name: string } | null>(null);
   const [promoteId, setPromoteId] = useState<string | null>(null);
   const [nominateVendorId, setNominateVendorId] = useState<string | null>(null);
   const [toast, setToast] = useState<string | null>(null);
 
   useMobilePrimaryAction({
-    actionKey: 'capture-piece',
-    surfaceKey: 'library',
-    regionKey: 'room-head',
-    label: 'Capture',
-    target: { kind: 'press', onPress: () => setCaptureOpen(true) },
+    actionKey: "capture-piece",
+    surfaceKey: "library",
+    regionKey: "room-head",
+    label: "Capture",
+    target: { kind: "press", onPress: () => setCaptureOpen(true) },
   });
 
   useEffect(() => {
@@ -122,25 +122,25 @@ export function LibraryRoom() {
 
   const handleNominate = async (productId: string) => {
     if (!studioId) {
-      setToast('Nominating a maker needs a studio on file.');
+      setToast("Nominating a maker needs a studio on file.");
       return;
     }
     try {
       const supabase = createBrowserClient();
       const { data } = await supabase
-        .from('products')
-        .select('vendor_id')
-        .eq('id', productId)
+        .from("products")
+        .select("vendor_id")
+        .eq("id", productId)
         .maybeSingle();
       const vendorId =
         (data as { vendor_id?: string } | null)?.vendor_id ?? null;
       if (!vendorId) {
-        setToast('This piece has no maker on file to nominate.');
+        setToast("This piece has no maker on file to nominate.");
         return;
       }
       setNominateVendorId(vendorId);
     } catch {
-      setToast('Could not open the nomination just now.');
+      setToast("Could not open the nomination just now.");
     }
   };
 
@@ -180,6 +180,8 @@ export function LibraryRoom() {
           onLayerChange={setActiveLayer}
           onCompose={enterCompose}
           onImport={() => setImportOpen(true)}
+          activeCapability={activeCapability}
+          onCapabilityChange={setActiveCapability}
         />
 
         <div className="px-6 sm:px-9">
@@ -192,10 +194,15 @@ export function LibraryRoom() {
             meta={SHELF_COPY[activeLayer].meta}
             teachingIds={teachingIds}
             validationIds={validationIds}
+            capability={activeCapability}
             onDeep={(id, name) => setDeep({ id, name })}
-            onPromote={activeLayer === 'personal' ? (id) => setPromoteId(id) : undefined}
+            onPromote={
+              activeLayer === "personal" ? (id) => setPromoteId(id) : undefined
+            }
             onNominate={
-              activeLayer === 'studio' ? (id) => void handleNominate(id) : undefined
+              activeLayer === "studio"
+                ? (id) => void handleNominate(id)
+                : undefined
             }
           />
         </div>
@@ -218,7 +225,7 @@ export function LibraryRoom() {
         onClose={() => setImportOpen(false)}
         onImported={(count) =>
           setToast(
-            `${count} piece${count === 1 ? '' : 's'} landed in My Library — raw, ready to teach.`,
+            `${count} piece${count === 1 ? "" : "s"} landed in My Library — raw, ready to teach.`,
           )
         }
       />
@@ -244,7 +251,7 @@ export function LibraryRoom() {
         onClose={() => setPromoteId(null)}
         onSuccess={() =>
           setToast(
-            'Promoted to the Studio Library — proven, and shared with the studio.',
+            "Promoted to the Studio Library — proven, and shared with the studio.",
           )
         }
       />
@@ -254,7 +261,7 @@ export function LibraryRoom() {
         studioId={studioId}
         asSheet
         onClose={() => setNominateVendorId(null)}
-        onSubmitted={() => setToast('Maker nominated to the Patina Catalog.')}
+        onSubmitted={() => setToast("Maker nominated to the Patina Catalog.")}
       />
 
       {toast && (
