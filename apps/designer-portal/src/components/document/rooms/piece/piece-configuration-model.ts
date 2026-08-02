@@ -8,6 +8,7 @@ export interface PieceOptionValueView {
   id: string;
   code?: string;
   label: string;
+  active?: boolean;
   sku?: string | null;
   swatch?: string | null;
   retailPriceDeltaCents?: number | null;
@@ -44,6 +45,7 @@ export type PieceComponentHandedness = "none" | "left" | "right" | "either";
 export interface PieceComponentView {
   id: string;
   name: string;
+  active?: boolean;
   sku?: string | null;
   retailPriceCents?: number | null;
   tradePriceCents?: number | null;
@@ -168,6 +170,60 @@ export function flatDefinition(
   };
 }
 
+/**
+ * Convert an authoring draft into the structural shape supported by a mode.
+ * This is deliberately lossy: hidden structures must never survive a mode
+ * change and continue affecting server evaluation behind the designer's back.
+ */
+export function definitionForConfigurationMode(
+  definition: PieceConfigurationDefinitionView,
+  mode: ConfigurationMode,
+): PieceConfigurationDefinitionView {
+  if (mode === "standard" || mode === "custom") {
+    return {
+      ...definition,
+      mode,
+      pricingStrategy: "base_plus_adjustments",
+      optionGroups: [],
+      variants: [],
+      components: [],
+      rules: [],
+    };
+  }
+
+  if (mode === "variant") {
+    return {
+      ...definition,
+      mode,
+      pricingStrategy: "base_plus_adjustments",
+      components: [],
+    };
+  }
+
+  return {
+    ...definition,
+    mode,
+    variants: [],
+  };
+}
+
+export function configurationModeRemovalCount(
+  definition: PieceConfigurationDefinitionView,
+  mode: ConfigurationMode,
+): number {
+  const next = definitionForConfigurationMode(definition, mode);
+  return (
+    definition.optionGroups.length -
+    next.optionGroups.length +
+    definition.variants.length -
+    next.variants.length +
+    definition.components.length -
+    next.components.length +
+    definition.rules.length -
+    next.rules.length
+  );
+}
+
 export function suggestedGroupsFromFlatPiece(
   piece: FlatPieceConfigurationSource,
 ): SuggestedOptionGroup[] {
@@ -244,7 +300,10 @@ export function initialSelection(
   return {
     optionValueIds: [],
     components: definition.components
-      .filter((component) => component.defaultQuantity > 0)
+      .filter(
+        (component) =>
+          component.active !== false && component.defaultQuantity > 0,
+      )
       .map((component) => ({
         componentId: component.id,
         quantity: clamp(
@@ -279,11 +338,14 @@ export function resolvePieceConfiguration({
   const warnings: string[] = [];
 
   for (const group of definition.optionGroups) {
-    const chosenInGroup = group.values.filter((value) => chosen.has(value.id));
+    const offeredValues = group.values.filter(
+      (value) => value.active !== false,
+    );
+    const chosenInGroup = offeredValues.filter((value) => chosen.has(value.id));
     const minimum = group.minSelections ?? (group.required ? 1 : 0);
     const maximum =
       group.selectionType === "multiple"
-        ? (group.maxSelections ?? group.values.length)
+        ? (group.maxSelections ?? offeredValues.length)
         : 1;
     if (chosenInGroup.length < minimum) {
       errors.push(`Choose ${group.name.toLowerCase()}.`);
@@ -320,7 +382,7 @@ export function resolvePieceConfiguration({
       ): item is {
         selected: PieceConfigurationSelectionView["components"][number];
         definition: PieceComponentView;
-      } => !!item.definition,
+      } => !!item.definition && item.definition.active !== false,
     );
 
   for (const { selected, definition: component } of selectedComponents) {
@@ -353,7 +415,9 @@ export function resolvePieceConfiguration({
   }
 
   const chosenValues = definition.optionGroups.flatMap((group) =>
-    group.values.filter((value) => chosen.has(value.id)),
+    group.values.filter(
+      (value) => value.active !== false && chosen.has(value.id),
+    ),
   );
   const optionRetailDelta = sumNullable(
     chosenValues.map((value) => value.retailPriceDeltaCents),

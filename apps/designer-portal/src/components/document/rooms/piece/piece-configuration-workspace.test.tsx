@@ -366,4 +366,93 @@ describe("PieceConfigurationWorkspace", () => {
       ),
     );
   });
+
+  it("opens the project commission workshop without creating a placeholder revision", async () => {
+    const customPiece: FlatPieceConfigurationSource = {
+      ...bed,
+      id: "cabinetry-1",
+      name: "Library wall cabinetry",
+      configurationMode: "custom",
+    };
+    const customDefinition: PieceConfigurationDefinitionView = {
+      productId: customPiece.id,
+      mode: "custom",
+      revision: 1,
+      optionGroups: [],
+      variants: [],
+      components: [],
+      rules: [],
+    };
+    const onSaveConfiguration = jest.fn();
+    const onCustomCommission = jest.fn().mockResolvedValue(undefined);
+
+    render(
+      <PieceConfigurationWorkspace
+        piece={customPiece}
+        definition={customDefinition}
+        readOnly
+        authoritativeResolution={authoritative(
+          { optionValueIds: [], components: [] },
+          {
+            retailPriceCents: null,
+            tradePriceCents: null,
+            leadTimeWeeks: null,
+            matchedVariant: null,
+          },
+        )}
+        onSaveConfiguration={onSaveConfiguration}
+        onCustomCommission={onCustomCommission}
+        onPlace={jest.fn()}
+      />,
+    );
+
+    expect(screen.queryByLabelText("Commission brief")).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: "Save for later" }),
+    ).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Start commission" }));
+
+    await waitFor(() => expect(onCustomCommission).toHaveBeenCalledWith(null));
+    expect(onSaveConfiguration).not.toHaveBeenCalled();
+  });
+
+  it("saves changes against the loaded configuration version", async () => {
+    const onSaveConfiguration = jest
+      .fn()
+      .mockResolvedValue({ id: "saved-bed-v6", version: 6 });
+
+    render(
+      <PieceConfigurationWorkspace
+        piece={bed}
+        definition={bedDefinition}
+        readOnly
+        savedConfigurations={[
+          {
+            id: "saved-bed-v5",
+            name: "Primary bedroom",
+            version: 5,
+            status: "saved",
+            sourceChanged: true,
+            selection: { optionValueIds: ["queen"], components: [] },
+          },
+        ]}
+        onSaveConfiguration={onSaveConfiguration}
+        onPlace={jest.fn()}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "Load" }));
+    expect(screen.getByText(/maker changed this piece/i)).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Save changes" }));
+
+    await waitFor(() =>
+      expect(onSaveConfiguration).toHaveBeenCalledWith(
+        expect.objectContaining({
+          name: "Primary bedroom",
+          selection: { optionValueIds: ["queen"], components: [] },
+        }),
+        { id: "saved-bed-v5", version: 5, sourceChanged: true },
+      ),
+    );
+  });
 });

@@ -10,6 +10,7 @@ import type {
   UpsertProductConfigurationDefinitionInput,
 } from "@patina/types";
 import {
+  definitionForConfigurationMode,
   flatDefinition,
   type DimensionValue,
   type FlatPieceConfigurationSource,
@@ -42,19 +43,18 @@ export function configurationDefinitionToView(
       selectionType: group.selectionType,
       minSelections: group.minSelections,
       maxSelections: group.maxSelections,
-      values: group.values
-        .filter((value) => value.isActive)
-        .map((value) => ({
-          id: value.id,
-          code: value.code,
-          label: value.label,
-          sku: readString(value.metadata, "sku") ?? value.code,
-          swatch: readSwatch(value.swatch),
-          retailPriceDeltaCents: value.retailPriceDeltaCents,
-          tradePriceDeltaCents: value.tradePriceDeltaCents,
-          leadTimeDeltaWeeks: value.leadTimeDeltaWeeks,
-          dimensions: readDimensions(value.metadata),
-        })),
+      values: group.values.map((value) => ({
+        id: value.id,
+        code: value.code,
+        label: value.label,
+        active: value.isActive,
+        sku: readString(value.metadata, "sku") ?? value.code,
+        swatch: readSwatch(value.swatch),
+        retailPriceDeltaCents: value.retailPriceDeltaCents,
+        tradePriceDeltaCents: value.tradePriceDeltaCents,
+        leadTimeDeltaWeeks: value.leadTimeDeltaWeeks,
+        dimensions: readDimensions(value.metadata),
+      })),
     })),
     variants: definition.variants.map((variant) => ({
       id: variant.id,
@@ -67,20 +67,19 @@ export function configurationDefinitionToView(
       dimensions: toDimensions(variant.dimensions),
       active: variant.status === "active",
     })),
-    components: definition.components
-      .filter((component) => component.isActive)
-      .map((component) => ({
-        id: component.id,
-        name: component.name,
-        sku: component.code,
-        retailPriceCents: component.retailPriceCents,
-        tradePriceCents: component.tradePriceCents,
-        leadTimeWeeks: component.leadTimeWeeks,
-        minQuantity: component.minQuantity,
-        maxQuantity: component.maxQuantity ?? 99,
-        defaultQuantity: component.defaultQuantity,
-        handedness: component.handedness,
-      })),
+    components: definition.components.map((component) => ({
+      id: component.id,
+      name: component.name,
+      active: component.isActive,
+      sku: component.code,
+      retailPriceCents: component.retailPriceCents,
+      tradePriceCents: component.tradePriceCents,
+      leadTimeWeeks: component.leadTimeWeeks,
+      minQuantity: component.minQuantity,
+      maxQuantity: component.maxQuantity ?? 99,
+      defaultQuantity: component.defaultQuantity,
+      handedness: component.handedness,
+    })),
     rules: definition.rules.flatMap((rule) => {
       const view = ruleToView(rule, definition.optionGroups);
       return view ? [view] : [];
@@ -92,6 +91,7 @@ export function configurationViewToUpsertInput(
   view: PieceConfigurationDefinitionView,
   source?: ProductConfigurationDefinition | null,
 ): UpsertProductConfigurationDefinitionInput {
+  const canonicalView = definitionForConfigurationMode(view, view.mode);
   const sourceGroups = new Map(
     (source?.optionGroups ?? []).map((group) => [group.id, group]),
   );
@@ -104,15 +104,19 @@ export function configurationViewToUpsertInput(
   const sourceRules = new Map(
     (source?.rules ?? []).map((rule) => [rule.id, rule]),
   );
-  const representedRuleIds = new Set(view.rules.map((rule) => rule.id));
+  const representedRuleIds = new Set(
+    canonicalView.rules.map((rule) => rule.id),
+  );
 
   return {
-    mode: view.mode,
+    mode: canonicalView.mode,
     pricingStrategy:
-      view.pricingStrategy ??
-      (view.components.length > 0 ? "component_sum" : "base_plus_adjustments"),
-    expectedRevision: view.revision,
-    optionGroups: view.optionGroups.map((group, groupIndex) => {
+      canonicalView.pricingStrategy ??
+      (canonicalView.components.length > 0
+        ? "component_sum"
+        : "base_plus_adjustments"),
+    expectedRevision: canonicalView.revision,
+    optionGroups: canonicalView.optionGroups.map((group, groupIndex) => {
       const original = sourceGroups.get(group.id);
       const originalValues = new Map(
         (original?.values ?? []).map((value) => [value.id, value]),
@@ -134,35 +138,57 @@ export function configurationViewToUpsertInput(
             ? (group.maxSelections ?? Math.max(1, group.values.length))
             : 1,
         position: groupIndex,
-        values: group.values.map((value, valueIndex) => {
-          const originalValue = originalValues.get(value.id);
-          return {
-            ...(persistedId(value.id) ? { id: value.id } : {}),
-            code:
-              value.code ??
-              originalValue?.code ??
-              slugCode(value.label, `value-${valueIndex + 1}`),
-            label: value.label,
-            description: originalValue?.description ?? null,
-            swatch: value.swatch
-              ? { hex: value.swatch }
-              : (originalValue?.swatch ?? null),
-            media: originalValue?.media ?? [],
-            retailPriceDeltaCents: value.retailPriceDeltaCents ?? 0,
-            tradePriceDeltaCents: value.tradePriceDeltaCents ?? 0,
-            leadTimeDeltaWeeks: value.leadTimeDeltaWeeks ?? 0,
-            metadata: {
-              ...(originalValue?.metadata ?? {}),
-              ...(value.sku ? { sku: value.sku } : {}),
-              ...(value.dimensions ? { dimensions: value.dimensions } : {}),
-            },
-            position: valueIndex,
-            isActive: true,
-          };
-        }),
+        values: [
+          ...group.values.map((value, valueIndex) => {
+            const originalValue = originalValues.get(value.id);
+            return {
+              ...(persistedId(value.id) ? { id: value.id } : {}),
+              code:
+                value.code ??
+                originalValue?.code ??
+                slugCode(value.label, `value-${valueIndex + 1}`),
+              label: value.label,
+              description: originalValue?.description ?? null,
+              swatch: value.swatch
+                ? { hex: value.swatch }
+                : (originalValue?.swatch ?? null),
+              media: originalValue?.media ?? [],
+              retailPriceDeltaCents: value.retailPriceDeltaCents ?? 0,
+              tradePriceDeltaCents: value.tradePriceDeltaCents ?? 0,
+              leadTimeDeltaWeeks: value.leadTimeDeltaWeeks ?? 0,
+              metadata: {
+                ...(originalValue?.metadata ?? {}),
+                ...(value.sku ? { sku: value.sku } : {}),
+                ...(value.dimensions ? { dimensions: value.dimensions } : {}),
+              },
+              position: valueIndex,
+              isActive: value.active !== false,
+            };
+          }),
+          ...(original?.values ?? [])
+            .filter(
+              (value) =>
+                !value.isActive &&
+                !group.values.some((candidate) => candidate.id === value.id),
+            )
+            .map((value) => ({
+              id: value.id,
+              code: value.code,
+              label: value.label,
+              description: value.description ?? null,
+              swatch: value.swatch ?? null,
+              media: value.media ?? [],
+              retailPriceDeltaCents: value.retailPriceDeltaCents,
+              tradePriceDeltaCents: value.tradePriceDeltaCents,
+              leadTimeDeltaWeeks: value.leadTimeDeltaWeeks,
+              metadata: value.metadata,
+              position: value.position,
+              isActive: false,
+            })),
+        ],
       };
     }),
-    variants: view.variants.map((variant) => {
+    variants: canonicalView.variants.map((variant) => {
       const original = sourceVariants.get(variant.id);
       return {
         ...(persistedId(variant.id) ? { id: variant.id } : {}),
@@ -180,42 +206,88 @@ export function configurationViewToUpsertInput(
         weight: original?.weight ?? null,
         metadata: original?.metadata ?? {},
         isDefault: original?.isDefault ?? false,
-        optionValueIds: variant.optionValueIds,
+        // New option values only have UI-local ids until this transaction
+        // inserts them. Stable group:value codes let the RPC resolve both new
+        // and persisted choices in the same first save.
+        optionValueIds: variant.optionValueIds.map((valueId) =>
+          stableOptionValueReference(valueId, canonicalView, source),
+        ),
       };
     }),
-    components: view.components.map((component, componentIndex) => {
-      const original = sourceComponents.get(component.id);
-      return {
-        ...(persistedId(component.id) ? { id: component.id } : {}),
-        code:
-          original?.code ??
-          slugCode(
-            component.sku || component.name,
-            `part-${componentIndex + 1}`,
-          ),
-        name: component.name,
-        description: original?.description ?? null,
-        componentType: original?.componentType ?? "module",
-        handedness: component.handedness,
-        minQuantity: component.minQuantity,
-        maxQuantity: component.maxQuantity,
-        defaultQuantity: component.defaultQuantity,
-        retailPriceCents: component.retailPriceCents ?? 0,
-        tradePriceCents: component.tradePriceCents ?? 0,
-        leadTimeWeeks: component.leadTimeWeeks ?? 0,
-        dimensions: original?.dimensions ?? null,
-        metadata: original?.metadata ?? {},
-        position: original?.position ?? componentIndex,
-        isActive: true,
-      };
-    }),
+    components: [
+      ...canonicalView.components.map((component, componentIndex) => {
+        const original = sourceComponents.get(component.id);
+        return {
+          ...(persistedId(component.id) ? { id: component.id } : {}),
+          code:
+            original?.code ??
+            slugCode(
+              component.sku || component.name,
+              `part-${componentIndex + 1}`,
+            ),
+          name: component.name,
+          description: original?.description ?? null,
+          componentType: original?.componentType ?? "module",
+          handedness: component.handedness,
+          minQuantity: component.minQuantity,
+          maxQuantity: component.maxQuantity,
+          defaultQuantity: component.defaultQuantity,
+          retailPriceCents: component.retailPriceCents ?? 0,
+          tradePriceCents: component.tradePriceCents ?? 0,
+          leadTimeWeeks: component.leadTimeWeeks ?? 0,
+          dimensions: original?.dimensions ?? null,
+          metadata: original?.metadata ?? {},
+          position: original?.position ?? componentIndex,
+          isActive: component.active !== false,
+        };
+      }),
+      ...(canonicalView.mode === "configured"
+        ? (source?.components ?? [])
+            .filter(
+              (component) =>
+                !component.isActive &&
+                !canonicalView.components.some(
+                  (candidate) => candidate.id === component.id,
+                ),
+            )
+            .map((component) => ({
+              id: component.id,
+              code: component.code,
+              name: component.name,
+              description: component.description ?? null,
+              componentType: component.componentType,
+              handedness: component.handedness,
+              minQuantity: component.minQuantity,
+              maxQuantity: component.maxQuantity ?? null,
+              defaultQuantity: component.defaultQuantity,
+              retailPriceCents: component.retailPriceCents,
+              tradePriceCents: component.tradePriceCents,
+              leadTimeWeeks: component.leadTimeWeeks,
+              dimensions: component.dimensions ?? null,
+              metadata: component.metadata,
+              position: component.position,
+              isActive: false,
+            }))
+        : []),
+    ],
     rules: [
-      ...view.rules.map((rule, index) =>
-        ruleViewToCanonical(rule, view, sourceRules.get(rule.id), index),
+      ...canonicalView.rules.map((rule, index) =>
+        ruleViewToCanonical(
+          rule,
+          canonicalView,
+          sourceRules.get(rule.id),
+          index,
+        ),
       ),
-      ...(source?.rules ?? []).filter(
-        (rule) => !representedRuleIds.has(rule.id),
-      ),
+      ...(canonicalView.mode === "variant" ||
+      canonicalView.mode === "configured"
+        ? (source?.rules ?? []).filter(
+            (rule) =>
+              !representedRuleIds.has(rule.id) &&
+              (!rule.isActive ||
+                ruleToView(rule, source?.optionGroups ?? []) === null),
+          )
+        : []),
     ],
   };
 }
@@ -312,6 +384,7 @@ export function configurationDraftToSaveInput({
 
 export function savedConfigurationToView(
   saved: SavedProductConfiguration,
+  currentSchemaRevision?: number | null,
 ): SavedConfigurationView {
   const handedness = new Map(
     saved.snapshot.components.map((component) => [
@@ -324,17 +397,18 @@ export function savedConfigurationToView(
     name: saved.name || `Configuration ${saved.version}`,
     version: saved.version,
     status: saved.status,
+    sourceChanged:
+      currentSchemaRevision != null &&
+      saved.schemaRevision !== currentSchemaRevision,
     selection: {
-      optionValueIds: Object.values(
-        saved.evaluation.normalizedSelection,
-      ).flat(),
-      components: Object.entries(saved.evaluation.componentQuantities).map(
-        ([componentId, quantity]) => ({
-          componentId,
-          quantity,
-          handedness: handedness.get(componentId) ?? null,
-        }),
+      optionValueIds: saved.snapshot.selections.map(
+        (selection) => selection.optionValueId,
       ),
+      components: saved.snapshot.components.map((component) => ({
+        componentId: component.componentId,
+        quantity: component.quantity,
+        handedness: handedness.get(component.componentId) ?? null,
+      })),
     },
   };
 }
@@ -423,6 +497,22 @@ function optionReference(
     };
   }
   return null;
+}
+
+function stableOptionValueReference(
+  valueId: string,
+  definition: PieceConfigurationDefinitionView,
+  source?: ProductConfigurationDefinition | null,
+): string {
+  const draftReference = optionReference(valueId, definition);
+  if (draftReference) {
+    return `${draftReference.groupCode}:${draftReference.valueCode}`;
+  }
+  for (const group of source?.optionGroups ?? []) {
+    const value = group.values.find((candidate) => candidate.id === valueId);
+    if (value) return `${group.code}:${value.code}`;
+  }
+  return valueId;
 }
 
 function referenceRecord(

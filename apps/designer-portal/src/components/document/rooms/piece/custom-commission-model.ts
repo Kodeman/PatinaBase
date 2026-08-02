@@ -8,31 +8,32 @@
  */
 
 export type CommissionLifecycleStatus =
-  | 'draft'
-  | 'submitted'
-  | 'quoted'
-  | 'client_review'
-  | 'approved'
-  | 'issued'
-  | 'rejected'
-  | 'superseded';
+  | "draft"
+  | "submitted"
+  | "quoted"
+  | "client_review"
+  | "approved"
+  | "issued"
+  | "rejected"
+  | "superseded";
 
 export type CommissionRevisionTransitionStatus = Exclude<
   CommissionLifecycleStatus,
-  'issued' | 'superseded'
+  "issued" | "superseded"
 >;
 
 export interface CommissionDimensions {
   width: string;
   depth: string;
   height: string;
-  unit: 'in' | 'mm';
+  unit: "in" | "mm";
   siteNotes: string;
 }
 
 export interface CommissionQuoteDraft {
   reference: string;
-  amount: string;
+  tradeAmount: string;
+  retailAmount: string;
   validUntil: string;
   leadTimeWeeks: string;
 }
@@ -50,8 +51,8 @@ export interface CommissionBriefDraft {
   allowance: string;
   priceOnRequest: boolean;
   quote: CommissionQuoteDraft;
-  designerApproval: 'pending' | 'approved';
-  clientApproval: 'pending' | 'approved';
+  designerApproval: "pending" | "approved";
+  clientApproval: "pending" | "approved";
 }
 
 export interface CommissionBriefErrors {
@@ -62,7 +63,8 @@ export interface CommissionBriefErrors {
   finish?: string;
   fabricator?: string;
   price?: string;
-  quote?: string;
+  tradeQuote?: string;
+  retailQuote?: string;
 }
 
 export interface CommissionSnapshotSummary {
@@ -85,19 +87,19 @@ export interface ConfigurationSnapshotEnvelope {
 }
 
 export type SnapshotSafety =
-  | { kind: 'draft'; message: string }
-  | { kind: 'approved'; message: string }
-  | { kind: 'issued'; message: string }
-  | { kind: 'requires_reapproval'; message: string };
+  | { kind: "draft"; message: string }
+  | { kind: "approved"; message: string }
+  | { kind: "issued"; message: string }
+  | { kind: "requires_reapproval"; message: string };
 
 const TRANSITIONS: Record<
   CommissionLifecycleStatus,
   CommissionRevisionTransitionStatus[]
 > = {
-  draft: ['submitted'],
-  submitted: ['quoted'],
-  quoted: ['client_review'],
-  client_review: ['approved', 'rejected'],
+  draft: ["submitted"],
+  submitted: ["quoted"],
+  quoted: ["client_review"],
+  client_review: ["approved", "rejected"],
   approved: [],
   issued: [],
   rejected: [],
@@ -105,31 +107,32 @@ const TRANSITIONS: Record<
 };
 
 export const EMPTY_COMMISSION_BRIEF: CommissionBriefDraft = {
-  projectId: '',
-  name: '',
-  scope: '',
+  projectId: "",
+  name: "",
+  scope: "",
   dimensions: {
-    width: '',
-    depth: '',
-    height: '',
-    unit: 'in',
-    siteNotes: '',
+    width: "",
+    depth: "",
+    height: "",
+    unit: "in",
+    siteNotes: "",
   },
-  material: '',
-  finish: '',
-  fabricatorVendorId: '',
-  fabricator: '',
+  material: "",
+  finish: "",
+  fabricatorVendorId: "",
+  fabricator: "",
   drawingReferences: [],
-  allowance: '',
+  allowance: "",
   priceOnRequest: true,
   quote: {
-    reference: '',
-    amount: '',
-    validUntil: '',
-    leadTimeWeeks: '',
+    reference: "",
+    tradeAmount: "",
+    retailAmount: "",
+    validUntil: "",
+    leadTimeWeeks: "",
   },
-  designerApproval: 'pending',
-  clientApproval: 'pending',
+  designerApproval: "pending",
+  clientApproval: "pending",
 };
 
 function clean(value: string): string {
@@ -137,7 +140,7 @@ function clean(value: string): string {
 }
 
 function parseMoneyToCents(value: string): number | null {
-  const normalized = value.replace(/[$,\s]/g, '');
+  const normalized = value.replace(/[$,\s]/g, "");
   if (!normalized) return null;
   const amount = Number(normalized);
   if (!Number.isFinite(amount) || amount < 0) return null;
@@ -145,46 +148,48 @@ function parseMoneyToCents(value: string): number | null {
 }
 
 function readRecord(value: unknown): Record<string, unknown> {
-  return value && typeof value === 'object' && !Array.isArray(value)
+  return value && typeof value === "object" && !Array.isArray(value)
     ? (value as Record<string, unknown>)
     : {};
 }
 
 function readString(value: unknown): string | null {
-  return typeof value === 'string' && value.trim() ? value.trim() : null;
+  return typeof value === "string" && value.trim() ? value.trim() : null;
 }
 
 function readNumber(value: unknown): number | null {
-  return typeof value === 'number' && Number.isFinite(value) ? value : null;
+  return typeof value === "number" && Number.isFinite(value) ? value : null;
 }
 
-export function normalizeCommissionStatus(status: string): CommissionLifecycleStatus {
+export function normalizeCommissionStatus(
+  status: string,
+): CommissionLifecycleStatus {
   switch (status) {
-    case 'quote_received':
-    case 'quote_revised':
-      return 'quoted';
-    case 'designer_approved':
-      return 'client_review';
-    case 'client_approved':
-      return 'approved';
-    case 'locked':
-    case 'ordered':
-      return 'issued';
-    case 'submitted':
-    case 'quoted':
-    case 'client_review':
-    case 'approved':
-    case 'issued':
-    case 'rejected':
-    case 'superseded':
+    case "quote_received":
+    case "quote_revised":
+      return "quoted";
+    case "designer_approved":
+      return "client_review";
+    case "client_approved":
+      return "approved";
+    case "locked":
+    case "ordered":
+      return "issued";
+    case "submitted":
+    case "quoted":
+    case "client_review":
+    case "approved":
+    case "issued":
+    case "rejected":
+    case "superseded":
       return status;
     default:
-      return 'draft';
+      return "draft";
   }
 }
 
 export function canEditCommissionRevision(status: string): boolean {
-  return normalizeCommissionStatus(status) === 'draft';
+  return normalizeCommissionStatus(status) === "draft";
 }
 
 export function canTransitionCommissionRevision(
@@ -201,7 +206,7 @@ export function assertCommissionTransition(
   const normalized = normalizeCommissionStatus(current);
   if (!canTransitionCommissionRevision(normalized, target)) {
     throw new Error(
-      `${normalized.replaceAll('_', ' ')} commissions cannot move directly to ${target.replaceAll('_', ' ')}.`,
+      `${normalized.replaceAll("_", " ")} commissions cannot move directly to ${target.replaceAll("_", " ")}.`,
     );
   }
   return target;
@@ -209,7 +214,7 @@ export function assertCommissionTransition(
 
 export function canIssueCommission(brief: CommissionBriefDraft): boolean {
   return (
-    brief.designerApproval === 'approved' && brief.clientApproval === 'approved'
+    brief.designerApproval === "approved" && brief.clientApproval === "approved"
   );
 }
 
@@ -217,14 +222,15 @@ export function validateCommissionBrief(
   brief: CommissionBriefDraft,
 ): CommissionBriefErrors {
   const errors: CommissionBriefErrors = {};
-  if (!clean(brief.projectId)) errors.projectId = 'Choose the project this piece belongs to.';
-  if (!clean(brief.name)) errors.name = 'Name this commission.';
+  if (!clean(brief.projectId))
+    errors.projectId = "Choose the project this piece belongs to.";
+  if (!clean(brief.name)) errors.name = "Name this commission.";
   if (
     !clean(brief.dimensions.width) ||
     !clean(brief.dimensions.depth) ||
     !clean(brief.dimensions.height)
   ) {
-    errors.dimensions = 'Width, depth, and height are required.';
+    errors.dimensions = "Width, depth, and height are required.";
   } else if (
     [
       brief.dimensions.width,
@@ -232,25 +238,42 @@ export function validateCommissionBrief(
       brief.dimensions.height,
     ].some((value) => !Number.isFinite(Number(value)) || Number(value) <= 0)
   ) {
-    errors.dimensions = 'Enter positive numbers for width, depth, and height.';
+    errors.dimensions = "Enter positive numbers for width, depth, and height.";
   }
-  if (!clean(brief.material)) errors.material = 'Name the material.';
-  if (!clean(brief.finish)) errors.finish = 'Name the finish.';
+  if (!clean(brief.material)) errors.material = "Name the material.";
+  if (!clean(brief.finish)) errors.finish = "Name the finish.";
   if (!clean(brief.fabricatorVendorId) && !clean(brief.fabricator)) {
-    errors.fabricator = 'Choose or name the fabricator.';
+    errors.fabricator = "Choose or name the fabricator.";
   }
 
   const allowance = parseMoneyToCents(brief.allowance);
-  if (!brief.priceOnRequest && allowance === null && !clean(brief.quote.amount)) {
-    errors.price = 'Add an allowance, a quote, or mark price on request.';
+  if (
+    !brief.priceOnRequest &&
+    allowance === null &&
+    !clean(brief.quote.tradeAmount) &&
+    !clean(brief.quote.retailAmount)
+  ) {
+    errors.price = "Add an allowance, a quote, or mark price on request.";
   }
-  if (clean(brief.quote.amount) && parseMoneyToCents(brief.quote.amount) === null) {
-    errors.quote = 'Enter the quote as a valid dollar amount.';
+  if (
+    clean(brief.quote.tradeAmount) &&
+    parseMoneyToCents(brief.quote.tradeAmount) === null
+  ) {
+    errors.tradeQuote = "Enter the workshop cost as a valid dollar amount.";
+  }
+  if (
+    clean(brief.quote.retailAmount) &&
+    parseMoneyToCents(brief.quote.retailAmount) === null
+  ) {
+    errors.retailQuote =
+      "Enter the client quoted price as a valid dollar amount.";
   }
   return errors;
 }
 
-export function hasCommissionBriefErrors(errors: CommissionBriefErrors): boolean {
+export function hasCommissionBriefErrors(
+  errors: CommissionBriefErrors,
+): boolean {
   return Object.keys(errors).length > 0;
 }
 
@@ -258,7 +281,7 @@ export function buildCustomRequirements(
   brief: CommissionBriefDraft,
 ): Record<string, unknown> {
   return {
-    kind: 'custom_commission',
+    kind: "custom_commission",
     scope: clean(brief.scope) || null,
     dimensions: {
       width: clean(brief.dimensions.width),
@@ -276,7 +299,8 @@ export function buildCustomRequirements(
     price_on_request: brief.priceOnRequest,
     quote: {
       reference: clean(brief.quote.reference) || null,
-      amount_cents: parseMoneyToCents(brief.quote.amount),
+      trade_amount_cents: parseMoneyToCents(brief.quote.tradeAmount),
+      retail_amount_cents: parseMoneyToCents(brief.quote.retailAmount),
       valid_until: clean(brief.quote.validUntil) || null,
       lead_time_weeks: clean(brief.quote.leadTimeWeeks)
         ? Number(brief.quote.leadTimeWeeks)
@@ -291,66 +315,81 @@ export function buildCustomRequirements(
 
 export function commissionBriefFromRequirements(
   requirements: unknown,
-  seed: Partial<Pick<CommissionBriefDraft, 'projectId' | 'name'>> = {},
+  seed: Partial<Pick<CommissionBriefDraft, "projectId" | "name">> = {},
 ): CommissionBriefDraft {
   const root = readRecord(requirements);
   const dimensions = readRecord(root.dimensions);
   const quote = readRecord(root.quote);
   const approvals = readRecord(root.approvals);
   const drawingReferences = Array.isArray(root.drawing_references)
-    ? root.drawing_references.filter((value): value is string => typeof value === 'string')
+    ? root.drawing_references.filter(
+        (value): value is string => typeof value === "string",
+      )
     : [];
   const allowanceCents = readNumber(root.allowance_cents);
-  const quoteCents = readNumber(quote.amount_cents);
+  const tradeQuoteCents = readNumber(
+    quote.trade_amount_cents ?? quote.amount_cents,
+  );
+  const retailQuoteCents = readNumber(quote.retail_amount_cents);
   return {
     ...EMPTY_COMMISSION_BRIEF,
-    projectId: seed.projectId ?? '',
-    name: seed.name ?? '',
-    scope: readString(root.scope) ?? '',
+    projectId: seed.projectId ?? "",
+    name: seed.name ?? "",
+    scope: readString(root.scope) ?? "",
     dimensions: {
-      width: readString(dimensions.width) ?? '',
-      depth: readString(dimensions.depth) ?? '',
-      height: readString(dimensions.height) ?? '',
-      unit: dimensions.unit === 'mm' ? 'mm' : 'in',
-      siteNotes: readString(dimensions.site_notes) ?? '',
+      width: readString(dimensions.width) ?? "",
+      depth: readString(dimensions.depth) ?? "",
+      height: readString(dimensions.height) ?? "",
+      unit: dimensions.unit === "mm" ? "mm" : "in",
+      siteNotes: readString(dimensions.site_notes) ?? "",
     },
-    material: readString(root.material) ?? '',
-    finish: readString(root.finish) ?? '',
-    fabricatorVendorId: readString(root.fabricator_vendor_id) ?? '',
-    fabricator: readString(root.fabricator) ?? '',
+    material: readString(root.material) ?? "",
+    finish: readString(root.finish) ?? "",
+    fabricatorVendorId: readString(root.fabricator_vendor_id) ?? "",
+    fabricator: readString(root.fabricator) ?? "",
     drawingReferences,
-    allowance: allowanceCents === null ? '' : (allowanceCents / 100).toFixed(2),
+    allowance: allowanceCents === null ? "" : (allowanceCents / 100).toFixed(2),
     priceOnRequest: root.price_on_request !== false,
     quote: {
-      reference: readString(quote.reference) ?? '',
-      amount: quoteCents === null ? '' : (quoteCents / 100).toFixed(2),
-      validUntil: readString(quote.valid_until) ?? '',
-      leadTimeWeeks:
-        readNumber(quote.lead_time_weeks)?.toString() ?? '',
+      reference: readString(quote.reference) ?? "",
+      tradeAmount:
+        tradeQuoteCents === null ? "" : (tradeQuoteCents / 100).toFixed(2),
+      retailAmount:
+        retailQuoteCents === null ? "" : (retailQuoteCents / 100).toFixed(2),
+      validUntil: readString(quote.valid_until) ?? "",
+      leadTimeWeeks: readNumber(quote.lead_time_weeks)?.toString() ?? "",
     },
-    designerApproval: approvals.designer === 'approved' ? 'approved' : 'pending',
-    clientApproval: approvals.client === 'approved' ? 'approved' : 'pending',
+    designerApproval:
+      approvals.designer === "approved" ? "approved" : "pending",
+    clientApproval: approvals.client === "approved" ? "approved" : "pending",
   };
 }
 
 export function formatCommissionMoney(cents: number | null): string | null {
   if (cents === null) return null;
-  return (cents / 100).toLocaleString('en-US', {
-    style: 'currency',
-    currency: 'USD',
+  return (cents / 100).toLocaleString("en-US", {
+    style: "currency",
+    currency: "USD",
     maximumFractionDigits: 0,
   });
 }
 
-export function summarizeCommissionSnapshot(snapshot: unknown): CommissionSnapshotSummary {
+export function summarizeCommissionSnapshot(
+  snapshot: unknown,
+): CommissionSnapshotSummary {
   const root = readRecord(snapshot);
   const canonicalSnapshot = readRecord(root.snapshot);
-  const configured = Object.keys(canonicalSnapshot).length > 0 ? canonicalSnapshot : root;
+  const configured =
+    Object.keys(canonicalSnapshot).length > 0 ? canonicalSnapshot : root;
+  const canonicalCommission = readRecord(
+    root.customCommission ?? configured.customCommission,
+  );
   const custom = readRecord(
     root.custom_brief ??
       root.customBrief ??
       root.custom_requirements ??
       root.customRequirements ??
+      canonicalCommission.brief ??
       root,
   );
   const canonicalMeasurements = Array.isArray(custom.measurements)
@@ -365,18 +404,22 @@ export function summarizeCommissionSnapshot(snapshot: unknown): CommissionSnapsh
       );
       const value = entry ? readNumber(entry.value) : null;
       const unit = entry ? readString(entry.unit) : null;
-      return value === null ? null : `${value}${unit ? ` ${unit}` : ''}`;
+      return value === null ? null : `${value}${unit ? ` ${unit}` : ""}`;
     };
-    const measurementParts = ['width', 'depth', 'height'].map(measurement);
+    const measurementParts = ["width", "depth", "height"].map(measurement);
     const materials = Array.isArray(custom.materials)
-      ? custom.materials.filter((value): value is string => typeof value === 'string')
+      ? custom.materials.filter(
+          (value): value is string => typeof value === "string",
+        )
       : [];
     const drawings = Array.isArray(root.drawings)
       ? root.drawings
-      : Array.isArray(custom.drawings)
-        ? custom.drawings
-        : [];
-    const quote = readRecord(root.quote);
+      : Array.isArray(canonicalCommission.drawings)
+        ? canonicalCommission.drawings
+        : Array.isArray(custom.drawings)
+          ? custom.drawings
+          : [];
+    const quote = readRecord(root.quote ?? canonicalCommission.quote);
     const quoteCents =
       readNumber(quote.tradePriceCents ?? quote.trade_price_cents) ??
       readNumber(quote.retailPriceCents ?? quote.retail_price_cents);
@@ -390,20 +433,25 @@ export function summarizeCommissionSnapshot(snapshot: unknown): CommissionSnapsh
         readString(root.name) ??
         readString(root.title) ??
         readString(custom.summary) ??
-        'Custom commission',
+        readString(configured.productName) ??
+        "Custom commission",
       dimensions: measurementParts.every(Boolean)
-        ? measurementParts.join(' × ')
-        : measurementParts.filter(Boolean).join(' · ') || null,
+        ? measurementParts.join(" × ")
+        : measurementParts.filter(Boolean).join(" · ") || null,
       materialFinish:
-        [...materials, readString(custom.finish)].filter(Boolean).join(' · ') ||
+        [...materials, readString(custom.finish)].filter(Boolean).join(" · ") ||
         null,
       fabricator,
       quote:
         formatCommissionMoney(quoteCents) ??
         formatCommissionMoney(allowanceCents) ??
-        (custom.priceOnRequest === true ? 'Price on request' : null),
+        (custom.priceOnRequest === true ? "Price on request" : null),
       drawingCount: drawings.length,
-      revision: readNumber(root.revisionNumber ?? root.revision_number),
+      revision: readNumber(
+        root.revisionNumber ??
+          root.revision_number ??
+          canonicalCommission.revisionNumber,
+      ),
       hash: readString(
         root.snapshotHash ??
           root.configurationSnapshotHash ??
@@ -427,9 +475,9 @@ export function summarizeCommissionSnapshot(snapshot: unknown): CommissionSnapsh
   if (isCanonicalConfiguration) {
     const variant = readRecord(configured.variant);
     const dimensions = readRecord(configured.dimensions);
-    const dimensionParts = ['width', 'depth', 'height']
+    const dimensionParts = ["width", "depth", "height"]
       .map((key) => dimensions[key])
-      .filter((value) => typeof value === 'string' || typeof value === 'number')
+      .filter((value) => typeof value === "string" || typeof value === "number")
       .map(String);
     const optionLabels = selections
       .map((selection) => {
@@ -442,7 +490,9 @@ export function summarizeCommissionSnapshot(snapshot: unknown): CommissionSnapsh
       .map((component) => {
         const name = readString(component.name);
         const quantity = readNumber(component.quantity);
-        return name ? `${name}${quantity && quantity > 1 ? ` ×${quantity}` : ''}` : null;
+        return name
+          ? `${name}${quantity && quantity > 1 ? ` ×${quantity}` : ""}`
+          : null;
       })
       .filter(Boolean) as string[];
     const retailPrice = readNumber(configured.retailPriceCents);
@@ -453,23 +503,24 @@ export function summarizeCommissionSnapshot(snapshot: unknown): CommissionSnapsh
       leadTime === null ? null : `${leadTime} week lead time`,
     ]
       .filter(Boolean)
-      .join(' · ');
-    const productName = readString(configured.productName) ?? 'Configured piece';
+      .join(" · ");
+    const productName =
+      readString(configured.productName) ?? "Configured piece";
     const variantName = readString(variant.name);
     return {
       title: variantName ? `${productName} · ${variantName}` : productName,
       dimensions:
         dimensionParts.length === 3
-          ? dimensionParts.join(' × ')
+          ? dimensionParts.join(" × ")
           : Object.entries(dimensions)
               .filter(([, value]) =>
-                ['string', 'number'].includes(typeof value),
+                ["string", "number"].includes(typeof value),
               )
               .slice(0, 3)
               .map(([key, value]) => `${key} ${String(value)}`)
-              .join(' · ') || null,
+              .join(" · ") || null,
       materialFinish:
-        [...optionLabels, ...componentLabels].slice(0, 4).join(' · ') || null,
+        [...optionLabels, ...componentLabels].slice(0, 4).join(" · ") || null,
       fabricator: null,
       quote: commercial || null,
       drawingCount: 0,
@@ -484,30 +535,37 @@ export function summarizeCommissionSnapshot(snapshot: unknown): CommissionSnapsh
     };
   }
   const brief = commissionBriefFromRequirements(custom, {
-    name: readString(root.name) ?? readString(root.title) ?? 'Custom commission',
+    name:
+      readString(root.name) ?? readString(root.title) ?? "Custom commission",
   });
   const dimensions = brief.dimensions;
-  const completeDimensions = [dimensions.width, dimensions.depth, dimensions.height].every(
-    Boolean,
-  );
+  const completeDimensions = [
+    dimensions.width,
+    dimensions.depth,
+    dimensions.height,
+  ].every(Boolean);
   const quoteRoot = readRecord(custom.quote);
-  const quoteCents = readNumber(quoteRoot.amount_cents);
+  const quoteCents =
+    readNumber(quoteRoot.retail_amount_cents) ??
+    readNumber(quoteRoot.trade_amount_cents ?? quoteRoot.amount_cents);
   const allowanceCents = readNumber(custom.allowance_cents);
   return {
-    title: brief.name || 'Custom commission',
+    title: brief.name || "Custom commission",
     dimensions: completeDimensions
       ? `${dimensions.width} × ${dimensions.depth} × ${dimensions.height} ${dimensions.unit}`
       : null,
     materialFinish:
-      [brief.material, brief.finish].filter(Boolean).join(' · ') || null,
+      [brief.material, brief.finish].filter(Boolean).join(" · ") || null,
     fabricator: brief.fabricator || null,
     quote:
       formatCommissionMoney(quoteCents) ??
       formatCommissionMoney(allowanceCents) ??
-      (brief.priceOnRequest ? 'Price on request' : null),
+      (brief.priceOnRequest ? "Price on request" : null),
     drawingCount: brief.drawingReferences.length,
     revision: readNumber(root.revision_number ?? root.revisionNumber),
-    hash: readString(root.configuration_hash ?? root.configurationHash ?? root.hash),
+    hash: readString(
+      root.configuration_hash ?? root.configurationHash ?? root.hash,
+    ),
   };
 }
 
@@ -520,25 +578,27 @@ export function assessSnapshotSafety(input: {
   const approved = input.approvedHash?.trim() || null;
   if (input.lockedAt) {
     return {
-      kind: 'issued',
-      message: 'Issued snapshot locked. Library edits will not change this order.',
+      kind: "issued",
+      message:
+        "Issued snapshot locked. Library edits will not change this order.",
     };
   }
   if (approved && working && approved !== working) {
     return {
-      kind: 'requires_reapproval',
-      message: 'This revision changed after approval. Reapprove it before issuing or ordering.',
+      kind: "requires_reapproval",
+      message:
+        "This revision changed after approval. Reapprove it before issuing or ordering.",
     };
   }
   if (approved) {
     return {
-      kind: 'approved',
-      message: 'Approved snapshot. Further changes start a new revision.',
+      kind: "approved",
+      message: "Approved snapshot. Further changes start a new revision.",
     };
   }
   return {
-    kind: 'draft',
-    message: 'Working draft. Submit it to preserve a reviewable revision.',
+    kind: "draft",
+    message: "Working draft. Submit it to preserve a reviewable revision.",
   };
 }
 
@@ -553,7 +613,7 @@ export function extractConfigurationSnapshotEnvelope(
     source.configuration_snapshot ??
     source.snapshot ??
     null;
-  if (!snapshot || typeof snapshot !== 'object') return null;
+  if (!snapshot || typeof snapshot !== "object") return null;
   return {
     configurationId: readString(
       source.configurationId ?? source.configuration_id,
@@ -572,12 +632,17 @@ export function extractConfigurationSnapshotEnvelope(
         source.approvedHash,
     ),
     lockedAt: readString(
-      source.configurationLockedAt ?? source.configuration_locked_at ?? source.lockedAt,
+      source.configurationLockedAt ??
+        source.configuration_locked_at ??
+        source.lockedAt,
     ),
   };
 }
 
-export function formatConfigurationSnapshotForClipboard(value: unknown): string[] {
+export function formatConfigurationSnapshotForClipboard(
+  value: unknown,
+  audience: "studio" | "vendor" = "studio",
+): string[] {
   const envelope = extractConfigurationSnapshotEnvelope(value);
   if (!envelope) return [];
   const summary = summarizeCommissionSnapshot({
@@ -586,22 +651,20 @@ export function formatConfigurationSnapshotForClipboard(value: unknown): string[
   });
   const lines = [`Configuration: ${summary.title}`];
   if (summary.dimensions) lines.push(`Dimensions: ${summary.dimensions}`);
-  if (summary.materialFinish) lines.push(`Selection: ${summary.materialFinish}`);
+  if (summary.materialFinish)
+    lines.push(`Selection: ${summary.materialFinish}`);
   if (summary.fabricator) lines.push(`Maker: ${summary.fabricator}`);
-  if (summary.quote) lines.push(`Commercial: ${summary.quote}`);
+  // Vendor manifests already carry the authoritative trade line amount. Do
+  // not repeat a summary that prefers client retail and could expose markup.
+  if (audience === "studio" && summary.quote) {
+    lines.push(`Commercial: ${summary.quote}`);
+  }
   if (summary.drawingCount > 0) lines.push(`Drawings: ${summary.drawingCount}`);
   if (envelope.hash) lines.push(`Snapshot: ${envelope.hash}`);
-  if (envelope.lockedAt) lines.push('State: issued snapshot (locked)');
+  if (envelope.lockedAt) lines.push("State: issued snapshot (locked)");
   return lines;
 }
 
 export function parseDrawingReferences(value: string): string[] {
-  return Array.from(
-    new Set(
-      value
-        .split(/\r?\n/)
-        .map(clean)
-        .filter(Boolean),
-    ),
-  );
+  return Array.from(new Set(value.split(/\r?\n/).map(clean).filter(Boolean)));
 }

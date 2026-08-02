@@ -46,6 +46,7 @@ import {
 } from "./facet-field";
 import { PieceFolio } from "./piece-folio";
 import { AddToProjectSheet } from "./add-to-project-sheet";
+import { CustomCommissionSheet } from "./custom-commission-sheet";
 import {
   configurationDefinitionToView,
   configurationDraftToSaveInput,
@@ -58,6 +59,7 @@ import {
   PieceConfigurationWorkspace,
   type AuthoritativeConfigurationResolution,
   type SaveConfigurationDraft,
+  type SavedConfigurationReference,
 } from "./piece-configuration-workspace";
 import type {
   FlatPieceConfigurationSource,
@@ -225,8 +227,11 @@ export function PieceRoom({ productId }: { productId: string }) {
     [configurationDefinition.data, configurationPiece],
   );
   const savedConfigurationViews = useMemo(
-    () => (savedConfigurations.data ?? []).map(savedConfigurationToView),
-    [savedConfigurations.data],
+    () =>
+      (savedConfigurations.data ?? []).map((saved) =>
+        savedConfigurationToView(saved, configurationDefinition.data?.revision),
+      ),
+    [configurationDefinition.data?.revision, savedConfigurations.data],
   );
   const layer = (p?.layer ?? "personal") as Layer;
 
@@ -325,6 +330,9 @@ export function PieceRoom({ productId }: { productId: string }) {
   const [promoteOpen, setPromoteOpen] = useState(false);
   const [nominateOpen, setNominateOpen] = useState(false);
   const [addOpen, setAddOpen] = useState(false);
+  const [customCommissionOpen, setCustomCommissionOpen] = useState(false);
+  const [customCommissionConfigurationId, setCustomCommissionConfigurationId] =
+    useState<string | null>(null);
   const [placementConfigurationId, setPlacementConfigurationId] = useState<
     string | null
   >(null);
@@ -368,16 +376,24 @@ export function PieceRoom({ productId }: { productId: string }) {
   );
 
   const saveConfiguredPiece = useCallback(
-    async (draft: SaveConfigurationDraft) => {
+    async (
+      draft: SaveConfigurationDraft,
+      current?: SavedConfigurationReference | null,
+    ) => {
       const result = await saveConfiguration.mutateAsync(
         configurationDraftToSaveInput({
           piece: configurationPiece,
           definition: configurationView,
           draft,
+          configurationId: current?.id,
+          expectedVersion: current?.version,
         }),
       );
       setToast("Configuration saved with its current maker-rule result.");
-      return { id: result.configuration.id };
+      return {
+        id: result.configuration.id,
+        version: result.configuration.version,
+      };
     },
     [configurationPiece, configurationView, saveConfiguration],
   );
@@ -385,6 +401,11 @@ export function PieceRoom({ productId }: { productId: string }) {
   const openPlacement = useCallback((configurationId: string | null) => {
     setPlacementConfigurationId(configurationId);
     setAddOpen(true);
+  }, []);
+
+  const openCustomCommission = useCallback((configurationId: string | null) => {
+    setCustomCommissionConfigurationId(configurationId);
+    setCustomCommissionOpen(true);
   }, []);
 
   const openPrimaryPlacement = useCallback(() => {
@@ -652,6 +673,11 @@ export function PieceRoom({ productId }: { productId: string }) {
           onEvaluate={evaluateSelection}
           onSaveConfiguration={user ? saveConfiguredPiece : undefined}
           onPlace={(configurationId) => openPlacement(configurationId)}
+          onCustomCommission={
+            user && configurationView.mode === "custom"
+              ? openCustomCommission
+              : undefined
+          }
         />
 
         {/* ── Movement 1 · The record ── */}
@@ -1121,6 +1147,18 @@ export function PieceRoom({ productId }: { productId: string }) {
         }}
         onAdded={(name) => setToast(`Added “${p.name}” to ${name}.`)}
       />
+      {configurationView.mode === "custom" && customCommissionOpen && (
+        <CustomCommissionSheet
+          open={customCommissionOpen}
+          onClose={() => {
+            setCustomCommissionOpen(false);
+            setCustomCommissionConfigurationId(null);
+          }}
+          productId={p.id}
+          productName={p.name}
+          initialConfigurationId={customCommissionConfigurationId}
+        />
+      )}
 
       {toast && (
         <div

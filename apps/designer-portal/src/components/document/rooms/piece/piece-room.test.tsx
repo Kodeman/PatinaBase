@@ -1,4 +1,10 @@
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import {
+  act,
+  fireEvent,
+  render,
+  screen,
+  waitFor,
+} from "@testing-library/react";
 import { PieceRoom } from "./piece-room";
 
 let mockProduct: Record<string, unknown>;
@@ -47,7 +53,7 @@ jest.mock("@patina/supabase", () => ({
     data: {
       productId: "piece-1",
       productName: "Oak Writing Desk",
-      mode: "standard",
+      mode: mockProduct.configuration_mode ?? "standard",
       pricingStrategy: "base_plus_adjustments",
       revision: 0,
       optionGroups: [],
@@ -63,7 +69,39 @@ jest.mock("@patina/supabase", () => ({
     isPending: false,
   }),
   useEvaluateProductConfiguration: () => ({
-    mutateAsync: jest.fn(() => new Promise<never>(() => undefined)),
+    mutateAsync: jest.fn().mockImplementation(() => {
+      if (mockProduct.configuration_mode !== "custom") {
+        return new Promise<never>(() => undefined);
+      }
+      return Promise.resolve({
+        valid: true,
+        complete: true,
+        violations: [],
+        warnings: [],
+        normalizedSelection: {},
+        componentQuantities: {},
+        matchedVariant: null,
+        retailPriceCents: null,
+        tradePriceCents: null,
+        leadTimeWeeks: null,
+        dimensions: null,
+        schemaRevision: 1,
+        snapshot: {
+          productId: "piece-1",
+          productName: "Oak Writing Desk",
+          configurationMode: mockProduct.configuration_mode ?? "standard",
+          schemaRevision: 1,
+          variant: null,
+          selections: [],
+          components: [],
+          retailPriceCents: null,
+          tradePriceCents: null,
+          leadTimeWeeks: null,
+          dimensions: null,
+          capturedAt: "2026-08-02T12:00:00Z",
+        },
+      });
+    }),
     isPending: false,
   }),
   useSaveProductConfiguration: () => ({
@@ -144,6 +182,18 @@ jest.mock("./add-to-project-sheet", () => ({
   AddToProjectSheet: () => null,
 }));
 
+jest.mock("./custom-commission-sheet", () => ({
+  CustomCommissionSheet: ({
+    initialConfigurationId,
+  }: {
+    initialConfigurationId?: string | null;
+  }) => (
+    <div data-testid="custom-commission-sheet">
+      {initialConfigurationId ?? "new-commission"}
+    </div>
+  ),
+}));
+
 jest.mock("../library/deep-analysis-sheet", () => ({
   DeepAnalysisSheet: () => null,
 }));
@@ -208,5 +258,26 @@ describe("PieceRoom quiet facets", () => {
     expect(screen.getByText("Style & character")).toBeInTheDocument();
     expect(screen.getByText("Name")).toBeInTheDocument();
     expect(screen.getByText("SEO title")).toBeInTheDocument();
+  });
+
+  it("opens the custom commission workshop as a new project record", async () => {
+    mockProduct = {
+      ...editablePiece(),
+      configuration_mode: "custom",
+    };
+
+    render(<PieceRoom productId="piece-1" />);
+
+    const start = await screen.findByRole("button", {
+      name: "Start commission",
+    });
+    await waitFor(() => expect(start).toBeEnabled());
+    await act(async () => {
+      fireEvent.click(start);
+    });
+
+    expect(screen.getByTestId("custom-commission-sheet")).toHaveTextContent(
+      "new-commission",
+    );
   });
 });

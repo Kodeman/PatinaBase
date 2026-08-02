@@ -16,7 +16,7 @@ interface MockBuilder {
 }
 
 function makeBuilder(result: BuilderResult): MockBuilder {
-  const builder = { chain: [], result } as MockBuilder;
+  const builder = { chain: [], result } as unknown as MockBuilder;
   const record = (method: string) =>
     vi.fn((...args: unknown[]) => {
       builder.chain.push({ method, args });

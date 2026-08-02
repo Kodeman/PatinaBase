@@ -1,4 +1,4 @@
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import type {
   ApproveProductConfigurationInput,
   CreateCustomCommissionRevisionInput,
@@ -15,8 +15,8 @@ import type {
   SaveProductConfigurationInput,
   TransitionCustomCommissionRevisionInput,
   UpsertProductConfigurationDefinitionInput,
-} from '@patina/types';
-import { createBrowserClient } from '../client';
+} from "@patina/types";
+import { createBrowserClient } from "../client";
 
 // RPC results are intentionally camelCase domain contracts. Generated database
 // types describe snake_case rows, so this one boundary casts the PostgREST
@@ -24,17 +24,17 @@ import { createBrowserClient } from '../client';
 const getSupabase = () => createBrowserClient() as any;
 
 export const productConfigurationKeys = {
-  all: ['product-configurations'] as const,
+  all: ["product-configurations"] as const,
   definition: (productId: string) =>
-    ['product-configurations', 'definition', productId] as const,
+    ["product-configurations", "definition", productId] as const,
   saved: (productId: string, projectId?: string) =>
-    ['product-configurations', 'saved', productId, projectId ?? null] as const,
+    ["product-configurations", "saved", productId, projectId ?? null] as const,
   savedPrefix: (productId: string) =>
-    ['product-configurations', 'saved', productId] as const,
+    ["product-configurations", "saved", productId] as const,
   detail: (configurationId: string) =>
-    ['product-configurations', 'detail', configurationId] as const,
+    ["product-configurations", "detail", configurationId] as const,
   customRevisions: (configurationId: string) =>
-    ['product-configurations', 'custom-revisions', configurationId] as const,
+    ["product-configurations", "custom-revisions", configurationId] as const,
 };
 
 function throwOnError<T>(result: { data: T | null; error: unknown }): T {
@@ -44,11 +44,11 @@ function throwOnError<T>(result: { data: T | null; error: unknown }): T {
 
 export function useProductConfigurationDefinition(productId?: string | null) {
   return useQuery<ProductConfigurationDefinition>({
-    queryKey: productConfigurationKeys.definition(productId ?? ''),
+    queryKey: productConfigurationKeys.definition(productId ?? ""),
     enabled: Boolean(productId),
     queryFn: async () =>
       throwOnError<ProductConfigurationDefinition>(
-        await getSupabase().rpc('get_product_configuration_schema', {
+        await getSupabase().rpc("get_product_configuration_schema", {
           p_product_id: productId,
         }),
       ),
@@ -60,11 +60,14 @@ export function useSavedProductConfigurations(
   projectId?: string | null,
 ) {
   return useQuery<SavedProductConfiguration[]>({
-    queryKey: productConfigurationKeys.saved(productId ?? '', projectId ?? undefined),
+    queryKey: productConfigurationKeys.saved(
+      productId ?? "",
+      projectId ?? undefined,
+    ),
     enabled: Boolean(productId),
     queryFn: async () =>
       throwOnError<SavedProductConfiguration[]>(
-        await getSupabase().rpc('list_product_configurations', {
+        await getSupabase().rpc("list_product_configurations", {
           p_product_id: productId,
           p_project_id: projectId ?? null,
         }),
@@ -78,7 +81,7 @@ export function useUpsertProductConfigurationDefinition(productId: string) {
     retry: false,
     mutationFn: async (input: UpsertProductConfigurationDefinitionInput) =>
       throwOnError<ProductConfigurationDefinition>(
-        await getSupabase().rpc('upsert_product_configuration_schema', {
+        await getSupabase().rpc("upsert_product_configuration_schema", {
           p_product_id: productId,
           p_input: input,
           p_expected_revision: input.expectedRevision ?? null,
@@ -86,8 +89,10 @@ export function useUpsertProductConfigurationDefinition(productId: string) {
       ),
     onSuccess: async () => {
       await Promise.all([
-        queryClient.invalidateQueries({ queryKey: productConfigurationKeys.definition(productId) }),
-        queryClient.invalidateQueries({ queryKey: ['products'] }),
+        queryClient.invalidateQueries({
+          queryKey: productConfigurationKeys.definition(productId),
+        }),
+        queryClient.invalidateQueries({ queryKey: ["products"] }),
       ]);
     },
   });
@@ -98,7 +103,7 @@ export function useEvaluateProductConfiguration() {
     retry: false,
     mutationFn: async (input: EvaluateProductConfigurationInput) =>
       throwOnError<ProductConfigurationEvaluation>(
-        await getSupabase().rpc('evaluate_product_configuration', {
+        await getSupabase().rpc("evaluate_product_configuration", {
           p_product_id: input.productId,
           p_variant_id: input.variantId ?? null,
           p_option_value_ids: input.optionValueIds,
@@ -114,13 +119,17 @@ export function useSaveProductConfiguration() {
     retry: false,
     mutationFn: async (input: SaveProductConfigurationInput) =>
       throwOnError<ProductConfigurationMutationResult>(
-        await getSupabase().rpc('save_product_configuration', { p_input: input }),
+        await getSupabase().rpc("save_product_configuration", {
+          p_input: input,
+        }),
       ),
     onSuccess: async (result: ProductConfigurationMutationResult) => {
       const configuration = result.configuration;
       await Promise.all([
         queryClient.invalidateQueries({
-          queryKey: productConfigurationKeys.savedPrefix(configuration.productId),
+          queryKey: productConfigurationKeys.savedPrefix(
+            configuration.productId,
+          ),
         }),
         queryClient.invalidateQueries({
           queryKey: productConfigurationKeys.detail(configuration.id),
@@ -145,16 +154,20 @@ export function useApproveProductConfiguration() {
     retry: false,
     mutationFn: async (input: ApproveProductConfigurationInput) =>
       throwOnError<SavedProductConfiguration>(
-        await getSupabase().rpc('approve_product_configuration', {
+        await getSupabase().rpc("approve_product_configuration", {
           p_configuration_id: input.configurationId,
           p_expected_version: input.expectedVersion ?? null,
         }),
       ),
     onSuccess: async (configuration: SavedProductConfiguration) => {
       await Promise.all([
-        queryClient.invalidateQueries({ queryKey: productConfigurationKeys.detail(configuration.id) }),
         queryClient.invalidateQueries({
-          queryKey: productConfigurationKeys.savedPrefix(configuration.productId),
+          queryKey: productConfigurationKeys.detail(configuration.id),
+        }),
+        queryClient.invalidateQueries({
+          queryKey: productConfigurationKeys.savedPrefix(
+            configuration.productId,
+          ),
         }),
       ]);
     },
@@ -167,18 +180,22 @@ export function usePromoteConfigurationToLibrary() {
     retry: false,
     mutationFn: async (input: PromoteConfigurationToLibraryInput) =>
       throwOnError<SavedProductConfiguration>(
-        await getSupabase().rpc('promote_configuration_to_library', {
+        await getSupabase().rpc("promote_configuration_to_library", {
           p_configuration_id: input.configurationId,
           p_name: input.name ?? null,
         }),
       ),
     onSuccess: async (configuration: SavedProductConfiguration) => {
       await Promise.all([
-        queryClient.invalidateQueries({ queryKey: productConfigurationKeys.detail(configuration.id) }),
         queryClient.invalidateQueries({
-          queryKey: productConfigurationKeys.savedPrefix(configuration.productId),
+          queryKey: productConfigurationKeys.detail(configuration.id),
         }),
-        queryClient.invalidateQueries({ queryKey: ['products'] }),
+        queryClient.invalidateQueries({
+          queryKey: productConfigurationKeys.savedPrefix(
+            configuration.productId,
+          ),
+        }),
+        queryClient.invalidateQueries({ queryKey: ["products"] }),
       ]);
     },
   });
@@ -186,11 +203,11 @@ export function usePromoteConfigurationToLibrary() {
 
 export function useCustomCommissionRevisions(configurationId?: string | null) {
   return useQuery<CustomCommissionRevision[]>({
-    queryKey: productConfigurationKeys.customRevisions(configurationId ?? ''),
+    queryKey: productConfigurationKeys.customRevisions(configurationId ?? ""),
     enabled: Boolean(configurationId),
     queryFn: async () =>
       throwOnError<CustomCommissionRevision[]>(
-        await getSupabase().rpc('list_custom_commission_revisions', {
+        await getSupabase().rpc("list_custom_commission_revisions", {
           p_configuration_id: configurationId,
         }),
       ),
@@ -203,7 +220,7 @@ export function useCreateCustomCommissionRevision() {
     retry: false,
     mutationFn: async (input: CreateCustomCommissionRevisionInput) =>
       throwOnError<CustomCommissionRevision>(
-        await getSupabase().rpc('create_custom_commission_revision', {
+        await getSupabase().rpc("create_custom_commission_revision", {
           p_configuration_id: input.configurationId,
           p_input: {
             brief: input.brief,
@@ -215,7 +232,9 @@ export function useCreateCustomCommissionRevision() {
       ),
     onSuccess: async (revision: CustomCommissionRevision) => {
       await queryClient.invalidateQueries({
-        queryKey: productConfigurationKeys.customRevisions(revision.configurationId),
+        queryKey: productConfigurationKeys.customRevisions(
+          revision.configurationId,
+        ),
       });
     },
   });
@@ -227,7 +246,7 @@ export function useTransitionCustomCommissionRevision() {
     retry: false,
     mutationFn: async (input: TransitionCustomCommissionRevisionInput) =>
       throwOnError<CustomCommissionRevision>(
-        await getSupabase().rpc('transition_custom_commission_revision', {
+        await getSupabase().rpc("transition_custom_commission_revision", {
           p_revision_id: input.revisionId,
           p_target_status: input.targetStatus,
           p_note: input.note ?? null,
@@ -240,12 +259,14 @@ export function useTransitionCustomCommissionRevision() {
     onSuccess: async (revision: CustomCommissionRevision) => {
       await Promise.all([
         queryClient.invalidateQueries({
-          queryKey: productConfigurationKeys.customRevisions(revision.configurationId),
+          queryKey: productConfigurationKeys.customRevisions(
+            revision.configurationId,
+          ),
         }),
         queryClient.invalidateQueries({
           queryKey: productConfigurationKeys.savedPrefix(revision.productId),
         }),
-        queryClient.invalidateQueries({ queryKey: ['vendor-quote-requests'] }),
+        queryClient.invalidateQueries({ queryKey: ["vendor-quote-requests"] }),
       ]);
     },
   });
@@ -257,7 +278,7 @@ export function usePrepareConfigurationQuoteRequest() {
     retry: false,
     mutationFn: async (input: PrepareConfigurationQuoteRequestInput) =>
       throwOnError<PreparedConfigurationQuoteRequest>(
-        await getSupabase().rpc('prepare_configuration_quote_request', {
+        await getSupabase().rpc("prepare_configuration_quote_request", {
           p_configuration_id: input.configurationId,
           p_vendor_id: input.vendorId,
           p_scope: input.scope ?? null,
@@ -267,7 +288,7 @@ export function usePrepareConfigurationQuoteRequest() {
       ),
     onSuccess: async (request: PreparedConfigurationQuoteRequest) => {
       await Promise.all([
-        queryClient.invalidateQueries({ queryKey: ['vendor-quote-requests'] }),
+        queryClient.invalidateQueries({ queryKey: ["vendor-quote-requests"] }),
         queryClient.invalidateQueries({
           queryKey: productConfigurationKeys.detail(request.configurationId),
         }),
@@ -282,7 +303,7 @@ export function usePlaceProductConfiguration() {
     retry: false,
     mutationFn: async (input: PlaceProductConfigurationInput) =>
       throwOnError<Record<string, unknown> & { productId: string }>(
-        await getSupabase().rpc('place_product_configuration_in_project', {
+        await getSupabase().rpc("place_product_configuration_in_project", {
           p_project_id: input.projectId,
           p_configuration_id: input.configurationId,
           p_room_id: input.roomId ?? null,
@@ -296,13 +317,27 @@ export function usePlaceProductConfiguration() {
       input: PlaceProductConfigurationInput,
     ) => {
       await Promise.all([
-        queryClient.invalidateQueries({ queryKey: ['project-ffe-items', input.projectId] }),
-        queryClient.invalidateQueries({ queryKey: ['spec-books', 'workbench', input.projectId] }),
+        queryClient.invalidateQueries({
+          queryKey: ["project-ffe-items", input.projectId],
+        }),
+        queryClient.invalidateQueries({
+          queryKey: ["project", input.projectId],
+        }),
+        queryClient.invalidateQueries({ queryKey: ["projects"] }),
+        queryClient.invalidateQueries({
+          queryKey: ["projects", input.projectId],
+        }),
+        queryClient.invalidateQueries({ queryKey: ["procurement-items"] }),
+        queryClient.invalidateQueries({
+          queryKey: ["spec-books", "workbench", input.projectId],
+        }),
         queryClient.invalidateQueries({
           queryKey: productConfigurationKeys.detail(input.configurationId),
         }),
         queryClient.invalidateQueries({
-          queryKey: productConfigurationKeys.customRevisions(input.configurationId),
+          queryKey: productConfigurationKeys.customRevisions(
+            input.configurationId,
+          ),
         }),
         queryClient.invalidateQueries({
           queryKey: productConfigurationKeys.savedPrefix(result.productId),

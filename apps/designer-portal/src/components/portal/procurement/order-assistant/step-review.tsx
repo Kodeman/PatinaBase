@@ -1,4 +1,4 @@
-'use client';
+"use client";
 
 /**
  * Order Assistant v2 — Review step.
@@ -9,64 +9,69 @@
  * the panel shell so the per-(vendor, project) context reset clears it.
  */
 
-import { Copy, ExternalLink } from 'lucide-react';
-import { Button } from '@/components/ui/controls';
-import { ConfigurationSnapshotCard } from '@/components/document/configuration-snapshot-card';
+import { Copy, ExternalLink } from "lucide-react";
+import { Button } from "@/components/ui/controls";
+import { ConfigurationSnapshotCard } from "@/components/document/configuration-snapshot-card";
 import {
   extractConfigurationSnapshotEnvelope,
   formatConfigurationSnapshotForClipboard,
-} from '@/components/document/rooms/piece/custom-commission-model';
+} from "@/components/document/rooms/piece/custom-commission-model";
 import {
   formatDollars,
   itemTradeCents,
   type OrderAssistantFFEItem,
   type OrderAssistantProject,
   type OrderAssistantVendor,
-} from './types';
+} from "./types";
 
 /** Studio ship-to surface is out of scope for Wave 1.4; PRD shows a static placeholder. */
-export const SHIP_TO_PLACEHOLDER = 'Middlewest Studio · Madison WI';
+export const SHIP_TO_PLACEHOLDER = "Middlewest Studio · Madison WI";
 
 export function formatItemDetailsForClipboard(
   vendor: OrderAssistantVendor,
   project: OrderAssistantProject,
-  items: OrderAssistantFFEItem[]
+  items: OrderAssistantFFEItem[],
 ): string {
   const lines: string[] = [];
   lines.push(`${vendor.name} — ${project.name}`);
-  lines.push('');
+  lines.push("");
   items.forEach((item, idx) => {
     lines.push(`${idx + 1}. ${item.name}`);
     if (item.room) lines.push(`   Room: ${item.room}`);
     lines.push(`   Ship to: ${SHIP_TO_PLACEHOLDER}`);
     // Vendor-facing amounts are TRADE cost (00186) — never client prices.
     lines.push(`   ${formatDollars(itemTradeCents(item))}`);
-    formatConfigurationSnapshotForClipboard(item).forEach((line) =>
+    formatConfigurationSnapshotForClipboard(item, "vendor").forEach((line) =>
       lines.push(`   ${line}`),
     );
-    lines.push('');
+    lines.push("");
   });
   const total = items.reduce((sum, i) => sum + itemTradeCents(i), 0);
   lines.push(`Total: ${formatDollars(total)}`);
-  return lines.join('\n');
+  return lines.join("\n");
 }
 
 export interface StepReviewProps {
   vendor: OrderAssistantVendor;
   ffeItems: OrderAssistantFFEItem[];
-  copyState: 'idle' | 'copied' | 'error';
+  copyState: "idle" | "copied" | "error";
   onCopyDetails: () => void;
 }
 
-export function StepReview({ vendor, ffeItems, copyState, onCopyDetails }: StepReviewProps) {
+export function StepReview({
+  vendor,
+  ffeItems,
+  copyState,
+  onCopyDetails,
+}: StepReviewProps) {
   return (
     <>
       {/* Open vendor portal */}
       <section
         className="mb-3 rounded-[5px] border px-3 py-3"
         style={{
-          borderColor: 'rgba(196,165,123,0.2)',
-          background: 'rgba(196,165,123,0.06)',
+          borderColor: "rgba(196,165,123,0.2)",
+          background: "rgba(196,165,123,0.06)",
         }}
       >
         <div className="mb-1 flex items-center justify-between gap-2">
@@ -90,8 +95,8 @@ export function StepReview({ vendor, ffeItems, copyState, onCopyDetails }: StepR
           )}
         </div>
         <div className="text-[0.7rem] leading-relaxed text-[var(--text-muted)]">
-          {vendor.trade_portal_url ?? '—'}
-          {vendor.trade_account_email ? ` · ${vendor.trade_account_email}` : ''}
+          {vendor.trade_portal_url ?? "—"}
+          {vendor.trade_account_email ? ` · ${vendor.trade_account_email}` : ""}
         </div>
       </section>
 
@@ -101,30 +106,26 @@ export function StepReview({ vendor, ffeItems, copyState, onCopyDetails }: StepR
           <div className="type-meta-small text-[var(--text-primary)]">
             Copy item details
           </div>
-          <Button
-            variant="secondary"
-            size="sm"
-            onClick={onCopyDetails}
-          >
+          <Button variant="secondary" size="sm" onClick={onCopyDetails}>
             <Copy className="h-3 w-3" />
-            {copyState === 'copied'
-              ? 'Copied!'
-              : copyState === 'error'
-                ? 'Copy failed'
-                : 'Copy details'}
+            {copyState === "copied"
+              ? "Copied!"
+              : copyState === "error"
+                ? "Copy failed"
+                : "Copy details"}
           </Button>
         </div>
         <div
           className="border-l-2 pl-3 text-[0.7rem] leading-[1.7] text-[var(--text-primary)]"
-          style={{ borderColor: 'var(--border-subtle)' }}
+          style={{ borderColor: "var(--border-subtle)" }}
         >
           {ffeItems.map((item, idx) => {
             const configuration = extractConfigurationSnapshotEnvelope(item);
             return (
-              <div key={item.id} className={idx > 0 ? 'mt-3' : ''}>
+              <div key={item.id} className={idx > 0 ? "mt-3" : ""}>
                 <div>
                   <strong>{idx + 1}.</strong> {item.name}
-                  {item.room ? ` · ${item.room}` : ''}
+                  {item.room ? ` · ${item.room}` : ""}
                 </div>
                 <div className="text-[var(--text-muted)]">
                   Ship to: {SHIP_TO_PLACEHOLDER}

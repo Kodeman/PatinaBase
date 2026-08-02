@@ -5,7 +5,9 @@ import { Button, Input, Select } from "@/components/ui/controls";
 import { libraryConfigurationEvents } from "@/lib/analytics/library-configuration-events";
 import {
   CONFIGURATION_MODE_COPY,
+  configurationModeRemovalCount,
   createDefinitionFromSuggestions,
+  definitionForConfigurationMode,
   localId,
   suggestedGroupsFromFlatPiece,
   type ConfigurationMode,
@@ -225,12 +227,22 @@ export function PieceConfigurationEditor({
           <Select
             aria-label="Offering model"
             value={definition.mode}
-            onChange={(event) =>
-              onChange({
-                ...definition,
-                mode: event.target.value as ConfigurationMode,
-              })
-            }
+            onChange={(event) => {
+              const mode = event.target.value as ConfigurationMode;
+              const removalCount = configurationModeRemovalCount(
+                definition,
+                mode,
+              );
+              if (
+                removalCount > 0 &&
+                !window.confirm(
+                  `Changing the offering model removes ${removalCount} incompatible ${removalCount === 1 ? "entry" : "entries"} from this draft. Continue?`,
+                )
+              ) {
+                return;
+              }
+              onChange(definitionForConfigurationMode(definition, mode));
+            }}
           >
             {Object.entries(CONFIGURATION_MODE_COPY).map(([mode, copy]) => (
               <option key={mode} value={mode}>
@@ -473,6 +485,32 @@ function OptionGroupsEditor({
               <OptionValuesEditor
                 group={group}
                 onChange={(values) => updateGroup(group.id, { values })}
+                onRemove={(valueId) =>
+                  onChange({
+                    ...definition,
+                    optionGroups: definition.optionGroups.map((candidate) =>
+                      candidate.id === group.id
+                        ? {
+                            ...candidate,
+                            values: candidate.values.filter(
+                              (value) => value.id !== valueId,
+                            ),
+                          }
+                        : candidate,
+                    ),
+                    variants: definition.variants.map((variant) => ({
+                      ...variant,
+                      optionValueIds: variant.optionValueIds.filter(
+                        (id) => id !== valueId,
+                      ),
+                    })),
+                    rules: definition.rules.filter(
+                      (rule) =>
+                        rule.sourceValueId !== valueId &&
+                        rule.targetValueId !== valueId,
+                    ),
+                  })
+                }
               />
             </fieldset>
           ))}
@@ -485,9 +523,11 @@ function OptionGroupsEditor({
 function OptionValuesEditor({
   group,
   onChange,
+  onRemove,
 }: {
   group: PieceOptionGroupView;
   onChange: (values: PieceOptionValueView[]) => void;
+  onRemove: (valueId: string) => void;
 }) {
   const update = (id: string, patch: Partial<PieceOptionValueView>) =>
     onChange(
@@ -502,7 +542,7 @@ function OptionValuesEditor({
         {group.values.map((value, index) => (
           <div
             key={value.id}
-            className="grid gap-2 rounded-[4px] bg-white p-2 sm:grid-cols-2 min-[980px]:grid-cols-6"
+            className={`grid gap-2 rounded-[4px] bg-white p-2 sm:grid-cols-2 min-[980px]:grid-cols-6 ${value.active === false ? "opacity-60" : ""}`}
           >
             <Field label="Value" className="min-[980px]:col-span-2">
               <Input
@@ -571,20 +611,27 @@ function OptionValuesEditor({
               value={value.dimensions}
               onChange={(dimensions) => update(value.id, { dimensions })}
             />
-            <div className="flex items-end justify-end min-[980px]:col-span-3">
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={() =>
-                  onChange(
-                    group.values.filter(
-                      (candidate) => candidate.id !== value.id,
-                    ),
-                  )
-                }
-              >
-                Remove value
-              </Button>
+            <div className="flex items-end justify-end gap-3 min-[980px]:col-span-3">
+              <label className="mb-2 flex items-center gap-2 text-[0.75rem] text-[var(--color-charcoal)]">
+                <input
+                  type="checkbox"
+                  checked={value.active !== false}
+                  onChange={(event) =>
+                    update(value.id, { active: event.target.checked })
+                  }
+                  className="accent-[var(--color-clay)]"
+                />
+                Offered
+              </label>
+              {!isPersistedId(value.id) && (
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => onRemove(value.id)}
+                >
+                  Remove value
+                </Button>
+              )}
             </div>
           </div>
         ))}
@@ -594,7 +641,10 @@ function OptionValuesEditor({
         size="sm"
         className="mt-2"
         onClick={() =>
-          onChange([...group.values, { id: localId("value"), label: "" }])
+          onChange([
+            ...group.values,
+            { id: localId("value"), label: "", active: true },
+          ])
         }
       >
         Add value
@@ -736,21 +786,35 @@ function VariantsEditor({
                   onChange={(dimensions) => update(variant.id, { dimensions })}
                 />
               </div>
-              <Button
-                variant="ghost"
-                size="sm"
-                className="mt-2"
-                onClick={() =>
-                  onChange({
-                    ...definition,
-                    variants: definition.variants.filter(
-                      (candidate) => candidate.id !== variant.id,
-                    ),
-                  })
-                }
-              >
-                Remove variant
-              </Button>
+              <div className="mt-2 flex items-center gap-3">
+                <label className="flex items-center gap-2 text-[0.75rem] text-[var(--color-charcoal)]">
+                  <input
+                    type="checkbox"
+                    checked={variant.active !== false}
+                    onChange={(event) =>
+                      update(variant.id, { active: event.target.checked })
+                    }
+                    className="accent-[var(--color-clay)]"
+                  />
+                  Offered
+                </label>
+                {!isPersistedId(variant.id) && (
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() =>
+                      onChange({
+                        ...definition,
+                        variants: definition.variants.filter(
+                          (candidate) => candidate.id !== variant.id,
+                        ),
+                      })
+                    }
+                  >
+                    Remove variant
+                  </Button>
+                )}
+              </div>
             </fieldset>
           ))}
         </div>
@@ -795,6 +859,7 @@ function ComponentsEditor({
                   maxQuantity: 12,
                   defaultQuantity: 0,
                   handedness: "none",
+                  active: true,
                 },
               ],
             })
@@ -922,21 +987,35 @@ function ComponentsEditor({
                   />
                 </Field>
               </div>
-              <Button
-                variant="ghost"
-                size="sm"
-                className="mt-2"
-                onClick={() =>
-                  onChange({
-                    ...definition,
-                    components: definition.components.filter(
-                      (candidate) => candidate.id !== component.id,
-                    ),
-                  })
-                }
-              >
-                Remove part
-              </Button>
+              <div className="mt-2 flex items-center gap-3">
+                <label className="flex items-center gap-2 text-[0.75rem] text-[var(--color-charcoal)]">
+                  <input
+                    type="checkbox"
+                    checked={component.active !== false}
+                    onChange={(event) =>
+                      update(component.id, { active: event.target.checked })
+                    }
+                    className="accent-[var(--color-clay)]"
+                  />
+                  Offered
+                </label>
+                {!isPersistedId(component.id) && (
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() =>
+                      onChange({
+                        ...definition,
+                        components: definition.components.filter(
+                          (candidate) => candidate.id !== component.id,
+                        ),
+                      })
+                    }
+                  >
+                    Remove part
+                  </Button>
+                )}
+              </div>
             </fieldset>
           ))}
         </div>
@@ -1182,4 +1261,10 @@ function inputToNumber(value: string): number | null {
 
 function validColor(value: string | null | undefined): boolean {
   return !!value && /^#[0-9a-f]{6}$/i.test(value);
+}
+
+function isPersistedId(value: string): boolean {
+  return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(
+    value,
+  );
 }

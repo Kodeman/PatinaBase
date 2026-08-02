@@ -1,10 +1,10 @@
-'use client';
+"use client";
 
-import { useEffect, useMemo, useState } from 'react';
-import { Input, Select, Textarea } from '@/components/ui/controls';
-import { DocumentAction, DocumentActionGroup } from '../../document-action';
-import { RoomSheet } from '../room-sheet';
-import { ConfigurationSnapshotCard } from '@/components/document/configuration-snapshot-card';
+import { useEffect, useMemo, useState } from "react";
+import { Input, Select, Textarea } from "@/components/ui/controls";
+import { DocumentAction, DocumentActionGroup } from "../../document-action";
+import { RoomSheet } from "../room-sheet";
+import { ConfigurationSnapshotCard } from "@/components/document/configuration-snapshot-card";
 import {
   EMPTY_COMMISSION_BRIEF,
   canEditCommissionRevision,
@@ -16,7 +16,7 @@ import {
   type CommissionBriefDraft,
   type CommissionBriefErrors,
   type CommissionRevisionTransitionStatus,
-} from './custom-commission-model';
+} from "./custom-commission-model";
 
 export interface CommissionProjectChoice {
   id: string;
@@ -67,7 +67,7 @@ export interface CustomCommissionWorkspaceProps {
     target: CommissionRevisionTransitionStatus,
     payload?: {
       note?: string;
-      quote?: CommissionBriefDraft['quote'];
+      quote?: CommissionBriefDraft["quote"];
       approval?: { designerApproved: boolean; clientApproved: boolean };
     },
   ) => Promise<void>;
@@ -76,7 +76,10 @@ export interface CustomCommissionWorkspaceProps {
     revisionId: string,
     brief: CommissionBriefDraft,
   ) => Promise<{ draftCreated: boolean; message: string }>;
-  onPlaceApproved: (configurationId: string, projectId: string) => Promise<void>;
+  onPlaceApproved: (
+    configurationId: string,
+    projectId: string,
+  ) => Promise<void>;
   onPromote: (configurationId: string) => Promise<void>;
   onStartNewCommission: () => void;
 }
@@ -107,16 +110,16 @@ function FieldLabel({
 
 function formatRevisionDate(value: string): string {
   const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return '';
-  return date.toLocaleDateString('en-US', {
-    month: 'short',
-    day: 'numeric',
-    year: 'numeric',
+  if (Number.isNaN(date.getTime())) return "";
+  return date.toLocaleDateString("en-US", {
+    month: "short",
+    day: "numeric",
+    year: "numeric",
   });
 }
 
 function statusLabel(status: string): string {
-  return normalizeCommissionStatus(status).replaceAll('_', ' ');
+  return normalizeCommissionStatus(status).replaceAll("_", " ");
 }
 
 function Timeline({
@@ -136,7 +139,10 @@ function Timeline({
     );
   }
   return (
-    <ol className="flex gap-2 overflow-x-auto pb-1" aria-label="Commission revisions">
+    <ol
+      className="flex gap-2 overflow-x-auto pb-1"
+      aria-label="Commission revisions"
+    >
       {revisions.map((revision) => (
         <li key={revision.id} className="shrink-0">
           <button
@@ -145,8 +151,8 @@ function Timeline({
             onClick={() => onSelect(revision)}
             className={`min-w-[126px] border-l-2 px-2.5 py-1.5 text-left transition-colors ${
               revision.id === activeId
-                ? 'border-[var(--color-clay)] bg-[rgba(196,165,123,0.08)]'
-                : 'border-[var(--color-pearl)] hover:border-[var(--color-aged-oak)]'
+                ? "border-[var(--color-clay)] bg-[rgba(196,165,123,0.08)]"
+                : "border-[var(--color-pearl)] hover:border-[var(--color-aged-oak)]"
             }`}
           >
             <span className="doc-type-meta block uppercase tracking-[0.08em] text-[var(--text-muted)]">
@@ -197,16 +203,16 @@ export function CustomCommissionWorkspace({
   const active = startingNew
     ? null
     : activeId
-      ? orderedRevisions.find((revision) => revision.id === activeId) ?? null
-      : orderedRevisions[0] ?? null;
+      ? (orderedRevisions.find((revision) => revision.id === activeId) ?? null)
+      : (orderedRevisions[0] ?? null);
   const [brief, setBrief] = useState<CommissionBriefDraft>({
     ...EMPTY_COMMISSION_BRIEF,
     name: productName,
-    projectId: initialProjectId ?? '',
+    projectId: initialProjectId ?? "",
   });
   const [errors, setErrors] = useState<CommissionBriefErrors>({});
   const [feedback, setFeedback] = useState<string | null>(null);
-  const [transitionNote, setTransitionNote] = useState('');
+  const [transitionNote, setTransitionNote] = useState("");
   const firstProjectId = projects[0]?.id;
 
   useEffect(() => {
@@ -223,34 +229,39 @@ export function CustomCommissionWorkspace({
       setBrief({
         ...EMPTY_COMMISSION_BRIEF,
         name: productName,
-        projectId: initialProjectId ?? firstProjectId ?? '',
+        projectId: initialProjectId ?? firstProjectId ?? "",
       });
     }
     setErrors({});
     setFeedback(null);
-    setTransitionNote('');
+    setTransitionNote("");
     // A newly returned revision must reseed the form; project/product defaults
     // are stable inputs for the no-revision case.
-  }, [active, activeId, firstProjectId, initialProjectId, open, productName, startingNew]);
+  }, [
+    active,
+    activeId,
+    firstProjectId,
+    initialProjectId,
+    open,
+    productName,
+    startingNew,
+  ]);
 
-  const status = active ? normalizeCommissionStatus(active.status) : 'draft';
+  const status = active ? normalizeCommissionStatus(active.status) : "draft";
   const editable = !active || canEditCommissionRevision(active.status);
   const set = <K extends keyof CommissionBriefDraft>(
     key: K,
     value: CommissionBriefDraft[K],
   ) => setBrief((current) => ({ ...current, [key]: value }));
   const setDimension = (
-    key: keyof CommissionBriefDraft['dimensions'],
+    key: keyof CommissionBriefDraft["dimensions"],
     value: string,
   ) =>
     setBrief((current) => ({
       ...current,
       dimensions: { ...current.dimensions, [key]: value },
     }));
-  const setQuote = (
-    key: keyof CommissionBriefDraft['quote'],
-    value: string,
-  ) =>
+  const setQuote = (key: keyof CommissionBriefDraft["quote"], value: string) =>
     setBrief((current) => ({
       ...current,
       quote: { ...current.quote, [key]: value },
@@ -277,11 +288,13 @@ export function CustomCommissionWorkspace({
       const result = await onSaveDraft(brief, active?.id);
       setStartingNew(false);
       setActiveId(result.revisionId);
-      setFeedback('Draft saved. Nothing was sent outside the studio.');
+      setFeedback("Draft saved. Nothing was sent outside the studio.");
       return result;
     } catch (cause) {
       setFeedback(
-        cause instanceof Error ? cause.message : 'The draft could not be saved.',
+        cause instanceof Error
+          ? cause.message
+          : "The draft could not be saved.",
       );
       return null;
     }
@@ -292,7 +305,7 @@ export function CustomCommissionWorkspace({
     success: string,
   ) => {
     let revisionId: string | null = active?.id ?? null;
-    if (status === 'draft') {
+    if (status === "draft") {
       const saved = await saveDraft();
       revisionId = saved?.revisionId ?? null;
     }
@@ -301,22 +314,22 @@ export function CustomCommissionWorkspace({
     try {
       await onTransition(revisionId, target, {
         note: transitionNote.trim() || undefined,
-        ...(target === 'approved'
+        ...(target === "approved"
           ? {
               approval: {
-                designerApproved: brief.designerApproval === 'approved',
-                clientApproved: brief.clientApproval === 'approved',
+                designerApproved: brief.designerApproval === "approved",
+                clientApproved: brief.clientApproval === "approved",
               },
             }
           : {}),
       });
-      setTransitionNote('');
+      setTransitionNote("");
       setFeedback(success);
     } catch (cause) {
       setFeedback(
         cause instanceof Error
           ? cause.message
-          : 'The revision could not move forward.',
+          : "The revision could not move forward.",
       );
     }
   };
@@ -324,20 +337,32 @@ export function CustomCommissionWorkspace({
   const recordQuote = async () => {
     if (!active) return;
     const validation = validateCommissionBrief(brief);
-    if (validation.quote) {
+    if (!brief.quote.tradeAmount.trim()) {
+      validation.tradeQuote =
+        "Add the workshop cost before recording the quote.";
+    }
+    if (!brief.quote.retailAmount.trim()) {
+      validation.retailQuote =
+        "Add the client quoted price before recording the quote.";
+    }
+    if (validation.tradeQuote || validation.retailQuote) {
       setErrors(validation);
       return;
     }
     setFeedback(null);
     try {
-      await onTransition(active.id, 'quoted', {
-        note: transitionNote.trim() || 'Quote recorded by designer',
+      await onTransition(active.id, "quoted", {
+        note: transitionNote.trim() || "Quote recorded by designer",
         quote: brief.quote,
       });
-      setFeedback('Quote revision recorded. It remains inside the studio until review.');
+      setFeedback(
+        "Quote revision recorded. It remains inside the studio until review.",
+      );
     } catch (cause) {
       setFeedback(
-        cause instanceof Error ? cause.message : 'The quote could not be recorded.',
+        cause instanceof Error
+          ? cause.message
+          : "The quote could not be recorded.",
       );
     }
   };
@@ -347,21 +372,21 @@ export function CustomCommissionWorkspace({
     if (!saved) return;
     setFeedback(null);
     try {
-      await onTransition(saved.revisionId, 'submitted', {
-        note: transitionNote.trim() || 'Prepared for quote review',
+      await onTransition(saved.revisionId, "submitted", {
+        note: transitionNote.trim() || "Prepared for quote review",
       });
       const rfq = await onPrepareQuoteRequest(
         saved.configurationId,
         saved.revisionId,
         brief,
       );
-      setTransitionNote('');
+      setTransitionNote("");
       setFeedback(rfq.message);
     } catch (cause) {
       setFeedback(
         cause instanceof Error
           ? cause.message
-          : 'The commission was saved, but quote review could not be prepared.',
+          : "The commission was saved, but quote review could not be prepared.",
       );
     }
   };
@@ -371,16 +396,18 @@ export function CustomCommissionWorkspace({
     try {
       const nextBrief: CommissionBriefDraft = {
         ...brief,
-        designerApproval: 'pending',
-        clientApproval: 'pending',
+        designerApproval: "pending",
+        clientApproval: "pending",
       };
       const result = await onSaveDraft(nextBrief, active?.id);
       setActiveId(result.revisionId);
       setBrief(nextBrief);
-      setFeedback('New draft started. The earlier revision remains unchanged.');
+      setFeedback("New draft started. The earlier revision remains unchanged.");
     } catch (cause) {
       setFeedback(
-        cause instanceof Error ? cause.message : 'A new revision could not be started.',
+        cause instanceof Error
+          ? cause.message
+          : "A new revision could not be started.",
       );
     }
   };
@@ -391,24 +418,30 @@ export function CustomCommissionWorkspace({
     setBrief({
       ...EMPTY_COMMISSION_BRIEF,
       name: productName,
-      projectId: firstProjectId ?? '',
+      projectId: firstProjectId ?? "",
     });
     setErrors({});
-    setFeedback('New project commission started. Earlier records remain unchanged.');
+    setFeedback(
+      "New project commission started. Earlier records remain unchanged.",
+    );
     onStartNewCommission();
   };
 
   const issue = async () => {
     if (!active || !canIssueCommission(brief)) {
-      setFeedback('Record both designer and client approval before issuing.');
+      setFeedback("Record both designer and client approval before issuing.");
       return;
     }
     try {
       await onPlaceApproved(active.configurationId, brief.projectId);
-      setFeedback('Issued to the project. This snapshot is locked for ordering.');
+      setFeedback(
+        "Issued to the project. This snapshot is locked for ordering.",
+      );
     } catch (cause) {
       setFeedback(
-        cause instanceof Error ? cause.message : 'The commission could not be issued.',
+        cause instanceof Error
+          ? cause.message
+          : "The commission could not be issued.",
       );
     }
   };
@@ -419,19 +452,23 @@ export function CustomCommissionWorkspace({
     try {
       await onPromote(active.configurationId);
       setFeedback(
-        'Saved as a reusable Library family. The project commission remains unchanged.',
+        "Saved as a reusable Library family. The project commission remains unchanged.",
       );
     } catch (cause) {
       setFeedback(
         cause instanceof Error
           ? cause.message
-          : 'The commission could not be saved to the Library.',
+          : "The commission could not be saved to the Library.",
       );
     }
   };
 
   return (
-    <RoomSheet open={open} onClose={onClose} title={`Custom commission · ${productName}`}>
+    <RoomSheet
+      open={open}
+      onClose={onClose}
+      title={`Custom commission · ${productName}`}
+    >
       <header className="border-b border-[var(--color-pearl)] pb-4">
         <p className="doc-type-meta uppercase tracking-[0.12em] text-[var(--color-clay)]">
           Made to measure
@@ -440,8 +477,9 @@ export function CustomCommissionWorkspace({
           Custom commission
         </h2>
         <p className="mt-1 max-w-[64ch] text-[0.78rem] leading-relaxed text-[var(--color-aged-oak)]">
-          Keep the field dimensions, workshop quote, drawings, and approvals in one
-          project record. Submitted work is preserved; changes begin a new revision.
+          Keep the field dimensions, workshop quote, drawings, and approvals in
+          one project record. Submitted work is preserved; changes begin a new
+          revision.
         </p>
       </header>
 
@@ -461,7 +499,11 @@ export function CustomCommissionWorkspace({
             New project commission
           </DocumentAction>
         </div>
-        <Timeline revisions={orderedRevisions} activeId={active?.id ?? null} onSelect={selectRevision} />
+        <Timeline
+          revisions={orderedRevisions}
+          activeId={active?.id ?? null}
+          onSelect={selectRevision}
+        />
       </section>
 
       {isLoading ? (
@@ -473,8 +515,8 @@ export function CustomCommissionWorkspace({
           <div className="min-w-0">
             {!editable && (
               <div className="mb-4 border-l-2 border-[var(--color-dusty-blue)] pl-3 text-[11px] text-[var(--text-muted)]">
-                Revision {active?.revisionNumber} is {statusLabel(status)} and cannot be
-                overwritten. Start a new revision to change the brief.
+                Revision {active?.revisionNumber} is {statusLabel(status)} and
+                cannot be overwritten. Start a new revision to change the brief.
               </div>
             )}
 
@@ -482,7 +524,7 @@ export function CustomCommissionWorkspace({
               <FieldLabel label="Project" error={errors.projectId}>
                 <Select
                   value={brief.projectId}
-                  onChange={(event) => set('projectId', event.target.value)}
+                  onChange={(event) => set("projectId", event.target.value)}
                   disabled={!editable}
                   invalid={!!errors.projectId}
                 >
@@ -497,7 +539,7 @@ export function CustomCommissionWorkspace({
               <FieldLabel label="Commission name" error={errors.name}>
                 <Input
                   value={brief.name}
-                  onChange={(event) => set('name', event.target.value)}
+                  onChange={(event) => set("name", event.target.value)}
                   disabled={!editable}
                   invalid={!!errors.name}
                 />
@@ -509,7 +551,7 @@ export function CustomCommissionWorkspace({
                 <Textarea
                   rows={3}
                   value={brief.scope}
-                  onChange={(event) => set('scope', event.target.value)}
+                  onChange={(event) => set("scope", event.target.value)}
                   disabled={!editable}
                   placeholder="Wall-to-wall cabinetry, integrated desk, cable access, reveal lines…"
                 />
@@ -521,12 +563,18 @@ export function CustomCommissionWorkspace({
                 Field dimensions
               </legend>
               <div className="mt-2 grid grid-cols-2 gap-3 sm:grid-cols-4">
-                {(['width', 'depth', 'height'] as const).map((dimension) => (
-                  <FieldLabel key={dimension} label={dimension} error={errors.dimensions}>
+                {(["width", "depth", "height"] as const).map((dimension) => (
+                  <FieldLabel
+                    key={dimension}
+                    label={dimension}
+                    error={errors.dimensions}
+                  >
                     <Input
                       inputMode="decimal"
                       value={brief.dimensions[dimension]}
-                      onChange={(event) => setDimension(dimension, event.target.value)}
+                      onChange={(event) =>
+                        setDimension(dimension, event.target.value)
+                      }
                       disabled={!editable}
                       invalid={!!errors.dimensions}
                     />
@@ -535,7 +583,9 @@ export function CustomCommissionWorkspace({
                 <FieldLabel label="Unit">
                   <Select
                     value={brief.dimensions.unit}
-                    onChange={(event) => setDimension('unit', event.target.value)}
+                    onChange={(event) =>
+                      setDimension("unit", event.target.value)
+                    }
                     disabled={!editable}
                   >
                     <option value="in">inches</option>
@@ -548,7 +598,9 @@ export function CustomCommissionWorkspace({
                   <Textarea
                     rows={2}
                     value={brief.dimensions.siteNotes}
-                    onChange={(event) => setDimension('siteNotes', event.target.value)}
+                    onChange={(event) =>
+                      setDimension("siteNotes", event.target.value)
+                    }
                     disabled={!editable}
                     placeholder="Field verify after flooring; north wall is 3/8 in out of plumb…"
                   />
@@ -564,7 +616,7 @@ export function CustomCommissionWorkspace({
                 <FieldLabel label="Material" error={errors.material}>
                   <Input
                     value={brief.material}
-                    onChange={(event) => set('material', event.target.value)}
+                    onChange={(event) => set("material", event.target.value)}
                     disabled={!editable}
                     invalid={!!errors.material}
                     placeholder="rift-sawn white oak"
@@ -573,19 +625,24 @@ export function CustomCommissionWorkspace({
                 <FieldLabel label="Finish" error={errors.finish}>
                   <Input
                     value={brief.finish}
-                    onChange={(event) => set('finish', event.target.value)}
+                    onChange={(event) => set("finish", event.target.value)}
                     disabled={!editable}
                     invalid={!!errors.finish}
                     placeholder="hand-rubbed clear oil"
                   />
                 </FieldLabel>
-                <FieldLabel label="Fabricator directory" error={errors.fabricator}>
+                <FieldLabel
+                  label="Fabricator directory"
+                  error={errors.fabricator}
+                >
                   <Select
                     value={brief.fabricatorVendorId}
                     onChange={(event) => {
-                      const vendor = vendors.find((item) => item.id === event.target.value);
-                      set('fabricatorVendorId', event.target.value);
-                      if (vendor) set('fabricator', vendor.name);
+                      const vendor = vendors.find(
+                        (item) => item.id === event.target.value,
+                      );
+                      set("fabricatorVendorId", event.target.value);
+                      if (vendor) set("fabricator", vendor.name);
                     }}
                     disabled={!editable}
                     invalid={!!errors.fabricator}
@@ -601,7 +658,7 @@ export function CustomCommissionWorkspace({
                 <FieldLabel label="Fabricator name" error={errors.fabricator}>
                   <Input
                     value={brief.fabricator}
-                    onChange={(event) => set('fabricator', event.target.value)}
+                    onChange={(event) => set("fabricator", event.target.value)}
                     disabled={!editable}
                     invalid={!!errors.fabricator}
                     placeholder="workshop or maker"
@@ -612,12 +669,17 @@ export function CustomCommissionWorkspace({
                 <FieldLabel label="Drawing & attachment references">
                   <Textarea
                     rows={3}
-                    value={brief.drawingReferences.join('\n')}
+                    value={brief.drawingReferences.join("\n")}
                     onChange={(event) =>
-                      set('drawingReferences', parseDrawingReferences(event.target.value))
+                      set(
+                        "drawingReferences",
+                        parseDrawingReferences(event.target.value),
+                      )
                     }
                     disabled={!editable}
-                    placeholder={'A-602 rev 3\nSK-14 desk reveal\nsite-measure-2026-08-02.pdf'}
+                    placeholder={
+                      "A-602 rev 3\nSK-14 desk reveal\nsite-measure-2026-08-02.pdf"
+                    }
                   />
                 </FieldLabel>
               </div>
@@ -631,18 +693,20 @@ export function CustomCommissionWorkspace({
                 <input
                   type="checkbox"
                   checked={brief.priceOnRequest}
-                  onChange={(event) => set('priceOnRequest', event.target.checked)}
+                  onChange={(event) =>
+                    set("priceOnRequest", event.target.checked)
+                  }
                   disabled={!editable}
                   className="h-4 w-4 accent-[var(--color-clay)]"
                 />
                 Price on request until the workshop quote is recorded
               </label>
-              <div className="mt-3 grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
+              <div className="mt-3 grid gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6">
                 <FieldLabel label="Project allowance" error={errors.price}>
                   <Input
                     inputMode="decimal"
                     value={brief.allowance}
-                    onChange={(event) => set('allowance', event.target.value)}
+                    onChange={(event) => set("allowance", event.target.value)}
                     disabled={!editable}
                     placeholder="$28,500"
                   />
@@ -650,68 +714,100 @@ export function CustomCommissionWorkspace({
                 <FieldLabel label="Quote reference">
                   <Input
                     value={brief.quote.reference}
-                    onChange={(event) => setQuote('reference', event.target.value)}
-                    disabled={status !== 'submitted'}
+                    onChange={(event) =>
+                      setQuote("reference", event.target.value)
+                    }
+                    disabled={status !== "submitted"}
                   />
                 </FieldLabel>
-                <FieldLabel label="Quoted amount" error={errors.quote}>
+                <FieldLabel label="Workshop cost" error={errors.tradeQuote}>
                   <Input
                     inputMode="decimal"
-                    value={brief.quote.amount}
-                    onChange={(event) => setQuote('amount', event.target.value)}
-                    disabled={status !== 'submitted'}
-                    invalid={!!errors.quote}
+                    value={brief.quote.tradeAmount}
+                    onChange={(event) =>
+                      setQuote("tradeAmount", event.target.value)
+                    }
+                    disabled={status !== "submitted"}
+                    invalid={!!errors.tradeQuote}
+                  />
+                </FieldLabel>
+                <FieldLabel
+                  label="Client quoted price"
+                  error={errors.retailQuote}
+                >
+                  <Input
+                    inputMode="decimal"
+                    value={brief.quote.retailAmount}
+                    onChange={(event) =>
+                      setQuote("retailAmount", event.target.value)
+                    }
+                    disabled={status !== "submitted"}
+                    invalid={!!errors.retailQuote}
                   />
                 </FieldLabel>
                 <FieldLabel label="Lead time · weeks">
                   <Input
                     inputMode="numeric"
                     value={brief.quote.leadTimeWeeks}
-                    onChange={(event) => setQuote('leadTimeWeeks', event.target.value)}
-                    disabled={status !== 'submitted'}
+                    onChange={(event) =>
+                      setQuote("leadTimeWeeks", event.target.value)
+                    }
+                    disabled={status !== "submitted"}
                   />
                 </FieldLabel>
                 <FieldLabel label="Quote valid until">
                   <Input
                     type="date"
                     value={brief.quote.validUntil}
-                    onChange={(event) => setQuote('validUntil', event.target.value)}
-                    disabled={status !== 'submitted'}
+                    onChange={(event) =>
+                      setQuote("validUntil", event.target.value)
+                    }
+                    disabled={status !== "submitted"}
                   />
                 </FieldLabel>
               </div>
             </fieldset>
 
-            {status === 'client_review' && (
+            {status === "client_review" && (
               <fieldset className="mt-5 border-l-2 border-[var(--color-clay)] pl-3">
                 <legend className="font-heading text-[15px] text-[var(--color-charcoal)]">
                   Approval record
                 </legend>
                 <p className="mt-1 text-[12px] text-[var(--text-muted)]">
-                  Both approvals are required before the configuration can be locked for
-                  the project or a purchase order.
+                  Both approvals are required before the configuration can be
+                  locked for the project or a purchase order.
                 </p>
                 <div className="mt-2 flex flex-wrap gap-4">
-                  {(['designerApproval', 'clientApproval'] as const).map((key) => (
-                    <label key={key} className="flex items-center gap-2 text-[11px] text-[var(--color-charcoal)]">
-                      <input
-                        type="checkbox"
-                        checked={brief[key] === 'approved'}
-                        onChange={(event) =>
-                          set(key, event.target.checked ? 'approved' : 'pending')
-                        }
-                        className="h-4 w-4 accent-[var(--color-clay)]"
-                      />
-                      {key === 'designerApproval' ? 'Designer approved' : 'Client approved'}
-                    </label>
-                  ))}
+                  {(["designerApproval", "clientApproval"] as const).map(
+                    (key) => (
+                      <label
+                        key={key}
+                        className="flex items-center gap-2 text-[11px] text-[var(--color-charcoal)]"
+                      >
+                        <input
+                          type="checkbox"
+                          checked={brief[key] === "approved"}
+                          onChange={(event) =>
+                            set(
+                              key,
+                              event.target.checked ? "approved" : "pending",
+                            )
+                          }
+                          className="h-4 w-4 accent-[var(--color-clay)]"
+                        />
+                        {key === "designerApproval"
+                          ? "Designer approved"
+                          : "Client approved"}
+                      </label>
+                    ),
+                  )}
                 </div>
               </fieldset>
             )}
           </div>
 
           <aside className="min-w-0 border-l border-[var(--color-pearl)] pl-4">
-              <p className="doc-type-meta uppercase tracking-[0.09em] text-[var(--text-muted)]">
+            <p className="doc-type-meta uppercase tracking-[0.09em] text-[var(--text-muted)]">
               Handoff
             </p>
             {active ? (
@@ -724,16 +820,17 @@ export function CustomCommissionWorkspace({
                 />
               </div>
             ) : (
-                <p className="doc-type-body mt-2 italic text-[var(--text-muted)]">
-                Save the first draft to establish its revision and snapshot hash.
+              <p className="doc-type-body mt-2 italic text-[var(--text-muted)]">
+                Save the first draft to establish its revision and snapshot
+                hash.
               </p>
             )}
             <p className="doc-type-body mt-4 leading-relaxed text-[var(--text-muted)]">
-              The same frozen configuration follows the FF&amp;E line, spec book,
-              quote review, and purchase order. Library edits never rewrite an issued
-              record.
+              The same frozen configuration follows the FF&amp;E line, spec
+              book, quote review, and purchase order. Library edits never
+              rewrite an issued record.
             </p>
-            {status === 'approved' && (
+            {status === "approved" && (
               <DocumentActionGroup
                 surfaceKey="piece"
                 regionKey="custom-commission-handoff"
@@ -766,15 +863,18 @@ export function CustomCommissionWorkspace({
           <div className="min-w-0 flex-1">
             {(feedback || error) && (
               <p
-                role={error ? 'alert' : 'status'}
-                className={`text-[12px] ${error ? 'text-[var(--color-terracotta)]' : 'text-[var(--text-muted)]'}`}
+                role={error ? "alert" : "status"}
+                className={`text-[12px] ${error ? "text-[var(--color-terracotta)]" : "text-[var(--text-muted)]"}`}
               >
                 {error ?? feedback}
               </p>
             )}
           </div>
-          <DocumentActionGroup surfaceKey="piece" regionKey="custom-commission-actions">
-            {status === 'draft' && (
+          <DocumentActionGroup
+            surfaceKey="piece"
+            regionKey="custom-commission-actions"
+          >
+            {status === "draft" && (
               <>
                 <DocumentAction
                   actionKey="save-custom-commission-draft"
@@ -794,41 +894,66 @@ export function CustomCommissionWorkspace({
                 </DocumentAction>
               </>
             )}
-            {status === 'submitted' && (
+            {status === "submitted" && (
               <DocumentAction
                 actionKey="record-custom-commission-quote"
                 variant="primary"
-                disabled={isBusy || !brief.quote.amount.trim()}
+                disabled={
+                  isBusy ||
+                  !brief.quote.tradeAmount.trim() ||
+                  !brief.quote.retailAmount.trim()
+                }
                 onClick={() => void recordQuote()}
               >
                 Record quote revision
               </DocumentAction>
             )}
-            {status === 'quoted' && active && (
+            {status === "quoted" && active && (
               <DocumentAction
                 actionKey="send-custom-commission-to-client-review"
                 variant="primary"
                 disabled={isBusy}
                 onClick={() =>
-                  void transition('client_review', 'Ready for designer and client approval.')
+                  void transition(
+                    "client_review",
+                    "Ready for designer and client approval.",
+                  )
                 }
               >
                 Begin client review
               </DocumentAction>
             )}
-            {status === 'client_review' && active && (
-              <DocumentAction
-                actionKey="approve-custom-commission"
-                variant="primary"
-                disabled={isBusy || !canIssueCommission(brief)}
-                onClick={() =>
-                  void transition('approved', 'Approved. The snapshot is ready to issue.')
-                }
-              >
-                Record both approvals
-              </DocumentAction>
+            {status === "client_review" && active && (
+              <>
+                <DocumentAction
+                  actionKey="request-custom-commission-revision"
+                  variant="secondary"
+                  disabled={isBusy}
+                  onClick={() =>
+                    void transition(
+                      "rejected",
+                      "Changes requested. Start a new revision to continue.",
+                    )
+                  }
+                >
+                  Request revision
+                </DocumentAction>
+                <DocumentAction
+                  actionKey="approve-custom-commission"
+                  variant="primary"
+                  disabled={isBusy || !canIssueCommission(brief)}
+                  onClick={() =>
+                    void transition(
+                      "approved",
+                      "Approved. The snapshot is ready to issue.",
+                    )
+                  }
+                >
+                  Record both approvals
+                </DocumentAction>
+              </>
             )}
-            {!editable && status !== 'client_review' && (
+            {!editable && status !== "client_review" && (
               <DocumentAction
                 actionKey="revise-custom-commission"
                 variant="secondary"

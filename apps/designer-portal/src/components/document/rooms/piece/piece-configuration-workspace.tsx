@@ -36,6 +36,7 @@ export interface SavedConfigurationView {
   name: string;
   version: number;
   status: string;
+  sourceChanged?: boolean;
   selection?: PieceConfigurationSelectionView;
 }
 
@@ -44,6 +45,12 @@ export interface SaveConfigurationDraft {
   notes: string | null;
   customRequirements: Record<string, unknown> | null;
   selection: PieceConfigurationSelectionView;
+}
+
+export interface SavedConfigurationReference {
+  id: string;
+  version: number;
+  sourceChanged?: boolean;
 }
 
 export function PieceConfigurationWorkspace({
@@ -80,13 +87,16 @@ export function PieceConfigurationWorkspace({
   onEvaluate?: (selection: PieceConfigurationSelectionView) => void;
   onSaveConfiguration?: (
     draft: SaveConfigurationDraft,
-  ) => Promise<{ id: string } | void>;
+    current?: SavedConfigurationReference | null,
+  ) => Promise<{ id: string; version?: number } | void>;
   onPlace: (
     savedConfigurationId: string | null,
     resolution: PieceConfigurationResolutionView,
     authoritativeSnapshot?: Record<string, unknown>,
   ) => Promise<void> | void;
-  onCustomCommission?: (savedConfigurationId: string) => Promise<void> | void;
+  onCustomCommission?: (
+    savedConfigurationId: string | null,
+  ) => Promise<void> | void;
   onResolutionChange?: (
     resolution: PieceConfigurationResolutionView,
     authoritativeSnapshot?: Record<string, unknown>,
@@ -102,9 +112,8 @@ export function PieceConfigurationWorkspace({
   const [customMeasurements, setCustomMeasurements] = useState("");
   const [customSiteNotes, setCustomSiteNotes] = useState("");
   const [saveError, setSaveError] = useState<string | null>(null);
-  const [activeSavedConfigurationId, setActiveSavedConfigurationId] = useState<
-    string | null
-  >(null);
+  const [activeSavedConfiguration, setActiveSavedConfiguration] =
+    useState<SavedConfigurationReference | null>(null);
   const [placing, setPlacing] = useState(false);
   const definitionRef = useRef(definition);
   const evaluateRef = useRef(onEvaluate);
@@ -116,7 +125,7 @@ export function PieceConfigurationWorkspace({
     const nextSelection = initialSelection(nextDefinition);
     setDraftDefinition(nextDefinition);
     setSelection(nextSelection);
-    setActiveSavedConfigurationId(null);
+    setActiveSavedConfiguration(null);
     evaluateRef.current?.(nextSelection);
   }, [definition.productId, definition.revision]);
 
@@ -126,7 +135,11 @@ export function PieceConfigurationWorkspace({
       definition: draftDefinition,
       selection,
     });
-    if (draftDefinition.mode !== "custom" || customBrief.trim()) {
+    if (
+      draftDefinition.mode !== "custom" ||
+      onCustomCommission ||
+      customBrief.trim()
+    ) {
       return resolved;
     }
     return {
@@ -135,7 +148,7 @@ export function PieceConfigurationWorkspace({
       complete: false,
       errors: [...resolved.errors, "Write a commission brief."],
     };
-  }, [customBrief, draftDefinition, piece, selection]);
+  }, [customBrief, draftDefinition, onCustomCommission, piece, selection]);
   const currentSelectionKey = selectionKey(selection);
   const freshAuthoritative =
     authoritativeResolution?.selectionKey === currentSelectionKey
@@ -153,7 +166,7 @@ export function PieceConfigurationWorkspace({
 
   const changeSelection = (next: PieceConfigurationSelectionView) => {
     setSelection(next);
-    setActiveSavedConfigurationId(null);
+    setActiveSavedConfiguration(null);
     onEvaluate?.(next);
   };
 
@@ -162,7 +175,11 @@ export function PieceConfigurationWorkspace({
       (candidate) => candidate.id === groupId,
     );
     if (!group) return;
-    const groupValueIds = new Set(group.values.map((value) => value.id));
+    const groupValueIds = new Set(
+      group.values
+        .filter((value) => value.active !== false)
+        .map((value) => value.id),
+    );
     const multiple = group.selectionType === "multiple";
     const alreadySelected = selection.optionValueIds.includes(valueId);
     changeSelection({
@@ -198,24 +215,37 @@ export function PieceConfigurationWorkspace({
   };
 
   const save = async (): Promise<string | null> => {
-    if (!onSaveConfiguration) return activeSavedConfigurationId;
+    if (!onSaveConfiguration) return activeSavedConfiguration?.id ?? null;
     setSaveError(null);
     try {
-      const saved = await onSaveConfiguration({
-        name: saveName.trim() || null,
-        notes: notes.trim() || null,
-        customRequirements:
-          draftDefinition.mode === "custom"
-            ? {
-                brief: customBrief.trim() || null,
-                measurements: customMeasurements.trim() || null,
-                siteNotes: customSiteNotes.trim() || null,
-              }
-            : null,
-        selection,
-      });
-      const savedId = saved?.id ?? activeSavedConfigurationId;
-      if (savedId) setActiveSavedConfigurationId(savedId);
+      const saved = await onSaveConfiguration(
+        {
+          name: saveName.trim() || null,
+          notes: notes.trim() || null,
+          customRequirements:
+            draftDefinition.mode === "custom"
+              ? {
+                  brief: customBrief.trim() || null,
+                  measurements: customMeasurements.trim() || null,
+                  siteNotes: customSiteNotes.trim() || null,
+                }
+              : null,
+          selection,
+        },
+        activeSavedConfiguration,
+      );
+      const savedId = saved?.id ?? activeSavedConfiguration?.id ?? null;
+      if (savedId) {
+        setActiveSavedConfiguration({
+          id: savedId,
+          version:
+            saved?.version ??
+            (activeSavedConfiguration
+              ? activeSavedConfiguration.version + 1
+              : 1),
+          sourceChanged: false,
+        });
+      }
       libraryConfigurationEvents.saved(piece.id, draftDefinition.mode);
       return savedId;
     } catch (error) {
@@ -232,7 +262,11 @@ export function PieceConfigurationWorkspace({
     setSaveError(null);
     setPlacing(true);
     try {
-      let savedConfigurationId = activeSavedConfigurationId;
+      let savedConfigurationId = activeSavedConfiguration?.id ?? null;
+      if (draftDefinition.mode === "custom" && onCustomCommission) {
+        await onCustomCommission(savedConfigurationId);
+        return;
+      }
       if (draftDefinition.mode !== "standard" && !savedConfigurationId) {
         savedConfigurationId = await save();
         if (!savedConfigurationId) {
@@ -240,14 +274,6 @@ export function PieceConfigurationWorkspace({
             "Save this configuration before adding it to a project.",
           );
         }
-      }
-      if (
-        draftDefinition.mode === "custom" &&
-        savedConfigurationId &&
-        onCustomCommission
-      ) {
-        await onCustomCommission(savedConfigurationId);
-        return;
       }
       await onPlace(
         savedConfigurationId,
@@ -278,6 +304,7 @@ export function PieceConfigurationWorkspace({
   const canPlace =
     effectiveResolution.complete &&
     effectiveResolution.valid &&
+    activeSavedConfiguration?.sourceChanged !== true &&
     (!requiresAuthoritative || freshAuthoritative?.complete === true) &&
     !evaluating;
   const unresolvedCount = effectiveResolution.errors.filter((error) =>
@@ -301,7 +328,7 @@ export function PieceConfigurationWorkspace({
               {modeCopy.label}
             </span>
             <span className="doc-type-meta">
-              r{draftDefinition.revision} · {draftDefinition.status}
+              r{draftDefinition.revision} · maker definition
             </span>
           </div>
           <h2
@@ -328,6 +355,8 @@ export function PieceConfigurationWorkspace({
 
       {draftDefinition.mode === "standard" ? (
         <StandardSelector piece={piece} />
+      ) : draftDefinition.mode === "custom" && onCustomCommission ? (
+        <CustomCommissionLauncher />
       ) : draftDefinition.mode === "custom" ? (
         <CustomCommissionFields
           brief={customBrief}
@@ -357,68 +386,73 @@ export function PieceConfigurationWorkspace({
                   )}
                 </legend>
                 <div className="mt-2 grid gap-2 sm:grid-cols-2">
-                  {group.values.map((value) => {
-                    const selected = selection.optionValueIds.includes(
-                      value.id,
-                    );
-                    const priceDelta = formatMoney(value.retailPriceDeltaCents);
-                    return (
-                      <label
-                        key={value.id}
-                        className={`relative flex min-h-[64px] cursor-pointer items-center gap-3 rounded-[5px] border px-3 py-2.5 transition-colors ${
-                          selected
-                            ? "border-[var(--color-clay)] bg-[rgba(196,165,123,0.1)]"
-                            : "border-[var(--doc-ink-border)] bg-[var(--doc-sheet-2)] hover:border-[var(--color-aged-oak)]"
-                        }`}
-                      >
-                        <input
-                          type={
-                            group.selectionType === "multiple"
-                              ? "checkbox"
-                              : "radio"
-                          }
-                          name={`configuration-${group.id}`}
-                          value={value.id}
-                          checked={selected}
-                          onChange={() => chooseValue(group.id, value.id)}
-                          className="sr-only"
-                        />
-                        {value.swatch && (
-                          <span
-                            aria-hidden
-                            className="h-8 w-8 shrink-0 rounded-full border border-[var(--doc-ink-border)]"
-                            style={{ background: value.swatch }}
+                  {group.values
+                    .filter((value) => value.active !== false)
+                    .map((value) => {
+                      const selected = selection.optionValueIds.includes(
+                        value.id,
+                      );
+                      const priceDelta = formatMoney(
+                        value.retailPriceDeltaCents,
+                      );
+                      return (
+                        <label
+                          key={value.id}
+                          className={`relative flex min-h-[64px] cursor-pointer items-center gap-3 rounded-[5px] border px-3 py-2.5 transition-colors ${
+                            selected
+                              ? "border-[var(--color-clay)] bg-[rgba(196,165,123,0.1)]"
+                              : "border-[var(--doc-ink-border)] bg-[var(--doc-sheet-2)] hover:border-[var(--color-aged-oak)]"
+                          }`}
+                        >
+                          <input
+                            type={
+                              group.selectionType === "multiple"
+                                ? "checkbox"
+                                : "radio"
+                            }
+                            name={`configuration-${group.id}`}
+                            value={value.id}
+                            checked={selected}
+                            onChange={() => chooseValue(group.id, value.id)}
+                            className="sr-only"
                           />
-                        )}
-                        <span className="min-w-0">
-                          <span className="block text-[0.82rem] font-medium text-[var(--color-charcoal)]">
-                            {value.label}
+                          {value.swatch && (
+                            <span
+                              aria-hidden
+                              className="h-8 w-8 shrink-0 rounded-full border border-[var(--doc-ink-border)]"
+                              style={{ background: value.swatch }}
+                            />
+                          )}
+                          <span className="min-w-0">
+                            <span className="block text-[0.82rem] font-medium text-[var(--color-charcoal)]">
+                              {value.label}
+                            </span>
+                            <span className="mt-0.5 block text-[0.68rem] text-[var(--color-quiet-ink)]">
+                              {[
+                                value.sku ? `SKU ${value.sku}` : null,
+                                priceDelta
+                                  ? `${(value.retailPriceDeltaCents ?? 0) >= 0 ? "+" : ""}${priceDelta}`
+                                  : null,
+                                value.leadTimeDeltaWeeks
+                                  ? `+${value.leadTimeDeltaWeeks} wk`
+                                  : null,
+                              ]
+                                .filter(Boolean)
+                                .join(" · ") ||
+                                "No change to price or lead time"}
+                            </span>
                           </span>
-                          <span className="mt-0.5 block text-[0.68rem] text-[var(--color-quiet-ink)]">
-                            {[
-                              value.sku ? `SKU ${value.sku}` : null,
-                              priceDelta
-                                ? `${(value.retailPriceDeltaCents ?? 0) >= 0 ? "+" : ""}${priceDelta}`
-                                : null,
-                              value.leadTimeDeltaWeeks
-                                ? `+${value.leadTimeDeltaWeeks} wk`
-                                : null,
-                            ]
-                              .filter(Boolean)
-                              .join(" · ") || "No change to price or lead time"}
-                          </span>
-                        </span>
-                        {selected && (
-                          <span
-                            aria-hidden
-                            className="ml-auto text-[var(--color-clay)]"
-                          >
-                            ✓
-                          </span>
-                        )}
-                      </label>
-                    );
-                  })}
+                          {selected && (
+                            <span
+                              aria-hidden
+                              className="ml-auto text-[var(--color-clay)]"
+                            >
+                              ✓
+                            </span>
+                          )}
+                        </label>
+                      );
+                    })}
                 </div>
               </fieldset>
             ))}
@@ -446,38 +480,52 @@ export function PieceConfigurationWorkspace({
         <CompatibilityFeedback resolution={effectiveResolution} />
       )}
 
+      {activeSavedConfiguration?.sourceChanged && (
+        <p
+          role="alert"
+          className="mt-5 border-l-2 border-[var(--color-terracotta)] pl-3 text-[0.75rem] text-[var(--color-charcoal)]"
+        >
+          The maker changed this piece after the saved specification. Review the
+          current choices and save a new revision before placing it.
+        </p>
+      )}
+
       <div className="mt-6 grid gap-4 border-t border-[var(--doc-ink-border)] pt-5 lg:grid-cols-[minmax(0,1fr)_auto]">
-        <div className="grid gap-2 sm:grid-cols-2">
-          <label>
-            <span className="doc-type-meta mb-1 block font-semibold uppercase tracking-[0.06em]">
-              Configuration name
-            </span>
-            <Input
-              value={saveName}
-              onChange={(event) => setSaveName(event.target.value)}
-              placeholder="Living room · client-approved"
-            />
-          </label>
-          <label>
-            <span className="doc-type-meta mb-1 block font-semibold uppercase tracking-[0.06em]">
-              Notes
-            </span>
-            <Input
-              value={notes}
-              onChange={(event) => setNotes(event.target.value)}
-              placeholder="COM or install notes"
-            />
-          </label>
-        </div>
+        {!(draftDefinition.mode === "custom" && onCustomCommission) && (
+          <div className="grid gap-2 sm:grid-cols-2">
+            <label>
+              <span className="doc-type-meta mb-1 block font-semibold uppercase tracking-[0.06em]">
+                Configuration name
+              </span>
+              <Input
+                value={saveName}
+                onChange={(event) => setSaveName(event.target.value)}
+                placeholder="Living room · client-approved"
+              />
+            </label>
+            <label>
+              <span className="doc-type-meta mb-1 block font-semibold uppercase tracking-[0.06em]">
+                Notes
+              </span>
+              <Input
+                value={notes}
+                onChange={(event) => setNotes(event.target.value)}
+                placeholder="COM or install notes"
+              />
+            </label>
+          </div>
+        )}
         <div className="flex flex-wrap items-end gap-2">
-          <Button
-            variant="secondary"
-            loading={savingConfiguration}
-            disabled={!onSaveConfiguration}
-            onClick={() => void save()}
-          >
-            {activeSavedConfigurationId ? "Save changes" : "Save for later"}
-          </Button>
+          {!(draftDefinition.mode === "custom" && onCustomCommission) && (
+            <Button
+              variant="secondary"
+              loading={savingConfiguration}
+              disabled={!onSaveConfiguration}
+              onClick={() => void save()}
+            >
+              {activeSavedConfiguration ? "Save changes" : "Save for later"}
+            </Button>
+          )}
           <Button
             disabled={!canPlace}
             loading={placing}
@@ -510,7 +558,12 @@ export function PieceConfigurationWorkspace({
           onLoad={(item) => {
             if (!item.selection) return;
             changeSelection(item.selection);
-            setActiveSavedConfigurationId(item.id);
+            setActiveSavedConfiguration({
+              id: item.id,
+              version: item.version,
+              sourceChanged: item.sourceChanged,
+            });
+            setSaveName(item.name);
           }}
         />
       )}
@@ -525,7 +578,7 @@ export function PieceConfigurationWorkspace({
               setDraftDefinition(next);
               onDefinitionChange?.(next);
               setSelection(nextSelection);
-              setActiveSavedConfigurationId(null);
+              setActiveSavedConfiguration(null);
               onEvaluate?.(nextSelection);
             }}
             onSave={onSaveDefinition}
@@ -630,6 +683,21 @@ function CustomCommissionFields({
   );
 }
 
+function CustomCommissionLauncher() {
+  return (
+    <div className="mt-6 rounded-[5px] border border-[var(--doc-ink-border)] bg-[var(--doc-sheet-2)] px-4 py-4">
+      <p className="text-[0.82rem] font-medium text-[var(--color-charcoal)]">
+        Build the commission inside its project record.
+      </p>
+      <p className="doc-type-body mt-1 max-w-[68ch] text-[var(--color-quiet-ink)]">
+        The workshop keeps field dimensions, drawings, maker quotes, and
+        designer and client approvals together. Every submitted change becomes a
+        preserved revision; nothing is sent outside the studio automatically.
+      </p>
+    </div>
+  );
+}
+
 function ComponentComposer({
   definition,
   selection,
@@ -651,91 +719,93 @@ function ComponentComposer({
         Add only the modules needed. A chaise or end unit may also need a side.
       </p>
       <div className="mt-2 space-y-2">
-        {definition.components.map((component) => {
-          const selected = selection.components.find(
-            (candidate) => candidate.componentId === component.id,
-          );
-          const quantity = selected?.quantity ?? 0;
-          return (
-            <div
-              key={component.id}
-              className="flex flex-wrap items-center gap-3 rounded-[5px] border border-[var(--doc-ink-border)] bg-[var(--doc-sheet-2)] px-3 py-3"
-            >
-              <div className="min-w-[170px] flex-1">
-                <p className="text-[0.82rem] font-medium text-[var(--color-charcoal)]">
-                  {component.name}
-                </p>
-                <p className="mt-0.5 text-[0.68rem] text-[var(--color-quiet-ink)]">
-                  {[
-                    component.sku ? `SKU ${component.sku}` : null,
-                    formatMoney(component.retailPriceCents),
-                    component.leadTimeWeeks
-                      ? `${component.leadTimeWeeks} wk`
-                      : null,
-                  ]
-                    .filter(Boolean)
-                    .join(" · ")}
-                </p>
-              </div>
-              {component.handedness === "either" && quantity > 0 && (
-                <label className="w-[132px]">
-                  <span className="sr-only">{component.name} handedness</span>
-                  <Select
-                    aria-label={`${component.name} handedness`}
-                    value={selected?.handedness ?? ""}
-                    invalid={!selected?.handedness}
-                    onChange={(event) =>
+        {definition.components
+          .filter((component) => component.active !== false)
+          .map((component) => {
+            const selected = selection.components.find(
+              (candidate) => candidate.componentId === component.id,
+            );
+            const quantity = selected?.quantity ?? 0;
+            return (
+              <div
+                key={component.id}
+                className="flex flex-wrap items-center gap-3 rounded-[5px] border border-[var(--doc-ink-border)] bg-[var(--doc-sheet-2)] px-3 py-3"
+              >
+                <div className="min-w-[170px] flex-1">
+                  <p className="text-[0.82rem] font-medium text-[var(--color-charcoal)]">
+                    {component.name}
+                  </p>
+                  <p className="mt-0.5 text-[0.68rem] text-[var(--color-quiet-ink)]">
+                    {[
+                      component.sku ? `SKU ${component.sku}` : null,
+                      formatMoney(component.retailPriceCents),
+                      component.leadTimeWeeks
+                        ? `${component.leadTimeWeeks} wk`
+                        : null,
+                    ]
+                      .filter(Boolean)
+                      .join(" · ")}
+                  </p>
+                </div>
+                {component.handedness === "either" && quantity > 0 && (
+                  <label className="w-[132px]">
+                    <span className="sr-only">{component.name} handedness</span>
+                    <Select
+                      aria-label={`${component.name} handedness`}
+                      value={selected?.handedness ?? ""}
+                      invalid={!selected?.handedness}
+                      onChange={(event) =>
+                        onChange(component.id, {
+                          handedness: event.target.value as "left" | "right",
+                        })
+                      }
+                    >
+                      <option value="">Choose side</option>
+                      <option value="left">Left</option>
+                      <option value="right">Right</option>
+                    </Select>
+                  </label>
+                )}
+                <div
+                  className="flex items-center rounded-[4px] border border-[var(--doc-ink-border)] bg-white"
+                  aria-label={`${component.name} quantity`}
+                >
+                  <button
+                    type="button"
+                    aria-label={`Remove one ${component.name}`}
+                    disabled={quantity <= component.minQuantity}
+                    onClick={() =>
                       onChange(component.id, {
-                        handedness: event.target.value as "left" | "right",
+                        quantity: Math.max(component.minQuantity, quantity - 1),
                       })
                     }
+                    className="h-9 w-9 text-[1rem] text-[var(--color-charcoal)] disabled:opacity-30"
                   >
-                    <option value="">Choose side</option>
-                    <option value="left">Left</option>
-                    <option value="right">Right</option>
-                  </Select>
-                </label>
-              )}
-              <div
-                className="flex items-center rounded-[4px] border border-[var(--doc-ink-border)] bg-white"
-                aria-label={`${component.name} quantity`}
-              >
-                <button
-                  type="button"
-                  aria-label={`Remove one ${component.name}`}
-                  disabled={quantity <= component.minQuantity}
-                  onClick={() =>
-                    onChange(component.id, {
-                      quantity: Math.max(component.minQuantity, quantity - 1),
-                    })
-                  }
-                  className="h-9 w-9 text-[1rem] text-[var(--color-charcoal)] disabled:opacity-30"
-                >
-                  −
-                </button>
-                <output
-                  aria-live="polite"
-                  className="min-w-8 text-center font-mono text-[0.76rem] text-[var(--color-charcoal)]"
-                >
-                  {quantity}
-                </output>
-                <button
-                  type="button"
-                  aria-label={`Add one ${component.name}`}
-                  disabled={quantity >= component.maxQuantity}
-                  onClick={() =>
-                    onChange(component.id, {
-                      quantity: Math.min(component.maxQuantity, quantity + 1),
-                    })
-                  }
-                  className="h-9 w-9 text-[1rem] text-[var(--color-charcoal)] disabled:opacity-30"
-                >
-                  +
-                </button>
+                    −
+                  </button>
+                  <output
+                    aria-live="polite"
+                    className="min-w-8 text-center font-mono text-[0.76rem] text-[var(--color-charcoal)]"
+                  >
+                    {quantity}
+                  </output>
+                  <button
+                    type="button"
+                    aria-label={`Add one ${component.name}`}
+                    disabled={quantity >= component.maxQuantity}
+                    onClick={() =>
+                      onChange(component.id, {
+                        quantity: Math.min(component.maxQuantity, quantity + 1),
+                      })
+                    }
+                    className="h-9 w-9 text-[1rem] text-[var(--color-charcoal)] disabled:opacity-30"
+                  >
+                    +
+                  </button>
+                </div>
               </div>
-            </div>
-          );
-        })}
+            );
+          })}
       </div>
     </fieldset>
   );
@@ -911,6 +981,11 @@ function SavedConfigurations({
               <span className="doc-type-meta">
                 v{item.version} · {item.status}
               </span>
+              {item.sourceChanged && (
+                <span className="mt-0.5 block text-[0.66rem] font-medium text-[var(--color-terracotta)]">
+                  Source changed · review
+                </span>
+              )}
             </span>
             {item.selection && (
               <Button variant="ghost" size="sm" onClick={() => onLoad(item)}>

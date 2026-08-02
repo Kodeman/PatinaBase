@@ -1,16 +1,16 @@
-'use client';
+"use client";
 
-import { useEffect, useMemo, useState } from 'react';
-import * as PatinaData from '@patina/supabase';
+import { useEffect, useMemo, useState } from "react";
+import * as PatinaData from "@patina/supabase";
 import {
   CustomCommissionWorkspace,
   type CommissionWorkspaceRevision,
-} from './custom-commission-workspace';
+} from "./custom-commission-workspace";
 import {
   EMPTY_COMMISSION_BRIEF,
   type CommissionBriefDraft,
   type CommissionRevisionTransitionStatus,
-} from './custom-commission-model';
+} from "./custom-commission-model";
 
 interface QueryResult<T> {
   data?: T;
@@ -86,10 +86,16 @@ interface ConfigurationHooks {
     Record<string, unknown>,
     { configuration: WireConfiguration; customRevision?: WireRevision | null }
   >;
-  useTransitionCustomCommissionRevision: () => MutationResult<Record<string, unknown>>;
+  useTransitionCustomCommissionRevision: () => MutationResult<
+    Record<string, unknown>
+  >;
   usePlaceProductConfiguration: () => MutationResult<Record<string, unknown>>;
-  usePromoteConfigurationToLibrary: () => MutationResult<Record<string, unknown>>;
-  usePrepareConfigurationQuoteRequest: () => MutationResult<Record<string, unknown>>;
+  usePromoteConfigurationToLibrary: () => MutationResult<
+    Record<string, unknown>
+  >;
+  usePrepareConfigurationQuoteRequest: () => MutationResult<
+    Record<string, unknown>
+  >;
 }
 
 // The shared hooks land in the data slice and are consumed here through one
@@ -98,43 +104,46 @@ interface ConfigurationHooks {
 const data = PatinaData as unknown as ConfigurationHooks;
 
 function stringValue(value: unknown): string {
-  return typeof value === 'string' ? value : '';
+  return typeof value === "string" ? value : "";
 }
 
 function numberValue(value: unknown): number | null {
-  return typeof value === 'number' && Number.isFinite(value) ? value : null;
+  return typeof value === "number" && Number.isFinite(value) ? value : null;
 }
 
 function recordValue(value: unknown): Record<string, unknown> {
-  return value && typeof value === 'object' && !Array.isArray(value)
+  return value && typeof value === "object" && !Array.isArray(value)
     ? (value as Record<string, unknown>)
     : {};
 }
 
 function dollars(cents: number | null): string {
-  return cents === null ? '' : (cents / 100).toFixed(2);
+  return cents === null ? "" : (cents / 100).toFixed(2);
 }
 
 function cents(value: string): number | null {
-  const normalized = value.replace(/[$,\s]/g, '');
+  const normalized = value.replace(/[$,\s]/g, "");
   if (!normalized) return null;
   const parsed = Number(normalized);
-  return Number.isFinite(parsed) && parsed >= 0 ? Math.round(parsed * 100) : null;
+  return Number.isFinite(parsed) && parsed >= 0
+    ? Math.round(parsed * 100)
+    : null;
 }
 
 function measurement(
   measurements: Array<Record<string, unknown>>,
   label: string,
-): { value: string; unit: 'in' | 'mm' } {
+): { value: string; unit: "in" | "mm" } {
   const found = measurements.find(
     (entry) => stringValue(entry.label).toLowerCase() === label,
   );
   return {
     value:
-      found && (typeof found.value === 'number' || typeof found.value === 'string')
+      found &&
+      (typeof found.value === "number" || typeof found.value === "string")
         ? String(found.value)
-        : '',
-    unit: found?.unit === 'mm' ? 'mm' : 'in',
+        : "",
+    unit: found?.unit === "mm" ? "mm" : "in",
   };
 }
 
@@ -146,11 +155,13 @@ function briefFromWire(
   const measurements = Array.isArray(brief.measurements)
     ? brief.measurements.map(recordValue)
     : [];
-  const width = measurement(measurements, 'width');
-  const depth = measurement(measurements, 'depth');
-  const height = measurement(measurements, 'height');
+  const width = measurement(measurements, "width");
+  const depth = measurement(measurements, "depth");
+  const height = measurement(measurements, "height");
   const materials = Array.isArray(brief.materials)
-    ? brief.materials.filter((value): value is string => typeof value === 'string')
+    ? brief.materials.filter(
+        (value): value is string => typeof value === "string",
+      )
     : [];
   const drawings = Array.isArray(revision.drawings)
     ? revision.drawings
@@ -160,11 +171,9 @@ function briefFromWire(
   const quote = recordValue(revision.quote);
   const designerApproval = recordValue(brief.designerApproval);
   const clientApproval = recordValue(brief.clientApproval);
-  const quoteCents =
-    numberValue(quote.tradePriceCents) ?? numberValue(quote.retailPriceCents);
   return {
     ...EMPTY_COMMISSION_BRIEF,
-    projectId: revision.projectId ?? configuration.projectId ?? '',
+    projectId: revision.projectId ?? configuration.projectId ?? "",
     name: revision.name ?? configuration.name ?? stringValue(brief.summary),
     scope: stringValue(brief.intent),
     dimensions: {
@@ -174,7 +183,7 @@ function briefFromWire(
       unit: width.unit ?? depth.unit ?? height.unit,
       siteNotes: stringValue(brief.siteConditions),
     },
-    material: materials.join(', '),
+    material: materials.join(", "),
     finish: stringValue(brief.finish),
     fabricatorVendorId: stringValue(brief.fabricatorVendorId),
     fabricator: stringValue(brief.fabricatorName),
@@ -187,24 +196,24 @@ function briefFromWire(
     priceOnRequest: brief.priceOnRequest !== false,
     quote: {
       reference: stringValue(quote.quoteNumber),
-      amount: dollars(quoteCents),
+      tradeAmount: dollars(numberValue(quote.tradePriceCents)),
+      retailAmount: dollars(numberValue(quote.retailPriceCents)),
       validUntil: stringValue(quote.validUntil),
-      leadTimeWeeks:
-        numberValue(quote.leadTimeWeeks)?.toString() ?? '',
+      leadTimeWeeks: numberValue(quote.leadTimeWeeks)?.toString() ?? "",
     },
     designerApproval:
-      designerApproval.status === 'approved' ? 'approved' : 'pending',
+      designerApproval.status === "approved" ? "approved" : "pending",
     clientApproval:
-      clientApproval.status === 'approved' ? 'approved' : 'pending',
+      clientApproval.status === "approved" ? "approved" : "pending",
   };
 }
 
 function drawingAttachment(reference: string): Record<string, unknown> {
   const isUrl = /^(https?:\/\/|\/)/.test(reference);
-  const lastSegment = reference.split('/').filter(Boolean).pop();
+  const lastSegment = reference.split("/").filter(Boolean).pop();
   return {
-    name: isUrl ? lastSegment || 'Drawing' : reference,
-    url: isUrl ? reference : '',
+    name: isUrl ? lastSegment || "Drawing" : reference,
+    url: isUrl ? reference : "",
     ...(isUrl ? {} : { revision: reference }),
   };
 }
@@ -212,15 +221,15 @@ function drawingAttachment(reference: string): Record<string, unknown> {
 function briefToWire(brief: CommissionBriefDraft): Record<string, unknown> {
   const parsedMeasurements = (
     [
-      ['width', brief.dimensions.width],
-      ['depth', brief.dimensions.depth],
-      ['height', brief.dimensions.height],
+      ["width", brief.dimensions.width],
+      ["depth", brief.dimensions.depth],
+      ["height", brief.dimensions.height],
     ] as const
   ).map(([label, value]) => ({
     label,
     value: Number(value),
     unit: brief.dimensions.unit,
-    source: 'designer_field_measurement',
+    source: "designer_field_measurement",
   }));
   return {
     summary: brief.name.trim(),
@@ -229,7 +238,7 @@ function briefToWire(brief: CommissionBriefDraft): Record<string, unknown> {
     measurements: parsedMeasurements,
     requirements: [],
     materials: brief.material
-      .split(',')
+      .split(",")
       .map((value) => value.trim())
       .filter(Boolean),
     finish: brief.finish.trim(),
@@ -244,12 +253,17 @@ function briefToWire(brief: CommissionBriefDraft): Record<string, unknown> {
   };
 }
 
-function quoteToWire(quote: CommissionBriefDraft['quote']): Record<string, unknown> {
+function quoteToWire(
+  quote: CommissionBriefDraft["quote"],
+): Record<string, unknown> {
   return {
     quoteNumber: quote.reference.trim() || undefined,
-    tradePriceCents: cents(quote.amount) ?? undefined,
-    currency: 'USD',
-    leadTimeWeeks: quote.leadTimeWeeks ? Number(quote.leadTimeWeeks) : undefined,
+    tradePriceCents: cents(quote.tradeAmount) ?? undefined,
+    retailPriceCents: cents(quote.retailAmount) ?? undefined,
+    currency: "USD",
+    leadTimeWeeks: quote.leadTimeWeeks
+      ? Number(quote.leadTimeWeeks)
+      : undefined,
     validUntil: quote.validUntil || undefined,
     receivedAt: new Date().toISOString(),
   };
@@ -265,26 +279,32 @@ export function CustomCommissionSheet({
   onClose,
   productId,
   productName,
+  initialConfigurationId = null,
 }: {
   open: boolean;
   onClose: () => void;
   productId: string;
   productName: string;
+  initialConfigurationId?: string | null;
 }) {
   const projectsQuery = data.useProjects();
   const vendorsQuery = data.useVendors(undefined, { page: 1, pageSize: 100 });
   const configurationsQuery = data.useSavedProductConfigurations(productId);
-  const [selectedConfigurationId, setSelectedConfigurationId] = useState<string | null>(null);
+  const [selectedConfigurationId, setSelectedConfigurationId] = useState<
+    string | null
+  >(initialConfigurationId ?? "__new__");
   const configurations = useMemo(
     () => configurationsQuery.data ?? [],
     [configurationsQuery.data],
   );
   const activeConfiguration = selectedConfigurationId
-    ? configurations.find((item) => item.id === selectedConfigurationId) ?? null
-    : [...configurations].sort((a, b) => b.updatedAt.localeCompare(a.updatedAt))[0] ??
-      null;
+    ? (configurations.find((item) => item.id === selectedConfigurationId) ??
+      null)
+    : ([...configurations].sort((a, b) =>
+        b.updatedAt.localeCompare(a.updatedAt),
+      )[0] ?? null);
   const revisionsQuery = data.useCustomCommissionRevisions(
-    activeConfiguration?.id ?? '',
+    activeConfiguration?.id ?? "",
   );
   const saveConfiguration = data.useSaveProductConfiguration();
   const transitionRevision = data.useTransitionCustomCommissionRevision();
@@ -293,26 +313,19 @@ export function CustomCommissionSheet({
   const prepareQuoteRequest = data.usePrepareConfigurationQuoteRequest();
 
   useEffect(() => {
-    if (!open || selectedConfigurationId || configurations.length === 0) return;
-    setSelectedConfigurationId(
-      [...configurations].sort((a, b) => b.updatedAt.localeCompare(a.updatedAt))[0].id,
-    );
-  }, [configurations, open, selectedConfigurationId]);
+    if (!open) return;
+    setSelectedConfigurationId(initialConfigurationId ?? "__new__");
+  }, [initialConfigurationId, open, productId]);
 
   const revisions = useMemo<CommissionWorkspaceRevision[]>(() => {
     if (!activeConfiguration) return [];
-    return (revisionsQuery.data ?? []).map((revision) => ({
-      id: revision.id,
-      configurationId: revision.configurationId,
-      revisionNumber: revision.revisionNumber,
-      status: revision.status,
-      brief: briefFromWire(activeConfiguration, revision),
-      snapshot: {
+    return (revisionsQuery.data ?? []).map((revision) => {
+      const historicalConfiguration: WireConfiguration = {
+        ...activeConfiguration,
+        id: revision.configurationId,
+        projectId: revision.projectId ?? activeConfiguration.projectId,
+        version: revision.configurationVersion ?? activeConfiguration.version,
         name: revision.name ?? activeConfiguration.name,
-        customBrief: revision.brief,
-        drawings: revision.drawings,
-        quote: revision.quote,
-        revisionNumber: revision.revisionNumber,
         snapshot:
           revision.configurationSnapshot ??
           revision.snapshot ??
@@ -321,26 +334,45 @@ export function CustomCommissionSheet({
           revision.configurationSnapshotHash ??
           revision.snapshotHash ??
           activeConfiguration.snapshotHash,
-      },
-      snapshotHash:
-        revision.configurationSnapshotHash ??
-        revision.snapshotHash ??
-        activeConfiguration.snapshotHash,
-      lockedAt:
-        revision.configurationLockedAt ??
-        revision.issuedAt ??
-        (revision.status === 'issued' ? activeConfiguration.issuedAt ?? null : null),
-      transitionNote: revision.transitionNote,
-      createdAt: revision.createdAt,
-    }));
+        issuedAt: revision.issuedAt ?? activeConfiguration.issuedAt,
+      };
+      return {
+        id: revision.id,
+        configurationId: revision.configurationId,
+        revisionNumber: revision.revisionNumber,
+        status: revision.status,
+        brief: briefFromWire(historicalConfiguration, revision),
+        snapshot: {
+          name: historicalConfiguration.name,
+          customBrief: revision.brief,
+          drawings: revision.drawings,
+          quote: revision.quote,
+          revisionNumber: revision.revisionNumber,
+          snapshot: historicalConfiguration.snapshot,
+          snapshotHash: historicalConfiguration.snapshotHash,
+        },
+        snapshotHash: historicalConfiguration.snapshotHash,
+        lockedAt:
+          revision.configurationLockedAt ??
+          revision.issuedAt ??
+          (revision.status === "issued"
+            ? (historicalConfiguration.issuedAt ?? null)
+            : null),
+        transitionNote: revision.transitionNote,
+        createdAt: revision.createdAt,
+      };
+    });
   }, [activeConfiguration, revisionsQuery.data]);
 
   const projects = (projectsQuery.data ?? [])
     .filter(
       (project) =>
-        !['completed', 'archived', 'cancelled'].includes(project.status ?? ''),
+        !["completed", "archived", "cancelled"].includes(project.status ?? ""),
     )
-    .map((project) => ({ id: project.id, name: project.name ?? 'Untitled project' }));
+    .map((project) => ({
+      id: project.id,
+      name: project.name ?? "Untitled project",
+    }));
   const vendors = (vendorsQuery.data?.data ?? []).map((vendor) => ({
     id: vendor.id,
     name: vendor.name,
@@ -367,7 +399,7 @@ export function CustomCommissionSheet({
     const created = result.customRevision;
     if (!created) {
       throw new Error(
-        'The configuration saved without its commission revision. Refresh and try again.',
+        "The configuration saved without its commission revision. Refresh and try again.",
       );
     }
     setSelectedConfigurationId(configuration.id);
@@ -379,7 +411,7 @@ export function CustomCommissionSheet({
     target: CommissionRevisionTransitionStatus,
     payload?: {
       note?: string;
-      quote?: CommissionBriefDraft['quote'];
+      quote?: CommissionBriefDraft["quote"];
       approval?: { designerApproved: boolean; clientApproved: boolean };
     },
   ) => {
@@ -428,7 +460,7 @@ export function CustomCommissionSheet({
           return {
             draftCreated: false,
             message:
-              'Commission submitted. Match the named fabricator to a maker before creating the RFQ draft.',
+              "Commission submitted. Match the named fabricator to a maker before creating the RFQ draft.",
           };
         }
         await prepareQuoteRequest.mutateAsync({
@@ -443,16 +475,16 @@ export function CustomCommissionSheet({
             `${brief.dimensions.width} × ${brief.dimensions.depth} × ${brief.dimensions.height} ${brief.dimensions.unit}`,
             `${brief.material.trim()} · ${brief.finish.trim()}`,
             brief.drawingReferences.length
-              ? `${brief.drawingReferences.length} drawing reference${brief.drawingReferences.length === 1 ? '' : 's'} attached to the commission record.`
+              ? `${brief.drawingReferences.length} drawing reference${brief.drawingReferences.length === 1 ? "" : "s"} attached to the commission record.`
               : null,
           ]
             .filter(Boolean)
-            .join('\n'),
+            .join("\n"),
         });
         return {
           draftCreated: true,
           message:
-            'Commission submitted and RFQ draft saved for review. Nothing was sent.',
+            "Commission submitted and RFQ draft saved for review. Nothing was sent.",
         };
       }}
       onPlaceApproved={async (configurationId, projectId) => {
@@ -460,7 +492,7 @@ export function CustomCommissionSheet({
           projectId,
           configurationId,
           source: {
-            surface: 'designer_piece_custom_commission',
+            surface: "designer_piece_custom_commission",
             explicitDesignerAction: true,
           },
         });
@@ -471,7 +503,7 @@ export function CustomCommissionSheet({
           name: `${productName} · proven custom pattern`,
         });
       }}
-      onStartNewCommission={() => setSelectedConfigurationId('__new__')}
+      onStartNewCommission={() => setSelectedConfigurationId("__new__")}
     />
   );
 }
