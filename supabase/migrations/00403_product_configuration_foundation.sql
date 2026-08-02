@@ -282,6 +282,51 @@ CREATE TABLE IF NOT EXISTS public.custom_commission_revisions (
 CREATE INDEX IF NOT EXISTS idx_custom_commission_revisions_configuration
   ON public.custom_commission_revisions(configuration_id, revision_number DESC);
 
+CREATE TABLE IF NOT EXISTS public.custom_commission_milestones (
+  id               uuid PRIMARY KEY DEFAULT extensions.gen_random_uuid(),
+  configuration_id uuid NOT NULL REFERENCES public.product_configurations(id) ON DELETE RESTRICT,
+  revision_id      uuid NOT NULL REFERENCES public.custom_commission_revisions(id) ON DELETE RESTRICT,
+  project_id       uuid NOT NULL REFERENCES public.projects(id) ON DELETE RESTRICT,
+  milestone_type   text NOT NULL CHECK (milestone_type IN ('submittal','receiving','installed')),
+  status           text NOT NULL DEFAULT 'pending',
+  evidence         jsonb NOT NULL DEFAULT '{}'::jsonb CHECK (jsonb_typeof(evidence) = 'object'),
+  artifacts        jsonb NOT NULL DEFAULT '[]'::jsonb CHECK (jsonb_typeof(artifacts) = 'array'),
+  created_by       uuid REFERENCES auth.users(id) ON DELETE SET NULL,
+  completed_by     uuid REFERENCES auth.users(id) ON DELETE SET NULL,
+  completed_at     timestamptz,
+  created_at       timestamptz NOT NULL DEFAULT now(),
+  updated_at       timestamptz NOT NULL DEFAULT now(),
+  UNIQUE (revision_id, milestone_type),
+  CHECK (
+    (milestone_type = 'submittal' AND status IN ('pending','approved','rejected'))
+    OR (milestone_type = 'receiving' AND status IN ('pending','received','rejected'))
+    OR (milestone_type = 'installed' AND status IN ('pending','installed','rejected'))
+  ),
+  CHECK ((status = 'pending' AND completed_at IS NULL) OR (status <> 'pending' AND completed_at IS NOT NULL))
+);
+
+CREATE INDEX IF NOT EXISTS idx_custom_commission_milestones_configuration
+  ON public.custom_commission_milestones(configuration_id, created_at);
+CREATE INDEX IF NOT EXISTS idx_custom_commission_milestones_project
+  ON public.custom_commission_milestones(project_id, created_at);
+
+CREATE TABLE IF NOT EXISTS public.custom_commission_milestone_events (
+  id              uuid PRIMARY KEY DEFAULT extensions.gen_random_uuid(),
+  milestone_id    uuid NOT NULL REFERENCES public.custom_commission_milestones(id) ON DELETE RESTRICT,
+  event_number    integer NOT NULL CHECK (event_number > 0),
+  from_status     text,
+  to_status       text NOT NULL,
+  evidence        jsonb NOT NULL DEFAULT '{}'::jsonb CHECK (jsonb_typeof(evidence) = 'object'),
+  artifacts       jsonb NOT NULL DEFAULT '[]'::jsonb CHECK (jsonb_typeof(artifacts) = 'array'),
+  note            text,
+  actor_id        uuid REFERENCES auth.users(id) ON DELETE SET NULL,
+  created_at      timestamptz NOT NULL DEFAULT now(),
+  UNIQUE (milestone_id, event_number)
+);
+
+CREATE INDEX IF NOT EXISTS idx_custom_commission_milestone_events_milestone
+  ON public.custom_commission_milestone_events(milestone_id, event_number);
+
 ALTER TABLE public.custom_commission_revisions
   DROP CONSTRAINT IF EXISTS custom_commission_revision_timestamp_coherence;
 ALTER TABLE public.custom_commission_revisions
@@ -367,7 +412,16 @@ STABLE
 SECURITY DEFINER
 SET search_path = public
 AS $$
-  SELECT (select auth.uid()) IS NOT NULL AND EXISTS (
+  SELECT (select auth.uid()) IS NOT NULL
+    AND (
+      EXISTS (SELECT 1 FROM public.profiles actor WHERE actor.id = (select auth.uid()) AND actor.is_designer)
+      OR EXISTS (
+        SELECT 1 FROM public.organization_members om
+        JOIN public.organizations o ON o.id = om.organization_id
+        WHERE om.user_id = (select auth.uid()) AND om.status = 'active' AND om.role <> 'guest'
+          AND o.type = 'design_studio' AND o.status = 'active'
+      )
+    ) AND EXISTS (
     SELECT 1
     FROM public.products p
     WHERE p.id = p_product_id
@@ -380,9 +434,13 @@ AS $$
           p.layer = 'studio'
           AND EXISTS (
             SELECT 1 FROM public.organization_members om
+            JOIN public.organizations o ON o.id = om.organization_id
             WHERE om.organization_id = p.studio_id
               AND om.user_id = (select auth.uid())
               AND om.status = 'active'
+              AND om.role <> 'guest'
+              AND o.type = 'design_studio'
+              AND o.status = 'active'
           )
         )
       )
@@ -398,7 +456,16 @@ STABLE
 SECURITY DEFINER
 SET search_path = public
 AS $$
-  SELECT (select auth.uid()) IS NOT NULL AND EXISTS (
+  SELECT (select auth.uid()) IS NOT NULL
+    AND (
+      EXISTS (SELECT 1 FROM public.profiles actor WHERE actor.id = (select auth.uid()) AND actor.is_designer)
+      OR EXISTS (
+        SELECT 1 FROM public.organization_members om
+        JOIN public.organizations o ON o.id = om.organization_id
+        WHERE om.user_id = (select auth.uid()) AND om.status = 'active' AND om.role <> 'guest'
+          AND o.type = 'design_studio' AND o.status = 'active'
+      )
+    ) AND EXISTS (
     SELECT 1
     FROM public.products p
     WHERE p.id = p_product_id
@@ -410,10 +477,13 @@ AS $$
           p.layer = 'studio'
           AND EXISTS (
             SELECT 1 FROM public.organization_members om
+            JOIN public.organizations o ON o.id = om.organization_id
             WHERE om.organization_id = p.studio_id
               AND om.user_id = (select auth.uid())
               AND om.status = 'active'
               AND om.role <> 'guest'
+              AND o.type = 'design_studio'
+              AND o.status = 'active'
           )
         )
         OR (p.layer = 'catalog' AND public.user_has_role((select auth.uid()), 'super_admin'))
@@ -430,7 +500,20 @@ STABLE
 SECURITY DEFINER
 SET search_path = public
 AS $$
-  SELECT (select auth.uid()) IS NOT NULL AND EXISTS (
+  SELECT (select auth.uid()) IS NOT NULL
+    AND (
+      EXISTS (SELECT 1 FROM public.profiles actor WHERE actor.id = (select auth.uid()) AND actor.is_designer)
+      OR EXISTS (
+        SELECT 1 FROM public.organization_members actor_membership
+        JOIN public.organizations actor_organization
+          ON actor_organization.id = actor_membership.organization_id
+        WHERE actor_membership.user_id = (select auth.uid())
+          AND actor_membership.status = 'active'
+          AND actor_membership.role <> 'guest'
+          AND actor_organization.type = 'design_studio'
+          AND actor_organization.status = 'active'
+      )
+    ) AND EXISTS (
     SELECT 1
     FROM public.product_configurations c
     WHERE c.id = p_configuration_id
@@ -440,10 +523,13 @@ AS $$
           c.studio_id IS NOT NULL
           AND EXISTS (
             SELECT 1 FROM public.organization_members om
+            JOIN public.organizations o ON o.id = om.organization_id
             WHERE om.organization_id = c.studio_id
               AND om.user_id = (select auth.uid())
               AND om.status = 'active'
               AND om.role <> 'guest'
+              AND o.type = 'design_studio'
+              AND o.status = 'active'
           )
         )
         OR (
@@ -451,7 +537,7 @@ AS $$
           AND EXISTS (
             SELECT 1 FROM public.projects p
             WHERE p.id = c.project_id
-              AND public.is_studio_comember(p.designer_id)
+              AND public.is_design_studio_comember(p.designer_id)
           )
         )
       )
@@ -492,6 +578,8 @@ RETURNS trigger
 LANGUAGE plpgsql
 SET search_path = public
 AS $$
+DECLARE
+  v_valid_ffe_binding boolean := false;
 BEGIN
   IF TG_OP = 'DELETE' THEN
     IF OLD.status IN ('approved', 'issued', 'superseded', 'archived') THEN
@@ -504,10 +592,24 @@ BEGIN
     RAISE EXCEPTION 'configuration version % is immutable (%)', OLD.id, OLD.status
       USING errcode = 'object_not_in_prerequisite_state';
   END IF;
+  IF NEW.ffe_item_id IS DISTINCT FROM OLD.ffe_item_id THEN
+    v_valid_ffe_binding := OLD.ffe_item_id IS NULL
+      AND NEW.ffe_item_id IS NOT NULL
+      AND EXISTS (
+        SELECT 1 FROM public.project_ffe_items item
+        WHERE item.id = NEW.ffe_item_id
+          AND item.product_id = NEW.product_id
+          AND (NEW.project_id IS NULL OR item.project_id = NEW.project_id)
+      );
+    IF NOT v_valid_ffe_binding THEN
+      RAISE EXCEPTION 'configuration may bind once to a matching project FF&E line'
+        USING errcode = 'check_violation';
+    END IF;
+  END IF;
   IF OLD.status IN ('approved', 'issued') AND
-     (to_jsonb(NEW) - ARRAY['status','name','updated_at','issued_at','is_library_template','promoted_at'])
+     (to_jsonb(NEW) - ARRAY['status','name','updated_at','issued_at','is_library_template','promoted_at','ffe_item_id'])
        IS DISTINCT FROM
-     (to_jsonb(OLD) - ARRAY['status','name','updated_at','issued_at','is_library_template','promoted_at']) THEN
+     (to_jsonb(OLD) - ARRAY['status','name','updated_at','issued_at','is_library_template','promoted_at','ffe_item_id']) THEN
     RAISE EXCEPTION 'approved or issued configuration snapshots are immutable'
       USING errcode = 'object_not_in_prerequisite_state';
   END IF;
@@ -545,6 +647,16 @@ BEGIN
   IF OLD.status IN ('issued', 'rejected', 'superseded') THEN
     RAISE EXCEPTION 'terminal custom commission revision is immutable (%)', OLD.status
       USING errcode = 'object_not_in_prerequisite_state';
+  END IF;
+  IF NEW.status = 'superseded' AND OLD.status IN ('draft', 'submitted', 'quoted', 'client_review') THEN
+    IF (to_jsonb(NEW) - ARRAY['status','transition_note','updated_at'])
+       IS DISTINCT FROM
+       (to_jsonb(OLD) - ARRAY['status','transition_note','updated_at']) THEN
+      RAISE EXCEPTION 'revision supersede may only change lifecycle metadata'
+        USING errcode = 'check_violation';
+    END IF;
+    NEW.updated_at := now();
+    RETURN NEW;
   END IF;
   IF OLD.status = 'submitted' AND (
     NEW.status <> 'quoted'
@@ -597,17 +709,84 @@ CREATE TRIGGER trg_custom_commission_revision_guard
   BEFORE UPDATE OR DELETE ON public.custom_commission_revisions
   FOR EACH ROW EXECUTE FUNCTION public.guard_custom_commission_revision();
 
+CREATE OR REPLACE FUNCTION public.guard_custom_commission_milestone()
+RETURNS trigger
+LANGUAGE plpgsql
+SET search_path = public
+AS $$
+BEGIN
+  IF TG_OP = 'DELETE' THEN
+    RAISE EXCEPTION 'custom commission milestone history is append-preserved'
+      USING errcode = 'object_not_in_prerequisite_state';
+  END IF;
+  IF current_user <> 'postgres' THEN
+    RAISE EXCEPTION 'custom commission milestones may only change through workflow RPCs'
+      USING errcode = 'insufficient_privilege';
+  END IF;
+  NEW.updated_at := now();
+  RETURN NEW;
+END;
+$$;
+
+DROP TRIGGER IF EXISTS trg_guard_custom_commission_milestone ON public.custom_commission_milestones;
+CREATE TRIGGER trg_guard_custom_commission_milestone
+  BEFORE UPDATE OR DELETE ON public.custom_commission_milestones
+  FOR EACH ROW EXECUTE FUNCTION public.guard_custom_commission_milestone();
+
+CREATE OR REPLACE FUNCTION public.guard_custom_commission_milestone_event()
+RETURNS trigger
+LANGUAGE plpgsql
+SET search_path = public
+AS $$
+BEGIN
+  RAISE EXCEPTION 'custom commission milestone events are immutable'
+    USING errcode = 'object_not_in_prerequisite_state';
+END;
+$$;
+
+DROP TRIGGER IF EXISTS trg_guard_custom_commission_milestone_event
+  ON public.custom_commission_milestone_events;
+CREATE TRIGGER trg_guard_custom_commission_milestone_event
+  BEFORE UPDATE OR DELETE ON public.custom_commission_milestone_events
+  FOR EACH ROW EXECUTE FUNCTION public.guard_custom_commission_milestone_event();
+
 CREATE OR REPLACE FUNCTION public.guard_project_configuration_snapshot()
 RETURNS trigger
 LANGUAGE plpgsql
 SET search_path = public
 AS $$
 BEGIN
+  IF TG_OP = 'DELETE' THEN
+    IF OLD.configuration_locked_at IS NOT NULL THEN
+      RAISE EXCEPTION 'locked project configuration specifications cannot be deleted'
+        USING errcode = 'object_not_in_prerequisite_state';
+    END IF;
+    RETURN OLD;
+  END IF;
+  IF current_user = 'postgres'
+     AND current_setting('patina.configuration_spec_workflow', true) = '00403' THEN
+    RETURN NEW;
+  END IF;
+  IF NEW.configuration_id IS DISTINCT FROM OLD.configuration_id
+     OR NEW.configuration_snapshot IS DISTINCT FROM OLD.configuration_snapshot
+     OR NEW.configuration_snapshot_hash IS DISTINCT FROM OLD.configuration_snapshot_hash
+     OR NEW.configuration_locked_at IS DISTINCT FROM OLD.configuration_locked_at THEN
+    RAISE EXCEPTION 'configuration linkage may only change through configuration workflow RPCs'
+      USING errcode = 'insufficient_privilege';
+  END IF;
   IF OLD.configuration_locked_at IS NOT NULL AND (
     NEW.configuration_id IS DISTINCT FROM OLD.configuration_id
     OR NEW.configuration_snapshot IS DISTINCT FROM OLD.configuration_snapshot
     OR NEW.configuration_snapshot_hash IS DISTINCT FROM OLD.configuration_snapshot_hash
     OR NEW.configuration_locked_at IS DISTINCT FROM OLD.configuration_locked_at
+    OR NEW.sku IS DISTINCT FROM OLD.sku
+    OR NEW.finish IS DISTINCT FROM OLD.finish
+    OR NEW.material IS DISTINCT FROM OLD.material
+    OR NEW.color_fabric IS DISTINCT FROM OLD.color_fabric
+    OR NEW.selected_dimensions IS DISTINCT FROM OLD.selected_dimensions
+    OR NEW.routing_source->'configurationVersion' IS DISTINCT FROM OLD.routing_source->'configurationVersion'
+    OR NEW.routing_source->'configurationSnapshotHash' IS DISTINCT FROM OLD.routing_source->'configurationSnapshotHash'
+    OR NEW.routing_source->'configurationHistory' IS DISTINCT FROM OLD.routing_source->'configurationHistory'
   ) THEN
     RAISE EXCEPTION 'project configuration snapshot is locked; create a new selection revision'
       USING errcode = 'object_not_in_prerequisite_state';
@@ -618,10 +797,221 @@ $$;
 
 DROP TRIGGER IF EXISTS trg_project_configuration_snapshot ON public.project_ffe_specs;
 CREATE TRIGGER trg_project_configuration_snapshot
-  BEFORE UPDATE OF configuration_id, configuration_snapshot,
-    configuration_snapshot_hash, configuration_locked_at
-  ON public.project_ffe_specs
+  BEFORE UPDATE OR DELETE ON public.project_ffe_specs
   FOR EACH ROW EXECUTE FUNCTION public.guard_project_configuration_snapshot();
+
+CREATE OR REPLACE FUNCTION public.guard_project_ffe_configuration_integrity()
+RETURNS trigger
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public, pg_temp
+AS $$
+DECLARE
+  v_spec public.project_ffe_specs;
+  v_configuration public.product_configurations;
+  v_project public.projects;
+  v_mode text;
+  v_expected_unit integer;
+  v_expected_trade integer;
+  v_snapshot_retail integer;
+  v_snapshot_trade integer;
+  v_sku text;
+  v_material text;
+  v_finish text;
+BEGIN
+  SELECT * INTO v_spec
+  FROM public.project_ffe_specs WHERE ffe_item_id = OLD.id FOR UPDATE;
+  IF NOT FOUND OR v_spec.configuration_id IS NULL THEN
+    RETURN NEW;
+  END IF;
+  IF v_spec.configuration_locked_at IS NOT NULL AND (
+    NEW.project_id IS DISTINCT FROM OLD.project_id
+    OR NEW.product_id IS DISTINCT FROM OLD.product_id
+    OR NEW.quantity IS DISTINCT FROM OLD.quantity
+    OR NEW.unit_price_cents IS DISTINCT FROM OLD.unit_price_cents
+    OR NEW.trade_price_cents IS DISTINCT FROM OLD.trade_price_cents
+    OR NEW.line_total_cents IS DISTINCT FROM OLD.line_total_cents
+  ) THEN
+    RAISE EXCEPTION 'configuration-derived project line fields are locked; create a configuration revision'
+      USING errcode = 'object_not_in_prerequisite_state';
+  END IF;
+  IF NOT (OLD.status IS DISTINCT FROM NEW.status AND NEW.status = 'approved') THEN
+    RETURN NEW;
+  END IF;
+  IF auth.uid() IS NULL THEN
+    RAISE EXCEPTION 'authentication required to approve a configured project line'
+      USING errcode = 'insufficient_privilege';
+  END IF;
+  SELECT * INTO v_project FROM public.projects WHERE id = NEW.project_id FOR SHARE;
+  IF NOT FOUND OR NOT public.is_design_studio_comember(v_project.designer_id) THEN
+    RAISE EXCEPTION 'project not found or not accessible' USING errcode = 'insufficient_privilege';
+  END IF;
+  IF NOT public._can_access_product_configuration(v_spec.configuration_id) THEN
+    RAISE EXCEPTION 'configuration not found or not accessible' USING errcode = 'insufficient_privilege';
+  END IF;
+  SELECT c.*
+  INTO v_configuration
+  FROM public.product_configurations c
+  WHERE c.id = v_spec.configuration_id
+  FOR UPDATE OF c;
+  SELECT configuration_mode INTO v_mode
+  FROM public.products WHERE id = v_configuration.product_id;
+  IF v_configuration.product_id IS DISTINCT FROM NEW.product_id
+     OR (v_configuration.project_id IS NOT NULL AND v_configuration.project_id <> NEW.project_id)
+     OR (v_configuration.ffe_item_id IS NOT NULL AND v_configuration.ffe_item_id <> NEW.id) THEN
+    RAISE EXCEPTION 'configuration, project, product, and FF&E line do not agree'
+      USING errcode = 'check_violation';
+  END IF;
+  IF NOT v_configuration.is_valid OR NOT v_configuration.is_complete THEN
+    RAISE EXCEPTION 'configuration must be valid and complete before project approval'
+      USING errcode = 'object_not_in_prerequisite_state';
+  END IF;
+  IF v_spec.configuration_snapshot IS DISTINCT FROM v_configuration.snapshot
+     OR v_spec.configuration_snapshot_hash IS DISTINCT FROM v_configuration.snapshot_hash
+     OR v_configuration.snapshot_hash IS DISTINCT FROM public._configuration_snapshot_hash(v_configuration.snapshot) THEN
+    RAISE EXCEPTION 'configuration snapshot or hash does not match its approved source'
+      USING errcode = 'object_not_in_prerequisite_state';
+  END IF;
+  v_snapshot_retail := NULLIF(v_configuration.snapshot->>'retailPriceCents', '')::integer;
+  v_snapshot_trade := NULLIF(v_configuration.snapshot->>'tradePriceCents', '')::integer;
+  IF v_snapshot_retail IS DISTINCT FROM v_configuration.retail_price_cents
+     OR v_snapshot_trade IS DISTINCT FROM v_configuration.trade_price_cents THEN
+    RAISE EXCEPTION 'configuration commercial columns diverge from the immutable snapshot'
+      USING errcode = 'object_not_in_prerequisite_state';
+  END IF;
+  IF v_mode = 'custom' THEN
+    IF v_configuration.status NOT IN ('approved', 'issued') THEN
+      RAISE EXCEPTION 'custom commission must complete its approval workflow first'
+        USING errcode = 'object_not_in_prerequisite_state';
+    END IF;
+  ELSIF v_configuration.status = 'saved' THEN
+    UPDATE public.product_configurations
+    SET status = 'approved', approved_by = auth.uid(), approved_at = now(), updated_at = now()
+    WHERE id = v_configuration.id;
+  ELSIF v_configuration.status NOT IN ('approved', 'issued') THEN
+    RAISE EXCEPTION 'configuration cannot be approved from status %', v_configuration.status
+      USING errcode = 'object_not_in_prerequisite_state';
+  END IF;
+
+  v_expected_unit := COALESCE(v_snapshot_retail, v_snapshot_trade);
+  v_expected_trade := COALESCE(v_snapshot_trade, v_snapshot_retail);
+  NEW.unit_price_cents := v_expected_unit;
+  NEW.trade_price_cents := v_expected_trade;
+  NEW.line_total_cents := CASE WHEN v_expected_unit IS NULL THEN NULL
+    ELSE NEW.quantity * v_expected_unit END;
+  v_sku := COALESCE(NULLIF(v_configuration.snapshot#>>'{variant,vendorSku}', ''),
+    NULLIF(v_configuration.snapshot#>>'{variant,sku}', ''));
+  SELECT string_agg(selection->>'valueLabel', ', ' ORDER BY ordinality)
+  INTO v_material
+  FROM jsonb_array_elements(COALESCE(v_configuration.snapshot->'selections', '[]'::jsonb))
+       WITH ORDINALITY AS chosen(selection, ordinality)
+  WHERE lower(selection->>'groupCode') = 'material';
+  SELECT string_agg(selection->>'valueLabel', ', ' ORDER BY ordinality)
+  INTO v_finish
+  FROM jsonb_array_elements(COALESCE(v_configuration.snapshot->'selections', '[]'::jsonb))
+       WITH ORDINALITY AS chosen(selection, ordinality)
+  WHERE lower(selection->>'groupCode') = 'finish';
+  PERFORM set_config('patina.configuration_spec_workflow', '00403', true);
+  UPDATE public.project_ffe_specs
+  SET configuration_locked_at = COALESCE(configuration_locked_at, now()),
+      selected_dimensions = v_configuration.resolved_dimensions,
+      sku = COALESCE(v_sku, sku),
+      material = COALESCE(v_material, material),
+      finish = COALESCE(v_finish, finish),
+      updated_by = auth.uid(), updated_at = now()
+  WHERE id = v_spec.id;
+  PERFORM set_config('patina.configuration_spec_workflow', '', true);
+  RETURN NEW;
+END;
+$$;
+
+DROP TRIGGER IF EXISTS trg_guard_project_ffe_configuration_integrity ON public.project_ffe_items;
+CREATE TRIGGER trg_guard_project_ffe_configuration_integrity
+  BEFORE UPDATE ON public.project_ffe_items
+  FOR EACH ROW EXECUTE FUNCTION public.guard_project_ffe_configuration_integrity();
+
+CREATE OR REPLACE FUNCTION public.guard_vendor_quote_configuration_snapshot()
+RETURNS trigger
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public, pg_temp
+AS $$
+DECLARE
+  v_configuration public.product_configurations;
+  v_expected_snapshot jsonb;
+BEGIN
+  IF TG_OP = 'DELETE' THEN
+    IF OLD.configuration_id IS NOT NULL AND OLD.status <> 'draft' THEN
+      RAISE EXCEPTION 'linked quote requests are immutable after draft'
+        USING errcode = 'object_not_in_prerequisite_state';
+    END IF;
+    RETURN OLD;
+  END IF;
+  IF TG_OP = 'UPDATE' AND OLD.configuration_id IS NOT NULL
+     AND OLD.status <> 'draft' AND NEW.status = 'draft' THEN
+    RAISE EXCEPTION 'linked quote requests cannot return to draft'
+      USING errcode = 'check_violation';
+  END IF;
+  IF TG_OP = 'UPDATE'
+     AND (OLD.configuration_id IS NOT NULL OR NEW.configuration_id IS NOT NULL)
+     AND (OLD.status <> 'draft' OR NEW.status <> 'draft') AND (
+       NEW.configuration_id IS DISTINCT FROM OLD.configuration_id
+       OR NEW.project_id IS DISTINCT FROM OLD.project_id
+       OR NEW.vendor_id IS DISTINCT FROM OLD.vendor_id
+       OR NEW.designer_id IS DISTINCT FROM OLD.designer_id
+       OR NEW.configuration_snapshot IS DISTINCT FROM OLD.configuration_snapshot
+       OR NEW.configuration_snapshot_hash IS DISTINCT FROM OLD.configuration_snapshot_hash
+     ) THEN
+    RAISE EXCEPTION 'linked quote configuration snapshots freeze when leaving draft'
+      USING errcode = 'object_not_in_prerequisite_state';
+  END IF;
+  IF NEW.configuration_id IS NULL THEN
+    IF NEW.configuration_snapshot <> '{}'::jsonb
+       OR NEW.configuration_snapshot_hash IS NOT NULL THEN
+      RAISE EXCEPTION 'unlinked quote requests cannot retain a configuration snapshot'
+        USING errcode = 'check_violation';
+    END IF;
+    RETURN NEW;
+  END IF;
+  IF TG_OP = 'INSERT' AND NEW.status <> 'draft' THEN
+    RAISE EXCEPTION 'linked configuration quote requests must begin as drafts'
+      USING errcode = 'check_violation';
+  END IF;
+  IF auth.uid() IS NULL AND COALESCE(auth.role(), '') <> 'service_role' THEN
+    RAISE EXCEPTION 'authentication required for a linked quote request'
+      USING errcode = 'insufficient_privilege';
+  END IF;
+  IF auth.uid() IS NOT NULL AND (
+       NEW.designer_id <> auth.uid()
+       OR NOT public._can_access_product_configuration(NEW.configuration_id)
+     ) THEN
+    RAISE EXCEPTION 'quote request configuration is not accessible to its designer'
+      USING errcode = 'insufficient_privilege';
+  END IF;
+  SELECT * INTO v_configuration
+  FROM public.product_configurations WHERE id = NEW.configuration_id FOR SHARE;
+  IF NOT FOUND OR v_configuration.project_id IS NULL
+     OR NEW.project_id IS DISTINCT FROM v_configuration.project_id
+     OR jsonb_typeof(NEW.configuration_snapshot) IS DISTINCT FROM 'object'
+     OR NEW.configuration_snapshot = '{}'::jsonb THEN
+    RAISE EXCEPTION 'linked quote project and configuration snapshot must be complete'
+      USING errcode = 'check_violation';
+  END IF;
+  v_expected_snapshot := public._configuration_quote_snapshot(NEW.configuration_id);
+  IF (NEW.status = 'draft' OR (TG_OP = 'UPDATE' AND OLD.status = 'draft' AND NEW.status = 'sent'))
+     AND NEW.configuration_snapshot IS DISTINCT FROM v_expected_snapshot THEN
+    RAISE EXCEPTION 'linked quote snapshot is not the authoritative configuration revision'
+      USING errcode = 'object_not_in_prerequisite_state';
+  END IF;
+  NEW.configuration_snapshot_hash := public._configuration_snapshot_hash(NEW.configuration_snapshot);
+  RETURN NEW;
+END;
+$$;
+
+DROP TRIGGER IF EXISTS trg_guard_vendor_quote_configuration_snapshot ON public.vendor_quote_requests;
+CREATE TRIGGER trg_guard_vendor_quote_configuration_snapshot
+  BEFORE INSERT OR UPDATE OR DELETE ON public.vendor_quote_requests
+  FOR EACH ROW EXECUTE FUNCTION public.guard_vendor_quote_configuration_snapshot();
 
 CREATE OR REPLACE FUNCTION public.lock_configuration_snapshot_on_po_link()
 RETURNS trigger
@@ -632,24 +1022,83 @@ AS $$
 DECLARE
   v_spec public.project_ffe_specs;
   v_configuration public.product_configurations;
+  v_po public.purchase_orders;
+  v_expected_unit integer;
+  v_expected_trade integer;
+  v_total bigint;
 BEGIN
   IF OLD.purchase_order_id IS NULL AND NEW.purchase_order_id IS NOT NULL THEN
+    IF auth.uid() IS NULL AND COALESCE(auth.role(), '') <> 'service_role' THEN
+      RAISE EXCEPTION 'authentication required to link a configured line to a purchase order'
+        USING errcode = 'insufficient_privilege';
+    END IF;
+    SELECT * INTO v_po FROM public.purchase_orders WHERE id = NEW.purchase_order_id FOR SHARE;
+    IF NOT FOUND OR v_po.project_id <> NEW.project_id
+       OR (auth.uid() IS NOT NULL AND v_po.designer_id <> auth.uid()) THEN
+      RAISE EXCEPTION 'purchase order caller and project do not match the configured line'
+        USING errcode = 'check_violation';
+    END IF;
     SELECT * INTO v_spec FROM public.project_ffe_specs WHERE ffe_item_id = NEW.id FOR UPDATE;
     IF FOUND AND v_spec.configuration_id IS NOT NULL THEN
+      IF auth.uid() IS NOT NULL
+         AND NOT public._can_access_product_configuration(v_spec.configuration_id) THEN
+        RAISE EXCEPTION 'configuration not found or not accessible'
+          USING errcode = 'insufficient_privilege';
+      END IF;
       SELECT * INTO STRICT v_configuration
       FROM public.product_configurations WHERE id = v_spec.configuration_id FOR SHARE;
       IF v_configuration.status NOT IN ('approved', 'issued') THEN
         RAISE EXCEPTION 'configuration must be approved before creating a purchase order'
           USING errcode = 'object_not_in_prerequisite_state';
       END IF;
-      IF v_spec.configuration_snapshot_hash IS DISTINCT FROM v_configuration.snapshot_hash THEN
+      IF NOT v_configuration.is_valid OR NOT v_configuration.is_complete
+         OR v_configuration.product_id IS DISTINCT FROM NEW.product_id
+         OR (v_configuration.project_id IS NOT NULL AND v_configuration.project_id <> NEW.project_id)
+         OR (v_configuration.ffe_item_id IS NOT NULL AND v_configuration.ffe_item_id <> NEW.id)
+         OR v_spec.configuration_snapshot IS DISTINCT FROM v_configuration.snapshot
+         OR v_spec.configuration_snapshot_hash IS DISTINCT FROM v_configuration.snapshot_hash
+         OR v_configuration.snapshot_hash IS DISTINCT FROM public._configuration_snapshot_hash(v_configuration.snapshot) THEN
         RAISE EXCEPTION 'project configuration snapshot is stale; re-approve before purchase order'
           USING errcode = 'object_not_in_prerequisite_state';
       END IF;
+      v_expected_unit := COALESCE(
+        NULLIF(v_configuration.snapshot->>'retailPriceCents', '')::integer,
+        NULLIF(v_configuration.snapshot->>'tradePriceCents', '')::integer
+      );
+      v_expected_trade := COALESCE(
+        NULLIF(v_configuration.snapshot->>'tradePriceCents', '')::integer,
+        NULLIF(v_configuration.snapshot->>'retailPriceCents', '')::integer
+      );
+      IF v_expected_trade IS NULL
+         OR NEW.unit_price_cents IS DISTINCT FROM v_expected_unit
+         OR NEW.trade_price_cents IS DISTINCT FROM v_expected_trade
+         OR NEW.line_total_cents IS DISTINCT FROM NEW.quantity * v_expected_unit THEN
+        RAISE EXCEPTION 'configured line pricing diverges from its approved snapshot'
+          USING errcode = 'object_not_in_prerequisite_state';
+      END IF;
+      PERFORM set_config('patina.configuration_spec_workflow', '00403', true);
       UPDATE public.project_ffe_specs
       SET configuration_locked_at = COALESCE(configuration_locked_at, now()),
           updated_at = now()
       WHERE id = v_spec.id;
+      PERFORM set_config('patina.configuration_spec_workflow', '', true);
+    END IF;
+    SELECT COALESCE(sum(
+      COALESCE(
+        CASE WHEN s.configuration_id IS NOT NULL THEN COALESCE(
+          NULLIF(s.configuration_snapshot->>'tradePriceCents', '')::integer,
+          NULLIF(s.configuration_snapshot->>'retailPriceCents', '')::integer
+        ) ELSE i.trade_price_cents END,
+        i.unit_price_cents, 0
+      )::bigint * COALESCE(i.quantity, 1)
+    ), 0)
+    INTO v_total
+    FROM public.project_ffe_items i
+    LEFT JOIN public.project_ffe_specs s ON s.ffe_item_id = i.id
+    WHERE i.purchase_order_id = NEW.purchase_order_id;
+    IF v_total IS DISTINCT FROM v_po.total_cents::bigint THEN
+      RAISE EXCEPTION 'purchase order total % does not match immutable configured line total %',
+        v_po.total_cents, v_total USING errcode = 'check_violation';
     END IF;
   END IF;
   RETURN NEW;
@@ -672,6 +1121,8 @@ ALTER TABLE public.product_configurations ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.product_configuration_selections ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.product_configuration_components ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.custom_commission_revisions ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.custom_commission_milestones ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.custom_commission_milestone_events ENABLE ROW LEVEL SECURITY;
 
 DROP POLICY IF EXISTS product_option_groups_visible ON public.product_option_groups;
 DROP POLICY IF EXISTS product_option_values_visible ON public.product_option_values;
@@ -683,6 +1134,8 @@ DROP POLICY IF EXISTS product_configurations_visible ON public.product_configura
 DROP POLICY IF EXISTS product_configuration_selections_visible ON public.product_configuration_selections;
 DROP POLICY IF EXISTS product_configuration_components_visible ON public.product_configuration_components;
 DROP POLICY IF EXISTS custom_commission_revisions_visible ON public.custom_commission_revisions;
+DROP POLICY IF EXISTS custom_commission_milestones_visible ON public.custom_commission_milestones;
+DROP POLICY IF EXISTS custom_commission_milestone_events_visible ON public.custom_commission_milestone_events;
 
 CREATE POLICY product_option_groups_visible ON public.product_option_groups
   FOR SELECT TO authenticated USING (public._can_read_configurable_product(product_id));
@@ -710,6 +1163,13 @@ CREATE POLICY product_configuration_components_visible ON public.product_configu
   FOR SELECT TO authenticated USING (public._can_access_product_configuration(configuration_id));
 CREATE POLICY custom_commission_revisions_visible ON public.custom_commission_revisions
   FOR SELECT TO authenticated USING (public._can_access_product_configuration(configuration_id));
+CREATE POLICY custom_commission_milestones_visible ON public.custom_commission_milestones
+  FOR SELECT TO authenticated USING (public._can_access_product_configuration(configuration_id));
+CREATE POLICY custom_commission_milestone_events_visible ON public.custom_commission_milestone_events
+  FOR SELECT TO authenticated USING (EXISTS (
+    SELECT 1 FROM public.custom_commission_milestones m
+    WHERE m.id = milestone_id AND public._can_access_product_configuration(m.configuration_id)
+  ));
 
 -- ── Definition read + atomic authoring ─────────────────────────────────────
 CREATE OR REPLACE FUNCTION public.get_product_configuration_schema(p_product_id uuid)
@@ -899,6 +1359,30 @@ BEGIN
      OR jsonb_typeof(COALESCE(p_input->'components', '[]'::jsonb)) <> 'array'
      OR jsonb_typeof(COALESCE(p_input->'rules', '[]'::jsonb)) <> 'array' THEN
     RAISE EXCEPTION 'definition collections must be arrays' USING errcode = 'check_violation';
+  END IF;
+  IF p_input->>'mode' IN ('standard', 'custom') AND (
+       jsonb_array_length(COALESCE(p_input->'optionGroups', '[]'::jsonb)) > 0
+       OR jsonb_array_length(COALESCE(p_input->'variants', '[]'::jsonb)) > 0
+       OR jsonb_array_length(COALESCE(p_input->'components', '[]'::jsonb)) > 0
+       OR jsonb_array_length(COALESCE(p_input->'rules', '[]'::jsonb)) > 0
+     ) THEN
+    RAISE EXCEPTION '% mode cannot retain option groups, variants, components, or rules', p_input->>'mode'
+      USING errcode = 'check_violation';
+  END IF;
+  IF p_input->>'mode' = 'variant'
+     AND jsonb_array_length(COALESCE(p_input->'components', '[]'::jsonb)) > 0 THEN
+    RAISE EXCEPTION 'variant mode cannot retain modular components'
+      USING errcode = 'check_violation';
+  END IF;
+  IF p_input->>'mode' = 'configured'
+     AND jsonb_array_length(COALESCE(p_input->'variants', '[]'::jsonb)) > 0 THEN
+    RAISE EXCEPTION 'configured mode cannot retain exact variants'
+      USING errcode = 'check_violation';
+  END IF;
+  IF COALESCE(p_input->>'pricingStrategy', 'base_plus_adjustments') = 'component_sum'
+     AND p_input->>'mode' <> 'configured' THEN
+    RAISE EXCEPTION 'component_sum pricing requires configured mode'
+      USING errcode = 'check_violation';
   END IF;
 
   UPDATE public.products
@@ -1653,6 +2137,8 @@ AS $$
     'studioId', c.studio_id,
     'version', c.version,
     'schemaRevision', c.schema_revision,
+    'currentSchemaRevision', p.configuration_revision,
+    'sourceChanged', c.schema_revision <> p.configuration_revision,
     'status', c.status,
     'name', c.name,
     'notes', c.notes,
@@ -1668,6 +2154,7 @@ AS $$
     'updatedAt', c.updated_at
   )
   FROM public.product_configurations c
+  JOIN public.products p ON p.id = c.product_id
   WHERE c.id = p_configuration_id;
 $$;
 
@@ -1707,6 +2194,33 @@ AS $$
   FROM public.custom_commission_revisions r
   JOIN public.product_configurations c ON c.id = r.configuration_id
   WHERE r.id = p_revision_id;
+$$;
+
+CREATE OR REPLACE FUNCTION public._configuration_quote_snapshot(p_configuration_id uuid)
+RETURNS jsonb
+LANGUAGE sql
+STABLE
+SECURITY DEFINER
+SET search_path = public
+AS $$
+  SELECT CASE WHEN latest_revision.id IS NULL THEN c.snapshot ELSE c.snapshot || jsonb_build_object(
+    'customCommission', jsonb_build_object(
+      'revisionId', latest_revision.id,
+      'revisionNumber', latest_revision.revision_number,
+      'status', latest_revision.status,
+      'brief', latest_revision.brief,
+      'drawings', latest_revision.drawings,
+      'quote', latest_revision.quote,
+      'provenance', latest_revision.provenance
+    )
+  ) END
+  FROM public.product_configurations c
+  LEFT JOIN LATERAL (
+    SELECT r.* FROM public.custom_commission_revisions r
+    WHERE r.configuration_id = c.id
+    ORDER BY r.revision_number DESC LIMIT 1
+  ) latest_revision ON true
+  WHERE c.id = p_configuration_id;
 $$;
 
 CREATE OR REPLACE FUNCTION public.save_product_configuration(p_input jsonb)
@@ -1773,6 +2287,30 @@ BEGIN
   IF jsonb_typeof(COALESCE(p_input->'selections', '{}'::jsonb)) <> 'object' THEN
     RAISE EXCEPTION 'selections must be an object' USING errcode = 'check_violation';
   END IF;
+  IF jsonb_typeof(v_components) <> 'array' THEN
+    RAISE EXCEPTION 'components must be an array' USING errcode = 'check_violation';
+  END IF;
+  IF v_product.configuration_mode IN ('standard', 'custom') AND (
+       NULLIF(p_input->>'variantId', '') IS NOT NULL
+       OR EXISTS (SELECT 1 FROM jsonb_each(COALESCE(p_input->'selections', '{}'::jsonb)))
+       OR jsonb_array_length(v_components) > 0
+     ) THEN
+    RAISE EXCEPTION '% mode cannot save variants, option selections, or components',
+      v_product.configuration_mode USING errcode = 'check_violation';
+  END IF;
+  IF v_product.configuration_mode = 'variant' AND jsonb_array_length(v_components) > 0 THEN
+    RAISE EXCEPTION 'variant mode cannot save modular components'
+      USING errcode = 'check_violation';
+  END IF;
+  IF v_product.configuration_mode = 'configured' AND NULLIF(p_input->>'variantId', '') IS NOT NULL THEN
+    RAISE EXCEPTION 'configured mode cannot save an exact variant'
+      USING errcode = 'check_violation';
+  END IF;
+  IF v_product.configuration_mode <> 'custom'
+     AND p_input ? 'customBrief' AND p_input->'customBrief' <> 'null'::jsonb THEN
+    RAISE EXCEPTION 'customBrief is only valid for custom products'
+      USING errcode = 'check_violation';
+  END IF;
   FOR v_group_entry IN SELECT key, value FROM jsonb_each(COALESCE(p_input->'selections', '{}'::jsonb)) LOOP
     IF jsonb_typeof(v_group_entry.value) <> 'array' THEN
       RAISE EXCEPTION 'each selection value must be an array' USING errcode = 'check_violation';
@@ -1813,7 +2351,7 @@ BEGIN
 
   IF v_project_id IS NOT NULL THEN
     SELECT * INTO v_project FROM public.projects WHERE id = v_project_id FOR SHARE;
-    IF NOT FOUND OR NOT public.is_studio_comember(v_project.designer_id) THEN
+    IF NOT FOUND OR NOT public.is_design_studio_comember(v_project.designer_id) THEN
       RAISE EXCEPTION 'project not found or not accessible' USING errcode = 'insufficient_privilege';
     END IF;
     IF v_ffe_item_id IS NOT NULL AND NOT EXISTS (
@@ -1832,6 +2370,11 @@ BEGIN
     SELECT * INTO STRICT v_old FROM public.product_configurations WHERE id = v_old_id FOR UPDATE;
     IF v_old.product_id <> v_product_id THEN
       RAISE EXCEPTION 'configuration belongs to another product' USING errcode = 'check_violation';
+    END IF;
+    IF v_old.project_id IS DISTINCT FROM v_project_id
+       OR v_old.ffe_item_id IS DISTINCT FROM v_ffe_item_id THEN
+      RAISE EXCEPTION 'configuration scope cannot change while versioning; instantiate a reusable template for another project'
+        USING errcode = 'check_violation';
     END IF;
     IF p_input ? 'expectedVersion'
        AND (p_input->>'expectedVersion')::integer <> v_old.version THEN
@@ -1953,6 +2496,24 @@ BEGIN
 END;
 $$;
 
+CREATE OR REPLACE FUNCTION public.get_product_configuration(
+  p_configuration_id uuid
+)
+RETURNS jsonb
+LANGUAGE plpgsql
+STABLE
+SECURITY DEFINER
+SET search_path = public, pg_temp
+AS $$
+BEGIN
+  IF NOT public._can_access_product_configuration(p_configuration_id) THEN
+    RAISE EXCEPTION 'configuration not found or not accessible'
+      USING errcode = 'insufficient_privilege';
+  END IF;
+  RETURN public._product_configuration_json(p_configuration_id);
+END;
+$$;
+
 CREATE OR REPLACE FUNCTION public.list_product_configurations(
   p_product_id uuid,
   p_project_id uuid DEFAULT NULL
@@ -2032,24 +2593,185 @@ SECURITY DEFINER
 SET search_path = public, pg_temp
 AS $$
 DECLARE
-  v_configuration public.product_configurations;
+  v_source public.product_configurations;
+  v_template public.product_configurations;
+  v_product_mode text;
+  v_safe_brief jsonb;
+  v_safe_snapshot jsonb;
+  v_safe_evaluation jsonb;
+  v_safe_hash text;
 BEGIN
   IF NOT public._can_access_product_configuration(p_configuration_id) THEN
     RAISE EXCEPTION 'configuration not found or not accessible' USING errcode = 'insufficient_privilege';
   END IF;
-  SELECT * INTO STRICT v_configuration
+  SELECT * INTO STRICT v_source
   FROM public.product_configurations WHERE id = p_configuration_id FOR UPDATE;
-  IF v_configuration.status NOT IN ('approved', 'issued') THEN
+  IF v_source.status NOT IN ('approved', 'issued') THEN
     RAISE EXCEPTION 'only approved or issued configurations may be promoted'
       USING errcode = 'object_not_in_prerequisite_state';
   END IF;
-  UPDATE public.product_configurations
-  SET is_library_template = true,
-      promoted_at = COALESCE(promoted_at, now()),
-      name = COALESCE(NULLIF(btrim(p_name), ''), name),
-      updated_at = now()
-  WHERE id = p_configuration_id;
-  RETURN public._product_configuration_json(p_configuration_id);
+  PERFORM pg_advisory_xact_lock(hashtextextended('configuration-promotion:' || v_source.id::text, 0));
+  SELECT configuration_mode INTO STRICT v_product_mode
+  FROM public.products WHERE id = v_source.product_id;
+
+  SELECT * INTO v_template
+  FROM public.product_configurations
+  WHERE previous_configuration_id = v_source.id
+    AND is_library_template
+    AND project_id IS NULL
+    AND owner_user_id = auth.uid()
+  ORDER BY created_at DESC LIMIT 1 FOR UPDATE;
+  IF FOUND THEN
+    UPDATE public.product_configurations
+    SET name = COALESCE(NULLIF(btrim(p_name), ''), name), updated_at = now()
+    WHERE id = v_template.id;
+    RETURN public._product_configuration_json(v_template.id);
+  END IF;
+
+  v_safe_brief := v_source.custom_brief;
+  v_safe_snapshot := v_source.snapshot - 'customCommission';
+  v_safe_evaluation := v_source.evaluation - 'customCommission';
+  IF v_product_mode = 'custom' THEN
+    v_safe_brief := jsonb_strip_nulls(jsonb_build_object(
+      'summary', v_source.custom_brief->>'summary',
+      'intent', v_source.custom_brief->>'intent',
+      'requirements', v_source.custom_brief->'requirements',
+      'materials', v_source.custom_brief->'materials',
+      'finish', v_source.custom_brief->>'finish',
+      'priceOnRequest', true
+    ));
+    v_safe_snapshot := v_safe_snapshot || jsonb_build_object(
+      'retailPriceCents', NULL, 'tradePriceCents', NULL,
+      'leadTimeWeeks', NULL, 'capturedAt', now()
+    );
+    v_safe_evaluation := v_safe_evaluation || jsonb_build_object(
+      'retailPriceCents', NULL, 'tradePriceCents', NULL,
+      'leadTimeWeeks', NULL, 'snapshot', v_safe_snapshot
+    );
+  END IF;
+  v_safe_hash := public._configuration_snapshot_hash(v_safe_snapshot);
+
+  INSERT INTO public.product_configurations (
+    configuration_key, product_id, product_variant_id, previous_configuration_id,
+    project_id, ffe_item_id, owner_user_id, studio_id, version, schema_revision,
+    status, name, notes, custom_brief, normalized_selection, component_quantities,
+    evaluation, snapshot, snapshot_hash, is_complete, is_valid,
+    retail_price_cents, trade_price_cents, lead_time_weeks, resolved_dimensions,
+    is_library_template, promoted_at
+  ) VALUES (
+    extensions.gen_random_uuid(), v_source.product_id,
+    CASE WHEN v_product_mode = 'custom' THEN NULL ELSE v_source.product_variant_id END,
+    v_source.id, NULL, NULL, auth.uid(),
+    COALESCE(v_source.studio_id, public._primary_studio_for(auth.uid())),
+    1, v_source.schema_revision, 'saved',
+    COALESCE(NULLIF(btrim(p_name), ''), v_source.name), NULL, v_safe_brief,
+    v_source.normalized_selection, v_source.component_quantities,
+    v_safe_evaluation, v_safe_snapshot, v_safe_hash,
+    v_source.is_complete, v_source.is_valid,
+    CASE WHEN v_product_mode = 'custom' THEN NULL ELSE v_source.retail_price_cents END,
+    CASE WHEN v_product_mode = 'custom' THEN NULL ELSE v_source.trade_price_cents END,
+    CASE WHEN v_product_mode = 'custom' THEN NULL ELSE v_source.lead_time_weeks END,
+    v_source.resolved_dimensions, true, now()
+  ) RETURNING * INTO v_template;
+
+  INSERT INTO public.product_configuration_selections (
+    configuration_id, option_group_id, option_value_id, selection_snapshot
+  )
+  SELECT v_template.id, option_group_id, option_value_id, selection_snapshot
+  FROM public.product_configuration_selections WHERE configuration_id = v_source.id;
+  INSERT INTO public.product_configuration_components (
+    configuration_id, component_id, quantity, handedness, component_snapshot
+  )
+  SELECT v_template.id, component_id, quantity, handedness, component_snapshot
+  FROM public.product_configuration_components WHERE configuration_id = v_source.id;
+
+  RETURN public._product_configuration_json(v_template.id);
+END;
+$$;
+
+CREATE OR REPLACE FUNCTION public.instantiate_product_configuration_template(
+  p_template_configuration_id uuid,
+  p_project_id uuid,
+  p_name text DEFAULT NULL
+)
+RETURNS jsonb
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public, extensions, pg_temp
+AS $$
+DECLARE
+  v_template public.product_configurations;
+  v_instance public.product_configurations;
+  v_project public.projects;
+  v_mode text;
+  v_revision public.custom_commission_revisions;
+BEGIN
+  IF NOT public._can_access_product_configuration(p_template_configuration_id) THEN
+    RAISE EXCEPTION 'configuration template not found or not accessible'
+      USING errcode = 'insufficient_privilege';
+  END IF;
+  SELECT * INTO STRICT v_template
+  FROM public.product_configurations
+  WHERE id = p_template_configuration_id FOR SHARE;
+  IF NOT v_template.is_library_template OR v_template.project_id IS NOT NULL THEN
+    RAISE EXCEPTION 'configuration is not a project-agnostic library template'
+      USING errcode = 'object_not_in_prerequisite_state';
+  END IF;
+  SELECT * INTO v_project FROM public.projects WHERE id = p_project_id FOR SHARE;
+  IF NOT FOUND OR NOT public.is_design_studio_comember(v_project.designer_id) THEN
+    RAISE EXCEPTION 'project not found or not accessible' USING errcode = 'insufficient_privilege';
+  END IF;
+  SELECT configuration_mode INTO STRICT v_mode
+  FROM public.products WHERE id = v_template.product_id;
+
+  INSERT INTO public.product_configurations (
+    configuration_key, product_id, product_variant_id, previous_configuration_id,
+    project_id, owner_user_id, studio_id, version, schema_revision,
+    status, name, notes, custom_brief, normalized_selection, component_quantities,
+    evaluation, snapshot, snapshot_hash, is_complete, is_valid,
+    retail_price_cents, trade_price_cents, lead_time_weeks, resolved_dimensions
+  ) VALUES (
+    extensions.gen_random_uuid(), v_template.product_id, v_template.product_variant_id,
+    v_template.id, p_project_id, auth.uid(),
+    COALESCE(v_project.studio_id, public._primary_studio_for(v_project.designer_id)),
+    1, v_template.schema_revision, 'saved',
+    COALESCE(NULLIF(btrim(p_name), ''), v_template.name), NULL, v_template.custom_brief,
+    v_template.normalized_selection, v_template.component_quantities,
+    v_template.evaluation, v_template.snapshot, v_template.snapshot_hash,
+    v_template.is_complete, v_template.is_valid,
+    v_template.retail_price_cents, v_template.trade_price_cents,
+    v_template.lead_time_weeks, v_template.resolved_dimensions
+  ) RETURNING * INTO v_instance;
+
+  INSERT INTO public.product_configuration_selections (
+    configuration_id, option_group_id, option_value_id, selection_snapshot
+  )
+  SELECT v_instance.id, option_group_id, option_value_id, selection_snapshot
+  FROM public.product_configuration_selections WHERE configuration_id = v_template.id;
+  INSERT INTO public.product_configuration_components (
+    configuration_id, component_id, quantity, handedness, component_snapshot
+  )
+  SELECT v_instance.id, component_id, quantity, handedness, component_snapshot
+  FROM public.product_configuration_components WHERE configuration_id = v_template.id;
+
+  IF v_mode = 'custom' THEN
+    INSERT INTO public.custom_commission_revisions (
+      configuration_id, revision_number, status, brief, drawings, provenance, created_by
+    ) VALUES (
+      v_instance.id, 1, 'draft', v_instance.custom_brief,
+      '[]'::jsonb, jsonb_build_object(
+        'source', 'library-template',
+        'templateConfigurationId', v_template.id
+      ), auth.uid()
+    ) RETURNING * INTO v_revision;
+  END IF;
+
+  RETURN jsonb_build_object(
+    'configuration', public._product_configuration_json(v_instance.id),
+    'templateConfigurationId', v_template.id,
+    'customRevision', CASE WHEN v_revision.id IS NULL THEN NULL
+      ELSE public._custom_commission_revision_json(v_revision.id) END
+  );
 END;
 $$;
 
@@ -2068,7 +2790,6 @@ AS $$
 DECLARE
   v_configuration public.product_configurations;
   v_request public.vendor_quote_requests;
-  v_revision public.custom_commission_revisions;
   v_quote_snapshot jsonb;
   v_quote_hash text;
 BEGIN
@@ -2084,24 +2805,7 @@ BEGIN
   IF NOT EXISTS (SELECT 1 FROM public.vendors WHERE id = p_vendor_id) THEN
     RAISE EXCEPTION 'vendor not found' USING errcode = 'foreign_key_violation';
   END IF;
-  v_quote_snapshot := v_configuration.snapshot;
-  SELECT r.* INTO v_revision
-  FROM public.custom_commission_revisions r
-  WHERE r.configuration_id = p_configuration_id
-  ORDER BY r.revision_number DESC LIMIT 1;
-  IF FOUND THEN
-    v_quote_snapshot := v_quote_snapshot || jsonb_build_object(
-      'customCommission', jsonb_build_object(
-        'revisionId', v_revision.id,
-        'revisionNumber', v_revision.revision_number,
-        'status', v_revision.status,
-        'brief', v_revision.brief,
-        'drawings', v_revision.drawings,
-        'quote', v_revision.quote,
-        'provenance', v_revision.provenance
-      )
-    );
-  END IF;
+  v_quote_snapshot := public._configuration_quote_snapshot(p_configuration_id);
   v_quote_hash := public._configuration_snapshot_hash(v_quote_snapshot);
 
   SELECT * INTO v_request
@@ -2165,11 +2869,16 @@ SET search_path = public, extensions, pg_temp
 AS $$
 DECLARE
   v_configuration public.product_configurations;
+  v_fork public.product_configurations;
   v_previous public.custom_commission_revisions;
   v_revision public.custom_commission_revisions;
   v_brief jsonb;
   v_vendor_id uuid;
+  v_latest_configuration_id uuid;
 BEGIN
+  IF p_input IS NULL OR jsonb_typeof(p_input) <> 'object' THEN
+    RAISE EXCEPTION 'revision input must be a JSON object' USING errcode = 'check_violation';
+  END IF;
   IF NOT public._can_access_product_configuration(p_configuration_id) THEN
     RAISE EXCEPTION 'configuration not found or not accessible' USING errcode = 'insufficient_privilege';
   END IF;
@@ -2177,10 +2886,19 @@ BEGIN
   FROM public.product_configurations c
   JOIN public.products p ON p.id = c.product_id
   WHERE c.id = p_configuration_id AND p.configuration_mode = 'custom'
-  FOR SHARE OF c;
+  FOR UPDATE OF c;
   IF v_configuration.status <> 'saved' THEN
     RAISE EXCEPTION 'start a new configuration version before revising an approved commission'
       USING errcode = 'object_not_in_prerequisite_state';
+  END IF;
+  PERFORM pg_advisory_xact_lock(hashtextextended(v_configuration.configuration_key::text, 0));
+  SELECT c.id INTO v_latest_configuration_id
+  FROM public.product_configurations c
+  WHERE c.configuration_key = v_configuration.configuration_key
+  ORDER BY c.version DESC LIMIT 1 FOR UPDATE;
+  IF v_latest_configuration_id IS DISTINCT FROM v_configuration.id THEN
+    RAISE EXCEPTION 'configuration is not the latest version; refresh before revising'
+      USING errcode = 'serialization_failure';
   END IF;
   v_brief := COALESCE(p_input->'brief', v_configuration.custom_brief);
   IF v_brief IS NULL OR jsonb_typeof(v_brief) <> 'object'
@@ -2202,24 +2920,52 @@ BEGIN
   JOIN public.product_configurations lineage ON lineage.id = r.configuration_id
   WHERE lineage.configuration_key = v_configuration.configuration_key
   ORDER BY r.revision_number DESC LIMIT 1 FOR UPDATE OF r;
-  IF FOUND AND v_previous.status IN ('submitted', 'quoted', 'client_review') THEN
-    RAISE EXCEPTION 'resolve the active commission revision before starting another'
+  IF FOUND AND v_previous.status IN ('approved', 'issued') THEN
+    RAISE EXCEPTION 'approved or issued commissions must fork through a new saved configuration'
       USING errcode = 'object_not_in_prerequisite_state';
   END IF;
-  IF FOUND AND v_previous.status = 'draft' THEN
+  IF FOUND AND v_previous.status IN ('draft', 'submitted', 'quoted', 'client_review') THEN
     UPDATE public.custom_commission_revisions
-    SET status = 'superseded', updated_at = now()
+    SET status = 'superseded', transition_note = 'Superseded by revision fork', updated_at = now()
     WHERE id = v_previous.id;
   END IF;
+
+  UPDATE public.vendor_quote_requests
+  SET status = 'closed', updated_at = now()
+  WHERE configuration_id = v_configuration.id AND status = 'draft';
+
+  UPDATE public.product_configurations
+  SET status = 'superseded', updated_at = now()
+  WHERE id = v_configuration.id;
+
+  INSERT INTO public.product_configurations (
+    configuration_key, product_id, product_variant_id, previous_configuration_id,
+    project_id, ffe_item_id, owner_user_id, studio_id, version, schema_revision,
+    status, name, notes, custom_brief, normalized_selection, component_quantities,
+    evaluation, snapshot, snapshot_hash, is_complete, is_valid,
+    retail_price_cents, trade_price_cents, lead_time_weeks, resolved_dimensions
+  ) VALUES (
+    v_configuration.configuration_key, v_configuration.product_id, NULL, v_configuration.id,
+    v_configuration.project_id, v_configuration.ffe_item_id, auth.uid(), v_configuration.studio_id,
+    v_configuration.version + 1, v_configuration.schema_revision,
+    'saved', v_configuration.name, v_configuration.notes, v_brief,
+    '{}'::jsonb, '{}'::jsonb, v_configuration.evaluation, v_configuration.snapshot,
+    v_configuration.snapshot_hash, v_configuration.is_complete, v_configuration.is_valid,
+    v_configuration.retail_price_cents, v_configuration.trade_price_cents,
+    v_configuration.lead_time_weeks, v_configuration.resolved_dimensions
+  ) RETURNING * INTO v_fork;
+
   INSERT INTO public.custom_commission_revisions (
     configuration_id, revision_number, previous_revision_id, status,
     brief, drawings, quote, provenance, created_by
   ) VALUES (
-    p_configuration_id, COALESCE(v_previous.revision_number, 0) + 1,
+    v_fork.id, COALESCE(v_previous.revision_number, 0) + 1,
     v_previous.id, 'draft', v_brief,
     COALESCE(p_input->'drawings', v_brief->'drawings', '[]'::jsonb),
     COALESCE(p_input->'quote', '{}'::jsonb),
-    COALESCE(p_input->'provenance', '{}'::jsonb), auth.uid()
+    COALESCE(p_input->'provenance', '{}'::jsonb) || jsonb_build_object(
+      'forkedFromConfigurationId', v_configuration.id
+    ), auth.uid()
   ) RETURNING * INTO v_revision;
   RETURN public._custom_commission_revision_json(v_revision.id);
 END;
@@ -2375,6 +3121,10 @@ BEGIN
       RAISE EXCEPTION 'commission configuration is no longer editable'
         USING errcode = 'object_not_in_prerequisite_state';
     END IF;
+    IF NOT v_configuration.is_valid OR NOT v_configuration.is_complete THEN
+      RAISE EXCEPTION 'custom configuration must already be valid and complete before approval'
+        USING errcode = 'object_not_in_prerequisite_state';
+    END IF;
     v_quote_retail := NULLIF(v_revision.quote->>'retailPriceCents', '')::integer;
     v_quote_trade := NULLIF(v_revision.quote->>'tradePriceCents', '')::integer;
     v_quote_lead := NULLIF(v_revision.quote->>'leadTimeWeeks', '')::integer;
@@ -2400,8 +3150,8 @@ BEGIN
         'tradePriceCents', v_quote_trade,
         'leadTimeWeeks', COALESCE(v_quote_lead, v_configuration.lead_time_weeks),
         'snapshot', v_enriched_snapshot,
-        'complete', true,
-        'valid', true
+        'complete', v_configuration.is_complete,
+        'valid', v_configuration.is_valid
       );
     UPDATE public.product_configurations
     SET status = 'approved',
@@ -2409,8 +3159,6 @@ BEGIN
         evaluation = v_enriched_evaluation,
         snapshot = v_enriched_snapshot,
         snapshot_hash = v_new_hash,
-        is_complete = true,
-        is_valid = true,
         retail_price_cents = v_quote_retail,
         trade_price_cents = v_quote_trade,
         lead_time_weeks = COALESCE(v_quote_lead, lead_time_weeks),
@@ -2441,7 +3189,215 @@ BEGIN
     JOIN public.product_configurations current_configuration
       ON current_configuration.id = p_configuration_id
      AND current_configuration.configuration_key = lineage.configuration_key
+    WHERE public._can_access_product_configuration(r.configuration_id)
   ), '[]'::jsonb);
+END;
+$$;
+
+CREATE OR REPLACE FUNCTION public._custom_commission_milestone_json(p_milestone_id uuid)
+RETURNS jsonb
+LANGUAGE sql
+STABLE
+SECURITY DEFINER
+SET search_path = public
+AS $$
+  SELECT jsonb_build_object(
+    'id', m.id,
+    'configurationId', m.configuration_id,
+    'revisionId', m.revision_id,
+    'projectId', m.project_id,
+    'milestoneType', m.milestone_type,
+    'status', m.status,
+    'evidence', m.evidence,
+    'artifacts', m.artifacts,
+    'createdBy', m.created_by,
+    'completedBy', m.completed_by,
+    'completedAt', m.completed_at,
+    'createdAt', m.created_at,
+    'updatedAt', m.updated_at,
+    'sourceChanged', c.schema_revision <> p.configuration_revision,
+    'currentSchemaRevision', p.configuration_revision,
+    'events', COALESCE((
+      SELECT jsonb_agg(jsonb_build_object(
+        'id', e.id,
+        'eventNumber', e.event_number,
+        'fromStatus', e.from_status,
+        'toStatus', e.to_status,
+        'evidence', e.evidence,
+        'artifacts', e.artifacts,
+        'note', e.note,
+        'actorId', e.actor_id,
+        'createdAt', e.created_at
+      ) ORDER BY e.event_number)
+      FROM public.custom_commission_milestone_events e
+      WHERE e.milestone_id = m.id
+    ), '[]'::jsonb)
+  )
+  FROM public.custom_commission_milestones m
+  JOIN public.product_configurations c ON c.id = m.configuration_id
+  JOIN public.products p ON p.id = c.product_id
+  WHERE m.id = p_milestone_id;
+$$;
+
+CREATE OR REPLACE FUNCTION public.list_custom_commission_milestones(p_configuration_id uuid)
+RETURNS jsonb
+LANGUAGE plpgsql
+STABLE
+SECURITY DEFINER
+SET search_path = public, pg_temp
+AS $$
+BEGIN
+  IF NOT public._can_access_product_configuration(p_configuration_id) THEN
+    RAISE EXCEPTION 'configuration not found or not accessible' USING errcode = 'insufficient_privilege';
+  END IF;
+  RETURN COALESCE((
+    SELECT jsonb_agg(public._custom_commission_milestone_json(m.id)
+      ORDER BY CASE m.milestone_type WHEN 'submittal' THEN 1 WHEN 'receiving' THEN 2 ELSE 3 END)
+    FROM public.custom_commission_milestones m
+    WHERE m.configuration_id = p_configuration_id
+  ), '[]'::jsonb);
+END;
+$$;
+
+CREATE OR REPLACE FUNCTION public.record_custom_commission_milestone(
+  p_configuration_id uuid,
+  p_milestone_type text,
+  p_status text,
+  p_evidence jsonb,
+  p_artifacts jsonb,
+  p_note text
+)
+RETURNS jsonb
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public, pg_temp
+AS $$
+DECLARE
+  v_configuration public.product_configurations;
+  v_revision public.custom_commission_revisions;
+  v_milestone public.custom_commission_milestones;
+  v_from_status text;
+  v_event_number integer;
+BEGIN
+  IF auth.uid() IS NULL THEN
+    RAISE EXCEPTION 'authentication required' USING errcode = 'insufficient_privilege';
+  END IF;
+  IF NOT public._can_access_product_configuration(p_configuration_id) THEN
+    RAISE EXCEPTION 'configuration not found or not accessible' USING errcode = 'insufficient_privilege';
+  END IF;
+  IF jsonb_typeof(COALESCE(p_evidence, '{}'::jsonb)) <> 'object'
+     OR jsonb_typeof(COALESCE(p_artifacts, '[]'::jsonb)) <> 'array' THEN
+    RAISE EXCEPTION 'milestone evidence must be an object and artifacts must be an array'
+      USING errcode = 'check_violation';
+  END IF;
+  IF NOT (
+    (p_milestone_type = 'submittal' AND p_status IN ('pending','approved','rejected'))
+    OR (p_milestone_type = 'receiving' AND p_status IN ('pending','received','rejected'))
+    OR (p_milestone_type = 'installed' AND p_status IN ('pending','installed','rejected'))
+  ) THEN
+    RAISE EXCEPTION 'invalid % milestone status %', p_milestone_type, p_status
+      USING errcode = 'check_violation';
+  END IF;
+  SELECT c.* INTO v_configuration
+  FROM public.product_configurations c
+  JOIN public.products p ON p.id = c.product_id
+  WHERE c.id = p_configuration_id AND p.configuration_mode = 'custom'
+  FOR SHARE OF c;
+  IF NOT FOUND OR v_configuration.status <> 'issued' OR v_configuration.project_id IS NULL THEN
+    RAISE EXCEPTION 'custom fulfillment requires an issued project configuration'
+      USING errcode = 'object_not_in_prerequisite_state';
+  END IF;
+  SELECT * INTO v_revision FROM public.custom_commission_revisions
+  WHERE configuration_id = p_configuration_id
+  ORDER BY revision_number DESC LIMIT 1 FOR SHARE;
+  IF NOT FOUND OR v_revision.status <> 'issued' THEN
+    RAISE EXCEPTION 'custom fulfillment requires an issued commission revision'
+      USING errcode = 'object_not_in_prerequisite_state';
+  END IF;
+  IF NOT EXISTS (
+    SELECT 1 FROM public.project_ffe_specs s
+    JOIN public.project_ffe_items i ON i.id = s.ffe_item_id
+    WHERE s.configuration_id = p_configuration_id
+      AND s.configuration_locked_at IS NOT NULL
+      AND i.project_id = v_configuration.project_id
+      AND i.purchase_order_id IS NOT NULL
+  ) THEN
+    RAISE EXCEPTION 'custom fulfillment begins only after the issued snapshot is on a purchase order'
+      USING errcode = 'object_not_in_prerequisite_state';
+  END IF;
+  IF p_milestone_type = 'receiving' AND NOT EXISTS (
+    SELECT 1 FROM public.custom_commission_milestones
+    WHERE configuration_id = v_configuration.id
+      AND revision_id = v_revision.id
+      AND milestone_type = 'submittal' AND status = 'approved'
+  ) THEN
+    RAISE EXCEPTION 'submittal must be approved before receiving'
+      USING errcode = 'object_not_in_prerequisite_state';
+  END IF;
+  IF p_milestone_type = 'installed' AND NOT EXISTS (
+    SELECT 1 FROM public.custom_commission_milestones
+    WHERE configuration_id = p_configuration_id
+      AND revision_id = v_revision.id
+      AND milestone_type = 'receiving' AND status = 'received'
+  ) THEN
+    RAISE EXCEPTION 'receiving must be recorded before installed truth'
+      USING errcode = 'object_not_in_prerequisite_state';
+  END IF;
+  IF p_status NOT IN ('pending','rejected')
+     AND COALESCE(p_evidence, '{}'::jsonb) = '{}'::jsonb
+     AND jsonb_array_length(COALESCE(p_artifacts, '[]'::jsonb)) = 0 THEN
+    RAISE EXCEPTION 'completed milestones require evidence or an artifact'
+      USING errcode = 'check_violation';
+  END IF;
+
+  SELECT * INTO v_milestone
+  FROM public.custom_commission_milestones
+  WHERE revision_id = v_revision.id AND milestone_type = p_milestone_type
+  FOR UPDATE;
+  IF FOUND THEN
+    IF v_milestone.status NOT IN ('pending', 'rejected') THEN
+      RAISE EXCEPTION 'terminal milestone % is immutable', v_milestone.id
+        USING errcode = 'object_not_in_prerequisite_state';
+    END IF;
+    v_from_status := v_milestone.status;
+    UPDATE public.custom_commission_milestones
+    SET status = p_status,
+        evidence = COALESCE(p_evidence, '{}'::jsonb),
+        artifacts = COALESCE(p_artifacts, '[]'::jsonb),
+        completed_by = CASE WHEN p_status = 'pending' THEN NULL ELSE auth.uid() END,
+        completed_at = CASE WHEN p_status = 'pending' THEN NULL ELSE now() END,
+        updated_at = now()
+    WHERE id = v_milestone.id
+    RETURNING * INTO v_milestone;
+  ELSE
+    v_from_status := NULL;
+    INSERT INTO public.custom_commission_milestones (
+      configuration_id, revision_id, project_id, milestone_type, status,
+      evidence, artifacts, created_by, completed_by, completed_at
+    ) VALUES (
+      p_configuration_id, v_revision.id, v_configuration.project_id,
+      p_milestone_type, p_status, COALESCE(p_evidence, '{}'::jsonb),
+      COALESCE(p_artifacts, '[]'::jsonb), auth.uid(),
+      CASE WHEN p_status = 'pending' THEN NULL ELSE auth.uid() END,
+      CASE WHEN p_status = 'pending' THEN NULL ELSE now() END
+    ) RETURNING * INTO v_milestone;
+  END IF;
+  SELECT COALESCE(max(event_number), 0) + 1 INTO v_event_number
+  FROM public.custom_commission_milestone_events WHERE milestone_id = v_milestone.id;
+  INSERT INTO public.custom_commission_milestone_events (
+    milestone_id, event_number, from_status, to_status,
+    evidence, artifacts, note, actor_id
+  ) VALUES (
+    v_milestone.id, v_event_number, v_from_status, p_status,
+    v_milestone.evidence, v_milestone.artifacts, p_note, auth.uid()
+  );
+  IF p_milestone_type = 'installed' AND p_status = 'installed' THEN
+    UPDATE public.project_ffe_items i
+    SET status = 'installed', updated_at = now()
+    FROM public.project_ffe_specs s
+    WHERE s.ffe_item_id = i.id AND s.configuration_id = p_configuration_id;
+  END IF;
+  RETURN public._custom_commission_milestone_json(v_milestone.id);
 END;
 $$;
 
@@ -2461,8 +3417,11 @@ AS $$
 DECLARE
   v_configuration public.product_configurations;
   v_product public.products;
+  v_project public.projects;
+  v_source_configuration_id uuid;
   v_custom_revision public.custom_commission_revisions;
   v_place jsonb;
+  v_instantiation jsonb;
   v_item_id uuid;
   v_spec_id uuid;
 BEGIN
@@ -2472,6 +3431,58 @@ BEGIN
   SELECT * INTO STRICT v_configuration
   FROM public.product_configurations WHERE id = p_configuration_id FOR UPDATE;
   SELECT * INTO STRICT v_product FROM public.products WHERE id = v_configuration.product_id;
+  IF v_configuration.project_id IS NULL THEN
+    v_source_configuration_id := v_configuration.id;
+    IF v_configuration.is_library_template THEN
+      v_instantiation := public.instantiate_product_configuration_template(
+        v_configuration.id, p_project_id, v_configuration.name
+      );
+      SELECT * INTO STRICT v_configuration
+      FROM public.product_configurations
+      WHERE id = (v_instantiation#>>'{configuration,id}')::uuid
+      FOR UPDATE;
+    ELSE
+      IF v_product.configuration_mode = 'custom' THEN
+        RAISE EXCEPTION 'projectless custom configurations must be promoted and explicitly instantiated before approval'
+          USING errcode = 'object_not_in_prerequisite_state';
+      END IF;
+      SELECT * INTO v_project FROM public.projects WHERE id = p_project_id FOR SHARE;
+      IF NOT FOUND OR NOT public.is_design_studio_comember(v_project.designer_id) THEN
+        RAISE EXCEPTION 'project not found or not accessible' USING errcode = 'insufficient_privilege';
+      END IF;
+      INSERT INTO public.product_configurations (
+        configuration_key, product_id, product_variant_id, previous_configuration_id,
+        project_id, owner_user_id, studio_id, version, schema_revision,
+        status, name, notes, custom_brief, normalized_selection, component_quantities,
+        evaluation, snapshot, snapshot_hash, is_complete, is_valid,
+        retail_price_cents, trade_price_cents, lead_time_weeks, resolved_dimensions
+      ) VALUES (
+        extensions.gen_random_uuid(), v_configuration.product_id,
+        v_configuration.product_variant_id, v_source_configuration_id,
+        p_project_id, auth.uid(),
+        COALESCE(v_project.studio_id, public._primary_studio_for(v_project.designer_id)),
+        1, v_configuration.schema_revision, 'saved', v_configuration.name,
+        v_configuration.notes, NULL, v_configuration.normalized_selection,
+        v_configuration.component_quantities, v_configuration.evaluation,
+        v_configuration.snapshot, v_configuration.snapshot_hash,
+        v_configuration.is_complete, v_configuration.is_valid,
+        v_configuration.retail_price_cents, v_configuration.trade_price_cents,
+        v_configuration.lead_time_weeks, v_configuration.resolved_dimensions
+      ) RETURNING * INTO v_configuration;
+      INSERT INTO public.product_configuration_selections (
+        configuration_id, option_group_id, option_value_id, selection_snapshot
+      )
+      SELECT v_configuration.id, option_group_id, option_value_id, selection_snapshot
+      FROM public.product_configuration_selections
+      WHERE configuration_id = v_source_configuration_id;
+      INSERT INTO public.product_configuration_components (
+        configuration_id, component_id, quantity, handedness, component_snapshot
+      )
+      SELECT v_configuration.id, component_id, quantity, handedness, component_snapshot
+      FROM public.product_configuration_components
+      WHERE configuration_id = v_source_configuration_id;
+    END IF;
+  END IF;
   IF NOT v_configuration.is_valid OR NOT v_configuration.is_complete THEN
     RAISE EXCEPTION 'configuration must be valid and complete before placement'
       USING errcode = 'object_not_in_prerequisite_state';
@@ -2487,7 +3498,7 @@ BEGIN
     END IF;
     SELECT * INTO v_custom_revision
     FROM public.custom_commission_revisions
-    WHERE configuration_id = p_configuration_id
+    WHERE configuration_id = v_configuration.id
     ORDER BY revision_number DESC LIMIT 1 FOR UPDATE;
     IF NOT FOUND OR v_custom_revision.status <> 'approved'
        OR v_custom_revision.brief#>>'{designerApproval,status}' <> 'approved'
@@ -2508,13 +3519,27 @@ BEGIN
   v_item_id := (v_place->>'ffeItemId')::uuid;
   v_spec_id := (v_place->>'specId')::uuid;
 
+  UPDATE public.product_configurations
+  SET ffe_item_id = v_item_id, updated_at = now()
+  WHERE id = v_configuration.id
+    AND (ffe_item_id IS NULL OR ffe_item_id = v_item_id)
+  RETURNING * INTO v_configuration;
+  IF NOT FOUND THEN
+    RAISE EXCEPTION 'configuration is already bound to another FF&E line'
+      USING errcode = 'object_not_in_prerequisite_state';
+  END IF;
+
   UPDATE public.project_ffe_items
-  SET trade_price_cents = COALESCE(v_configuration.trade_price_cents, trade_price_cents),
-      unit_price_cents = COALESCE(v_configuration.retail_price_cents, unit_price_cents),
-      line_total_cents = quantity * COALESCE(v_configuration.retail_price_cents, unit_price_cents, 0),
+  SET trade_price_cents = COALESCE(v_configuration.trade_price_cents,
+        v_configuration.retail_price_cents, trade_price_cents),
+      unit_price_cents = COALESCE(v_configuration.retail_price_cents,
+        v_configuration.trade_price_cents, unit_price_cents),
+      line_total_cents = quantity * COALESCE(v_configuration.retail_price_cents,
+        v_configuration.trade_price_cents, unit_price_cents, 0),
       updated_at = now()
   WHERE id = v_item_id;
 
+  PERFORM set_config('patina.configuration_spec_workflow', '00403', true);
   UPDATE public.project_ffe_specs
   SET configuration_id = v_configuration.id,
       configuration_snapshot = v_configuration.snapshot,
@@ -2525,6 +3550,20 @@ BEGIN
         ELSE NULL
       END,
       selected_dimensions = v_configuration.resolved_dimensions,
+      sku = COALESCE(NULLIF(v_configuration.snapshot#>>'{variant,vendorSku}', ''),
+        NULLIF(v_configuration.snapshot#>>'{variant,sku}', ''), sku),
+      material = COALESCE((
+        SELECT string_agg(selection->>'valueLabel', ', ' ORDER BY ordinality)
+        FROM jsonb_array_elements(COALESCE(v_configuration.snapshot->'selections', '[]'::jsonb))
+             WITH ORDINALITY AS chosen(selection, ordinality)
+        WHERE lower(selection->>'groupCode') = 'material'
+      ), material),
+      finish = COALESCE((
+        SELECT string_agg(selection->>'valueLabel', ', ' ORDER BY ordinality)
+        FROM jsonb_array_elements(COALESCE(v_configuration.snapshot->'selections', '[]'::jsonb))
+             WITH ORDINALITY AS chosen(selection, ordinality)
+        WHERE lower(selection->>'groupCode') = 'finish'
+      ), finish),
       routing_source = routing_source || jsonb_build_object(
         'configurationVersion', v_configuration.version,
         'configurationSnapshotHash', v_configuration.snapshot_hash
@@ -2532,6 +3571,7 @@ BEGIN
       updated_by = auth.uid(),
       updated_at = now()
   WHERE id = v_spec_id;
+  PERFORM set_config('patina.configuration_spec_workflow', '', true);
 
   IF v_product.configuration_mode = 'custom' THEN
     UPDATE public.custom_commission_revisions
@@ -2552,6 +3592,422 @@ BEGIN
 END;
 $$;
 
+CREATE OR REPLACE FUNCTION public.revise_project_ffe_configuration(
+  p_project_id uuid,
+  p_ffe_item_id uuid,
+  p_expected_configuration_id uuid,
+  p_expected_configuration_version integer,
+  p_expected_snapshot_hash text,
+  p_new_configuration_id uuid,
+  p_expected_new_version integer
+)
+RETURNS jsonb
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public, pg_temp
+AS $$
+DECLARE
+  v_project public.projects;
+  v_item public.project_ffe_items;
+  v_spec public.project_ffe_specs;
+  v_current public.product_configurations;
+  v_new public.product_configurations;
+  v_new_mode text;
+  v_expected_unit integer;
+  v_expected_trade integer;
+  v_history jsonb;
+BEGIN
+  IF auth.uid() IS NULL THEN
+    RAISE EXCEPTION 'authentication required' USING errcode = 'insufficient_privilege';
+  END IF;
+  SELECT * INTO v_project FROM public.projects WHERE id = p_project_id FOR SHARE;
+  IF NOT FOUND OR NOT public.is_design_studio_comember(v_project.designer_id) THEN
+    RAISE EXCEPTION 'project not found or not accessible' USING errcode = 'insufficient_privilege';
+  END IF;
+  SELECT * INTO v_item FROM public.project_ffe_items
+  WHERE id = p_ffe_item_id AND project_id = p_project_id FOR UPDATE;
+  IF NOT FOUND THEN
+    RAISE EXCEPTION 'FF&E line not found in project' USING errcode = 'no_data_found';
+  END IF;
+  IF v_item.purchase_order_id IS NOT NULL
+     OR v_item.status IN ('ordered','production','shipped','delivered','installed') THEN
+    RAISE EXCEPTION 'ordered or fulfilled lines require a new FF&E line, not an in-place revision'
+      USING errcode = 'object_not_in_prerequisite_state';
+  END IF;
+  SELECT * INTO v_spec FROM public.project_ffe_specs
+  WHERE ffe_item_id = p_ffe_item_id FOR UPDATE;
+  IF NOT FOUND OR v_spec.configuration_id IS DISTINCT FROM p_expected_configuration_id
+     OR v_spec.configuration_snapshot_hash IS DISTINCT FROM p_expected_snapshot_hash THEN
+    RAISE EXCEPTION 'project specification changed in another session'
+      USING errcode = 'serialization_failure';
+  END IF;
+  IF NOT public._can_access_product_configuration(p_expected_configuration_id)
+     OR NOT public._can_access_product_configuration(p_new_configuration_id) THEN
+    RAISE EXCEPTION 'configuration not found or not accessible' USING errcode = 'insufficient_privilege';
+  END IF;
+  SELECT * INTO STRICT v_current FROM public.product_configurations
+  WHERE id = p_expected_configuration_id FOR SHARE;
+  SELECT * INTO STRICT v_new FROM public.product_configurations
+  WHERE id = p_new_configuration_id FOR UPDATE;
+  SELECT configuration_mode INTO STRICT v_new_mode
+  FROM public.products WHERE id = v_new.product_id;
+  IF v_new_mode = 'custom' THEN
+    RAISE EXCEPTION 'custom commission changes require their approval/issuance lifecycle and a new project line'
+      USING errcode = 'object_not_in_prerequisite_state';
+  END IF;
+  IF v_current.version <> p_expected_configuration_version
+     OR v_new.version <> p_expected_new_version THEN
+    RAISE EXCEPTION 'configuration version changed in another session'
+      USING errcode = 'serialization_failure';
+  END IF;
+  IF v_spec.configuration_snapshot IS DISTINCT FROM v_current.snapshot
+     OR v_current.snapshot_hash IS DISTINCT FROM p_expected_snapshot_hash
+     OR v_current.snapshot_hash IS DISTINCT FROM public._configuration_snapshot_hash(v_current.snapshot) THEN
+    RAISE EXCEPTION 'current project snapshot does not match its configuration source'
+      USING errcode = 'object_not_in_prerequisite_state';
+  END IF;
+  IF v_new.id = v_current.id OR v_new.status <> 'saved'
+     OR v_new.is_library_template
+     OR v_new.project_id IS DISTINCT FROM p_project_id
+     OR v_new.product_id IS DISTINCT FROM v_item.product_id
+     OR (v_new.ffe_item_id IS NOT NULL AND v_new.ffe_item_id <> v_item.id)
+     OR NOT v_new.is_valid OR NOT v_new.is_complete
+     OR v_new.snapshot_hash IS DISTINCT FROM public._configuration_snapshot_hash(v_new.snapshot) THEN
+    RAISE EXCEPTION 'replacement must be a valid, complete saved configuration instantiated for this project and product'
+      USING errcode = 'object_not_in_prerequisite_state';
+  END IF;
+
+  v_expected_unit := COALESCE(v_new.retail_price_cents, v_new.trade_price_cents);
+  v_expected_trade := COALESCE(v_new.trade_price_cents, v_new.retail_price_cents);
+  v_history := COALESCE(v_spec.routing_source->'configurationHistory', '[]'::jsonb)
+    || jsonb_build_array(jsonb_build_object(
+      'fromConfigurationId', v_current.id,
+      'fromVersion', v_current.version,
+      'fromSnapshotHash', v_current.snapshot_hash,
+      'toConfigurationId', v_new.id,
+      'toVersion', v_new.version,
+      'toSnapshotHash', v_new.snapshot_hash,
+      'revisedBy', auth.uid(),
+      'revisedAt', now()
+    ));
+  UPDATE public.product_configurations
+  SET ffe_item_id = COALESCE(ffe_item_id, v_item.id), updated_at = now()
+  WHERE id = v_new.id;
+
+  PERFORM set_config('patina.configuration_spec_workflow', '00403', true);
+  UPDATE public.project_ffe_specs
+  SET configuration_id = v_new.id,
+      configuration_snapshot = v_new.snapshot,
+      configuration_snapshot_hash = v_new.snapshot_hash,
+      configuration_locked_at = NULL,
+      selected_dimensions = v_new.resolved_dimensions,
+      sku = COALESCE(NULLIF(v_new.snapshot#>>'{variant,vendorSku}', ''),
+        NULLIF(v_new.snapshot#>>'{variant,sku}', ''), sku),
+      material = COALESCE((
+        SELECT string_agg(selection->>'valueLabel', ', ' ORDER BY ordinality)
+        FROM jsonb_array_elements(COALESCE(v_new.snapshot->'selections', '[]'::jsonb))
+             WITH ORDINALITY AS chosen(selection, ordinality)
+        WHERE lower(selection->>'groupCode') = 'material'
+      ), material),
+      finish = COALESCE((
+        SELECT string_agg(selection->>'valueLabel', ', ' ORDER BY ordinality)
+        FROM jsonb_array_elements(COALESCE(v_new.snapshot->'selections', '[]'::jsonb))
+             WITH ORDINALITY AS chosen(selection, ordinality)
+        WHERE lower(selection->>'groupCode') = 'finish'
+      ), finish),
+      routing_source = routing_source || jsonb_build_object('configurationHistory', v_history),
+      updated_by = auth.uid(), updated_at = now()
+  WHERE id = v_spec.id;
+  PERFORM set_config('patina.configuration_spec_workflow', '', true);
+  UPDATE public.project_ffe_items
+  SET status = 'specified',
+      unit_price_cents = v_expected_unit,
+      trade_price_cents = v_expected_trade,
+      line_total_cents = CASE WHEN v_expected_unit IS NULL THEN NULL
+        ELSE quantity * v_expected_unit END,
+      updated_at = now()
+  WHERE id = v_item.id;
+
+  RETURN jsonb_build_object(
+    'projectId', p_project_id,
+    'ffeItemId', v_item.id,
+    'specId', v_spec.id,
+    'configurationId', v_new.id,
+    'configurationVersion', v_new.version,
+    'configurationSnapshotHash', v_new.snapshot_hash,
+    'status', 'specified',
+    'requiresApproval', true
+  );
+END;
+$$;
+
+-- 00380 snapshot materializer, extended so configuration identity and the
+-- exact locked snapshot participate in immutable revision content and hashes.
+-- The envelope is deliberately outside selection/pricing; non-internal
+-- render audiences use an allow-listed DTO and drop unknown fields.
+CREATE OR REPLACE FUNCTION public._spec_book_current_item_snapshots(p_spec_book_id uuid)
+RETURNS TABLE (
+  ffe_item_id uuid,
+  item_type text,
+  document_code text,
+  chapter_position integer,
+  item_position integer,
+  item_snapshot jsonb,
+  content_hash text
+)
+LANGUAGE sql
+STABLE
+SECURITY DEFINER
+SET search_path = public, extensions, pg_temp
+AS $$
+  WITH source AS (
+    SELECT
+      i.id AS ffe_item_id,
+      i.item_type,
+      i.doc_code,
+      COALESCE(c.position, 2147483647) AS chapter_position,
+      s.position AS item_position,
+      jsonb_strip_nulls(jsonb_build_object(
+        'ffeItemId', i.id,
+        'itemType', i.item_type,
+        'documentCode', i.doc_code,
+        'name', i.name,
+        'projectId', i.project_id,
+        'room', CASE WHEN r.id IS NULL THEN NULL ELSE jsonb_build_object(
+          'id', r.id, 'name', r.name
+        ) END,
+        'quantity', i.quantity,
+        'category', i.ffe_category,
+        'selectedMedia', CASE
+          WHEN jsonb_array_length(sp.selected_media) > 0 THEN sp.selected_media
+          ELSE COALESCE(to_jsonb(p.images), '[]'::jsonb)
+        END,
+        'selection', jsonb_build_object(
+          'sku', public._spec_book_resolve_field(
+            to_jsonb(sp.sku), i.custom_fields->'sku', to_jsonb(p.sku),
+            p.capture_provenance#>'{studioCustom,sku}', sp.na_declarations->'sku',
+            sp.updated_at, i.updated_at, p.updated_at,
+            NULLIF(sp.source_verifications->>'sku', '')::timestamptz
+          ),
+          'finish', public._spec_book_resolve_field(
+            to_jsonb(sp.finish), i.custom_fields->'finish', to_jsonb(p.finish),
+            p.capture_provenance#>'{studioCustom,finish}', sp.na_declarations->'finish',
+            sp.updated_at, i.updated_at, p.updated_at,
+            NULLIF(sp.source_verifications->>'finish', '')::timestamptz
+          ),
+          'material', public._spec_book_resolve_field(
+            to_jsonb(sp.material), i.custom_fields->'material', to_jsonb(p.materials),
+            p.capture_provenance#>'{studioCustom,material}', sp.na_declarations->'material',
+            sp.updated_at, i.updated_at, p.updated_at,
+            NULLIF(sp.source_verifications->>'material', '')::timestamptz
+          ),
+          'colorFabric', public._spec_book_resolve_field(
+            to_jsonb(sp.color_fabric), i.custom_fields->'colorFabric', to_jsonb(p.colors),
+            p.capture_provenance#>'{studioCustom,colorFabric}', sp.na_declarations->'colorFabric',
+            sp.updated_at, i.updated_at, p.updated_at,
+            NULLIF(sp.source_verifications->>'colorFabric', '')::timestamptz
+          ),
+          'dimensions', public._spec_book_resolve_field(
+            sp.selected_dimensions, i.custom_fields->'dimensions', p.dimensions,
+            p.capture_provenance#>'{studioCustom,dimensions}', sp.na_declarations->'dimensions',
+            sp.updated_at, i.updated_at, p.updated_at,
+            NULLIF(sp.source_verifications->>'dimensions', '')::timestamptz
+          ),
+          'exactLocation', public._spec_book_resolve_field(
+            to_jsonb(sp.exact_location), i.custom_fields->'exactLocation', NULL,
+            p.capture_provenance#>'{studioCustom,exactLocation}', sp.na_declarations->'exactLocation',
+            sp.updated_at, i.updated_at, p.updated_at,
+            NULLIF(sp.source_verifications->>'exactLocation', '')::timestamptz
+          )
+        ),
+        'notes', jsonb_build_object(
+          'client', sp.client_notes,
+          'trade', sp.trade_notes,
+          'install', sp.install_notes,
+          'private', i.notes,
+          'care', sp.care_notes,
+          'warranty', sp.warranty_notes
+        ),
+        'pricing', jsonb_build_object(
+          'clientPriceCents', i.unit_price_cents,
+          'tradePriceCents', i.trade_price_cents,
+          'markupPercent', i.markup_percent
+        ),
+        'vendor', jsonb_build_object(
+          'id', i.vendor_id,
+          'name', i.vendor_name,
+          'internalContact', p.vendor_contact
+        ),
+        'configuration', CASE WHEN sp.configuration_id IS NULL THEN NULL ELSE jsonb_build_object(
+          'id', sp.configuration_id,
+          'snapshot', sp.configuration_snapshot,
+          'snapshotHash', sp.configuration_snapshot_hash,
+          'lockedAt', sp.configuration_locked_at
+        ) END,
+        'provenance', sp.field_provenance,
+        'sourceVerification', sp.source_verifications,
+        'naDeclarations', sp.na_declarations,
+        'readinessStatus', sp.readiness_status,
+        'rowVersion', sp.row_version
+      )) AS snapshot
+    FROM public.spec_book_item_settings s
+    JOIN public.spec_books b ON b.id = s.spec_book_id
+    JOIN public.project_ffe_items i ON i.id = s.ffe_item_id
+    JOIN public.project_ffe_specs sp ON sp.ffe_item_id = i.id
+    LEFT JOIN public.spec_book_chapters c ON c.id = s.chapter_id
+    LEFT JOIN public.project_rooms r ON r.id = i.project_room_id
+    LEFT JOIN public.products p ON p.id = i.product_id
+    WHERE s.spec_book_id = p_spec_book_id
+      AND s.included
+      AND (c.id IS NULL OR c.included)
+  )
+  SELECT
+    source.ffe_item_id,
+    source.item_type,
+    source.doc_code,
+    source.chapter_position,
+    source.item_position,
+    source.snapshot,
+    encode(
+      extensions.digest(public._spec_book_canonical_json(source.snapshot), 'sha256'),
+      'hex'
+    )
+  FROM source
+  ORDER BY source.chapter_position, source.item_position, source.ffe_item_id;
+$$;
+
+-- Preserve the 00380 issue bodies behind exact design-studio wrappers. This
+-- avoids copying a high-churn monolith while closing raw commercial snapshot
+-- access to contractor/manufacturer co-members.
+DO $$
+BEGIN
+  IF to_regprocedure('public._prepare_spec_book_issue_00403(uuid,text[],text,text,uuid,text,jsonb)') IS NULL THEN
+    ALTER FUNCTION public.prepare_spec_book_issue(uuid,text[],text,text,uuid,text,jsonb)
+      RENAME TO _prepare_spec_book_issue_00403;
+  END IF;
+  IF to_regprocedure('public._finalize_spec_book_issue_00403(uuid)') IS NULL THEN
+    ALTER FUNCTION public.finalize_spec_book_issue(uuid)
+      RENAME TO _finalize_spec_book_issue_00403;
+  END IF;
+END;
+$$;
+
+CREATE OR REPLACE FUNCTION public.prepare_spec_book_issue(
+  p_spec_book_id uuid,
+  p_audiences text[],
+  p_issue_type text,
+  p_reason text,
+  p_base_revision_id uuid,
+  p_idempotency_key text,
+  p_warning_acknowledgements jsonb DEFAULT '[]'::jsonb
+)
+RETURNS jsonb
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public, pg_temp
+AS $$
+DECLARE
+  v_designer_id uuid;
+BEGIN
+  SELECT p.designer_id INTO v_designer_id
+  FROM public.spec_books b JOIN public.projects p ON p.id = b.project_id
+  WHERE b.id = p_spec_book_id;
+  IF COALESCE(auth.role(), '') <> 'service_role'
+     AND (auth.uid() IS NULL OR NOT public.is_design_studio_comember(v_designer_id)) THEN
+    RAISE EXCEPTION 'spec book not found or not accessible'
+      USING errcode = 'insufficient_privilege';
+  END IF;
+  RETURN public._prepare_spec_book_issue_00403(
+    p_spec_book_id, p_audiences, p_issue_type, p_reason,
+    p_base_revision_id, p_idempotency_key, p_warning_acknowledgements
+  );
+END;
+$$;
+
+CREATE OR REPLACE FUNCTION public.finalize_spec_book_issue(p_revision_id uuid)
+RETURNS public.spec_book_revisions
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public, pg_temp
+AS $$
+DECLARE
+  v_designer_id uuid;
+BEGIN
+  SELECT p.designer_id INTO v_designer_id
+  FROM public.spec_book_revisions r
+  JOIN public.spec_books b ON b.id = r.spec_book_id
+  JOIN public.projects p ON p.id = b.project_id
+  WHERE r.id = p_revision_id;
+  IF COALESCE(auth.role(), '') <> 'service_role'
+     AND (auth.uid() IS NULL OR NOT public.is_design_studio_comember(v_designer_id)) THEN
+    RAISE EXCEPTION 'spec book revision not found or not accessible'
+      USING errcode = 'insufficient_privilege';
+  END IF;
+  RETURN public._finalize_spec_book_issue_00403(p_revision_id);
+END;
+$$;
+
+DROP POLICY IF EXISTS project_ffe_specs_studio_rw ON public.project_ffe_specs;
+CREATE POLICY project_ffe_specs_studio_rw ON public.project_ffe_specs
+  FOR ALL TO authenticated
+  USING (EXISTS (
+    SELECT 1 FROM public.project_ffe_items i JOIN public.projects p ON p.id = i.project_id
+    WHERE i.id = project_ffe_specs.ffe_item_id
+      AND public.is_design_studio_comember(p.designer_id)
+  ))
+  WITH CHECK (EXISTS (
+    SELECT 1 FROM public.project_ffe_items i JOIN public.projects p ON p.id = i.project_id
+    WHERE i.id = project_ffe_specs.ffe_item_id
+      AND public.is_design_studio_comember(p.designer_id)
+  ));
+
+DROP POLICY IF EXISTS spec_books_studio_rw ON public.spec_books;
+CREATE POLICY spec_books_studio_rw ON public.spec_books
+  FOR ALL TO authenticated
+  USING (EXISTS (SELECT 1 FROM public.projects p WHERE p.id = spec_books.project_id
+    AND public.is_design_studio_comember(p.designer_id)))
+  WITH CHECK (EXISTS (SELECT 1 FROM public.projects p WHERE p.id = spec_books.project_id
+    AND public.is_design_studio_comember(p.designer_id)));
+DROP POLICY IF EXISTS spec_book_chapters_studio_rw ON public.spec_book_chapters;
+CREATE POLICY spec_book_chapters_studio_rw ON public.spec_book_chapters
+  FOR ALL TO authenticated
+  USING (EXISTS (SELECT 1 FROM public.spec_books b JOIN public.projects p ON p.id = b.project_id
+    WHERE b.id = spec_book_chapters.spec_book_id AND public.is_design_studio_comember(p.designer_id)))
+  WITH CHECK (EXISTS (SELECT 1 FROM public.spec_books b JOIN public.projects p ON p.id = b.project_id
+    WHERE b.id = spec_book_chapters.spec_book_id AND public.is_design_studio_comember(p.designer_id)));
+DROP POLICY IF EXISTS spec_book_item_settings_studio_rw ON public.spec_book_item_settings;
+CREATE POLICY spec_book_item_settings_studio_rw ON public.spec_book_item_settings
+  FOR ALL TO authenticated
+  USING (EXISTS (SELECT 1 FROM public.spec_books b JOIN public.projects p ON p.id = b.project_id
+    WHERE b.id = spec_book_item_settings.spec_book_id AND public.is_design_studio_comember(p.designer_id)))
+  WITH CHECK (EXISTS (SELECT 1 FROM public.spec_books b JOIN public.projects p ON p.id = b.project_id
+    WHERE b.id = spec_book_item_settings.spec_book_id AND public.is_design_studio_comember(p.designer_id)));
+DROP POLICY IF EXISTS spec_book_revisions_studio_select ON public.spec_book_revisions;
+CREATE POLICY spec_book_revisions_studio_select ON public.spec_book_revisions
+  FOR SELECT TO authenticated
+  USING (EXISTS (SELECT 1 FROM public.spec_books b JOIN public.projects p ON p.id = b.project_id
+    WHERE b.id = spec_book_revisions.spec_book_id AND public.is_design_studio_comember(p.designer_id)));
+DROP POLICY IF EXISTS spec_book_revision_items_studio_select ON public.spec_book_revision_items;
+CREATE POLICY spec_book_revision_items_studio_select ON public.spec_book_revision_items
+  FOR SELECT TO authenticated
+  USING (EXISTS (
+    SELECT 1 FROM public.spec_book_revisions r
+    JOIN public.spec_books b ON b.id = r.spec_book_id
+    JOIN public.projects p ON p.id = b.project_id
+    WHERE r.id = spec_book_revision_items.revision_id
+      AND public.is_design_studio_comember(p.designer_id)
+  ));
+DROP POLICY IF EXISTS spec_book_artifacts_studio_select ON public.spec_book_artifacts;
+CREATE POLICY spec_book_artifacts_studio_select ON public.spec_book_artifacts
+  FOR SELECT TO authenticated
+  USING (EXISTS (
+    SELECT 1 FROM public.spec_book_revisions r
+    JOIN public.spec_books b ON b.id = r.spec_book_id
+    JOIN public.projects p ON p.id = b.project_id
+    WHERE r.id = spec_book_artifacts.revision_id
+      AND public.is_design_studio_comember(p.designer_id)
+  ));
+
 -- ── Explicit ACLs ──────────────────────────────────────────────────────────
 REVOKE ALL ON public.product_option_groups FROM PUBLIC, anon;
 REVOKE ALL ON public.product_option_values FROM PUBLIC, anon;
@@ -2563,6 +4019,9 @@ REVOKE ALL ON public.product_configurations FROM PUBLIC, anon;
 REVOKE ALL ON public.product_configuration_selections FROM PUBLIC, anon;
 REVOKE ALL ON public.product_configuration_components FROM PUBLIC, anon;
 REVOKE ALL ON public.custom_commission_revisions FROM PUBLIC, anon;
+REVOKE ALL ON public.custom_commission_milestones FROM PUBLIC, anon;
+REVOKE ALL ON public.custom_commission_milestone_events FROM PUBLIC, anon;
+REVOKE ALL ON public.vendor_quote_requests FROM PUBLIC, anon;
 
 GRANT SELECT ON public.product_option_groups TO authenticated;
 GRANT SELECT ON public.product_option_values TO authenticated;
@@ -2574,6 +4033,9 @@ GRANT SELECT ON public.product_configurations TO authenticated;
 GRANT SELECT ON public.product_configuration_selections TO authenticated;
 GRANT SELECT ON public.product_configuration_components TO authenticated;
 GRANT SELECT ON public.custom_commission_revisions TO authenticated;
+GRANT SELECT ON public.custom_commission_milestones TO authenticated;
+GRANT SELECT ON public.custom_commission_milestone_events TO authenticated;
+GRANT SELECT, INSERT, UPDATE, DELETE ON public.vendor_quote_requests TO authenticated;
 
 GRANT ALL ON public.product_option_groups TO service_role;
 GRANT ALL ON public.product_option_values TO service_role;
@@ -2585,6 +4047,9 @@ GRANT ALL ON public.product_configurations TO service_role;
 GRANT ALL ON public.product_configuration_selections TO service_role;
 GRANT ALL ON public.product_configuration_components TO service_role;
 GRANT ALL ON public.custom_commission_revisions TO service_role;
+GRANT ALL ON public.custom_commission_milestones TO service_role;
+GRANT ALL ON public.custom_commission_milestone_events TO service_role;
+GRANT ALL ON public.vendor_quote_requests TO service_role;
 
 REVOKE EXECUTE ON FUNCTION public._can_read_configurable_product(uuid) FROM PUBLIC, anon;
 REVOKE EXECUTE ON FUNCTION public._can_manage_configurable_product(uuid) FROM PUBLIC, anon;
@@ -2596,42 +4061,77 @@ GRANT EXECUTE ON FUNCTION public._can_access_product_configuration(uuid) TO auth
 REVOKE EXECUTE ON FUNCTION public.product_variant_value_same_product() FROM PUBLIC, anon, authenticated, service_role;
 REVOKE EXECUTE ON FUNCTION public.guard_product_configuration_immutability() FROM PUBLIC, anon, authenticated, service_role;
 REVOKE EXECUTE ON FUNCTION public.guard_custom_commission_revision() FROM PUBLIC, anon, authenticated, service_role;
+REVOKE EXECUTE ON FUNCTION public.guard_custom_commission_milestone() FROM PUBLIC, anon, authenticated, service_role;
+REVOKE EXECUTE ON FUNCTION public.guard_custom_commission_milestone_event() FROM PUBLIC, anon, authenticated, service_role;
 REVOKE EXECUTE ON FUNCTION public.guard_project_configuration_snapshot() FROM PUBLIC, anon, authenticated, service_role;
+REVOKE EXECUTE ON FUNCTION public.guard_project_ffe_configuration_integrity() FROM PUBLIC, anon, authenticated, service_role;
+REVOKE EXECUTE ON FUNCTION public.guard_vendor_quote_configuration_snapshot() FROM PUBLIC, anon, authenticated, service_role;
 REVOKE EXECUTE ON FUNCTION public.lock_configuration_snapshot_on_po_link() FROM PUBLIC, anon, authenticated, service_role;
 REVOKE EXECUTE ON FUNCTION public._product_configuration_condition_matches(jsonb, jsonb, jsonb) FROM PUBLIC, anon, authenticated;
 REVOKE EXECUTE ON FUNCTION public._configuration_snapshot_hash(jsonb) FROM PUBLIC, anon, authenticated;
 REVOKE EXECUTE ON FUNCTION public._product_configuration_json(uuid) FROM PUBLIC, anon, authenticated;
 REVOKE EXECUTE ON FUNCTION public._custom_commission_revision_json(uuid) FROM PUBLIC, anon, authenticated;
+REVOKE EXECUTE ON FUNCTION public._configuration_quote_snapshot(uuid) FROM PUBLIC, anon, authenticated;
+REVOKE EXECUTE ON FUNCTION public._custom_commission_milestone_json(uuid) FROM PUBLIC, anon, authenticated;
 GRANT EXECUTE ON FUNCTION public._product_configuration_condition_matches(jsonb, jsonb, jsonb) TO service_role;
 GRANT EXECUTE ON FUNCTION public._configuration_snapshot_hash(jsonb) TO service_role;
 GRANT EXECUTE ON FUNCTION public._product_configuration_json(uuid) TO service_role;
 GRANT EXECUTE ON FUNCTION public._custom_commission_revision_json(uuid) TO service_role;
+GRANT EXECUTE ON FUNCTION public._configuration_quote_snapshot(uuid) TO service_role;
+GRANT EXECUTE ON FUNCTION public._custom_commission_milestone_json(uuid) TO service_role;
+
+REVOKE EXECUTE ON FUNCTION public._prepare_spec_book_issue_00403(uuid, text[], text, text, uuid, text, jsonb)
+  FROM PUBLIC, anon, authenticated;
+REVOKE EXECUTE ON FUNCTION public._finalize_spec_book_issue_00403(uuid)
+  FROM PUBLIC, anon, authenticated;
+GRANT EXECUTE ON FUNCTION public._prepare_spec_book_issue_00403(uuid, text[], text, text, uuid, text, jsonb)
+  TO service_role;
+GRANT EXECUTE ON FUNCTION public._finalize_spec_book_issue_00403(uuid)
+  TO service_role;
+REVOKE EXECUTE ON FUNCTION public.prepare_spec_book_issue(uuid, text[], text, text, uuid, text, jsonb)
+  FROM PUBLIC, anon;
+REVOKE EXECUTE ON FUNCTION public.finalize_spec_book_issue(uuid)
+  FROM PUBLIC, anon;
+GRANT EXECUTE ON FUNCTION public.prepare_spec_book_issue(uuid, text[], text, text, uuid, text, jsonb)
+  TO authenticated, service_role;
+GRANT EXECUTE ON FUNCTION public.finalize_spec_book_issue(uuid)
+  TO authenticated, service_role;
 
 REVOKE EXECUTE ON FUNCTION public.get_product_configuration_schema(uuid) FROM PUBLIC, anon;
 REVOKE EXECUTE ON FUNCTION public.upsert_product_configuration_schema(uuid, jsonb, integer) FROM PUBLIC, anon;
 REVOKE EXECUTE ON FUNCTION public.evaluate_product_configuration(uuid, uuid, uuid[], jsonb) FROM PUBLIC, anon;
 REVOKE EXECUTE ON FUNCTION public.save_product_configuration(jsonb) FROM PUBLIC, anon;
+REVOKE EXECUTE ON FUNCTION public.get_product_configuration(uuid) FROM PUBLIC, anon;
 REVOKE EXECUTE ON FUNCTION public.list_product_configurations(uuid, uuid) FROM PUBLIC, anon;
 REVOKE EXECUTE ON FUNCTION public.approve_product_configuration(uuid, integer) FROM PUBLIC, anon;
 REVOKE EXECUTE ON FUNCTION public.promote_configuration_to_library(uuid, text) FROM PUBLIC, anon;
+REVOKE EXECUTE ON FUNCTION public.instantiate_product_configuration_template(uuid, uuid, text) FROM PUBLIC, anon;
 REVOKE EXECUTE ON FUNCTION public.prepare_configuration_quote_request(uuid, uuid, text, text, text) FROM PUBLIC, anon;
 REVOKE EXECUTE ON FUNCTION public.create_custom_commission_revision(uuid, jsonb) FROM PUBLIC, anon;
 REVOKE EXECUTE ON FUNCTION public.transition_custom_commission_revision(uuid, text, text, jsonb) FROM PUBLIC, anon;
 REVOKE EXECUTE ON FUNCTION public.list_custom_commission_revisions(uuid) FROM PUBLIC, anon;
+REVOKE EXECUTE ON FUNCTION public.list_custom_commission_milestones(uuid) FROM PUBLIC, anon;
+REVOKE EXECUTE ON FUNCTION public.record_custom_commission_milestone(uuid, text, text, jsonb, jsonb, text) FROM PUBLIC, anon;
 REVOKE EXECUTE ON FUNCTION public.place_product_configuration_in_project(uuid, uuid, uuid, uuid, text, jsonb) FROM PUBLIC, anon;
+REVOKE EXECUTE ON FUNCTION public.revise_project_ffe_configuration(uuid, uuid, uuid, integer, text, uuid, integer) FROM PUBLIC, anon;
 
 GRANT EXECUTE ON FUNCTION public.get_product_configuration_schema(uuid) TO authenticated, service_role;
 GRANT EXECUTE ON FUNCTION public.upsert_product_configuration_schema(uuid, jsonb, integer) TO authenticated, service_role;
 GRANT EXECUTE ON FUNCTION public.evaluate_product_configuration(uuid, uuid, uuid[], jsonb) TO authenticated, service_role;
 GRANT EXECUTE ON FUNCTION public.save_product_configuration(jsonb) TO authenticated, service_role;
+GRANT EXECUTE ON FUNCTION public.get_product_configuration(uuid) TO authenticated, service_role;
 GRANT EXECUTE ON FUNCTION public.list_product_configurations(uuid, uuid) TO authenticated, service_role;
 GRANT EXECUTE ON FUNCTION public.approve_product_configuration(uuid, integer) TO authenticated, service_role;
 GRANT EXECUTE ON FUNCTION public.promote_configuration_to_library(uuid, text) TO authenticated, service_role;
+GRANT EXECUTE ON FUNCTION public.instantiate_product_configuration_template(uuid, uuid, text) TO authenticated, service_role;
 GRANT EXECUTE ON FUNCTION public.prepare_configuration_quote_request(uuid, uuid, text, text, text) TO authenticated, service_role;
 GRANT EXECUTE ON FUNCTION public.create_custom_commission_revision(uuid, jsonb) TO authenticated, service_role;
 GRANT EXECUTE ON FUNCTION public.transition_custom_commission_revision(uuid, text, text, jsonb) TO authenticated, service_role;
 GRANT EXECUTE ON FUNCTION public.list_custom_commission_revisions(uuid) TO authenticated, service_role;
+GRANT EXECUTE ON FUNCTION public.list_custom_commission_milestones(uuid) TO authenticated, service_role;
+GRANT EXECUTE ON FUNCTION public.record_custom_commission_milestone(uuid, text, text, jsonb, jsonb, text) TO authenticated, service_role;
 GRANT EXECUTE ON FUNCTION public.place_product_configuration_in_project(uuid, uuid, uuid, uuid, text, jsonb) TO authenticated, service_role;
+GRANT EXECUTE ON FUNCTION public.revise_project_ffe_configuration(uuid, uuid, uuid, integer, text, uuid, integer) TO authenticated, service_role;
 
 COMMENT ON TABLE public.product_configurations IS
   'Version rows for designer-saved furniture configurations. The snapshot/hash is the commercial truth; approved and issued versions are immutable.';
@@ -2639,6 +4139,8 @@ COMMENT ON TABLE public.custom_commission_revisions IS
   'Drawing/brief/quote/approval lifecycle for custom furniture. Issuance is atomic with placement into a project specification.';
 COMMENT ON FUNCTION public.upsert_product_configuration_schema(uuid, jsonb, integer) IS
   'Atomically authors a product definition with optimistic concurrency. Referenced values/components cannot be removed.';
+COMMENT ON FUNCTION public.get_product_configuration(uuid) IS
+  'Loads one exact authorized configuration version, including a superseded version pinned by an FF&E specification.';
 COMMENT ON FUNCTION public.evaluate_product_configuration(uuid, uuid, uuid[], jsonb) IS
   'Evaluates options, exact variants, modular components, compatibility, pricing, lead time, dimensions, and completeness without persisting.';
 COMMENT ON FUNCTION public.place_product_configuration_in_project(uuid, uuid, uuid, uuid, text, jsonb) IS

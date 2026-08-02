@@ -3106,6 +3106,130 @@ export type Database = {
           },
         ]
       }
+      custom_commission_milestone_events: {
+        Row: {
+          actor_id: string | null
+          artifacts: Json
+          created_at: string
+          event_number: number
+          evidence: Json
+          from_status: string | null
+          id: string
+          milestone_id: string
+          note: string | null
+          to_status: string
+        }
+        Insert: {
+          actor_id?: string | null
+          artifacts?: Json
+          created_at?: string
+          event_number: number
+          evidence?: Json
+          from_status?: string | null
+          id?: string
+          milestone_id: string
+          note?: string | null
+          to_status: string
+        }
+        Update: {
+          actor_id?: string | null
+          artifacts?: Json
+          created_at?: string
+          event_number?: number
+          evidence?: Json
+          from_status?: string | null
+          id?: string
+          milestone_id?: string
+          note?: string | null
+          to_status?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "custom_commission_milestone_events_milestone_id_fkey"
+            columns: ["milestone_id"]
+            isOneToOne: false
+            referencedRelation: "custom_commission_milestones"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      custom_commission_milestones: {
+        Row: {
+          artifacts: Json
+          completed_at: string | null
+          completed_by: string | null
+          configuration_id: string
+          created_at: string
+          created_by: string | null
+          evidence: Json
+          id: string
+          milestone_type: string
+          project_id: string
+          revision_id: string
+          status: string
+          updated_at: string
+        }
+        Insert: {
+          artifacts?: Json
+          completed_at?: string | null
+          completed_by?: string | null
+          configuration_id: string
+          created_at?: string
+          created_by?: string | null
+          evidence?: Json
+          id?: string
+          milestone_type: string
+          project_id: string
+          revision_id: string
+          status?: string
+          updated_at?: string
+        }
+        Update: {
+          artifacts?: Json
+          completed_at?: string | null
+          completed_by?: string | null
+          configuration_id?: string
+          created_at?: string
+          created_by?: string | null
+          evidence?: Json
+          id?: string
+          milestone_type?: string
+          project_id?: string
+          revision_id?: string
+          status?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "custom_commission_milestones_configuration_id_fkey"
+            columns: ["configuration_id"]
+            isOneToOne: false
+            referencedRelation: "product_configurations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "custom_commission_milestones_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "field_activity_summary"
+            referencedColumns: ["project_id"]
+          },
+          {
+            foreignKeyName: "custom_commission_milestones_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "custom_commission_milestones_revision_id_fkey"
+            columns: ["revision_id"]
+            isOneToOne: false
+            referencedRelation: "custom_commission_revisions"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       custom_commission_revisions: {
         Row: {
           approved_at: string | null
@@ -22204,9 +22328,17 @@ export type Database = {
         }
       }
       _compute_quiz_profile: { Args: { p_answers: Json }; Returns: Json }
+      _configuration_quote_snapshot: {
+        Args: { p_configuration_id: string }
+        Returns: Json
+      }
       _configuration_snapshot_hash: {
         Args: { p_snapshot: Json }
         Returns: string
+      }
+      _custom_commission_milestone_json: {
+        Args: { p_milestone_id: string }
+        Returns: Json
       }
       _custom_commission_revision_json: {
         Args: { p_revision_id: string }
@@ -22271,6 +22403,34 @@ export type Database = {
           p_kind: Database["public"]["Enums"]["decision_notification_kind"]
         }
         Returns: string
+      }
+      _finalize_spec_book_issue_00403: {
+        Args: { p_revision_id: string }
+        Returns: {
+          base_revision_id: string | null
+          created_at: string
+          created_by: string | null
+          id: string
+          idempotency_key: string
+          issue_type: string
+          issued_at: string | null
+          prior_revision_id: string | null
+          reason: string | null
+          render_snapshot: Json
+          requested_audiences: string[]
+          revision_number: number
+          snapshot_checksum: string
+          spec_book_id: string
+          status: string
+          template_snapshot: Json
+          warning_acknowledgements: Json
+        }
+        SetofOptions: {
+          from: "*"
+          to: "spec_book_revisions"
+          isOneToOne: true
+          isSetofReturn: false
+        }
       }
       _issue_invoice_authorized_legacy_00397: {
         Args: { p_due_date?: string; p_invoice_id: string }
@@ -22385,6 +22545,18 @@ export type Database = {
           follows_phase_id: string
           sort_order: number
         }[]
+      }
+      _prepare_spec_book_issue_00403: {
+        Args: {
+          p_audiences: string[]
+          p_base_revision_id: string
+          p_idempotency_key: string
+          p_issue_type: string
+          p_reason: string
+          p_spec_book_id: string
+          p_warning_acknowledgements?: Json
+        }
+        Returns: Json
       }
       _primary_studio_for: { Args: { p_user: string }; Returns: string }
       _product_configuration_condition_matches: {
@@ -24514,6 +24686,10 @@ export type Database = {
           source: string
         }[]
       }
+      get_product_configuration: {
+        Args: { p_configuration_id: string }
+        Returns: Json
+      }
       get_product_configuration_schema: {
         Args: { p_product_id: string }
         Returns: Json
@@ -24623,6 +24799,14 @@ export type Database = {
       increment_sequence_counter: {
         Args: { p_column: string; p_sequence_id: string }
         Returns: undefined
+      }
+      instantiate_product_configuration_template: {
+        Args: {
+          p_name?: string
+          p_project_id: string
+          p_template_configuration_id: string
+        }
+        Returns: Json
       }
       invoke_edge_function: {
         Args: { body?: Json; fn_name: string }
@@ -24794,6 +24978,10 @@ export type Database = {
         Returns: number
       }
       list_client_proposals: { Args: never; Returns: Json }
+      list_custom_commission_milestones: {
+        Args: { p_configuration_id: string }
+        Returns: Json
+      }
       list_custom_commission_revisions: {
         Args: { p_configuration_id: string }
         Returns: Json
@@ -25199,6 +25387,17 @@ export type Database = {
       record_activation_event: {
         Args: { p_event_name: string; p_properties?: Json; p_user_id: string }
         Returns: undefined
+      }
+      record_custom_commission_milestone: {
+        Args: {
+          p_artifacts: Json
+          p_configuration_id: string
+          p_evidence: Json
+          p_milestone_type: string
+          p_note: string
+          p_status: string
+        }
+        Returns: Json
       }
       record_invoice_payment: {
         Args: {
@@ -25607,6 +25806,18 @@ export type Database = {
       }
       review_sms_message: {
         Args: { p_action: string; p_effect?: Json; p_message_id: string }
+        Returns: Json
+      }
+      revise_project_ffe_configuration: {
+        Args: {
+          p_expected_configuration_id: string
+          p_expected_configuration_version: number
+          p_expected_new_version: number
+          p_expected_snapshot_hash: string
+          p_ffe_item_id: string
+          p_new_configuration_id: string
+          p_project_id: string
+        }
         Returns: Json
       }
       revoke_document_share: { Args: { p_share_id: string }; Returns: boolean }
