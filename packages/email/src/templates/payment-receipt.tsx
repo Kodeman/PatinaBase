@@ -1,5 +1,6 @@
 import * as React from 'react';
-import { Text, Heading, Section, Hr } from '@react-email/components';
+import { Text, Heading, Hr } from '@react-email/components';
+import { PadSection } from '../components/PadSection';
 import { BaseEmailLayout } from '../components/BaseEmailLayout';
 import { Button } from '../components/Button';
 
@@ -38,7 +39,7 @@ export const PaymentReceipt: React.FC<PaymentReceiptProps> = ({
         <strong>{amountFormatted}</strong> has been processed.
       </Text>
 
-      <Section style={styles.receiptCard}>
+      <PadSection style={styles.receiptCard}>
         <Text style={styles.receiptTitle}>Receipt</Text>
 
         <div style={styles.receiptRow}>
@@ -83,7 +84,7 @@ export const PaymentReceipt: React.FC<PaymentReceiptProps> = ({
           <Text style={styles.totalLabel}>Total Paid</Text>
           <Text style={styles.totalAmount}>{amountFormatted}</Text>
         </div>
-      </Section>
+      </PadSection>
 
       <div style={styles.buttonContainer}>
         <Button href={receiptUrl || `${portalUrl}/billing`}>

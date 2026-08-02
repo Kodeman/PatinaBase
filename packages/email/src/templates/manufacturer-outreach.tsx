@@ -1,5 +1,6 @@
 import * as React from 'react';
 import { Text, Heading, Section, Hr } from '@react-email/components';
+import { PadSection } from '../components/PadSection';
 import { BaseEmailLayout } from '../components/BaseEmailLayout';
 import { Button } from '../components/Button';
 
@@ -51,7 +52,7 @@ export const ManufacturerOutreach: React.FC<ManufacturerOutreachProps> = ({
       preview={`A Patina designer just nominated ${vendorName} for the catalog`}
       unsubscribeUrl={unsubscribeUrl}
     >
-      <Section style={{ paddingTop: 12 }}>
+      <PadSection style={{ paddingTop: 12 }}>
         <Heading
           as="h1"
           style={{
@@ -73,11 +74,11 @@ export const ManufacturerOutreach: React.FC<ManufacturerOutreachProps> = ({
           designer-facing experience; you keep the manufacturing relationship
           and the wholesale margin.
         </Text>
-      </Section>
+      </PadSection>
 
       <Hr style={{ borderTop: '1px solid #E5E2DD', margin: '18px 0' }} />
 
-      <Section>
+      <Section style={{ width: '100%' }}>
         <Text
           style={{
             fontFamily: '"DM Mono", ui-monospace, monospace',
@@ -120,7 +121,7 @@ export const ManufacturerOutreach: React.FC<ManufacturerOutreachProps> = ({
 
       <Hr style={{ borderTop: '1px solid #E5E2DD', margin: '18px 0' }} />
 
-      <Section>
+      <Section style={{ width: '100%' }}>
         <Heading
           as="h2"
           style={{
@@ -145,7 +146,7 @@ export const ManufacturerOutreach: React.FC<ManufacturerOutreachProps> = ({
 
       <Hr style={{ borderTop: '1px solid #E5E2DD', margin: '18px 0' }} />
 
-      <Section>
+      <Section style={{ width: '100%' }}>
         <Text style={{ color: '#8B7355', fontSize: '13px', lineHeight: '1.6' }}>
           Questions?{' '}
           {patinaContactName && (

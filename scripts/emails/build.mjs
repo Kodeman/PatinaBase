@@ -1,14 +1,19 @@
 #!/usr/bin/env node
-// Generates three artifacts from the branded email source files:
-//   1. supabase/migrations/00309_seed_branded_email_templates.sql
-//        — dollar-quoted UPSERTs of the 5 DB/Resend templates into email_templates.
-//   1b. supabase/migrations/00311_reseed_static_email_templates_branded.sql
-//        — dollar-quoted UPSERTs of the 7 migrated static transactional/engagement
-//          emails (back-in-stock, price-drop, lead-expiring, new-lead-designer,
-//          client-confirmation, security-alert, workspace-invite).
+// Generates the email artifacts from the branded email source files:
+//   1. supabase/migrations/<REBAKE_MIGRATION>  — the ONLY migration this script
+//        still writes by default: one idempotent UPSERT of all 17 branded slugs
+//        plus a replace()-based patch for the 3 hand-authored 00336 arrival rows.
 //   2. apps/admin-portal/src/data/system-email-previews.ts
 //        — the 6 GoTrue auth templates with sample vars substituted, for the
 //          read-only admin "System emails" preview tab.
+//
+// FROZEN (only rewritten with EMAILS_REWRITE_APPLIED=1, for drift inspection):
+//   00309_seed_branded_email_templates.sql            — 5 DB/Resend templates
+//   00311_reseed_static_email_templates_branded.sql   — 7 migrated static emails
+//   00312_reseed_remaining_email_templates_branded.sql— 5 remaining rows
+// These are applied on Strata; template changes fix forward via the re-bake
+// migration, never by rewriting an applied file (see the patina-db-migrations
+// skill). After the re-bake migration ships, bump REBAKE_MIGRATION.
 //
 // Source of truth: packages/email/branded/*.html (DB templates, {{mustache}})
 //                  supabase/templates/*.html      (auth templates, Go dialect)
@@ -20,6 +25,17 @@ import { dirname, join } from "node:path";
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..", "..");
 const MIGRATION = "00309_seed_branded_email_templates.sql";
 const MIGRATION_STATIC = "00311_reseed_static_email_templates_branded.sql";
+
+// 00309/00311/00312 are APPLIED on Strata — frozen point-in-time snapshots.
+// Editing a branded/*.html now ships as a NEW re-bake migration (REBAKE_MIGRATION
+// below), never by rewriting an applied file. Set EMAILS_REWRITE_APPLIED=1 only
+// to inspect drift between those snapshots and the current sources.
+const REWRITE_APPLIED = process.env.EMAILS_REWRITE_APPLIED === "1";
+
+// The current re-bake target. Once this migration has shipped, bump it to the
+// next free number (ls supabase/migrations | sort | tail -1) before re-running —
+// same rule as packages/email/scripts/render-db-templates.ts.
+const REBAKE_MIGRATION = "00383_harden_email_templates_outlook_m365.sql";
 
 // Footer/nav merge-tags every DB template inherits from brandDefaults().
 const BRAND_VARS = [
@@ -182,7 +198,7 @@ ON CONFLICT (slug) DO UPDATE SET
   updated_at      = now();
 `;
 
-writeFileSync(join(ROOT, "supabase/migrations", MIGRATION), sql);
+if (REWRITE_APPLIED) writeFileSync(join(ROOT, "supabase/migrations", MIGRATION), sql);
 
 // ---- 1b. Static-email reseed migration (00311) ------------------------------
 // Same UPSERT generator as 00309 — migrates the remaining hand-coded
@@ -216,7 +232,7 @@ ON CONFLICT (slug) DO UPDATE SET
   updated_at      = now();
 `;
 
-writeFileSync(join(ROOT, "supabase/migrations", MIGRATION_STATIC), staticSql);
+if (REWRITE_APPLIED) writeFileSync(join(ROOT, "supabase/migrations", MIGRATION_STATIC), staticSql);
 
 // ---- 1c. Remaining-email reseed migration (00312) ---------------------------
 // Same UPSERT generator as 00309/00311 — brings the last un-migrated rows onto
@@ -255,10 +271,139 @@ ON CONFLICT (slug) DO UPDATE SET
   updated_at      = now();
 `;
 
-writeFileSync(
-  join(ROOT, "supabase/migrations", MIGRATION_REMAINING),
-  remainingSql
-);
+if (REWRITE_APPLIED) {
+  writeFileSync(join(ROOT, "supabase/migrations", MIGRATION_REMAINING), remainingSql);
+}
+
+// ---- 1d. Re-bake migration (fix-forward for the applied 00309/00311/00312) ---
+// All 17 branded slugs in one idempotent UPSERT, plus a replace()-based UPDATE
+// for the three hand-authored 00336 "arrival" rows (they have no bake path —
+// their HTML lives in that migration, not in packages/email/branded/).
+const ALL_BRANDED = [...DB_TEMPLATES, ...STATIC_TEMPLATES, ...REMAINING_TEMPLATES];
+const rebakeRows = buildRows(ALL_BRANDED);
+
+// The 00336 rows carry byte-identical shell markup to the branded sources, so
+// the same four rewrites apply. ORDER MATTERS: the bar block must be rewritten
+// before the generic bare-table rule, or the bar table takes the plain
+// width:100% style and never gets border-collapse. Every step is idempotent —
+// no replacement's output re-matches its own pattern.
+const ARRIVAL_SLUGS = [
+  "design-request-held",
+  "design-request-intro-delivered",
+  "design-request-claimed",
+];
+const BAR_COLORS = ["#4E7A66", "#B08A46", "#A24E2E"];
+
+// [from, to] pairs, in application order (first = applied first = innermost
+// replace() call). The bar block MUST precede the generic bare-table rule.
+const ARRIVAL_REWRITES = [
+  [
+    '<tr><td style="font-size:0; line-height:0;">\n' +
+      '          <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0"><tr>',
+    '<tr><td style="font-size:0; line-height:0; padding:0;">\n' +
+      '          <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="width:100%; border-collapse:collapse;"><tr>',
+  ],
+  [
+    '<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0">',
+    '<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="width:100%;">',
+  ],
+  [
+    '<table role="presentation" class="bg" width="100%" cellpadding="0" cellspacing="0" border="0" style="background:#F5F0E6;">',
+    '<table role="presentation" class="bg" width="100%" cellpadding="0" cellspacing="0" border="0" style="width:100%; background:#F5F0E6;">',
+  ],
+  ...BAR_COLORS.map((c) => [
+    `height="4" style="background:${c}; font-size:0; line-height:0;"`,
+    `height="4" style="background:${c}; height:4px; font-size:4px; line-height:4px; padding:0;"`,
+  ]),
+];
+
+// Nest the rewrites into one replace(replace(...)) expression over html_content,
+// indenting each level so the generated SQL stays readable.
+const arrivalExpr = ARRIVAL_REWRITES.reduce((inner, [from, to], i) => {
+  const pad = "  ".repeat(ARRIVAL_REWRITES.length - i);
+  return (
+    `replace(\n` +
+    `${pad}  ${inner.split("\n").join(`\n`)},\n` +
+    `${pad}  $o$${from}$o$,\n` +
+    `${pad}  $n$${to}$n$\n` +
+    `${pad})`
+  );
+}, "html_content");
+
+const rebakeSql = `-- ═══════════════════════════════════════════════════════════════════════════
+-- ${REBAKE_MIGRATION.replace(/_.*/, "")} — Harden the remaining email_templates rows for Outlook/M365
+--
+-- Companion to 00382 (which re-baked the 17 designer-onboarding drip rows from
+-- the fixed packages/email React templates). This one covers every OTHER live
+-- row: the ${ALL_BRANDED.length} branded slugs seeded by 00309/00311/00312 and the ${ARRIVAL_SLUGS.length} hand-authored
+-- "arrival" rows seeded by 00336.
+--
+-- Microsoft's Exchange HTML converter (new Outlook desktop, OWA, Outlook iOS —
+-- all render the Exchange-converted body, not the source) strips <head>/<style>,
+-- every table ATTRIBUTE (width/align/border/cellpadding/cellspacing/role), the
+-- bgcolor attribute, and the CSS \`height\` property. It KEEPS inline
+-- background/background-color, padding, border-radius, fonts, width, font-size
+-- and line-height. Gmail independently forces border-collapse:collapse on
+-- message tables, which voids padding declared on a <table>. So the shells now
+-- state inline what they used to state by attribute:
+--
+--   (a) CTA fill as inline background-color on the <a> (the <td bgcolor> stays,
+--       but it alone left buttons transparent-on-cream with pale text);
+--   (b) the 4px tri-colour bar cells carry height:4px + font-size:4px +
+--       line-height:4px + padding:0, the cell WRAPPING them carries padding:0,
+--       and the bar table carries border-collapse — losing cellpadding="0" and
+--       cellspacing="0" falls back to td{padding:1px} and border-spacing:2px.
+--       Measured in headless Chromium on the converted body: cells-only 10px
+--       band → +wrapper padding 8px → +border-collapse 4px (the design intent);
+--   (c) every full-width layout table declares width:100% inline, not only
+--       width="100%".
+--
+-- No copy, colour, spacing value, or class name changed; healthy renderers are
+-- pixel-identical to the previous markup.
+--
+-- The ${ALL_BRANDED.length}-row UPSERT below is GENERATED by scripts/emails/build.mjs from
+-- packages/email/branded/*.html — do not hand-edit. 00309/00311/00312 are
+-- applied on Strata and stay frozen; this is the fix-forward. The 00125 BEFORE
+-- UPDATE snapshot trigger versions the prior content, so it is reversible.
+--
+-- The ${ARRIVAL_SLUGS.length} arrival rows are patched with replace() rather than re-seeded, so any
+-- later admin-portal copy edit survives; each replace is a no-op if the pattern
+-- is absent. Hit counts verified against 00336's actual html_content: 1 bar
+-- block, 2 bare tables, 1 .bg table and 3 bar cells per row.
+--
+-- No GRANT/REVOKE: email_templates is reached only by the service-role client
+-- inside edge functions (00296 precedent) — the legacy-grants seed is unchanged.
+-- ═══════════════════════════════════════════════════════════════════════════
+
+INSERT INTO public.email_templates
+  (slug, name, category, subject_default, html_content, content_blocks, variables, is_active)
+VALUES
+${rebakeRows}
+ON CONFLICT (slug) DO UPDATE SET
+  name            = EXCLUDED.name,
+  category        = EXCLUDED.category,
+  subject_default = EXCLUDED.subject_default,
+  html_content    = EXCLUDED.html_content,
+  variables       = EXCLUDED.variables,
+  is_active       = true,
+  updated_at      = now();
+
+-- ── The three 00336 arrival rows (hand-authored HTML, no bake path) ──────────
+UPDATE public.email_templates AS t
+SET html_content = s.h,
+    updated_at   = now()
+FROM (
+  SELECT
+    slug,
+    ${arrivalExpr} AS h
+  FROM public.email_templates
+  WHERE slug IN (${ARRIVAL_SLUGS.map((s) => `'${s}'`).join(", ")})
+) AS s
+WHERE t.slug = s.slug
+  AND t.html_content IS DISTINCT FROM s.h;
+`;
+
+writeFileSync(join(ROOT, "supabase/migrations", REBAKE_MIGRATION), rebakeSql);
 
 // ---- 2. Admin preview module ------------------------------------------------
 const previews = AUTH_TEMPLATES.map((t) => {
@@ -286,7 +431,10 @@ export const systemEmailPreviews: SystemEmailPreview[] = ${JSON.stringify(previe
 
 writeFileSync(join(ROOT, "apps/admin-portal/src/data/system-email-previews.ts"), ts);
 
-console.log(`Wrote supabase/migrations/${MIGRATION} (${DB_TEMPLATES.length} templates)`);
-console.log(`Wrote supabase/migrations/${MIGRATION_STATIC} (${STATIC_TEMPLATES.length} templates)`);
-console.log(`Wrote supabase/migrations/${MIGRATION_REMAINING} (${REMAINING_TEMPLATES.length} templates)`);
+if (REWRITE_APPLIED) {
+  console.log(`Rewrote APPLIED ${MIGRATION} / ${MIGRATION_STATIC} / ${MIGRATION_REMAINING}`);
+} else {
+  console.log(`Left 00309/00311/00312 frozen (applied on Strata) — set EMAILS_REWRITE_APPLIED=1 to inspect drift`);
+}
+console.log(`Wrote supabase/migrations/${REBAKE_MIGRATION} (${ALL_BRANDED.length} branded + ${ARRIVAL_SLUGS.length} arrival rows)`);
 console.log(`Wrote apps/admin-portal/src/data/system-email-previews.ts (${previews.length} templates)`);

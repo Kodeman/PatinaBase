@@ -103,6 +103,7 @@ const styles = {
     margin: '0 0 16px 0',
   },
   imageContainer: {
+    width: '100%',
     margin: '16px 0',
     borderRadius: '12px',
     overflow: 'hidden' as const,
@@ -121,6 +122,7 @@ const styles = {
     textAlign: 'center' as const,
   },
   priceSection: {
+    width: '100%',
     textAlign: 'center' as const,
     margin: '12px 0 20px 0',
   },

@@ -9,14 +9,14 @@ function renderGridItem(p: ProductGridProduct): string {
     : `<div class="card" style="height:180px;background:${COLORS.card};border-radius:6px;"></div>`;
 
   return `<td class="stack" width="48%" style="vertical-align:top;padding:8px;">
-                      <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0">
+                      <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="width:100%;">
                         <tr><td>${image}</td></tr>
                         <tr>
                           <td style="padding:10px 0 0;">
                             <p style="margin:0 0 2px;font-family:${FONTS.mono};font-size:10px;letter-spacing:0.16em;text-transform:uppercase;color:${COLORS.verd};font-weight:600;">${esc(p.provenance)}</p>
                             <p class="ink" style="margin:0 0 4px;font-family:${FONTS.sans};font-size:14px;font-weight:600;color:${COLORS.ink};">${esc(p.product_name)}</p>
                             <p class="ink3" style="margin:0 0 6px;font-family:${FONTS.sans};font-size:12px;line-height:1.4;color:${COLORS.ink3};">${esc(p.description)}</p>
-                            <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0">
+                            <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="width:100%;">
                               <tr>
                                 <td><span class="ink" style="font-family:${FONTS.sans};font-size:15px;font-weight:600;color:${COLORS.ink};">${esc(p.price)}</span></td>
                                 <td align="right"><span style="font-family:${FONTS.sans};font-size:11px;font-weight:500;color:${COLORS.verd};">${esc(p.style_match)}</span></td>
@@ -54,7 +54,7 @@ export function renderProductGrid(props: ProductGridProps, _ctx: RenderContext):
 
   return `          <tr>
             <td class="px" style="padding:8px 32px;">
-              <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0">
+              <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="width:100%;">
 ${rows.join('\n')}
               </table>
             </td>

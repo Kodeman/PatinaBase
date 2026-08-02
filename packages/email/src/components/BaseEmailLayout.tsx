@@ -4,7 +4,6 @@ import {
   Head,
   Body,
   Container,
-  Section,
   Row,
   Column,
   Text,
@@ -12,6 +11,7 @@ import {
   Img,
   Preview,
 } from '@react-email/components';
+import { PadSection } from './PadSection';
 import { COLORS, FONTS, COLOR_BAR, FONT_LINK, HEAD_CSS, TAGLINE, URLS } from './brand';
 
 export interface BaseEmailLayoutProps {
@@ -69,17 +69,20 @@ export const BaseEmailLayout: React.FC<BaseEmailLayoutProps> = ({
       <Body className="bg" style={styles.body}>
         <Container className="container shell" style={styles.shell}>
           {/* Signature color-bar */}
-          <Row>
+          <Row style={styles.barRow}>
             {COLOR_BAR.map((c, i) => (
-              <Column key={i} style={{ ...styles.bar, backgroundColor: c }}>
+              <Column
+                key={i}
+                style={{ ...styles.bar, width: BAR_WIDTHS[i], backgroundColor: c }}
+              >
                 &nbsp;
               </Column>
             ))}
           </Row>
 
           {showHeader && (
-            <Section className="px" style={styles.headerPad}>
-              <Row>
+            <PadSection className="px" style={styles.headerPad}>
+              <Row style={styles.fullWidth}>
                 <Column align="left" style={{ verticalAlign: 'middle' }}>
                   <Text className="wordmark" style={styles.wordmark}>
                     Patina
@@ -93,14 +96,14 @@ export const BaseEmailLayout: React.FC<BaseEmailLayoutProps> = ({
                   </Column>
                 )}
               </Row>
-            </Section>
+            </PadSection>
           )}
 
           {/* Studio co-brand byline (Designer Studios) — under the wordmark. */}
           {showCobrand &&
             (studioLogoTrimmed ? (
-              <Section className="px" style={styles.cobrandLogoPad}>
-                <Row>
+              <PadSection className="px" style={styles.cobrandLogoPad}>
+                <Row style={styles.fullWidth}>
                   <Column style={styles.cobrandLogoCol}>
                     <Img
                       src={studioLogoTrimmed}
@@ -117,29 +120,29 @@ export const BaseEmailLayout: React.FC<BaseEmailLayoutProps> = ({
                     </Column>
                   )}
                 </Row>
-              </Section>
+              </PadSection>
             ) : (
-              <Section className="px" style={styles.cobrandNamePad}>
+              <PadSection className="px" style={styles.cobrandNamePad}>
                 <Text className="ink3" style={styles.cobrandOnBehalf}>
                   Sent on behalf of {studioNameTrimmed}
                 </Text>
-              </Section>
+              </PadSection>
             ))}
 
           {/* Body */}
-          <Section className="px" style={styles.content}>
+          <PadSection className="px" style={styles.content}>
             {children}
-          </Section>
+          </PadSection>
 
           {showFooter && (
             <>
-              <Section className="px" style={styles.footerHairPad}>
+              <PadSection className="px" style={styles.footerHairPad}>
                 <div className="hairbg" style={styles.hair}>
                   &nbsp;
                 </div>
-              </Section>
-              <Section className="px" style={styles.footerPad}>
-                <Row>
+              </PadSection>
+              <PadSection className="px" style={styles.footerPad}>
+                <Row style={styles.fullWidth}>
                   <Column align="left" style={{ verticalAlign: 'top' }}>
                     <Text className="ink2" style={styles.footerBrand}>
                       Patina
@@ -164,7 +167,7 @@ export const BaseEmailLayout: React.FC<BaseEmailLayoutProps> = ({
                     </Link>
                   </Column>
                 </Row>
-              </Section>
+              </PadSection>
             </>
           )}
         </Container>
@@ -181,7 +184,15 @@ export const BaseEmailLayout: React.FC<BaseEmailLayoutProps> = ({
   );
 };
 
+/**
+ * Explicit thirds for the signature bar. Auto table layout already lands on
+ * thirds, but Microsoft's converter strips the `width` attribute and we want
+ * the split to be inline-declared rather than inferred.
+ */
+const BAR_WIDTHS = ['33.34%', '33.33%', '33.33%'] as const;
+
 const styles = {
+  fullWidth: { width: '100%' },
   body: {
     backgroundColor: COLORS.paper,
     fontFamily: FONTS.sans,
@@ -196,7 +207,20 @@ const styles = {
     borderRadius: '12px',
     overflow: 'hidden',
   },
-  bar: { height: '4px', fontSize: '0', lineHeight: '0' },
+  // font-size/line-height carry the 4px, not just `height`: Microsoft's HTML
+  // converter drops the CSS `height` property outright, and a 4px-tall bar
+  // whose only height was `height:4px` vanished in Outlook/OWA/Outlook iOS.
+  // font-size:4px + line-height:4px on the &nbsp; holds the same 4px box.
+  // padding:0 and the row's border-collapse are load-bearing for the same
+  // reason: the converter strips cellpadding="0"/cellspacing="0" and the UA
+  // defaults (td{padding:1px}, border-spacing:2px) then swell the 4px band.
+  // Mirrors supabase/functions/_shared/branded-email.ts.
+  // Residual: react-email's <Container> wraps the whole card in a bare <td> it
+  // gives us no way to style, so that one cell still picks up the 1px UA
+  // default post-conversion (a 1px inset around the card, measured; the bar
+  // cells themselves stay 4px). Fixing it would mean hand-rolling Container.
+  barRow: { width: '100%', borderCollapse: 'collapse' as const },
+  bar: { height: '4px', fontSize: '4px', lineHeight: '4px', padding: '0' },
   headerPad: { padding: '26px 40px 0' },
   wordmark: {
     fontFamily: FONTS.serif,
@@ -240,7 +264,9 @@ const styles = {
   },
   content: { padding: '22px 40px 0' },
   footerHairPad: { padding: '34px 40px 0' },
-  hair: { height: '1px', backgroundColor: COLORS.line, fontSize: '0', lineHeight: '0' },
+  // Same `height`-stripping hazard as the color bar — the 1px rule needs a 1px
+  // line box of its own or the footer hairline disappears in Outlook/M365.
+  hair: { height: '1px', backgroundColor: COLORS.line, fontSize: '1px', lineHeight: '1px' },
   footerPad: { padding: '22px 40px 32px' },
   footerBrand: { fontFamily: FONTS.serif, fontSize: '15px', color: COLORS.ink2, margin: '0 0 5px' },
   footerTagline: {

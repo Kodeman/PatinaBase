@@ -61,7 +61,7 @@ export const CampaignProductLaunch: React.FC<CampaignProductLaunchProps> = ({
           )}
           <div style={styles.productInfo}>
             <Text style={styles.productName}>{product.name}</Text>
-            <Row>
+            <Row style={{ width: '100%' }}>
               <Column>
                 <Text style={styles.productPrice}>{product.priceFormatted}</Text>
               </Column>
@@ -110,6 +110,7 @@ const styles = {
     margin: '0 0 28px 0',
   },
   productCard: {
+    width: '100%',
     margin: '0 0 8px 0',
   },
   productImage: {

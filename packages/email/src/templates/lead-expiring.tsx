@@ -1,5 +1,6 @@
 import * as React from 'react';
-import { Text, Heading, Section } from '@react-email/components';
+import { Text, Heading } from '@react-email/components';
+import { PadSection } from '../components/PadSection';
 import { BaseEmailLayout } from '../components/BaseEmailLayout';
 import { Button } from '../components/Button';
 
@@ -47,9 +48,9 @@ export const LeadExpiring: React.FC<LeadExpiringProps> = ({
       unsubscribeUrl={unsubscribeUrl}
     >
       {/* Urgency banner */}
-      <Section style={styles.urgencyBanner}>
+      <PadSection style={styles.urgencyBanner}>
         <Text style={styles.urgencyText}>{timeRemaining} remaining</Text>
-      </Section>
+      </PadSection>
 
       <Heading style={styles.heading}>
         {displayName ? `${displayName}, don't` : "Don't"} miss this lead
@@ -61,12 +62,12 @@ export const LeadExpiring: React.FC<LeadExpiringProps> = ({
         {budgetRange ? ` (${BUDGET_LABELS[budgetRange] || budgetRange})` : ''}.
       </Text>
 
-      <Section style={styles.summaryBox}>
+      <PadSection style={styles.summaryBox}>
         <Text style={styles.summaryText}>
           Leads that go unanswered are reassigned to other designers.
           Respond now to keep this opportunity.
         </Text>
-      </Section>
+      </PadSection>
 
       <div style={styles.buttonContainer}>
         <Button href={viewUrl} variant="urgent">Respond Now</Button>

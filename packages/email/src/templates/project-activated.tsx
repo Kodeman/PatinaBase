@@ -1,5 +1,6 @@
 import * as React from 'react';
 import { Text, Heading, Section, Hr } from '@react-email/components';
+import { PadSection } from '../components/PadSection';
 import { BaseEmailLayout } from '../components/BaseEmailLayout';
 import { Button } from '../components/Button';
 
@@ -43,7 +44,7 @@ export const ProjectActivated: React.FC<ProjectActivatedProps> = ({
         the FF&amp;E pipeline are all in place.
       </Text>
 
-      <Section style={styles.metaBox}>
+      <PadSection style={styles.metaBox}>
         <MetaRow label="Kickoff" value={new Date(kickoffDate).toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' })} />
         {expectedCompletion && (
           <MetaRow
@@ -52,7 +53,7 @@ export const ProjectActivated: React.FC<ProjectActivatedProps> = ({
           />
         )}
         <MetaRow label="Designer" value={designerName} />
-      </Section>
+      </PadSection>
 
       <Heading as="h2" style={styles.subheading}>How updates will reach you</Heading>
       <Text style={styles.text}>{tierDescription}</Text>
@@ -131,6 +132,7 @@ const styles = {
     marginBottom: '20px',
   },
   cta: {
+    width: '100%',
     textAlign: 'center' as const,
     marginTop: '8px',
     marginBottom: '20px',

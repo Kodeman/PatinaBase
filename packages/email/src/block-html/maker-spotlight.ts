@@ -10,7 +10,7 @@ export function renderMakerSpotlight(props: MakerSpotlightProps, _ctx: RenderCon
 
   return `          <tr>
             <td class="px" style="padding:16px 40px;">
-              <table role="presentation" class="chip" width="100%" cellpadding="0" cellspacing="0" border="0" style="background:${COLORS.cardAlt};border:1px solid ${COLORS.line};border-radius:8px;overflow:hidden;">
+              <table role="presentation" class="chip" width="100%" cellpadding="0" cellspacing="0" border="0" style="width:100%;background:${COLORS.cardAlt};border:1px solid ${COLORS.line};border-radius:8px;overflow:hidden;">
                 <tr>
                   <td style="padding:32px;text-align:center;">
                     ${portrait}

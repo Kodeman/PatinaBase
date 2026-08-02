@@ -1,5 +1,6 @@
 import * as React from 'react';
 import { Text, Heading, Section, Img, Hr } from '@react-email/components';
+import { PadSection } from '../components/PadSection';
 import { BaseEmailLayout } from '../components/BaseEmailLayout';
 import { Button } from '../components/Button';
 import { ProvenanceBar } from '../components/ProvenanceBar';
@@ -62,10 +63,10 @@ export const CampaignMakerSpotlight: React.FC<CampaignMakerSpotlightProps> = ({
 
       {/* Philosophy quote */}
       {philosophyQuote && (
-        <Section style={styles.quoteSection}>
+        <PadSection style={styles.quoteSection}>
           <Text style={styles.quoteText}>&ldquo;{philosophyQuote}&rdquo;</Text>
           <Text style={styles.quoteAttribution}>&mdash; {makerName}</Text>
-        </Section>
+        </PadSection>
       )}
 
       {/* Product list */}
@@ -172,6 +173,7 @@ const styles = {
     margin: '24px 0',
   },
   productCard: {
+    width: '100%',
     margin: '0 0 8px 0',
   },
   productImage: {

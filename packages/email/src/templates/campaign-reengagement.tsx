@@ -1,5 +1,6 @@
 import * as React from 'react';
 import { Text, Heading, Section, Img, Hr } from '@react-email/components';
+import { PadSection } from '../components/PadSection';
 import { BaseEmailLayout } from '../components/BaseEmailLayout';
 import { Button } from '../components/Button';
 
@@ -42,10 +43,10 @@ export const CampaignReengagement: React.FC<CampaignReengagementProps> = ({
       <Heading style={styles.heading}>{greeting}</Heading>
 
       {daysSinceLastVisit && (
-        <Section style={styles.daysCallout}>
+        <PadSection style={styles.daysCallout}>
           <Text style={styles.daysNumber}>{daysSinceLastVisit}</Text>
           <Text style={styles.daysLabel}>days since your last visit</Text>
-        </Section>
+        </PadSection>
       )}
 
       <Text style={styles.bodyText}>
@@ -55,9 +56,9 @@ export const CampaignReengagement: React.FC<CampaignReengagementProps> = ({
 
       {/* Offer banner */}
       {offerText && (
-        <Section style={styles.offerBanner}>
+        <PadSection style={styles.offerBanner}>
           <Text style={styles.offerText}>{offerText}</Text>
-        </Section>
+        </PadSection>
       )}
 
       {/* Personalized product picks */}
@@ -141,6 +142,7 @@ const styles = {
     margin: '0',
   },
   productCard: {
+    width: '100%',
     margin: '0 0 8px 0',
   },
   productImage: {

@@ -1,5 +1,6 @@
 import * as React from 'react';
-import { Section, Text } from '@react-email/components';
+import { Text } from '@react-email/components';
+import { PadSection } from './PadSection';
 import { COLORS, FONTS } from './brand';
 
 export interface ProvenanceBarProps {
@@ -22,11 +23,11 @@ export const ProvenanceBar: React.FC<ProvenanceBarProps> = ({
   if (items.length === 0) return null;
 
   return (
-    <Section style={styles.bar}>
+    <PadSection style={styles.bar}>
       <Text style={styles.text}>
         {items.join('  ·  ')}
       </Text>
-    </Section>
+    </PadSection>
   );
 };
 

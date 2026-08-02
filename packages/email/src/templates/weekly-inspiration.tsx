@@ -1,5 +1,6 @@
 import * as React from 'react';
 import { Text, Heading, Section, Img, Hr, Column, Row } from '@react-email/components';
+import { PadSection } from '../components/PadSection';
 import { BaseEmailLayout } from '../components/BaseEmailLayout';
 import { Button } from '../components/Button';
 
@@ -61,7 +62,7 @@ export const WeeklyInspiration: React.FC<WeeklyInspirationProps> = ({
           )}
           <div style={styles.productInfo}>
             <Text style={styles.productName}>{product.name}</Text>
-            <Row>
+            <Row style={{ width: '100%' }}>
               <Column>
                 <Text style={styles.productPrice}>{product.priceFormatted}</Text>
               </Column>
@@ -84,15 +85,15 @@ export const WeeklyInspiration: React.FC<WeeklyInspirationProps> = ({
 
       {/* Designer tip */}
       {designerTip && (
-        <Section style={styles.tipSection}>
+        <PadSection style={styles.tipSection}>
           <Text style={styles.tipLabel}>Designer Tip</Text>
           <Text style={styles.tipText}>{designerTip}</Text>
-        </Section>
+        </PadSection>
       )}
 
       {/* Maker spotlight */}
       {makerSpotlight && (
-        <Section style={styles.spotlightSection}>
+        <PadSection style={styles.spotlightSection}>
           <Text style={styles.spotlightLabel}>Maker Spotlight</Text>
           {makerSpotlight.imageUrl && (
             <Img
@@ -107,7 +108,7 @@ export const WeeklyInspiration: React.FC<WeeklyInspirationProps> = ({
           <Text style={styles.spotlightDescription}>
             {makerSpotlight.description}
           </Text>
-        </Section>
+        </PadSection>
       )}
 
       <div style={styles.buttonContainer}>
@@ -132,6 +133,7 @@ const styles = {
     margin: '0 0 24px 0',
   },
   productCard: {
+    width: '100%',
     margin: '0 0 8px 0',
   },
   productImage: {

@@ -5,6 +5,11 @@ export { Button } from './components/Button';
 export type { ButtonProps } from './components/Button';
 export { ProvenanceBar } from './components/ProvenanceBar';
 export type { ProvenanceBarProps } from './components/ProvenanceBar';
+// Use PadSection, not react-email's <Section>, for any block that needs
+// padding — <Section> emits the padding on a <table>, where border-collapse
+// (which Gmail forces) throws it away.
+export { PadSection } from './components/PadSection';
+export type { PadSectionProps } from './components/PadSection';
 
 // Templates
 export { WelcomeVerification } from './templates/welcome-verification';

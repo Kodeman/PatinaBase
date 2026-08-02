@@ -13,7 +13,7 @@ export function renderDivider(props: DividerBlockProps, _ctx: RenderContext): st
   const hairlineClass = isGold ? '' : ' class="hairbg"';
   return `          <tr>
             <td class="px" style="padding:8px 40px;">
-              <div${hairlineClass} style="height:${height};background:${color};font-size:0;line-height:0;">&nbsp;</div>
+              <div${hairlineClass} style="height:${height};background:${color};font-size:${height};line-height:${height};">&nbsp;</div>
             </td>
           </tr>`;
 }

@@ -1,5 +1,6 @@
 import * as React from 'react';
 import { Text, Heading, Section, Img, Column, Row } from '@react-email/components';
+import { PadSection } from '../components/PadSection';
 import { BaseEmailLayout } from '../components/BaseEmailLayout';
 import { Button } from '../components/Button';
 
@@ -83,10 +84,10 @@ export const NewLeadDesigner: React.FC<NewLeadDesignerProps> = ({
       )}
 
       {/* Project details card */}
-      <Section style={styles.detailCard}>
+      <PadSection style={styles.detailCard}>
         <Text style={styles.detailTitle}>Project Details</Text>
 
-        <Row>
+        <Row style={{ width: '100%' }}>
           <Column style={styles.detailColumn}>
             <Text style={styles.detailLabel}>Project Type</Text>
             <Text style={styles.detailValue}>
@@ -104,7 +105,7 @@ export const NewLeadDesigner: React.FC<NewLeadDesignerProps> = ({
         </Row>
 
         {(timeline || location) && (
-          <Row>
+          <Row style={{ width: '100%' }}>
             {timeline && (
               <Column style={styles.detailColumn}>
                 <Text style={styles.detailLabel}>Timeline</Text>
@@ -121,11 +122,11 @@ export const NewLeadDesigner: React.FC<NewLeadDesignerProps> = ({
             )}
           </Row>
         )}
-      </Section>
+      </PadSection>
 
       {/* Compatibility score badge */}
       {scorePercent && (
-        <Section style={styles.scoreBadge}>
+        <PadSection style={styles.scoreBadge}>
           <Text style={styles.scoreText}>
             {scorePercent}% compatibility match
           </Text>
@@ -134,7 +135,7 @@ export const NewLeadDesigner: React.FC<NewLeadDesignerProps> = ({
               {matchReasons.slice(0, 3).join(' · ')}
             </Text>
           )}
-        </Section>
+        </PadSection>
       )}
 
       {/* Style summary */}
@@ -170,6 +171,7 @@ const styles = {
     margin: '0 0 16px 0',
   },
   imageContainer: {
+    width: '100%',
     margin: '16px 0',
     borderRadius: '12px',
     overflow: 'hidden' as const,

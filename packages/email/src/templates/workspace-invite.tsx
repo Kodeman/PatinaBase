@@ -1,5 +1,6 @@
 import * as React from 'react';
-import { Text, Heading, Section, Link } from '@react-email/components';
+import { Text, Heading, Link } from '@react-email/components';
+import { PadSection } from '../components/PadSection';
 import { BaseEmailLayout } from '../components/BaseEmailLayout';
 import { Button } from '../components/Button';
 
@@ -53,7 +54,7 @@ export const WorkspaceInvite: React.FC<WorkspaceInviteProps> = ({
         </Button>
       </div>
 
-      <Section style={styles.fallbackBox}>
+      <PadSection style={styles.fallbackBox}>
         <Text style={styles.fallbackText}>
           This invitation expires in 7 days. If the button doesn't work, copy and
           paste this link into your browser:
@@ -63,7 +64,7 @@ export const WorkspaceInvite: React.FC<WorkspaceInviteProps> = ({
             {actionLink}
           </Link>
         </Text>
-      </Section>
+      </PadSection>
 
       <Text style={styles.signoff}>— The Patina team</Text>
     </BaseEmailLayout>

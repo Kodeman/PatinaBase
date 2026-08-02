@@ -1,5 +1,6 @@
 import * as React from 'react';
-import { Text, Heading, Section } from '@react-email/components';
+import { Text, Heading } from '@react-email/components';
+import { PadSection } from '../components/PadSection';
 import { BaseEmailLayout } from '../components/BaseEmailLayout';
 import { Button } from '../components/Button';
 
@@ -51,7 +52,7 @@ export const SecurityAlert: React.FC<SecurityAlertProps> = ({
         {alert.description}
       </Text>
 
-      <Section style={styles.detailBox}>
+      <PadSection style={styles.detailBox}>
         {deviceInfo && (
           <Text style={styles.detailRow}>
             <strong>Device:</strong> {deviceInfo}
@@ -70,7 +71,7 @@ export const SecurityAlert: React.FC<SecurityAlertProps> = ({
         <Text style={styles.detailRow}>
           <strong>Time:</strong> {timestamp}
         </Text>
-      </Section>
+      </PadSection>
 
       <Text style={styles.text}>
         If this was you, no action is needed. If you don't recognize this

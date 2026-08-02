@@ -13,16 +13,16 @@ export function renderNotification(props: NotificationBlockProps, _ctx: RenderCo
 
   return `          <tr>
             <td class="px" style="padding:16px 40px;">
-              <table role="presentation" class="chip" width="100%" cellpadding="0" cellspacing="0" border="0" style="background:${COLORS.cardAlt};border:1px solid ${COLORS.line};border-radius:8px;overflow:hidden;">
+              <table role="presentation" class="chip" width="100%" cellpadding="0" cellspacing="0" border="0" style="width:100%;background:${COLORS.cardAlt};border:1px solid ${COLORS.line};border-radius:8px;overflow:hidden;">
                 <tr>
                   <td style="padding:24px;">
                     <span style="display:inline-block;padding:4px 12px;background:${COLORS.brass};color:#FFFFFF;border:1px solid ${COLORS.brassBorder};border-radius:20px;font-family:${FONTS.mono};font-size:11px;font-weight:600;letter-spacing:0.09em;text-transform:uppercase;margin-bottom:12px;">${esc(props.badge_label)}</span>
                     <h3 class="ink" style="margin:12px 0 8px;font-family:${FONTS.serif};font-size:18px;font-weight:600;color:${COLORS.ink};">${esc(props.headline)}</h3>
                     <p class="ink3" style="margin:0 0 16px;font-family:${FONTS.sans};font-size:14px;line-height:1.5;color:${COLORS.ink3};">${esc(props.body)}</p>
-                    ${detailRows ? `<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="margin-bottom:16px;">
+                    ${detailRows ? `<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="width:100%;margin-bottom:16px;">
                             ${detailRows}
                           </table>` : ''}
-                    ${props.cta_text ? `<table role="presentation" class="btn" cellpadding="0" cellspacing="0" border="0"><tr><td style="border-radius:7px;background:${COLORS.ink};"><a href="${esc(props.cta_url || '#')}" style="display:inline-block;padding:10px 24px;font-family:${FONTS.sans};color:${COLORS.buttonInkText};text-decoration:none;border:1px solid ${COLORS.ink};border-radius:7px;font-size:13px;font-weight:600;">${esc(props.cta_text)}</a></td></tr></table>` : ''}
+                    ${props.cta_text ? `<table role="presentation" class="btn" cellpadding="0" cellspacing="0" border="0"><tr><td style="border-radius:7px;background:${COLORS.ink};"><a href="${esc(props.cta_url || '#')}" style="display:inline-block;padding:10px 24px;font-family:${FONTS.sans};background-color:${COLORS.ink};color:${COLORS.buttonInkText};text-decoration:none;border:1px solid ${COLORS.ink};border-radius:7px;font-size:13px;font-weight:600;">${esc(props.cta_text)}</a></td></tr></table>` : ''}
                   </td>
                 </tr>
               </table>

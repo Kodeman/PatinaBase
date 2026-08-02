@@ -125,9 +125,11 @@ const styles = {
     margin: '0 0 28px 0',
   },
   gridSection: {
+    width: '100%',
     margin: '0 0 24px 0',
   },
   gridRow: {
+    width: '100%',
     marginBottom: '16px',
   },
   gridCol: {

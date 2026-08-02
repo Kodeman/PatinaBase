@@ -15,12 +15,12 @@ export function renderFooter(props: FooterBlockProps, _ctx: RenderContext): stri
   // stored block data / builders that still set it.
   return `          <tr>
             <td class="px" style="padding:34px 40px 0;">
-              <div class="hairbg" style="height:1px;background:${COLORS.line};font-size:0;line-height:0;">&nbsp;</div>
+              <div class="hairbg" style="height:1px;background:${COLORS.line};font-size:1px;line-height:1px;">&nbsp;</div>
             </td>
           </tr>
           <tr>
             <td class="px" style="padding:22px 40px 32px;">
-              <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0">
+              <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="width:100%;">
                 <tr>
                   <td align="left" valign="top">
                     <div class="ink2" style="font-family:${FONTS.serif};font-size:15px;color:${COLORS.ink2};margin-bottom:5px;">Patina</div>

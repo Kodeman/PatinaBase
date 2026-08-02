@@ -1,5 +1,6 @@
 import * as React from 'react';
-import { Text, Heading, Section, Hr } from '@react-email/components';
+import { Text, Heading, Hr } from '@react-email/components';
+import { PadSection } from '../components/PadSection';
 import { BaseEmailLayout } from '../components/BaseEmailLayout';
 import { Button } from '../components/Button';
 
@@ -38,9 +39,9 @@ export const FoundingCircleUpdate: React.FC<FoundingCircleUpdateProps> = ({
       unsubscribeUrl={unsubscribeUrl}
     >
       {/* Founding Circle badge */}
-      <Section style={styles.badge}>
+      <PadSection style={styles.badge}>
         <Text style={styles.badgeText}>Founding Circle</Text>
-      </Section>
+      </PadSection>
 
       <Heading style={styles.heading}>{subject}</Heading>
 
@@ -65,7 +66,7 @@ export const FoundingCircleUpdate: React.FC<FoundingCircleUpdateProps> = ({
       {communityVoice && (
         <>
           <Hr style={styles.divider} />
-          <Section style={styles.quoteSection}>
+          <PadSection style={styles.quoteSection}>
             <Text style={styles.quote}>
               &ldquo;{communityVoice.quote}&rdquo;
             </Text>
@@ -73,7 +74,7 @@ export const FoundingCircleUpdate: React.FC<FoundingCircleUpdateProps> = ({
               — {communityVoice.author}
               {communityVoice.role ? `, ${communityVoice.role}` : ''}
             </Text>
-          </Section>
+          </PadSection>
         </>
       )}
 

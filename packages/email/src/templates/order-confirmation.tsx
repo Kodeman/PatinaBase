@@ -1,5 +1,6 @@
 import * as React from 'react';
-import { Text, Heading, Section, Hr } from '@react-email/components';
+import { Text, Heading, Hr } from '@react-email/components';
+import { PadSection } from '../components/PadSection';
 import { BaseEmailLayout } from '../components/BaseEmailLayout';
 import { Button } from '../components/Button';
 
@@ -50,7 +51,7 @@ export const OrderConfirmation: React.FC<OrderConfirmationProps> = ({
       </Text>
 
       {/* Order items */}
-      <Section style={styles.itemsCard}>
+      <PadSection style={styles.itemsCard}>
         <Text style={styles.cardTitle}>Order Summary</Text>
 
         {items.map((item, i) => (
@@ -94,11 +95,11 @@ export const OrderConfirmation: React.FC<OrderConfirmationProps> = ({
           <Text style={styles.grandTotalLabel}>Total</Text>
           <Text style={styles.grandTotalValue}>{totalFormatted}</Text>
         </div>
-      </Section>
+      </PadSection>
 
       {/* Delivery info */}
       {(estimatedDelivery || shippingAddress) && (
-        <Section style={styles.deliveryCard}>
+        <PadSection style={styles.deliveryCard}>
           {estimatedDelivery && (
             <div>
               <Text style={styles.deliveryLabel}>Estimated Delivery</Text>
@@ -111,7 +112,7 @@ export const OrderConfirmation: React.FC<OrderConfirmationProps> = ({
               <Text style={styles.deliveryValue}>{shippingAddress}</Text>
             </div>
           )}
-        </Section>
+        </PadSection>
       )}
 
       <div style={styles.buttonContainer}>

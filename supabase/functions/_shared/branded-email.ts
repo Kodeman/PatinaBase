@@ -102,14 +102,14 @@ export function muted(html: string): string {
 
 /** A left-accented quote/callout (personal notes, etc.). */
 export function callout(html: string): string {
-  return `<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" class="chip" style="border-left:3px solid ${C.brass}; background:${C.cardAlt};"><tr><td style="padding:14px 18px; font-family:${F.serif}; font-size:15px; font-style:italic; line-height:1.5; color:${C.ink2};">${html}</td></tr></table>`;
+  return `<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" class="chip" style="width:100%; border-left:3px solid ${C.brass}; background:${C.cardAlt};"><tr><td style="padding:14px 18px; font-family:${F.serif}; font-size:15px; font-style:italic; line-height:1.5; color:${C.ink2};">${html}</td></tr></table>`;
 }
 
 /** Bulletproof CTA button. variant: "ink" (default) | "brass". */
 export function ctaButton(url: string, label: string, variant: "ink" | "brass" = "ink"): string {
   const bg = variant === "brass" ? C.brass : C.ink;
   const border = variant === "brass" ? C.brassBorder : C.ink;
-  return `<table role="presentation" class="btn" cellpadding="0" cellspacing="0" border="0"><tr><td bgcolor="${bg}" style="border-radius:7px;"><a href="${url}" style="display:inline-block; padding:15px 32px; font-family:${F.sans}; font-size:15px; font-weight:600; line-height:1; letter-spacing:0.01em; color:${C.buttonInkText}; text-decoration:none; border:1px solid ${border}; border-radius:7px;">${escapeHtml(label)}</a></td></tr></table>`;
+  return `<table role="presentation" class="btn" cellpadding="0" cellspacing="0" border="0"><tr><td bgcolor="${bg}" style="border-radius:7px;"><a href="${url}" style="display:inline-block; padding:15px 32px; font-family:${F.sans}; font-size:15px; font-weight:600; line-height:1; letter-spacing:0.01em; background-color:${bg}; color:${C.buttonInkText}; text-decoration:none; border:1px solid ${border}; border-radius:7px;">${escapeHtml(label)}</a></td></tr></table>`;
 }
 
 export function spacer(px = 26): string {
@@ -145,6 +145,17 @@ export interface BrandedShellOpts {
   studioLogoUrl?: string;
 }
 
+// Microsoft's Exchange HTML converter (new Outlook desktop, OWA, Outlook iOS)
+// strips <head>/<style>, every table attribute (width/align/border/cellpadding/
+// cellspacing/role), the bgcolor attribute, and the CSS `height` property. So
+// the shell below declares inline: table widths, the CTA fill on the <a>, and a
+// 4px line box (font-size + line-height) for the color bar. The bar band also
+// needs padding:0 on the cells AND the wrapping cell, plus border-collapse on
+// the bar table, or the UA defaults (td{padding:1px}, border-spacing:2px) take
+// over. Measured in headless Chromium on the converted body — intent is 4px:
+//   bar cells padding:0 only 10px  →  + wrapper padding:0 8px  →  + border-collapse 4px.
+// Healthy clients render identically. Keep in step with the React mirrors:
+// packages/email/src/components/BaseEmailLayout.tsx and src/block-html/skeleton.ts.
 export function renderBrandedShell(opts: BrandedShellOpts): string {
   const base = portalBase();
   const links = opts.footerLinks ?? [
@@ -203,19 +214,19 @@ export function renderBrandedShell(opts: BrandedShellOpts): string {
 </head>
 <body class="bg" style="margin:0; padding:0; background:${C.paper};">
   ${preheader}
-  <table role="presentation" class="bg" width="100%" cellpadding="0" cellspacing="0" border="0" style="background:${C.paper};">
+  <table role="presentation" class="bg" width="100%" cellpadding="0" cellspacing="0" border="0" style="width:100%; background:${C.paper};">
     <tr><td align="center" style="padding:24px 12px;">
       <!--[if mso]><table role="presentation" width="600" cellpadding="0" cellspacing="0" border="0"><tr><td><![endif]-->
       <table role="presentation" class="container shell" width="600" cellpadding="0" cellspacing="0" border="0" style="width:600px; max-width:600px; background:${C.card}; border:1px solid ${C.line}; border-radius:12px; overflow:hidden;">
-        <tr><td style="font-size:0; line-height:0;">
-          <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0"><tr>
-            <td width="33.34%" height="4" style="background:${C.verd}; font-size:0; line-height:0;">&nbsp;</td>
-            <td width="33.33%" height="4" style="background:${C.brass}; font-size:0; line-height:0;">&nbsp;</td>
-            <td width="33.33%" height="4" style="background:${C.rust}; font-size:0; line-height:0;">&nbsp;</td>
+        <tr><td style="font-size:0; line-height:0; padding:0;">
+          <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="width:100%; border-collapse:collapse;"><tr>
+            <td width="33.34%" height="4" style="background:${C.verd}; height:4px; font-size:4px; line-height:4px; padding:0;">&nbsp;</td>
+            <td width="33.33%" height="4" style="background:${C.brass}; height:4px; font-size:4px; line-height:4px; padding:0;">&nbsp;</td>
+            <td width="33.33%" height="4" style="background:${C.rust}; height:4px; font-size:4px; line-height:4px; padding:0;">&nbsp;</td>
           </tr></table>
         </td></tr>
         <tr><td class="px" style="padding:26px 40px 0;">
-          <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0"><tr>
+          <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="width:100%;"><tr>
             <td align="left" valign="middle" class="wordmark" style="font-family:${F.serif}; font-size:23px; font-weight:600; letter-spacing:-0.01em; color:${C.ink};">Patina</td>
             ${eyebrow}
           </tr></table>
@@ -227,7 +238,7 @@ export function renderBrandedShell(opts: BrandedShellOpts): string {
           <div class="hairbg" style="height:1px; background:${C.line}; font-size:0; line-height:0;">&nbsp;</div>
         </td></tr>
         <tr><td class="px" style="padding:22px 40px 32px;">
-          <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0"><tr>
+          <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="width:100%;"><tr>
             <td align="left" valign="top">
               <div class="ink2" style="font-family:${F.serif}; font-size:15px; color:${C.ink2}; margin-bottom:5px;">Patina</div>
               <div class="ink3" style="font-family:${F.sans}; font-size:13px; line-height:1.5; color:${C.ink3};">A workshop for interior designers<br>and the makers they trust.</div>

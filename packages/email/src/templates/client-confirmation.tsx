@@ -1,5 +1,6 @@
 import * as React from 'react';
-import { Text, Heading, Section } from '@react-email/components';
+import { Text, Heading } from '@react-email/components';
+import { PadSection } from '../components/PadSection';
 import { BaseEmailLayout } from '../components/BaseEmailLayout';
 import { Button } from '../components/Button';
 
@@ -52,7 +53,7 @@ export const ClientConfirmation: React.FC<ClientConfirmationProps> = ({
       </Text>
 
       {/* Next steps */}
-      <Section style={styles.stepsCard}>
+      <PadSection style={styles.stepsCard}>
         <Text style={styles.stepsTitle}>What happens next</Text>
         {steps.map((step, i) => (
           <Text key={i} style={styles.stepItem}>
@@ -60,14 +61,14 @@ export const ClientConfirmation: React.FC<ClientConfirmationProps> = ({
             {step}
           </Text>
         ))}
-      </Section>
+      </PadSection>
 
       {expectedTimeline && (
-        <Section style={styles.timelineBox}>
+        <PadSection style={styles.timelineBox}>
           <Text style={styles.timelineText}>
             Expected response time: <strong>{expectedTimeline}</strong>
           </Text>
-        </Section>
+        </PadSection>
       )}
 
       <Text style={styles.text}>

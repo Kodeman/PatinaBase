@@ -111,6 +111,7 @@ const styles = {
     marginBottom: '20px',
   },
   cta: {
+    width: '100%',
     textAlign: 'center' as const,
     marginBottom: '20px',
   },

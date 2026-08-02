@@ -3,11 +3,32 @@
 //        supabase/functions/_shared/branded-email.test.ts
 //
 // The load-bearing guarantee (plan D4): when NO studio params are passed the
-// output is BYTE-IDENTICAL to the pre-co-brand shell. The baseline snapshot in
-// ./__snapshots__/branded-shell.baseline.html was generated from the shell at
-// b2c2af22 (before this wave) with the same deterministic opts used below —
-// explicit footerLinks + businessAddress so portalBase()/env never influence
-// the bytes. Regenerate ONLY if the plain shell is intentionally restyled.
+// output is BYTE-IDENTICAL to the committed plain-shell snapshot in
+// ./__snapshots__/branded-shell.baseline.html — i.e. the co-brand path is a
+// true no-op and the plain shell never drifts by accident. It is generated with
+// the same deterministic opts used below — explicit footerLinks +
+// businessAddress so portalBase()/env never influence the bytes.
+//
+// Regenerate ONLY if the plain shell is intentionally restyled, and only by
+// re-rendering with baseOpts() (never by hand-editing the snapshot). Lineage:
+//   b2c2af22 — original capture, the pre-co-brand shell (wave 2).
+//   2026-08-02 — re-rendered for the Outlook/M365 converter hardening. The
+//     converter strips table ATTRIBUTES (width/cellpadding/…) and the CSS
+//     `height` property, but keeps inline width/padding/font-size/line-height,
+//     so the shell now states those inline as well as by attribute:
+//       · inline width:100% on the layout tables that only had width="100%";
+//       · font-size:4px + line-height:4px + height:4px + padding:0 on the
+//         tri-colour bar tds (padding:0 because losing cellpadding="0" falls
+//         back to the 1px HTML default, which would render the bar 6px);
+//       · padding:0 on the cell WRAPPING the bar table and border-collapse on
+//         the bar table itself — losing cellspacing="0" falls back to
+//         border-spacing:2px, so the cells alone were not enough.
+//     Measured in Chromium: healthy renderers are pixel-identical to the old
+//     markup (4px bar, same cell widths); the converted body goes from a 2px
+//     stub to the intended 4px full-width bar. The band around that bar
+//     measured 10px with the cell fix alone → 8px once the wrapping cell took
+//     padding:0 → 4px with border-collapse on the bar table.
+//     No spacing/colour/type changes.
 
 import {
   assert,

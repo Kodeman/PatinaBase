@@ -15,7 +15,7 @@ export function renderCtaButton(props: CtaButtonProps, _ctx: RenderContext): str
               <table role="presentation" class="btn" cellpadding="0" cellspacing="0" border="0" style="margin:0 auto;">
                 <tr>
                   <td align="center" style="border-radius:7px;background:${bgColor};">
-                    <a href="${esc(props.url)}" style="display:inline-block;padding:15px 32px;font-family:${FONTS.sans};color:${textColor};text-decoration:none;font-size:15px;font-weight:600;letter-spacing:0.01em;border:1px solid ${borderColor};border-radius:7px;">${esc(props.text)}</a>
+                    <a href="${esc(props.url)}" style="display:inline-block;padding:15px 32px;font-family:${FONTS.sans};background-color:${bgColor};color:${textColor};text-decoration:none;font-size:15px;font-weight:600;letter-spacing:0.01em;border:1px solid ${borderColor};border-radius:7px;">${esc(props.text)}</a>
                   </td>
                 </tr>
               </table>

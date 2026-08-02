@@ -15,6 +15,21 @@ import { COLORS, COLOR_BAR, FONTS, FONT_LINK, HEAD_CSS } from '../components/bra
 // pattern in welcome.html / security-alert.html.
 const PREHEADER_PADDING = '&#847;&zwnj;&nbsp;'.repeat(8);
 
+// Why the color-bar cells carry font-size/line-height as well as height:
+// Microsoft's Exchange HTML converter (new Outlook desktop, OWA, Outlook iOS)
+// strips every table attribute and drops the CSS `height` property outright.
+// A 4px line box built from font-size + line-height on the &nbsp; survives it.
+// The bar band also needs padding:0 (cells + wrapping cell) and an inline
+// border-collapse, because the converter strips cellpadding="0"/cellspacing="0"
+// and the UA defaults (td{padding:1px}, border-spacing:2px) take over.
+// Measured in headless Chromium on the converted body — design intent is 4px:
+//   bar cells padding:0 only ....... 10px
+//   + wrapper <td> padding:0 ........ 8px
+//   + bar <table> border-collapse ... 4px
+// Healthy clients render identically in all three variants.
+// Same reason the full-width tables below declare width inline as well as by
+// attribute, and every CTA fill sits on the <a>, not only on the cell.
+
 export function wrapSkeleton(innerRows: string, preheader?: string): string {
   const preheaderHtml = preheader ? `${esc(preheader)}${PREHEADER_PADDING}` : '';
 
@@ -38,15 +53,15 @@ ${HEAD_CSS}
 </head>
 <body class="bg" style="margin:0; padding:0; background:${COLORS.paper};">
   <div style="display:none; font-size:1px; line-height:1px; max-height:0; max-width:0; opacity:0; overflow:hidden; mso-hide:all; color:transparent;">${preheaderHtml}</div>
-  <table role="presentation" class="bg" width="100%" cellpadding="0" cellspacing="0" border="0" style="background:${COLORS.paper};">
+  <table role="presentation" class="bg" width="100%" cellpadding="0" cellspacing="0" border="0" style="width:100%;background:${COLORS.paper};">
     <tr><td align="center" style="padding:24px 12px;">
       <!--[if mso]><table role="presentation" width="600" cellpadding="0" cellspacing="0" border="0"><tr><td><![endif]-->
       <table role="presentation" class="container shell" width="600" cellpadding="0" cellspacing="0" border="0" style="width:600px; max-width:600px; background:${COLORS.card}; border:1px solid ${COLORS.line}; border-radius:12px; overflow:hidden;">
-        <tr><td style="font-size:0; line-height:0;">
-          <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0"><tr>
-            <td width="33.34%" height="4" style="background:${COLOR_BAR[0]}; font-size:0; line-height:0;">&nbsp;</td>
-            <td width="33.33%" height="4" style="background:${COLOR_BAR[1]}; font-size:0; line-height:0;">&nbsp;</td>
-            <td width="33.33%" height="4" style="background:${COLOR_BAR[2]}; font-size:0; line-height:0;">&nbsp;</td>
+        <tr><td style="font-size:4px; line-height:4px; padding:0;">
+          <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="width:100%; border-collapse:collapse;"><tr>
+            <td width="33.34%" height="4" style="width:33.34%; height:4px; background:${COLOR_BAR[0]}; font-size:4px; line-height:4px; padding:0;">&nbsp;</td>
+            <td width="33.33%" height="4" style="width:33.33%; height:4px; background:${COLOR_BAR[1]}; font-size:4px; line-height:4px; padding:0;">&nbsp;</td>
+            <td width="33.33%" height="4" style="width:33.33%; height:4px; background:${COLOR_BAR[2]}; font-size:4px; line-height:4px; padding:0;">&nbsp;</td>
           </tr></table>
         </td></tr>
 ${innerRows}

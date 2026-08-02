@@ -1,5 +1,6 @@
 import * as React from 'react';
-import { Heading, Text, Section, Img } from '@react-email/components';
+import { Heading, Text, Img } from '@react-email/components';
+import { PadSection } from '../components/PadSection';
 import { BaseEmailLayout } from '../components/BaseEmailLayout';
 import { Button } from '../components/Button';
 
@@ -71,7 +72,7 @@ export const InAppMessage: React.FC<InAppMessageProps> = ({
       </Heading>
       <Text style={styles.contextSubtitle}>{contextSubtitle}</Text>
 
-      <Section style={isMention ? styles.bubbleMention : styles.bubble}>
+      <PadSection style={isMention ? styles.bubbleMention : styles.bubble}>
         <table
           role="presentation"
           cellPadding="0"
@@ -104,7 +105,7 @@ export const InAppMessage: React.FC<InAppMessageProps> = ({
             </tr>
           </tbody>
         </table>
-      </Section>
+      </PadSection>
 
       <div style={styles.buttonContainer}>
         <Button href={deepLink}>

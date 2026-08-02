@@ -1,5 +1,6 @@
 import * as React from 'react';
 import { Text, Heading, Section, Img } from '@react-email/components';
+import { PadSection } from '../components/PadSection';
 import { BaseEmailLayout } from '../components/BaseEmailLayout';
 import { ProvenanceBar } from '../components/ProvenanceBar';
 import { Button } from '../components/Button';
@@ -72,9 +73,9 @@ export const BackInStock: React.FC<BackInStockProps> = ({
 
       {/* Scarcity indicator */}
       {scarcityLabel && (
-        <Section style={styles.scarcityBadge}>
+        <PadSection style={styles.scarcityBadge}>
           <Text style={styles.scarcityText}>{scarcityLabel}</Text>
-        </Section>
+        </PadSection>
       )}
 
       {/* Maker attribution */}
@@ -107,6 +108,7 @@ const styles = {
     margin: '0 0 16px 0',
   },
   imageContainer: {
+    width: '100%',
     margin: '16px 0',
     borderRadius: '12px',
     overflow: 'hidden' as const,
