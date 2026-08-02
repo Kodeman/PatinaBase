@@ -19,6 +19,31 @@ const context = {
   createdAt: "2026-07-30T15:05:00.000Z",
 } as const;
 
+function furnitureConfiguration(
+  retailPriceCents: number,
+  tradePriceCents: number,
+) {
+  return {
+    id: "40000000-0000-4000-8000-000000000001",
+    snapshot: {
+      mode: "custom",
+      evaluation: {
+        retailPriceCents,
+        tradePriceCents,
+      },
+      customCommission: {
+        quote: {
+          retailPriceCents,
+          tradePriceCents,
+          leadTimeWeeks: 14,
+        },
+      },
+    },
+    snapshotHash: `configuration-${retailPriceCents}-${tradePriceCents}`,
+    lockedAt: "2026-07-30T15:05:00.000Z",
+  };
+}
+
 Deno.test("audience allow-lists remove private procurement and cost fields", async () => {
   const forbiddenKeys = [
     "tradepricecents",
@@ -100,6 +125,42 @@ Deno.test("internal edition keeps the complete frozen item", async () => {
     consoleItem.vendor.internalContact,
     "INTERNAL-CONTACT jordan@example.test",
   );
+});
+
+Deno.test("nested furniture configuration is preserved only in the internal edition", async () => {
+  const source = frozenSnapshot();
+  const configuration = furnitureConfiguration(4_120_000, 3_184_000);
+  const snapshot = frozenSnapshot({
+    items: [{ ...source.items[0], configuration }, source.items[1]],
+  });
+
+  for (const audience of ["client", "vendor", "installer", "care"] as const) {
+    const model = await buildAudienceRenderModel(snapshot, audience, context);
+    const serialized = JSON.stringify(model);
+    assertEquals(
+      serialized.includes('"configuration"'),
+      false,
+      `${audience} leaked the configuration snapshot`,
+    );
+    assertEquals(
+      serialized.includes('"retailPriceCents"'),
+      false,
+      `${audience} leaked configuration retail pricing`,
+    );
+    assertEquals(
+      serialized.includes('"tradePriceCents"'),
+      false,
+      `${audience} leaked configuration trade pricing`,
+    );
+  }
+
+  const internal = await buildAudienceRenderModel(
+    snapshot,
+    "internal",
+    context,
+  );
+  const consoleItem = internal.items.find((item) => item.id === "item-b")!;
+  assertEquals(consoleItem.raw?.configuration, configuration);
 });
 
 Deno.test("items sort deterministically by chapter, position, then id", async () => {
@@ -251,6 +312,63 @@ Deno.test("external addenda ignore private-only changes and expose audience-safe
   );
   assertEquals(internalAddendum.items.map((item) => item.id), ["item-b"]);
   assertEquals(internalAddendum.changes, [{
+    id: "item-b",
+    documentCode: "PB-201",
+    name: "Console",
+    kind: "changed",
+  }]);
+});
+
+Deno.test("configuration pricing-only changes create an internal addendum change only", async () => {
+  const source = frozenSnapshot();
+  const base = frozenSnapshot({
+    items: [{
+      ...source.items[0],
+      configuration: furnitureConfiguration(4_120_000, 3_184_000),
+      contentHash: "hash-b-configuration-pricing-v1",
+    }, source.items[1]],
+  });
+  const current = frozenSnapshot({
+    issue: {
+      type: "addendum",
+      reason: "Configuration quote update",
+      baseRevisionId: "30000000-0000-4000-8000-000000000001",
+    },
+    items: [{
+      ...source.items[0],
+      configuration: furnitureConfiguration(4_260_000, 3_275_000),
+      contentHash: "hash-b-configuration-pricing-v2",
+    }, source.items[1]],
+  });
+  const addendumContext = {
+    ...context,
+    revisionNumber: 2,
+    issueType: "addendum",
+  } as const;
+
+  for (const audience of ["client", "vendor", "installer", "care"] as const) {
+    const addendum = await buildAudienceRenderModel(
+      current,
+      audience,
+      addendumContext,
+      base,
+    );
+    assertEquals(addendum.items, [], `${audience} received a pricing addendum`);
+    assertEquals(
+      addendum.changes,
+      [],
+      `${audience} received a pricing change ledger entry`,
+    );
+  }
+
+  const internal = await buildAudienceRenderModel(
+    current,
+    "internal",
+    addendumContext,
+    base,
+  );
+  assertEquals(internal.items.map((item) => item.id), ["item-b"]);
+  assertEquals(internal.changes, [{
     id: "item-b",
     documentCode: "PB-201",
     name: "Console",
