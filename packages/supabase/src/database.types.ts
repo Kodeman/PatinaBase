@@ -3106,6 +3106,84 @@ export type Database = {
           },
         ]
       }
+      custom_commission_revisions: {
+        Row: {
+          approved_at: string | null
+          approved_by: string | null
+          brief: Json
+          configuration_id: string
+          created_at: string
+          created_by: string | null
+          drawings: Json
+          id: string
+          issued_at: string | null
+          previous_revision_id: string | null
+          provenance: Json
+          quote: Json
+          quoted_at: string | null
+          revision_number: number
+          status: string
+          submitted_at: string | null
+          transition_note: string | null
+          updated_at: string
+        }
+        Insert: {
+          approved_at?: string | null
+          approved_by?: string | null
+          brief: Json
+          configuration_id: string
+          created_at?: string
+          created_by?: string | null
+          drawings?: Json
+          id?: string
+          issued_at?: string | null
+          previous_revision_id?: string | null
+          provenance?: Json
+          quote?: Json
+          quoted_at?: string | null
+          revision_number: number
+          status?: string
+          submitted_at?: string | null
+          transition_note?: string | null
+          updated_at?: string
+        }
+        Update: {
+          approved_at?: string | null
+          approved_by?: string | null
+          brief?: Json
+          configuration_id?: string
+          created_at?: string
+          created_by?: string | null
+          drawings?: Json
+          id?: string
+          issued_at?: string | null
+          previous_revision_id?: string | null
+          provenance?: Json
+          quote?: Json
+          quoted_at?: string | null
+          revision_number?: number
+          status?: string
+          submitted_at?: string | null
+          transition_note?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "custom_commission_revisions_configuration_id_fkey"
+            columns: ["configuration_id"]
+            isOneToOne: false
+            referencedRelation: "product_configurations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "custom_commission_revisions_previous_revision_id_fkey"
+            columns: ["previous_revision_id"]
+            isOneToOne: false
+            referencedRelation: "custom_commission_revisions"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       daily_briefs: {
         Row: {
           brief_date: string
@@ -8907,6 +8985,470 @@ export type Database = {
           },
         ]
       }
+      product_components: {
+        Row: {
+          code: string
+          component_type: string
+          created_at: string
+          default_quantity: number
+          description: string | null
+          dimensions: Json | null
+          handedness: string
+          id: string
+          is_active: boolean
+          lead_time_weeks: number
+          max_quantity: number | null
+          metadata: Json
+          min_quantity: number
+          name: string
+          position: number
+          product_id: string
+          retail_price_cents: number
+          trade_price_cents: number
+          updated_at: string
+        }
+        Insert: {
+          code: string
+          component_type?: string
+          created_at?: string
+          default_quantity?: number
+          description?: string | null
+          dimensions?: Json | null
+          handedness?: string
+          id?: string
+          is_active?: boolean
+          lead_time_weeks?: number
+          max_quantity?: number | null
+          metadata?: Json
+          min_quantity?: number
+          name: string
+          position?: number
+          product_id: string
+          retail_price_cents?: number
+          trade_price_cents?: number
+          updated_at?: string
+        }
+        Update: {
+          code?: string
+          component_type?: string
+          created_at?: string
+          default_quantity?: number
+          description?: string | null
+          dimensions?: Json | null
+          handedness?: string
+          id?: string
+          is_active?: boolean
+          lead_time_weeks?: number
+          max_quantity?: number | null
+          metadata?: Json
+          min_quantity?: number
+          name?: string
+          position?: number
+          product_id?: string
+          retail_price_cents?: number
+          trade_price_cents?: number
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "product_components_product_id_fkey"
+            columns: ["product_id"]
+            isOneToOne: false
+            referencedRelation: "products"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "product_components_product_id_fkey"
+            columns: ["product_id"]
+            isOneToOne: false
+            referencedRelation: "v_aesthete_catalog_input"
+            referencedColumns: ["product_id"]
+          },
+          {
+            foreignKeyName: "product_components_product_id_fkey"
+            columns: ["product_id"]
+            isOneToOne: false
+            referencedRelation: "v_aesthete_personal_input"
+            referencedColumns: ["product_id"]
+          },
+          {
+            foreignKeyName: "product_components_product_id_fkey"
+            columns: ["product_id"]
+            isOneToOne: false
+            referencedRelation: "v_aesthete_studio_input"
+            referencedColumns: ["product_id"]
+          },
+          {
+            foreignKeyName: "product_components_product_id_fkey"
+            columns: ["product_id"]
+            isOneToOne: false
+            referencedRelation: "v_promotion_candidates"
+            referencedColumns: ["product_id"]
+          },
+        ]
+      }
+      product_configuration_components: {
+        Row: {
+          component_id: string
+          component_snapshot: Json
+          configuration_id: string
+          created_at: string
+          handedness: string | null
+          quantity: number
+        }
+        Insert: {
+          component_id: string
+          component_snapshot: Json
+          configuration_id: string
+          created_at?: string
+          handedness?: string | null
+          quantity: number
+        }
+        Update: {
+          component_id?: string
+          component_snapshot?: Json
+          configuration_id?: string
+          created_at?: string
+          handedness?: string | null
+          quantity?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "product_configuration_components_component_id_fkey"
+            columns: ["component_id"]
+            isOneToOne: false
+            referencedRelation: "product_components"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "product_configuration_components_configuration_id_fkey"
+            columns: ["configuration_id"]
+            isOneToOne: false
+            referencedRelation: "product_configurations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      product_configuration_rules: {
+        Row: {
+          code: string
+          condition: Json
+          created_at: string
+          effect: Json
+          id: string
+          is_active: boolean
+          message: string | null
+          name: string
+          priority: number
+          product_id: string
+          rule_type: string
+          updated_at: string
+        }
+        Insert: {
+          code: string
+          condition?: Json
+          created_at?: string
+          effect?: Json
+          id?: string
+          is_active?: boolean
+          message?: string | null
+          name: string
+          priority?: number
+          product_id: string
+          rule_type: string
+          updated_at?: string
+        }
+        Update: {
+          code?: string
+          condition?: Json
+          created_at?: string
+          effect?: Json
+          id?: string
+          is_active?: boolean
+          message?: string | null
+          name?: string
+          priority?: number
+          product_id?: string
+          rule_type?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "product_configuration_rules_product_id_fkey"
+            columns: ["product_id"]
+            isOneToOne: false
+            referencedRelation: "products"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "product_configuration_rules_product_id_fkey"
+            columns: ["product_id"]
+            isOneToOne: false
+            referencedRelation: "v_aesthete_catalog_input"
+            referencedColumns: ["product_id"]
+          },
+          {
+            foreignKeyName: "product_configuration_rules_product_id_fkey"
+            columns: ["product_id"]
+            isOneToOne: false
+            referencedRelation: "v_aesthete_personal_input"
+            referencedColumns: ["product_id"]
+          },
+          {
+            foreignKeyName: "product_configuration_rules_product_id_fkey"
+            columns: ["product_id"]
+            isOneToOne: false
+            referencedRelation: "v_aesthete_studio_input"
+            referencedColumns: ["product_id"]
+          },
+          {
+            foreignKeyName: "product_configuration_rules_product_id_fkey"
+            columns: ["product_id"]
+            isOneToOne: false
+            referencedRelation: "v_promotion_candidates"
+            referencedColumns: ["product_id"]
+          },
+        ]
+      }
+      product_configuration_selections: {
+        Row: {
+          configuration_id: string
+          created_at: string
+          option_group_id: string
+          option_value_id: string
+          selection_snapshot: Json
+        }
+        Insert: {
+          configuration_id: string
+          created_at?: string
+          option_group_id: string
+          option_value_id: string
+          selection_snapshot: Json
+        }
+        Update: {
+          configuration_id?: string
+          created_at?: string
+          option_group_id?: string
+          option_value_id?: string
+          selection_snapshot?: Json
+        }
+        Relationships: [
+          {
+            foreignKeyName: "product_configuration_selections_configuration_id_fkey"
+            columns: ["configuration_id"]
+            isOneToOne: false
+            referencedRelation: "product_configurations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "product_configuration_selections_option_group_id_fkey"
+            columns: ["option_group_id"]
+            isOneToOne: false
+            referencedRelation: "product_option_groups"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "product_configuration_selections_option_value_id_fkey"
+            columns: ["option_value_id"]
+            isOneToOne: false
+            referencedRelation: "product_option_values"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      product_configurations: {
+        Row: {
+          approved_at: string | null
+          approved_by: string | null
+          component_quantities: Json
+          configuration_key: string
+          created_at: string
+          custom_brief: Json | null
+          evaluation: Json
+          ffe_item_id: string | null
+          id: string
+          is_complete: boolean
+          is_library_template: boolean
+          is_valid: boolean
+          issued_at: string | null
+          lead_time_weeks: number | null
+          name: string | null
+          normalized_selection: Json
+          notes: string | null
+          owner_user_id: string
+          previous_configuration_id: string | null
+          product_id: string
+          product_variant_id: string | null
+          project_id: string | null
+          promoted_at: string | null
+          resolved_dimensions: Json | null
+          retail_price_cents: number | null
+          schema_revision: number
+          snapshot: Json
+          snapshot_hash: string
+          status: string
+          studio_id: string | null
+          trade_price_cents: number | null
+          updated_at: string
+          version: number
+        }
+        Insert: {
+          approved_at?: string | null
+          approved_by?: string | null
+          component_quantities?: Json
+          configuration_key?: string
+          created_at?: string
+          custom_brief?: Json | null
+          evaluation: Json
+          ffe_item_id?: string | null
+          id?: string
+          is_complete?: boolean
+          is_library_template?: boolean
+          is_valid?: boolean
+          issued_at?: string | null
+          lead_time_weeks?: number | null
+          name?: string | null
+          normalized_selection?: Json
+          notes?: string | null
+          owner_user_id: string
+          previous_configuration_id?: string | null
+          product_id: string
+          product_variant_id?: string | null
+          project_id?: string | null
+          promoted_at?: string | null
+          resolved_dimensions?: Json | null
+          retail_price_cents?: number | null
+          schema_revision: number
+          snapshot: Json
+          snapshot_hash: string
+          status?: string
+          studio_id?: string | null
+          trade_price_cents?: number | null
+          updated_at?: string
+          version: number
+        }
+        Update: {
+          approved_at?: string | null
+          approved_by?: string | null
+          component_quantities?: Json
+          configuration_key?: string
+          created_at?: string
+          custom_brief?: Json | null
+          evaluation?: Json
+          ffe_item_id?: string | null
+          id?: string
+          is_complete?: boolean
+          is_library_template?: boolean
+          is_valid?: boolean
+          issued_at?: string | null
+          lead_time_weeks?: number | null
+          name?: string | null
+          normalized_selection?: Json
+          notes?: string | null
+          owner_user_id?: string
+          previous_configuration_id?: string | null
+          product_id?: string
+          product_variant_id?: string | null
+          project_id?: string | null
+          promoted_at?: string | null
+          resolved_dimensions?: Json | null
+          retail_price_cents?: number | null
+          schema_revision?: number
+          snapshot?: Json
+          snapshot_hash?: string
+          status?: string
+          studio_id?: string | null
+          trade_price_cents?: number | null
+          updated_at?: string
+          version?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "product_configurations_ffe_item_id_fkey"
+            columns: ["ffe_item_id"]
+            isOneToOne: false
+            referencedRelation: "project_ffe_items"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "product_configurations_previous_configuration_id_fkey"
+            columns: ["previous_configuration_id"]
+            isOneToOne: false
+            referencedRelation: "product_configurations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "product_configurations_product_id_fkey"
+            columns: ["product_id"]
+            isOneToOne: false
+            referencedRelation: "products"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "product_configurations_product_id_fkey"
+            columns: ["product_id"]
+            isOneToOne: false
+            referencedRelation: "v_aesthete_catalog_input"
+            referencedColumns: ["product_id"]
+          },
+          {
+            foreignKeyName: "product_configurations_product_id_fkey"
+            columns: ["product_id"]
+            isOneToOne: false
+            referencedRelation: "v_aesthete_personal_input"
+            referencedColumns: ["product_id"]
+          },
+          {
+            foreignKeyName: "product_configurations_product_id_fkey"
+            columns: ["product_id"]
+            isOneToOne: false
+            referencedRelation: "v_aesthete_studio_input"
+            referencedColumns: ["product_id"]
+          },
+          {
+            foreignKeyName: "product_configurations_product_id_fkey"
+            columns: ["product_id"]
+            isOneToOne: false
+            referencedRelation: "v_promotion_candidates"
+            referencedColumns: ["product_id"]
+          },
+          {
+            foreignKeyName: "product_configurations_product_variant_id_fkey"
+            columns: ["product_variant_id"]
+            isOneToOne: false
+            referencedRelation: "product_variants"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "product_configurations_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "field_activity_summary"
+            referencedColumns: ["project_id"]
+          },
+          {
+            foreignKeyName: "product_configurations_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "product_configurations_studio_id_fkey"
+            columns: ["studio_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "product_configurations_studio_id_fkey"
+            columns: ["studio_id"]
+            isOneToOne: false
+            referencedRelation: "v_studios"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       product_dna: {
         Row: {
           accent_colors: string[] | null
@@ -9303,6 +9845,149 @@ export type Database = {
             isOneToOne: true
             referencedRelation: "v_promotion_candidates"
             referencedColumns: ["product_id"]
+          },
+        ]
+      }
+      product_option_groups: {
+        Row: {
+          code: string
+          created_at: string
+          description: string | null
+          id: string
+          max_selections: number
+          min_selections: number
+          name: string
+          position: number
+          product_id: string
+          required: boolean
+          selection_type: string
+          updated_at: string
+        }
+        Insert: {
+          code: string
+          created_at?: string
+          description?: string | null
+          id?: string
+          max_selections?: number
+          min_selections?: number
+          name: string
+          position?: number
+          product_id: string
+          required?: boolean
+          selection_type?: string
+          updated_at?: string
+        }
+        Update: {
+          code?: string
+          created_at?: string
+          description?: string | null
+          id?: string
+          max_selections?: number
+          min_selections?: number
+          name?: string
+          position?: number
+          product_id?: string
+          required?: boolean
+          selection_type?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "product_option_groups_product_id_fkey"
+            columns: ["product_id"]
+            isOneToOne: false
+            referencedRelation: "products"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "product_option_groups_product_id_fkey"
+            columns: ["product_id"]
+            isOneToOne: false
+            referencedRelation: "v_aesthete_catalog_input"
+            referencedColumns: ["product_id"]
+          },
+          {
+            foreignKeyName: "product_option_groups_product_id_fkey"
+            columns: ["product_id"]
+            isOneToOne: false
+            referencedRelation: "v_aesthete_personal_input"
+            referencedColumns: ["product_id"]
+          },
+          {
+            foreignKeyName: "product_option_groups_product_id_fkey"
+            columns: ["product_id"]
+            isOneToOne: false
+            referencedRelation: "v_aesthete_studio_input"
+            referencedColumns: ["product_id"]
+          },
+          {
+            foreignKeyName: "product_option_groups_product_id_fkey"
+            columns: ["product_id"]
+            isOneToOne: false
+            referencedRelation: "v_promotion_candidates"
+            referencedColumns: ["product_id"]
+          },
+        ]
+      }
+      product_option_values: {
+        Row: {
+          code: string
+          created_at: string
+          description: string | null
+          id: string
+          is_active: boolean
+          label: string
+          lead_time_delta_weeks: number
+          media: Json
+          metadata: Json
+          option_group_id: string
+          position: number
+          retail_price_delta_cents: number
+          swatch: Json | null
+          trade_price_delta_cents: number
+          updated_at: string
+        }
+        Insert: {
+          code: string
+          created_at?: string
+          description?: string | null
+          id?: string
+          is_active?: boolean
+          label: string
+          lead_time_delta_weeks?: number
+          media?: Json
+          metadata?: Json
+          option_group_id: string
+          position?: number
+          retail_price_delta_cents?: number
+          swatch?: Json | null
+          trade_price_delta_cents?: number
+          updated_at?: string
+        }
+        Update: {
+          code?: string
+          created_at?: string
+          description?: string | null
+          id?: string
+          is_active?: boolean
+          label?: string
+          lead_time_delta_weeks?: number
+          media?: Json
+          metadata?: Json
+          option_group_id?: string
+          position?: number
+          retail_price_delta_cents?: number
+          swatch?: Json | null
+          trade_price_delta_cents?: number
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "product_option_values_option_group_id_fkey"
+            columns: ["option_group_id"]
+            isOneToOne: false
+            referencedRelation: "product_option_groups"
+            referencedColumns: ["id"]
           },
         ]
       }
@@ -9706,6 +10391,132 @@ export type Database = {
           },
         ]
       }
+      product_variant_values: {
+        Row: {
+          created_at: string
+          option_value_id: string
+          variant_id: string
+        }
+        Insert: {
+          created_at?: string
+          option_value_id: string
+          variant_id: string
+        }
+        Update: {
+          created_at?: string
+          option_value_id?: string
+          variant_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "product_variant_values_option_value_id_fkey"
+            columns: ["option_value_id"]
+            isOneToOne: false
+            referencedRelation: "product_option_values"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "product_variant_values_variant_id_fkey"
+            columns: ["variant_id"]
+            isOneToOne: false
+            referencedRelation: "product_variants"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      product_variants: {
+        Row: {
+          code: string
+          created_at: string
+          dimensions: Json | null
+          id: string
+          is_default: boolean
+          lead_time_weeks: number | null
+          metadata: Json
+          name: string
+          product_id: string
+          retail_price_cents: number | null
+          sku: string | null
+          status: string
+          trade_price_cents: number | null
+          updated_at: string
+          vendor_sku: string | null
+          weight: Json | null
+        }
+        Insert: {
+          code: string
+          created_at?: string
+          dimensions?: Json | null
+          id?: string
+          is_default?: boolean
+          lead_time_weeks?: number | null
+          metadata?: Json
+          name: string
+          product_id: string
+          retail_price_cents?: number | null
+          sku?: string | null
+          status?: string
+          trade_price_cents?: number | null
+          updated_at?: string
+          vendor_sku?: string | null
+          weight?: Json | null
+        }
+        Update: {
+          code?: string
+          created_at?: string
+          dimensions?: Json | null
+          id?: string
+          is_default?: boolean
+          lead_time_weeks?: number | null
+          metadata?: Json
+          name?: string
+          product_id?: string
+          retail_price_cents?: number | null
+          sku?: string | null
+          status?: string
+          trade_price_cents?: number | null
+          updated_at?: string
+          vendor_sku?: string | null
+          weight?: Json | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "product_variants_product_id_fkey"
+            columns: ["product_id"]
+            isOneToOne: false
+            referencedRelation: "products"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "product_variants_product_id_fkey"
+            columns: ["product_id"]
+            isOneToOne: false
+            referencedRelation: "v_aesthete_catalog_input"
+            referencedColumns: ["product_id"]
+          },
+          {
+            foreignKeyName: "product_variants_product_id_fkey"
+            columns: ["product_id"]
+            isOneToOne: false
+            referencedRelation: "v_aesthete_personal_input"
+            referencedColumns: ["product_id"]
+          },
+          {
+            foreignKeyName: "product_variants_product_id_fkey"
+            columns: ["product_id"]
+            isOneToOne: false
+            referencedRelation: "v_aesthete_studio_input"
+            referencedColumns: ["product_id"]
+          },
+          {
+            foreignKeyName: "product_variants_product_id_fkey"
+            columns: ["product_id"]
+            isOneToOne: false
+            referencedRelation: "v_promotion_candidates"
+            referencedColumns: ["product_id"]
+          },
+        ]
+      }
       products: {
         Row: {
           aesthete_model_version: string | null
@@ -9721,6 +10532,11 @@ export type Database = {
           category: string | null
           colors: string[] | null
           commission_rate: number | null
+          configuration_mode: string
+          configuration_pricing_strategy: string
+          configuration_revision: number
+          configuration_summary: Json
+          configuration_updated_at: string | null
           created_at: string | null
           deleted_at: string | null
           description: string | null
@@ -9786,6 +10602,11 @@ export type Database = {
           category?: string | null
           colors?: string[] | null
           commission_rate?: number | null
+          configuration_mode?: string
+          configuration_pricing_strategy?: string
+          configuration_revision?: number
+          configuration_summary?: Json
+          configuration_updated_at?: string | null
           created_at?: string | null
           deleted_at?: string | null
           description?: string | null
@@ -9851,6 +10672,11 @@ export type Database = {
           category?: string | null
           colors?: string[] | null
           commission_rate?: number | null
+          configuration_mode?: string
+          configuration_pricing_strategy?: string
+          configuration_revision?: number
+          configuration_summary?: Json
+          configuration_updated_at?: string | null
           created_at?: string | null
           deleted_at?: string | null
           description?: string | null
@@ -10659,6 +11485,10 @@ export type Database = {
           care_notes: string | null
           client_notes: string | null
           color_fabric: string | null
+          configuration_id: string | null
+          configuration_locked_at: string | null
+          configuration_snapshot: Json
+          configuration_snapshot_hash: string | null
           created_at: string
           exact_location: string | null
           ffe_item_id: string
@@ -10684,6 +11514,10 @@ export type Database = {
           care_notes?: string | null
           client_notes?: string | null
           color_fabric?: string | null
+          configuration_id?: string | null
+          configuration_locked_at?: string | null
+          configuration_snapshot?: Json
+          configuration_snapshot_hash?: string | null
           created_at?: string
           exact_location?: string | null
           ffe_item_id: string
@@ -10709,6 +11543,10 @@ export type Database = {
           care_notes?: string | null
           client_notes?: string | null
           color_fabric?: string | null
+          configuration_id?: string | null
+          configuration_locked_at?: string | null
+          configuration_snapshot?: Json
+          configuration_snapshot_hash?: string | null
           created_at?: string
           exact_location?: string | null
           ffe_item_id?: string
@@ -10731,6 +11569,13 @@ export type Database = {
           warranty_notes?: string | null
         }
         Relationships: [
+          {
+            foreignKeyName: "project_ffe_specs_configuration_id_fkey"
+            columns: ["configuration_id"]
+            isOneToOne: false
+            referencedRelation: "product_configurations"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "project_ffe_specs_ffe_item_id_fkey"
             columns: ["ffe_item_id"]
@@ -19033,10 +19878,14 @@ export type Database = {
       }
       vendor_quote_requests: {
         Row: {
+          configuration_id: string | null
+          configuration_snapshot: Json
+          configuration_snapshot_hash: string | null
           created_at: string
           designer_id: string
           id: string
           message: string | null
+          project_id: string | null
           scope: string | null
           sent_at: string | null
           status: string
@@ -19045,10 +19894,14 @@ export type Database = {
           vendor_id: string
         }
         Insert: {
+          configuration_id?: string | null
+          configuration_snapshot?: Json
+          configuration_snapshot_hash?: string | null
           created_at?: string
           designer_id: string
           id?: string
           message?: string | null
+          project_id?: string | null
           scope?: string | null
           sent_at?: string | null
           status?: string
@@ -19057,10 +19910,14 @@ export type Database = {
           vendor_id: string
         }
         Update: {
+          configuration_id?: string | null
+          configuration_snapshot?: Json
+          configuration_snapshot_hash?: string | null
           created_at?: string
           designer_id?: string
           id?: string
           message?: string | null
+          project_id?: string | null
           scope?: string | null
           sent_at?: string | null
           status?: string
@@ -19069,6 +19926,27 @@ export type Database = {
           vendor_id?: string
         }
         Relationships: [
+          {
+            foreignKeyName: "vendor_quote_requests_configuration_id_fkey"
+            columns: ["configuration_id"]
+            isOneToOne: false
+            referencedRelation: "product_configurations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "vendor_quote_requests_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "field_activity_summary"
+            referencedColumns: ["project_id"]
+          },
+          {
+            foreignKeyName: "vendor_quote_requests_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "vendor_quote_requests_vendor_id_fkey"
             columns: ["vendor_id"]
@@ -21234,8 +22112,20 @@ export type Database = {
         Args: { p_context: string; p_proposal_id: string }
         Returns: undefined
       }
+      _can_access_product_configuration: {
+        Args: { p_configuration_id: string }
+        Returns: boolean
+      }
       _can_author_proposal: { Args: { p_owner: string }; Returns: boolean }
+      _can_manage_configurable_product: {
+        Args: { p_product_id: string }
+        Returns: boolean
+      }
       _can_manage_invoice_owner: { Args: { p_owner: string }; Returns: boolean }
+      _can_read_configurable_product: {
+        Args: { p_product_id: string }
+        Returns: boolean
+      }
       _can_record_proposal_engagement: {
         Args: {
           p_event_type: string
@@ -21314,6 +22204,14 @@ export type Database = {
         }
       }
       _compute_quiz_profile: { Args: { p_answers: Json }; Returns: Json }
+      _configuration_snapshot_hash: {
+        Args: { p_snapshot: Json }
+        Returns: string
+      }
+      _custom_commission_revision_json: {
+        Args: { p_revision_id: string }
+        Returns: Json
+      }
       _decline_proposal_impl: {
         Args: { p_proposal_id: string; p_reason?: string }
         Returns: {
@@ -21489,6 +22387,14 @@ export type Database = {
         }[]
       }
       _primary_studio_for: { Args: { p_user: string }; Returns: string }
+      _product_configuration_condition_matches: {
+        Args: { p_components: Json; p_condition: Json; p_selections: Json }
+        Returns: boolean
+      }
+      _product_configuration_json: {
+        Args: { p_configuration_id: string }
+        Returns: Json
+      }
       _proposal_phase_effect_snapshot: {
         Args: { p_phase_ids: string[]; p_proposal_id: string }
         Returns: Json
@@ -22064,6 +22970,10 @@ export type Database = {
         }
         Returns: Json
       }
+      approve_product_configuration: {
+        Args: { p_configuration_id: string; p_expected_version?: number }
+        Returns: Json
+      }
       approve_scope_change_request: {
         Args: {
           p_approved_by_name: string
@@ -22588,6 +23498,10 @@ export type Database = {
         }
         Returns: Json
       }
+      create_custom_commission_revision: {
+        Args: { p_configuration_id: string; p_input: Json }
+        Returns: Json
+      }
       create_direct_order: {
         Args: { p_product_id: string; p_quantity?: number }
         Returns: {
@@ -23035,6 +23949,15 @@ export type Database = {
       }
       evaluate_collection_rules: {
         Args: { p_collection_id: string }
+        Returns: Json
+      }
+      evaluate_product_configuration: {
+        Args: {
+          p_components?: Json
+          p_option_value_ids?: string[]
+          p_product_id: string
+          p_variant_id?: string
+        }
         Returns: Json
       }
       expire_client_decision: {
@@ -23591,6 +24514,10 @@ export type Database = {
           source: string
         }[]
       }
+      get_product_configuration_schema: {
+        Args: { p_product_id: string }
+        Returns: Json
+      }
       get_proposal_send_dispatch_status: {
         Args: {
           p_dispatch_id: string
@@ -23867,6 +24794,10 @@ export type Database = {
         Returns: number
       }
       list_client_proposals: { Args: never; Returns: Json }
+      list_custom_commission_revisions: {
+        Args: { p_configuration_id: string }
+        Returns: Json
+      }
       list_designer_open_proposals: {
         Args: { p_designer_id?: string }
         Returns: {
@@ -23875,6 +24806,10 @@ export type Database = {
           scope_rooms_count: number
           title: string
         }[]
+      }
+      list_product_configurations: {
+        Args: { p_product_id: string; p_project_id?: string }
+        Returns: Json
       }
       lock_client_decision_option_parent: {
         Args: { p_decision_id: string; p_path: string }
@@ -24065,6 +25000,17 @@ export type Database = {
         }
         Returns: Json
       }
+      place_product_configuration_in_project: {
+        Args: {
+          p_category?: string
+          p_configuration_id: string
+          p_project_id: string
+          p_room_id?: string
+          p_slot_id?: string
+          p_source?: Json
+        }
+        Returns: Json
+      }
       place_product_in_project: {
         Args: {
           p_category?: string
@@ -24077,6 +25023,16 @@ export type Database = {
         Returns: Json
       }
       po_status_to_ffe_stage: { Args: { p_po_status: string }; Returns: string }
+      prepare_configuration_quote_request: {
+        Args: {
+          p_configuration_id: string
+          p_message?: string
+          p_scope?: string
+          p_timeline?: string
+          p_vendor_id: string
+        }
+        Returns: Json
+      }
       prepare_spec_book_issue: {
         Args: {
           p_audiences: string[]
@@ -24095,6 +25051,10 @@ export type Database = {
         Returns: Json
       }
       promote_batch_to_studio: { Args: { p_items: Json }; Returns: string[] }
+      promote_configuration_to_library: {
+        Args: { p_configuration_id: string; p_name?: string }
+        Returns: Json
+      }
       promote_to_studio: {
         Args: {
           p_category: string
@@ -24707,6 +25667,7 @@ export type Database = {
           passed: boolean
         }[]
       }
+      save_product_configuration: { Args: { p_input: Json }; Returns: Json }
       search_products: {
         Args: {
           category_filter?: string
@@ -25420,6 +26381,15 @@ export type Database = {
         Args: { p_new_owner: string; p_org_id: string }
         Returns: undefined
       }
+      transition_custom_commission_revision: {
+        Args: {
+          p_input?: Json
+          p_note?: string
+          p_revision_id: string
+          p_target_status: string
+        }
+        Returns: Json
+      }
       update_client_decision: {
         Args: {
           p_decision_id: string
@@ -25596,6 +26566,14 @@ export type Database = {
           isOneToOne: true
           isSetofReturn: false
         }
+      }
+      upsert_product_configuration_schema: {
+        Args: {
+          p_expected_revision?: number
+          p_input: Json
+          p_product_id: string
+        }
+        Returns: Json
       }
       user_has_role: {
         Args: { p_role_name: string; p_user_id: string }

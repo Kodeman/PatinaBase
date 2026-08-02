@@ -9,6 +9,21 @@ export {
   useCreateDraftProduct,
 } from './use-products';
 export {
+  productConfigurationKeys,
+  useProductConfigurationDefinition,
+  useSavedProductConfigurations,
+  useUpsertProductConfigurationDefinition,
+  useEvaluateProductConfiguration,
+  useSaveProductConfiguration,
+  useApproveProductConfiguration,
+  usePromoteConfigurationToLibrary,
+  useCustomCommissionRevisions,
+  useCreateCustomCommissionRevision,
+  useTransitionCustomCommissionRevision,
+  usePrepareConfigurationQuoteRequest,
+  usePlaceProductConfiguration,
+} from './use-product-configurations';
+export {
   useLayerProducts,
   useLayerCounts,
   type LayerProductLayer,

@@ -4,6 +4,7 @@ export * from './user';
 export * from './designer';
 export * from './dev-accounts';
 export * from './product';
+export * from './product-configuration';
 export * from './catalog';
 export * from './catalog-search';
 export * from './order';

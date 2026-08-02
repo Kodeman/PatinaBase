@@ -6329,3 +6329,441 @@ DO $g$ BEGIN
   REVOKE INSERT, UPDATE, DELETE ON TABLE public.document_shares FROM anon, authenticated;
 EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
 END $g$;
+
+-- 00403_product_configuration_foundation.sql
+DO $g$ BEGIN
+  REVOKE ALL ON public.product_option_groups FROM PUBLIC, anon;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00403_product_configuration_foundation.sql
+DO $g$ BEGIN
+  REVOKE ALL ON public.product_option_values FROM PUBLIC, anon;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00403_product_configuration_foundation.sql
+DO $g$ BEGIN
+  REVOKE ALL ON public.product_variants FROM PUBLIC, anon;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00403_product_configuration_foundation.sql
+DO $g$ BEGIN
+  REVOKE ALL ON public.product_variant_values FROM PUBLIC, anon;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00403_product_configuration_foundation.sql
+DO $g$ BEGIN
+  REVOKE ALL ON public.product_components FROM PUBLIC, anon;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00403_product_configuration_foundation.sql
+DO $g$ BEGIN
+  REVOKE ALL ON public.product_configuration_rules FROM PUBLIC, anon;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00403_product_configuration_foundation.sql
+DO $g$ BEGIN
+  REVOKE ALL ON public.product_configurations FROM PUBLIC, anon;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00403_product_configuration_foundation.sql
+DO $g$ BEGIN
+  REVOKE ALL ON public.product_configuration_selections FROM PUBLIC, anon;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00403_product_configuration_foundation.sql
+DO $g$ BEGIN
+  REVOKE ALL ON public.product_configuration_components FROM PUBLIC, anon;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00403_product_configuration_foundation.sql
+DO $g$ BEGIN
+  REVOKE ALL ON public.custom_commission_revisions FROM PUBLIC, anon;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00403_product_configuration_foundation.sql
+DO $g$ BEGIN
+  GRANT SELECT ON public.product_option_groups TO authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00403_product_configuration_foundation.sql
+DO $g$ BEGIN
+  GRANT SELECT ON public.product_option_values TO authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00403_product_configuration_foundation.sql
+DO $g$ BEGIN
+  GRANT SELECT ON public.product_variants TO authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00403_product_configuration_foundation.sql
+DO $g$ BEGIN
+  GRANT SELECT ON public.product_variant_values TO authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00403_product_configuration_foundation.sql
+DO $g$ BEGIN
+  GRANT SELECT ON public.product_components TO authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00403_product_configuration_foundation.sql
+DO $g$ BEGIN
+  GRANT SELECT ON public.product_configuration_rules TO authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00403_product_configuration_foundation.sql
+DO $g$ BEGIN
+  GRANT SELECT ON public.product_configurations TO authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00403_product_configuration_foundation.sql
+DO $g$ BEGIN
+  GRANT SELECT ON public.product_configuration_selections TO authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00403_product_configuration_foundation.sql
+DO $g$ BEGIN
+  GRANT SELECT ON public.product_configuration_components TO authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00403_product_configuration_foundation.sql
+DO $g$ BEGIN
+  GRANT SELECT ON public.custom_commission_revisions TO authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00403_product_configuration_foundation.sql
+DO $g$ BEGIN
+  GRANT ALL ON public.product_option_groups TO service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00403_product_configuration_foundation.sql
+DO $g$ BEGIN
+  GRANT ALL ON public.product_option_values TO service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00403_product_configuration_foundation.sql
+DO $g$ BEGIN
+  GRANT ALL ON public.product_variants TO service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00403_product_configuration_foundation.sql
+DO $g$ BEGIN
+  GRANT ALL ON public.product_variant_values TO service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00403_product_configuration_foundation.sql
+DO $g$ BEGIN
+  GRANT ALL ON public.product_components TO service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00403_product_configuration_foundation.sql
+DO $g$ BEGIN
+  GRANT ALL ON public.product_configuration_rules TO service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00403_product_configuration_foundation.sql
+DO $g$ BEGIN
+  GRANT ALL ON public.product_configurations TO service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00403_product_configuration_foundation.sql
+DO $g$ BEGIN
+  GRANT ALL ON public.product_configuration_selections TO service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00403_product_configuration_foundation.sql
+DO $g$ BEGIN
+  GRANT ALL ON public.product_configuration_components TO service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00403_product_configuration_foundation.sql
+DO $g$ BEGIN
+  GRANT ALL ON public.custom_commission_revisions TO service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00403_product_configuration_foundation.sql
+DO $g$ BEGIN
+  REVOKE EXECUTE ON FUNCTION public._can_read_configurable_product(uuid) FROM PUBLIC, anon;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00403_product_configuration_foundation.sql
+DO $g$ BEGIN
+  REVOKE EXECUTE ON FUNCTION public._can_manage_configurable_product(uuid) FROM PUBLIC, anon;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00403_product_configuration_foundation.sql
+DO $g$ BEGIN
+  REVOKE EXECUTE ON FUNCTION public._can_access_product_configuration(uuid) FROM PUBLIC, anon;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00403_product_configuration_foundation.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public._can_read_configurable_product(uuid) TO authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00403_product_configuration_foundation.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public._can_manage_configurable_product(uuid) TO authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00403_product_configuration_foundation.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public._can_access_product_configuration(uuid) TO authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00403_product_configuration_foundation.sql
+DO $g$ BEGIN
+  REVOKE EXECUTE ON FUNCTION public.product_variant_value_same_product() FROM PUBLIC, anon, authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00403_product_configuration_foundation.sql
+DO $g$ BEGIN
+  REVOKE EXECUTE ON FUNCTION public.guard_product_configuration_immutability() FROM PUBLIC, anon, authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00403_product_configuration_foundation.sql
+DO $g$ BEGIN
+  REVOKE EXECUTE ON FUNCTION public.guard_custom_commission_revision() FROM PUBLIC, anon, authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00403_product_configuration_foundation.sql
+DO $g$ BEGIN
+  REVOKE EXECUTE ON FUNCTION public.guard_project_configuration_snapshot() FROM PUBLIC, anon, authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00403_product_configuration_foundation.sql
+DO $g$ BEGIN
+  REVOKE EXECUTE ON FUNCTION public.lock_configuration_snapshot_on_po_link() FROM PUBLIC, anon, authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00403_product_configuration_foundation.sql
+DO $g$ BEGIN
+  REVOKE EXECUTE ON FUNCTION public._product_configuration_condition_matches(jsonb, jsonb, jsonb) FROM PUBLIC, anon, authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00403_product_configuration_foundation.sql
+DO $g$ BEGIN
+  REVOKE EXECUTE ON FUNCTION public._configuration_snapshot_hash(jsonb) FROM PUBLIC, anon, authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00403_product_configuration_foundation.sql
+DO $g$ BEGIN
+  REVOKE EXECUTE ON FUNCTION public._product_configuration_json(uuid) FROM PUBLIC, anon, authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00403_product_configuration_foundation.sql
+DO $g$ BEGIN
+  REVOKE EXECUTE ON FUNCTION public._custom_commission_revision_json(uuid) FROM PUBLIC, anon, authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00403_product_configuration_foundation.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public._product_configuration_condition_matches(jsonb, jsonb, jsonb) TO service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00403_product_configuration_foundation.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public._configuration_snapshot_hash(jsonb) TO service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00403_product_configuration_foundation.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public._product_configuration_json(uuid) TO service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00403_product_configuration_foundation.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public._custom_commission_revision_json(uuid) TO service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00403_product_configuration_foundation.sql
+DO $g$ BEGIN
+  REVOKE EXECUTE ON FUNCTION public.get_product_configuration_schema(uuid) FROM PUBLIC, anon;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00403_product_configuration_foundation.sql
+DO $g$ BEGIN
+  REVOKE EXECUTE ON FUNCTION public.upsert_product_configuration_schema(uuid, jsonb, integer) FROM PUBLIC, anon;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00403_product_configuration_foundation.sql
+DO $g$ BEGIN
+  REVOKE EXECUTE ON FUNCTION public.evaluate_product_configuration(uuid, uuid, uuid[], jsonb) FROM PUBLIC, anon;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00403_product_configuration_foundation.sql
+DO $g$ BEGIN
+  REVOKE EXECUTE ON FUNCTION public.save_product_configuration(jsonb) FROM PUBLIC, anon;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00403_product_configuration_foundation.sql
+DO $g$ BEGIN
+  REVOKE EXECUTE ON FUNCTION public.list_product_configurations(uuid, uuid) FROM PUBLIC, anon;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00403_product_configuration_foundation.sql
+DO $g$ BEGIN
+  REVOKE EXECUTE ON FUNCTION public.approve_product_configuration(uuid, integer) FROM PUBLIC, anon;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00403_product_configuration_foundation.sql
+DO $g$ BEGIN
+  REVOKE EXECUTE ON FUNCTION public.promote_configuration_to_library(uuid, text) FROM PUBLIC, anon;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00403_product_configuration_foundation.sql
+DO $g$ BEGIN
+  REVOKE EXECUTE ON FUNCTION public.prepare_configuration_quote_request(uuid, uuid, text, text, text) FROM PUBLIC, anon;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00403_product_configuration_foundation.sql
+DO $g$ BEGIN
+  REVOKE EXECUTE ON FUNCTION public.create_custom_commission_revision(uuid, jsonb) FROM PUBLIC, anon;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00403_product_configuration_foundation.sql
+DO $g$ BEGIN
+  REVOKE EXECUTE ON FUNCTION public.transition_custom_commission_revision(uuid, text, text, jsonb) FROM PUBLIC, anon;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00403_product_configuration_foundation.sql
+DO $g$ BEGIN
+  REVOKE EXECUTE ON FUNCTION public.list_custom_commission_revisions(uuid) FROM PUBLIC, anon;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00403_product_configuration_foundation.sql
+DO $g$ BEGIN
+  REVOKE EXECUTE ON FUNCTION public.place_product_configuration_in_project(uuid, uuid, uuid, uuid, text, jsonb) FROM PUBLIC, anon;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00403_product_configuration_foundation.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.get_product_configuration_schema(uuid) TO authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00403_product_configuration_foundation.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.upsert_product_configuration_schema(uuid, jsonb, integer) TO authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00403_product_configuration_foundation.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.evaluate_product_configuration(uuid, uuid, uuid[], jsonb) TO authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00403_product_configuration_foundation.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.save_product_configuration(jsonb) TO authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00403_product_configuration_foundation.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.list_product_configurations(uuid, uuid) TO authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00403_product_configuration_foundation.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.approve_product_configuration(uuid, integer) TO authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00403_product_configuration_foundation.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.promote_configuration_to_library(uuid, text) TO authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00403_product_configuration_foundation.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.prepare_configuration_quote_request(uuid, uuid, text, text, text) TO authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00403_product_configuration_foundation.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.create_custom_commission_revision(uuid, jsonb) TO authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00403_product_configuration_foundation.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.transition_custom_commission_revision(uuid, text, text, jsonb) TO authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00403_product_configuration_foundation.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.list_custom_commission_revisions(uuid) TO authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00403_product_configuration_foundation.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.place_product_configuration_in_project(uuid, uuid, uuid, uuid, text, jsonb) TO authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
