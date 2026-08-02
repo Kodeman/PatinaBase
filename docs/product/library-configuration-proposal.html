@@ -1,0 +1,912 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta name="description" content="Patina product review: a furniture-aware configuration model for the Library." />
+  <title>Patina Library Configuration — Product Review</title>
+  <style>
+    :root {
+      --ink: #25231f;
+      --ink-soft: #5f5a52;
+      --paper: #f5f0e7;
+      --paper-2: #ebe3d6;
+      --paper-3: #ded1be;
+      --clay: #a85f43;
+      --clay-dark: #743b28;
+      --sage: #75826d;
+      --sage-dark: #485346;
+      --gold: #c7a65d;
+      --blue: #6f8390;
+      --rust: #8f4937;
+      --charcoal: #242724;
+      --white: #fffdf8;
+      --line: rgba(37, 35, 31, 0.18);
+      --line-light: rgba(255, 253, 248, 0.2);
+      --serif: "Playfair Display", Georgia, "Times New Roman", serif;
+      --sans: Inter, ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      --mono: "DM Mono", "SFMono-Regular", Consolas, monospace;
+      --ease: cubic-bezier(.22,.76,.2,1);
+    }
+
+    * { box-sizing: border-box; }
+    html, body { height: 100%; }
+    body {
+      margin: 0;
+      overflow: hidden;
+      color: var(--ink);
+      background: var(--charcoal);
+      font-family: var(--sans);
+      -webkit-font-smoothing: antialiased;
+    }
+    button, select, input { font: inherit; }
+    button, a { -webkit-tap-highlight-color: transparent; }
+    button:focus-visible, a:focus-visible, select:focus-visible {
+      outline: 2px solid var(--gold);
+      outline-offset: 3px;
+    }
+
+    .deck { height: 100%; position: relative; }
+    .slide-stage { height: 100%; }
+    .slide {
+      position: absolute;
+      inset: 0;
+      display: none;
+      overflow: auto;
+      background:
+        radial-gradient(circle at 84% 10%, rgba(168,95,67,.08), transparent 25%),
+        linear-gradient(135deg, var(--paper), #f9f5ee 60%, var(--paper-2));
+      padding: clamp(76px, 8vh, 104px) clamp(28px, 7vw, 116px) clamp(88px, 10vh, 120px);
+      scrollbar-width: thin;
+      scrollbar-color: var(--clay) transparent;
+    }
+    .slide.active { display: block; }
+    .slide.dark {
+      color: var(--white);
+      background:
+        linear-gradient(110deg, rgba(168,95,67,.13), transparent 38%),
+        radial-gradient(circle at 80% 40%, rgba(199,166,93,.09), transparent 30%),
+        var(--charcoal);
+    }
+    .slide-grid {
+      width: min(1440px, 100%);
+      min-height: calc(100vh - 190px);
+      margin: 0 auto;
+      display: grid;
+      align-content: center;
+      gap: clamp(24px, 4vw, 60px);
+    }
+    .two-col { grid-template-columns: minmax(0, 1fr) minmax(340px, .92fr); align-items: center; }
+    .wide-left { grid-template-columns: minmax(0, 1.25fr) minmax(330px, .75fr); align-items: center; }
+    .eyebrow, .kicker, .micro {
+      margin: 0 0 14px;
+      font-family: var(--mono);
+      font-size: 11px;
+      line-height: 1.4;
+      letter-spacing: .14em;
+      text-transform: uppercase;
+    }
+    .eyebrow { color: var(--clay); }
+    .dark .eyebrow { color: #e1b9a6; }
+    h1, h2, h3, p { margin-top: 0; }
+    h1, h2, h3 { font-family: var(--serif); font-weight: 400; }
+    h1 {
+      max-width: 1000px;
+      margin-bottom: 24px;
+      font-size: clamp(52px, 7.2vw, 112px);
+      line-height: .91;
+      letter-spacing: -.045em;
+    }
+    h2 {
+      max-width: 1050px;
+      margin-bottom: 20px;
+      font-size: clamp(42px, 5vw, 78px);
+      line-height: .97;
+      letter-spacing: -.035em;
+    }
+    h2 em, h1 em { color: var(--clay); font-weight: inherit; }
+    .dark h2 em, .dark h1 em { color: #dfa88f; }
+    h3 { margin-bottom: 8px; font-size: clamp(24px, 2vw, 32px); line-height: 1.05; }
+    .lede {
+      max-width: 780px;
+      margin-bottom: 0;
+      color: var(--ink-soft);
+      font-size: clamp(18px, 1.55vw, 25px);
+      line-height: 1.48;
+    }
+    .dark .lede { color: rgba(255,253,248,.72); }
+    .caption { color: var(--ink-soft); font-size: 14px; line-height: 1.55; }
+    .dark .caption { color: rgba(255,253,248,.6); }
+
+    .topbar, .footer {
+      position: fixed;
+      z-index: 30;
+      left: 0;
+      right: 0;
+      display: flex;
+      align-items: center;
+      color: var(--ink);
+      pointer-events: none;
+    }
+    .topbar { top: 0; height: 64px; padding: 0 28px; justify-content: space-between; }
+    .footer { bottom: 0; height: 58px; padding: 0 28px; gap: 20px; }
+    .topbar > *, .footer > * { pointer-events: auto; }
+    .over-dark { color: var(--white); }
+    .wordmark {
+      display: inline-flex;
+      align-items: center;
+      gap: 10px;
+      border: 0;
+      padding: 7px;
+      color: inherit;
+      background: transparent;
+      cursor: pointer;
+    }
+    .mark {
+      width: 22px;
+      height: 22px;
+      display: grid;
+      place-items: center;
+      border: 1px solid currentColor;
+      transform: rotate(45deg);
+    }
+    .mark::after { content: "P"; transform: rotate(-45deg); font-family: var(--serif); font-size: 12px; }
+    .wordmark span:last-child, .motion-toggle, .slide-title, .counter {
+      font-family: var(--mono);
+      font-size: 10px;
+      letter-spacing: .13em;
+      text-transform: uppercase;
+    }
+    .motion-toggle {
+      border: 0;
+      color: inherit;
+      background: transparent;
+      cursor: pointer;
+      opacity: .7;
+    }
+    .progress { position: absolute; left: 0; right: 0; bottom: 0; height: 2px; background: rgba(37,35,31,.12); }
+    .progress i { display: block; width: 10%; height: 100%; background: var(--clay); transition: width .45s var(--ease); }
+    .over-dark .progress { background: rgba(255,255,255,.12); }
+    .counter { min-width: 58px; }
+    .counter b { font-weight: 500; color: var(--clay); }
+    .over-dark .counter b { color: #dfa88f; }
+    .slide-title { flex: 1; opacity: .58; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+    .nav-controls { display: flex; gap: 4px; }
+    .nav-controls button {
+      width: 38px;
+      height: 34px;
+      border: 1px solid var(--line);
+      color: inherit;
+      background: rgba(245,240,231,.35);
+      cursor: pointer;
+    }
+    .over-dark .nav-controls button { border-color: var(--line-light); background: rgba(255,255,255,.03); }
+    .nav-controls button:disabled { opacity: .25; cursor: default; }
+
+    .menu {
+      position: fixed;
+      z-index: 60;
+      inset: 0 auto 0 0;
+      width: min(440px, 92vw);
+      padding: 28px 28px 36px;
+      color: var(--white);
+      background: #20231f;
+      transform: translateX(-104%);
+      transition: transform .38s var(--ease);
+      overflow-y: auto;
+    }
+    .menu.open { transform: translateX(0); }
+    .menu-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 28px; }
+    .menu-head strong { font-family: var(--serif); font-size: 28px; font-weight: 400; }
+    .menu-head button { border: 0; color: inherit; background: transparent; font-size: 24px; cursor: pointer; }
+    .menu ol { list-style: none; padding: 0; margin: 0; }
+    .menu li button {
+      width: 100%;
+      display: grid;
+      grid-template-columns: 34px 1fr;
+      gap: 12px;
+      padding: 13px 4px;
+      border: 0;
+      border-bottom: 1px solid rgba(255,255,255,.1);
+      color: rgba(255,255,255,.66);
+      background: transparent;
+      text-align: left;
+      cursor: pointer;
+    }
+    .menu li button.active { color: var(--white); }
+    .menu li span { color: #dfa88f; font-family: var(--mono); font-size: 10px; }
+    .menu li strong { font-size: 14px; font-weight: 500; }
+    .scrim { position: fixed; z-index: 55; inset: 0; display: none; border: 0; background: rgba(0,0,0,.48); }
+    .scrim.open { display: block; }
+
+    .hero-copy { align-self: center; }
+    .hero-note {
+      max-width: 550px;
+      padding-top: 22px;
+      border-top: 1px solid var(--line-light);
+      color: rgba(255,253,248,.62);
+      font-size: 15px;
+      line-height: 1.6;
+    }
+    .hero-object { min-height: 520px; position: relative; display: grid; place-items: center; }
+    .chair-scene { width: min(540px, 94%); aspect-ratio: 1; position: relative; }
+    .chair-back, .chair-seat, .chair-leg { position: absolute; background: #93604d; }
+    .chair-back { left: 22%; top: 12%; width: 57%; height: 48%; border-radius: 8px 8px 40% 40%; transform: rotate(-3deg); background: linear-gradient(130deg,#b07a61,#704638); }
+    .chair-seat { left: 20%; top: 53%; width: 61%; height: 20%; border-radius: 12px 12px 36px 36px; transform: skewX(-7deg); background: linear-gradient(145deg,#91604a,#603d32); }
+    .chair-leg { width: 5%; height: 31%; top: 68%; background: #3d3027; transform-origin: top; }
+    .chair-leg.one { left: 27%; transform: rotate(8deg); }
+    .chair-leg.two { left: 70%; transform: rotate(-8deg); }
+    .grain-line { position: absolute; inset: 18% 17%; border: 1px solid rgba(255,255,255,.16); border-radius: 50%; transform: rotate(-18deg); }
+    .orbit-label {
+      position: absolute;
+      padding: 8px 10px;
+      border: 1px solid rgba(255,255,255,.2);
+      color: rgba(255,255,255,.72);
+      background: rgba(36,39,36,.75);
+      font-family: var(--mono);
+      font-size: 9px;
+      letter-spacing: .08em;
+    }
+    .orbit-label.a { top: 10%; right: 2%; }
+    .orbit-label.b { left: 0; bottom: 31%; }
+    .orbit-label.c { right: 2%; bottom: 11%; }
+
+    .split-fact { display: grid; grid-template-columns: repeat(2,1fr); gap: 16px; }
+    .fact-card, .case-card, .mode-card, .metric, .phase-card {
+      border-top: 3px solid var(--clay);
+      padding: 18px 18px 20px;
+      background: rgba(255,255,255,.34);
+    }
+    .fact-card strong { display: block; margin-bottom: 6px; font-family: var(--serif); font-size: 26px; font-weight: 400; }
+    .fact-card p { margin: 0; color: var(--ink-soft); font-size: 13px; line-height: 1.5; }
+    .code-window { border: 1px solid var(--line); background: rgba(255,255,255,.3); }
+    .code-head { display: flex; justify-content: space-between; padding: 10px 14px; border-bottom: 1px solid var(--line); font-family: var(--mono); font-size: 9px; letter-spacing: .1em; }
+    .code-body { padding: 20px; font-family: var(--mono); font-size: 12px; line-height: 1.8; }
+    .code-body .old { color: var(--rust); }
+    .code-body .new { color: var(--sage-dark); }
+    .code-body .dim { color: var(--ink-soft); }
+
+    .case-grid { display: grid; grid-template-columns: repeat(4,1fr); gap: 14px; }
+    .case-card { min-height: 260px; display: flex; flex-direction: column; border-top-color: var(--paper-3); }
+    .case-card:nth-child(2) { border-top-color: var(--clay); }
+    .case-card:nth-child(3) { border-top-color: var(--sage); }
+    .case-card:nth-child(4) { border-top-color: var(--gold); }
+    .case-card .number { color: var(--clay); font-family: var(--mono); font-size: 10px; letter-spacing: .1em; }
+    .case-card h3 { margin-top: 28px; }
+    .case-card p { color: var(--ink-soft); font-size: 14px; line-height: 1.55; }
+    .case-card ul { margin: auto 0 0; padding: 14px 0 0; border-top: 1px solid var(--line); list-style: none; }
+    .case-card li { margin: 6px 0; font-family: var(--mono); font-size: 9px; letter-spacing: .05em; text-transform: uppercase; }
+
+    .evidence-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+    .evidence {
+      padding: 16px 18px;
+      border: 1px solid var(--line-light);
+      background: rgba(255,255,255,.035);
+    }
+    .evidence span { color: #dfa88f; font-family: var(--mono); font-size: 9px; letter-spacing: .1em; text-transform: uppercase; }
+    .evidence strong { display: block; margin: 9px 0 5px; font-family: var(--serif); font-size: 21px; font-weight: 400; }
+    .evidence p { margin: 0; color: rgba(255,253,248,.62); font-size: 12px; line-height: 1.5; }
+    .evidence a { color: inherit; }
+    .research-caveat { padding: 18px; border-left: 3px solid var(--gold); background: rgba(199,166,93,.07); }
+    .research-caveat strong { display: block; margin-bottom: 5px; font-family: var(--mono); font-size: 10px; letter-spacing: .09em; }
+    .research-caveat p { margin: 0; color: rgba(255,253,248,.72); font-size: 13px; line-height: 1.55; }
+
+    .mode-strip { display: grid; grid-template-columns: repeat(4,1fr); gap: 2px; background: var(--line); }
+    .mode-card { min-height: 255px; border: 0; background: var(--paper); }
+    .mode-card .mode-num { font-family: var(--mono); font-size: 10px; color: var(--clay); }
+    .mode-card h3 { margin-top: 44px; }
+    .mode-card p { color: var(--ink-soft); font-size: 13px; line-height: 1.5; }
+    .mode-card small { display: block; margin-top: 18px; font-family: var(--mono); font-size: 9px; letter-spacing: .07em; text-transform: uppercase; }
+    .principle-line { padding: 18px 0 0; border-top: 1px solid var(--line); font-family: var(--serif); font-size: 25px; }
+
+    .model-map { position: relative; display: grid; grid-template-columns: 1fr 1fr; gap: 14px 52px; }
+    .model-node { position: relative; min-height: 132px; padding: 18px; border: 1px solid var(--line-light); background: rgba(255,255,255,.04); }
+    .model-node::before { content: ""; position: absolute; top: 50%; width: 52px; height: 1px; background: var(--line-light); }
+    .model-node:nth-child(odd)::before { right: -53px; }
+    .model-node:nth-child(even)::before { left: -53px; }
+    .model-node span { color: #dfa88f; font-family: var(--mono); font-size: 9px; letter-spacing: .1em; }
+    .model-node h3 { margin: 12px 0 7px; font-size: 24px; }
+    .model-node p { margin: 0; color: rgba(255,253,248,.62); font-size: 12px; line-height: 1.5; }
+    .model-center {
+      position: absolute;
+      left: 50%; top: 50%;
+      width: 68px; height: 68px;
+      display: grid; place-items: center;
+      border: 1px solid #dfa88f;
+      border-radius: 50%;
+      color: #dfa88f;
+      background: var(--charcoal);
+      transform: translate(-50%,-50%);
+      font-family: var(--mono); font-size: 8px; text-align: center; line-height: 1.4; letter-spacing: .08em;
+    }
+
+    .configurator { display: grid; grid-template-columns: .78fr 1.22fr; border: 1px solid var(--line); background: rgba(255,255,255,.34); }
+    .config-controls { padding: 22px; border-right: 1px solid var(--line); }
+    .config-controls label { display: block; margin: 0 0 16px; color: var(--ink-soft); font-family: var(--mono); font-size: 9px; letter-spacing: .1em; text-transform: uppercase; }
+    .config-controls select { width: 100%; margin-top: 7px; padding: 10px 34px 10px 11px; border: 1px solid var(--line); color: var(--ink); background: var(--paper); }
+    .config-summary { padding: 16px 0; border-top: 1px solid var(--line); }
+    .config-summary div { display: flex; justify-content: space-between; padding: 6px 0; font-size: 12px; }
+    .config-summary strong { font-weight: 600; }
+    .validity { padding: 10px; color: var(--sage-dark); background: rgba(117,130,109,.12); font-family: var(--mono); font-size: 9px; line-height: 1.45; }
+    .validity.warn { color: var(--clay-dark); background: rgba(168,95,67,.12); }
+    .sectional-canvas { min-height: 420px; padding: 24px; display: grid; grid-template-rows: 1fr auto; background: linear-gradient(#e8ded0 1px,transparent 1px),linear-gradient(90deg,#e8ded0 1px,transparent 1px); background-size: 24px 24px; }
+    .sectional-shape { align-self: center; display: flex; justify-content: center; align-items: end; gap: 4px; min-height: 230px; }
+    .sofa-part { width: 30%; max-width: 150px; height: 114px; position: relative; border: 2px solid #5f5146; border-radius: 5px 5px 14px 14px; background: var(--sofa, #ab8268); transition: all .28s var(--ease); }
+    .sofa-part::before { content: ""; position: absolute; left: 8%; top: -70px; width: 84%; height: 78px; border: 2px solid #5f5146; border-bottom: 0; border-radius: 24px 24px 0 0; background: var(--sofa, #ab8268); }
+    .sofa-part::after { content: ""; position: absolute; left: 8%; right: 8%; top: 18px; height: 1px; background: rgba(37,35,31,.26); }
+    .sofa-part.chaise { width: 38%; height: 160px; }
+    .sofa-part.hidden { display: none; }
+    .assembly-list { display: flex; flex-wrap: wrap; gap: 7px; padding-top: 18px; border-top: 1px solid var(--line); }
+    .assembly-list span { padding: 6px 8px; background: rgba(255,255,255,.55); font-family: var(--mono); font-size: 8px; letter-spacing: .06em; text-transform: uppercase; }
+
+    .commission-flow { display: grid; grid-template-columns: repeat(6,1fr); gap: 8px; }
+    .commission-step { min-height: 155px; padding: 14px; border: 1px solid var(--line-light); background: rgba(255,255,255,.035); }
+    .commission-step span { color: #dfa88f; font-family: var(--mono); font-size: 9px; }
+    .commission-step strong { display: block; margin: 28px 0 7px; font-family: var(--serif); font-size: 19px; font-weight: 400; }
+    .commission-step p { margin: 0; color: rgba(255,253,248,.58); font-size: 11px; line-height: 1.45; }
+    .decision-band { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+    .decision-band > div { padding: 18px; border-top: 2px solid var(--sage); background: rgba(255,255,255,.04); }
+    .decision-band > div:last-child { border-top-color: var(--gold); }
+    .decision-band strong { font-family: var(--serif); font-size: 21px; font-weight: 400; }
+    .decision-band p { margin: 6px 0 0; color: rgba(255,253,248,.62); font-size: 12px; line-height: 1.5; }
+
+    .data-rail { display: grid; grid-template-columns: repeat(7,1fr); align-items: stretch; }
+    .data-stop { position: relative; min-height: 220px; padding: 20px 12px; border-top: 2px solid var(--clay); background: rgba(255,255,255,.3); }
+    .data-stop + .data-stop { border-left: 1px solid var(--line); }
+    .data-stop:not(:last-child)::after { content: "→"; position: absolute; z-index: 2; right: -10px; top: 47%; width: 20px; height: 20px; display: grid; place-items: center; background: var(--paper); font-family: var(--mono); font-size: 11px; }
+    .data-stop span { font-family: var(--mono); font-size: 9px; color: var(--clay); }
+    .data-stop strong { display: block; margin: 40px 0 8px; font-family: var(--serif); font-size: 19px; font-weight: 400; }
+    .data-stop p { margin: 0; color: var(--ink-soft); font-size: 11px; line-height: 1.48; }
+    .invariant { padding: 17px 20px; border-left: 3px solid var(--clay); background: rgba(168,95,67,.07); font-size: 14px; line-height: 1.55; }
+
+    .screen-mock { min-height: 470px; display: grid; grid-template-columns: 90px minmax(0,1fr) 260px; border: 1px solid var(--line); background: var(--white); }
+    .screen-nav { padding: 18px 10px; color: var(--white); background: var(--charcoal); }
+    .screen-nav b { font-family: var(--serif); font-size: 20px; font-weight: 400; }
+    .screen-nav span { display: block; margin-top: 34px; color: rgba(255,255,255,.5); font-family: var(--mono); font-size: 8px; line-height: 3.3; }
+    .screen-main { min-width: 0; padding: 24px; }
+    .screen-main .micro { color: var(--clay); }
+    .screen-main h3 { font-size: 34px; }
+    .screen-image { height: 220px; position: relative; display: grid; place-items: center; background: #e7ddd0; }
+    .screen-image::after { content: "SECTIONAL · 3 PIECES"; font-family: var(--mono); font-size: 9px; letter-spacing: .1em; }
+    .screen-facts { display: grid; grid-template-columns: repeat(3,1fr); gap: 6px; margin-top: 12px; }
+    .screen-facts div { padding: 10px; background: var(--paper); }
+    .screen-facts span { display: block; color: var(--ink-soft); font-family: var(--mono); font-size: 7px; text-transform: uppercase; }
+    .screen-facts strong { font-size: 11px; }
+    .screen-panel { min-width: 0; padding: 24px; border-left: 1px solid var(--line); background: #f7f3ec; }
+    .screen-panel > span { font-family: var(--mono); font-size: 9px; color: var(--clay); }
+    .option-row { padding: 14px 0; border-bottom: 1px solid var(--line); }
+    .option-row small { display: block; color: var(--ink-soft); font-family: var(--mono); font-size: 7px; text-transform: uppercase; }
+    .option-row strong { font-size: 12px; }
+    .screen-cta { margin-top: 20px; padding: 12px; color: var(--white); background: var(--clay); text-align: center; font-size: 11px; }
+
+    .phase-grid { display: grid; grid-template-columns: repeat(3,1fr); gap: 14px; }
+    .phase-card { min-height: 290px; border-top-color: var(--paper-3); }
+    .phase-card:nth-child(2) { border-top-color: var(--clay); }
+    .phase-card:nth-child(3) { border-top-color: var(--sage); }
+    .phase-card span { color: var(--clay); font-family: var(--mono); font-size: 9px; letter-spacing: .1em; }
+    .phase-card h3 { margin-top: 34px; }
+    .phase-card ul { margin: 18px 0 0; padding: 0; list-style: none; }
+    .phase-card li { margin: 9px 0; color: var(--ink-soft); font-size: 13px; line-height: 1.4; }
+    .phase-card li::before { content: "—"; margin-right: 8px; color: var(--clay); }
+    .phase-card .gate { margin-top: 20px; padding-top: 14px; border-top: 1px solid var(--line); font-family: var(--mono); font-size: 8px; line-height: 1.5; text-transform: uppercase; }
+
+    .metric-grid { display: grid; grid-template-columns: repeat(4,1fr); gap: 12px; }
+    .metric { min-height: 180px; border-top-color: var(--sage); }
+    .metric span { color: var(--sage-dark); font-family: var(--mono); font-size: 9px; letter-spacing: .08em; }
+    .metric strong { display: block; margin: 34px 0 8px; font-family: var(--serif); font-size: 24px; font-weight: 400; }
+    .metric p { margin: 0; color: var(--ink-soft); font-size: 12px; line-height: 1.5; }
+    .guardrails { display: grid; grid-template-columns: repeat(3,1fr); gap: 12px; }
+    .guardrails div { padding: 15px; border-left: 2px solid var(--clay); background: rgba(168,95,67,.05); font-size: 12px; line-height: 1.5; }
+
+    .validation-layout { display: grid; grid-template-columns: .75fr 1.25fr; gap: 40px; align-items: start; }
+    .participant-stack { display: grid; grid-template-columns: repeat(2,1fr); gap: 8px; }
+    .participant-stack div { padding: 14px; border: 1px solid var(--line-light); background: rgba(255,255,255,.04); }
+    .participant-stack span { color: #dfa88f; font-family: var(--mono); font-size: 9px; }
+    .participant-stack strong { display: block; margin-top: 8px; font-family: var(--serif); font-size: 18px; font-weight: 400; }
+    .test-list { margin: 0; padding: 0; list-style: none; counter-reset: tests; }
+    .test-list li { counter-increment: tests; display: grid; grid-template-columns: 34px 1fr; gap: 12px; padding: 14px 0; border-bottom: 1px solid var(--line-light); color: rgba(255,253,248,.72); font-size: 13px; line-height: 1.5; }
+    .test-list li::before { content: counter(tests, decimal-leading-zero); color: #dfa88f; font-family: var(--mono); font-size: 9px; }
+
+    .ask-grid { display: grid; grid-template-columns: repeat(3,1fr); gap: 12px; }
+    .ask-card { min-height: 255px; padding: 20px; border: 1px solid var(--line-light); background: rgba(255,255,255,.04); }
+    .ask-card span { color: #dfa88f; font-family: var(--mono); font-size: 9px; letter-spacing: .08em; }
+    .ask-card h3 { margin-top: 38px; }
+    .ask-card p { color: rgba(255,253,248,.62); font-size: 13px; line-height: 1.5; }
+    .ask-card strong { display: block; margin-top: 20px; color: var(--white); font-size: 13px; }
+    .closing { display: flex; align-items: end; justify-content: space-between; gap: 30px; padding-top: 22px; border-top: 1px solid var(--line-light); }
+    .closing p { margin: 0; font-family: var(--serif); font-size: clamp(25px,3vw,44px); }
+    .closing span { color: #dfa88f; font-family: var(--mono); font-size: 10px; letter-spacing: .13em; }
+
+    .reveal { opacity: 0; transform: translateY(14px); }
+    .active .reveal { animation: reveal .62s var(--ease) forwards; animation-delay: var(--delay,0ms); }
+    @keyframes reveal { to { opacity: 1; transform: none; } }
+    .reduce-motion .reveal, .reduce-motion .active .reveal { opacity: 1; transform: none; animation: none; }
+    .reduce-motion * { scroll-behavior: auto !important; transition-duration: 0s !important; }
+
+    @media (max-width: 1050px) {
+      .two-col, .wide-left, .validation-layout { grid-template-columns: 1fr; }
+      .hero-object { min-height: 360px; }
+      .chair-scene { width: min(420px,80%); }
+      .case-grid, .mode-strip { grid-template-columns: repeat(2,1fr); }
+      .commission-flow { grid-template-columns: repeat(3,1fr); }
+      .data-rail { grid-template-columns: repeat(4,1fr); }
+      .data-stop:nth-child(4)::after { display: none; }
+      .screen-mock { grid-template-columns: 90px 1fr; }
+      .screen-panel { grid-column: 1 / -1; border-left: 0; border-top: 1px solid var(--line); }
+    }
+    @media (max-width: 720px) {
+      .slide { padding: 72px 20px 80px; }
+      .topbar, .footer { padding-left: 14px; padding-right: 14px; }
+      .motion-toggle, .slide-title { display: none; }
+      .split-fact, .evidence-grid, .case-grid, .mode-strip, .phase-grid, .metric-grid, .guardrails, .ask-grid, .decision-band { grid-template-columns: 1fr; }
+      .model-map { grid-template-columns: 1fr; gap: 10px; }
+      .model-node::before, .model-center { display: none; }
+      .configurator { grid-template-columns: 1fr; }
+      .config-controls { border-right: 0; border-bottom: 1px solid var(--line); }
+      .commission-flow { grid-template-columns: repeat(2,1fr); }
+      .data-rail { grid-template-columns: 1fr; }
+      .data-stop { min-height: 120px; }
+      .data-stop strong { margin-top: 20px; }
+      .data-stop:not(:last-child)::after { content: "↓"; right: 50%; top: auto; bottom: -10px; }
+      .screen-mock { grid-template-columns: 1fr; }
+      .screen-nav { display: none; }
+      .screen-panel { grid-column: auto; }
+      .participant-stack { grid-template-columns: 1fr; }
+    }
+    @media (prefers-reduced-motion: reduce) {
+      .reveal, .active .reveal { opacity: 1; transform: none; animation: none; }
+      * { scroll-behavior: auto !important; transition-duration: .01ms !important; animation-duration: .01ms !important; }
+    }
+
+    @media print {
+      body { overflow: visible; background: white; }
+      .topbar, .footer, .menu, .scrim { display: none !important; }
+      .deck, .slide-stage { height: auto; }
+      .slide, .slide.active {
+        position: relative;
+        display: block !important;
+        width: 100%;
+        min-height: 100vh;
+        overflow: hidden;
+        break-after: page;
+        print-color-adjust: exact;
+        -webkit-print-color-adjust: exact;
+      }
+      .reveal { opacity: 1 !important; transform: none !important; animation: none !important; }
+    }
+  </style>
+</head>
+<body>
+  <main class="deck" id="deck">
+    <div class="slide-stage">
+      <section class="slide dark active" data-title="A Library built for furniture">
+        <div class="slide-grid two-col">
+          <div class="hero-copy">
+            <p class="eyebrow reveal">Patina · Product review · August 2026</p>
+            <h1 class="reveal" style="--delay:80ms">A Library built for <em>furniture.</em></h1>
+            <p class="lede reveal" style="--delay:160ms">From a queen bed to a hand-built cabinet, one piece can hold dozens—or thousands—of valid possibilities. Patina should preserve the family, resolve the choice, and remember exactly what was promised.</p>
+            <p class="hero-note reveal" style="--delay:240ms"><strong>Working recommendation.</strong> Grounded in Patina’s current system and published workflow research. No designer interviews were conducted for this version; validation is part of the proposed next step.</p>
+          </div>
+          <div class="hero-object reveal" style="--delay:180ms" aria-label="Abstract wood lounge chair">
+            <div class="chair-scene" aria-hidden="true">
+              <div class="chair-back"><i class="grain-line"></i></div>
+              <div class="chair-seat"></div>
+              <div class="chair-leg one"></div><div class="chair-leg two"></div>
+              <span class="orbit-label a">FAMILY · LINDQVIST</span>
+              <span class="orbit-label b">FINISH · SADDLE 04</span>
+              <span class="orbit-label c">PROMISE · ISSUE 01</span>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section class="slide" data-title="The flat-row problem">
+        <div class="slide-grid wide-left">
+          <div>
+            <p class="eyebrow reveal">01 · The problem</p>
+            <h2 class="reveal" style="--delay:60ms">Today, the Library stores a piece as a <em>flat row.</em></h2>
+            <p class="lede reveal" style="--delay:120ms">That works until the designer must answer: which size, which finish, which modules, which drawing revision—and at what price?</p>
+            <div class="split-fact reveal" style="--delay:190ms; margin-top:32px">
+              <div class="fact-card"><strong>Production truth</strong><p><code>products</code> carries one set of dimensions, materials, prices, finish, SKU, and lead time.</p></div>
+              <div class="fact-card"><strong>Disconnected intent</strong><p>Variant and customization interfaces exist in TypeScript and API clients, but no shipped Supabase model backs the current Library.</p></div>
+            </div>
+          </div>
+          <div class="code-window reveal" style="--delay:160ms">
+            <div class="code-head"><span>PUBLIC.PRODUCTS</span><span>AS BUILT</span></div>
+            <div class="code-body">
+              <div><span class="dim">name</span> “Woodward Sectional”</div>
+              <div><span class="old">dimensions</span> { width, height, depth }</div>
+              <div><span class="old">materials</span> [ “linen”, “oak” ]</div>
+              <div><span class="old">finish</span> “Natural”</div>
+              <div><span class="old">price_trade</span> 680000</div>
+              <div><span class="old">sku</span> “WDS-SEC”</div>
+              <br />
+              <div><span class="new">missing</span> option groups + values</div>
+              <div><span class="new">missing</span> valid combinations</div>
+              <div><span class="new">missing</span> component assembly</div>
+              <div><span class="new">missing</span> resolved configuration</div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section class="slide" data-title="Four kinds of variance">
+        <div class="slide-grid">
+          <div>
+            <p class="eyebrow reveal">02 · The furniture spectrum</p>
+            <h2 class="reveal" style="--delay:60ms">Variation is not one problem.</h2>
+            <p class="lede reveal" style="--delay:110ms">A useful model must be quiet for the simple piece and deep enough for the workshop.</p>
+          </div>
+          <div class="case-grid">
+            <article class="case-card reveal" style="--delay:120ms"><span class="number">01 · BED</span><h3>Known sizes</h3><p>The family is shared. Queen and king carry distinct dimensions, SKUs, prices, and availability.</p><ul><li>Finite variants</li><li>Exact sellable identity</li></ul></article>
+            <article class="case-card reveal" style="--delay:170ms"><span class="number">02 · SECTIONAL</span><h3>Many pieces</h3><p>Armless seats, corners, chaises, handedness, and fabric assemble into a valid whole.</p><ul><li>Components + quantities</li><li>Compatibility rules</li></ul></article>
+            <article class="case-card reveal" style="--delay:220ms"><span class="number">03 · TABLE</span><h3>Material choices</h3><p>Size, top, edge, and base alter the look, price, weight, and lead time.</p><ul><li>Conditional options</li><li>Calculated effects</li></ul></article>
+            <article class="case-card reveal" style="--delay:270ms"><span class="number">04 · CABINETRY</span><h3>Made to measure</h3><p>The selection begins with a need, then gains field dimensions, drawings, revisions, and a quote.</p><ul><li>Project commission</li><li>Approval history</li></ul></article>
+          </div>
+        </div>
+      </section>
+
+      <section class="slide dark" data-title="What the evidence says">
+        <div class="slide-grid two-col">
+          <div>
+            <p class="eyebrow reveal">03 · Desk research</p>
+            <h2 class="reveal" style="--delay:60ms">The market separates the family from the <em>resolved promise.</em></h2>
+            <p class="lede reveal" style="--delay:120ms">Commerce models cover finite choices. Furniture standards go further: components, relationships, geometry, price logic, quotation, and ordering.</p>
+            <div class="research-caveat reveal" style="--delay:200ms; margin-top:28px"><strong>EVIDENCE LIMIT</strong><p>These are product and standards signals—not interview findings. We should not treat them as proof of Patina designers’ terminology or priorities.</p></div>
+          </div>
+          <div class="evidence-grid">
+            <div class="evidence reveal" style="--delay:120ms"><span>Interior design workflow</span><strong>Library master + project adjustment</strong><p>Programa carries reusable product specifications into schedules while allowing project-specific edits.</p></div>
+            <div class="evidence reveal" style="--delay:160ms"><span>Open web vocabulary</span><strong>Group + explicit dimensions of variance</strong><p>Schema.org ProductGroup models shared properties once and names what its products vary by.</p></div>
+            <div class="evidence reveal" style="--delay:200ms"><span>Furniture configuration</span><strong>Rules prevent invalid orders</strong><p>OFML joins configuration data, commercial data, and product logic from planning through ordering.</p></div>
+            <div class="evidence reveal" style="--delay:240ms"><span>Planning-intensive furniture</span><strong>Components + conditions + price</strong><p>IDM carries components, materials, relationships, and conditions for upholstery, living, and fitted furniture.</p></div>
+          </div>
+        </div>
+      </section>
+
+      <section class="slide" data-title="One Library, graduated complexity">
+        <div class="slide-grid">
+          <div>
+            <p class="eyebrow reveal">04 · Product principle</p>
+            <h2 class="reveal" style="--delay:60ms">One Library. <em>Four depths.</em></h2>
+          </div>
+          <div class="mode-strip reveal" style="--delay:120ms">
+            <article class="mode-card"><span class="mode-num">01</span><h3>Standard</h3><p>A single piece with one directly specifiable identity.</p><small>Today’s fast path stays fast</small></article>
+            <article class="mode-card"><span class="mode-num">02</span><h3>Variant</h3><p>Finite sellable choices, each with an exact SKU and physical facts.</p><small>Bed size · lamp finish</small></article>
+            <article class="mode-card"><span class="mode-num">03</span><h3>Configured</h3><p>Options, components, and rules resolve a valid, priced assembly.</p><small>Sectional · dining table</small></article>
+            <article class="mode-card"><span class="mode-num">04</span><h3>Custom commission</h3><p>A project brief becomes measured, drawn, quoted, approved, and built.</p><small>Cabinetry · one-off furniture</small></article>
+          </div>
+          <p class="principle-line reveal" style="--delay:190ms">The designer sees only the depth the piece requires.</p>
+        </div>
+      </section>
+
+      <section class="slide dark" data-title="The proposed model">
+        <div class="slide-grid two-col">
+          <div>
+            <p class="eyebrow reveal">05 · Information model</p>
+            <h2 class="reveal" style="--delay:60ms">Preserve the family. Resolve the choice. <em>Freeze the promise.</em></h2>
+            <p class="lede reveal" style="--delay:120ms">Do not generate every theoretical combination. Materialize exact sellable variants; express the rest as options, components, and rules.</p>
+          </div>
+          <div class="model-map reveal" style="--delay:150ms">
+            <article class="model-node"><span>REUSABLE</span><h3>Product family</h3><p>Maker, story, category, common media, and shared specifications.</p></article>
+            <article class="model-node"><span>SELLABLE</span><h3>Variant</h3><p>Known combination with SKU, price, dimensions, availability, and lead time.</p></article>
+            <article class="model-node"><span>ASSEMBLED</span><h3>Components + rules</h3><p>Pieces, quantities, attachment logic, requirements, exclusions, and calculations.</p></article>
+            <article class="model-node"><span>RESOLVED</span><h3>Configuration</h3><p>Chosen values, components, measurements, quote, status, and version.</p></article>
+            <div class="model-center">ONE<br/>BACKBONE</div>
+          </div>
+        </div>
+      </section>
+
+      <section class="slide" data-title="Try a sectional configuration">
+        <div class="slide-grid two-col">
+          <div>
+            <p class="eyebrow reveal">06 · Feel the model</p>
+            <h2 class="reveal" style="--delay:60ms">A sectional is an <em>assembly,</em> not a color dropdown.</h2>
+            <p class="lede reveal" style="--delay:120ms">Change the composition. Patina validates the pieces and carries an exact, readable assembly forward.</p>
+          </div>
+          <div class="configurator reveal" style="--delay:150ms">
+            <div class="config-controls">
+              <label>Composition<select id="composition"><option value="sofa">Three-seat sofa</option><option value="left">Left chaise sectional</option><option value="right">Right chaise sectional</option><option value="four">Four-piece sectional</option></select></label>
+              <label>Upholstery<select id="upholstery"><option value="linen" data-price="0">Oatmeal linen</option><option value="moss" data-price="54000">Moss performance velvet</option><option value="leather" data-price="148000">Saddle leather</option></select></label>
+              <label>Leg<select id="leg"><option value="oak">White oak</option><option value="walnut">Walnut</option><option value="steel">Blackened steel</option></select></label>
+              <div class="config-summary"><div><span>Pieces</span><strong id="pieceCount">3</strong></div><div><span>Width</span><strong id="configWidth">102 in</strong></div><div><span>Trade</span><strong id="configPrice">$6,800</strong></div><div><span>Lead time</span><strong id="leadTime">10–12 wk</strong></div></div>
+              <div class="validity" id="validity">VALID · 3 sellable components resolved</div>
+            </div>
+            <div class="sectional-canvas">
+              <div class="sectional-shape" id="sectionalShape"><div class="sofa-part" id="part1"></div><div class="sofa-part" id="part2"></div><div class="sofa-part" id="part3"></div><div class="sofa-part hidden" id="part4"></div></div>
+              <div class="assembly-list" id="assemblyList"><span>1 × Left arm</span><span>1 × Armless seat</span><span>1 × Right arm</span></div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section class="slide dark" data-title="Custom work has its own rhythm">
+        <div class="slide-grid">
+          <div>
+            <p class="eyebrow reveal">07 · Custom commission</p>
+            <h2 class="reveal" style="--delay:60ms">Custom work begins with a need—not a <em>fabricated SKU.</em></h2>
+            <p class="lede reveal" style="--delay:110ms">Use the same configuration backbone, but give one-off furniture a project workspace of its own.</p>
+          </div>
+          <div class="commission-flow reveal" style="--delay:150ms">
+            <div class="commission-step"><span>01</span><strong>Brief</strong><p>Use, intent, budget, constraints, and maker.</p></div>
+            <div class="commission-step"><span>02</span><strong>Measure</strong><p>Field dimensions with source and confidence.</p></div>
+            <div class="commission-step"><span>03</span><strong>Develop</strong><p>Materials, components, details, and drawings.</p></div>
+            <div class="commission-step"><span>04</span><strong>Quote</strong><p>Maker price, lead time, exclusions, and revision.</p></div>
+            <div class="commission-step"><span>05</span><strong>Approve</strong><p>Named drawing and configuration version.</p></div>
+            <div class="commission-step"><span>06</span><strong>Build</strong><p>PO, submittals, changes, receiving, and care.</p></div>
+          </div>
+          <div class="decision-band reveal" style="--delay:220ms">
+            <div><strong>Project first</strong><p>The commission stays close to the room, client, measurements, and approval trail.</p></div>
+            <div><strong>Library when useful</strong><p>After completion, the studio may promote the proven design into a reusable family or starting template.</p></div>
+          </div>
+        </div>
+      </section>
+
+      <section class="slide" data-title="Carry the promise end to end">
+        <div class="slide-grid">
+          <div>
+            <p class="eyebrow reveal">08 · End-to-end handoff</p>
+            <h2 class="reveal" style="--delay:60ms">The configuration travels. The <em>meaning does not drift.</em></h2>
+          </div>
+          <div class="data-rail reveal" style="--delay:120ms">
+            <div class="data-stop"><span>01</span><strong>Library</strong><p>Family, options, variants, components, rules.</p></div>
+            <div class="data-stop"><span>02</span><strong>Project</strong><p>Resolved selection and project overrides.</p></div>
+            <div class="data-stop"><span>03</span><strong>Approval</strong><p>Client sees the chosen facts, not internal cost.</p></div>
+            <div class="data-stop"><span>04</span><strong>RFQ</strong><p>Maker receives exact assembly and open questions.</p></div>
+            <div class="data-stop"><span>05</span><strong>PO</strong><p>Frozen configuration, price, and quoted revision.</p></div>
+            <div class="data-stop"><span>06</span><strong>Receiving</strong><p>Inspect what arrived against what was ordered.</p></div>
+            <div class="data-stop"><span>07</span><strong>Memory</strong><p>Care, warranty, substitutions, and installed truth.</p></div>
+          </div>
+          <div class="invariant reveal" style="--delay:190ms"><strong>Load-bearing rule:</strong> a Library update may alert the designer that the source changed. It must never silently alter an approved selection, issued spec book, sent RFQ, or confirmed PO.</div>
+        </div>
+      </section>
+
+      <section class="slide" data-title="The designer experience">
+        <div class="slide-grid two-col">
+          <div>
+            <p class="eyebrow reveal">09 · The Piece</p>
+            <h2 class="reveal" style="--delay:60ms">Configuration belongs <em>inside the piece.</em></h2>
+            <p class="lede reveal" style="--delay:120ms">Library cards stay calm: “4 sizes,” “modular,” “from $6,800,” or “price on request.” The full configuration appears only when the designer opens or places the piece.</p>
+          </div>
+          <div class="screen-mock reveal" style="--delay:150ms" aria-label="Conceptual product configuration interface">
+            <div class="screen-nav"><b>Patina</b><span>DESK<br/>LIBRARY<br/>ORDERS<br/>PEOPLE</span></div>
+            <div class="screen-main"><p class="micro">The Piece · Studio Library</p><h3>Woodward Sectional</h3><p class="caption">Holloway Workshop · Grand Rapids, Michigan</p><div class="screen-image"></div><div class="screen-facts"><div><span>Trade</span><strong>$6,800</strong></div><div><span>Lead time</span><strong>10–12 weeks</strong></div><div><span>Configuration</span><strong>Complete</strong></div></div></div>
+            <aside class="screen-panel"><span>CONFIGURE</span><div class="option-row"><small>Composition</small><strong>Left chaise · 3 pieces</strong></div><div class="option-row"><small>Upholstery</small><strong>Oatmeal linen · Grade B</strong></div><div class="option-row"><small>Leg</small><strong>White oak</strong></div><div class="option-row"><small>Resolved size</small><strong>118 × 65 × 33 in</strong></div><div class="screen-cta">Place in the living room</div></aside>
+          </div>
+        </div>
+      </section>
+
+      <section class="slide" data-title="Delivery in three deliberate cuts">
+        <div class="slide-grid">
+          <div>
+            <p class="eyebrow reveal">10 · Delivery path</p>
+            <h2 class="reveal" style="--delay:60ms">Build the backbone once. <em>Earn the depth.</em></h2>
+          </div>
+          <div class="phase-grid">
+            <article class="phase-card reveal" style="--delay:110ms"><span>CUT 01 · FOUNDATION</span><h3>Families + variants</h3><ul><li>Configuration mode on existing products</li><li>Option groups, values, exact variants</li><li>Library indicators and variant selection</li><li>Project configuration snapshot</li></ul><div class="gate">Gate · bed-size flow works end to end; flat products unchanged</div></article>
+            <article class="phase-card reveal" style="--delay:170ms"><span>CUT 02 · ASSEMBLY</span><h3>Rules + components</h3><ul><li>Modular pieces and quantities</li><li>Requirements, exclusions, calculations</li><li>RFQ and PO configuration handoff</li><li>Source-change alerts and revisions</li></ul><div class="gate">Gate · sectional and table cases resolve without invalid orders</div></article>
+            <article class="phase-card reveal" style="--delay:230ms"><span>CUT 03 · COMMISSION</span><h3>Custom work</h3><ul><li>Requirements and field measurements</li><li>Drawings, quote revisions, approvals</li><li>Submittals, receiving, installed truth</li><li>Optional promotion to Library</li></ul><div class="gate">Gate · cabinet case reaches PO with an auditable promise</div></article>
+          </div>
+        </div>
+      </section>
+
+      <section class="slide" data-title="Measure confidence, not catalog volume">
+        <div class="slide-grid">
+          <div>
+            <p class="eyebrow reveal">11 · Measures + guardrails</p>
+            <h2 class="reveal" style="--delay:60ms">Measure whether the studio can <em>specify with confidence.</em></h2>
+          </div>
+          <div class="metric-grid">
+            <article class="metric reveal" style="--delay:100ms"><span>COMPLETENESS</span><strong>Resolved before approval</strong><p>Share of placed FF&amp;E lines with every required configuration fact complete.</p></article>
+            <article class="metric reveal" style="--delay:140ms"><span>CLARITY</span><strong>RFQ / PO questions</strong><p>Vendor clarification requests caused by missing or contradictory specifications.</p></article>
+            <article class="metric reveal" style="--delay:180ms"><span>STABILITY</span><strong>Changes after approval</strong><p>Configuration revisions triggered after the client or studio has approved a promise.</p></article>
+            <article class="metric reveal" style="--delay:220ms"><span>MEMORY</span><strong>Reuse with intent</strong><p>Configurations or custom starting points reused by the studio without copying stale facts.</p></article>
+          </div>
+          <div class="guardrails reveal" style="--delay:260ms"><div>No combinatorial explosion: only materialize sellable variants.</div><div>No silent propagation: project and issued snapshots are immutable.</div><div>No false precision: custom work may remain “price on request” until quoted.</div></div>
+        </div>
+      </section>
+
+      <section class="slide dark" data-title="Validate with working designers">
+        <div class="slide-grid validation-layout">
+          <div>
+            <p class="eyebrow reveal">12 · Research before schema lock</p>
+            <h2 class="reveal" style="--delay:60ms">Put the model in front of <em>working designers.</em></h2>
+            <p class="lede reveal" style="--delay:120ms">Five to eight 45-minute sessions can challenge the vocabulary, custom-work boundary, and handoff before the data model hardens.</p>
+            <div class="participant-stack reveal" style="--delay:190ms; margin-top:26px"><div><span>2</span><strong>Solo residential</strong></div><div><span>2</span><strong>Small studio</strong></div><div><span>2</span><strong>Procurement-heavy</strong></div><div><span>1–2</span><strong>Custom millwork depth</strong></div></div>
+          </div>
+          <ol class="test-list reveal" style="--delay:150ms">
+            <li>Bring a real product with meaningful variation. Show how it is recorded today.</li>
+            <li>Configure the bed, sectional, and table concepts; note where Patina’s language breaks.</li>
+            <li>Walk a custom cabinet from first need through approved drawing and PO.</li>
+            <li>Test when a source update should flow forward, warn, or remain frozen.</li>
+            <li>Rank the release cuts by frequency, risk, and value—not by technical elegance.</li>
+          </ol>
+        </div>
+      </section>
+
+      <section class="slide dark" data-title="The decision for Patina">
+        <div class="slide-grid">
+          <div>
+            <p class="eyebrow reveal">13 · Team review</p>
+            <h2 class="reveal" style="--delay:60ms">Three decisions unlock the <em>next cut.</em></h2>
+          </div>
+          <div class="ask-grid">
+            <article class="ask-card reveal" style="--delay:110ms"><span>DECISION 01</span><h3>Backbone</h3><p>Adopt family, variant, component, rule, and resolved configuration as the shared vocabulary.</p><strong>Recommendation · Yes</strong></article>
+            <article class="ask-card reveal" style="--delay:170ms"><span>DECISION 02</span><h3>Custom boundary</h3><p>Begin custom work in the project; promote proven designs into the Library only when reuse is honest.</p><strong>Recommendation · Shared core, separate flow</strong></article>
+            <article class="ask-card reveal" style="--delay:230ms"><span>DECISION 03</span><h3>Validation</h3><p>Run designer sessions before final schema and sequence Cut 01 from the evidence.</p><strong>Recommendation · Recruit now</strong></article>
+          </div>
+          <div class="closing reveal" style="--delay:290ms"><p>Capture the family. Specify the piece.<br/><em>Remember the promise.</em></p><span>WHERE TIME ADDS VALUE.</span></div>
+        </div>
+      </section>
+
+      <section class="slide" data-title="Research notes">
+        <div class="slide-grid">
+          <div>
+            <p class="eyebrow reveal">Appendix · Sources</p>
+            <h2 class="reveal" style="--delay:60ms">Research notes.</h2>
+            <p class="lede reveal" style="--delay:110ms">Primary and product sources used to frame the working model. Accessed August 2, 2026.</p>
+          </div>
+          <div class="evidence-grid reveal" style="--delay:160ms; color:var(--ink)">
+            <div class="evidence" style="border-color:var(--line);background:rgba(255,255,255,.35)"><span>Patina repository</span><strong>Current production shape</strong><p style="color:var(--ink-soft)"><code>products</code>, three-layer RLS, <code>project_ffe_specs</code>, spec-book snapshots, RFQs, and POs. Migrations 00001, 00152, 00162, 00148, 00306, and 00380.</p></div>
+            <div class="evidence" style="border-color:var(--line);background:rgba(255,255,255,.35)"><span>Programa</span><strong>Product Library</strong><p style="color:var(--ink-soft)"><a href="https://programa.design/features/product-libraries" target="_blank" rel="noreferrer">programa.design/features/product-libraries</a></p></div>
+            <div class="evidence" style="border-color:var(--line);background:rgba(255,255,255,.35)"><span>Schema.org</span><strong>ProductGroup</strong><p style="color:var(--ink-soft)"><a href="https://schema.org/ProductGroup" target="_blank" rel="noreferrer">schema.org/ProductGroup</a></p></div>
+            <div class="evidence" style="border-color:var(--line);background:rgba(255,255,255,.35)"><span>IBA Forum</span><strong>OFML overview + specifications</strong><p style="color:var(--ink-soft)"><a href="https://iba.online/en/knowledge/space-planning/ofml/ofml-overview/" target="_blank" rel="noreferrer">OFML overview</a> · <a href="https://iba.online/en/knowledge/space-planning/ofml/specifications/" target="_blank" rel="noreferrer">technical specifications</a></p></div>
+            <div class="evidence" style="border-color:var(--line);background:rgba(255,255,255,.35)"><span>DCC / Roomle</span><strong>Integrated Data Model</strong><p style="color:var(--ink-soft)"><a href="https://docs.roomle.com/idm/IDMAbout" target="_blank" rel="noreferrer">About IDM for variant-rich, planning-intensive furniture</a></p></div>
+            <div class="evidence" style="border-color:var(--line);background:rgba(255,255,255,.35)"><span>Configura</span><strong>Products + options</strong><p style="color:var(--ink-soft)"><a href="https://support.configura.com/hc/en-us/articles/360039745954-Products" target="_blank" rel="noreferrer">Products generate part numbers, prices, and configurations</a></p></div>
+          </div>
+        </div>
+      </section>
+    </div>
+
+    <header class="topbar over-dark" id="topbar">
+      <button class="wordmark" id="menuOpen" aria-label="Open slide menu" aria-expanded="false"><span class="mark" aria-hidden="true"></span><span>Patina · Library configuration</span></button>
+      <button class="motion-toggle" id="motionToggle" aria-pressed="false">Motion on</button>
+    </header>
+    <footer class="footer over-dark" id="footer">
+      <div class="progress" aria-hidden="true"><i id="progressBar"></i></div>
+      <span class="counter"><b id="currentCount">01</b> / <span id="totalCount">15</span></span>
+      <span class="slide-title" id="currentTitle">A Library built for furniture</span>
+      <div class="nav-controls"><button id="prev" aria-label="Previous slide">←</button><button id="next" aria-label="Next slide">→</button></div>
+    </footer>
+
+    <aside class="menu" id="menu" aria-hidden="true">
+      <div class="menu-head"><strong>Review path</strong><button id="menuClose" aria-label="Close slide menu">×</button></div>
+      <ol id="menuList"></ol>
+    </aside>
+    <button class="scrim" id="scrim" aria-label="Close slide menu"></button>
+  </main>
+
+  <script>
+    (() => {
+      const deck = document.getElementById('deck');
+      const slides = [...document.querySelectorAll('.slide')];
+      const titles = slides.map((slide) => slide.dataset.title || 'Untitled');
+      const menu = document.getElementById('menu');
+      const scrim = document.getElementById('scrim');
+      const menuOpen = document.getElementById('menuOpen');
+      const menuClose = document.getElementById('menuClose');
+      const menuList = document.getElementById('menuList');
+      const currentCount = document.getElementById('currentCount');
+      const totalCount = document.getElementById('totalCount');
+      const currentTitle = document.getElementById('currentTitle');
+      const progressBar = document.getElementById('progressBar');
+      const prev = document.getElementById('prev');
+      const next = document.getElementById('next');
+      const topbar = document.getElementById('topbar');
+      const footer = document.getElementById('footer');
+      const motionToggle = document.getElementById('motionToggle');
+      let index = 0;
+      let touchX = null;
+
+      totalCount.textContent = String(slides.length).padStart(2, '0');
+      titles.forEach((title, position) => {
+        const li = document.createElement('li');
+        const button = document.createElement('button');
+        button.type = 'button';
+        button.innerHTML = `<span>${String(position + 1).padStart(2, '0')}</span><strong>${title}</strong>`;
+        button.addEventListener('click', () => go(position));
+        li.appendChild(button);
+        menuList.appendChild(li);
+      });
+
+      const menuButtons = [...menuList.querySelectorAll('button')];
+      function setMenu(open) {
+        menu.classList.toggle('open', open);
+        scrim.classList.toggle('open', open);
+        menu.setAttribute('aria-hidden', String(!open));
+        menuOpen.setAttribute('aria-expanded', String(open));
+        if (open) menuClose.focus();
+      }
+      function go(nextIndex) {
+        index = Math.max(0, Math.min(slides.length - 1, nextIndex));
+        slides.forEach((slide, position) => {
+          const active = position === index;
+          slide.classList.toggle('active', active);
+          slide.setAttribute('aria-hidden', String(!active));
+          if (active) slide.scrollTop = 0;
+        });
+        menuButtons.forEach((button, position) => button.classList.toggle('active', position === index));
+        currentCount.textContent = String(index + 1).padStart(2, '0');
+        currentTitle.textContent = titles[index];
+        progressBar.style.width = `${((index + 1) / slides.length) * 100}%`;
+        prev.disabled = index === 0;
+        next.disabled = index === slides.length - 1;
+        const dark = slides[index].classList.contains('dark');
+        topbar.classList.toggle('over-dark', dark);
+        footer.classList.toggle('over-dark', dark);
+        setMenu(false);
+        history.replaceState(null, '', `#slide-${index + 1}`);
+      }
+      menuOpen.addEventListener('click', () => setMenu(true));
+      menuClose.addEventListener('click', () => setMenu(false));
+      scrim.addEventListener('click', () => setMenu(false));
+      prev.addEventListener('click', () => go(index - 1));
+      next.addEventListener('click', () => go(index + 1));
+      motionToggle.addEventListener('click', () => {
+        const reduced = deck.classList.toggle('reduce-motion');
+        motionToggle.textContent = reduced ? 'Motion off' : 'Motion on';
+        motionToggle.setAttribute('aria-pressed', String(reduced));
+      });
+      window.addEventListener('keydown', (event) => {
+        const interactive = ['SELECT', 'INPUT', 'BUTTON', 'A'].includes(event.target.tagName);
+        if ((event.key === 'ArrowRight' || event.key === 'PageDown' || event.key === ' ') && !interactive) { event.preventDefault(); go(index + 1); }
+        if ((event.key === 'ArrowLeft' || event.key === 'PageUp') && !interactive) { event.preventDefault(); go(index - 1); }
+        if (event.key === 'Home' && !interactive) go(0);
+        if (event.key === 'End' && !interactive) go(slides.length - 1);
+        if (event.key === 'Escape') setMenu(false);
+      });
+      deck.addEventListener('touchstart', (event) => { touchX = event.touches[0]?.clientX ?? null; }, { passive: true });
+      deck.addEventListener('touchend', (event) => {
+        if (touchX === null) return;
+        const delta = (event.changedTouches[0]?.clientX ?? touchX) - touchX;
+        if (Math.abs(delta) > 55) go(index + (delta < 0 ? 1 : -1));
+        touchX = null;
+      }, { passive: true });
+
+      const composition = document.getElementById('composition');
+      const upholstery = document.getElementById('upholstery');
+      const leg = document.getElementById('leg');
+      const part1 = document.getElementById('part1');
+      const part2 = document.getElementById('part2');
+      const part3 = document.getElementById('part3');
+      const part4 = document.getElementById('part4');
+      const pieceCount = document.getElementById('pieceCount');
+      const configWidth = document.getElementById('configWidth');
+      const configPrice = document.getElementById('configPrice');
+      const leadTime = document.getElementById('leadTime');
+      const validity = document.getElementById('validity');
+      const assemblyList = document.getElementById('assemblyList');
+      const configs = {
+        sofa: { pieces: 3, width: 102, base: 680000, names: ['Left arm', 'Armless seat', 'Right arm'] },
+        left: { pieces: 3, width: 118, base: 785000, names: ['Left chaise', 'Armless seat', 'Right arm'], chaise: 1 },
+        right: { pieces: 3, width: 118, base: 785000, names: ['Left arm', 'Armless seat', 'Right chaise'], chaise: 3 },
+        four: { pieces: 4, width: 136, base: 910000, names: ['Left arm', 'Armless seat × 2', 'Corner', 'Right arm'] }
+      };
+      const colors = { linen: '#ab8268', moss: '#67705b', leather: '#84533d' };
+      function renderConfiguration() {
+        const config = configs[composition.value];
+        const extra = Number(upholstery.selectedOptions[0].dataset.price || 0);
+        const parts = [part1, part2, part3, part4];
+        parts.forEach((part, partIndex) => {
+          part.classList.toggle('hidden', partIndex >= config.pieces);
+          part.classList.toggle('chaise', config.chaise === partIndex + 1);
+          part.style.setProperty('--sofa', colors[upholstery.value]);
+        });
+        pieceCount.textContent = String(config.pieces);
+        configWidth.textContent = `${config.width} in`;
+        configPrice.textContent = new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 0 }).format((config.base + extra) / 100);
+        leadTime.textContent = upholstery.value === 'leather' ? '14–16 wk' : '10–12 wk';
+        const steelLeather = leg.value === 'steel' && upholstery.value === 'leather';
+        validity.textContent = steelLeather ? 'REVIEW · steel base adds 2 weeks to leather' : `VALID · ${config.pieces} sellable components resolved`;
+        validity.classList.toggle('warn', steelLeather);
+        if (steelLeather) leadTime.textContent = '16–18 wk';
+        assemblyList.innerHTML = config.names.map((name) => `<span>1 × ${name}</span>`).join('');
+      }
+      [composition, upholstery, leg].forEach((control) => control.addEventListener('change', renderConfiguration));
+      renderConfiguration();
+
+      const hashSlide = Number(location.hash.replace('#slide-', ''));
+      go(Number.isFinite(hashSlide) && hashSlide > 0 ? hashSlide - 1 : 0);
+    })();
+  </script>
+</body>
+</html>
