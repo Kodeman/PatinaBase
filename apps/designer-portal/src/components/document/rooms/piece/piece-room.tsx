@@ -12,6 +12,7 @@
  */
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useSearchParams } from "next/navigation";
 import {
   useProduct,
   useUserWithRoles,
@@ -20,8 +21,10 @@ import {
   useCaptureFromUrl,
   useEvaluateProductConfiguration,
   useProductConfigurationDefinition,
+  useProductConfiguration,
   useSavedProductConfigurations,
   useSaveProductConfiguration,
+  useReviseProjectFFEConfiguration,
   useUpsertProductConfigurationDefinition,
 } from "@patina/supabase";
 import type { ProductConfigurationMode } from "@patina/types";
@@ -201,6 +204,7 @@ function firstIncompletePieceFacet(
 }
 
 export function PieceRoom({ productId }: { productId: string }) {
+  const searchParams = useSearchParams();
   const hydrated = useHydrated();
   const { data, isLoading, error, refetch } = useProduct(productId);
   const { user, isSuperAdmin } = useUserWithRoles();
@@ -212,6 +216,20 @@ export function PieceRoom({ productId }: { productId: string }) {
     useUpsertProductConfigurationDefinition(productId);
   const evaluateConfiguration = useEvaluateProductConfiguration();
   const saveConfiguration = useSaveProductConfiguration();
+  const reviseProjectConfiguration = useReviseProjectFFEConfiguration();
+  const revisionContext = useMemo(() => {
+    const projectId = searchParams.get("projectId");
+    const ffeItemId = searchParams.get("ffeItemId");
+    const configurationId = searchParams.get("configurationId");
+    const snapshotHash = searchParams.get("snapshotHash");
+    if (!projectId || !ffeItemId || !configurationId || !snapshotHash) {
+      return null;
+    }
+    return { projectId, ffeItemId, configurationId, snapshotHash };
+  }, [searchParams]);
+  const revisionConfiguration = useProductConfiguration(
+    revisionContext?.configurationId,
+  );
 
   const p = data as PieceProduct | undefined;
   const configurationPiece = useMemo(
@@ -226,13 +244,22 @@ export function PieceRoom({ productId }: { productId: string }) {
       ),
     [configurationDefinition.data, configurationPiece],
   );
-  const savedConfigurationViews = useMemo(
-    () =>
-      (savedConfigurations.data ?? []).map((saved) =>
-        savedConfigurationToView(saved, configurationDefinition.data?.revision),
-      ),
-    [configurationDefinition.data?.revision, savedConfigurations.data],
-  );
+  const savedConfigurationViews = useMemo(() => {
+    const saved = [...(savedConfigurations.data ?? [])];
+    if (
+      revisionConfiguration.data &&
+      !saved.some((item) => item.id === revisionConfiguration.data?.id)
+    ) {
+      saved.push(revisionConfiguration.data);
+    }
+    return saved.map((item) =>
+      savedConfigurationToView(item, configurationDefinition.data?.revision),
+    );
+  }, [
+    configurationDefinition.data?.revision,
+    revisionConfiguration.data,
+    savedConfigurations.data,
+  ]);
   const layer = (p?.layer ?? "personal") as Layer;
 
   // Only non-guest memberships may write a studio row (matches the
@@ -380,22 +407,53 @@ export function PieceRoom({ productId }: { productId: string }) {
       draft: SaveConfigurationDraft,
       current?: SavedConfigurationReference | null,
     ) => {
+      const revising = revisionContext !== null;
+      const currentConfiguration = revising ? revisionConfiguration.data : null;
+      if (revising && !currentConfiguration) {
+        throw new Error(
+          "The project configuration is no longer available. Return to the spec book and reopen it.",
+        );
+      }
       const result = await saveConfiguration.mutateAsync(
         configurationDraftToSaveInput({
           piece: configurationPiece,
           definition: configurationView,
           draft,
-          configurationId: current?.id,
-          expectedVersion: current?.version,
+          configurationId: revising ? undefined : current?.id,
+          expectedVersion: revising ? undefined : current?.version,
+          projectId: revisionContext?.projectId,
+          ffeItemId: revisionContext?.ffeItemId,
         }),
       );
-      setToast("Configuration saved with its current maker-rule result.");
+      if (revisionContext && currentConfiguration) {
+        await reviseProjectConfiguration.mutateAsync({
+          projectId: revisionContext.projectId,
+          ffeItemId: revisionContext.ffeItemId,
+          expectedConfigurationId: currentConfiguration.id,
+          expectedConfigurationVersion: currentConfiguration.version,
+          expectedSnapshotHash: revisionContext.snapshotHash,
+          newConfigurationId: result.configuration.id,
+          expectedNewVersion: result.configuration.version,
+        });
+        setToast(
+          "Project specification revised. Approval is required again before ordering.",
+        );
+      } else {
+        setToast("Configuration saved with its current maker-rule result.");
+      }
       return {
         id: result.configuration.id,
         version: result.configuration.version,
       };
     },
-    [configurationPiece, configurationView, saveConfiguration],
+    [
+      configurationPiece,
+      configurationView,
+      reviseProjectConfiguration,
+      revisionConfiguration.data,
+      revisionContext,
+      saveConfiguration,
+    ],
   );
 
   const openPlacement = useCallback((configurationId: string | null) => {
@@ -665,9 +723,13 @@ export function PieceRoom({ productId }: { productId: string }) {
           definitionLoading={configurationDefinition.isLoading}
           evaluating={evaluateConfiguration.isPending}
           savingDefinition={upsertConfigurationDefinition.isPending}
-          savingConfiguration={saveConfiguration.isPending}
+          savingConfiguration={
+            saveConfiguration.isPending || reviseProjectConfiguration.isPending
+          }
           authoritativeResolution={authoritativeConfiguration}
           savedConfigurations={savedConfigurationViews}
+          initialSavedConfigurationId={revisionContext?.configurationId}
+          revisionMode={revisionContext !== null}
           onDefinitionChange={() => setAuthoritativeConfiguration(null)}
           onSaveDefinition={canEdit ? saveDefinition : undefined}
           onEvaluate={evaluateSelection}

@@ -455,4 +455,199 @@ describe("PieceConfigurationWorkspace", () => {
       ),
     );
   });
+
+  it("surfaces and removes discontinued choices during source-drift repair", async () => {
+    const configuredPiece: FlatPieceConfigurationSource = {
+      ...bed,
+      id: "sectional-1",
+      configurationMode: "configured",
+    };
+    const configuredDefinition: PieceConfigurationDefinitionView = {
+      productId: configuredPiece.id,
+      mode: "configured",
+      revision: 4,
+      optionGroups: [
+        {
+          id: "size",
+          name: "Size",
+          required: true,
+          values: [
+            { id: "queen", label: "Queen", active: false },
+            { id: "king", label: "King", active: true },
+          ],
+        },
+      ],
+      variants: [],
+      components: [
+        {
+          id: "chaise",
+          name: "Chaise end",
+          active: false,
+          minQuantity: 1,
+          maxQuantity: 1,
+          defaultQuantity: 0,
+          handedness: "none",
+        },
+      ],
+      rules: [],
+    };
+    const onSaveConfiguration = jest
+      .fn()
+      .mockResolvedValue({ id: "repaired-configuration", version: 2 });
+
+    render(
+      <PieceConfigurationWorkspace
+        piece={configuredPiece}
+        definition={configuredDefinition}
+        readOnly
+        savedConfigurations={[
+          {
+            id: "stale-configuration",
+            name: "Discontinued composition",
+            version: 1,
+            status: "saved",
+            sourceChanged: true,
+            selection: {
+              optionValueIds: ["queen"],
+              components: [
+                { componentId: "chaise", quantity: 1, handedness: null },
+              ],
+            },
+          },
+        ]}
+        onSaveConfiguration={onSaveConfiguration}
+        onPlace={jest.fn()}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "Load" }));
+    expect(
+      screen.getAllByText("No longer offered · remove or replace"),
+    ).toHaveLength(2);
+    fireEvent.click(screen.getByRole("radio", { name: /King/i }));
+    fireEvent.click(
+      screen.getByRole("button", { name: "Remove one Chaise end" }),
+    );
+    fireEvent.click(screen.getByRole("button", { name: "Save changes" }));
+
+    await waitFor(() =>
+      expect(onSaveConfiguration).toHaveBeenCalledWith(
+        expect.objectContaining({
+          selection: {
+            optionValueIds: ["king"],
+            components: [
+              { componentId: "chaise", quantity: 0, handedness: null },
+            ],
+          },
+        }),
+        expect.objectContaining({ id: "stale-configuration", version: 1 }),
+      ),
+    );
+  });
+
+  it("versions an edited saved choice before placing the visible snapshot", async () => {
+    const onSaveConfiguration = jest
+      .fn()
+      .mockResolvedValue({ id: "saved-bed-v6", version: 6 });
+    const onPlace = jest.fn().mockResolvedValue(undefined);
+
+    render(
+      <PieceConfigurationWorkspace
+        piece={bed}
+        definition={bedDefinition}
+        readOnly
+        savedConfigurations={[
+          {
+            id: "saved-bed-v5",
+            name: "Primary bedroom",
+            version: 5,
+            status: "saved",
+            selection: { optionValueIds: ["queen"], components: [] },
+          },
+        ]}
+        authoritativeResolution={authoritative({
+          optionValueIds: ["king"],
+          components: [],
+        })}
+        onSaveConfiguration={onSaveConfiguration}
+        onPlace={onPlace}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "Load" }));
+    fireEvent.click(screen.getByRole("radio", { name: /King/i }));
+    fireEvent.click(
+      screen.getByRole("button", { name: "Add configured piece" }),
+    );
+
+    await waitFor(() =>
+      expect(onSaveConfiguration).toHaveBeenCalledWith(
+        expect.objectContaining({
+          selection: { optionValueIds: ["king"], components: [] },
+        }),
+        { id: "saved-bed-v5", version: 5, sourceChanged: undefined },
+      ),
+    );
+    await waitFor(() =>
+      expect(onPlace).toHaveBeenCalledWith(
+        "saved-bed-v6",
+        expect.any(Object),
+        expect.any(Object),
+      ),
+    );
+    expect(onPlace).not.toHaveBeenCalledWith(
+      "saved-bed-v5",
+      expect.anything(),
+      expect.anything(),
+    );
+  });
+
+  it("applies an existing project-line revision without opening new placement", async () => {
+    const onSaveConfiguration = jest
+      .fn()
+      .mockResolvedValue({ id: "project-config-v2", version: 1 });
+    const onPlace = jest.fn();
+    const selection = { optionValueIds: ["queen"], components: [] };
+
+    render(
+      <PieceConfigurationWorkspace
+        piece={bed}
+        definition={bedDefinition}
+        readOnly
+        revisionMode
+        initialSavedConfigurationId="project-config-v1"
+        savedConfigurations={[
+          {
+            id: "project-config-v1",
+            name: "Primary bedroom",
+            version: 4,
+            status: "approved",
+            sourceChanged: true,
+            selection,
+          },
+        ]}
+        authoritativeResolution={authoritative(selection)}
+        onSaveConfiguration={onSaveConfiguration}
+        onPlace={onPlace}
+      />,
+    );
+
+    const apply = await screen.findByRole("button", {
+      name: "Apply project revision",
+    });
+    await waitFor(() => expect(apply).toBeEnabled());
+    fireEvent.click(apply);
+
+    await waitFor(() =>
+      expect(onSaveConfiguration).toHaveBeenCalledWith(
+        expect.objectContaining({ selection }),
+        {
+          id: "project-config-v1",
+          version: 4,
+          sourceChanged: true,
+        },
+      ),
+    );
+    expect(onPlace).not.toHaveBeenCalled();
+  });
 });

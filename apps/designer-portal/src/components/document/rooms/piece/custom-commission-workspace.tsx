@@ -6,6 +6,11 @@ import { DocumentAction, DocumentActionGroup } from "../../document-action";
 import { RoomSheet } from "../room-sheet";
 import { ConfigurationSnapshotCard } from "@/components/document/configuration-snapshot-card";
 import {
+  CustomCommissionFulfillment,
+  type CommissionMilestoneView,
+  type RecordCommissionMilestoneDraft,
+} from "./custom-commission-fulfillment";
+import {
   EMPTY_COMMISSION_BRIEF,
   canEditCommissionRevision,
   canIssueCommission,
@@ -82,6 +87,12 @@ export interface CustomCommissionWorkspaceProps {
   ) => Promise<void>;
   onPromote: (configurationId: string) => Promise<void>;
   onStartNewCommission: () => void;
+  onActiveRevisionChange?: (
+    revision: CommissionWorkspaceRevision | null,
+  ) => void;
+  fulfillmentMilestones?: CommissionMilestoneView[];
+  fulfillmentReady?: boolean;
+  onRecordMilestone?: (draft: RecordCommissionMilestoneDraft) => Promise<void>;
 }
 
 function FieldLabel({
@@ -193,6 +204,10 @@ export function CustomCommissionWorkspace({
   onPlaceApproved,
   onPromote,
   onStartNewCommission,
+  onActiveRevisionChange,
+  fulfillmentMilestones = [],
+  fulfillmentReady = false,
+  onRecordMilestone,
 }: CustomCommissionWorkspaceProps) {
   const orderedRevisions = useMemo(
     () => [...revisions].sort((a, b) => b.revisionNumber - a.revisionNumber),
@@ -214,6 +229,10 @@ export function CustomCommissionWorkspace({
   const [feedback, setFeedback] = useState<string | null>(null);
   const [transitionNote, setTransitionNote] = useState("");
   const firstProjectId = projects[0]?.id;
+
+  useEffect(() => {
+    onActiveRevisionChange?.(active);
+  }, [active, onActiveRevisionChange]);
 
   useEffect(() => {
     if (!open) return;
@@ -856,6 +875,15 @@ export function CustomCommissionWorkspace({
             )}
           </aside>
         </div>
+      )}
+
+      {status === "issued" && onRecordMilestone && (
+        <CustomCommissionFulfillment
+          milestones={fulfillmentMilestones}
+          isReady={fulfillmentReady}
+          isBusy={isBusy}
+          onRecord={onRecordMilestone}
+        />
       )}
 
       <footer className="sticky bottom-0 -mx-6 border-t border-[var(--color-pearl)] bg-[var(--doc-paper)] px-6 py-3 sm:-mx-9 sm:px-9">

@@ -346,6 +346,20 @@ function SelectionEditor({
     ["exact_location", "Exact location"],
   ] as const;
   const configuration = extractConfigurationSnapshotEnvelope(item.spec);
+  const configurationSnapshot =
+    configuration?.snapshot && typeof configuration.snapshot === "object"
+      ? (configuration.snapshot as Record<string, unknown>)
+      : null;
+  const isCustomConfiguration =
+    configurationSnapshot?.configurationMode === "custom";
+  const revisionClosed =
+    Boolean(item.purchase_order_id) ||
+    ["ordered", "production", "shipped", "delivered", "installed"].includes(
+      item.status,
+    ) ||
+    isCustomConfiguration;
+  const canReviseConfiguration =
+    Boolean(configuration?.hash) && !revisionClosed;
 
   return (
     <div>
@@ -382,6 +396,27 @@ function SelectionEditor({
             lockedAt={configuration.lockedAt}
             label="Project configuration"
           />
+          {item.product_id && configuration.configurationId && (
+            <div className="mt-3 flex flex-wrap items-center justify-between gap-2 border-t border-[var(--color-pearl)] pt-3">
+              <p className="text-[10px] text-[var(--text-muted)]">
+                {revisionClosed
+                  ? "Ordered and custom promises stay intact; changes begin on a new project line."
+                  : "A replacement creates a new snapshot and returns this line to approval."}
+              </p>
+              <Link
+                href={
+                  !canReviseConfiguration
+                    ? `/library/${item.product_id}`
+                    : `/library/${item.product_id}?projectId=${encodeURIComponent(item.project_id)}&ffeItemId=${encodeURIComponent(item.id)}&configurationId=${encodeURIComponent(configuration.configurationId)}&snapshotHash=${encodeURIComponent(configuration.hash ?? "")}`
+                }
+                className="font-mono text-[9px] uppercase tracking-[0.08em] text-[var(--color-clay)] underline-offset-4 hover:underline"
+              >
+                {!canReviseConfiguration
+                  ? "View source piece"
+                  : "Review or revise configuration"}
+              </Link>
+            </div>
+          )}
         </div>
       )}
 
@@ -892,7 +927,9 @@ export function SpecBookWorkspace({ projectId }: { projectId: string }) {
         label: `${artifact.audience} spec book`,
         expiresAt: null,
       });
-      const clientPortalBase = resolveClientPortalOrigin(window.location.origin);
+      const clientPortalBase = resolveClientPortalOrigin(
+        window.location.origin,
+      );
       const url = `${clientPortalBase}/field/spec-book/${result.token}`;
       setShareResult({ artifactId: artifact.id, url });
       specBookEvents.shareCreated({

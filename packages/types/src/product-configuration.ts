@@ -283,6 +283,58 @@ export interface CustomCommissionRevision {
   updatedAt: string;
 }
 
+export type CustomCommissionMilestoneType =
+  | 'submittal'
+  | 'receiving'
+  | 'installed';
+
+export type CustomCommissionMilestoneStatus =
+  | 'pending'
+  | 'approved'
+  | 'received'
+  | 'installed'
+  | 'rejected';
+
+export interface CustomCommissionMilestoneEvent {
+  id: UUID;
+  eventNumber: number;
+  fromStatus?: CustomCommissionMilestoneStatus | null;
+  toStatus: CustomCommissionMilestoneStatus;
+  evidence: Record<string, unknown>;
+  artifacts: CustomCommissionAttachment[];
+  note?: string | null;
+  actorId?: UUID | null;
+  createdAt: string;
+}
+
+export interface CustomCommissionMilestone {
+  id: UUID;
+  configurationId: UUID;
+  revisionId: UUID;
+  projectId: UUID;
+  milestoneType: CustomCommissionMilestoneType;
+  status: CustomCommissionMilestoneStatus;
+  evidence: Record<string, unknown>;
+  artifacts: CustomCommissionAttachment[];
+  createdBy?: UUID | null;
+  completedBy?: UUID | null;
+  completedAt?: string | null;
+  createdAt: string;
+  updatedAt: string;
+  sourceChanged: boolean;
+  currentSchemaRevision: number;
+  events: CustomCommissionMilestoneEvent[];
+}
+
+export interface RecordCustomCommissionMilestoneInput {
+  configurationId: UUID;
+  milestoneType: CustomCommissionMilestoneType;
+  status: CustomCommissionMilestoneStatus;
+  evidence: Record<string, unknown>;
+  artifacts?: CustomCommissionAttachment[];
+  note?: string;
+}
+
 export interface SavedProductConfiguration {
   id: UUID;
   configurationKey: UUID;
@@ -295,6 +347,8 @@ export interface SavedProductConfiguration {
   studioId?: UUID | null;
   version: number;
   schemaRevision: number;
+  currentSchemaRevision?: number;
+  sourceChanged?: boolean;
   status: 'saved' | 'approved' | 'issued' | 'superseded' | 'archived';
   name?: string | null;
   notes?: string | null;
@@ -346,6 +400,33 @@ export interface PlaceProductConfigurationInput {
   slotId?: UUID;
   category?: string;
   source?: Record<string, unknown>;
+}
+
+export interface InstantiateProductConfigurationTemplateInput {
+  templateConfigurationId: UUID;
+  projectId: UUID;
+  name?: string;
+}
+
+export interface ReviseProjectFFEConfigurationInput {
+  projectId: UUID;
+  ffeItemId: UUID;
+  expectedConfigurationId: UUID;
+  expectedConfigurationVersion: number;
+  expectedSnapshotHash: string;
+  newConfigurationId: UUID;
+  expectedNewVersion: number;
+}
+
+export interface ReviseProjectFFEConfigurationResult {
+  projectId: UUID;
+  ffeItemId: UUID;
+  specId: UUID;
+  configurationId: UUID;
+  configurationVersion: number;
+  configurationSnapshotHash: string;
+  status: 'specified';
+  requiresApproval: true;
 }
 
 export interface UpsertProductConfigurationDefinitionInput {

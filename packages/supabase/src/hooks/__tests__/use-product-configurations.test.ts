@@ -14,8 +14,13 @@ vi.mock("@tanstack/react-query", () => ({
 
 import {
   useEvaluateProductConfiguration,
+  useInstantiateProductConfigurationTemplate,
+  useCustomCommissionMilestones,
   usePrepareConfigurationQuoteRequest,
   usePlaceProductConfiguration,
+  useProductConfiguration,
+  useReviseProjectFFEConfiguration,
+  useRecordCustomCommissionMilestone,
   useSaveProductConfiguration,
   useUpsertProductConfigurationDefinition,
 } from "../use-product-configurations";
@@ -26,6 +31,23 @@ beforeEach(() => {
 });
 
 describe("product configuration RPC hooks", () => {
+  it("loads the exact configuration version pinned to a project line", async () => {
+    const pinned = {
+      id: "configuration-v2",
+      configurationKey: "lineage-1",
+      version: 2,
+      status: "superseded",
+    };
+    rpc.mockResolvedValue({ data: pinned, error: null });
+    const query = useProductConfiguration("configuration-v2") as any;
+
+    await expect(query.queryFn()).resolves.toEqual(pinned);
+    expect(query.enabled).toBe(true);
+    expect(rpc).toHaveBeenCalledWith("get_product_configuration", {
+      p_configuration_id: "configuration-v2",
+    });
+  });
+
   it("authors the whole definition with optimistic concurrency", async () => {
     const definition = {
       productId: "product-1",
@@ -175,5 +197,119 @@ describe("product configuration RPC hooks", () => {
         ["procurement-items"],
       ]),
     );
+  });
+
+  it("instantiates a reusable template into an explicit project", async () => {
+    const result = {
+      configuration: {
+        id: "configuration-2",
+        productId: "cabinet-1",
+        projectId: "project-1",
+      },
+      templateConfigurationId: "template-1",
+      customRevision: { id: "revision-1" },
+    };
+    rpc.mockResolvedValue({ data: result, error: null });
+    const mutation = useInstantiateProductConfigurationTemplate() as any;
+
+    await expect(
+      mutation.mutationFn({
+        templateConfigurationId: "template-1",
+        projectId: "project-1",
+        name: "Library wall cabinetry",
+      }),
+    ).resolves.toEqual(result);
+    expect(rpc).toHaveBeenCalledWith(
+      "instantiate_product_configuration_template",
+      {
+        p_template_configuration_id: "template-1",
+        p_project_id: "project-1",
+        p_name: "Library wall cabinetry",
+      },
+    );
+  });
+
+  it("replaces an un-ordered project snapshot with optimistic concurrency", async () => {
+    const result = {
+      projectId: "project-1",
+      ffeItemId: "ffe-1",
+      specId: "spec-1",
+      configurationId: "configuration-2",
+      configurationVersion: 1,
+      configurationSnapshotHash: "b".repeat(64),
+      status: "specified",
+      requiresApproval: true,
+    };
+    rpc.mockResolvedValue({ data: result, error: null });
+    const mutation = useReviseProjectFFEConfiguration() as any;
+    const input = {
+      projectId: "project-1",
+      ffeItemId: "ffe-1",
+      expectedConfigurationId: "configuration-1",
+      expectedConfigurationVersion: 4,
+      expectedSnapshotHash: "a".repeat(64),
+      newConfigurationId: "configuration-2",
+      expectedNewVersion: 1,
+    };
+
+    await expect(mutation.mutationFn(input)).resolves.toEqual(result);
+    expect(rpc).toHaveBeenCalledWith("revise_project_ffe_configuration", {
+      p_project_id: "project-1",
+      p_ffe_item_id: "ffe-1",
+      p_expected_configuration_id: "configuration-1",
+      p_expected_configuration_version: 4,
+      p_expected_snapshot_hash: "a".repeat(64),
+      p_new_configuration_id: "configuration-2",
+      p_expected_new_version: 1,
+    });
+
+    await mutation.onSuccess(result);
+    const invalidatedKeys = invalidateQueries.mock.calls.map(
+      ([value]) => value.queryKey,
+    );
+    expect(invalidatedKeys).toEqual(
+      expect.arrayContaining([
+        ["project-ffe-items", "project-1"],
+        ["spec-books", "workbench", "project-1"],
+        ["procurement-items"],
+      ]),
+    );
+  });
+
+  it("lists and appends custom fulfillment evidence through dedicated RPCs", async () => {
+    const query = useCustomCommissionMilestones("configuration-1") as any;
+    rpc.mockResolvedValueOnce({ data: [], error: null });
+    await expect(query.queryFn()).resolves.toEqual([]);
+    expect(rpc).toHaveBeenCalledWith("list_custom_commission_milestones", {
+      p_configuration_id: "configuration-1",
+    });
+
+    const milestone = {
+      id: "milestone-1",
+      configurationId: "configuration-1",
+      projectId: "project-1",
+      milestoneType: "receiving",
+      status: "received",
+      events: [{ eventNumber: 1 }],
+    };
+    rpc.mockResolvedValueOnce({ data: milestone, error: null });
+    const mutation = useRecordCustomCommissionMilestone() as any;
+    const input = {
+      configurationId: "configuration-1",
+      milestoneType: "receiving",
+      status: "received",
+      evidence: { note: "Two crates verified" },
+      artifacts: [{ name: "photo.jpg", url: "/photo.jpg" }],
+      note: "Received without damage",
+    };
+    await expect(mutation.mutationFn(input)).resolves.toEqual(milestone);
+    expect(rpc).toHaveBeenCalledWith("record_custom_commission_milestone", {
+      p_configuration_id: "configuration-1",
+      p_milestone_type: "receiving",
+      p_status: "received",
+      p_evidence: { note: "Two crates verified" },
+      p_artifacts: [{ name: "photo.jpg", url: "/photo.jpg" }],
+      p_note: "Received without damage",
+    });
   });
 });

@@ -3,7 +3,9 @@ import type {
   ApproveProductConfigurationInput,
   CreateCustomCommissionRevisionInput,
   CustomCommissionRevision,
+  CustomCommissionMilestone,
   EvaluateProductConfigurationInput,
+  InstantiateProductConfigurationTemplateInput,
   PlaceProductConfigurationInput,
   PrepareConfigurationQuoteRequestInput,
   PreparedConfigurationQuoteRequest,
@@ -11,6 +13,9 @@ import type {
   ProductConfigurationEvaluation,
   ProductConfigurationMutationResult,
   PromoteConfigurationToLibraryInput,
+  RecordCustomCommissionMilestoneInput,
+  ReviseProjectFFEConfigurationInput,
+  ReviseProjectFFEConfigurationResult,
   SavedProductConfiguration,
   SaveProductConfigurationInput,
   TransitionCustomCommissionRevisionInput,
@@ -35,6 +40,8 @@ export const productConfigurationKeys = {
     ["product-configurations", "detail", configurationId] as const,
   customRevisions: (configurationId: string) =>
     ["product-configurations", "custom-revisions", configurationId] as const,
+  customMilestones: (configurationId: string) =>
+    ["product-configurations", "custom-milestones", configurationId] as const,
 };
 
 function throwOnError<T>(result: { data: T | null; error: unknown }): T {
@@ -70,6 +77,19 @@ export function useSavedProductConfigurations(
         await getSupabase().rpc("list_product_configurations", {
           p_product_id: productId,
           p_project_id: projectId ?? null,
+        }),
+      ),
+  });
+}
+
+export function useProductConfiguration(configurationId?: string | null) {
+  return useQuery<SavedProductConfiguration>({
+    queryKey: productConfigurationKeys.detail(configurationId ?? ""),
+    enabled: Boolean(configurationId),
+    queryFn: async () =>
+      throwOnError<SavedProductConfiguration>(
+        await getSupabase().rpc("get_product_configuration", {
+          p_configuration_id: configurationId,
         }),
       ),
   });
@@ -201,6 +221,33 @@ export function usePromoteConfigurationToLibrary() {
   });
 }
 
+export function useInstantiateProductConfigurationTemplate() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    retry: false,
+    mutationFn: async (input: InstantiateProductConfigurationTemplateInput) =>
+      throwOnError<ProductConfigurationMutationResult>(
+        await getSupabase().rpc("instantiate_product_configuration_template", {
+          p_template_configuration_id: input.templateConfigurationId,
+          p_project_id: input.projectId,
+          p_name: input.name ?? null,
+        }),
+      ),
+    onSuccess: async (result: ProductConfigurationMutationResult) => {
+      await Promise.all([
+        queryClient.invalidateQueries({
+          queryKey: productConfigurationKeys.savedPrefix(
+            result.configuration.productId,
+          ),
+        }),
+        queryClient.invalidateQueries({
+          queryKey: ["project", result.configuration.projectId],
+        }),
+      ]);
+    },
+  });
+}
+
 export function useCustomCommissionRevisions(configurationId?: string | null) {
   return useQuery<CustomCommissionRevision[]>({
     queryKey: productConfigurationKeys.customRevisions(configurationId ?? ""),
@@ -211,6 +258,53 @@ export function useCustomCommissionRevisions(configurationId?: string | null) {
           p_configuration_id: configurationId,
         }),
       ),
+  });
+}
+
+export function useCustomCommissionMilestones(configurationId?: string | null) {
+  return useQuery<CustomCommissionMilestone[]>({
+    queryKey: productConfigurationKeys.customMilestones(configurationId ?? ""),
+    enabled: Boolean(configurationId),
+    queryFn: async () =>
+      throwOnError<CustomCommissionMilestone[]>(
+        await getSupabase().rpc("list_custom_commission_milestones", {
+          p_configuration_id: configurationId,
+        }),
+      ),
+  });
+}
+
+export function useRecordCustomCommissionMilestone() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    retry: false,
+    mutationFn: async (input: RecordCustomCommissionMilestoneInput) =>
+      throwOnError<CustomCommissionMilestone>(
+        await getSupabase().rpc("record_custom_commission_milestone", {
+          p_configuration_id: input.configurationId,
+          p_milestone_type: input.milestoneType,
+          p_status: input.status,
+          p_evidence: input.evidence,
+          p_artifacts: input.artifacts ?? [],
+          p_note: input.note ?? null,
+        }),
+      ),
+    onSuccess: async (milestone: CustomCommissionMilestone) => {
+      await Promise.all([
+        queryClient.invalidateQueries({
+          queryKey: productConfigurationKeys.customMilestones(
+            milestone.configurationId,
+          ),
+        }),
+        queryClient.invalidateQueries({
+          queryKey: ["project-ffe-items", milestone.projectId],
+        }),
+        queryClient.invalidateQueries({
+          queryKey: ["spec-books", "workbench", milestone.projectId],
+        }),
+        queryClient.invalidateQueries({ queryKey: ["procurement-items"] }),
+      ]);
+    },
   });
 }
 
@@ -341,6 +435,46 @@ export function usePlaceProductConfiguration() {
         }),
         queryClient.invalidateQueries({
           queryKey: productConfigurationKeys.savedPrefix(result.productId),
+        }),
+      ]);
+    },
+  });
+}
+
+export function useReviseProjectFFEConfiguration() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    retry: false,
+    mutationFn: async (input: ReviseProjectFFEConfigurationInput) =>
+      throwOnError<ReviseProjectFFEConfigurationResult>(
+        await getSupabase().rpc("revise_project_ffe_configuration", {
+          p_project_id: input.projectId,
+          p_ffe_item_id: input.ffeItemId,
+          p_expected_configuration_id: input.expectedConfigurationId,
+          p_expected_configuration_version: input.expectedConfigurationVersion,
+          p_expected_snapshot_hash: input.expectedSnapshotHash,
+          p_new_configuration_id: input.newConfigurationId,
+          p_expected_new_version: input.expectedNewVersion,
+        }),
+      ),
+    onSuccess: async (result: ReviseProjectFFEConfigurationResult) => {
+      await Promise.all([
+        queryClient.invalidateQueries({
+          queryKey: ["project-ffe-items", result.projectId],
+        }),
+        queryClient.invalidateQueries({
+          queryKey: ["project", result.projectId],
+        }),
+        queryClient.invalidateQueries({ queryKey: ["projects"] }),
+        queryClient.invalidateQueries({
+          queryKey: ["projects", result.projectId],
+        }),
+        queryClient.invalidateQueries({ queryKey: ["procurement-items"] }),
+        queryClient.invalidateQueries({
+          queryKey: ["spec-books", "workbench", result.projectId],
+        }),
+        queryClient.invalidateQueries({
+          queryKey: productConfigurationKeys.detail(result.configurationId),
         }),
       ]);
     },

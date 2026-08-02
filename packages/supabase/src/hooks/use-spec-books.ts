@@ -125,7 +125,9 @@ export interface SpecBookWorkItem {
   name: string | null;
   document_code: string | null;
   item_type: "fixed" | "allowance" | "tbd" | string;
+  status: string;
   quantity: number | null;
+  purchase_order_id: string | null;
   image_url: string | null;
   vendor_name: string | null;
   sku: string | null;

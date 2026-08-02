@@ -36,6 +36,7 @@ export interface SavedConfigurationView {
   name: string;
   version: number;
   status: string;
+  isLibraryTemplate?: boolean;
   sourceChanged?: boolean;
   selection?: PieceConfigurationSelectionView;
 }
@@ -63,6 +64,8 @@ export function PieceConfigurationWorkspace({
   savingConfiguration = false,
   authoritativeResolution = null,
   savedConfigurations = [],
+  initialSavedConfigurationId = null,
+  revisionMode = false,
   onDefinitionChange,
   onSaveDefinition,
   onEvaluate,
@@ -80,6 +83,8 @@ export function PieceConfigurationWorkspace({
   savingConfiguration?: boolean;
   authoritativeResolution?: AuthoritativeConfigurationResolution | null;
   savedConfigurations?: SavedConfigurationView[];
+  initialSavedConfigurationId?: string | null;
+  revisionMode?: boolean;
   onDefinitionChange?: (definition: PieceConfigurationDefinitionView) => void;
   onSaveDefinition?: (
     definition: PieceConfigurationDefinitionView,
@@ -114,9 +119,11 @@ export function PieceConfigurationWorkspace({
   const [saveError, setSaveError] = useState<string | null>(null);
   const [activeSavedConfiguration, setActiveSavedConfiguration] =
     useState<SavedConfigurationReference | null>(null);
+  const [configurationDirty, setConfigurationDirty] = useState(false);
   const [placing, setPlacing] = useState(false);
   const definitionRef = useRef(definition);
   const evaluateRef = useRef(onEvaluate);
+  const loadedInitialConfigurationRef = useRef<string | null>(null);
   definitionRef.current = definition;
   evaluateRef.current = onEvaluate;
 
@@ -126,8 +133,39 @@ export function PieceConfigurationWorkspace({
     setDraftDefinition(nextDefinition);
     setSelection(nextSelection);
     setActiveSavedConfiguration(null);
+    setConfigurationDirty(false);
+    loadedInitialConfigurationRef.current = null;
     evaluateRef.current?.(nextSelection);
   }, [definition.productId, definition.revision]);
+
+  useEffect(() => {
+    if (!initialSavedConfigurationId) {
+      loadedInitialConfigurationRef.current = null;
+      return;
+    }
+    if (loadedInitialConfigurationRef.current === initialSavedConfigurationId) {
+      return;
+    }
+    const item = savedConfigurations.find(
+      (candidate) => candidate.id === initialSavedConfigurationId,
+    );
+    if (!item?.selection) return;
+    loadedInitialConfigurationRef.current = initialSavedConfigurationId;
+    setSelection(item.selection);
+    setActiveSavedConfiguration({
+      id: item.id,
+      version: item.version,
+      sourceChanged: item.sourceChanged,
+    });
+    setSaveName(item.name);
+    setConfigurationDirty(false);
+    onEvaluate?.(item.selection);
+  }, [
+    definition.revision,
+    initialSavedConfigurationId,
+    onEvaluate,
+    savedConfigurations,
+  ]);
 
   const localResolution = useMemo(() => {
     const resolved = resolvePieceConfiguration({
@@ -166,7 +204,7 @@ export function PieceConfigurationWorkspace({
 
   const changeSelection = (next: PieceConfigurationSelectionView) => {
     setSelection(next);
-    setActiveSavedConfiguration(null);
+    setConfigurationDirty(true);
     onEvaluate?.(next);
   };
 
@@ -175,11 +213,7 @@ export function PieceConfigurationWorkspace({
       (candidate) => candidate.id === groupId,
     );
     if (!group) return;
-    const groupValueIds = new Set(
-      group.values
-        .filter((value) => value.active !== false)
-        .map((value) => value.id),
-    );
+    const groupValueIds = new Set(group.values.map((value) => value.id));
     const multiple = group.selectionType === "multiple";
     const alreadySelected = selection.optionValueIds.includes(valueId);
     changeSelection({
@@ -245,6 +279,7 @@ export function PieceConfigurationWorkspace({
               : 1),
           sourceChanged: false,
         });
+        setConfigurationDirty(false);
       }
       libraryConfigurationEvents.saved(piece.id, draftDefinition.mode);
       return savedId;
@@ -263,11 +298,21 @@ export function PieceConfigurationWorkspace({
     setPlacing(true);
     try {
       let savedConfigurationId = activeSavedConfiguration?.id ?? null;
+      if (revisionMode) {
+        savedConfigurationId = await save();
+        if (!savedConfigurationId) {
+          throw new Error("Save the revised specification before applying it.");
+        }
+        return;
+      }
       if (draftDefinition.mode === "custom" && onCustomCommission) {
         await onCustomCommission(savedConfigurationId);
         return;
       }
-      if (draftDefinition.mode !== "standard" && !savedConfigurationId) {
+      if (
+        draftDefinition.mode !== "standard" &&
+        (!savedConfigurationId || configurationDirty)
+      ) {
         savedConfigurationId = await save();
         if (!savedConfigurationId) {
           throw new Error(
@@ -304,7 +349,7 @@ export function PieceConfigurationWorkspace({
   const canPlace =
     effectiveResolution.complete &&
     effectiveResolution.valid &&
-    activeSavedConfiguration?.sourceChanged !== true &&
+    (revisionMode || activeSavedConfiguration?.sourceChanged !== true) &&
     (!requiresAuthoritative || freshAuthoritative?.complete === true) &&
     !evaluating;
   const unresolvedCount = effectiveResolution.errors.filter((error) =>
@@ -362,9 +407,18 @@ export function PieceConfigurationWorkspace({
           brief={customBrief}
           measurements={customMeasurements}
           siteNotes={customSiteNotes}
-          onBriefChange={setCustomBrief}
-          onMeasurementsChange={setCustomMeasurements}
-          onSiteNotesChange={setCustomSiteNotes}
+          onBriefChange={(value) => {
+            setCustomBrief(value);
+            setConfigurationDirty(true);
+          }}
+          onMeasurementsChange={(value) => {
+            setCustomMeasurements(value);
+            setConfigurationDirty(true);
+          }}
+          onSiteNotesChange={(value) => {
+            setCustomSiteNotes(value);
+            setConfigurationDirty(true);
+          }}
         />
       ) : (
         <div className="mt-7 grid gap-7 lg:grid-cols-[minmax(0,1fr)_310px]">
@@ -387,11 +441,16 @@ export function PieceConfigurationWorkspace({
                 </legend>
                 <div className="mt-2 grid gap-2 sm:grid-cols-2">
                   {group.values
-                    .filter((value) => value.active !== false)
+                    .filter(
+                      (value) =>
+                        value.active !== false ||
+                        selection.optionValueIds.includes(value.id),
+                    )
                     .map((value) => {
                       const selected = selection.optionValueIds.includes(
                         value.id,
                       );
+                      const unavailable = value.active === false;
                       const priceDelta = formatMoney(
                         value.retailPriceDeltaCents,
                       );
@@ -402,18 +461,28 @@ export function PieceConfigurationWorkspace({
                             selected
                               ? "border-[var(--color-clay)] bg-[rgba(196,165,123,0.1)]"
                               : "border-[var(--doc-ink-border)] bg-[var(--doc-sheet-2)] hover:border-[var(--color-aged-oak)]"
-                          }`}
+                          } ${unavailable ? "border-dashed opacity-70" : ""}`}
                         >
                           <input
                             type={
-                              group.selectionType === "multiple"
+                              unavailable || group.selectionType === "multiple"
                                 ? "checkbox"
                                 : "radio"
                             }
                             name={`configuration-${group.id}`}
                             value={value.id}
                             checked={selected}
-                            onChange={() => chooseValue(group.id, value.id)}
+                            onChange={() =>
+                              unavailable
+                                ? changeSelection({
+                                    ...selection,
+                                    optionValueIds:
+                                      selection.optionValueIds.filter(
+                                        (id) => id !== value.id,
+                                      ),
+                                  })
+                                : chooseValue(group.id, value.id)
+                            }
                             className="sr-only"
                           />
                           {value.swatch && (
@@ -429,6 +498,9 @@ export function PieceConfigurationWorkspace({
                             </span>
                             <span className="mt-0.5 block text-[0.68rem] text-[var(--color-quiet-ink)]">
                               {[
+                                unavailable
+                                  ? "No longer offered · remove or replace"
+                                  : null,
                                 value.sku ? `SKU ${value.sku}` : null,
                                 priceDelta
                                   ? `${(value.retailPriceDeltaCents ?? 0) >= 0 ? "+" : ""}${priceDelta}`
@@ -499,7 +571,10 @@ export function PieceConfigurationWorkspace({
               </span>
               <Input
                 value={saveName}
-                onChange={(event) => setSaveName(event.target.value)}
+                onChange={(event) => {
+                  setSaveName(event.target.value);
+                  setConfigurationDirty(true);
+                }}
                 placeholder="Living room · client-approved"
               />
             </label>
@@ -509,23 +584,27 @@ export function PieceConfigurationWorkspace({
               </span>
               <Input
                 value={notes}
-                onChange={(event) => setNotes(event.target.value)}
+                onChange={(event) => {
+                  setNotes(event.target.value);
+                  setConfigurationDirty(true);
+                }}
                 placeholder="COM or install notes"
               />
             </label>
           </div>
         )}
         <div className="flex flex-wrap items-end gap-2">
-          {!(draftDefinition.mode === "custom" && onCustomCommission) && (
-            <Button
-              variant="secondary"
-              loading={savingConfiguration}
-              disabled={!onSaveConfiguration}
-              onClick={() => void save()}
-            >
-              {activeSavedConfiguration ? "Save changes" : "Save for later"}
-            </Button>
-          )}
+          {!revisionMode &&
+            !(draftDefinition.mode === "custom" && onCustomCommission) && (
+              <Button
+                variant="secondary"
+                loading={savingConfiguration}
+                disabled={!onSaveConfiguration}
+                onClick={() => void save()}
+              >
+                {activeSavedConfiguration ? "Save changes" : "Save for later"}
+              </Button>
+            )}
           <Button
             disabled={!canPlace}
             loading={placing}
@@ -537,9 +616,11 @@ export function PieceConfigurationWorkspace({
               void place();
             }}
           >
-            {draftDefinition.mode === "custom"
-              ? "Start commission"
-              : "Add configured piece"}
+            {revisionMode
+              ? "Apply project revision"
+              : draftDefinition.mode === "custom"
+                ? "Start commission"
+                : "Add configured piece"}
           </Button>
         </div>
       </div>
@@ -564,6 +645,7 @@ export function PieceConfigurationWorkspace({
               sourceChanged: item.sourceChanged,
             });
             setSaveName(item.name);
+            setConfigurationDirty(false);
           }}
         />
       )}
@@ -579,6 +661,7 @@ export function PieceConfigurationWorkspace({
               onDefinitionChange?.(next);
               setSelection(nextSelection);
               setActiveSavedConfiguration(null);
+              setConfigurationDirty(false);
               onEvaluate?.(nextSelection);
             }}
             onSave={onSaveDefinition}
@@ -720,12 +803,22 @@ function ComponentComposer({
       </p>
       <div className="mt-2 space-y-2">
         {definition.components
-          .filter((component) => component.active !== false)
+          .filter(
+            (component) =>
+              component.active !== false ||
+              selection.components.some(
+                (selected) =>
+                  selected.componentId === component.id &&
+                  selected.quantity > 0,
+              ),
+          )
           .map((component) => {
             const selected = selection.components.find(
               (candidate) => candidate.componentId === component.id,
             );
             const quantity = selected?.quantity ?? 0;
+            const unavailable = component.active === false;
+            const minimumQuantity = unavailable ? 0 : component.minQuantity;
             return (
               <div
                 key={component.id}
@@ -737,6 +830,9 @@ function ComponentComposer({
                   </p>
                   <p className="mt-0.5 text-[0.68rem] text-[var(--color-quiet-ink)]">
                     {[
+                      unavailable
+                        ? "No longer offered · remove or replace"
+                        : null,
                       component.sku ? `SKU ${component.sku}` : null,
                       formatMoney(component.retailPriceCents),
                       component.leadTimeWeeks
@@ -773,10 +869,10 @@ function ComponentComposer({
                   <button
                     type="button"
                     aria-label={`Remove one ${component.name}`}
-                    disabled={quantity <= component.minQuantity}
+                    disabled={quantity <= minimumQuantity}
                     onClick={() =>
                       onChange(component.id, {
-                        quantity: Math.max(component.minQuantity, quantity - 1),
+                        quantity: Math.max(minimumQuantity, quantity - 1),
                       })
                     }
                     className="h-9 w-9 text-[1rem] text-[var(--color-charcoal)] disabled:opacity-30"
@@ -792,7 +888,7 @@ function ComponentComposer({
                   <button
                     type="button"
                     aria-label={`Add one ${component.name}`}
-                    disabled={quantity >= component.maxQuantity}
+                    disabled={unavailable || quantity >= component.maxQuantity}
                     onClick={() =>
                       onChange(component.id, {
                         quantity: Math.min(component.maxQuantity, quantity + 1),
@@ -980,6 +1076,7 @@ function SavedConfigurations({
               </span>
               <span className="doc-type-meta">
                 v{item.version} · {item.status}
+                {item.isLibraryTemplate ? " · Library family" : ""}
               </span>
               {item.sourceChanged && (
                 <span className="mt-0.5 block text-[0.66rem] font-medium text-[var(--color-terracotta)]">

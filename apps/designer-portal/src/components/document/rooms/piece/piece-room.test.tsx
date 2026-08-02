@@ -7,6 +7,10 @@ import {
 } from "@testing-library/react";
 import { PieceRoom } from "./piece-room";
 
+jest.mock("next/navigation", () => ({
+  useSearchParams: () => new URLSearchParams(),
+}));
+
 let mockProduct: Record<string, unknown>;
 
 const editablePiece = () => ({
@@ -63,6 +67,7 @@ jest.mock("@patina/supabase", () => ({
     },
     isLoading: false,
   }),
+  useProductConfiguration: () => ({ data: undefined, isLoading: false }),
   useSavedProductConfigurations: () => ({ data: [] }),
   useUpsertProductConfigurationDefinition: () => ({
     mutateAsync: jest.fn(),
@@ -105,6 +110,10 @@ jest.mock("@patina/supabase", () => ({
     isPending: false,
   }),
   useSaveProductConfiguration: () => ({
+    mutateAsync: jest.fn(),
+    isPending: false,
+  }),
+  useReviseProjectFFEConfiguration: () => ({
     mutateAsync: jest.fn(),
     isPending: false,
   }),

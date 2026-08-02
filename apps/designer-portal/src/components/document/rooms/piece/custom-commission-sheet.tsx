@@ -1,11 +1,15 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import * as PatinaData from "@patina/supabase";
 import {
   CustomCommissionWorkspace,
   type CommissionWorkspaceRevision,
 } from "./custom-commission-workspace";
+import type {
+  CommissionMilestoneView,
+  RecordCommissionMilestoneDraft,
+} from "./custom-commission-fulfillment";
 import {
   EMPTY_COMMISSION_BRIEF,
   type CommissionBriefDraft,
@@ -28,6 +32,7 @@ interface WireConfiguration {
   id: string;
   productId: string;
   projectId?: string | null;
+  ffeItemId?: string | null;
   version: number;
   status: string;
   name?: string | null;
@@ -36,6 +41,7 @@ interface WireConfiguration {
   snapshotHash: string;
   issuedAt?: string | null;
   updatedAt: string;
+  isLibraryTemplate?: boolean;
 }
 
 interface WireRevision {
@@ -70,6 +76,23 @@ interface WireVendor {
   name: string;
 }
 
+interface WireMilestone {
+  id: string;
+  configurationId: string;
+  milestoneType: "submittal" | "receiving" | "installed";
+  status: string;
+  evidence?: Record<string, unknown>;
+  artifacts?: Array<Record<string, unknown>>;
+  events?: Array<Record<string, unknown>>;
+  updatedAt: string;
+}
+
+interface WireFfeItem {
+  id: string;
+  purchase_order_id?: string | null;
+  purchase_order?: { id?: string | null } | null;
+}
+
 interface ConfigurationHooks {
   useProjects: () => QueryResult<WireProject[]>;
   useVendors: (
@@ -79,15 +102,34 @@ interface ConfigurationHooks {
   useSavedProductConfigurations: (
     productId: string,
   ) => QueryResult<WireConfiguration[]>;
+  useProductConfiguration: (
+    configurationId: string,
+  ) => QueryResult<WireConfiguration>;
+  useProjectFFEItems: (projectId: string) => QueryResult<WireFfeItem[]>;
   useCustomCommissionRevisions: (
     configurationId: string,
   ) => QueryResult<WireRevision[]>;
+  useCustomCommissionMilestones: (
+    configurationId: string,
+  ) => QueryResult<WireMilestone[]>;
   useSaveProductConfiguration: () => MutationResult<
     Record<string, unknown>,
     { configuration: WireConfiguration; customRevision?: WireRevision | null }
   >;
+  useInstantiateProductConfigurationTemplate: () => MutationResult<
+    Record<string, unknown>,
+    {
+      configuration: WireConfiguration;
+      templateConfigurationId: string;
+      customRevision?: WireRevision | null;
+    }
+  >;
   useTransitionCustomCommissionRevision: () => MutationResult<
     Record<string, unknown>
+  >;
+  useRecordCustomCommissionMilestone: () => MutationResult<
+    Record<string, unknown>,
+    WireMilestone
   >;
   usePlaceProductConfiguration: () => MutationResult<Record<string, unknown>>;
   usePromoteConfigurationToLibrary: () => MutationResult<
@@ -293,6 +335,9 @@ export function CustomCommissionSheet({
   const [selectedConfigurationId, setSelectedConfigurationId] = useState<
     string | null
   >(initialConfigurationId ?? "__new__");
+  const [fulfillmentConfigurationId, setFulfillmentConfigurationId] = useState<
+    string | null
+  >(null);
   const configurations = useMemo(
     () => configurationsQuery.data ?? [],
     [configurationsQuery.data],
@@ -306,8 +351,19 @@ export function CustomCommissionSheet({
   const revisionsQuery = data.useCustomCommissionRevisions(
     activeConfiguration?.id ?? "",
   );
+  const fulfillmentConfigurationQuery = data.useProductConfiguration(
+    fulfillmentConfigurationId ?? "",
+  );
+  const fulfillmentProjectId =
+    fulfillmentConfigurationQuery.data?.projectId ?? "";
+  const fulfillmentItemsQuery = data.useProjectFFEItems(fulfillmentProjectId);
+  const milestonesQuery = data.useCustomCommissionMilestones(
+    fulfillmentConfigurationId ?? "",
+  );
   const saveConfiguration = data.useSaveProductConfiguration();
+  const instantiateTemplate = data.useInstantiateProductConfigurationTemplate();
   const transitionRevision = data.useTransitionCustomCommissionRevision();
+  const recordMilestone = data.useRecordCustomCommissionMilestone();
   const placeConfiguration = data.usePlaceProductConfiguration();
   const promoteConfiguration = data.usePromoteConfigurationToLibrary();
   const prepareQuoteRequest = data.usePrepareConfigurationQuoteRequest();
@@ -377,12 +433,48 @@ export function CustomCommissionSheet({
     id: vendor.id,
     name: vendor.name,
   }));
+  const milestones = (milestonesQuery.data ?? []).map<CommissionMilestoneView>(
+    (milestone) => ({
+      id: milestone.id,
+      milestoneType: milestone.milestoneType,
+      status: milestone.status,
+      evidence: milestone.evidence ?? {},
+      artifacts: milestone.artifacts ?? [],
+      eventCount: milestone.events?.length ?? 0,
+      updatedAt: milestone.updatedAt,
+    }),
+  );
+  const fulfillmentLine = (fulfillmentItemsQuery.data ?? []).find(
+    (item) => item.id === fulfillmentConfigurationQuery.data?.ffeItemId,
+  );
+  const fulfillmentReady = Boolean(
+    fulfillmentLine?.purchase_order_id || fulfillmentLine?.purchase_order?.id,
+  );
+  const handleActiveRevisionChange = useCallback(
+    (revision: CommissionWorkspaceRevision | null) => {
+      setFulfillmentConfigurationId(
+        revision?.status === "issued" ? revision.configurationId : null,
+      );
+    },
+    [],
+  );
 
   const saveDraft = async (brief: CommissionBriefDraft) => {
-    const sameProjectConfiguration =
+    let sameProjectConfiguration =
       activeConfiguration?.projectId === brief.projectId
         ? activeConfiguration
         : null;
+    if (
+      activeConfiguration?.isLibraryTemplate &&
+      activeConfiguration.projectId !== brief.projectId
+    ) {
+      const instantiated = await instantiateTemplate.mutateAsync({
+        templateConfigurationId: activeConfiguration.id,
+        projectId: brief.projectId,
+        name: brief.name.trim(),
+      });
+      sameProjectConfiguration = instantiated.configuration;
+    }
     const wireBrief = briefToWire(brief);
     const result = await saveConfiguration.mutateAsync({
       productId,
@@ -426,7 +518,9 @@ export function CustomCommissionSheet({
 
   const isBusy = [
     saveConfiguration,
+    instantiateTemplate,
     transitionRevision,
+    recordMilestone,
     placeConfiguration,
     promoteConfiguration,
     prepareQuoteRequest,
@@ -444,7 +538,11 @@ export function CustomCommissionSheet({
       isLoading={
         projectsQuery.isLoading ||
         configurationsQuery.isLoading ||
-        (!!activeConfiguration && revisionsQuery.isLoading)
+        (!!activeConfiguration && revisionsQuery.isLoading) ||
+        (!!fulfillmentConfigurationId &&
+          (fulfillmentConfigurationQuery.isLoading ||
+            milestonesQuery.isLoading)) ||
+        (!!fulfillmentProjectId && fulfillmentItemsQuery.isLoading)
       }
       isBusy={isBusy}
       error={mutationError(
@@ -452,6 +550,9 @@ export function CustomCommissionSheet({
         vendorsQuery.error,
         configurationsQuery.error,
         revisionsQuery.error,
+        fulfillmentConfigurationQuery.error,
+        fulfillmentItemsQuery.error,
+        milestonesQuery.error,
       )}
       onSaveDraft={saveDraft}
       onTransition={transition}
@@ -504,6 +605,27 @@ export function CustomCommissionSheet({
         });
       }}
       onStartNewCommission={() => setSelectedConfigurationId("__new__")}
+      onActiveRevisionChange={handleActiveRevisionChange}
+      fulfillmentMilestones={milestones}
+      fulfillmentReady={fulfillmentReady}
+      onRecordMilestone={async (draft: RecordCommissionMilestoneDraft) => {
+        if (!fulfillmentConfigurationId || !fulfillmentReady) {
+          throw new Error(
+            "Choose an issued commission linked to a purchase order first.",
+          );
+        }
+        await recordMilestone.mutateAsync({
+          configurationId: fulfillmentConfigurationId,
+          milestoneType: draft.milestoneType,
+          status: draft.status,
+          evidence: {
+            note: draft.note,
+            recordedFrom: "designer_portal",
+          },
+          artifacts: draft.references.map(drawingAttachment),
+          note: draft.note,
+        });
+      }}
     />
   );
 }

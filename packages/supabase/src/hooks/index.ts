@@ -11,17 +11,22 @@ export {
 export {
   productConfigurationKeys,
   useProductConfigurationDefinition,
+  useProductConfiguration,
   useSavedProductConfigurations,
   useUpsertProductConfigurationDefinition,
   useEvaluateProductConfiguration,
   useSaveProductConfiguration,
   useApproveProductConfiguration,
   usePromoteConfigurationToLibrary,
+  useInstantiateProductConfigurationTemplate,
   useCustomCommissionRevisions,
+  useCustomCommissionMilestones,
+  useRecordCustomCommissionMilestone,
   useCreateCustomCommissionRevision,
   useTransitionCustomCommissionRevision,
   usePrepareConfigurationQuoteRequest,
   usePlaceProductConfiguration,
+  useReviseProjectFFEConfiguration,
 } from './use-product-configurations';
 export {
   useLayerProducts,

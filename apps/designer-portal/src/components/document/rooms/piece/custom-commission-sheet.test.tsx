@@ -4,11 +4,17 @@ import { EMPTY_COMMISSION_BRIEF } from "./custom-commission-model";
 import { CustomCommissionSheet } from "./custom-commission-sheet";
 
 let mockWorkspaceProps: CustomCommissionWorkspaceProps | null = null;
+let mockConfigurations: Array<Record<string, unknown>> = [];
+let mockExactConfiguration: Record<string, unknown> | undefined;
+let mockFfeItems: Array<Record<string, unknown>> = [];
+const mockUseMilestones = jest.fn(() => ({ data: [], isLoading: false }));
+const mockRecordMilestone = jest.fn();
 const mockPrepareRfq = jest
   .fn()
   .mockResolvedValue({ id: "rfq-1", status: "draft" });
 const mockPlace = jest.fn().mockResolvedValue({ ffeItemId: "ffe-1" });
 const mockTransition = jest.fn().mockResolvedValue({ id: "revision-1" });
+const mockInstantiate = jest.fn();
 const mockSave = jest.fn().mockResolvedValue({
   configuration: {
     id: "configuration-1",
@@ -43,14 +49,32 @@ jest.mock("@patina/supabase", () => ({
     data: { data: [{ id: "vendor-1", name: "Northstar Millwork" }] },
     isLoading: false,
   }),
-  useSavedProductConfigurations: () => ({ data: [], isLoading: false }),
+  useSavedProductConfigurations: () => ({
+    data: mockConfigurations,
+    isLoading: false,
+  }),
+  useProductConfiguration: () => ({
+    data: mockExactConfiguration,
+    isLoading: false,
+  }),
+  useProjectFFEItems: () => ({ data: mockFfeItems, isLoading: false }),
   useCustomCommissionRevisions: () => ({ data: [], isLoading: false }),
+  useCustomCommissionMilestones: (configurationId: string) =>
+    mockUseMilestones(configurationId),
   useSaveProductConfiguration: () => ({
     mutateAsync: mockSave,
     isPending: false,
   }),
+  useInstantiateProductConfigurationTemplate: () => ({
+    mutateAsync: mockInstantiate,
+    isPending: false,
+  }),
   useTransitionCustomCommissionRevision: () => ({
     mutateAsync: mockTransition,
+    isPending: false,
+  }),
+  useRecordCustomCommissionMilestone: () => ({
+    mutateAsync: mockRecordMilestone,
     isPending: false,
   }),
   usePlaceProductConfiguration: () => ({
@@ -100,10 +124,16 @@ const completeBrief = {
 describe("CustomCommissionSheet data adapter", () => {
   beforeEach(() => {
     mockWorkspaceProps = null;
+    mockConfigurations = [];
+    mockExactConfiguration = undefined;
+    mockFfeItems = [];
     mockPrepareRfq.mockClear();
     mockPlace.mockClear();
     mockSave.mockClear();
     mockTransition.mockClear();
+    mockInstantiate.mockReset();
+    mockUseMilestones.mockClear();
+    mockRecordMilestone.mockReset();
   });
 
   it("creates a review-only RFQ draft for a matched maker without sending", async () => {
@@ -251,5 +281,132 @@ describe("CustomCommissionSheet data adapter", () => {
       },
       approval: undefined,
     });
+  });
+
+  it("instantiates a sanitized Library template before saving it to a project", async () => {
+    mockConfigurations = [
+      {
+        id: "template-1",
+        productId: "product-1",
+        projectId: null,
+        version: 1,
+        status: "saved",
+        name: "Proven cabinetry pattern",
+        snapshot: { productName: "Cabinetry template" },
+        snapshotHash: "sha256:template-1",
+        updatedAt: "2026-08-02T12:00:00Z",
+        isLibraryTemplate: true,
+      },
+    ];
+    mockInstantiate.mockResolvedValue({
+      configuration: {
+        ...mockConfigurations[0],
+        id: "project-instance-1",
+        projectId: "project-1",
+      },
+      templateConfigurationId: "template-1",
+      customRevision: { id: "instance-revision-1" },
+    });
+
+    render(
+      <CustomCommissionSheet
+        open
+        onClose={jest.fn()}
+        productId="product-1"
+        productName="Library wall cabinetry"
+        initialConfigurationId="template-1"
+      />,
+    );
+    await waitFor(() => expect(mockWorkspaceProps).not.toBeNull());
+    await act(async () => {
+      await mockWorkspaceProps!.onSaveDraft(completeBrief);
+    });
+
+    expect(mockInstantiate).toHaveBeenCalledWith({
+      templateConfigurationId: "template-1",
+      projectId: "project-1",
+      name: "Library wall cabinetry",
+    });
+    expect(mockSave).toHaveBeenCalledWith(
+      expect.objectContaining({
+        configurationId: "project-instance-1",
+        expectedVersion: 1,
+        projectId: "project-1",
+      }),
+    );
+  });
+
+  it("binds fulfillment evidence to the selected issued revision and its purchase order", async () => {
+    mockConfigurations = [
+      {
+        id: "configuration-draft",
+        productId: "product-1",
+        projectId: "project-1",
+        version: 3,
+        status: "saved",
+        snapshot: {},
+        snapshotHash: "draft-hash",
+        updatedAt: "2026-08-03T12:00:00Z",
+      },
+    ];
+    mockExactConfiguration = {
+      id: "configuration-issued",
+      productId: "product-1",
+      projectId: "project-1",
+      ffeItemId: "ffe-issued",
+      version: 2,
+      status: "issued",
+      snapshot: {},
+      snapshotHash: "issued-hash",
+      updatedAt: "2026-08-02T12:00:00Z",
+    };
+    mockFfeItems = [
+      {
+        id: "ffe-issued",
+        purchase_order_id: "po-1",
+      },
+    ];
+    mockRecordMilestone.mockResolvedValue({ id: "milestone-1" });
+
+    render(
+      <CustomCommissionSheet
+        open
+        onClose={jest.fn()}
+        productId="product-1"
+        productName="Library wall cabinetry"
+      />,
+    );
+    await act(async () => {
+      mockWorkspaceProps!.onActiveRevisionChange?.({
+        id: "revision-issued",
+        configurationId: "configuration-issued",
+        revisionNumber: 2,
+        status: "issued",
+        brief: completeBrief,
+        snapshot: {},
+        snapshotHash: "issued-hash",
+        lockedAt: "2026-08-02T12:00:00Z",
+        createdAt: "2026-08-02T12:00:00Z",
+      });
+    });
+
+    await waitFor(() =>
+      expect(mockUseMilestones).toHaveBeenLastCalledWith(
+        "configuration-issued",
+      ),
+    );
+    expect(mockWorkspaceProps!.fulfillmentReady).toBe(true);
+    await mockWorkspaceProps!.onRecordMilestone?.({
+      milestoneType: "submittal",
+      status: "approved",
+      note: "Shop drawing A-602 approved.",
+      references: ["A-602 rev 4"],
+    });
+    expect(mockRecordMilestone).toHaveBeenCalledWith(
+      expect.objectContaining({
+        configurationId: "configuration-issued",
+        milestoneType: "submittal",
+      }),
+    );
   });
 });

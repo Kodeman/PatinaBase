@@ -339,12 +339,16 @@ export function configurationDraftToSaveInput({
   draft,
   configurationId,
   expectedVersion,
+  projectId,
+  ffeItemId,
 }: {
   piece: FlatPieceConfigurationSource;
   definition: PieceConfigurationDefinitionView;
   draft: SaveConfigurationDraft;
   configurationId?: string;
   expectedVersion?: number;
+  projectId?: string;
+  ffeItemId?: string;
 }): SaveProductConfigurationInput {
   const selected = new Set(draft.selection.optionValueIds);
   const selections = Object.fromEntries(
@@ -361,6 +365,8 @@ export function configurationDraftToSaveInput({
     productId: piece.id,
     ...(configurationId ? { configurationId } : {}),
     ...(expectedVersion != null ? { expectedVersion } : {}),
+    ...(projectId ? { projectId } : {}),
+    ...(ffeItemId ? { ffeItemId } : {}),
     ...(draft.name ? { name: draft.name } : {}),
     ...(draft.notes ? { notes: draft.notes } : {}),
     selections,
@@ -397,6 +403,7 @@ export function savedConfigurationToView(
     name: saved.name || `Configuration ${saved.version}`,
     version: saved.version,
     status: saved.status,
+    isLibraryTemplate: saved.isLibraryTemplate,
     sourceChanged:
       currentSchemaRevision != null &&
       saved.schemaRevision !== currentSchemaRevision,
