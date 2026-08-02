@@ -317,6 +317,12 @@ export interface ProcurementItemRow {
   } | null;
   project?: { id: string; name: string } | null;
   room?: { id: string; name: string } | null;
+  spec?: {
+    configuration_id: string | null;
+    configuration_snapshot: Record<string, unknown> | null;
+    configuration_snapshot_hash: string | null;
+    configuration_locked_at: string | null;
+  } | null;
 }
 
 export interface ProcurementItemFilters {
@@ -354,7 +360,11 @@ export function useProcurementItems(filters?: ProcurementItemFilters) {
             payments:po_payments(*)
           ),
           project:projects!project_id(id, name),
-          room:project_rooms!project_room_id(id, name)
+          room:project_rooms!project_room_id(id, name),
+          spec:project_ffe_specs!project_ffe_specs_ffe_item_id_fkey(
+            configuration_id, configuration_snapshot,
+            configuration_snapshot_hash, configuration_locked_at
+          )
         `
         )
         .order('sort_order', { ascending: true })

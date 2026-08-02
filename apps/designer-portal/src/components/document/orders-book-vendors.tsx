@@ -148,6 +148,15 @@ function VendorOrderAll({ vendor }: { vendor: AnyRecord }) {
           blocked: it.blocked,
           blocked_by_decision_id: it.blocked_by_decision_id ?? null,
           blocked_reason: it.blocked_reason,
+          spec: it.spec ?? null,
+          configurationSnapshot:
+            it.configurationSnapshot ?? it.configuration_snapshot ?? null,
+          configurationSnapshotHash:
+            it.configurationSnapshotHash ??
+            it.configuration_snapshot_hash ??
+            null,
+          configurationLockedAt:
+            it.configurationLockedAt ?? it.configuration_locked_at ?? null,
         })),
       })),
     );

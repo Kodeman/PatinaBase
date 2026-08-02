@@ -118,6 +118,7 @@ import {
   useUpdateFFEItemPricing,
   useProjectFinancials,
   useUpdateFFEItemStatus,
+  useProjectFFEItems,
   useBulkReassignFfeVendor,
   useCreateProjectPhase,
   useUpdateProjectPhaseStatus,
@@ -142,6 +143,33 @@ beforeEach(() => {
   supabaseClient.auth.getSession.mockReset();
   supabaseClient.from.mockClear();
   supabaseClient.rpc.mockReset();
+});
+
+describe('useProjectFFEItems configuration handoff', () => {
+  it('joins the frozen project spec snapshot used by RFQ and PO review', async () => {
+    const builder = setTableDefault('project_ffe_items', {
+      data: [],
+      error: null,
+    });
+    const config = useProjectFFEItems('project-1') as unknown as {
+      queryKey: unknown[];
+      queryFn: () => Promise<unknown[]>;
+    };
+
+    expect(config.queryKey).toEqual([
+      'project-ffe-items',
+      'project-1',
+      undefined,
+    ]);
+    await config.queryFn();
+
+    const select = builder.__chain.find((call) => call.method === 'select');
+    const selection = String(select?.args[0]);
+    expect(selection).toContain('spec:project_ffe_specs');
+    expect(selection).toContain('configuration_snapshot');
+    expect(selection).toContain('configuration_snapshot_hash');
+    expect(selection).toContain('configuration_locked_at');
+  });
 });
 
 // ─────────────────────────────────────────────────────────────────────────────

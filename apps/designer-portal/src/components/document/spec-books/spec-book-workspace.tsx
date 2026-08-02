@@ -39,6 +39,8 @@ import {
 import { useHydrated } from "@/hooks/use-hydrated";
 import { specBookEvents } from "@/lib/analytics/spec-book-events";
 import { resolveClientPortalOrigin } from "@/lib/client-portal-url";
+import { ConfigurationSnapshotCard } from "@/components/document/configuration-snapshot-card";
+import { extractConfigurationSnapshotEnvelope } from "@/components/document/rooms/piece/custom-commission-model";
 import {
   audienceAllows,
   buildNaDeclarationUpdate,
@@ -343,6 +345,7 @@ function SelectionEditor({
     ["color_fabric", "Color / fabric"],
     ["exact_location", "Exact location"],
   ] as const;
+  const configuration = extractConfigurationSnapshotEnvelope(item.spec);
 
   return (
     <div>
@@ -369,6 +372,18 @@ function SelectionEditor({
           <option value="blocked">Blocked</option>
         </Select>
       </div>
+
+      {configuration && (
+        <div className="mb-5 border-y border-[var(--color-pearl)] py-3">
+          <ConfigurationSnapshotCard
+            snapshot={configuration.snapshot}
+            configurationHash={configuration.hash}
+            approvedHash={configuration.approvedHash}
+            lockedAt={configuration.lockedAt}
+            label="Project configuration"
+          />
+        </div>
+      )}
 
       <div className="mb-5 border-y border-[var(--color-pearl)]">
         {(

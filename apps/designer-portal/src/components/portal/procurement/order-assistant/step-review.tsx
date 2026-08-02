@@ -11,6 +11,11 @@
 
 import { Copy, ExternalLink } from 'lucide-react';
 import { Button } from '@/components/ui/controls';
+import { ConfigurationSnapshotCard } from '@/components/document/configuration-snapshot-card';
+import {
+  extractConfigurationSnapshotEnvelope,
+  formatConfigurationSnapshotForClipboard,
+} from '@/components/document/rooms/piece/custom-commission-model';
 import {
   formatDollars,
   itemTradeCents,
@@ -36,6 +41,9 @@ export function formatItemDetailsForClipboard(
     lines.push(`   Ship to: ${SHIP_TO_PLACEHOLDER}`);
     // Vendor-facing amounts are TRADE cost (00186) — never client prices.
     lines.push(`   ${formatDollars(itemTradeCents(item))}`);
+    formatConfigurationSnapshotForClipboard(item).forEach((line) =>
+      lines.push(`   ${line}`),
+    );
     lines.push('');
   });
   const total = items.reduce((sum, i) => sum + itemTradeCents(i), 0);
@@ -110,17 +118,32 @@ export function StepReview({ vendor, ffeItems, copyState, onCopyDetails }: StepR
           className="border-l-2 pl-3 text-[0.7rem] leading-[1.7] text-[var(--text-primary)]"
           style={{ borderColor: 'var(--border-subtle)' }}
         >
-          {ffeItems.map((item, idx) => (
-            <div key={item.id} className={idx > 0 ? 'mt-2' : ''}>
-              <div>
-                <strong>{idx + 1}.</strong> {item.name}
-                {item.room ? ` · ${item.room}` : ''}
+          {ffeItems.map((item, idx) => {
+            const configuration = extractConfigurationSnapshotEnvelope(item);
+            return (
+              <div key={item.id} className={idx > 0 ? 'mt-3' : ''}>
+                <div>
+                  <strong>{idx + 1}.</strong> {item.name}
+                  {item.room ? ` · ${item.room}` : ''}
+                </div>
+                <div className="text-[var(--text-muted)]">
+                  Ship to: {SHIP_TO_PLACEHOLDER}
+                </div>
+                {configuration && (
+                  <div className="mt-2">
+                    <ConfigurationSnapshotCard
+                      snapshot={configuration.snapshot}
+                      configurationHash={configuration.hash}
+                      approvedHash={configuration.approvedHash}
+                      lockedAt={configuration.lockedAt}
+                      label="Order configuration"
+                      compact
+                    />
+                  </div>
+                )}
               </div>
-              <div className="text-[var(--text-muted)]">
-                Ship to: {SHIP_TO_PLACEHOLDER}
-              </div>
-            </div>
-          ))}
+            );
+          })}
         </div>
       </section>
     </>

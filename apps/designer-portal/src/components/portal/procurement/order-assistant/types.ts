@@ -74,6 +74,15 @@ export interface OrderAssistantFFEItem {
   blocked?: boolean | null;
   blocked_by_decision_id?: string | null;
   blocked_reason?: string | null;
+  /**
+   * Frozen project selection carried into quote/PO review. Callers may pass
+   * either the joined spec object or the normalized camel-case fields; the UI
+   * accepts both while the Supabase hook migration rolls out.
+   */
+  spec?: Record<string, unknown> | null;
+  configurationSnapshot?: unknown;
+  configurationSnapshotHash?: string | null;
+  configurationLockedAt?: string | null;
 }
 
 export interface OrderAssistantProps {

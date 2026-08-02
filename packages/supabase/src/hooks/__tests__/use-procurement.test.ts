@@ -247,6 +247,9 @@ describe('useProcurementItems', () => {
     expect(selectStr).toContain('payments:po_payments(*)');
     expect(selectStr).toContain('project:projects');
     expect(selectStr).toContain('room:project_rooms');
+    expect(selectStr).toContain('spec:project_ffe_specs');
+    expect(selectStr).toContain('configuration_snapshot_hash');
+    expect(selectStr).toContain('configuration_locked_at');
     // W5-T2 — expediting columns: the By Status view reads our outbound PO
     // number plus the Ordered / Ack / no-ack-flag timestamps off the join.
     expect(selectStr).toContain('po_number');

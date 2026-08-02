@@ -49,6 +49,10 @@ export interface SpecBookChapter {
 export interface ProjectFfeSpec {
   id: string;
   ffe_item_id: string;
+  configuration_id: string | null;
+  configuration_snapshot: Record<string, unknown> | null;
+  configuration_snapshot_hash: string | null;
+  configuration_locked_at: string | null;
   sku: string | null;
   finish: string | null;
   material: string | null;
