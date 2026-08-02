@@ -5,6 +5,7 @@ import type {
 import {
   configurationDefinitionToView,
   configurationViewToUpsertInput,
+  pieceRoomConfigurationRows,
   savedConfigurationToView,
 } from "./piece-configuration-adapter";
 
@@ -217,5 +218,24 @@ describe("piece configuration adapter integrity", () => {
     });
 
     expect(input.variants[0].optionValueIds).toEqual(["size:queen"]);
+  });
+
+  it("hides bound project copies except for the exact line being revised", () => {
+    const reusable = {
+      id: "reusable-configuration",
+      projectId: null,
+    } as unknown as SavedProductConfiguration;
+    const projectCopy = {
+      id: "project-copy",
+      projectId: "project-1",
+      ffeItemId: "ffe-1",
+    } as unknown as SavedProductConfiguration;
+
+    expect(pieceRoomConfigurationRows([reusable, projectCopy])).toEqual([
+      reusable,
+    ]);
+    expect(
+      pieceRoomConfigurationRows([reusable, projectCopy], projectCopy),
+    ).toEqual([reusable, projectCopy]);
   });
 });

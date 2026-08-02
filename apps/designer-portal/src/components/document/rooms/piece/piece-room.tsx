@@ -55,6 +55,7 @@ import {
   configurationDraftToSaveInput,
   configurationViewToUpsertInput,
   evaluationToAuthoritative,
+  pieceRoomConfigurationRows,
   savedConfigurationToView,
   selectionToEvaluationInput,
 } from "./piece-configuration-adapter";
@@ -245,19 +246,16 @@ export function PieceRoom({ productId }: { productId: string }) {
     [configurationDefinition.data, configurationPiece],
   );
   const savedConfigurationViews = useMemo(() => {
-    const saved = [...(savedConfigurations.data ?? [])];
-    if (
-      revisionConfiguration.data &&
-      !saved.some((item) => item.id === revisionConfiguration.data?.id)
-    ) {
-      saved.push(revisionConfiguration.data);
-    }
-    return saved.map((item) =>
+    return pieceRoomConfigurationRows(
+      savedConfigurations.data ?? [],
+      revisionContext ? revisionConfiguration.data : null,
+    ).map((item) =>
       savedConfigurationToView(item, configurationDefinition.data?.revision),
     );
   }, [
     configurationDefinition.data?.revision,
     revisionConfiguration.data,
+    revisionContext,
     savedConfigurations.data,
   ]);
   const layer = (p?.layer ?? "personal") as Layer;

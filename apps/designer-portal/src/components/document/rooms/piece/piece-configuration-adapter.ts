@@ -420,6 +420,24 @@ export function savedConfigurationToView(
   };
 }
 
+export function pieceRoomConfigurationRows(
+  configurations: SavedProductConfiguration[],
+  revisionConfiguration?: SavedProductConfiguration | null,
+): SavedProductConfiguration[] {
+  const reusable = configurations.filter(
+    (configuration) => configuration.projectId == null,
+  );
+  if (
+    revisionConfiguration &&
+    !reusable.some(
+      (configuration) => configuration.id === revisionConfiguration.id,
+    )
+  ) {
+    reusable.push(revisionConfiguration);
+  }
+  return reusable;
+}
+
 function ruleToView(
   rule: ProductConfigurationRule,
   groups: ProductOptionGroup[],
