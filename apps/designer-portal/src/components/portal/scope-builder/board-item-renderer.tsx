@@ -1,11 +1,10 @@
 'use client';
 
 import type { ReactNode } from 'react';
-import type { BoardItem } from '@patina/design-system';
 import type { ProposalBoardItem } from '@patina/supabase';
 import type { EditableMoodBoardItem } from '@patina/types';
 
-// ─── Snapshot shapes (written by board-editor.tsx into `data` JSONB) ─────────
+// ─── Persisted snapshot shapes carried in item `data` JSONB ─────────────────
 
 interface ProductSnapshot {
   name?: string | null;
@@ -38,17 +37,11 @@ function formatDollars(cents: number): string {
 }
 
 /**
- * renderItem implementation for BoardCanvas / BoardStatic. The canvas item
- * wrapper sets position/size/rotation; everything here just fills it.
- *
- * `item.data` carries the full `proposal_board_items` row (the editor maps
- * rows → BoardItem with `data: row`), so renderers read display fields from
- * the row's `data` JSONB snapshot and fall back to `image_url`/`content`.
+ * Shared board-room pin content. BoardRoomCanvas owns geometry and gestures;
+ * this renderer reads display fields from the persisted item snapshot.
  */
-export function renderBoardItem(item: BoardItem): ReactNode {
-  const row = item.data as ProposalBoardItem;
-
-  switch (item.type) {
+function renderBoardItem(row: ProposalBoardItem): ReactNode {
+  switch (row.type) {
     case 'product':
     case 'capture':
       return <ProductCard row={row} />;
@@ -63,7 +56,7 @@ export function renderBoardItem(item: BoardItem): ReactNode {
     default:
       return (
         <div className="rounded-sm border border-[var(--border-default)] bg-[var(--bg-surface)] p-3 text-xs text-[var(--text-muted)]">
-          {item.type}
+          {row.type}
         </div>
       );
   }
@@ -91,16 +84,7 @@ export function renderBoardRoomItem(item: EditableMoodBoardItem): ReactNode {
     created_at: '',
     updated_at: '',
   };
-  return renderBoardItem({
-    id: item.id,
-    type: item.type,
-    position: { x: item.x, y: item.y },
-    size: { width: item.width, height: item.height ?? item.width },
-    zIndex: item.zIndex ?? 0,
-    rotation: item.rotation ?? 0,
-    locked: item.locked ?? false,
-    data: row,
-  });
+  return renderBoardItem(row);
 }
 
 // ─── Product / capture card ──────────────────────────────────────────────────
@@ -116,7 +100,6 @@ function ProductCard({ row }: { row: ProposalBoardItem }) {
         style={{ aspectRatio: '1 / 1' }}
       >
         {imageUrl ? (
-          // eslint-disable-next-line @next/next/no-img-element
           <img
             src={imageUrl}
             alt={snap.name ?? ''}
@@ -184,7 +167,6 @@ function ImageTile({ row }: { row: ProposalBoardItem }) {
     );
   }
   return (
-    // eslint-disable-next-line @next/next/no-img-element
     <img
       src={row.image_url}
       alt=""
@@ -202,7 +184,6 @@ function RoomScanTile({ row }: { row: ProposalBoardItem }) {
     <div className="flex h-full w-full select-none flex-col overflow-hidden rounded-sm border border-[var(--border-default)] bg-[var(--bg-surface)] shadow-sm">
       <div className="relative min-h-0 flex-1 bg-[var(--bg-muted)]">
         {row.image_url ? (
-          // eslint-disable-next-line @next/next/no-img-element
           <img
             src={row.image_url}
             alt={snap.name ?? 'Room scan'}

@@ -20,7 +20,6 @@
     "Card": { "cardMode": "column" },
     "DataTable": { "cardMode": "single", "primaryStory": "Empty", "skip": ["data-display-datatable--default", "data-display-datatable--with-sorting", "data-display-datatable--with-pagination", "data-display-datatable--with-row-selection", "data-display-datatable--with-actions", "data-display-datatable--small-size", "data-display-datatable--large-size", "data-display-datatable--all-features"] },
     "Stat": { "cardMode": "column" },
-    "BoardStatic": { "cardMode": "column" },
     "FFECategoryPicker": { "cardMode": "column" },
     "Badge": { "cardMode": "column" },
     "EmptyState": { "cardMode": "column" },

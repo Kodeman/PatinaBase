@@ -65,10 +65,10 @@ function mutationOwner(input: BoardOwnerMutationInput): BoardOwnerRef | null {
 
 /**
  * A named section on a board (00264). Persisted as an ordered array in
- * proposal_boards.sections — the same {id, name, color?} shape BoardCanvas's
- * `sections` prop accepts. Items belong to a section via a `section_id` key
- * inside each item's `data` JSONB (there is NO section_id column on
- * proposal_board_items). `color` is optional and may be omitted.
+ * proposal_boards.sections using the canonical {id, name, color?} band shape.
+ * Items belong to a section via a `section_id` key inside each item's `data`
+ * JSONB (there is NO section_id column on proposal_board_items). `color` is
+ * optional and may be omitted.
  */
 export interface BoardSection {
   id: string;

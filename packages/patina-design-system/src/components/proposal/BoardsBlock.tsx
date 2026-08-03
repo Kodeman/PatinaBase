@@ -123,9 +123,8 @@ function sourceHost(url: string | null | undefined): string | null {
 }
 
 // ─── Scaled canvas (dependency-free scale-to-fit) ────────────────────────────
-// A sibling of BoardStatic, but keyed off the flat DB row shape (x/y/width/
-// height directly, height:null → CSS auto) rather than BoardStatic's
-// position/size objects — kept identical to the client render it replaces.
+// Keyed off the flat DB row shape (x/y/width/height directly, height:null →
+// CSS auto). This is the canonical client composition canvas.
 
 const useIsomorphicLayoutEffect =
   typeof window !== 'undefined' ? React.useLayoutEffect : React.useEffect

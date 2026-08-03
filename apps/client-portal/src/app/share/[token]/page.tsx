@@ -29,6 +29,7 @@ import {
   GUEST_SCOPE_ROOM_SELECT,
   GUEST_SECTION_SELECT,
 } from '@/lib/guest-proposal-document';
+import { captureMoodBoardShareViewed } from '@/lib/analytics/mood-board-server';
 
 // The token is resolved per request (and bumps view stats) — never static.
 export const dynamic = 'force-dynamic';
@@ -72,6 +73,12 @@ export default async function SharePage({ params }: { params: Promise<{ token: s
   );
   if (!boardResolveError && resolvedBoard?.board) {
     const board = resolvedBoard.board as BoardsBlockBoard;
+    if (typeof board.id === 'string' && typeof resolvedBoard.shareId === 'string') {
+      await captureMoodBoardShareViewed({
+        boardId: board.id,
+        shareId: resolvedBoard.shareId,
+      });
+    }
     return (
       <main className="flex min-h-dvh flex-col bg-[var(--bg-page)]">
         <header className="flex shrink-0 items-center justify-between border-b border-[var(--border-subtle)] px-5 py-3 sm:px-8">

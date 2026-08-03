@@ -111,7 +111,6 @@ export * from './DragDrop'
 
 // Designer Portal Specific
 export * from './ProductCard'
-export * from './BoardCanvas'
 export * from './BoardRoomCanvas'
 export * from './StyleQuizCard'
 export * from './PriceDisplay'

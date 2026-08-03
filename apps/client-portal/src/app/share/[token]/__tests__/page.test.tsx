@@ -1,9 +1,14 @@
 import { render, screen } from '@testing-library/react';
 import { createServiceClient } from '@patina/supabase/server';
 import SharePage from '../page';
+import { captureMoodBoardShareViewed } from '@/lib/analytics/mood-board-server';
 
 jest.mock('@patina/supabase/server', () => ({
   createServiceClient: jest.fn(),
+}));
+
+jest.mock('@/lib/analytics/mood-board-server', () => ({
+  captureMoodBoardShareViewed: jest.fn().mockResolvedValue(undefined),
 }));
 
 jest.mock('@patina/design-system', () => ({
@@ -80,6 +85,14 @@ describe('board-scoped guest share', () => {
     expect(screen.getByText('Shared by Patina Studio')).toBeInTheDocument();
     expect(rpc).toHaveBeenCalledTimes(1);
     expect(rpc).toHaveBeenCalledWith('resolve_board_share', { p_token: TOKEN });
+    expect(captureMoodBoardShareViewed).toHaveBeenCalledTimes(1);
+    expect(captureMoodBoardShareViewed).toHaveBeenCalledWith({
+      boardId: 'board-1',
+      shareId: 'share-1',
+    });
+    expect(JSON.stringify((captureMoodBoardShareViewed as jest.Mock).mock.calls)).not.toContain(
+      TOKEN,
+    );
   });
 
   it('falls through without leaking scope when neither resolver accepts a token', async () => {
@@ -94,5 +107,6 @@ describe('board-scoped guest share', () => {
     expect(screen.getByText('This link isn’t available')).toBeInTheDocument();
     expect(rpc).toHaveBeenNthCalledWith(1, 'resolve_board_share', { p_token: TOKEN });
     expect(rpc).toHaveBeenNthCalledWith(2, 'resolve_document_share', { p_token: TOKEN });
+    expect(captureMoodBoardShareViewed).not.toHaveBeenCalled();
   });
 });
