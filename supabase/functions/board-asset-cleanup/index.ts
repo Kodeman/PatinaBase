@@ -28,12 +28,12 @@ import {
   destructiveCleanupEnabled,
   type LiveBoardItemReferenceRow,
   normalizeBoardObjectReference,
-  planCleanup,
   type ProjectBoardReferenceRow,
   type ProposalBoardReferenceRow,
   type ReferenceCounts,
   resolveCleanupMode,
 } from "./core.ts";
+import { runBoardAssetCleanup } from "./run.ts";
 
 const FUNCTION_NAME = "board-asset-cleanup";
 const JOB_NAME = "board-asset-gc";
@@ -459,63 +459,42 @@ Deno.serve(async (req: Request) => {
   log("started", { job_run_id: runId, ...mode });
 
   try {
-    const [dataset, objectNames, candidates] = await Promise.all([
-      loadReferenceDataset(admin),
-      listBoardObjects(admin),
-      loadCandidates(admin),
-    ]);
-    const referenceCounts = buildBoardReferenceCounts(dataset);
-    const plan = planCleanup({
-      objectNames,
-      referenceCounts,
-      candidates,
+    const detail = await runBoardAssetCleanup({
+      jobRunId: runId,
       now,
-      dryRun: mode.dry_run,
-      destructiveEnabled,
+      mode,
+      port: {
+        loadReferenceDataset: () => loadReferenceDataset(admin),
+        listBoardObjects: () => listBoardObjects(admin),
+        loadCandidates: () => loadCandidates(admin),
+        resetCandidates: (objectNames) =>
+          deleteCandidateRows(admin, objectNames),
+        insertCandidates: (objectNames, observedAt, jobRunId) =>
+          insertNewCandidates(admin, objectNames, observedAt, jobRunId),
+        observeCandidates: (
+          candidateRows,
+          referenceCounts,
+          observedAt,
+          jobRunId,
+        ) =>
+          updateObservedCandidates(
+            admin,
+            candidateRows,
+            referenceCounts,
+            observedAt,
+            jobRunId,
+          ),
+        deleteEligibleObjects: (objectNames, observedAt, jobRunId) =>
+          deleteEligibleObjects({
+            admin,
+            plannedNames: objectNames,
+            now: observedAt,
+            jobRunId,
+          }),
+        finishRun: (status, runDetail, error = null) =>
+          finishRun(admin, runId, status, runDetail, error),
+      },
     });
-
-    // Reset first: a referenced/missing/re-uploaded object must lose all stale
-    // eligibility before any new first-sighting row is inserted.
-    await deleteCandidateRows(admin, plan.resetCandidateNames);
-    await insertNewCandidates(admin, plan.newCandidateNames, now, runId);
-    await updateObservedCandidates(
-      admin,
-      plan.observedCandidates,
-      referenceCounts,
-      now,
-      runId,
-    );
-
-    const deletion = plan.deleteObjectNames.length > 0
-      ? await deleteEligibleObjects({
-        admin,
-        plannedNames: plan.deleteObjectNames,
-        now,
-        jobRunId: runId,
-      })
-      : { deleted: 0, rescued: 0 };
-
-    const referencedObjects = objectNames.filter((name) =>
-      (referenceCounts.get(name) ?? 0) > 0
-    ).length;
-    const detail = {
-      ...mode,
-      bucket_id: BOARD_ASSET_BUCKET,
-      grace_days: BOARD_ASSET_GRACE_DAYS,
-      scanned_objects: objectNames.length,
-      referenced_objects: referencedObjects,
-      reference_fields: [...referenceCounts.values()].reduce(
-        (sum, n) => sum + n,
-        0,
-      ),
-      candidates_first_seen: plan.newCandidateNames.length,
-      candidates_observed: plan.observedCandidates.length,
-      candidates_reset: plan.resetCandidateNames.length,
-      eligible_objects: plan.eligibleObjectNames.length,
-      rescued_at_delete_boundary: deletion.rescued,
-      deleted_objects: deletion.deleted,
-    };
-    await finishRun(admin, runId, "succeeded", detail);
     log("completed", { job_run_id: runId, ...detail });
     return json({ ok: true, ...detail });
   } catch (error) {
