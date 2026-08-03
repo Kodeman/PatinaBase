@@ -446,6 +446,33 @@ describe('summarizeBoard', () => {
     expect(summary.sections).toEqual([]);
     expect(summary.status).toBe('active');
     expect(summary.cover_fallback_url).toBeNull();
+    expect(summary.verdict_counts).toEqual({ approved: 0, rejected: 0, comment: 0, total: 0 });
+  });
+
+  it('folds RLS-visible current verdicts into the cover summary', () => {
+    const summary = summarizeBoard({ id: 'b1', name: 'B', proposal_id: 'p1' }, [
+      {
+        type: 'product',
+        image_url: null,
+        z_index: 0,
+        verdicts: [
+          {
+            id: 'f1',
+            client_id: 'client-1',
+            verdict: 'rejected',
+            created_at: '2026-08-01T10:00:00Z',
+          },
+          {
+            id: 'f2',
+            client_id: 'client-1',
+            verdict: 'approved',
+            created_at: '2026-08-02T10:00:00Z',
+          },
+        ],
+      },
+    ]);
+
+    expect(summary.verdict_counts).toEqual({ approved: 1, rejected: 0, comment: 0, total: 1 });
   });
 });
 
@@ -528,6 +555,9 @@ describe('useProjectOwnedBoards', () => {
     };
     const result = await config.queryFn();
     expect(builder.__chain.find((c) => c.method === 'eq')?.args).toEqual(['project_id', 'proj-1']);
+    expect(builder.__chain.find((c) => c.method === 'select')?.args[0]).toContain(
+      'verdicts:item_feedback!item_feedback_board_item_id_fkey',
+    );
     expect(result[0].project_id).toBe('proj-1');
     expect(result[0].item_count).toBe(1);
   });

@@ -21,6 +21,7 @@ const board = {
   sections: [],
   status: 'active',
   item_count: 4,
+  verdict_counts: { approved: 2, rejected: 1, comment: 0, total: 3 },
   created_at: '2026-08-01T12:00:00.000Z',
   updated_at: '2026-08-01T12:00:00.000Z',
 };
@@ -94,6 +95,8 @@ describe('BoardsBuilder launcher', () => {
       '/board/board-1?source=drafting_strip&from=%2Fdrafting%2Fproposal-1',
     );
     expect(screen.getByText('4 pieces · Open room')).toBeInTheDocument();
+    expect(screen.getByLabelText('Client verdicts: 2 approved, 1 flagged')).toHaveTextContent('2 Approved');
+    expect(screen.getByLabelText('Client verdicts: 2 approved, 1 flagged')).toHaveTextContent('1 Flagged');
   });
 
   it('flushes surrounding work before creating a blank board and navigating', async () => {

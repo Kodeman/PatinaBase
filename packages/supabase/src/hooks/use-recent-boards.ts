@@ -3,6 +3,11 @@
 import { useQuery } from '@tanstack/react-query';
 import type { BoardOwnerRef } from '@patina/types';
 import { createBrowserClient } from '../client';
+import {
+  summarizeBoardVerdicts,
+  type BoardItemVerdictProjection,
+  type BoardVerdictCounts,
+} from './board-verdicts';
 
 const getSupabase = () => createBrowserClient();
 
@@ -13,6 +18,7 @@ export interface RecentBoard {
   ownerName: string;
   roomName: string | null;
   coverImageUrl: string | null;
+  verdictCounts: BoardVerdictCounts;
   updatedAt: string;
 }
 
@@ -20,7 +26,11 @@ function firstRelation<T>(value: T | T[] | null | undefined): T | null {
   return Array.isArray(value) ? (value[0] ?? null) : (value ?? null);
 }
 
-/** RLS-scoped, owner-unified recent boards for Desk and command surfaces. */
+/**
+ * RLS-scoped, owner-unified recent boards for Desk and command surfaces. The
+ * compact nested feedback projection supplies cover-card verdict counts in the
+ * same round trip; item_feedback policies remain the access boundary.
+ */
 export function useRecentBoards(limit = 8) {
   const safeLimit = Math.max(1, Math.min(20, Math.trunc(limit) || 8));
   return useQuery({
@@ -31,7 +41,7 @@ export function useRecentBoards(limit = 8) {
       const { data, error } = await supabase
         .from('proposal_boards')
         .select(
-          'id, name, proposal_id, project_id, cover_image_url, updated_at, proposal:proposals(title), project:projects(name), room:proposal_scope_rooms(name)',
+          'id, name, proposal_id, project_id, cover_image_url, updated_at, proposal:proposals(title), project:projects(name), room:proposal_scope_rooms(name), proposal_board_items(verdicts:item_feedback!item_feedback_board_item_id_fkey(id, client_id, verdict, created_at))',
         )
         .eq('status', 'active')
         .order('updated_at', { ascending: false })
@@ -62,6 +72,9 @@ export function useRecentBoards(limit = 8) {
           ownerName,
           roomName: typeof room?.name === 'string' ? room.name : null,
           coverImageUrl: typeof row.cover_image_url === 'string' ? row.cover_image_url : null,
+          verdictCounts: summarizeBoardVerdicts(
+            (row.proposal_board_items ?? []) as BoardItemVerdictProjection[],
+          ),
           updatedAt: String(row.updated_at),
         }];
       });

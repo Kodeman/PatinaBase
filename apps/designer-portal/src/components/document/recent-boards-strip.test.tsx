@@ -28,6 +28,7 @@ describe('RecentBoardsStrip', () => {
           ownerName: 'Lake House',
           roomName: 'Living room',
           coverImageUrl: 'https://images.example/cover.jpg',
+          verdictCounts: { approved: 2, rejected: 1, comment: 1, total: 4 },
           updatedAt: new Date().toISOString(),
         },
         {
@@ -37,6 +38,7 @@ describe('RecentBoardsStrip', () => {
           ownerName: 'Lake House project',
           roomName: null,
           coverImageUrl: null,
+          verdictCounts: { approved: 0, rejected: 0, comment: 0, total: 0 },
           updatedAt: new Date().toISOString(),
         },
       ],
@@ -55,6 +57,10 @@ describe('RecentBoardsStrip', () => {
     );
     expect(screen.getByText('Living room')).toBeInTheDocument();
     expect(screen.getByText('Lake House project')).toBeInTheDocument();
+    const verdicts = screen.getByLabelText('Client verdicts: 2 approved, 1 flagged, 1 noted');
+    expect(verdicts).toHaveTextContent('2 Approved');
+    expect(verdicts).toHaveTextContent('1 Flagged');
+    expect(verdicts).toHaveTextContent('1 Noted');
   });
 
   it('stays absent once an empty query resolves', () => {

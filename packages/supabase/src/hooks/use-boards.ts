@@ -9,6 +9,11 @@ import {
   invalidateProposalClientQueries,
   PROPOSAL_CLIENT_MUTATION_KEY,
 } from '../lib/proposal-client-query-invalidation';
+import {
+  summarizeBoardVerdicts,
+  type BoardItemVerdictProjection,
+  type BoardVerdictCounts,
+} from './board-verdicts';
 
 const getSupabase = () => createBrowserClient();
 
@@ -98,6 +103,8 @@ export interface ProposalBoard {
 
 export interface ProposalBoardSummary extends ProposalBoard {
   item_count: number;
+  /** Current, RLS-visible client verdicts grouped for cover-card badges. */
+  verdict_counts: BoardVerdictCounts;
   /**
    * Effective thumbnail source when `cover_image_url` is unset: the image_url
    * of the lowest-z image item on the board, else null. Derived in useBoards
@@ -276,9 +283,10 @@ export interface BoardLayoutPosition {
 /**
  * All boards on a proposal (BOTH active and archived — the builder filters by
  * status client-side), ordered by sort_order then created_at. A compact item
- * projection (type/image_url/z_index only — no `data` JSONB) rides along to
- * derive item_count and the fallback cover in one round trip. RLS scopes rows
- * to the proposal designer (or, for non-draft proposals, the linked client).
+ * projection (type/image_url/z_index plus RLS-visible verdict fields — no
+ * `data` JSONB) rides along to derive item_count, the fallback cover, and
+ * verdict totals in one round trip. RLS scopes rows to the proposal designer
+ * (or, for non-draft proposals, the linked client).
  */
 export function useBoards(ownerInput: BoardOwnerInput) {
   const owner = normalizeBoardOwner(ownerInput);
@@ -290,7 +298,9 @@ export function useBoards(ownerInput: BoardOwnerInput) {
       const supabase = getSupabase() as any;
       const { data, error } = await supabase
         .from('proposal_boards')
-        .select('*, proposal_board_items(type, image_url, z_index)')
+        .select(
+          '*, proposal_board_items(type, image_url, z_index, verdicts:item_feedback!item_feedback_board_item_id_fkey(id, client_id, verdict, created_at))',
+        )
         .eq(owner!.kind === 'proposal' ? 'proposal_id' : 'project_id', owner!.id)
         .order('sort_order', { ascending: true })
         .order('created_at', { ascending: true });
@@ -306,8 +316,8 @@ export function useBoards(ownerInput: BoardOwnerInput) {
   });
 }
 
-/** Minimal item projection useBoards pulls for count + cover derivation. */
-interface BoardCoverItem {
+/** Minimal item projection useBoards pulls for count, cover, and verdict derivation. */
+interface BoardCoverItem extends BoardItemVerdictProjection {
   type: BoardItemType;
   image_url: string | null;
   z_index: number;
@@ -336,6 +346,7 @@ export function summarizeBoard(
     status: (board?.status ?? 'active') as BoardStatus,
     item_count: items.length,
     cover_fallback_url: firstImage?.image_url ?? null,
+    verdict_counts: summarizeBoardVerdicts(items),
   };
 }
 
@@ -883,7 +894,9 @@ export function useProjectOwnedBoards(projectId: string | null | undefined) {
       const supabase = getSupabase() as any;
       const { data, error } = await supabase
         .from('proposal_boards')
-        .select('*, proposal_board_items(type, image_url, z_index)')
+        .select(
+          '*, proposal_board_items(type, image_url, z_index, verdicts:item_feedback!item_feedback_board_item_id_fkey(id, client_id, verdict, created_at))',
+        )
         .eq('project_id', projectId)
         .order('sort_order', { ascending: true })
         .order('created_at', { ascending: true });

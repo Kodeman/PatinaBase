@@ -25,6 +25,7 @@ import { Button } from '@/components/ui/controls';
 import { boardRoomHref } from '@/lib/mood-board/navigation';
 import { runProposalAutosaveAction } from '@/lib/proposal-autosave-registry';
 import { moodBoardEvents } from '@/lib/analytics/mood-board-events';
+import { BoardVerdictSummary } from '@/components/mood-board/board-verdict-summary';
 
 interface BoardsBuilderProps {
   /** Pass exactly one owner. Both legs launch the same dedicated board room. */
@@ -230,6 +231,7 @@ export function BoardsBuilder({ proposalId, projectId }: BoardsBuilderProps) {
                 <p className="mt-1 font-mono text-[9px] uppercase tracking-[0.05em] text-[var(--text-muted)]">
                   {board.item_count} {board.item_count === 1 ? 'piece' : 'pieces'} · Open room
                 </p>
+                <BoardVerdictSummary counts={board.verdict_counts} className="mt-2" />
               </div>
             </Link>
           ))}

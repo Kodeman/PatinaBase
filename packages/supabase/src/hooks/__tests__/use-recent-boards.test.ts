@@ -11,6 +11,24 @@ const rows = [
     proposal: { title: 'Hale proposal' },
     project: null,
     room: { name: 'Living room' },
+    proposal_board_items: [
+      {
+        verdicts: [
+          {
+            id: 'feedback-old',
+            client_id: 'client-1',
+            verdict: 'rejected',
+            created_at: '2026-08-01T10:00:00Z',
+          },
+          {
+            id: 'feedback-current',
+            client_id: 'client-1',
+            verdict: 'approved',
+            created_at: '2026-08-02T10:00:00Z',
+          },
+        ],
+      },
+    ],
   },
   {
     id: 'board-project',
@@ -22,6 +40,7 @@ const rows = [
     proposal: null,
     project: { name: 'Hale residence' },
     room: null,
+    proposal_board_items: [],
   },
 ];
 
@@ -59,18 +78,23 @@ describe('useRecentBoards', () => {
     expect(chain.eq).toHaveBeenCalledWith('status', 'active');
     expect(chain.order).toHaveBeenCalledWith('updated_at', { ascending: false });
     expect(chain.limit).toHaveBeenCalledWith(8);
+    expect(chain.select).toHaveBeenCalledWith(
+      expect.stringContaining('verdicts:item_feedback!item_feedback_board_item_id_fkey'),
+    );
     expect(result).toMatchObject([
       {
         id: 'board-proposal',
         owner: { kind: 'proposal', id: 'proposal-1' },
         ownerName: 'Hale proposal',
         roomName: 'Living room',
+        verdictCounts: { approved: 1, rejected: 0, comment: 0, total: 1 },
       },
       {
         id: 'board-project',
         owner: { kind: 'project', id: 'project-1' },
         ownerName: 'Hale residence',
         roomName: null,
+        verdictCounts: { approved: 0, rejected: 0, comment: 0, total: 0 },
       },
     ]);
   });

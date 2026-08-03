@@ -1302,6 +1302,15 @@ export type {
   ApplyBoardRoomStateInput,
   BoardLayoutPosition,
 } from './use-boards';
+export {
+  emptyBoardVerdictCounts,
+  summarizeBoardVerdicts,
+} from './board-verdicts';
+export type {
+  BoardVerdictCounts,
+  BoardVerdictProjection,
+  BoardItemVerdictProjection,
+} from './board-verdicts';
 
 // ═══════════════════════════════════════════════════════════════════════════
 // Invoicing money core (Wave 1 — see migration 00178)

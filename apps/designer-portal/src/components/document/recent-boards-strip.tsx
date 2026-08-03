@@ -6,6 +6,7 @@ import { useRecentBoards } from '@patina/supabase';
 import { boardRoomHref } from '@/lib/mood-board/navigation';
 import { formatRelativeTime } from '@/lib/utils';
 import { SectionEyebrow } from './section-eyebrow';
+import { BoardVerdictSummary } from '@/components/mood-board/board-verdict-summary';
 
 /**
  * Desk-level doorway into the most recently touched mood boards. The query is
@@ -68,6 +69,7 @@ export function RecentBoardsStrip() {
                   <p className="mt-0.5 truncate font-mono text-[9px] uppercase tracking-[0.05em] text-[var(--text-muted)]">
                     {board.roomName ?? board.ownerName}
                   </p>
+                  <BoardVerdictSummary counts={board.verdictCounts} className="mt-1.5" />
                   <p
                     suppressHydrationWarning
                     className="mt-1 font-mono text-[9px] text-[var(--text-muted)]"
