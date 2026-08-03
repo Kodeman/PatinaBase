@@ -6,6 +6,16 @@ const downloadPdf = jest.fn();
 
 jest.mock('@/lib/mood-board-assets/export-board', () => ({
   exportMoodBoardPng: (...args: unknown[]) => exportPng(...args),
+  formatMoodBoardExportScale: (scale: number) => scale.toFixed(2),
+  getMoodBoardPngExportPlan: (input: { canvasWidth: number; canvasHeight: number }) => {
+    const effectiveScale = Math.min(2, 8192 / Math.max(input.canvasWidth, input.canvasHeight));
+    return {
+      effectiveScale,
+      width: Math.round(input.canvasWidth * effectiveScale),
+      height: Math.round(input.canvasHeight * effectiveScale),
+      capped: effectiveScale < 2,
+    };
+  },
   safeMoodBoardFilename: (name: string, extension: string) => `${name}.${extension}`,
 }));
 
@@ -47,7 +57,7 @@ describe('BoardExportDialog', () => {
     const flush = jest.fn(async () => { calls.push('flush'); });
     exportPng.mockImplementation(async () => {
       calls.push('png');
-      return { warnings: [{ reason: 'image-load-failed' }] };
+      return { effectiveScale: 2, warnings: [{ reason: 'image-load-failed' }] };
     });
     const onExported = jest.fn();
     render(
@@ -70,6 +80,52 @@ describe('BoardExportDialog', () => {
       expect.objectContaining({ format: 'png', failedImageCount: 1 }),
     );
     expect(screen.getByText(/labelled image placeholder/)).toBeInTheDocument();
+  });
+
+  it('reports the effective PNG scale when the 8192px cap lowers the requested 2×', async () => {
+    exportPng.mockResolvedValue({ effectiveScale: 8192 / 5000, warnings: [] });
+    render(
+      <BoardExportDialog
+        boardId="board-1"
+        boardName="Large board"
+        owner={{ kind: 'proposal', id: 'proposal-1' }}
+        input={{ ...input, canvasWidth: 5000, canvasHeight: 3000 }}
+        open
+        onOpenChange={jest.fn()}
+        flush={jest.fn().mockResolvedValue(undefined)}
+      />,
+    );
+
+    expect(screen.getByText(/1\.64× effective scale/)).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: /Composition · PNG/ }));
+    await waitFor(() =>
+      expect(screen.getByText(/PNG downloaded at 1\.64× effective scale/)).toBeInTheDocument(),
+    );
+  });
+
+  it('translates the dense composition warning into a Spec sheet recommendation', async () => {
+    downloadPdf.mockResolvedValue({
+      warnings: ['dense_board'],
+      warningMetadata: { denseBoard: { pinCount: 64 }, imagePlaceholders: [] },
+      filename: 'board.pdf',
+    });
+    render(
+      <BoardExportDialog
+        boardId="board-1"
+        boardName="Dense board"
+        owner={{ kind: 'proposal', id: 'proposal-1' }}
+        input={input}
+        open
+        onOpenChange={jest.fn()}
+        flush={jest.fn().mockResolvedValue(undefined)}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: /Composition · PDF/ }));
+    await waitFor(() =>
+      expect(screen.getByText(/choose Spec sheet for a more legible product reference/)).toBeInTheDocument(),
+    );
+    expect(screen.queryByText(/dense_board/)).not.toBeInTheDocument();
   });
 
   it('keeps composition and spec-sheet PDF kinds distinct for project boards', async () => {

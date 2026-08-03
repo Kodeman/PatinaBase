@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import {
   Dialog,
   DialogContent,
@@ -12,7 +12,12 @@ import {
 import type { BoardOwnerRef } from '@patina/types';
 import { Button } from '@/components/ui/controls';
 import { downloadSpecPdf } from '@/lib/scope/spec-pdf-client';
-import { exportMoodBoardPng, safeMoodBoardFilename } from '@/lib/mood-board-assets/export-board';
+import {
+  exportMoodBoardPng,
+  formatMoodBoardExportScale,
+  getMoodBoardPngExportPlan,
+  safeMoodBoardFilename,
+} from '@/lib/mood-board-assets/export-board';
 import { moodBoardEvents } from '@/lib/analytics/mood-board-events';
 
 export type BoardExportFormat = 'png' | 'pdf_composition' | 'pdf_spec_sheet';
@@ -21,6 +26,39 @@ export interface BoardExportResult {
   format: BoardExportFormat;
   durationMs: number;
   failedImageCount: number;
+}
+
+function pngExportMessage(result: {
+  effectiveScale: number;
+  warnings: readonly unknown[];
+}): string {
+  const scale = result.effectiveScale < 2
+    ? ` at ${formatMoodBoardExportScale(result.effectiveScale)}× effective scale (8192px cap)`
+    : '';
+  const placeholders = result.warnings.length
+    ? ` with ${result.warnings.length} labelled image placeholder${result.warnings.length === 1 ? '' : 's'}`
+    : '';
+  return `PNG downloaded${scale}${placeholders}.`;
+}
+
+function pdfExportMessage(warnings: readonly string[], placeholderCount: number): string {
+  const messages: string[] = ['PDF downloaded.'];
+  if (warnings.includes('dense_board')) {
+    messages.push(
+      'This board is dense at one-page composition scale; choose Spec sheet for a more legible product reference.',
+    );
+  }
+  if (warnings.includes('image_placeholders')) {
+    messages.push(
+      placeholderCount > 0
+        ? `${placeholderCount} image${placeholderCount === 1 ? '' : 's'} could not be loaded and were replaced with labelled placeholders.`
+        : 'Some images could not be loaded and were replaced with labelled placeholders.',
+    );
+  }
+  if (warnings.some((warning) => warning !== 'dense_board' && warning !== 'image_placeholders')) {
+    messages.push('The export completed with additional warnings.');
+  }
+  return messages.join(' ');
 }
 
 export function BoardExportDialog({
@@ -46,6 +84,7 @@ export function BoardExportDialog({
   const [progress, setProgress] = useState(0);
   const [message, setMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const pngPlan = useMemo(() => getMoodBoardPngExportPlan(input), [input]);
 
   const requestOwner = owner.kind === 'proposal'
     ? { proposalId: owner.id }
@@ -97,9 +136,7 @@ export function BoardExportDialog({
       });
       return {
         failedImageCount: result.warnings.length,
-        message: result.warnings.length
-          ? `PNG downloaded with ${result.warnings.length} labelled image placeholder${result.warnings.length === 1 ? '' : 's'}.`
-          : 'PNG downloaded.',
+        message: pngExportMessage(result),
       };
     });
 
@@ -113,12 +150,16 @@ export function BoardExportDialog({
           'pdf',
         ),
       );
-      const placeholderCount = Number(result.warningMetadata?.imagePlaceholders ?? 0);
+      const placeholderMetadata = result.warningMetadata?.imagePlaceholders;
+      const parsedPlaceholderCount = Array.isArray(placeholderMetadata)
+        ? placeholderMetadata.length
+        : Number(placeholderMetadata ?? 0);
+      const placeholderCount = Number.isFinite(parsedPlaceholderCount)
+        ? Math.max(0, parsedPlaceholderCount)
+        : 0;
       return {
-        failedImageCount: Number.isFinite(placeholderCount) ? placeholderCount : 0,
-        message: result.warnings.length
-          ? `PDF downloaded with ${result.warnings.join(', ')}.`
-          : 'PDF downloaded.',
+        failedImageCount: placeholderCount,
+        message: pdfExportMessage(result.warnings, placeholderCount),
       };
     });
   };
@@ -141,7 +182,11 @@ export function BoardExportDialog({
             className="rounded-[5px] border border-[var(--border-default)] p-4 text-left hover:border-[var(--color-clay)] disabled:cursor-wait disabled:opacity-60"
           >
             <span className="font-heading text-[14px] text-[var(--text-primary)]">Composition · PNG</span>
-            <span className="mt-1 block text-[11px] text-[var(--text-muted)]">2× raster, uniformly capped at 8192 pixels.</span>
+            <span className="mt-1 block text-[11px] text-[var(--text-muted)]">
+              {pngPlan.capped
+                ? `${formatMoodBoardExportScale(pngPlan.effectiveScale)}× effective scale · ${pngPlan.width} × ${pngPlan.height}px (8192px cap).`
+                : `2× raster · ${pngPlan.width} × ${pngPlan.height}px.`}
+            </span>
           </button>
           <button
             type="button"
