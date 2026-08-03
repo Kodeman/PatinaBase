@@ -4,8 +4,9 @@ Development handoff package for the reimagined Patina mood board. The direction
 deck was approved 2026-08-03; the four scope questions it left open are now
 decided (see [Decision log](#decision-log)).
 
-**Status:** approved direction, specs ready for build. Phase 1 is unblocked and
-carries zero schema change.
+**Status:** implementation in progress on `moodboard/ga-integration`. Repository
+drift and the approved one-release GA policy are recorded in the implementation
+addendum.
 
 ## Reading order
 
@@ -16,6 +17,7 @@ carries zero schema change.
 | 3 | [01-phase-1-the-room.md](./01-phase-1-the-room.md) | Phase 1 spec — the dedicated editor route and the interaction bar | Building Phase 1. |
 | 4 | [02-phase-2-the-audience.md](./02-phase-2-the-audience.md) | Phase 2 spec — unified presentation renderer, on-canvas verdicts, board share, project boards | Building Phase 2. |
 | 5 | [03-phase-3-the-reach.md](./03-phase-3-the-reach.md) | Phase 3 spec — composition-true export, URL unfurl, background removal, image pipeline, templates | Building Phase 3. |
+| 6 | [05-implementation-addendum.md](./05-implementation-addendum.md) | Current-repository reconciliation, locked runtime contracts, security decisions, and production order | Implementing or reviewing any phase. |
 
 Docs 01–03 are self-contained specs. Doc 04 is the shared substrate every phase
 depends on — the undo/autosave contract in particular is a Phase 1 hard
@@ -23,11 +25,11 @@ prerequisite and is specified there, not in the phase doc.
 
 ## Phase summary
 
-| Phase | Name | Schema | Flag | Ships |
-|-------|------|--------|------|-------|
-| 1 | The Room | none | `mood-board-editor` | `/board/[boardId]` full-screen editor + the 2026 interaction bar |
-| 2 | The Audience | small, additive | `mood-board-editor` | One composition renderer for every client surface, on-canvas verdicts, board-scoped share, project-phase boards |
-| 3 | The Reach | one new table | `mood-board-editor` | Composition-true PNG/PDF, URL unfurl, background removal, image pipeline, templates |
+| Phase | Name | Schema | Release policy | Ships |
+|-------|------|--------|----------------|-------|
+| 1 | The Room | storage compatibility | Integration gate; no runtime feature flag | `/board/[boardId]` full-screen editor + the 2026 interaction bar |
+| 2 | The Audience | additive share/project continuity | Integration gate; no runtime feature flag | One composition renderer for every client surface, on-canvas verdicts, board-scoped share, project-phase boards |
+| 3 | The Reach | templates, durable cleanup/rate state, media ledger | One GA release after all phase gates | Composition-true PNG/PDF, URL unfurl, background removal, image pipeline, templates |
 
 ## Decision log
 
