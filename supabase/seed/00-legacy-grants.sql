@@ -6977,3 +6977,213 @@ DO $g$ BEGIN
   GRANT EXECUTE ON FUNCTION public.revise_project_ffe_configuration(uuid, uuid, uuid, integer, text, uuid, integer) TO authenticated, service_role;
 EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
 END $g$;
+
+-- 00406_mood_board_storage_and_shares.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.guard_document_share_board_retarget() FROM PUBLIC, anon, authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00406_mood_board_storage_and_shares.sql
+DO $g$ BEGIN
+  GRANT SELECT ON TABLE public.document_shares TO authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00406_mood_board_storage_and_shares.sql
+DO $g$ BEGIN
+  REVOKE INSERT, UPDATE, DELETE ON TABLE public.document_shares FROM anon, authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00406_mood_board_storage_and_shares.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.create_board_share(uuid, text, timestamptz) FROM PUBLIC, anon;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00406_mood_board_storage_and_shares.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.resolve_board_share(text) FROM PUBLIC, anon;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00406_mood_board_storage_and_shares.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.revoke_document_share(uuid) FROM PUBLIC, anon;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00406_mood_board_storage_and_shares.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.create_board_share(uuid, text, timestamptz) TO authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00406_mood_board_storage_and_shares.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.resolve_board_share(text) TO authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00406_mood_board_storage_and_shares.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.revoke_document_share(uuid) TO authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00407_project_board_sections_and_lineage.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.snapshot_project_board_sections() FROM PUBLIC, anon, authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00407_project_board_sections_and_lineage.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.guard_live_board_source_lineage() FROM PUBLIC, anon, authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00407_project_board_sections_and_lineage.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.continue_board_in_project(uuid) FROM PUBLIC, anon;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00407_project_board_sections_and_lineage.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.continue_board_in_project(uuid) TO authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00407_project_board_sections_and_lineage.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.get_client_proposal_bundle(uuid) FROM PUBLIC, anon, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00407_project_board_sections_and_lineage.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.get_client_proposal_bundle(uuid) TO authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00408_board_templates.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.guard_board_template_immutability() FROM PUBLIC, anon, authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00408_board_templates.sql
+DO $g$ BEGIN
+  REVOKE ALL ON TABLE public.board_templates FROM PUBLIC, anon, authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00408_board_templates.sql
+DO $g$ BEGIN
+  GRANT SELECT, UPDATE (name, description, cover_url), DELETE ON TABLE public.board_templates TO authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00408_board_templates.sql
+DO $g$ BEGIN
+  GRANT ALL ON TABLE public.board_templates TO service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00408_board_templates.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.sanitize_board_template_json(jsonb) FROM PUBLIC, anon, authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00408_board_templates.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.save_board_as_template(uuid, uuid, text, text) FROM PUBLIC, anon;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00408_board_templates.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.materialize_board_template( uuid, uuid, uuid, text, uuid ) FROM PUBLIC, anon;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00408_board_templates.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.save_board_as_template( uuid, uuid, text, text ) TO authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00408_board_templates.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.materialize_board_template( uuid, uuid, uuid, text, uuid ) TO authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00410_board_asset_maintenance.sql
+DO $g$ BEGIN
+  REVOKE ALL ON TABLE public.board_asset_gc_candidates FROM PUBLIC, anon, authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00410_board_asset_maintenance.sql
+DO $g$ BEGIN
+  GRANT ALL ON TABLE public.board_asset_gc_candidates TO service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00410_board_asset_maintenance.sql
+DO $g$ BEGIN
+  REVOKE ALL ON TABLE public.board_unfurl_usage FROM PUBLIC, anon, authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00410_board_asset_maintenance.sql
+DO $g$ BEGIN
+  GRANT ALL ON TABLE public.board_unfurl_usage TO service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00410_board_asset_maintenance.sql
+DO $g$ BEGIN
+  GRANT USAGE, SELECT ON SEQUENCE public.board_unfurl_usage_id_seq TO service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00410_board_asset_maintenance.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.consume_board_unfurl_quota(uuid) FROM PUBLIC, anon;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00410_board_asset_maintenance.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.consume_board_unfurl_quota(uuid) TO authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00410_board_asset_maintenance.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.dispatch_board_asset_gc(boolean) FROM PUBLIC, anon, authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00410_board_asset_maintenance.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.finish_board_asset_gc_run( bigint, text, jsonb, text ) FROM PUBLIC, anon, authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00410_board_asset_maintenance.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.dispatch_board_asset_gc(boolean) TO service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00410_board_asset_maintenance.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.finish_board_asset_gc_run( bigint, text, jsonb, text ) TO service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
