@@ -64,7 +64,7 @@ describe('SupabaseBoardAccessService', () => {
     });
   });
 
-  it('resolves the source URL only from an authorized board item', async () => {
+  it('prefers the authorized item display column over stale legacy JSON', async () => {
     jest
       .spyOn(global, 'fetch')
       .mockResolvedValueOnce(
@@ -79,8 +79,8 @@ describe('SupabaseBoardAccessService', () => {
             id: ITEM_ID,
             board_id: BOARD_ID,
             type: 'image',
-            image_url: 'https://images.example/legacy.png',
-            data: { image_url: 'https://images.example/current.png' },
+            image_url: 'https://images.example/current.png',
+            data: { image_url: 'https://images.example/stale-original.png' },
           },
         ]),
       );
@@ -91,6 +91,34 @@ describe('SupabaseBoardAccessService', () => {
       studioId: STUDIO_ID,
       quotaOwnerId: STUDIO_ID,
       item: { sourceUrl: 'https://images.example/current.png' },
+    });
+  });
+
+  it('falls back to the legacy JSON image only when the display column is empty', async () => {
+    jest
+      .spyOn(global, 'fetch')
+      .mockResolvedValueOnce(
+        jsonResponse([{ id: BOARD_ID, proposal_id: PROPOSAL_ID, project_id: null }]),
+      )
+      .mockResolvedValueOnce(jsonResponse([{ designer_id: DESIGNER_ID, project_id: null }]))
+      .mockResolvedValueOnce(jsonResponse(true))
+      .mockResolvedValueOnce(jsonResponse(STUDIO_ID))
+      .mockResolvedValueOnce(
+        jsonResponse([
+          {
+            id: ITEM_ID,
+            board_id: BOARD_ID,
+            type: 'image',
+            image_url: null,
+            data: { image_url: 'https://images.example/legacy.png' },
+          },
+        ]),
+      );
+
+    await expect(
+      service().authorizeBoardItem('caller-jwt', BOARD_ID, ITEM_ID),
+    ).resolves.toMatchObject({
+      item: { sourceUrl: 'https://images.example/legacy.png' },
     });
   });
 });

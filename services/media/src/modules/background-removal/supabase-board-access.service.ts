@@ -128,7 +128,9 @@ export class SupabaseBoardAccessService {
         ? (item.data as Record<string, unknown>)
         : {};
     const dataImage = typeof data.image_url === 'string' ? data.image_url.trim() : '';
-    const sourceUrl = dataImage || item.image_url?.trim() || '';
+    // The normalized column is the persisted current display image. The JSON
+    // value exists only for legacy rows and may still point at a stale original.
+    const sourceUrl = item.image_url?.trim() || dataImage;
     if (!sourceUrl) {
       throw new UnprocessableEntityException({
         code: 'background_removal_source_unavailable',
