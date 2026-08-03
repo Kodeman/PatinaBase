@@ -201,7 +201,7 @@ export interface BoardRoomControllerApi {
   addItems: (items: readonly EditableMoodBoardItem[], options?: BoardRoomAddOptions) => string[];
   deleteItems: (ids?: readonly string[]) => void;
   duplicateItems: (ids?: readonly string[]) => string[];
-  altDragItems: (ids: readonly string[], delta: BoardPoint) => string[];
+  altDragItems: (ids: readonly string[], delta: BoardPoint, gestureId?: string) => string[];
   copyItems: (ids?: readonly string[]) => Promise<string | null>;
   cutItems: (ids?: readonly string[]) => Promise<void>;
   pasteAt: (
@@ -930,10 +930,10 @@ export function useBoardRoomController({
     return result.createdIds;
   }, [applyResult, onItemsAdded, selectedItemIds]);
 
-  const altDragItems = useCallback((ids: readonly string[], delta: BoardPoint) => {
+  const altDragItems = useCallback((ids: readonly string[], delta: BoardPoint, gestureId?: string) => {
     const current = historyRef.current;
     if (!current) return [];
-    const result = altDragDuplicateBoardRoomItems(current, ids, delta, () => generatedId(), { id: generatedId('alt-drag') });
+    const result = altDragDuplicateBoardRoomItems(current, ids, delta, () => generatedId(), { id: gestureId ?? generatedId('alt-drag') });
     applyResult(result, result.createdIds);
     if (result.command) {
       const created = result.history.present.items.filter((item) => result.createdIds.includes(item.id));
@@ -1241,12 +1241,23 @@ export function useBoardRoomController({
         : commit.reason === 'distribute'
           ? 'distribute'
           : 'move';
+      const patches: Record<string, BoardItemPatch> = Object.fromEntries(
+        commit.after.map((position) => [position.id, { x: position.x, y: position.y }]),
+      );
+      for (const patch of commit.zIndexPatches ?? []) {
+        patches[patch.id] = { ...(patches[patch.id] ?? {}), zIndex: patch.zIndex };
+      }
       commitPatches(
-        Object.fromEntries(commit.after.map((position) => [position.id, { x: position.x, y: position.y }])),
+        patches,
         kind,
         'layout',
         id,
       );
+    },
+    onItemsAltDragged: (commit) => {
+      const id = generatedId('alt-drag');
+      armSemanticGesture(id);
+      return altDragItems(commit.itemIds, commit.delta, id);
     },
     onItemResized: (commit) => {
       const id = generatedId('resize');
@@ -1261,6 +1272,20 @@ export function useBoardRoomController({
           resolved_height: commit.after.resolvedHeight,
         },
       }, id);
+    },
+    onItemsResized: (commit) => {
+      const id = generatedId('resize');
+      armSemanticGesture(id);
+      commitPatches(Object.fromEntries(commit.after.map((item) => [item.id, {
+        x: item.x,
+        y: item.y,
+        width: item.width,
+        height: item.height,
+        data: {
+          ...(state.items.find((candidate) => candidate.id === item.id)?.data ?? {}),
+          resolved_height: item.resolvedHeight,
+        },
+      }])), 'resize', 'layout', id);
     },
     onItemRotated: (commit) => {
       const id = generatedId('rotate');
@@ -1320,6 +1345,7 @@ export function useBoardRoomController({
     renderItem: renderBoardRoomItem,
   } : null, [
     addItems,
+    altDragItems,
     armSemanticGesture,
     commitPatches,
     execute,

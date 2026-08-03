@@ -4,6 +4,7 @@ import {
   computeBoardAutoGrow,
   distributeBoardItems,
   findBoardAlignmentGuides,
+  findBoardSmartGuides,
   fitBoardGeometry,
   marqueeIntersections,
   resolveMoodBoardGeometry,
@@ -95,6 +96,32 @@ describe('guides and multi-item operations', () => {
     }).guides
     expect(atOne.filter((guide) => guide.axis === 'x').length).toBeGreaterThan(0)
     expect(atFour.filter((guide) => guide.axis === 'x')).toHaveLength(0)
+  })
+
+  it('snaps to an existing equal gap and emits paired spacing markers', () => {
+    const geometry = resolveMoodBoardGeometry({
+      canvasWidth: 900,
+      canvasHeight: 500,
+      backgroundColor: '#fff',
+      sections: [],
+      items: [
+        { id: 'a', type: 'image', x: 0, y: 100, width: 100, height: 100, data: {} },
+        { id: 'b', type: 'image', x: 200, y: 100, width: 100, height: 100, data: {} },
+        { id: 'right', type: 'image', x: 600, y: 100, width: 100, height: 100, data: {} },
+      ],
+    })
+    const result = findBoardSmartGuides(
+      { x: 400, y: 100, width: 96, height: 100 },
+      geometry.items,
+      {
+        zoom: 1,
+        movingValueIndices: { x: [2], y: [] },
+      },
+    )
+
+    expect(result.delta).toEqual({ x: 4, y: 0 })
+    expect(result.guides.filter((guide) => guide.kind === 'spacing')).toHaveLength(2)
+    expect(result.guides.every((guide) => guide.axis === 'x')).toBe(true)
   })
 
   it('aligns unlocked items while retaining locked items as references', () => {

@@ -47,6 +47,7 @@ const mockBoard = {
     },
   ],
 };
+let mockBoardResult = mockBoard;
 
 jest.mock('@patina/design-system', () => ({
   BoardRoomCanvas: (props: Record<string, any>) => {
@@ -85,7 +86,7 @@ jest.mock('@patina/design-system', () => ({
 }));
 
 jest.mock('@patina/supabase', () => ({
-  useBoard: () => ({ data: mockBoard, isLoading: false, error: null }),
+  useBoard: () => ({ data: mockBoardResult, isLoading: false, error: null }),
   useSaveBoardLayout: () => ({ mutateAsync: mockSaveLayout }),
   useUpsertBoard: () => ({ mutateAsync: mockUpsertBoard }),
   useApplyBoardRoomState: () => ({ mutateAsync: mockApplyBoardRoomState }),
@@ -94,6 +95,7 @@ jest.mock('@patina/supabase', () => ({
 beforeEach(() => {
   jest.useFakeTimers();
   mockCanvasProps = null;
+  mockBoardResult = mockBoard;
   mockSaveLayout.mockResolvedValue(undefined);
   mockUpsertBoard.mockResolvedValue(mockBoard);
   mockApplyBoardRoomState.mockResolvedValue(undefined);
@@ -153,6 +155,101 @@ describe('BoardRoomController binding', () => {
     fireEvent.keyDown(window, { key: 'z', metaKey: true, shiftKey: true });
     expect(screen.getByTestId('edit-canvas')).toHaveTextContent('edit-x:410;selected:1');
     expect(mockCanvasProps).not.toBeNull();
+  });
+
+  it('wires Alt-drag through one structural duplicate command and preserves the original', async () => {
+    let api: BoardRoomControllerApi | null = null;
+    render(
+      <BoardRoomController owner={{ kind: 'project', id: 'project-1' }} boardId="board-project">
+        {(value) => {
+          api = value;
+          return <span data-testid="alt-items">{value.state?.items.length}</span>;
+        }}
+      </BoardRoomController>,
+    );
+    await waitFor(() => expect(api?.canvasProps).not.toBeNull());
+
+    let created: readonly string[] = [];
+    act(() => {
+      created = api!.canvasProps!.onItemsAltDragged?.({
+        itemIds: ['item-1'],
+        before: [{ id: 'item-1', x: 10, y: 20 }],
+        after: [{ id: 'item-1', x: 110, y: 70 }],
+        delta: { x: 100, y: 50 },
+        guides: [],
+      }) ?? [];
+    });
+
+    expect(created).toHaveLength(1);
+    expect(api!.state?.items.find((item) => item.id === 'item-1')).toMatchObject({ x: 10, y: 20 });
+    expect(api!.state?.items.find((item) => item.id === created[0])).toMatchObject({ x: 110, y: 70 });
+    act(() => api!.undo());
+    expect(screen.getByTestId('alt-items')).toHaveTextContent('1');
+  });
+
+  it('commits drag promotion with position and group resize patches as single undo steps', async () => {
+    mockBoardResult = {
+      ...mockBoard,
+      items: [
+        ...mockBoard.items,
+        {
+          ...mockBoard.items[0],
+          id: 'item-2',
+          x: 310,
+          y: 120,
+          width: 100,
+          height: 100,
+          z_index: 4,
+          product_id: 'product-2',
+        },
+      ],
+    };
+    let api: BoardRoomControllerApi | null = null;
+    render(
+      <BoardRoomController owner={{ kind: 'project', id: 'project-1' }} boardId="board-project">
+        {(value) => {
+          api = value;
+          return <span data-testid="gesture-state">{value.state?.items.map((item) => `${item.id}:${item.x}:${item.width}:${item.zIndex}`).join('|')}</span>;
+        }}
+      </BoardRoomController>,
+    );
+    await waitFor(() => expect(api?.canvasProps).not.toBeNull());
+
+    act(() => api!.canvasProps!.onItemsMoved?.({
+      itemIds: ['item-1'],
+      before: [{ id: 'item-1', x: 10, y: 20 }],
+      after: [{ id: 'item-1', x: 60, y: 30 }],
+      delta: { x: 50, y: 10 },
+      reason: 'drag',
+      guides: [],
+      zIndexPatches: [{ id: 'item-1', zIndex: 5 }],
+    }));
+    expect(api!.state?.items[0]).toMatchObject({ x: 60, y: 30, zIndex: 5 });
+    act(() => api!.undo());
+    expect(api!.state?.items[0]).toMatchObject({ x: 10, y: 20, zIndex: 0 });
+
+    act(() => api!.canvasProps!.onItemsResized?.({
+      itemIds: ['item-1', 'item-2'],
+      handle: 'se',
+      before: [
+        { id: 'item-1', x: 10, y: 20, width: 200, height: 220, resolvedHeight: 220 },
+        { id: 'item-2', x: 310, y: 120, width: 100, height: 100, resolvedHeight: 100 },
+      ],
+      after: [
+        { id: 'item-1', x: 10, y: 20, width: 300, height: 330, resolvedHeight: 330 },
+        { id: 'item-2', x: 460, y: 170, width: 150, height: 150, resolvedHeight: 150 },
+      ],
+      guides: [],
+    }));
+    expect(api!.state?.items).toEqual(expect.arrayContaining([
+      expect.objectContaining({ id: 'item-1', width: 300, height: 330 }),
+      expect.objectContaining({ id: 'item-2', x: 460, width: 150, height: 150 }),
+    ]));
+    act(() => api!.undo());
+    expect(api!.state?.items).toEqual(expect.arrayContaining([
+      expect.objectContaining({ id: 'item-1', width: 200, height: 220 }),
+      expect.objectContaining({ id: 'item-2', x: 310, width: 100, height: 100 }),
+    ]));
   });
 
   it('keeps Present immutable when undo shortcuts are pressed', async () => {

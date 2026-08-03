@@ -1,5 +1,5 @@
 import * as React from 'react'
-import { fireEvent, render, screen } from '@testing-library/react'
+import { act, fireEvent, render, screen } from '@testing-library/react'
 import { beforeAll, describe, expect, it, vi } from 'vitest'
 import type { EditableMoodBoardItem, MoodBoardSection } from '@patina/types'
 import { BoardRoomCanvas, type BoardRoomCanvasProps } from './BoardRoomCanvas'
@@ -7,10 +7,12 @@ import { BoardRoomCanvas, type BoardRoomCanvasProps } from './BoardRoomCanvas'
 beforeAll(() => {
   class PointerEventMock extends MouseEvent {
     pointerId: number
+    pointerType: string
 
     constructor(type: string, init: PointerEventInit = {}) {
       super(type, init)
       this.pointerId = init.pointerId ?? 0
+      this.pointerType = init.pointerType ?? 'mouse'
     }
   }
   Object.defineProperty(window, 'PointerEvent', {
@@ -156,6 +158,89 @@ describe('BoardRoomCanvas accessibility and view controls', () => {
       expect.objectContaining({ itemId: 'note', source: 'keyboard' }),
     )
   })
+
+  it('targets an unfocused right-clicked pin and selects it', () => {
+    const onContextMenuRequest = vi.fn()
+    const onSelectionChange = vi.fn()
+    renderCanvas({
+      selectedItemIds: ['chair'],
+      onContextMenuRequest,
+      onSelectionChange,
+    })
+    const image = document.querySelector('[data-board-item-id="image"]')!
+
+    fireEvent.contextMenu(image, { clientX: 420, clientY: 180 })
+
+    expect(onContextMenuRequest).toHaveBeenCalledWith({
+      itemId: 'image',
+      clientPoint: { x: 420, y: 180 },
+      source: 'pointer',
+    })
+    expect(onSelectionChange).toHaveBeenCalledWith(['image'], {
+      reason: 'item',
+    })
+    expect(document.activeElement).toBe(image)
+  })
+
+  it('opens one context request on stationary touch long-press and cancels on movement or pointer-up', () => {
+    vi.useFakeTimers()
+    try {
+      const onContextMenuRequest = vi.fn()
+      const onItemActivate = vi.fn()
+      renderCanvas({ onContextMenuRequest, onItemActivate })
+      const application = screen.getByRole('application')
+      const image = document.querySelector('[data-board-item-id="image"]')!
+
+      fireEvent.pointerDown(image, {
+        button: 0,
+        pointerId: 21,
+        pointerType: 'touch',
+        clientX: 400,
+        clientY: 160,
+      })
+      act(() => vi.advanceTimersByTime(500))
+      expect(onContextMenuRequest).toHaveBeenCalledTimes(1)
+      expect(onContextMenuRequest).toHaveBeenLastCalledWith({
+        itemId: 'image',
+        clientPoint: { x: 400, y: 160 },
+        source: 'pointer',
+      })
+      fireEvent.pointerUp(application, { pointerId: 21, pointerType: 'touch' })
+      fireEvent.click(image)
+      fireEvent.contextMenu(image)
+      expect(onContextMenuRequest).toHaveBeenCalledTimes(1)
+      expect(onItemActivate).not.toHaveBeenCalled()
+
+      fireEvent.pointerDown(image, {
+        button: 0,
+        pointerId: 22,
+        pointerType: 'touch',
+        clientX: 400,
+        clientY: 160,
+      })
+      fireEvent.pointerMove(application, {
+        pointerId: 22,
+        pointerType: 'touch',
+        clientX: 420,
+        clientY: 160,
+      })
+      act(() => vi.advanceTimersByTime(500))
+      expect(onContextMenuRequest).toHaveBeenCalledTimes(1)
+
+      fireEvent.pointerDown(image, {
+        button: 0,
+        pointerId: 23,
+        pointerType: 'touch',
+        clientX: 400,
+        clientY: 160,
+      })
+      fireEvent.pointerUp(application, { pointerId: 23, pointerType: 'touch' })
+      act(() => vi.advanceTimersByTime(500))
+      expect(onContextMenuRequest).toHaveBeenCalledTimes(1)
+    } finally {
+      vi.useRealTimers()
+    }
+  })
 })
 
 describe('BoardRoomCanvas selection', () => {
@@ -281,6 +366,104 @@ describe('BoardRoomCanvas semantic commits', () => {
     )
   })
 
+  it('previews Alt-drag copies, preserves selection offsets, and leaves originals still', () => {
+    const onItemsAltDragged = vi.fn(() => ['chair-copy', 'image-copy'])
+    renderCanvas({
+      selectedItemIds: ['chair', 'image'],
+      view: { pan: { x: 0, y: 0 }, zoom: 1 },
+      onItemsAltDragged,
+      showGuides: false,
+      showViewControls: false,
+    })
+    const application = screen.getByRole('application')
+    const chair = document.querySelector('[data-board-item-id="chair"]') as HTMLElement
+    const image = document.querySelector('[data-board-item-id="image"]') as HTMLElement
+
+    fireEvent.pointerDown(chair, {
+      button: 0,
+      pointerId: 31,
+      altKey: true,
+      clientX: 100,
+      clientY: 100,
+    })
+    expect(document.querySelectorAll('[data-alt-drag-copy-of]')).toHaveLength(2)
+    fireEvent.pointerMove(application, {
+      pointerId: 31,
+      altKey: true,
+      clientX: 150,
+      clientY: 125,
+    })
+    expect(chair.style.left).toBe('40px')
+    expect(image.style.left).toBe('340px')
+    expect(
+      (document.querySelector('[data-alt-drag-copy-of="chair"]') as HTMLElement).style.left,
+    ).toBe('90px')
+    expect(
+      (document.querySelector('[data-alt-drag-copy-of="image"]') as HTMLElement).style.left,
+    ).toBe('390px')
+
+    fireEvent.pointerUp(application, {
+      pointerId: 31,
+      altKey: true,
+      clientX: 150,
+      clientY: 125,
+    })
+    expect(onItemsAltDragged).toHaveBeenCalledTimes(1)
+    expect(onItemsAltDragged).toHaveBeenCalledWith(
+      expect.objectContaining({
+        itemIds: ['chair', 'image'],
+        delta: { x: 50, y: 25 },
+        before: [
+          { id: 'chair', x: 40, y: 80 },
+          { id: 'image', x: 340, y: 100 },
+        ],
+        after: [
+          { id: 'chair', x: 90, y: 105 },
+          { id: 'image', x: 390, y: 125 },
+        ],
+      }),
+    )
+    expect(document.querySelector('[data-alt-drag-copy-of]')).toBeNull()
+  })
+
+  it('promotes the dragged selection once in the same move commit', () => {
+    const onItemsMoved = vi.fn()
+    renderCanvas({
+      selectedItemIds: ['image'],
+      view: { pan: { x: 0, y: 0 }, zoom: 1 },
+      onItemsMoved,
+      showGuides: false,
+      showViewControls: false,
+    })
+    const application = screen.getByRole('application')
+    const image = document.querySelector('[data-board-item-id="image"]')!
+    fireEvent.pointerDown(image, {
+      button: 0,
+      pointerId: 32,
+      clientX: 400,
+      clientY: 150,
+    })
+    fireEvent.pointerMove(application, {
+      pointerId: 32,
+      clientX: 410,
+      clientY: 150,
+    })
+    fireEvent.pointerUp(application, {
+      pointerId: 32,
+      clientX: 410,
+      clientY: 150,
+    })
+
+    expect(onItemsMoved).toHaveBeenCalledTimes(1)
+    expect(onItemsMoved).toHaveBeenCalledWith(
+      expect.objectContaining({
+        reason: 'drag',
+        after: [{ id: 'image', x: 350, y: 100 }],
+        zIndexPatches: [{ id: 'image', zIndex: 4 }],
+      }),
+    )
+  })
+
   it('evaluates section membership against the section bounds captured before a move', () => {
     const onSectionMembership = vi.fn()
     renderCanvas({
@@ -360,6 +543,128 @@ describe('BoardRoomCanvas semantic commits', () => {
       }),
     )
     rerender(<div />)
+  })
+
+  it('exposes eight constant-screen-size group handles and scales every member about the anchor', () => {
+    const onItemsResized = vi.fn()
+    renderCanvas({
+      selectedItemIds: ['chair', 'image'],
+      view: { pan: { x: 0, y: 0 }, zoom: 2 },
+      onItemsResized,
+      showGuides: false,
+      showViewControls: false,
+    })
+    const application = screen.getByRole('application')
+    const handles = screen.getAllByRole('button', {
+      name: /Resize selection/,
+    })
+    expect(handles).toHaveLength(8)
+    expect(handles[0]).toHaveStyle({ width: '10px', height: '10px' })
+    expect(screen.queryByRole('button', { name: 'Rotate item' })).toBeNull()
+
+    const southeast = screen.getByRole('button', {
+      name: 'Resize selection se',
+    })
+    fireEvent.pointerDown(southeast, {
+      button: 0,
+      pointerId: 33,
+      clientX: 1120,
+      clientY: 712,
+    })
+    fireEvent.pointerMove(application, {
+      pointerId: 33,
+      clientX: 1640,
+      clientY: 988,
+    })
+    expect(onItemsResized).not.toHaveBeenCalled()
+    fireEvent.pointerUp(application, {
+      pointerId: 33,
+      clientX: 1640,
+      clientY: 988,
+    })
+
+    expect(onItemsResized).toHaveBeenCalledTimes(1)
+    const commit = onItemsResized.mock.lastCall?.[0]
+    const chair = commit.after.find((item: { id: string }) => item.id === 'chair')
+    const image = commit.after.find((item: { id: string }) => item.id === 'image')
+    expect(chair).toMatchObject({ x: 40, y: 80, width: 360, resolvedHeight: 414 })
+    expect(image).toMatchObject({ x: 490, y: 110, width: 330, resolvedHeight: 240 })
+  })
+
+  it('shows equal-spacing guides while resizing, snaps the edge, and lets Alt suppress both', () => {
+    const guideItems: EditableMoodBoardItem[] = [
+      { id: 'a', type: 'image', x: 0, y: 100, width: 100, height: 100, data: {} },
+      { id: 'b', type: 'image', x: 200, y: 100, width: 100, height: 100, data: {} },
+      { id: 'moving', type: 'note', x: 400, y: 100, width: 90, height: 100, data: {} },
+      { id: 'right', type: 'image', x: 600, y: 100, width: 100, height: 100, data: {} },
+    ]
+    const onItemResized = vi.fn()
+    const { rerender } = renderCanvas({
+      items: guideItems,
+      sections: [],
+      selectedItemIds: ['moving'],
+      view: { pan: { x: 0, y: 0 }, zoom: 1 },
+      onItemResized,
+      showViewControls: false,
+    })
+    const application = screen.getByRole('application')
+    const east = screen.getByRole('button', { name: 'Resize e' })
+    fireEvent.pointerDown(east, {
+      button: 0,
+      pointerId: 34,
+      clientX: 490,
+      clientY: 150,
+    })
+    fireEvent.pointerMove(application, {
+      pointerId: 34,
+      clientX: 496,
+      clientY: 150,
+    })
+    expect(
+      document.querySelectorAll('[data-board-guide-kind="spacing"]'),
+    ).toHaveLength(2)
+    fireEvent.pointerUp(application, {
+      pointerId: 34,
+      clientX: 496,
+      clientY: 150,
+    })
+    expect(onItemResized.mock.lastCall?.[0].after.width).toBe(100)
+
+    onItemResized.mockClear()
+    rerender(
+      <BoardRoomCanvas
+        boardName="Living Room"
+        items={guideItems}
+        sections={[]}
+        selectedItemIds={['moving']}
+        view={{ pan: { x: 0, y: 0 }, zoom: 1 }}
+        onItemResized={onItemResized}
+        showViewControls={false}
+        renderItem={(item) => <span>{item.id}</span>}
+      />,
+    )
+    const eastAgain = screen.getByRole('button', { name: 'Resize e' })
+    fireEvent.pointerDown(eastAgain, {
+      button: 0,
+      pointerId: 35,
+      clientX: 490,
+      clientY: 150,
+      altKey: true,
+    })
+    fireEvent.pointerMove(application, {
+      pointerId: 35,
+      clientX: 496,
+      clientY: 150,
+      altKey: true,
+    })
+    expect(document.querySelector('[data-board-guide]')).toBeNull()
+    fireEvent.pointerUp(application, {
+      pointerId: 35,
+      clientX: 496,
+      clientY: 150,
+      altKey: true,
+    })
+    expect(onItemResized.mock.lastCall?.[0].after.width).toBe(96)
   })
 
   it('snaps rotation to 15 degrees while Shift is held', () => {

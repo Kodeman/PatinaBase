@@ -18,7 +18,7 @@ import {
   DEFAULT_MOOD_BOARD_CANVAS,
   DEFAULT_MOOD_BOARD_GRID_SIZE,
   distributeBoardItems,
-  findBoardAlignmentGuides,
+  findBoardSmartGuides,
   fitBoardGeometry,
   marqueeIntersections,
   resolveMoodBoardGeometry,
@@ -44,6 +44,8 @@ export interface BoardItemsMovedCommit {
   delta: BoardPoint
   reason: 'drag' | 'keyboard' | 'align' | 'distribute'
   guides: BoardGuide[]
+  /** Applied with the position patches so drag promotion is one command. */
+  zIndexPatches?: Array<{ id: string; zIndex: number }>
 }
 
 export type BoardResizeHandle =
@@ -69,6 +71,26 @@ export interface BoardItemResizedCommit {
   handle: BoardResizeHandle
   before: BoardResizeGeometry
   after: BoardResizeGeometry
+}
+
+export interface BoardResizeSnapshot extends BoardResizeGeometry {
+  id: string
+}
+
+export interface BoardItemsResizedCommit {
+  itemIds: string[]
+  handle: BoardResizeHandle
+  before: BoardResizeSnapshot[]
+  after: BoardResizeSnapshot[]
+  guides: BoardGuide[]
+}
+
+export interface BoardItemsAltDraggedCommit {
+  itemIds: string[]
+  before: BoardMoveSnapshot[]
+  after: BoardMoveSnapshot[]
+  delta: BoardPoint
+  guides: BoardGuide[]
 }
 
 export interface BoardItemRotatedCommit {
@@ -125,6 +147,10 @@ export interface BoardRoomCanvasProps extends Omit<
   ) => void
   onItemsMoved?: (commit: BoardItemsMovedCommit) => void
   onItemResized?: (commit: BoardItemResizedCommit) => void
+  onItemsResized?: (commit: BoardItemsResizedCommit) => void
+  onItemsAltDragged?: (
+    commit: BoardItemsAltDraggedCommit,
+  ) => readonly string[] | void
   onItemRotated?: (commit: BoardItemRotatedCommit) => void
   onItemsDropped?: (commit: BoardItemsDroppedCommit) => void
   onSectionMembership?: (commit: BoardSectionMembershipCommit) => void
@@ -142,7 +168,10 @@ export interface BoardRoomCanvasProps extends Omit<
 }
 
 type PreviewGeometry = Partial<
-  Pick<EditableMoodBoardItem, 'x' | 'y' | 'width' | 'height' | 'rotation'>
+  Pick<
+    EditableMoodBoardItem,
+    'x' | 'y' | 'width' | 'height' | 'rotation' | 'zIndex'
+  >
 > & {
   resolvedHeight?: number
 }
@@ -167,10 +196,14 @@ interface MoveGesture {
   pointerId: number
   startScreen: BoardPoint
   leadId: string
+  leadBounds: BoardRect
   itemIds: string[]
   before: BoardMoveSnapshot[]
   latest: BoardMoveSnapshot[]
   guides: BoardGuide[]
+  promotedZIndices: Array<{ id: string; zIndex: number }>
+  didMove: boolean
+  duplicate: boolean
   sectionBounds: Array<{ id: string; bounds: BoardRect }>
 }
 
@@ -178,10 +211,13 @@ interface ResizeGesture {
   kind: 'resize'
   pointerId: number
   startScreen: BoardPoint
-  itemId: string
+  itemIds: string[]
   handle: BoardResizeHandle
-  before: BoardResizeGeometry
-  latest: BoardResizeGeometry
+  boundsBefore: BoardResizeGeometry
+  before: BoardResizeSnapshot[]
+  latest: BoardResizeSnapshot[]
+  latestBounds: BoardResizeGeometry
+  guides: BoardGuide[]
   preserveAspectByDefault: boolean
 }
 
@@ -218,6 +254,9 @@ const ASPECT_LOCKED_TYPES = new Set([
   'image',
   'room_scan',
 ])
+const BOARD_LONG_PRESS_MS = 500
+const BOARD_LONG_PRESS_MOVE_TOLERANCE_PX = 8
+const BOARD_LONG_PRESS_SUPPRESSION_MS = 1_000
 
 function eventPoint(
   event: { clientX: number; clientY: number },
@@ -309,6 +348,144 @@ function resizeGeometry(
   }
 }
 
+function resizeHandleAxes(handle: BoardResizeHandle) {
+  return {
+    horizontal: handle.includes('w') || handle.includes('e'),
+    vertical: handle.includes('n') || handle.includes('s'),
+    movesLeft: handle.includes('w'),
+    movesTop: handle.includes('n'),
+  }
+}
+
+function resizeGeometryWithSnapping(
+  before: BoardResizeGeometry,
+  handle: BoardResizeHandle,
+  rawDelta: BoardPoint,
+  preserveAspect: boolean,
+  options: {
+    geometryItems: ReturnType<typeof resolveMoodBoardGeometry>['items']
+    excludedIds: readonly string[]
+    canvas: { width: number; height: number }
+    zoom: number
+    gridSize: number
+    snapToGrid: boolean
+    showGuides: boolean
+    suppressSnapping: boolean
+  },
+): { geometry: BoardResizeGeometry; guides: BoardGuide[] } {
+  const axes = resizeHandleAxes(handle)
+  let delta = { ...rawDelta }
+  let candidate = resizeGeometry(before, handle, delta, preserveAspect)
+
+  if (options.snapToGrid && !options.suppressSnapping) {
+    if (axes.horizontal) {
+      const edge = axes.movesLeft
+        ? candidate.x
+        : candidate.x + candidate.width
+      delta.x += Math.round(edge / options.gridSize) * options.gridSize - edge
+    }
+    if (axes.vertical) {
+      const edge = axes.movesTop
+        ? candidate.y
+        : candidate.y + candidate.resolvedHeight
+      delta.y += Math.round(edge / options.gridSize) * options.gridSize - edge
+    }
+    candidate = resizeGeometry(before, handle, delta, preserveAspect)
+  }
+
+  if (!options.showGuides || options.suppressSnapping) {
+    return { geometry: candidate, guides: [] }
+  }
+  const guideResult = findBoardSmartGuides(
+    {
+      x: candidate.x,
+      y: candidate.y,
+      width: candidate.width,
+      height: candidate.resolvedHeight,
+    },
+    options.geometryItems,
+    {
+      zoom: options.zoom,
+      excludeKeys: options.excludedIds,
+      canvas: options.canvas,
+      movingValueIndices: {
+        x: axes.horizontal ? [axes.movesLeft ? 0 : 2] : [],
+        y: axes.vertical ? [axes.movesTop ? 0 : 2] : [],
+      },
+    },
+  )
+  if (axes.horizontal) delta.x += guideResult.delta.x
+  if (axes.vertical) delta.y += guideResult.delta.y
+  return {
+    geometry: resizeGeometry(before, handle, delta, preserveAspect),
+    guides: guideResult.guides,
+  }
+}
+
+function scaleResizeGroup(
+  before: readonly BoardResizeSnapshot[],
+  boundsBefore: BoardResizeGeometry,
+  desiredBounds: BoardResizeGeometry,
+  handle: BoardResizeHandle,
+): { bounds: BoardResizeGeometry; items: BoardResizeSnapshot[] } {
+  const axes = resizeHandleAxes(handle)
+  let scaleX = axes.horizontal
+    ? desiredBounds.width / Math.max(1, boundsBefore.width)
+    : 1
+  let scaleY = axes.vertical
+    ? desiredBounds.resolvedHeight / Math.max(1, boundsBefore.resolvedHeight)
+    : 1
+  const minimumScaleX = Math.max(
+    0,
+    ...before.map((item) => 40 / Math.max(1, item.width)),
+  )
+  const minimumScaleY = Math.max(
+    0,
+    ...before.map((item) => 40 / Math.max(1, item.resolvedHeight)),
+  )
+  const uniformScale =
+    axes.horizontal &&
+    axes.vertical &&
+    Math.abs(scaleX - scaleY) < 0.000_001
+  if (uniformScale) {
+    const scale = Math.max(scaleX, minimumScaleX, minimumScaleY)
+    scaleX = scale
+    scaleY = scale
+  } else {
+    scaleX = Math.max(scaleX, minimumScaleX)
+    scaleY = Math.max(scaleY, minimumScaleY)
+  }
+  const width = boundsBefore.width * scaleX
+  const resolvedHeight = boundsBefore.resolvedHeight * scaleY
+  const x = axes.movesLeft
+    ? boundsBefore.x + boundsBefore.width - width
+    : boundsBefore.x
+  const y = axes.movesTop
+    ? boundsBefore.y + boundsBefore.resolvedHeight - resolvedHeight
+    : boundsBefore.y
+  const bounds: BoardResizeGeometry = {
+    x,
+    y,
+    width,
+    height: resolvedHeight,
+    resolvedHeight,
+  }
+  return {
+    bounds,
+    items: before.map((item) => {
+      const nextHeight = item.resolvedHeight * scaleY
+      return {
+        ...item,
+        x: x + (item.x - boundsBefore.x) * scaleX,
+        y: y + (item.y - boundsBefore.y) * scaleY,
+        width: item.width * scaleX,
+        height: item.height === null ? null : nextHeight,
+        resolvedHeight: nextHeight,
+      }
+    }),
+  }
+}
+
 function useReducedMotion(): boolean {
   const [reduced, setReduced] = React.useState(false)
   React.useEffect(() => {
@@ -346,6 +523,8 @@ export const BoardRoomCanvas = React.forwardRef<
       onViewChange,
       onItemsMoved,
       onItemResized,
+      onItemsResized,
+      onItemsAltDragged,
       onItemRotated,
       onItemsDropped,
       onSectionMembership,
@@ -373,6 +552,9 @@ export const BoardRoomCanvas = React.forwardRef<
     const [preview, setPreview] = React.useState<
       Record<string, PreviewGeometry>
     >({})
+    const [altDragPreview, setAltDragPreview] = React.useState<
+      BoardMoveSnapshot[] | null
+    >(null)
     const [marquee, setMarquee] = React.useState<BoardRect | null>(null)
     const [guides, setGuides] = React.useState<BoardGuide[]>([])
     const [announcement, setAnnouncement] = React.useState('')
@@ -381,11 +563,30 @@ export const BoardRoomCanvas = React.forwardRef<
       null,
     )
     const gestureRef = React.useRef<CanvasGesture | null>(null)
+    const longPressRef = React.useRef<{
+      pointerId: number
+      itemId: string
+      startClient: BoardPoint
+      clientPoint: BoardPoint
+      timer: ReturnType<typeof setTimeout>
+    } | null>(null)
+    const suppressClickUntilRef = React.useRef(0)
+    const suppressContextMenuUntilRef = React.useRef(0)
     const reducedMotion = useReducedMotion()
     const selectedSet = React.useMemo(
       () => new Set(selectedItemIds),
       [selectedItemIds],
     )
+
+    const cancelLongPress = React.useCallback((pointerId?: number) => {
+      const pending = longPressRef.current
+      if (!pending || (pointerId !== undefined && pending.pointerId !== pointerId))
+        return
+      clearTimeout(pending.timer)
+      longPressRef.current = null
+    }, [])
+
+    React.useEffect(() => cancelLongPress, [cancelLongPress])
 
     const setRefs = React.useCallback(
       (node: HTMLDivElement | null) => {
@@ -473,6 +674,7 @@ export const BoardRoomCanvas = React.forwardRef<
         patches: readonly BoardPositionPatch[],
         reason: BoardItemsMovedCommit['reason'],
         moveGuides: BoardGuide[] = [],
+        zIndexPatches: Array<{ id: string; zIndex: number }> = [],
       ) => {
         if (patches.length === 0) return
         const byId = new Map(patches.map((patch) => [patch.id, patch]))
@@ -495,10 +697,15 @@ export const BoardRoomCanvas = React.forwardRef<
           },
           reason,
           guides: moveGuides,
+          ...(zIndexPatches.length > 0 ? { zIndexPatches } : {}),
         })
+        const zById = new Map(
+          zIndexPatches.map((patch) => [patch.id, patch.zIndex]),
+        )
         const nextItems = items.map((item) => ({
           ...item,
           ...(byId.get(item.id) ?? {}),
+          ...(zById.has(item.id) ? { zIndex: zById.get(item.id)! } : {}),
         }))
         emitAutoGrow(nextItems, reason === 'drag' ? 'move' : reason)
       },
@@ -511,6 +718,43 @@ export const BoardRoomCanvas = React.forwardRef<
         setAnnouncement(selectionLabel(ids.length))
       },
       [onSelectionChange],
+    )
+
+    const startLongPress = React.useCallback(
+      (
+        event: React.PointerEvent<HTMLDivElement>,
+        itemId: string,
+      ) => {
+        if (event.pointerType !== 'touch' || !onContextMenuRequest) return
+        cancelLongPress()
+        const pending = {
+          pointerId: event.pointerId,
+          itemId,
+          startClient: { x: event.clientX, y: event.clientY },
+          clientPoint: { x: event.clientX, y: event.clientY },
+          timer: 0 as unknown as ReturnType<typeof setTimeout>,
+        }
+        pending.timer = setTimeout(() => {
+          if (longPressRef.current !== pending) return
+          longPressRef.current = null
+          gestureRef.current = null
+          const suppressUntil = Date.now() + BOARD_LONG_PRESS_SUPPRESSION_MS
+          suppressClickUntilRef.current = suppressUntil
+          suppressContextMenuUntilRef.current = suppressUntil
+          setPreview({})
+          setAltDragPreview(null)
+          setGuides([])
+          setMarquee(null)
+          setAnnouncement('Context menu opened')
+          onContextMenuRequest({
+            itemId: pending.itemId,
+            clientPoint: pending.clientPoint,
+            source: 'pointer',
+          })
+        }, BOARD_LONG_PRESS_MS)
+        longPressRef.current = pending
+      },
+      [cancelLongPress, onContextMenuRequest],
     )
 
     const handleItemPointerDown = (
@@ -537,6 +781,9 @@ export const BoardRoomCanvas = React.forwardRef<
       }
       if (nextSelection.join('|') !== selectedItemIds.join('|'))
         setSelection(nextSelection, 'item')
+      startLongPress(event, itemId)
+      if (event.pointerType === 'touch')
+        event.currentTarget.setPointerCapture?.(event.pointerId)
       if (
         readOnly ||
         item.locked ||
@@ -554,50 +801,96 @@ export const BoardRoomCanvas = React.forwardRef<
           x: candidate.x,
           y: candidate.y,
         }))
+      const maxZ = Math.max(0, ...items.map((candidate) => candidate.zIndex ?? 0))
+      const promotedZIndices = items
+        .filter((candidate) => movingIds.includes(candidate.id))
+        .sort((a, b) => (a.zIndex ?? 0) - (b.zIndex ?? 0))
+        .map((candidate, index) => ({
+          id: candidate.id,
+          zIndex: maxZ + index + 1,
+        }))
+      const duplicate = event.altKey && !!onItemsAltDragged
+      const leadBounds = geometry.items.find(
+        (candidate) => candidate.id === itemId,
+      )?.aabb
+      if (!leadBounds) return
       gestureRef.current = {
         kind: 'move',
         pointerId: event.pointerId,
         startScreen: eventPoint(event, viewport),
         leadId: itemId,
+        leadBounds,
         itemIds: movingIds,
         before,
         latest: before,
         guides: [],
+        promotedZIndices,
+        didMove: false,
+        duplicate,
         sectionBounds: geometry.sections.map(({ id, bounds }) => ({
           id,
           bounds,
         })),
       }
+      if (duplicate) setAltDragPreview(before)
       event.currentTarget.setPointerCapture?.(event.pointerId)
     }
 
     const handleResizePointerDown = (
       event: React.PointerEvent<HTMLButtonElement>,
-      itemId: string,
+      itemIds: readonly string[],
       handle: BoardResizeHandle,
     ) => {
       event.preventDefault()
       event.stopPropagation()
       const viewport = viewportRef.current
-      const item = geometry.items.find((candidate) => candidate.id === itemId)
-      const source = items.find((candidate) => candidate.id === itemId)
-      if (!viewport || !item || !source || readOnly || item.locked) return
-      const before: BoardResizeGeometry = {
-        x: item.x,
-        y: item.y,
-        width: item.width,
-        height: source.height ?? null,
-        resolvedHeight: item.height,
-      }
+      const sources = items.filter(
+        (candidate) => itemIds.includes(candidate.id) && !candidate.locked,
+      )
+      const resolved = geometry.items.filter(
+        (candidate) => candidate.id && sources.some((source) => source.id === candidate.id),
+      )
+      if (!viewport || sources.length === 0 || readOnly) return
+      const before: BoardResizeSnapshot[] = resolved.map((item) => {
+        const source = sources.find((candidate) => candidate.id === item.id)!
+        return {
+          id: source.id,
+          x: item.x,
+          y: item.y,
+          width: item.width,
+          height: source.height ?? null,
+          resolvedHeight: item.height,
+        }
+      })
+      const selectionBounds = unionBoardRects(resolved.map((item) => item.aabb))
+      if (!selectionBounds) return
+      const boundsBefore: BoardResizeGeometry = sources.length === 1
+        ? {
+            x: before[0]!.x,
+            y: before[0]!.y,
+            width: before[0]!.width,
+            height: before[0]!.height,
+            resolvedHeight: before[0]!.resolvedHeight,
+          }
+        : {
+            x: selectionBounds.x,
+            y: selectionBounds.y,
+            width: selectionBounds.width,
+            height: selectionBounds.height,
+            resolvedHeight: selectionBounds.height,
+          }
       gestureRef.current = {
         kind: 'resize',
         pointerId: event.pointerId,
         startScreen: eventPoint(event, viewport),
-        itemId,
+        itemIds: before.map((item) => item.id),
         handle,
+        boundsBefore,
         before,
         latest: before,
-        preserveAspectByDefault: ASPECT_LOCKED_TYPES.has(item.type),
+        latestBounds: boundsBefore,
+        guides: [],
+        preserveAspectByDefault: sources.length > 1 || ASPECT_LOCKED_TYPES.has(sources[0]!.type),
       }
       event.currentTarget.setPointerCapture?.(event.pointerId)
     }
@@ -666,6 +959,16 @@ export const BoardRoomCanvas = React.forwardRef<
     }
 
     const handlePointerMove = (event: React.PointerEvent<HTMLDivElement>) => {
+      const pendingLongPress = longPressRef.current
+      if (
+        pendingLongPress?.pointerId === event.pointerId &&
+        Math.hypot(
+          event.clientX - pendingLongPress.startClient.x,
+          event.clientY - pendingLongPress.startClient.y,
+        ) > BOARD_LONG_PRESS_MOVE_TOLERANCE_PX
+      ) {
+        cancelLongPress(event.pointerId)
+      }
       const gesture = gestureRef.current
       const viewport = viewportRef.current
       if (!gesture || !viewport || gesture.pointerId !== event.pointerId) return
@@ -703,11 +1006,9 @@ export const BoardRoomCanvas = React.forwardRef<
         const leadBefore = gesture.before.find(
           (item) => item.id === gesture.leadId,
         )!
-        const leadGeometry = geometry.items.find(
-          (item) => item.id === gesture.leadId,
-        )!
+        if (rawDelta.x !== 0 || rawDelta.y !== 0) gesture.didMove = true
         let delta = { ...rawDelta }
-        if (snapToGrid) {
+        if (snapToGrid && !event.altKey) {
           delta = {
             x:
               Math.round((leadBefore.x + delta.x) / gridSize) * gridSize -
@@ -719,11 +1020,11 @@ export const BoardRoomCanvas = React.forwardRef<
         }
         let nextGuides: BoardGuide[] = []
         if (showGuides && !event.altKey) {
-          const guideResult = findBoardAlignmentGuides(
+          const guideResult = findBoardSmartGuides(
             {
-              ...leadGeometry.aabb,
-              x: leadGeometry.aabb.x + delta.x,
-              y: leadGeometry.aabb.y + delta.y,
+              ...gesture.leadBounds,
+              x: gesture.leadBounds.x + delta.x,
+              y: gesture.leadBounds.y + delta.y,
             },
             geometry.items,
             {
@@ -744,35 +1045,74 @@ export const BoardRoomCanvas = React.forwardRef<
           y: item.y + delta.y,
         }))
         gesture.guides = nextGuides
-        setPreview(
-          Object.fromEntries(
-            gesture.latest.map((item) => [item.id, { x: item.x, y: item.y }]),
-          ),
-        )
+        if (gesture.duplicate) {
+          setAltDragPreview(gesture.latest)
+        } else {
+          const zById = new Map(
+            gesture.promotedZIndices.map((patch) => [patch.id, patch.zIndex]),
+          )
+          setPreview(
+            Object.fromEntries(
+              gesture.latest.map((item) => [
+                item.id,
+                { x: item.x, y: item.y, zIndex: zById.get(item.id) },
+              ]),
+            ),
+          )
+        }
         setGuides(nextGuides)
         return
       }
 
       if (gesture.kind === 'resize') {
-        const delta = {
+        const rawDelta = {
           x: (screen.x - gesture.startScreen.x) / activeView.zoom,
           y: (screen.y - gesture.startScreen.y) / activeView.zoom,
         }
-        gesture.latest = resizeGeometry(
-          gesture.before,
+        const snapped = resizeGeometryWithSnapping(
+          gesture.boundsBefore,
           gesture.handle,
-          delta,
+          rawDelta,
           gesture.preserveAspectByDefault && !event.shiftKey,
-        )
-        setPreview({
-          [gesture.itemId]: {
-            x: gesture.latest.x,
-            y: gesture.latest.y,
-            width: gesture.latest.width,
-            height: gesture.latest.height,
-            resolvedHeight: gesture.latest.resolvedHeight,
+          {
+            geometryItems: geometry.items,
+            excludedIds: gesture.itemIds,
+            canvas: geometry.canvas,
+            zoom: activeView.zoom,
+            gridSize,
+            snapToGrid,
+            showGuides,
+            suppressSnapping: event.altKey,
           },
-        })
+        )
+        if (gesture.itemIds.length === 1) {
+          gesture.latestBounds = snapped.geometry
+          gesture.latest = [{
+            id: gesture.itemIds[0]!,
+            ...snapped.geometry,
+          }]
+        } else {
+          const scaled = scaleResizeGroup(
+            gesture.before,
+            gesture.boundsBefore,
+            snapped.geometry,
+            gesture.handle,
+          )
+          gesture.latestBounds = scaled.bounds
+          gesture.latest = scaled.items
+        }
+        gesture.guides = snapped.guides
+        setPreview(Object.fromEntries(gesture.latest.map((item) => [
+          item.id,
+          {
+            x: item.x,
+            y: item.y,
+            width: item.width,
+            height: item.height,
+            resolvedHeight: item.resolvedHeight,
+          },
+        ])))
+        setGuides(snapped.guides)
         return
       }
 
@@ -793,6 +1133,7 @@ export const BoardRoomCanvas = React.forwardRef<
     }
 
     const commitGesture = (event: React.PointerEvent<HTMLDivElement>) => {
+      cancelLongPress(event.pointerId)
       const gesture = gestureRef.current
       if (!gesture || gesture.pointerId !== event.pointerId) return
       gestureRef.current = null
@@ -814,12 +1155,55 @@ export const BoardRoomCanvas = React.forwardRef<
           x: item.x,
           y: item.y,
         }))
-        emitMovePatches(patches, 'drag', gesture.guides)
+        let createdIds: readonly string[] = []
+        if (gesture.didMove && gesture.duplicate) {
+          createdIds = onItemsAltDragged?.({
+            itemIds: gesture.itemIds,
+            before: gesture.before,
+            after: gesture.latest,
+            delta: {
+              x: gesture.latest[0]!.x - gesture.before[0]!.x,
+              y: gesture.latest[0]!.y - gesture.before[0]!.y,
+            },
+            guides: gesture.guides,
+          }) ?? []
+          if (createdIds.length === gesture.itemIds.length) {
+            const maxZ = Math.max(
+              0,
+              ...items.map((item) => item.zIndex ?? 0),
+            )
+            const copied = gesture.itemIds.flatMap((sourceId, index) => {
+              const source = items.find((item) => item.id === sourceId)
+              const next = gesture.latest.find((item) => item.id === sourceId)
+              if (!source || !next || !createdIds[index]) return []
+              return [{
+                ...source,
+                id: createdIds[index]!,
+                x: next.x,
+                y: next.y,
+                zIndex: maxZ + index + 1,
+              }]
+            })
+            emitAutoGrow([...items, ...copied], 'move')
+          }
+        } else if (gesture.didMove) {
+          emitMovePatches(
+            patches,
+            'drag',
+            gesture.guides,
+            gesture.promotedZIndices,
+          )
+        }
         const nextById = new Map(patches.map((patch) => [patch.id, patch]))
-        for (const itemId of gesture.itemIds) {
+        const membershipIds = gesture.duplicate && createdIds.length > 0
+          ? createdIds
+          : gesture.itemIds
+        for (let index = 0; index < gesture.itemIds.length; index += 1) {
+          const itemId = gesture.itemIds[index]!
+          const membershipId = membershipIds[index]
           const item = items.find((candidate) => candidate.id === itemId)
           const next = nextById.get(itemId)
-          if (!item || !next) continue
+          if (!item || !next || !membershipId || !gesture.didMove) continue
           const resolved = geometry.items.find(
             (candidate) => candidate.id === itemId,
           )
@@ -840,39 +1224,63 @@ export const BoardRoomCanvas = React.forwardRef<
               ? item.data.section_id
               : null
           if (sectionId !== previous)
-            onSectionMembership?.({ itemId, sectionId })
+            onSectionMembership?.({ itemId: membershipId, sectionId })
         }
-        setAnnouncement(
-          gesture.itemIds.length === 1
-            ? 'Moved 1 item'
-            : `Moved ${gesture.itemIds.length} items`,
-        )
+        if (gesture.didMove) {
+          setAnnouncement(
+            gesture.duplicate
+              ? gesture.itemIds.length === 1
+                ? 'Duplicated and moved 1 item'
+                : `Duplicated and moved ${gesture.itemIds.length} items`
+              : gesture.itemIds.length === 1
+                ? 'Moved 1 item'
+                : `Moved ${gesture.itemIds.length} items`,
+          )
+        }
       }
 
       if (gesture.kind === 'resize' && gesture.latest !== gesture.before) {
-        onItemResized?.({
-          itemId: gesture.itemId,
-          handle: gesture.handle,
-          before: gesture.before,
-          after: gesture.latest,
-        })
-        const nextItems = items.map((item) =>
-          item.id === gesture.itemId
+        if (gesture.itemIds.length === 1) {
+          onItemResized?.({
+            itemId: gesture.itemIds[0]!,
+            handle: gesture.handle,
+            before: gesture.before[0]!,
+            after: gesture.latest[0]!,
+          })
+        } else {
+          onItemsResized?.({
+            itemIds: gesture.itemIds,
+            handle: gesture.handle,
+            before: gesture.before,
+            after: gesture.latest,
+            guides: gesture.guides,
+          })
+        }
+        const nextById = new Map(
+          gesture.latest.map((item) => [item.id, item]),
+        )
+        const nextItems = items.map((item) => {
+          const next = nextById.get(item.id)
+          return next
             ? {
                 ...item,
-                x: gesture.latest.x,
-                y: gesture.latest.y,
-                width: gesture.latest.width,
-                height: gesture.latest.height,
+                x: next.x,
+                y: next.y,
+                width: next.width,
+                height: next.height,
                 data: {
                   ...(item.data ?? {}),
-                  resolved_height: gesture.latest.resolvedHeight,
+                  resolved_height: next.resolvedHeight,
                 },
               }
-            : item,
-        )
+            : item
+        })
         emitAutoGrow(nextItems, 'resize')
-        setAnnouncement('Resized 1 item')
+        setAnnouncement(
+          gesture.itemIds.length === 1
+            ? 'Resized 1 item'
+            : `Resized ${gesture.itemIds.length} items`,
+        )
       }
 
       if (gesture.kind === 'rotate' && gesture.latest !== gesture.before) {
@@ -891,13 +1299,16 @@ export const BoardRoomCanvas = React.forwardRef<
       }
 
       setPreview({})
+      setAltDragPreview(null)
       setGuides([])
       setMarquee(null)
     }
 
     const cancelGesture = () => {
+      cancelLongPress()
       gestureRef.current = null
       setPreview({})
+      setAltDragPreview(null)
       setGuides([])
       setMarquee(null)
     }
@@ -1101,6 +1512,21 @@ export const BoardRoomCanvas = React.forwardRef<
       selectedItemIds.length === 1
         ? geometry.items.find((item) => item.id === selectedItemIds[0])
         : undefined
+    const resizableSelectionIds = geometry.items
+      .filter(
+        (item) =>
+          item.id && selectedSet.has(item.id) && item.locked !== true,
+      )
+      .map((item) => item.id!)
+    const resizableSelectionBounds = unionBoardRects(
+      geometry.items
+        .filter(
+          (item) =>
+            item.id &&
+            resizableSelectionIds.includes(item.id),
+        )
+        .map((item) => item.aabb),
+    )
     const handleSize = 20 / activeView.zoom
     const handleDot = 10 / activeView.zoom
 
@@ -1123,6 +1549,12 @@ export const BoardRoomCanvas = React.forwardRef<
         onPointerMove={handlePointerMove}
         onPointerUp={commitGesture}
         onPointerCancel={cancelGesture}
+        onClickCapture={(event) => {
+          if (Date.now() > suppressClickUntilRef.current) return
+          suppressClickUntilRef.current = 0
+          event.preventDefault()
+          event.stopPropagation()
+        }}
         onWheel={handleWheel}
         onKeyDown={handleKeyDown}
         onKeyUp={(event) => {
@@ -1137,10 +1569,25 @@ export const BoardRoomCanvas = React.forwardRef<
         }}
         onDrop={handleDrop}
         onContextMenu={(event) => {
+          if (Date.now() <= suppressContextMenuUntilRef.current) {
+            suppressContextMenuUntilRef.current = 0
+            event.preventDefault()
+            event.stopPropagation()
+            return
+          }
           if (!onContextMenuRequest) return
           event.preventDefault()
+          const target = event.target instanceof Element
+            ? event.target.closest<HTMLElement>('[data-board-item-id]')
+            : null
+          const itemId = target?.dataset.boardItemId ?? null
+          if (itemId) {
+            target?.focus()
+            setFocusedItemId(itemId)
+            if (!selectedSet.has(itemId)) setSelection([itemId], 'item')
+          }
           onContextMenuRequest({
-            itemId: focusedItemId,
+            itemId,
             clientPoint: { x: event.clientX, y: event.clientY },
             source: 'pointer',
           })
@@ -1348,7 +1795,7 @@ export const BoardRoomCanvas = React.forwardRef<
                       size={handleSize}
                       dot={handleDot}
                       onPointerDown={(event) =>
-                        handleResizePointerDown(event, item.id, handle)
+                        handleResizePointerDown(event, [item.id], handle)
                       }
                     />
                   ))}
@@ -1378,6 +1825,43 @@ export const BoardRoomCanvas = React.forwardRef<
             )
           })}
 
+          {altDragPreview?.map((position, index) => {
+            const item = items.find((candidate) => candidate.id === position.id)
+            const resolved = geometry.items.find(
+              (candidate) => candidate.id === position.id,
+            )
+            if (!item || !resolved) return null
+            return (
+              <div
+                key={`alt-drag-${item.id}`}
+                aria-hidden="true"
+                data-alt-drag-copy-of={item.id}
+                className="pointer-events-none absolute"
+                style={{
+                  left: position.x,
+                  top: position.y,
+                  width: resolved.width,
+                  height: resolved.height,
+                  zIndex: Math.max(
+                    ...items.map((candidate) => candidate.zIndex ?? 0),
+                  ) + index + 1,
+                  transform: resolved.rotation
+                    ? `rotate(${resolved.rotation}deg)`
+                    : undefined,
+                  transformOrigin: 'center',
+                }}
+              >
+                <div className="h-full w-full">{renderItem(item)}</div>
+                <div
+                  className="absolute inset-0"
+                  style={{
+                    border: `${2 / activeView.zoom}px solid var(--color-clay,#a66d4f)`,
+                  }}
+                />
+              </div>
+            )
+          })}
+
           {activeSelectionBounds && selectedItemIds.length > 1 && (
             <div
               className="pointer-events-none absolute"
@@ -1392,13 +1876,67 @@ export const BoardRoomCanvas = React.forwardRef<
             />
           )}
 
+          {resizableSelectionBounds &&
+            resizableSelectionIds.length > 1 &&
+            !readOnly && (
+              <div
+                className="pointer-events-none absolute"
+                data-testid="multi-selection-resize-bounds"
+                style={{
+                  left: resizableSelectionBounds.x,
+                  top: resizableSelectionBounds.y,
+                  width: resizableSelectionBounds.width,
+                  height: resizableSelectionBounds.height,
+                }}
+              >
+                {RESIZE_HANDLES.map((handle) => (
+                  <ResizeHandle
+                    key={handle}
+                    handle={handle}
+                    label={`Resize selection ${handle}`}
+                    size={handleSize}
+                    dot={handleDot}
+                    onPointerDown={(event) =>
+                      handleResizePointerDown(
+                        event,
+                        resizableSelectionIds,
+                        handle,
+                      )
+                    }
+                  />
+                ))}
+              </div>
+          )}
+
           {guides.map((guide, index) => (
             <div
               key={`${guide.axis}-${guide.position}-${index}`}
               data-board-guide={guide.axis}
-              className="pointer-events-none absolute bg-[var(--color-clay,#a66d4f)]"
+              data-board-guide-kind={guide.kind}
+              className={cn(
+                'pointer-events-none absolute bg-[var(--color-clay,#a66d4f)]',
+                guide.kind === 'spacing' && 'opacity-80',
+              )}
               style={
-                guide.axis === 'x'
+                guide.kind === 'spacing' && guide.axis === 'x'
+                  ? {
+                      left: guide.start,
+                      top: guide.position,
+                      width: guide.end - guide.start,
+                      height: 1 / activeView.zoom,
+                      borderTop: `${1 / activeView.zoom}px dashed var(--color-clay,#a66d4f)`,
+                      background: 'transparent',
+                    }
+                  : guide.kind === 'spacing'
+                    ? {
+                        left: guide.position,
+                        top: guide.start,
+                        width: 1 / activeView.zoom,
+                        height: guide.end - guide.start,
+                        borderLeft: `${1 / activeView.zoom}px dashed var(--color-clay,#a66d4f)`,
+                        background: 'transparent',
+                      }
+                    : guide.axis === 'x'
                   ? {
                       left: guide.position,
                       top: guide.start,
@@ -1463,11 +2001,13 @@ function CanvasControl({
 
 function ResizeHandle({
   handle,
+  label,
   size,
   dot,
   onPointerDown,
 }: {
   handle: BoardResizeHandle
+  label?: string
   size: number
   dot: number
   onPointerDown: React.PointerEventHandler<HTMLButtonElement>
@@ -1485,8 +2025,8 @@ function ResizeHandle({
   return (
     <button
       type="button"
-      aria-label={`Resize ${handle}`}
-      className="absolute z-30 flex items-center justify-center rounded-full outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-clay,#a66d4f)]"
+      aria-label={label ?? `Resize ${handle}`}
+      className="pointer-events-auto absolute z-30 flex items-center justify-center rounded-full outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-clay,#a66d4f)]"
       style={{ ...positions[handle], width: size, height: size }}
       onPointerDown={onPointerDown}
     >

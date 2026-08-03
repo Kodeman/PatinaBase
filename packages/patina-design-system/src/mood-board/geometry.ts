@@ -93,6 +93,21 @@ interface BoardGuideMatch {
   kind: 'edge' | 'center'
 }
 
+interface BoardSpacingMatch {
+  delta: number
+  movingGuide: BoardGuide
+  referenceGuide: BoardGuide
+}
+
+export interface BoardGuideOptions {
+  zoom: number
+  tolerancePx?: number
+  excludeKeys?: readonly string[]
+  canvas?: BoardSize
+  /** Restricts which moving edge/center may snap (used by resize handles). */
+  movingValueIndices?: Partial<Record<'x' | 'y', readonly number[]>>
+}
+
 export interface BoardAutoGrowResult {
   grew: boolean
   canvas: BoardSize
@@ -348,12 +363,7 @@ function rectAxisValues(rect: BoardRect, axis: 'x' | 'y'): number[] {
 export function findBoardAlignmentGuides(
   movingRect: BoardRect,
   stationaryItems: readonly BoardItemGeometrySnapshot[],
-  options: {
-    zoom: number
-    tolerancePx?: number
-    excludeKeys?: readonly string[]
-    canvas?: BoardSize
-  },
+  options: BoardGuideOptions,
 ): BoardGuideResult {
   const tolerance =
     (options.tolerancePx ?? MOOD_BOARD_GUIDE_TOLERANCE_PX) / clampBoardZoom(options.zoom)
@@ -365,7 +375,8 @@ export function findBoardAlignmentGuides(
   const consider = (axis: 'x' | 'y', targetRect: BoardRect) => {
     const movingValues = rectAxisValues(movingRect, axis)
     const targetValues = rectAxisValues(targetRect, axis)
-    for (let movingIndex = 0; movingIndex < movingValues.length; movingIndex += 1) {
+    const movingIndices = options.movingValueIndices?.[axis] ?? [0, 1, 2]
+    for (const movingIndex of movingIndices) {
       for (let targetIndex = 0; targetIndex < targetValues.length; targetIndex += 1) {
         const delta = targetValues[targetIndex]! - movingValues[movingIndex]!
         if (Math.abs(delta) > tolerance) continue
@@ -436,6 +447,177 @@ export function findBoardAlignmentGuides(
     })
   }
   return { delta, snappedRect, guides }
+}
+
+function axisSpan(rect: BoardRect, axis: 'x' | 'y') {
+  return axis === 'x'
+    ? { start: rect.x, end: rect.x + rect.width, cross: rect.y + rect.height / 2 }
+    : { start: rect.y, end: rect.y + rect.height, cross: rect.x + rect.width / 2 }
+}
+
+function spacingGuide(
+  axis: 'x' | 'y',
+  start: number,
+  end: number,
+  cross: number,
+): BoardGuide {
+  return {
+    axis,
+    position: cross,
+    start: Math.min(start, end),
+    end: Math.max(start, end),
+    kind: 'spacing',
+  }
+}
+
+function findBoardSpacingMatch(
+  axis: 'x' | 'y',
+  movingRect: BoardRect,
+  targets: readonly BoardRect[],
+  tolerance: number,
+  movingValueIndices: readonly number[] = [0, 1, 2],
+): BoardSpacingMatch | null {
+  if (targets.length < 2) return null
+  const ordered = targets
+    .map((rect) => ({ rect, span: axisSpan(rect, axis) }))
+    .sort((a, b) => a.span.start - b.span.start)
+  const referenceGaps = ordered.flatMap((entry, index) => {
+    const next = ordered[index + 1]
+    if (!next) return []
+    const gap = next.span.start - entry.span.end
+    if (gap <= 0) return []
+    return [{
+      gap,
+      start: entry.span.end,
+      end: next.span.start,
+      cross: Math.min(entry.span.cross, next.span.cross),
+    }]
+  })
+  if (referenceGaps.length === 0) return null
+
+  const moving = axisSpan(movingRect, axis)
+  let best: BoardSpacingMatch | null = null
+  const consider = (
+    delta: number,
+    neighbor: ReturnType<typeof axisSpan>,
+    reference: (typeof referenceGaps)[number],
+    movingStart: number,
+    movingEnd: number,
+  ) => {
+    if (Math.abs(delta) > tolerance) return
+    const candidate: BoardSpacingMatch = {
+      delta,
+      movingGuide: spacingGuide(
+        axis,
+        movingStart,
+        movingEnd,
+        Math.min(moving.cross, neighbor.cross),
+      ),
+      referenceGuide: spacingGuide(
+        axis,
+        reference.start,
+        reference.end,
+        reference.cross,
+      ),
+    }
+    if (!best || Math.abs(delta) < Math.abs(best.delta)) best = candidate
+  }
+
+  for (const { span: neighbor } of ordered) {
+    const beforeGap = moving.start - neighbor.end
+    if (beforeGap >= 0 && movingValueIndices.includes(0)) {
+      for (const reference of referenceGaps) {
+        const delta = reference.gap - beforeGap
+        consider(
+          delta,
+          neighbor,
+          reference,
+          neighbor.end,
+          moving.start + delta,
+        )
+      }
+    }
+    const afterGap = neighbor.start - moving.end
+    if (afterGap >= 0 && movingValueIndices.includes(2)) {
+      for (const reference of referenceGaps) {
+        const delta = afterGap - reference.gap
+        consider(
+          delta,
+          neighbor,
+          reference,
+          moving.end + delta,
+          neighbor.start,
+        )
+      }
+    }
+  }
+  return best
+}
+
+/**
+ * Alignment is preferred per axis; when no edge/center match exists, an
+ * equal-gap match supplies the snap delta and a pair of distance markers.
+ */
+export function findBoardSmartGuides(
+  movingRect: BoardRect,
+  stationaryItems: readonly BoardItemGeometrySnapshot[],
+  options: BoardGuideOptions,
+): BoardGuideResult {
+  const alignment = findBoardAlignmentGuides(
+    movingRect,
+    stationaryItems,
+    options,
+  )
+  const excluded = new Set(options.excludeKeys ?? [])
+  const targets = stationaryItems
+    .filter((item) => !excluded.has(item.key))
+    .map((item) => item.aabb)
+  const tolerance =
+    (options.tolerancePx ?? MOOD_BOARD_GUIDE_TOLERANCE_PX) /
+    clampBoardZoom(options.zoom)
+  const hasXAlignment = alignment.guides.some(
+    (guide) => guide.axis === 'x' && guide.kind !== 'spacing',
+  )
+  const hasYAlignment = alignment.guides.some(
+    (guide) => guide.axis === 'y' && guide.kind !== 'spacing',
+  )
+  const allowsX = (options.movingValueIndices?.x?.length ?? 1) > 0
+  const allowsY = (options.movingValueIndices?.y?.length ?? 1) > 0
+  const xSpacing = !hasXAlignment && allowsX
+    ? findBoardSpacingMatch(
+        'x',
+        movingRect,
+        targets,
+        tolerance,
+        options.movingValueIndices?.x,
+      )
+    : null
+  const ySpacing = !hasYAlignment && allowsY
+    ? findBoardSpacingMatch(
+        'y',
+        movingRect,
+        targets,
+        tolerance,
+        options.movingValueIndices?.y,
+      )
+    : null
+  const delta = {
+    x: hasXAlignment ? alignment.delta.x : xSpacing?.delta ?? 0,
+    y: hasYAlignment ? alignment.delta.y : ySpacing?.delta ?? 0,
+  }
+  return {
+    delta,
+    snappedRect: {
+      ...movingRect,
+      x: movingRect.x + delta.x,
+      y: movingRect.y + delta.y,
+    },
+    guides: [
+      ...alignment.guides,
+      ...(xSpacing ? [xSpacing.referenceGuide, xSpacing.movingGuide] : []),
+      ...(ySpacing ? [ySpacing.referenceGuide, ySpacing.movingGuide] : []),
+    ],
+  }
 }
 
 function selectedGeometry(
