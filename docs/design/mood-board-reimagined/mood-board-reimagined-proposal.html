@@ -1,0 +1,1945 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="auto">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>A Room for the Board — Patina</title>
+<style>
+/* ============================================================
+   A ROOM FOR THE BOARD — mood board editor proposal deck
+   Self-contained. No external fonts, scripts, or images.
+   Palette: drafting ink / bone paper / verdigris (oxidized copper,
+   literally patina) / brass / oxblood. Type: bookish serif display,
+   system sans body, mono for spec-sheet labels.
+   House style shared with docs/design/library-variance/.
+   ============================================================ */
+
+:root{
+  --paper:#E7E9E3;
+  --paper-2:#F3F4F0;
+  --card:#FBFBF8;
+  --ink:#16202B;
+  --ink-2:#33404E;
+  --slate:#5D6773;
+  --rule:rgba(22,32,43,.14);
+  --rule-2:rgba(22,32,43,.28);
+  --verdigris:#2F6F63;
+  --verdigris-soft:rgba(47,111,99,.10);
+  --brass:#9A6B1F;
+  --brass-soft:rgba(154,107,31,.10);
+  --oxblood:#8A3A32;
+  --oxblood-soft:rgba(138,58,50,.09);
+  --grid:rgba(22,32,43,.045);
+  --dotc:rgba(22,32,43,.10);
+  --lift:0 2px 10px -6px rgba(22,32,43,.5);
+  --lift-2:0 12px 30px -16px rgba(22,32,43,.65);
+  --shadow:0 1px 0 rgba(22,32,43,.05), 0 10px 30px -22px rgba(22,32,43,.5);
+
+  --display:"Iowan Old Style","Palatino Linotype",Palatino,"Book Antiqua",Georgia,serif;
+  --body:-apple-system,BlinkMacSystemFont,"Segoe UI",system-ui,Roboto,"Helvetica Neue",Arial,sans-serif;
+  --mono:ui-monospace,SFMono-Regular,"SF Mono",Menlo,Consolas,"Liberation Mono",monospace;
+}
+
+@media (prefers-color-scheme: dark){
+  :root[data-theme="auto"]{
+    --paper:#111820;
+    --paper-2:#161E27;
+    --card:#1B252F;
+    --ink:#E6E9E5;
+    --ink-2:#C3CBD2;
+    --slate:#8C98A4;
+    --rule:rgba(230,233,229,.14);
+    --rule-2:rgba(230,233,229,.3);
+    --verdigris:#7CC7B6;
+    --verdigris-soft:rgba(124,199,182,.12);
+    --brass:#D5A24C;
+    --brass-soft:rgba(213,162,76,.12);
+    --oxblood:#DE8478;
+    --oxblood-soft:rgba(222,132,120,.12);
+    --grid:rgba(230,233,229,.04);
+    --dotc:rgba(230,233,229,.09);
+    --lift:0 2px 10px -6px rgba(0,0,0,.8);
+    --lift-2:0 12px 30px -16px rgba(0,0,0,.95);
+    --shadow:0 1px 0 rgba(0,0,0,.3), 0 14px 34px -24px rgba(0,0,0,.9);
+  }
+}
+
+:root[data-theme="dark"]{
+  --paper:#111820;
+  --paper-2:#161E27;
+  --card:#1B252F;
+  --ink:#E6E9E5;
+  --ink-2:#C3CBD2;
+  --slate:#8C98A4;
+  --rule:rgba(230,233,229,.14);
+  --rule-2:rgba(230,233,229,.3);
+  --verdigris:#7CC7B6;
+  --verdigris-soft:rgba(124,199,182,.12);
+  --brass:#D5A24C;
+  --brass-soft:rgba(213,162,76,.12);
+  --oxblood:#DE8478;
+  --oxblood-soft:rgba(222,132,120,.12);
+  --grid:rgba(230,233,229,.04);
+  --dotc:rgba(230,233,229,.09);
+  --lift:0 2px 10px -6px rgba(0,0,0,.8);
+  --lift-2:0 12px 30px -16px rgba(0,0,0,.95);
+  --shadow:0 1px 0 rgba(0,0,0,.3), 0 14px 34px -24px rgba(0,0,0,.9);
+}
+
+*,*::before,*::after{box-sizing:border-box}
+html,body{margin:0;padding:0;height:100%}
+html{-webkit-text-size-adjust:100%}
+
+body{
+  background:var(--paper);
+  color:var(--ink);
+  font-family:var(--body);
+  font-size:16px;
+  line-height:1.55;
+  overflow-x:hidden;
+  background-image:
+    linear-gradient(var(--grid) 1px, transparent 1px),
+    linear-gradient(90deg, var(--grid) 1px, transparent 1px);
+  background-size:28px 28px, 28px 28px;
+}
+
+/* ---------- deck shell ---------- */
+#deck{
+  height:100dvh;
+  overflow-y:auto;
+  overflow-x:hidden;
+  scroll-snap-type:y proximity;
+  /* NB: no `scroll-behavior:smooth` — it cancels programmatic scrolls in
+     Chrome on a snapping container and breaks keyboard navigation. */
+}
+
+.slide{
+  min-height:100dvh;
+  scroll-snap-align:start;
+  display:flex;
+  align-items:center;
+  padding:clamp(24px,4.5vh,60px) clamp(20px,5vw,80px);
+  border-bottom:1px solid var(--rule);
+  position:relative;
+}
+.inner{
+  width:100%;
+  max-width:1180px;
+  margin:0 auto;
+  display:grid;
+  grid-template-columns:132px minmax(0,1fr);
+  gap:clamp(18px,3vw,44px);
+  align-items:start;
+}
+@media (max-width:860px){
+  .inner{grid-template-columns:minmax(0,1fr);gap:14px}
+}
+.gutter{position:sticky;top:0;padding-top:.5rem}
+.main{min-width:0}
+
+/* wide variant — the two mockup slides get the whole measure */
+.slide.wide .inner{grid-template-columns:minmax(0,1fr);max-width:1320px;gap:0}
+.slide.wide .gutter{position:static;padding:0;display:flex;align-items:center;gap:12px;margin-bottom:.3rem}
+.slide.wide .gutter .num{margin-top:0}
+.slide.wide .gutter .tick{display:none}
+
+/* ---------- type ---------- */
+.eyebrow{
+  font-family:var(--mono);
+  font-size:11px;
+  letter-spacing:.14em;
+  text-transform:uppercase;
+  color:var(--slate);
+  display:block;
+}
+.gutter .num{
+  font-family:var(--mono);
+  font-size:11px;
+  letter-spacing:.1em;
+  color:var(--verdigris);
+  display:block;
+  margin-top:6px;
+}
+.gutter .tick{
+  display:block;width:34px;height:2px;background:var(--verdigris);
+  margin-top:12px;opacity:.55;
+}
+@media (max-width:860px){ .gutter .tick{display:none} .gutter{position:static} }
+
+h1,h2,h3{font-family:var(--display);font-weight:600;letter-spacing:-.012em;margin:0}
+h1{font-size:clamp(2.4rem,6.2vw,4.4rem);line-height:1.03}
+h2{font-size:clamp(1.6rem,3.3vw,2.7rem);line-height:1.1;margin-bottom:.5rem}
+h3{font-size:clamp(1.02rem,1.6vw,1.26rem);line-height:1.25}
+.lede{
+  font-size:clamp(1rem,1.45vw,1.18rem);
+  color:var(--ink-2);
+  max-width:66ch;
+  margin:.85rem 0 0;
+}
+p{margin:.7rem 0;max-width:70ch}
+.small{font-size:.85rem;color:var(--slate);line-height:1.5}
+strong{font-weight:650;color:var(--ink)}
+em{font-style:italic}
+.vd{color:var(--verdigris)}
+.br{color:var(--brass)}
+.ox{color:var(--oxblood)}
+
+code,.mono{font-family:var(--mono);font-size:.82em}
+code{
+  background:var(--verdigris-soft);
+  color:var(--verdigris);
+  padding:.08em .38em;
+  border-radius:3px;
+  word-break:break-word;
+}
+
+/* ---------- cover ---------- */
+.cover .inner{grid-template-columns:minmax(0,1fr)}
+.wordmark{display:flex;align-items:center;gap:10px;margin-bottom:clamp(20px,5vh,48px)}
+.wordmark svg{display:block}
+.wordmark span{
+  font-family:var(--mono);font-size:11px;letter-spacing:.24em;
+  text-transform:uppercase;color:var(--slate);
+}
+.cover-quote{
+  font-family:var(--display);
+  font-size:clamp(1.4rem,2.8vw,2rem);
+  line-height:1.25;
+  color:var(--ink-2);
+  font-style:italic;
+  border-left:3px solid var(--verdigris);
+  padding-left:clamp(14px,2vw,24px);
+  margin:clamp(22px,4vh,40px) 0 0;
+  max-width:30ch;
+}
+.cover-meta{
+  margin-top:clamp(26px,5vh,52px);
+  display:flex;flex-wrap:wrap;gap:10px 28px;
+  font-family:var(--mono);font-size:11px;letter-spacing:.1em;
+  text-transform:uppercase;color:var(--slate);
+  border-top:1px solid var(--rule);padding-top:16px;
+}
+.cover-meta b{color:var(--ink);font-weight:500}
+
+/* ---------- cards & grids ---------- */
+.grid{display:grid;gap:13px;margin-top:1.05rem}
+.g2{grid-template-columns:repeat(2,minmax(0,1fr))}
+.g3{grid-template-columns:repeat(3,minmax(0,1fr))}
+.g4{grid-template-columns:repeat(4,minmax(0,1fr))}
+@media (max-width:960px){ .g3,.g4{grid-template-columns:repeat(2,minmax(0,1fr))} }
+@media (max-width:640px){ .g2,.g3,.g4{grid-template-columns:minmax(0,1fr)} }
+
+.card{
+  background:var(--card);
+  border:1px solid var(--rule);
+  border-radius:6px;
+  padding:15px 17px;
+  box-shadow:var(--shadow);
+  min-width:0;
+}
+.card h3{margin-bottom:.3rem}
+.card p{margin:.35rem 0}
+.card .small{margin-top:.4rem}
+.card.accent{border-left:3px solid var(--verdigris)}
+.card.warn{border-left:3px solid var(--brass)}
+.card.bad{border-left:3px solid var(--oxblood)}
+.card.tight{padding:10px 12px}
+.card.tight p{font-size:.83rem;color:var(--slate);line-height:1.45;margin:.2rem 0 0}
+
+.kicker{
+  font-family:var(--mono);font-size:10.5px;letter-spacing:.13em;
+  text-transform:uppercase;color:var(--slate);display:block;margin-bottom:.35rem;
+}
+
+/* ---------- pull quotes ---------- */
+.quote{
+  border-left:3px solid var(--verdigris);
+  padding:2px 0 2px 16px;
+  margin:14px 0;
+}
+.quote p{
+  font-family:var(--display);
+  font-style:italic;
+  font-size:clamp(1rem,1.45vw,1.16rem);
+  line-height:1.4;
+  color:var(--ink);
+  margin:0;
+}
+.quote .attr{
+  font-family:var(--mono);font-size:10.5px;letter-spacing:.1em;
+  text-transform:uppercase;color:var(--slate);margin-top:8px;display:block;
+}
+.quote.ox{border-left-color:var(--oxblood)}
+
+.badge-flag{
+  display:inline-block;
+  font-family:var(--mono);font-size:9.5px;letter-spacing:.12em;text-transform:uppercase;
+  color:var(--brass);background:var(--brass-soft);
+  border:1px solid rgba(154,107,31,.3);
+  padding:1px 6px;border-radius:3px;margin-left:8px;vertical-align:1px;
+}
+:root[data-theme="dark"] .badge-flag{border-color:rgba(213,162,76,.35)}
+@media (prefers-color-scheme: dark){
+  :root[data-theme="auto"] .badge-flag{border-color:rgba(213,162,76,.35)}
+}
+
+/* ---------- evidence chips ---------- */
+.evidence{
+  background:var(--paper-2);
+  border:1px solid var(--rule);
+  border-left:3px solid var(--brass);
+  border-radius:5px;
+  padding:12px 14px;
+  min-width:0;
+}
+.evidence .where{
+  font-family:var(--mono);font-size:10.5px;color:var(--brass);
+  letter-spacing:.04em;display:block;margin-bottom:6px;word-break:break-word;
+}
+.evidence .what{
+  font-family:var(--mono);font-size:.79rem;color:var(--ink);
+  background:var(--card);border:1px dashed var(--rule-2);
+  border-radius:4px;padding:7px 9px;display:block;margin-bottom:7px;
+  white-space:normal;word-break:break-word;line-height:1.5;
+}
+.evidence .read{font-size:.82rem;color:var(--slate);line-height:1.45;margin:0}
+
+/* ---------- rails ---------- */
+.rail{
+  background:var(--card);
+  border:1px solid var(--rule);
+  border-radius:6px;
+  padding:12px 15px;
+  margin:9px 0;
+  min-width:0;
+}
+.rail-head{
+  display:flex;align-items:baseline;justify-content:space-between;gap:12px;
+  margin-bottom:8px;flex-wrap:wrap;
+}
+.rail-name{font-family:var(--mono);font-size:11px;letter-spacing:.12em;text-transform:uppercase;color:var(--ink)}
+.rail-kind{font-family:var(--mono);font-size:10px;letter-spacing:.08em;color:var(--slate)}
+.chips{display:flex;gap:7px;flex-wrap:wrap}
+.chip{
+  display:inline-flex;flex-direction:column;gap:2px;
+  border:1px solid var(--rule-2);
+  border-radius:4px;
+  padding:5px 9px 6px;
+  background:var(--paper-2);
+  min-width:0;
+}
+.chip .lab{font-size:.82rem;color:var(--ink);white-space:nowrap}
+.chip .delta{font-family:var(--mono);font-size:10px;color:var(--slate);white-space:nowrap}
+.chip.on{border-color:var(--verdigris);background:var(--verdigris-soft)}
+.chip.on .lab{color:var(--verdigris);font-weight:600}
+.chip.on .delta{color:var(--verdigris)}
+.chip.com{border-style:dashed;border-color:var(--brass)}
+.chip.com .lab{color:var(--brass)}
+.chip.ghost{opacity:.55;border-style:dashed}
+
+/* ---------- flow chain ---------- */
+.chain{
+  display:flex;align-items:stretch;gap:2px;flex-wrap:nowrap;
+  overflow-x:auto;padding-bottom:8px;margin-top:1rem;
+}
+.chain .step{
+  flex:0 0 auto;min-width:118px;
+  border:1px solid var(--rule);border-radius:5px;background:var(--card);
+  padding:9px 11px;
+}
+.chain .step .kicker{margin-bottom:.2rem}
+.chain .step .t{font-size:.86rem;color:var(--ink);line-height:1.3}
+.chain .step .s{font-size:.74rem;color:var(--slate);margin-top:3px;line-height:1.35}
+.chain .arr{
+  flex:0 0 auto;align-self:center;color:var(--verdigris);
+  font-family:var(--mono);font-size:13px;padding:0 6px;opacity:.7;
+}
+.chain .step.end{border-color:var(--oxblood);background:var(--oxblood-soft)}
+.chain .step.new{border-color:var(--verdigris);background:var(--verdigris-soft)}
+
+/* ---------- tables ---------- */
+.tablewrap{overflow-x:auto;margin-top:1rem;border:1px solid var(--rule);border-radius:6px;background:var(--card)}
+table{border-collapse:collapse;width:100%;min-width:840px;font-size:.77rem}
+th,td{text-align:left;padding:5px 11px;border-bottom:1px solid var(--rule);vertical-align:top;line-height:1.32}
+th{
+  font-family:var(--mono);font-size:9.5px;letter-spacing:.1em;text-transform:uppercase;
+  color:var(--slate);font-weight:500;background:var(--paper-2);
+}
+tr:last-child td{border-bottom:none}
+td code{white-space:nowrap}
+th.me,td.me{background:var(--verdigris-soft)}
+th.me{color:var(--verdigris)}
+td.cy{color:var(--verdigris)}
+td.cn{color:var(--oxblood)}
+td.cp{color:var(--brass)}
+td.cu{color:var(--slate)}
+td.lead{color:var(--ink);font-weight:600}
+.legend{
+  display:flex;gap:16px;flex-wrap:wrap;margin-top:9px;
+  font-family:var(--mono);font-size:10px;letter-spacing:.06em;text-transform:uppercase;color:var(--slate);
+}
+.legend b{font-weight:500}
+
+/* ---------- lists ---------- */
+ul.plain{list-style:none;padding:0;margin:.6rem 0}
+ul.plain li{
+  padding-left:20px;position:relative;margin:.4rem 0;max-width:72ch;
+  font-size:.91rem;color:var(--ink-2);
+}
+ul.plain li::before{
+  content:"";position:absolute;left:2px;top:.62em;
+  width:7px;height:1.5px;background:var(--verdigris);
+}
+ul.plain li strong{color:var(--ink)}
+ul.plain.ox li::before{background:var(--oxblood)}
+
+/* ---------- keyboard legend (interaction bar) ---------- */
+.keys{display:grid;grid-template-columns:auto minmax(0,1fr);gap:4px 14px;margin-top:.6rem;align-items:baseline}
+.keys .ky{
+  font-family:var(--mono);font-size:10px;color:var(--ink);
+  background:var(--paper-2);border:1px solid var(--rule-2);border-bottom-width:2px;
+  border-radius:4px;padding:2px 7px;white-space:nowrap;justify-self:start;
+}
+.keys .ky.soft{border-style:dashed;color:var(--slate);border-bottom-width:1px}
+.keys .kd{font-size:.85rem;color:var(--ink-2)}
+
+/* ---------- roadmap ---------- */
+.phase{
+  border:1px solid var(--rule);border-radius:6px;background:var(--card);
+  padding:14px 16px;border-top:3px solid var(--verdigris);min-width:0;
+}
+.phase.p2{border-top-color:#4E8F7F}
+.phase.p3{border-top-color:var(--brass)}
+.phase .when{font-family:var(--mono);font-size:10.5px;letter-spacing:.1em;text-transform:uppercase;color:var(--slate)}
+.phase h3{margin:.3rem 0 .35rem;font-size:1.08rem}
+.phase .val{
+  margin-top:9px;padding-top:9px;border-top:1px dashed var(--rule);
+  font-size:.79rem;color:var(--verdigris);line-height:1.45;
+}
+
+/* ---------- callout / note ---------- */
+.callout{
+  border:1px solid var(--verdigris);
+  background:var(--verdigris-soft);
+  border-radius:6px;padding:13px 16px;margin-top:1.05rem;
+}
+.callout p{margin:0;font-size:.93rem;color:var(--ink);max-width:none}
+.callout .kicker{color:var(--verdigris)}
+
+.note{
+  border:1px dashed var(--rule-2);border-radius:6px;padding:12px 15px;margin-top:1rem;
+  background:var(--paper-2);
+}
+.note p{margin:.3rem 0;font-size:.85rem;color:var(--slate);max-width:82ch}
+.note .kicker{color:var(--brass)}
+
+.route{
+  font-family:var(--mono);font-size:.86rem;color:var(--verdigris);
+  background:var(--verdigris-soft);border:1px solid var(--verdigris);
+  border-radius:5px;padding:8px 13px;display:inline-block;margin-top:.9rem;
+}
+.route s{color:var(--slate);opacity:.7}
+
+/* ---------- board launcher strip ---------- */
+.launch{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px;margin-top:13px}
+@media (max-width:760px){ .launch{grid-template-columns:repeat(2,minmax(0,1fr))} }
+.lc{border:1px solid var(--rule);border-radius:6px;background:var(--card);overflow:hidden;box-shadow:var(--shadow)}
+.lc .cv{height:clamp(52px,8vh,78px);background:var(--paper-2);display:flex;align-items:center;justify-content:center;gap:9px}
+.lc .cv svg{width:clamp(18px,2.2vw,26px);height:clamp(18px,2.2vw,26px);opacity:.42}
+.lc .mt{padding:7px 10px;border-top:1px solid var(--rule)}
+.lc .mt b{font-family:var(--display);font-size:.88rem;font-weight:600;display:block;color:var(--ink)}
+.lc .mt span{font-family:var(--mono);font-size:9px;letter-spacing:.08em;text-transform:uppercase;color:var(--slate)}
+
+/* ============================================================
+   MOCKUPS — miniature portal UI, pure CSS + inline SVG
+   ============================================================ */
+.mock{
+  position:relative;
+  border:1px solid var(--rule-2);
+  border-radius:8px;
+  background:var(--card);
+  box-shadow:var(--lift-2);
+  overflow:hidden;
+  display:flex;
+  flex-direction:column;
+  width:100%;
+  margin-top:13px;
+}
+.mock-before{height:clamp(374px,47vh,490px)}
+.mock-after{height:clamp(290px,47vh,540px)}
+
+.mk-note{
+  position:absolute;z-index:8;
+  font-family:var(--mono);font-size:8.5px;line-height:1.5;letter-spacing:.04em;
+  background:var(--card);border:1px solid var(--oxblood);color:var(--oxblood);
+  border-radius:3px;padding:1.5px 6px;white-space:nowrap;
+  box-shadow:var(--lift);
+}
+.mk-note.vd{border-color:var(--verdigris);color:var(--verdigris)}
+
+/* browser + portal chrome */
+.mk-bar{
+  display:flex;align-items:center;gap:9px;
+  padding:6px 10px;background:var(--paper-2);
+  border-bottom:1px solid var(--rule);flex:0 0 auto;
+}
+.mk-dots{display:flex;gap:4px;flex:0 0 auto}
+.mk-dots i{width:7px;height:7px;border-radius:50%;background:var(--rule-2);display:block}
+.mk-url{
+  font-family:var(--mono);font-size:9.5px;color:var(--slate);
+  background:var(--card);border:1px solid var(--rule);border-radius:999px;
+  padding:2px 11px;flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;
+}
+.mk-url em{color:var(--oxblood);font-style:normal}
+.mk-url b{color:var(--verdigris);font-weight:500}
+
+.mk-nav{display:flex;align-items:center;gap:11px;padding:6px 12px;border-bottom:1px solid var(--rule);flex:0 0 auto;background:var(--card)}
+.mk-mark{font-family:var(--display);font-size:12px;color:var(--ink);flex:0 0 auto}
+.mk-crumb{font-family:var(--mono);font-size:9px;letter-spacing:.05em;color:var(--slate);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.mk-av{margin-left:auto;width:15px;height:15px;border-radius:50%;background:var(--brass-soft);border:1px solid var(--rule-2);flex:0 0 auto}
+
+.mk-page{flex:1;min-height:0;overflow:hidden;padding:9px 12px;display:flex;flex-direction:column;gap:5px;background:var(--paper)}
+.mk-band{display:flex;gap:5px;flex-wrap:wrap;margin-bottom:2px;flex:0 0 auto}
+.mk-band span{
+  font-family:var(--mono);font-size:8px;letter-spacing:.08em;text-transform:uppercase;
+  color:var(--slate);border:1px solid var(--rule);border-radius:999px;padding:1.5px 8px;background:var(--card);
+}
+.mk-band span.on{color:var(--verdigris);border-color:var(--verdigris);background:var(--verdigris-soft)}
+
+.mk-facet{border:1px solid var(--rule);border-radius:5px;background:var(--card);flex:0 0 auto}
+.mk-fh{display:flex;align-items:center;justify-content:space-between;padding:5px 10px}
+.mk-fh b{font-weight:600;font-size:10.5px;color:var(--ink-2)}
+.mk-fh i{font-family:var(--mono);font-size:11px;color:var(--slate);font-style:normal}
+.mk-facet.open{border-color:var(--rule-2);flex:1 1 auto;display:flex;flex-direction:column;min-height:0}
+.mk-facet.open .mk-fh b{color:var(--ink)}
+.mk-fb{
+  border-top:1px solid var(--rule);padding:8px 9px;
+  display:grid;grid-template-columns:minmax(0,1fr) 30%;gap:8px;flex:1;min-height:132px;
+}
+
+.mk-canvas{
+  position:relative;border:1px solid var(--rule-2);border-radius:4px;
+  background:var(--paper-2);
+  background-image:
+    linear-gradient(var(--grid) 1px,transparent 1px),
+    linear-gradient(90deg,var(--grid) 1px,transparent 1px);
+  background-size:13px 13px,13px 13px;
+  overflow:hidden;min-height:124px;
+  border-bottom:1px dashed var(--oxblood);
+}
+.pin{
+  position:absolute;border-radius:3px;border:1px solid var(--rule-2);background:var(--card);
+  display:flex;align-items:center;justify-content:center;box-shadow:var(--lift);
+}
+.pin svg{width:74%;height:74%;display:block;opacity:.5}
+.pin.sw{padding:2px;display:flex;align-items:stretch;gap:2px;border-color:var(--rule)}
+.pin.sw i{flex:1;border-radius:2px;display:block;min-height:8px}
+.pin.cascade{border-color:var(--brass)}
+
+.mk-side{
+  border:1px solid var(--rule);border-radius:4px;background:var(--card);
+  padding:7px 8px 26px;display:flex;flex-direction:column;gap:5px;overflow:hidden;position:relative;min-height:0;
+}
+.mk-side .lbl{font-family:var(--mono);font-size:7.5px;letter-spacing:.1em;text-transform:uppercase;color:var(--slate)}
+.mk-side .fld{height:9px;border-radius:2px;background:var(--paper-2);border:1px solid var(--rule)}
+.mk-side .sldr{height:3px;border-radius:2px;background:var(--rule-2);position:relative;margin:5px 3px 3px}
+.mk-side .sldr::after{content:"";position:absolute;left:44%;top:-3.5px;width:10px;height:10px;border-radius:50%;background:var(--card);border:1px solid var(--verdigris)}
+.mk-side .seg{display:flex;gap:3px}
+.mk-side .seg span{
+  flex:1;text-align:center;font-family:var(--mono);font-size:7.5px;
+  border:1px solid var(--rule);border-radius:2px;padding:2px 0;color:var(--slate);
+}
+.mk-side .seg span.on{border-color:var(--verdigris);color:var(--verdigris);background:var(--verdigris-soft)}
+
+/* ---------- the room (after) ---------- */
+.ed-top{display:flex;align-items:center;gap:9px;padding:7px 12px;border-bottom:1px solid var(--rule);background:var(--card);flex:0 0 auto}
+.ed-back{font-family:var(--mono);font-size:12px;color:var(--slate);flex:0 0 auto}
+.ed-name{font-family:var(--display);font-size:clamp(11px,1.05vw,14px);color:var(--ink);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.ed-chip{
+  font-family:var(--mono);font-size:8px;letter-spacing:.1em;text-transform:uppercase;
+  color:var(--verdigris);background:var(--verdigris-soft);border:1px solid var(--verdigris);
+  border-radius:999px;padding:1.5px 8px;flex:0 0 auto;
+}
+.ed-mode{margin-left:auto;display:flex;border:1px solid var(--rule-2);border-radius:999px;overflow:hidden;flex:0 0 auto}
+.ed-mode b,.ed-mode span{
+  font-family:var(--mono);font-size:8.5px;letter-spacing:.08em;text-transform:uppercase;
+  padding:3px 11px;color:var(--slate);font-weight:400;
+}
+.ed-mode b{background:var(--verdigris-soft);color:var(--verdigris);font-weight:600}
+.ed-actions{display:flex;gap:6px;flex:0 0 auto}
+.ed-actions span{
+  font-family:var(--mono);font-size:8.5px;letter-spacing:.08em;text-transform:uppercase;
+  border-radius:4px;padding:3px 10px;border:1px solid var(--rule-2);color:var(--slate);
+}
+.ed-actions .solid{background:var(--verdigris);border-color:var(--verdigris);color:var(--card)}
+
+.ed-body{flex:1;min-height:0;display:grid;grid-template-columns:clamp(112px,16%,180px) minmax(0,1fr)}
+.ed-rail{
+  border-right:1px solid var(--rule);background:var(--paper-2);
+  padding:8px;display:flex;flex-direction:column;gap:7px;min-height:0;overflow:hidden;
+}
+.ed-tabs{display:flex;gap:3px;flex-wrap:wrap;flex:0 0 auto}
+.ed-tabs span{
+  font-family:var(--mono);font-size:7px;letter-spacing:.07em;text-transform:uppercase;
+  color:var(--slate);border:1px solid var(--rule);border-radius:999px;padding:1.5px 6px;
+}
+.ed-tabs span.on{color:var(--verdigris);border-color:var(--verdigris);background:var(--verdigris-soft)}
+.ed-search{
+  font-size:8.5px;color:var(--slate);border:1px solid var(--rule);border-radius:4px;
+  padding:4px 7px;background:var(--card);flex:0 0 auto;
+}
+.ed-thumbs{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:5px;flex:0 0 auto}
+.th{
+  border:1px solid var(--rule);border-radius:3px;background:var(--card);
+  aspect-ratio:1 / .82;display:flex;align-items:center;justify-content:center;position:relative;
+}
+.th svg{width:68%;height:68%;opacity:.5}
+.th .pz{position:absolute;left:4px;bottom:2px;font-family:var(--mono);font-size:6.5px;color:var(--slate)}
+.ed-sugg{margin-top:auto;flex:0 0 auto;border-top:1px dashed var(--rule-2);padding-top:7px}
+.ed-sugg .lbl{
+  font-family:var(--mono);font-size:7px;letter-spacing:.1em;text-transform:uppercase;
+  color:var(--verdigris);display:block;margin-bottom:5px;
+}
+.ed-sugg .ed-thumbs{grid-template-columns:repeat(3,minmax(0,1fr))}
+
+.ed-canvas{
+  position:relative;min-height:0;overflow:hidden;
+  background-color:var(--paper);
+  background-image:radial-gradient(var(--dotc) 1px, transparent 1px);
+  background-size:15px 15px;
+}
+.it{position:absolute;border-radius:4px;z-index:2}
+.it.card2{
+  background:var(--card);border:1px solid var(--rule);box-shadow:var(--lift);
+  display:flex;align-items:center;justify-content:center;
+}
+.it.card2 svg{width:76%;height:76%;opacity:.52}
+.it.band{border:1px dashed var(--rule-2);background:transparent;z-index:1;border-radius:7px}
+.it.band span{
+  position:absolute;left:9px;top:-8px;background:var(--paper);padding:0 6px;
+  font-family:var(--mono);font-size:7.5px;letter-spacing:.12em;text-transform:uppercase;color:var(--slate);
+}
+.it.pal{display:flex;gap:3px;background:var(--card);border:1px solid var(--rule);padding:4px;box-shadow:var(--lift)}
+.it.pal i{flex:1;border-radius:2px;display:block}
+.it.tex{
+  border:1px solid var(--rule-2);box-shadow:var(--lift);
+  background-color:var(--paper-2);
+  background-image:repeating-linear-gradient(45deg, rgba(150,128,96,.34) 0 2px, transparent 2px 6px);
+}
+.it.note2{
+  background:var(--card);border:1px solid var(--rule);box-shadow:var(--lift);
+  padding:7px 10px;display:flex;align-items:center;
+}
+.it.note2 p{
+  font-family:var(--display);font-style:italic;line-height:1.35;
+  font-size:clamp(8.5px,.9vw,11.5px);color:var(--ink-2);margin:0;max-width:none;
+}
+.it.sel{box-shadow:0 0 0 1.5px var(--verdigris), var(--lift-2);z-index:5}
+.hnd{position:absolute;width:6px;height:6px;background:var(--card);border:1.5px solid var(--verdigris);border-radius:1px;z-index:6}
+.hnd.tl{left:-4px;top:-4px} .hnd.tr{right:-4px;top:-4px}
+.hnd.bl{left:-4px;bottom:-4px} .hnd.brr{right:-4px;bottom:-4px}
+.hnd.tc{left:50%;top:-4px;margin-left:-3px} .hnd.bc{left:50%;bottom:-4px;margin-left:-3px}
+.hnd.lc{left:-4px;top:50%;margin-top:-3px} .hnd.rc{right:-4px;top:50%;margin-top:-3px}
+.rot{position:absolute;left:50%;top:-20px;margin-left:-4px;width:8px;height:8px;border-radius:50%;background:var(--card);border:1.5px solid var(--verdigris);z-index:6}
+.rot::after{content:"";position:absolute;left:50%;top:7px;width:1.5px;height:9px;background:var(--verdigris);margin-left:-.75px}
+.guide{position:absolute;background:var(--verdigris);opacity:.5;z-index:4}
+.guide.v{width:1px}
+.guide.h{height:1px}
+
+.insp{
+  position:absolute;z-index:7;background:var(--card);
+  border:1px solid var(--rule-2);border-radius:6px;box-shadow:var(--lift-2);
+  padding:9px 10px;
+}
+.insp .nm{font-family:var(--display);font-size:clamp(9.5px,1vw,12px);color:var(--ink);line-height:1.25;display:block}
+.insp .vn{font-family:var(--mono);font-size:7.5px;letter-spacing:.06em;text-transform:uppercase;color:var(--slate);margin-top:3px;display:block}
+.insp .row{display:flex;justify-content:space-between;align-items:center;gap:8px;margin-top:6px;font-family:var(--mono);font-size:8px;color:var(--slate)}
+.insp .row b{color:var(--ink);font-weight:600}
+.insp .drift{
+  color:var(--brass);border:1px solid var(--brass);background:var(--brass-soft);
+  border-radius:3px;padding:1px 5px;font-size:7px;letter-spacing:.06em;text-transform:uppercase;white-space:nowrap;
+}
+.insp .verd{display:flex;gap:4px;margin-top:7px;align-items:center;flex-wrap:wrap}
+.insp .verd i{
+  font-style:normal;font-family:var(--mono);font-size:7px;letter-spacing:.05em;text-transform:uppercase;
+  border-radius:999px;padding:1px 6px;border:1px solid var(--rule-2);color:var(--slate);
+}
+.insp .verd i.yes{border-color:var(--verdigris);color:var(--verdigris);background:var(--verdigris-soft)}
+.insp .acts{display:flex;gap:4px;margin-top:8px;padding-top:7px;border-top:1px dashed var(--rule)}
+.insp .acts span{
+  flex:1;text-align:center;font-family:var(--mono);font-size:7px;letter-spacing:.05em;text-transform:uppercase;
+  border:1px solid var(--rule-2);border-radius:3px;padding:3px 2px;color:var(--slate);
+}
+.insp .acts .go{border-color:var(--verdigris);color:var(--verdigris);background:var(--verdigris-soft)}
+
+.ed-zoom{
+  position:absolute;left:10px;bottom:10px;z-index:7;display:flex;align-items:center;gap:9px;
+  background:var(--card);border:1px solid var(--rule);border-radius:999px;padding:3px 11px;
+  font-family:var(--mono);font-size:8px;letter-spacing:.06em;color:var(--slate);box-shadow:var(--lift);
+}
+.ed-tools{
+  position:absolute;right:10px;top:10px;z-index:7;display:flex;gap:2px;
+  background:var(--card);border:1px solid var(--rule);border-radius:999px;padding:3px 4px;box-shadow:var(--lift);
+}
+.ed-tools span{
+  font-family:var(--mono);font-size:7.5px;letter-spacing:.08em;text-transform:uppercase;
+  color:var(--slate);padding:2px 7px;border-radius:999px;
+}
+.ed-tools span.on{background:var(--verdigris-soft);color:var(--verdigris)}
+
+/* mockup caption row */
+.caps{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:12px;margin-top:13px}
+.caps .cap{border-top:1px solid var(--rule);padding-top:7px;min-width:0}
+.caps .cap b{
+  font-family:var(--mono);font-size:9px;letter-spacing:.11em;text-transform:uppercase;
+  color:var(--verdigris);display:block;font-weight:500;
+}
+.caps .cap.was b{color:var(--oxblood)}
+.caps .cap p{font-size:.76rem;color:var(--slate);margin:.25rem 0 0;line-height:1.42;max-width:none}
+
+/* ---------- chrome ---------- */
+#progress{
+  position:fixed;top:0;left:0;height:2px;background:var(--verdigris);
+  width:0;z-index:60;transition:width .18s linear;
+}
+@media (prefers-reduced-motion: reduce){ #progress{transition:none} }
+
+#chrome{
+  position:fixed;right:clamp(12px,2.4vw,26px);bottom:clamp(12px,2.4vh,24px);
+  z-index:60;display:flex;align-items:center;gap:8px;
+  background:var(--card);border:1px solid var(--rule);border-radius:999px;
+  padding:5px 6px 5px 13px;box-shadow:var(--shadow);
+}
+#counter{font-family:var(--mono);font-size:11px;letter-spacing:.1em;color:var(--slate);min-width:52px}
+#counter b{color:var(--ink);font-weight:600}
+.navbtn{
+  appearance:none;border:1px solid var(--rule);background:var(--paper-2);color:var(--ink);
+  width:28px;height:28px;border-radius:999px;cursor:pointer;
+  display:inline-flex;align-items:center;justify-content:center;font-size:13px;line-height:1;
+  font-family:var(--mono);padding:0;
+}
+.navbtn:hover{border-color:var(--verdigris);color:var(--verdigris)}
+.navbtn:focus-visible,#themebtn:focus-visible{outline:2px solid var(--verdigris);outline-offset:2px}
+#themebtn{
+  appearance:none;border:1px solid var(--rule);background:var(--paper-2);color:var(--slate);
+  height:28px;border-radius:999px;cursor:pointer;padding:0 11px;
+  font-family:var(--mono);font-size:10px;letter-spacing:.1em;text-transform:uppercase;
+}
+#themebtn:hover{border-color:var(--verdigris);color:var(--verdigris)}
+
+#hint{
+  position:fixed;left:clamp(12px,2.4vw,26px);bottom:clamp(12px,2.4vh,24px);z-index:60;
+  font-family:var(--mono);font-size:10px;letter-spacing:.1em;text-transform:uppercase;
+  color:var(--slate);opacity:.75;
+}
+@media (max-width:700px){ #hint{display:none} }
+
+/* reveal */
+.slide .main > *, .slide .gutter > *{opacity:0;transform:translateY(8px);transition:opacity .5s ease, transform .5s ease}
+.slide.seen .main > *, .slide.seen .gutter > *{opacity:1;transform:none}
+.slide.seen .main > *:nth-child(2){transition-delay:.06s}
+.slide.seen .main > *:nth-child(3){transition-delay:.12s}
+.slide.seen .main > *:nth-child(4){transition-delay:.17s}
+.slide.seen .main > *:nth-child(5){transition-delay:.21s}
+@media (prefers-reduced-motion: reduce){
+  .slide .main > *, .slide .gutter > *{opacity:1;transform:none;transition:none}
+}
+
+/* ---------- print ---------- */
+@media print{
+  html,body{height:auto;background:#fff;color:#000;background-image:none}
+  #deck{height:auto;overflow:visible}
+  #chrome,#hint,#progress{display:none !important}
+  .slide{
+    min-height:auto;height:auto;page-break-after:always;break-after:page;
+    padding:14mm 12mm;border-bottom:none;display:block;
+  }
+  .slide:last-child{page-break-after:auto;break-after:auto}
+  .slide .main > *,.slide .gutter > *{opacity:1 !important;transform:none !important}
+  .card,.evidence,.rail,.phase,.sp,.tablewrap,.mock,.lc{break-inside:avoid;box-shadow:none}
+  .mock-before{height:105mm}
+  .mock-after{height:125mm}
+  h1{font-size:30pt}h2{font-size:19pt}
+  .inner{max-width:none}
+  .slide.wide .inner{max-width:none}
+}
+</style>
+</head>
+<body>
+
+<!-- furniture silhouettes — abstract, drawn inline, no external assets -->
+<svg width="0" height="0" style="position:absolute;overflow:hidden" aria-hidden="true" focusable="false">
+  <symbol id="f-sofa" viewBox="0 0 100 100">
+    <path d="M12 48q0-14 12-14h52q12 0 12 14v6H12z" fill="currentColor"/>
+    <rect x="8" y="50" width="84" height="18" rx="6" fill="currentColor"/>
+    <rect x="6" y="42" width="12" height="28" rx="5" fill="currentColor"/>
+    <rect x="82" y="42" width="12" height="28" rx="5" fill="currentColor"/>
+    <rect x="15" y="68" width="5" height="12" rx="2" fill="currentColor"/>
+    <rect x="80" y="68" width="5" height="12" rx="2" fill="currentColor"/>
+  </symbol>
+  <symbol id="f-chair" viewBox="0 0 100 100">
+    <path d="M24 36q0-12 11-12h30q11 0 11 12v18H24z" fill="currentColor"/>
+    <rect x="18" y="52" width="64" height="15" rx="6" fill="currentColor"/>
+    <rect x="24" y="67" width="5" height="19" rx="2" fill="currentColor"/>
+    <rect x="71" y="67" width="5" height="19" rx="2" fill="currentColor"/>
+  </symbol>
+  <symbol id="f-lamp" viewBox="0 0 100 100">
+    <path d="M35 22h30l11 26H24z" fill="currentColor"/>
+    <rect x="47.5" y="48" width="5" height="34" fill="currentColor"/>
+    <ellipse cx="50" cy="84" rx="18" ry="5" fill="currentColor"/>
+  </symbol>
+  <symbol id="f-table" viewBox="0 0 100 100">
+    <ellipse cx="50" cy="34" rx="38" ry="10" fill="currentColor"/>
+    <rect x="45" y="38" width="10" height="38" fill="currentColor"/>
+    <ellipse cx="50" cy="79" rx="22" ry="6" fill="currentColor"/>
+  </symbol>
+  <symbol id="f-rug" viewBox="0 0 100 100">
+    <rect x="8" y="28" width="84" height="44" rx="3" fill="none" stroke="currentColor" stroke-width="4"/>
+    <rect x="17" y="37" width="66" height="26" rx="2" fill="none" stroke="currentColor" stroke-width="2" opacity=".6"/>
+    <line x1="26" y1="45" x2="74" y2="45" stroke="currentColor" stroke-width="2" opacity=".45"/>
+    <line x1="26" y1="55" x2="74" y2="55" stroke="currentColor" stroke-width="2" opacity=".45"/>
+  </symbol>
+  <symbol id="f-pendant" viewBox="0 0 100 100">
+    <rect x="48.5" y="8" width="3" height="28" fill="currentColor"/>
+    <path d="M50 34c16 0 28 14 30 30H20c2-16 14-30 30-30z" fill="currentColor"/>
+  </symbol>
+  <symbol id="f-vase" viewBox="0 0 100 100">
+    <path d="M40 16h20v12c12 8 16 20 16 32 0 14-10 22-26 22s-26-8-26-22c0-12 4-24 16-32z" fill="currentColor"/>
+  </symbol>
+  <symbol id="f-ottoman" viewBox="0 0 100 100">
+    <rect x="14" y="40" width="72" height="28" rx="9" fill="currentColor"/>
+    <rect x="23" y="68" width="5" height="14" rx="2" fill="currentColor"/>
+    <rect x="72" y="68" width="5" height="14" rx="2" fill="currentColor"/>
+  </symbol>
+  <symbol id="f-art" viewBox="0 0 100 100">
+    <rect x="17" y="12" width="66" height="76" rx="3" fill="none" stroke="currentColor" stroke-width="5"/>
+    <path d="M27 76l19-26 12 15 10-13 12 24z" fill="currentColor"/>
+  </symbol>
+  <symbol id="f-shelf" viewBox="0 0 100 100">
+    <rect x="14" y="18" width="72" height="64" rx="3" fill="none" stroke="currentColor" stroke-width="5"/>
+    <line x1="16" y1="42" x2="84" y2="42" stroke="currentColor" stroke-width="4"/>
+    <line x1="16" y1="62" x2="84" y2="62" stroke="currentColor" stroke-width="4"/>
+  </symbol>
+</svg>
+
+<div id="progress" role="presentation"></div>
+
+<div id="deck" tabindex="-1">
+
+<!-- ============ 01 · COVER ============ -->
+<section class="slide cover" data-label="Cover">
+  <div class="inner">
+    <div class="main">
+      <div class="wordmark">
+        <svg width="22" height="22" viewBox="0 0 22 22" aria-hidden="true">
+          <rect x="1.5" y="1.5" width="19" height="19" rx="2.5" fill="none" stroke="currentColor" stroke-width="1.2" opacity=".35"/>
+          <path d="M5 16.5 L11 5.5 L17 16.5" fill="none" stroke="currentColor" stroke-width="1.4"/>
+          <line x1="7.6" y1="12" x2="14.4" y2="12" stroke="currentColor" stroke-width="1.1" opacity=".55"/>
+        </svg>
+        <span>Patina · The Document</span>
+      </div>
+
+      <h1>A Room for<br>the Board</h1>
+      <p class="lede">Reimagining Patina's mood board as a full-screen editor — the craft the canvas already deserves, sitting on the procurement spine nobody else has.</p>
+
+      <blockquote class="cover-quote">The most emotional artifact a designer makes, and we built it into an accordion.</blockquote>
+
+      <div class="cover-meta">
+        <span>Design direction · <b>for review</b></span>
+        <span>Status <b>proposal — nothing built</b></span>
+        <span>Flag <b>mood-board-editor</b></span>
+        <span><b>August 2026</b></span>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============ 02 · THE PATH ============ -->
+<section class="slide" data-label="The path">
+  <div class="inner">
+    <div class="gutter"><span class="eyebrow">Act I · Why now</span><span class="num">02</span><span class="tick"></span></div>
+    <div class="main">
+      <h2>The board is four moves deep and has no address of its own.</h2>
+      <p class="lede">There is no route that points at a board. To reach one you walk the document, then open a drawer.</p>
+
+      <div class="chain">
+        <div class="step"><span class="kicker">01</span><span class="t">/desk</span><span class="s">Start of every session</span></div>
+        <span class="arr">›</span>
+        <div class="step"><span class="kicker">02</span><span class="t">Project folder</span><span class="s">Pick the house</span></div>
+        <span class="arr">›</span>
+        <div class="step"><span class="kicker">03</span><span class="t">/doc/[id]</span><span class="s">The document</span></div>
+        <span class="arr">›</span>
+        <div class="step"><span class="kicker">04</span><span class="t">Work band</span><span class="s">Choose Drafting</span></div>
+        <span class="arr">›</span>
+        <div class="step"><span class="kicker">05</span><span class="t">/drafting/[id]</span><span class="s">Then scroll</span></div>
+        <span class="arr">›</span>
+        <div class="step end"><span class="kicker">06</span><span class="t">Expand "Boards"</span><span class="s">An accordion facet</span></div>
+      </div>
+
+      <div class="grid g3">
+        <div class="card bad">
+          <span class="kicker">No address</span>
+          <p>A board has no URL. You cannot send one to a colleague, bookmark one, or return to the one you were in yesterday.</p>
+        </div>
+        <div class="card bad">
+          <span class="kicker">Search knows the word, not the thing</span>
+          <p>Typing "moodboards" into ⌘K lands you on the drafting page. From there you scroll and expand, same as always.</p>
+        </div>
+        <div class="card bad">
+          <span class="kicker">The drawer is the product</span>
+          <p>The most-shown artifact in the studio opens inside a collapsed section of a page about something else.</p>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============ 03 · BEFORE — THE LETTERBOX ============ -->
+<section class="slide wide" data-label="Today">
+  <div class="inner">
+    <div class="gutter"><span class="eyebrow">Act I · Today</span><span class="num">03</span></div>
+    <div class="main">
+      <h2>Today the canvas is a letterbox.</h2>
+      <p class="lede">The board opens inside the Boards facet on the drafting page: a canvas capped at <code>max-h-[70vh]</code>, sharing its band with a fixed 300px sidebar. The composition is always partly somewhere you cannot see.</p>
+
+      <div class="mock mock-before">
+        <div class="mk-bar">
+          <span class="mk-dots"><i></i><i></i><i></i></span>
+          <span class="mk-url">app.patina.cloud/drafting/8c41f2e0 &nbsp;<em>— the board has no URL of its own</em></span>
+        </div>
+        <div class="mk-nav">
+          <span class="mk-mark">Patina</span>
+          <span class="mk-crumb">Desk › Ellsworth Residence › Document › Drafting</span>
+          <span class="mk-av"></span>
+        </div>
+        <div class="mk-page">
+          <div class="mk-band">
+            <span>Concept</span><span class="on">Drafting</span><span>Proposal</span><span>Procurement</span><span>Install</span>
+          </div>
+          <div class="mk-facet"><div class="mk-fh"><b>Overview</b><i>+</i></div></div>
+          <div class="mk-facet"><div class="mk-fh"><b>Schedule &amp; FF&amp;E</b><i>+</i></div></div>
+          <div class="mk-facet open">
+            <div class="mk-fh"><b>Boards</b><i>−</i></div>
+            <div class="mk-fb">
+              <div class="mk-canvas">
+                <div class="pin" style="left:3%;top:6%;width:18%;height:32%;color:var(--brass)"><svg><use href="#f-sofa"/></svg></div>
+                <div class="pin" style="left:23%;top:4%;width:14%;height:26%;color:var(--slate)"><svg><use href="#f-lamp"/></svg></div>
+                <div class="pin cascade" style="left:44%;top:24%;width:16%;height:32%;color:var(--verdigris)"><svg><use href="#f-chair"/></svg></div>
+                <div class="pin cascade" style="left:46.5%;top:29%;width:16%;height:32%;color:var(--verdigris)"><svg><use href="#f-chair"/></svg></div>
+                <div class="pin cascade" style="left:49%;top:34%;width:16%;height:32%;color:var(--verdigris)"><svg><use href="#f-chair"/></svg></div>
+                <div class="pin" style="left:72%;top:6%;width:15%;height:28%;color:var(--slate)"><svg><use href="#f-art"/></svg></div>
+                <div class="pin sw" style="left:3%;top:50%;width:20%;height:16%">
+                  <i style="background:#6E7F6A"></i><i style="background:#C9B79C"></i><i style="background:#7C5A3C"></i><i style="background:#A8623F"></i>
+                </div>
+                <div class="pin" style="left:26%;top:70%;width:19%;height:44%;color:var(--oxblood)"><svg><use href="#f-rug"/></svg></div>
+                <div class="pin" style="left:56%;top:74%;width:20%;height:44%;color:var(--brass)"><svg><use href="#f-table"/></svg></div>
+                <div class="pin" style="left:80%;top:66%;width:16%;height:44%;color:var(--verdigris)"><svg><use href="#f-vase"/></svg></div>
+                <span class="mk-note" style="left:31%;top:4px">every add lands here</span>
+                <span class="mk-note" style="left:6px;bottom:5px">max-h-[70vh]</span>
+              </div>
+              <div class="mk-side">
+                <span class="lbl">Selected pin</span>
+                <span class="fld"></span>
+                <span class="lbl">Size</span>
+                <span class="seg"><span>S</span><span class="on">M</span><span>L</span></span>
+                <span class="sldr"></span>
+                <span class="lbl">Section</span>
+                <span class="fld"></span>
+                <span class="lbl">Notes</span>
+                <span class="fld" style="height:20px"></span>
+                <span class="mk-note" style="left:6px;bottom:5px">300px, fixed</span>
+              </div>
+            </div>
+          </div>
+          <div class="mk-facet"><div class="mk-fh"><b>Files</b><i>+</i></div></div>
+        </div>
+      </div>
+
+      <div class="caps">
+        <div class="cap was"><b>The room</b><p>An accordion facet on a page about something else, with the rest of the document stacked above and below it.</p></div>
+        <div class="cap was"><b>The canvas</b><p>Capped at 70% of viewport height inside a two-column band. The board is authored through a slot.</p></div>
+        <div class="cap was"><b>The drop point</b><p>Every added item lands at the canvas centre with a 32px cascade — never where the pointer was.</p></div>
+        <div class="cap was"><b>The inspector</b><p>A fixed 300px column that is always there, taking width from the canvas whether or not anything is selected.</p></div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============ 04 · WHAT THE CANVAS CAN'T DO ============ -->
+<section class="slide" data-label="The canvas">
+  <div class="inner">
+    <div class="gutter"><span class="eyebrow">Act I · The canvas</span><span class="num">04</span><span class="tick"></span></div>
+    <div class="main">
+      <h2>The canvas is fixed, and the hand has almost nothing to hold.</h2>
+      <p class="lede">Everything below is verified against the code as it stands. None of it is a bug — it is simply where an inline canvas stopped.</p>
+
+      <div class="grid g4">
+        <div class="card bad tight"><span class="kicker">Size</span><p><strong>1200 × 800, fixed.</strong> No UI resizes it. Items are clamped to the bounds as they are added.</p></div>
+        <div class="card bad tight"><span class="kicker">Placement</span><p>Adds drop at centre with an <span class="mono">(n % 8) × 32px</span> cascade. Never at the pointer.</p></div>
+        <div class="card bad tight"><span class="kicker">Selection</span><p>One item at a time. No marquee, no shift-click, no group, no moving five things together.</p></div>
+        <div class="card bad tight"><span class="kicker">History</span><p>No undo. No redo. A misdrag is repaired by hand or not at all.</p></div>
+        <div class="card bad tight"><span class="kicker">Clipboard</span><p>No copy, no paste, no duplicate. The same swatch is re-added from the library each time.</p></div>
+        <div class="card bad tight"><span class="kicker">Handles</span><p>No on-canvas resize or rotate. Size is an S/M/L preset plus a slider, over in the sidebar.</p></div>
+        <div class="card bad tight"><span class="kicker">Navigation</span><p>No pan gesture. Snap is welded to the visible grid — you cannot have one without the other.</p></div>
+        <div class="card bad tight"><span class="kicker">Sections</span><p>Sections exist and organise the designer's thinking. Clients never see them.</p></div>
+      </div>
+
+      <p class="small" style="margin-top:1rem">Read as a set, these are not eight small omissions. They are the interaction vocabulary a designer brings from every other canvas they use, arriving to find none of it works.</p>
+    </div>
+  </div>
+</section>
+
+<!-- ============ 05 · THE SEAMS ============ -->
+<section class="slide" data-label="The seams">
+  <div class="inner">
+    <div class="gutter"><span class="eyebrow">Act I · The seams</span><span class="num">05</span><span class="tick"></span></div>
+    <div class="main">
+      <h2>The seams show after the canvas, too.</h2>
+      <p class="lede">The board's problems do not end at the frame. They continue into every path out of it.</p>
+
+      <div class="grid g2">
+        <div class="evidence">
+          <span class="where">PDF export</span>
+          <span class="what">board → tile grid</span>
+          <p class="read">The export re-lays the board as a grid of tiles. The composition — the thing the designer spent the afternoon on — is discarded at exactly the moment it is meant to travel.</p>
+        </div>
+        <div class="evidence">
+          <span class="where">Image export</span>
+          <span class="what">— none —</span>
+          <p class="read">There is no PNG. Nothing to drop into a text message, a deck, or an email to a client who does not want an attachment.</p>
+        </div>
+        <div class="evidence">
+          <span class="where">Sharing</span>
+          <span class="what">no board-level share</span>
+          <p class="read">Guest share exists at the document level. A single board cannot be sent on its own terms.</p>
+        </div>
+        <div class="evidence">
+          <span class="where">Migrations 00272 / 00273</span>
+          <span class="what">schema + RPC shipped · UI never built</span>
+          <p class="read">Boards are supposed to continue into the project after signing. The tables and the RPC are live. Nothing calls them. Today a board's life quietly ends at the signature.</p>
+        </div>
+        <div class="evidence">
+          <span class="where">Images</span>
+          <span class="what">raw public URLs</span>
+          <p class="read">No thumbnails, no cleanup. Full-size assets render at pin scale, and deleted pins leave their files behind.</p>
+        </div>
+        <div class="card accent">
+          <span class="kicker">The shape of it</span>
+          <p>Every one of these is a finishing problem, not an architecture problem. The board was built, then the surfaces around it were left for later. Later has arrived.</p>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============ 06 · WHAT'S STRONG ============ -->
+<section class="slide" data-label="The bones">
+  <div class="inner">
+    <div class="gutter"><span class="eyebrow">Act I · The bones</span><span class="num">06</span><span class="tick"></span></div>
+    <div class="main">
+      <h2>The bones are good. The room is wrong.</h2>
+      <p class="lede">This is not a rescue. Patina's board already does things the rest of the category does not, and most of them are the hard half.</p>
+
+      <div class="grid g3">
+        <div class="card accent"><span class="kicker">Composition</span><h3>A real freeform canvas</h3><p class="small">Items sit where the designer put them. Six item types. Sections. Arrange. Autosave.</p></div>
+        <div class="card accent"><span class="kicker">Provenance</span><h3>Pins that know their product</h3><p class="small">Every product pin carries a price and vendor snapshot, and raises a drift badge when the vendor's price moves.</p></div>
+        <div class="card accent"><span class="kicker">Commerce</span><h3>Send to schedule, from the pin</h3><p class="small">A pin becomes a schedule line without re-entry. The board is already wired to the money.</p></div>
+        <div class="card accent"><span class="kicker">Client</span><h3>Per-pin verdicts</h3><p class="small">Approval lives on the individual item, which is what four of the six competitors also concluded.</p></div>
+        <div class="card accent"><span class="kicker">Sourcing</span><h3>Three-layer library and captures</h3><p class="small">The library picker plus our own Chrome extension — the web clipper the whole industry converged on.</p></div>
+        <div class="card accent"><span class="kicker">Continuity</span><h3>Clone, carry, share</h3><p class="small">Boards clone with a proposal and carry through activation. Guest share works.</p></div>
+      </div>
+
+      <div class="callout">
+        <span class="kicker">Worth saying plainly</span>
+        <p>A genuinely freeform canvas is rarer here than it sounds. Programa — the closest analogue to what Patina is building — has been auto-snapping images into place, and only in July 2026 started moving toward manual layout control.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============ 07 · FRAMING ============ -->
+<section class="slide" data-label="The field">
+  <div class="inner">
+    <div class="gutter"><span class="eyebrow">Act II · The field</span><span class="num">07</span><span class="tick"></span></div>
+    <div class="main">
+      <h2>Six platforms set the feature bar. Four canvases set the interaction bar.</h2>
+      <p class="lede">Two different questions, two different reference sets. What must a design-industry board <em>do</em>, and what must any 2026 canvas <em>feel like</em> under the hand.</p>
+
+      <div class="grid g2">
+        <div class="card">
+          <span class="kicker">The feature bar — design industry</span>
+          <div class="chips" style="margin-top:.5rem">
+            <span class="chip"><span class="lab">Programa</span><span class="delta">Pinboards</span></span>
+            <span class="chip"><span class="lab">DesignFiles</span><span class="delta">Moodboard Editor</span></span>
+            <span class="chip"><span class="lab">Mydoma Studio</span><span class="delta">Design Boards</span></span>
+            <span class="chip"><span class="lab">Houzz Pro</span><span class="delta">Mood Boards</span></span>
+            <span class="chip"><span class="lab">Studio Designer</span><span class="delta">Design Boards, May 2026</span></span>
+            <span class="chip ghost"><span class="lab">SampleBoard</span><span class="delta">closed Dec 2023</span></span>
+          </div>
+        </div>
+        <div class="card">
+          <span class="kicker">The interaction bar — canvas craft</span>
+          <div class="chips" style="margin-top:.5rem">
+            <span class="chip on"><span class="lab">FigJam</span><span class="delta">hand-feel</span></span>
+            <span class="chip"><span class="lab">Milanote</span><span class="delta">gathering</span></span>
+            <span class="chip"><span class="lab">Canva Whiteboards</span><span class="delta">reach</span></span>
+            <span class="chip on"><span class="lab">Morpholio Board</span><span class="delta">presenting</span></span>
+          </div>
+          <p class="small" style="margin-top:.7rem">Designers already use these. Whatever we build, their hands arrive pre-trained.</p>
+        </div>
+      </div>
+
+      <div class="note">
+        <span class="kicker">How to read the next six slides</span>
+        <p>Research date <strong>3 August 2026</strong>. Where a vendor's own documentation was silent we say so rather than guessing — several claims in this deck carry an explicit uncertainty flag. The category is also moving fast: Programa's Pinboard update landed in July 2026 and Studio Designer's Design Boards in May 2026, both inside the research window. Re-check before anything ships.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============ 08 · THE BASELINE ============ -->
+<section class="slide" data-label="Baseline">
+  <div class="inner">
+    <div class="gutter"><span class="eyebrow">Act II · Baseline</span><span class="num">08</span><span class="tick"></span></div>
+    <div class="main">
+      <h2>Everyone else already treats the board as a first-class surface.</h2>
+      <p class="lede">Five capabilities recur across every live tool in the set. None of them is a differentiator any more; each of them is the floor.</p>
+
+      <ul class="plain">
+        <li><strong>A freeform, project-scoped canvas.</strong> Programa is the outlier still leaning on auto-snap — its July 2026 "Fixed Image Layouts" update reads as movement toward manual layout control, though whether that is true free positioning or a lock inside the existing grid is <em>unverified</em>. <span class="badge-flag">unverified</span></li>
+        <li><strong>A web clipper.</strong> Near-universal: Programa, DesignFiles, Mydoma, Houzz Pro and Studio Designer all ship one, and SampleBoard did before it closed. Houzz Pro added a mobile clipper in March 2026.</li>
+        <li><strong>A client share link with feedback.</strong> Four of the six tie approve, decline and comment to the <em>individual item</em>, with a timestamped audit trail — DesignFiles, Houzz Pro (via Selections), Mydoma and Studio Designer.</li>
+        <li><strong>Export as the default way out.</strong> Usually PDF. Mydoma's is a composed image rather than a true PDF; Studio Designer's Design Tools output a PowerPoint deck.</li>
+        <li><strong>A headline tie-back from the board to money.</strong> Every live business suite markets this at the top of the page, not in a footnote.</li>
+      </ul>
+
+      <div class="grid g3" style="margin-top:1rem">
+        <div class="card"><span class="kicker">DesignFiles</span><p class="small">Client approvals "turn into quotes, invoices, and POs instantly."</p></div>
+        <div class="card"><span class="kicker">Houzz Pro</span><p class="small">Final selections become "send-ready Estimates, Proposals, or Invoices in less than a minute."</p></div>
+        <div class="card"><span class="kicker">Studio Designer</span><p class="small">Catalog to item to ledger — "no re-entry, no copying between tools."</p></div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============ 09 · THE WEDGES ============ -->
+<section class="slide" data-label="Wedges">
+  <div class="inner">
+    <div class="gutter"><span class="eyebrow">Act II · Wedges</span><span class="num">09</span><span class="tick"></span></div>
+    <div class="main">
+      <h2>Two wedges are open, and the incumbents' editors are their soft spot.</h2>
+
+      <div class="grid g2">
+        <div class="card accent">
+          <span class="kicker">Wedge 01 · table-stakes-adjacent</span>
+          <h3>Background removal</h3>
+          <p class="small">DesignFiles ships it automatic plus a manual lasso. Houzz Pro applies it <em>by default</em> to every image added to a board. Mydoma markets it first-party. Programa and Studio Designer conspicuously lack it — in a 2026 tool its absence reads as dated. It was also SampleBoard's signature feature.</p>
+        </div>
+        <div class="card warn">
+          <span class="kicker">Wedge 02 · the current arms race</span>
+          <h3>AI-assisted image editing</h3>
+          <p class="small">DesignFiles "Enhance with AI", Houzz Pro "AI Edit", Studio Designer "Visualize" — three separate 2025–26 launches on the same idea. Not yet universal, clearly where the category's spend is going.</p>
+        </div>
+      </div>
+
+      <div class="quote ox">
+        <p>"Incredibly limited in everything" — wanting something closer to Canva.</p>
+        <span class="attr">Verified Capterra reviewers on Mydoma Studio's board editor</span>
+      </div>
+      <div class="quote ox">
+        <p>"A heavy business platform, not a light creative board… the concept and inspiration step is not where it shines."</p>
+        <span class="attr">Independent 2026 review of Houzz Pro (Storyflow) — a second reviewer calls it "not especially robust or customizable"</span>
+      </div>
+
+      <div class="callout">
+        <span class="kicker">The read</span>
+        <p>The money spine is what sells these suites. The editor is where the reviews turn. No tool in the set has yet built a canvas designers actually enjoy — which is the opening, and it is wider than the feature list suggests.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============ 10 · THE INTERACTION BAR ============ -->
+<section class="slide" data-label="Interaction bar">
+  <div class="inner">
+    <div class="gutter"><span class="eyebrow">Act II · The hand</span><span class="num">10</span><span class="tick"></span></div>
+    <div class="main">
+      <h2>The hand-feel is a solved problem. We just have not adopted the solution.</h2>
+      <p class="lede">Milanote, Canva Whiteboards and FigJam converge on the same vocabulary. It is not a design space any more — it is a convention, and inverting it reads as a bug.</p>
+
+      <div class="grid g2">
+        <div>
+          <span class="kicker">Must-haves — near-universal across the three</span>
+          <div class="keys">
+            <span class="ky">⌘ / Ctrl + wheel</span><span class="kd">Zoom</span>
+            <span class="ky">Scroll</span><span class="kd">Pan</span>
+            <span class="ky">Space + drag</span><span class="kd">Temporary pan, with any tool active</span>
+            <span class="ky">Drag on empty</span><span class="kd">Marquee select</span>
+            <span class="ky">Shift + click</span><span class="kd">Add to selection</span>
+            <span class="ky">⌘D · Alt-drag</span><span class="kd">Duplicate</span>
+            <span class="ky">⌘ ] · ⌘ [</span><span class="kd">Z-order, also on right-click</span>
+            <span class="ky">⌘⇧L</span><span class="kd">Lock an item in place</span>
+            <span class="ky">⌘Z · ⌘⇧Z</span><span class="kd">Undo, redo</span>
+            <span class="ky">Arrows</span><span class="kd">Nudge — Shift for ten times the step</span>
+            <span class="ky soft">drop a file</span><span class="kd">Lands at the pointer, no upload dialog</span>
+            <span class="ky soft">paste a URL</span><span class="kd">Unfurls into a card with image and detail</span>
+            <span class="ky soft">always on</span><span class="kd">Continuous autosave, and smart guides while dragging — the research's highest-leverage investment relative to effort</span>
+          </div>
+        </div>
+        <div>
+          <span class="kicker">Delighters — worth the extra build</span>
+          <div class="grid" style="margin-top:.55rem;gap:7px">
+            <div class="card tight accent"><span class="kicker">FigJam</span><h3>Tidy Up</h3><p>Select a mess, get an even grid, then nudge the spacing while order is preserved. The single most-praised interaction in the research.</p></div>
+            <div class="card tight accent"><span class="kicker">FigJam</span><h3>Sections that capture what you drag in</h3><p>Membership is implicit. Drag an item over a section and it joins — no grouping step, no dialog.</p></div>
+            <div class="card tight accent"><span class="kicker">Morpholio Board</span><h3>A presentation you can still edit</h3><p>Swap an item mid-meeting and the client watches it change. Not a frozen slideshow.</p></div>
+            <div class="card tight"><span class="kicker">Milanote</span><h3>Synced copies</h3><p>One swatch, many boards, a single source of truth. Edit once, updates everywhere.</p></div>
+          </div>
+        </div>
+      </div>
+
+    </div>
+  </div>
+</section>
+
+<!-- ============ 11 · TWO INSTRUCTIVE COMPETITORS ============ -->
+<section class="slide" data-label="Two lessons">
+  <div class="inner">
+    <div class="gutter"><span class="eyebrow">Act II · Two lessons</span><span class="num">11</span><span class="tick"></span></div>
+    <div class="main">
+      <h2>One tool has the room. One has the hands. Neither has both.</h2>
+
+      <div class="grid g2">
+        <div class="card accent">
+          <span class="kicker">Morpholio Board — the room</span>
+          <h3>The best client moment in the category, on the weakest foundation.</h3>
+          <p class="small">Page-based rather than infinite. No live share link at all — sharing means exporting a file and sending it. Morpholio's own documentation says cross-device sync is "not quite ready yet."</p>
+          <p class="small"><strong>And yet:</strong> one tap hides every tool for a distraction-free presentation that stays live-editable, with an Ava toggle that swings the same board between board, auto-generated cut sheets, and a shoppable product list. Named brand libraries — Knoll, Herman Miller, Kravet — sit behind it.</p>
+        </div>
+        <div class="card accent">
+          <span class="kicker">FigJam — the hands</span>
+          <h3>Best-in-class craft, with nothing to show a client.</h3>
+          <p class="small">Infinite canvas, sections, Tidy Up, a complete keyboard model, anchored comments, multiplayer cursors. Reviewers reach for the word <em>fast</em>.</p>
+          <p class="small"><strong>And yet:</strong> FigJam has no presentation mode. It is an open, unfulfilled request on Figma's own forum; real decks are a separate product. The craft never gets to meet the audience.</p>
+        </div>
+      </div>
+
+      <div class="callout">
+        <span class="kicker">Why this matters for us</span>
+        <p>Morpholio's board-to-spec collapse — one artifact that is simultaneously the mood board, the cut sheet, and the shopping list — is the most strategically important pattern in this research. Patina already half-owns it: send-to-schedule from a pin does exactly this, once.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============ 12 · THE OBITUARY ============ -->
+<section class="slide" data-label="Obituary">
+  <div class="inner">
+    <div class="gutter"><span class="eyebrow">Act II · Obituary</span><span class="num">12</span><span class="tick"></span></div>
+    <div class="main">
+      <h2>A beautiful board, on its own, is not a business.</h2>
+      <p class="lede">SampleBoard ran for thirteen years as a dedicated mood-board tool. It had the canvas, one-click background removal, a web clipper, client comments, PDF export, and even a Purchase List Generator. It was discontinued in December 2023.</p>
+
+      <div class="quote">
+        <p>"The real value wasn't the software. It was the thinking behind the visuals."</p>
+        <span class="attr">SampleBoard's founder, on the pivot away from the editor</span>
+      </div>
+
+      <div class="grid g3">
+        <div class="card bad"><span class="kicker">The lesson taken</span><p>Craft alone does not win. This proposal is a room for the board we already have — not a new product, and not a boards business.</p></div>
+        <div class="card warn"><span class="kicker">The lesson not taken</span><p>Bad craft is loudly punished. Mydoma has the commerce and still draws "incredibly limited" from its own reviewers.</p></div>
+        <div class="card"><span class="kicker">A footnote worth keeping</span><p>Several 2026 "best mood board tools" roundups still list SampleBoard as purchasable. Published comparisons in this category go stale fast; treat them accordingly.</p></div>
+      </div>
+
+      <p class="small" style="margin-top:1rem">Cited here as a benchmark and an obituary, not as an active competitor.</p>
+    </div>
+  </div>
+</section>
+
+<!-- ============ 13 · WHERE WE STAND ============ -->
+<section class="slide" data-label="Standing">
+  <div class="inner">
+    <div class="gutter"><span class="eyebrow">Act II · Standing</span><span class="num">13</span><span class="tick"></span></div>
+    <div class="main">
+      <h2>We lead where it is hard and lag where it is known.</h2>
+      <p class="lede">The columns are the five live design-industry tools. The pattern is consistent: our advantages are structural, our deficits are craft.</p>
+
+      <div class="tablewrap">
+        <table>
+          <thead>
+            <tr>
+              <th>Capability</th>
+              <th class="me">Patina today</th>
+              <th>Programa</th>
+              <th>DesignFiles</th>
+              <th>Mydoma</th>
+              <th>Houzz Pro</th>
+              <th>Studio Designer</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td class="lead">Freeform canvas</td>
+              <td class="me cy">Yes</td>
+              <td class="cp">Auto-snap; moving</td>
+              <td class="cy">Yes</td>
+              <td class="cy">Yes</td>
+              <td class="cy">Yes, multi-page</td>
+              <td class="cu">Undocumented</td>
+            </tr>
+            <tr>
+              <td class="lead">Dedicated full-screen editor</td>
+              <td class="me cn">No — inline facet</td>
+              <td class="cy">Yes</td>
+              <td class="cy">Yes</td>
+              <td class="cy">Yes</td>
+              <td class="cy">Yes</td>
+              <td class="cu">Undocumented</td>
+            </tr>
+            <tr>
+              <td class="lead">Canvas ergonomics<br><span class="small">multi-select · undo · handles · pan</span></td>
+              <td class="me cn">Almost none</td>
+              <td class="cn">Not found</td>
+              <td class="cy">Multi-select, group, layers</td>
+              <td class="cu">Partly unverified</td>
+              <td class="cy">Broadest of the set</td>
+              <td class="cn">Not confirmed</td>
+            </tr>
+            <tr>
+              <td class="lead">Product-linked pins with live price drift</td>
+              <td class="me cy">Only us</td>
+              <td class="cp">Hyperlink to source</td>
+              <td class="cp">Catalog-linked</td>
+              <td class="cp">Hotspots to specs</td>
+              <td class="cp">Auto-saves to library</td>
+              <td class="cp">Catalog to item</td>
+            </tr>
+            <tr>
+              <td class="lead">Per-item client verdict</td>
+              <td class="me cy">Yes, per pin</td>
+              <td class="cn">Schedule only</td>
+              <td class="cy">Yes, with audit</td>
+              <td class="cp">Claimed</td>
+              <td class="cy">Yes, via Selections</td>
+              <td class="cy">Yes, per line</td>
+            </tr>
+            <tr>
+              <td class="lead">Web clipper / capture</td>
+              <td class="me cy">Chrome extension</td>
+              <td class="cy">Scraper, Jul 2026</td>
+              <td class="cy">Product Clipper</td>
+              <td class="cy">Yes</td>
+              <td class="cy">Desktop + mobile</td>
+              <td class="cy">Studio Capture</td>
+            </tr>
+            <tr>
+              <td class="lead">Background removal</td>
+              <td class="me cn">No</td>
+              <td class="cn">Not found</td>
+              <td class="cy">Auto + lasso</td>
+              <td class="cp">Claimed</td>
+              <td class="cy">Automatic by default</td>
+              <td class="cn">Not found</td>
+            </tr>
+            <tr>
+              <td class="lead">Presentation mode</td>
+              <td class="me cn">No</td>
+              <td class="cy">Presentation / Detail</td>
+              <td class="cy">Full-screen live</td>
+              <td class="cu">Unverified</td>
+              <td class="cy">Live + dashboard</td>
+              <td class="cp">Interactive documents</td>
+            </tr>
+            <tr>
+              <td class="lead">Export honouring the composition</td>
+              <td class="me cn">PDF re-lays a grid; no PNG</td>
+              <td class="cn">None found for pinboards</td>
+              <td class="cy">Branded PDF</td>
+              <td class="cp">Composed image only</td>
+              <td class="cy">PDF + image + print</td>
+              <td class="cp">PDF; PowerPoint</td>
+            </tr>
+            <tr>
+              <td class="lead">Board to schedule / PO</td>
+              <td class="me cy">Send to schedule, per pin</td>
+              <td class="cp">Hyperlink only</td>
+              <td class="cy">Approvals to quotes, POs</td>
+              <td class="cy">Approved items to sourcing</td>
+              <td class="cy">Selections to proposal to PO</td>
+              <td class="cy">Deepest — into the ledger</td>
+            </tr>
+            <tr>
+              <td class="lead">Board templates</td>
+              <td class="me cn">No</td>
+              <td class="cn">Not found</td>
+              <td class="cy">Brandable</td>
+              <td class="cy">Yes</td>
+              <td class="cy">Yes</td>
+              <td class="cu">Not confirmed</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      <div class="legend">
+        <span><b class="vd">Green</b> — present and strong</span>
+        <span><b class="br">Amber</b> — partial, adjacent, or vendor-claimed only</span>
+        <span><b class="ox">Red</b> — absent</span>
+        <span><b>Grey</b> — the vendor's own documentation is silent</span>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============ 14 · THE CONCEPT ============ -->
+<section class="slide" data-label="The concept">
+  <div class="inner">
+    <div class="gutter"><span class="eyebrow">Act III · The concept</span><span class="num">14</span><span class="tick"></span></div>
+    <div class="main">
+      <h2>The board should open into a room of its own.</h2>
+      <p class="lede">Not a modal, not a taller facet. A dedicated page the board owns, that you enter deliberately and leave the same way.</p>
+
+      <span class="route">/board/<b>[boardId]</b> &nbsp;&nbsp;<s>— instead of /drafting/[id] → scroll → expand</s></span>
+
+      <div class="grid g4" style="margin-top:1.1rem">
+        <div class="card accent tight"><span class="kicker">Its own route</span><p>A page under the document group, shedding the portal chrome the way the spec-book layout already does. Nothing new is invented here.</p></div>
+        <div class="card accent tight"><span class="kicker">A way back</span><p>Escape or Done returns you exactly where you came from — the drafting page, the desk, or a share link.</p></div>
+        <div class="card accent tight"><span class="kicker">An address</span><p>Deep-linkable and finally ⌘K-addressable. "Ellsworth living room board" goes to the board.</p></div>
+        <div class="card accent tight"><span class="kicker">A doorway</span><p>The drafting facet stops being a cramped editor and becomes what it should have been: a strip of board covers you click into.</p></div>
+      </div>
+
+      <div class="launch">
+        <div class="lc">
+          <div class="cv"><svg style="color:var(--brass)"><use href="#f-sofa"/></svg><svg style="color:var(--verdigris)"><use href="#f-chair"/></svg><svg style="color:var(--slate)"><use href="#f-lamp"/></svg></div>
+          <div class="mt"><b>Living Room</b><span>18 pins · edited today</span></div>
+        </div>
+        <div class="lc">
+          <div class="cv"><svg style="color:var(--oxblood)"><use href="#f-rug"/></svg><svg style="color:var(--brass)"><use href="#f-table"/></svg><svg style="color:var(--slate)"><use href="#f-art"/></svg></div>
+          <div class="mt"><b>Dining</b><span>11 pins · shared</span></div>
+        </div>
+        <div class="lc">
+          <div class="cv"><svg style="color:var(--verdigris)"><use href="#f-vase"/></svg><svg style="color:var(--slate)"><use href="#f-pendant"/></svg><svg style="color:var(--brass)"><use href="#f-shelf"/></svg></div>
+          <div class="mt"><b>Entry &amp; Hall</b><span>7 pins · draft</span></div>
+        </div>
+        <div class="lc">
+          <div class="cv"><svg style="color:var(--slate)"><use href="#f-ottoman"/></svg><svg style="color:var(--verdigris)"><use href="#f-chair"/></svg><svg style="color:var(--oxblood)"><use href="#f-rug"/></svg></div>
+          <div class="mt"><b>Primary Bedroom</b><span>14 pins · 3 approved</span></div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============ 15 · THE ROOM (HERO) ============ -->
+<section class="slide wide" data-label="The room">
+  <div class="inner">
+    <div class="gutter"><span class="eyebrow">Act III · The room</span><span class="num">15</span></div>
+    <div class="main">
+      <h2>Here is the room.</h2>
+      <p class="lede">A thin bar across the top. The library within reach on the left. The canvas breathing in the middle. The inspector floating on what you selected, instead of anchoring a column whether or not anything is selected at all.</p>
+
+      <div class="mock mock-after">
+        <div class="ed-top">
+          <span class="ed-back">←</span>
+          <span class="ed-name">Ellsworth Residence — Living Room</span>
+          <span class="ed-chip">Living Room</span>
+          <span class="ed-mode"><b>Edit</b><span>Present</span></span>
+          <span class="ed-actions"><span class="ghost">Share</span><span class="solid">Done</span></span>
+        </div>
+        <div class="ed-body">
+          <aside class="ed-rail">
+            <div class="ed-tabs">
+              <span class="on">Library</span><span>Captures</span><span>Uploads</span><span>Palettes</span><span>Scans</span>
+            </div>
+            <div class="ed-search">Search the library…</div>
+            <div class="ed-thumbs">
+              <div class="th"><svg style="color:var(--brass)"><use href="#f-sofa"/></svg><span class="pz">$3,180</span></div>
+              <div class="th"><svg style="color:var(--verdigris)"><use href="#f-chair"/></svg><span class="pz">$940</span></div>
+              <div class="th"><svg style="color:var(--slate)"><use href="#f-lamp"/></svg><span class="pz">$412</span></div>
+              <div class="th"><svg style="color:var(--brass)"><use href="#f-table"/></svg><span class="pz">$1,650</span></div>
+              <div class="th"><svg style="color:var(--oxblood)"><use href="#f-rug"/></svg><span class="pz">$2,240</span></div>
+              <div class="th"><svg style="color:var(--slate)"><use href="#f-shelf"/></svg><span class="pz">$1,090</span></div>
+            </div>
+            <div class="ed-sugg">
+              <span class="lbl">Suggested for this room</span>
+              <div class="ed-thumbs">
+                <div class="th"><svg style="color:var(--verdigris)"><use href="#f-vase"/></svg></div>
+                <div class="th"><svg style="color:var(--slate)"><use href="#f-pendant"/></svg></div>
+                <div class="th"><svg style="color:var(--brass)"><use href="#f-ottoman"/></svg></div>
+              </div>
+            </div>
+          </aside>
+
+          <div class="ed-canvas">
+            <!-- section band -->
+            <div class="it band" style="left:3%;top:10%;width:53%;height:62%"><span>Seating</span></div>
+
+            <!-- smart guides -->
+            <div class="guide h" style="left:4%;top:18%;width:50%"></div>
+            <div class="guide v" style="left:42.5%;top:14%;height:58%"></div>
+
+            <!-- composition -->
+            <div class="it card2" style="left:6%;top:18%;width:24%;height:30%;color:var(--brass)"><svg><use href="#f-sofa"/></svg></div>
+
+            <div class="it card2 sel" style="left:34%;top:18%;width:17%;height:26%;color:var(--verdigris)">
+              <svg><use href="#f-chair"/></svg>
+              <span class="rot"></span>
+              <span class="hnd tl"></span><span class="hnd tc"></span><span class="hnd tr"></span>
+              <span class="hnd lc"></span><span class="hnd rc"></span>
+              <span class="hnd bl"></span><span class="hnd bc"></span><span class="hnd brr"></span>
+            </div>
+
+            <div class="it card2" style="left:8%;top:52%;width:16%;height:15%;color:var(--slate)"><svg><use href="#f-ottoman"/></svg></div>
+            <div class="it card2" style="left:29%;top:52%;width:27%;height:17%;color:var(--oxblood)"><svg><use href="#f-rug"/></svg></div>
+
+            <div class="it card2" style="left:82%;top:16%;width:14%;height:19%;color:var(--slate)"><svg><use href="#f-pendant"/></svg></div>
+            <div class="it card2" style="left:82%;top:38%;width:14%;height:21%;color:var(--slate)"><svg><use href="#f-art"/></svg></div>
+            <div class="it card2" style="left:80%;top:62%;width:17%;height:20%;color:var(--brass)"><svg><use href="#f-table"/></svg></div>
+            <div class="it card2" style="left:71%;top:64%;width:8%;height:14%;color:var(--verdigris)"><svg><use href="#f-vase"/></svg></div>
+
+            <div class="it pal" style="left:4%;top:76%;width:21%;height:11%">
+              <i style="background:#6E7F6A"></i><i style="background:#C9B79C"></i><i style="background:#7C5A3C"></i><i style="background:#A8623F"></i>
+            </div>
+            <div class="it tex" style="left:28%;top:74%;width:11%;height:15%"></div>
+            <div class="it note2" style="left:42%;top:74%;width:26%;height:16%">
+              <p>Warm oak, unbleached linen, brass that has already been touched.</p>
+            </div>
+
+            <!-- floating inspector on the selection -->
+            <div class="insp" style="left:54%;top:18%;width:23%">
+              <span class="nm">Halsted Lounge Chair</span>
+              <span class="vn">Middlewest Workshop · Walnut / Flax</span>
+              <div class="row"><span>Trade</span><b>$940</b></div>
+              <div class="row"><span>Was $890</span><span class="drift">price moved</span></div>
+              <div class="row"><span>Size</span><b>31 × 33 × 30 in</b></div>
+              <div class="verd"><i class="yes">Approved</i><i>Hold</i><i>Pass</i></div>
+              <div class="acts"><span class="go">Send to schedule</span><span>Replace</span></div>
+            </div>
+
+            <div class="ed-tools"><span class="on">Select</span><span>Text</span><span>Section</span><span>Tidy</span><span>Align</span></div>
+            <div class="ed-zoom"><span>−</span><span>68%</span><span>+</span><span>·</span><span>Fit</span></div>
+          </div>
+        </div>
+      </div>
+
+      <div class="caps">
+        <div class="cap"><b>Top bar</b><p>Board name, room, the Edit / Present switch, Share, and Done. Five things, one line, nothing else competing.</p></div>
+        <div class="cap"><b>Left rail</b><p>Library, captures, uploads, palettes and room scans in one place, with taught suggestions pinned to the bottom.</p></div>
+        <div class="cap"><b>Canvas</b><p>The composition at full width, on a dot grid, with smart guides appearing as you drag and sections you can name.</p></div>
+        <div class="cap"><b>Selection</b><p>Resize and rotate handles on the item itself. The inspector floats beside it and leaves when you deselect.</p></div>
+        <div class="cap"><b>The spine, visible</b><p>Trade price, vendor, drift, verdict and send-to-schedule — all already ours, finally where the hand is.</p></div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============ 16 · HAND-FEEL ============ -->
+<section class="slide" data-label="Hand-feel">
+  <div class="inner">
+    <div class="gutter"><span class="eyebrow">Act III · Hand-feel</span><span class="num">16</span><span class="tick"></span></div>
+    <div class="main">
+      <h2>Adopt the conventions whole. They are not ours to reinvent.</h2>
+      <p class="lede">Every behaviour on this slide already exists in a tool our designers use. The work is fitting them to our canvas, not inventing an idiom.</p>
+
+      <div class="grid g3">
+        <div class="card accent">
+          <span class="kicker">Moving around</span>
+          <ul class="plain" style="margin:.3rem 0 0">
+            <li>Wheel with modifier zooms; plain scroll pans; space-drag pans temporarily.</li>
+            <li>The edit canvas grows as the composition grows, with zoom-to-fit always a keystroke away.</li>
+            <li>Drag from the rail and drop at the pointer. Drop a file from the desktop and it lands where you let go.</li>
+          </ul>
+        </div>
+        <div class="card accent">
+          <span class="kicker">Handling things</span>
+          <ul class="plain" style="margin:.3rem 0 0">
+            <li>Resize and rotate handles on the item, not in a sidebar.</li>
+            <li>Marquee and shift-click, then move five things as one.</li>
+            <li>Align and distribute, with smart guides while you drag.</li>
+            <li>Undo and redo. Duplicate by keystroke or alt-drag. Nudge with the arrows.</li>
+          </ul>
+        </div>
+        <div class="card accent">
+          <span class="kicker">Two evolutions, not additions</span>
+          <ul class="plain" style="margin:.3rem 0 0">
+            <li><strong>Arrange becomes Tidy.</strong> One click turns a scattered selection into an even grid — FigJam's most-praised interaction, on our own control.</li>
+            <li><strong>Sections become implicit.</strong> Drag an item over a section band and it joins. The schema already stores membership in <code>data.section_id</code>; no migration is required.</li>
+          </ul>
+        </div>
+      </div>
+
+      <div class="callout">
+        <span class="kicker">The one genuine design decision</span>
+        <p>An <strong>infinite canvas to work in, a bounded artifact to present</strong>. Web tools converge on infinite; presentation-first tools converge on pages. The research recommends both rather than either — compose without running out of room, then present something that has edges.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============ 17 · PRESENTING ============ -->
+<section class="slide" data-label="Presenting">
+  <div class="inner">
+    <div class="gutter"><span class="eyebrow">Act III · Presenting</span><span class="num">17</span><span class="tick"></span></div>
+    <div class="main">
+      <h2>Presenting is the moment the board was made for.</h2>
+      <p class="lede">The Edit / Present switch in the top bar is not decoration. It is the second half of the room.</p>
+
+      <div class="grid g2">
+        <div class="card accent">
+          <span class="kicker">What Present becomes</span>
+          <p><strong>Full-bleed, tools gone, board only.</strong> Sections finally visible to the client, because the designer's grouping is the argument.</p>
+          <p class="small"><strong>Still live.</strong> Morpholio's lesson: a designer swaps the chair mid-meeting and the client watches it happen. A frozen preview would be a worse version of a PDF.</p>
+        </div>
+        <div class="card accent">
+          <span class="kicker">What the client can do</span>
+          <p><strong>Verdicts anchored on the canvas tile.</strong> Approve, hold, or pass on the piece itself, where they are looking.</p>
+          <p class="small">Per-item approval is the industry baseline — four of six tools tie it to the item with an audit trail. Our verdict schema from migration 00267 already supports it; only the on-canvas anchor was never built.</p>
+        </div>
+      </div>
+
+      <div class="grid g2" style="margin-top:13px">
+        <div class="card">
+          <span class="kicker">Board-level share</span>
+          <p class="small">A link that opens one board, no login required to view — the default expectation across every collaborative tool in the set. Today share is document-level only.</p>
+        </div>
+        <div class="card">
+          <span class="kicker">Deliberately not in this phase</span>
+          <p class="small">Live multiplayer cursors. Only Canva and FigJam clear that bar, and not one of the five design-industry tools does. It is a Phase 4 question at the earliest.</p>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============ 18 · EARNS ITS KEEP ============ -->
+<section class="slide" data-label="The moat">
+  <div class="inner">
+    <div class="gutter"><span class="eyebrow">Act III · The moat</span><span class="num">18</span><span class="tick"></span></div>
+    <div class="main">
+      <h2>The board already knows what everything costs.</h2>
+      <p class="lede">This is the part no competitor can copy quickly, because it is not an editor feature — it is the spine the editor happens to be sitting on.</p>
+
+      <div class="chain">
+        <div class="step"><span class="kicker">Have</span><span class="t">Product pin</span><span class="s">Price, vendor, SKU snapshot</span></div>
+        <span class="arr">›</span>
+        <div class="step"><span class="kicker">Have</span><span class="t">Price drift</span><span class="s">Badge when the vendor moves</span></div>
+        <span class="arr">›</span>
+        <div class="step"><span class="kicker">Have</span><span class="t">Verdict</span><span class="s">Per pin, per client</span></div>
+        <span class="arr">›</span>
+        <div class="step"><span class="kicker">Have</span><span class="t">Send to schedule</span><span class="s">One pin, one line</span></div>
+        <span class="arr">›</span>
+        <div class="step new"><span class="kicker">Next</span><span class="t">Emit the list</span><span class="s">Shoppable list, cut sheet</span></div>
+        <span class="arr">›</span>
+        <div class="step new"><span class="kicker">Next</span><span class="t">After signing</span><span class="s">Boards continue into the project</span></div>
+      </div>
+
+      <div class="grid g2" style="margin-top:1.1rem">
+        <div class="card accent">
+          <span class="kicker">Deepen what exists</span>
+          <h3>A board that can emit its own list</h3>
+          <p class="small">Send-to-schedule already moves one pin. The next step is the whole board: a shoppable list and a cut sheet derived from the composition, without re-entry. Morpholio's Ava proves designers want this artifact; we are the ones with real prices behind it.</p>
+        </div>
+        <div class="card warn">
+          <span class="kicker">Turn on what shipped</span>
+          <h3>Life after signing</h3>
+          <p class="small">Migrations 00272 and 00273 gave boards a life in the project after the proposal is signed. The schema and the RPC are live in production and nothing calls them. This is dead code with a job waiting for it.</p>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============ 19 · LEAVING THE ROOM ============ -->
+<section class="slide" data-label="Export">
+  <div class="inner">
+    <div class="gutter"><span class="eyebrow">Act III · Export</span><span class="num">19</span><span class="tick"></span></div>
+    <div class="main">
+      <h2>Leaving the room should not flatten the composition.</h2>
+      <p class="lede">A board that re-lays itself as a tile grid on the way out is telling the designer their afternoon did not matter.</p>
+
+      <div class="grid g3">
+        <div class="card bad"><span class="kicker">Today</span><h3>PDF, re-laid as a grid</h3><p class="small">Position, scale and overlap are discarded. What arrives in the client's inbox is a contact sheet, not the board.</p></div>
+        <div class="card accent"><span class="kicker">Proposed</span><h3>PDF and PNG of the authored canvas</h3><p class="small">The composition as composed. PDF is universal across the category; PNG is expected and we do not have one at all.</p></div>
+        <div class="card accent"><span class="kicker">Proposed</span><h3>Covers from the real board</h3><p class="small">Board thumbnails rendered from the actual composition, so the launcher strip shows the work rather than a placeholder.</p></div>
+      </div>
+
+      <div class="note">
+        <span class="kicker">Worth knowing before anyone promises print quality</span>
+        <p>None of the six competitors makes a technical print-resolution claim anywhere in their public documentation. Morpholio Board is the only tool in either research set that names export tiers at all — good, better, best. There is no established bar here to clear, which means we should set our own and state it honestly.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============ 20 · NEW SOURCES ============ -->
+<section class="slide" data-label="Sources">
+  <div class="inner">
+    <div class="gutter"><span class="eyebrow">Act III · Sources</span><span class="num">20</span><span class="tick"></span></div>
+    <div class="main">
+      <h2>New ways in, and one finishing tool.</h2>
+
+      <div class="grid g3">
+        <div class="card accent">
+          <span class="kicker">Paste</span>
+          <h3>A URL unfurls onto the canvas</h3>
+          <p class="small">Milanote, Canva and FigJam all do this. For a furniture platform it maps cleanly: paste a manufacturer's product page and get an image, a price and a link, already a real pin.</p>
+        </div>
+        <div class="card accent">
+          <span class="kicker">Clip</span>
+          <h3>Our captures, surfaced in the rail</h3>
+          <p class="small">The Chrome extension already lands captures in the library — this is the clipper the whole industry converged on, and we built it. It just needs a tab in the rail.</p>
+        </div>
+        <div class="card accent">
+          <span class="kicker">Finish</span>
+          <h3>Background removal on any image pin</h3>
+          <p class="small">The one wedge feature two incumbents conspicuously lack and two others apply by default. The media service is the natural host.</p>
+        </div>
+      </div>
+
+      <div class="note">
+        <span class="kicker">Deliberately deferred — Pinterest import</span>
+        <p>Pinterest lands as an open question, not a commitment. A general URL and clipper path covers most of the same ground without an API dependency — the same call Programa appears to have made when it shipped a generic web scraper in July 2026 rather than deepening its Pinterest integration.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============ 21 · ROADMAP ============ -->
+<section class="slide" data-label="Roadmap">
+  <div class="inner">
+    <div class="gutter"><span class="eyebrow">Act IV · Sequencing</span><span class="num">21</span><span class="tick"></span></div>
+    <div class="main">
+      <h2>Three phases, in the order that pays.</h2>
+      <p class="lede">Each phase is worth shipping on its own. Nothing later is required to make anything earlier useful.</p>
+
+      <div class="grid g3">
+        <div class="phase">
+          <span class="when">Phase 1</span>
+          <h3>The room</h3>
+          <ul class="plain" style="margin:.25rem 0 0">
+            <li>The <code>/board/[boardId]</code> route and the full-screen shell.</li>
+            <li>The whole interaction bar — zoom, pan, marquee, handles, undo, duplicate, guides, Tidy.</li>
+            <li>Sections become implicit. The drafting facet becomes a launcher strip.</li>
+          </ul>
+          <p class="val">Rides the existing data model. Zero schema change. Behind the <code>mood-board-editor</code> flag.</p>
+        </div>
+        <div class="phase p2">
+          <span class="when">Phase 2</span>
+          <h3>The audience</h3>
+          <ul class="plain" style="margin:.25rem 0 0">
+            <li>Present mode: full-bleed, sections visible, live-editable.</li>
+            <li>Board-level share link.</li>
+            <li>Verdicts anchored on the canvas tile.</li>
+            <li>Project-phase boards — the 00272 / 00273 UI that was never built.</li>
+          </ul>
+          <p class="val">Still zero schema change. Every table it needs is already in production.</p>
+        </div>
+        <div class="phase p3">
+          <span class="when">Phase 3</span>
+          <h3>The reach</h3>
+          <ul class="plain" style="margin:.25rem 0 0">
+            <li>Composition-true PDF and PNG export; covers from the real board.</li>
+            <li>URL unfurl; background removal on image pins.</li>
+            <li>The image pipeline — thumbnails, cleanup.</li>
+            <li>Board templates.</li>
+          </ul>
+          <p class="val">The first phase that adds infrastructure rather than surface. Gate it on how Phase 1 is being used.</p>
+        </div>
+      </div>
+
+      <div class="callout">
+        <span class="kicker">Why this order</span>
+        <p>Phase 1 is the one a designer feels the day it ships, and it is the cheapest of the three because the data is already right. Presenting follows craft; craft does not follow presenting.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============ 22 · NOT PROPOSING ============ -->
+<section class="slide" data-label="Not proposing">
+  <div class="inner">
+    <div class="gutter"><span class="eyebrow">Act IV · Boundaries</span><span class="num">22</span><span class="tick"></span></div>
+    <div class="main">
+      <h2>What we are not proposing.</h2>
+      <p class="lede">Five things this deck deliberately leaves alone, each for a stated reason.</p>
+
+      <div class="grid g2">
+        <div class="card warn">
+          <span class="kicker">Not this</span>
+          <h3>A new canvas library</h3>
+          <p class="small">dnd-kit stays. The interaction bar is achievable on what we already ship, and swapping the foundation would spend the whole phase on parity.</p>
+        </div>
+        <div class="card warn">
+          <span class="kicker">Not this</span>
+          <h3>Realtime multiplayer, version one</h3>
+          <p class="small">Only Canva and FigJam clear that bar. None of the five live design-industry tools offers it. Presence is a want, not an expectation, in this category.</p>
+        </div>
+        <div class="card warn">
+          <span class="kicker">Not this</span>
+          <h3>A schema rewrite</h3>
+          <p class="small">Phases 1 and 2 ride the existing model — including section membership, which already lives in <code>data.section_id</code>.</p>
+        </div>
+        <div class="card warn">
+          <span class="kicker">Not this</span>
+          <h3>A separate boards product</h3>
+          <p class="small">SampleBoard is the argument. The board's value here is that it is attached to a project, a library, and a purchase order.</p>
+        </div>
+        <div class="card warn">
+          <span class="kicker">Not this</span>
+          <h3>A Pinterest API dependency</h3>
+          <p class="small">URL unfurl plus our own clipper covers the same need without taking a dependency on someone else's terms of service.</p>
+        </div>
+        <div class="card accent">
+          <span class="kicker">And to be clear</span>
+          <h3>Nothing here is built</h3>
+          <p class="small">No route, no migration, no component. This is a direction to approve or redirect, not a status report.</p>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============ 23 · THE ASK ============ -->
+<section class="slide" data-label="The ask">
+  <div class="inner">
+    <div class="gutter"><span class="eyebrow">Act IV · The ask</span><span class="num">23</span><span class="tick"></span></div>
+    <div class="main">
+      <h2>Open questions, then a green light.</h2>
+
+      <div class="grid g3">
+        <div class="card warn">
+          <span class="kicker">Needs a ruling</span>
+          <p><strong>The drafting facet.</strong> Launcher strip only, or does board entry move up to desk level as well?</p>
+        </div>
+        <div class="card warn">
+          <span class="kicker">Needs a ruling</span>
+          <p><strong>Present mode's audience.</strong> Does it also become the client-portal render, or is it designer-driven in the room at first?</p>
+        </div>
+        <div class="card warn">
+          <span class="kicker">Needs a decision</span>
+          <p><strong>Background removal.</strong> In-house on the media service, or a third-party API for version one?</p>
+        </div>
+        <div class="card warn">
+          <span class="kicker">Needs a decision</span>
+          <p><strong>Board templates.</strong> Seed a starter set, or let studios grow their own and promote what works?</p>
+        </div>
+        <div class="card warn">
+          <span class="kicker">Needs a decision</span>
+          <p><strong>Realtime presence.</strong> Phase 4, or never? The category says it can wait; our designers may say otherwise.</p>
+        </div>
+        <div class="card accent">
+          <span class="kicker">The ask</span>
+          <p><strong>Review this, then green-light Phase 1 scoping</strong> — the route, the shell, and the interaction bar, behind the flag.</p>
+          <p class="small">Phase 1 changes no schema and can be turned off with a switch.</p>
+        </div>
+      </div>
+
+      <div class="callout">
+        <span class="kicker">Where this lands</span>
+        <p>We already have the rarest thing in this market: a real canvas wired to real prices. What we owe the designer is somewhere to stand while they use it.</p>
+      </div>
+
+      <div class="cover-meta" style="margin-top:22px">
+        <span>Deck <b>docs/design/mood-board-reimagined/</b></span>
+        <span>Research <b>3 August 2026 · 10 tools</b></span>
+        <span>Flag <b>mood-board-editor</b></span>
+        <span>Status <b>proposal — awaiting review</b></span>
+      </div>
+    </div>
+  </div>
+</section>
+
+</div><!-- /#deck -->
+
+<div id="chrome">
+  <span id="counter"><b>01</b> / 23</span>
+  <button class="navbtn" id="prev" type="button" aria-label="Previous slide">&#8592;</button>
+  <button class="navbtn" id="next" type="button" aria-label="Next slide">&#8594;</button>
+  <button id="themebtn" type="button" aria-label="Toggle colour theme">Theme</button>
+</div>
+<div id="hint">← → or space · P to print</div>
+
+<script>
+(function(){
+  var deck = document.getElementById('deck');
+  var slides = Array.prototype.slice.call(deck.querySelectorAll('.slide'));
+  var counter = document.getElementById('counter');
+  var progress = document.getElementById('progress');
+  var current = 0;
+
+  function pad(n){ return (n < 10 ? '0' : '') + n; }
+
+  function setCurrent(i){
+    current = Math.max(0, Math.min(slides.length - 1, i));
+    counter.innerHTML = '<b>' + pad(current + 1) + '</b> / ' + slides.length;
+    progress.style.width = (((current + 1) / slides.length) * 100) + '%';
+  }
+
+  function go(i){
+    var t = Math.max(0, Math.min(slides.length - 1, i));
+    /* measured against the container, so it holds whatever the offsetParent is */
+    deck.scrollTop = deck.scrollTop + slides[t].getBoundingClientRect().top;
+    slides[t].classList.add('seen');
+    setCurrent(t);
+  }
+
+  /* which slide is showing */
+  if ('IntersectionObserver' in window){
+    var io = new IntersectionObserver(function(entries){
+      entries.forEach(function(e){
+        if (e.isIntersecting){
+          e.target.classList.add('seen');
+          if (e.intersectionRatio > 0.5) setCurrent(slides.indexOf(e.target));
+        }
+      });
+    }, { threshold: [0.12, 0.55] });
+    slides.forEach(function(s){ io.observe(s); });
+  } else {
+    slides.forEach(function(s){ s.classList.add('seen'); });
+  }
+
+  deck.addEventListener('scroll', function(){
+    /* fallback tracking for browsers where ratios are coarse */
+    var mid = deck.scrollTop + deck.clientHeight * 0.4;
+    for (var i = 0; i < slides.length; i++){
+      if (slides[i].offsetTop <= mid) setCurrent(i);
+    }
+  }, { passive: true });
+
+  document.getElementById('prev').addEventListener('click', function(){ go(current - 1); });
+  document.getElementById('next').addEventListener('click', function(){ go(current + 1); });
+
+  document.addEventListener('keydown', function(e){
+    var tag = (e.target && e.target.tagName) || '';
+    if (tag === 'INPUT' || tag === 'TEXTAREA') return;
+    switch (e.key){
+      case 'ArrowRight': case 'PageDown': go(current + 1); e.preventDefault(); break;
+      case 'ArrowLeft':  case 'PageUp':   go(current - 1); e.preventDefault(); break;
+      case ' ': go(current + (e.shiftKey ? -1 : 1)); e.preventDefault(); break;
+      case 'Home': go(0); e.preventDefault(); break;
+      case 'End': go(slides.length - 1); e.preventDefault(); break;
+      case 'p': case 'P': window.print(); break;
+    }
+  });
+
+  /* theme: auto → light → dark → auto */
+  var root = document.documentElement;
+  var btn = document.getElementById('themebtn');
+  var order = ['auto','light','dark'];
+  var label = { auto: 'Theme', light: 'Light', dark: 'Dark' };
+  var stored = null;
+  try { stored = window.localStorage.getItem('patina-moodboard-theme'); } catch (err) {}
+  if (stored && order.indexOf(stored) > -1){ root.setAttribute('data-theme', stored); btn.textContent = label[stored]; }
+  btn.addEventListener('click', function(){
+    var now = root.getAttribute('data-theme') || 'auto';
+    var nextTheme = order[(order.indexOf(now) + 1) % order.length];
+    root.setAttribute('data-theme', nextTheme);
+    btn.textContent = label[nextTheme];
+    try { window.localStorage.setItem('patina-moodboard-theme', nextTheme); } catch (err) {}
+  });
+
+  setCurrent(0);
+})();
+</script>
+
+</body>
+</html>
