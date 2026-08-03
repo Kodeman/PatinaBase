@@ -14,6 +14,8 @@ import type { BoardSection } from '@patina/supabase';
 export interface ArrangeItem {
   id: string;
   type: string;
+  x?: number;
+  y?: number;
   width: number;
   height: number | null;
   data?: { section_id?: string | null } | null;
@@ -21,6 +23,10 @@ export interface ArrangeItem {
 
 export interface ArrangeOptions {
   canvasWidth: number;
+  /** Explicit selection scope. Omit for the section-aware whole-board path. */
+  itemIds?: readonly string[];
+  /** Logical origin for a selection-scoped flow (normally its prior bbox). */
+  origin?: { x: number; y: number };
   /** Space between items (px). @default 24 */
   gap?: number;
   /** Canvas edge padding (px). @default 32 */
@@ -50,6 +56,36 @@ function effectiveHeight(item: ArrangeItem): number {
 }
 
 /**
+ * Stable visual reading order: rows top-to-bottom and members left-to-right.
+ * Items without persisted coordinates retain their input order so old callers
+ * and newly-created fixtures keep deterministic behavior.
+ */
+export function sortItemsInReadingOrder<T extends ArrangeItem>(items: readonly T[]): T[] {
+  if (items.length < 2 || items.some((item) => item.x == null || item.y == null)) {
+    return [...items];
+  }
+  const heights = items.map(effectiveHeight).sort((a, b) => a - b);
+  const middle = Math.floor(heights.length / 2);
+  const median = heights.length % 2 === 0
+    ? (heights[middle - 1] + heights[middle]) / 2
+    : heights[middle];
+  const tolerance = median / 2;
+  const byY = [...items].sort((a, b) =>
+    (a.y! - b.y!) || (a.x! - b.x!),
+  );
+  const rows: Array<{ anchorY: number; items: T[] }> = [];
+  for (const item of byY) {
+    const row = rows[rows.length - 1];
+    if (!row || Math.abs(item.y! - row.anchorY) > tolerance) {
+      rows.push({ anchorY: item.y!, items: [item] });
+    } else {
+      row.items.push(item);
+    }
+  }
+  return rows.flatMap((row) => row.items.sort((a, b) => a.x! - b.x!));
+}
+
+/**
  * Auto-lay-out items into a tidy wrapping grid, grouped by section when the
  * board has any (each section's items flow in their own band below a reserved
  * label strip, in the sections' order; unassigned items trail last). Returns
@@ -64,27 +100,45 @@ export function arrangeBoardItems(
   const gap = options.gap ?? DEFAULTS.gap;
   const pad = options.pad ?? DEFAULTS.pad;
   const labelBand = options.labelBand ?? DEFAULTS.labelBand;
-  const hasSections = sections.length > 0;
-  const contentWidth = Math.max(1, options.canvasWidth - pad * 2);
+  const selectedIds = options.itemIds ? new Set(options.itemIds) : null;
+  const scopedItems = selectedIds ? items.filter((item) => selectedIds.has(item.id)) : items;
+  const hasSections = !selectedIds && sections.length > 0;
+  const selectedBounds = selectedIds && scopedItems.length > 0
+    ? {
+        minX: Math.min(...scopedItems.map((item) => item.x ?? pad)),
+        minY: Math.min(...scopedItems.map((item) => item.y ?? pad)),
+        maxX: Math.max(...scopedItems.map((item) => (item.x ?? pad) + item.width)),
+      }
+    : null;
+  const startX = options.origin?.x ?? selectedBounds?.minX ?? pad;
+  const startY = options.origin?.y ?? selectedBounds?.minY ?? pad;
+  const contentWidth = Math.max(
+    1,
+    selectedBounds
+      ? selectedBounds.maxX - selectedBounds.minX
+      : options.canvasWidth - pad * 2,
+  );
 
   // Group items in section order; unassigned (or orphaned section_id) trail.
   const groups: ArrangeItem[][] = [];
-  if (hasSections) {
+  if (selectedIds) {
+    groups.push(sortItemsInReadingOrder(scopedItems));
+  } else if (hasSections) {
     for (const section of sections) {
-      groups.push(items.filter((it) => itemSectionId(it) === section.id));
+      groups.push(sortItemsInReadingOrder(items.filter((it) => itemSectionId(it) === section.id)));
     }
     const known = new Set(sections.map((s) => s.id));
     const orphans = items.filter((it) => {
       const sid = itemSectionId(it);
       return sid === null || !known.has(sid);
     });
-    if (orphans.length > 0) groups.push(orphans);
+    if (orphans.length > 0) groups.push(sortItemsInReadingOrder(orphans));
   } else {
-    groups.push(items);
+    groups.push(sortItemsInReadingOrder(items));
   }
 
   const positions: Array<{ id: string; x: number; y: number }> = [];
-  let cursorY = pad;
+  let cursorY = startY;
 
   groups.forEach((group, groupIndex) => {
     if (group.length === 0) return; // empty section reserves no space
@@ -93,15 +147,15 @@ export function arrangeBoardItems(
     const isNamedSection = hasSections && groupIndex < sections.length;
     if (isNamedSection) cursorY += labelBand;
 
-    let x = pad;
+    let x = startX;
     let rowHeight = 0;
     for (const item of group) {
       const w = item.width;
       const h = effectiveHeight(item);
       // Wrap when the item would overflow the content width (but always place
       // at least one item per row).
-      if (x > pad && x + w > pad + contentWidth) {
-        x = pad;
+      if (x > startX && x + w > startX + contentWidth) {
+        x = startX;
         cursorY += rowHeight + gap;
         rowHeight = 0;
       }

@@ -3,6 +3,7 @@
 import type { ReactNode } from 'react';
 import type { BoardItem } from '@patina/design-system';
 import type { ProposalBoardItem } from '@patina/supabase';
+import type { EditableMoodBoardItem } from '@patina/types';
 
 // ─── Snapshot shapes (written by board-editor.tsx into `data` JSONB) ─────────
 
@@ -66,6 +67,40 @@ export function renderBoardItem(item: BoardItem): ReactNode {
         </div>
       );
   }
+}
+
+/** Canonical board-room adapter; pin appearance still has one portal source. */
+export function renderBoardRoomItem(item: EditableMoodBoardItem): ReactNode {
+  const row: ProposalBoardItem = {
+    id: item.id,
+    board_id: '',
+    type: item.type,
+    x: item.x,
+    y: item.y,
+    width: item.width,
+    height: item.height ?? null,
+    z_index: item.zIndex ?? 0,
+    rotation: item.rotation ?? 0,
+    locked: item.locked ?? false,
+    product_id: item.productId ?? null,
+    capture_id: item.captureId ?? null,
+    palette_id: item.paletteId ?? null,
+    image_url: item.imageUrl ?? null,
+    content: item.content ?? null,
+    data: item.data ?? {},
+    created_at: '',
+    updated_at: '',
+  };
+  return renderBoardItem({
+    id: item.id,
+    type: item.type,
+    position: { x: item.x, y: item.y },
+    size: { width: item.width, height: item.height ?? item.width },
+    zIndex: item.zIndex ?? 0,
+    rotation: item.rotation ?? 0,
+    locked: item.locked ?? false,
+    data: row,
+  });
 }
 
 // ─── Product / capture card ──────────────────────────────────────────────────

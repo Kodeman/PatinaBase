@@ -1,6 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import type { BoardOwnerRef } from '@patina/types';
 import {
   BoardCanvas,
   BoardComposition,
@@ -38,7 +39,7 @@ import {
   type ItemFeedback,
 } from '@patina/supabase';
 import { useBufferedAutosave } from '@/hooks/use-buffered-autosave';
-import { runProposalAutosaveAction } from '@/lib/proposal-autosave-registry';
+import { runBoardOwnerAutosaveAction } from '@/lib/proposal-autosave-registry';
 import {
   ProductPickerModal,
   type ProductPickResult,
@@ -81,6 +82,8 @@ function layoutPosition(item: ProposalBoardItem): BoardLayoutPosition {
     type: item.type,
     x: Number(item.x),
     y: Number(item.y),
+    width: Number(item.width),
+    height: item.height === null ? null : Number(item.height),
     z_index: item.z_index,
     rotation: Number(item.rotation),
   };
@@ -133,6 +136,16 @@ export function BoardEditor({ proposalId, projectId, boardId, actionPending = fa
   // First path segment for board-image uploads (00131 for proposals; 00272 leg
   // for projects). One of the two is always set.
   const ownerId = (projectId ?? proposalId)!;
+  const owner = useMemo<BoardOwnerRef>(
+    () => (projectId ? { kind: 'project', id: projectId } : { kind: 'proposal', id: proposalId! }),
+    [projectId, proposalId],
+  );
+  // Preserve the legacy proposal mutation shape while project-owned boards use
+  // the canonical owner ref. This keeps existing call-site contracts stable.
+  const ownerMutationInput = useMemo(
+    () => owner.kind === 'proposal' ? { proposalId: owner.id } : { owner },
+    [owner],
+  );
 
   const { data: board } = useBoard(boardId);
 
@@ -165,7 +178,6 @@ export function BoardEditor({ proposalId, projectId, boardId, actionPending = fa
   const parentActionPendingRef = useRef(actionPending);
   parentActionPendingRef.current = actionPending;
   const structuralPendingRef = useRef(false);
-  const retiredLayoutItemIdsRef = useRef(new Set<string>());
 
   useEffect(() => {
     setStructuralError(null);
@@ -178,7 +190,7 @@ export function BoardEditor({ proposalId, projectId, boardId, actionPending = fa
       setStructuralPending(true);
       setStructuralError(null);
       try {
-        await runProposalAutosaveAction(ownerId, mutation);
+        await runBoardOwnerAutosaveAction(owner, mutation);
         return true;
       } catch (error) {
         const detail = error instanceof Error ? ` ${error.message}` : '';
@@ -189,7 +201,7 @@ export function BoardEditor({ proposalId, projectId, boardId, actionPending = fa
         setStructuralPending(false);
       }
     },
-    [ownerId],
+    [owner],
   );
 
   // ── B4/B5 derivations (product/capture pins) ────────────────────────────────
@@ -246,32 +258,31 @@ export function BoardEditor({ proposalId, projectId, boardId, actionPending = fa
   } = useBufferedAutosave<string, BoardLayoutPatch>({
     // Project boards never share a SendSheet, but still use their owner id to
     // isolate this editor's buffer and retain lossless unmount behavior.
-    proposalId: ownerId,
+    owner,
     generationKey: boardId,
     delay: LAYOUT_FLUSH_MS,
     save: useCallback(
       async (targetBoardId, positionsById) => {
-        const positions = Object.values(positionsById).filter(
-          (position) => !retiredLayoutItemIdsRef.current.has(position.id),
-        );
+        const liveIds = new Set(itemsRef.current.map((item) => item.id));
+        const positions = Object.values(positionsById).filter((position) => liveIds.has(position.id));
         if (positions.length === 0) return;
         // mutateAsync is load-bearing: the registry remains in-flight until
         // persistence and central client-copy invalidations have settled.
         await saveLayoutAsync({
           boardId: targetBoardId,
-          proposalId,
+          ...ownerMutationInput,
           positions,
         });
       },
-      [proposalId, saveLayoutAsync],
+      [ownerMutationInput, saveLayoutAsync],
     ),
   });
 
   const queueLayout = useCallback(
     (changedItems: ProposalBoardItem[]) => {
       if (parentActionPendingRef.current || structuralPendingRef.current) return;
-      const activeItems = changedItems.filter(
-        (item) => !retiredLayoutItemIdsRef.current.has(item.id),
+      const activeItems = changedItems.filter((item) =>
+        itemsRef.current.some((current) => current.id === item.id),
       );
       if (activeItems.length === 0) return;
       const patch: BoardLayoutPatch = {};
@@ -322,8 +333,7 @@ export function BoardEditor({ proposalId, projectId, boardId, actionPending = fa
     (itemId: string, patch: Partial<ProposalBoardItem>) => {
       if (
         parentActionPendingRef.current ||
-        structuralPendingRef.current ||
-        retiredLayoutItemIdsRef.current.has(itemId)
+        structuralPendingRef.current
       ) {
         return;
       }
@@ -348,7 +358,7 @@ export function BoardEditor({ proposalId, projectId, boardId, actionPending = fa
         await updateItem.mutateAsync({
           itemId,
           boardId,
-          proposalId,
+          ...ownerMutationInput,
           ...(patch.width !== undefined ? { width: Number(patch.width) } : {}),
           ...(patch.height !== undefined
             ? { height: patch.height === null ? null : Number(patch.height) }
@@ -361,7 +371,7 @@ export function BoardEditor({ proposalId, projectId, boardId, actionPending = fa
         mergeLocal(itemId, patch);
       });
     },
-    [boardId, mergeLocal, proposalId, runStructuralMutation, updateItem],
+    [boardId, mergeLocal, ownerMutationInput, runStructuralMutation, updateItem],
   );
 
   const nextZ = useCallback(
@@ -390,7 +400,7 @@ export function BoardEditor({ proposalId, projectId, boardId, actionPending = fa
         );
         const item = await addItem.mutateAsync({
           boardId,
-          proposalId,
+          ...ownerMutationInput,
           x,
           y,
           zIndex: nextZ(),
@@ -402,28 +412,20 @@ export function BoardEditor({ proposalId, projectId, boardId, actionPending = fa
         setSelectedId(item.id);
       });
     },
-    [addItem, board, boardId, nextZ, proposalId, runStructuralMutation],
+    [addItem, board, boardId, nextZ, ownerMutationInput, runStructuralMutation],
   );
 
   const handleDeleteItem = useCallback(
     (itemId: string) => {
       void runStructuralMutation('The item could not be deleted.', async () => {
-        // Retire the id before the delete request. Late canvas callbacks and
-        // detached drains must never upsert the deleted item back into being.
-        retiredLayoutItemIdsRef.current.add(itemId);
-        try {
-          await deleteItem.mutateAsync({ itemId, boardId, proposalId });
-        } catch (error) {
-          retiredLayoutItemIdsRef.current.delete(itemId);
-          throw error;
-        }
+        await deleteItem.mutateAsync({ itemId, boardId, ...ownerMutationInput });
         const next = itemsRef.current.filter((item) => item.id !== itemId);
         itemsRef.current = next;
         setItems(next);
         setSelectedId((selected) => (selected === itemId ? null : selected));
       });
     },
-    [boardId, deleteItem, proposalId, runStructuralMutation],
+    [boardId, deleteItem, ownerMutationInput, runStructuralMutation],
   );
 
   // ── Sections ──────────────────────────────────────────────────────────────
@@ -432,11 +434,11 @@ export function BoardEditor({ proposalId, projectId, boardId, actionPending = fa
   const persistSections = useCallback(
     (next: BoardSection[]) => {
       void runStructuralMutation('The board sections could not be updated.', async () => {
-        await upsertBoard.mutateAsync({ proposalId, boardId, sections: next });
+        await upsertBoard.mutateAsync({ ...ownerMutationInput, boardId, sections: next });
         setSections(next);
       });
     },
-    [proposalId, boardId, runStructuralMutation, upsertBoard],
+    [ownerMutationInput, boardId, runStructuralMutation, upsertBoard],
   );
 
   /** Assign (or clear, sectionId=null) the selected item's section membership. */
@@ -446,11 +448,11 @@ export function BoardEditor({ proposalId, projectId, boardId, actionPending = fa
       if (!item) return;
       const nextData = { ...(item.data ?? {}), section_id: sectionId };
       void runStructuralMutation('The item section could not be updated.', async () => {
-        await updateItem.mutateAsync({ itemId, boardId, proposalId, data: nextData });
+        await updateItem.mutateAsync({ itemId, boardId, ...ownerMutationInput, data: nextData });
         mergeLocal(itemId, { data: nextData });
       });
     },
-    [boardId, mergeLocal, proposalId, runStructuralMutation, updateItem],
+    [boardId, mergeLocal, ownerMutationInput, runStructuralMutation, updateItem],
   );
 
   /**
@@ -484,13 +486,13 @@ export function BoardEditor({ proposalId, projectId, boardId, actionPending = fa
       if (changedItems.length === 0) return;
       await saveLayoutAsync({
         boardId,
-        proposalId,
+        ...ownerMutationInput,
         positions: changedItems.map(layoutPosition),
       });
       itemsRef.current = nextItems;
       setItems(nextItems);
     });
-  }, [board, boardId, proposalId, runStructuralMutation, saveLayoutAsync, sections]);
+  }, [board, boardId, ownerMutationInput, runStructuralMutation, saveLayoutAsync, sections]);
 
   // ── Canvas callbacks ────────────────────────────────────────────────────────
 
@@ -552,10 +554,10 @@ export function BoardEditor({ proposalId, projectId, boardId, actionPending = fa
   const handleSetCover = useCallback(
     (imageUrl: string) => {
       void runStructuralMutation('The board cover could not be updated.', async () => {
-        await upsertBoard.mutateAsync({ proposalId, boardId, coverImageUrl: imageUrl });
+        await upsertBoard.mutateAsync({ ...ownerMutationInput, boardId, coverImageUrl: imageUrl });
       });
     },
-    [boardId, proposalId, runStructuralMutation, upsertBoard],
+    [boardId, ownerMutationInput, runStructuralMutation, upsertBoard],
   );
 
   // ── Render ──────────────────────────────────────────────────────────────────

@@ -1,7 +1,10 @@
 import {
+  flushBoardOwnerAutosaves,
   flushProposalAutosaves,
   getProposalAutosaveSnapshot,
+  registerBoardOwnerAutosave,
   resetProposalAutosaveRegistryForTests,
+  runBoardOwnerAutosaveAction,
   runProposalAutosaveAction,
 } from '../proposal-autosave-registry';
 
@@ -93,5 +96,32 @@ describe('runProposalAutosaveAction', () => {
       dirty: false,
       flushing: false,
     });
+  });
+
+  it('isolates identical proposal and project ids and flushes the project barrier', async () => {
+    let proposalDirty = true;
+    let projectDirty = true;
+    const proposalFlush = jest.fn(async () => { proposalDirty = false; });
+    const projectFlush = jest.fn(async () => { projectDirty = false; });
+    registerBoardOwnerAutosave(
+      { kind: 'proposal', id: 'same-id' },
+      { getSnapshot: () => ({ dirty: proposalDirty, flushing: false, error: null }), flush: proposalFlush },
+    );
+    registerBoardOwnerAutosave(
+      { kind: 'project', id: 'same-id' },
+      { getSnapshot: () => ({ dirty: projectDirty, flushing: false, error: null }), flush: projectFlush },
+    );
+
+    await flushBoardOwnerAutosaves({ kind: 'project', id: 'same-id' });
+    expect(projectFlush).toHaveBeenCalledTimes(1);
+    expect(proposalFlush).not.toHaveBeenCalled();
+
+    const action = jest.fn(async () => 'saved');
+    await expect(
+      runBoardOwnerAutosaveAction({ kind: 'project', id: 'same-id' }, action),
+    ).resolves.toBe('saved');
+    expect(action).toHaveBeenCalledTimes(1);
+    expect(getProposalAutosaveSnapshot({ kind: 'proposal', id: 'same-id' }).registeredBuffers).toBe(1);
+    expect(getProposalAutosaveSnapshot({ kind: 'project', id: 'same-id' }).registeredBuffers).toBe(1);
   });
 });

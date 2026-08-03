@@ -169,6 +169,11 @@ describe('worker-safe mood-board painter core', () => {
           call.name === 'fillText' && String(call.args[0]).includes('Quiet'),
       ),
     ).toBe(true)
+    expect(
+      context.calls.some(
+        (call) => call.name === 'fillText' && call.args[0] === 'maker.example',
+      ),
+    ).toBe(true)
     expect(progress.mock.lastCall?.[0]).toBe(1)
   })
 

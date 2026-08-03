@@ -58,8 +58,8 @@ export interface BoardCompositionBoard extends Omit<BoardsBlockBoard, 'items'> {
 }
 
 // Presentation = exactly today's client-facing render (the default everywhere).
-// Detail = presentation PLUS quiet product context on product/capture pins
-// (lead time + provenance), for the designer's editor preview toggle. It never
+// Detail = presentation PLUS quiet lead-time context on product/capture pins;
+// captured-source provenance is visible in both modes. It never
 // changes presentation output, so the client copy stays byte-stable.
 export type BoardMode = 'presentation' | 'detail'
 
@@ -374,8 +374,9 @@ function ProductTile({
 }) {
   const snap = (item.data ?? {}) as ProductSnapshot
   const imageUrl = item.image_url ?? snap.image_url ?? null
-  // Detail-only context, computed once; renders nothing when absent.
-  const host = mode === 'detail' ? sourceHost(snap.source_url) : null
+  // Provenance is artifact truth in every composition surface. Lead time
+  // remains designer-detail context, but the captured source never disappears.
+  const host = sourceHost(snap.source_url)
   const leadWeeks =
     mode === 'detail' && typeof snap.lead_time_weeks === 'number' ? snap.lead_time_weeks : null
 
@@ -434,8 +435,7 @@ function ProductTile({
             {formatDollars(snap.price_cents)}
           </div>
         )}
-        {/* Detail mode: quiet lead-time + provenance context. Guarded so
-            presentation output is byte-identical. */}
+        {/* Lead time is detail-only; provenance is always visible. */}
         {leadWeeks !== null && (
           <div
             style={{
@@ -774,8 +774,8 @@ export interface BoardCompositionProps {
   className?: string
   /**
    * 'presentation' (default) is exactly the client-facing render.
-   * 'detail' additionally overlays lead-time + provenance on product/capture
-   * pins — used by the designer editor's preview toggle. See BoardMode.
+   * 'detail' additionally overlays lead-time on product/capture pins — used
+   * by the designer editor's preview toggle. See BoardMode.
    */
   mode?: BoardMode
   /** Quiet non-interactive tile overlay (verdict chip · drift badge). */

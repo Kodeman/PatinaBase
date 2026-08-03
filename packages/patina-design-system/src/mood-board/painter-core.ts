@@ -104,6 +104,15 @@ function dataNumber(
   return typeof value === 'number' && Number.isFinite(value) ? value : null
 }
 
+function sourceHost(value: string | null): string | null {
+  if (!value) return null
+  try {
+    return new URL(value).host.replace(/^www\./, '') || null
+  } catch {
+    return null
+  }
+}
+
 function itemLabel(item: BoardItemGeometrySnapshot): string {
   return (
     dataString(item, 'name') ??
@@ -335,6 +344,13 @@ async function drawProduct(
       item.width - 8,
       item.height - 18,
     )
+  }
+  const host = sourceHost(dataString(item, 'source_url'))
+  if (host) {
+    context.fillStyle = '#776e64'
+    context.font = `9px ui-monospace, SFMono-Regular, Menlo, monospace`
+    context.textAlign = 'left'
+    context.fillText(host, 8, item.height - 6, item.width - 16)
   }
 }
 

@@ -1281,8 +1281,11 @@ export {
   useContinueBoardInProject,
   // Pure helper (00264 — exported for unit tests + reuse)
   summarizeBoard,
+  normalizeBoardOwner,
+  boardOwnerQueryKeys,
 } from './use-boards';
 export type {
+  BoardOwnerInput,
   BoardItemType,
   BoardStatus,
   BoardSection,

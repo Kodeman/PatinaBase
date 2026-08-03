@@ -1,4 +1,5 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import type { BoardOwnerRef } from '@patina/types';
 import { createBrowserClient } from '../client';
 import {
   invalidateProposalClientQueries,
@@ -20,6 +21,38 @@ export type BoardItemType =
   | 'room_scan';
 
 export type BoardStatus = 'active' | 'archived';
+
+/** Legacy string inputs remain proposal-scoped for existing consumers. */
+export type BoardOwnerInput = BoardOwnerRef | string | null | undefined;
+
+export function normalizeBoardOwner(owner: BoardOwnerInput): BoardOwnerRef | null {
+  if (!owner) return null;
+  return typeof owner === 'string' ? { kind: 'proposal', id: owner } : owner;
+}
+
+export const boardOwnerQueryKeys = {
+  list: (owner: BoardOwnerRef) =>
+    owner.kind === 'proposal'
+      ? (['boards', owner.id] as const)
+      : (['project-owned-boards', owner.id] as const),
+  withItems: (owner: BoardOwnerRef) =>
+    owner.kind === 'proposal'
+      ? (['boards-with-items', owner.id] as const)
+      : (['project-owned-boards-with-items', owner.id] as const),
+};
+
+interface BoardOwnerMutationInput {
+  owner?: BoardOwnerRef;
+  proposalId?: string;
+  projectId?: string;
+}
+
+function mutationOwner(input: BoardOwnerMutationInput): BoardOwnerRef | null {
+  if (input.owner) return input.owner;
+  if (input.projectId) return { kind: 'project', id: input.projectId };
+  if (input.proposalId) return { kind: 'proposal', id: input.proposalId };
+  return null;
+}
 
 /**
  * A named section on a board (00264). Persisted as an ordered array in
@@ -126,12 +159,14 @@ export interface ProjectBoard {
   canvas_width: number;
   canvas_height: number;
   background_color: string;
+  sections: BoardSection[];
   items: ProjectBoardItem[];
   sort_order: number;
   created_at: string;
 }
 
 export interface UpsertBoardInput {
+  owner?: BoardOwnerRef;
   /**
    * Owner on the INSERT path — pass EXACTLY ONE of proposalId / projectId
    * (00272). On the UPDATE path (boardId set) the owner is immutable and
@@ -153,8 +188,12 @@ export interface UpsertBoardInput {
 }
 
 export interface AddBoardItemInput {
+  /** Stable id for delete undo/restoration; omitted for ordinary creates. */
+  itemId?: string;
   boardId: string;
+  owner?: BoardOwnerRef;
   proposalId?: string;
+  projectId?: string;
   type: BoardItemType;
   x?: number;
   y?: number;
@@ -174,7 +213,10 @@ export interface AddBoardItemInput {
 export interface UpdateBoardItemInput {
   itemId: string;
   boardId: string;
+  type?: BoardItemType;
   proposalId?: string;
+  projectId?: string;
+  owner?: BoardOwnerRef;
   x?: number;
   y?: number;
   width?: number;
@@ -182,6 +224,9 @@ export interface UpdateBoardItemInput {
   zIndex?: number;
   rotation?: number;
   locked?: boolean;
+  productId?: string | null;
+  captureId?: string | null;
+  paletteId?: string | null;
   imageUrl?: string | null;
   content?: string | null;
   data?: Record<string, unknown>;
@@ -198,6 +243,8 @@ export interface BoardLayoutPosition {
   type: BoardItemType;
   x: number;
   y: number;
+  width: number;
+  height: number | null;
   z_index: number;
   rotation: number;
 }
@@ -211,17 +258,18 @@ export interface BoardLayoutPosition {
  * derive item_count and the fallback cover in one round trip. RLS scopes rows
  * to the proposal designer (or, for non-draft proposals, the linked client).
  */
-export function useBoards(proposalId: string | null | undefined) {
+export function useBoards(ownerInput: BoardOwnerInput) {
+  const owner = normalizeBoardOwner(ownerInput);
   return useQuery({
-    queryKey: ['boards', proposalId ?? null],
-    enabled: !!proposalId,
+    queryKey: owner ? boardOwnerQueryKeys.list(owner) : ['boards', null],
+    enabled: !!owner,
     queryFn: async (): Promise<ProposalBoardSummary[]> => {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const supabase = getSupabase() as any;
       const { data, error } = await supabase
         .from('proposal_boards')
         .select('*, proposal_board_items(type, image_url, z_index)')
-        .eq('proposal_id', proposalId)
+        .eq(owner!.kind === 'proposal' ? 'proposal_id' : 'project_id', owner!.id)
         .order('sort_order', { ascending: true })
         .order('created_at', { ascending: true });
 
@@ -292,6 +340,10 @@ export function useBoard(boardId: string | null | undefined) {
       const { proposal_board_items: items, ...board } = data;
       return {
         ...(board as ProposalBoard),
+        proposal_id: board.proposal_id ?? null,
+        project_id: board.project_id ?? null,
+        sections: board.sections ?? [],
+        status: board.status ?? 'active',
         items: (items ?? []) as ProposalBoardItem[],
       };
     },
@@ -308,17 +360,18 @@ export function useBoard(boardId: string | null | undefined) {
  * single choke point every shared-render caller flows through. RLS scopes rows
  * to the proposal designer (or, for non-draft proposals, the linked client).
  */
-export function useBoardsWithItems(proposalId: string | null | undefined) {
+export function useBoardsWithItems(ownerInput: BoardOwnerInput) {
+  const owner = normalizeBoardOwner(ownerInput);
   return useQuery({
-    queryKey: ['boards-with-items', proposalId ?? null],
-    enabled: !!proposalId,
+    queryKey: owner ? boardOwnerQueryKeys.withItems(owner) : ['boards-with-items', null],
+    enabled: !!owner,
     queryFn: async (): Promise<BoardWithItems[]> => {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const supabase = getSupabase() as any;
       const { data, error } = await supabase
         .from('proposal_boards')
         .select('*, proposal_board_items(*)')
-        .eq('proposal_id', proposalId)
+        .eq(owner!.kind === 'proposal' ? 'proposal_id' : 'project_id', owner!.id)
         .eq('status', 'active')
         .order('sort_order', { ascending: true })
         .order('created_at', { ascending: true })
@@ -331,6 +384,10 @@ export function useBoardsWithItems(proposalId: string | null | undefined) {
         const { proposal_board_items: items, ...board } = row;
         return {
           ...(board as ProposalBoard),
+          proposal_id: board.proposal_id ?? null,
+          project_id: board.project_id ?? null,
+          sections: board.sections ?? [],
+          status: board.status ?? 'active',
           items: (items ?? []) as ProposalBoardItem[],
         };
       });
@@ -377,15 +434,16 @@ export function useUpsertBoard() {
 
       // Insert path.
       if (!input.name) throw new Error('Board name is required');
-      if (!input.proposalId && !input.projectId) {
+      const owner = mutationOwner(input);
+      if (!owner) {
         throw new Error('A board needs an owner (proposalId or projectId)');
       }
 
       const row = {
         // Exactly-one-of owner (00272). project_id path is the B8 project board.
-        ...(input.projectId
-          ? { project_id: input.projectId }
-          : { proposal_id: input.proposalId }),
+        ...(owner.kind === 'project'
+          ? { project_id: owner.id }
+          : { proposal_id: owner.id }),
         name: input.name,
         scope_room_id: input.scopeRoomId ?? null,
         cover_image_url: input.coverImageUrl ?? null,
@@ -410,19 +468,17 @@ export function useUpsertBoard() {
     },
     onSuccess: async (board) => {
       // Refresh whichever owner list the board belongs to (00272).
-      if (board.project_id) {
-        queryClient.invalidateQueries({ queryKey: ['project-owned-boards', board.project_id] });
-      } else {
-        queryClient.invalidateQueries({ queryKey: ['boards', board.proposal_id] });
-        queryClient.invalidateQueries({
-          queryKey: ['boards-with-items', board.proposal_id],
-        });
-        if (board.proposal_id) {
-          await invalidateProposalClientQueries(
-            queryClient,
-            board.proposal_id,
-          );
-        }
+      const owner: BoardOwnerRef | null = board.project_id
+        ? { kind: 'project', id: board.project_id }
+        : board.proposal_id
+          ? { kind: 'proposal', id: board.proposal_id }
+          : null;
+      if (owner) {
+        queryClient.invalidateQueries({ queryKey: boardOwnerQueryKeys.list(owner) });
+        queryClient.invalidateQueries({ queryKey: boardOwnerQueryKeys.withItems(owner) });
+      }
+      if (owner?.kind === 'proposal') {
+        await invalidateProposalClientQueries(queryClient, owner.id);
       }
       queryClient.invalidateQueries({ queryKey: ['board', board.id] });
     },
@@ -482,9 +538,13 @@ export function useDeleteBoard() {
     mutationFn: async ({
       boardId,
       proposalId: _proposalId,
+      projectId: _projectId,
+      owner: _owner,
     }: {
       boardId: string;
       proposalId?: string;
+      projectId?: string;
+      owner?: BoardOwnerRef;
     }): Promise<void> => {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const supabase = getSupabase() as any;
@@ -492,17 +552,17 @@ export function useDeleteBoard() {
       if (error) throw error;
     },
     onSuccess: async (_data, variables) => {
-      queryClient.invalidateQueries({ queryKey: ['boards', variables.proposalId] });
-      queryClient.invalidateQueries({ queryKey: ['project-owned-boards'] });
+      const owner = mutationOwner(variables);
+      if (owner) {
+        queryClient.invalidateQueries({ queryKey: boardOwnerQueryKeys.list(owner) });
+        queryClient.invalidateQueries({ queryKey: boardOwnerQueryKeys.withItems(owner) });
+      } else {
+        queryClient.invalidateQueries({ queryKey: ['boards'] });
+        queryClient.invalidateQueries({ queryKey: ['project-owned-boards'] });
+      }
       queryClient.invalidateQueries({ queryKey: ['board', variables.boardId] });
-      if (variables.proposalId) {
-        queryClient.invalidateQueries({
-          queryKey: ['boards-with-items', variables.proposalId],
-        });
-        await invalidateProposalClientQueries(
-          queryClient,
-          variables.proposalId,
-        );
+      if (owner?.kind === 'proposal') {
+        await invalidateProposalClientQueries(queryClient, owner.id);
       }
     },
   });
@@ -521,6 +581,7 @@ export function useAddBoardItem() {
       const supabase = getSupabase() as any;
 
       const row = {
+        ...(input.itemId ? { id: input.itemId } : {}),
         board_id: input.boardId,
         type: input.type,
         x: input.x ?? 0,
@@ -549,18 +610,17 @@ export function useAddBoardItem() {
     },
     onSuccess: async (item, variables) => {
       queryClient.invalidateQueries({ queryKey: ['board', item.board_id] });
-      // Item counts on the list view — we don't know the owner from the item
-      // row, so invalidate both owner-list prefixes.
-      queryClient.invalidateQueries({ queryKey: ['boards'] });
-      queryClient.invalidateQueries({ queryKey: ['project-owned-boards'] });
-      if (variables.proposalId) {
-        queryClient.invalidateQueries({
-          queryKey: ['boards-with-items', variables.proposalId],
-        });
-        await invalidateProposalClientQueries(
-          queryClient,
-          variables.proposalId,
-        );
+      const owner = mutationOwner(variables);
+      if (owner) {
+        queryClient.invalidateQueries({ queryKey: boardOwnerQueryKeys.list(owner) });
+        queryClient.invalidateQueries({ queryKey: boardOwnerQueryKeys.withItems(owner) });
+      } else {
+        // Legacy callers may not know the owner at the mutation boundary.
+        queryClient.invalidateQueries({ queryKey: ['boards'] });
+        queryClient.invalidateQueries({ queryKey: ['project-owned-boards'] });
+      }
+      if (owner?.kind === 'proposal') {
+        await invalidateProposalClientQueries(queryClient, owner.id);
       }
     },
   });
@@ -580,6 +640,7 @@ export function useUpdateBoardItem() {
       const supabase = getSupabase() as any;
 
       const updates: Record<string, unknown> = {};
+      if (input.type !== undefined) updates.type = input.type;
       if (input.x !== undefined) updates.x = input.x;
       if (input.y !== undefined) updates.y = input.y;
       if (input.width !== undefined) updates.width = input.width;
@@ -587,6 +648,9 @@ export function useUpdateBoardItem() {
       if (input.zIndex !== undefined) updates.z_index = input.zIndex;
       if (input.rotation !== undefined) updates.rotation = input.rotation;
       if (input.locked !== undefined) updates.locked = input.locked;
+      if (input.productId !== undefined) updates.product_id = input.productId;
+      if (input.captureId !== undefined) updates.capture_id = input.captureId;
+      if (input.paletteId !== undefined) updates.palette_id = input.paletteId;
       if (input.imageUrl !== undefined) updates.image_url = input.imageUrl;
       if (input.content !== undefined) updates.content = input.content;
       if (input.data !== undefined) updates.data = input.data;
@@ -603,14 +667,12 @@ export function useUpdateBoardItem() {
     },
     onSuccess: async (_item, variables) => {
       queryClient.invalidateQueries({ queryKey: ['board', variables.boardId] });
-      if (variables.proposalId) {
-        queryClient.invalidateQueries({
-          queryKey: ['boards-with-items', variables.proposalId],
-        });
-        await invalidateProposalClientQueries(
-          queryClient,
-          variables.proposalId,
-        );
+      const owner = mutationOwner(variables);
+      if (owner) {
+        queryClient.invalidateQueries({ queryKey: boardOwnerQueryKeys.withItems(owner) });
+      }
+      if (owner?.kind === 'proposal') {
+        await invalidateProposalClientQueries(queryClient, owner.id);
       }
     },
   });
@@ -628,10 +690,14 @@ export function useDeleteBoardItem() {
       itemId,
       boardId: _boardId,
       proposalId: _proposalId,
+      projectId: _projectId,
+      owner: _owner,
     }: {
       itemId: string;
       boardId: string;
       proposalId?: string;
+      projectId?: string;
+      owner?: BoardOwnerRef;
     }): Promise<void> => {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const supabase = getSupabase() as any;
@@ -640,16 +706,16 @@ export function useDeleteBoardItem() {
     },
     onSuccess: async (_data, variables) => {
       queryClient.invalidateQueries({ queryKey: ['board', variables.boardId] });
-      queryClient.invalidateQueries({ queryKey: ['boards'] });
-      queryClient.invalidateQueries({ queryKey: ['project-owned-boards'] });
-      if (variables.proposalId) {
-        queryClient.invalidateQueries({
-          queryKey: ['boards-with-items', variables.proposalId],
-        });
-        await invalidateProposalClientQueries(
-          queryClient,
-          variables.proposalId,
-        );
+      const owner = mutationOwner(variables);
+      if (owner) {
+        queryClient.invalidateQueries({ queryKey: boardOwnerQueryKeys.list(owner) });
+        queryClient.invalidateQueries({ queryKey: boardOwnerQueryKeys.withItems(owner) });
+      } else {
+        queryClient.invalidateQueries({ queryKey: ['boards'] });
+        queryClient.invalidateQueries({ queryKey: ['project-owned-boards'] });
+      }
+      if (owner?.kind === 'proposal') {
+        await invalidateProposalClientQueries(queryClient, owner.id);
       }
     },
   });
@@ -671,10 +737,14 @@ export function useSaveBoardLayout() {
     mutationFn: async ({
       boardId: _boardId,
       proposalId: _proposalId,
+      projectId: _projectId,
+      owner: _owner,
       positions,
     }: {
       boardId: string;
       proposalId?: string;
+      projectId?: string;
+      owner?: BoardOwnerRef;
       positions: BoardLayoutPosition[];
     }): Promise<void> => {
       if (positions.length === 0) return;
@@ -690,6 +760,8 @@ export function useSaveBoardLayout() {
             type: p.type,
             x: p.x,
             y: p.y,
+            width: p.width,
+            height: p.height,
             z_index: p.z_index,
             rotation: p.rotation,
           })),
@@ -700,14 +772,12 @@ export function useSaveBoardLayout() {
     },
     onSuccess: async (_data, variables) => {
       queryClient.invalidateQueries({ queryKey: ['board', variables.boardId] });
-      if (variables.proposalId) {
-        queryClient.invalidateQueries({
-          queryKey: ['boards-with-items', variables.proposalId],
-        });
-        await invalidateProposalClientQueries(
-          queryClient,
-          variables.proposalId,
-        );
+      const owner = mutationOwner(variables);
+      if (owner) {
+        queryClient.invalidateQueries({ queryKey: boardOwnerQueryKeys.withItems(owner) });
+      }
+      if (owner?.kind === 'proposal') {
+        await invalidateProposalClientQueries(queryClient, owner.id);
       }
     },
   });
@@ -732,7 +802,10 @@ export function useProjectBoards(projectId: string | null | undefined) {
         .order('created_at', { ascending: true });
 
       if (error) throw error;
-      return (data ?? []) as ProjectBoard[];
+      return ((data ?? []) as ProjectBoard[]).map((board) => ({
+        ...board,
+        sections: board.sections ?? [],
+      }));
     },
   });
 }

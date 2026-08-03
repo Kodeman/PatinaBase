@@ -7,8 +7,8 @@ import {
   type BoardsBlockBoard,
 } from './BoardsBlock'
 
-// A product pin whose snapshot carries the detail-only fields (lead time +
-// provenance). Presentation must ignore them; detail must surface them.
+// A product pin whose snapshot carries detail-only lead time and always-visible
+// captured-source provenance.
 function productBoard(): BoardsBlockBoard {
   return {
     id: 'b1',
@@ -38,13 +38,13 @@ function productBoard(): BoardsBlockBoard {
 }
 
 describe('BoardComposition mode prop', () => {
-  it('defaults to presentation: no lead-time or provenance overlay', () => {
+  it('defaults to presentation with provenance but no lead-time overlay', () => {
     const { container } = render(<BoardComposition board={productBoard()} />)
     // The product still renders (name shows on the pin + featured list).
     expect(container.textContent).toContain('Halyard Lounge Chair')
-    // But the detail-only context is absent.
+    // Lead time is designer detail; captured provenance is artifact truth.
     expect(container.textContent).not.toContain('6 wk lead time')
-    expect(container.textContent).not.toContain('west-elm.com')
+    expect(container.textContent).toContain('west-elm.com')
   })
 
   it('default output is byte-identical to explicit presentation', () => {
@@ -53,7 +53,7 @@ describe('BoardComposition mode prop', () => {
     expect(a.container.innerHTML).toBe(b.container.innerHTML)
   })
 
-  it('detail mode overlays lead time + source host on product pins', () => {
+  it('detail mode adds lead time while retaining the source host', () => {
     const { container } = render(<BoardComposition board={productBoard()} mode="detail" />)
     expect(container.textContent).toContain('6 wk lead time')
     // Host is stripped of a leading www.
@@ -73,7 +73,7 @@ describe('BoardsBlock mode prop', () => {
   it('defaults to presentation for the client copy', () => {
     const { container } = render(<BoardsBlock boards={[productBoard()]} />)
     expect(container.textContent).toContain('Halyard Lounge Chair')
-    expect(container.textContent).not.toContain('west-elm.com')
+    expect(container.textContent).toContain('west-elm.com')
   })
 })
 

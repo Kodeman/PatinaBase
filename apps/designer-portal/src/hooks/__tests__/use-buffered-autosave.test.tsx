@@ -211,4 +211,29 @@ describe('useBufferedAutosave', () => {
     expect(saveBoardB).toHaveBeenCalledWith('board-b', { x: 240 });
     expect(saveBoardA).toHaveBeenCalledTimes(1);
   });
+
+  it('registers and drains a project-owned generation without sharing a proposal key', async () => {
+    const save = jest.fn().mockResolvedValue(undefined);
+    const owner = { kind: 'project' as const, id: 'project-1' };
+    const { result } = renderHook(() =>
+      useBufferedAutosave<string, { x: number }>({
+        owner,
+        generationKey: 'board-1',
+        save,
+        delay: 60_000,
+      }),
+    );
+
+    expect(getProposalAutosaveSnapshot(owner).registeredBuffers).toBe(1);
+    expect(getProposalAutosaveSnapshot('project-1').registeredBuffers).toBe(0);
+    act(() => result.current.queue('board-1', { x: 480 }));
+    await act(async () => result.current.flushAll());
+
+    expect(save).toHaveBeenCalledWith('board-1', { x: 480 });
+    expect(getProposalAutosaveSnapshot(owner)).toMatchObject({
+      dirty: false,
+      flushing: false,
+      registeredBuffers: 1,
+    });
+  });
 });

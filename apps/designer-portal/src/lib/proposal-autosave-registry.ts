@@ -1,3 +1,17 @@
+import type { BoardOwnerRef } from '@patina/types';
+
+export type ProposalAutosaveOwner = string | BoardOwnerRef;
+
+/** Legacy strings are proposal owners; new room code always passes a ref. */
+export function normalizeAutosaveOwner(owner: ProposalAutosaveOwner): BoardOwnerRef {
+  return typeof owner === 'string' ? { kind: 'proposal', id: owner } : owner;
+}
+
+function autosaveOwnerKey(owner: ProposalAutosaveOwner): string {
+  const normalized = normalizeAutosaveOwner(owner);
+  return `${normalized.kind}:${normalized.id}`;
+}
+
 export interface ProposalAutosaveBufferSnapshot {
   dirty: boolean;
   flushing: boolean;
@@ -70,9 +84,10 @@ function recomputeProposalAutosaves(
 }
 
 export function registerProposalAutosave(
-  proposalId: string,
+  owner: ProposalAutosaveOwner,
   handle: ProposalAutosaveHandle,
 ): ProposalAutosaveRegistration {
+  const proposalId = autosaveOwnerKey(owner);
   const token = Symbol(proposalId);
   const handles = handlesByProposal.get(proposalId) ?? new Map();
   handles.set(token, handle);
@@ -95,10 +110,19 @@ export function registerProposalAutosave(
   };
 }
 
+/** Canonical owner-aware registration used by board-room buffers. */
+export function registerBoardOwnerAutosave(
+  owner: BoardOwnerRef,
+  handle: ProposalAutosaveHandle,
+): ProposalAutosaveRegistration {
+  return registerProposalAutosave(owner, handle);
+}
+
 export function subscribeToProposalAutosaves(
-  proposalId: string,
+  owner: ProposalAutosaveOwner,
   listener: () => void,
 ): () => void {
+  const proposalId = autosaveOwnerKey(owner);
   const listeners = listenersByProposal.get(proposalId) ?? new Set();
   listeners.add(listener);
   listenersByProposal.set(proposalId, listeners);
@@ -109,8 +133,9 @@ export function subscribeToProposalAutosaves(
 }
 
 export function getProposalAutosaveSnapshot(
-  proposalId: string,
+  owner: ProposalAutosaveOwner,
 ): ProposalAutosaveSnapshot {
+  const proposalId = autosaveOwnerKey(owner);
   const existing = snapshotsByProposal.get(proposalId);
   if (existing) return existing;
   const initial = emptySnapshot();
@@ -181,8 +206,9 @@ async function flushRegisteredAutosaves(
  * part of the same Send/switch barrier.
  */
 export async function flushProposalAutosaves(
-  proposalId: string,
+  owner: ProposalAutosaveOwner,
 ): Promise<void> {
+  const proposalId = autosaveOwnerKey(owner);
   const active = activeFlushes.get(proposalId);
   if (active) return active;
 
@@ -228,14 +254,20 @@ export async function flushProposalAutosaves(
   }
 }
 
+/** Flush every buffer/action for either owner leg. */
+export function flushBoardOwnerAutosaves(owner: BoardOwnerRef): Promise<void> {
+  return flushProposalAutosaves(owner);
+}
+
 /**
  * Serialize an immediate mutation behind the proposal's buffered editors and
  * keep it visible to concurrent Send/switch barriers until it settles.
  */
 export async function runProposalAutosaveAction<Result>(
-  proposalId: string,
+  owner: ProposalAutosaveOwner,
   action: () => Promise<Result>,
 ): Promise<Result> {
+  const proposalId = autosaveOwnerKey(owner);
   const previous = proposalActionTails.get(proposalId) ?? Promise.resolve();
   const run = previous.catch(() => undefined).then(async () => {
     await flushRegisteredAutosaves(proposalId);
@@ -253,6 +285,14 @@ export async function runProposalAutosaveAction<Result>(
   };
   void settled.then(clearSettledTail, clearSettledTail);
   return run;
+}
+
+/** Canonical structural barrier used by project- and proposal-owned rooms. */
+export function runBoardOwnerAutosaveAction<Result>(
+  owner: BoardOwnerRef,
+  action: () => Promise<Result>,
+): Promise<Result> {
+  return runProposalAutosaveAction(owner, action);
 }
 
 /** Test isolation for the module-level external store. */

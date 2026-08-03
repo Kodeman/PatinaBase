@@ -98,6 +98,8 @@ vi.mock('@tanstack/react-query', () => ({
 
 // Import AFTER the mocks are wired up.
 import {
+  useAddBoardItem,
+  useBoards,
   useSaveBoardLayout,
   useBoardsWithItems,
   useDuplicateBoard,
@@ -126,9 +128,9 @@ beforeEach(() => {
 
 describe('useSaveBoardLayout', () => {
   const positions: BoardLayoutPosition[] = [
-    { id: 'i1', board_id: 'b1', type: 'product', x: 10, y: 20, z_index: 0, rotation: 0 },
-    { id: 'i2', board_id: 'b1', type: 'note', x: 30, y: 40, z_index: 1, rotation: 15 },
-    { id: 'i3', board_id: 'b1', type: 'palette', x: 50, y: 60, z_index: 2, rotation: 0 },
+    { id: 'i1', board_id: 'b1', type: 'product', x: 10, y: 20, width: 220, height: null, z_index: 0, rotation: 0 },
+    { id: 'i2', board_id: 'b1', type: 'note', x: 30, y: 40, width: 180, height: 140, z_index: 1, rotation: 15 },
+    { id: 'i3', board_id: 'b1', type: 'palette', x: 50, y: 60, width: 260, height: 96, z_index: 2, rotation: 0 },
   ];
 
   it('upserts every row carrying board_id + type (WITH-CHECK guard)', async () => {
@@ -150,10 +152,12 @@ describe('useSaveBoardLayout', () => {
       expect(row.board_id, `row ${row.id} missing board_id`).toBe('b1');
       expect(row.type, `row ${row.id} missing type`).toBeDefined();
       expect(typeof row.type).toBe('string');
+      expect(row.width, `row ${row.id} missing width`).toBeDefined();
+      expect(row).toHaveProperty('height');
     }
     // Layout columns ride along too.
     expect(rows[1]).toEqual(
-      expect.objectContaining({ id: 'i2', board_id: 'b1', type: 'note', x: 30, y: 40, z_index: 1, rotation: 15 })
+      expect.objectContaining({ id: 'i2', board_id: 'b1', type: 'note', x: 30, y: 40, width: 180, height: 140, z_index: 1, rotation: 15 })
     );
     // Conflict target is the primary key so every row takes the update path.
     expect(upsert?.args[1]).toEqual({ onConflict: 'id' });
@@ -175,6 +179,59 @@ describe('useSaveBoardLayout', () => {
       mutationFn: (input: any) => Promise<any>;
     };
     await expect(config.mutationFn({ boardId: 'b1', positions })).rejects.toThrow('rls reject');
+  });
+});
+
+describe('owner-aware board hooks', () => {
+  it('keeps legacy proposal query keys while scoping project owners to project_id', async () => {
+    const builder = pushTableResult('proposal_boards', { data: [], error: null });
+    const project = useBoards({ kind: 'project', id: 'project-1' }) as unknown as {
+      queryKey: readonly unknown[];
+      queryFn: () => Promise<unknown[]>;
+    };
+    expect(project.queryKey).toEqual(['project-owned-boards', 'project-1']);
+    await project.queryFn();
+    expect(builder.__chain.filter((call) => call.method === 'eq').map((call) => call.args))
+      .toContainEqual(['project_id', 'project-1']);
+
+    const legacy = useBoards('proposal-1') as unknown as { queryKey: readonly unknown[] };
+    expect(legacy.queryKey).toEqual(['boards', 'proposal-1']);
+  });
+
+  it('inserts a caller-supplied id and complete snapshot for delete resurrection', async () => {
+    const inserted = {
+      id: 'item-original',
+      board_id: 'board-1',
+      type: 'product',
+      x: 12,
+      y: 34,
+    };
+    const builder = pushTableResult('proposal_board_items', { data: inserted, error: null });
+    const config = useAddBoardItem() as unknown as {
+      mutationFn: (input: Record<string, unknown>) => Promise<unknown>;
+    };
+    await config.mutationFn({
+      itemId: 'item-original',
+      boardId: 'board-1',
+      owner: { kind: 'project', id: 'project-1' },
+      type: 'product',
+      x: 12,
+      y: 34,
+      width: 210,
+      height: null,
+      productId: 'product-1',
+      imageUrl: 'https://cdn.example/chair.jpg',
+      data: { source_url: 'https://maker.example/chair' },
+    });
+
+    const insert = builder.__chain.find((call) => call.method === 'insert');
+    expect(insert?.args[0]).toEqual(expect.objectContaining({
+      id: 'item-original',
+      board_id: 'board-1',
+      product_id: 'product-1',
+      image_url: 'https://cdn.example/chair.jpg',
+      data: { source_url: 'https://maker.example/chair' },
+    }));
   });
 });
 
