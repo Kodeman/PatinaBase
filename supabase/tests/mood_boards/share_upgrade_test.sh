@@ -76,8 +76,10 @@ SQL
 
 psql "$MOOD_BOARD_DB_URL" -v ON_ERROR_STOP=1 -At \
   -v raw_token="$MOOD_BOARD_RAW_TOKEN" \
-  -c "SELECT row_to_json(resolved)::text FROM public.resolve_document_share(:'raw_token') AS resolved" \
-  -o "$MOOD_BOARD_TMP_DIR/before.txt"
+  -o "$MOOD_BOARD_TMP_DIR/before.txt" <<'SQL'
+SELECT row_to_json(resolved)::text
+FROM public.resolve_document_share(:'raw_token') AS resolved;
+SQL
 
 test -s "$MOOD_BOARD_TMP_DIR/before.txt"
 
@@ -86,8 +88,10 @@ MOOD_BOARD_SCHEMA_CURRENT=true
 
 psql "$MOOD_BOARD_DB_URL" -v ON_ERROR_STOP=1 -At \
   -v raw_token="$MOOD_BOARD_RAW_TOKEN" \
-  -c "SELECT row_to_json(resolved)::text FROM public.resolve_document_share(:'raw_token') AS resolved" \
-  -o "$MOOD_BOARD_TMP_DIR/after.txt"
+  -o "$MOOD_BOARD_TMP_DIR/after.txt" <<'SQL'
+SELECT row_to_json(resolved)::text
+FROM public.resolve_document_share(:'raw_token') AS resolved;
+SQL
 
 cmp "$MOOD_BOARD_TMP_DIR/before.txt" "$MOOD_BOARD_TMP_DIR/after.txt"
 
