@@ -1258,8 +1258,8 @@ function compositionImageOrPlaceholder(pin: SpecBoardCompositionPin) {
           height: '100%',
           alignItems: 'center',
           justifyContent: 'center',
-          backgroundColor: '#EEEAE4',
-          border: '0.7pt solid #CFC8BF',
+          backgroundColor: '#F5F3EE',
+          border: '0.7pt solid #E5E2DD',
           padding: 3,
         },
       },
@@ -1287,6 +1287,8 @@ function compositionPinContent(pin: SpecBoardCompositionPin) {
           height: '100%',
           backgroundColor: '#FFFFFF',
           padding: 2,
+          border: '0.6pt solid #E5E2DD',
+          borderRadius: 2,
         },
       },
       h(
@@ -1297,7 +1299,17 @@ function compositionPinContent(pin: SpecBoardCompositionPin) {
           index,
         ) => h(View, { key: index, style: { flex: 1, backgroundColor: color } })),
       ),
-      pin.name ? h(Text, { style: { fontSize: labelSize, marginTop: 2 } }, pin.name) : null,
+      pin.name
+        ? h(Text, {
+          style: {
+            fontSize: labelSize,
+            marginTop: 2,
+            textTransform: 'uppercase',
+            letterSpacing: 0.3,
+            color: '#746B62',
+          },
+        }, pin.name)
+        : null,
     );
   }
   if (pin.type === 'note') {
@@ -1308,18 +1320,17 @@ function compositionPinContent(pin: SpecBoardCompositionPin) {
           width: '100%',
           height: '100%',
           padding: Math.max(2, pin.pageBox.width / 24),
-          backgroundColor: '#F1E7D8',
-          border: '0.6pt solid #D8C8B3',
+          backgroundColor: '#F3E9D5',
+          border: '0.6pt solid #E0D2B8',
           borderRadius: 3,
         },
       },
       h(Text, {
-        style: { fontSize: labelSize, lineHeight: 1.25, color: '#3D3A36' },
+        style: { fontSize: labelSize, lineHeight: 1.5, color: '#4A4137' },
       }, pin.note || 'Note'),
     );
   }
   if (pin.type === 'product' || pin.type === 'capture') {
-    const caption = [pin.name, pin.vendorName].filter(Boolean).join(' · ');
     return h(
       View,
       {
@@ -1327,16 +1338,26 @@ function compositionPinContent(pin: SpecBoardCompositionPin) {
           width: '100%',
           height: '100%',
           backgroundColor: '#FFFFFF',
-          border: '0.6pt solid #D8D2CA',
+          border: '0.6pt solid #E5E2DD',
+          borderRadius: 2,
           padding: 2,
         },
       },
       h(
         View,
-        { style: { flex: 1, minHeight: 0 } },
+        { style: { flex: 1, minHeight: 0, backgroundColor: '#F5F3EE' } },
         compositionImageOrPlaceholder(pin),
       ),
-      caption ? h(Text, { style: { fontSize: labelSize, marginTop: 2 } }, caption) : null,
+      pin.name ? h(Text, { style: { fontSize: labelSize, marginTop: 2 } }, pin.name) : null,
+      pin.vendorName
+        ? h(Text, {
+          style: {
+            fontSize: Math.max(3.5, labelSize - 0.7),
+            fontStyle: 'italic',
+            color: '#746B62',
+          },
+        }, pin.vendorName)
+        : null,
       pin.clientPriceCents != null
         ? h(
           Text,
@@ -1346,6 +1367,20 @@ function compositionPinContent(pin: SpecBoardCompositionPin) {
         : null,
     );
   }
+  if (pin.type === 'image') {
+    return h(
+      View,
+      {
+        style: {
+          width: '100%',
+          height: '100%',
+          backgroundColor: '#F5F3EE',
+          borderRadius: 2,
+        },
+      },
+      compositionImageOrPlaceholder(pin),
+    );
+  }
   return h(
     View,
     {
@@ -1353,22 +1388,29 @@ function compositionPinContent(pin: SpecBoardCompositionPin) {
         width: '100%',
         height: '100%',
         backgroundColor: '#FFFFFF',
-        border: '0.6pt solid #D8D2CA',
+        border: '0.6pt solid #E5E2DD',
+        borderRadius: 2,
         padding: 2,
       },
     },
     h(
       View,
-      { style: { flex: 1, minHeight: 0 } },
+      { style: { flex: 1, minHeight: 0, backgroundColor: '#F5F3EE' } },
       compositionImageOrPlaceholder(pin),
     ),
-    pin.type === 'room_scan' || pin.name
-      ? h(
-        Text,
-        { style: { fontSize: labelSize, marginTop: 2 } },
-        pin.name || 'Room scan',
-      )
-      : null,
+    h(
+      Text,
+      {
+        style: {
+          fontSize: labelSize,
+          marginTop: 2,
+          textTransform: 'uppercase',
+          letterSpacing: 0.3,
+          color: '#746B62',
+        },
+      },
+      pin.name || 'Room scan',
+    ),
   );
 }
 
@@ -1432,9 +1474,9 @@ function BoardCompositionDocument(model: SpecBoardCompositionModel) {
             top: section.pageBounds.y,
             width: section.pageBounds.width,
             height: section.pageBounds.height,
-            border: `0.8pt dashed ${section.color}`,
+            border: `0.6pt dashed ${section.color}`,
             backgroundColor: section.color,
-            opacity: 0.13,
+            opacity: 0.063,
           },
         }),
         h(
@@ -1443,11 +1485,15 @@ function BoardCompositionDocument(model: SpecBoardCompositionModel) {
             key: `${section.id}:label`,
             style: {
               position: 'absolute',
-              left: section.pageBounds.x + 3,
-              top: section.pageBounds.y + 2,
-              fontSize: 6,
-              fontWeight: 700,
-              color: '#3D3A36',
+              left: section.pageBounds.x + 4,
+              top: section.pageBounds.y - 4,
+              paddingHorizontal: 3,
+              paddingVertical: 1,
+              borderRadius: 4,
+              backgroundColor: section.color,
+              fontSize: 5.5,
+              fontWeight: 500,
+              color: '#FFFFFF',
             },
           },
           section.name,

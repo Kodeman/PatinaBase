@@ -3,7 +3,7 @@
 //
 // Run (npm specifiers need auto node-modules resolution in this repo — a
 // node_modules dir from pnpm puts Deno in manual mode otherwise):
-//   deno test --no-check --node-modules-dir=auto \
+//   deno test --allow-env --node-modules-dir=auto \
 //     supabase/functions/_shared/spec-pdf.test.ts
 //
 // The PURE-MODEL tests (buildScheduleModel / buildItemModel / computeRecordPct)
@@ -12,7 +12,12 @@
 // they fail to load, but the pure-model tests above them still stand as the
 // proof of the gating logic.
 
-import { assertEquals } from 'https://deno.land/std@0.168.0/testing/asserts.ts';
+import {
+  assert,
+  assertAlmostEquals,
+  assertEquals,
+} from 'https://deno.land/std@0.168.0/testing/asserts.ts';
+import { getDocument } from 'npm:pdfjs-dist@4.10.38/legacy/build/pdf.mjs';
 import {
   buildBoardCompositionModel,
   buildBoardModel,
@@ -66,6 +71,50 @@ const compositionPinCannotCarryMargin: SpecBoardCompositionPinInput = {
 void compositionPinCannotCarryTrade;
 void compositionPinCannotCarryMarkup;
 void compositionPinCannotCarryMargin;
+
+interface RenderedPdfText {
+  str: string;
+  transform: number[];
+}
+
+async function inspectRenderedPdf(bytes: Uint8Array): Promise<{
+  pageCount: number;
+  width: number;
+  height: number;
+  text: RenderedPdfText[];
+}> {
+  const pdf = await getDocument({
+    data: bytes,
+    disableFontFace: true,
+    useSystemFonts: true,
+  }).promise;
+  try {
+    const page = await pdf.getPage(1);
+    const viewport = page.getViewport({ scale: 1 });
+    const content = await page.getTextContent();
+    return {
+      pageCount: pdf.numPages,
+      width: viewport.width,
+      height: viewport.height,
+      text: content.items.flatMap((item) =>
+        'str' in item && item.str
+          ? [{ str: item.str, transform: [...item.transform] }]
+          : []
+      ),
+    };
+  } finally {
+    await pdf.destroy();
+  }
+}
+
+function renderedText(
+  pdf: Awaited<ReturnType<typeof inspectRenderedPdf>>,
+  value: string,
+): RenderedPdfText {
+  const match = pdf.text.find((item) => item.str === value);
+  assert(match, `Expected rendered PDF text ${JSON.stringify(value)}`);
+  return match;
+}
 
 // ─── Fixtures ────────────────────────────────────────────────────────────────
 
@@ -463,17 +512,27 @@ Deno.test('board model: a pin whose section_id is unknown falls into Unsectioned
   assertEquals(model.sections[0].name, 'Unsectioned');
 });
 
-Deno.test('renderBoardPdf smoke — real bytes', async () => {
-  // Drop image urls so the render doesn't fetch at test time.
+Deno.test('renderBoardPdf keeps the legacy portrait, section-grouped tile grid', async () => {
+  // Two pins in one section must remain side-by-side tiles. This is the legacy
+  // `kind: board` signature, intentionally distinct from absolute composition.
   const input = boardInput({
     tiles: [
       {
         type: 'product',
-        name: 'Walnut sectional',
+        name: 'Legacy left tile',
         imageUrl: null,
         note: null,
         swatches: [],
         priceCents: 480000,
+        sectionId: 'sofa-wall',
+      },
+      {
+        type: 'capture',
+        name: 'Legacy right tile',
+        imageUrl: null,
+        note: null,
+        swatches: [],
+        priceCents: null,
         sectionId: 'sofa-wall',
       },
     ],
@@ -487,6 +546,18 @@ Deno.test('renderBoardPdf smoke — real bytes', async () => {
   );
   assertEquals(bytes instanceof Uint8Array, true);
   assertEquals(bytes.length > 1000, true);
+  const pdf = await inspectRenderedPdf(bytes);
+  assertEquals(pdf.pageCount, 1);
+  assertAlmostEquals(pdf.width, 612, 0.01);
+  assertAlmostEquals(pdf.height, 792, 0.01);
+
+  const section = renderedText(pdf, 'Sofa wall');
+  const left = renderedText(pdf, 'Legacy left tile');
+  const right = renderedText(pdf, 'Legacy right tile');
+  assert(left.transform[4] < right.transform[4]);
+  assert(right.transform[4] - left.transform[4] > 100);
+  assertAlmostEquals(left.transform[5], right.transform[5], 0.5);
+  assert(section.transform[5] > left.transform[5]);
 });
 
 // ─── Board composition model — persisted geometry on one landscape page ────
@@ -598,12 +669,20 @@ Deno.test('board composition: landscape fit preserves canvas aspect and shared g
     15,
   );
   assertEquals(
+    model.pins.find((pin) => pin.key === 'product-pin')!.pageBox,
+    { x: 70.5, y: 152.25, width: 93, height: 93 },
+  );
+  assertEquals(
     model.pins.find((pin) => pin.type === 'image')!.key,
     'snapshot:2',
   );
   assertEquals(
     model.pins.find((pin) => pin.type === 'image')!.logicalBox.height,
     160,
+  );
+  assertEquals(
+    model.pins.find((pin) => pin.type === 'image')!.pageBox,
+    { x: 303, y: 152.25, width: 116.25, height: 74.4 },
   );
 });
 
@@ -669,12 +748,72 @@ Deno.test('board composition: client price is gated and model has no internal mo
   visit(open);
 });
 
-Deno.test('renderBoardCompositionPdf smoke — one landscape Letter page', async () => {
-  const model = buildBoardCompositionModel(compositionInput(), {});
+Deno.test('renderBoardCompositionPdf preserves absolute canonical geometry on landscape Letter', async () => {
+  const model = buildBoardCompositionModel(compositionInput({
+    canvasWidth: 1200,
+    canvasHeight: 800,
+    sections: [{ id: 'absolute', name: 'Absolute group', color: '#A66D4F' }],
+    pins: [
+      {
+        ...compositionPinTypeWitness,
+        id: 'absolute-left',
+        x: 80,
+        y: 90,
+        width: 220,
+        height: 220,
+        zIndex: 1,
+        name: 'Absolute left pin',
+        sectionId: 'absolute',
+      },
+      {
+        ...compositionPinTypeWitness,
+        id: 'absolute-right',
+        x: 900,
+        y: 450,
+        width: 180,
+        height: 180,
+        zIndex: 2,
+        name: 'Absolute right pin',
+        sectionId: 'absolute',
+      },
+      {
+        ...compositionPinTypeWitness,
+        id: 'absolute-rotated',
+        x: 500,
+        y: 200,
+        width: 200,
+        height: 200,
+        zIndex: 3,
+        rotation: 25,
+        name: 'Rotated evidence',
+      },
+    ],
+  }), {});
   const bytes = await renderBoardCompositionPdf(model);
   assertEquals(bytes instanceof Uint8Array, true);
   assertEquals(bytes.length > 1000, true);
-  const pdfText = new TextDecoder('latin1').decode(bytes);
-  assertEquals((pdfText.match(/\/Type \/Page\b/g) ?? []).length, 1);
-  assertEquals(pdfText.includes('/MediaBox [0 0 792 612]'), true);
+  const pdf = await inspectRenderedPdf(bytes);
+  assertEquals(pdf.pageCount, 1);
+  assertAlmostEquals(pdf.width, 792, 0.01);
+  assertAlmostEquals(pdf.height, 612, 0.01);
+
+  const leftPin = model.pins.find((pin) => pin.key === 'absolute-left')!;
+  const rightPin = model.pins.find((pin) => pin.key === 'absolute-right')!;
+  assertEquals(leftPin.pageBox, { x: 73.6, y: 122.8, width: 136.4, height: 136.4 });
+  assertEquals(rightPin.pageBox, { x: 582, y: 346, width: 111.6, height: 111.6 });
+
+  const left = renderedText(pdf, 'Absolute left pin');
+  const right = renderedText(pdf, 'Absolute right pin');
+  assertAlmostEquals(
+    right.transform[4] - left.transform[4],
+    rightPin.pageBox.x - leftPin.pageBox.x,
+    2,
+  );
+  // PDF text coordinates rise from the bottom, so the visually lower right pin
+  // has the smaller text y. The gap proves persisted y was not tile-reflowed.
+  assert(left.transform[5] - right.transform[5] > 150);
+
+  const rotated = renderedText(pdf, 'Rotated evidence');
+  assert(Math.abs(rotated.transform[1]) > 0.1 || Math.abs(rotated.transform[2]) > 0.1);
+  renderedText(pdf, 'Absolute group');
 });

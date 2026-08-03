@@ -57,6 +57,10 @@ import {
 import { generateAndUploadMoodBoardCover } from '@/lib/mood-board-assets/board-cover';
 import { prepareAndUploadBoardImages } from '@/lib/mood-board-assets/upload-board-assets';
 import { buildSendToScheduleArgs, findScheduleTwin } from '@/lib/scope/board-schedule';
+import {
+  createMoodBoardCoverLifecycle,
+  type MoodBoardCoverSnapshot,
+} from '@/lib/mood-board-assets/board-cover-lifecycle';
 import { BoardAddRail, uploadFilesAsBoardItems, type BoardAddSource } from './board-add-rail';
 import { BoardRoomInspector } from './board-room-inspector';
 import { BoardRoomSectionsMenu } from './board-room-sections-menu';
@@ -281,18 +285,34 @@ function BoardRoomSurface({
   const startedAtRef = useRef(performance.now());
   const presentStartedRef = useRef<number | null>(null);
   const previousModeRef = useRef(api.mode);
-  const coverTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const firstCoverSignatureRef = useRef<string | null>(null);
-  const lastCoverSignatureRef = useRef<string | null>(null);
-  const coverInFlightRef = useRef<Promise<void> | null>(null);
-  const latestApiRef = useRef(api);
   const upsertCoverRef = useRef(upsertBoard.mutateAsync);
   const preferenceScope = user?.id;
   const railPreferenceKey = preferenceScope ? `${RAIL_COLLAPSED_KEY}:${preferenceScope}` : null;
   const gridPreferenceKey = preferenceScope ? `${GRID_VISIBLE_KEY}:${preferenceScope}` : null;
   const snapPreferenceKey = preferenceScope ? `${SNAP_TO_GRID_KEY}:${preferenceScope}` : null;
-  latestApiRef.current = api;
+  const coverWriteRef = useRef<(snapshot: MoodBoardCoverSnapshot) => Promise<void>>(
+    async () => undefined,
+  );
+  const coverLifecycleRef = useRef<ReturnType<typeof createMoodBoardCoverLifecycle> | null>(null);
   upsertCoverRef.current = upsertBoard.mutateAsync;
+  coverWriteRef.current = async (snapshot) => {
+    const generated = await generateAndUploadMoodBoardCover({
+      ownerId: owner.id,
+      boardId: snapshot.boardId,
+      input: snapshot.input,
+    });
+    await upsertCoverRef.current({
+      boardId: snapshot.boardId,
+      owner: { kind: owner.kind, id: owner.id },
+      coverImageUrl: generated.url,
+    });
+  };
+  if (coverLifecycleRef.current === null) {
+    coverLifecycleRef.current = createMoodBoardCoverLifecycle({
+      write: (snapshot) => coverWriteRef.current(snapshot),
+      onError: (error) => console.warn('Mood-board cover generation failed', error),
+    });
+  }
 
   const tidyTarget = useMemo(
     () => resolveBoardRoomTidyTarget(api.state?.items ?? [], api.selectedItemIds),
@@ -554,57 +574,28 @@ function BoardRoomSurface({
   );
 
   const writeCover = useCallback(async (force = false) => {
-    const latestApi = latestApiRef.current;
-    const latestInput = boardRasterInput(latestApi);
-    const signature = latestApi.state ? JSON.stringify({
-      canvasWidth: latestApi.state.canvasWidth,
-      canvasHeight: latestApi.state.canvasHeight,
-      backgroundColor: latestApi.state.backgroundColor,
-      sections: latestApi.state.sections,
-      items: latestApi.state.items,
-    }) : null;
-    if (!latestInput || !latestApi.state || !signature) return;
-    if (!force && signature === lastCoverSignatureRef.current) return;
-    if (coverInFlightRef.current) await coverInFlightRef.current;
-    if (!force && signature === lastCoverSignatureRef.current) return;
-    const coverOwner: BoardOwnerRef = { kind: owner.kind, id: owner.id };
-    const task = (async () => {
-      const generated = await generateAndUploadMoodBoardCover({
-        ownerId: coverOwner.id,
-        boardId: latestApi.state!.boardId,
-        input: latestInput,
+    if (coverSignature && input && api.state) {
+      // Capture the render-current state synchronously. A Done click can land
+      // before the observation effect below has run for the latest edit.
+      coverLifecycleRef.current?.update({
+        boardId: api.state.boardId,
+        signature: coverSignature,
+        input,
       });
-      await upsertCoverRef.current({
-        boardId: latestApi.state!.boardId,
-        owner: coverOwner,
-        coverImageUrl: generated.url,
-      });
-      lastCoverSignatureRef.current = signature;
-    })();
-    coverInFlightRef.current = task;
-    try {
-      await task;
-    } catch (error) {
-      // Covers are a derived convenience. Composition persistence remains authoritative.
-      console.warn('Mood-board cover generation failed', error);
-    } finally {
-      if (coverInFlightRef.current === task) coverInFlightRef.current = null;
     }
-  }, [owner.id, owner.kind]);
+    await coverLifecycleRef.current?.flush(force);
+  }, [api.state, coverSignature, input]);
 
   useEffect(() => {
-    if (!coverSignature) return;
-    if (firstCoverSignatureRef.current === null) {
-      firstCoverSignatureRef.current = coverSignature;
-      return;
-    }
-    if (coverTimerRef.current) clearTimeout(coverTimerRef.current);
-    coverTimerRef.current = setTimeout(() => void writeCover(), 30_000);
-    return () => {
-      if (coverTimerRef.current) clearTimeout(coverTimerRef.current);
-      coverTimerRef.current = null;
-    };
-  }, [coverSignature, writeCover]);
+    if (!coverSignature || !input || !api.state) return;
+    coverLifecycleRef.current?.update({
+      boardId: api.state.boardId,
+      signature: coverSignature,
+      input,
+    });
+  }, [api.state, coverSignature, input]);
+
+  useEffect(() => () => coverLifecycleRef.current?.dispose(), []);
 
   const finishPresentation = useCallback(() => {
     if (presentStartedRef.current === null || !api.state) return;
