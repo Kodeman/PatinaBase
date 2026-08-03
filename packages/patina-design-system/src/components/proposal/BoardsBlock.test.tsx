@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from 'vitest'
-import { render } from '@testing-library/react'
+import { fireEvent, render, within } from '@testing-library/react'
 import {
   BoardComposition,
   BoardsBlock,
@@ -34,6 +34,36 @@ function productBoard(): BoardsBlockBoard {
         },
       },
     ],
+  }
+}
+
+const PIN_TYPES = ['product', 'capture', 'image', 'palette', 'note', 'room_scan'] as const
+
+function allPinTypesBoard(): BoardCompositionBoard {
+  return {
+    id: 'all-pin-types',
+    name: 'All pin types',
+    canvas_width: 1200,
+    canvas_height: 800,
+    background_color: '#FAF8F5',
+    items: PIN_TYPES.map((type, index) => ({
+      id: `pin-${type}`,
+      type,
+      x: 40 + index * 180,
+      y: index < 3 ? 40 : 360,
+      width: type === 'palette' ? 260 : 160,
+      height: type === 'palette' ? 80 : 180,
+      z_index: index,
+      image_url:
+        type === 'product' || type === 'capture' || type === 'image' || type === 'room_scan'
+          ? `https://images.example/${type}.jpg`
+          : null,
+      content: type === 'note' ? 'Pin-level note' : null,
+      data:
+        type === 'palette'
+          ? { name: 'Clay', swatches: [{ hex: '#A66D4F', name: 'Clay' }] }
+          : { name: `${type} pin` },
+    })),
   }
 }
 
@@ -80,14 +110,34 @@ describe('BoardsBlock mode prop', () => {
 // The per-pin render-prop seams (B3 guest render · B4 verdicts · B5 drift /
 // send-to-schedule). Undefined by default so a guest share stays byte-stable.
 describe('BoardsBlock per-pin render props', () => {
-  it('renderPinOverlay draws a quiet overlay on product/capture tiles', () => {
+  it('draws pin overlays for all six types on the canvas and stacked presentation', () => {
+    const seen: string[] = []
     const { container } = render(
       <BoardComposition
-        board={productBoard()}
-        renderPinOverlay={(item) => <span>chip-{item.id}</span>}
+        board={allPinTypesBoard()}
+        renderPinOverlay={(item) => {
+          seen.push(item.type)
+          return <span>{`chip-${item.type}`}</span>
+        }}
       />,
     )
-    expect(container.textContent).toContain('chip-i1')
+
+    const canvas = container.querySelector('[data-board-composition-canvas="true"]')
+    const stacked = container.querySelector('[data-stacked-board-items="true"]')
+    expect(canvas).not.toBeNull()
+    expect(stacked).not.toBeNull()
+    expect(canvas?.querySelectorAll('[data-pin-overlay="true"]')).toHaveLength(PIN_TYPES.length)
+    expect(stacked?.querySelectorAll('[data-pin-overlay="true"]')).toHaveLength(PIN_TYPES.length)
+
+    for (const type of PIN_TYPES) {
+      expect(
+        canvas?.querySelector(`[data-board-item-id="pin-${type}"] [data-pin-overlay="true"]`),
+      ).toHaveTextContent(`chip-${type}`)
+      expect(
+        stacked?.querySelector(`[data-board-item-type="${type}"] [data-pin-overlay="true"]`),
+      ).toHaveTextContent(`chip-${type}`)
+    }
+    expect(new Set(seen)).toEqual(new Set(PIN_TYPES))
   })
 
   it('renderPinDetail draws an interactive block per pin in the Featured list', () => {
@@ -112,33 +162,96 @@ describe('BoardsBlock per-pin render props', () => {
     expect(withUndefined.container.innerHTML).toBe(plain.container.innerHTML)
   })
 
-  it('does not invoke renderPinOverlay for non-product tiles', () => {
-    const noteBoard: BoardsBlockBoard = {
-      ...productBoard(),
-      items: [
-        {
-          id: 'note-1',
-          type: 'note',
-          x: 0,
-          y: 0,
-          width: 200,
-          height: 120,
-          z_index: 0,
-          content: 'Hi',
-        },
-      ],
+  it('does not offer pin overlays to frozen snapshots without ids', () => {
+    const frozenBoard: BoardCompositionBoard = {
+      ...allPinTypesBoard(),
+      items: allPinTypesBoard().items.map(({ id: _id, ...item }) => item),
     }
     const seen: string[] = []
     render(
       <BoardComposition
-        board={noteBoard}
+        board={frozenBoard}
         renderPinOverlay={(item) => {
           seen.push(item.id)
           return null
         }}
       />,
     )
-    expect(seen).not.toContain('note-1')
+    expect(seen).toEqual([])
+  })
+})
+
+describe('BoardComposition pin interaction parity', () => {
+  it('exposes keyboard pin targets and host interactions for all six stacked pin types', () => {
+    const activate = vi.fn()
+    const interaction = vi.fn((item: BoardCompositionBoard['items'][number]) => (
+      <button type="button" aria-label={`Review ${item.type}`}>
+        Review
+      </button>
+    ))
+    const { container } = render(
+      <BoardComposition
+        board={allPinTypesBoard()}
+        interactive
+        onItemActivate={activate}
+        renderPinInteraction={interaction}
+      />,
+    )
+    const stacked = container.querySelector('[data-stacked-board-items="true"]')
+    expect(stacked).not.toBeNull()
+    if (!stacked) return
+
+    for (const type of PIN_TYPES) {
+      const frame = stacked.querySelector(`[data-board-item-type="${type}"]`)
+      expect(frame).toHaveAttribute('role', 'button')
+      expect(frame).toHaveAttribute('tabindex', '0')
+      expect(frame).toHaveAccessibleName(`${type.replace('_', ' ')} board item`)
+      expect(
+        within(frame as HTMLElement).getByRole('button', {
+          name: `Review ${type}`,
+        }),
+      ).toBeVisible()
+    }
+    expect(new Set(interaction.mock.calls.map(([item]) => item.type))).toEqual(new Set(PIN_TYPES))
+
+    const noteFrame = stacked.querySelector('[data-board-item-type="note"]')
+    expect(noteFrame).not.toBeNull()
+    if (!noteFrame) return
+    fireEvent.keyDown(noteFrame, { key: 'Enter' })
+    expect(activate).toHaveBeenLastCalledWith(
+      expect.objectContaining({ id: 'pin-note', type: 'note' }),
+    )
+
+    activate.mockClear()
+    fireEvent.click(
+      within(noteFrame as HTMLElement).getByRole('button', {
+        name: 'Review note',
+      }),
+    )
+    expect(activate).not.toHaveBeenCalled()
+  })
+
+  it('keeps authored canvas geometry unchanged when pin chrome is added', () => {
+    const plain = render(<BoardComposition board={allPinTypesBoard()} />)
+    const decorated = render(
+      <BoardComposition
+        board={allPinTypesBoard()}
+        interactive
+        renderPinOverlay={(item) => <span>{item.type}</span>}
+        renderPinInteraction={() => <span>Review</span>}
+      />,
+    )
+
+    const plainCanvas = plain.container.querySelector('[data-board-composition-canvas="true"]')
+    const decoratedCanvas = decorated.container.querySelector(
+      '[data-board-composition-canvas="true"]',
+    )
+    for (const type of PIN_TYPES) {
+      const selector = `[data-board-item-id="pin-${type}"]`
+      expect(decoratedCanvas?.querySelector(selector)?.getAttribute('style')).toBe(
+        plainCanvas?.querySelector(selector)?.getAttribute('style'),
+      )
+    }
   })
 })
 

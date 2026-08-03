@@ -66,9 +66,9 @@ export type BoardMode = 'presentation' | 'detail'
 // Host-supplied per-pin decoration (mirrors the `mark` seam so this stays
 // presentational — the caller owns all data/hooks). Both default to undefined,
 // so a guest share (which passes neither) renders byte-identically to today.
-//   • renderPinOverlay — a QUIET, non-interactive chip laid over a product/
-//     capture tile (designer verdict chip · "price moved" drift badge). Gets
-//     the mode so detail-only chips can gate themselves.
+//   • renderPinOverlay — a QUIET, non-interactive chip laid over any id-backed
+//     pin (designer verdict chip · "price moved" drift badge). Gets the mode so
+//     detail-only chips can gate themselves.
 //   • renderPinDetail  — an INTERACTIVE block under a pin in the Featured list
 //     (client Approve/Flag/Note · designer "send to the schedule").
 export type RenderPinOverlay = (item: BoardsBlockItem, mode: BoardMode) => React.ReactNode
@@ -317,7 +317,12 @@ function ScaledBoardCanvas({
             >
               {renderItem(item)}
               {interaction && (
-                <div className="absolute right-1 top-1 z-20" data-pin-interaction="true">
+                <div
+                  className="absolute right-1 top-1 z-20"
+                  data-pin-interaction="true"
+                  onClick={(event) => event.stopPropagation()}
+                  onKeyDown={(event) => event.stopPropagation()}
+                >
                   {interaction}
                 </div>
               )}
@@ -336,33 +341,46 @@ function renderBoardItem(
   mode: BoardMode = 'presentation',
   renderPinOverlay?: RenderPinOverlay,
 ): React.ReactNode {
+  let tile: React.ReactNode
+
   switch (item.type) {
     case 'product':
-    case 'capture': {
-      const tile = <ProductTile item={item} mode={mode} />
-      // Byte-identical to the bare tile when no overlay is supplied (or it
-      // returns nothing) — the guest/client presentation invariant.
-      if (!renderPinOverlay || !item.id) return tile
-      const overlay = renderPinOverlay(item as BoardsBlockItem, mode)
-      if (!overlay) return tile
-      return (
-        <div className="relative h-full w-full">
-          {tile}
-          <div className="absolute right-1 top-1 z-10 flex flex-col items-end gap-1">{overlay}</div>
-        </div>
-      )
-    }
+    case 'capture':
+      tile = <ProductTile item={item} mode={mode} />
+      break
     case 'image':
-      return <ImageTile item={item} />
+      tile = <ImageTile item={item} />
+      break
     case 'room_scan':
-      return <RoomScanTile item={item} />
+      tile = <RoomScanTile item={item} />
+      break
     case 'palette':
-      return <PaletteStrip item={item} />
+      tile = <PaletteStrip item={item} />
+      break
     case 'note':
-      return <NoteCard item={item} />
+      tile = <NoteCard item={item} />
+      break
     default:
       return null
   }
+
+  // Verdicts are anchored by board_item_id, so frozen snapshots without ids
+  // deliberately keep their plain, non-interactive presentation.
+  if (!renderPinOverlay || typeof item.id !== 'string') return tile
+  const overlay = renderPinOverlay(item as BoardsBlockItem, mode)
+  if (!overlay) return tile
+
+  return (
+    <div className="relative h-full w-full">
+      {tile}
+      <div
+        className="absolute right-1 top-1 z-10 flex flex-col items-end gap-1"
+        data-pin-overlay="true"
+      >
+        {overlay}
+      </div>
+    </div>
+  )
 }
 
 function ProductTile({
@@ -581,11 +599,17 @@ function StackedBoardItems({
   sections,
   mode,
   renderPinOverlay,
+  interactive,
+  onItemActivate,
+  renderPinInteraction,
 }: {
   items: BoardCompositionItem[]
   sections: MoodBoardSection[]
   mode: BoardMode
   renderPinOverlay?: RenderPinOverlay
+  interactive: boolean
+  onItemActivate?: (item: BoardCompositionItem) => void
+  renderPinInteraction?: RenderPinInteraction
 }) {
   const sectionId = (item: BoardCompositionItem) => {
     if (!item.data || typeof item.data !== 'object' || Array.isArray(item.data)) return null
@@ -608,7 +632,10 @@ function StackedBoardItems({
   ].filter((group) => group.items.length > 0)
 
   return (
-    <div className="grid grid-cols-2 gap-2.5">
+    <div
+      className="grid grid-cols-2 gap-2.5"
+      data-stacked-board-items={renderPinOverlay || interactive ? 'true' : undefined}
+    >
       {groups.map((group, groupIndex) => (
         <React.Fragment key={group.section?.id ?? 'unassigned'}>
           {group.section && (
@@ -621,18 +648,81 @@ function StackedBoardItems({
           )}
           {group.items.map((item, itemIndex) => {
             const key = item.id ?? `snapshot:${groupIndex}:${itemIndex}`
+            const idBacked = typeof item.id === 'string'
+            const idInteractive = interactive && idBacked
+            const overlay = idBacked ? renderPinOverlay?.(item as BoardsBlockItem, mode) : null
+            const interaction = idInteractive ? renderPinInteraction?.(item) : null
+            const hasPinChrome = Boolean(idInteractive || overlay || interaction)
+            const frame = (
+              children: React.ReactNode,
+              baseClassName?: string,
+              style?: React.CSSProperties,
+            ) => {
+              const frameClassName = cn(
+                baseClassName,
+                (overlay || interaction) && 'relative',
+                idInteractive &&
+                  'outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-clay,#a66d4f)]',
+              )
+
+              return (
+                <div
+                  key={key}
+                  className={frameClassName || undefined}
+                  style={style}
+                  role={idInteractive ? 'button' : undefined}
+                  tabIndex={idInteractive ? 0 : undefined}
+                  aria-label={
+                    idInteractive ? `${item.type.replace('_', ' ')} board item` : undefined
+                  }
+                  data-board-item-id={hasPinChrome ? item.id : undefined}
+                  data-board-item-type={hasPinChrome ? item.type : undefined}
+                  data-stacked-board-item={hasPinChrome ? 'true' : undefined}
+                  data-interactive={hasPinChrome ? (idInteractive ? 'true' : 'false') : undefined}
+                  onClick={idInteractive ? () => onItemActivate?.(item) : undefined}
+                  onKeyDown={
+                    idInteractive
+                      ? (event) => {
+                          if (event.key === 'Enter' || event.key === ' ') {
+                            event.preventDefault()
+                            onItemActivate?.(item)
+                          }
+                        }
+                      : undefined
+                  }
+                >
+                  {children}
+                  {overlay && (
+                    <div
+                      className="absolute right-1 top-1 z-10 flex flex-col items-end gap-1"
+                      data-pin-overlay="true"
+                    >
+                      {overlay}
+                    </div>
+                  )}
+                  {interaction && (
+                    <div
+                      className="absolute right-1 top-1 z-20"
+                      data-pin-interaction="true"
+                      onClick={(event) => event.stopPropagation()}
+                      onKeyDown={(event) => event.stopPropagation()}
+                    >
+                      {interaction}
+                    </div>
+                  )}
+                </div>
+              )
+            }
+
             switch (item.type) {
               case 'palette':
-                return (
-                  <div key={key} className="col-span-2" style={{ height: 72 }}>
-                    <PaletteStrip item={item} />
-                  </div>
-                )
-              case 'note':
+                return frame(<PaletteStrip item={item} />, 'col-span-2', {
+                  height: 72,
+                })
+              case 'note': {
                 if (!item.content?.trim()) return null
-                return (
+                const note = (
                   <p
-                    key={key}
                     className="col-span-2"
                     style={{
                       fontFamily: 'var(--font-body)',
@@ -645,37 +735,26 @@ function StackedBoardItems({
                     {item.content}
                   </p>
                 )
-              case 'product':
-              case 'capture': {
-                const overlay = item.id
-                  ? renderPinOverlay?.(item as BoardsBlockItem, mode)
-                  : null
-                return (
-                  <div key={key} className={overlay ? 'relative' : undefined}>
-                    <ProductTile item={item} mode={mode} />
-                    {overlay && (
-                      <div className="absolute right-1 top-1 z-10 flex flex-col items-end gap-1">
-                        {overlay}
-                      </div>
-                    )}
-                  </div>
-                )
+
+                // Keep the no-callback guest markup byte-stable. A wrapper is
+                // needed only when the note carries absolute pin chrome.
+                if (!hasPinChrome) return React.cloneElement(note, { key })
+                return frame(note, 'col-span-2')
               }
+              case 'product':
+              case 'capture':
+                return frame(<ProductTile item={item} mode={mode} />)
               case 'image':
               case 'room_scan': {
                 if (!item.image_url) return null
-                return (
-                  <div
-                    key={key}
-                    className="overflow-hidden rounded-sm"
-                    style={{
-                      aspectRatio: '4 / 3',
-                      background: 'var(--color-pearl, #f5f3ee)',
-                    }}
-                  >
-                    {/* eslint-disable-next-line @next/next/no-img-element */}
-                    <img src={item.image_url} alt="" className="h-full w-full object-contain" />
-                  </div>
+                return frame(
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img src={item.image_url} alt="" className="h-full w-full object-contain" />,
+                  'overflow-hidden rounded-sm',
+                  {
+                    aspectRatio: '4 / 3',
+                    background: 'var(--color-pearl, #f5f3ee)',
+                  },
                 )
               }
               default:
@@ -778,7 +857,7 @@ export interface BoardCompositionProps {
    * by the designer editor's preview toggle. See BoardMode.
    */
   mode?: BoardMode
-  /** Quiet non-interactive tile overlay (verdict chip · drift badge). */
+  /** Quiet non-interactive overlay for any id-backed pin (verdict chip · drift badge). */
   renderPinOverlay?: RenderPinOverlay
   /** Interactive per-pin block in the Featured list (verdict acts · send-to-schedule). */
   renderPinDetail?: RenderPinDetail
@@ -797,7 +876,7 @@ export interface BoardCompositionProps {
   /** Enables id-backed, keyboard-focusable pin targets. @default false */
   interactive?: boolean
   onItemActivate?: (item: BoardCompositionItem) => void
-  /** Optional id-backed control rendered over a pin when `interactive` is true. */
+  /** Optional id-backed control rendered over any pin when `interactive` is true. */
   renderPinInteraction?: RenderPinInteraction
 }
 
@@ -871,6 +950,9 @@ export function BoardComposition({
           sections={sections}
           mode={mode}
           renderPinOverlay={renderPinOverlay}
+          interactive={interactive}
+          onItemActivate={onItemActivate}
+          renderPinInteraction={renderPinInteraction}
         />
       </div>
 
@@ -896,7 +978,7 @@ export interface BoardsBlockProps {
    * callers omit it, so their render is unchanged.
    */
   mode?: BoardMode
-  /** Quiet non-interactive tile overlay per pin (verdict chip · drift badge). */
+  /** Quiet non-interactive overlay for any id-backed pin (verdict chip · drift badge). */
   renderPinOverlay?: RenderPinOverlay
   /** Interactive per-pin block in the Featured list (verdict acts · send-to-schedule). */
   renderPinDetail?: RenderPinDetail
