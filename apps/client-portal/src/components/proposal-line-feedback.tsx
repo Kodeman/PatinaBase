@@ -47,6 +47,7 @@ export function LineFeedback({
   boardItemId,
   feedback,
   variant = 'inline',
+  onSubmitted,
 }: {
   proposalId: string;
   /** Anchor: pass EXACTLY ONE of itemId (a schedule line) or boardItemId (a
@@ -57,6 +58,8 @@ export function LineFeedback({
   feedback: ItemFeedback[];
   /** Compact canvas treatment; the mutation and validation contract is shared. */
   variant?: 'inline' | 'pin';
+  /** Called only after the verdict mutation succeeds. */
+  onSubmitted?: (verdict: Verdict) => void;
 }) {
   const submit = useSubmitVerdict();
   const [composing, setComposing] = useState<null | 'rejected' | 'comment'>(null);
@@ -74,6 +77,7 @@ export function LineFeedback({
           ? { proposalId, boardItemId, verdict, body: body ?? null }
           : { proposalId, proposalItemId: itemId, verdict, body: body ?? null },
       );
+      onSubmitted?.(verdict);
       setComposing(null);
       setDraft('');
     } catch (e) {

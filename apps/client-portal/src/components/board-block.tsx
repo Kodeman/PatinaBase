@@ -14,6 +14,7 @@ import {
 } from '@patina/design-system';
 import { StrataMark } from '@/components/strata-mark';
 import { LineFeedback } from '@/components/proposal-line-feedback';
+import { moodBoardEvents } from '@/lib/analytics/events';
 
 interface BoardsBlockProps {
   boards: ProposalBoardSummary[];
@@ -64,6 +65,20 @@ export function BoardsBlock({ boards, resolved, proposalId, feedbackEnabled }: B
   const visible = resolved ?? (data ?? []).filter((b) => b.items.length > 0);
   if (visible.length === 0) return null;
 
+  const submitted = (item: BoardCompositionItem) => (verdict: ItemFeedback['verdict']) => {
+    if (!item.id) return;
+    const board = visible.find((candidate) =>
+      candidate.items.some((candidateItem) => candidateItem.id === item.id),
+    );
+    if (!board) return;
+    moodBoardEvents.verdictGiven({
+      verdict,
+      boardId: board.id,
+      boardItemId: item.id,
+      itemType: item.type,
+    });
+  };
+
   // Only wire acts when feedback is on AND we know the proposal — product/capture
   // pins only (the shared block calls this from the Featured list, which is
   // already filtered to those types).
@@ -74,6 +89,7 @@ export function BoardsBlock({ boards, resolved, proposalId, feedbackEnabled }: B
             proposalId={effectiveProposalId}
             boardItemId={item.id}
             feedback={feedbackByPin.get(item.id) ?? []}
+            onSubmitted={submitted(item)}
           />
         )
       : undefined;
@@ -90,6 +106,7 @@ export function BoardsBlock({ boards, resolved, proposalId, feedbackEnabled }: B
               boardItemId={item.id}
               feedback={feedbackByPin.get(item.id) ?? []}
               variant="pin"
+              onSubmitted={submitted(item)}
             />
           ) : null
       : undefined;

@@ -1,10 +1,11 @@
-import { render, screen } from '@testing-library/react';
+import { fireEvent, render, screen } from '@testing-library/react';
 import { BoardsBlock } from '../board-block';
 
 let mockSharedProps: Record<string, unknown> = {};
 
 const mockUseBoardsWithItems = jest.fn();
 const mockUseClientBoardFeedback = jest.fn();
+const mockVerdictGiven = jest.fn();
 
 jest.mock('@patina/supabase', () => ({
   useBoardsWithItems: (...args: unknown[]) => mockUseBoardsWithItems(...args),
@@ -22,9 +23,13 @@ jest.mock('@/components/strata-mark', () => ({
   StrataMark: () => null,
 }));
 
+jest.mock('@/lib/analytics/events', () => ({
+  moodBoardEvents: { verdictGiven: (...args: unknown[]) => mockVerdictGiven(...args) },
+}));
+
 jest.mock('@/components/proposal-line-feedback', () => ({
-  LineFeedback: ({ variant, boardItemId }: { variant?: string; boardItemId?: string }) => (
-    <div data-testid="line-feedback" data-variant={variant} data-board-item-id={boardItemId} />
+  LineFeedback: ({ variant, boardItemId, onSubmitted }: { variant?: string; boardItemId?: string; onSubmitted?: (verdict: string) => void }) => (
+    <button type="button" onClick={() => onSubmitted?.('approved')} data-testid="line-feedback" data-variant={variant} data-board-item-id={boardItemId} />
   ),
 }));
 
@@ -56,6 +61,7 @@ describe('client board verdict affordances', () => {
     mockSharedProps = {};
     mockUseBoardsWithItems.mockReturnValue({ data: [board] });
     mockUseClientBoardFeedback.mockReturnValue({ data: [] });
+    mockVerdictGiven.mockReset();
   });
 
   it('enables id-backed on-canvas feedback for an authenticated client', () => {
@@ -73,6 +79,13 @@ describe('client board verdict affordances', () => {
     render(renderInteraction({ id: 'pin-1', type: 'product' }));
     expect(screen.getByTestId('line-feedback')).toHaveAttribute('data-variant', 'pin');
     expect(screen.getByTestId('line-feedback')).toHaveAttribute('data-board-item-id', 'pin-1');
+    fireEvent.click(screen.getByTestId('line-feedback'));
+    expect(mockVerdictGiven).toHaveBeenCalledWith({
+      verdict: 'approved',
+      boardId: 'board-1',
+      boardItemId: 'pin-1',
+      itemType: 'product',
+    });
   });
 
   it('keeps guest-resolved boards non-interactive even with stale feedback visibility', () => {

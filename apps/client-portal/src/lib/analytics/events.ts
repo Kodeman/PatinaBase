@@ -116,3 +116,20 @@ export const proposalClientEvents = {
       platform: 'client',
     }),
 };
+
+/** MoodBoard addendum: client verdict telemetry is emitted only at submission. */
+export const moodBoardEvents = {
+  verdictGiven: (p: {
+    verdict: 'approved' | 'rejected' | 'comment';
+    boardId: string;
+    boardItemId: string;
+    itemType: string;
+  }) =>
+    track('mood_board_verdict_given', {
+      verdict: p.verdict,
+      board_id: p.boardId,
+      board_item_id: p.boardItemId,
+      item_type: p.itemType,
+      surface: 'client_portal',
+    }),
+};
