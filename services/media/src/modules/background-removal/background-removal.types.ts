@@ -102,7 +102,7 @@ export type ReservationResult =
       cutoutUrl: string;
       quota: BackgroundRemovalQuota;
     }
-  | { kind: 'in_progress' }
+  | { kind: 'in_progress'; reason: 'same_request' | 'active_target' }
   | { kind: 'failed' };
 
 export type BackgroundRemovalFailureOutcome =

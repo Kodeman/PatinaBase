@@ -1,6 +1,9 @@
 import { BadGatewayException, ServiceUnavailableException } from '@nestjs/common';
 import { BackgroundRemovalConfig } from './background-removal.config';
-import { BackgroundRemovalVendorError } from './background-removal.errors';
+import {
+  BackgroundRemovalSourceError,
+  BackgroundRemovalVendorError,
+} from './background-removal.errors';
 import { BackgroundRemovalService } from './background-removal.service';
 import { BackgroundRemovalQuota } from './background-removal.types';
 
@@ -174,7 +177,7 @@ describe('BackgroundRemovalService', () => {
     expect(storage.upload).toHaveBeenCalledTimes(1);
   });
 
-  it('rolls back the durable reservation on vendor failure and returns a generic error', async () => {
+  it('counts a failed vendor attempt and returns a generic error', async () => {
     const { service, ledger, vendor, storage } = setup();
     vendor.removeBackground.mockRejectedValue(new BackgroundRemovalVendorError());
 
@@ -188,8 +191,36 @@ describe('BackgroundRemovalService', () => {
     expect(caught).toBeInstanceOf(BadGatewayException);
     expect(vendor.removeBackground).toHaveBeenCalledTimes(1);
     expect(storage.upload).toHaveBeenCalledTimes(1); // external original only
-    expect(ledger.markFailed).toHaveBeenCalledWith(REQUEST_ID, 'VENDOR_FAILED', 0);
+    expect(ledger.markFailed).toHaveBeenCalledWith(REQUEST_ID, 'VENDOR_FAILED', {
+      countAgainstQuota: true,
+      creditsUsed: 0,
+    });
     expect(JSON.stringify(caught!.getResponse())).not.toMatch(/remove\.bg|vendor|api/i);
+  });
+
+  it('releases a source rejection because the vendor was never invoked', async () => {
+    const { service, ledger, external, vendor } = setup();
+    external.fetch.mockRejectedValue(new BackgroundRemovalSourceError());
+
+    await expect(
+      service.removeBackground('forwarded-jwt', USER_ID, BOARD_ID, ITEM_ID, 'request-key-source'),
+    ).rejects.toMatchObject({ status: 422 });
+
+    expect(vendor.removeBackground).not.toHaveBeenCalled();
+    expect(ledger.markFailed).toHaveBeenCalledWith(REQUEST_ID, 'SOURCE_REJECTED', {
+      countAgainstQuota: false,
+      creditsUsed: 0,
+    });
+  });
+
+  it('never returns success when the durable success transition is unreconciled', async () => {
+    const { service, ledger } = setup();
+    ledger.markSucceeded.mockRejectedValue(new Error('zero rows transitioned'));
+
+    await expect(
+      service.removeBackground('forwarded-jwt', USER_ID, BOARD_ID, ITEM_ID, 'request-key-ledger'),
+    ).rejects.toBeInstanceOf(BadGatewayException);
+    expect(ledger.markFailed).not.toHaveBeenCalled();
   });
 
   it('replays a completed idempotency key without another vendor or storage call', async () => {

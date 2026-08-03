@@ -8,6 +8,7 @@ import {
 import { BackgroundRemovalConfig } from './background-removal.config';
 import {
   BackgroundRemovalIdempotencyConflictError,
+  BackgroundRemovalLedgerTransitionError,
   BackgroundRemovalQuotaExceededError,
 } from './background-removal.errors';
 import {
@@ -68,11 +69,11 @@ export class BackgroundRemovalLedgerService {
       const currentQuota = this.quota(periods, studioLimit, globalLimit, studioUsed, globalUsed);
 
       if (existing) {
-        if (
-          existing.requestedBy !== target.requestedBy ||
-          existing.boardId !== target.boardId ||
-          existing.itemId !== target.itemId
-        ) {
+        // Authorization happens before reservation. Within a quota owner, the
+        // board item is the idempotency target; requestedBy records the member
+        // who started the durable request and must not block an authorized
+        // teammate from observing or replaying that same result.
+        if (existing.boardId !== target.boardId || existing.itemId !== target.itemId) {
           throw new BackgroundRemovalIdempotencyConflictError();
         }
         if (
@@ -90,9 +91,9 @@ export class BackgroundRemovalLedgerService {
         }
         if (existing.status === BackgroundRemovalStatus.RESERVED) {
           if (existing.reservationExpiresAt > now) {
-            return { kind: 'in_progress' };
+            return { kind: 'in_progress', reason: 'same_request' };
           }
-          await transaction.backgroundRemovalRequest.updateMany({
+          const expired = await transaction.backgroundRemovalRequest.updateMany({
             where: { id: existing.id, status: BackgroundRemovalStatus.RESERVED },
             data: {
               status: BackgroundRemovalStatus.FAILED_RELEASED,
@@ -100,9 +101,53 @@ export class BackgroundRemovalLedgerService {
               completedAt: now,
             },
           });
+          if (expired.count !== 1) {
+            const persisted = await transaction.backgroundRemovalRequest.findUnique({
+              where: { id: existing.id },
+            });
+            if (
+              persisted?.status !== BackgroundRemovalStatus.FAILED_RELEASED ||
+              persisted.outcome !== BackgroundRemovalOutcome.INTERNAL_FAILED ||
+              Number(persisted.creditsUsed) !== 0
+            ) {
+              throw new BackgroundRemovalLedgerTransitionError(existing.id, 'failed');
+            }
+          }
           return { kind: 'failed' };
         }
         return { kind: 'failed' };
+      }
+
+      // A partial unique index treats an expired RESERVED row as live until its
+      // status is reconciled. Release stale rows for this target before checking
+      // for a different-key request or creating a new reservation.
+      await transaction.backgroundRemovalRequest.updateMany({
+        where: {
+          quotaOwnerId: target.quotaOwnerId,
+          boardId: target.boardId,
+          itemId: target.itemId,
+          status: BackgroundRemovalStatus.RESERVED,
+          reservationExpiresAt: { lte: now },
+        },
+        data: {
+          status: BackgroundRemovalStatus.FAILED_RELEASED,
+          outcome: BackgroundRemovalOutcome.INTERNAL_FAILED,
+          completedAt: now,
+        },
+      });
+
+      const activeTarget = await transaction.backgroundRemovalRequest.findFirst({
+        where: {
+          quotaOwnerId: target.quotaOwnerId,
+          boardId: target.boardId,
+          itemId: target.itemId,
+          status: BackgroundRemovalStatus.RESERVED,
+          reservationExpiresAt: { gt: now },
+        },
+        select: { id: true },
+      });
+      if (activeTarget) {
+        return { kind: 'in_progress', reason: 'active_target' };
       }
 
       if (studioUsed >= studioLimit) {
@@ -170,7 +215,7 @@ export class BackgroundRemovalLedgerService {
     cutoutUrl: string,
     creditsUsed: number,
   ): Promise<void> {
-    await this.prisma.backgroundRemovalRequest.updateMany({
+    const transition = await this.prisma.backgroundRemovalRequest.updateMany({
       where: { id: requestId, status: BackgroundRemovalStatus.RESERVED },
       data: {
         status: BackgroundRemovalStatus.SUCCEEDED,
@@ -181,25 +226,54 @@ export class BackgroundRemovalLedgerService {
         completedAt: this.clock(),
       },
     });
+    if (transition.count === 1) return;
+
+    const persisted = await this.prisma.backgroundRemovalRequest.findUnique({
+      where: { id: requestId },
+    });
+    if (
+      persisted?.status === BackgroundRemovalStatus.SUCCEEDED &&
+      persisted.outcome === BackgroundRemovalOutcome.SUCCEEDED &&
+      persisted.originalUrl === originalUrl &&
+      persisted.cutoutUrl === cutoutUrl &&
+      Number(persisted.creditsUsed) === creditsUsed
+    ) {
+      return;
+    }
+    throw new BackgroundRemovalLedgerTransitionError(requestId, 'succeeded');
   }
 
   async markFailed(
     requestId: string,
     outcome: BackgroundRemovalFailureOutcome,
-    creditsUsed = 0,
+    options: { countAgainstQuota: boolean; creditsUsed?: number },
   ): Promise<void> {
-    await this.prisma.backgroundRemovalRequest.updateMany({
+    const creditsUsed = options.creditsUsed ?? 0;
+    const status = options.countAgainstQuota
+      ? BackgroundRemovalStatus.FAILED_COUNTED
+      : BackgroundRemovalStatus.FAILED_RELEASED;
+    const transition = await this.prisma.backgroundRemovalRequest.updateMany({
       where: { id: requestId, status: BackgroundRemovalStatus.RESERVED },
       data: {
-        status:
-          creditsUsed > 0
-            ? BackgroundRemovalStatus.FAILED_CHARGED
-            : BackgroundRemovalStatus.FAILED_RELEASED,
+        status,
         outcome: outcome as BackgroundRemovalOutcome,
         creditsUsed,
         completedAt: this.clock(),
       },
     });
+    if (transition.count === 1) return;
+
+    const persisted = await this.prisma.backgroundRemovalRequest.findUnique({
+      where: { id: requestId },
+    });
+    if (
+      persisted?.status === status &&
+      persisted.outcome === (outcome as BackgroundRemovalOutcome) &&
+      Number(persisted.creditsUsed) === creditsUsed
+    ) {
+      return;
+    }
+    throw new BackgroundRemovalLedgerTransitionError(requestId, 'failed');
   }
 
   private activeUsage(now: Date): Prisma.BackgroundRemovalRequestWhereInput {
@@ -207,7 +281,11 @@ export class BackgroundRemovalLedgerService {
       OR: [
         {
           status: {
-            in: [BackgroundRemovalStatus.SUCCEEDED, BackgroundRemovalStatus.FAILED_CHARGED],
+            in: [
+              BackgroundRemovalStatus.SUCCEEDED,
+              BackgroundRemovalStatus.FAILED_CHARGED,
+              BackgroundRemovalStatus.FAILED_COUNTED,
+            ],
           },
         },
         {

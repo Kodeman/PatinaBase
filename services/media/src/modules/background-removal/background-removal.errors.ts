@@ -36,3 +36,13 @@ export class BackgroundRemovalIdempotencyConflictError extends Error {
     this.name = 'BackgroundRemovalIdempotencyConflictError';
   }
 }
+
+export class BackgroundRemovalLedgerTransitionError extends Error {
+  constructor(
+    readonly requestId: string,
+    readonly transition: 'succeeded' | 'failed',
+  ) {
+    super(`Background removal ledger could not be marked ${transition}`);
+    this.name = 'BackgroundRemovalLedgerTransitionError';
+  }
+}

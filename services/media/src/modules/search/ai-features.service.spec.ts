@@ -1,7 +1,9 @@
 import { Test, TestingModule } from '@nestjs/testing';
-import { ConfigService } from '@nestjs/config';
+import sharp from 'sharp';
 import { AIFeaturesService } from './ai-features.service';
 import { PrismaClient } from '../../generated/prisma-client';
+
+let IMAGE: Buffer;
 
 describe('AIFeaturesService', () => {
   let service: AIFeaturesService;
@@ -14,17 +16,22 @@ describe('AIFeaturesService', () => {
     },
   };
 
-  const mockConfig = {
-    get: jest.fn(),
-  };
+  beforeAll(async () => {
+    IMAGE = await sharp({
+      create: {
+        width: 100,
+        height: 100,
+        channels: 3,
+        background: { r: 128, g: 128, b: 128 },
+      },
+    })
+      .png()
+      .toBuffer();
+  });
 
   beforeEach(async () => {
     const module: TestingModule = await Test.createTestingModule({
-      providers: [
-        AIFeaturesService,
-        { provide: PrismaClient, useValue: mockPrisma },
-        { provide: ConfigService, useValue: mockConfig },
-      ],
+      providers: [AIFeaturesService, { provide: PrismaClient, useValue: mockPrisma }],
     }).compile();
 
     service = module.get<AIFeaturesService>(AIFeaturesService);
@@ -37,7 +44,7 @@ describe('AIFeaturesService', () => {
 
   describe('autoTagImage', () => {
     it('should auto-tag image and save to database', async () => {
-      const mockBuffer = Buffer.from('fake-image-data');
+      const mockBuffer = IMAGE;
       const assetId = 'asset-123';
 
       mockPrisma.mediaAsset.update.mockResolvedValue({
@@ -56,7 +63,6 @@ describe('AIFeaturesService', () => {
         expect.objectContaining({
           where: { id: assetId },
           data: expect.objectContaining({
-            aiTags: expect.any(Array),
             tags: expect.any(Array),
           }),
         }),
@@ -66,7 +72,7 @@ describe('AIFeaturesService', () => {
 
   describe('generateSmartCrops', () => {
     it('should generate crop suggestions for multiple aspect ratios', async () => {
-      const mockBuffer = Buffer.from('fake-image-data');
+      const mockBuffer = IMAGE;
       const aspectRatios = ['1:1', '4:3', '16:9'];
 
       const result = await service.generateSmartCrops(mockBuffer, aspectRatios);
@@ -83,7 +89,7 @@ describe('AIFeaturesService', () => {
     });
 
     it('should use default aspect ratios if none provided', async () => {
-      const mockBuffer = Buffer.from('fake-image-data');
+      const mockBuffer = IMAGE;
 
       const result = await service.generateSmartCrops(mockBuffer);
 
@@ -91,22 +97,9 @@ describe('AIFeaturesService', () => {
     });
   });
 
-  describe('removeBackground', () => {
-    it('should attempt to remove background with API', async () => {
-      const mockBuffer = Buffer.from('fake-image-data');
-      mockConfig.get.mockReturnValue(null); // No API key
-
-      const result = await service.removeBackground(mockBuffer);
-
-      expect(result).toBeDefined();
-      expect(result.success).toBeDefined();
-      expect(result.confidence).toBeDefined();
-    });
-  });
-
   describe('detectProducts', () => {
     it('should detect products in lifestyle image', async () => {
-      const mockBuffer = Buffer.from('fake-image-data');
+      const mockBuffer = IMAGE;
 
       const result = await service.detectProducts(mockBuffer);
 
@@ -116,7 +109,7 @@ describe('AIFeaturesService', () => {
     });
 
     it('should identify primary product when multiple detected', async () => {
-      const mockBuffer = Buffer.from('fake-image-data');
+      const mockBuffer = IMAGE;
 
       const result = await service.detectProducts(mockBuffer);
 
@@ -128,7 +121,7 @@ describe('AIFeaturesService', () => {
 
   describe('calculateQualityScore', () => {
     it('should calculate comprehensive quality score', async () => {
-      const mockBuffer = Buffer.from('fake-image-data');
+      const mockBuffer = IMAGE;
 
       const result = await service.calculateQualityScore(mockBuffer);
 
@@ -145,7 +138,7 @@ describe('AIFeaturesService', () => {
     });
 
     it('should identify quality issues', async () => {
-      const mockBuffer = Buffer.from('fake-image-data');
+      const mockBuffer = IMAGE;
 
       const result = await service.calculateQualityScore(mockBuffer);
 

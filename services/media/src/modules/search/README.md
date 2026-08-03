@@ -102,17 +102,6 @@ const result = await aiService.autoTagImage(imageBuffer, assetId);
 const crops = await aiService.generateSmartCrops(imageBuffer, ['1:1', '16:9']);
 ```
 
-#### Background Removal
-- **API Integration**: Supports remove.bg and similar services
-- **Fallback Processing**: Local threshold-based removal
-- **Transparency Detection**: Identifies alpha channels
-- **Confidence Scoring**: Quality assessment
-
-```typescript
-const result = await aiService.removeBackground(imageBuffer);
-// Returns: { success, outputBuffer, mask, confidence }
-```
-
 #### Product Detection
 - **Lifestyle Image Analysis**: Detects products in contextual scenes
 - **Bounding Boxes**: Precise location data
@@ -340,7 +329,6 @@ All endpoints are available under `/search`:
 ### AI Features Endpoints
 - `POST /search/ai/auto-tag/:assetId` - Auto-tag image
 - `POST /search/ai/smart-crop/:assetId` - Generate smart crops
-- `POST /search/ai/remove-background/:assetId` - Remove background
 - `POST /search/ai/detect-products/:assetId` - Detect products
 - `POST /search/ai/quality-score/:assetId` - Calculate quality score
 
@@ -450,8 +438,6 @@ Required environment variables:
 
 ```env
 # AI Services
-BACKGROUND_REMOVAL_API_KEY=your_key_here
-BACKGROUND_REMOVAL_API_URL=https://api.remove.bg/v1.0/removebg
 VISION_API_KEY=your_vision_api_key
 
 # Cost Configuration

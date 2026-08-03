@@ -119,15 +119,22 @@ export class BackgroundRemovalService {
     }
 
     const requestId = reservation.requestId;
+    let source!: { image: ValidatedImage; originalUrl: string };
+    let cutoutUrl!: string;
     let chargedCredits = 0;
+    let vendorAttempted = false;
     let vendorCompleted = false;
     try {
-      const source = await this.acquireSource(
+      source = await this.acquireSource(
         context.item.sourceUrl,
         context.owner.id,
         boardId,
         requestId,
       );
+      // Set this immediately before the configured adapter is invoked. Source
+      // rejection remains released; any vendor throw/timeout consumes one call
+      // from both durable quota windows.
+      vendorAttempted = true;
       const result = await this.vendor.removeBackground({
         bytes: source.image.bytes,
         mimeType: source.image.mimeType,
@@ -139,7 +146,30 @@ export class BackgroundRemovalService {
         this.policy.maxSourceBytes,
       );
       const cutoutPath = `${context.owner.id}/boards/${boardId}/${requestId}-cutout.png`;
-      const cutoutUrl = await this.storage.upload(cutoutPath, cutout, 'image/png');
+      cutoutUrl = await this.storage.upload(cutoutPath, cutout, 'image/png');
+    } catch (error) {
+      const outcome = this.failureOutcome(error, vendorCompleted);
+      try {
+        await this.ledger.markFailed(requestId, outcome, {
+          countAgainstQuota: vendorAttempted,
+          creditsUsed: vendorCompleted ? chargedCredits : 0,
+        });
+      } catch {
+        // Never return the processing error over an unknown ledger state. A
+        // duplicate request must not be allowed to infer that this reservation
+        // was safely released when its terminal transition did not land.
+        throw this.genericFailure();
+      }
+      if (error instanceof BackgroundRemovalSourceError) {
+        throw new UnprocessableEntityException({
+          code: 'background_removal_source_unavailable',
+          message: 'This image cannot be processed.',
+        });
+      }
+      throw this.genericFailure();
+    }
+
+    try {
       await this.ledger.markSucceeded(requestId, source.originalUrl, cutoutUrl, chargedCredits);
       return {
         originalUrl: source.originalUrl,
@@ -147,15 +177,10 @@ export class BackgroundRemovalService {
         quota: await this.ledger.getQuota(context.quotaOwnerId),
         idempotentReplay: false,
       };
-    } catch (error) {
-      const outcome = this.failureOutcome(error, vendorCompleted);
-      await this.ledger.markFailed(requestId, outcome, vendorCompleted ? chargedCredits : 0);
-      if (error instanceof BackgroundRemovalSourceError) {
-        throw new UnprocessableEntityException({
-          code: 'background_removal_source_unavailable',
-          message: 'This image cannot be processed.',
-        });
-      }
+    } catch {
+      // A cutout may already exist, but success is not returned unless the
+      // durable idempotency result is either written once or reconciled as an
+      // identical existing terminal state by the ledger.
       throw this.genericFailure();
     }
   }

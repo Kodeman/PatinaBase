@@ -389,6 +389,7 @@ enum BackgroundRemovalStatus {
   SUCCEEDED
   FAILED_RELEASED
   FAILED_CHARGED
+  FAILED_COUNTED
 
   @@map("background_removal_status")
 }

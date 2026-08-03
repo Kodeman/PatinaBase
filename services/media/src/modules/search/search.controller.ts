@@ -119,18 +119,6 @@ export class SearchController {
   }
 
   /**
-   * Remove background
-   */
-  @Post('ai/remove-background/:assetId')
-  @HttpCode(HttpStatus.OK)
-  @ApiOperation({ summary: 'Remove background from image' })
-  @ApiResponse({ status: 200, description: 'Background removed successfully' })
-  async removeBackground(@Param('assetId') assetId: string) {
-    const buffer = Buffer.from(''); // Placeholder
-    return this.aiService.removeBackground(buffer);
-  }
-
-  /**
    * Detect products in image
    */
   @Post('ai/detect-products/:assetId')

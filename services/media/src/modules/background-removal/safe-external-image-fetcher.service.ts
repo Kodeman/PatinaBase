@@ -2,7 +2,10 @@ import { Inject, Injectable } from '@nestjs/common';
 import { promises as dns } from 'dns';
 import { request as httpsRequest } from 'https';
 import { BlockList, isIP, type LookupFunction } from 'net';
-import { BackgroundRemovalConfig } from './background-removal.config';
+import {
+  BACKGROUND_REMOVAL_MAX_REDIRECTS,
+  BackgroundRemovalConfig,
+} from './background-removal.config';
 import { BackgroundRemovalSourceError } from './background-removal.errors';
 import {
   BACKGROUND_REMOVAL_DNS,
@@ -38,11 +41,14 @@ for (const [network, prefix] of [
 for (const [network, prefix] of [
   ['::', 128],
   ['::1', 128],
+  ['64:ff9b::', 96],
   ['64:ff9b:1::', 48],
   ['100::', 64],
+  ['2001::', 32],
   ['2001:2::', 48],
   ['2001:10::', 28],
   ['2001:db8::', 32],
+  ['2002::', 16],
   ['fc00::', 7],
   ['fe80::', 10],
   ['ff00::', 8],
@@ -182,7 +188,7 @@ export class SafeExternalImageFetcherService {
 
   async fetch(source: string): Promise<ValidatedImage> {
     let current = this.parseUrl(source);
-    for (let redirects = 0; redirects <= 3; redirects += 1) {
+    for (let redirects = 0; redirects <= BACKGROUND_REMOVAL_MAX_REDIRECTS; redirects += 1) {
       const addresses = await this.resolvePublic(current.hostname);
       const response = await this.transport.get(current, addresses, {
         timeoutMs: this.policy.sourceTimeoutMs,
@@ -191,7 +197,9 @@ export class SafeExternalImageFetcherService {
 
       if ([301, 302, 303, 307, 308].includes(response.status)) {
         const location = response.headers.location;
-        if (!location || redirects === 3) throw new BackgroundRemovalSourceError();
+        if (!location || redirects === BACKGROUND_REMOVAL_MAX_REDIRECTS) {
+          throw new BackgroundRemovalSourceError();
+        }
         current = this.parseUrl(new URL(location, current).toString());
         continue;
       }
