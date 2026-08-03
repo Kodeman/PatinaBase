@@ -13,3 +13,4 @@ export {
 export { procurementEvents } from './procurement-events';
 export { studioEvents } from './studio-events';
 export { roomEvents, type RoomPhotoOpenSource } from './room-events';
+export { moodBoardEvents, MOOD_BOARD_EVENT_NAMES } from './mood-board-events';
