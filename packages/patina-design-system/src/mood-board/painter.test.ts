@@ -75,6 +75,9 @@ class RecordingContext implements MoodBoardPainterContext {
   clip() {
     this.call('clip')
   }
+  setLineDash(segments: number[]) {
+    this.call('setLineDash', segments)
+  }
   drawImage(
     image: unknown,
     dx: number,
@@ -212,6 +215,76 @@ describe('worker-safe mood-board painter core', () => {
     const draw = context.calls.find((call) => call.name === 'drawImage')!
     expect(draw.args.slice(1)).toEqual([0, 37.5, 100, 25])
   })
+
+  it('exports 100 image pins with bounded parallel loading, monotonic progress and cooperative yields', async () => {
+    const context = new RecordingContext()
+    const geometry = resolveMoodBoardGeometry({
+      canvasWidth: 2000,
+      canvasHeight: 1400,
+      backgroundColor: '#faf8f5',
+      sections: [],
+      items: Array.from({ length: 100 }, (_, index) => ({
+        id: `pin-${index}`,
+        type: 'image' as const,
+        x: (index % 10) * 190,
+        y: Math.floor(index / 10) * 130,
+        width: 160,
+        height: 100,
+        zIndex: index,
+        imageUrl: `https://images.example/${index}.png`,
+        data: { name: `Reference ${index}` },
+      })),
+    })
+    const progress: number[] = []
+    let activeLoads = 0
+    let maxActiveLoads = 0
+    let yieldCount = 0
+    let heartbeatCount = 0
+    const heartbeat = setInterval(() => {
+      heartbeatCount += 1
+    }, 0)
+    const started = performance.now()
+    try {
+      const result = await paintMoodBoardGeometry({
+        context,
+        geometry,
+        transform: {
+          scale: 1,
+          offsetX: 0,
+          offsetY: 0,
+          viewportWidth: 2000,
+          viewportHeight: 1400,
+        },
+        imageLoadConcurrency: 8,
+        resolveImage: async () => {
+          activeLoads += 1
+          maxActiveLoads = Math.max(maxActiveLoads, activeLoads)
+          await new Promise<void>((resolve) => setTimeout(resolve, 2))
+          activeLoads -= 1
+          return { source: {}, width: 160, height: 100 }
+        },
+        onProgress: (value) => progress.push(value),
+        yieldControl: async () => {
+          yieldCount += 1
+          await new Promise<void>((resolve) => setTimeout(resolve, 0))
+        },
+      })
+      expect(result.paintedItemKeys).toHaveLength(100)
+    } finally {
+      clearInterval(heartbeat)
+    }
+    const elapsedMs = performance.now() - started
+
+    expect(elapsedMs).toBeLessThan(10_000)
+    expect(maxActiveLoads).toBe(8)
+    expect(yieldCount).toBeGreaterThan(0)
+    expect(heartbeatCount).toBeGreaterThan(0)
+    expect(progress.at(-1)).toBe(1)
+    expect(progress.length).toBeGreaterThan(100)
+    expect(
+      progress.every((value, index) => index === 0 || value >= progress[index - 1]!),
+    ).toBe(true)
+  })
 })
 
 describe('PNG and cover raster wrappers', () => {
@@ -242,6 +315,30 @@ describe('PNG and cover raster wrappers', () => {
     expect(order[0]).toBe('fonts')
     expect(order[1]).toBe('canvas:2400x1600')
     expect(order.at(-1)).toBe('encode:2400x1600')
+  })
+
+  it('falls back to the system font stack when document font readiness rejects', async () => {
+    const context = new RecordingContext()
+    const order: string[] = []
+    const environment = rasterEnvironment(context, order)
+    environment.waitForFonts = async () => {
+      order.push('fonts:rejected')
+      throw new Error('forced font load failure')
+    }
+
+    const result = await renderMoodBoardPng(MOOD_BOARD_GOLDEN_FIXTURE, {
+      environment,
+    })
+
+    expect(result.blob.type).toBe('image/png')
+    expect(order[0]).toBe('fonts:rejected')
+    expect(order[1]).toBe('canvas:2400x1600')
+    expect(
+      context.calls.some(
+        (call) =>
+          call.name === 'fillText' && String(call.args.at(-1)).includes('system-ui'),
+      ),
+    ).toBe(true)
   })
 
   it('renders an 800x600 fit-contain cover through the same painter', async () => {

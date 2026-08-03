@@ -1,5 +1,9 @@
+import * as React from 'react'
 import type { Meta, StoryObj } from '@storybook/react'
-import { MOOD_BOARD_GOLDEN_FIXTURE } from '../../mood-board'
+import {
+  MOOD_BOARD_GOLDEN_FIXTURE,
+  renderMoodBoardPng,
+} from '../../mood-board'
 import {
   BoardComposition,
   type BoardCompositionBoard,
@@ -7,9 +11,27 @@ import {
 } from './BoardsBlock'
 
 const safeImage =
-  'data:image/svg+xml;charset=utf-8,%3Csvg xmlns="http://www.w3.org/2000/svg" width="800" height="600"%3E%3Crect width="800" height="600" fill="%23ddd2c4"/%3E%3Cpath d="M0 470L230 250l150 130 120-90 300 180v130H0z" fill="%23a7b0a0"/%3E%3C/svg%3E'
+  'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAMAAAACACAIAAADS5vE8AAABdklEQVR4nO3WsQ2AMBAEQYwokHIojAJJDQmyNp3JTLw6ftzXuU3G/PD0/Hvu74+wRkAkAiI5vn82WGGBSAREIiASNxCJBSIREImASNxAJBaIREAkAiJxA5FYIBIBkQiIxA1EYoFIBEQiIBI3EIkFIhEQiYBI3EAkFohEQCQCInEDkVggEgGRCIjEDURigUgERCIgEjcQiQUiERCJgEjcQCQWiERAJAIicQORWCASAZEIiMQNRGKBSAREIiASNxCJBSIREImASNxAJBaIREAkAiJxA5FYIBIBkQiIxA1EYoFIBEQiIBI3EIkFIhEQiYBI3EAkFohEQCQCInEDkVggEgGRCIjEDURigUgERCIgEjcQiQUiERCJgEjcQCQWiERAJAIicQORWCASAZEIiMQNRGKBSAREIiASNxCJBSIREImASNxAJBaIREAkAiJxA5FYIBIBkQiIxA1EYoFIBEQiIBI3EIkFIhEQiYBI3EAkFohEQCQCYise0YEC/8CDz/0AAAAASUVORK5CYII='
 
-const items: BoardCompositionItem[] = MOOD_BOARD_GOLDEN_FIXTURE.items.map(
+const parityFixture = {
+  ...MOOD_BOARD_GOLDEN_FIXTURE,
+  items: MOOD_BOARD_GOLDEN_FIXTURE.items.map((item) => ({
+    ...item,
+    imageUrl:
+      item.type === 'product' ||
+      item.type === 'capture' ||
+      item.type === 'image' ||
+      item.type === 'room_scan'
+        ? safeImage
+        : item.imageUrl,
+    data:
+      item.id === 'note' || item.id === 'sofa'
+        ? { ...item.data, section_id: 'empty' }
+        : item.data,
+  })),
+}
+
+const items: BoardCompositionItem[] = parityFixture.items.map(
   (item) => ({
     id: item.id,
     type: item.type,
@@ -19,13 +41,7 @@ const items: BoardCompositionItem[] = MOOD_BOARD_GOLDEN_FIXTURE.items.map(
     height: item.height ?? null,
     z_index: item.zIndex,
     rotation: item.rotation,
-    image_url:
-      item.type === 'product' ||
-      item.type === 'capture' ||
-      item.type === 'image' ||
-      item.type === 'room_scan'
-        ? safeImage
-        : null,
+    image_url: item.imageUrl,
     content: item.content,
     data: item.data,
   }),
@@ -39,6 +55,61 @@ const board: BoardCompositionBoard = {
   background_color: MOOD_BOARD_GOLDEN_FIXTURE.backgroundColor,
   sections: MOOD_BOARD_GOLDEN_FIXTURE.sections,
   items,
+}
+
+function ExportPainterParityHarness() {
+  const [rasterUrl, setRasterUrl] = React.useState<string | null>(null)
+  const [error, setError] = React.useState<string | null>(null)
+
+  React.useEffect(() => {
+    let active = true
+    let objectUrl: string | null = null
+    void renderMoodBoardPng(parityFixture, { scale: 1 })
+      .then((result) => {
+        if (!active) return
+        objectUrl = URL.createObjectURL(result.blob)
+        setRasterUrl(objectUrl)
+      })
+      .catch((cause) => {
+        if (active)
+          setError(cause instanceof Error ? cause.message : 'Painter failed')
+      })
+    return () => {
+      active = false
+      if (objectUrl) URL.revokeObjectURL(objectUrl)
+    }
+  }, [])
+
+  return (
+    <div className="w-full" data-export-parity-harness="true">
+      <div
+        className="w-full"
+        style={{ aspectRatio: `${board.canvas_width} / ${board.canvas_height}` }}
+        data-export-parity-dom="true"
+      >
+        <BoardComposition
+          board={board}
+          fit="width"
+          fullBleed
+        />
+      </div>
+      <div
+        className="mt-8 w-full"
+        style={{ aspectRatio: `${board.canvas_width} / ${board.canvas_height}` }}
+      >
+        {rasterUrl && (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img
+            src={rasterUrl}
+            alt="Painter parity raster"
+            className="block h-full w-full"
+            data-export-parity-painter="true"
+          />
+        )}
+        {error && <p role="alert">{error}</p>}
+      </div>
+    </div>
+  )
 }
 
 const meta: Meta<typeof BoardComposition> = {
@@ -102,4 +173,9 @@ export const MobileStackedSections: Story = {
       },
     },
   },
+}
+
+/** AC3.1: same six-pin/three-section fixture rendered by DOM and painter. */
+export const ExportPainterParity: Story = {
+  render: () => <ExportPainterParityHarness />,
 }

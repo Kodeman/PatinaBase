@@ -26,17 +26,21 @@ Deno.test('spec-pdf body parser preserves legacy kinds and accepts board-composi
   );
 });
 
-Deno.test('authorization regression: legacy board stays exact-owner-only', () => {
+Deno.test('authorization regression: both board PDF kinds stay exact-owner-only', () => {
   assertEquals(canCallerUseOwner('board', 'peer', 'owner', true), false);
   assertEquals(
     canCallerUseOwner('board-composition', 'peer', 'owner', true),
-    true,
+    false,
   );
   assertEquals(
     canCallerUseOwner('board-composition', 'peer', 'owner', false),
     false,
   );
   assertEquals(canCallerUseOwner('board', 'owner', 'owner', false), true);
+  assertEquals(
+    canCallerUseOwner('board-composition', 'owner', 'owner', true),
+    true,
+  );
 });
 
 Deno.test('missing and foreign boards collapse to the identical null result', () => {

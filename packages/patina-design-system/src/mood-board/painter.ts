@@ -124,7 +124,13 @@ async function paintToRaster(
   },
   onProgress?: (progress: number, itemKey?: string) => void,
 ): Promise<MoodBoardRasterResult> {
-  await environment.waitForFonts?.()
+  try {
+    await environment.waitForFonts?.()
+  } catch {
+    // A rejected webfont load must not abort a deliverable. Every painter font
+    // declaration carries a system-stack tail, so continuing here selects the
+    // same deterministic fallback the DOM composition uses.
+  }
   const canvas = environment.createCanvas(output.width, output.height)
   canvas.width = output.width
   canvas.height = output.height

@@ -19,8 +19,7 @@
 //   · kind 'board' additionally requires boardId (a section-grouped tile grid;
 //     client price only, never trade — same structural money invariant)
 //   · kind 'board-composition' requires boardId and renders persisted geometry
-//     on one landscape Letter page; only this new kind admits an active,
-//     non-guest peer in the owner's active design studio
+//     on one landscape Letter page; like every PDF kind it is exact-owner-only
 // Returns: 200 application/pdf (attachment), or the JSON error idiom.
 
 // deno-lint-ignore-file no-explicit-any no-import-prefix
@@ -76,49 +75,6 @@ async function getCallerUser(req: Request) {
   const { data, error } = await supabase.auth.getUser();
   if (error) return null;
   return data.user ?? null;
-}
-
-async function sharesActiveDesignStudio(
-  admin: any,
-  callerId: string,
-  designerId: string,
-) {
-  const { data: memberships, error: membershipError } = await admin
-    .from('organization_members')
-    .select('user_id, organization_id')
-    .in('user_id', [callerId, designerId])
-    .eq('status', 'active')
-    .neq('role', 'guest');
-  if (membershipError) throw membershipError;
-
-  const callerOrganizations = new Set(
-    ((memberships ?? []) as any[])
-      .filter((membership) => membership.user_id === callerId)
-      .map((membership) => String(membership.organization_id)),
-  );
-  const sharedOrganizations = [
-    ...new Set(
-      ((memberships ?? []) as any[])
-        .filter(
-          (membership) =>
-            membership.user_id === designerId &&
-            callerOrganizations.has(String(membership.organization_id)),
-        )
-        .map((membership) => String(membership.organization_id)),
-    ),
-  ];
-  if (sharedOrganizations.length === 0) return false;
-
-  const { data: studio, error: studioError } = await admin
-    .from('organizations')
-    .select('id')
-    .in('id', sharedOrganizations)
-    .eq('type', 'design_studio')
-    .eq('status', 'active')
-    .limit(1)
-    .maybeSingle();
-  if (studioError) throw studioError;
-  return studio != null;
 }
 
 // ─── Normalization helpers ───────────────────────────────────────────────────
@@ -311,10 +267,7 @@ Deno.serve(async (req: Request) => {
       designerId = owner.designer_id;
     }
 
-    const sharesStudio = kind === 'board-composition' && caller.id !== designerId
-      ? await sharesActiveDesignStudio(admin, caller.id, designerId)
-      : false;
-    if (!canCallerUseOwner(kind, caller.id, designerId, sharesStudio)) {
+    if (!canCallerUseOwner(kind, caller.id, designerId)) {
       return json({ error: 'not_found' }, 404);
     }
 

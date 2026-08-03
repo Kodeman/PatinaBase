@@ -4,6 +4,15 @@ import * as React from 'react'
 import type { MoodBoardItemType, MoodBoardSection } from '@patina/types'
 import { cn } from '../../utils/cn'
 import { resolveMoodBoardGeometry } from '../../mood-board/geometry'
+import {
+  MOOD_BOARD_BODY_FONT,
+  MOOD_BOARD_DISPLAY_FONT,
+  MOOD_BOARD_MONO_FONT,
+  MOOD_BOARD_VISUAL,
+  moodBoardColorWithAlpha,
+  resolveMoodBoardMediaLayout,
+  resolveMoodBoardProductLayout,
+} from '../../mood-board/visual-contract'
 
 // ============================================================================
 // Shared mood-board rendering (client proposal · designer preview · drafting
@@ -140,7 +149,10 @@ interface ScaledBoardCanvasProps {
   interactive: boolean
   onItemActivate?: (item: BoardCompositionItem) => void
   renderPinInteraction?: RenderPinInteraction
-  renderItem: (item: BoardCompositionItem) => React.ReactNode
+  renderItem: (
+    item: BoardCompositionItem,
+    box: { width: number; height: number },
+  ) => React.ReactNode
 }
 
 function ScaledBoardCanvas({
@@ -206,7 +218,10 @@ function ScaledBoardCanvas({
         fit === 'contain' && availableHeight > 0
           ? Math.min(widthScale, availableHeight / canvasHeight)
           : widthScale
-      const height = fullBleed && availableHeight > 0 ? availableHeight : canvasHeight * scale
+      const height =
+        fullBleed && fit === 'contain' && availableHeight > 0
+          ? availableHeight
+          : canvasHeight * scale
       setFrame({
         scale,
         offsetX: fit === 'contain' ? (width - canvasWidth * scale) / 2 : 0,
@@ -253,21 +268,34 @@ function ScaledBoardCanvas({
           <div
             key={section.id}
             data-composition-section={section.id}
-            className="pointer-events-none absolute rounded-sm border border-dashed"
+            className="pointer-events-none absolute"
             style={{
               left: section.bounds.x,
               top: section.bounds.y,
               width: section.bounds.width,
               height: section.bounds.height,
+              borderRadius: MOOD_BOARD_VISUAL.sectionRadius,
+              borderStyle: 'dashed',
+              borderWidth: 1,
               borderColor: section.color ?? '#8c8175',
-              backgroundColor: `${section.color ?? '#8c8175'}10`,
+              backgroundColor: moodBoardColorWithAlpha(
+                section.color ?? '#8c8175',
+                MOOD_BOARD_VISUAL.sectionFillAlpha,
+              ),
             }}
           >
             <span
-              className="absolute left-2 top-0 -translate-y-1/2 rounded-full px-2 py-0.5 text-[11px] font-medium"
+              className="absolute left-2 top-0 flex -translate-y-1/2 items-center whitespace-nowrap"
               style={{
+                height: MOOD_BOARD_VISUAL.sectionLabelHeight,
+                paddingInline: MOOD_BOARD_VISUAL.sectionLabelPaddingX,
+                borderRadius: MOOD_BOARD_VISUAL.sectionLabelHeight / 2,
                 backgroundColor: section.color ?? '#8c8175',
                 color: '#fff',
+                fontFamily: MOOD_BOARD_BODY_FONT,
+                fontSize: 11,
+                fontWeight: 500,
+                lineHeight: `${MOOD_BOARD_VISUAL.sectionLabelHeight}px`,
               }}
             >
               {section.name}
@@ -314,7 +342,10 @@ function ScaledBoardCanvas({
                   : undefined
               }
             >
-              {renderItem(item)}
+              {renderItem(item, {
+                width: resolved.width,
+                height: resolved.height,
+              })}
               {interaction && (
                 <div
                   className="absolute right-1 top-1 z-20"
@@ -339,25 +370,26 @@ function renderBoardItem(
   item: BoardCompositionItem,
   mode: BoardMode = 'presentation',
   renderPinOverlay?: RenderPinOverlay,
+  box?: { width: number; height: number },
 ): React.ReactNode {
   let tile: React.ReactNode
 
   switch (item.type) {
     case 'product':
     case 'capture':
-      tile = <ProductTile item={item} mode={mode} />
+      tile = <ProductTile item={item} mode={mode} box={box} />
       break
     case 'image':
-      tile = <ImageTile item={item} />
+      tile = <ImageTile item={item} box={box} />
       break
     case 'room_scan':
-      tile = <RoomScanTile item={item} />
+      tile = <RoomScanTile item={item} box={box} />
       break
     case 'palette':
-      tile = <PaletteStrip item={item} />
+      tile = <PaletteStrip item={item} box={box} />
       break
     case 'note':
-      tile = <NoteCard item={item} />
+      tile = <NoteCard item={item} box={box} />
       break
     default:
       return null
@@ -385,9 +417,11 @@ function renderBoardItem(
 function ProductTile({
   item,
   mode = 'presentation',
+  box,
 }: {
   item: BoardCompositionItem
   mode?: BoardMode
+  box?: { width: number; height: number }
 }) {
   const snap = (item.data ?? {}) as ProductSnapshot
   const imageUrl = item.image_url ?? snap.image_url ?? null
@@ -396,6 +430,120 @@ function ProductTile({
   const host = sourceHost(snap.source_url)
   const leadWeeks =
     mode === 'detail' && typeof snap.lead_time_weeks === 'number' ? snap.lead_time_weeks : null
+
+  if (box) {
+    const layout = resolveMoodBoardProductLayout(box.width, box.height)
+    return (
+      <div
+        className="relative h-full w-full select-none overflow-hidden"
+        style={{
+          borderRadius: MOOD_BOARD_VISUAL.pinRadius,
+          border: `1px solid ${MOOD_BOARD_VISUAL.colors.border}`,
+          backgroundColor: MOOD_BOARD_VISUAL.colors.surface,
+        }}
+      >
+        <div
+          className="absolute overflow-hidden"
+          style={{
+            left: layout.image.x - 1,
+            top: layout.image.y - 1,
+            width: layout.image.width,
+            height: layout.image.height,
+            backgroundColor: imageUrl
+              ? MOOD_BOARD_VISUAL.colors.surface
+              : MOOD_BOARD_VISUAL.colors.placeholder,
+            border: imageUrl
+              ? undefined
+              : `1px solid ${MOOD_BOARD_VISUAL.colors.placeholderBorder}`,
+          }}
+        >
+          {imageUrl ? (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img
+              src={imageUrl}
+              alt={snap.name ?? ''}
+              draggable={false}
+              className="pointer-events-none h-full w-full object-contain"
+            />
+          ) : (
+            <span
+              className="flex h-full w-full items-center justify-center px-2 text-center"
+              style={{
+                color: MOOD_BOARD_VISUAL.colors.placeholderText,
+                fontFamily: MOOD_BOARD_BODY_FONT,
+                fontSize: 12,
+              }}
+            >
+              {snap.name ?? 'Selected piece'}
+            </span>
+          )}
+        </div>
+        <div
+          className="absolute line-clamp-2"
+          style={{
+            left: 7,
+            top: layout.nameTop - 1,
+            width: box.width - 16,
+            color: MOOD_BOARD_VISUAL.colors.text,
+            fontFamily: MOOD_BOARD_BODY_FONT,
+            fontSize: 12,
+            lineHeight: '14px',
+          }}
+        >
+          {snap.name ?? 'Selected piece'}
+        </div>
+        {snap.vendor_name && (
+          <div
+            className="absolute truncate"
+            style={{
+              left: 7,
+              top: layout.metaBaseline - 11,
+              maxWidth: box.width - 70,
+              color: MOOD_BOARD_VISUAL.colors.muted,
+              fontFamily: MOOD_BOARD_BODY_FONT,
+              fontSize: 10,
+              fontStyle: 'italic',
+              lineHeight: '11px',
+            }}
+          >
+            {snap.vendor_name}
+          </div>
+        )}
+        {typeof snap.price_cents === 'number' && (
+          <div
+            className="absolute"
+            style={{
+              right: 7,
+              top: layout.metaBaseline - 12,
+              color: MOOD_BOARD_VISUAL.colors.text,
+              fontFamily: MOOD_BOARD_DISPLAY_FONT,
+              fontSize: 11,
+              fontWeight: 600,
+              lineHeight: '12px',
+            }}
+          >
+            {formatDollars(snap.price_cents)}
+          </div>
+        )}
+        {host && (
+          <div
+            className="absolute truncate"
+            style={{
+              left: 7,
+              top: layout.sourceBaseline - 10,
+              width: box.width - 16,
+              color: MOOD_BOARD_VISUAL.colors.muted,
+              fontFamily: MOOD_BOARD_MONO_FONT,
+              fontSize: 9,
+              lineHeight: '10px',
+            }}
+          >
+            {host}
+          </div>
+        )}
+      </div>
+    )
+  }
 
   return (
     <div className="flex h-full w-full select-none flex-col overflow-hidden rounded-sm border border-[var(--border-subtle)] bg-white">
@@ -482,13 +630,32 @@ function ProductTile({
   )
 }
 
-function ImageTile({ item }: { item: BoardCompositionItem }) {
+function ImageTile({
+  item,
+  box,
+}: {
+  item: BoardCompositionItem
+  box?: { width: number; height: number }
+}) {
   if (!item.image_url) {
     return (
       <div
-        className="h-full w-full rounded-sm"
-        style={{ background: 'var(--color-pearl, #f5f3ee)' }}
-      />
+        className="flex h-full w-full items-center justify-center text-center"
+        style={{
+          borderRadius: MOOD_BOARD_VISUAL.pinRadius,
+          border: box
+            ? `1px solid ${MOOD_BOARD_VISUAL.colors.placeholderBorder}`
+            : undefined,
+          background: box
+            ? MOOD_BOARD_VISUAL.colors.placeholder
+            : 'var(--color-pearl, #f5f3ee)',
+          color: MOOD_BOARD_VISUAL.colors.placeholderText,
+          fontFamily: MOOD_BOARD_BODY_FONT,
+          fontSize: 12,
+        }}
+      >
+        {box ? 'image' : null}
+      </div>
     )
   }
   return (
@@ -497,13 +664,86 @@ function ImageTile({ item }: { item: BoardCompositionItem }) {
       src={item.image_url}
       alt=""
       draggable={false}
-      className="pointer-events-none h-full w-full select-none rounded-sm object-contain"
+      className="pointer-events-none h-full w-full select-none object-contain"
+      style={{ borderRadius: box ? MOOD_BOARD_VISUAL.pinRadius : undefined }}
     />
   )
 }
 
-function RoomScanTile({ item }: { item: BoardCompositionItem }) {
+function RoomScanTile({
+  item,
+  box,
+}: {
+  item: BoardCompositionItem
+  box?: { width: number; height: number }
+}) {
   const snap = (item.data ?? {}) as RoomScanSnapshot
+  if (box) {
+    const layout = resolveMoodBoardMediaLayout(box.width, box.height)
+    return (
+      <div
+        className="relative h-full w-full select-none overflow-hidden"
+        style={{
+          borderRadius: MOOD_BOARD_VISUAL.pinRadius,
+          border: `1px solid ${MOOD_BOARD_VISUAL.colors.border}`,
+          backgroundColor: MOOD_BOARD_VISUAL.colors.surface,
+        }}
+      >
+        <div
+          className="absolute overflow-hidden"
+          style={{
+            left: layout.media.x - 1,
+            top: layout.media.y - 1,
+            width: layout.media.width,
+            height: layout.media.height,
+            backgroundColor: item.image_url
+              ? MOOD_BOARD_VISUAL.colors.surface
+              : MOOD_BOARD_VISUAL.colors.placeholder,
+            border: item.image_url
+              ? undefined
+              : `1px solid ${MOOD_BOARD_VISUAL.colors.placeholderBorder}`,
+          }}
+        >
+          {item.image_url ? (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img
+              src={item.image_url}
+              alt={snap.name ?? 'Your space'}
+              draggable={false}
+              className="pointer-events-none h-full w-full object-contain"
+            />
+          ) : (
+            <span
+              className="flex h-full w-full items-center justify-center px-2 text-center"
+              style={{
+                color: MOOD_BOARD_VISUAL.colors.placeholderText,
+                fontFamily: MOOD_BOARD_BODY_FONT,
+                fontSize: 12,
+              }}
+            >
+              {snap.name ?? 'Your space'}
+            </span>
+          )}
+        </div>
+        <div
+          className="absolute truncate"
+          style={{
+            left: 7,
+            top: layout.labelTop,
+            width: box.width - 16,
+            height: box.height - layout.labelTop,
+            color: MOOD_BOARD_VISUAL.colors.muted,
+            fontFamily: MOOD_BOARD_DISPLAY_FONT,
+            fontSize: 9,
+            fontWeight: 500,
+            lineHeight: `${box.height - layout.labelTop}px`,
+          }}
+        >
+          {(snap.name ?? 'Your space').toUpperCase()}
+        </div>
+      </div>
+    )
+  }
   return (
     <div className="flex h-full w-full select-none flex-col overflow-hidden rounded-sm border border-[var(--border-subtle)] bg-white">
       <div
@@ -536,9 +776,70 @@ function RoomScanTile({ item }: { item: BoardCompositionItem }) {
   )
 }
 
-function PaletteStrip({ item }: { item: BoardCompositionItem }) {
+function PaletteStrip({
+  item,
+  box,
+}: {
+  item: BoardCompositionItem
+  box?: { width: number; height: number }
+}) {
   const snap = (item.data ?? {}) as PaletteSnapshot
   const swatches = snap.swatches ?? []
+
+  if (box) {
+    const layout = resolveMoodBoardMediaLayout(box.width, box.height)
+    return (
+      <div
+        className="relative h-full w-full select-none overflow-hidden"
+        style={{
+          borderRadius: MOOD_BOARD_VISUAL.pinRadius,
+          border: `1px solid ${MOOD_BOARD_VISUAL.colors.border}`,
+          backgroundColor: MOOD_BOARD_VISUAL.colors.surface,
+        }}
+      >
+        <div
+          className="absolute flex overflow-hidden"
+          style={{
+            left: layout.media.x - 1,
+            top: layout.media.y - 1,
+            width: layout.media.width,
+            height: layout.media.height,
+          }}
+        >
+          {swatches.length > 0 ? (
+            swatches.map((swatch, index) => (
+              <div
+                key={`${swatch.hex}-${index}`}
+                className="h-full flex-1"
+                style={{ backgroundColor: swatch.hex }}
+              />
+            ))
+          ) : (
+            <div
+              className="h-full w-full"
+              style={{ backgroundColor: MOOD_BOARD_VISUAL.colors.placeholder }}
+            />
+          )}
+        </div>
+        <div
+          className="absolute truncate"
+          style={{
+            left: 7,
+            top: layout.labelTop,
+            width: box.width - 16,
+            height: box.height - layout.labelTop,
+            color: MOOD_BOARD_VISUAL.colors.muted,
+            fontFamily: MOOD_BOARD_DISPLAY_FONT,
+            fontSize: 9,
+            fontWeight: 500,
+            lineHeight: `${box.height - layout.labelTop}px`,
+          }}
+        >
+          {(snap.name ?? 'Palette').toUpperCase()}
+        </div>
+      </div>
+    )
+  }
 
   return (
     <div className="flex h-full w-full select-none flex-col overflow-hidden rounded-sm border border-[var(--border-subtle)] bg-white">
@@ -572,18 +873,25 @@ function PaletteStrip({ item }: { item: BoardCompositionItem }) {
   )
 }
 
-function NoteCard({ item }: { item: BoardCompositionItem }) {
+function NoteCard({
+  item,
+  box,
+}: {
+  item: BoardCompositionItem
+  box?: { width: number; height: number }
+}) {
   if (!item.content?.trim()) return null
   return (
     <div
-      className="h-full w-full select-none overflow-hidden rounded-sm p-3"
+      className="h-full w-full select-none overflow-hidden p-3"
       style={{
-        backgroundColor: '#F3E9D5',
-        border: '1px solid #E0D2B8',
-        fontFamily: 'var(--font-body)',
-        fontSize: '0.78rem',
-        lineHeight: 1.5,
-        color: '#4A4137',
+        borderRadius: box ? MOOD_BOARD_VISUAL.pinRadius : undefined,
+        backgroundColor: MOOD_BOARD_VISUAL.colors.note,
+        border: `1px solid ${MOOD_BOARD_VISUAL.colors.noteBorder}`,
+        fontFamily: box ? MOOD_BOARD_BODY_FONT : 'var(--font-body)',
+        fontSize: box ? 13 : '0.78rem',
+        lineHeight: box ? '18px' : 1.5,
+        color: MOOD_BOARD_VISUAL.colors.noteText,
       }}
     >
       <p className="whitespace-pre-wrap break-words">{item.content}</p>
@@ -944,7 +1252,9 @@ export function BoardComposition({
           interactive={interactive}
           onItemActivate={onItemActivate}
           renderPinInteraction={renderPinInteraction}
-          renderItem={(item) => renderBoardItem(item, mode, renderPinOverlay)}
+          renderItem={(item, box) =>
+            renderBoardItem(item, mode, renderPinOverlay, box)
+          }
         />
       </div>
 

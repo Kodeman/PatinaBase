@@ -3,6 +3,14 @@ import type {
   BoardItemGeometrySnapshot,
   BoardRect,
 } from '@patina/types'
+import {
+  MOOD_BOARD_BODY_FONT,
+  MOOD_BOARD_DISPLAY_FONT,
+  MOOD_BOARD_MONO_FONT,
+  MOOD_BOARD_VISUAL,
+  resolveMoodBoardMediaLayout,
+  resolveMoodBoardProductLayout,
+} from './visual-contract'
 
 /** Minimal structural 2D context; implemented by browser and worker canvases. */
 export interface MoodBoardPainterContext {
@@ -28,6 +36,7 @@ export interface MoodBoardPainterContext {
   fill(): void
   stroke(): void
   clip(): void
+  setLineDash(segments: number[]): void
   drawImage(
     image: unknown,
     dx: number,
@@ -78,15 +87,16 @@ export interface PaintMoodBoardOptions {
   transform: MoodBoardPaintTransform
   resolveImage?: MoodBoardImageResolver
   onProgress?: (progress: number, itemKey?: string) => void
+  /** Bounded image decode/fetch parallelism. @default 8 */
+  imageLoadConcurrency?: number
+  /** Cooperative main-thread yield seam (injected by deterministic tests). */
+  yieldControl?: () => Promise<void>
 }
 
 export interface MoodBoardPaintResult {
   warnings: MoodBoardPaintWarning[]
   paintedItemKeys: string[]
 }
-
-const BODY_FONT = 'Inter, ui-sans-serif, system-ui, -apple-system, sans-serif'
-const DISPLAY_FONT = 'Iowan Old Style, Georgia, ui-serif, serif'
 
 function dataString(
   item: BoardItemGeometrySnapshot,
@@ -203,12 +213,13 @@ function drawPlaceholder(
   rect: BoardRect,
   label: string,
 ) {
-  fillRoundedRect(context, rect, 4, '#eee9e1')
-  context.strokeStyle = '#cfc5b8'
+  context.fillStyle = MOOD_BOARD_VISUAL.colors.placeholder
+  context.fillRect(rect.x, rect.y, rect.width, rect.height)
+  context.strokeStyle = MOOD_BOARD_VISUAL.colors.placeholderBorder
   context.lineWidth = 1
   context.strokeRect(rect.x, rect.y, rect.width, rect.height)
-  context.fillStyle = '#756b60'
-  context.font = `12px ${BODY_FONT}`
+  context.fillStyle = MOOD_BOARD_VISUAL.colors.placeholderText
+  context.font = `12px ${MOOD_BOARD_BODY_FONT}`
   context.textAlign = 'center'
   context.textBaseline = 'middle'
   context.fillText(
@@ -252,43 +263,136 @@ function wrapText(
   return lines
 }
 
+interface ResolvedItemImage {
+  image: MoodBoardResolvedImage | null
+  warning: MoodBoardPaintWarning | null
+}
+
 async function resolveItemImage(
   item: BoardItemGeometrySnapshot,
   resolver: MoodBoardImageResolver | undefined,
-  warnings: MoodBoardPaintWarning[],
-): Promise<MoodBoardResolvedImage | null> {
+): Promise<ResolvedItemImage> {
   const request = imageRequest(item)
-  if (!request || !resolver) return null
+  if (!request || !resolver) return { image: null, warning: null }
   try {
     const image = await resolver(request)
-    if (image) return image
+    if (image) return { image, warning: null }
   } catch {
     // Failed resources degrade to a labelled placeholder below.
   }
-  warnings.push({
-    itemKey: item.key,
-    itemId: item.id,
-    label: request.label,
-    reason: 'image-load-failed',
-  })
-  return null
+  return {
+    image: null,
+    warning: {
+      itemKey: item.key,
+      itemId: item.id,
+      label: request.label,
+      reason: 'image-load-failed',
+    },
+  }
+}
+
+function itemUsesImage(item: BoardItemGeometrySnapshot): boolean {
+  return (
+    item.type === 'product' ||
+    item.type === 'capture' ||
+    item.type === 'image' ||
+    item.type === 'room_scan'
+  )
+}
+
+async function defaultYieldControl(): Promise<void> {
+  const scheduler = (
+    globalThis as typeof globalThis & {
+      scheduler?: { yield?: () => Promise<void> }
+    }
+  ).scheduler
+  if (typeof scheduler?.yield === 'function') {
+    await scheduler.yield()
+    return
+  }
+  await new Promise<void>((resolve) => setTimeout(resolve, 0))
+}
+
+async function preloadItemImages(options: {
+  items: readonly BoardItemGeometrySnapshot[]
+  resolver: MoodBoardImageResolver | undefined
+  concurrency: number
+  onProgress?: (progress: number, itemKey?: string) => void
+}): Promise<Map<string, ResolvedItemImage>> {
+  const candidates = options.items.filter(
+    (item) => itemUsesImage(item) && imageRequest(item) !== null,
+  )
+  const resolved = new Map<string, ResolvedItemImage>()
+  if (candidates.length === 0 || !options.resolver) return resolved
+
+  let cursor = 0
+  let completed = 0
+  const workerCount = Math.min(
+    candidates.length,
+    Math.max(1, Math.floor(options.concurrency)),
+  )
+  await Promise.all(
+    Array.from({ length: workerCount }, async () => {
+      for (;;) {
+        const index = cursor
+        cursor += 1
+        const item = candidates[index]
+        if (!item) return
+        resolved.set(item.key, await resolveItemImage(item, options.resolver))
+        completed += 1
+        // Image hydration owns the first 70% of determinate progress. This is
+        // deliberately emitted as each request completes instead of leaving
+        // the UI parked at zero behind a large Promise.all barrier.
+        options.onProgress?.((completed / candidates.length) * 0.7, item.key)
+      }
+    }),
+  )
+  return resolved
 }
 
 function drawSection(
   context: MoodBoardPainterContext,
   section: BoardGeometrySnapshot['sections'][number],
 ) {
+  const color = section.color ?? '#8c8175'
   context.save()
-  context.globalAlpha = 0.09
-  fillRoundedRect(context, section.bounds, 6, section.color ?? '#8c8175')
+  context.globalAlpha = MOOD_BOARD_VISUAL.sectionFillAlpha
+  fillRoundedRect(
+    context,
+    section.bounds,
+    MOOD_BOARD_VISUAL.sectionRadius,
+    color,
+  )
   context.restore()
   context.lineWidth = 1
-  strokeRoundedRect(context, section.bounds, 6, section.color ?? '#8c8175')
-  context.fillStyle = section.color ?? '#8c8175'
-  context.font = `600 12px ${BODY_FONT}`
+  context.setLineDash([...MOOD_BOARD_VISUAL.sectionDash])
+  strokeRoundedRect(
+    context,
+    section.bounds,
+    MOOD_BOARD_VISUAL.sectionRadius,
+    color,
+  )
+  context.setLineDash([])
+
+  context.font = `500 11px ${MOOD_BOARD_BODY_FONT}`
+  const labelWidth =
+    context.measureText(section.name).width +
+    MOOD_BOARD_VISUAL.sectionLabelPaddingX * 2
+  const labelRect = {
+    x: section.bounds.x + 8,
+    y: section.bounds.y - MOOD_BOARD_VISUAL.sectionLabelHeight / 2,
+    width: labelWidth,
+    height: MOOD_BOARD_VISUAL.sectionLabelHeight,
+  }
+  fillRoundedRect(context, labelRect, labelRect.height / 2, color)
+  context.fillStyle = '#ffffff'
   context.textAlign = 'left'
-  context.textBaseline = 'bottom'
-  context.fillText(section.name, section.bounds.x + 8, section.bounds.y - 4)
+  context.textBaseline = 'middle'
+  context.fillText(
+    section.name,
+    labelRect.x + MOOD_BOARD_VISUAL.sectionLabelPaddingX,
+    section.bounds.y,
+  )
 }
 
 async function drawProduct(
@@ -296,62 +400,71 @@ async function drawProduct(
   item: BoardItemGeometrySnapshot,
   image: MoodBoardResolvedImage | null,
 ) {
+  const layout = resolveMoodBoardProductLayout(item.width, item.height)
   fillRoundedRect(
     context,
-    { x: 0, y: 0, width: item.width, height: item.height },
-    4,
-    '#ffffff',
+    layout.frame,
+    MOOD_BOARD_VISUAL.pinRadius,
+    MOOD_BOARD_VISUAL.colors.surface,
   )
-  strokeRoundedRect(
+  context.save()
+  roundedRectPath(
     context,
-    { x: 0, y: 0, width: item.width, height: item.height },
-    4,
-    '#ded7cd',
+    layout.frame.x,
+    layout.frame.y,
+    layout.frame.width,
+    layout.frame.height,
+    MOOD_BOARD_VISUAL.pinRadius,
   )
-  const captionHeight = Math.min(70, Math.max(42, item.height * 0.25))
-  const imageRect = {
-    x: 0,
-    y: 0,
-    width: item.width,
-    height: Math.max(1, item.height - captionHeight),
-  }
-  if (image) drawContainedImage(context, image, imageRect)
-  else drawPlaceholder(context, imageRect, itemLabel(item))
+  context.clip()
+  if (image) drawContainedImage(context, image, layout.image)
+  else drawPlaceholder(context, layout.image, itemLabel(item))
 
   const name = itemLabel(item)
-  context.fillStyle = '#362f29'
-  context.font = `12px ${BODY_FONT}`
+  context.fillStyle = MOOD_BOARD_VISUAL.colors.text
+  context.font = `12px ${MOOD_BOARD_BODY_FONT}`
   context.textAlign = 'left'
   context.textBaseline = 'top'
   const lines = wrapText(context, name, item.width - 16, 2)
   lines.forEach((line, index) =>
-    context.fillText(line, 8, imageRect.height + 7 + index * 14),
+    context.fillText(line, 8, layout.nameTop + index * 14),
   )
 
   const vendor = dataString(item, 'vendor_name')
   if (vendor) {
-    context.fillStyle = '#776e64'
-    context.font = `italic 10px ${BODY_FONT}`
-    context.fillText(vendor, 8, item.height - 18, item.width - 16)
+    context.fillStyle = MOOD_BOARD_VISUAL.colors.muted
+    context.font = `italic 10px ${MOOD_BOARD_BODY_FONT}`
+    context.textBaseline = 'alphabetic'
+    context.fillText(vendor, 8, layout.metaBaseline, item.width - 16)
   }
   const price = dataNumber(item, 'price_cents')
   if (price !== null) {
-    context.fillStyle = '#362f29'
-    context.font = `600 11px ${DISPLAY_FONT}`
+    context.fillStyle = MOOD_BOARD_VISUAL.colors.text
+    context.font = `600 11px ${MOOD_BOARD_DISPLAY_FONT}`
     context.textAlign = 'right'
+    context.textBaseline = 'alphabetic'
     context.fillText(
       `$${Math.round(price / 100).toLocaleString('en-US')}`,
       item.width - 8,
-      item.height - 18,
+      layout.metaBaseline,
     )
   }
   const host = sourceHost(dataString(item, 'source_url'))
   if (host) {
-    context.fillStyle = '#776e64'
-    context.font = `9px ui-monospace, SFMono-Regular, Menlo, monospace`
+    context.fillStyle = MOOD_BOARD_VISUAL.colors.muted
+    context.font = `9px ${MOOD_BOARD_MONO_FONT}`
     context.textAlign = 'left'
-    context.fillText(host, 8, item.height - 6, item.width - 16)
+    context.textBaseline = 'alphabetic'
+    context.fillText(host, 8, layout.sourceBaseline, item.width - 16)
   }
+  context.restore()
+  context.lineWidth = 1
+  strokeRoundedRect(
+    context,
+    layout.frame,
+    MOOD_BOARD_VISUAL.pinRadius,
+    MOOD_BOARD_VISUAL.colors.border,
+  )
 }
 
 function drawPalette(
@@ -367,33 +480,49 @@ function drawPalette(
           typeof (swatch as { hex?: unknown }).hex === 'string',
       )
     : []
+  const layout = resolveMoodBoardMediaLayout(item.width, item.height)
   fillRoundedRect(
     context,
-    { x: 0, y: 0, width: item.width, height: item.height },
-    4,
-    '#ffffff',
+    layout.frame,
+    MOOD_BOARD_VISUAL.pinRadius,
+    MOOD_BOARD_VISUAL.colors.surface,
   )
-  const labelHeight = Math.min(28, item.height * 0.3)
-  const stripHeight = item.height - labelHeight
   if (swatches.length === 0) {
-    context.fillStyle = '#eee9e1'
-    context.fillRect(0, 0, item.width, stripHeight)
+    context.fillStyle = MOOD_BOARD_VISUAL.colors.placeholder
+    context.fillRect(
+      layout.media.x,
+      layout.media.y,
+      layout.media.width,
+      layout.media.height,
+    )
   } else {
-    const width = item.width / swatches.length
+    const width = layout.media.width / swatches.length
     swatches.forEach((swatch, index) => {
       context.fillStyle = swatch.hex
-      context.fillRect(index * width, 0, width + 0.5, stripHeight)
+      context.fillRect(
+        layout.media.x + index * width,
+        layout.media.y,
+        width + 0.5,
+        layout.media.height,
+      )
     })
   }
-  context.fillStyle = '#5f564d'
-  context.font = `10px ${DISPLAY_FONT}`
+  context.fillStyle = MOOD_BOARD_VISUAL.colors.muted
+  context.font = `500 9px ${MOOD_BOARD_DISPLAY_FONT}`
   context.textAlign = 'left'
   context.textBaseline = 'middle'
   context.fillText(
-    itemLabel(item),
+    itemLabel(item).toUpperCase(),
     8,
-    stripHeight + labelHeight / 2,
+    layout.labelTop + (item.height - layout.labelTop) / 2,
     item.width - 16,
+  )
+  context.lineWidth = 1
+  strokeRoundedRect(
+    context,
+    layout.frame,
+    MOOD_BOARD_VISUAL.pinRadius,
+    MOOD_BOARD_VISUAL.colors.border,
   )
 }
 
@@ -404,17 +533,17 @@ function drawNote(
   fillRoundedRect(
     context,
     { x: 0, y: 0, width: item.width, height: item.height },
-    5,
-    '#f3e9d5',
+    MOOD_BOARD_VISUAL.pinRadius,
+    MOOD_BOARD_VISUAL.colors.note,
   )
   strokeRoundedRect(
     context,
     { x: 0, y: 0, width: item.width, height: item.height },
-    5,
-    '#e0d2b8',
+    MOOD_BOARD_VISUAL.pinRadius,
+    MOOD_BOARD_VISUAL.colors.noteBorder,
   )
-  context.fillStyle = '#4a4137'
-  context.font = `13px ${BODY_FONT}`
+  context.fillStyle = MOOD_BOARD_VISUAL.colors.noteText
+  context.font = `13px ${MOOD_BOARD_BODY_FONT}`
   context.textAlign = 'left'
   context.textBaseline = 'top'
   const lines = wrapText(
@@ -431,47 +560,39 @@ function drawRoomScan(
   item: BoardItemGeometrySnapshot,
   image: MoodBoardResolvedImage | null,
 ) {
+  const layout = resolveMoodBoardMediaLayout(item.width, item.height)
   fillRoundedRect(
     context,
-    { x: 0, y: 0, width: item.width, height: item.height },
-    4,
-    '#ffffff',
+    layout.frame,
+    MOOD_BOARD_VISUAL.pinRadius,
+    MOOD_BOARD_VISUAL.colors.surface,
   )
-  const labelHeight = Math.min(28, item.height * 0.22)
-  const imageRect = {
-    x: 0,
-    y: 0,
-    width: item.width,
-    height: item.height - labelHeight,
-  }
-  if (image) drawContainedImage(context, image, imageRect)
-  else drawPlaceholder(context, imageRect, itemLabel(item))
-  context.fillStyle = '#655b52'
-  context.font = `10px ${DISPLAY_FONT}`
+  if (image) drawContainedImage(context, image, layout.media)
+  else drawPlaceholder(context, layout.media, itemLabel(item))
+  context.fillStyle = MOOD_BOARD_VISUAL.colors.muted
+  context.font = `500 9px ${MOOD_BOARD_DISPLAY_FONT}`
   context.textAlign = 'left'
   context.textBaseline = 'middle'
   context.fillText(
-    itemLabel(item),
+    itemLabel(item).toUpperCase(),
     8,
-    item.height - labelHeight / 2,
+    layout.labelTop + (item.height - layout.labelTop) / 2,
     item.width - 16,
+  )
+  context.lineWidth = 1
+  strokeRoundedRect(
+    context,
+    layout.frame,
+    MOOD_BOARD_VISUAL.pinRadius,
+    MOOD_BOARD_VISUAL.colors.border,
   )
 }
 
 async function drawItem(
   context: MoodBoardPainterContext,
   item: BoardItemGeometrySnapshot,
-  resolver: MoodBoardImageResolver | undefined,
-  warnings: MoodBoardPaintWarning[],
+  image: MoodBoardResolvedImage | null,
 ) {
-  const image =
-    item.type === 'product' ||
-    item.type === 'capture' ||
-    item.type === 'image' ||
-    item.type === 'room_scan'
-      ? await resolveItemImage(item, resolver, warnings)
-      : null
-
   context.save()
   context.translate(item.x + item.width / 2, item.y + item.height / 2)
   context.rotate((item.rotation * Math.PI) / 180)
@@ -479,14 +600,23 @@ async function drawItem(
   if (item.type === 'product' || item.type === 'capture')
     await drawProduct(context, item, image)
   else if (item.type === 'image') {
-    if (image)
+    if (image) {
+      roundedRectPath(
+        context,
+        0,
+        0,
+        item.width,
+        item.height,
+        MOOD_BOARD_VISUAL.pinRadius,
+      )
+      context.clip()
       drawContainedImage(context, image, {
         x: 0,
         y: 0,
         width: item.width,
         height: item.height,
       })
-    else
+    } else
       drawPlaceholder(
         context,
         { x: 0, y: 0, width: item.width, height: item.height },
@@ -508,9 +638,25 @@ export async function paintMoodBoardGeometry({
   transform,
   resolveImage,
   onProgress,
+  imageLoadConcurrency = 8,
+  yieldControl = defaultYieldControl,
 }: PaintMoodBoardOptions): Promise<MoodBoardPaintResult> {
   const warnings: MoodBoardPaintWarning[] = []
   const paintedItemKeys: string[] = []
+  onProgress?.(0)
+  const images = await preloadItemImages({
+    items: geometry.items,
+    resolver: resolveImage,
+    concurrency: imageLoadConcurrency,
+    onProgress,
+  })
+  for (const item of geometry.items) {
+    const warning = images.get(item.key)?.warning
+    if (warning) warnings.push(warning)
+  }
+  const hasImages = images.size > 0
+  const paintProgressStart = hasImages ? 0.7 : 0
+
   context.save()
   context.globalAlpha = 1
   context.fillStyle = geometry.canvas.backgroundColor
@@ -518,13 +664,20 @@ export async function paintMoodBoardGeometry({
   context.translate(transform.offsetX, transform.offsetY)
   context.scale(transform.scale, transform.scale)
   geometry.sections.forEach((section) => drawSection(context, section))
-  onProgress?.(geometry.items.length === 0 ? 1 : 0)
+  onProgress?.(geometry.items.length === 0 ? 1 : paintProgressStart)
 
   for (let index = 0; index < geometry.items.length; index += 1) {
     const item = geometry.items[index]!
-    await drawItem(context, item, resolveImage, warnings)
+    await drawItem(context, item, images.get(item.key)?.image ?? null)
     paintedItemKeys.push(item.key)
-    onProgress?.((index + 1) / geometry.items.length, item.key)
+    onProgress?.(
+      paintProgressStart +
+        ((index + 1) / geometry.items.length) * (1 - paintProgressStart),
+      item.key,
+    )
+    if ((index + 1) % 12 === 0 && index + 1 < geometry.items.length) {
+      await yieldControl()
+    }
   }
   context.restore()
   return { warnings, paintedItemKeys }

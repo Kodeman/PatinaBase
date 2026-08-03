@@ -60,15 +60,14 @@ export function parseSpecPdfBody(
   };
 }
 
-/** Legacy kinds remain exact-owner-only; only composition accepts a peer. */
+/** Every authenticated PDF kind is exact-owner-only; peer membership is not ownership. */
 export function canCallerUseOwner(
-  kind: SpecPdfKind,
+  _kind: SpecPdfKind,
   callerId: string,
   designerId: string,
-  sharesActiveDesignStudio: boolean,
+  _sharesActiveDesignStudio = false,
 ): boolean {
-  if (callerId === designerId) return true;
-  return kind === 'board-composition' && sharesActiveDesignStudio;
+  return callerId === designerId;
 }
 
 export interface BoardOwnerLegs {
