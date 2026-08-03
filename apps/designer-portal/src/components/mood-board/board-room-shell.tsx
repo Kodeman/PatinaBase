@@ -369,15 +369,17 @@ function BoardRoomSurface({
     if (!latestInput || !latestApi.state || !signature) return;
     if (!force && signature === lastCoverSignatureRef.current) return;
     if (coverInFlightRef.current) await coverInFlightRef.current;
+    if (!force && signature === lastCoverSignatureRef.current) return;
+    const coverOwner: BoardOwnerRef = { kind: owner.kind, id: owner.id };
     const task = (async () => {
       const generated = await generateAndUploadMoodBoardCover({
-        ownerId: owner.id,
+        ownerId: coverOwner.id,
         boardId: latestApi.state!.boardId,
         input: latestInput,
       });
       await upsertCoverRef.current({
         boardId: latestApi.state!.boardId,
-        owner,
+        owner: coverOwner,
         coverImageUrl: generated.url,
       });
       lastCoverSignatureRef.current = signature;
@@ -391,7 +393,7 @@ function BoardRoomSurface({
     } finally {
       if (coverInFlightRef.current === task) coverInFlightRef.current = null;
     }
-  }, [owner]);
+  }, [owner.id, owner.kind]);
 
   useEffect(() => {
     if (!coverSignature) return;
