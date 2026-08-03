@@ -1,6 +1,7 @@
 import {
   boardRoomHref,
   moodBoardOpenSource,
+  recentBoardCommandDescriptor,
   resolveMoodBoardReturnTarget,
   safeMoodBoardReturnPath,
 } from './navigation';
@@ -59,5 +60,25 @@ describe('mood-board room navigation', () => {
   it('normalizes untrusted source tags to direct_url', () => {
     expect(moodBoardOpenSource('command_bar')).toBe('command_bar');
     expect(moodBoardOpenSource('crafted')).toBe('direct_url');
+  });
+
+  it('builds a concrete board command whose match outranks the generic room', () => {
+    const command = recentBoardCommandDescriptor(
+      {
+        id: 'board-1',
+        name: 'Warm modern',
+        ownerName: 'Hale residence',
+        roomName: 'Living room',
+      },
+      '/desk',
+    );
+    expect(command).toMatchObject({
+      key: 'board:board-1',
+      label: 'Board: Warm modern',
+      sub: 'Living room · mood board',
+    });
+    expect(command.match).toContain('board');
+    expect(command.match).toContain('moodboard');
+    expect(command.href).toBe('/board/board-1?source=command_bar&from=%2Fdesk');
   });
 });

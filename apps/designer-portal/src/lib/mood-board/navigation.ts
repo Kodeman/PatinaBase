@@ -7,6 +7,13 @@ export type MoodBoardOpenSource =
   | 'project_surface'
   | 'direct_url';
 
+export interface RecentBoardCommandInput {
+  id: string;
+  name: string;
+  ownerName: string;
+  roomName: string | null;
+}
+
 const SAFE_RETURN_PATH = /^\/(?:desk(?:\/|$)|drafting\/[^/?#]+(?:\/|$)|doc\/[^/?#]+(?:\/|$))/;
 
 /** Strict allow-list for the room's `from` parameter; never an open redirect. */
@@ -34,6 +41,25 @@ export function boardRoomHref(input: {
   const from = safeMoodBoardReturnPath(input.from);
   if (from) query.set('from', from);
   return `/board/${encodeURIComponent(input.boardId)}?${query.toString()}`;
+}
+
+export function recentBoardCommandDescriptor(
+  board: RecentBoardCommandInput,
+  from?: string | null,
+) {
+  return {
+    key: `board:${board.id}`,
+    label: `Board: ${board.name}`,
+    sub: `${board.roomName ?? board.ownerName} · mood board`,
+    match:
+      `board moodboard mood board ${board.name} ${board.ownerName} ${board.roomName ?? ''}`
+        .toLowerCase(),
+    href: boardRoomHref({
+      boardId: board.id,
+      from,
+      source: 'command_bar',
+    }),
+  };
 }
 
 export function resolveMoodBoardReturnTarget(input: {

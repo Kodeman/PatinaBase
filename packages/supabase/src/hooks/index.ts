@@ -1451,6 +1451,9 @@ export {
   useDeleteBoardTemplate,
 } from './use-board-templates';
 export type { BoardTemplate } from './use-board-templates';
+
+export { useRecentBoards } from './use-recent-boards';
+export type { RecentBoard } from './use-recent-boards';
 export {
   useProposalFeedback,
   useClientProposalFeedback,
