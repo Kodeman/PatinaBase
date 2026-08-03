@@ -1436,7 +1436,9 @@ export type {
 // Schedule & Boards Wave 2 · Track C — document shares (C2) + per-line verdicts (C3)
 export {
   useProposalShares,
+  useBoardShares,
   useCreateShare,
+  useCreateBoardShare,
   useRevokeShare,
 } from './use-document-shares';
 export type { DocumentShare, CreatedShare } from './use-document-shares';
