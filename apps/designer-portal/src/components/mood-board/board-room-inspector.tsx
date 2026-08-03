@@ -2,10 +2,12 @@
 
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { resolveMoodBoardGeometry, unionBoardRects } from '@patina/design-system';
-import type { BoardRect, EditableMoodBoardItem } from '@patina/types';
+import type { BoardOwnerRef, BoardRect, EditableMoodBoardItem } from '@patina/types';
 import { Button, Input, Select, Textarea } from '@/components/ui/controls';
 import type { BoardRoomControllerApi } from '@/components/portal/scope-builder/board-room-controller';
 import { BoardImageInspectorActions } from './board-image-inspector-actions';
+import { BoardPaletteInspectorActions } from './board-palette-inspector-actions';
+import { BoardScheduleInspectorAction } from './board-schedule-inspector-action';
 
 const INSPECTOR_WIDTH = 286;
 const INSPECTOR_GAP = 18;
@@ -115,9 +117,17 @@ function NoteDraft({
 
 export function BoardRoomInspector({
   api,
+  owner,
+  scopeRoomId = null,
+  onOpenProduct,
+  onReplaceImage,
   onCommand,
 }: {
   api: BoardRoomControllerApi;
+  owner?: BoardOwnerRef;
+  scopeRoomId?: string | null;
+  onOpenProduct?: (item: EditableMoodBoardItem) => void;
+  onReplaceImage?: (item: EditableMoodBoardItem) => void;
   onCommand?: (kind: 'arrange' | 'content' | 'delete' | 'handle') => void;
 }) {
   const panelRef = useRef<HTMLElement>(null);
@@ -364,6 +374,34 @@ export function BoardRoomInspector({
               onCommand?.('content');
             }}
           />
+
+          <BoardPaletteInspectorActions
+            item={lead}
+            onUpdate={(data) => {
+              api.updateItem(lead.id, { data });
+              onCommand?.('content');
+            }}
+          />
+
+          {owner?.kind === 'proposal' && (lead.type === 'product' || lead.type === 'capture') && (
+            <BoardScheduleInspectorAction
+              proposalId={owner.id}
+              scopeRoomId={scopeRoomId}
+              item={lead}
+            />
+          )}
+
+          {onOpenProduct && lead.productId && (lead.type === 'product' || lead.type === 'capture') && (
+            <Button size="sm" variant="ghost" onClick={() => onOpenProduct(lead)}>
+              Open product
+            </Button>
+          )}
+
+          {onReplaceImage && (lead.type === 'image' || lead.type === 'room_scan') && (
+            <Button size="sm" variant="ghost" onClick={() => onReplaceImage(lead)}>
+              Replace image
+            </Button>
+          )}
 
           {sourceUrl && (
             <a

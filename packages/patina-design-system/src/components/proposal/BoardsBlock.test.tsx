@@ -280,7 +280,11 @@ describe('BoardComposition unified renderer props', () => {
           height: null,
           z_index: 1,
           image_url: 'https://images.example/reference.jpg',
-          data: { section_id: 'seating', resolved_height: 180 },
+          data: {
+            section_id: 'seating',
+            resolved_height: 180,
+            thumbnail_url: 'https://images.example/reference-thumb.jpg',
+          },
         },
         {
           id: 'note-1',
@@ -302,6 +306,16 @@ describe('BoardComposition unified renderer props', () => {
     expect(container.querySelector('[data-composition-section="seating"]')).toBeInTheDocument()
     expect(container.querySelector('[data-composition-section="empty"]')).not.toBeInTheDocument()
     expect(container.querySelector('[data-stacked-section="seating"]')).toHaveTextContent('Seating')
+  })
+
+  it('uses display imagery on the composition canvas and thumbnails in the stacked fallback', () => {
+    const { container } = render(<BoardComposition board={sectionBoard()} />)
+    expect(
+      container.querySelector('[data-board-snapshot-key] img[src="https://images.example/reference.jpg"]'),
+    ).toBeInTheDocument()
+    expect(
+      container.querySelector('img[src="https://images.example/reference-thumb.jpg"]'),
+    ).toBeInTheDocument()
   })
 
   it('honors dimension, fit, full-bleed and background overrides additively', () => {

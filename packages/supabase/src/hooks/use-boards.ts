@@ -299,7 +299,7 @@ export function useBoards(ownerInput: BoardOwnerInput) {
       const { data, error } = await supabase
         .from('proposal_boards')
         .select(
-          '*, proposal_board_items(type, image_url, z_index, verdicts:item_feedback!item_feedback_board_item_id_fkey(id, client_id, verdict, created_at))',
+          '*, proposal_board_items(type, image_url, data, z_index, verdicts:item_feedback!item_feedback_board_item_id_fkey(id, client_id, verdict, created_at))',
         )
         .eq(owner!.kind === 'proposal' ? 'proposal_id' : 'project_id', owner!.id)
         .order('sort_order', { ascending: true })
@@ -320,12 +320,13 @@ export function useBoards(ownerInput: BoardOwnerInput) {
 interface BoardCoverItem extends BoardItemVerdictProjection {
   type: BoardItemType;
   image_url: string | null;
+  data?: unknown;
   z_index: number;
 }
 
 /** Return the first visible pin images in canvas stacking order. */
 export function summarizeBoardCoverUrls(
-  items: Array<{ image_url?: unknown; z_index?: unknown }>,
+  items: Array<{ image_url?: unknown; data?: unknown; z_index?: unknown }>,
   limit = 4,
 ): string[] {
   const safeLimit = Math.max(0, Math.trunc(limit));
@@ -335,9 +336,14 @@ export function summarizeBoardCoverUrls(
       const bZ = typeof b.z_index === 'number' && Number.isFinite(b.z_index) ? b.z_index : 0;
       return aZ - bZ;
     })
-    .flatMap((item) =>
-      typeof item.image_url === 'string' && item.image_url.trim() ? [item.image_url] : [],
-    )
+    .flatMap((item) => {
+      const data = item.data && typeof item.data === 'object'
+        ? item.data as Record<string, unknown>
+        : null;
+      const thumbnail = data?.thumbnail_url;
+      if (typeof thumbnail === 'string' && thumbnail.trim()) return [thumbnail];
+      return typeof item.image_url === 'string' && item.image_url.trim() ? [item.image_url] : [];
+    })
     .slice(0, safeLimit);
 }
 

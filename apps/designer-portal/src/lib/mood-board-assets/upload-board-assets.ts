@@ -44,6 +44,15 @@ export type PrepareBoardImage = (
   options: PrepareBoardImageOptions,
 ) => Promise<PreparedBoardImage>;
 
+export type BoardImageUploadStage = 'preparing' | 'uploading' | 'complete' | 'error';
+
+export interface BoardImageUploadProgress {
+  file: File;
+  index: number;
+  total: number;
+  stage: BoardImageUploadStage;
+}
+
 function safeSegment(value: string, label: string): string {
   if (!/^[A-Za-z0-9_-]+$/.test(value)) {
     throw new Error(`${label} must be a safe storage-path segment`);
@@ -165,15 +174,19 @@ export async function prepareAndUploadBoardImages(options: {
   storage?: BoardAssetStorage;
   createAssetId?: () => string;
   prepare?: PrepareBoardImage;
+  onProgress?: (progress: BoardImageUploadProgress) => void;
 }): Promise<UploadedBoardImage[]> {
   const storage = options.storage ?? createBoardAssetStorage();
   const prepare = options.prepare ?? prepareBoardImage;
   const createAssetId = options.createAssetId ?? randomAssetId;
   const usedIds = new Set<string>();
   const uploaded: UploadedBoardImage[] = [];
+  let activeIndex = -1;
 
   try {
-    for (const file of options.files) {
+    for (const [index, file] of options.files.entries()) {
+      activeIndex = index;
+      options.onProgress?.({ file, index, total: options.files.length, stage: 'preparing' });
       const assetId = createAssetId();
       if (usedIds.has(assetId)) throw new Error('Board asset IDs must be unique per batch');
       usedIds.add(assetId);
@@ -181,6 +194,7 @@ export async function prepareAndUploadBoardImages(options: {
       if (image.assetId !== assetId) {
         throw new Error('Prepared board asset ID does not match its allocation');
       }
+      options.onProgress?.({ file, index, total: options.files.length, stage: 'uploading' });
       uploaded.push(
         await uploadPreparedBoardImage({
           ownerId: options.ownerId,
@@ -189,9 +203,19 @@ export async function prepareAndUploadBoardImages(options: {
           storage,
         }),
       );
+      options.onProgress?.({ file, index, total: options.files.length, stage: 'complete' });
     }
     return uploaded;
   } catch (error) {
+    const failedFile = options.files[activeIndex];
+    if (failedFile) {
+      options.onProgress?.({
+        file: failedFile,
+        index: activeIndex,
+        total: options.files.length,
+        stage: 'error',
+      });
+    }
     const priorPaths = uploaded.flatMap((item) => [
       item.assets.display.path,
       item.assets.thumbnail.path,

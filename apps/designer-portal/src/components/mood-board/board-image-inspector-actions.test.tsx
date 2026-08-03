@@ -33,7 +33,7 @@ const imageItem = {
   locked: false,
   imageUrl: 'https://assets.example/original.jpg',
   content: null,
-  data: {},
+  data: { image_url: 'https://assets.example/original.jpg' },
 };
 
 describe('BoardImageInspectorActions', () => {
@@ -77,7 +77,10 @@ describe('BoardImageInspectorActions', () => {
     await waitFor(() => expect(remove).toHaveBeenCalled());
     expect(onUpdate).toHaveBeenCalledWith('item-1', {
       imageUrl: 'https://assets.example/item-1-cutout.png',
-      data: { original_image_url: 'https://assets.example/original.jpg' },
+      data: {
+        image_url: 'https://assets.example/item-1-cutout.png',
+        original_image_url: 'https://assets.example/original.jpg',
+      },
     });
     expect(screen.getByText('23 studio credits remain this month')).toBeInTheDocument();
   });
@@ -116,6 +119,7 @@ describe('BoardImageInspectorActions', () => {
           ...imageItem,
           imageUrl: 'https://assets.example/item-1-cutout.png',
           data: {
+            image_url: 'https://assets.example/item-1-cutout.png',
             original_image_url: 'https://assets.example/original.jpg',
             thumbnail_url: 'https://assets.example/thumb.jpg',
           },
@@ -127,7 +131,10 @@ describe('BoardImageInspectorActions', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Revert background removal' }));
     expect(onUpdate).toHaveBeenCalledWith('item-1', {
       imageUrl: 'https://assets.example/original.jpg',
-      data: { thumbnail_url: 'https://assets.example/thumb.jpg' },
+      data: {
+        image_url: 'https://assets.example/original.jpg',
+        thumbnail_url: 'https://assets.example/thumb.jpg',
+      },
     });
   });
 

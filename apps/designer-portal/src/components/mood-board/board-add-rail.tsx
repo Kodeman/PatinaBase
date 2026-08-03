@@ -21,6 +21,7 @@ import {
   ProductPickerModal,
   type ProductPickResult,
 } from '@/components/portal/proposals/product-picker-modal';
+import { validateBoardImageFiles } from '@/components/portal/scope-builder/board-room-controller';
 import { prepareAndUploadBoardImages } from '@/lib/mood-board-assets/upload-board-assets';
 import { verdictChipSpec } from '@/lib/document/verdict-chip';
 import { BoardSuggestionsRail } from '@/components/portal/scope-builder/board-suggestions-rail';
@@ -73,6 +74,12 @@ function payloadString(payload: Record<string, unknown>, ...keys: string[]): str
     if (typeof value === 'string' && value.trim()) return value.trim();
   }
   return null;
+}
+
+export function boardItemThumbnail(item: EditableMoodBoardItem): string | null {
+  const thumbnail = item.data?.thumbnail_url;
+  if (typeof thumbnail === 'string' && thumbnail.trim()) return thumbnail;
+  return typeof item.imageUrl === 'string' && item.imageUrl.trim() ? item.imageUrl : null;
 }
 
 export function captureToBoardItem(
@@ -142,11 +149,13 @@ export async function uploadFilesAsBoardItems(options: {
   files: readonly File[];
   point: BoardPoint;
   startZ: number;
+  onProgress?: Parameters<typeof prepareAndUploadBoardImages>[0]['onProgress'];
 }): Promise<EditableMoodBoardItem[]> {
   const uploaded = await prepareAndUploadBoardImages({
     ownerId: options.ownerId,
     boardId: options.boardId,
     files: options.files,
+    onProgress: options.onProgress,
   });
   return uploaded.map((asset, index) => {
     const width = 280;
@@ -547,6 +556,7 @@ export function BoardAddRail({
   owner,
   boardId,
   items,
+  preferenceScope,
   nextPoint,
   nextZ,
   onAddItems,
@@ -555,6 +565,8 @@ export function BoardAddRail({
   owner: BoardOwnerRef;
   boardId: string;
   items: readonly EditableMoodBoardItem[];
+  /** Auth user id; keeps rail preferences isolated on shared browsers. */
+  preferenceScope?: string;
   nextPoint: () => BoardPoint;
   nextZ: () => number;
   onAddItems: (items: readonly EditableMoodBoardItem[], source: BoardAddSource) => void;
@@ -563,6 +575,7 @@ export function BoardAddRail({
   const [tab, setTab] = useState<BoardAddRailTab>('library');
   const [pickerOpen, setPickerOpen] = useState(false);
   const [uploading, setUploading] = useState(false);
+  const [uploadProgress, setUploadProgress] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [captureSearch, setCaptureSearch] = useState('');
   const inputRef = useRef<HTMLInputElement>(null);
@@ -575,12 +588,20 @@ export function BoardAddRail({
       return `${name} ${capture.source_url}`.toLowerCase().includes(term);
     });
   }, [captureSearch, captures]);
+  const uploadedImages = useMemo(
+    () => items.filter((item) => item.type === 'image' && boardItemThumbnail(item)),
+    [items],
+  );
   const proposalId = owner.kind === 'proposal' ? owner.id : undefined;
+  const tabPreferenceKey = preferenceScope
+    ? `${BOARD_RAIL_TAB_KEY}:${preferenceScope}`
+    : null;
   const suggestionItems = useMemo(() => suggestionRows(boardId, items), [boardId, items]);
 
   useEffect(() => {
+    if (!tabPreferenceKey) return;
     try {
-      const persisted = window.localStorage.getItem(BOARD_RAIL_TAB_KEY);
+      const persisted = window.localStorage.getItem(tabPreferenceKey);
       if (
         persisted === 'library' ||
         persisted === 'captures' ||
@@ -590,16 +611,19 @@ export function BoardAddRail({
         persisted === 'feedback'
       ) {
         setTab(persisted);
+      } else {
+        setTab('library');
       }
     } catch {
       // Storage is an enhancement; private browsing must not break the rail.
     }
-  }, []);
+  }, [tabPreferenceKey]);
 
   const selectTab = (next: BoardAddRailTab) => {
     setTab(next);
+    if (!tabPreferenceKey) return;
     try {
-      window.localStorage.setItem(BOARD_RAIL_TAB_KEY, next);
+      window.localStorage.setItem(tabPreferenceKey, next);
     } catch {
       // Keep the in-memory selection when storage is unavailable.
     }
@@ -611,6 +635,13 @@ export function BoardAddRail({
 
   const upload = async (files: readonly File[]) => {
     if (files.length === 0) return;
+    try {
+      validateBoardImageFiles(files);
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : 'Choose PNG, JPEG, WebP, GIF, or AVIF images up to 20MB.');
+      if (inputRef.current) inputRef.current.value = '';
+      return;
+    }
     setUploading(true);
     setError(null);
     try {
@@ -620,12 +651,16 @@ export function BoardAddRail({
         files,
         point: nextPoint(),
         startZ: nextZ(),
+        onProgress: ({ file, index, total, stage }) => {
+          setUploadProgress(`${index + 1}/${total} · ${file.name} · ${stage}`);
+        },
       });
       onAddItems(items, 'file_drop');
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : 'The image could not be uploaded.');
     } finally {
       setUploading(false);
+      setUploadProgress(null);
       if (inputRef.current) inputRef.current.value = '';
     }
   };
@@ -748,6 +783,51 @@ export function BoardAddRail({
             <Button variant="secondary" size="sm" disabled={uploading} onClick={() => inputRef.current?.click()}>
               {uploading ? 'Preparing images…' : 'Choose images'}
             </Button>
+            {uploadProgress && <p role="status" className="text-[11px] text-[var(--text-muted)]">{uploadProgress}</p>}
+            {uploadedImages.length > 0 && (
+              <div className="space-y-2 border-t border-[var(--border-default)] pt-3">
+                <p className="font-mono text-[8px] uppercase tracking-[0.04em] text-[var(--text-muted)]">
+                  Uploaded images
+                </p>
+                <div className="grid grid-cols-2 gap-2">
+                  {uploadedImages.map((item, index) => {
+                    const thumbnail = boardItemThumbnail(item)!;
+                    const label = payloadString(item.data ?? {}, 'name', 'title') ?? `Upload ${index + 1}`;
+                    return (
+                      <button
+                        key={item.id}
+                        type="button"
+                        draggable
+                        title={label}
+                        onClick={() => {
+                          const point = nextPoint();
+                          onAddItems([{
+                            ...item,
+                            id: newItemId(),
+                            x: point.x,
+                            y: point.y,
+                            zIndex: nextZ(),
+                            locked: false,
+                            data: item.data ? { ...item.data } : {},
+                          }], 'rail_click');
+                        }}
+                        onDragStart={(event) => beginRailDrag(event, owner, boardId, {
+                          ...item,
+                          x: 0,
+                          y: 0,
+                          zIndex: 0,
+                        })}
+                        className="overflow-hidden rounded-[4px] border border-[var(--border-default)] text-left hover:border-[var(--color-clay)]"
+                      >
+                        {/* eslint-disable-next-line @next/next/no-img-element */}
+                        <img src={thumbnail} alt="" className="aspect-[4/3] w-full object-cover" />
+                        <span className="block truncate px-2 py-1.5 text-[10px]">{label}</span>
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
           </div>
         )}
 

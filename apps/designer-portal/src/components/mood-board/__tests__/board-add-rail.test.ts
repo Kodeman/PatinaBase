@@ -1,6 +1,6 @@
 import type { ProposalCapture } from '@patina/supabase';
 import type { ProductPickResult } from '@/components/portal/proposals/product-picker-modal';
-import { captureToBoardItem, productPickToBoardItem } from '../board-add-rail';
+import { boardItemThumbnail, captureToBoardItem, productPickToBoardItem } from '../board-add-rail';
 
 describe('mood-board add rail item provenance', () => {
   it('keeps extension capture lineage and source metadata on the canvas item', () => {
@@ -55,5 +55,21 @@ describe('mood-board add rail item provenance', () => {
         captureId: 'capture-2',
       }),
     );
+  });
+
+  it('uses the bounded thumbnail in rail cards and falls back for legacy pins', () => {
+    const base = {
+      id: 'image-1',
+      type: 'image' as const,
+      x: 0,
+      y: 0,
+      width: 240,
+      imageUrl: 'https://images.example/display.webp',
+    };
+    expect(boardItemThumbnail({
+      ...base,
+      data: { thumbnail_url: 'https://images.example/thumb.webp' },
+    })).toBe('https://images.example/thumb.webp');
+    expect(boardItemThumbnail(base)).toBe('https://images.example/display.webp');
   });
 });

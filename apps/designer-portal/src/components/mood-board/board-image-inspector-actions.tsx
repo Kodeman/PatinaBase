@@ -78,6 +78,7 @@ export function BoardImageInspectorActions({
         onClick={() => {
           const nextData = { ...(item.data ?? {}) };
           delete nextData.original_image_url;
+          nextData.image_url = originalUrl;
           onUpdate(item.id, { imageUrl: originalUrl, data: nextData });
         }}
       >
@@ -107,6 +108,7 @@ export function BoardImageInspectorActions({
         imageUrl: result.cutoutUrl,
         data: {
           ...(item.data ?? {}),
+          image_url: result.cutoutUrl,
           original_image_url: result.originalUrl,
         },
       });

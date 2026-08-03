@@ -32,6 +32,7 @@ const rows = [
       },
       {
         image_url: 'https://images.example/first.jpg',
+        data: { thumbnail_url: 'https://images.example/first-thumb.jpg' },
         z_index: 1,
         verdicts: [],
       },
@@ -95,7 +96,7 @@ describe('useRecentBoards', () => {
         ownerName: 'Hale proposal',
         roomName: 'Living room',
         coverFallbackUrls: [
-          'https://images.example/first.jpg',
+          'https://images.example/first-thumb.jpg',
           'https://images.example/second.jpg',
         ],
         verdictCounts: { approved: 1, rejected: 0, comment: 0, total: 1 },

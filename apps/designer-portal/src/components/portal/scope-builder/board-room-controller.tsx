@@ -1484,7 +1484,7 @@ function BoardRoomContextMenu({
       action: () => api.setItemsSectionMembership(api.selectedItemIds, section.id),
     })),
     { label: 'Remove from section', action: () => api.setItemsSectionMembership(api.selectedItemIds, null) },
-    { label: 'Send to schedule', action: () => lead && onSendToSchedule?.(lead), hidden: !lead || !onSendToSchedule },
+    { label: 'Send to schedule', action: () => lead && onSendToSchedule?.(lead), hidden: !lead || !onSendToSchedule || !['product', 'capture'].includes(lead.type) },
     { label: 'Open product', action: () => lead && onOpenProduct?.(lead), hidden: !lead || !onOpenProduct || !['product', 'capture'].includes(lead.type) },
     { label: 'Replace image', action: () => lead && onReplaceImage?.(lead), hidden: !lead || !onReplaceImage || !['image', 'room_scan'].includes(lead.type) },
   ].filter((entry) => !entry.hidden);

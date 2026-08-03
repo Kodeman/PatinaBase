@@ -20,15 +20,19 @@ import {
 } from '@patina/design-system';
 import type { BoardOwnerRef, BoardPoint, EditableMoodBoardItem } from '@patina/types';
 import {
+  useAddProposalItem,
+  useBoard,
   useBoardFeedback,
   useProject,
   useProposal,
+  useProposalScheduleItems,
   useUpsertBoard,
   type ItemFeedback,
 } from '@patina/supabase';
 import { Button, Input } from '@/components/ui/controls';
 import {
   BoardRoomController,
+  validateBoardImageFiles,
   type BoardRoomControllerApi,
   type BoardRoomCommandCommittedEvent,
   type BoardRoomUrlPasteControls,
@@ -44,18 +48,22 @@ import {
   resolveMoodBoardReturnTarget,
 } from '@/lib/mood-board/navigation';
 import { useMoodBoardUrlUnfurl } from '@/hooks/use-mood-board-url-unfurl';
+import { useAuth } from '@/hooks/use-auth';
 import {
   buildMoodBoardUrlFallbackNote,
   buildMoodBoardUrlPlaceholder,
   buildResolvedMoodBoardUrlItem,
 } from '@/lib/mood-board/url-unfurl';
 import { generateAndUploadMoodBoardCover } from '@/lib/mood-board-assets/board-cover';
+import { prepareAndUploadBoardImages } from '@/lib/mood-board-assets/upload-board-assets';
+import { buildSendToScheduleArgs, findScheduleTwin } from '@/lib/scope/board-schedule';
 import { BoardAddRail, uploadFilesAsBoardItems, type BoardAddSource } from './board-add-rail';
 import { BoardRoomInspector } from './board-room-inspector';
 import { BoardRoomSectionsMenu } from './board-room-sections-menu';
 import { BoardShareDialog } from './board-share-dialog';
 import { BoardExportDialog } from './board-export-dialog';
 import { BoardTemplateDialog } from './board-template-dialog';
+import { scheduleSnapshotForBoardItem } from './board-schedule-inspector-action';
 import {
   BOARD_ROOM_DEFAULT_TIDY_GAP,
   BOARD_ROOM_MAX_TIDY_GAP,
@@ -210,6 +218,12 @@ interface TidySpacingSession {
   committedAt: number;
 }
 
+interface BoardRoomItemActions {
+  sendToSchedule: (item: EditableMoodBoardItem) => void;
+  openProduct: (item: EditableMoodBoardItem) => void;
+  replaceImage: (item: EditableMoodBoardItem) => void;
+}
+
 function isTextEntryTarget(target: EventTarget | null): boolean {
   return target instanceof HTMLElement && (
     target.matches('input, textarea, select') || target.isContentEditable
@@ -225,6 +239,8 @@ function BoardRoomSurface({
   deleteGuardRef,
   metricsRef,
   lastCommand,
+  itemActionsRef,
+  dropUploadProgress,
 }: {
   api: BoardRoomControllerApi;
   owner: BoardOwnerRef;
@@ -234,21 +250,30 @@ function BoardRoomSurface({
   deleteGuardRef: MutableRefObject<((items: readonly EditableMoodBoardItem[]) => boolean) | null>;
   metricsRef: MutableRefObject<SessionMetrics>;
   lastCommand: BoardRoomCommandCommittedEvent | null;
+  itemActionsRef: MutableRefObject<BoardRoomItemActions | null>;
+  dropUploadProgress: string | null;
 }) {
   const router = useRouter();
+  const { user } = useAuth();
   const rootRef = useRef<HTMLElement | null>(null);
   const workspaceRef = useRef<HTMLDivElement>(null);
+  const replaceInputRef = useRef<HTMLInputElement>(null);
+  const replaceTargetIdRef = useRef<string | null>(null);
   const [railCollapsed, setRailCollapsed] = useState(false);
   const [shareOpen, setShareOpen] = useState(false);
   const [exportOpen, setExportOpen] = useState(false);
   const [templateOpen, setTemplateOpen] = useState(false);
   const [surfaceError, setSurfaceError] = useState<string | null>(null);
+  const [surfaceNotice, setSurfaceNotice] = useState<string | null>(null);
   const [showGrid, setShowGrid] = useState(false);
   const [snapToGrid, setSnapToGrid] = useState(false);
   const [tidySession, setTidySession] = useState<TidySpacingSession | null>(null);
   const upsertBoard = useUpsertBoard();
+  const boardQuery = useBoard(api.state?.boardId);
   const proposalQuery = useProposal(owner.kind === 'proposal' ? owner.id : '');
   const projectQuery = useProject(owner.kind === 'project' ? owner.id : '');
+  const scheduleQuery = useProposalScheduleItems(owner.kind === 'proposal' ? owner.id : undefined);
+  const addScheduleItem = useAddProposalItem();
   const feedbackQuery = useBoardFeedback(owner.kind === 'proposal' ? owner.id : undefined);
   const feedback = feedbackQuery.data ?? [];
   const feedbackByItem = useMemo(() => latestFeedback(feedback), [feedback]);
@@ -262,6 +287,10 @@ function BoardRoomSurface({
   const coverInFlightRef = useRef<Promise<void> | null>(null);
   const latestApiRef = useRef(api);
   const upsertCoverRef = useRef(upsertBoard.mutateAsync);
+  const preferenceScope = user?.id;
+  const railPreferenceKey = preferenceScope ? `${RAIL_COLLAPSED_KEY}:${preferenceScope}` : null;
+  const gridPreferenceKey = preferenceScope ? `${GRID_VISIBLE_KEY}:${preferenceScope}` : null;
+  const snapPreferenceKey = preferenceScope ? `${SNAP_TO_GRID_KEY}:${preferenceScope}` : null;
   latestApiRef.current = api;
   upsertCoverRef.current = upsertBoard.mutateAsync;
 
@@ -326,22 +355,25 @@ function BoardRoomSurface({
   useBoardRoomBoundary(rootRef);
 
   useEffect(() => {
+    if (!railPreferenceKey || !gridPreferenceKey || !snapPreferenceKey) return;
     try {
-      setRailCollapsed(window.localStorage.getItem(RAIL_COLLAPSED_KEY) === 'true');
-      setShowGrid(window.localStorage.getItem(GRID_VISIBLE_KEY) === 'true');
-      setSnapToGrid(window.localStorage.getItem(SNAP_TO_GRID_KEY) === 'true');
+      setRailCollapsed(window.localStorage.getItem(railPreferenceKey) === 'true');
+      setShowGrid(window.localStorage.getItem(gridPreferenceKey) === 'true');
+      setSnapToGrid(window.localStorage.getItem(snapPreferenceKey) === 'true');
     } catch {
       // Local persistence is optional.
     }
-  }, []);
+  }, [gridPreferenceKey, railPreferenceKey, snapPreferenceKey]);
 
   const toggleRail = () => {
     setRailCollapsed((current) => {
       const next = !current;
-      try {
-        window.localStorage.setItem(RAIL_COLLAPSED_KEY, String(next));
-      } catch {
-        // Keep the current-session preference.
+      if (railPreferenceKey) {
+        try {
+          window.localStorage.setItem(railPreferenceKey, String(next));
+        } catch {
+          // Keep the current-session preference.
+        }
       }
       return next;
     });
@@ -350,17 +382,101 @@ function BoardRoomSurface({
   const toggleGrid = () => {
     setShowGrid((current) => {
       const next = !current;
-      try { window.localStorage.setItem(GRID_VISIBLE_KEY, String(next)); } catch { /* optional */ }
+      if (gridPreferenceKey) {
+        try { window.localStorage.setItem(gridPreferenceKey, String(next)); } catch { /* optional */ }
+      }
       return next;
     });
   };
   const toggleSnap = () => {
     setSnapToGrid((current) => {
       const next = !current;
-      try { window.localStorage.setItem(SNAP_TO_GRID_KEY, String(next)); } catch { /* optional */ }
+      if (snapPreferenceKey) {
+        try { window.localStorage.setItem(snapPreferenceKey, String(next)); } catch { /* optional */ }
+      }
       return next;
     });
   };
+
+  const sendToSchedule = useCallback(async (item: EditableMoodBoardItem) => {
+    if (owner.kind !== 'proposal' || (item.type !== 'product' && item.type !== 'capture')) return;
+    setSurfaceNotice(null);
+    setSurfaceError(null);
+    try {
+      const refreshed = await scheduleQuery.refetch();
+      if (refreshed.error) throw refreshed.error;
+      const lines = refreshed.data ?? [];
+      const snapshot = scheduleSnapshotForBoardItem(item);
+      const scopeRoomId = boardQuery.data?.scope_room_id ?? null;
+      const twin = findScheduleTwin(lines, snapshot.productId, scopeRoomId);
+      if (twin) {
+        setSurfaceNotice(`Already on the schedule${twin.doc_code ? ` · ${twin.doc_code}` : ''}`);
+        return;
+      }
+      const args = buildSendToScheduleArgs({
+        proposalId: owner.id,
+        snap: snapshot,
+        boardScopeRoomId: scopeRoomId,
+        existingCodes: lines.map((line) => line.doc_code),
+      });
+      await addScheduleItem.mutateAsync(args);
+      setSurfaceNotice(`Added to the schedule · ${args.docCode}`);
+    } catch (cause) {
+      setSurfaceError(cause instanceof Error ? cause.message : 'Could not add this pin to the schedule.');
+    }
+  }, [addScheduleItem, boardQuery.data?.scope_room_id, owner, scheduleQuery]);
+
+  const openProduct = useCallback((item: EditableMoodBoardItem) => {
+    if (!item.productId) return;
+    window.open(`/library/${encodeURIComponent(item.productId)}`, '_blank', 'noopener,noreferrer');
+  }, []);
+
+  const replaceImage = useCallback((item: EditableMoodBoardItem) => {
+    if (item.type !== 'image' && item.type !== 'room_scan') return;
+    replaceTargetIdRef.current = item.id;
+    replaceInputRef.current?.click();
+  }, []);
+
+  const uploadReplacement = useCallback(async (file: File) => {
+    const itemId = replaceTargetIdRef.current;
+    replaceTargetIdRef.current = null;
+    if (!itemId || !api.state) return;
+    setSurfaceNotice(null);
+    setSurfaceError(null);
+    try {
+      validateBoardImageFiles([file]);
+      const [asset] = await prepareAndUploadBoardImages({
+        ownerId: owner.id,
+        boardId: api.state.boardId,
+        files: [file],
+      });
+      if (!asset) throw new Error('The replacement image was not created.');
+      const current = api.state.items.find((item) => item.id === itemId);
+      if (!current) throw new Error('That pin is no longer on the board.');
+      const data = {
+        ...(current.data ?? {}),
+        image_url: asset.image_url,
+        thumbnail_url: asset.data.thumbnail_url,
+      };
+      delete data.original_image_url;
+      api.updateItem(itemId, { imageUrl: asset.image_url, data });
+      setSurfaceNotice('Image replaced.');
+    } catch (cause) {
+      setSurfaceError(cause instanceof Error ? cause.message : 'The image could not be replaced.');
+    }
+  }, [api, owner.id]);
+
+  useEffect(() => {
+    const handlers: BoardRoomItemActions = {
+      sendToSchedule: (item) => { void sendToSchedule(item); },
+      openProduct,
+      replaceImage,
+    };
+    itemActionsRef.current = handlers;
+    return () => {
+      if (itemActionsRef.current === handlers) itemActionsRef.current = null;
+    };
+  }, [itemActionsRef, openProduct, replaceImage, sendToSchedule]);
 
   useEffect(() => {
     if (!api.state || openedRef.current) return;
@@ -705,6 +821,39 @@ function BoardRoomSurface({
         </div>
       )}
 
+      {surfaceNotice && !surfaceError && !api.persistenceError && (
+        <div role="status" className="relative z-40 flex shrink-0 items-center justify-between gap-3 border-b border-[var(--border-default)] bg-[var(--bg-surface)] px-4 py-2 text-[11px] text-[var(--text-muted)]">
+          <span>{surfaceNotice}</span>
+          <button
+            type="button"
+            aria-label="Dismiss board notice"
+            className="min-h-9 shrink-0 font-mono text-[9px] uppercase"
+            onClick={() => setSurfaceNotice(null)}
+          >
+            Dismiss
+          </button>
+        </div>
+      )}
+
+      {dropUploadProgress && (
+        <div role="status" className="relative z-40 shrink-0 border-b border-[var(--border-default)] bg-[var(--bg-surface)] px-4 py-2 text-[11px] text-[var(--text-muted)]">
+          Uploading {dropUploadProgress}
+        </div>
+      )}
+
+      <input
+        ref={replaceInputRef}
+        type="file"
+        accept="image/*"
+        className="hidden"
+        aria-label="Choose replacement image"
+        onChange={(event) => {
+          const file = event.currentTarget.files?.[0];
+          if (file) void uploadReplacement(file);
+          event.currentTarget.value = '';
+        }}
+      />
+
       <div className="flex min-h-0 flex-1 flex-col md:flex-row">
         {api.mode === 'edit' && !railCollapsed && (
           <aside className="flex max-h-48 w-full shrink-0 flex-col border-b border-[var(--border-default)] bg-[var(--bg-surface)] md:max-h-none md:w-[264px] md:border-b-0 md:border-r">
@@ -712,6 +861,7 @@ function BoardRoomSurface({
               owner={owner}
               boardId={state.boardId}
               items={state.items}
+              preferenceScope={preferenceScope}
               nextPoint={nextPoint}
               nextZ={nextZ}
               onAddItems={addFromRail}
@@ -779,7 +929,13 @@ function BoardRoomSurface({
               className="h-full min-h-0"
             />
           )}
-          <BoardRoomInspector api={api} />
+          <BoardRoomInspector
+            api={api}
+            owner={owner}
+            scopeRoomId={boardQuery.data?.scope_room_id ?? null}
+            onOpenProduct={openProduct}
+            onReplaceImage={replaceImage}
+          />
         </div>
       </div>
 
@@ -828,9 +984,11 @@ export function MoodBoardRoom({
   boardId: string;
 }) {
   const apiRef = useRef<BoardRoomControllerApi | null>(null);
+  const itemActionsRef = useRef<BoardRoomItemActions | null>(null);
   const exitHandlerRef = useRef<(() => Promise<void>) | null>(null);
   const deleteGuardRef = useRef<((items: readonly EditableMoodBoardItem[]) => boolean) | null>(null);
   const unfurl = useMoodBoardUrlUnfurl();
+  const [dropUploadProgress, setDropUploadProgress] = useState<string | null>(null);
   const metricsRef = useRef<SessionMetrics>({
     commands: 0,
     usedUndo: false,
@@ -924,14 +1082,20 @@ export function MoodBoardRoom({
     if (!api?.state) return;
     if (commit.files.length > 0) {
       const startZ = Math.max(-1, ...api.state.items.map((item) => item.zIndex ?? 0)) + 1;
-      const items = await uploadFilesAsBoardItems({
-        ownerId: owner.id,
-        boardId,
-        files: commit.files,
-        point: { x: commit.point.x - 140, y: commit.point.y - 100 },
-        startZ,
-      });
-      return items;
+      try {
+        return await uploadFilesAsBoardItems({
+          ownerId: owner.id,
+          boardId,
+          files: commit.files,
+          point: { x: commit.point.x - 140, y: commit.point.y - 100 },
+          startZ,
+          onProgress: ({ file, index, total, stage }) => {
+            setDropUploadProgress(`${index + 1}/${total} · ${file.name} · ${stage}`);
+          },
+        });
+      } finally {
+        setDropUploadProgress(null);
+      }
     }
     const railEnvelope = commit.dataTransfer.getData(BOARD_ROOM_CLIPBOARD_MIME);
     if (railEnvelope) {
@@ -983,6 +1147,9 @@ export function MoodBoardRoom({
       onItemsDropped={dropped}
       onPasteImages={pasteImages}
       onPasteUrl={resolveUrl}
+      onSendToSchedule={(item) => itemActionsRef.current?.sendToSchedule(item)}
+      onOpenProduct={(item) => itemActionsRef.current?.openProduct(item)}
+      onReplaceImage={(item) => itemActionsRef.current?.replaceImage(item)}
       onBeforeDelete={(items) => deleteGuardRef.current?.(items) ?? owner.kind !== 'proposal'}
       onItemsAdded={observeItemsAdded}
       onCommandCommitted={observeCommand}
@@ -999,6 +1166,8 @@ export function MoodBoardRoom({
             deleteGuardRef={deleteGuardRef}
             metricsRef={metricsRef}
             lastCommand={lastCommandRef.current}
+            itemActionsRef={itemActionsRef}
+            dropUploadProgress={dropUploadProgress}
           />
         );
       }}

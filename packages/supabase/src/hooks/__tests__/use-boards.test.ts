@@ -431,7 +431,12 @@ describe('summarizeBoard', () => {
       [
         { type: 'product', image_url: 'product.jpg', z_index: 0 },
         { type: 'image', image_url: 'top.jpg', z_index: 5 },
-        { type: 'image', image_url: 'bottom.jpg', z_index: 1 },
+        {
+          type: 'image',
+          image_url: 'bottom.jpg',
+          data: { thumbnail_url: 'bottom-thumb.jpg' },
+          z_index: 1,
+        },
         { type: 'capture', image_url: 'material.jpg', z_index: 3 },
         { type: 'product', image_url: 'fifth.jpg', z_index: 9 },
       ],
@@ -440,7 +445,7 @@ describe('summarizeBoard', () => {
     expect(summary.cover_fallback_url).toBe('product.jpg');
     expect(summary.cover_fallback_urls).toEqual([
       'product.jpg',
-      'bottom.jpg',
+      'bottom-thumb.jpg',
       'material.jpg',
       'top.jpg',
     ]);

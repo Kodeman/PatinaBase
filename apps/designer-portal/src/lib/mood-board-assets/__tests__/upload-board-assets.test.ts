@@ -152,4 +152,32 @@ describe('canonical mood-board asset upload', () => {
     ).rejects.toThrow('Prepared board asset ID does not match its allocation');
     expect(bucket.upload).not.toHaveBeenCalled();
   });
+
+  it('reports per-file preparation, upload, and completion progress', async () => {
+    const bucket = storage();
+    const file = new File(['original'], 'source.jpg', { type: 'image/jpeg' });
+    const onProgress = jest.fn();
+
+    await prepareAndUploadBoardImages({
+      ownerId: 'owner-id',
+      boardId: 'board-id',
+      files: [file],
+      storage: bucket,
+      createAssetId: () => 'asset-id',
+      prepare: jest.fn().mockResolvedValue(prepared('asset-id')),
+      onProgress,
+    });
+
+    expect(onProgress.mock.calls.map(([progress]) => progress.stage)).toEqual([
+      'preparing',
+      'uploading',
+      'complete',
+    ]);
+    expect(onProgress).toHaveBeenLastCalledWith({
+      file,
+      index: 0,
+      total: 1,
+      stage: 'complete',
+    });
+  });
 });

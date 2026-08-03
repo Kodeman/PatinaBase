@@ -745,10 +745,16 @@ function StackedBoardItems({
                 return frame(<ProductTile item={item} mode={mode} />)
               case 'image':
               case 'room_scan': {
-                if (!item.image_url) return null
+                const itemData = item.data && typeof item.data === 'object' && !Array.isArray(item.data)
+                  ? item.data as Record<string, unknown>
+                  : null
+                const thumbnailUrl = typeof itemData?.thumbnail_url === 'string' && itemData.thumbnail_url.trim()
+                  ? itemData.thumbnail_url
+                  : item.image_url
+                if (!thumbnailUrl) return null
                 return frame(
                   // eslint-disable-next-line @next/next/no-img-element
-                  <img src={item.image_url} alt="" className="h-full w-full object-contain" />,
+                  <img src={thumbnailUrl} alt="" className="h-full w-full object-contain" />,
                   'overflow-hidden rounded-sm',
                   {
                     aspectRatio: '4 / 3',
