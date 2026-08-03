@@ -214,6 +214,16 @@ export const queryKeys = {
     detail: (id: string) => [...queryKeys.proposals.all, id] as const,
   },
 
+  // Mood-board media assets. Board data itself keeps the package-owned
+  // ['board', id] keys; this namespace is for derived media capabilities.
+  moodBoardAssets: {
+    all: ['mood-board-assets'] as const,
+    board: (boardId: string | null) =>
+      [...queryKeys.moodBoardAssets.all, boardId] as const,
+    backgroundRemovalCapability: (boardId: string | null) =>
+      [...queryKeys.moodBoardAssets.board(boardId), 'background-removal-capability'] as const,
+  },
+
   // Clients
   clients: {
     all: ['clients'] as const,
