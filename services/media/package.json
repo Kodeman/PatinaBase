@@ -21,6 +21,7 @@
     "test:e2e": "jest --config ./test/jest-e2e.json",
     "prisma:generate": "prisma generate",
     "prisma:migrate": "prisma migrate dev",
+    "prisma:deploy": "./scripts/migrate-deploy.sh",
     "prisma:studio": "prisma studio",
     "worker:transform": "node dist/workers/transform-worker.js",
     "worker:3d": "node dist/workers/3d-worker.js",

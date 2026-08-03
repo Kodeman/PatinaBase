@@ -26,6 +26,14 @@ The approved non-secret bindings are `BACKGROUND_REMOVAL_PROVIDER=remove_bg`, `B
 
 ## Schema release gate
 
-Apply the committed Prisma migration from `services/media/prisma/migrations` against the production `svc_media` direct/session connection before deploying the changed container. Do not use `prisma db push` in production. The container image includes the migration source for provenance, but its startup path intentionally does not mutate the database.
+Apply the committed Prisma migrations against the production `svc_media` direct/session connection before deploying the changed container:
+
+```bash
+DATABASE_URL='...?...&schema=svc_media' \
+DIRECT_URL='...?...&schema=svc_media' \
+pnpm --filter @patina/media prisma:deploy
+```
+
+The guarded command verifies the legacy schema created by `supabase/migrations/00053_svc_media_schema.sql`, records that exact schema as the one-time Prisma baseline when needed, rejects partial background-removal state, deploys pending migrations, and verifies the resulting objects. Do not use `prisma db push` in production. The container image includes the migration source for provenance, but its startup path intentionally does not mutate the database.
 
 After a reviewed release, verify the schema object, authenticated capability behavior, a successful idempotent replay, foreign-board 404 behavior, and the latest Cloudflare deployment entry. `/version` is a static fallback and is not deployment evidence.
