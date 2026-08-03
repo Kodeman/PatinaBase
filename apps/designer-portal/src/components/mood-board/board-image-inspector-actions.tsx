@@ -6,17 +6,15 @@ import {
   useBackgroundRemovalCapability,
   useRemoveBoardItemBackground,
 } from '@/hooks/use-background-removal';
-import { BackgroundRemovalClientError } from '@/lib/mood-board-assets/background-removal-client';
+import {
+  backgroundRemovalIdempotencyKey,
+  BackgroundRemovalClientError,
+} from '@/lib/mood-board-assets/background-removal-client';
 import { moodBoardEvents } from '@/lib/analytics/mood-board-events';
 
 export interface BoardImagePatch {
   imageUrl?: string | null;
   data?: Record<string, unknown>;
-}
-
-function idempotencyKey(): string {
-  if (globalThis.crypto?.randomUUID) return globalThis.crypto.randomUUID();
-  return `bg-${Date.now()}-${Math.random().toString(36).slice(2)}`;
 }
 
 function originalImageUrl(item: EditableMoodBoardItem): string | null {
@@ -26,10 +24,28 @@ function originalImageUrl(item: EditableMoodBoardItem): string | null {
 
 function readableError(cause: unknown): string {
   if (cause instanceof BackgroundRemovalClientError && cause.code === 'background_removal_limit_reached') {
+    const limit = cause.details?.limit;
+    const scope = cause.details?.scope;
+    const cap = typeof limit === 'number'
+      ? scope === 'studio_monthly'
+        ? `${limit} per studio/month`
+        : scope === 'global_daily'
+          ? `${limit} globally/day`
+          : `cap ${limit}`
+      : null;
     const reset = cause.details?.resetAt;
-    return reset
-      ? `Background-removal limit reached. It resets ${new Intl.DateTimeFormat('en-US', { month: 'short', day: 'numeric' }).format(new Date(reset))}.`
-      : 'Background-removal limit reached.';
+    const resetDate = reset ? new Date(reset) : null;
+    const formattedReset = resetDate && Number.isFinite(resetDate.getTime())
+      ? new Intl.DateTimeFormat('en-US', {
+          month: 'short',
+          day: 'numeric',
+          timeZone: 'UTC',
+        }).format(resetDate)
+      : null;
+    return [
+      `Background-removal limit reached${cap ? ` (${cap})` : ''}.`,
+      formattedReset ? `It resets ${formattedReset}.` : null,
+    ].filter(Boolean).join(' ');
   }
   return cause instanceof Error ? cause.message : 'The background could not be removed.';
 }
@@ -77,10 +93,15 @@ export function BoardImageInspectorActions({
   const handleRemove = async () => {
     const started = performance.now();
     try {
+      if (!item.imageUrl) return;
       const result = await removeBackground.mutateAsync({
         boardId,
         itemId: item.id,
-        idempotencyKey: idempotencyKey(),
+        idempotencyKey: await backgroundRemovalIdempotencyKey({
+          boardId,
+          itemId: item.id,
+          sourceUrl: item.imageUrl,
+        }),
       });
       onUpdate(item.id, {
         imageUrl: result.cutoutUrl,

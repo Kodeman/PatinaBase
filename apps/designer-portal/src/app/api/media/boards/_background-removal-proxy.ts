@@ -7,6 +7,13 @@ import {
 
 const MEDIA_SERVICE_URL = process.env.MEDIA_SERVICE_URL || 'http://localhost:3014';
 
+// The media service permits three redirects (four total hops), each with
+// separate 10s DNS and transfer deadlines, then allows 30s at the vendor and
+// 15s on each of two storage operations. Keep the portal's single,
+// non-retried write alive beyond that 140s default budget so it cannot
+// manufacture an ambiguous timeout while paid work completes.
+const BACKGROUND_REMOVAL_WRITE_TIMEOUT_MS = 180_000;
+
 type BackgroundRemovalOperation = 'capability' | 'mutation';
 
 function jsonResponse(payload: unknown, status: number): Response {
@@ -99,7 +106,7 @@ export async function proxyBackgroundRemoval(
       ? {
           forwardHeaders: ['idempotency-key'],
           retry: { maxRetries: 0, shouldRetryMutation: false },
-          timeout: { write: 45_000 },
+          timeout: { write: BACKGROUND_REMOVAL_WRITE_TIMEOUT_MS },
         }
       : {
           retry: { maxRetries: 2 },

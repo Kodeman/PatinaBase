@@ -109,6 +109,7 @@ describe('designer background-removal proxies', () => {
       requireAuth: true,
       forwardHeaders: ['idempotency-key'],
       retry: { maxRetries: 0, shouldRetryMutation: false },
+      timeout: { write: 180_000 },
     });
   });
 

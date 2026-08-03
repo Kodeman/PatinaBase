@@ -2,6 +2,7 @@
  * @jest-environment node
  */
 import {
+  backgroundRemovalIdempotencyKey,
   BackgroundRemovalClientError,
   getBackgroundRemovalCapability,
   removeBoardItemBackground,
@@ -13,6 +14,26 @@ describe('background-removal client', () => {
   beforeEach(() => {
     fetchMock.mockReset();
     global.fetch = fetchMock;
+  });
+
+  it('derives a stable retry key from board, item, and source identity', async () => {
+    const input = {
+      boardId: 'board-id',
+      itemId: 'item-id',
+      sourceUrl: 'https://assets.example/source.webp',
+    };
+
+    const first = await backgroundRemovalIdempotencyKey(input);
+    const retry = await backgroundRemovalIdempotencyKey(input);
+    const replacement = await backgroundRemovalIdempotencyKey({
+      ...input,
+      sourceUrl: 'https://assets.example/replacement.webp',
+    });
+
+    expect(retry).toBe(first);
+    expect(replacement).not.toBe(first);
+    expect(first).toMatch(/^moodboard-bg:[a-f0-9]{16,32}$/);
+    expect(first.length).toBeLessThanOrEqual(128);
   });
 
   it('unwraps the authenticated portal capability response', async () => {

@@ -32,6 +32,52 @@ export class BackgroundRemovalClientError extends Error {
   }
 }
 
+function fallbackFingerprint(value: string): string {
+  // Two independently seeded FNV-1a passes keep retries deterministic in
+  // older WebViews without Web Crypto. This is a uniqueness key, not a
+  // security boundary; modern browsers use SHA-256 below.
+  const hash = (seed: number): string => {
+    let current = seed >>> 0;
+    for (let index = 0; index < value.length; index += 1) {
+      current ^= value.charCodeAt(index);
+      current = Math.imul(current, 0x01000193) >>> 0;
+    }
+    return current.toString(16).padStart(8, '0');
+  };
+  return `${hash(0x811c9dc5)}${hash(0x9e3779b9)}`;
+}
+
+async function requestFingerprint(value: string): Promise<string> {
+  const subtle = globalThis.crypto?.subtle;
+  if (subtle && typeof TextEncoder !== 'undefined') {
+    try {
+      const digest = await subtle.digest('SHA-256', new TextEncoder().encode(value));
+      return Array.from(new Uint8Array(digest), (byte) =>
+        byte.toString(16).padStart(2, '0'),
+      ).join('').slice(0, 32);
+    } catch {
+      // Deterministic fallback preserves retry safety if Web Crypto is denied.
+    }
+  }
+  return fallbackFingerprint(value);
+}
+
+/**
+ * Stable across an ambiguous timeout/reload for the same source, but changes
+ * when the item points at a different source image. The source URL itself is
+ * never sent to the endpoint.
+ */
+export async function backgroundRemovalIdempotencyKey(input: {
+  boardId: string;
+  itemId: string;
+  sourceUrl: string;
+}): Promise<string> {
+  const fingerprint = await requestFingerprint(
+    `${input.boardId}\n${input.itemId}\n${input.sourceUrl}`,
+  );
+  return `moodboard-bg:${fingerprint}`;
+}
+
 async function responsePayload(response: Response): Promise<unknown> {
   return response.json().catch(() => null);
 }
