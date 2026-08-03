@@ -158,8 +158,12 @@ function InlineNoteEditor({
 }
 
 /** Route-level scroll isolation; Radix dialogs own their portal focus traps. */
-function useBoardRoomBoundary(ref: MutableRefObject<HTMLElement | null>) {
+function useBoardRoomBoundary(
+  ref: MutableRefObject<HTMLElement | null>,
+  active: boolean,
+) {
   useEffect(() => {
+    if (!active) return;
     const root = ref.current;
     if (!root) return;
     const previousOverflow = document.body.style.overflow;
@@ -176,7 +180,7 @@ function useBoardRoomBoundary(ref: MutableRefObject<HTMLElement | null>) {
       document.body.style.overflow = previousOverflow;
       document.body.style.paddingRight = previousPadding;
     };
-  }, [ref]);
+  }, [active, ref]);
 }
 
 function BoardNameField({ api }: { api: BoardRoomControllerApi }) {
@@ -372,8 +376,6 @@ function BoardRoomSurface({
     return () => window.removeEventListener('keydown', handleTidyShortcut, true);
   }, [api.mode, runTidy, tidySession]);
 
-  useBoardRoomBoundary(rootRef);
-
   useEffect(() => {
     if (!railPreferenceKey || !gridPreferenceKey || !snapPreferenceKey) return;
     try {
@@ -562,6 +564,14 @@ function BoardRoomSurface({
   }, [api.mode, api.state]);
 
   const input = useMemo(() => boardRasterInput(api), [api]);
+  useBoardRoomBoundary(
+    rootRef,
+    !api.isLoading &&
+      !!api.state &&
+      !!api.canvasProps &&
+      !!api.compositionBoard &&
+      !!input,
+  );
   const coverSignature = useMemo(
     () => api.state ? JSON.stringify({
       canvasWidth: api.state.canvasWidth,

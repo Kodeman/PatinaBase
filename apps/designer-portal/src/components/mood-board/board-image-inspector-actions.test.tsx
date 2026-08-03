@@ -39,6 +39,7 @@ const imageItem = {
 describe('BoardImageInspectorActions', () => {
   beforeEach(() => {
     remove.mockReset();
+    useCapability.mockClear();
     mockMutationError = null;
     useCapability.mockReturnValue({
       data: { available: false, code: 'background_removal_not_configured' },
@@ -50,6 +51,19 @@ describe('BoardImageInspectorActions', () => {
       <BoardImageInspectorActions boardId="board-1" item={imageItem} onUpdate={jest.fn()} />,
     );
     expect(container).toBeEmptyDOMElement();
+  });
+
+  it('does not probe the media capability for a pin that cannot remove backgrounds', () => {
+    const { container } = render(
+      <BoardImageInspectorActions
+        boardId="board-1"
+        item={{ ...imageItem, type: 'note', imageUrl: null, content: 'A note' }}
+        onUpdate={jest.fn()}
+      />,
+    );
+
+    expect(container).toBeEmptyDOMElement();
+    expect(useCapability).toHaveBeenCalledWith(null);
   });
 
   it('applies a cutout while preserving the original in one controller patch', async () => {

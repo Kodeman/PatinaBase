@@ -64,10 +64,10 @@ export function BoardImageInspectorActions({
   onRemoved?: (durationMs: number) => void;
   onBlocked?: (reason: 'not_configured' | 'budget_exceeded') => void;
 }) {
-  const capability = useBackgroundRemovalCapability(boardId);
+  const eligibleType = item.type === 'image' || item.type === 'capture' || item.type === 'product';
+  const capability = useBackgroundRemovalCapability(eligibleType && item.imageUrl ? boardId : null);
   const removeBackground = useRemoveBoardItemBackground();
   const originalUrl = originalImageUrl(item);
-  const eligibleType = item.type === 'image' || item.type === 'capture' || item.type === 'product';
   const canRemove = eligibleType && Boolean(item.imageUrl) && capability.data?.available === true;
 
   if (originalUrl) {
