@@ -8,6 +8,7 @@ import {
 } from '@patina/supabase';
 import {
   BoardsBlock as SharedBoardsBlock,
+  type BoardCompositionItem,
   type BoardsBlockBoard,
   type BoardsBlockItem,
 } from '@patina/design-system';
@@ -47,13 +48,16 @@ interface BoardsBlockProps {
 export function BoardsBlock({ boards, resolved, proposalId, feedbackEnabled }: BoardsBlockProps) {
   // Summaries carry proposal_id; fall back to it when the caller didn't pass one.
   const effectiveProposalId = proposalId ?? boards?.[0]?.proposal_id ?? null;
+  // `resolved` is the guest-only DTO path. Keep verdict capability structurally
+  // impossible even if a stale/crafted visibility object says otherwise.
+  const canFeedback = !!feedbackEnabled && !resolved && !!effectiveProposalId;
 
   // Skip the RLS fetch when the caller pre-resolved the boards (guest render).
   const { data } = useBoardsWithItems(resolved ? null : effectiveProposalId);
 
   // Board-pin verdicts for the authed client (inert unless feedback is on).
   const { data: feedbackRows = [] } = useClientBoardFeedback(
-    feedbackEnabled && effectiveProposalId ? effectiveProposalId : undefined,
+    canFeedback ? effectiveProposalId : undefined,
   );
   const feedbackByPin = groupByBoardItem(feedbackRows);
 
@@ -64,7 +68,7 @@ export function BoardsBlock({ boards, resolved, proposalId, feedbackEnabled }: B
   // pins only (the shared block calls this from the Featured list, which is
   // already filtered to those types).
   const renderPinDetail =
-    feedbackEnabled && effectiveProposalId
+    canFeedback && effectiveProposalId
       ? (item: BoardsBlockItem) => (
           <LineFeedback
             proposalId={effectiveProposalId}
@@ -74,12 +78,30 @@ export function BoardsBlock({ boards, resolved, proposalId, feedbackEnabled }: B
         )
       : undefined;
 
+  // The canvas affordance is intentionally the same verdict mutation surface
+  // as the Featured list, in a compact treatment. Guests never reach this
+  // branch because their caller forces feedbackEnabled=false.
+  const renderPinInteraction =
+    canFeedback && effectiveProposalId
+      ? (item: BoardCompositionItem) =>
+          item.id ? (
+            <LineFeedback
+              proposalId={effectiveProposalId}
+              boardItemId={item.id}
+              feedback={feedbackByPin.get(item.id) ?? []}
+              variant="pin"
+            />
+          ) : null
+      : undefined;
+
   return (
     <div data-section-type="boards">
       <SharedBoardsBlock
         boards={visible}
         mark={<StrataMark variant="micro" />}
         renderPinDetail={renderPinDetail}
+        interactive={!!renderPinInteraction}
+        renderPinInteraction={renderPinInteraction}
       />
     </div>
   );

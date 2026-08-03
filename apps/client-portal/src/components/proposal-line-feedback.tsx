@@ -46,6 +46,7 @@ export function LineFeedback({
   itemId,
   boardItemId,
   feedback,
+  variant = 'inline',
 }: {
   proposalId: string;
   /** Anchor: pass EXACTLY ONE of itemId (a schedule line) or boardItemId (a
@@ -54,6 +55,8 @@ export function LineFeedback({
   boardItemId?: string;
   /** This anchor's verdicts (the client's own), ascending by created_at. */
   feedback: ItemFeedback[];
+  /** Compact canvas treatment; the mutation and validation contract is shared. */
+  variant?: 'inline' | 'pin';
 }) {
   const submit = useSubmitVerdict();
   const [composing, setComposing] = useState<null | 'rejected' | 'comment'>(null);
@@ -78,8 +81,17 @@ export function LineFeedback({
     }
   };
 
+  const anchorLabel = boardItemId ? 'pin' : 'line';
+
   return (
-    <div className="mt-1.5">
+    <div
+      className={
+        variant === 'pin'
+          ? 'max-w-[230px] rounded-[3px] border border-[var(--border-subtle)] bg-[var(--bg-surface)]/95 p-1.5 shadow-md backdrop-blur-sm'
+          : 'mt-1.5'
+      }
+      data-feedback-variant={variant}
+    >
       <div className="flex flex-wrap items-center gap-1.5">
         {latest && <VerdictChip verdict={latest.verdict} resolved={!!latest.resolved_at} />}
         <button
@@ -87,7 +99,7 @@ export function LineFeedback({
           className={ACT_BTN}
           disabled={submit.isPending}
           onClick={() => act('approved')}
-          aria-label="Approve this line"
+          aria-label={`Approve this ${anchorLabel}`}
         >
           ✓ Approve
         </button>
