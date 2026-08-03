@@ -37,6 +37,7 @@ import {
 import { useDocumentSurface } from '@/lib/help-system/use-document-surface';
 import { DOCUMENT_SURFACE_KEYS } from '@/lib/help-system/document-surface-keys';
 import { useMobilePrimaryAction } from '@/components/document/mobile/mobile-shell';
+import { RecentBoardsStrip } from '@/components/document/recent-boards-strip';
 
 export default function DeskPage() {
   useDocumentSurface(DOCUMENT_SURFACE_KEYS.desk); // R89 — scope help to the Desk
@@ -333,6 +334,8 @@ export default function DeskPage() {
             chips={data?.chips ?? []}
             engagementsResolved={Boolean(data) && !isLoading}
           />
+
+          <RecentBoardsStrip />
 
           {/* R95 — on a quiet Desk the Studio index rises here, at full weight, to
               fill the space the folders would occupy. */}
