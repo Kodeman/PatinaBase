@@ -26,6 +26,7 @@ import { boardRoomHref } from '@/lib/mood-board/navigation';
 import { runProposalAutosaveAction } from '@/lib/proposal-autosave-registry';
 import { moodBoardEvents } from '@/lib/analytics/mood-board-events';
 import { BoardVerdictSummary } from '@/components/mood-board/board-verdict-summary';
+import { BoardCoverArt } from '@/components/mood-board/board-cover-art';
 
 interface BoardsBuilderProps {
   /** Pass exactly one owner. Both legs launch the same dedicated board room. */
@@ -34,18 +35,15 @@ interface BoardsBuilderProps {
 }
 
 function BoardCover({ board }: { board: ProposalBoardSummary }) {
-  const src = board.cover_image_url ?? board.cover_fallback_url;
   return (
-    <div className="flex h-[112px] items-center justify-center overflow-hidden bg-[var(--bg-muted)]">
-      {src ? (
-        // eslint-disable-next-line @next/next/no-img-element
-        <img src={src} alt="" className="h-full w-full object-cover" />
-      ) : (
-        <span aria-hidden className="font-heading text-[32px] italic text-[var(--text-muted)]">
-          {board.name.trim().charAt(0).toUpperCase() || 'B'}
-        </span>
-      )}
-    </div>
+    <BoardCoverArt
+      name={board.name}
+      coverUrl={board.cover_image_url}
+      fallbackUrls={
+        board.cover_fallback_urls ?? (board.cover_fallback_url ? [board.cover_fallback_url] : [])
+      }
+      className="h-[112px]"
+    />
   );
 }
 

@@ -7,6 +7,7 @@ import { boardRoomHref } from '@/lib/mood-board/navigation';
 import { formatRelativeTime } from '@/lib/utils';
 import { SectionEyebrow } from './section-eyebrow';
 import { BoardVerdictSummary } from '@/components/mood-board/board-verdict-summary';
+import { BoardCoverArt } from '@/components/mood-board/board-cover-art';
 
 /**
  * Desk-level doorway into the most recently touched mood boards. The query is
@@ -45,23 +46,13 @@ export function RecentBoardsStrip() {
                 className="group w-[190px] shrink-0 overflow-hidden rounded-[5px] border border-[var(--border-default)] bg-[var(--bg-surface)] transition-colors hover:border-[var(--color-clay)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-clay)] motion-reduce:transition-none"
                 aria-label={`Open mood board ${board.name}`}
               >
-                <div className="flex h-[92px] items-center justify-center overflow-hidden bg-[var(--doc-sheet-2,var(--bg-muted))]">
-                  {board.coverImageUrl ? (
-                    // eslint-disable-next-line @next/next/no-img-element
-                    <img
-                      src={board.coverImageUrl}
-                      alt=""
-                      className="h-full w-full object-cover transition-transform duration-300 group-hover:scale-[1.02] motion-reduce:transition-none"
-                    />
-                  ) : (
-                    <span
-                      aria-hidden
-                      className="font-heading text-[28px] italic text-[var(--text-muted)]"
-                    >
-                      {board.name.trim().charAt(0).toUpperCase() || 'B'}
-                    </span>
-                  )}
-                </div>
+                <BoardCoverArt
+                  name={board.name}
+                  coverUrl={board.coverImageUrl}
+                  fallbackUrls={board.coverFallbackUrls}
+                  className="h-[92px] bg-[var(--doc-sheet-2,var(--bg-muted))]"
+                  imageClassName="transition-transform duration-300 group-hover:scale-[1.02] motion-reduce:transition-none"
+                />
                 <div className="px-3 py-2.5">
                   <p className="truncate font-heading text-[14px] text-[var(--text-primary)]">
                     {board.name}

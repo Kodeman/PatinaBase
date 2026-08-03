@@ -95,6 +95,7 @@ describe('ProjectMoodBoards', () => {
           scope_room_id: null,
           cover_image_url: null,
           cover_fallback_url: null,
+          cover_fallback_urls: [],
           canvas_width: 1200,
           canvas_height: 800,
           background_color: '#faf8f5',

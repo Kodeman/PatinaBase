@@ -13,6 +13,8 @@ const rows = [
     room: { name: 'Living room' },
     proposal_board_items: [
       {
+        image_url: 'https://images.example/second.jpg',
+        z_index: 2,
         verdicts: [
           {
             id: 'feedback-old',
@@ -27,6 +29,11 @@ const rows = [
             created_at: '2026-08-02T10:00:00Z',
           },
         ],
+      },
+      {
+        image_url: 'https://images.example/first.jpg',
+        z_index: 1,
+        verdicts: [],
       },
     ],
   },
@@ -87,6 +94,10 @@ describe('useRecentBoards', () => {
         owner: { kind: 'proposal', id: 'proposal-1' },
         ownerName: 'Hale proposal',
         roomName: 'Living room',
+        coverFallbackUrls: [
+          'https://images.example/first.jpg',
+          'https://images.example/second.jpg',
+        ],
         verdictCounts: { approved: 1, rejected: 0, comment: 0, total: 1 },
       },
       {

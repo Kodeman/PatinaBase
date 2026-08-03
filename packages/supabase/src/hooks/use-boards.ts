@@ -106,12 +106,12 @@ export interface ProposalBoardSummary extends ProposalBoard {
   /** Current, RLS-visible client verdicts grouped for cover-card badges. */
   verdict_counts: BoardVerdictCounts;
   /**
-   * Effective thumbnail source when `cover_image_url` is unset: the image_url
-   * of the lowest-z image item on the board, else null. Derived in useBoards
-   * (the board list) so the chip can show cover → first-image → monogram
-   * without a second fetch.
+   * Backward-compatible first mosaic image. New cover surfaces should render
+   * `cover_fallback_urls`.
    */
   cover_fallback_url: string | null;
+  /** First four pin image URLs in bottom→top z-order. */
+  cover_fallback_urls: string[];
 }
 
 export interface ProposalBoardItem {
@@ -323,20 +323,36 @@ interface BoardCoverItem extends BoardItemVerdictProjection {
   z_index: number;
 }
 
+/** Return the first visible pin images in canvas stacking order. */
+export function summarizeBoardCoverUrls(
+  items: Array<{ image_url?: unknown; z_index?: unknown }>,
+  limit = 4,
+): string[] {
+  const safeLimit = Math.max(0, Math.trunc(limit));
+  return [...items]
+    .sort((a, b) => {
+      const aZ = typeof a.z_index === 'number' && Number.isFinite(a.z_index) ? a.z_index : 0;
+      const bZ = typeof b.z_index === 'number' && Number.isFinite(b.z_index) ? b.z_index : 0;
+      return aZ - bZ;
+    })
+    .flatMap((item) =>
+      typeof item.image_url === 'string' && item.image_url.trim() ? [item.image_url] : [],
+    )
+    .slice(0, safeLimit);
+}
+
 /**
  * Fold a board row + its compact items into a ProposalBoardSummary. The
- * fallback cover is the lowest-z image item's url (matching the bottom→top
- * render order); sections/status default defensively for pre-00264 rows. Pure
- * — exported for the unit test.
+ * fallback cover is a four-image mosaic in bottom→top render order;
+ * sections/status default defensively for pre-00264 rows. Pure — exported for
+ * the unit test.
  */
 export function summarizeBoard(
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   board: any,
   items: BoardCoverItem[],
 ): ProposalBoardSummary {
-  const firstImage = items
-    .filter((i) => i.type === 'image' && !!i.image_url)
-    .sort((a, b) => (a.z_index ?? 0) - (b.z_index ?? 0))[0];
+  const coverFallbackUrls = summarizeBoardCoverUrls(items);
   return {
     ...(board as ProposalBoard),
     // Owner legs default to null for pre-00272 reads via `as any`.
@@ -345,7 +361,8 @@ export function summarizeBoard(
     sections: (board?.sections ?? []) as BoardSection[],
     status: (board?.status ?? 'active') as BoardStatus,
     item_count: items.length,
-    cover_fallback_url: firstImage?.image_url ?? null,
+    cover_fallback_url: coverFallbackUrls[0] ?? null,
+    cover_fallback_urls: coverFallbackUrls,
     verdict_counts: summarizeBoardVerdicts(items),
   };
 }

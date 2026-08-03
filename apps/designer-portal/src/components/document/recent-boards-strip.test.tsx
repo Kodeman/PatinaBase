@@ -28,6 +28,7 @@ describe('RecentBoardsStrip', () => {
           ownerName: 'Lake House',
           roomName: 'Living room',
           coverImageUrl: 'https://images.example/cover.jpg',
+          coverFallbackUrls: ['https://images.example/pin.jpg'],
           verdictCounts: { approved: 2, rejected: 1, comment: 1, total: 4 },
           updatedAt: new Date().toISOString(),
         },
@@ -38,6 +39,10 @@ describe('RecentBoardsStrip', () => {
           ownerName: 'Lake House project',
           roomName: null,
           coverImageUrl: null,
+          coverFallbackUrls: [
+            'https://images.example/one.jpg',
+            'https://images.example/two.jpg',
+          ],
           verdictCounts: { approved: 0, rejected: 0, comment: 0, total: 0 },
           updatedAt: new Date().toISOString(),
         },

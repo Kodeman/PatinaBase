@@ -425,18 +425,25 @@ describe('useDuplicateBoard atomic RPC', () => {
 // ─────────────────────────────────────────────────────────────────────────────
 
 describe('summarizeBoard', () => {
-  it('counts items and picks the lowest-z image as the fallback cover', () => {
+  it('counts items and returns the first four pin images in z-order for the fallback mosaic', () => {
     const summary = summarizeBoard(
       { id: 'b1', name: 'Whole Home', proposal_id: 'p1', cover_image_url: null },
       [
-        { type: 'product', image_url: 'p.jpg', z_index: 0 },
+        { type: 'product', image_url: 'product.jpg', z_index: 0 },
         { type: 'image', image_url: 'top.jpg', z_index: 5 },
         { type: 'image', image_url: 'bottom.jpg', z_index: 1 },
+        { type: 'capture', image_url: 'material.jpg', z_index: 3 },
+        { type: 'product', image_url: 'fifth.jpg', z_index: 9 },
       ],
     );
-    expect(summary.item_count).toBe(3);
-    // Lowest-z image wins (bottom→top render order).
-    expect(summary.cover_fallback_url).toBe('bottom.jpg');
+    expect(summary.item_count).toBe(5);
+    expect(summary.cover_fallback_url).toBe('product.jpg');
+    expect(summary.cover_fallback_urls).toEqual([
+      'product.jpg',
+      'bottom.jpg',
+      'material.jpg',
+      'top.jpg',
+    ]);
   });
 
   it('defaults sections/status for pre-00264 rows and null cover with no images', () => {
@@ -446,6 +453,7 @@ describe('summarizeBoard', () => {
     expect(summary.sections).toEqual([]);
     expect(summary.status).toBe('active');
     expect(summary.cover_fallback_url).toBeNull();
+    expect(summary.cover_fallback_urls).toEqual([]);
     expect(summary.verdict_counts).toEqual({ approved: 0, rejected: 0, comment: 0, total: 0 });
   });
 

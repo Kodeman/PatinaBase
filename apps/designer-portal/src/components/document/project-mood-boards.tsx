@@ -14,6 +14,7 @@ import {
 import type { MoodBoardSection } from '@patina/types';
 import { boardRoomHref } from '@/lib/mood-board/navigation';
 import { moodBoardEvents } from '@/lib/analytics/mood-board-events';
+import { BoardCoverArt } from '@/components/mood-board/board-cover-art';
 
 type LiveBoardWithLineage = ProposalBoardSummary & {
   source_project_board_id?: string | null;
@@ -137,7 +138,6 @@ export function ProjectMoodBoards({ projectId }: { projectId: string }) {
           </h3>
           <div className="mt-2 flex gap-3 overflow-x-auto pb-2">
             {liveBoards.map((board) => {
-              const cover = board.cover_image_url ?? board.cover_fallback_url;
               return (
                 <Link
                   key={board.id}
@@ -145,16 +145,15 @@ export function ProjectMoodBoards({ projectId }: { projectId: string }) {
                   className="group w-[184px] shrink-0 overflow-hidden rounded-[5px] border border-[var(--border-default)] bg-[var(--bg-surface)] hover:border-[var(--color-clay)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-clay)]"
                   aria-label={`Open live mood board ${board.name}`}
                 >
-                  <div className="flex h-[92px] items-center justify-center overflow-hidden bg-[var(--bg-muted)]">
-                    {cover ? (
-                      // eslint-disable-next-line @next/next/no-img-element
-                      <img src={cover} alt="" className="h-full w-full object-cover" />
-                    ) : (
-                      <span aria-hidden className="font-heading text-2xl italic text-[var(--text-muted)]">
-                        {board.name.trim().charAt(0).toUpperCase() || 'B'}
-                      </span>
-                    )}
-                  </div>
+                  <BoardCoverArt
+                    name={board.name}
+                    coverUrl={board.cover_image_url}
+                    fallbackUrls={
+                      board.cover_fallback_urls ??
+                      (board.cover_fallback_url ? [board.cover_fallback_url] : [])
+                    }
+                    className="h-[92px]"
+                  />
                   <div className="px-3 py-2.5">
                     <p className="truncate font-heading text-[14px] text-[var(--text-primary)]">
                       {board.name}

@@ -3,6 +3,7 @@
 import { useQuery } from '@tanstack/react-query';
 import type { BoardOwnerRef } from '@patina/types';
 import { createBrowserClient } from '../client';
+import { summarizeBoardCoverUrls } from './use-boards';
 import {
   summarizeBoardVerdicts,
   type BoardItemVerdictProjection,
@@ -18,6 +19,7 @@ export interface RecentBoard {
   ownerName: string;
   roomName: string | null;
   coverImageUrl: string | null;
+  coverFallbackUrls: string[];
   verdictCounts: BoardVerdictCounts;
   updatedAt: string;
 }
@@ -41,7 +43,7 @@ export function useRecentBoards(limit = 8) {
       const { data, error } = await supabase
         .from('proposal_boards')
         .select(
-          'id, name, proposal_id, project_id, cover_image_url, updated_at, proposal:proposals(title), project:projects(name), room:proposal_scope_rooms(name), proposal_board_items(verdicts:item_feedback!item_feedback_board_item_id_fkey(id, client_id, verdict, created_at))',
+          'id, name, proposal_id, project_id, cover_image_url, updated_at, proposal:proposals(title), project:projects(name), room:proposal_scope_rooms(name), proposal_board_items(image_url, z_index, verdicts:item_feedback!item_feedback_board_item_id_fkey(id, client_id, verdict, created_at))',
         )
         .eq('status', 'active')
         .order('updated_at', { ascending: false })
@@ -65,6 +67,9 @@ export function useRecentBoards(limit = 8) {
           : typeof project?.name === 'string' && project.name.trim()
             ? project.name
             : 'Project';
+        const boardItems = (row.proposal_board_items ?? []) as Array<
+          BoardItemVerdictProjection & { image_url?: unknown; z_index?: unknown }
+        >;
         return [{
           id: String(row.id),
           name: String(row.name),
@@ -72,9 +77,8 @@ export function useRecentBoards(limit = 8) {
           ownerName,
           roomName: typeof room?.name === 'string' ? room.name : null,
           coverImageUrl: typeof row.cover_image_url === 'string' ? row.cover_image_url : null,
-          verdictCounts: summarizeBoardVerdicts(
-            (row.proposal_board_items ?? []) as BoardItemVerdictProjection[],
-          ),
+          coverFallbackUrls: summarizeBoardCoverUrls(boardItems),
+          verdictCounts: summarizeBoardVerdicts(boardItems),
           updatedAt: String(row.updated_at),
         }];
       });
