@@ -1,9 +1,12 @@
-name: Extension — Beta Channel
+name: Extension — Chrome Web Store Beta
 
 on:
   push:
     tags:
-      - 'extension-beta-v*'
+      - "extension-beta-v*"
+
+permissions:
+  contents: read
 
 jobs:
   publish:
@@ -20,75 +23,60 @@ jobs:
 
       - run: pnpm install --frozen-lockfile
 
-      - name: Extract version from tag
+      - name: Validate release version
         id: version
+        shell: bash
         run: |
-          TAG="${GITHUB_REF#refs/tags/extension-beta-v}"
-          echo "tag=$TAG" >> "$GITHUB_OUTPUT"
+          TAG_VERSION="${GITHUB_REF#refs/tags/extension-beta-v}"
+          PACKAGE_VERSION="$(node -p "require('./apps/extension/package.json').version")"
+          if [ "$TAG_VERSION" != "$PACKAGE_VERSION" ]; then
+            echo "Tag version $TAG_VERSION does not match package version $PACKAGE_VERSION" >&2
+            exit 1
+          fi
+          echo "version=$TAG_VERSION" >> "$GITHUB_OUTPUT"
 
-      - name: Build extension
+      - name: Brand beta manifest
+        run: |
+          node -e "const fs=require('fs');const p='apps/extension/package.json';const j=require('./'+p);j.displayName='Patina Capture BETA';j.description='THIS EXTENSION IS FOR BETA TESTING. '+j.description;fs.writeFileSync(p,JSON.stringify(j,null,2)+'\n')"
+
+      - name: Test and package extension
         env:
           PLASMO_PUBLIC_SUPABASE_URL: ${{ secrets.EXT_SUPABASE_URL }}
           PLASMO_PUBLIC_SUPABASE_ANON_KEY: ${{ secrets.EXT_SUPABASE_ANON_KEY }}
           PLASMO_PUBLIC_PORTAL_URL: ${{ secrets.EXT_PORTAL_URL }}
           PLASMO_PUBLIC_POSTHOG_KEY: ${{ secrets.EXT_POSTHOG_KEY }}
-          PLASMO_PUBLIC_UPDATE_URL: https://api.patina.cloud/storage/v1/object/public/extension-releases/version.json
+          # Web Store builds use Chrome's automatic update channel.
+          PLASMO_PUBLIC_UPDATE_URL: ""
         run: |
+          pnpm --filter @patina/extension type-check
+          pnpm --filter @patina/extension test
           pnpm --filter @patina/extension build
           pnpm --filter @patina/extension package
 
-      - name: Find built zip
+      - name: Find packaged extension
         id: zip
+        shell: bash
         run: |
-          ZIP=$(find apps/extension/build -name '*.zip' | head -1)
+          ZIP="$(find apps/extension/build -name '*.zip' | head -1)"
+          if [ -z "$ZIP" ]; then
+            echo "No packaged extension ZIP was produced" >&2
+            exit 1
+          fi
           echo "path=$ZIP" >> "$GITHUB_OUTPUT"
 
-      - name: Rename zip with version
-        id: artifact
+      - name: Upload beta to Chrome Web Store
         run: |
-          VERSION="${{ steps.version.outputs.tag }}"
-          DEST="apps/extension/build/patina-capture-${VERSION}.zip"
-          cp "${{ steps.zip.outputs.path }}" "$DEST"
-          echo "path=$DEST" >> "$GITHUB_OUTPUT"
+          npx chrome-webstore-upload-cli upload \
+            --source "${{ steps.zip.outputs.path }}" \
+            --extension-id "${{ secrets.CWS_BETA_EXTENSION_ID }}" \
+            --client-id "${{ secrets.CWS_CLIENT_ID }}" \
+            --client-secret "${{ secrets.CWS_CLIENT_SECRET }}" \
+            --refresh-token "${{ secrets.CWS_REFRESH_TOKEN }}"
 
-      - name: Generate version.json
+      - name: Publish unlisted beta
         run: |
-          VERSION="${{ steps.version.outputs.tag }}"
-          cat > apps/extension/build/version.json <<EOF
-          {
-            "version": "${VERSION}",
-            "downloadUrl": "https://api.patina.cloud/storage/v1/object/public/extension-releases/patina-capture-${VERSION}.zip",
-            "changelog": "",
-            "releasedAt": "$(date -u +%Y-%m-%dT%H:%M:%SZ)"
-          }
-          EOF
-
-      - name: Upload to Supabase Storage
-        env:
-          SUPABASE_URL: ${{ secrets.EXT_SUPABASE_URL }}
-          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
-        run: |
-          VERSION="${{ steps.version.outputs.tag }}"
-
-          # Upload version.json
-          curl -f -X POST \
-            "${SUPABASE_URL}/storage/v1/object/extension-releases/version.json" \
-            -H "Authorization: Bearer ${SUPABASE_SERVICE_ROLE_KEY}" \
-            -H "Content-Type: application/json" \
-            -H "x-upsert: true" \
-            --data-binary @apps/extension/build/version.json
-
-          # Upload zip
-          curl -f -X POST \
-            "${SUPABASE_URL}/storage/v1/object/extension-releases/patina-capture-${VERSION}.zip" \
-            -H "Authorization: Bearer ${SUPABASE_SERVICE_ROLE_KEY}" \
-            -H "Content-Type: application/zip" \
-            -H "x-upsert: true" \
-            --data-binary @"${{ steps.artifact.outputs.path }}"
-
-      - name: Create GitHub Release
-        uses: softprops/action-gh-release@v2
-        with:
-          files: ${{ steps.artifact.outputs.path }}
-          generate_release_notes: true
-          prerelease: true
+          npx chrome-webstore-upload-cli publish \
+            --extension-id "${{ secrets.CWS_BETA_EXTENSION_ID }}" \
+            --client-id "${{ secrets.CWS_CLIENT_ID }}" \
+            --client-secret "${{ secrets.CWS_CLIENT_SECRET }}" \
+            --refresh-token "${{ secrets.CWS_REFRESH_TOKEN }}"

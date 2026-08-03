@@ -37,6 +37,7 @@ import { AccountProfilePage } from './account-profile-page';
 import { AccountNotificationsPage } from './account-notifications-page';
 import { AccountSecurityPage } from './account-security-page';
 import { AccountDevicesPage } from './account-devices-page';
+import { AccountExtensionPage } from './account-extension-page';
 import { AccountStudioPage } from './account-studio-page';
 import { DocumentAction } from '../document-action';
 
@@ -55,6 +56,7 @@ export type AccountPage =
   | 'notifications'
   | 'security'
   | 'devices'
+  | 'extension'
   | 'studio';
 
 export const ACCOUNT_PAGES: readonly AccountPage[] = [
@@ -62,6 +64,7 @@ export const ACCOUNT_PAGES: readonly AccountPage[] = [
   'notifications',
   'security',
   'devices',
+  'extension',
   'studio',
 ];
 
@@ -100,6 +103,8 @@ export function AccountSheet() {
   // today — matches the fail-closed convention in open-requests-strip.tsx.
   const { value: studioEnabled, isLoading: studioFlagLoading } =
     useFeatureFlag('studio-workspaces');
+  const { value: extensionEnabled, isLoading: extensionFlagLoading } =
+    useFeatureFlag('chrome-extension-beta');
 
   const { user, signOut } = useAuth();
   const { data: profile } = useProfile();
@@ -139,6 +144,13 @@ export function AccountSheet() {
     setPage('profile');
   }, [page, studioEnabled, studioFlagLoading]);
 
+  useEffect(() => {
+    if (page !== 'extension') return;
+    if (extensionFlagLoading) return;
+    if (extensionEnabled) return;
+    setPage('profile');
+  }, [extensionEnabled, extensionFlagLoading, page]);
+
   const handleSignOut = useCallback(async () => {
     setIsSigningOut(true);
     authEvents.logout();
@@ -157,9 +169,13 @@ export function AccountSheet() {
   const currentStatus: AvailabilityStatus = hydrated
     ? (status ?? 'online')
     : 'offline';
-  const pages = studioEnabled
-    ? [...PAGES, { key: 'studio' as const, label: 'Studio' }]
-    : PAGES;
+  const pages = [
+    ...PAGES,
+    ...(extensionEnabled
+      ? [{ key: 'extension' as const, label: 'Extension' }]
+      : []),
+    ...(studioEnabled ? [{ key: 'studio' as const, label: 'Studio' }] : []),
+  ];
 
   return (
     <DocSheet open={open} onClose={() => setOpen(false)} title="Account">
@@ -263,6 +279,7 @@ export function AccountSheet() {
         {page === 'notifications' && <AccountNotificationsPage />}
         {page === 'security' && <AccountSecurityPage />}
         {page === 'devices' && <AccountDevicesPage />}
+        {page === 'extension' && extensionEnabled && <AccountExtensionPage />}
         {page === 'studio' && studioEnabled && <AccountStudioPage />}
 
         {/* Sign out */}

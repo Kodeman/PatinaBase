@@ -53,10 +53,11 @@ export function UpdateBanner() {
 
       {showInstructions && (
         <ol className="mt-2 ml-4 text-[0.82rem] text-mocha list-decimal space-y-1">
-          <li>Click "Download" above to get the .zip file</li>
+          <li>Download the .zip file and extract it</li>
+          <li>Replace the files in the permanent folder you originally loaded</li>
           <li>Open <code className="bg-off-white px-1 rounded-sm font-mono text-[0.72rem]">chrome://extensions</code> in a new tab</li>
-          <li>Enable "Developer mode" (top right toggle)</li>
-          <li>Drag and drop the .zip file onto the extensions page</li>
+          <li>Choose Reload on Patina Capture</li>
+          <li>If it is no longer listed, enable Developer mode, choose Load unpacked, and select that folder</li>
         </ol>
       )}
     </div>

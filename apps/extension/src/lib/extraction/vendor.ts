@@ -239,18 +239,27 @@ function extractContact(): ExtractedVendorContact {
   let email: string | null = null;
   let phone: string | null = null;
 
-  // Find mailto: links
+  // Prefer purpose-built trade and sales addresses, while preserving
+  // document order for ordinary addresses and the fallback case.
   const mailtoLinks = document.querySelectorAll('a[href^="mailto:"]');
+  const emailCandidates: string[] = [];
   for (const link of mailtoLinks) {
     const href = link.getAttribute('href');
-    if (href) {
-      const match = href.match(/mailto:([^?]+)/);
-      if (match && match[1]) {
-        email = match[1];
-        break;
-      }
-    }
+    const match = href?.match(/mailto:([^?]+)/);
+    if (match?.[1]) emailCandidates.push(match[1]);
   }
+
+  const preferredPrefixes = ['trade', 'sales'];
+  email =
+    preferredPrefixes
+      .map((prefix) =>
+        emailCandidates.find(
+          (candidate) => candidate.split('@')[0]?.toLowerCase() === prefix,
+        ),
+      )
+      .find((candidate): candidate is string => Boolean(candidate)) ??
+    emailCandidates[0] ??
+    null;
 
   // Find tel: links
   const telLinks = document.querySelectorAll('a[href^="tel:"]');
@@ -381,11 +390,13 @@ function extractFoundedYear(): number | null {
  * Looks for patterns like "Based in NYC", "Headquartered in San Francisco"
  */
 function extractHeadquarters(): string | null {
+  const locationPattern =
+    '([A-Z][A-Za-z\\s]+?(?:,\\s*[A-Z]{2})?)(?:\\.|$|\\s+(?:since|for|and))';
   const patterns = [
-    /\bBased\s+in\s+([A-Z][A-Za-z\s,]+?)(?:\.|,|$|\s+(?:since|for|and))/i,
-    /\bHeadquartered\s+in\s+([A-Z][A-Za-z\s,]+?)(?:\.|,|$|\s+(?:since|for|and))/i,
-    /\bLocated\s+in\s+([A-Z][A-Za-z\s,]+?)(?:\.|,|$|\s+(?:since|for|and))/i,
-    /\bHQ:\s*([A-Z][A-Za-z\s,]+?)(?:\.|,|$)/i,
+    new RegExp(`\\bBased\\s+in\\s+${locationPattern}`, 'i'),
+    new RegExp(`\\bHeadquartered\\s+in\\s+${locationPattern}`, 'i'),
+    new RegExp(`\\bLocated\\s+in\\s+${locationPattern}`, 'i'),
+    new RegExp(`\\bHQ:\\s*${locationPattern}`, 'i'),
   ];
 
   // Search in about sections and footer

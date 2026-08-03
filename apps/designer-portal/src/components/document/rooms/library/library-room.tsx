@@ -24,6 +24,7 @@ import { LibrarianBar } from "./librarian-bar";
 import { LibraryShelf } from "./library-shelf";
 import { LibraryToolbar } from "./library-toolbar";
 import { LibraryFoot } from "./library-foot";
+import { CaptureExtensionPrompt } from "./capture-extension-prompt";
 import { CaptureSheet } from "./capture-sheet";
 import { ImportSheet } from "./import-sheet";
 import { DeepAnalysisSheet } from "./deep-analysis-sheet";
@@ -173,6 +174,8 @@ export function LibraryRoom() {
             )
           }
         />
+
+        <CaptureExtensionPrompt />
 
         <LibraryToolbar
           activeLayer={activeLayer}
