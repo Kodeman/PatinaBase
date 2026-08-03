@@ -24,6 +24,7 @@ import type { BoardOwnerRef } from '@patina/types';
 import { Button } from '@/components/ui/controls';
 import { boardRoomHref } from '@/lib/mood-board/navigation';
 import { runProposalAutosaveAction } from '@/lib/proposal-autosave-registry';
+import { moodBoardEvents } from '@/lib/analytics/mood-board-events';
 
 interface BoardsBuilderProps {
   /** Pass exactly one owner. Both legs launch the same dedicated board room. */
@@ -167,7 +168,13 @@ export function BoardsBuilder({ proposalId, projectId }: BoardsBuilderProps) {
   const handleTemplate = (template: BoardTemplate) =>
     void runCreate(`template:${template.id}`, async () => {
       if (!owner) throw new Error('The board owner is unavailable.');
-      return materializeTemplate.mutateAsync({ templateId: template.id, owner });
+      const boardId = await materializeTemplate.mutateAsync({ templateId: template.id, owner });
+      moodBoardEvents.templateUsed({
+        source: template.kind,
+        template_id: template.id,
+        board_id: boardId,
+      });
+      return boardId;
     });
 
   if (!owner) {

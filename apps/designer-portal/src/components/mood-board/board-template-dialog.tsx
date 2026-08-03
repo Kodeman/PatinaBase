@@ -16,6 +16,7 @@ import {
   useSaveBoardAsTemplate,
 } from '@patina/supabase';
 import { Button, Input } from '@/components/ui/controls';
+import { moodBoardEvents } from '@/lib/analytics/mood-board-events';
 
 export function BoardTemplateDialog({
   boardId,
@@ -71,6 +72,11 @@ export function BoardTemplateDialog({
       });
       setName(`${boardName} template`);
       setDescription('');
+      moodBoardEvents.templateSaved({
+        template_id: template.id,
+        item_count: itemCount,
+        section_count: sectionCount,
+      });
       onSaved?.(template.id);
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : 'The template could not be saved.');

@@ -16,6 +16,7 @@ import {
 } from '@patina/supabase';
 import { Button, Input } from '@/components/ui/controls';
 import { guestProposalShareUrl } from '@/lib/client-portal-url';
+import { moodBoardEvents } from '@/lib/analytics/mood-board-events';
 
 function shortDate(value: string) {
   return new Intl.DateTimeFormat('en-US', { month: 'short', day: 'numeric' }).format(
@@ -95,6 +96,12 @@ export function BoardShareDialog({
       setCreated({ id: result.id, url });
       setLabel('');
       setExpiryDate('');
+      moodBoardEvents.shared({
+        board_id: boardId,
+        scope: 'board',
+        has_expiry: Boolean(expiresAtFromDate(expiryDate)),
+        share_id: result.id,
+      });
       if (await copy(url)) onShareCreated?.(result.id);
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : 'The share link could not be created.');

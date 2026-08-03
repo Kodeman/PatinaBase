@@ -13,6 +13,7 @@ import type { BoardOwnerRef } from '@patina/types';
 import { Button } from '@/components/ui/controls';
 import { downloadSpecPdf } from '@/lib/scope/spec-pdf-client';
 import { exportMoodBoardPng, safeMoodBoardFilename } from '@/lib/mood-board-assets/export-board';
+import { moodBoardEvents } from '@/lib/analytics/mood-board-events';
 
 export type BoardExportFormat = 'png' | 'pdf_composition' | 'pdf_spec_sheet';
 
@@ -65,13 +66,23 @@ export function BoardExportDialog({
       const result = await action();
       setProgress(1);
       setMessage(result.message ?? 'Export downloaded.');
-      onExported?.({
+      const exported = {
         format,
         durationMs: Math.max(0, Math.round(performance.now() - started)),
         failedImageCount: result.failedImageCount,
+      };
+      moodBoardEvents.exported({
+        format,
+        board_id: boardId,
+        item_count: 'items' in input && Array.isArray(input.items) ? input.items.length : 0,
+        duration_ms: exported.durationMs,
+        failed_image_count: exported.failedImageCount,
       });
+      onExported?.(exported);
     } catch (cause) {
-      setError(cause instanceof Error ? cause.message : 'The board could not be exported.');
+      const reason = cause instanceof Error ? cause.message : 'The board could not be exported.';
+      setError(reason);
+      moodBoardEvents.exportFailed({ format, board_id: boardId, reason });
     } finally {
       setBusy(null);
     }

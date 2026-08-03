@@ -7,6 +7,7 @@ import {
   useRemoveBoardItemBackground,
 } from '@/hooks/use-background-removal';
 import { BackgroundRemovalClientError } from '@/lib/mood-board-assets/background-removal-client';
+import { moodBoardEvents } from '@/lib/analytics/mood-board-events';
 
 export interface BoardImagePatch {
   imageUrl?: string | null;
@@ -88,11 +89,24 @@ export function BoardImageInspectorActions({
           original_image_url: result.originalUrl,
         },
       });
-      onRemoved?.(Math.max(0, Math.round(performance.now() - started)));
+      const durationMs = Math.max(0, Math.round(performance.now() - started));
+      moodBoardEvents.backgroundRemoved({
+        board_id: boardId,
+        board_item_id: item.id,
+        item_type: item.type,
+        duration_ms: durationMs,
+      });
+      onRemoved?.(durationMs);
     } catch (cause) {
       if (cause instanceof BackgroundRemovalClientError) {
-        if (cause.code === 'background_removal_not_configured') onBlocked?.('not_configured');
-        if (cause.code === 'background_removal_limit_reached') onBlocked?.('budget_exceeded');
+        if (cause.code === 'background_removal_not_configured') {
+          moodBoardEvents.backgroundRemovalBlocked({ reason: 'not_configured', board_id: boardId });
+          onBlocked?.('not_configured');
+        }
+        if (cause.code === 'background_removal_limit_reached') {
+          moodBoardEvents.backgroundRemovalBlocked({ reason: 'budget_exceeded', board_id: boardId });
+          onBlocked?.('budget_exceeded');
+        }
       }
     }
   };

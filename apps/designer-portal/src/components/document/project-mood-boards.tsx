@@ -13,6 +13,7 @@ import {
 } from '@patina/supabase';
 import type { MoodBoardSection } from '@patina/types';
 import { boardRoomHref } from '@/lib/mood-board/navigation';
+import { moodBoardEvents } from '@/lib/analytics/mood-board-events';
 
 type LiveBoardWithLineage = ProposalBoardSummary & {
   source_project_board_id?: string | null;
@@ -95,6 +96,11 @@ export function ProjectMoodBoards({ projectId }: { projectId: string }) {
       const boardId = await continueBoard.mutateAsync({
         projectBoardId: snapshot.id,
         projectId,
+      });
+      moodBoardEvents.projectBoardContinued({
+        project_id: projectId,
+        source_board_id: snapshot.source_board_id ?? snapshot.id,
+        new_board_id: boardId,
       });
       router.push(roomHref(boardId, pathname));
     } catch (cause) {
