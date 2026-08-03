@@ -15,7 +15,10 @@ function service(): SupabaseBoardStorageService {
 }
 
 describe('SupabaseBoardStorageService', () => {
-  afterEach(() => jest.restoreAllMocks());
+  afterEach(() => {
+    jest.restoreAllMocks();
+    jest.useRealTimers();
+  });
 
   it('accepts only canonical proposal-mood-boards public URLs', () => {
     const storage = service();
@@ -55,5 +58,20 @@ describe('SupabaseBoardStorageService', () => {
         'x-upsert': 'false',
       },
     });
+  });
+
+  it('aborts a stalled storage write before the reservation can expire', async () => {
+    jest.useFakeTimers();
+    jest.spyOn(global, 'fetch').mockImplementation((_url, init) => {
+      return new Promise((_resolve, reject) => {
+        init?.signal?.addEventListener('abort', () => reject(new Error('aborted')));
+      });
+    });
+    const upload = expect(
+      service().upload('owner/boards/board/cutout.png', Buffer.from('png'), 'image/png'),
+    ).rejects.toThrow('Background removal storage request failed');
+
+    await jest.advanceTimersByTimeAsync(15_000);
+    await upload;
   });
 });

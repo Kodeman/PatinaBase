@@ -87,26 +87,26 @@ export class SupabaseBoardStorageService {
     if (!objectPath) throw new BackgroundRemovalSourceError();
     this.assertConfigured();
 
-    const response = await fetch(
-      `${this.supabaseUrl}/storage/v1/object/${BOARD_BUCKET}/${encodedObjectPath(objectPath)}`,
-      { method: 'GET', headers: this.serverHeaders() },
-    ).catch(() => {
-      throw new BackgroundRemovalSourceError();
-    });
-    if (!response.ok) throw new BackgroundRemovalSourceError();
-
-    let bytes: Buffer;
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), this.policy.storageTimeoutMs);
     try {
-      bytes = await readResponseBuffer(response, this.policy.maxSourceBytes, 'storage');
+      const response = await fetch(
+        `${this.supabaseUrl}/storage/v1/object/${BOARD_BUCKET}/${encodedObjectPath(objectPath)}`,
+        { method: 'GET', headers: this.serverHeaders(), signal: controller.signal },
+      );
+      if (!response.ok) throw new BackgroundRemovalSourceError();
+      const bytes = await readResponseBuffer(response, this.policy.maxSourceBytes, 'storage');
+      return {
+        objectPath,
+        publicUrl: this.publicUrl(objectPath),
+        bytes,
+        declaredMime: response.headers.get('content-type') ?? undefined,
+      };
     } catch {
       throw new BackgroundRemovalSourceError();
+    } finally {
+      clearTimeout(timeout);
     }
-    return {
-      objectPath,
-      publicUrl: this.publicUrl(objectPath),
-      bytes,
-      declaredMime: response.headers.get('content-type') ?? undefined,
-    };
   }
 
   async upload(objectPath: string, bytes: Buffer, mimeType: string): Promise<string> {
@@ -114,6 +114,8 @@ export class SupabaseBoardStorageService {
     if (!validObjectSegments(objectPath.split('/'))) {
       throw new BackgroundRemovalStorageError();
     }
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), this.policy.storageTimeoutMs);
     try {
       const response = await fetch(
         `${this.supabaseUrl}/storage/v1/object/${BOARD_BUCKET}/${encodedObjectPath(objectPath)}`,
@@ -125,6 +127,7 @@ export class SupabaseBoardStorageService {
             'x-upsert': 'false',
           },
           body: new Uint8Array(bytes),
+          signal: controller.signal,
         },
       );
       if (!response.ok) throw new BackgroundRemovalStorageError();
@@ -132,6 +135,8 @@ export class SupabaseBoardStorageService {
     } catch (error) {
       if (error instanceof BackgroundRemovalStorageError) throw error;
       throw new BackgroundRemovalStorageError();
+    } finally {
+      clearTimeout(timeout);
     }
   }
 

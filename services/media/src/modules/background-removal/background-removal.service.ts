@@ -43,14 +43,13 @@ export class BackgroundRemovalService {
 
   async capability(userJwt: string, boardId: string) {
     const board = await this.access.authorizeBoard(userJwt, boardId);
-    const quota = await this.ledger.getQuota(board.quotaOwnerId);
     if (!this.vendor.isConfigured()) {
       return {
         available: false,
         code: 'background_removal_not_configured',
-        quota,
       };
     }
+    const quota = await this.ledger.getQuota(board.quotaOwnerId);
     return { available: true, quota };
   }
 

@@ -12,11 +12,11 @@ export class BackgroundRemovalConfig {
   constructor(private readonly config: ConfigService) {}
 
   get studioMonthlyLimit(): number {
-    return positiveInteger(this.config.get<string>('BACKGROUND_REMOVAL_STUDIO_MONTHLY_LIMIT'), 25);
+    return positiveInteger(this.config.get<string>('BACKGROUND_REMOVAL_STUDIO_MONTHLY_CAP'), 25);
   }
 
   get globalDailyLimit(): number {
-    return positiveInteger(this.config.get<string>('BACKGROUND_REMOVAL_GLOBAL_DAILY_LIMIT'), 100);
+    return positiveInteger(this.config.get<string>('BACKGROUND_REMOVAL_GLOBAL_DAILY_CAP'), 100);
   }
 
   get maxSourceBytes(): number {
@@ -32,6 +32,13 @@ export class BackgroundRemovalConfig {
 
   get vendorTimeoutMs(): number {
     return positiveInteger(this.config.get<string>('BACKGROUND_REMOVAL_VENDOR_TIMEOUT_MS'), 30_000);
+  }
+
+  get storageTimeoutMs(): number {
+    return positiveInteger(
+      this.config.get<string>('BACKGROUND_REMOVAL_STORAGE_TIMEOUT_MS'),
+      15_000,
+    );
   }
 
   get reservationTtlMs(): number {

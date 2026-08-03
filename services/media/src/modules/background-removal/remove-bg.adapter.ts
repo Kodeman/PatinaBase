@@ -9,24 +9,27 @@ import {
 } from './background-removal.types';
 import { readResponseBuffer } from './response-buffer';
 
+const REMOVE_BG_ENDPOINT = 'https://api.remove.bg/v1.0/removebg';
+
 @Injectable()
 export class RemoveBgAdapter implements BackgroundRemovalVendor {
   private readonly apiKey: string | null;
-  private readonly apiUrl: string;
   private readonly provider: string;
 
   constructor(
     config: ConfigService,
     private readonly policy: BackgroundRemovalConfig,
   ) {
-    this.apiKey = config.get<string>('BACKGROUND_REMOVAL_API_KEY')?.trim() || null;
-    this.apiUrl =
-      config.get<string>('BACKGROUND_REMOVAL_API_URL') || 'https://api.remove.bg/v1.0/removebg';
-    this.provider = (config.get<string>('BACKGROUND_REMOVAL_PROVIDER') || 'removebg').toLowerCase();
+    this.apiKey = config.get<string>('REMOVE_BG_API_KEY')?.trim() || null;
+    this.provider = (
+      config.get<string>('BACKGROUND_REMOVAL_PROVIDER') || 'remove_bg'
+    )
+      .trim()
+      .toLowerCase();
   }
 
   isConfigured(): boolean {
-    return this.provider === 'removebg' && this.apiKey !== null;
+    return this.provider === 'remove_bg' && this.apiKey !== null;
   }
 
   async removeBackground(
@@ -50,7 +53,7 @@ export class RemoveBgAdapter implements BackgroundRemovalVendor {
     try {
       // Intentionally one fetch and no retry layer: one request can consume one
       // paid vendor credit.
-      const response = await fetch(this.apiUrl, {
+      const response = await fetch(REMOVE_BG_ENDPOINT, {
         method: 'POST',
         headers: { 'X-Api-Key': this.apiKey! },
         body: form,
@@ -68,7 +71,8 @@ export class RemoveBgAdapter implements BackgroundRemovalVendor {
       return {
         bytes,
         mimeType: 'image/png',
-        creditsUsed: Number.isFinite(rawCredits) && rawCredits >= 0 ? rawCredits : 1,
+        creditsUsed:
+          Number.isFinite(rawCredits) && rawCredits >= 0 && rawCredits <= 999_999 ? rawCredits : 1,
       };
     } catch (error) {
       if (error instanceof BackgroundRemovalVendorError) throw error;

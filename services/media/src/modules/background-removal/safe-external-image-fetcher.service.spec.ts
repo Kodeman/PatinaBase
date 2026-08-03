@@ -18,6 +18,8 @@ function policy() {
 }
 
 describe('SafeExternalImageFetcherService', () => {
+  afterEach(() => jest.useRealTimers());
+
   it.each([
     ['127.0.0.1', 4],
     ['10.2.3.4', 4],
@@ -55,6 +57,27 @@ describe('SafeExternalImageFetcherService', () => {
     await expect(service.fetch('https://images.example/chair.jpg')).rejects.toBeInstanceOf(
       BackgroundRemovalSourceError,
     );
+    expect(transport.get).not.toHaveBeenCalled();
+  });
+
+  it('bounds DNS resolution with the source timeout', async () => {
+    jest.useFakeTimers();
+    const resolver: BackgroundRemovalDns = {
+      lookup: jest.fn(() => new Promise(() => undefined)),
+    };
+    const transport: BackgroundRemovalHttpsTransport = { get: jest.fn() };
+    const service = new SafeExternalImageFetcherService(
+      resolver,
+      transport,
+      policy(),
+      new ImagePayloadValidatorService(),
+    );
+
+    const rejection = expect(
+      service.fetch('https://images.example/chair.jpg'),
+    ).rejects.toBeInstanceOf(BackgroundRemovalSourceError);
+    await jest.advanceTimersByTimeAsync(10_000);
+    await rejection;
     expect(transport.get).not.toHaveBeenCalled();
   });
 

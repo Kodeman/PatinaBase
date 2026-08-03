@@ -89,7 +89,18 @@ export class BackgroundRemovalLedgerService {
           };
         }
         if (existing.status === BackgroundRemovalStatus.RESERVED) {
-          return { kind: 'in_progress' };
+          if (existing.reservationExpiresAt > now) {
+            return { kind: 'in_progress' };
+          }
+          await transaction.backgroundRemovalRequest.updateMany({
+            where: { id: existing.id, status: BackgroundRemovalStatus.RESERVED },
+            data: {
+              status: BackgroundRemovalStatus.FAILED_RELEASED,
+              outcome: BackgroundRemovalOutcome.INTERNAL_FAILED,
+              completedAt: now,
+            },
+          });
+          return { kind: 'failed' };
         }
         return { kind: 'failed' };
       }

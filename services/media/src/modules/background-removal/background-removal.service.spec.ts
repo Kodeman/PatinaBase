@@ -103,6 +103,18 @@ function setup() {
 }
 
 describe('BackgroundRemovalService', () => {
+  it('reports unconfigured capability after authorization without requiring the ledger', async () => {
+    const { service, access, ledger, vendor } = setup();
+    vendor.isConfigured.mockReturnValue(false);
+
+    await expect(service.capability('forwarded-jwt', BOARD_ID)).resolves.toEqual({
+      available: false,
+      code: 'background_removal_not_configured',
+    });
+    expect(access.authorizeBoard).toHaveBeenCalledWith('forwarded-jwt', BOARD_ID);
+    expect(ledger.getQuota).not.toHaveBeenCalled();
+  });
+
   it('copies an external item source into canonical board storage, stores the cutout, and returns URLs/quota', async () => {
     const { service, ledger, storage, external, vendor } = setup();
 

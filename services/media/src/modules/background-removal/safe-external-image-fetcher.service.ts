@@ -1,7 +1,7 @@
 import { Inject, Injectable } from '@nestjs/common';
 import { promises as dns } from 'dns';
 import { request as httpsRequest } from 'https';
-import { BlockList, isIP } from 'net';
+import { BlockList, isIP, type LookupFunction } from 'net';
 import { BackgroundRemovalConfig } from './background-removal.config';
 import { BackgroundRemovalSourceError } from './background-removal.errors';
 import {
@@ -79,8 +79,25 @@ export class NodePinnedHttpsTransport implements BackgroundRemovalHttpsTransport
   ): Promise<HttpsTransportResponse> {
     const selected = addresses[0];
     if (!selected) return Promise.reject(new BackgroundRemovalSourceError());
+    const pinnedLookup: LookupFunction = (_hostname, _options, callback) => {
+      callback(null, selected.address, selected.family);
+    };
 
     return new Promise((resolve, reject) => {
+      let settled = false;
+      let deadline: ReturnType<typeof setTimeout> | undefined;
+      const fail = () => {
+        if (settled) return;
+        settled = true;
+        if (deadline) clearTimeout(deadline);
+        reject(new BackgroundRemovalSourceError());
+      };
+      const succeed = (value: HttpsTransportResponse) => {
+        if (settled) return;
+        settled = true;
+        if (deadline) clearTimeout(deadline);
+        resolve(value);
+      };
       const request = httpsRequest(
         url,
         {
@@ -93,14 +110,24 @@ export class NodePinnedHttpsTransport implements BackgroundRemovalHttpsTransport
           },
           // Pin the connection to an address from the validated lookup. TLS
           // still verifies `url.hostname` through the request's SNI/Host.
-          lookup: ((_hostname: string, _options: unknown, callback: Function) =>
-            callback(null, selected.address, selected.family)) as any,
+          lookup: pinnedLookup,
         },
         (response) => {
+          const headers: Record<string, string | undefined> = {};
+          for (const [name, value] of Object.entries(response.headers)) {
+            headers[name.toLowerCase()] = Array.isArray(value) ? value[0] : value;
+          }
+          const status = response.statusCode ?? 0;
+          if (status !== 200) {
+            response.destroy();
+            succeed({ status, headers, body: Buffer.alloc(0) });
+            return;
+          }
+
           const contentLength = Number(response.headers['content-length'] ?? '0');
           if (Number.isFinite(contentLength) && contentLength > options.maxBytes) {
             response.destroy();
-            reject(new BackgroundRemovalSourceError());
+            fail();
             return;
           }
 
@@ -111,28 +138,32 @@ export class NodePinnedHttpsTransport implements BackgroundRemovalHttpsTransport
             size += bytes.length;
             if (size > options.maxBytes) {
               response.destroy(new BackgroundRemovalSourceError());
+              fail();
               return;
             }
             chunks.push(bytes);
           });
           response.on('end', () => {
-            const headers: Record<string, string | undefined> = {};
-            for (const [name, value] of Object.entries(response.headers)) {
-              headers[name.toLowerCase()] = Array.isArray(value) ? value[0] : value;
-            }
-            resolve({
-              status: response.statusCode ?? 0,
+            succeed({
+              status,
               headers,
               body: Buffer.concat(chunks, size),
             });
           });
-          response.on('error', () => reject(new BackgroundRemovalSourceError()));
+          response.on('error', fail);
         },
       );
+      // Node's request timeout is an inactivity timer. Keep an absolute
+      // deadline too so a slow-drip response cannot hold a quota reservation.
+      deadline = setTimeout(() => {
+        request.destroy(new BackgroundRemovalSourceError());
+        fail();
+      }, options.timeoutMs);
       request.setTimeout(options.timeoutMs, () => {
         request.destroy(new BackgroundRemovalSourceError());
+        fail();
       });
-      request.on('error', () => reject(new BackgroundRemovalSourceError()));
+      request.on('error', fail);
       request.end();
     });
   }
@@ -205,7 +236,10 @@ export class SafeExternalImageFetcherService {
       if (isIP(hostname)) {
         addresses = [{ address: hostname, family: isIP(hostname) as 4 | 6 }];
       } else {
-        addresses = await this.resolver.lookup(hostname);
+        addresses = await this.withTimeout(
+          this.resolver.lookup(hostname),
+          this.policy.sourceTimeoutMs,
+        );
       }
     } catch {
       throw new BackgroundRemovalSourceError();
@@ -217,5 +251,21 @@ export class SafeExternalImageFetcherService {
       throw new BackgroundRemovalSourceError();
     }
     return addresses;
+  }
+
+  private withTimeout<T>(promise: Promise<T>, timeoutMs: number): Promise<T> {
+    return new Promise<T>((resolve, reject) => {
+      const timeout = setTimeout(() => reject(new BackgroundRemovalSourceError()), timeoutMs);
+      promise.then(
+        (value) => {
+          clearTimeout(timeout);
+          resolve(value);
+        },
+        () => {
+          clearTimeout(timeout);
+          reject(new BackgroundRemovalSourceError());
+        },
+      );
+    });
   }
 }

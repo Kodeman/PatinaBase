@@ -169,6 +169,41 @@ describe('BackgroundRemovalLedgerService', () => {
     expect(model.create).not.toHaveBeenCalled();
   });
 
+  it('turns an expired reservation into a durable released failure', async () => {
+    const { prisma, rows, model } = inMemoryPrisma();
+    rows.push({
+      ...target('expired-key'),
+      id: '77777777-7777-4777-8777-777777777777',
+      status: BackgroundRemovalStatus.RESERVED,
+      outcome: null,
+      originalUrl: null,
+      cutoutUrl: null,
+      creditsUsed: 0,
+      studioPeriodStart: new Date('2026-08-01T00:00:00.000Z'),
+      globalPeriodStart: new Date('2026-08-03T00:00:00.000Z'),
+      reservationExpiresAt: new Date('2026-08-03T18:59:59.000Z'),
+    });
+    const policy = {
+      studioMonthlyLimit: 25,
+      globalDailyLimit: 100,
+      reservationTtlMs: 300_000,
+    } as BackgroundRemovalConfig;
+    const service = new BackgroundRemovalLedgerService(prisma as any, policy, () => new Date(NOW));
+
+    await expect(service.reserve(target('expired-key'))).resolves.toEqual({ kind: 'failed' });
+    expect(model.updateMany).toHaveBeenCalledWith({
+      where: {
+        id: '77777777-7777-4777-8777-777777777777',
+        status: BackgroundRemovalStatus.RESERVED,
+      },
+      data: {
+        status: BackgroundRemovalStatus.FAILED_RELEASED,
+        outcome: BackgroundRemovalOutcome.INTERNAL_FAILED,
+        completedAt: NOW,
+      },
+    });
+  });
+
   it('releases quota when a reserved vendor call fails without a charge', async () => {
     const { prisma } = inMemoryPrisma();
     const policy = {
