@@ -1442,6 +1442,15 @@ export {
   useRevokeShare,
 } from './use-document-shares';
 export type { DocumentShare, CreatedShare } from './use-document-shares';
+
+export {
+  useBoardTemplates,
+  useSaveBoardAsTemplate,
+  useMaterializeBoardTemplate,
+  useRenameBoardTemplate,
+  useDeleteBoardTemplate,
+} from './use-board-templates';
+export type { BoardTemplate } from './use-board-templates';
 export {
   useProposalFeedback,
   useClientProposalFeedback,
