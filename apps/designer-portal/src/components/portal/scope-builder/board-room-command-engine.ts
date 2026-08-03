@@ -13,8 +13,9 @@ export const BOARD_ROOM_HISTORY_LIMIT = 100;
 export const BOARD_ROOM_COALESCE_MS = 500;
 export const BOARD_ROOM_DUPLICATE_OFFSET = 24;
 export const BOARD_ROOM_CANVAS_MARGIN = 240;
-export const BOARD_ROOM_CLIPBOARD_MIME = 'application/json';
+export const BOARD_ROOM_CLIPBOARD_MIME = 'application/vnd.patina.board-items+json';
 export const BOARD_ROOM_CLIPBOARD_NAMESPACE = 'com.patina.board-items';
+export const BOARD_ROOM_CLIPBOARD_MAX_BYTES = 1024 * 1024;
 
 export type BoardRoomMode = 'edit' | 'present';
 
@@ -710,19 +711,138 @@ export function serializeBoardRoomSelection(
       };
     }),
   };
-  return JSON.stringify(envelope);
+  const serialized = JSON.stringify(envelope);
+  const bytes = typeof TextEncoder === 'undefined'
+    ? serialized.length * 2
+    : new TextEncoder().encode(serialized).byteLength;
+  return bytes <= BOARD_ROOM_CLIPBOARD_MAX_BYTES ? serialized : null;
+}
+
+function clipboardRecord(value: unknown): value is Record<string, unknown> {
+  return !!value && typeof value === 'object' && !Array.isArray(value);
+}
+
+function clipboardString(value: unknown, max = 2_048): value is string {
+  return typeof value === 'string' && value.length > 0 && value.length <= max;
+}
+
+function clipboardNullableString(value: unknown, max = 100_000): value is string | null | undefined {
+  return value == null || (typeof value === 'string' && value.length <= max);
+}
+
+function clipboardNumber(value: unknown, options: { positive?: boolean } = {}): value is number {
+  return typeof value === 'number' && Number.isFinite(value) &&
+    Math.abs(value) <= 10_000_000 && (!options.positive || value > 0);
+}
+
+function safeClipboardJson(value: unknown, depth = 0): boolean {
+  if (depth > 12) return false;
+  if (value == null || typeof value === 'boolean') return true;
+  if (typeof value === 'number') return Number.isFinite(value);
+  if (typeof value === 'string') return value.length <= 100_000;
+  if (Array.isArray(value)) {
+    return value.length <= 1_000 && value.every((entry) => safeClipboardJson(entry, depth + 1));
+  }
+  if (!clipboardRecord(value)) return false;
+  const entries = Object.entries(value);
+  return entries.length <= 1_000 && entries.every(([key, entry]) =>
+    !['__proto__', 'prototype', 'constructor'].includes(key) &&
+    key.length <= 256 &&
+    safeClipboardJson(entry, depth + 1),
+  );
+}
+
+const CLIPBOARD_ITEM_TYPES = new Set([
+  'product',
+  'capture',
+  'image',
+  'palette',
+  'note',
+  'room_scan',
+]);
+
+function parseClipboardItem(value: unknown): EditableMoodBoardItem | null {
+  if (!clipboardRecord(value)) return null;
+  if (!clipboardString(value.id) || !CLIPBOARD_ITEM_TYPES.has(String(value.type))) return null;
+  if (
+    !clipboardNumber(value.x) ||
+    !clipboardNumber(value.y) ||
+    !clipboardNumber(value.width, { positive: true }) ||
+    !(value.height == null || clipboardNumber(value.height, { positive: true })) ||
+    !(value.zIndex == null || clipboardNumber(value.zIndex)) ||
+    !(value.rotation == null || clipboardNumber(value.rotation)) ||
+    !(value.locked == null || typeof value.locked === 'boolean') ||
+    !clipboardNullableString(value.productId) ||
+    !clipboardNullableString(value.captureId) ||
+    !clipboardNullableString(value.paletteId) ||
+    !clipboardNullableString(value.imageUrl) ||
+    !clipboardNullableString(value.imageKey) ||
+    !clipboardNullableString(value.content) ||
+    !(value.data == null || (clipboardRecord(value.data) && safeClipboardJson(value.data)))
+  ) return null;
+  return {
+    id: value.id,
+    type: value.type as EditableMoodBoardItem['type'],
+    x: value.x,
+    y: value.y,
+    width: value.width,
+    height: value.height as number | null | undefined,
+    zIndex: (value.zIndex as number | undefined) ?? 0,
+    rotation: (value.rotation as number | undefined) ?? 0,
+    locked: (value.locked as boolean | undefined) ?? false,
+    productId: (value.productId as string | null | undefined) ?? null,
+    captureId: (value.captureId as string | null | undefined) ?? null,
+    paletteId: (value.paletteId as string | null | undefined) ?? null,
+    imageUrl: (value.imageUrl as string | null | undefined) ?? null,
+    imageKey: (value.imageKey as string | null | undefined) ?? null,
+    content: (value.content as string | null | undefined) ?? null,
+    data: (value.data as MoodBoardItemData | null | undefined) ?? {},
+  };
 }
 
 export function parseBoardRoomClipboard(value: string): BoardRoomClipboardEnvelope | null {
   try {
-    const envelope = JSON.parse(value) as Partial<BoardRoomClipboardEnvelope>;
+    const bytes = typeof TextEncoder === 'undefined'
+      ? value.length * 2
+      : new TextEncoder().encode(value).byteLength;
+    if (bytes > BOARD_ROOM_CLIPBOARD_MAX_BYTES) return null;
+    const envelope = JSON.parse(value) as unknown;
     if (
+      !clipboardRecord(envelope) ||
       envelope.namespace !== BOARD_ROOM_CLIPBOARD_NAMESPACE ||
       envelope.version !== 1 ||
-      !envelope.owner ||
-      !Array.isArray(envelope.items)
+      !clipboardRecord(envelope.owner) ||
+      (envelope.owner.kind !== 'proposal' && envelope.owner.kind !== 'project') ||
+      !clipboardString(envelope.owner.id) ||
+      !clipboardString(envelope.originBoardId) ||
+      !Array.isArray(envelope.items) ||
+      envelope.items.length === 0 ||
+      envelope.items.length > 1_000
     ) return null;
-    return envelope as BoardRoomClipboardEnvelope;
+    const items: BoardRoomClipboardItem[] = [];
+    for (const entry of envelope.items) {
+      if (
+        !clipboardRecord(entry) ||
+        !clipboardRecord(entry.offset) ||
+        !clipboardNumber(entry.offset.x) ||
+        !clipboardNumber(entry.offset.y) ||
+        !(entry.sectionName == null || (typeof entry.sectionName === 'string' && entry.sectionName.length <= 256))
+      ) return null;
+      const item = parseClipboardItem(entry.item);
+      if (!item) return null;
+      items.push({
+        item,
+        offset: { x: entry.offset.x, y: entry.offset.y },
+        sectionName: (entry.sectionName as string | null | undefined) ?? null,
+      });
+    }
+    return {
+      namespace: BOARD_ROOM_CLIPBOARD_NAMESPACE,
+      version: 1,
+      owner: { kind: envelope.owner.kind, id: envelope.owner.id },
+      originBoardId: envelope.originBoardId,
+      items,
+    };
   } catch {
     return null;
   }

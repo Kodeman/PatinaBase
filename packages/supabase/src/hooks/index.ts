@@ -1274,6 +1274,7 @@ export {
   useAddBoardItem,
   useUpdateBoardItem,
   useDeleteBoardItem,
+  useApplyBoardRoomState,
   useSaveBoardLayout,
   useProjectBoards,
   // B8 (00272/00273) — project-owned live boards
@@ -1298,6 +1299,7 @@ export type {
   UpsertBoardInput,
   AddBoardItemInput,
   UpdateBoardItemInput,
+  ApplyBoardRoomStateInput,
   BoardLayoutPosition,
 } from './use-boards';
 

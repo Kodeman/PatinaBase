@@ -24,6 +24,7 @@ import {
   updateBoardRoomItemFields,
   replaceBoardRoomItem,
   updateBoardRoomSections,
+  BOARD_ROOM_CLIPBOARD_MAX_BYTES,
   type BoardRoomHistory,
   type BoardRoomState,
 } from './board-room-command-engine';
@@ -197,6 +198,21 @@ describe('duplicate, clipboard and keyboard command groups', () => {
     });
     expect(crossOwner.history.present.items[0].data?.source_url).toBe('https://maker.example/chair');
     expect(crossOwner.history.present.items[1].imageUrl).toBe('https://cdn.example/reference.jpg');
+  });
+
+  it('rejects oversized and malformed clipboard envelopes before they reach history', () => {
+    expect(parseBoardRoomClipboard('x'.repeat(BOARD_ROOM_CLIPBOARD_MAX_BYTES + 1))).toBeNull();
+    expect(parseBoardRoomClipboard(JSON.stringify({
+      namespace: 'com.patina.board-items',
+      version: 1,
+      owner: { kind: 'proposal', id: 'proposal-1' },
+      originBoardId: 'board-1',
+      items: [{
+        item: { id: 'bad', type: 'script', x: 0, y: 0, width: -10, data: { __proto__: { polluted: true } } },
+        offset: { x: Number.POSITIVE_INFINITY, y: 0 },
+        sectionName: null,
+      }],
+    }))).toBeNull();
   });
 
   it('coalesces ten rapid nudges into one 10px undo step (AC1.23)', () => {

@@ -37,6 +37,8 @@ export interface BoardShareDialogProps {
   onOpenChange: (open: boolean) => void;
   /** Called only after a newly minted link has reached the clipboard. */
   onShareCreated?: (shareId: string) => void;
+  /** Flushes the live room before a token can expose its composition. */
+  flush?: () => Promise<void>;
 }
 
 /** Board-only, view-only share management for the full-screen room. */
@@ -46,6 +48,7 @@ export function BoardShareDialog({
   open,
   onOpenChange,
   onShareCreated,
+  flush,
 }: BoardShareDialogProps) {
   const { data: shares = [], isLoading, isError } = useBoardShares(open ? boardId : undefined);
   const createShare = useCreateBoardShare();
@@ -84,6 +87,7 @@ export function BoardShareDialog({
     setError(null);
     setCopied(false);
     try {
+      await flush?.();
       const result = await createShare.mutateAsync({
         boardId,
         label: label.trim() || null,

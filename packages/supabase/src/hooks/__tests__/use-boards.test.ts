@@ -99,6 +99,7 @@ vi.mock('@tanstack/react-query', () => ({
 // Import AFTER the mocks are wired up.
 import {
   useAddBoardItem,
+  useApplyBoardRoomState,
   useBoards,
   useSaveBoardLayout,
   useBoardsWithItems,
@@ -179,6 +180,65 @@ describe('useSaveBoardLayout', () => {
       mutationFn: (input: any) => Promise<any>;
     };
     await expect(config.mutationFn({ boardId: 'b1', positions })).rejects.toThrow('rls reject');
+  });
+});
+
+describe('useApplyBoardRoomState', () => {
+  const input = {
+    boardId: 'board-1',
+    owner: { kind: 'project' as const, id: 'project-1' },
+    state: {
+      name: 'Living room direction',
+      canvasWidth: 1200,
+      canvasHeight: 800,
+      backgroundColor: '#FAF8F5',
+      sections: [{ id: 'section-1', name: 'Seating' }],
+      items: [{
+        id: '11111111-1111-4111-8111-111111111111',
+        type: 'note' as const,
+        x: 40,
+        y: 60,
+        width: 200,
+        height: 120,
+        zIndex: 1,
+        rotation: 0,
+        locked: false,
+        content: 'Warm, quiet, grounded',
+        data: {},
+      }],
+    },
+  };
+
+  it('sends one owner-scoped full-state RPC', async () => {
+    rpc.mockResolvedValue({ data: null, error: null });
+    const config = useApplyBoardRoomState() as unknown as {
+      mutationFn: (value: typeof input) => Promise<void>;
+    };
+
+    await config.mutationFn(input);
+
+    expect(rpc).toHaveBeenCalledTimes(1);
+    expect(rpc).toHaveBeenCalledWith('apply_board_room_state', {
+      p_board_id: 'board-1',
+      p_owner_kind: 'project',
+      p_owner_id: 'project-1',
+      p_state: input.state,
+    });
+    expect(fromSpy).not.toHaveBeenCalled();
+  });
+
+  it('throws the RPC error and invalidates every owner projection on settle', async () => {
+    rpc.mockResolvedValue({ data: null, error: new Error('transaction rolled back') });
+    const config = useApplyBoardRoomState() as unknown as {
+      mutationFn: (value: typeof input) => Promise<void>;
+      onSettled: (data: undefined, error: Error, value: typeof input) => Promise<void>;
+    };
+
+    await expect(config.mutationFn(input)).rejects.toThrow('transaction rolled back');
+    await config.onSettled(undefined, new Error('transaction rolled back'), input);
+    expect(invalidateQueries).toHaveBeenCalledWith({ queryKey: ['board', 'board-1'] });
+    expect(invalidateQueries).toHaveBeenCalledWith({ queryKey: ['project-owned-boards', 'project-1'] });
+    expect(invalidateQueries).toHaveBeenCalledWith({ queryKey: ['project-owned-boards-with-items', 'project-1'] });
   });
 });
 

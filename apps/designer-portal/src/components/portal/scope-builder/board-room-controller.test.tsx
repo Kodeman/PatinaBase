@@ -1,13 +1,12 @@
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import type { BoardRoomControllerApi } from './board-room-controller';
-import { BoardRoomController } from './board-room-controller';
+import { BoardRoomController, revertFailedStructuralTransition } from './board-room-controller';
+import type { BoardRoomState } from './board-room-command-engine';
 import { resetProposalAutosaveRegistryForTests } from '@/lib/proposal-autosave-registry';
 
 const mockSaveLayout = jest.fn();
 const mockUpsertBoard = jest.fn();
-const mockAddItem = jest.fn();
-const mockUpdateItem = jest.fn();
-const mockDeleteItem = jest.fn();
+const mockApplyBoardRoomState = jest.fn();
 let mockCanvasProps: Record<string, any> | null = null;
 
 const mockBoard = {
@@ -89,9 +88,7 @@ jest.mock('@patina/supabase', () => ({
   useBoard: () => ({ data: mockBoard, isLoading: false, error: null }),
   useSaveBoardLayout: () => ({ mutateAsync: mockSaveLayout }),
   useUpsertBoard: () => ({ mutateAsync: mockUpsertBoard }),
-  useAddBoardItem: () => ({ mutateAsync: mockAddItem }),
-  useUpdateBoardItem: () => ({ mutateAsync: mockUpdateItem }),
-  useDeleteBoardItem: () => ({ mutateAsync: mockDeleteItem }),
+  useApplyBoardRoomState: () => ({ mutateAsync: mockApplyBoardRoomState }),
 }));
 
 beforeEach(() => {
@@ -99,9 +96,7 @@ beforeEach(() => {
   mockCanvasProps = null;
   mockSaveLayout.mockResolvedValue(undefined);
   mockUpsertBoard.mockResolvedValue(mockBoard);
-  mockAddItem.mockImplementation(async (input) => ({ ...mockBoard.items[0], id: input.itemId }));
-  mockUpdateItem.mockResolvedValue(mockBoard.items[0]);
-  mockDeleteItem.mockResolvedValue(undefined);
+  mockApplyBoardRoomState.mockResolvedValue(undefined);
 });
 
 afterEach(() => {
@@ -110,6 +105,28 @@ afterEach(() => {
 });
 
 describe('BoardRoomController binding', () => {
+  it('three-way reverts a failed structural command without clobbering later unrelated edits', () => {
+    const item = {
+      id: 'item-1', type: 'note' as const, x: 10, y: 20, width: 200, height: 120,
+      zIndex: 0, rotation: 0, locked: false, productId: null, captureId: null,
+      paletteId: null, imageUrl: null, content: 'Before', data: {},
+    };
+    const before: BoardRoomState = {
+      boardId: 'board-project', owner: { kind: 'project', id: 'project-1' },
+      name: 'Before', canvasWidth: 1200, canvasHeight: 800,
+      backgroundColor: '#fff', sections: [], items: [item],
+    };
+    const added = { ...item, id: 'item-added', content: 'Failed add', zIndex: 1 };
+    const after: BoardRoomState = { ...before, name: 'Failed rename', items: [item, added] };
+    const later = { ...item, id: 'item-later', content: 'Later local edit', zIndex: 2 };
+    const current: BoardRoomState = { ...after, items: [item, { ...added, content: 'Edited later' }, later] };
+
+    expect(revertFailedStructuralTransition(current, before, after)).toMatchObject({
+      name: 'Before',
+      items: [item, later],
+    });
+  });
+
   it('keeps live edits, selection and history across Edit/Present without a refetch (AC2.6)', async () => {
     render(
       <BoardRoomController
@@ -122,9 +139,13 @@ describe('BoardRoomController binding', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Move item' }));
     expect(screen.getByTestId('edit-canvas')).toHaveTextContent('edit-x:410;selected:1');
 
-    fireEvent.keyDown(window, { key: 'p' });
+    await act(async () => {
+      fireEvent.keyDown(window, { key: 'p' });
+      await Promise.resolve();
+      await Promise.resolve();
+    });
     expect(screen.getByTestId('present-composition')).toHaveTextContent('present-x:410');
-    fireEvent.keyDown(window, { key: 'p' });
+    act(() => fireEvent.keyDown(window, { key: 'p' }));
     expect(screen.getByTestId('edit-canvas')).toHaveTextContent('edit-x:410;selected:1');
 
     fireEvent.keyDown(window, { key: 'z', metaKey: true });
@@ -132,6 +153,25 @@ describe('BoardRoomController binding', () => {
     fireEvent.keyDown(window, { key: 'z', metaKey: true, shiftKey: true });
     expect(screen.getByTestId('edit-canvas')).toHaveTextContent('edit-x:410;selected:1');
     expect(mockCanvasProps).not.toBeNull();
+  });
+
+  it('keeps Present immutable when undo shortcuts are pressed', async () => {
+    render(
+      <BoardRoomController
+        owner={{ kind: 'project', id: 'project-1' }}
+        boardId="board-project"
+      />,
+    );
+    await screen.findByTestId('edit-canvas');
+    fireEvent.click(screen.getByRole('button', { name: 'Move item' }));
+    await act(async () => {
+      fireEvent.keyDown(window, { key: 'p' });
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+    expect(screen.getByTestId('present-composition')).toHaveTextContent('present-x:410');
+    fireEvent.keyDown(window, { key: 'z', metaKey: true });
+    expect(screen.getByTestId('present-composition')).toHaveTextContent('present-x:410');
   });
 
   it('compensates pan for top/left canvas growth so the composition does not jump (AC1.8)', async () => {
@@ -168,7 +208,11 @@ describe('BoardRoomController binding', () => {
     );
     await screen.findByTestId('edit-canvas');
     fireEvent.click(screen.getByRole('button', { name: 'Select item' }));
-    fireEvent.keyDown(window, { key: 'p' });
+    await act(async () => {
+      fireEvent.keyDown(window, { key: 'p' });
+      await Promise.resolve();
+      await Promise.resolve();
+    });
     expect(screen.getByTestId('present-composition')).toBeInTheDocument();
     fireEvent.keyDown(window, { key: 'Escape' });
     expect(screen.getByTestId('edit-canvas')).toHaveTextContent('selected:0');
@@ -221,10 +265,10 @@ describe('BoardRoomController binding', () => {
       owner: { kind: 'project', id: 'project-1' },
       positions: [expect.objectContaining({ id: 'item-1', x: 510, width: 200, height: 220 })],
     }));
-    expect(mockUpsertBoard).toHaveBeenCalledWith(expect.objectContaining({
+    expect(mockApplyBoardRoomState).toHaveBeenCalledWith(expect.objectContaining({
       boardId: 'board-project',
       owner: { kind: 'project', id: 'project-1' },
-      name: 'Client-ready concept',
+      state: expect.objectContaining({ name: 'Client-ready concept' }),
     }));
   });
 
@@ -245,12 +289,63 @@ describe('BoardRoomController binding', () => {
     expect(screen.getByTestId('item-count')).toHaveTextContent('0');
     act(() => api!.undo());
     expect(api!.state?.items[0]).toMatchObject({ id: 'item-1', x: 10 });
-    await waitFor(() => expect(mockAddItem).toHaveBeenCalledWith(expect.objectContaining({
-      itemId: 'item-1',
+    await waitFor(() => expect(mockApplyBoardRoomState).toHaveBeenLastCalledWith(expect.objectContaining({
       owner: { kind: 'project', id: 'project-1' },
+      state: expect.objectContaining({
+        items: [expect.objectContaining({ id: 'item-1' })],
+      }),
     })));
     expect(mockSaveLayout).not.toHaveBeenCalledWith(expect.objectContaining({
       positions: [expect.objectContaining({ id: 'item-1', x: 999 })],
+    }));
+  });
+
+  it('rebases a queued structural snapshot after the earlier command rolls back', async () => {
+    let api: BoardRoomControllerApi | null = null;
+    let rejectFirst: (error: Error) => void = () => undefined;
+    const first = new Promise<void>((_resolve, reject) => { rejectFirst = reject; });
+    mockApplyBoardRoomState
+      .mockImplementationOnce(() => first)
+      .mockResolvedValue(undefined);
+
+    render(
+      <BoardRoomController owner={{ kind: 'project', id: 'project-1' }} boardId="board-project">
+        {(value) => {
+          api = value;
+          return <span data-testid="queued-items">{value.state?.items.map((item) => item.id).join(',')}</span>;
+        }}
+      </BoardRoomController>,
+    );
+    await waitFor(() => expect(api?.state).not.toBeNull());
+    act(() => {
+      api!.addItems([{
+        id: 'failed-a', type: 'note', x: 280, y: 20, width: 160, height: 100,
+        zIndex: 1, rotation: 0, locked: false, content: 'A', data: {},
+      }]);
+    });
+    await waitFor(() => expect(mockApplyBoardRoomState).toHaveBeenCalledTimes(1));
+    act(() => {
+      api!.addItems([{
+        id: 'kept-b', type: 'note', x: 470, y: 20, width: 160, height: 100,
+        zIndex: 2, rotation: 0, locked: false, content: 'B', data: {},
+      }]);
+    });
+    await act(async () => {
+      rejectFirst(new Error('injected transaction failure'));
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    await waitFor(() => expect(mockApplyBoardRoomState).toHaveBeenCalledTimes(2));
+    expect(screen.getByTestId('queued-items')).toHaveTextContent('item-1,kept-b');
+    expect(screen.getByTestId('queued-items')).not.toHaveTextContent('failed-a');
+    expect(mockApplyBoardRoomState).toHaveBeenLastCalledWith(expect.objectContaining({
+      state: expect.objectContaining({
+        items: [
+          expect.objectContaining({ id: 'item-1' }),
+          expect.objectContaining({ id: 'kept-b' }),
+        ],
+      }),
     }));
   });
 });

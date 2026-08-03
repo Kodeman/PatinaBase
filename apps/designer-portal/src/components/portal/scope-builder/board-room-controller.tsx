@@ -19,11 +19,9 @@ import {
   type BoardView,
 } from '@patina/design-system';
 import {
-  useAddBoardItem,
+  useApplyBoardRoomState,
   useBoard,
-  useDeleteBoardItem,
   useSaveBoardLayout,
-  useUpdateBoardItem,
   useUpsertBoard,
   type BoardLayoutPosition,
   type ProposalBoardItem,
@@ -45,6 +43,7 @@ import {
   alignBoardRoomItems,
   altDragDuplicateBoardRoomItems,
   changeBoardRoomZOrder,
+  cloneBoardRoomState,
   commitItemPatches,
   createBoardRoomHistory,
   deleteBoardRoomItems,
@@ -65,9 +64,12 @@ import {
   updateBoardRoomItemFields,
   updateBoardRoomFields,
   updateBoardRoomSections,
+  BOARD_ROOM_CLIPBOARD_MIME,
+  BOARD_ROOM_HISTORY_LIMIT,
   type BoardItemPatch,
   type BoardRoomAlignment,
   type BoardRoomCommandResult,
+  type BoardRoomCommand,
   type BoardRoomDistribution,
   type BoardRoomHistory,
   type BoardRoomMode,
@@ -98,6 +100,20 @@ export interface BoardRoomAddOptions {
   id?: string;
   kind?: 'add' | 'paste' | 'duplicate';
   select?: boolean;
+  source?: BoardRoomItemAddSource;
+}
+
+export type BoardRoomItemAddSource =
+  | 'rail_drag'
+  | 'rail_click'
+  | 'file_drop'
+  | 'paste'
+  | 'duplicate'
+  | 'suggestion';
+
+export interface BoardRoomCommandCommittedEvent {
+  command: BoardRoomCommand;
+  direction: StructuralTransitionDirection;
 }
 
 export interface BoardRoomTidyOptions {
@@ -135,6 +151,13 @@ export interface BoardRoomControllerOptions {
   onSendToSchedule?: (item: EditableMoodBoardItem) => void;
   onOpenProduct?: (item: EditableMoodBoardItem) => void;
   onReplaceImage?: (item: EditableMoodBoardItem) => void;
+  /** Central guard shared by keyboard, context-menu, cut, and inspector deletes. */
+  onBeforeDelete?: (items: readonly EditableMoodBoardItem[]) => boolean;
+  onItemsAdded?: (
+    items: readonly EditableMoodBoardItem[],
+    source: BoardRoomItemAddSource,
+  ) => void;
+  onCommandCommitted?: (event: BoardRoomCommandCommittedEvent) => void;
 }
 
 export interface BoardRoomUrlPasteControls {
@@ -160,6 +183,7 @@ export interface BoardRoomControllerApi {
   isExiting: boolean;
   persistenceState: BufferedAutosaveState | 'saving';
   persistenceError: string | null;
+  announcement: string;
   canUndo: boolean;
   canRedo: boolean;
   canvasProps: BoardRoomCanvasProps | null;
@@ -180,7 +204,11 @@ export interface BoardRoomControllerApi {
   altDragItems: (ids: readonly string[], delta: BoardPoint) => string[];
   copyItems: (ids?: readonly string[]) => Promise<string | null>;
   cutItems: (ids?: readonly string[]) => Promise<void>;
-  pasteAt: (point: BoardPoint, serialized?: string) => Promise<string[]>;
+  pasteAt: (
+    point: BoardPoint,
+    serialized?: string,
+    source?: BoardRoomItemAddSource,
+  ) => Promise<string[]>;
   moveItems: (
     patches: Readonly<Record<string, Pick<BoardItemPatch, 'x' | 'y'>>>,
     id?: string,
@@ -201,6 +229,8 @@ export interface BoardRoomControllerApi {
   updateSections: (operation: BoardSectionOperation) => void;
   moveSectionBand: (sectionId: string, delta: BoardPoint) => void;
   trimCanvas: () => void;
+  /** Clears a surfaced error after the failed structural change was reverted. */
+  discardPersistenceError: () => void;
 }
 
 function boardItemFromRow(row: ProposalBoardItem): EditableMoodBoardItem {
@@ -284,6 +314,185 @@ function sameStructuralItem(a: EditableMoodBoardItem, b: EditableMoodBoardItem):
     stableString(a.data) === stableString(b.data);
 }
 
+function sameValue(a: unknown, b: unknown): boolean {
+  return stableString(a) === stableString(b);
+}
+
+function atomicBoardState(state: BoardRoomState) {
+  return {
+    name: state.name,
+    canvasWidth: state.canvasWidth,
+    canvasHeight: state.canvasHeight,
+    backgroundColor: state.backgroundColor,
+    sections: state.sections.map((section) => ({ ...section })),
+    items: state.items.map((item) => ({
+      id: item.id,
+      type: item.type,
+      x: item.x,
+      y: item.y,
+      width: item.width,
+      height: item.height ?? null,
+      zIndex: item.zIndex ?? 0,
+      rotation: item.rotation ?? 0,
+      locked: item.locked ?? false,
+      productId: item.productId ?? null,
+      captureId: item.captureId ?? null,
+      paletteId: item.paletteId ?? null,
+      imageUrl: item.imageUrl ?? null,
+      content: item.content ?? null,
+      data: item.data ?? {},
+    })),
+  };
+}
+
+export type StructuralTransitionDirection = 'apply' | 'undo' | 'redo';
+
+function recoveryCommand(
+  command: BoardRoomCommand,
+  before: BoardRoomState,
+  after: BoardRoomState,
+): BoardRoomCommand {
+  return {
+    id: `recovery:${command.id}:${Date.now()}`,
+    kind: 'content',
+    lane: 'structural',
+    touches: [...command.touches],
+    before: cloneBoardRoomState(before),
+    after: cloneBoardRoomState(after),
+    committedAt: Date.now(),
+  };
+}
+
+/** Keep the unaffected history prefix instead of erasing all undo state. */
+function historyAfterStructuralFailure(
+  history: BoardRoomHistory,
+  command: BoardRoomCommand,
+  direction: StructuralTransitionDirection,
+  reverted: BoardRoomState,
+): BoardRoomHistory {
+  if (direction === 'undo') {
+    const futureIndex = history.future.findIndex((entry) => entry.id === command.id);
+    if (futureIndex >= 0 && sameValue(history.present, command.before)) {
+      return {
+        present: cloneBoardRoomState(reverted),
+        past: [...history.past, command].slice(-BOARD_ROOM_HISTORY_LIMIT),
+        future: history.future.filter((_, index) => index !== futureIndex),
+      };
+    }
+    const recovery = recoveryCommand(command, history.present, reverted);
+    return {
+      present: cloneBoardRoomState(reverted),
+      past: [...history.past, recovery].slice(-BOARD_ROOM_HISTORY_LIMIT),
+      future: [],
+    };
+  }
+
+  let commandIndex = -1;
+  for (let index = history.past.length - 1; index >= 0; index -= 1) {
+    if (history.past[index]?.id === command.id) {
+      commandIndex = index;
+      break;
+    }
+  }
+  if (commandIndex >= 0) {
+    const prefix = history.past.slice(0, commandIndex);
+    const cleanBase = command.before;
+    const hasLaterEffectiveEdits = !sameValue(cleanBase, reverted);
+    const past = hasLaterEffectiveEdits
+      ? [...prefix, recoveryCommand(command, cleanBase, reverted)]
+      : prefix;
+    return {
+      present: cloneBoardRoomState(reverted),
+      past: past.slice(-BOARD_ROOM_HISTORY_LIMIT),
+      future: direction === 'redo' && !hasLaterEffectiveEdits
+        ? [command, ...history.future]
+        : [],
+    };
+  }
+
+  return createBoardRoomHistory(reverted);
+}
+
+function cloneValue<Value>(value: Value): Value {
+  if (typeof structuredClone === 'function') return structuredClone(value);
+  if (value === undefined) return value;
+  return JSON.parse(JSON.stringify(value)) as Value;
+}
+
+/**
+ * Three-way inverse for a failed immediate write. Later unrelated local edits
+ * survive; an item whose create failed is removed even if it was edited later.
+ */
+export function revertFailedStructuralTransition(
+  current: BoardRoomState,
+  before: BoardRoomState,
+  after: BoardRoomState,
+): BoardRoomState {
+  const reverted = cloneBoardRoomState(current);
+  const currentRecord = reverted as unknown as Record<string, unknown>;
+  const beforeRecord = before as unknown as Record<string, unknown>;
+  const afterRecord = after as unknown as Record<string, unknown>;
+  for (const key of ['name', 'canvasWidth', 'canvasHeight', 'backgroundColor', 'sections']) {
+    if (sameValue(currentRecord[key], afterRecord[key])) {
+      currentRecord[key] = cloneValue(beforeRecord[key]);
+    }
+  }
+
+  const beforeById = new Map(before.items.map((item) => [item.id, item]));
+  const afterById = new Map(after.items.map((item) => [item.id, item]));
+  const currentById = new Map(reverted.items.map((item) => [item.id, item]));
+  const result = new Map<string, EditableMoodBoardItem>();
+  const keys: Array<keyof EditableMoodBoardItem> = [
+    'type',
+    'x',
+    'y',
+    'width',
+    'height',
+    'zIndex',
+    'rotation',
+    'locked',
+    'productId',
+    'captureId',
+    'paletteId',
+    'imageUrl',
+    'imageKey',
+    'content',
+    'data',
+  ];
+
+  for (const [id, currentItem] of currentById) {
+    const previous = beforeById.get(id);
+    const failed = afterById.get(id);
+    if (!previous && failed) continue;
+    if (!previous || !failed) {
+      result.set(id, currentItem);
+      continue;
+    }
+    const next = cloneBoardRoomState({ ...current, items: [currentItem] }).items[0];
+    const nextRecord = next as unknown as Record<string, unknown>;
+    const previousRecord = previous as unknown as Record<string, unknown>;
+    const failedRecord = failed as unknown as Record<string, unknown>;
+    for (const key of keys) {
+      if (sameValue(nextRecord[key], failedRecord[key])) {
+        nextRecord[key] = cloneValue(previousRecord[key]);
+      }
+    }
+    result.set(id, next);
+  }
+
+  for (const item of before.items) {
+    if (!afterById.has(item.id) && !result.has(item.id)) {
+      result.set(item.id, cloneBoardRoomState({ ...before, items: [item] }).items[0]);
+    }
+  }
+  const orderedIds = [
+    ...before.items.map((item) => item.id),
+    ...reverted.items.map((item) => item.id).filter((id) => !beforeById.has(id)),
+  ];
+  reverted.items = orderedIds.flatMap((id) => result.get(id) ? [result.get(id)!] : []);
+  return reverted;
+}
+
 function generatedId(prefix = 'board-item'): string {
   if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
     return crypto.randomUUID();
@@ -304,13 +513,18 @@ function isEditableTarget(target: EventTarget | null): boolean {
 async function writeClipboardJson(value: string): Promise<void> {
   if (typeof navigator === 'undefined' || !navigator.clipboard) return;
   if ('write' in navigator.clipboard && typeof ClipboardItem !== 'undefined') {
-    await navigator.clipboard.write([
-      new ClipboardItem({
-        'application/json': new Blob([value], { type: 'application/json' }),
-        'text/plain': new Blob([value], { type: 'text/plain' }),
-      }),
-    ]);
-    return;
+    try {
+      await navigator.clipboard.write([
+        new ClipboardItem({
+          [BOARD_ROOM_CLIPBOARD_MIME]: new Blob([value], { type: BOARD_ROOM_CLIPBOARD_MIME }),
+          'text/plain': new Blob([value], { type: 'text/plain' }),
+        }),
+      ]);
+      return;
+    } catch {
+      // Some browsers reject custom clipboard MIME types. The namespaced,
+      // fully validated text envelope remains interoperable.
+    }
   }
   await navigator.clipboard.writeText(value);
 }
@@ -358,8 +572,8 @@ async function readClipboardPayload(): Promise<BoardClipboardPayload> {
         const blob = await entry.getType(imageType);
         images.push(new File([blob], `clipboard.${imageType.split('/')[1]}`, { type: imageType }));
       }
-      const type = entry.types.includes('application/json')
-        ? 'application/json'
+      const type = entry.types.includes(BOARD_ROOM_CLIPBOARD_MIME)
+        ? BOARD_ROOM_CLIPBOARD_MIME
         : entry.types.includes('text/plain')
           ? 'text/plain'
           : null;
@@ -385,6 +599,9 @@ export function useBoardRoomController({
   onItemsDropped,
   onPasteImages,
   onPasteUrl,
+  onBeforeDelete,
+  onItemsAdded,
+  onCommandCommitted,
 }: BoardRoomControllerOptions): BoardRoomControllerApi {
   const owner = useMemo<BoardOwnerRef>(
     () => ({ kind: ownerInput.kind, id: ownerInput.id }),
@@ -394,9 +611,7 @@ export function useBoardRoomController({
   const boardQuery = useBoard(boardId);
   const saveLayoutMutation = useSaveBoardLayout();
   const upsertBoardMutation = useUpsertBoard();
-  const addItemMutation = useAddBoardItem();
-  const updateItemMutation = useUpdateBoardItem();
-  const deleteItemMutation = useDeleteBoardItem();
+  const applyStateMutation = useApplyBoardRoomState();
 
   const [history, setHistory] = useState<BoardRoomHistory | null>(null);
   const historyRef = useRef<BoardRoomHistory | null>(null);
@@ -404,8 +619,11 @@ export function useBoardRoomController({
   const initializedIdentityRef = useRef<string | null>(null);
   const generationsRef = useRef(new Map<string, number>());
   const structuralTasksRef = useRef(new Set<Promise<unknown>>());
+  const structuralQueueRef = useRef<Promise<void>>(Promise.resolve());
+  const structuralWriteGateRef = useRef<Promise<void> | null>(null);
   const [structuralSaving, setStructuralSaving] = useState(false);
   const [persistenceError, setPersistenceError] = useState<string | null>(null);
+  const [announcement, setAnnouncement] = useState('');
   const [internalMode, setInternalMode] = useState(defaultMode);
   const [internalShowNotes, setInternalShowNotes] = useState(defaultShowNotes);
   const [selectedItemIds, setSelectedItemIds] = useState<string[]>([]);
@@ -415,6 +633,7 @@ export function useBoardRoomController({
   const [isExiting, setIsExiting] = useState(false);
   const lastPointerRef = useRef<BoardPoint | null>(null);
   const activeSemanticGestureRef = useRef<string | null>(null);
+  const transitionBarrierRef = useRef<() => Promise<void>>(async () => {});
   const mode = controlledMode ?? internalMode;
   const showNotes = controlledShowNotes ?? internalShowNotes;
 
@@ -429,6 +648,7 @@ export function useBoardRoomController({
     generationKey: `${identityKey}:layout`,
     delay: 600,
     save: useCallback(async (targetBoardId: string, envelope: LayoutEnvelope) => {
+      await structuralWriteGateRef.current;
       const current = stateRef.current;
       if (!current || current.boardId !== targetBoardId) return;
       const live = new Set(current.items.map((item) => item.id));
@@ -447,6 +667,7 @@ export function useBoardRoomController({
     generationKey: `${identityKey}:canvas`,
     delay: 1_000,
     save: useCallback(async (targetBoardId: string, patch: CanvasPatch) => {
+      await structuralWriteGateRef.current;
       await upsertBoardMutation.mutateAsync({ boardId: targetBoardId, owner, ...patch });
     }, [owner, upsertBoardMutation]),
   });
@@ -484,50 +705,80 @@ export function useBoardRoomController({
     setPersistenceError(null);
   }, [boardQuery.data, identityKey, owner, reportError]);
 
-  const trackStructural = useCallback(<Result,>(task: Promise<Result>): Promise<Result> => {
+  const scheduleStructural = useCallback((
+    before: BoardRoomState,
+    after: BoardRoomState,
+    command: BoardRoomCommand,
+    direction: StructuralTransitionDirection,
+  ): void => {
+    const previous = structuralQueueRef.current;
+    const task = previous.catch(() => undefined).then(async () => {
+      try {
+        await runBoardOwnerAutosaveAction(owner, () => {
+          // Snapshot at execution time. A later queued command therefore
+          // rebases on any rollback that occurred ahead of it.
+          const live = stateRef.current ?? after;
+          const write = applyStateMutation.mutateAsync({
+            boardId,
+            owner,
+            state: atomicBoardState(live),
+          });
+          const gate = write.then(() => undefined, () => undefined);
+          structuralWriteGateRef.current = gate;
+          return write.finally(() => {
+            if (structuralWriteGateRef.current === gate) structuralWriteGateRef.current = null;
+          });
+        });
+      } catch (error) {
+        const current = stateRef.current;
+        if (current) {
+          const reverted = revertFailedStructuralTransition(current, before, after);
+          const activeHistory = historyRef.current ?? createBoardRoomHistory(current);
+          const reconciled = historyAfterStructuralFailure(
+            activeHistory,
+            command,
+            direction,
+            reverted,
+          );
+          historyRef.current = reconciled;
+          stateRef.current = reconciled.present;
+          generationsRef.current = new Map(
+            reverted.items.map((item) => [item.id, generationsRef.current.get(item.id) ?? 0]),
+          );
+          setHistory(reconciled);
+          setSelectedItemIds((ids) => ids.filter((id) => reverted.items.some((item) => item.id === id)));
+        }
+        const normalized = error instanceof Error ? error : new Error('The board change could not be saved.');
+        reportError(new Error(`That change was reverted because it could not be saved. ${normalized.message}`));
+        throw error;
+      }
+    });
+    structuralQueueRef.current = task.then(() => undefined, () => undefined);
     structuralTasksRef.current.add(task);
     setStructuralSaving(true);
-    void task.catch(reportError).finally(() => {
+    void task.catch(() => undefined).finally(() => {
       structuralTasksRef.current.delete(task);
       setStructuralSaving(structuralTasksRef.current.size > 0);
     });
-    return task;
-  }, [reportError]);
+  }, [applyStateMutation, boardId, owner, reportError]);
 
-  const persistTransition = useCallback((before: BoardRoomState, after: BoardRoomState) => {
+  const persistTransition = useCallback((
+    before: BoardRoomState,
+    after: BoardRoomState,
+    command: BoardRoomCommand,
+    direction: StructuralTransitionDirection,
+  ) => {
     const beforeById = new Map(before.items.map((item) => [item.id, item]));
     const afterById = new Map(after.items.map((item) => [item.id, item]));
-
+    let structural = before.items.length !== after.items.length ||
+      before.name !== after.name ||
+      before.backgroundColor !== after.backgroundColor ||
+      stableString(before.sections) !== stableString(after.sections);
     for (const removed of before.items.filter((item) => !afterById.has(item.id))) {
       generationsRef.current.set(removed.id, (generationsRef.current.get(removed.id) ?? 0) + 1);
-      trackStructural(runBoardOwnerAutosaveAction(owner, () =>
-        deleteItemMutation.mutateAsync({ itemId: removed.id, boardId, owner }),
-      ));
     }
-
     for (const added of after.items.filter((item) => !beforeById.has(item.id))) {
       if (!generationsRef.current.has(added.id)) generationsRef.current.set(added.id, 0);
-      trackStructural(runBoardOwnerAutosaveAction(owner, () =>
-        addItemMutation.mutateAsync({
-          itemId: added.id,
-          boardId,
-          owner,
-          type: added.type,
-          x: added.x,
-          y: added.y,
-          width: added.width,
-          height: added.height ?? null,
-          zIndex: added.zIndex ?? 0,
-          rotation: added.rotation ?? 0,
-          locked: added.locked ?? false,
-          productId: added.productId ?? null,
-          captureId: added.captureId ?? null,
-          paletteId: added.paletteId ?? null,
-          imageUrl: added.imageUrl ?? null,
-          content: added.content ?? null,
-          data: added.data ?? {},
-        }),
-      ));
     }
 
     const layoutEnvelope: LayoutEnvelope = {};
@@ -541,23 +792,18 @@ export function useBoardRoomController({
         };
       }
       if (!sameStructuralItem(previous, next)) {
-        trackStructural(runBoardOwnerAutosaveAction(owner, () =>
-          updateItemMutation.mutateAsync({
-            itemId: next.id,
-            boardId,
-            owner,
-            type: next.type,
-            locked: next.locked ?? false,
-            productId: next.productId ?? null,
-            captureId: next.captureId ?? null,
-            paletteId: next.paletteId ?? null,
-            imageUrl: next.imageUrl ?? null,
-            content: next.content ?? null,
-            data: next.data ?? {},
-          }),
-        ));
+        structural = true;
       }
     }
+
+    // While a full-state write is queued, keep subsequent geometry on the same
+    // serialized path. This prevents a late layout request from racing an item
+    // create/delete snapshot.
+    if (structural || structuralTasksRef.current.size > 0) {
+      scheduleStructural(before, after, command, direction);
+      return;
+    }
+
     if (Object.keys(layoutEnvelope).length > 0) layoutBuffer.queue(boardId, layoutEnvelope);
 
     if (before.canvasWidth !== after.canvasWidth || before.canvasHeight !== after.canvasHeight) {
@@ -566,31 +812,11 @@ export function useBoardRoomController({
         canvasHeight: after.canvasHeight,
       });
     }
-    if (
-      before.name !== after.name ||
-      before.backgroundColor !== after.backgroundColor ||
-      stableString(before.sections) !== stableString(after.sections)
-    ) {
-      trackStructural(runBoardOwnerAutosaveAction(owner, () =>
-        upsertBoardMutation.mutateAsync({
-          boardId,
-          owner,
-          name: after.name,
-          backgroundColor: after.backgroundColor,
-          sections: after.sections,
-        }),
-      ));
-    }
   }, [
-    addItemMutation,
     boardId,
     canvasBuffer,
-    deleteItemMutation,
     layoutBuffer,
-    owner,
-    trackStructural,
-    updateItemMutation,
-    upsertBoardMutation,
+    scheduleStructural,
   ]);
 
   const applyResult = useCallback((result: BoardRoomCommandResult, selection?: readonly string[]) => {
@@ -598,12 +824,15 @@ export function useBoardRoomController({
     if (!previous || !result.command) return result;
     historyRef.current = result.history;
     stateRef.current = result.history.present;
+    setPersistenceError(null);
     setHistory(result.history);
     if (selection) setSelectedItemIds([...selection]);
     else setSelectedItemIds((ids) => ids.filter((id) => result.history.present.items.some((item) => item.id === id)));
-    persistTransition(previous.present, result.history.present);
+    persistTransition(previous.present, result.history.present, result.command, 'apply');
+    setAnnouncement(`${result.command.kind.replaceAll('-', ' ')} applied`);
+    onCommandCommitted?.({ command: result.command, direction: 'apply' });
     return result;
-  }, [persistTransition]);
+  }, [onCommandCommitted, persistTransition]);
 
   const execute = useCallback((
     create: (current: BoardRoomHistory) => BoardRoomCommandResult,
@@ -618,7 +847,15 @@ export function useBoardRoomController({
     if (controlledMode === undefined) setInternalMode(next);
     onModeChange?.(next);
   }, [controlledMode, onModeChange]);
-  const togglePresent = useCallback(() => setMode(mode === 'edit' ? 'present' : 'edit'), [mode, setMode]);
+  const togglePresent = useCallback(() => {
+    if (mode === 'present') {
+      setMode('edit');
+      return;
+    }
+    void transitionBarrierRef.current()
+      .then(() => setMode('present'))
+      .catch(reportError);
+  }, [mode, reportError, setMode]);
   const setShowNotes = useCallback((next: boolean) => {
     if (controlledShowNotes === undefined) setInternalShowNotes(next);
     onShowNotesChange?.(next);
@@ -640,8 +877,10 @@ export function useBoardRoomController({
     stateRef.current = step.history.present;
     setHistory(step.history);
     setSelectedItemIds((ids) => ids.filter((id) => step.history.present.items.some((item) => item.id === id)));
-    persistTransition(current.present, step.history.present);
-  }, [persistTransition]);
+    persistTransition(current.present, step.history.present, step.command, 'undo');
+    setAnnouncement(`Undid ${step.command.kind.replaceAll('-', ' ')}`);
+    onCommandCommitted?.({ command: step.command, direction: 'undo' });
+  }, [onCommandCommitted, persistTransition]);
 
   const redo = useCallback(() => {
     const current = historyRef.current;
@@ -652,13 +891,15 @@ export function useBoardRoomController({
     stateRef.current = step.history.present;
     setHistory(step.history);
     setSelectedItemIds((ids) => ids.filter((id) => step.history.present.items.some((item) => item.id === id)));
-    persistTransition(current.present, step.history.present);
-  }, [persistTransition]);
+    persistTransition(current.present, step.history.present, step.command, 'redo');
+    setAnnouncement(`Redid ${step.command.kind.replaceAll('-', ' ')}`);
+    onCommandCommitted?.({ command: step.command, direction: 'redo' });
+  }, [onCommandCommitted, persistTransition]);
 
   const addItems = useCallback((items: readonly EditableMoodBoardItem[], options: BoardRoomAddOptions = {}) => {
     const normalized = items.map((item) => ({ ...item, id: item.id || generatedId() }));
     const ids = normalized.map((item) => item.id);
-    execute(
+    const result = execute(
       (current) => addBoardRoomItems(current, normalized, {
         id: options.id ?? generatedId('add'),
         kind: options.kind ?? 'add',
@@ -666,28 +907,40 @@ export function useBoardRoomController({
       }),
       options.select === false ? undefined : ids,
     );
+    if (result?.command && options.source) onItemsAdded?.(normalized, options.source);
     return ids;
-  }, [execute]);
+  }, [execute, onItemsAdded]);
 
   const deleteItems = useCallback((ids: readonly string[] = selectedItemIds) => {
+    const current = stateRef.current;
+    const targets = current?.items.filter((item) => ids.includes(item.id)) ?? [];
+    if (targets.length === 0 || onBeforeDelete?.(targets) === false) return;
     execute((current) => deleteBoardRoomItems(current, ids, { id: generatedId('delete') }), []);
-  }, [execute, selectedItemIds]);
+  }, [execute, onBeforeDelete, selectedItemIds]);
 
   const duplicateItems = useCallback((ids: readonly string[] = selectedItemIds) => {
     const current = historyRef.current;
     if (!current) return [];
     const result = duplicateBoardRoomItems(current, ids, () => generatedId(), { id: generatedId('duplicate') });
     applyResult(result, result.createdIds);
+    if (result.command) {
+      const created = result.history.present.items.filter((item) => result.createdIds.includes(item.id));
+      onItemsAdded?.(created, 'duplicate');
+    }
     return result.createdIds;
-  }, [applyResult, selectedItemIds]);
+  }, [applyResult, onItemsAdded, selectedItemIds]);
 
   const altDragItems = useCallback((ids: readonly string[], delta: BoardPoint) => {
     const current = historyRef.current;
     if (!current) return [];
     const result = altDragDuplicateBoardRoomItems(current, ids, delta, () => generatedId(), { id: generatedId('alt-drag') });
     applyResult(result, result.createdIds);
+    if (result.command) {
+      const created = result.history.present.items.filter((item) => result.createdIds.includes(item.id));
+      onItemsAdded?.(created, 'duplicate');
+    }
     return result.createdIds;
-  }, [applyResult]);
+  }, [applyResult, onItemsAdded]);
 
   const copyItems = useCallback(async (ids: readonly string[] = selectedItemIds) => {
     const current = stateRef.current;
@@ -702,14 +955,18 @@ export function useBoardRoomController({
     if (serialized) deleteItems(ids);
   }, [copyItems, deleteItems, selectedItemIds]);
 
-  const pasteAt = useCallback(async (point: BoardPoint, serialized?: string) => {
+  const pasteAt = useCallback(async (
+    point: BoardPoint,
+    serialized?: string,
+    source: BoardRoomItemAddSource = 'paste',
+  ) => {
     const payload = serialized === undefined
       ? await readClipboardPayload()
       : { text: serialized, images: [] };
     if (payload.images.length > 0 && onPasteImages) {
       validateBoardImageFiles(payload.images);
       const items = await onPasteImages(payload.images, point);
-      if (items?.length) return addItems(items, { id: generatedId('paste-images'), kind: 'paste' });
+      if (items?.length) return addItems(items, { id: generatedId('paste-images'), kind: 'paste', source });
     }
     const value = payload.text;
     if (!value) return [];
@@ -718,6 +975,10 @@ export function useBoardRoomController({
     if (envelope && current) {
       const result = pasteBoardRoomItems(current, envelope, point, () => generatedId(), { id: generatedId('paste') });
       applyResult(result, result.createdIds);
+      if (result.command) {
+        const created = result.history.present.items.filter((item) => result.createdIds.includes(item.id));
+        onItemsAdded?.(created, source);
+      }
       return result.createdIds;
     }
     try {
@@ -734,7 +995,7 @@ export function useBoardRoomController({
     } catch {
       return [];
     }
-  }, [addItems, applyResult, deleteItems, execute, onPasteImages, onPasteUrl]);
+  }, [addItems, applyResult, deleteItems, execute, onItemsAdded, onPasteImages, onPasteUrl]);
 
   const commitPatches = useCallback((
     patches: Readonly<Record<string, BoardItemPatch>>,
@@ -850,6 +1111,7 @@ export function useBoardRoomController({
     await flushBoardOwnerAutosaves(owner);
     if (persistenceError) throw new Error(persistenceError);
   }, [canvasBuffer, layoutBuffer, owner, persistenceError]);
+  transitionBarrierRef.current = flushPending;
 
   const requestExit = useCallback(async () => {
     if (isExiting) return false;
@@ -859,12 +1121,8 @@ export function useBoardRoomController({
     }
     setIsExiting(true);
     try {
-      await runBoardOwnerAutosaveAction(owner, async () => {
-        if (structuralTasksRef.current.size > 0) {
-          await Promise.all([...structuralTasksRef.current]);
-        }
-        await onExit?.();
-      });
+      await flushPending();
+      await onExit?.();
       return true;
     } catch (error) {
       reportError(error);
@@ -872,7 +1130,7 @@ export function useBoardRoomController({
     } finally {
       setIsExiting(false);
     }
-  }, [isExiting, onExit, owner, persistenceError, reportError]);
+  }, [flushPending, isExiting, onExit, persistenceError, reportError]);
 
   useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent) => {
@@ -895,6 +1153,7 @@ export function useBoardRoomController({
         togglePresent();
         return;
       }
+      if (mode !== 'edit') return;
       if (mod && key === 'z') {
         event.preventDefault();
         if (event.shiftKey) redo(); else undo();
@@ -905,7 +1164,6 @@ export function useBoardRoomController({
         redo();
         return;
       }
-      if (mode !== 'edit') return;
       if (mod && key === 'd') {
         event.preventDefault();
         duplicateItems();
@@ -1036,11 +1294,16 @@ export function useBoardRoomController({
         return;
       }
       void onItemsDropped(commit)
-        .then((items) => { if (items?.length) addItems(items, { id: generatedId('drop'), select: true }); })
+        .then((items) => {
+          if (items?.length) {
+            addItems(items, { id: generatedId('drop'), select: true, source: 'file_drop' });
+          }
+        })
         .catch(reportError);
     } : undefined,
     onItemActivate: (item) => {
       setFocusedItemId(item.id);
+      setSelection([item.id]);
       onItemActivate?.(item);
     },
     onContextMenuRequest: (request) => {
@@ -1098,6 +1361,7 @@ export function useBoardRoomController({
     isExiting,
     persistenceState,
     persistenceError: effectiveError,
+    announcement,
     canUndo: !!history?.past.length,
     canRedo: !!history?.future.length,
     canvasProps,
@@ -1136,6 +1400,7 @@ export function useBoardRoomController({
     updateSections,
     moveSectionBand,
     trimCanvas,
+    discardPersistenceError: () => setPersistenceError(null),
   };
 }
 

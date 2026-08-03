@@ -23144,6 +23144,15 @@ export type Database = {
         Returns: undefined
       }
       app_setting: { Args: { p_name: string }; Returns: string }
+      apply_board_room_state: {
+        Args: {
+          p_board_id: string
+          p_owner_id: string
+          p_owner_kind: string
+          p_state: Json
+        }
+        Returns: undefined
+      }
       apply_client_decision: {
         Args: {
           p_client_consent_method?: string

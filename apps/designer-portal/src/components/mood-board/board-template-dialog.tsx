@@ -26,6 +26,7 @@ export function BoardTemplateDialog({
   open,
   onOpenChange,
   onSaved,
+  flush,
 }: {
   boardId: string;
   boardName: string;
@@ -34,6 +35,7 @@ export function BoardTemplateDialog({
   open: boolean;
   onOpenChange: (open: boolean) => void;
   onSaved?: (templateId: string) => void;
+  flush?: () => Promise<void>;
 }) {
   const { data: organizations } = useOrganizations();
   const studioId = useMemo(() => {
@@ -64,6 +66,7 @@ export function BoardTemplateDialog({
     }
     setError(null);
     try {
+      await flush?.();
       const template = await saveTemplate.mutateAsync({
         boardId,
         studioId,

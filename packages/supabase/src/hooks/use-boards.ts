@@ -1,5 +1,9 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import type { BoardOwnerRef } from '@patina/types';
+import type {
+  BoardOwnerRef,
+  EditableMoodBoardItem,
+  MoodBoardSection,
+} from '@patina/types';
 import { createBrowserClient } from '../client';
 import {
   invalidateProposalClientQueries,
@@ -230,6 +234,24 @@ export interface UpdateBoardItemInput {
   imageUrl?: string | null;
   content?: string | null;
   data?: Record<string, unknown>;
+}
+
+/**
+ * Complete room snapshot accepted by apply_board_room_state (00411). This is
+ * deliberately the editor's canonical camelCase shape; the RPC owns the
+ * translation to proposal_board_items columns inside one database transaction.
+ */
+export interface ApplyBoardRoomStateInput {
+  boardId: string;
+  owner: BoardOwnerRef;
+  state: {
+    name: string;
+    canvasWidth: number;
+    canvasHeight: number;
+    backgroundColor: string;
+    sections: MoodBoardSection[];
+    items: EditableMoodBoardItem[];
+  };
 }
 
 export interface BoardLayoutPosition {
@@ -716,6 +738,41 @@ export function useDeleteBoardItem() {
       }
       if (owner?.kind === 'proposal') {
         await invalidateProposalClientQueries(queryClient, owner.id);
+      }
+    },
+  });
+}
+
+/**
+ * Persist one complete room snapshot atomically. Structural commands use this
+ * path so a failed multi-pin edit cannot leave a partially applied board.
+ */
+export function useApplyBoardRoomState() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationKey: [PROPOSAL_CLIENT_MUTATION_KEY],
+    mutationFn: async ({
+      boardId,
+      owner,
+      state,
+    }: ApplyBoardRoomStateInput): Promise<void> => {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const supabase = getSupabase() as any;
+      const { error } = await supabase.rpc('apply_board_room_state', {
+        p_board_id: boardId,
+        p_owner_kind: owner.kind,
+        p_owner_id: owner.id,
+        p_state: state,
+      });
+      if (error) throw error;
+    },
+    onSettled: async (_data, _error, variables) => {
+      queryClient.invalidateQueries({ queryKey: ['board', variables.boardId] });
+      queryClient.invalidateQueries({ queryKey: boardOwnerQueryKeys.list(variables.owner) });
+      queryClient.invalidateQueries({ queryKey: boardOwnerQueryKeys.withItems(variables.owner) });
+      if (variables.owner.kind === 'proposal') {
+        await invalidateProposalClientQueries(queryClient, variables.owner.id);
       }
     },
   });
