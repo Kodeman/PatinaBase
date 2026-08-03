@@ -1,6 +1,9 @@
 'use client'
 
 import * as React from 'react'
+import type { MoodBoardItemType, MoodBoardSection } from '@patina/types'
+import { cn } from '../../utils/cn'
+import { resolveMoodBoardGeometry } from '../../mood-board/geometry'
 
 // ============================================================================
 // Shared mood-board rendering (client proposal · designer preview · drafting
@@ -26,7 +29,10 @@ export interface BoardsBlockItem {
   z_index?: number | null
   rotation?: number | string | null
   image_url?: string | null
+  /** Optional renderer/cache identity; not required persistence truth. */
+  image_key?: string | null
   content?: string | null
+  locked?: boolean
   data?: unknown
 }
 
@@ -36,7 +42,19 @@ export interface BoardsBlockBoard {
   canvas_width: number
   canvas_height: number
   background_color: string
+  sections?: MoodBoardSection[]
   items: BoardsBlockItem[]
+}
+
+/**
+ * Read-only project/template snapshots may predate persisted item ids. Keep the
+ * legacy `BoardsBlockItem` contract strict while allowing composition-only
+ * renderers to consume those frozen rows without inventing an identity.
+ */
+export type BoardCompositionItem = Omit<BoardsBlockItem, 'id'> & { id?: string }
+
+export interface BoardCompositionBoard extends Omit<BoardsBlockBoard, 'items'> {
+  items: BoardCompositionItem[]
 }
 
 // Presentation = exactly today's client-facing render (the default everywhere).
@@ -55,6 +73,7 @@ export type BoardMode = 'presentation' | 'detail'
 //     (client Approve/Flag/Note · designer "send to the schedule").
 export type RenderPinOverlay = (item: BoardsBlockItem, mode: BoardMode) => React.ReactNode
 export type RenderPinDetail = (item: BoardsBlockItem) => React.ReactNode
+export type RenderPinInteraction = (item: BoardCompositionItem) => React.ReactNode
 
 // ─── Snapshot shapes (written by the designer board editor into `data`) ──────
 
@@ -112,22 +131,68 @@ const useIsomorphicLayoutEffect =
   typeof window !== 'undefined' ? React.useLayoutEffect : React.useEffect
 
 interface ScaledBoardCanvasProps {
-  items: BoardsBlockItem[]
+  items: BoardCompositionItem[]
+  sections: MoodBoardSection[]
   canvasWidth: number
   canvasHeight: number
   backgroundColor: string
-  renderItem: (item: BoardsBlockItem) => React.ReactNode
+  fit: 'contain' | 'width'
+  fullBleed: boolean
+  interactive: boolean
+  onItemActivate?: (item: BoardCompositionItem) => void
+  renderPinInteraction?: RenderPinInteraction
+  renderItem: (item: BoardCompositionItem) => React.ReactNode
 }
 
 function ScaledBoardCanvas({
   items,
+  sections,
   canvasWidth,
   canvasHeight,
   backgroundColor,
+  fit,
+  fullBleed,
+  interactive,
+  onItemActivate,
+  renderPinInteraction,
   renderItem,
 }: ScaledBoardCanvasProps) {
   const containerRef = React.useRef<HTMLDivElement | null>(null)
-  const [scale, setScale] = React.useState(1)
+  const [frame, setFrame] = React.useState({
+    scale: 1,
+    offsetX: 0,
+    offsetY: 0,
+    height: canvasHeight,
+  })
+
+  const geometry = React.useMemo(
+    () =>
+      resolveMoodBoardGeometry({
+        canvasWidth,
+        canvasHeight,
+        backgroundColor,
+        sections,
+        items: items.map((item) => ({
+          id: item.id,
+          type: item.type as MoodBoardItemType,
+          x: item.x,
+          y: item.y,
+          width: item.width,
+          height: item.height,
+          zIndex: item.z_index,
+          rotation: item.rotation,
+          locked: item.locked,
+          imageUrl: item.image_url,
+          imageKey: item.image_key,
+          content: item.content,
+          data:
+            item.data && typeof item.data === 'object' && !Array.isArray(item.data)
+              ? (item.data as Record<string, unknown>)
+              : {},
+        })),
+      }),
+    [backgroundColor, canvasHeight, canvasWidth, items, sections],
+  )
 
   useIsomorphicLayoutEffect(() => {
     const el = containerRef.current
@@ -135,7 +200,20 @@ function ScaledBoardCanvas({
 
     const measure = () => {
       const width = el.clientWidth
-      if (width > 0) setScale(width / canvasWidth)
+      if (width <= 0) return
+      const widthScale = width / canvasWidth
+      const availableHeight = el.clientHeight
+      const scale =
+        fit === 'contain' && availableHeight > 0
+          ? Math.min(widthScale, availableHeight / canvasHeight)
+          : widthScale
+      const height = fullBleed && availableHeight > 0 ? availableHeight : canvasHeight * scale
+      setFrame({
+        scale,
+        offsetX: fit === 'contain' ? (width - canvasWidth * scale) / 2 : 0,
+        offsetY: fit === 'contain' ? Math.max(0, (height - canvasHeight * scale) / 2) : 0,
+        height,
+      })
     }
 
     measure()
@@ -145,40 +223,107 @@ function ScaledBoardCanvas({
     const observer = new ResizeObserver(measure)
     observer.observe(el)
     return () => observer.disconnect()
-  }, [canvasWidth])
+  }, [canvasHeight, canvasWidth, fit, fullBleed])
 
   return (
     <div
       ref={containerRef}
-      className="relative w-full overflow-hidden rounded-md border border-[var(--border-subtle)]"
-      style={{ height: canvasHeight * scale }}
+      data-board-composition-canvas="true"
+      data-fit={fit}
+      data-full-bleed={fullBleed ? 'true' : 'false'}
+      data-canvas-width={canvasWidth}
+      data-canvas-height={canvasHeight}
+      className={cn(
+        'relative w-full overflow-hidden',
+        !fullBleed && 'rounded-md border border-[var(--border-subtle)]',
+        fullBleed && 'h-full min-h-0',
+      )}
+      style={{ height: frame.height }}
     >
       <div
-        className="relative"
+        className="absolute left-0 top-0"
         style={{
           width: canvasWidth,
           height: canvasHeight,
           backgroundColor,
-          transform: `scale(${scale})`,
+          transform: `translate(${frame.offsetX}px, ${frame.offsetY}px) scale(${frame.scale})`,
           transformOrigin: 'top left',
         }}
       >
-        {items.map((item) => (
+        {geometry.sections.map((section) => (
           <div
-            key={item.id}
-            className="absolute"
+            key={section.id}
+            data-composition-section={section.id}
+            className="pointer-events-none absolute rounded-sm border border-dashed"
             style={{
-              left: Number(item.x),
-              top: Number(item.y),
-              width: Number(item.width),
-              height: item.height === null || item.height === undefined ? undefined : Number(item.height),
-              zIndex: item.z_index ?? 0,
-              transform: item.rotation ? `rotate(${Number(item.rotation)}deg)` : undefined,
+              left: section.bounds.x,
+              top: section.bounds.y,
+              width: section.bounds.width,
+              height: section.bounds.height,
+              borderColor: section.color ?? '#8c8175',
+              backgroundColor: `${section.color ?? '#8c8175'}10`,
             }}
           >
-            {renderItem(item)}
+            <span
+              className="absolute left-2 top-0 -translate-y-1/2 rounded-full px-2 py-0.5 text-[11px] font-medium"
+              style={{
+                backgroundColor: section.color ?? '#8c8175',
+                color: '#fff',
+              }}
+            >
+              {section.name}
+            </span>
           </div>
         ))}
+        {geometry.items.map((resolved) => {
+          const item = items[resolved.sourceIndex]
+          if (!item) return null
+          const idInteractive = interactive && typeof item.id === 'string'
+          const interaction = idInteractive ? renderPinInteraction?.(item) : null
+          return (
+            <div
+              key={resolved.key}
+              className={cn(
+                'absolute outline-none',
+                idInteractive &&
+                  'focus-visible:ring-2 focus-visible:ring-[var(--color-clay,#a66d4f)]',
+              )}
+              role={idInteractive ? 'button' : undefined}
+              tabIndex={idInteractive ? 0 : undefined}
+              aria-label={idInteractive ? `${item.type.replace('_', ' ')} board item` : undefined}
+              data-board-item-id={item.id}
+              data-board-snapshot-key={resolved.key}
+              data-interactive={idInteractive ? 'true' : 'false'}
+              style={{
+                left: resolved.x,
+                top: resolved.y,
+                width: resolved.width,
+                height: resolved.height,
+                zIndex: Math.max(0, resolved.zIndex),
+                transform: resolved.rotation ? `rotate(${resolved.rotation}deg)` : undefined,
+                transformOrigin: 'center',
+              }}
+              onClick={idInteractive ? () => onItemActivate?.(item) : undefined}
+              onKeyDown={
+                idInteractive
+                  ? (event) => {
+                      if (event.key === 'Enter' || event.key === ' ') {
+                        event.preventDefault()
+                        onItemActivate?.(item)
+                      }
+                    }
+                  : undefined
+              }
+            >
+              {renderItem(item)}
+              {interaction && (
+                <div className="absolute right-1 top-1 z-20" data-pin-interaction="true">
+                  {interaction}
+                </div>
+              )}
+            </div>
+          )
+        })}
       </div>
     </div>
   )
@@ -187,7 +332,7 @@ function ScaledBoardCanvas({
 // ─── Item renderers (read-only, client-facing tone) ──────────────────────────
 
 function renderBoardItem(
-  item: BoardsBlockItem,
+  item: BoardCompositionItem,
   mode: BoardMode = 'presentation',
   renderPinOverlay?: RenderPinOverlay,
 ): React.ReactNode {
@@ -197,15 +342,13 @@ function renderBoardItem(
       const tile = <ProductTile item={item} mode={mode} />
       // Byte-identical to the bare tile when no overlay is supplied (or it
       // returns nothing) — the guest/client presentation invariant.
-      if (!renderPinOverlay) return tile
-      const overlay = renderPinOverlay(item, mode)
+      if (!renderPinOverlay || !item.id) return tile
+      const overlay = renderPinOverlay(item as BoardsBlockItem, mode)
       if (!overlay) return tile
       return (
         <div className="relative h-full w-full">
           {tile}
-          <div className="absolute right-1 top-1 z-10 flex flex-col items-end gap-1">
-            {overlay}
-          </div>
+          <div className="absolute right-1 top-1 z-10 flex flex-col items-end gap-1">{overlay}</div>
         </div>
       )
     }
@@ -222,7 +365,13 @@ function renderBoardItem(
   }
 }
 
-function ProductTile({ item, mode = 'presentation' }: { item: BoardsBlockItem; mode?: BoardMode }) {
+function ProductTile({
+  item,
+  mode = 'presentation',
+}: {
+  item: BoardCompositionItem
+  mode?: BoardMode
+}) {
   const snap = (item.data ?? {}) as ProductSnapshot
   const imageUrl = item.image_url ?? snap.image_url ?? null
   // Detail-only context, computed once; renders nothing when absent.
@@ -234,7 +383,10 @@ function ProductTile({ item, mode = 'presentation' }: { item: BoardsBlockItem; m
     <div className="flex h-full w-full select-none flex-col overflow-hidden rounded-sm border border-[var(--border-subtle)] bg-white">
       <div
         className="relative w-full overflow-hidden"
-        style={{ aspectRatio: '1 / 1', background: 'var(--color-pearl, #f5f3ee)' }}
+        style={{
+          aspectRatio: '1 / 1',
+          background: 'var(--color-pearl, #f5f3ee)',
+        }}
       >
         {imageUrl && (
           // eslint-disable-next-line @next/next/no-img-element
@@ -242,7 +394,7 @@ function ProductTile({ item, mode = 'presentation' }: { item: BoardsBlockItem; m
             src={imageUrl}
             alt={snap.name ?? ''}
             draggable={false}
-            className="pointer-events-none h-full w-full object-cover"
+            className="pointer-events-none h-full w-full object-contain"
           />
         )}
       </div>
@@ -313,7 +465,7 @@ function ProductTile({ item, mode = 'presentation' }: { item: BoardsBlockItem; m
   )
 }
 
-function ImageTile({ item }: { item: BoardsBlockItem }) {
+function ImageTile({ item }: { item: BoardCompositionItem }) {
   if (!item.image_url) {
     return (
       <div
@@ -328,12 +480,12 @@ function ImageTile({ item }: { item: BoardsBlockItem }) {
       src={item.image_url}
       alt=""
       draggable={false}
-      className="pointer-events-none h-full w-full select-none rounded-sm object-cover"
+      className="pointer-events-none h-full w-full select-none rounded-sm object-contain"
     />
   )
 }
 
-function RoomScanTile({ item }: { item: BoardsBlockItem }) {
+function RoomScanTile({ item }: { item: BoardCompositionItem }) {
   const snap = (item.data ?? {}) as RoomScanSnapshot
   return (
     <div className="flex h-full w-full select-none flex-col overflow-hidden rounded-sm border border-[var(--border-subtle)] bg-white">
@@ -347,7 +499,7 @@ function RoomScanTile({ item }: { item: BoardsBlockItem }) {
             src={item.image_url}
             alt={snap.name ?? 'Your space'}
             draggable={false}
-            className="pointer-events-none h-full w-full object-cover"
+            className="pointer-events-none h-full w-full object-contain"
           />
         )}
       </div>
@@ -367,7 +519,7 @@ function RoomScanTile({ item }: { item: BoardsBlockItem }) {
   )
 }
 
-function PaletteStrip({ item }: { item: BoardsBlockItem }) {
+function PaletteStrip({ item }: { item: BoardCompositionItem }) {
   const snap = (item.data ?? {}) as PaletteSnapshot
   const swatches = snap.swatches ?? []
 
@@ -403,7 +555,7 @@ function PaletteStrip({ item }: { item: BoardsBlockItem }) {
   )
 }
 
-function NoteCard({ item }: { item: BoardsBlockItem }) {
+function NoteCard({ item }: { item: BoardCompositionItem }) {
   if (!item.content?.trim()) return null
   return (
     <div
@@ -426,70 +578,112 @@ function NoteCard({ item }: { item: BoardsBlockItem }) {
 
 function StackedBoardItems({
   items,
+  sections,
+  mode,
   renderPinOverlay,
 }: {
-  items: BoardsBlockItem[]
+  items: BoardCompositionItem[]
+  sections: MoodBoardSection[]
+  mode: BoardMode
   renderPinOverlay?: RenderPinOverlay
 }) {
+  const sectionId = (item: BoardCompositionItem) => {
+    if (!item.data || typeof item.data !== 'object' || Array.isArray(item.data)) return null
+    const value = (item.data as Record<string, unknown>).section_id
+    return typeof value === 'string' ? value : null
+  }
+  const known = new Set(sections.map((section) => section.id))
+  const groups = [
+    ...sections.map((section) => ({
+      section,
+      items: items.filter((item) => sectionId(item) === section.id),
+    })),
+    {
+      section: null,
+      items: items.filter((item) => {
+        const id = sectionId(item)
+        return id === null || !known.has(id)
+      }),
+    },
+  ].filter((group) => group.items.length > 0)
+
   return (
     <div className="grid grid-cols-2 gap-2.5">
-      {items.map((item) => {
-        switch (item.type) {
-          case 'palette':
-            return (
-              <div key={item.id} className="col-span-2" style={{ height: 72 }}>
-                <PaletteStrip item={item} />
-              </div>
-            )
-          case 'note':
-            if (!item.content?.trim()) return null
-            return (
-              <p
-                key={item.id}
-                className="col-span-2"
-                style={{
-                  fontFamily: 'var(--font-body)',
-                  fontSize: '0.82rem',
-                  fontStyle: 'italic',
-                  lineHeight: 1.6,
-                  color: 'var(--text-body)',
-                }}
-              >
-                {item.content}
-              </p>
-            )
-          case 'product':
-          case 'capture': {
-            const overlay = renderPinOverlay?.(item, 'presentation')
-            return (
-              <div key={item.id} className={overlay ? 'relative' : undefined}>
-                <ProductTile item={item} />
-                {overlay && (
-                  <div className="absolute right-1 top-1 z-10 flex flex-col items-end gap-1">
-                    {overlay}
+      {groups.map((group, groupIndex) => (
+        <React.Fragment key={group.section?.id ?? 'unassigned'}>
+          {group.section && (
+            <h4
+              className="col-span-2 mt-2 border-b border-[var(--border-subtle)] pb-1 type-meta-small text-[var(--text-muted)] first:mt-0"
+              data-stacked-section={group.section.id}
+            >
+              {group.section.name}
+            </h4>
+          )}
+          {group.items.map((item, itemIndex) => {
+            const key = item.id ?? `snapshot:${groupIndex}:${itemIndex}`
+            switch (item.type) {
+              case 'palette':
+                return (
+                  <div key={key} className="col-span-2" style={{ height: 72 }}>
+                    <PaletteStrip item={item} />
                   </div>
-                )}
-              </div>
-            )
-          }
-          case 'image':
-          case 'room_scan': {
-            if (!item.image_url) return null
-            return (
-              <div
-                key={item.id}
-                className="overflow-hidden rounded-sm"
-                style={{ aspectRatio: '4 / 3', background: 'var(--color-pearl, #f5f3ee)' }}
-              >
-                {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img src={item.image_url} alt="" className="h-full w-full object-cover" />
-              </div>
-            )
-          }
-          default:
-            return null
-        }
-      })}
+                )
+              case 'note':
+                if (!item.content?.trim()) return null
+                return (
+                  <p
+                    key={key}
+                    className="col-span-2"
+                    style={{
+                      fontFamily: 'var(--font-body)',
+                      fontSize: '0.82rem',
+                      fontStyle: 'italic',
+                      lineHeight: 1.6,
+                      color: 'var(--text-body)',
+                    }}
+                  >
+                    {item.content}
+                  </p>
+                )
+              case 'product':
+              case 'capture': {
+                const overlay = item.id
+                  ? renderPinOverlay?.(item as BoardsBlockItem, mode)
+                  : null
+                return (
+                  <div key={key} className={overlay ? 'relative' : undefined}>
+                    <ProductTile item={item} mode={mode} />
+                    {overlay && (
+                      <div className="absolute right-1 top-1 z-10 flex flex-col items-end gap-1">
+                        {overlay}
+                      </div>
+                    )}
+                  </div>
+                )
+              }
+              case 'image':
+              case 'room_scan': {
+                if (!item.image_url) return null
+                return (
+                  <div
+                    key={key}
+                    className="overflow-hidden rounded-sm"
+                    style={{
+                      aspectRatio: '4 / 3',
+                      background: 'var(--color-pearl, #f5f3ee)',
+                    }}
+                  >
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    <img src={item.image_url} alt="" className="h-full w-full object-contain" />
+                  </div>
+                )
+              }
+              default:
+                return null
+            }
+          })}
+        </React.Fragment>
+      ))}
     </div>
   )
 }
@@ -500,7 +694,7 @@ function FeaturedPieces({
   items,
   renderPinDetail,
 }: {
-  items: BoardsBlockItem[]
+  items: BoardCompositionItem[]
   renderPinDetail?: RenderPinDetail
 }) {
   const pieces = items.filter((item) => item.type === 'product' || item.type === 'capture')
@@ -515,11 +709,12 @@ function FeaturedPieces({
         Featured pieces
       </p>
       <ul className="mt-2 space-y-3">
-        {pieces.map((item) => {
+        {pieces.map((item, itemIndex) => {
+          const itemKey = item.id ?? `featured-snapshot:${itemIndex}`
           const snap = (item.data ?? {}) as ProductSnapshot
           const imageUrl = item.image_url ?? snap.image_url ?? null
           // Host-supplied per-pin acts (client verdicts · send-to-schedule).
-          const detail = renderPinDetail?.(item)
+          const detail = item.id ? renderPinDetail?.(item as BoardsBlockItem) : null
           const row = (
             <>
               {imageUrl && (
@@ -528,7 +723,7 @@ function FeaturedPieces({
                   style={{ background: 'var(--color-pearl, #f5f3ee)' }}
                 >
                   {/* eslint-disable-next-line @next/next/no-img-element */}
-                  <img src={imageUrl} alt="" className="h-full w-full object-cover" />
+                  <img src={imageUrl} alt="" className="h-full w-full object-contain" />
                 </div>
               )}
               <div className="min-w-0 flex-1">
@@ -550,7 +745,7 @@ function FeaturedPieces({
           if (!detail) {
             return (
               <li
-                key={item.id}
+                key={itemKey}
                 className="flex items-center gap-3 rounded-[3px] border border-[var(--border-subtle)] bg-[var(--bg-surface)] px-3 py-2.5"
               >
                 {row}
@@ -559,7 +754,7 @@ function FeaturedPieces({
           }
           return (
             <li
-              key={item.id}
+              key={itemKey}
               className="rounded-[3px] border border-[var(--border-subtle)] bg-[var(--bg-surface)] px-3 py-2.5"
             >
               <div className="flex items-center gap-3">{row}</div>
@@ -575,7 +770,7 @@ function FeaturedPieces({
 // ─── Single board composition (name + desktop canvas + mobile + featured) ────
 
 export interface BoardCompositionProps {
-  board: BoardsBlockBoard
+  board: BoardsBlockBoard | BoardCompositionBoard
   className?: string
   /**
    * 'presentation' (default) is exactly the client-facing render.
@@ -587,6 +782,23 @@ export interface BoardCompositionProps {
   renderPinOverlay?: RenderPinOverlay
   /** Interactive per-pin block in the Featured list (verdict acts · send-to-schedule). */
   renderPinDetail?: RenderPinDetail
+  /** Section definitions. Defaults to `board.sections` and omits empty bands. */
+  sections?: MoodBoardSection[]
+  /** Additive overrides for persisted board dimensions/background. */
+  canvasWidth?: number
+  canvasHeight?: number
+  backgroundColor?: string
+  /** `width` for documents; `contain` for the full-viewport Present surface. */
+  fit?: 'contain' | 'width'
+  /** Removes the canvas card chrome and board-name heading. */
+  fullBleed?: boolean
+  /** Working-note visibility. @default true */
+  showNotes?: boolean
+  /** Enables id-backed, keyboard-focusable pin targets. @default false */
+  interactive?: boolean
+  onItemActivate?: (item: BoardCompositionItem) => void
+  /** Optional id-backed control rendered over a pin when `interactive` is true. */
+  renderPinInteraction?: RenderPinInteraction
 }
 
 /**
@@ -601,38 +813,65 @@ export function BoardComposition({
   mode = 'presentation',
   renderPinOverlay,
   renderPinDetail,
+  sections = board.sections ?? [],
+  canvasWidth = board.canvas_width,
+  canvasHeight = board.canvas_height,
+  backgroundColor = board.background_color,
+  fit = 'width',
+  fullBleed = false,
+  showNotes = true,
+  interactive = false,
+  onItemActivate,
+  renderPinInteraction,
 }: BoardCompositionProps) {
-  const items = board.items ?? []
+  const items = (board.items ?? []).filter((item) => showNotes || item.type !== 'note')
   if (items.length === 0) return null
 
   return (
-    <div className={className}>
-      <h3
-        style={{
-          fontFamily: 'var(--font-display)',
-          fontWeight: 400,
-          fontSize: '1.05rem',
-          color: 'var(--text-primary)',
-          marginBottom: '0.75rem',
-        }}
-      >
-        {board.name}
-      </h3>
+    <div
+      className={cn(fullBleed && 'h-full min-h-0 w-full', className)}
+      data-board-composition="true"
+      data-full-bleed={fullBleed ? 'true' : 'false'}
+    >
+      {!fullBleed && (
+        <h3
+          style={{
+            fontFamily: 'var(--font-display)',
+            fontWeight: 400,
+            fontSize: '1.05rem',
+            color: 'var(--text-primary)',
+            marginBottom: '0.75rem',
+          }}
+        >
+          {board.name}
+        </h3>
+      )}
 
       {/* Desktop: scale-to-fit canvas at the board's authored composition. */}
-      <div className="hidden sm:block">
+      <div className={cn('hidden sm:block', fullBleed && 'h-full min-h-0')}>
         <ScaledBoardCanvas
           items={items}
-          canvasWidth={board.canvas_width}
-          canvasHeight={board.canvas_height}
-          backgroundColor={board.background_color}
+          sections={sections}
+          canvasWidth={canvasWidth}
+          canvasHeight={canvasHeight}
+          backgroundColor={backgroundColor}
+          fit={fit}
+          fullBleed={fullBleed}
+          interactive={interactive}
+          onItemActivate={onItemActivate}
+          renderPinInteraction={renderPinInteraction}
           renderItem={(item) => renderBoardItem(item, mode, renderPinOverlay)}
         />
       </div>
 
       {/* Mobile: stacked grid in the caller's array order (z-sorted). */}
       <div className="sm:hidden">
-        <StackedBoardItems items={items} renderPinOverlay={renderPinOverlay} />
+        <StackedBoardItems
+          items={items}
+          sections={sections}
+          mode={mode}
+          renderPinOverlay={renderPinOverlay}
+        />
       </div>
 
       <FeaturedPieces items={items} renderPinDetail={renderPinDetail} />
@@ -661,6 +900,12 @@ export interface BoardsBlockProps {
   renderPinOverlay?: RenderPinOverlay
   /** Interactive per-pin block in the Featured list (verdict acts · send-to-schedule). */
   renderPinDetail?: RenderPinDetail
+  fit?: 'contain' | 'width'
+  fullBleed?: boolean
+  showNotes?: boolean
+  interactive?: boolean
+  onItemActivate?: (item: BoardsBlockItem) => void
+  renderPinInteraction?: RenderPinInteraction
 }
 
 /**
@@ -675,6 +920,12 @@ export function BoardsBlock({
   mode = 'presentation',
   renderPinOverlay,
   renderPinDetail,
+  fit = 'width',
+  fullBleed = false,
+  showNotes = true,
+  interactive = false,
+  onItemActivate,
+  renderPinInteraction,
 }: BoardsBlockProps) {
   const visible = (boards ?? []).filter((b) => (b.items?.length ?? 0) > 0)
   if (visible.length === 0) return null
@@ -702,6 +953,18 @@ export function BoardsBlock({
             mode={mode}
             renderPinOverlay={renderPinOverlay}
             renderPinDetail={renderPinDetail}
+            fit={fit}
+            fullBleed={fullBleed}
+            showNotes={showNotes}
+            interactive={interactive}
+            onItemActivate={
+              onItemActivate
+                ? (item) => {
+                    if (item.id) onItemActivate(item as BoardsBlockItem)
+                  }
+                : undefined
+            }
+            renderPinInteraction={renderPinInteraction}
           />
         ))}
       </section>

@@ -1,6 +1,11 @@
-import { describe, it, expect } from 'vitest'
+import { describe, it, expect, vi } from 'vitest'
 import { render } from '@testing-library/react'
-import { BoardComposition, BoardsBlock, type BoardsBlockBoard } from './BoardsBlock'
+import {
+  BoardComposition,
+  BoardsBlock,
+  type BoardCompositionBoard,
+  type BoardsBlockBoard,
+} from './BoardsBlock'
 
 // A product pin whose snapshot carries the detail-only fields (lead time +
 // provenance). Presentation must ignore them; detail must surface them.
@@ -97,7 +102,11 @@ describe('BoardsBlock per-pin render props', () => {
 
   it('omitting both render props is byte-identical to the plain render (guest byte-stability)', () => {
     const withUndefined = render(
-      <BoardComposition board={productBoard()} renderPinOverlay={undefined} renderPinDetail={undefined} />,
+      <BoardComposition
+        board={productBoard()}
+        renderPinOverlay={undefined}
+        renderPinDetail={undefined}
+      />,
     )
     const plain = render(<BoardComposition board={productBoard()} />)
     expect(withUndefined.container.innerHTML).toBe(plain.container.innerHTML)
@@ -107,7 +116,16 @@ describe('BoardsBlock per-pin render props', () => {
     const noteBoard: BoardsBlockBoard = {
       ...productBoard(),
       items: [
-        { id: 'note-1', type: 'note', x: 0, y: 0, width: 200, height: 120, z_index: 0, content: 'Hi' },
+        {
+          id: 'note-1',
+          type: 'note',
+          x: 0,
+          y: 0,
+          width: 200,
+          height: 120,
+          z_index: 0,
+          content: 'Hi',
+        },
       ],
     }
     const seen: string[] = []
@@ -121,5 +139,129 @@ describe('BoardsBlock per-pin render props', () => {
       />,
     )
     expect(seen).not.toContain('note-1')
+  })
+})
+
+describe('BoardComposition unified renderer props', () => {
+  function sectionBoard(): BoardCompositionBoard {
+    return {
+      ...productBoard(),
+      sections: [
+        { id: 'seating', name: 'Seating', color: '#a66d4f' },
+        { id: 'empty', name: 'Empty' },
+      ],
+      items: [
+        {
+          ...productBoard().items[0],
+          data: {
+            ...((productBoard().items[0].data ?? {}) as object),
+            section_id: 'seating',
+          },
+        },
+        {
+          // Frozen project-board snapshots intentionally carry no item id.
+          type: 'image',
+          x: 320,
+          y: 80,
+          width: 240,
+          height: null,
+          z_index: 1,
+          image_url: 'https://images.example/reference.jpg',
+          data: { section_id: 'seating', resolved_height: 180 },
+        },
+        {
+          id: 'note-1',
+          type: 'note',
+          x: 600,
+          y: 80,
+          width: 200,
+          height: null,
+          z_index: 2,
+          content: 'Working annotation',
+          data: { resolved_height: 140 },
+        },
+      ],
+    }
+  }
+
+  it('uses the shared geometry for non-empty section bands and mobile headings', () => {
+    const { container } = render(<BoardComposition board={sectionBoard()} />)
+    expect(container.querySelector('[data-composition-section="seating"]')).toBeInTheDocument()
+    expect(container.querySelector('[data-composition-section="empty"]')).not.toBeInTheDocument()
+    expect(container.querySelector('[data-stacked-section="seating"]')).toHaveTextContent('Seating')
+  })
+
+  it('honors dimension, fit, full-bleed and background overrides additively', () => {
+    const { container } = render(
+      <BoardComposition
+        board={sectionBoard()}
+        canvasWidth={1800}
+        canvasHeight={1000}
+        backgroundColor="#112233"
+        fit="contain"
+        fullBleed
+      />,
+    )
+    const canvas = container.querySelector('[data-board-composition-canvas="true"]')
+    expect(canvas).toHaveAttribute('data-fit', 'contain')
+    expect(canvas).toHaveAttribute('data-full-bleed', 'true')
+    expect(canvas).toHaveAttribute('data-canvas-width', '1800')
+    expect(canvas).toHaveAttribute('data-canvas-height', '1000')
+    expect(container.querySelector('h3')).not.toBeInTheDocument()
+    expect(container).toHaveTextContent('Featured pieces')
+  })
+
+  it('removes note pins from desktop and stacked DOM when showNotes is false', () => {
+    const { container } = render(<BoardComposition board={sectionBoard()} showNotes={false} />)
+    expect(container).not.toHaveTextContent('Working annotation')
+  })
+
+  it('enables hit targets only for id-backed items and skips frozen snapshot affordances', () => {
+    const activate = vi.fn()
+    const interaction = vi.fn((item: BoardCompositionBoard['items'][number]) => (
+      <span>act-{item.id}</span>
+    ))
+    const { container } = render(
+      <BoardComposition
+        board={sectionBoard()}
+        interactive
+        onItemActivate={activate}
+        renderPinInteraction={interaction}
+      />,
+    )
+    expect(container.querySelector('[data-board-item-id="i1"]')).toHaveAttribute(
+      'data-interactive',
+      'true',
+    )
+    expect(container.querySelector('[data-board-snapshot-key="snapshot:1"]')).toHaveAttribute(
+      'data-interactive',
+      'false',
+    )
+    expect(interaction.mock.calls.some(([item]) => item.id === undefined)).toBe(false)
+  })
+
+  it('uses contain image fit for every composition image surface', () => {
+    const { container } = render(<BoardComposition board={sectionBoard()} />)
+    const images = Array.from(container.querySelectorAll('img'))
+    expect(images.length).toBeGreaterThan(0)
+    expect(images.every((image) => image.className.includes('object-contain'))).toBe(true)
+  })
+
+  it('keeps default output identical to explicitly supplied additive defaults', () => {
+    const a = render(<BoardComposition board={sectionBoard()} />)
+    const b = render(
+      <BoardComposition
+        board={sectionBoard()}
+        sections={sectionBoard().sections}
+        canvasWidth={1200}
+        canvasHeight={800}
+        backgroundColor="#FAF8F5"
+        fit="width"
+        fullBleed={false}
+        showNotes
+        interactive={false}
+      />,
+    )
+    expect(a.container.innerHTML).toBe(b.container.innerHTML)
   })
 })
