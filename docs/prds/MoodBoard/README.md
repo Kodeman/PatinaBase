@@ -18,6 +18,7 @@ addendum.
 | 4 | [02-phase-2-the-audience.md](./02-phase-2-the-audience.md) | Phase 2 spec — unified presentation renderer, on-canvas verdicts, board share, project boards | Building Phase 2. |
 | 5 | [03-phase-3-the-reach.md](./03-phase-3-the-reach.md) | Phase 3 spec — composition-true export, URL unfurl, background removal, image pipeline, templates | Building Phase 3. |
 | 6 | [05-implementation-addendum.md](./05-implementation-addendum.md) | Current-repository reconciliation, locked runtime contracts, security decisions, and production order | Implementing or reviewing any phase. |
+| 7 | [06-acceptance-evidence.md](./06-acceptance-evidence.md) | Live owner/status/evidence ledger for all 85 numbered acceptance criteria | Every handoff, merge gate, and release review. |
 
 Docs 01–03 are self-contained specs. Doc 04 is the shared substrate every phase
 depends on — the undo/autosave contract in particular is a Phase 1 hard
