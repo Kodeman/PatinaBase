@@ -1,3 +1,4 @@
+// deno-lint-ignore-file no-import-prefix
 // Deno tests for the shared spec-sheet builder.
 //
 // Run (npm specifiers need auto node-modules resolution in this repo — a
@@ -13,17 +14,58 @@
 
 import { assertEquals } from 'https://deno.land/std@0.168.0/testing/asserts.ts';
 import {
+  buildBoardCompositionModel,
   buildBoardModel,
   buildItemModel,
   buildScheduleModel,
   computeRecordPct,
+  renderBoardCompositionPdf,
   renderBoardPdf,
   renderSpecItemPdf,
   renderSpecSchedulePdf,
+  type SpecBoardCompositionInput,
+  type SpecBoardCompositionPinInput,
   type SpecBoardInput,
   type SpecItemInput,
   type SpecLineInput,
 } from './spec-pdf.ts';
+
+const compositionPinTypeWitness: SpecBoardCompositionPinInput = {
+  type: 'product',
+  x: 0,
+  y: 0,
+  width: 200,
+  height: 200,
+  resolvedHeight: null,
+  zIndex: 0,
+  rotation: 0,
+  imageDataUrl: null,
+  imageRequested: false,
+  name: null,
+  vendorName: null,
+  note: null,
+  swatches: [],
+  priceCents: null,
+  sectionId: null,
+};
+const compositionPinCannotCarryTrade: SpecBoardCompositionPinInput = {
+  ...compositionPinTypeWitness,
+  // @ts-expect-error Composition inputs have no studio cost field.
+  tradePriceCents: 100,
+};
+const compositionPinCannotCarryMarkup: SpecBoardCompositionPinInput = {
+  ...compositionPinTypeWitness,
+  // @ts-expect-error Composition inputs have no markup field.
+  markupPercent: 25,
+};
+const compositionPinCannotCarryMargin: SpecBoardCompositionPinInput = {
+  ...compositionPinTypeWitness,
+  // @ts-expect-error Composition inputs have no margin field.
+  marginPercent: 20,
+};
+void compositionPinCannotCarryTrade;
+void compositionPinCannotCarryMarkup;
+void compositionPinCannotCarryMargin;
 
 // ─── Fixtures ────────────────────────────────────────────────────────────────
 
@@ -125,7 +167,10 @@ Deno.test('buildScheduleModel — supplier off strips supplier, keeps pricing', 
     [
       {
         roomName: 'Living Room',
-        lines: [line(), line({ name: 'Rug', lineTotalCents: 50000, clientUnitCents: 50000 })],
+        lines: [
+          line(),
+          line({ name: 'Rug', lineTotalCents: 50000, clientUnitCents: 50000 }),
+        ],
       },
     ],
     { supplierIdentity: false },
@@ -146,7 +191,10 @@ Deno.test('buildScheduleModel — supplier off strips supplier, keeps pricing', 
 // ─── money-never-trade — structural, not a filter ───────────────────────────
 
 Deno.test('SpecLine/SpecSection/SpecScheduleModel carry no trade/markup/margin key', () => {
-  const model = buildScheduleModel([{ roomName: 'Living Room', lines: [line()] }], {});
+  const model = buildScheduleModel([{
+    roomName: 'Living Room',
+    lines: [line()],
+  }], {});
   const l = model.sections[0].lines[0];
 
   // The obvious offender never exists.
@@ -184,7 +232,10 @@ Deno.test('buildScheduleModel — verifiedCount / totalCount tally across sectio
       },
       {
         roomName: 'Bedroom',
-        lines: [line({ recordVerified: false }), line({ recordVerified: true })],
+        lines: [
+          line({ recordVerified: false }),
+          line({ recordVerified: true }),
+        ],
       },
     ],
     {},
@@ -224,7 +275,11 @@ Deno.test('computeRecordPct — identity + folio only, untaught = 33', () => {
   // fill = [0.5 (identity) + 0 (piece), 0 (commerce) + 0.5 (folio), 0 (eye)]
   // => round((1/3) * 100) = 33
   const pct = computeRecordPct(
-    { name: 'Side Table', brand: 'CB2', images: ['https://cdn.example.com/t.jpg'] },
+    {
+      name: 'Side Table',
+      brand: 'CB2',
+      images: ['https://cdn.example.com/t.jpg'],
+    },
     0,
   );
   assertEquals(pct, 33);
@@ -275,7 +330,10 @@ Deno.test('renderSpecSchedulePdf — produces a valid PDF', async () => {
     [
       {
         roomName: 'Living Room',
-        lines: [line(), line({ name: 'Rug', code: 'FF-02', recordVerified: true })],
+        lines: [
+          line(),
+          line({ name: 'Rug', code: 'FF-02', recordVerified: true }),
+        ],
       },
     ],
     {},
@@ -352,7 +410,9 @@ Deno.test('board model: pricing on → product tile carries client price, no tra
   // Every tile + section is scanned; the money invariant is structural.
   for (const section of model.sections) {
     scan(section as unknown as Record<string, unknown>);
-    for (const tile of section.tiles) scan(tile as unknown as Record<string, unknown>);
+    for (const tile of section.tiles) {
+      scan(tile as unknown as Record<string, unknown>);
+    }
   }
   scan(model as unknown as Record<string, unknown>);
 
@@ -418,10 +478,203 @@ Deno.test('renderBoardPdf smoke — real bytes', async () => {
       },
     ],
   });
-  const bytes = await renderBoardPdf(buildBoardModel(input, { pricing: true }), {
-    studioName: 'Studio Patina',
-    projectName: 'Maple Residence',
-  });
+  const bytes = await renderBoardPdf(
+    buildBoardModel(input, { pricing: true }),
+    {
+      studioName: 'Studio Patina',
+      projectName: 'Maple Residence',
+    },
+  );
   assertEquals(bytes instanceof Uint8Array, true);
   assertEquals(bytes.length > 1000, true);
+});
+
+// ─── Board composition model — persisted geometry on one landscape page ────
+
+function compositionInput(
+  overrides: Partial<SpecBoardCompositionInput> = {},
+): SpecBoardCompositionInput {
+  return {
+    studioName: 'Studio Patina',
+    projectName: 'Maple Residence',
+    boardName: 'Composition study',
+    canvasWidth: 1600,
+    canvasHeight: 900,
+    backgroundColor: '#F4F0EA',
+    sections: [
+      { id: 'main', name: 'Main grouping', color: '#C9B7A4' },
+      { id: 'empty', name: 'Empty grouping' },
+    ],
+    pins: [
+      {
+        ...compositionPinTypeWitness,
+        id: 'product-pin',
+        type: 'product',
+        x: 100,
+        y: 100,
+        zIndex: 5,
+        rotation: 15,
+        name: 'Sofa',
+        vendorName: 'Patina Vendor',
+        priceCents: 420000,
+        sectionId: 'main',
+      },
+      {
+        ...compositionPinTypeWitness,
+        id: 'capture-pin',
+        type: 'capture',
+        x: 350,
+        y: 100,
+        zIndex: 1,
+      },
+      {
+        ...compositionPinTypeWitness,
+        type: 'image',
+        x: 600,
+        y: 100,
+        width: 250,
+        height: null,
+        resolvedHeight: 160,
+        zIndex: 2,
+        imageRequested: true,
+      },
+      {
+        ...compositionPinTypeWitness,
+        id: 'palette-pin',
+        type: 'palette',
+        x: 100,
+        y: 400,
+        zIndex: 3,
+        swatches: ['#112233', '#DDEEFF'],
+      },
+      {
+        ...compositionPinTypeWitness,
+        id: 'note-pin',
+        type: 'note',
+        x: 350,
+        y: 400,
+        zIndex: 4,
+        note: 'Keep it warm.',
+      },
+      {
+        ...compositionPinTypeWitness,
+        id: 'scan-pin',
+        type: 'room_scan',
+        x: 600,
+        y: 400,
+        zIndex: 6,
+      },
+    ],
+    ...overrides,
+  };
+}
+
+Deno.test('board composition: landscape fit preserves canvas aspect and shared geometry', () => {
+  const model = buildBoardCompositionModel(compositionInput(), {
+    pricing: true,
+  });
+  assertEquals(model.canvas, {
+    width: 1600,
+    height: 900,
+    backgroundColor: '#F4F0EA',
+  });
+  assertEquals(model.frame, {
+    x: 24,
+    y: 105.75,
+    width: 744,
+    height: 418.5,
+    scale: 0.465,
+  });
+  assertEquals(model.sections.map((section) => section.name), [
+    'Main grouping',
+  ]);
+  assertEquals(model.sections[0].memberKeys, ['product-pin']);
+  assertEquals(
+    model.pins.map((pin) => pin.type),
+    ['capture', 'image', 'palette', 'note', 'product', 'room_scan'],
+  );
+  assertEquals(
+    model.pins.find((pin) => pin.key === 'product-pin')!.rotation,
+    15,
+  );
+  assertEquals(
+    model.pins.find((pin) => pin.type === 'image')!.key,
+    'snapshot:2',
+  );
+  assertEquals(
+    model.pins.find((pin) => pin.type === 'image')!.logicalBox.height,
+    160,
+  );
+});
+
+Deno.test('board composition: dense metadata warns but retains every pin', () => {
+  const tinyPins = Array.from({ length: 61 }, (_, index) => ({
+    ...compositionPinTypeWitness,
+    id: `pin-${index}`,
+    width: 10,
+    height: 10,
+    zIndex: index,
+  }));
+  const model = buildBoardCompositionModel(
+    compositionInput({ pins: tinyPins }),
+    {},
+  );
+  assertEquals(model.pins.length, 61);
+  assertEquals(model.warnings.includes('dense_board'), true);
+  assertEquals(model.warningMetadata.denseBoard?.pinLimitExceeded, true);
+  assertEquals(
+    model.warningMetadata.denseBoard?.pinsBelowTwentyPoints.length,
+    61,
+  );
+});
+
+Deno.test('board composition: image failures become labelled placeholders', () => {
+  const model = buildBoardCompositionModel(compositionInput(), {});
+  const image = model.pins.find((pin) => pin.type === 'image')!;
+  assertEquals(image.placeholderLabel, 'Image unavailable');
+  assertEquals(model.warnings.includes('image_placeholders'), true);
+  assertEquals(model.warningMetadata.imagePlaceholders, ['snapshot:2']);
+});
+
+Deno.test('board composition: client price is gated and model has no internal money keys', () => {
+  const open = buildBoardCompositionModel(compositionInput(), {
+    pricing: true,
+  });
+  const locked = buildBoardCompositionModel(compositionInput(), {
+    pricing: false,
+  });
+  assertEquals(
+    open.pins.find((pin) => pin.key === 'product-pin')!.clientPriceCents,
+    420000,
+  );
+  assertEquals(
+    'clientPriceCents' in locked.pins.find((pin) => pin.key === 'product-pin')!,
+    false,
+  );
+
+  const forbidden = ['trade', 'markup', 'margin'];
+  const visit = (value: unknown): void => {
+    if (Array.isArray(value)) {
+      value.forEach(visit);
+      return;
+    }
+    if (!value || typeof value !== 'object') return;
+    for (
+      const [key, child] of Object.entries(value as Record<string, unknown>)
+    ) {
+      forbidden.forEach((word) => assertEquals(key.toLowerCase().includes(word), false));
+      visit(child);
+    }
+  };
+  visit(open);
+});
+
+Deno.test('renderBoardCompositionPdf smoke — one landscape Letter page', async () => {
+  const model = buildBoardCompositionModel(compositionInput(), {});
+  const bytes = await renderBoardCompositionPdf(model);
+  assertEquals(bytes instanceof Uint8Array, true);
+  assertEquals(bytes.length > 1000, true);
+  const pdfText = new TextDecoder('latin1').decode(bytes);
+  assertEquals((pdfText.match(/\/Type \/Page\b/g) ?? []).length, 1);
+  assertEquals(pdfText.includes('/MediaBox [0 0 792 612]'), true);
 });

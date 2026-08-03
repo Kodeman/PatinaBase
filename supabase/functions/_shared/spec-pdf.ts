@@ -15,15 +15,17 @@
 // money-never-trade guarantee is STRUCTURAL, not a runtime filter you could
 // forget to apply.
 
+// deno-lint-ignore-file no-import-prefix
+
 import React from 'npm:react@19.1.0';
 import {
   Document,
+  Image,
   Page,
+  renderToBuffer,
+  StyleSheet,
   Text,
   View,
-  Image,
-  StyleSheet,
-  renderToBuffer,
 } from 'npm:@react-pdf/renderer@4.3.0';
 
 const h = React.createElement;
@@ -305,7 +307,8 @@ export function computeRecordPct(
 ): number | null {
   if (!product) return null;
   const identity = !!product.name?.trim() && !!product.brand?.trim();
-  const piece = hasDimensions(product.dimensions) && (product.materials?.length ?? 0) > 0;
+  const piece = hasDimensions(product.dimensions) &&
+    (product.materials?.length ?? 0) > 0;
   const commerce = product.price_retail != null || product.price_trade != null;
   const folio = (product.images?.length ?? 0) >= 1;
   const eye = productStylesCount > 0;
@@ -371,7 +374,10 @@ const UNSECTIONED_KEY = '__unsectioned__';
  * sections dropped; unsectioned pins in a trailing group). Client price rides
  * only on product/capture tiles, only under `pricing`. Pure — unit-tested.
  */
-export function buildBoardModel(input: SpecBoardInput, visibility: SpecVisibility): SpecBoardModel {
+export function buildBoardModel(
+  input: SpecBoardInput,
+  visibility: SpecVisibility,
+): SpecBoardModel {
   const showPricing = visibility.pricing !== false;
   const nameById = new Map(input.sections.map((s) => [s.id, s.name]));
   const declaredOrder = input.sections.map((s) => s.id);
@@ -392,7 +398,10 @@ export function buildBoardModel(input: SpecBoardInput, visibility: SpecVisibilit
       note: t.note,
       swatches: t.swatches,
     };
-    if (showPricing && t.priceCents != null && (t.type === 'product' || t.type === 'capture')) {
+    if (
+      showPricing && t.priceCents != null &&
+      (t.type === 'product' || t.type === 'capture')
+    ) {
       tile.clientPriceCents = t.priceCents;
     }
     buckets.get(sid)!.tiles.push(tile);
@@ -404,22 +413,377 @@ export function buildBoardModel(input: SpecBoardInput, visibility: SpecVisibilit
       if (b === UNSECTIONED_KEY) return -1;
       return declaredOrder.indexOf(a) - declaredOrder.indexOf(b);
     })
-    .map((sid) => ({ name: buckets.get(sid)!.name, tiles: buckets.get(sid)!.tiles }));
+    .map((sid) => ({
+      name: buckets.get(sid)!.name,
+      tiles: buckets.get(sid)!.tiles,
+    }));
 
   return { boardName: input.boardName, sections, showPricing };
+}
+
+// ─── Board composition model (pure) — geometry-preserving landscape export ──
+
+export type SpecBoardCompositionPinType =
+  | 'product'
+  | 'capture'
+  | 'image'
+  | 'palette'
+  | 'note'
+  | 'room_scan';
+
+export interface SpecBoardCompositionPinInput {
+  /** Optional for frozen project-board snapshots created before item ids. */
+  id?: string;
+  type: SpecBoardCompositionPinType;
+  x: number | string | null;
+  y: number | string | null;
+  width: number | string | null;
+  height: number | string | null;
+  resolvedHeight: number | string | null;
+  zIndex: number | string | null;
+  rotation: number | string | null;
+  imageDataUrl: string | null;
+  imageRequested: boolean;
+  name: string | null;
+  vendorName: string | null;
+  note: string | null;
+  swatches: string[];
+  priceCents: number | null;
+  sectionId: string | null;
+}
+
+export interface SpecBoardCompositionInput {
+  studioName: string;
+  projectName: string;
+  boardName: string;
+  canvasWidth: number | string | null;
+  canvasHeight: number | string | null;
+  backgroundColor: string | null;
+  sections: { id: string; name: string; color?: string | null }[];
+  pins: SpecBoardCompositionPinInput[];
+}
+
+export interface SpecBoardCompositionRect {
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+}
+
+export interface SpecBoardCompositionPin {
+  key: string;
+  id?: string;
+  sourceIndex: number;
+  type: SpecBoardCompositionPinType;
+  logicalBox: SpecBoardCompositionRect;
+  pageBox: SpecBoardCompositionRect;
+  zIndex: number;
+  rotation: number;
+  imageDataUrl: string | null;
+  placeholderLabel: string;
+  name: string | null;
+  vendorName: string | null;
+  note: string | null;
+  swatches: string[];
+  clientPriceCents?: number;
+}
+
+export interface SpecBoardCompositionSection {
+  id: string;
+  name: string;
+  color: string;
+  memberKeys: string[];
+  logicalBounds: SpecBoardCompositionRect;
+  pageBounds: SpecBoardCompositionRect;
+}
+
+export interface SpecBoardCompositionWarningMetadata {
+  denseBoard: null | {
+    pinCount: number;
+    pinLimitExceeded: boolean;
+    pinsBelowTwentyPoints: string[];
+  };
+  imagePlaceholders: string[];
+}
+
+/**
+ * Composition-only client render model. It accepts only the public client
+ * price snapshot and has no internal-cost fields by construction.
+ */
+export interface SpecBoardCompositionModel {
+  studioName: string;
+  projectName: string;
+  boardName: string;
+  showPricing: boolean;
+  canvas: { width: number; height: number; backgroundColor: string };
+  frame: SpecBoardCompositionRect & { scale: number };
+  sections: SpecBoardCompositionSection[];
+  pins: SpecBoardCompositionPin[];
+  warnings: string[];
+  warningMetadata: SpecBoardCompositionWarningMetadata;
+}
+
+const COMPOSITION_FRAME_AREA = {
+  x: 24,
+  y: 54,
+  width: 744,
+  height: 522,
+} as const;
+const COMPOSITION_DEFAULT_WIDTH = 1200;
+const COMPOSITION_DEFAULT_HEIGHT = 800;
+const COMPOSITION_DEFAULT_PIN_WIDTH = 240;
+
+function compositionFinite(
+  value: number | string | null,
+  fallback: number,
+): number {
+  const parsed = typeof value === 'number' ? value : Number(value);
+  return Number.isFinite(parsed) ? parsed : fallback;
+}
+
+function compositionPositive(value: number | string | null): number | null {
+  const parsed = compositionFinite(value, Number.NaN);
+  return parsed > 0 ? parsed : null;
+}
+
+function compositionRound(value: number, places = 6): number {
+  const factor = 10 ** places;
+  return Math.round((value + Number.EPSILON) * factor) / factor;
+}
+
+function compositionAabb(
+  rect: SpecBoardCompositionRect,
+  degrees: number,
+): SpecBoardCompositionRect {
+  const normalized = ((degrees % 360) + 360) % 360;
+  if (normalized === 0) return { ...rect };
+  const radians = (normalized * Math.PI) / 180;
+  const sin = Math.abs(Math.sin(radians));
+  const cos = Math.abs(Math.cos(radians));
+  const width = rect.width * cos + rect.height * sin;
+  const height = rect.width * sin + rect.height * cos;
+  const centerX = rect.x + rect.width / 2;
+  const centerY = rect.y + rect.height / 2;
+  return {
+    x: centerX - width / 2,
+    y: centerY - height / 2,
+    width,
+    height,
+  };
+}
+
+function compositionPageRect(
+  rect: SpecBoardCompositionRect,
+  frame: SpecBoardCompositionModel['frame'],
+): SpecBoardCompositionRect {
+  return {
+    x: compositionRound(frame.x + rect.x * frame.scale),
+    y: compositionRound(frame.y + rect.y * frame.scale),
+    width: compositionRound(rect.width * frame.scale),
+    height: compositionRound(rect.height * frame.scale),
+  };
+}
+
+function safeCompositionColor(
+  value: string | null | undefined,
+  fallback: string,
+): string {
+  return value && /^#[0-9a-f]{6}$/i.test(value) ? value : fallback;
+}
+
+function compositionPlaceholderLabel(
+  type: SpecBoardCompositionPinType,
+): string {
+  if (type === 'room_scan') return 'Room scan unavailable';
+  if (type === 'product' || type === 'capture') {
+    return 'Product image unavailable';
+  }
+  if (type === 'image') return 'Image unavailable';
+  return 'Preview unavailable';
+}
+
+/**
+ * Resolve the same persisted geometry used by the interactive board, fit it
+ * into one landscape Letter page, and derive every page coordinate once. Pins
+ * stay in ascending z order and rotation remains center-based in the renderer.
+ */
+export function buildBoardCompositionModel(
+  input: SpecBoardCompositionInput,
+  visibility: SpecVisibility,
+): SpecBoardCompositionModel {
+  const canvas = {
+    width: compositionPositive(input.canvasWidth) ?? COMPOSITION_DEFAULT_WIDTH,
+    height: compositionPositive(input.canvasHeight) ??
+      COMPOSITION_DEFAULT_HEIGHT,
+    backgroundColor: safeCompositionColor(input.backgroundColor, '#FAF8F5'),
+  };
+  const scale = Math.min(
+    COMPOSITION_FRAME_AREA.width / canvas.width,
+    COMPOSITION_FRAME_AREA.height / canvas.height,
+  );
+  const frame = {
+    x: compositionRound(
+      COMPOSITION_FRAME_AREA.x +
+        (COMPOSITION_FRAME_AREA.width - canvas.width * scale) / 2,
+    ),
+    y: compositionRound(
+      COMPOSITION_FRAME_AREA.y +
+        (COMPOSITION_FRAME_AREA.height - canvas.height * scale) / 2,
+    ),
+    width: compositionRound(canvas.width * scale),
+    height: compositionRound(canvas.height * scale),
+    scale: compositionRound(scale),
+  };
+  const showPricing = visibility.pricing !== false;
+  const resolved = input.pins
+    .map((source, sourceIndex) => {
+      const width = compositionPositive(source.width) ??
+        COMPOSITION_DEFAULT_PIN_WIDTH;
+      const height = compositionPositive(source.height) ??
+        compositionPositive(source.resolvedHeight) ??
+        compositionRound(
+          width *
+            (source.type === 'image' || source.type === 'room_scan' ? 0.72 : 1.15),
+        );
+      const logicalBox = {
+        x: compositionFinite(source.x, 0),
+        y: compositionFinite(source.y, 0),
+        width,
+        height,
+      };
+      return {
+        source,
+        sourceIndex,
+        key: source.id || `snapshot:${sourceIndex}`,
+        logicalBox,
+        aabb: compositionAabb(
+          logicalBox,
+          compositionFinite(source.rotation, 0),
+        ),
+        zIndex: compositionFinite(source.zIndex, 0),
+        rotation: compositionFinite(source.rotation, 0),
+      };
+    })
+    .sort((a, b) => a.zIndex - b.zIndex || a.sourceIndex - b.sourceIndex);
+
+  const pins: SpecBoardCompositionPin[] = resolved.map((item) => {
+    const pin: SpecBoardCompositionPin = {
+      key: item.key,
+      sourceIndex: item.sourceIndex,
+      type: item.source.type,
+      logicalBox: item.logicalBox,
+      pageBox: compositionPageRect(item.logicalBox, frame),
+      zIndex: item.zIndex,
+      rotation: item.rotation,
+      imageDataUrl: item.source.imageDataUrl,
+      placeholderLabel: compositionPlaceholderLabel(item.source.type),
+      name: item.source.name,
+      vendorName: item.source.vendorName,
+      note: item.source.note,
+      swatches: item.source.swatches.filter((color) => /^#[0-9a-f]{6}$/i.test(color)),
+    };
+    if (item.source.id) pin.id = item.source.id;
+    if (
+      showPricing &&
+      item.source.priceCents != null &&
+      (item.source.type === 'product' || item.source.type === 'capture')
+    ) {
+      pin.clientPriceCents = item.source.priceCents;
+    }
+    return pin;
+  });
+
+  const fallbackSectionColors = ['#C9B7A4', '#B7C5BE', '#C7B9C9', '#D0C2A5'];
+  const sections: SpecBoardCompositionSection[] = [];
+  input.sections.forEach((section, sectionIndex) => {
+    const members = resolved.filter((item) => item.source.sectionId === section.id);
+    if (members.length === 0) return;
+    const minX = Math.min(...members.map((item) => item.aabb.x));
+    const minY = Math.min(...members.map((item) => item.aabb.y));
+    const maxX = Math.max(
+      ...members.map((item) => item.aabb.x + item.aabb.width),
+    );
+    const maxY = Math.max(
+      ...members.map((item) => item.aabb.y + item.aabb.height),
+    );
+    const x = Math.max(0, minX - 16);
+    const y = Math.max(0, minY - 24);
+    const logicalBounds = {
+      x,
+      y,
+      width: maxX + 16 - x,
+      height: maxY + 16 - y,
+    };
+    sections.push({
+      id: section.id,
+      name: section.name || 'Section',
+      color: safeCompositionColor(
+        section.color,
+        fallbackSectionColors[sectionIndex % fallbackSectionColors.length],
+      ),
+      memberKeys: members.map((member) => member.key),
+      logicalBounds,
+      pageBounds: compositionPageRect(logicalBounds, frame),
+    });
+  });
+
+  const pinsBelowTwentyPoints = pins
+    .filter((pin) => pin.pageBox.width < 20 || pin.pageBox.height < 20)
+    .map((pin) => pin.key);
+  const denseBoard = input.pins.length > 60 || pinsBelowTwentyPoints.length > 0
+    ? {
+      pinCount: input.pins.length,
+      pinLimitExceeded: input.pins.length > 60,
+      pinsBelowTwentyPoints,
+    }
+    : null;
+  const imagePlaceholders = resolved
+    .filter((item) => item.source.imageRequested && !item.source.imageDataUrl)
+    .map((item) => item.key);
+  const warnings = [
+    ...(denseBoard ? ['dense_board'] : []),
+    ...(imagePlaceholders.length > 0 ? ['image_placeholders'] : []),
+  ];
+
+  return {
+    studioName: input.studioName,
+    projectName: input.projectName,
+    boardName: input.boardName,
+    showPricing,
+    canvas,
+    frame,
+    sections,
+    pins,
+    warnings,
+    warningMetadata: { denseBoard, imagePlaceholders },
+  };
 }
 
 // ─── Styles (ported from po-pdf.ts) ──────────────────────────────────────────
 
 const styles = StyleSheet.create({
-  page: { padding: 56, fontSize: 10, fontFamily: 'Helvetica', color: '#2C2926' },
-  header: { borderBottom: '1pt solid #2C2926', paddingBottom: 16, marginBottom: 24 },
+  page: {
+    padding: 56,
+    fontSize: 10,
+    fontFamily: 'Helvetica',
+    color: '#2C2926',
+  },
+  header: {
+    borderBottom: '1pt solid #2C2926',
+    paddingBottom: 16,
+    marginBottom: 24,
+  },
   // Studio logo (Designer Studios) — small, above the title. Height-capped so a
   // tall logo can't blow out the header; width scales to the intrinsic ratio.
   headerLogo: { height: 30, marginBottom: 10, objectFit: 'contain' },
   title: { fontSize: 18, fontWeight: 700, marginBottom: 4 },
   meta: { fontSize: 9, color: '#5C4A3C' },
-  itemCode: { fontSize: 11, color: '#5C4A3C', marginTop: 4, fontFamily: 'Courier' },
+  itemCode: {
+    fontSize: 11,
+    color: '#5C4A3C',
+    marginTop: 4,
+    fontFamily: 'Courier',
+  },
   label: {
     fontSize: 7,
     textTransform: 'uppercase',
@@ -443,7 +807,11 @@ const styles = StyleSheet.create({
   },
   block: { marginBottom: 20 },
   specText: { fontSize: 10, color: '#3D3A36', lineHeight: 1.4 },
-  customRow: { flexDirection: 'row', paddingVertical: 3, borderTop: '1pt solid #E5E2DD' },
+  customRow: {
+    flexDirection: 'row',
+    paddingVertical: 3,
+    borderTop: '1pt solid #E5E2DD',
+  },
   customLabel: { flex: 2, fontSize: 9, color: '#5C4A3C' },
   customValue: { flex: 3, fontSize: 10 },
   provenanceText: { fontSize: 9, color: '#5C4A3C' },
@@ -454,15 +822,28 @@ const styles = StyleSheet.create({
   sectionHeading: { fontSize: 13, fontWeight: 700, marginBottom: 8 },
   table: { border: '1pt solid #E5E2DD', borderRadius: 2 },
   tableHead: { flexDirection: 'row', backgroundColor: '#E5E2DD', padding: 8 },
-  tableRow: { flexDirection: 'row', padding: 8, borderTop: '1pt solid #E5E2DD' },
+  tableRow: {
+    flexDirection: 'row',
+    padding: 8,
+    borderTop: '1pt solid #E5E2DD',
+  },
   cellCode: { flex: 2, fontFamily: 'Courier', fontSize: 9 },
   cellName: { flex: 4 },
   cellQty: { flex: 1, textAlign: 'right' },
   cellLead: { flex: 2 },
   cellPrice: { flex: 2, textAlign: 'right' },
   cellSupplier: { flex: 3 },
-  subtotalRow: { flexDirection: 'row', padding: 8, borderTop: '1pt solid #2C2926' },
-  subtotalSpacer: { flex: 9, textAlign: 'right', fontWeight: 700, paddingRight: 8 },
+  subtotalRow: {
+    flexDirection: 'row',
+    padding: 8,
+    borderTop: '1pt solid #2C2926',
+  },
+  subtotalSpacer: {
+    flex: 9,
+    textAlign: 'right',
+    fontWeight: 700,
+    paddingRight: 8,
+  },
   subtotalAmount: { flex: 2, textAlign: 'right', fontWeight: 700 },
   subtotalSupplierPad: { flex: 3 },
   totals: { marginTop: 12, flexDirection: 'row', justifyContent: 'flex-end' },
@@ -513,10 +894,12 @@ const styles = StyleSheet.create({
 // ─── Helpers (same shapes as po-pdf.ts) ──────────────────────────────────────
 
 function fmt(cents: number): string {
-  return `$${(cents / 100).toLocaleString('en-US', {
-    minimumFractionDigits: 2,
-    maximumFractionDigits: 2,
-  })}`;
+  return `$${
+    (cents / 100).toLocaleString('en-US', {
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 2,
+    })
+  }`;
 }
 
 // Same shape as po-pdf.ts fmtDate. Exported so the edge fn formats the
@@ -579,7 +962,8 @@ function ItemDocument(model: SpecItemModel) {
         h(
           Text,
           { style: styles.meta },
-          [model.studioName, model.projectName, 'Specification'].filter(Boolean).join(' · '),
+          [model.studioName, model.projectName, 'Specification'].filter(Boolean)
+            .join(' · '),
         ),
         model.code ? h(Text, { style: styles.itemCode }, model.code) : null,
       ),
@@ -595,46 +979,46 @@ function ItemDocument(model: SpecItemModel) {
       // Images (up to 4) — react-pdf Image fetches src at render time
       images.length > 0
         ? h(
-            View,
-            { style: styles.imageRow },
-            ...images.map((src, idx) => h(Image, { key: idx, style: styles.image, src })),
-          )
+          View,
+          { style: styles.imageRow },
+          ...images.map((src, idx) => h(Image, { key: idx, style: styles.image, src })),
+        )
         : null,
       // Specs / description
       model.specs
         ? h(
-            View,
-            { style: styles.block },
-            h(Text, { style: styles.label }, 'Specification'),
-            h(Text, { style: styles.specText }, model.specs),
-          )
+          View,
+          { style: styles.block },
+          h(Text, { style: styles.label }, 'Specification'),
+          h(Text, { style: styles.specText }, model.specs),
+        )
         : null,
       // Custom fields (label: value rows)
       model.customFields.length > 0
         ? h(
-            View,
-            { style: styles.block },
-            h(Text, { style: styles.label }, 'Details'),
-            ...model.customFields.map((f, idx) =>
-              h(
-                View,
-                { key: idx, style: styles.customRow },
-                h(Text, { style: styles.customLabel }, f.label),
-                h(Text, { style: styles.customValue }, f.value),
-              ),
-            ),
-          )
+          View,
+          { style: styles.block },
+          h(Text, { style: styles.label }, 'Details'),
+          ...model.customFields.map((f, idx) =>
+            h(
+              View,
+              { key: idx, style: styles.customRow },
+              h(Text, { style: styles.customLabel }, f.label),
+              h(Text, { style: styles.customValue }, f.value),
+            )
+          ),
+        )
         : null,
       // Provenance
       provenanceBlock(model.provenance),
       // Client price — CLIENT only, present only when pricing is visible
       model.clientPriceCents != null
         ? h(
-            View,
-            { style: styles.block },
-            h(Text, { style: styles.label }, 'Client Price'),
-            h(Text, { style: styles.priceValue }, fmt(model.clientPriceCents)),
-          )
+          View,
+          { style: styles.block },
+          h(Text, { style: styles.label }, 'Client Price'),
+          h(Text, { style: styles.priceValue }, fmt(model.clientPriceCents)),
+        )
         : null,
       // Footer
       h(Text, { style: styles.footer }, 'Generated by Patina · patina.cloud'),
@@ -646,7 +1030,12 @@ function ItemDocument(model: SpecItemModel) {
 
 function ScheduleDocument(
   model: SpecScheduleModel,
-  header: { studioName: string; projectName: string; title: string; studioLogoUrl?: string },
+  header: {
+    studioName: string;
+    projectName: string;
+    title: string;
+    studioLogoUrl?: string;
+  },
 ) {
   return h(
     Document,
@@ -689,7 +1078,11 @@ function ScheduleDocument(
                 ? h(Text, { style: [styles.cellPrice, styles.label] }, 'Client')
                 : null,
               model.showSupplier
-                ? h(Text, { style: [styles.cellSupplier, styles.label] }, 'Supplier')
+                ? h(
+                  Text,
+                  { style: [styles.cellSupplier, styles.label] },
+                  'Supplier',
+                )
                 : null,
             ),
             // Rows
@@ -703,51 +1096,63 @@ function ScheduleDocument(
                 h(Text, { style: styles.cellLead }, line.leadLabel ?? '-'),
                 model.showPricing
                   ? h(
-                      Text,
-                      { style: styles.cellPrice },
-                      line.clientPriceCents != null ? fmt(line.clientPriceCents) : '-',
-                    )
+                    Text,
+                    { style: styles.cellPrice },
+                    line.clientPriceCents != null ? fmt(line.clientPriceCents) : '-',
+                  )
                   : null,
                 model.showSupplier
-                  ? h(Text, { style: styles.cellSupplier }, line.supplierName ?? '-')
+                  ? h(
+                    Text,
+                    { style: styles.cellSupplier },
+                    line.supplierName ?? '-',
+                  )
                   : null,
-              ),
+              )
             ),
             // Section subtotal (pricing only)
             model.showPricing
               ? h(
-                  View,
-                  { style: styles.subtotalRow },
-                  h(Text, { style: styles.subtotalSpacer }, 'Subtotal'),
-                  h(Text, { style: styles.subtotalAmount }, fmt(section.subtotalCents ?? 0)),
-                  model.showSupplier ? h(Text, { style: styles.subtotalSupplierPad }, '') : null,
-                )
+                View,
+                { style: styles.subtotalRow },
+                h(Text, { style: styles.subtotalSpacer }, 'Subtotal'),
+                h(
+                  Text,
+                  { style: styles.subtotalAmount },
+                  fmt(section.subtotalCents ?? 0),
+                ),
+                model.showSupplier ? h(Text, { style: styles.subtotalSupplierPad }, '') : null,
+              )
               : null,
           ),
-        ),
+        )
       ),
       // Document total (pricing only)
       model.showPricing
         ? h(
+          View,
+          { style: styles.totals },
+          h(
             View,
-            { style: styles.totals },
+            { style: styles.totalsBlock },
             h(
               View,
-              { style: styles.totalsBlock },
-              h(
-                View,
-                { style: styles.totalsTotal },
-                h(Text, null, 'Total'),
-                h(Text, null, fmt(model.documentTotalCents ?? 0)),
-              ),
+              { style: styles.totalsTotal },
+              h(Text, null, 'Total'),
+              h(Text, null, fmt(model.documentTotalCents ?? 0)),
             ),
-          )
+          ),
+        )
         : null,
       // Footer — verified-record tally + provenance line
       h(
         View,
         { style: styles.footer },
-        h(Text, null, `${model.verifiedCount} of ${model.totalCount} lines verified records`),
+        h(
+          Text,
+          null,
+          `${model.verifiedCount} of ${model.totalCount} lines verified records`,
+        ),
         h(Text, null, 'Generated by Patina · patina.cloud'),
       ),
     ),
@@ -793,31 +1198,293 @@ function BoardDocument(
               h(
                 View,
                 { key: tIdx, style: styles.boardTile, wrap: false },
-                tile.imageUrl ? h(Image, { style: styles.boardTileImage, src: tile.imageUrl }) : null,
+                tile.imageUrl
+                  ? h(Image, {
+                    style: styles.boardTileImage,
+                    src: tile.imageUrl,
+                  })
+                  : null,
                 tile.swatches.length > 0
                   ? h(
-                      View,
-                      { style: styles.boardSwatchRow },
-                      ...tile.swatches.map((hex, i) =>
-                        h(View, { key: i, style: { flex: 1, backgroundColor: hex } }),
-                      ),
-                    )
+                    View,
+                    { style: styles.boardSwatchRow },
+                    ...tile.swatches.map((hex, i) =>
+                      h(View, {
+                        key: i,
+                        style: { flex: 1, backgroundColor: hex },
+                      })
+                    ),
+                  )
                   : null,
                 tile.name ? h(Text, { style: styles.boardTileName }, tile.name) : null,
                 tile.clientPriceCents != null
-                  ? h(Text, { style: styles.boardTilePrice }, fmt(tile.clientPriceCents))
+                  ? h(
+                    Text,
+                    { style: styles.boardTilePrice },
+                    fmt(tile.clientPriceCents),
+                  )
                   : null,
                 tile.note ? h(Text, { style: styles.boardTileNote }, tile.note) : null,
-              ),
+              )
             ),
           ),
-        ),
+        )
       ),
       // Provenance footer.
       h(
         Text,
         { style: styles.footer },
-        [header.studioName, 'Generated by Patina · patina.cloud'].filter(Boolean).join(' · '),
+        [header.studioName, 'Generated by Patina · patina.cloud'].filter(
+          Boolean,
+        ).join(' · '),
+      ),
+    ),
+  );
+}
+
+// ─── Board composition document tree ────────────────────────────────────────
+
+function compositionImageOrPlaceholder(pin: SpecBoardCompositionPin) {
+  return pin.imageDataUrl
+    ? h(Image, {
+      src: pin.imageDataUrl,
+      style: { width: '100%', height: '100%', objectFit: 'contain' },
+    })
+    : h(
+      View,
+      {
+        style: {
+          width: '100%',
+          height: '100%',
+          alignItems: 'center',
+          justifyContent: 'center',
+          backgroundColor: '#EEEAE4',
+          border: '0.7pt solid #CFC8BF',
+          padding: 3,
+        },
+      },
+      h(
+        Text,
+        {
+          style: {
+            fontSize: Math.max(3.5, Math.min(7, pin.pageBox.width / 20)),
+            color: '#746B62',
+          },
+        },
+        pin.placeholderLabel,
+      ),
+    );
+}
+
+function compositionPinContent(pin: SpecBoardCompositionPin) {
+  const labelSize = Math.max(3.5, Math.min(8, pin.pageBox.width / 18));
+  if (pin.type === 'palette') {
+    return h(
+      View,
+      {
+        style: {
+          width: '100%',
+          height: '100%',
+          backgroundColor: '#FFFFFF',
+          padding: 2,
+        },
+      },
+      h(
+        View,
+        { style: { flexDirection: 'row', flex: 1 } },
+        ...(pin.swatches.length > 0 ? pin.swatches : ['#EEEAE4']).map((
+          color,
+          index,
+        ) => h(View, { key: index, style: { flex: 1, backgroundColor: color } })),
+      ),
+      pin.name ? h(Text, { style: { fontSize: labelSize, marginTop: 2 } }, pin.name) : null,
+    );
+  }
+  if (pin.type === 'note') {
+    return h(
+      View,
+      {
+        style: {
+          width: '100%',
+          height: '100%',
+          padding: Math.max(2, pin.pageBox.width / 24),
+          backgroundColor: '#F1E7D8',
+          border: '0.6pt solid #D8C8B3',
+          borderRadius: 3,
+        },
+      },
+      h(Text, {
+        style: { fontSize: labelSize, lineHeight: 1.25, color: '#3D3A36' },
+      }, pin.note || 'Note'),
+    );
+  }
+  if (pin.type === 'product' || pin.type === 'capture') {
+    const caption = [pin.name, pin.vendorName].filter(Boolean).join(' · ');
+    return h(
+      View,
+      {
+        style: {
+          width: '100%',
+          height: '100%',
+          backgroundColor: '#FFFFFF',
+          border: '0.6pt solid #D8D2CA',
+          padding: 2,
+        },
+      },
+      h(
+        View,
+        { style: { flex: 1, minHeight: 0 } },
+        compositionImageOrPlaceholder(pin),
+      ),
+      caption ? h(Text, { style: { fontSize: labelSize, marginTop: 2 } }, caption) : null,
+      pin.clientPriceCents != null
+        ? h(
+          Text,
+          { style: { fontSize: labelSize, fontWeight: 700 } },
+          fmt(pin.clientPriceCents),
+        )
+        : null,
+    );
+  }
+  return h(
+    View,
+    {
+      style: {
+        width: '100%',
+        height: '100%',
+        backgroundColor: '#FFFFFF',
+        border: '0.6pt solid #D8D2CA',
+        padding: 2,
+      },
+    },
+    h(
+      View,
+      { style: { flex: 1, minHeight: 0 } },
+      compositionImageOrPlaceholder(pin),
+    ),
+    pin.type === 'room_scan' || pin.name
+      ? h(
+        Text,
+        { style: { fontSize: labelSize, marginTop: 2 } },
+        pin.name || 'Room scan',
+      )
+      : null,
+  );
+}
+
+function BoardCompositionDocument(model: SpecBoardCompositionModel) {
+  return h(
+    Document,
+    null,
+    h(
+      Page,
+      {
+        size: 'LETTER',
+        orientation: 'landscape',
+        style: {
+          width: 792,
+          height: 612,
+          fontFamily: 'Helvetica',
+          color: '#2C2926',
+          backgroundColor: '#FFFFFF',
+        },
+      },
+      h(Text, {
+        style: {
+          position: 'absolute',
+          left: 24,
+          top: 18,
+          fontSize: 16,
+          fontWeight: 700,
+        },
+      }, model.boardName),
+      h(
+        Text,
+        {
+          style: {
+            position: 'absolute',
+            right: 24,
+            top: 21,
+            fontSize: 8,
+            color: '#5C4A3C',
+          },
+        },
+        [model.studioName, model.projectName].filter(Boolean).join(' · '),
+      ),
+      h(View, {
+        style: {
+          position: 'absolute',
+          left: model.frame.x,
+          top: model.frame.y,
+          width: model.frame.width,
+          height: model.frame.height,
+          backgroundColor: model.canvas.backgroundColor,
+          border: '0.6pt solid #CFC8BF',
+          overflow: 'hidden',
+        },
+      }),
+      ...model.sections.flatMap((section) => [
+        h(View, {
+          key: `${section.id}:band`,
+          style: {
+            position: 'absolute',
+            left: section.pageBounds.x,
+            top: section.pageBounds.y,
+            width: section.pageBounds.width,
+            height: section.pageBounds.height,
+            border: `0.8pt dashed ${section.color}`,
+            backgroundColor: section.color,
+            opacity: 0.13,
+          },
+        }),
+        h(
+          Text,
+          {
+            key: `${section.id}:label`,
+            style: {
+              position: 'absolute',
+              left: section.pageBounds.x + 3,
+              top: section.pageBounds.y + 2,
+              fontSize: 6,
+              fontWeight: 700,
+              color: '#3D3A36',
+            },
+          },
+          section.name,
+        ),
+      ]),
+      ...model.pins.map((pin) =>
+        h(
+          View,
+          {
+            key: pin.key,
+            style: {
+              position: 'absolute',
+              left: pin.pageBox.x,
+              top: pin.pageBox.y,
+              width: pin.pageBox.width,
+              height: pin.pageBox.height,
+              transform: `rotate(${pin.rotation}deg)`,
+              transformOrigin: 'center center',
+            },
+          },
+          compositionPinContent(pin),
+        )
+      ),
+      h(
+        Text,
+        {
+          style: {
+            position: 'absolute',
+            left: 24,
+            right: 24,
+            bottom: 14,
+            textAlign: 'center',
+            fontSize: 7,
+            color: '#746B62',
+          },
+        },
+        'Generated by Patina · patina.cloud',
       ),
     ),
   );
@@ -831,7 +1498,9 @@ function BoardDocument(
  * can hand it to `Response`, `storage.upload`, or base64-encode it (po-pdf.ts
  * "API shape").
  */
-export async function renderSpecItemPdf(model: SpecItemModel): Promise<Uint8Array> {
+export async function renderSpecItemPdf(
+  model: SpecItemModel,
+): Promise<Uint8Array> {
   const buffer = await renderToBuffer(ItemDocument(model));
   return new Uint8Array(buffer);
 }
@@ -839,7 +1508,12 @@ export async function renderSpecItemPdf(model: SpecItemModel): Promise<Uint8Arra
 /** Render the per-project Specification schedule to PDF bytes. */
 export async function renderSpecSchedulePdf(
   model: SpecScheduleModel,
-  header: { studioName: string; projectName: string; title: string; studioLogoUrl?: string },
+  header: {
+    studioName: string;
+    projectName: string;
+    title: string;
+    studioLogoUrl?: string;
+  },
 ): Promise<Uint8Array> {
   const buffer = await renderToBuffer(ScheduleDocument(model, header));
   return new Uint8Array(buffer);
@@ -851,5 +1525,13 @@ export async function renderBoardPdf(
   header: { studioName: string; projectName: string; studioLogoUrl?: string },
 ): Promise<Uint8Array> {
   const buffer = await renderToBuffer(BoardDocument(model, header));
+  return new Uint8Array(buffer);
+}
+
+/** Render one persisted board composition on exactly one landscape Letter page. */
+export async function renderBoardCompositionPdf(
+  model: SpecBoardCompositionModel,
+): Promise<Uint8Array> {
+  const buffer = await renderToBuffer(BoardCompositionDocument(model));
   return new Uint8Array(buffer);
 }

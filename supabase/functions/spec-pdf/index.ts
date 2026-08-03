@@ -12,26 +12,33 @@
 // separate service-role `admin` client does the loads. Not-found and not-owned
 // BOTH collapse to a 404 so foreign proposal/project/item ids aren't confirmed.
 //
-// Body: { kind: 'item' | 'document' | 'board', proposalId?, projectId?,
+// Body: { kind: 'item' | 'document' | 'board' | 'board-composition', proposalId?, projectId?,
 //         itemId?, boardId?, visibility?: SpecVisibility }
 //   · exactly one of proposalId / projectId is required
 //   · kind 'item' additionally requires itemId
 //   · kind 'board' additionally requires boardId (a section-grouped tile grid;
 //     client price only, never trade — same structural money invariant)
+//   · kind 'board-composition' requires boardId and renders persisted geometry
+//     on one landscape Letter page; only this new kind admits an active,
+//     non-guest peer in the owner's active design studio
 // Returns: 200 application/pdf (attachment), or the JSON error idiom.
 
-// deno-lint-ignore-file no-explicit-any
+// deno-lint-ignore-file no-explicit-any no-import-prefix
 
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 import {
+  buildBoardCompositionModel,
   buildBoardModel,
   buildItemModel,
   buildScheduleModel,
   computeRecordPct,
   fmtDate,
+  renderBoardCompositionPdf,
   renderBoardPdf,
   renderSpecItemPdf,
   renderSpecSchedulePdf,
+  type SpecBoardCompositionModel,
+  type SpecBoardCompositionPinInput,
   type SpecBoardModel,
   type SpecBoardTileInput,
   type SpecItemInput,
@@ -41,6 +48,8 @@ import {
   type SpecVisibility,
 } from '../_shared/spec-pdf.ts';
 import { resolveStudioIdentity, studioDisplayName } from '../_shared/studio-identity.ts';
+import { canCallerUseOwner, ownedBoardOrNull, parseSpecPdfBody } from './core.ts';
+import { hydrateCompositionImages } from './image-loader.ts';
 
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL')!;
 const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
@@ -69,47 +78,47 @@ async function getCallerUser(req: Request) {
   return data.user ?? null;
 }
 
-// ─── Body parsing ────────────────────────────────────────────────────────────
+async function sharesActiveDesignStudio(
+  admin: any,
+  callerId: string,
+  designerId: string,
+) {
+  const { data: memberships, error: membershipError } = await admin
+    .from('organization_members')
+    .select('user_id, organization_id')
+    .in('user_id', [callerId, designerId])
+    .eq('status', 'active')
+    .neq('role', 'guest');
+  if (membershipError) throw membershipError;
 
-interface SpecPdfPayload {
-  kind: 'item' | 'document' | 'board';
-  proposalId: string | null;
-  projectId: string | null;
-  itemId: string | null;
-  boardId: string | null;
-  visibility: SpecVisibility;
-}
+  const callerOrganizations = new Set(
+    ((memberships ?? []) as any[])
+      .filter((membership) => membership.user_id === callerId)
+      .map((membership) => String(membership.organization_id)),
+  );
+  const sharedOrganizations = [
+    ...new Set(
+      ((memberships ?? []) as any[])
+        .filter(
+          (membership) =>
+            membership.user_id === designerId &&
+            callerOrganizations.has(String(membership.organization_id)),
+        )
+        .map((membership) => String(membership.organization_id)),
+    ),
+  ];
+  if (sharedOrganizations.length === 0) return false;
 
-function parseBody(
-  raw: unknown,
-): { ok: true; payload: SpecPdfPayload } | { ok: false; error: string } {
-  if (!raw || typeof raw !== 'object') return { ok: false, error: 'invalid_body' };
-  const b = raw as Record<string, unknown>;
-
-  const kind = b.kind;
-  if (kind !== 'item' && kind !== 'document' && kind !== 'board') {
-    return { ok: false, error: 'invalid_kind' };
-  }
-
-  const proposalId = typeof b.proposalId === 'string' && b.proposalId ? b.proposalId : null;
-  const projectId = typeof b.projectId === 'string' && b.projectId ? b.projectId : null;
-  // EXACTLY one owner.
-  if ((proposalId && projectId) || (!proposalId && !projectId)) {
-    return { ok: false, error: 'exactly_one_owner_required' };
-  }
-
-  const itemId = typeof b.itemId === 'string' && b.itemId ? b.itemId : null;
-  if (kind === 'item' && !itemId) return { ok: false, error: 'item_id_required' };
-
-  const boardId = typeof b.boardId === 'string' && b.boardId ? b.boardId : null;
-  if (kind === 'board' && !boardId) return { ok: false, error: 'board_id_required' };
-
-  const visibility =
-    b.visibility && typeof b.visibility === 'object'
-      ? (b.visibility as SpecVisibility)
-      : {};
-
-  return { ok: true, payload: { kind, proposalId, projectId, itemId, boardId, visibility } };
+  const { data: studio, error: studioError } = await admin
+    .from('organizations')
+    .select('id')
+    .in('id', sharedOrganizations)
+    .eq('type', 'design_studio')
+    .eq('status', 'active')
+    .limit(1)
+    .maybeSingle();
+  if (studioError) throw studioError;
+  return studio != null;
 }
 
 // ─── Normalization helpers ───────────────────────────────────────────────────
@@ -195,7 +204,8 @@ function groupSections(
 
 /** Filename-safe fragment for the doc_code / item id path segment. */
 function safeFilePart(s: string): string {
-  return s.replace(/[^a-zA-Z0-9._-]+/g, '-').replace(/^-+|-+$/g, '') || 'document';
+  return s.replace(/[^a-zA-Z0-9._-]+/g, '-').replace(/^-+|-+$/g, '') ||
+    'document';
 }
 
 /** Lowercase dashed slug for the owner-name filename fragment. */
@@ -213,18 +223,28 @@ function slug(s: string): string {
 
 type Prepared =
   | {
-      kind: 'document';
-      model: SpecScheduleModel;
-      header: { studioName: string; projectName: string; title: string; studioLogoUrl?: string };
-      filename: string;
-    }
+    kind: 'document';
+    model: SpecScheduleModel;
+    header: {
+      studioName: string;
+      projectName: string;
+      title: string;
+      studioLogoUrl?: string;
+    };
+    filename: string;
+  }
   | { kind: 'item'; model: SpecItemModel; filename: string }
   | {
-      kind: 'board';
-      model: SpecBoardModel;
-      header: { studioName: string; projectName: string; studioLogoUrl?: string };
-      filename: string;
-    };
+    kind: 'board';
+    model: SpecBoardModel;
+    header: { studioName: string; projectName: string; studioLogoUrl?: string };
+    filename: string;
+  }
+  | {
+    kind: 'board-composition';
+    model: SpecBoardCompositionModel;
+    filename: string;
+  };
 
 Deno.serve(async (req: Request) => {
   if (req.method === 'OPTIONS') {
@@ -240,7 +260,7 @@ Deno.serve(async (req: Request) => {
   } catch {
     return json({ error: 'invalid_body' }, 400);
   }
-  const parsed = parseBody(rawBody);
+  const parsed = parseSpecPdfBody(rawBody);
   if (!parsed.ok) {
     return json({ error: parsed.error }, 400);
   }
@@ -269,7 +289,7 @@ Deno.serve(async (req: Request) => {
         .maybeSingle();
       if (error) throw error;
       const owner = data as any;
-      if (!owner || owner.designer_id !== caller.id) {
+      if (!owner) {
         return json({ error: 'not_found' }, 404);
       }
       ownerId = owner.id;
@@ -283,12 +303,19 @@ Deno.serve(async (req: Request) => {
         .maybeSingle();
       if (error) throw error;
       const owner = data as any;
-      if (!owner || owner.designer_id !== caller.id) {
+      if (!owner) {
         return json({ error: 'not_found' }, 404);
       }
       ownerId = owner.id;
       ownerName = (owner.name as string | null)?.trim() || 'Project';
       designerId = owner.designer_id;
+    }
+
+    const sharesStudio = kind === 'board-composition' && caller.id !== designerId
+      ? await sharesActiveDesignStudio(admin, caller.id, designerId)
+      : false;
+    if (!canCallerUseOwner(kind, caller.id, designerId, sharesStudio)) {
+      return json({ error: 'not_found' }, 404);
     }
 
     // ── Studio identity (header) — canonical resolver (Designer Studios) ────
@@ -323,7 +350,10 @@ Deno.serve(async (req: Request) => {
           'id, name, sections, proposal_id, project_id, proposal_board_items(id, type, image_url, content, data, z_index)',
         )
         .eq('id', boardId!)
-        .order('z_index', { ascending: true, referencedTable: 'proposal_board_items' })
+        .order('z_index', {
+          ascending: true,
+          referencedTable: 'proposal_board_items',
+        })
         .maybeSingle();
       if (boardErr) throw boardErr;
       const board = boardRow as any;
@@ -336,21 +366,25 @@ Deno.serve(async (req: Request) => {
         .filter((s) => s && s.id != null)
         .map((s) => ({ id: String(s.id), name: String(s.name ?? 'Section') }));
 
-      const tiles: SpecBoardTileInput[] = ((board.proposal_board_items ?? []) as any[]).map((it) => {
-        const data = (it.data ?? {}) as Record<string, any>;
-        const swatches = Array.isArray(data.swatches)
-          ? (data.swatches as any[]).map((sw) => String(sw?.hex ?? sw ?? '')).filter(Boolean)
-          : [];
-        return {
-          type: String(it.type),
-          name: typeof data.name === 'string' ? data.name : null,
-          imageUrl: it.image_url ?? (typeof data.image_url === 'string' ? data.image_url : null),
-          note: it.content ?? null,
-          swatches,
-          priceCents: typeof data.price_cents === 'number' ? data.price_cents : null,
-          sectionId: typeof data.section_id === 'string' ? data.section_id : null,
-        };
-      });
+      const tiles: SpecBoardTileInput[] = ((board.proposal_board_items ?? []) as any[]).map(
+        (it) => {
+          const data = (it.data ?? {}) as Record<string, any>;
+          const swatches = Array.isArray(data.swatches)
+            ? (data.swatches as any[]).map((sw) => String(sw?.hex ?? sw ?? ''))
+              .filter(Boolean)
+            : [];
+          return {
+            type: String(it.type),
+            name: typeof data.name === 'string' ? data.name : null,
+            imageUrl: it.image_url ??
+              (typeof data.image_url === 'string' ? data.image_url : null),
+            note: it.content ?? null,
+            swatches,
+            priceCents: typeof data.price_cents === 'number' ? data.price_cents : null,
+            sectionId: typeof data.section_id === 'string' ? data.section_id : null,
+          };
+        },
+      );
 
       const model = buildBoardModel(
         {
@@ -368,189 +402,285 @@ Deno.serve(async (req: Request) => {
         header: { studioName, projectName: ownerName, studioLogoUrl },
         filename: `board-${slug((board.name as string) || (board.id as string))}.pdf`,
       };
-    } else {
-    // ── spec_field_defs (custom schedule columns), ordered ─────────────────
-    const { data: defsData, error: defsError } = await admin
-      .from('spec_field_defs')
-      .select('field_key, name, sort_order')
-      .eq(isProposal ? 'proposal_id' : 'project_id', ownerId)
-      .order('sort_order', { ascending: true });
-    if (defsError) throw defsError;
-    const defs = (defsData ?? []) as { field_key: string; name: string; sort_order: number }[];
-
-    // ── Line items → normalized shape ──────────────────────────────────────
-    let items: NormItem[];
-    if (isProposal) {
-      const { data, error } = await admin
-        .from('proposal_items')
+    } else if (kind === 'board-composition') {
+      const { data: boardRow, error: boardError } = await admin
+        .from('proposal_boards')
         .select(
-          `
+          'id, name, sections, proposal_id, project_id, canvas_width, canvas_height, background_color, proposal_board_items(id, type, x, y, width, height, z_index, rotation, image_url, content, data)',
+        )
+        .eq('id', boardId!)
+        .order('z_index', {
+          ascending: true,
+          referencedTable: 'proposal_board_items',
+        })
+        .maybeSingle();
+      if (boardError) throw boardError;
+      const board = ownedBoardOrNull(boardRow as any, ownerId, isProposal);
+      if (!board) return json({ error: 'not_found' }, 404);
+
+      const imageSources = ((board.proposal_board_items ?? []) as any[]).map(
+        (item) => {
+          const data = (item.data ?? {}) as Record<string, any>;
+          return {
+            item,
+            data,
+            imageUrl: item.image_url ??
+              (typeof data.image_url === 'string' ? data.image_url : null) ??
+              (typeof data.thumbnail_url === 'string' ? data.thumbnail_url : null) ??
+              (typeof data.original_image_url === 'string' ? data.original_image_url : null),
+          };
+        },
+      );
+      const hydrated = await hydrateCompositionImages(imageSources);
+      const pins: SpecBoardCompositionPinInput[] = hydrated.map(
+        ({ item, data, imageDataUrl, imageRequested }) => ({
+          id: typeof item.id === 'string' ? item.id : undefined,
+          type: item.type,
+          x: item.x,
+          y: item.y,
+          width: item.width,
+          height: item.height,
+          resolvedHeight: data.resolved_height ?? null,
+          zIndex: item.z_index,
+          rotation: item.rotation,
+          imageDataUrl,
+          imageRequested,
+          name: typeof data.name === 'string' ? data.name : null,
+          vendorName: typeof data.vendor_name === 'string' ? data.vendor_name : null,
+          note: typeof item.content === 'string' ? item.content : null,
+          swatches: Array.isArray(data.swatches)
+            ? data.swatches.map((swatch: any) => String(swatch?.hex ?? swatch ?? '')).filter(
+              Boolean,
+            )
+            : [],
+          priceCents: typeof data.price_cents === 'number' ? data.price_cents : null,
+          sectionId: typeof data.section_id === 'string' ? data.section_id : null,
+        }),
+      );
+      const sections = ((board.sections ?? []) as any[])
+        .filter((section) => section && section.id != null)
+        .map((section) => ({
+          id: String(section.id),
+          name: String(section.name ?? 'Section'),
+          color: typeof section.color === 'string' ? section.color : null,
+        }));
+      const model = buildBoardCompositionModel(
+        {
+          studioName,
+          projectName: ownerName,
+          boardName: (board.name as string)?.trim() || 'Board',
+          canvasWidth: board.canvas_width,
+          canvasHeight: board.canvas_height,
+          backgroundColor: board.background_color,
+          sections,
+          pins,
+        },
+        visibility as SpecVisibility,
+      );
+      prepared = {
+        kind: 'board-composition',
+        model,
+        filename: `board-composition-${slug((board.name as string) || (board.id as string))}.pdf`,
+      };
+    } else {
+      // ── spec_field_defs (custom schedule columns), ordered ─────────────────
+      const { data: defsData, error: defsError } = await admin
+        .from('spec_field_defs')
+        .select('field_key, name, sort_order')
+        .eq(isProposal ? 'proposal_id' : 'project_id', ownerId)
+        .order('sort_order', { ascending: true });
+      if (defsError) throw defsError;
+      const defs = (defsData ?? []) as {
+        field_key: string;
+        name: string;
+        sort_order: number;
+      }[];
+
+      // ── Line items → normalized shape ──────────────────────────────────────
+      let items: NormItem[];
+      if (isProposal) {
+        const { data, error } = await admin
+          .from('proposal_items')
+          .select(
+            `
           id, name, doc_code, ffe_category, scope_room_id, quantity,
           unit_sell_price, line_total_cents, lead_time_weeks, custom_fields,
           product_id, vendor_name, item_type, position, notes, description,
           room:proposal_scope_rooms!scope_room_id(name, sort_order)
         `,
-        )
-        .eq('proposal_id', ownerId)
-        .order('position', { ascending: true });
-      if (error) throw error;
-      items = ((data ?? []) as any[]).map((r) => ({
-        id: r.id,
-        code: r.doc_code ?? null,
-        name: r.name,
-        category: r.ffe_category ?? null,
-        quantity: r.quantity ?? 1,
-        leadLabel: leadBucketLabel(r.lead_time_weeks ?? null),
-        clientUnitCents: r.unit_sell_price ?? null,
-        lineTotalCents: r.line_total_cents ?? null,
-        supplierName: r.vendor_name ?? null,
-        itemType: normItemType(r.item_type),
-        productId: r.product_id ?? null,
-        customFields: r.custom_fields ?? null,
-        description: r.description ?? null,
-        notes: r.notes ?? null,
-        roomName: r.room?.name ?? null,
-        roomSort: r.room?.sort_order ?? Number.POSITIVE_INFINITY,
-        itemSort: r.position ?? 0,
-      }));
-    } else {
-      const { data, error } = await admin
-        .from('project_ffe_items')
-        .select(
-          `
+          )
+          .eq('proposal_id', ownerId)
+          .order('position', { ascending: true });
+        if (error) throw error;
+        items = ((data ?? []) as any[]).map((r) => ({
+          id: r.id,
+          code: r.doc_code ?? null,
+          name: r.name,
+          category: r.ffe_category ?? null,
+          quantity: r.quantity ?? 1,
+          leadLabel: leadBucketLabel(r.lead_time_weeks ?? null),
+          clientUnitCents: r.unit_sell_price ?? null,
+          lineTotalCents: r.line_total_cents ?? null,
+          supplierName: r.vendor_name ?? null,
+          itemType: normItemType(r.item_type),
+          productId: r.product_id ?? null,
+          customFields: r.custom_fields ?? null,
+          description: r.description ?? null,
+          notes: r.notes ?? null,
+          roomName: r.room?.name ?? null,
+          roomSort: r.room?.sort_order ?? Number.POSITIVE_INFINITY,
+          itemSort: r.position ?? 0,
+        }));
+      } else {
+        const { data, error } = await admin
+          .from('project_ffe_items')
+          .select(
+            `
           id, name, doc_code, ffe_category, project_room_id, quantity,
           unit_price_cents, line_total_cents, custom_fields, product_id,
           vendor_name, item_type, eta, sort_order, notes,
           room:project_rooms!project_room_id(name, sort_order)
         `,
-        )
-        .eq('project_id', ownerId)
-        .order('sort_order', { ascending: true });
-      if (error) throw error;
-      items = ((data ?? []) as any[]).map((r) => ({
-        id: r.id,
-        code: r.doc_code ?? null,
-        name: r.name,
-        category: r.ffe_category ?? null,
-        quantity: r.quantity ?? 1,
-        leadLabel: r.eta ? fmtDate(r.eta) : null,
-        clientUnitCents: r.unit_price_cents ?? null,
-        lineTotalCents: r.line_total_cents ?? null,
-        supplierName: r.vendor_name ?? null,
-        itemType: normItemType(r.item_type),
-        productId: r.product_id ?? null,
-        customFields: r.custom_fields ?? null,
-        description: null,
-        notes: r.notes ?? null,
-        roomName: r.room?.name ?? null,
-        roomSort: r.room?.sort_order ?? Number.POSITIVE_INFINITY,
-        itemSort: r.sort_order ?? 0,
-      }));
-    }
-
-    // ── Products + teaching counts (for record-completeness / verified) ────
-    const productIds = [...new Set(items.map((n) => n.productId).filter(Boolean))] as string[];
-    const products = new Map<string, any>();
-    const styleCounts = new Map<string, number>();
-    if (productIds.length > 0) {
-      const { data: prodData, error: prodError } = await admin
-        .from('products')
-        .select(
-          'id, name, description, brand, dimensions, materials, price_retail, price_trade, images, source_url, captured_by',
-        )
-        .in('id', productIds);
-      if (prodError) throw prodError;
-      for (const p of (prodData ?? []) as any[]) products.set(p.id, p);
-
-      const { data: styleData, error: styleError } = await admin
-        .from('product_styles')
-        .select('product_id')
-        .in('product_id', productIds);
-      if (styleError) throw styleError;
-      for (const s of (styleData ?? []) as any[]) {
-        styleCounts.set(s.product_id, (styleCounts.get(s.product_id) ?? 0) + 1);
-      }
-    }
-
-    const recordPctFor = (productId: string | null): number | null =>
-      productId
-        ? computeRecordPct(products.get(productId) ?? null, styleCounts.get(productId) ?? 0)
-        : null;
-
-    if (kind === 'document') {
-      const toLine = (n: NormItem): SpecLineInput => ({
-        code: n.code,
-        name: n.name,
-        quantity: n.quantity,
-        leadLabel: n.leadLabel,
-        clientUnitCents: n.clientUnitCents,
-        lineTotalCents: n.lineTotalCents,
-        supplierName: n.supplierName,
-        itemType: n.itemType,
-        recordVerified: recordPctFor(n.productId) === 100,
-      });
-      const sections = groupSections(items, toLine);
-      const model = buildScheduleModel(sections, visibility);
-      prepared = {
-        kind: 'document',
-        model,
-        header: { studioName, projectName: ownerName, title: 'Specification', studioLogoUrl },
-        filename: `schedule-${slug(ownerName || ownerId)}.pdf`,
-      };
-    } else {
-      // ── Single item — must belong to the owner (else 404-collapse) ───────
-      const item = items.find((n) => n.id === itemId);
-      if (!item) {
-        return json({ error: 'not_found' }, 404);
-      }
-      const product = item.productId ? products.get(item.productId) ?? null : null;
-
-      // Resolve captured_by → a display name.
-      let capturedBy: string | null = null;
-      if (product?.captured_by) {
-        const { data: capProfile } = await admin
-          .from('profiles')
-          .select('full_name, email')
-          .eq('id', product.captured_by)
-          .maybeSingle();
-        capturedBy =
-          (capProfile as any)?.full_name?.trim() || (capProfile as any)?.email || null;
+          )
+          .eq('project_id', ownerId)
+          .order('sort_order', { ascending: true });
+        if (error) throw error;
+        items = ((data ?? []) as any[]).map((r) => ({
+          id: r.id,
+          code: r.doc_code ?? null,
+          name: r.name,
+          category: r.ffe_category ?? null,
+          quantity: r.quantity ?? 1,
+          leadLabel: r.eta ? fmtDate(r.eta) : null,
+          clientUnitCents: r.unit_price_cents ?? null,
+          lineTotalCents: r.line_total_cents ?? null,
+          supplierName: r.vendor_name ?? null,
+          itemType: normItemType(r.item_type),
+          productId: r.product_id ?? null,
+          customFields: r.custom_fields ?? null,
+          description: null,
+          notes: r.notes ?? null,
+          roomName: r.room?.name ?? null,
+          roomSort: r.room?.sort_order ?? Number.POSITIVE_INFINITY,
+          itemSort: r.sort_order ?? 0,
+        }));
       }
 
-      // specs = the line's description (pre-sale) or the product's, + notes.
-      const description = item.description ?? product?.description ?? null;
-      const specs =
-        [description, item.notes]
+      // ── Products + teaching counts (for record-completeness / verified) ────
+      const productIds = [
+        ...new Set(items.map((n) => n.productId).filter(Boolean)),
+      ] as string[];
+      const products = new Map<string, any>();
+      const styleCounts = new Map<string, number>();
+      if (productIds.length > 0) {
+        const { data: prodData, error: prodError } = await admin
+          .from('products')
+          .select(
+            'id, name, description, brand, dimensions, materials, price_retail, price_trade, images, source_url, captured_by',
+          )
+          .in('id', productIds);
+        if (prodError) throw prodError;
+        for (const p of (prodData ?? []) as any[]) products.set(p.id, p);
+
+        const { data: styleData, error: styleError } = await admin
+          .from('product_styles')
+          .select('product_id')
+          .in('product_id', productIds);
+        if (styleError) throw styleError;
+        for (const s of (styleData ?? []) as any[]) {
+          styleCounts.set(
+            s.product_id,
+            (styleCounts.get(s.product_id) ?? 0) + 1,
+          );
+        }
+      }
+
+      const recordPctFor = (productId: string | null): number | null =>
+        productId
+          ? computeRecordPct(
+            products.get(productId) ?? null,
+            styleCounts.get(productId) ?? 0,
+          )
+          : null;
+
+      if (kind === 'document') {
+        const toLine = (n: NormItem): SpecLineInput => ({
+          code: n.code,
+          name: n.name,
+          quantity: n.quantity,
+          leadLabel: n.leadLabel,
+          clientUnitCents: n.clientUnitCents,
+          lineTotalCents: n.lineTotalCents,
+          supplierName: n.supplierName,
+          itemType: n.itemType,
+          recordVerified: recordPctFor(n.productId) === 100,
+        });
+        const sections = groupSections(items, toLine);
+        const model = buildScheduleModel(sections, visibility);
+        prepared = {
+          kind: 'document',
+          model,
+          header: {
+            studioName,
+            projectName: ownerName,
+            title: 'Specification',
+            studioLogoUrl,
+          },
+          filename: `schedule-${slug(ownerName || ownerId)}.pdf`,
+        };
+      } else {
+        // ── Single item — must belong to the owner (else 404-collapse) ───────
+        const item = items.find((n) => n.id === itemId);
+        if (!item) {
+          return json({ error: 'not_found' }, 404);
+        }
+        const product = item.productId ? products.get(item.productId) ?? null : null;
+
+        // Resolve captured_by → a display name.
+        let capturedBy: string | null = null;
+        if (product?.captured_by) {
+          const { data: capProfile } = await admin
+            .from('profiles')
+            .select('full_name, email')
+            .eq('id', product.captured_by)
+            .maybeSingle();
+          capturedBy = (capProfile as any)?.full_name?.trim() ||
+            (capProfile as any)?.email || null;
+        }
+
+        // specs = the line's description (pre-sale) or the product's, + notes.
+        const description = item.description ?? product?.description ?? null;
+        const specs = [description, item.notes]
           .filter((s) => s != null && String(s).trim() !== '')
           .join('\n\n') || null;
 
-      const input: SpecItemInput = {
-        studioName,
-        studioLogoUrl,
-        projectName: ownerName,
-        name: item.name,
-        code: item.code,
-        category: item.category,
-        roomName: item.roomName,
-        quantity: item.quantity,
-        leadLabel: item.leadLabel,
-        itemType: item.itemType,
-        specs,
-        customFields: mapCustomFields(defs, item.customFields),
-        sourceUrl: product?.source_url ?? null,
-        capturedBy,
-        recordPct: recordPctFor(item.productId),
-        brand: product?.brand ?? null,
-        imageUrls: (product?.images ?? []) as string[],
-        clientUnitCents: item.clientUnitCents,
-      };
-      const model = buildItemModel(input, visibility);
-      prepared = {
-        kind: 'item',
-        model,
-        filename: `spec-${safeFilePart(item.code || itemId!)}.pdf`,
-      };
-    }
+        const input: SpecItemInput = {
+          studioName,
+          studioLogoUrl,
+          projectName: ownerName,
+          name: item.name,
+          code: item.code,
+          category: item.category,
+          roomName: item.roomName,
+          quantity: item.quantity,
+          leadLabel: item.leadLabel,
+          itemType: item.itemType,
+          specs,
+          customFields: mapCustomFields(defs, item.customFields),
+          sourceUrl: product?.source_url ?? null,
+          capturedBy,
+          recordPct: recordPctFor(item.productId),
+          brand: product?.brand ?? null,
+          imageUrls: (product?.images ?? []) as string[],
+          clientUnitCents: item.clientUnitCents,
+        };
+        const model = buildItemModel(input, visibility);
+        prepared = {
+          kind: 'item',
+          model,
+          filename: `spec-${safeFilePart(item.code || itemId!)}.pdf`,
+        };
+      }
     }
   } catch (err) {
     const detail = err instanceof Error ? err.message : String(err);
@@ -561,24 +691,34 @@ Deno.serve(async (req: Request) => {
   // ── Render ───────────────────────────────────────────────────────────────
   let pdfBytes: Uint8Array;
   try {
-    pdfBytes =
-      prepared.kind === 'document'
-        ? await renderSpecSchedulePdf(prepared.model, prepared.header)
-        : prepared.kind === 'board'
-          ? await renderBoardPdf(prepared.model, prepared.header)
-          : await renderSpecItemPdf(prepared.model);
+    pdfBytes = prepared.kind === 'document'
+      ? await renderSpecSchedulePdf(prepared.model, prepared.header)
+      : prepared.kind === 'board'
+      ? await renderBoardPdf(prepared.model, prepared.header)
+      : prepared.kind === 'board-composition'
+      ? await renderBoardCompositionPdf(prepared.model)
+      : await renderSpecItemPdf(prepared.model);
   } catch (err) {
     const detail = err instanceof Error ? `${err.name}: ${err.message}` : String(err);
     console.error('spec-pdf: PDF render failed', detail);
     return json({ error: 'render_failed', detail }, 500);
   }
 
+  const responseHeaders: Record<string, string> = {
+    ...corsHeaders,
+    'Content-Type': 'application/pdf',
+    'Content-Disposition': `attachment; filename="${prepared.filename}"`,
+  };
+  if (prepared.kind === 'board-composition') {
+    responseHeaders['Access-Control-Expose-Headers'] =
+      'X-Patina-Pdf-Warnings, X-Patina-Pdf-Warning-Metadata';
+    responseHeaders['X-Patina-Pdf-Warnings'] = prepared.model.warnings.join(',') || 'none';
+    responseHeaders['X-Patina-Pdf-Warning-Metadata'] = encodeURIComponent(
+      JSON.stringify(prepared.model.warningMetadata),
+    );
+  }
   return new Response(pdfBytes as unknown as BodyInit, {
     status: 200,
-    headers: {
-      ...corsHeaders,
-      'Content-Type': 'application/pdf',
-      'Content-Disposition': `attachment; filename="${prepared.filename}"`,
-    },
+    headers: responseHeaders,
   });
 });
