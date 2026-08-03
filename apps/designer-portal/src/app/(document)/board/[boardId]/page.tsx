@@ -7,7 +7,7 @@ import { useBoard, type BoardWithItems } from '@patina/supabase';
 import { Button } from '@/components/ui/controls';
 import { MoodBoardRoom } from '@/components/mood-board/board-room-shell';
 
-export function moodBoardOwner(board: Pick<BoardWithItems, 'proposal_id' | 'project_id'>): BoardOwnerRef | null {
+function moodBoardOwner(board: Pick<BoardWithItems, 'proposal_id' | 'project_id'>): BoardOwnerRef | null {
   if (board.project_id) return { kind: 'project', id: board.project_id };
   if (board.proposal_id) return { kind: 'proposal', id: board.proposal_id };
   return null;
