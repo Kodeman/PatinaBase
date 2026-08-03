@@ -9,4 +9,5 @@ module.exports = {
   rootDir: '.',
   displayName: 'media-service',
   coverageDirectory: '<rootDir>/coverage',
+  modulePathIgnorePatterns: ['<rootDir>/dist/'],
 };

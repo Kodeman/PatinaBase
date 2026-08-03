@@ -29,8 +29,9 @@ coverage/
 *.test.ts.snap
 
 # Prisma
-prisma/migrations/*
-!prisma/migrations/.gitkeep
+# Production migrations are source. Generated clients remain ignored below.
+!prisma/migrations/
+!prisma/migrations/**
 src/generated/
 
 # Logs
