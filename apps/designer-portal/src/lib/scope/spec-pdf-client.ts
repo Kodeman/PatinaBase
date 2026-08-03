@@ -23,11 +23,14 @@ export interface SpecPdfVisibility {
 }
 
 export interface SpecPdfRequest {
-  kind: 'item' | 'document' | 'board';
+  kind: 'item' | 'document' | 'board' | 'board-composition';
   proposalId?: string;
   projectId?: string;
   itemId?: string;
-  /** Required for kind 'board' — a section-grouped tile grid of one board (B3). */
+  /**
+   * Required for board kinds. `board` is the legacy section-grouped spec grid;
+   * `board-composition` is the geometry-preserving, one-page landscape export.
+   */
   boardId?: string;
   visibility?: SpecPdfVisibility;
 }
@@ -61,7 +64,16 @@ function triggerDownload(blob: Blob, filename: string): void {
  * (message pulled from the edge fn's JSON error when present). `fallbackName` is
  * used when the response omits a Content-Disposition filename.
  */
-export async function downloadSpecPdf(req: SpecPdfRequest, fallbackName: string): Promise<void> {
+export interface SpecPdfDownloadResult {
+  filename: string;
+  warnings: string[];
+  warningMetadata: Record<string, unknown> | null;
+}
+
+export async function downloadSpecPdf(
+  req: SpecPdfRequest,
+  fallbackName: string,
+): Promise<SpecPdfDownloadResult> {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const supabase = createBrowserClient() as any;
   const { data: sessionResult, error: sessionError } = await supabase.auth.getSession();
@@ -90,5 +102,23 @@ export async function downloadSpecPdf(req: SpecPdfRequest, fallbackName: string)
   }
 
   const blob = await response.blob();
-  triggerDownload(blob, parseFilename(response.headers, fallbackName));
+  const filename = parseFilename(response.headers, fallbackName);
+  triggerDownload(blob, filename);
+  const warningHeader = response.headers.get('X-Patina-Pdf-Warnings');
+  const warnings = !warningHeader || warningHeader === 'none'
+    ? []
+    : warningHeader.split(',').map((warning) => warning.trim()).filter(Boolean);
+  let warningMetadata: Record<string, unknown> | null = null;
+  const encodedMetadata = response.headers.get('X-Patina-Pdf-Warning-Metadata');
+  if (encodedMetadata) {
+    try {
+      const parsed = JSON.parse(decodeURIComponent(encodedMetadata));
+      if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
+        warningMetadata = parsed as Record<string, unknown>;
+      }
+    } catch {
+      // Export succeeded; malformed optional diagnostics must not discard it.
+    }
+  }
+  return { filename, warnings, warningMetadata };
 }
