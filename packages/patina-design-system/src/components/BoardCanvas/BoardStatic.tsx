@@ -53,6 +53,11 @@ const useIsomorphicLayoutEffect =
 /**
  * BoardStatic — dependency-free, read-only mood-board renderer.
  *
+ * @deprecated Use `BoardComposition`. It is the canonical renderer shared by
+ * the designer room, proposal mirror, client document, guest share, and frozen
+ * project snapshots. This component remains exported temporarily for source
+ * compatibility and has no production consumers.
+ *
  * Renders the board at its logical size and scales it down (or up) with a
  * CSS transform so it always fits the container's width. Used for client
  * proposal rendering, board thumbnails, and activated-project snapshots
