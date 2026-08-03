@@ -56,6 +56,12 @@ import { BoardRoomSectionsMenu } from './board-room-sections-menu';
 import { BoardShareDialog } from './board-share-dialog';
 import { BoardExportDialog } from './board-export-dialog';
 import { BoardTemplateDialog } from './board-template-dialog';
+import {
+  BOARD_ROOM_DEFAULT_TIDY_GAP,
+  BOARD_ROOM_MAX_TIDY_GAP,
+  BOARD_ROOM_MIN_TIDY_GAP,
+  resolveBoardRoomTidyTarget,
+} from './board-room-tidy';
 
 const RAIL_COLLAPSED_KEY = 'patina:mood-board:add-rail-collapsed';
 const GRID_VISIBLE_KEY = 'patina:mood-board:grid-visible';
@@ -196,6 +202,20 @@ interface SessionMetrics {
   usedHandles: boolean;
 }
 
+interface TidySpacingSession {
+  targetKey: string;
+  itemIds: string[];
+  gap: number;
+  gestureId: string;
+  committedAt: number;
+}
+
+function isTextEntryTarget(target: EventTarget | null): boolean {
+  return target instanceof HTMLElement && (
+    target.matches('input, textarea, select') || target.isContentEditable
+  );
+}
+
 function BoardRoomSurface({
   api,
   owner,
@@ -204,6 +224,7 @@ function BoardRoomSurface({
   exitHandlerRef,
   deleteGuardRef,
   metricsRef,
+  lastCommand,
 }: {
   api: BoardRoomControllerApi;
   owner: BoardOwnerRef;
@@ -212,6 +233,7 @@ function BoardRoomSurface({
   exitHandlerRef: MutableRefObject<(() => Promise<void>) | null>;
   deleteGuardRef: MutableRefObject<((items: readonly EditableMoodBoardItem[]) => boolean) | null>;
   metricsRef: MutableRefObject<SessionMetrics>;
+  lastCommand: BoardRoomCommandCommittedEvent | null;
 }) {
   const router = useRouter();
   const rootRef = useRef<HTMLElement | null>(null);
@@ -223,6 +245,7 @@ function BoardRoomSurface({
   const [surfaceError, setSurfaceError] = useState<string | null>(null);
   const [showGrid, setShowGrid] = useState(false);
   const [snapToGrid, setSnapToGrid] = useState(false);
+  const [tidySession, setTidySession] = useState<TidySpacingSession | null>(null);
   const upsertBoard = useUpsertBoard();
   const proposalQuery = useProposal(owner.kind === 'proposal' ? owner.id : '');
   const projectQuery = useProject(owner.kind === 'project' ? owner.id : '');
@@ -241,6 +264,64 @@ function BoardRoomSurface({
   const upsertCoverRef = useRef(upsertBoard.mutateAsync);
   latestApiRef.current = api;
   upsertCoverRef.current = upsertBoard.mutateAsync;
+
+  const tidyTarget = useMemo(
+    () => resolveBoardRoomTidyTarget(api.state?.items ?? [], api.selectedItemIds),
+    [api.selectedItemIds, api.state?.items],
+  );
+  const runTidy = useCallback(() => {
+    if (!tidyTarget.enabled) return;
+    const session: TidySpacingSession = {
+      targetKey: tidyTarget.key,
+      itemIds: tidyTarget.itemIds,
+      gap: BOARD_ROOM_DEFAULT_TIDY_GAP,
+      gestureId: generatedId('tidy-spacing'),
+      committedAt: Date.now(),
+    };
+    api.tidy(session.itemIds, {
+      gap: session.gap,
+      gestureId: session.gestureId,
+      committedAt: session.committedAt,
+    });
+    setTidySession(session);
+  }, [api, tidyTarget]);
+
+  useEffect(() => {
+    setTidySession((current) =>
+      current && (current.targetKey !== tidyTarget.key || api.mode !== 'edit')
+        ? null
+        : current,
+    );
+  }, [api.mode, tidyTarget.key]);
+
+  useEffect(() => {
+    setTidySession((current) => {
+      if (!current || !lastCommand) return current;
+      return lastCommand.direction === 'apply' &&
+        lastCommand.command.kind === 'tidy' &&
+        lastCommand.command.id === current.gestureId
+        ? current
+        : null;
+    });
+  }, [lastCommand]);
+
+  useEffect(() => {
+    const handleTidyShortcut = (event: KeyboardEvent) => {
+      if (api.mode !== 'edit' || isTextEntryTarget(event.target)) return;
+      if (event.key === 'Escape' && tidySession) {
+        event.preventDefault();
+        event.stopImmediatePropagation();
+        setTidySession(null);
+        return;
+      }
+      if (!event.shiftKey || event.key.toLowerCase() !== 't') return;
+      event.preventDefault();
+      event.stopImmediatePropagation();
+      runTidy();
+    };
+    window.addEventListener('keydown', handleTidyShortcut, true);
+    return () => window.removeEventListener('keydown', handleTidyShortcut, true);
+  }, [api.mode, runTidy, tidySession]);
 
   useBoardRoomBoundary(rootRef);
 
@@ -520,8 +601,14 @@ function BoardRoomSurface({
     </div>
   );
 
-  const tidyBoard = () => {
-    api.tidy();
+  const adjustTidyGap = (gap: number) => {
+    if (!tidySession) return;
+    api.tidy(tidySession.itemIds, {
+      gap,
+      gestureId: tidySession.gestureId,
+      committedAt: tidySession.committedAt,
+    });
+    setTidySession({ ...tidySession, gap });
   };
 
   const focusFeedbackItem = (itemId: string) => {
@@ -572,7 +659,8 @@ function BoardRoomSurface({
               variant="ghost"
               size="sm"
               className="hidden xl:inline-flex"
-              onClick={tidyBoard}
+              disabled={!tidyTarget.enabled}
+              onClick={runTidy}
             >
               Tidy
             </Button>
@@ -591,7 +679,8 @@ function BoardRoomSurface({
             snapToGrid={snapToGrid}
             onToggleGrid={toggleGrid}
             onToggleSnap={toggleSnap}
-            onTidy={tidyBoard}
+            tidyEnabled={tidyTarget.enabled}
+            onTidy={runTidy}
             onSaveTemplate={() => setTemplateOpen(true)}
           />
           <Button variant="primary" size="sm" disabled={api.isExiting} onClick={() => void api.requestExit()}>
@@ -635,6 +724,38 @@ function BoardRoomSurface({
           ref={workspaceRef}
           className={`relative min-h-0 flex-1 ${api.mode === 'present' ? 'overflow-y-auto sm:overflow-hidden' : 'overflow-hidden'}`}
         >
+          {api.mode === 'edit' && tidySession && (
+            <div
+              role="group"
+              aria-label="Tidy spacing"
+              className="absolute left-1/2 top-3 z-50 flex -translate-x-1/2 items-center gap-2 rounded-full border border-[var(--border-default)] bg-[var(--bg-surface)] px-3 py-2 shadow-lg"
+            >
+              <label className="flex items-center gap-2 font-mono text-[9px] uppercase text-[var(--text-muted)]">
+                Spacing
+                <input
+                  type="range"
+                  aria-label="Tidy spacing in pixels"
+                  min={BOARD_ROOM_MIN_TIDY_GAP}
+                  max={BOARD_ROOM_MAX_TIDY_GAP}
+                  step={2}
+                  value={tidySession.gap}
+                  onChange={(event) => adjustTidyGap(Number(event.currentTarget.value))}
+                  className="w-32 accent-[var(--color-clay)]"
+                />
+              </label>
+              <output className="min-w-8 font-mono text-[9px] tabular-nums text-[var(--text-primary)]">
+                {tidySession.gap}px
+              </output>
+              <button
+                type="button"
+                aria-label="Close Tidy spacing"
+                onClick={() => setTidySession(null)}
+                className="min-h-8 min-w-8 rounded-full text-[var(--text-muted)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-[var(--color-clay)]"
+              >
+                ×
+              </button>
+            </div>
+          )}
           {api.mode === 'present' ? (
             <BoardComposition
               board={api.compositionBoard}
@@ -717,8 +838,11 @@ export function MoodBoardRoom({
     usedTidy: false,
     usedHandles: false,
   });
+  const lastCommandRef = useRef<BoardRoomCommandCommittedEvent | null>(null);
 
-  const observeCommand = useCallback(({ command, direction }: BoardRoomCommandCommittedEvent) => {
+  const observeCommand = useCallback((event: BoardRoomCommandCommittedEvent) => {
+    const { command, direction } = event;
+    lastCommandRef.current = event;
     metricsRef.current.commands += 1;
     if (direction === 'undo') metricsRef.current.usedUndo = true;
     if (command.kind === 'tidy') metricsRef.current.usedTidy = true;
@@ -874,6 +998,7 @@ export function MoodBoardRoom({
             exitHandlerRef={exitHandlerRef}
             deleteGuardRef={deleteGuardRef}
             metricsRef={metricsRef}
+            lastCommand={lastCommandRef.current}
           />
         );
       }}

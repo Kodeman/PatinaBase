@@ -319,6 +319,33 @@ describe('sections, tidy and canvas commands', () => {
     expect(positions(undoBoardRoomCommand(tidy.history).history)).toEqual(positions(initial));
   });
 
+  it('replaces the active Tidy step while its transient spacing control changes', () => {
+    const initial = createBoardRoomHistory(state());
+    const first = tidyBoardRoomItems(initial, [
+      { id: 'i1', x: 32, y: 32 },
+      { id: 'i2', x: 156, y: 32 },
+      { id: 'i3', x: 280, y: 32 },
+    ], { id: 'tidy-spacing', committedAt: 1 });
+    const adjusted = tidyBoardRoomItems(first.history, [
+      { id: 'i1', x: 32, y: 32 },
+      { id: 'i2', x: 172, y: 32 },
+      { id: 'i3', x: 312, y: 32 },
+    ], {
+      id: 'tidy-spacing',
+      // The controller deliberately retains the session timestamp, even if the
+      // spacing UI has remained open longer than the generic 500ms window.
+      committedAt: 1,
+    });
+
+    expect(adjusted.history.past).toHaveLength(1);
+    expect(positions(adjusted.history)).toEqual({
+      i1: [32, 32],
+      i2: [172, 32],
+      i3: [312, 32],
+    });
+    expect(positions(undoBoardRoomCommand(adjusted.history).history)).toEqual(positions(initial));
+  });
+
   it('coalesces a drag and its canvas growth into one step with translated origin (AC1.8)', () => {
     const initial = createBoardRoomHistory(state({ canvasWidth: 700, canvasHeight: 500 }));
     const moved = commitItemPatches(initial, { i1: { x: -40, y: -30 } }, {

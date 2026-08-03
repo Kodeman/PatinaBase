@@ -59,6 +59,7 @@ export function BoardRoomSectionsMenu({
   snapToGrid,
   onToggleGrid,
   onToggleSnap,
+  tidyEnabled,
   onTidy,
   onSaveTemplate,
 }: {
@@ -67,6 +68,7 @@ export function BoardRoomSectionsMenu({
   snapToGrid: boolean;
   onToggleGrid: () => void;
   onToggleSnap: () => void;
+  tidyEnabled: boolean;
   onTidy: () => void;
   onSaveTemplate: () => void;
 }) {
@@ -90,7 +92,7 @@ export function BoardRoomSectionsMenu({
         <div className="mb-3 grid grid-cols-3 gap-1 border-b border-[var(--border-default)] pb-3 xl:hidden">
           <Button size="sm" variant={showGrid ? 'secondary' : 'ghost'} aria-pressed={showGrid} onClick={onToggleGrid}>Grid</Button>
           <Button size="sm" variant={snapToGrid ? 'secondary' : 'ghost'} aria-pressed={snapToGrid} onClick={onToggleSnap}>Snap</Button>
-          <Button size="sm" variant="ghost" onClick={onTidy}>Tidy</Button>
+          <Button size="sm" variant="ghost" disabled={!tidyEnabled} onClick={onTidy}>Tidy</Button>
         </div>
         <p className="font-mono text-[9px] uppercase text-[var(--text-muted)]">Sections</p>
         <div className="mt-2 flex gap-1">

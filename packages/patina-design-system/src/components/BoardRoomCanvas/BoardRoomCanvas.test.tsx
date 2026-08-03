@@ -326,6 +326,72 @@ describe('BoardRoomCanvas selection', () => {
 })
 
 describe('BoardRoomCanvas semantic commits', () => {
+  it('drags a section label as one semantic commit for every member (AC1.27)', () => {
+    const onSectionBandMoved = vi.fn()
+    const onItemsMoved = vi.fn()
+    renderCanvas({
+      view: { pan: { x: 0, y: 0 }, zoom: 2 },
+      onSectionBandMoved,
+      onItemsMoved,
+      showGuides: false,
+      showViewControls: false,
+    })
+    const application = screen.getByRole('application')
+    const label = document.querySelector('[data-board-section-label="living"]')!
+    fireEvent.pointerDown(label, {
+      button: 0,
+      pointerId: 12,
+      clientX: 100,
+      clientY: 100,
+    })
+    fireEvent.pointerMove(application, {
+      pointerId: 12,
+      clientX: 200,
+      clientY: 160,
+    })
+    expect(onSectionBandMoved).not.toHaveBeenCalled()
+    expect(
+      (document.querySelector('[data-board-item-id="chair"]') as HTMLElement)
+        .style.left,
+    ).toBe('90px')
+    fireEvent.pointerUp(application, {
+      pointerId: 12,
+      clientX: 200,
+      clientY: 160,
+    })
+    expect(onSectionBandMoved).toHaveBeenCalledTimes(1)
+    expect(onSectionBandMoved).toHaveBeenCalledWith({
+      sectionId: 'living',
+      itemIds: ['chair', 'image'],
+      delta: { x: 50, y: 30 },
+    })
+    expect(onItemsMoved).not.toHaveBeenCalled()
+  })
+
+  it('commits section name and color edits from the band label', () => {
+    const onSectionUpdated = vi.fn()
+    renderCanvas({ onSectionUpdated, showViewControls: false })
+
+    const name = screen.getByRole('textbox', {
+      name: 'Rename Living section',
+    })
+    fireEvent.change(name, { target: { value: 'Conversation area' } })
+    fireEvent.blur(name)
+    expect(onSectionUpdated).toHaveBeenCalledWith({
+      sectionId: 'living',
+      patch: { name: 'Conversation area' },
+    })
+
+    fireEvent.change(
+      screen.getByLabelText('Change Living section color'),
+      { target: { value: '#526b5f' } },
+    )
+    expect(onSectionUpdated).toHaveBeenLastCalledWith({
+      sectionId: 'living',
+      patch: { color: '#526b5f' },
+    })
+  })
+
   it('emits one logical move commit on pointer-up, not pointer-move', () => {
     const onItemsMoved = vi.fn()
     renderCanvas({

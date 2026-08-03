@@ -114,6 +114,17 @@ export interface BoardSectionMembershipCommit {
   sectionId: string | null
 }
 
+export interface BoardSectionBandMovedCommit {
+  sectionId: string
+  itemIds: string[]
+  delta: BoardPoint
+}
+
+export interface BoardSectionUpdatedCommit {
+  sectionId: string
+  patch: Partial<Omit<MoodBoardSection, 'id'>>
+}
+
 export interface BoardCanvasGrowCommit extends BoardAutoGrowResult {
   reason: 'move' | 'resize' | 'rotate' | 'align' | 'distribute' | 'keyboard'
 }
@@ -154,6 +165,8 @@ export interface BoardRoomCanvasProps extends Omit<
   onItemRotated?: (commit: BoardItemRotatedCommit) => void
   onItemsDropped?: (commit: BoardItemsDroppedCommit) => void
   onSectionMembership?: (commit: BoardSectionMembershipCommit) => void
+  onSectionBandMoved?: (commit: BoardSectionBandMovedCommit) => void
+  onSectionUpdated?: (commit: BoardSectionUpdatedCommit) => void
   onCanvasGrow?: (commit: BoardCanvasGrowCommit) => void
   onItemActivate?: (item: EditableMoodBoardItem) => void
   onContextMenuRequest?: (request: BoardContextMenuRequest) => void
@@ -221,6 +234,16 @@ interface ResizeGesture {
   preserveAspectByDefault: boolean
 }
 
+interface SectionMoveGesture {
+  kind: 'section-move'
+  pointerId: number
+  startScreen: BoardPoint
+  sectionId: string
+  itemIds: string[]
+  before: BoardMoveSnapshot[]
+  latest: BoardMoveSnapshot[]
+}
+
 interface RotateGesture {
   kind: 'rotate'
   pointerId: number
@@ -235,6 +258,7 @@ type CanvasGesture =
   | PanGesture
   | MarqueeGesture
   | MoveGesture
+  | SectionMoveGesture
   | ResizeGesture
   | RotateGesture
 
@@ -528,6 +552,8 @@ export const BoardRoomCanvas = React.forwardRef<
       onItemRotated,
       onItemsDropped,
       onSectionMembership,
+      onSectionBandMoved,
+      onSectionUpdated,
       onCanvasGrow,
       onItemActivate,
       onContextMenuRequest,
@@ -895,6 +921,31 @@ export const BoardRoomCanvas = React.forwardRef<
       event.currentTarget.setPointerCapture?.(event.pointerId)
     }
 
+    const handleSectionPointerDown = (
+      event: React.PointerEvent<HTMLElement>,
+      sectionId: string,
+    ) => {
+      if (event.button !== 0 || readOnly) return
+      event.preventDefault()
+      event.stopPropagation()
+      const viewport = viewportRef.current
+      if (!viewport) return
+      const before = items
+        .filter((item) => item.data?.section_id === sectionId)
+        .map((item) => ({ id: item.id, x: item.x, y: item.y }))
+      if (before.length === 0) return
+      gestureRef.current = {
+        kind: 'section-move',
+        pointerId: event.pointerId,
+        startScreen: eventPoint(event, viewport),
+        sectionId,
+        itemIds: before.map((item) => item.id),
+        before,
+        latest: before,
+      }
+      event.currentTarget.setPointerCapture?.(event.pointerId)
+    }
+
     const handleRotatePointerDown = (
       event: React.PointerEvent<HTMLButtonElement>,
       itemId: string,
@@ -1061,6 +1112,24 @@ export const BoardRoomCanvas = React.forwardRef<
           )
         }
         setGuides(nextGuides)
+        return
+      }
+
+      if (gesture.kind === 'section-move') {
+        const delta = {
+          x: (screen.x - gesture.startScreen.x) / activeView.zoom,
+          y: (screen.y - gesture.startScreen.y) / activeView.zoom,
+        }
+        gesture.latest = gesture.before.map((item) => ({
+          ...item,
+          x: item.x + delta.x,
+          y: item.y + delta.y,
+        }))
+        setPreview(
+          Object.fromEntries(
+            gesture.latest.map((item) => [item.id, { x: item.x, y: item.y }]),
+          ),
+        )
         return
       }
 
@@ -1235,6 +1304,35 @@ export const BoardRoomCanvas = React.forwardRef<
               : gesture.itemIds.length === 1
                 ? 'Moved 1 item'
                 : `Moved ${gesture.itemIds.length} items`,
+          )
+        }
+      }
+
+      if (gesture.kind === 'section-move') {
+        const firstBefore = gesture.before[0]
+        const firstAfter = gesture.latest[0]
+        const delta = {
+          x: firstBefore && firstAfter ? firstAfter.x - firstBefore.x : 0,
+          y: firstBefore && firstAfter ? firstAfter.y - firstBefore.y : 0,
+        }
+        if (delta.x !== 0 || delta.y !== 0) {
+          onSectionBandMoved?.({
+            sectionId: gesture.sectionId,
+            itemIds: gesture.itemIds,
+            delta,
+          })
+          const nextById = new Map(
+            gesture.latest.map((position) => [position.id, position]),
+          )
+          emitAutoGrow(
+            items.map((item) => ({
+              ...item,
+              ...(nextById.get(item.id) ?? {}),
+            })),
+            'move',
+          )
+          setAnnouncement(
+            `Moved ${gesture.sectionId} section with ${gesture.itemIds.length} ${gesture.itemIds.length === 1 ? 'item' : 'items'}`,
           )
         }
       }
@@ -1717,29 +1815,17 @@ export const BoardRoomCanvas = React.forwardRef<
           data-testid="board-room-canvas"
         >
           {geometry.sections.map((section) => (
-            <div
+            <SectionBand
               key={section.id}
-              data-board-section={section.id}
-              className="pointer-events-none absolute rounded-sm border border-dashed"
-              style={{
-                left: section.bounds.x,
-                top: section.bounds.y,
-                width: section.bounds.width,
-                height: section.bounds.height,
-                borderColor: section.color ?? '#8c8175',
-                backgroundColor: `${section.color ?? '#8c8175'}12`,
-              }}
-            >
-              <span
-                className="absolute left-2 top-0 -translate-y-1/2 rounded-full px-2 py-0.5 text-[11px] font-medium"
-                style={{
-                  backgroundColor: section.color ?? '#8c8175',
-                  color: '#fff',
-                }}
-              >
-                {section.name}
-              </span>
-            </div>
+              section={section}
+              readOnly={readOnly}
+              onPointerDown={(event) =>
+                handleSectionPointerDown(event, section.id)
+              }
+              onUpdate={(patch) =>
+                onSectionUpdated?.({ sectionId: section.id, patch })
+              }
+            />
           ))}
 
           {geometry.items.map((resolved) => {
@@ -1972,6 +2058,87 @@ export const BoardRoomCanvas = React.forwardRef<
 )
 
 BoardRoomCanvas.displayName = 'BoardRoomCanvas'
+
+function sectionColor(value: string | undefined): string {
+  return value && /^#[0-9a-f]{6}$/i.test(value) ? value : '#8c8175'
+}
+
+function SectionBand({
+  section,
+  readOnly,
+  onPointerDown,
+  onUpdate,
+}: {
+  section: MoodBoardSection & { bounds: BoardRect }
+  readOnly: boolean
+  onPointerDown: React.PointerEventHandler<HTMLElement>
+  onUpdate: (patch: Partial<Omit<MoodBoardSection, 'id'>>) => void
+}) {
+  const [draft, setDraft] = React.useState(section.name)
+  React.useEffect(() => setDraft(section.name), [section.id, section.name])
+  const color = sectionColor(section.color)
+  const commitName = () => {
+    const name = draft.trim()
+    if (name && name !== section.name) onUpdate({ name })
+    else setDraft(section.name)
+  }
+
+  return (
+    <div
+      data-board-section={section.id}
+      className="pointer-events-none absolute rounded-sm border border-dashed"
+      style={{
+        left: section.bounds.x,
+        top: section.bounds.y,
+        width: section.bounds.width,
+        height: section.bounds.height,
+        borderColor: color,
+        backgroundColor: `${color}12`,
+      }}
+    >
+      <div
+        data-board-section-label={section.id}
+        className={cn(
+          'pointer-events-auto absolute left-2 top-0 z-20 flex -translate-y-1/2 items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-medium text-white',
+          !readOnly && 'cursor-move',
+        )}
+        style={{ backgroundColor: color }}
+        onPointerDown={onPointerDown}
+      >
+        {!readOnly && <span aria-hidden="true">⋮⋮</span>}
+        {readOnly ? (
+          <span>{section.name}</span>
+        ) : (
+          <>
+            <input
+              aria-label={`Rename ${section.name} section`}
+              value={draft}
+              onChange={(event) => setDraft(event.currentTarget.value)}
+              onBlur={commitName}
+              onPointerDown={(event) => event.stopPropagation()}
+              onKeyDown={(event) => {
+                if (event.key === 'Enter') event.currentTarget.blur()
+                if (event.key === 'Escape') {
+                  setDraft(section.name)
+                  event.currentTarget.blur()
+                }
+              }}
+              className="min-w-0 max-w-36 border-0 bg-transparent p-0 text-[11px] font-medium text-white outline-none focus-visible:ring-1 focus-visible:ring-white"
+            />
+            <input
+              type="color"
+              aria-label={`Change ${section.name} section color`}
+              value={color}
+              onChange={(event) => onUpdate({ color: event.currentTarget.value })}
+              onPointerDown={(event) => event.stopPropagation()}
+              className="h-4 w-4 cursor-pointer rounded-full border border-white/70 bg-transparent p-0"
+            />
+          </>
+        )}
+      </div>
+    </div>
+  )
+}
 
 function CanvasControl({
   label,

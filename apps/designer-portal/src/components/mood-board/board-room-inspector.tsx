@@ -1,10 +1,65 @@
 'use client';
 
-import { useEffect, useState } from 'react';
-import type { EditableMoodBoardItem } from '@patina/types';
+import { useEffect, useMemo, useRef, useState } from 'react';
+import { resolveMoodBoardGeometry, unionBoardRects } from '@patina/design-system';
+import type { BoardRect, EditableMoodBoardItem } from '@patina/types';
 import { Button, Input, Select, Textarea } from '@/components/ui/controls';
 import type { BoardRoomControllerApi } from '@/components/portal/scope-builder/board-room-controller';
 import { BoardImageInspectorActions } from './board-image-inspector-actions';
+
+const INSPECTOR_WIDTH = 286;
+const INSPECTOR_GAP = 18;
+const INSPECTOR_MARGIN = 8;
+
+export interface BoardRoomInspectorPosition {
+  left: number;
+  top: number;
+  horizontal: 'left' | 'right';
+  vertical: 'above' | 'aligned';
+}
+
+export function resolveBoardRoomInspectorPosition({
+  selection,
+  view,
+  workspace,
+  panel,
+  gap = INSPECTOR_GAP,
+  margin = INSPECTOR_MARGIN,
+}: {
+  selection: BoardRect;
+  view: { pan: { x: number; y: number }; zoom: number };
+  workspace: { width: number; height: number };
+  panel: { width: number; height: number };
+  gap?: number;
+  margin?: number;
+}): BoardRoomInspectorPosition {
+  const selectionLeft = view.pan.x + selection.x * view.zoom;
+  const selectionTop = view.pan.y + selection.y * view.zoom;
+  const selectionRight = selectionLeft + selection.width * view.zoom;
+  const maxLeft = Math.max(margin, workspace.width - panel.width - margin);
+  const maxTop = Math.max(margin, workspace.height - panel.height - margin);
+
+  let horizontal: BoardRoomInspectorPosition['horizontal'] = 'right';
+  let left = selectionRight + gap;
+  if (left + panel.width > workspace.width - margin) {
+    horizontal = 'left';
+    left = selectionLeft - gap - panel.width;
+  }
+
+  let vertical: BoardRoomInspectorPosition['vertical'] = 'aligned';
+  let top = selectionTop;
+  if (top + panel.height > workspace.height - margin) {
+    vertical = 'above';
+    top = selectionTop - gap - panel.height;
+  }
+
+  return {
+    left: Math.min(maxLeft, Math.max(margin, left)),
+    top: Math.min(maxTop, Math.max(margin, top)),
+    horizontal,
+    vertical,
+  };
+}
 
 function itemLabel(item: EditableMoodBoardItem, fallback: string): string {
   const name = item.data?.name;
@@ -65,14 +120,77 @@ export function BoardRoomInspector({
   api: BoardRoomControllerApi;
   onCommand?: (kind: 'arrange' | 'content' | 'delete' | 'handle') => void;
 }) {
-  if (!api.state || api.mode !== 'edit' || api.selectedItemIds.length === 0) return null;
-  const selected = api.state.items.filter((item) => api.selectedItemIds.includes(item.id));
-  if (selected.length === 0) return null;
+  const panelRef = useRef<HTMLElement>(null);
+  const selected = useMemo(
+    () => api.state?.items.filter((item) => api.selectedItemIds.includes(item.id)) ?? [],
+    [api.selectedItemIds, api.state?.items],
+  );
+  const selectionBounds = useMemo(() => {
+    if (!api.state || selected.length === 0) return null;
+    const selectedIds = new Set(selected.map((item) => item.id));
+    const geometry = resolveMoodBoardGeometry({
+      canvasWidth: api.state.canvasWidth,
+      canvasHeight: api.state.canvasHeight,
+      backgroundColor: api.state.backgroundColor,
+      sections: api.state.sections,
+      items: api.state.items,
+    });
+    return unionBoardRects(
+      geometry.items
+        .filter((item) => item.id && selectedIds.has(item.id))
+        .map((item) => item.aabb),
+    );
+  }, [api.state, selected]);
+  const [position, setPosition] = useState<BoardRoomInspectorPosition | null>(null);
+
+  useEffect(() => {
+    const panel = panelRef.current;
+    const workspace = panel?.parentElement;
+    if (!panel || !workspace || !selectionBounds) return;
+    const measure = () => {
+      const workspaceRect = workspace.getBoundingClientRect();
+      const panelRect = panel.getBoundingClientRect();
+      const next = resolveBoardRoomInspectorPosition({
+        selection: selectionBounds,
+        view: api.view,
+        workspace: {
+          width: workspaceRect.width || workspace.clientWidth || 800,
+          height: workspaceRect.height || workspace.clientHeight || 600,
+        },
+        panel: {
+          width: panelRect.width || panel.offsetWidth || INSPECTOR_WIDTH,
+          height: panelRect.height || panel.offsetHeight || 320,
+        },
+      });
+      setPosition((current) =>
+        current && current.left === next.left && current.top === next.top &&
+          current.horizontal === next.horizontal && current.vertical === next.vertical
+          ? current
+          : next,
+      );
+    };
+    measure();
+    const observer = typeof ResizeObserver === 'undefined' ? null : new ResizeObserver(measure);
+    observer?.observe(workspace);
+    observer?.observe(panel);
+    window.addEventListener('resize', measure);
+    return () => {
+      observer?.disconnect();
+      window.removeEventListener('resize', measure);
+    };
+  }, [api.view, selectionBounds]);
+
+  if (!api.state || api.mode !== 'edit' || selected.length === 0 || !selectionBounds) return null;
   const lead = selected[0];
   const multi = selected.length > 1;
   const sourceUrl = safeSourceUrl(lead);
-  const anchorLeft = Math.max(8, api.view.pan.x + (lead.x + lead.width) * api.view.zoom + 18);
-  const anchorTop = Math.max(8, api.view.pan.y + lead.y * api.view.zoom);
+  const sectionIds = selected.map((item) =>
+    typeof item.data?.section_id === 'string' ? item.data.section_id : '',
+  );
+  const sharedSectionId = sectionIds.every((sectionId) => sectionId === sectionIds[0])
+    ? sectionIds[0]
+    : '__mixed__';
+  const shouldLockSelection = selected.some((item) => !item.locked);
 
   const deleteSelection = () => {
     api.deleteItems();
@@ -81,9 +199,17 @@ export function BoardRoomInspector({
 
   return (
     <aside
+      ref={panelRef}
       aria-label="Selected board item inspector"
+      data-placement-horizontal={position?.horizontal}
+      data-placement-vertical={position?.vertical}
       className="absolute z-40 w-[286px] max-w-[calc(100%-16px)] overflow-y-auto rounded-[6px] border border-[var(--border-default)] bg-[var(--bg-surface)] p-3 shadow-lg max-md:!bottom-2 max-md:!left-2 max-md:!right-2 max-md:!top-auto max-md:w-auto"
-      style={{ left: anchorLeft, top: anchorTop, maxHeight: 'min(520px, calc(100% - 16px))' }}
+      style={{
+        left: position?.left ?? INSPECTOR_MARGIN,
+        top: position?.top ?? INSPECTOR_MARGIN,
+        maxHeight: 'min(520px, calc(100% - 16px))',
+        visibility: position ? 'visible' : 'hidden',
+      }}
     >
       <div className="flex items-start justify-between gap-2">
         <div className="min-w-0">
@@ -126,6 +252,30 @@ export function BoardRoomInspector({
               <Button size="sm" variant="ghost" disabled={selected.length < 3} onClick={() => { api.distributeItems('vertical-gaps'); onCommand?.('arrange'); }}>V gaps</Button>
             </div>
           </div>
+          <label className="block text-[9px] uppercase text-[var(--text-muted)]">
+            Section
+            <Select
+              className="mt-1"
+              value={sharedSectionId}
+              onChange={(event) => api.setItemsSectionMembership(
+                selected.map((item) => item.id),
+                event.target.value || null,
+              )}
+            >
+              {sharedSectionId === '__mixed__' && <option value="__mixed__" disabled>Mixed sections</option>}
+              <option value="">No section</option>
+              {api.state.sections.map((section) => (
+                <option key={section.id} value={section.id}>{section.name}</option>
+              ))}
+            </Select>
+          </label>
+          <Button
+            size="sm"
+            variant="ghost"
+            onClick={() => api.toggleLock(selected.map((item) => item.id))}
+          >
+            {shouldLockSelection ? `Lock ${selected.length} pins` : `Unlock ${selected.length} pins`}
+          </Button>
         </div>
       ) : (
         <div className="mt-3 space-y-3">

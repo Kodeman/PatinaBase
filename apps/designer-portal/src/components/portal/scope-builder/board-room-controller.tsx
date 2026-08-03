@@ -120,6 +120,8 @@ export interface BoardRoomTidyOptions {
   gap?: number;
   /** Reuse while the transient spacing control is active to replace one step. */
   gestureId?: string;
+  /** Keep fixed for the lifetime of the transient control so coalescing is not time-limited. */
+  committedAt?: number;
 }
 
 export interface BoardRoomControllerOptions {
@@ -1050,14 +1052,17 @@ export function useBoardRoomController({
   ) => {
     const current = historyRef.current;
     if (!current) return;
-    const scoped = ids.length >= 2 ? ids : undefined;
-    const selected = scoped
-      ? current.present.items.filter((item) => scoped.includes(item.id))
-      : [];
+    const selectionScoped = ids.length >= 2;
+    const candidates = current.present.items.filter((item) =>
+      !item.locked && (!selectionScoped || ids.includes(item.id)),
+    );
+    if (candidates.length < 2) return;
+    const scoped = selectionScoped ? candidates.map((item) => item.id) : undefined;
+    const selected = selectionScoped ? candidates : [];
     const origin = selected.length > 0
       ? { x: Math.min(...selected.map((item) => item.x)), y: Math.min(...selected.map((item) => item.y)) }
       : undefined;
-    const positions = arrangeBoardItems(current.present.items.map((item) => ({
+    const positions = arrangeBoardItems(candidates.map((item) => ({
       ...item,
       height: item.height ?? null,
     })), current.present.sections, {
@@ -1068,6 +1073,7 @@ export function useBoardRoomController({
     });
     applyResult(tidyBoardRoomItems(current, positions, {
       id: options.gestureId ?? generatedId('tidy'),
+      committedAt: options.committedAt,
     }));
   }, [applyResult, selectedItemIds]);
   const commitItemsSectionMembership = useCallback((itemIds: readonly string[], sectionId: string | null, gestureId: string) => {
@@ -1297,6 +1303,18 @@ export function useBoardRoomController({
       sectionId,
       activeSemanticGestureRef.current ?? generatedId('membership'),
     ),
+    onSectionBandMoved: ({ sectionId, delta }) => {
+      const id = generatedId('band-drag');
+      armSemanticGesture(id);
+      execute((current) => moveBoardRoomSectionBand(current, sectionId, delta, { id }));
+    },
+    onSectionUpdated: ({ sectionId, patch }) => {
+      execute((current) => updateBoardRoomSections(current, {
+        type: 'update',
+        sectionId,
+        patch,
+      }, { id: generatedId('section') }));
+    },
     onCanvasGrow: (growth) => {
       const id = activeSemanticGestureRef.current ?? generatedId('grow');
       if (growth.translation.x !== 0 || growth.translation.y !== 0) {

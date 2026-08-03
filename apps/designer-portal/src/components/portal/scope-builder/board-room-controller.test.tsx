@@ -294,6 +294,94 @@ describe('BoardRoomController binding', () => {
     expect(api!.state?.items[0]).toMatchObject({ x: 290, y: 290 });
   });
 
+  it('routes band drag and inline section edits through undoable persisted commands (AC1.27)', async () => {
+    let api: BoardRoomControllerApi | null = null;
+    render(
+      <BoardRoomController owner={{ kind: 'project', id: 'project-1' }} boardId="board-project">
+        {(value) => {
+          api = value;
+          return <span data-testid="section-state">{value.state?.sections[0]?.name}:{value.state?.items[0]?.x}</span>;
+        }}
+      </BoardRoomController>,
+    );
+    await waitFor(() => expect(api?.canvasProps).not.toBeNull());
+
+    act(() => api!.updateSections({
+      type: 'create',
+      section: { id: 'living', name: 'Living', color: '#a66d4f' },
+    }));
+    act(() => api!.setSectionMembership('item-1', 'living'));
+    act(() => api!.canvasProps!.onSectionBandMoved?.({
+      sectionId: 'living',
+      itemIds: ['item-1'],
+      delta: { x: 50, y: 30 },
+    }));
+    expect(api!.state?.items[0]).toMatchObject({ x: 60, y: 50 });
+
+    act(() => api!.undo());
+    expect(api!.state?.items[0]).toMatchObject({
+      x: 10,
+      y: 20,
+      data: expect.objectContaining({ section_id: 'living' }),
+    });
+
+    act(() => api!.canvasProps!.onSectionUpdated?.({
+      sectionId: 'living',
+      patch: { name: 'Conversation area', color: '#526b5f' },
+    }));
+    expect(screen.getByTestId('section-state')).toHaveTextContent('Conversation area:10');
+    await waitFor(() => expect(mockApplyBoardRoomState).toHaveBeenLastCalledWith(expect.objectContaining({
+      state: expect.objectContaining({
+        sections: [expect.objectContaining({
+          id: 'living',
+          name: 'Conversation area',
+          color: '#526b5f',
+        })],
+      }),
+    })));
+  });
+
+  it('coalesces transient Tidy spacing into one undo step and persists the final gap', async () => {
+    let api: BoardRoomControllerApi | null = null;
+    render(
+      <BoardRoomController owner={{ kind: 'project', id: 'project-1' }} boardId="board-project">
+        {(value) => {
+          api = value;
+          return <span data-testid="tidy-positions">{value.state?.items.map((item) => item.x).join(',')}</span>;
+        }}
+      </BoardRoomController>,
+    );
+    await waitFor(() => expect(api?.state).not.toBeNull());
+    act(() => api!.addItems([{
+      id: 'item-2', type: 'note', x: 500, y: 20, width: 100, height: 100,
+      zIndex: 1, rotation: 0, locked: false, content: 'Second', data: {},
+    }]));
+    expect(screen.getByTestId('tidy-positions')).toHaveTextContent('10,500');
+    await act(async () => {
+      await api!.flushPending();
+    });
+    mockSaveLayout.mockClear();
+
+    act(() => api!.tidy([], { gap: 24, gestureId: 'tidy-spacing', committedAt: 1 }));
+    act(() => api!.tidy([], { gap: 40, gestureId: 'tidy-spacing', committedAt: 1 }));
+    expect(screen.getByTestId('tidy-positions')).toHaveTextContent('32,272');
+
+    act(() => api!.undo());
+    expect(screen.getByTestId('tidy-positions')).toHaveTextContent('10,500');
+    act(() => api!.redo());
+    expect(screen.getByTestId('tidy-positions')).toHaveTextContent('32,272');
+
+    await act(async () => {
+      await api!.flushPending();
+    });
+    await waitFor(() => expect(mockSaveLayout).toHaveBeenLastCalledWith(expect.objectContaining({
+      positions: expect.arrayContaining([
+        expect.objectContaining({ id: 'item-1', x: 32 }),
+        expect.objectContaining({ id: 'item-2', x: 272 }),
+      ]),
+    })));
+  });
+
   it('uses the Present escape ladder before exiting the room', async () => {
     const onExit = jest.fn().mockResolvedValue(undefined);
     render(
