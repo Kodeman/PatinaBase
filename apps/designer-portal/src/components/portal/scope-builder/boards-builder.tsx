@@ -1,555 +1,330 @@
 'use client';
 
-import { useCallback, useRef, useState } from 'react';
-import { Button, IconButton, Input, Select } from '@/components/ui/controls';
+import { useMemo, useRef, useState } from 'react';
+import Link from 'next/link';
+import { usePathname, useRouter } from 'next/navigation';
 import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
 } from '@patina/design-system';
-import { EmptyState, useHelpContent } from '@patina/help-system';
 import {
+  useBoardTemplates,
   useBoards,
+  useMaterializeBoardTemplate,
+  useOrganizations,
   useProjectOwnedBoards,
   useUpsertBoard,
-  useDuplicateBoard,
-  useDeleteBoard,
-  useProposalScopeRooms,
+  type BoardTemplate,
   type ProposalBoardSummary,
-  type ProposalScopeRoom,
 } from '@patina/supabase';
-import { downloadSpecPdf } from '@/lib/scope/spec-pdf-client';
+import type { BoardOwnerRef } from '@patina/types';
+import { Button } from '@/components/ui/controls';
+import { boardRoomHref } from '@/lib/mood-board/navigation';
 import { runProposalAutosaveAction } from '@/lib/proposal-autosave-registry';
-import { BoardEditor } from './board-editor';
-
-type StatusFilter = 'active' | 'archived';
-
-// CMS surface key for the zero-boards state (probe-then-fallback, mirroring
-// the FF&E board empty-state pattern).
-const BOARDS_EMPTY_SURFACE_KEY = 'designer-portal/scope-builder/boards/empty';
 
 interface BoardsBuilderProps {
-  /**
-   * Owner — pass EXACTLY ONE (B8). proposalId mounts the proposal-stage builder;
-   * projectId mounts the same builder on a live project-owned board (00272),
-   * hiding the proposal-only affordances (linked room · duplicate).
-   */
+  /** Pass exactly one owner. Both legs launch the same dedicated board room. */
   proposalId?: string;
   projectId?: string;
 }
 
-export function BoardsBuilder({ proposalId, projectId }: BoardsBuilderProps) {
-  const isProject = !!projectId;
-  // Both hooks are called (hook rules); the inactive owner passes null.
-  const proposalBoards = useBoards(isProject ? null : proposalId);
-  const projectBoards = useProjectOwnedBoards(isProject ? projectId : null);
-  const { data: boards = [], isLoading } = isProject ? projectBoards : proposalBoards;
-  // Scope rooms are proposal-only; disabled (and hidden) in project mode.
-  const { data: roomsData = [] } = useProposalScopeRooms(isProject ? null : proposalId);
-  const rooms = roomsData as ProposalScopeRoom[];
-  const upsertBoard = useUpsertBoard();
-  const duplicateBoard = useDuplicateBoard();
-  const deleteBoard = useDeleteBoard();
-  const ownerId = projectId ?? proposalId;
-
-  // The owner arg for INSERTs (new board). Updates key on boardId and ignore it.
-  const ownerArg = isProject ? { projectId } : { proposalId };
-
-  const [pdfBusy, setPdfBusy] = useState(false);
-  const [pdfError, setPdfError] = useState<string | null>(null);
-  const [boardActionPending, setBoardActionPending] = useState(false);
-  const [boardActionError, setBoardActionError] = useState<string | null>(null);
-  const boardActionPendingRef = useRef(false);
-
-  const runBoardAction = useCallback(
-    async (failureMessage: string, action: () => Promise<void>): Promise<boolean> => {
-      if (boardActionPendingRef.current) return false;
-      boardActionPendingRef.current = true;
-      setBoardActionPending(true);
-      setBoardActionError(null);
-      try {
-        if (!ownerId) throw new Error('The board owner is unavailable.');
-        await runProposalAutosaveAction(ownerId, action);
-        return true;
-      } catch (error) {
-        const detail = error instanceof Error ? ` ${error.message}` : '';
-        setBoardActionError(`${failureMessage} Nothing was changed.${detail}`);
-        return false;
-      } finally {
-        boardActionPendingRef.current = false;
-        setBoardActionPending(false);
-      }
-    },
-    [ownerId],
-  );
-
-  const [activeBoardId, setActiveBoardId] = useState<string | null>(null);
-  const [statusFilter, setStatusFilter] = useState<StatusFilter>('active');
-
-  const activeCount = boards.filter((b) => b.status !== 'archived').length;
-  const archivedCount = boards.length - activeCount;
-
-  // Fall back to Active whenever nothing is archived, so unarchiving the last
-  // board can't strand the view on an empty Archived tab.
-  const effectiveFilter: StatusFilter = archivedCount === 0 ? 'active' : statusFilter;
-
-  // Boards matching the current filter (archived boards stay editable, behind
-  // the Archived tab). The active board is chosen from the shown set so an
-  // archive/unarchive that moves a board out of view falls back cleanly.
-  const shown = boards.filter((b) =>
-    effectiveFilter === 'archived' ? b.status === 'archived' : b.status !== 'archived',
-  );
-  const active = shown.find((b) => b.id === activeBoardId) ?? shown[0] ?? null;
-
-  const handleNewBoard = useCallback(async () => {
-    await runBoardAction('The board could not be created.', async () => {
-      const result = await upsertBoard.mutateAsync({
-        ...ownerArg,
-        name: `Board ${activeCount + 1}`,
-        sortOrder: boards.length,
-      });
-      if (result?.id) {
-        setStatusFilter('active');
-        setActiveBoardId(result.id);
-      }
-    });
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [upsertBoard, proposalId, projectId, activeCount, boards.length, runBoardAction]);
-
-  const handleDuplicate = useCallback(
-    (boardId: string) => {
-      // Duplicate is proposal-only (useDuplicateBoard inserts proposal_id).
-      if (!proposalId) return;
-      void runBoardAction('The board could not be duplicated.', async () => {
-        const duplicated = await duplicateBoard.mutateAsync({ proposalId, boardId });
-        setStatusFilter('active');
-        setActiveBoardId(duplicated.id);
-      });
-    },
-    [duplicateBoard, proposalId, runBoardAction],
-  );
-
-  const handleArchiveToggle = useCallback(
-    (board: ProposalBoardSummary) => {
-      const next = board.status === 'archived' ? 'active' : 'archived';
-      void runBoardAction('The board status could not be updated.', async () => {
-        // Update path — keys on boardId; owner is ignored but passed for typing.
-        await upsertBoard.mutateAsync({ ...ownerArg, boardId: board.id, status: next });
-        // Leaving the current filter's view — drop the selection so `active`
-        // falls back to the first still-shown board.
-        if (activeBoardId === board.id) setActiveBoardId(null);
-      });
-    },
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    [upsertBoard, proposalId, projectId, activeBoardId, runBoardAction],
-  );
-
-  const handleRename = useCallback(
-    (boardId: string, name: string) => {
-      const next = name.trim();
-      if (!next) return;
-      void runBoardAction('The board name could not be updated.', async () => {
-        await upsertBoard.mutateAsync({ ...ownerArg, boardId, name: next });
-      });
-    },
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    [upsertBoard, proposalId, projectId, runBoardAction],
-  );
-
-  const handleLinkRoom = useCallback(
-    (boardId: string, scopeRoomId: string | null) => {
-      // Linked room is proposal-only (FK targets proposal_scope_rooms).
-      if (!proposalId) return;
-      void runBoardAction('The linked room could not be updated.', async () => {
-        await upsertBoard.mutateAsync({ proposalId, boardId, scopeRoomId });
-      });
-    },
-    [upsertBoard, proposalId, runBoardAction],
-  );
-
-  const handleExport = useCallback(
-    async (board: ProposalBoardSummary) => {
-      setPdfBusy(true);
-      setPdfError(null);
-      try {
-        await downloadSpecPdf(
-          { kind: 'board', ...ownerArg, boardId: board.id },
-          `board-${board.name || board.id}.pdf`,
-        );
-      } catch (err) {
-        setPdfError(err instanceof Error ? err.message : 'Could not export the board.');
-      } finally {
-        setPdfBusy(false);
-      }
-    },
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    [proposalId, projectId],
-  );
-
-  const [deleteTarget, setDeleteTarget] = useState<ProposalBoardSummary | null>(null);
-
-  const handleConfirmDelete = useCallback(async () => {
-    if (!deleteTarget) return;
-    await runBoardAction('The board could not be deleted.', async () => {
-      await deleteBoard.mutateAsync({ boardId: deleteTarget.id, proposalId });
-      if (activeBoardId === deleteTarget.id) setActiveBoardId(null);
-      setDeleteTarget(null);
-    });
-  }, [deleteBoard, proposalId, activeBoardId, deleteTarget, runBoardAction]);
-
-  const handleSelectBoard = useCallback(
-    (boardId: string) => {
-      if (boardId === active?.id) return;
-      void runBoardAction('The next board could not be opened.', async () => {
-        setActiveBoardId(boardId);
-      });
-    },
-    [active?.id, runBoardAction],
-  );
-
-  const handleStatusFilter = useCallback(
-    (next: StatusFilter) => {
-      if (next === effectiveFilter) return;
-      void runBoardAction('The board list could not be switched.', async () => {
-        setStatusFilter(next);
-        setActiveBoardId(null);
-      });
-    },
-    [effectiveFilter, runBoardAction],
-  );
-
-  if (isLoading) {
-    return (
-      <p className="text-sm text-[var(--text-muted)]">Loading boards…</p>
-    );
-  }
-
-  if (boards.length === 0) {
-    return (
-      <fieldset
-        disabled={boardActionPending}
-        className="min-w-0 space-y-3 border-0 p-0"
-      >
-        {boardActionError && (
-          <p
-            className="rounded-md border border-red-200 bg-red-50 px-3 py-2 text-xs text-red-800"
-            role="alert"
-          >
-            {boardActionError}
-          </p>
-        )}
-        <BoardsEmpty
-          onCreate={() => void handleNewBoard()}
-          creating={boardActionPending || upsertBoard.isPending}
-        />
-      </fieldset>
-    );
-  }
-
+function BoardCover({ board }: { board: ProposalBoardSummary }) {
+  const src = board.cover_image_url ?? board.cover_fallback_url;
   return (
-    <fieldset
-      disabled={boardActionPending}
-      className="min-w-0 space-y-4 border-0 p-0"
-    >
-      {archivedCount > 0 && (
-        <div className="inline-flex overflow-hidden rounded-md border border-[var(--border-default)] text-xs">
-          {(
-            [
-              ['active', `Active · ${activeCount}`],
-              ['archived', `Archived · ${archivedCount}`],
-            ] as Array<[StatusFilter, string]>
-          ).map(([value, label]) => (
-            <button
-              key={value}
-              type="button"
-              aria-pressed={effectiveFilter === value}
-              onClick={() => handleStatusFilter(value)}
-              className={`px-3 py-1.5 transition-colors ${
-                effectiveFilter === value
-                  ? 'bg-[var(--accent-primary)] text-white'
-                  : 'bg-[var(--bg-surface)] text-[var(--text-muted)] hover:text-[var(--text-primary)]'
-              }`}
-            >
-              {label}
-            </button>
-          ))}
-        </div>
-      )}
-
-      <BoardList
-        boards={shown}
-        activeId={active?.id ?? null}
-        showNew={effectiveFilter === 'active'}
-        onSelect={handleSelectBoard}
-        onNew={() => void handleNewBoard()}
-        onRename={handleRename}
-        onDelete={setDeleteTarget}
-      />
-
-      {boardActionError && (
-        <p
-          className="rounded-md border border-red-200 bg-red-50 px-3 py-2 text-xs text-red-800"
-          role="alert"
-        >
-          {boardActionError}
-        </p>
-      )}
-
-      {shown.length === 0 && (
-        <p className="text-sm text-[var(--text-muted)]">
-          No {effectiveFilter} boards.
-        </p>
-      )}
-
-      <AlertDialog
-        open={deleteTarget !== null}
-        onOpenChange={(open) => {
-          if (!open) setDeleteTarget(null);
-        }}
-      >
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>Delete board</AlertDialogTitle>
-            <AlertDialogDescription>
-              Delete <strong>{deleteTarget?.name}</strong>? Its{' '}
-              {deleteTarget?.item_count === 1
-                ? 'item'
-                : `${deleteTarget?.item_count ?? 0} items`}{' '}
-              will also be removed. This cannot be undone.
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel disabled={boardActionPending || deleteBoard.isPending}>Cancel</AlertDialogCancel>
-            <AlertDialogAction
-              onClick={(e) => {
-                e.preventDefault();
-                handleConfirmDelete();
-              }}
-              disabled={boardActionPending || deleteBoard.isPending}
-              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
-            >
-              {deleteBoard.isPending ? 'Deleting…' : 'Delete board'}
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
-
-      {active && (
-        <>
-          {/* Board-level acts: room link · export · duplicate · archive.
-              Room link + Duplicate are proposal-only (project boards have no
-              proposal scope rooms, and duplicate inserts proposal_id). */}
-          <div className="flex flex-wrap items-center gap-3">
-            {!isProject && (
-              <>
-                <label
-                  htmlFor="board-room-link"
-                  className="font-mono text-[0.58rem] uppercase tracking-wider text-[var(--text-muted)]"
-                >
-                  Linked room
-                </label>
-                <Select
-                  id="board-room-link"
-                  value={active.scope_room_id ?? ''}
-                  onChange={(e) => handleLinkRoom(active.id, e.target.value || null)}
-                  wrapperClassName="w-auto"
-                >
-                  <option value="">Whole home (no room)</option>
-                  {rooms.map((r) => (
-                    <option key={r.id} value={r.id}>
-                      {r.name}
-                    </option>
-                  ))}
-                </Select>
-              </>
-            )}
-
-            <div className="ml-auto flex items-center gap-1.5">
-              <Button
-                variant="ghost"
-                size="sm"
-                disabled={pdfBusy}
-                onClick={() => void handleExport(active)}
-              >
-                {pdfBusy ? 'Exporting…' : 'Export PDF'}
-              </Button>
-              {!isProject && (
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  disabled={duplicateBoard.isPending}
-                  onClick={() => handleDuplicate(active.id)}
-                >
-                  {duplicateBoard.isPending ? 'Duplicating…' : 'Duplicate'}
-                </Button>
-              )}
-              <Button variant="ghost" size="sm" onClick={() => handleArchiveToggle(active)}>
-                {active.status === 'archived' ? 'Unarchive' : 'Archive'}
-              </Button>
-            </div>
-          </div>
-
-          {pdfError && (
-            <p className="text-xs text-[var(--color-clay,#a5552f)]" role="alert">
-              {pdfError}
-            </p>
-          )}
-
-          {/* Include the owner in the key so an owner switch cannot retain the
-              previous editor's registry generation. */}
-          <BoardEditor
-            key={`${ownerId ?? 'unknown'}:${active.id}`}
-            proposalId={isProject ? undefined : proposalId}
-            projectId={projectId}
-            boardId={active.id}
-            actionPending={boardActionPending}
-          />
-        </>
-      )}
-    </fieldset>
-  );
-}
-
-// ─── Board list strip ────────────────────────────────────────────────────────
-
-interface BoardListProps {
-  boards: ProposalBoardSummary[];
-  activeId: string | null;
-  showNew: boolean;
-  onSelect: (id: string) => void;
-  onNew: () => void;
-  onRename: (boardId: string, name: string) => void;
-  onDelete: (board: ProposalBoardSummary) => void;
-}
-
-function BoardList({ boards, activeId, showNew, onSelect, onNew, onRename, onDelete }: BoardListProps) {
-  const [renamingId, setRenamingId] = useState<string | null>(null);
-  const [nameDraft, setNameDraft] = useState('');
-
-  const commitRename = (boardId: string) => {
-    onRename(boardId, nameDraft);
-    setRenamingId(null);
-  };
-
-  return (
-    <div className="flex flex-wrap items-center gap-2">
-      {boards.map((b) => (
-        <div
-          key={b.id}
-          className={`flex items-center gap-2 rounded-md border px-3 py-2 text-sm ${
-            b.id === activeId
-              ? 'border-[var(--accent-primary)] bg-[var(--bg-surface)]'
-              : 'border-[var(--border-default)] bg-[var(--bg-muted)]'
-          }`}
-        >
-          <BoardCoverThumb board={b} />
-          {renamingId === b.id ? (
-            <Input
-              autoFocus
-              value={nameDraft}
-              onChange={(e) => setNameDraft(e.target.value)}
-              onBlur={() => commitRename(b.id)}
-              onKeyDown={(e) => {
-                if (e.key === 'Enter') commitRename(b.id);
-                if (e.key === 'Escape') setRenamingId(null);
-              }}
-              className="h-7 w-36"
-              aria-label="Board name"
-            />
-          ) : (
-            <button onClick={() => onSelect(b.id)} className="font-medium">
-              {b.name}
-            </button>
-          )}
-          <span className="font-mono text-[0.6rem] text-[var(--text-muted)]">
-            {b.item_count} item{b.item_count === 1 ? '' : 's'}
-          </span>
-          {b.id === activeId && renamingId !== b.id && (
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={() => {
-                setRenamingId(b.id);
-                setNameDraft(b.name);
-              }}
-            >
-              Rename
-            </Button>
-          )}
-          <IconButton
-            label="Delete board"
-            variant="ghost"
-            size="sm"
-            onClick={() => onDelete(b)}
-          >
-            ×
-          </IconButton>
-        </div>
-      ))}
-      {showNew && (
-        <button
-          onClick={onNew}
-          className="rounded-md border border-dashed border-[var(--border-default)] px-3 py-2 text-sm hover:border-[var(--accent-primary)]"
-        >
-          + New Board
-        </button>
+    <div className="flex h-[112px] items-center justify-center overflow-hidden bg-[var(--bg-muted)]">
+      {src ? (
+        // eslint-disable-next-line @next/next/no-img-element
+        <img src={src} alt="" className="h-full w-full object-cover" />
+      ) : (
+        <span aria-hidden className="font-heading text-[32px] italic text-[var(--text-muted)]">
+          {board.name.trim().charAt(0).toUpperCase() || 'B'}
+        </span>
       )}
     </div>
   );
 }
 
-/**
- * Board-list thumbnail: the set cover, else the first image item on the board,
- * else a monogram of the board name's first letter.
- */
-function BoardCoverThumb({ board }: { board: ProposalBoardSummary }) {
-  const src = board.cover_image_url ?? board.cover_fallback_url ?? null;
-  if (src) {
-    return (
-      <span className="h-7 w-7 flex-shrink-0 overflow-hidden rounded-sm bg-[var(--bg-muted)]">
-        {/* eslint-disable-next-line @next/next/no-img-element */}
-        <img src={src} alt="" className="h-full w-full object-cover" />
-      </span>
-    );
-  }
+function TemplateCard({
+  template,
+  busy,
+  onChoose,
+}: {
+  template: BoardTemplate;
+  busy: boolean;
+  onChoose: () => void;
+}) {
   return (
-    <span
-      aria-hidden
-      className="flex h-7 w-7 flex-shrink-0 items-center justify-center rounded-sm bg-[var(--bg-muted)] font-display text-xs text-[var(--text-muted)]"
+    <button
+      type="button"
+      onClick={onChoose}
+      disabled={busy}
+      className="overflow-hidden rounded-[5px] border border-[var(--border-default)] bg-[var(--bg-surface)] text-left transition-colors hover:border-[var(--color-clay)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-clay)] disabled:cursor-wait disabled:opacity-60 motion-reduce:transition-none"
+      aria-label={`Start from ${template.name}`}
     >
-      {board.name.trim().charAt(0).toUpperCase() || 'B'}
-    </span>
+      <div className="flex h-24 items-center justify-center overflow-hidden bg-[var(--bg-muted)]">
+        {template.cover_url ? (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img src={template.cover_url} alt="" className="h-full w-full object-cover" />
+        ) : (
+          <span aria-hidden className="font-heading text-2xl italic text-[var(--text-muted)]">
+            {template.name.trim().charAt(0).toUpperCase() || 'T'}
+          </span>
+        )}
+      </div>
+      <div className="p-3">
+        <p className="font-heading text-[14px] text-[var(--text-primary)]">{template.name}</p>
+        <p className="mt-1 line-clamp-2 min-h-8 text-[11px] leading-4 text-[var(--text-muted)]">
+          {template.description || `${template.items.length} ready-to-compose pieces`}
+        </p>
+      </div>
+    </button>
   );
 }
 
-// ─── Empty state (CMS probe → fallback copy) ─────────────────────────────────
+/**
+ * The drafting facet is now a launcher, never an embedded editor. This keeps
+ * the proposal page calm and makes every board open through the one canonical
+ * full-viewport room.
+ */
+export function BoardsBuilder({ proposalId, projectId }: BoardsBuilderProps) {
+  const router = useRouter();
+  const pathname = usePathname();
+  const isProject = Boolean(projectId);
+  const owner: BoardOwnerRef | null = projectId
+    ? { kind: 'project', id: projectId }
+    : proposalId
+      ? { kind: 'proposal', id: proposalId }
+      : null;
 
-function BoardsEmpty({ onCreate, creating }: { onCreate: () => void; creating: boolean }) {
-  const { data, isLoading } = useHelpContent(BOARDS_EMPTY_SURFACE_KEY, 'emptyState');
+  // Hook order stays stable across owner kinds; the inactive query is disabled.
+  const proposalBoards = useBoards(isProject ? null : proposalId);
+  const projectBoards = useProjectOwnedBoards(isProject ? projectId : null);
+  const boardsQuery = isProject ? projectBoards : proposalBoards;
+  const boards = (boardsQuery.data ?? []).filter((board) => board.status !== 'archived');
+  const archivedCount = (boardsQuery.data ?? []).length - boards.length;
+
+  const { data: organizations } = useOrganizations();
+  const studioId = useMemo(() => {
+    if (!organizations) return undefined;
+    return (
+      organizations.find((organization) => organization.type === 'design_studio')?.id ??
+      organizations[0]?.id ??
+      null
+    );
+  }, [organizations]);
+  const templatesQuery = useBoardTemplates(studioId);
+  const templates = templatesQuery.data ?? [];
+  const seededTemplates = templates.filter((template) => template.kind === 'seeded');
+  const studioTemplates = templates.filter((template) => template.kind === 'studio');
+
+  const createBoard = useUpsertBoard();
+  const materializeTemplate = useMaterializeBoardTemplate();
+  const [pickerOpen, setPickerOpen] = useState(false);
+  const [pendingKey, setPendingKey] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const actionPending = useRef(false);
+
+  const source = isProject ? 'project_surface' : 'drafting_strip';
+  const hrefFor = (boardId: string) =>
+    boardRoomHref({ boardId, from: pathname, source });
+
+  const runCreate = async (key: string, action: () => Promise<string>) => {
+    if (!owner || actionPending.current) return;
+    actionPending.current = true;
+    setPendingKey(key);
+    setError(null);
+    try {
+      let boardId = '';
+      await runProposalAutosaveAction(owner.id, async () => {
+        boardId = await action();
+      });
+      if (!boardId) throw new Error('The new board did not return an id.');
+      setPickerOpen(false);
+      router.push(hrefFor(boardId));
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : 'The board could not be created.');
+    } finally {
+      actionPending.current = false;
+      setPendingKey(null);
+    }
+  };
+
+  const handleBlank = () =>
+    void runCreate('blank', async () => {
+      if (!owner) throw new Error('The board owner is unavailable.');
+      const board = await createBoard.mutateAsync({
+        proposalId: owner.kind === 'proposal' ? owner.id : undefined,
+        projectId: owner.kind === 'project' ? owner.id : undefined,
+        name: `Board ${boards.length + 1}`,
+        sortOrder: (boardsQuery.data ?? []).length,
+      });
+      return board.id;
+    });
+
+  const handleTemplate = (template: BoardTemplate) =>
+    void runCreate(`template:${template.id}`, async () => {
+      if (!owner) throw new Error('The board owner is unavailable.');
+      return materializeTemplate.mutateAsync({ templateId: template.id, owner });
+    });
+
+  if (!owner) {
+    return <p className="text-sm text-[var(--text-muted)]">The board owner is unavailable.</p>;
+  }
+
+  if (boardsQuery.isLoading) {
+    return (
+      <div aria-label="Loading mood boards" className="flex gap-3 overflow-hidden">
+        {[0, 1, 2].map((index) => (
+          <div
+            key={index}
+            aria-hidden
+            className="h-[174px] w-[210px] shrink-0 animate-pulse rounded-[5px] bg-[var(--bg-muted)] motion-reduce:animate-none"
+          />
+        ))}
+      </div>
+    );
+  }
 
   return (
-    <div className="rounded-md border border-dashed border-[var(--border-default)] bg-[var(--bg-surface)] px-6 py-10 text-center">
-      {!isLoading && data ? (
-        <EmptyState surfaceKey={BOARDS_EMPTY_SURFACE_KEY} />
-      ) : (
-        <>
-          <h4 className="font-display text-lg">No mood boards yet</h4>
-          <p className="mx-auto mt-1 max-w-md type-body-small text-[var(--text-muted)]">
-            Boards are freeform canvases for products, captures, palettes, room scans, and
-            notes — one per room, or one for the whole home.
+    <div className="min-w-0 space-y-3">
+      <div className="flex items-end justify-between gap-4">
+        <div>
+          <p className="text-[12px] text-[var(--text-muted)]">
+            Open a board in its room to compose, present, share, and export.
           </p>
-        </>
-      )}
-      <div className="mt-4">
-        <Button variant="primary" onClick={onCreate} disabled={creating}>
-          {creating ? 'Creating…' : 'Create your first board'}
+          {archivedCount > 0 && (
+            <p className="mt-1 font-mono text-[9px] uppercase tracking-[0.05em] text-[var(--text-muted)]">
+              {archivedCount} archived
+            </p>
+          )}
+        </div>
+        <Button variant="primary" size="sm" onClick={() => setPickerOpen(true)}>
+          New board
         </Button>
       </div>
+
+      {boards.length > 0 ? (
+        <div className="flex gap-3 overflow-x-auto pb-2 [scrollbar-width:thin]">
+          {boards.map((board) => (
+            <Link
+              key={board.id}
+              href={hrefFor(board.id)}
+              className="group w-[210px] shrink-0 overflow-hidden rounded-[5px] border border-[var(--border-default)] bg-[var(--bg-surface)] transition-colors hover:border-[var(--color-clay)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-clay)] motion-reduce:transition-none"
+              aria-label={`Open mood board ${board.name}`}
+            >
+              <BoardCover board={board} />
+              <div className="px-3 py-2.5">
+                <p className="truncate font-heading text-[14px] text-[var(--text-primary)]">
+                  {board.name}
+                </p>
+                <p className="mt-1 font-mono text-[9px] uppercase tracking-[0.05em] text-[var(--text-muted)]">
+                  {board.item_count} {board.item_count === 1 ? 'piece' : 'pieces'} · Open room
+                </p>
+              </div>
+            </Link>
+          ))}
+        </div>
+      ) : (
+        <button
+          type="button"
+          onClick={() => setPickerOpen(true)}
+          className="w-full rounded-[5px] border border-dashed border-[var(--border-default)] bg-[var(--bg-surface)] px-6 py-9 text-center transition-colors hover:border-[var(--color-clay)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-clay)] motion-reduce:transition-none"
+        >
+          <span className="block font-heading text-[16px] text-[var(--text-primary)]">
+            Start the first mood board
+          </span>
+          <span className="mt-1 block text-[12px] text-[var(--text-muted)]">
+            Begin blank or use a Patina or studio template.
+          </span>
+        </button>
+      )}
+
+      {error && (
+        <p role="alert" className="text-[12px] text-[var(--color-clay)]">
+          {error}
+        </p>
+      )}
+
+      <Dialog open={pickerOpen} onOpenChange={(open) => !actionPending.current && setPickerOpen(open)}>
+        <DialogContent className="max-h-[85dvh] max-w-3xl overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>Start a mood board</DialogTitle>
+            <DialogDescription>
+              Begin with open space, a Patina starter, or a template saved by your studio.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="mt-2 space-y-6">
+            <section aria-labelledby="blank-board-option">
+              <h3 id="blank-board-option" className="font-mono text-[9px] uppercase tracking-[0.08em] text-[var(--text-muted)]">
+                Blank
+              </h3>
+              <button
+                type="button"
+                onClick={handleBlank}
+                disabled={pendingKey !== null}
+                className="mt-2 flex min-h-20 w-full items-center justify-between rounded-[5px] border border-dashed border-[var(--border-default)] px-4 text-left hover:border-[var(--color-clay)] disabled:cursor-wait disabled:opacity-60"
+              >
+                <span>
+                  <span className="block font-heading text-[14px] text-[var(--text-primary)]">Blank board</span>
+                  <span className="mt-1 block text-[11px] text-[var(--text-muted)]">A clean, flexible canvas.</span>
+                </span>
+                <span className="font-mono text-[10px] uppercase tracking-[0.05em] text-[var(--color-clay)]">
+                  {pendingKey === 'blank' ? 'Creating…' : 'Choose'}
+                </span>
+              </button>
+            </section>
+
+            {templatesQuery.isLoading && (
+              <p className="text-[12px] text-[var(--text-muted)]">Loading templates…</p>
+            )}
+            {templatesQuery.isError && (
+              <p role="alert" className="text-[12px] text-[var(--color-clay)]">
+                Templates could not be loaded. You can still start blank.
+              </p>
+            )}
+
+            {seededTemplates.length > 0 && (
+              <section aria-labelledby="patina-board-templates">
+                <h3 id="patina-board-templates" className="font-mono text-[9px] uppercase tracking-[0.08em] text-[var(--text-muted)]">
+                  Patina starters
+                </h3>
+                <div className="mt-2 grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
+                  {seededTemplates.map((template) => (
+                    <TemplateCard
+                      key={template.id}
+                      template={template}
+                      busy={pendingKey !== null}
+                      onChoose={() => handleTemplate(template)}
+                    />
+                  ))}
+                </div>
+              </section>
+            )}
+
+            {studioTemplates.length > 0 && (
+              <section aria-labelledby="studio-board-templates">
+                <h3 id="studio-board-templates" className="font-mono text-[9px] uppercase tracking-[0.08em] text-[var(--text-muted)]">
+                  Your studio
+                </h3>
+                <div className="mt-2 grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
+                  {studioTemplates.map((template) => (
+                    <TemplateCard
+                      key={template.id}
+                      template={template}
+                      busy={pendingKey !== null}
+                      onChoose={() => handleTemplate(template)}
+                    />
+                  ))}
+                </div>
+              </section>
+            )}
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
