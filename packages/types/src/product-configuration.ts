@@ -25,6 +25,8 @@ export interface ProductOptionValue {
   retailPriceDeltaCents: number;
   tradePriceDeltaCents: number;
   leadTimeDeltaWeeks: number;
+  /** 00413 — the value accepts customer's-own-material (COM/COL). */
+  allowsCom?: boolean;
   metadata: Record<string, unknown>;
   position: number;
   isActive: boolean;

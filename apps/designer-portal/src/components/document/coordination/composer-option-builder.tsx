@@ -5,8 +5,9 @@
  *
  * A THIN array wrapper over the shipped `DecisionOptionBuilder` (the same
  * library-first option card the decision composer / proposal builder / project
- * detail all share). It owns the `DecisionOptionValue[]` array — add / remove —
- * and nothing else: the option FIELDS (library picker, image upload, price /
+ * detail all share). It owns the `DecisionOptionValue[]` array — add, remove,
+ * and where generated siblings land (P1-6) — and nothing else: the option
+ * FIELDS (library picker, image upload, price /
  * quantity / deltas, "save as draft") are NOT reimplemented here, they come
  * verbatim from `DecisionOptionBuilder`. On publish the composer calls
  * `useMaterializeDraftOptions()` then maps each value through
@@ -37,6 +38,21 @@ export function ComposerOptionBuilder({ value, onChange }: ComposerOptionBuilder
 
   const add = () => onChange([...value, emptyOption()]);
 
+  /**
+   * P1-6 — "Compare across a group" hands back one sibling per compared value.
+   * They land beside the option they were built from, in the maker's own order.
+   * The generator marks its baseline as the recommendation; that only stands if
+   * the designer has not already recommended something, because a selection has
+   * exactly one recommendation.
+   */
+  const placeSiblings = (index: number, siblings: DecisionOptionValue[]) => {
+    const alreadyRecommended = value.some((option) => option.isRecommended);
+    const placed = alreadyRecommended
+      ? siblings.map((option) => ({ ...option, isRecommended: false }))
+      : siblings;
+    onChange([...value.slice(0, index + 1), ...placed, ...value.slice(index + 1)]);
+  };
+
   return (
     <div className="flex flex-col gap-3">
       {value.map((option, index) => (
@@ -48,6 +64,7 @@ export function ComposerOptionBuilder({ value, onChange }: ComposerOptionBuilder
           // The first two options are the floor of a selection — keep them
           // un-removable so a selection always offers a real choice.
           onRemove={value.length > 2 ? () => removeAt(index) : undefined}
+          onGenerateSiblings={(siblings) => placeSiblings(index, siblings)}
         />
       ))}
 

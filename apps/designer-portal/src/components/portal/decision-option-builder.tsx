@@ -4,14 +4,22 @@ import { useCallback, useRef, useState } from 'react';
 import { useImageUpload } from '@/hooks/use-image-upload';
 import {
   useCreateDraftProduct,
+  useProduct,
   type LayerProductLayer,
   type ClientDecisionOption,
 } from '@patina/supabase';
-import type { ProductConfigurationSelection } from '@patina/types';
+import type {
+  ProductConfigurationMode,
+  ProductConfigurationSelection,
+} from '@patina/types';
 import {
   ProductPickerModal,
   type ProductPickResult,
 } from '@/components/portal/proposals/product-picker-modal';
+import {
+  CompareAcrossGroupPanel,
+  isComparableConfigurationMode,
+} from '@/components/portal/decision-compare-across-group';
 import { Button, Input, Textarea } from '@/components/ui/controls';
 
 interface DecisionOptionValue {
@@ -48,6 +56,11 @@ interface DecisionOptionValue {
   savedConfigurationId?: string;
   /** True when an optioned piece was linked without resolving a spec. */
   configurationPending?: boolean;
+  /**
+   * The linked piece's configuration mode, carried from the pick. Absent on a
+   * hydrated or legacy option — the builder then reads it off the product row.
+   */
+  configurationMode?: ProductConfigurationMode;
 }
 
 interface DecisionOptionBuilderProps {
@@ -55,6 +68,11 @@ interface DecisionOptionBuilderProps {
   onChange: (value: DecisionOptionValue) => void;
   onRemove?: () => void;
   index: number;
+  /**
+   * Hand new sibling options to whoever owns the options array (P1-6 "Compare
+   * across a group"). Absent = the affordance is not offered.
+   */
+  onGenerateSiblings?: (siblings: DecisionOptionValue[]) => void;
 }
 
 // ─── Shared helpers (single-sourced for new / edit / project-detail surfaces) ────
@@ -78,6 +96,7 @@ export const emptyOption = (): DecisionOptionValue => ({
   configurationSelections: undefined,
   savedConfigurationId: undefined,
   configurationPending: false,
+  configurationMode: undefined,
 });
 
 export function parsePriceToCents(price: string): number | undefined {
@@ -129,6 +148,8 @@ export function optionToValue(opt: ClientDecisionOption): DecisionOptionValue {
     configurationSelections: opt.selection_snapshot ?? undefined,
     savedConfigurationId: opt.configuration_id ?? undefined,
     configurationPending: false,
+    // Not on the row — the builder reads it off the product when it needs it.
+    configurationMode: undefined,
   };
 }
 
@@ -234,12 +255,25 @@ export function DecisionOptionBuilder({
   onChange,
   onRemove,
   index,
+  onGenerateSiblings,
 }: DecisionOptionBuilderProps) {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const { uploadToBucket, isUploading } = useImageUpload();
   const [pickerOpen, setPickerOpen] = useState(false);
+  const [comparing, setComparing] = useState(false);
 
   const isLinked = !!value.productId;
+  // A pick carries its mode; a hydrated or legacy option does not, so read it
+  // off the product row — and only then (the query is disabled otherwise).
+  const modeProbe = useProduct(
+    isLinked && !value.configurationMode ? (value.productId as string) : '',
+  );
+  const configurationMode =
+    value.configurationMode ??
+    (modeProbe.data as { configuration_mode?: ProductConfigurationMode } | undefined)
+      ?.configuration_mode;
+  const canCompare =
+    isLinked && !!onGenerateSiblings && isComparableConfigurationMode(configurationMode);
   const hasContent = !!(
     value.name ||
     value.imageUrl ||
@@ -284,11 +318,14 @@ export function DecisionOptionBuilder({
       configurationSelections: selection?.selections,
       savedConfigurationId: selection?.savedConfigurationId ?? undefined,
       configurationPending: r.configurationSkipped === true,
+      configurationMode: r.configurationMode,
     });
     setPickerOpen(false);
+    setComparing(false);
   };
 
-  const clearLink = () =>
+  const clearLink = () => {
+    setComparing(false);
     // Drop the product link but keep the copied text so a mis-pick never wipes work.
     onChange({
       ...value,
@@ -299,7 +336,9 @@ export function DecisionOptionBuilder({
       configurationSelections: undefined,
       savedConfigurationId: undefined,
       configurationPending: false,
+      configurationMode: undefined,
     });
+  };
 
   const picker = (
     <ProductPickerModal
@@ -423,6 +462,19 @@ export function DecisionOptionBuilder({
                   >
                     Clear link
                   </Button>
+                  {/* P1-6 — a family piece can put its own group in front of
+                      the client as separate cards. */}
+                  {canCompare && (
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => setComparing((open) => !open)}
+                      data-testid={`option-${index}-compare-group`}
+                      className="px-0 py-0 text-[0.72rem] text-[var(--accent-primary)] hover:text-[var(--accent-primary)]"
+                    >
+                      Compare across a group
+                    </Button>
+                  )}
                 </div>
                 {/* Warn, never block: the option is usable, but nobody can
                     order it until the specification is resolved. */}
@@ -498,6 +550,18 @@ export function DecisionOptionBuilder({
                 ‹ choose from library instead
               </Button>
             </>
+          )}
+
+          {/* P1-6 — the comparison panel sits under the linked strip it was
+              opened from, above the fields it is about to write siblings for. */}
+          {canCompare && comparing && (
+            <CompareAcrossGroupPanel
+              source={value}
+              index={index}
+              basePriceCents={parsePriceToCents(value.price)}
+              onGenerate={(siblings) => onGenerateSiblings?.(siblings)}
+              onClose={() => setComparing(false)}
+            />
           )}
 
           {/* ── Shared editable fields (states B & C) ── */}
