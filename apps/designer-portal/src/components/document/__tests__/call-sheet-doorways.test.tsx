@@ -1,7 +1,7 @@
 /**
  * Wave 3 doorways — the Call Sheet's wiring into the Document's navigation
- * (registry.tsx, command-bar.tsx, letterhead-instruments.tsx). Three things,
- * per the slice:
+ * (registry.tsx, command-bar.tsx, letterhead-instruments.tsx). Four things,
+ * per the slice (plus its w1 ⌘K leak fix):
  *   1. The registry entry's shape — document-scoped, sheet-weight, the right
  *      aliases (pure data, no mocking).
  *   2. The ⌘K "This surface" row — present with a project document in hand
@@ -9,8 +9,16 @@
  *      drafting-room-here).
  *   3. The letterhead instrument — present with the flag on, byte-absent
  *      (not merely hidden) with it off.
+ *   4. The ⌘K TYPED-search leak fix — matchSurfaces has no scope/flag check
+ *      of its own (registry.tsx stays data-only), so command-bar.tsx's typed
+ *      branch must filter document-scoped surfaces itself: typing "roster"
+ *      must not surface Call Sheet with the flag off or no project document
+ *      in hand (previously a silent no-op click — the sheet only mounts on
+ *      /doc/[id]), and must surface it (dispatching the same event as every
+ *      other doorway) once both are true. The Drafting Room — the registry's
+ *      other document-scoped surface — keeps working under the same filter.
  */
-import { act, render, screen } from '@testing-library/react';
+import { act, fireEvent, render, screen } from '@testing-library/react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { STUDIO_LEDGERS } from '@/lib/document/registry';
 import type { ProjectRosterRow } from '@patina/supabase';
@@ -243,7 +251,112 @@ describe('command-bar — the "This surface" call sheet row', () => {
 });
 
 // ============================================================================
-// 3. The letterhead instrument
+// 3. The ⌘K TYPED-search leak fix (w1) — matchSurfaces has no scope/flag
+//    check of its own; command-bar.tsx's typed branch must apply the same
+//    in-hand (+flag, for Call Sheet) gate its "This surface" row above uses.
+// ============================================================================
+
+describe('command-bar — typed search respects document scope (⌘K leak fix)', () => {
+  async function openPaletteAndType(query: string) {
+    render(<CommandBar />);
+    await act(async () => {
+      window.dispatchEvent(new CustomEvent('document:open-command-bar'));
+    });
+    const input = screen.getByPlaceholderText(/Find a document or a ledger/);
+    await act(async () => {
+      fireEvent.change(input, { target: { value: query } });
+    });
+  }
+
+  it('(a) flag off + "roster": no Call sheet row, even with a project document in hand', async () => {
+    mockCallSheetFlag = false;
+    mockPathname.mockReturnValue('/doc/eng-1');
+    mockDeskData.mockReturnValue({ folders: [{ row: deskRow() }], chips: [] });
+
+    await openPaletteAndType('roster');
+
+    expect(screen.queryByText('Call sheet')).not.toBeInTheDocument();
+  });
+
+  it('(b) flag on + no document in hand + "roster": no Call sheet row', async () => {
+    mockCallSheetFlag = true;
+    mockPathname.mockReturnValue('/desk');
+    mockDeskData.mockReturnValue({ folders: [], chips: [] });
+
+    await openPaletteAndType('roster');
+
+    expect(screen.queryByText('Call sheet')).not.toBeInTheDocument();
+  });
+
+  it('(c) flag on + a document in hand + "roster": the row appears and dispatches document:open-call-sheet', async () => {
+    mockCallSheetFlag = true;
+    mockPathname.mockReturnValue('/doc/eng-1');
+    mockDeskData.mockReturnValue({ folders: [{ row: deskRow() }], chips: [] });
+
+    const opened = jest.fn();
+    window.addEventListener('document:open-call-sheet', opened);
+
+    await openPaletteAndType('roster');
+
+    const row = screen.getByText('Call sheet');
+    expect(row).toBeInTheDocument();
+
+    await act(async () => {
+      fireEvent.click(row.closest('button')!);
+    });
+
+    expect(opened).toHaveBeenCalledTimes(1);
+    window.removeEventListener('document:open-call-sheet', opened);
+  });
+
+  it('also drops the "who" alias for Call sheet without a document in hand', async () => {
+    mockCallSheetFlag = true;
+    mockPathname.mockReturnValue('/desk');
+    mockDeskData.mockReturnValue({ folders: [], chips: [] });
+
+    await openPaletteAndType('who');
+    expect(screen.queryByText('Call sheet')).not.toBeInTheDocument();
+  });
+
+  it('preserves the Drafting Room\'s working typed search with a draft proposal in hand', async () => {
+    mockPathname.mockReturnValue('/doc/prop-1');
+    mockDeskData.mockReturnValue({
+      folders: [
+        {
+          row: deskRow({
+            engagement_kind: 'proposal',
+            engagement_id: 'prop-1',
+            proposal_id: 'prop-1',
+            proposal_status: 'draft',
+          }),
+        },
+      ],
+      chips: [],
+    });
+    mockPush.mockClear();
+
+    await openPaletteAndType('moodboards');
+
+    const row = screen.getByText('Drafting Room');
+    await act(async () => {
+      fireEvent.click(row.closest('button')!);
+    });
+
+    expect(mockPush).toHaveBeenCalledWith('/drafting/prop-1');
+  });
+
+  it('hides the Drafting Room from typed search without a draft proposal in hand', async () => {
+    mockPathname.mockReturnValue('/desk');
+    mockDeskData.mockReturnValue({ folders: [], chips: [] });
+
+    await openPaletteAndType('moodboards');
+
+    expect(screen.queryByText('Drafting Room')).not.toBeInTheDocument();
+  });
+});
+
+// ============================================================================
+// 4. The letterhead instrument
 // ============================================================================
 
 describe('letterhead-instruments — the Call Sheet instrument', () => {

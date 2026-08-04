@@ -542,7 +542,27 @@ export function CommandBar() {
       // for "board" / "moodboard" queries.
       list.push(...recentBoards.map(recentBoardRow).filter((r) => r.match.includes(q)));
       list.push(...liveDocs.map((f) => documentRow(f.row)).filter((r) => r.match.includes(q)));
-      list.push(...matchSurfaces(query).map(surfaceRow));
+      // Document-scoped registry surfaces (scope: 'document' — registry.tsx's
+      // own canon: "only reachable with a document in hand") must pass the
+      // same in-hand gate their "This surface" row above is gated on, or a
+      // typed query surfaces them with nothing to act on. This is the ⌘K leak
+      // fix: "roster"/"who"/"team" used to show Call Sheet with the flag off
+      // and/or no project document in hand, and clicking silently no-op'd
+      // (the sheet only mounts on /doc/[id], and even there renders nothing
+      // past its own flag check). The Drafting Room carries the same scope
+      // but a different in-hand shape — its own dispatch below only routes
+      // straight into the room when `draftingProposalId` is set; otherwise it
+      // falls back to the draft-proposal picker (a working, deliberate
+      // doorway shared with the "Draft a design agreement" verb), so gating
+      // on that exact condition keeps what's shown in sync with what
+      // clicking it will do, rather than hiding a fallback that already works.
+      const isSurfaceReachable = (s: StudioSurface): boolean => {
+        if (s.scope !== 'document') return true;
+        if (s.key === 'call-sheet') return Boolean(inHandRow?.row.project_id) && callSheetOn;
+        if (s.key === 'drafting-room') return Boolean(draftingProposalId);
+        return Boolean(inHandRow?.row.project_id);
+      };
+      list.push(...matchSurfaces(query).filter(isSurfaceReachable).map(surfaceRow));
       if (people) {
         list.push(
           ...people
