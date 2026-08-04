@@ -10,7 +10,6 @@
 
 import type {
   Product,
-  Variant,
   Category,
   Collection,
   Vendor,
@@ -75,12 +74,6 @@ export interface ICatalogService {
   // Statistics operations
   getCatalogStats(filters?: AdminProductFilters): Promise<CatalogServiceResponse<CatalogStats>>;
   getCatalogTrends(period: 'day' | 'week' | 'month' | 'year', days?: number): Promise<CatalogServiceResponse<CatalogTrends>>;
-
-  // Variant operations
-  getVariants(productId: UUID): Promise<CatalogServiceResponse<Variant[]>>;
-  createVariant(productId: UUID, data: CreateVariantRequest): Promise<CatalogServiceResponse<Variant>>;
-  updateVariant(variantId: UUID, data: UpdateVariantRequest): Promise<CatalogServiceResponse<Variant>>;
-  deleteVariant(variantId: UUID): Promise<CatalogServiceResponse<void>>;
 
   // Category operations
   getCategories(filters?: CategoryFilters): Promise<CatalogServiceResponse<Category[]>>;
@@ -193,38 +186,6 @@ export interface UpdateProductRequest extends Omit<Partial<CreateProductRequest>
   publishedAt?: Date;
   internalNotes?: string;
   priority?: 'low' | 'medium' | 'high' | 'critical';
-}
-
-/**
- * Create variant request payload.
- */
-export interface CreateVariantRequest {
-  sku: string;
-  barcode?: string;
-  name?: string;
-  options: Record<string, string>;
-  price?: number;
-  salePrice?: number;
-  availabilityStatus: 'in_stock' | 'out_of_stock' | 'preorder' | 'discontinued' | 'backorder';
-  quantity?: number;
-  leadTimeDays?: number;
-  dimensions?: {
-    width: number;
-    height: number;
-    depth: number;
-    unit: 'cm' | 'inch';
-  };
-  weight?: {
-    value: number;
-    unit: 'kg' | 'lb';
-  };
-}
-
-/**
- * Update variant request payload.
- */
-export interface UpdateVariantRequest extends Partial<CreateVariantRequest> {
-  // Allow partial updates
 }
 
 /**
@@ -519,11 +480,6 @@ export enum CatalogErrorCode {
   PRODUCT_VALIDATION_FAILED = 'PRODUCT_VALIDATION_FAILED',
   PRODUCT_CANNOT_PUBLISH = 'PRODUCT_CANNOT_PUBLISH',
   PRODUCT_HAS_DEPENDENCIES = 'PRODUCT_HAS_DEPENDENCIES',
-
-  // Variant errors
-  VARIANT_NOT_FOUND = 'VARIANT_NOT_FOUND',
-  VARIANT_ALREADY_EXISTS = 'VARIANT_ALREADY_EXISTS',
-  VARIANT_SKU_DUPLICATE = 'VARIANT_SKU_DUPLICATE',
 
   // Category errors
   CATEGORY_NOT_FOUND = 'CATEGORY_NOT_FOUND',

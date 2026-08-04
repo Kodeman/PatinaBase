@@ -30,7 +30,6 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { useToast } from '@/components/ui/use-toast';
 import { AdminEditBar } from '@/components/catalog/detail/admin-edit-bar';
 import { ValidationIssuesBar } from '@/components/catalog/detail/validation-issues-bar';
-import { VariantsPanel } from '@/components/catalog/detail/variants-panel';
 import { SEOPanel } from '@/components/catalog/detail/seo-panel';
 
 // ── Admin extras ───────────────────────────────────────────────────────
@@ -122,7 +121,7 @@ function KeyboardShortcuts() {
 
 // ── Content ────────────────────────────────────────────────────────────
 
-function AdminProductDetailContent({ productId }: { productId: string }) {
+function AdminProductDetailContent() {
   return (
     <>
       <KeyboardShortcuts />
@@ -138,7 +137,6 @@ function AdminProductDetailContent({ productId }: { productId: string }) {
         <MakerStory />
         <PairsWith />
         <DesignerIntelligence />
-        <VariantsPanel productId={productId} />
         <SEOPanel />
       </div>
     </>
@@ -246,7 +244,7 @@ export function ProductEditPageClient({ productId }: ProductEditPageClientProps)
       onValidate={memoizedSchema}
       onToast={handleToast}
     >
-      <AdminProductDetailContent productId={productId} />
+      <AdminProductDetailContent />
     </ProductEditProvider>
   );
 }

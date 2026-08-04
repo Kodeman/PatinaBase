@@ -1,5 +1,5 @@
 import { UUID, Timestamps } from './common';
-import { Product, AvailabilityStatus, Variant, AttributeType, ProductAttribute as BaseProductAttribute } from './product';
+import { Product, AvailabilityStatus, AttributeType, ProductAttribute as BaseProductAttribute } from './product';
 
 // Category Management
 export interface Category extends Timestamps {
@@ -263,7 +263,6 @@ export interface AttributeOption {
 export interface CatalogProductAttribute extends BaseProductAttribute {
   // Relations
   product?: Product;
-  variant?: Variant;
   definition?: AttributeDefinition;
 }
 

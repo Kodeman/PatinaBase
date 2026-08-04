@@ -8,13 +8,9 @@ import {
   ProductImage,
   Dimensions,
   Weight,
-  Variant,
   ProductAttribute,
   VendorProduct,
-  CustomizationOption,
-  CustomizationValue,
   ProductStatus,
-  AvailabilityStatus,
   AttributeType,
 } from '../product';
 
@@ -187,63 +183,6 @@ describe('Product Types', () => {
     });
   });
 
-  describe('Variant interface', () => {
-    it('should validate variant with all mandatory fields', () => {
-      const variant: Variant = {
-        id: '123e4567-e89b-12d3-a456-426614174000',
-        productId: '123e4567-e89b-12d3-a456-426614174001',
-        sku: 'SOFA-GRAY-84',
-        options: {
-          color: 'Gray',
-          size: '84 inches',
-          fabric: 'Linen',
-        },
-        availabilityStatus: 'in_stock',
-      };
-
-      expect(variant.sku).toBeDefined();
-      expect(variant.options.color).toBe('Gray');
-      expect(variant.availabilityStatus).toBe('in_stock');
-    });
-
-    it('should support all AvailabilityStatus values', () => {
-      const statuses: AvailabilityStatus[] = [
-        'in_stock',
-        'out_of_stock',
-        'preorder',
-        'discontinued',
-        'backorder',
-      ];
-
-      statuses.forEach((status) => {
-        const variant: Partial<Variant> = {
-          availabilityStatus: status,
-        };
-        expect(variant.availabilityStatus).toBe(status);
-      });
-    });
-
-    it('should allow price overrides', () => {
-      const variant: Partial<Variant> = {
-        price: 1099.99,
-        salePrice: 899.99,
-        currency: 'USD',
-      };
-
-      expect(variant.salePrice).toBeLessThan(variant.price!);
-    });
-
-    it('should allow dimension and weight overrides', () => {
-      const variant: Partial<Variant> = {
-        dimensions: { width: 210, height: 85, depth: 95, unit: 'cm' },
-        weight: { value: 55, unit: 'kg' },
-      };
-
-      expect(variant.dimensions?.width).toBe(210);
-      expect(variant.weight?.value).toBe(55);
-    });
-  });
-
   describe('ProductAttribute interface', () => {
     it('should validate product attribute structure', () => {
       const attribute: ProductAttribute = {
@@ -373,89 +312,6 @@ describe('Product Types', () => {
     });
   });
 
-  describe('CustomizationOption interface', () => {
-    it('should validate customization option structure', () => {
-      const option: CustomizationOption = {
-        id: '123e4567-e89b-12d3-a456-426614174000',
-        name: 'Fabric',
-        type: 'material',
-        options: [],
-      };
-
-      expect(option.name).toBe('Fabric');
-      expect(option.type).toBe('material');
-    });
-
-    it('should support all customization types', () => {
-      const types: ('color' | 'material' | 'size' | 'finish')[] = [
-        'color',
-        'material',
-        'size',
-        'finish',
-      ];
-
-      types.forEach((type) => {
-        const option: CustomizationOption = {
-          id: '123e4567-e89b-12d3-a456-426614174000',
-          name: `Test ${type}`,
-          type,
-          options: [],
-        };
-        expect(option.type).toBe(type);
-      });
-    });
-
-    it('should support price modifier', () => {
-      const option: CustomizationOption = {
-        id: '123e4567-e89b-12d3-a456-426614174000',
-        name: 'Premium Fabric',
-        type: 'material',
-        options: [],
-        priceModifier: 200.0,
-      };
-
-      expect(option.priceModifier).toBe(200.0);
-    });
-  });
-
-  describe('CustomizationValue interface', () => {
-    it('should validate customization value structure', () => {
-      const value: CustomizationValue = {
-        id: '123e4567-e89b-12d3-a456-426614174000',
-        value: 'navy',
-        displayName: 'Navy Blue',
-        priceModifier: 50.0,
-      };
-
-      expect(value.value).toBe('navy');
-      expect(value.displayName).toBe('Navy Blue');
-      expect(value.priceModifier).toBe(50.0);
-    });
-
-    it('should support optional image URL', () => {
-      const value: CustomizationValue = {
-        id: '123e4567-e89b-12d3-a456-426614174000',
-        value: 'walnut',
-        displayName: 'Walnut Finish',
-        priceModifier: 100.0,
-        imageUrl: 'https://cdn.example.com/walnut-swatch.jpg',
-      };
-
-      expect(value.imageUrl).toContain('https://');
-    });
-
-    it('should support negative price modifiers for discounts', () => {
-      const value: CustomizationValue = {
-        id: '123e4567-e89b-12d3-a456-426614174000',
-        value: 'basic',
-        displayName: 'Basic Finish',
-        priceModifier: -50.0,
-      };
-
-      expect(value.priceModifier).toBeLessThan(0);
-    });
-  });
-
   describe('Type safety validations', () => {
     it('should ensure Product category is type-safe', () => {
       const product: Partial<Product> = {
@@ -466,19 +322,6 @@ describe('Product Types', () => {
       expect(['sofa', 'chair', 'table', 'bed', 'storage', 'lighting', 'decor', 'outdoor']).toContain(
         product.category,
       );
-    });
-
-    it('should ensure variant options is a record', () => {
-      const variant: Partial<Variant> = {
-        options: {
-          color: 'Blue',
-          size: 'Large',
-          customField: 'Custom Value',
-        },
-      };
-
-      expect(Object.keys(variant.options!)).toContain('color');
-      expect(variant.options!['customField']).toBe('Custom Value');
     });
 
     it('should ensure arrays are properly typed', () => {

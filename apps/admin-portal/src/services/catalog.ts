@@ -124,16 +124,4 @@ export const catalogService = {
     return adminFetch(`/api/catalog/categories/${categoryId}`, { method: 'DELETE' });
   },
 
-  // Variants — write operations via API routes
-  async createVariant(productId: string, data: Partial<Record<string, unknown>>) {
-    return adminFetch(`/api/catalog/products/${productId}/variants`, { method: 'POST', body: JSON.stringify(data) });
-  },
-
-  async updateVariant(variantId: string, data: Partial<Record<string, unknown>>) {
-    return adminFetch(`/api/catalog/variants/${variantId}`, { method: 'PATCH', body: JSON.stringify(data) });
-  },
-
-  async deleteVariant(variantId: string) {
-    return adminFetch(`/api/catalog/variants/${variantId}`, { method: 'DELETE' });
-  },
 };

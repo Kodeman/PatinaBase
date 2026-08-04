@@ -36,18 +36,6 @@ export {
 export { useBulkOperationLock } from './useBulkOperationLock';
 export type { BulkOperationLock } from './useBulkOperationLock';
 
-// Variant Management hooks
-export {
-  useVariants,
-  useVariant,
-  useCreateVariant,
-  useUpdateVariant,
-  useDeleteVariant,
-  useBulkCreateVariants,
-  useCheckSkuUniqueness,
-  variantsKeys,
-} from './use-variants';
-
 // Media Upload hooks
 export {
   useMediaUpload,

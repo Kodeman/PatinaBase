@@ -8,7 +8,7 @@ import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
-import type { Product, Variant } from '@patina/types';
+import type { Product } from '@patina/types';
 
 interface PricingTabProps {
   product?: Product;
@@ -24,9 +24,6 @@ const CURRENCIES = [
 ];
 
 export function PricingTab({ product, onChange }: PricingTabProps) {
-  const [hasVariants, setHasVariants] = React.useState(
-    (product?.variants?.length || 0) > 0
-  );
   const [onSale, setOnSale] = React.useState(!!product?.salePrice);
 
   const currency = product?.currency || 'USD';
@@ -80,7 +77,7 @@ export function PricingTab({ product, onChange }: PricingTabProps) {
       <div>
         <h3 className="text-lg font-semibold mb-1">Pricing & Discounts</h3>
         <p className="text-sm text-muted-foreground">
-          Configure base pricing, sale prices, and variant-specific pricing.
+          Configure base pricing and sale prices.
         </p>
       </div>
 
@@ -262,25 +259,6 @@ export function PricingTab({ product, onChange }: PricingTabProps) {
           </div>
         )}
       </div>
-
-      {/* Variant Pricing */}
-      {hasVariants && (
-        <div className="space-y-4 pt-4 border-t border-border">
-          <div>
-            <h4 className="text-base font-semibold mb-1">Variant Pricing</h4>
-            <p className="text-sm text-muted-foreground">
-              Configure pricing overrides for specific variants
-            </p>
-          </div>
-
-          <div className="bg-muted/50 rounded-lg p-4">
-            <p className="text-sm text-center text-muted-foreground">
-              Variant pricing configuration will be available in the Inventory tab.
-              Set up variants first to configure variant-specific pricing.
-            </p>
-          </div>
-        </div>
-      )}
 
       {/* Pricing Summary */}
       <div className="bg-muted/50 rounded-lg p-4 space-y-3">

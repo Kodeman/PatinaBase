@@ -16,7 +16,6 @@ export { BulkActionDialogs } from './bulk-action-dialogs';
 export { ProductCreateDialog } from './product-create-dialog';
 export { MediaUploader, useMediaUploader } from './media-uploader';
 export { ImageGallery } from './image-gallery';
-export { VariantEditor } from './variant-editor';
 
 export type { UploadFile, MediaUploaderProps } from './media-uploader';
 export type { GalleryImage, ImageGalleryProps } from './image-gallery';
