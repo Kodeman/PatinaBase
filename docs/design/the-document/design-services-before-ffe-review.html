@@ -1,0 +1,947 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="color-scheme" content="light" />
+  <meta
+    name="description"
+    content="Patina review presentation for design-services agreements, hourly billing, working budgets, and later furnishings authorizations."
+  />
+  <title>Patina · Two Yeses, One Document · Design Review</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link
+    href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@300;400;500&amp;family=Inter:wght@300;400;500;600&amp;family=Playfair+Display:ital,wght@0,400;0,500;1,400&amp;display=swap"
+    rel="stylesheet"
+  />
+  <style>
+    /*
+      THROWAWAY APPROVAL PROTOTYPE — not production UI.
+      Question: how should a design-services-first engagement live inside The Document?
+      Three architecture concepts are switchable on slide 03; the deck recommends the hybrid.
+    */
+    * { box-sizing: border-box; }
+    :root {
+      --paper: #faf7f2;
+      --paper-deep: #f2ece2;
+      --paper-white: #fffdf8;
+      --ink: #2c2926;
+      --ink-soft: #5c4a3c;
+      --quiet: #8b7355;
+      --pearl: #e5e2dd;
+      --clay: #c4a57b;
+      --clay-dark: #9b7954;
+      --sage: #8da084;
+      --sage-pale: #e5eadf;
+      --blue: #8093a6;
+      --blue-pale: #e6ebef;
+      --terracotta: #c77b6e;
+      --terracotta-pale: #f2e1dc;
+      --charcoal: #211f1d;
+      --gold: #e8c547;
+      --rule: rgba(44, 41, 38, 0.16);
+      --rule-soft: rgba(44, 41, 38, 0.08);
+      --display: "Playfair Display", Georgia, serif;
+      --body: Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      --mono: "DM Mono", "SFMono-Regular", Consolas, monospace;
+      --ease: cubic-bezier(.2, .75, .25, 1);
+    }
+
+    html, body { margin: 0; min-height: 100%; background: var(--charcoal); color: var(--ink); }
+    body { font-family: var(--body); overflow: hidden; -webkit-font-smoothing: antialiased; }
+    button, input { font: inherit; }
+    button { color: inherit; }
+    button:focus-visible, input:focus-visible, [tabindex]:focus-visible {
+      outline: 2px solid var(--terracotta);
+      outline-offset: 3px;
+    }
+
+    .deck { position: fixed; inset: 0; display: grid; grid-template-rows: 34px 1fr 50px; background: var(--paper); }
+    .review-frame {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      padding: 0 18px;
+      background: var(--charcoal);
+      color: rgba(250, 247, 242, .66);
+      border-bottom: 1px solid rgba(196, 165, 123, .22);
+      font: 400 9px/1 var(--mono);
+      letter-spacing: .1em;
+      text-transform: uppercase;
+    }
+    .review-frame strong { color: var(--clay); font-weight: 500; }
+    .review-frame .status { margin-left: auto; color: rgba(250, 247, 242, .42); }
+    .review-frame .status b { color: var(--sage); font-weight: 500; }
+
+    .stage { position: relative; overflow: hidden; }
+    .slide {
+      position: absolute;
+      inset: 0;
+      display: grid;
+      grid-template-columns: minmax(110px, 12vw) minmax(0, 1fr);
+      opacity: 0;
+      visibility: hidden;
+      transform: translateX(24px);
+      transition: opacity .32s var(--ease), transform .42s var(--ease), visibility .42s;
+      background:
+        linear-gradient(90deg, rgba(196, 165, 123, .055) 0, transparent 14%),
+        repeating-linear-gradient(0deg, transparent, transparent 4px, rgba(92, 74, 60, .012) 4px, rgba(92, 74, 60, .012) 5px),
+        var(--paper);
+    }
+    .slide.active { opacity: 1; visibility: visible; transform: none; z-index: 2; }
+    .slide.leaving { opacity: 0; transform: translateX(-18px); visibility: visible; }
+
+    .slide-index {
+      position: relative;
+      border-right: 1px solid var(--rule-soft);
+      padding: clamp(22px, 4vh, 50px) 20px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      color: var(--quiet);
+    }
+    .slide-index .n { font: 300 clamp(32px, 4vw, 62px)/.9 var(--display); color: var(--clay); }
+    .slide-index .of { margin-top: 8px; font: 400 8px/1 var(--mono); letter-spacing: .14em; text-transform: uppercase; }
+    .slide-index .chapter {
+      margin-top: auto;
+      writing-mode: vertical-rl;
+      transform: rotate(180deg);
+      font: 400 8px/1 var(--mono);
+      letter-spacing: .18em;
+      text-transform: uppercase;
+    }
+
+    .slide-body { min-width: 0; overflow: auto; padding: clamp(28px, 5vh, 66px) clamp(28px, 6vw, 92px) 54px; }
+    .slide-body.centered { display: grid; place-items: center; overflow: hidden; }
+    .content { width: min(1180px, 100%); margin: 0 auto; }
+    .eyebrow { color: var(--clay-dark); font: 500 9px/1.3 var(--mono); letter-spacing: .15em; text-transform: uppercase; }
+    h1, h2, h3, p { margin-top: 0; }
+    h1, h2, h3 { font-family: var(--display); font-weight: 400; }
+    h1 { max-width: 12ch; margin-bottom: 20px; font-size: clamp(47px, 7.2vw, 106px); line-height: .94; letter-spacing: -.035em; }
+    h1 em, h2 em { color: var(--clay-dark); font-weight: 400; }
+    h2 { max-width: 18ch; margin: 8px 0 24px; font-size: clamp(34px, 4.5vw, 68px); line-height: 1.02; letter-spacing: -.025em; }
+    h3 { margin-bottom: 8px; font-size: clamp(21px, 2.1vw, 30px); line-height: 1.12; }
+    .lede { max-width: 65ch; color: var(--ink-soft); font-size: clamp(15px, 1.45vw, 21px); font-weight: 300; line-height: 1.7; }
+    .small { color: var(--quiet); font-size: 12px; line-height: 1.65; }
+    .mono { font-family: var(--mono); }
+    .muted { color: var(--quiet); }
+    .rule { width: 74px; height: 1px; margin: 22px 0; background: var(--clay); }
+    .hairline { border-top: 1px solid var(--rule); }
+    .no-wrap { white-space: nowrap; }
+
+    .title-layout { display: grid; grid-template-columns: minmax(0, 1fr) minmax(260px, .65fr); gap: clamp(34px, 7vw, 100px); align-items: center; }
+    .thesis-mark { display: grid; gap: 18px; align-content: center; min-height: 330px; padding-left: 12%; border-left: 1px solid var(--rule); }
+    .thesis-mark .line { position: relative; height: 7px; background: var(--pearl); overflow: hidden; }
+    .thesis-mark .line::after { content: ""; position: absolute; inset: 0; transform-origin: left; background: var(--clay); }
+    .thesis-mark .line:nth-child(1) { width: 100%; }
+    .thesis-mark .line:nth-child(2) { width: 77%; }
+    .thesis-mark .line:nth-child(3) { width: 52%; }
+    .thesis-mark .line:nth-child(1)::after { transform: scaleX(1); background: var(--ink-soft); }
+    .thesis-mark .line:nth-child(2)::after { transform: scaleX(.5); }
+    .thesis-mark .line:nth-child(3)::after { transform: scaleX(.08); background: var(--blue); }
+    .thesis-caption { margin-top: 10px; font: 400 9px/1.6 var(--mono); color: var(--quiet); letter-spacing: .08em; text-transform: uppercase; }
+
+    .problem-grid, .two-col, .three-col { display: grid; gap: 24px; }
+    .problem-grid { grid-template-columns: 1.15fr .85fr; align-items: end; }
+    .two-col { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    .three-col { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+    .note-panel { padding: 22px 0; border-top: 1px solid var(--rule); }
+    .note-panel + .note-panel { border-top-color: var(--rule-soft); }
+    .note-panel .k { margin-bottom: 7px; color: var(--clay-dark); font: 500 8px/1.2 var(--mono); letter-spacing: .12em; text-transform: uppercase; }
+    .note-panel p { margin-bottom: 0; color: var(--ink-soft); font-size: 13px; line-height: 1.65; }
+
+    .old-proposal {
+      border: 1px solid var(--rule);
+      background: rgba(255, 253, 248, .62);
+      padding: clamp(22px, 3vw, 38px);
+    }
+    .old-proposal .total { display: flex; justify-content: space-between; align-items: baseline; margin-top: 26px; padding-top: 16px; border-top: 2px solid var(--ink); }
+    .old-proposal .total b { font: 400 31px/1 var(--display); }
+    .crossed { position: relative; opacity: .58; }
+    .crossed::after { content: ""; position: absolute; top: 50%; left: -2%; width: 104%; height: 1px; background: var(--terracotta); transform: rotate(-3deg); }
+
+    .concept-switch { display: flex; flex-wrap: wrap; gap: 4px; margin: 25px 0 18px; border-bottom: 1px solid var(--rule); }
+    .concept-switch button, .perspective button, .wave-tabs button {
+      border: 0;
+      background: transparent;
+      padding: 11px 14px;
+      cursor: pointer;
+      color: var(--quiet);
+      font: 500 9px/1 var(--mono);
+      letter-spacing: .09em;
+      text-transform: uppercase;
+    }
+    .concept-switch button[aria-selected="true"], .perspective button[aria-pressed="true"], .wave-tabs button[aria-selected="true"] {
+      color: var(--ink);
+      box-shadow: inset 0 -2px var(--clay);
+    }
+    .concept-stage { min-height: 360px; }
+    .concept { display: none; grid-template-columns: .72fr 1.28fr; gap: clamp(32px, 6vw, 84px); align-items: start; animation: inkIn .32s var(--ease); }
+    .concept.active { display: grid; }
+    .concept-verdict { border-left: 3px solid var(--clay); padding-left: 18px; }
+    .concept-verdict.recommended { border-color: var(--sage); }
+    .concept-map { display: grid; gap: 1px; background: var(--rule); border: 1px solid var(--rule); }
+    .concept-map .row { display: grid; grid-template-columns: 128px 1fr; gap: 16px; padding: 16px 18px; background: var(--paper-white); }
+    .concept-map .row b { font: 500 8px/1.5 var(--mono); color: var(--quiet); letter-spacing: .08em; text-transform: uppercase; }
+    .concept-map .row span { font-size: 13px; line-height: 1.55; }
+
+    .lifecycle { position: relative; margin-top: 42px; padding: 12px 0 0; }
+    .authority-thread { position: absolute; top: 35px; left: 0; right: 0; height: 2px; background: var(--pearl); }
+    .authority-thread::after { content: ""; display: block; width: var(--thread, 44%); height: 100%; background: linear-gradient(90deg, var(--ink-soft), var(--clay), var(--blue)); transition: width .7s var(--ease); }
+    .lifecycle-steps { position: relative; display: grid; grid-template-columns: repeat(6, 1fr); }
+    .life-step { padding-right: 18px; }
+    .life-dot { width: 14px; height: 14px; margin: 17px 0 26px; border: 2px solid var(--paper); outline: 1px solid var(--rule); background: var(--paper); border-radius: 50%; }
+    .life-step.complete .life-dot { background: var(--ink-soft); }
+    .life-step.yes .life-dot { background: var(--clay); outline-color: var(--clay); }
+    .life-step.future .life-dot { background: var(--blue); outline-color: var(--blue); }
+    .life-step .when { color: var(--quiet); font: 400 8px/1.4 var(--mono); letter-spacing: .09em; text-transform: uppercase; }
+    .life-step h3 { margin: 7px 0 6px; font-size: 19px; }
+    .life-step p { max-width: 22ch; color: var(--quiet); font-size: 11px; line-height: 1.55; }
+    .yes-label { display: inline-block; margin-top: 8px; padding: 4px 7px; border: 1px solid currentColor; color: var(--clay-dark); font: 500 8px/1 var(--mono); letter-spacing: .08em; text-transform: uppercase; }
+    .yes-label.blue { color: var(--blue); }
+
+    .money-truths { margin-top: 24px; border-top: 1px solid var(--rule); }
+    .money-row { display: grid; grid-template-columns: 70px minmax(180px, .7fr) minmax(260px, 1.3fr) 120px; gap: 22px; align-items: baseline; padding: 22px 0; border-bottom: 1px solid var(--rule-soft); }
+    .money-row .roman { font: italic 400 31px/1 var(--display); color: var(--clay); }
+    .money-row .name { font: 400 22px/1.2 var(--display); }
+    .money-row p { margin: 0; color: var(--quiet); font-size: 12px; line-height: 1.6; }
+    .money-row .state { justify-self: end; font: 500 8px/1.4 var(--mono); letter-spacing: .09em; text-transform: uppercase; }
+    .state.authority { color: var(--sage); }
+    .state.planning { color: var(--blue); }
+    .state.purchase { color: var(--terracotta); }
+
+    .screen-shell { border: 1px solid var(--rule); background: rgba(255, 253, 248, .84); }
+    .screen-head { display: flex; align-items: center; gap: 16px; padding: 13px 18px; border-bottom: 1px solid var(--rule-soft); }
+    .screen-head .back { color: var(--quiet); font: 400 8px/1 var(--mono); letter-spacing: .1em; text-transform: uppercase; }
+    .screen-head .title { margin: 0 auto; font: 500 9px/1 var(--mono); letter-spacing: .16em; text-transform: uppercase; }
+    .screen-action, .ink-action {
+      border: 0;
+      border-bottom: 1px solid var(--clay);
+      background: transparent;
+      padding: 8px 2px 6px;
+      cursor: pointer;
+      color: var(--ink);
+      font: 500 9px/1 var(--mono);
+      letter-spacing: .07em;
+      text-transform: uppercase;
+    }
+    .screen-grid { display: grid; grid-template-columns: 190px minmax(0, 1fr) 290px; min-height: 420px; }
+    .facet-rail { padding: 20px 0; border-right: 1px solid var(--rule-soft); }
+    .facet-rail .label { padding: 0 18px 10px; color: var(--quiet); font: 500 8px/1 var(--mono); letter-spacing: .12em; text-transform: uppercase; }
+    .facet { display: flex; align-items: center; gap: 10px; padding: 12px 18px; color: var(--quiet); font-size: 12px; }
+    .facet::before { content: ""; width: 7px; height: 7px; border: 1px solid var(--rule); border-radius: 50%; }
+    .facet.done::before { border-color: var(--sage); background: var(--sage); }
+    .facet.active { border-left: 2px solid var(--clay); background: rgba(196, 165, 123, .09); color: var(--ink); }
+    .composer { padding: 28px 30px; }
+    .composer .section-title { margin-bottom: 5px; font: 400 25px/1.2 var(--display); }
+    .composer .hint { margin-bottom: 22px; color: var(--quiet); font-size: 11px; line-height: 1.6; }
+    .field-line { display: grid; grid-template-columns: 1fr auto; align-items: end; gap: 12px; padding: 12px 0; border-bottom: 1px solid var(--rule-soft); }
+    .field-line label { display: block; color: var(--quiet); font: 500 8px/1.3 var(--mono); letter-spacing: .08em; text-transform: uppercase; }
+    .field-line span { margin-top: 5px; font-size: 13px; }
+    .field-line strong { font: 400 17px/1 var(--display); }
+    .client-preview { padding: 26px 22px; border-left: 1px solid var(--rule-soft); background: rgba(242, 236, 226, .48); }
+    .preview-label { color: var(--quiet); font: 500 8px/1 var(--mono); letter-spacing: .12em; text-transform: uppercase; }
+    .preview-paper { margin-top: 12px; padding: 22px 18px; border: 1px solid var(--rule); background: var(--paper-white); }
+    .preview-paper h3 { font-size: 21px; }
+    .preview-paper .copy { color: var(--ink-soft); font-size: 10px; line-height: 1.65; }
+    .preview-line { display: flex; justify-content: space-between; gap: 12px; padding: 8px 0; border-bottom: 1px solid var(--rule-soft); font-size: 10px; }
+    .not-included { margin-top: 13px; padding-top: 11px; border-top: 1px solid var(--terracotta); color: var(--terracotta); font: 500 8px/1.55 var(--mono); letter-spacing: .04em; text-transform: uppercase; }
+
+    .perspective { display: inline-flex; gap: 2px; margin-bottom: 18px; border-bottom: 1px solid var(--rule); }
+    .perspective-view { display: none; animation: inkIn .28s var(--ease); }
+    .perspective-view.active { display: block; }
+
+    .signature-layout { display: grid; grid-template-columns: 1fr .85fr; gap: clamp(30px, 6vw, 82px); align-items: start; }
+    .signature-paper { padding: 30px; border: 1px solid var(--rule); background: var(--paper-white); }
+    .sig-block { position: relative; display: grid; grid-template-columns: 100px 1fr auto; gap: 16px; align-items: center; padding: 20px 0; border-bottom: 1px solid var(--rule-soft); }
+    .sig-block:last-child { border-bottom: 0; }
+    .sig-role { color: var(--quiet); font: 500 8px/1.4 var(--mono); letter-spacing: .1em; text-transform: uppercase; }
+    .sig-name { font: italic 400 22px/1 var(--display); color: var(--ink-soft); }
+    .sig-stamp { padding: 6px 8px; border: 1px solid var(--rule); color: var(--quiet); font: 500 8px/1 var(--mono); letter-spacing: .08em; text-transform: uppercase; transform: rotate(-1deg); }
+    .sig-block.signed .sig-stamp { border-color: var(--sage); color: var(--sage); }
+    .sig-block.signed .sig-name { color: var(--ink); }
+    .signature-controls { padding-top: 10px; }
+    .signature-controls .ink-action { margin-right: 18px; }
+    .inline-band { margin-top: 16px; padding: 12px 14px; border-left: 3px solid var(--blue); background: var(--blue-pale); color: var(--ink-soft); font-size: 11px; line-height: 1.55; }
+    .inline-band.success { border-color: var(--sage); background: var(--sage-pale); }
+
+    .doc-layout { display: grid; grid-template-columns: 165px minmax(0, 1fr) 210px; min-height: 430px; border: 1px solid var(--rule); background: rgba(255, 253, 248, .8); }
+    .doc-spine { padding: 20px 16px; border-right: 1px solid var(--rule-soft); }
+    .spine-row { padding: 8px 0; color: var(--quiet); font: 400 9px/1.3 var(--mono); letter-spacing: .05em; text-transform: uppercase; }
+    .spine-row.active { color: var(--ink); font-weight: 500; }
+    .spine-row.settled::after { content: " · settled"; color: var(--sage); font-size: 7px; }
+    .timer { margin-top: 22px; padding: 13px 0; border-top: 1px solid var(--rule); }
+    .timer .running { color: var(--sage); font: 500 8px/1 var(--mono); letter-spacing: .1em; text-transform: uppercase; }
+    .timer .time { margin-top: 8px; font: 300 20px/1 var(--mono); }
+    .doc-paper { padding: 25px 28px; }
+    .doc-paper .doc-name { font: 400 28px/1.1 var(--display); }
+    .authority-band { margin-top: 20px; padding: 15px 0; border-top: 2px solid var(--clay); border-bottom: 1px solid var(--rule); }
+    .authority-head { display: flex; justify-content: space-between; align-items: baseline; gap: 20px; }
+    .authority-head b { font: 400 16px/1.2 var(--display); }
+    .authority-head span { color: var(--sage); font: 500 8px/1 var(--mono); letter-spacing: .08em; text-transform: uppercase; }
+    .meter { height: 5px; margin: 15px 0 9px; background: var(--pearl); }
+    .meter i { display: block; width: var(--fill, 64%); height: 100%; background: var(--clay); transition: width .5s var(--ease); }
+    .meter-meta { display: flex; justify-content: space-between; color: var(--quiet); font: 400 8px/1.4 var(--mono); text-transform: uppercase; }
+    .work-lines { margin-top: 18px; }
+    .work-line { display: grid; grid-template-columns: 1fr auto; gap: 20px; padding: 12px 0; border-bottom: 1px solid var(--rule-soft); font-size: 11px; }
+    .doc-margin { padding: 20px 14px; border-left: 1px solid var(--rule-soft); }
+    .margin-title { color: var(--quiet); font: 500 8px/1 var(--mono); letter-spacing: .12em; text-transform: uppercase; }
+    .margin-note { margin-top: 14px; padding: 12px; border-left: 2px solid var(--clay); background: rgba(196, 165, 123, .07); font-size: 10px; line-height: 1.55; }
+
+    .budget-workshop { display: grid; grid-template-columns: minmax(0, 1.4fr) minmax(240px, .6fr); gap: 34px; }
+    .budget-table { border-top: 1px solid var(--rule); }
+    .budget-row { display: grid; grid-template-columns: 1.2fr .8fr repeat(3, .45fr); gap: 12px; align-items: center; padding: 13px 0; border-bottom: 1px solid var(--rule-soft); font-size: 11px; }
+    .budget-row.header { color: var(--quiet); font: 500 8px/1 var(--mono); letter-spacing: .08em; text-transform: uppercase; }
+    .budget-row strong { font-weight: 500; }
+    .budget-row .money { text-align: right; font-family: var(--mono); font-size: 9px; }
+    .budget-summary { padding: 20px 0 20px 22px; border-left: 1px solid var(--rule); }
+    .budget-total { margin: 8px 0 3px; font: 400 38px/1 var(--display); }
+    .range { width: 100%; accent-color: var(--clay-dark); }
+    .checkpoint { margin-top: 20px; padding-top: 17px; border-top: 1px solid var(--rule); }
+    .checkpoint-status { margin-top: 12px; color: var(--blue); font: 500 8px/1.5 var(--mono); letter-spacing: .06em; text-transform: uppercase; }
+
+    .overage-layout { display: grid; grid-template-columns: .8fr 1.2fr; gap: 50px; align-items: center; }
+    .gauge { position: relative; width: min(340px, 80vw); aspect-ratio: 1; border: 1px solid var(--rule); border-radius: 50%; display: grid; place-items: center; background: conic-gradient(var(--clay) 0 var(--gauge, 84%), var(--pearl) var(--gauge, 84%) 100%); }
+    .gauge::before { content: ""; position: absolute; inset: 22px; background: var(--paper); border-radius: 50%; border: 1px solid var(--rule-soft); }
+    .gauge-copy { position: relative; text-align: center; }
+    .gauge-copy b { display: block; font: 400 56px/1 var(--display); }
+    .gauge-copy span { color: var(--quiet); font: 500 8px/1.5 var(--mono); letter-spacing: .08em; text-transform: uppercase; }
+    .policy-list { margin-top: 22px; border-top: 1px solid var(--rule); }
+    .policy { display: grid; grid-template-columns: 40px 1fr; gap: 12px; padding: 13px 0; border-bottom: 1px solid var(--rule-soft); }
+    .policy .mark { color: var(--sage); font: 500 10px/1.4 var(--mono); }
+    .policy b { display: block; margin-bottom: 4px; font-size: 12px; }
+    .policy p { margin: 0; color: var(--quiet); font-size: 11px; line-height: 1.5; }
+
+    .wave-board { display: grid; grid-template-columns: minmax(0, 1fr) 300px; gap: 36px; }
+    .wave-tabs { display: flex; gap: 3px; border-bottom: 1px solid var(--rule); }
+    .wave-content { padding-top: 18px; }
+    .wave-content [data-wave-panel] { display: none; }
+    .wave-content [data-wave-panel].active { display: block; animation: inkIn .28s var(--ease); }
+    .ffe-line { display: grid; grid-template-columns: 1fr 90px 90px; gap: 14px; padding: 13px 0; border-bottom: 1px solid var(--rule-soft); font-size: 11px; }
+    .ffe-line .price { text-align: right; font-family: var(--mono); font-size: 9px; }
+    .ffe-line .tag { color: var(--blue); font: 500 8px/1.4 var(--mono); text-transform: uppercase; }
+    .authorization-summary { padding: 22px; border-left: 2px solid var(--blue); background: var(--blue-pale); }
+    .authorization-summary .amount { margin: 9px 0; font: 400 40px/1 var(--display); }
+    .authorization-summary .not-authority { margin-top: 18px; padding-top: 13px; border-top: 1px solid rgba(128, 147, 166, .4); color: var(--quiet); font-size: 10px; line-height: 1.55; }
+
+    .architecture { display: grid; grid-template-columns: 1fr 52px 1fr 52px 1fr; align-items: stretch; margin-top: 30px; }
+    .arch-layer { padding: 20px; border: 1px solid var(--rule); background: rgba(255, 253, 248, .72); }
+    .arch-layer .label { margin-bottom: 15px; color: var(--clay-dark); font: 500 8px/1 var(--mono); letter-spacing: .12em; text-transform: uppercase; }
+    .arch-item { padding: 9px 0; border-bottom: 1px solid var(--rule-soft); font-size: 11px; line-height: 1.45; }
+    .arch-item:last-child { border-bottom: 0; }
+    .arch-arrow { display: grid; place-items: center; color: var(--clay); font: 300 24px/1 var(--display); }
+    .guard-strip { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 20px; }
+    .guard-strip span { padding: 6px 9px; border: 1px solid var(--rule); color: var(--quiet); font: 500 8px/1 var(--mono); letter-spacing: .06em; text-transform: uppercase; }
+
+    .roadmap { margin-top: 24px; border-top: 1px solid var(--rule); }
+    .roadmap-row { display: grid; grid-template-columns: 90px 1fr 1fr; gap: 28px; padding: 18px 0; border-bottom: 1px solid var(--rule-soft); }
+    .roadmap-row .phase { color: var(--clay-dark); font: 500 9px/1.4 var(--mono); letter-spacing: .09em; text-transform: uppercase; }
+    .roadmap-row b { font: 400 18px/1.2 var(--display); }
+    .roadmap-row p { margin: 0; color: var(--quiet); font-size: 11px; line-height: 1.55; }
+
+    .acceptance { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0 40px; margin-top: 18px; }
+    .accept { display: grid; grid-template-columns: 18px 1fr; gap: 10px; padding: 10px 0; border-bottom: 1px solid var(--rule-soft); font-size: 11px; line-height: 1.5; }
+    .accept::before { content: "✓"; color: var(--sage); font-family: var(--mono); }
+
+    .approval-layout { display: grid; grid-template-columns: 1.1fr .9fr; gap: clamp(38px, 7vw, 100px); align-items: start; }
+    .decision-list { border-top: 1px solid var(--rule); }
+    .decision { display: grid; grid-template-columns: 26px 1fr auto; gap: 12px; align-items: center; padding: 13px 0; border-bottom: 1px solid var(--rule-soft); }
+    .decision .tick { color: var(--sage); font-family: var(--mono); }
+    .decision b { display: block; font-size: 11px; font-weight: 500; }
+    .decision span { color: var(--quiet); font-size: 9px; }
+    .decision .choice { color: var(--ink); font: 500 8px/1.4 var(--mono); text-align: right; text-transform: uppercase; }
+    .review-actions { padding: 24px; border: 1px solid var(--rule); background: var(--paper-white); }
+    .review-actions h3 { font-size: 26px; }
+    .review-actions button { width: 100%; margin-top: 10px; border: 1px solid var(--rule); background: transparent; padding: 12px 14px; cursor: pointer; text-align: left; font: 500 9px/1.4 var(--mono); letter-spacing: .05em; text-transform: uppercase; }
+    .review-actions button:hover, .review-actions button.selected { border-color: var(--clay); background: rgba(196, 165, 123, .08); }
+    .review-result { min-height: 44px; margin-top: 15px; color: var(--quiet); font-size: 11px; line-height: 1.55; }
+
+    .deck-controls {
+      display: grid;
+      grid-template-columns: 1fr auto 1fr;
+      align-items: center;
+      gap: 16px;
+      padding: 0 18px;
+      background: var(--charcoal);
+      color: rgba(250, 247, 242, .68);
+      border-top: 1px solid rgba(196, 165, 123, .2);
+    }
+    .nav-button { border: 0; background: transparent; padding: 9px; cursor: pointer; color: inherit; font: 400 9px/1 var(--mono); letter-spacing: .08em; text-transform: uppercase; }
+    .nav-button:disabled { opacity: .24; cursor: default; }
+    .nav-button.next { justify-self: end; }
+    .slide-dots { display: flex; align-items: center; gap: 6px; }
+    .slide-dot { width: 18px; height: 14px; border: 0; background: transparent; padding: 0; cursor: pointer; }
+    .slide-dot::after { content: ""; display: block; width: 100%; height: 2px; background: rgba(250, 247, 242, .18); transition: background .2s, transform .2s; }
+    .slide-dot.active::after { background: var(--clay); transform: scaleY(1.5); }
+    .key-hint { justify-self: start; font: 400 8px/1 var(--mono); color: rgba(250, 247, 242, .36); letter-spacing: .06em; text-transform: uppercase; }
+    .screen-count { justify-self: end; font: 400 8px/1 var(--mono); color: rgba(250, 247, 242, .36); }
+
+    @keyframes inkIn { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
+
+    @media (max-width: 980px) {
+      .slide { grid-template-columns: 72px minmax(0, 1fr); }
+      .slide-index { padding-inline: 10px; }
+      .title-layout, .problem-grid, .signature-layout, .budget-workshop, .overage-layout, .wave-board, .approval-layout { grid-template-columns: 1fr; }
+      .thesis-mark { min-height: 150px; padding: 30px 0 0; border-left: 0; border-top: 1px solid var(--rule); }
+      .screen-grid { grid-template-columns: 150px minmax(0, 1fr); }
+      .client-preview { display: none; }
+      .doc-layout { grid-template-columns: 130px minmax(0, 1fr); }
+      .doc-margin { display: none; }
+      .money-row { grid-template-columns: 48px 1fr 100px; }
+      .money-row p { grid-column: 2 / -1; }
+      .architecture { grid-template-columns: 1fr; gap: 10px; }
+      .arch-arrow { transform: rotate(90deg); }
+      .lifecycle-steps { grid-template-columns: repeat(3, 1fr); gap: 24px 0; }
+      .authority-thread { display: none; }
+    }
+
+    @media (max-width: 680px) {
+      .deck { grid-template-rows: 34px 1fr 48px; }
+      .review-frame { padding-inline: 10px; font-size: 7px; }
+      .review-frame .status { display: none; }
+      .slide { grid-template-columns: 1fr; }
+      .slide-index { display: none; }
+      .slide-body { padding: 25px 18px 55px; }
+      h1 { font-size: clamp(43px, 14vw, 67px); }
+      h2 { font-size: clamp(31px, 10vw, 44px); }
+      .three-col, .two-col, .concept.active, .acceptance { grid-template-columns: 1fr; }
+      .concept-stage { min-height: 540px; }
+      .concept-map .row { grid-template-columns: 90px 1fr; }
+      .lifecycle-steps { grid-template-columns: repeat(2, 1fr); }
+      .money-row { grid-template-columns: 38px 1fr; }
+      .money-row .state { justify-self: start; grid-column: 2; }
+      .screen-shell { min-width: 0; transform: none; margin-bottom: 0; }
+      .screen-head { padding: 10px 12px; }
+      .screen-head .back, .screen-head .screen-action { display: none; }
+      .screen-head .title { margin: 0; flex: 1; text-align: center; }
+      .screen-grid { grid-template-columns: 1fr; min-height: 0; }
+      .facet-rail, .client-preview { display: none; }
+      .composer { padding: 20px 16px; }
+      .field-line { grid-template-columns: minmax(0, 1fr) auto; }
+      .signature-paper { padding: 18px; }
+      .sig-block { grid-template-columns: 82px 1fr; }
+      .sig-stamp { grid-column: 2; justify-self: start; }
+      .doc-layout { min-width: 0; grid-template-columns: 92px minmax(0, 1fr); transform: none; margin-bottom: 0; }
+      .doc-spine { padding: 12px 9px; }
+      .spine-row { font-size: 7px; }
+      .timer .time { font-size: 15px; }
+      .doc-paper { padding: 18px 14px; }
+      .doc-paper .doc-name { font-size: 23px; }
+      .authority-head { display: block; }
+      .authority-head span { display: block; margin-top: 6px; }
+      .meter-meta { display: grid; gap: 5px; }
+      .budget-row { grid-template-columns: 1fr .75fr .55fr; font-size: 9px; }
+      .budget-row > :nth-child(3), .budget-row > :nth-child(5) { display: none; }
+      .roadmap-row { grid-template-columns: 65px 1fr; }
+      .roadmap-row p { grid-column: 2; }
+      .deck-controls { grid-template-columns: auto 1fr auto; padding-inline: 8px; }
+      .key-hint { display: none; }
+      .slide-dots { overflow: hidden; justify-content: center; }
+      .slide-dot { width: 10px; }
+      .screen-count { display: none; }
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+      *, *::before, *::after { animation: none !important; transition: none !important; scroll-behavior: auto !important; }
+    }
+
+    @media print {
+      @page { size: landscape; margin: 0; }
+      body { overflow: visible; background: white; }
+      .deck { position: static; display: block; }
+      .review-frame, .deck-controls { display: none; }
+      .stage { overflow: visible; }
+      .slide { position: relative; display: grid !important; width: 100vw; height: 100vh; break-after: page; opacity: 1 !important; visibility: visible !important; transform: none !important; }
+      .slide-body { overflow: hidden; }
+      .concept { display: none !important; }
+      .concept[data-concept="two"] { display: grid !important; }
+      .perspective-view { display: none !important; }
+      .perspective-view[data-view="designer"] { display: block !important; }
+    }
+  </style>
+</head>
+<body>
+  <main class="deck" aria-label="Design services before FF&amp;E review presentation">
+    <header class="review-frame">
+      <strong>Patina · The Document</strong>
+      <span>Design services before furnishings</span>
+      <span class="status">Review artifact · <b>no product changes</b></span>
+    </header>
+
+    <section class="stage" id="stage" aria-live="polite">
+      <article class="slide active" data-title="The premise" data-chapter="Premise">
+        <aside class="slide-index"><span class="n">01</span><span class="of">of 16</span><span class="chapter">Premise</span></aside>
+        <div class="slide-body centered">
+          <div class="content title-layout">
+            <div>
+              <p class="eyebrow">A commercial sequence for The Document</p>
+              <h1>Sell the <em>judgment</em> before the objects.</h1>
+              <p class="lede">Contract for design work first. Shape the furnishing budget together. Ask for purchasing authority only when the hard costs are ready.</p>
+              <div class="rule"></div>
+              <p class="small mono">Design review · August 2026 · for feedback and approval</p>
+            </div>
+            <div class="thesis-mark" aria-label="Services complete, budget in progress, furnishings ahead">
+              <div class="line"></div><div class="line"></div><div class="line"></div>
+              <p class="thesis-caption">Services agreed<br />Budget taking shape<br />Furnishings still ahead</p>
+            </div>
+          </div>
+        </div>
+      </article>
+
+      <article class="slide" data-title="The current collision" data-chapter="Problem">
+        <aside class="slide-index"><span class="n">02</span><span class="of">of 16</span><span class="chapter">Problem</span></aside>
+        <div class="slide-body">
+          <div class="content problem-grid">
+            <div>
+              <p class="eyebrow">The current collision</p>
+              <h2>One proposal is carrying <em>three different promises.</em></h2>
+              <p class="lede">Today the proposal total intentionally combines design fees and FF&amp;E. Signing activates the project and copies the furnishing schedule at once.</p>
+              <div class="note-panel"><p class="k">Promise 01</p><p>Who the studio is hiring itself out to be, how time is billed, and where that authority stops.</p></div>
+              <div class="note-panel"><p class="k">Plan 02</p><p>The room-by-room budget the designer and client are still negotiating.</p></div>
+              <div class="note-panel"><p class="k">Purchase 03</p><p>The actual products, quantities, deposits, and permission to procure.</p></div>
+            </div>
+            <div class="old-proposal" aria-label="Current combined proposal example">
+              <p class="eyebrow">Current signed shape</p>
+              <h3>Whitfield Living &amp; Dining</h3>
+              <div class="preview-line"><span>Design phases</span><span>$8,000</span></div>
+              <div class="preview-line crossed"><span>Furnishings · still being selected</span><span>$58,400</span></div>
+              <div class="preview-line crossed"><span>Freight, tax &amp; installation</span><span>$7,600</span></div>
+              <div class="total"><span class="eyebrow">One signature</span><b>$74,000</b></div>
+              <p class="not-included">The client is being asked to approve purchases before the design work has stabilized the budget.</p>
+            </div>
+          </div>
+        </div>
+      </article>
+
+      <article class="slide" data-title="Three architecture concepts" data-chapter="Options">
+        <aside class="slide-index"><span class="n">03</span><span class="of">of 16</span><span class="chapter">Options</span></aside>
+        <div class="slide-body">
+          <div class="content">
+            <p class="eyebrow">Designed three ways</p>
+            <h2>Three shapes. One recommended <em>hybrid.</em></h2>
+            <div class="concept-switch" role="tablist" aria-label="Architecture concepts">
+              <button role="tab" aria-selected="false" data-concept-tab="folio">A · Commercial folio</button>
+              <button role="tab" aria-selected="false" data-concept-tab="authority">B · Authority system</button>
+              <button role="tab" aria-selected="true" data-concept-tab="two">C · Two yeses</button>
+            </div>
+            <div class="concept-stage">
+              <section class="concept" data-concept="folio">
+                <div class="concept-verdict"><p class="eyebrow">Minimal change</p><h3>One Commercial Folio</h3><p class="small">A services-only root proposal, followed by one cumulative FF&amp;E amendment in the same lineage.</p><div class="rule"></div><p class="small"><strong>Strong:</strong> fastest reuse.<br /><strong>Weak:</strong> revision history and new purchasing authority become the same concept.</p></div>
+                <div class="concept-map"><div class="row"><b>Agreement</b><span>Existing proposal with phases, terms, and zero items</span></div><div class="row"><b>Design work</b><span>Existing project time and invoice stack</span></div><div class="row"><b>Hard costs</b><span>Child proposal treated as a cumulative amendment</span></div><div class="row"><b>Verdict</b><span>Useful proof, but too ambiguous for named waves and later addenda</span></div></div>
+              </section>
+              <section class="concept" data-concept="authority">
+                <div class="concept-verdict"><p class="eyebrow">Maximum rigor</p><h3>The Authority System</h3><p class="small">Independent contract, authority, rate, budget, and authorization ledgers alongside proposals.</p><div class="rule"></div><p class="small"><strong>Strong:</strong> impeccable audit trail.<br /><strong>Weak:</strong> duplicates Patina’s hardened proposal signature and revision machinery.</p></div>
+                <div class="concept-map"><div class="row"><b>Agreement</b><span>New contract domain and lifecycle</span></div><div class="row"><b>Design work</b><span>Explicit immutable billing authorities and rates</span></div><div class="row"><b>Hard costs</b><span>Independent purchasing authorization domain</span></div><div class="row"><b>Verdict</b><span>Deep integrity, but more machinery than the designer should feel</span></div></div>
+              </section>
+              <section class="concept active" data-concept="two">
+                <div class="concept-verdict recommended"><p class="eyebrow">Recommended</p><h3>Two Yeses, One Document</h3><p class="small">Reuse proposals as immutable commercial editions; add explicit document kinds and signed billing authority beneath a continuous Document experience.</p><div class="rule"></div><p class="small"><strong>Strong:</strong> clear to the client, auditable for billing, compatible with current signing.</p></div>
+                <div class="concept-map"><div class="row"><b>Yes 01</b><span>Client + studio execute Design Services</span></div><div class="row"><b>Between</b><span>Hours accrue while a nonbinding budget is shaped</span></div><div class="row"><b>Yes 02</b><span>Client authorizes named furnishing waves</span></div><div class="row"><b>Architecture</b><span>Existing proposal engine + explicit project authority bindings</span></div></div>
+              </section>
+            </div>
+          </div>
+        </div>
+      </article>
+
+      <article class="slide" data-title="Two yeses lifecycle" data-chapter="Sequence">
+        <aside class="slide-index"><span class="n">04</span><span class="of">of 16</span><span class="chapter">Sequence</span></aside>
+        <div class="slide-body">
+          <div class="content">
+            <p class="eyebrow">The new commercial sequence</p>
+            <h2>One relationship. One project. <em>Two moments of consent.</em></h2>
+            <p class="lede">The project begins when the services agreement is fully executed. Procurement begins only when a furnishings authorization is signed.</p>
+            <div class="lifecycle" style="--thread: 100%">
+              <div class="authority-thread"></div>
+              <div class="lifecycle-steps">
+                <div class="life-step complete"><span class="when">Understand</span><div class="life-dot"></div><h3>Discovery</h3><p>Scope, priorities, early budget band.</p></div>
+                <div class="life-step yes"><span class="when">Authorize labor</span><div class="life-dot"></div><h3>Design agreement</h3><p>Rates, ceiling, retainer, services.</p><span class="yes-label">Yes to the designer</span></div>
+                <div class="life-step complete"><span class="when">Do the work</span><div class="life-dot"></div><h3>Design development</h3><p>Track time against signed authority.</p></div>
+                <div class="life-step complete"><span class="when">Set the target</span><div class="life-dot"></div><h3>Working budget</h3><p>Agree the planning checkpoint.</p></div>
+                <div class="life-step future yes"><span class="when">Authorize spend</span><div class="life-dot"></div><h3>Furnishings</h3><p>Products, deposits, freight, tax.</p><span class="yes-label blue">Yes to the objects</span></div>
+                <div class="life-step future"><span class="when">Carry it out</span><div class="life-dot"></div><h3>Procurement</h3><p>Only signed lines may be ordered.</p></div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </article>
+
+      <article class="slide" data-title="Three money truths" data-chapter="Money">
+        <aside class="slide-index"><span class="n">05</span><span class="of">of 16</span><span class="chapter">Money</span></aside>
+        <div class="slide-body">
+          <div class="content">
+            <p class="eyebrow">The organizing rule</p>
+            <h2>Never let three money truths <em>blur.</em></h2>
+            <div class="money-truths">
+              <div class="money-row"><span class="roman">I</span><span class="name">Design authorization</span><p>Actual professional time may be billed up to this dollar ceiling under the signed role-rate schedule.</p><span class="state authority">Contractual</span></div>
+              <div class="money-row"><span class="roman">II</span><span class="name">Working furnishing budget</span><p>A room × category planning target with low, target, and high ranges. Agreement records alignment—not permission to purchase.</p><span class="state planning">Planning only</span></div>
+              <div class="money-row"><span class="roman">III</span><span class="name">Furnishings authorized</span><p>The exact items, allowances, quantities, deposits, and client prices the studio may procure.</p><span class="state purchase">Purchase authority</span></div>
+            </div>
+          </div>
+        </div>
+      </article>
+
+      <article class="slide" data-title="Services Drafting Room" data-chapter="Designer">
+        <aside class="slide-index"><span class="n">06</span><span class="of">of 16</span><span class="chapter">Designer</span></aside>
+        <div class="slide-body">
+          <div class="content">
+            <p class="eyebrow">Designer entry point</p>
+            <h2>The Drafting Room learns a <em>services posture.</em></h2>
+            <div class="screen-shell" aria-label="Design agreement composer concept">
+              <div class="screen-head"><span class="back">← The document</span><span class="title">The Drafting Room · Design Agreement</span><button class="screen-action" type="button">Preview client copy</button></div>
+              <div class="screen-grid">
+                <nav class="facet-rail" aria-label="Agreement facets"><div class="label">The offer</div><div class="facet done">Services</div><div class="facet done">Deliverables</div><div class="facet done">Exclusions</div><div class="facet active">Rates &amp; ceiling</div><div class="facet">Retainer</div><div class="facet">Terms</div></nav>
+                <section class="composer"><p class="eyebrow">Facet · how design time is billed</p><div class="section-title">Rates &amp; ceiling</div><p class="hint">The agreement names the people, the rate for their work, and the point where the studio must return for additional authority.</p><div class="field-line"><div><label>Principal designer</label><span>Creative direction, presentations, client sessions</span></div><strong>$225 / hr</strong></div><div class="field-line"><div><label>Designer</label><span>Development, sourcing, documentation</span></div><strong>$165 / hr</strong></div><div class="field-line"><div><label>Project assistant</label><span>Schedules, samples, coordination</span></div><strong>$110 / hr</strong></div><div class="field-line"><div><label>Design authorization ceiling</label><span>Additional hours require written authorization</span></div><strong>$18,000</strong></div></section>
+                <aside class="client-preview"><span class="preview-label">The client’s copy</span><div class="preview-paper"><h3>How design time is billed</h3><p class="copy">You will be billed for actual time at the rates below, up to the authorized design amount. We will return to you before invoicing work beyond it.</p><div class="preview-line"><span>Principal</span><span>$225/hr</span></div><div class="preview-line"><span>Designer</span><span>$165/hr</span></div><div class="preview-line"><span>Assistant</span><span>$110/hr</span></div><div class="not-included">Furnishings, freight, tax, and installation are not included or authorized by this agreement.</div></div></aside>
+              </div>
+            </div>
+          </div>
+        </div>
+      </article>
+
+      <article class="slide" data-title="Two signatures" data-chapter="Consent">
+        <aside class="slide-index"><span class="n">07</span><span class="of">of 16</span><span class="chapter">Consent</span></aside>
+        <div class="slide-body">
+          <div class="content signature-layout">
+            <div>
+              <p class="eyebrow">Signature is a two-act hinge</p>
+              <h2>The client says yes. The studio <em>countersigns.</em></h2>
+              <p class="lede">The agreement becomes effective only when both signatures exist. That final act creates one project and one billing authority—atomically.</p>
+              <div class="signature-controls"><button class="ink-action" id="clientSign" type="button">1 · Sign as client</button><button class="ink-action" id="studioSign" type="button" disabled>2 · Countersign as studio</button></div>
+              <div class="inline-band" id="signatureMessage">Waiting for the client signature. No project or billing authority exists yet.</div>
+            </div>
+            <div class="signature-paper" aria-label="Signature state demonstration">
+              <p class="eyebrow">DS-001 · Whitfield residence</p>
+              <div class="sig-block" id="clientSigBlock"><span class="sig-role">Client</span><span class="sig-name">Sarah Whitfield</span><span class="sig-stamp">Awaiting</span></div>
+              <div class="sig-block" id="studioSigBlock"><span class="sig-role">Studio</span><span class="sig-name">Middlewest Studio</span><span class="sig-stamp">Awaiting</span></div>
+              <p class="small" style="margin-top: 20px">Electronic evidence remains immutable. Retries prove the same consent and repair only a missing reciprocal link.</p>
+            </div>
+          </div>
+        </div>
+      </article>
+
+      <article class="slide" data-title="The active Document" data-chapter="Hours">
+        <aside class="slide-index"><span class="n">08</span><span class="of">of 16</span><span class="chapter">Hours</span></aside>
+        <div class="slide-body">
+          <div class="content">
+            <p class="eyebrow">The same Document, now active</p>
+            <h2>Hours stay where the <em>work is happening.</em></h2>
+            <div class="perspective" role="group" aria-label="Document perspective"><button type="button" aria-pressed="true" data-perspective="designer">Designer view</button><button type="button" aria-pressed="false" data-perspective="client">Client summary</button></div>
+            <div class="perspective-view active" data-view="designer">
+              <div class="doc-layout"><aside class="doc-spine"><div class="spine-row settled">Brief</div><div class="spine-row settled">Discovery</div><div class="spine-row settled">Direction</div><div class="spine-row settled">Design agreement</div><div class="spine-row active">Design development</div><div class="spine-row">Furnishings</div><div class="timer"><span class="running">● in hand</span><div class="time">1h 24m</div></div></aside><section class="doc-paper"><p class="eyebrow">Whitfield residence</p><div class="doc-name">Design development</div><div class="authority-band"><div class="authority-head"><b>DS-001 · design authority</b><span>Executed · May 12</span></div><div class="meter" style="--fill: 64%"><i></i></div><div class="meter-meta"><span>38.4h · $11,520 accrued</span><span>$6,480 remains of $18,000</span></div></div><div class="work-lines"><div class="work-line"><span>Concept refinement · current phase</span><span>22.5h</span></div><div class="work-line"><span>Sourcing &amp; budget modeling</span><span>9.4h</span></div><div class="work-line"><span>Client sessions</span><span>6.5h</span></div></div></section><aside class="doc-margin"><span class="margin-title">In the margin</span><div class="margin-note"><b>Money · watch</b><br />At the current pace, the design ceiling will be reached before final selections.</div><div class="margin-note" style="border-color: var(--blue)"><b>Budget · with client</b><br />Living floor checkpoint opened yesterday.</div></aside></div>
+            </div>
+            <div class="perspective-view" data-view="client"><div class="signature-paper" style="max-width: 760px"><p class="eyebrow">Design services statement · May 1–15</p><h3>Work completed this period</h3><div class="preview-line"><span>Concept development · 18.5 hours</span><span>$3,330</span></div><div class="preview-line"><span>Sourcing &amp; budget planning · 7.0 hours</span><span>$1,155</span></div><div class="preview-line"><span>Client meetings · 2.0 hours</span><span>$450</span></div><div class="authority-band"><div class="authority-head"><b>Remaining design authorization</b><span>$6,480</span></div></div><p class="small" style="margin-top: 14px">Client-safe descriptions only. Internal notes, idle annotations, staff cost, and margin never enter this view.</p></div></div>
+          </div>
+        </div>
+      </article>
+
+      <article class="slide" data-title="Budget workshop" data-chapter="Budget">
+        <aside class="slide-index"><span class="n">09</span><span class="of">of 16</span><span class="chapter">Budget</span></aside>
+        <div class="slide-body">
+          <div class="content">
+            <p class="eyebrow">A workshop, not an early purchase proposal</p>
+            <h2>Rein in the budget <em>room by room.</em></h2>
+            <div class="budget-workshop">
+              <div class="budget-table"><div class="budget-row header"><span>Room</span><span>Category</span><span>Low</span><span>Target</span><span>High</span></div><div class="budget-row"><strong>Living room</strong><span>Seating</span><span class="money">$18K</span><span class="money">$23K</span><span class="money">$29K</span></div><div class="budget-row"><strong>Living room</strong><span>Tables</span><span class="money">$7K</span><span class="money">$10K</span><span class="money">$14K</span></div><div class="budget-row"><strong>Dining room</strong><span>Dining set</span><span class="money">$12K</span><span class="money">$16K</span><span class="money">$21K</span></div><div class="budget-row"><strong>Shared</strong><span>Lighting</span><span class="money">$8K</span><span class="money" id="lightingTarget">$12K</span><span class="money">$17K</span></div><div class="budget-row"><strong>Shared</strong><span>Freight &amp; install</span><span class="money">$9K</span><span class="money">$13K</span><span class="money">$17K</span></div></div>
+              <aside class="budget-summary"><p class="eyebrow">Working target</p><div class="budget-total" id="budgetTotal">$74,000</div><p class="small">Low $54K · High $98K<br />Not permission to purchase.</p><label class="small" for="budgetRange">Adjust lighting target</label><input class="range" id="budgetRange" type="range" min="8000" max="17000" value="12000" step="500" /><div class="checkpoint"><button class="ink-action" id="agreeBudget" type="button">Agree to working budget</button><p class="checkpoint-status" id="budgetStatus">No agreed checkpoint yet · FF&amp;E send requires one or a recorded override</p></div></aside>
+            </div>
+          </div>
+        </div>
+      </article>
+
+      <article class="slide" data-title="Budget checkpoint" data-chapter="Checkpoint">
+        <aside class="slide-index"><span class="n">10</span><span class="of">of 16</span><span class="chapter">Checkpoint</span></aside>
+        <div class="slide-body">
+          <div class="content two-col">
+            <div>
+              <p class="eyebrow">A line with meaning</p>
+              <h2>Agreement to a target is <em>not authority to buy.</em></h2>
+              <p class="lede">A checkpoint freezes the client’s current planning position so every later product choice can explain what changed.</p>
+              <div class="rule"></div>
+              <p class="small mono">Checkpoint B-003 · Living floor<br />Target $74,000 · range $54,000–$98,000<br />Agreed by Sarah Whitfield · June 2</p>
+            </div>
+            <div>
+              <div class="note-panel"><p class="k">Before FF&amp;E send</p><h3>Required by default</h3><p>The Drafting Room names the agreed checkpoint the furnishing wave was built against.</p></div>
+              <div class="note-panel"><p class="k">Exceptional project</p><h3>Override, never bypass</h3><p>The designer may continue only after recording who requested the exception and why. The act enters the audit trail.</p></div>
+              <div class="note-panel"><p class="k">After agreement</p><h3>New version, never rewrite</h3><p>Changing the target creates B-004. Previously signed furnishing authorizations keep pointing to B-003.</p></div>
+            </div>
+          </div>
+        </div>
+      </article>
+
+      <article class="slide" data-title="Approaching the ceiling" data-chapter="Control">
+        <aside class="slide-index"><span class="n">11</span><span class="of">of 16</span><span class="chapter">Control</span></aside>
+        <div class="slide-body">
+          <div class="content overage-layout">
+            <div class="gauge" id="hoursGauge" style="--gauge: 84%"><div class="gauge-copy"><b id="gaugePct">84%</b><span>of design authority<br />used</span></div></div>
+            <div>
+              <p class="eyebrow">Truth before alarm</p>
+              <h2>The timer keeps recording. Billing <em>waits for authority.</em></h2>
+              <p class="lede">Move the gauge to see the posture change. At the ceiling, Patina preserves the work but prevents an unauthorized invoice.</p>
+              <input class="range" id="gaugeRange" type="range" min="40" max="112" value="84" aria-label="Design authority utilization" />
+              <div class="inline-band" id="gaugeMessage">The ceiling is approaching. Prepare additional authorization before final selections.</div>
+              <div class="policy-list"><div class="policy"><span class="mark">01</span><div><b>Capture never lies</b><p>Time continues to accrue with its signed role rate and authority provenance.</p></div></div><div class="policy"><span class="mark">02</span><div><b>Excess is pending</b><p>Entries beyond the ceiling cannot be claimed by an invoice until covered.</p></div></div><div class="policy"><span class="mark">03</span><div><b>Additional authority is prospective</b><p>A signed addendum changes future coverage; it never rewrites prior hours.</p></div></div></div>
+            </div>
+          </div>
+        </div>
+      </article>
+
+      <article class="slide" data-title="Named furnishing waves" data-chapter="FF&E">
+        <aside class="slide-index"><span class="n">12</span><span class="of">of 16</span><span class="chapter">FF&amp;E</span></aside>
+        <div class="slide-body">
+          <div class="content">
+            <p class="eyebrow">The second yes can arrive in waves</p>
+            <h2>Authorize the objects when <em>each part is ready.</em></h2>
+            <div class="wave-board">
+              <section><div class="wave-tabs" role="tablist" aria-label="Furnishing authorization waves"><button role="tab" aria-selected="true" data-wave="living">Living floor</button><button role="tab" aria-selected="false" data-wave="bedrooms">Bedrooms</button><button role="tab" aria-selected="false" data-wave="art">Art &amp; objects</button></div><div class="wave-content"><div class="active" data-wave-panel="living"><div class="ffe-line"><strong>Meadow linen sectional</strong><span class="tag">Fixed</span><span class="price">$14,800</span></div><div class="ffe-line"><strong>Heirloom oak dining table</strong><span class="tag">Fixed</span><span class="price">$8,200</span></div><div class="ffe-line"><strong>Dining seating</strong><span class="tag">Allowance</span><span class="price">$9,600</span></div><div class="ffe-line"><strong>Freight &amp; receiving</strong><span class="tag">Estimate</span><span class="price">$6,900</span></div></div><div data-wave-panel="bedrooms"><div class="ffe-line"><strong>Primary bed</strong><span class="tag">Fixed</span><span class="price">$11,200</span></div><div class="ffe-line"><strong>Bedside pair</strong><span class="tag">Allowance</span><span class="price">$5,400</span></div><div class="ffe-line"><strong>Window treatments</strong><span class="tag">TBD</span><span class="price">Pending</span></div></div><div data-wave-panel="art"><div class="ffe-line"><strong>Living room focal work</strong><span class="tag">Allowance</span><span class="price">$12,000</span></div><div class="ffe-line"><strong>Objects &amp; styling</strong><span class="tag">Allowance</span><span class="price">$6,500</span></div></div></div></section>
+              <aside class="authorization-summary"><p class="eyebrow" id="waveName">Authorization 01 · Living floor</p><div class="amount" id="waveAmount">$39,500</div><p class="small" id="waveMeta">4 lines · against budget checkpoint B-003</p><div class="not-authority">Design services remain governed by DS-001. This signature authorizes only the named furnishing lines and client prices shown here.</div><button class="ink-action" type="button" style="margin-top: 18px">Send for authorization →</button></aside>
+            </div>
+          </div>
+        </div>
+      </article>
+
+      <article class="slide" data-title="The purchasing hinge" data-chapter="Procurement">
+        <aside class="slide-index"><span class="n">13</span><span class="of">of 16</span><span class="chapter">Procurement</span></aside>
+        <div class="slide-body">
+          <div class="content title-layout">
+            <div>
+              <p class="eyebrow">The second signature does one precise thing</p>
+              <h2>Signed lines become <em>orderable.</em></h2>
+              <p class="lede">Executing a furnishings authorization applies its immutable item snapshot to the existing project. It never creates a second project or reopens the Design Agreement.</p>
+            </div>
+            <div>
+              <div class="note-panel"><p class="k">Before signature</p><h3>Specified · not authorized</h3><p>Working selections can be budgeted, discussed, and revised. Procurement acts remain unavailable.</p></div>
+              <div class="note-panel"><p class="k">At signature</p><h3>One transaction</h3><p>Record consent, bind exact item snapshots, apply signed quantities and client prices, open the deposit payable.</p></div>
+              <div class="note-panel"><p class="k">After signature</p><h3>Authorized · orderable</h3><p>Only covered lines may enter quotes, purchase orders, and receiving. A changed quantity requires new authority.</p></div>
+            </div>
+          </div>
+        </div>
+      </article>
+
+      <article class="slide" data-title="Architecture" data-chapter="System">
+        <aside class="slide-index"><span class="n">14</span><span class="of">of 16</span><span class="chapter">System</span></aside>
+        <div class="slide-body">
+          <div class="content">
+            <p class="eyebrow">Reuse the hardened rails; add the missing authority</p>
+            <h2>A small public vocabulary over <em>deep integrity.</em></h2>
+            <div class="architecture">
+              <section class="arch-layer"><p class="label">The Document</p><div class="arch-item">Design Agreement composer</div><div class="arch-item">Authority band + Hours</div><div class="arch-item">Working Budget workshop</div><div class="arch-item">Named furnishing waves</div></section>
+              <div class="arch-arrow">→</div>
+              <section class="arch-layer"><p class="label">Commercial editions</p><div class="arch-item"><code>design_services</code></div><div class="arch-item"><code>furnishings_authorization</code></div><div class="arch-item"><code>service_addendum</code></div><div class="arch-item">Independent revision chains</div></section>
+              <div class="arch-arrow">→</div>
+              <section class="arch-layer"><p class="label">Project authority</p><div class="arch-item">Executed agreement + role rates</div><div class="arch-item">Billing authority + cap policy</div><div class="arch-item">Budget checkpoints</div><div class="arch-item">FF&amp;E item authorizations</div></section>
+            </div>
+            <div class="guard-strip"><span>Immutable sent editions</span><span>RLS in the same migration</span><span>RPC-only lifecycle</span><span>Idempotent signatures</span><span>Rate snapshots</span><span>One project</span><span>No trade-cost exposure</span></div>
+            <p class="small" style="margin-top: 18px">Keep <code>projects.proposal_id</code> as the originating agreement. Bind later commercial documents through a dedicated project-document relation instead of weakening the reciprocal activation guard introduced by the current signature hardening.</p>
+          </div>
+        </div>
+      </article>
+
+      <article class="slide" data-title="Delivery and proof" data-chapter="Delivery">
+        <aside class="slide-index"><span class="n">15</span><span class="of">of 16</span><span class="chapter">Delivery</span></aside>
+        <div class="slide-body">
+          <div class="content">
+            <p class="eyebrow">Implementation after approval</p>
+            <h2>Build the authority first. Then let the <em>paper reveal it.</em></h2>
+            <div class="roadmap"><div class="roadmap-row"><span class="phase">Foundation</span><b>Commercial kinds &amp; authority RPCs</b><p>Signatures, countersignature, project creation, rate schedules, billing authority, immutable bindings.</p></div><div class="roadmap-row"><span class="phase">Work</span><b>Hours &amp; Accounts integration</b><p>Authority provenance, cap posture, retainer policy, curated client summaries, invoice eligibility.</p></div><div class="roadmap-row"><span class="phase">Budget</span><b>Room × category workshop</b><p>Versioned ranges, client checkpoint, audited override, Document and Desk needs.</p></div><div class="roadmap-row"><span class="phase">Hard costs</span><b>Named furnishing waves</b><p>Snapshot, send, sign, apply, deposit, and procurement eligibility without a second project.</p></div></div>
+            <div class="acceptance"><div class="accept">Services can execute with zero FF&amp;E and create exactly one project.</div><div class="accept">Client signature cannot substitute for studio countersignature.</div><div class="accept">Time beyond the ceiling is captured but cannot be invoiced.</div><div class="accept">Budget agreement never authorizes purchases.</div><div class="accept">FF&amp;E send requires a checkpoint or audited override.</div><div class="accept">Named waves remain independent revision chains.</div><div class="accept">Signed quantities and prices cannot be silently changed.</div><div class="accept">Legacy proposals continue through their current path.</div></div>
+          </div>
+        </div>
+      </article>
+
+      <article class="slide" data-title="Approval" data-chapter="Decision">
+        <aside class="slide-index"><span class="n">16</span><span class="of">of 16</span><span class="chapter">Decision</span></aside>
+        <div class="slide-body">
+          <div class="content approval-layout">
+            <div>
+              <p class="eyebrow">The recommendation</p>
+              <h2>Approve <em>Two Yeses, One Document.</em></h2>
+              <div class="decision-list"><div class="decision"><span class="tick">✓</span><div><b>Commercial sequence</b><span>Services → budget → furnishings</span></div><span class="choice">Two yeses</span></div><div class="decision"><span class="tick">✓</span><div><b>Design fees</b><span>Actual hours against signed authority</span></div><span class="choice">Role rates + ceiling</span></div><div class="decision"><span class="tick">✓</span><div><b>Signatures</b><span>Agreement effective after both acts</span></div><span class="choice">Client + studio</span></div><div class="decision"><span class="tick">✓</span><div><b>Retainer</b><span>Activation policy chosen per agreement</span></div><span class="choice">Studio choice</span></div><div class="decision"><span class="tick">✓</span><div><b>Client time view</b><span>Useful without exposing studio internals</span></div><span class="choice">Curated summary</span></div><div class="decision"><span class="tick">✓</span><div><b>Working budget</b><span>Room × category ranges</span></div><span class="choice">Checkpoint + override</span></div><div class="decision"><span class="tick">✓</span><div><b>Hard costs</b><span>Multiple packages, one project</span></div><span class="choice">Named waves</span></div></div>
+            </div>
+            <aside class="review-actions"><p class="eyebrow">Record the review posture</p><h3>What should happen next?</h3><button type="button" data-review="approved">Approve the direction</button><button type="button" data-review="revise">Approve with revisions</button><button type="button" data-review="rethink">Reconsider the architecture</button><div class="review-result" id="reviewResult">This prototype records nothing externally. Choose a posture to generate a review note you can copy.</div><button class="ink-action" id="copyReview" type="button" style="display: none; border-width: 0 0 1px; padding-left: 0">Copy review note</button></aside>
+          </div>
+        </div>
+      </article>
+    </section>
+
+    <footer class="deck-controls">
+      <div><button class="nav-button" id="prevSlide" type="button" aria-label="Previous slide">← Previous</button><span class="key-hint">Arrow keys navigate</span></div>
+      <nav class="slide-dots" id="slideDots" aria-label="Presentation slides"></nav>
+      <div style="display:flex;align-items:center;justify-content:flex-end"><span class="screen-count" id="screenCount">01 / 16</span><button class="nav-button next" id="nextSlide" type="button" aria-label="Next slide">Next →</button></div>
+    </footer>
+  </main>
+
+  <script>
+    const slides = Array.from(document.querySelectorAll('.slide'));
+    const dots = document.getElementById('slideDots');
+    const previous = document.getElementById('prevSlide');
+    const next = document.getElementById('nextSlide');
+    const screenCount = document.getElementById('screenCount');
+    let currentSlide = Math.max(0, Math.min(slides.length - 1, Number(new URLSearchParams(location.search).get('slide') || 1) - 1));
+
+    slides.forEach((slide, index) => {
+      const button = document.createElement('button');
+      button.type = 'button';
+      button.className = 'slide-dot';
+      button.setAttribute('aria-label', `Slide ${index + 1}: ${slide.dataset.title}`);
+      button.addEventListener('click', () => showSlide(index));
+      dots.appendChild(button);
+    });
+
+    function showSlide(index, updateUrl = true) {
+      const destination = Math.max(0, Math.min(slides.length - 1, index));
+      slides.forEach((slide, i) => {
+        slide.classList.toggle('active', i === destination);
+        slide.classList.toggle('leaving', i === currentSlide && i !== destination && destination > currentSlide);
+        slide.setAttribute('aria-hidden', i === destination ? 'false' : 'true');
+      });
+      currentSlide = destination;
+      Array.from(dots.children).forEach((dot, i) => dot.classList.toggle('active', i === destination));
+      previous.disabled = destination === 0;
+      next.disabled = destination === slides.length - 1;
+      screenCount.textContent = `${String(destination + 1).padStart(2, '0')} / ${slides.length}`;
+      document.title = `Patina · ${slides[destination].dataset.title} · Design Review`;
+      if (updateUrl) {
+        const url = new URL(location.href);
+        url.searchParams.set('slide', String(destination + 1));
+        history.replaceState({}, '', url);
+      }
+    }
+
+    previous.addEventListener('click', () => showSlide(currentSlide - 1));
+    next.addEventListener('click', () => showSlide(currentSlide + 1));
+    document.addEventListener('keydown', (event) => {
+      const target = event.target;
+      if (target instanceof HTMLInputElement || target instanceof HTMLTextAreaElement || target?.isContentEditable) return;
+      if (event.key === 'ArrowRight' || event.key === 'PageDown' || event.key === ' ') { event.preventDefault(); showSlide(currentSlide + 1); }
+      if (event.key === 'ArrowLeft' || event.key === 'PageUp') { event.preventDefault(); showSlide(currentSlide - 1); }
+      if (event.key === 'Home') { event.preventDefault(); showSlide(0); }
+      if (event.key === 'End') { event.preventDefault(); showSlide(slides.length - 1); }
+    });
+
+    const conceptTabs = Array.from(document.querySelectorAll('[data-concept-tab]'));
+    function setConcept(name) {
+      conceptTabs.forEach(tab => tab.setAttribute('aria-selected', tab.dataset.conceptTab === name ? 'true' : 'false'));
+      document.querySelectorAll('[data-concept]').forEach(panel => panel.classList.toggle('active', panel.dataset.concept === name));
+      const url = new URL(location.href);
+      url.searchParams.set('concept', name);
+      history.replaceState({}, '', url);
+    }
+    conceptTabs.forEach(tab => tab.addEventListener('click', () => setConcept(tab.dataset.conceptTab)));
+    const requestedConcept = new URLSearchParams(location.search).get('concept');
+    if (['folio', 'authority', 'two'].includes(requestedConcept)) setConcept(requestedConcept);
+
+    document.querySelectorAll('[data-perspective]').forEach(button => {
+      button.addEventListener('click', () => {
+        const name = button.dataset.perspective;
+        document.querySelectorAll('[data-perspective]').forEach(item => item.setAttribute('aria-pressed', item === button ? 'true' : 'false'));
+        document.querySelectorAll('[data-view]').forEach(view => view.classList.toggle('active', view.dataset.view === name));
+      });
+    });
+
+    let signatureState = 0;
+    const clientSign = document.getElementById('clientSign');
+    const studioSign = document.getElementById('studioSign');
+    const signatureMessage = document.getElementById('signatureMessage');
+    function setSigned(blockId, date) {
+      const block = document.getElementById(blockId);
+      block.classList.add('signed');
+      block.querySelector('.sig-stamp').textContent = `Signed · ${date}`;
+    }
+    clientSign.addEventListener('click', () => {
+      if (signatureState > 0) return;
+      signatureState = 1;
+      setSigned('clientSigBlock', 'May 12');
+      clientSign.disabled = true;
+      studioSign.disabled = false;
+      signatureMessage.textContent = 'Client consent is preserved. The agreement is awaiting the studio countersignature; work is not yet authorized.';
+    });
+    studioSign.addEventListener('click', () => {
+      if (signatureState !== 1) return;
+      signatureState = 2;
+      setSigned('studioSigBlock', 'May 12');
+      studioSign.disabled = true;
+      signatureMessage.classList.add('success');
+      signatureMessage.textContent = 'Agreement executed. Project created once; DS-001 is now the active billing authority.';
+    });
+
+    const budgetRange = document.getElementById('budgetRange');
+    const lightingTarget = document.getElementById('lightingTarget');
+    const budgetTotal = document.getElementById('budgetTotal');
+    const budgetStatus = document.getElementById('budgetStatus');
+    const agreeBudget = document.getElementById('agreeBudget');
+    let budgetAgreed = false;
+    budgetRange.addEventListener('input', () => {
+      const lighting = Number(budgetRange.value);
+      lightingTarget.textContent = `$${Math.round(lighting / 1000)}K`;
+      budgetTotal.textContent = `$${(62000 + lighting).toLocaleString()}`;
+      if (budgetAgreed) {
+        budgetAgreed = false;
+        agreeBudget.disabled = false;
+        agreeBudget.textContent = 'Agree to working budget';
+        budgetStatus.textContent = 'Target changed · create a new checkpoint before FF&E send';
+      }
+    });
+    agreeBudget.addEventListener('click', () => {
+      budgetAgreed = true;
+      agreeBudget.disabled = true;
+      agreeBudget.textContent = 'Checkpoint agreed';
+      budgetStatus.textContent = `B-003 agreed at ${budgetTotal.textContent} · planning target only · ready to prepare FF&E`;
+    });
+
+    const gaugeRange = document.getElementById('gaugeRange');
+    const gauge = document.getElementById('hoursGauge');
+    const gaugePct = document.getElementById('gaugePct');
+    const gaugeMessage = document.getElementById('gaugeMessage');
+    gaugeRange.addEventListener('input', () => {
+      const value = Number(gaugeRange.value);
+      gauge.style.setProperty('--gauge', `${Math.min(value, 100)}%`);
+      gaugePct.textContent = `${value}%`;
+      gaugeMessage.classList.toggle('success', value < 70);
+      if (value < 70) gaugeMessage.textContent = 'Design work is tracking within the current authorization.';
+      else if (value < 85) gaugeMessage.textContent = 'The Document begins watching the forecast. No client action is needed yet.';
+      else if (value < 100) gaugeMessage.textContent = 'The ceiling is approaching. Prepare additional authorization before final selections.';
+      else gaugeMessage.textContent = 'Time is still captured, but excess entries are pending authorization and cannot be invoiced.';
+    });
+
+    const waveData = {
+      living: { name: 'Authorization 01 · Living floor', amount: '$39,500', meta: '4 lines · against budget checkpoint B-003' },
+      bedrooms: { name: 'Authorization 02 · Bedrooms', amount: '$16,600+', meta: '3 lines · one TBD · draft' },
+      art: { name: 'Authorization 03 · Art & objects', amount: '$18,500', meta: '2 allowances · not yet sent' }
+    };
+    document.querySelectorAll('[data-wave]').forEach(button => {
+      button.addEventListener('click', () => {
+        const wave = button.dataset.wave;
+        document.querySelectorAll('[data-wave]').forEach(tab => tab.setAttribute('aria-selected', tab === button ? 'true' : 'false'));
+        document.querySelectorAll('[data-wave-panel]').forEach(panel => panel.classList.toggle('active', panel.dataset.wavePanel === wave));
+        document.getElementById('waveName').textContent = waveData[wave].name;
+        document.getElementById('waveAmount').textContent = waveData[wave].amount;
+        document.getElementById('waveMeta').textContent = waveData[wave].meta;
+      });
+    });
+
+    let reviewNote = '';
+    const reviewResult = document.getElementById('reviewResult');
+    const copyReview = document.getElementById('copyReview');
+    document.querySelectorAll('[data-review]').forEach(button => {
+      button.addEventListener('click', () => {
+        document.querySelectorAll('[data-review]').forEach(item => item.classList.toggle('selected', item === button));
+        const posture = button.dataset.review;
+        const wording = posture === 'approved' ? 'Approved' : posture === 'revise' ? 'Approved with revisions' : 'Architecture needs reconsideration';
+        reviewNote = `${wording}: Two Yeses, One Document — design services execute before budget development; working-budget checkpoints remain nonbinding; named furnishings authorizations govern hard costs within the same project.`;
+        reviewResult.textContent = reviewNote;
+        copyReview.style.display = 'inline-block';
+      });
+    });
+    copyReview.addEventListener('click', async () => {
+      try {
+        await navigator.clipboard.writeText(reviewNote);
+        copyReview.textContent = 'Copied';
+      } catch {
+        copyReview.textContent = 'Select the note above to copy';
+      }
+    });
+
+    showSlide(currentSlide, false);
+  </script>
+</body>
+</html>
