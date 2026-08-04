@@ -2,7 +2,6 @@ import type {
   ClientCommercialDocumentBundle,
   DesignServicesExecutionResult,
   FurnishingsAuthorization,
-  FurnishingsExecutionResult,
   ProjectBillingAuthoritySummary,
   WorkingBudgetCheckpoint,
   WorkingBudgetVersion,
@@ -236,29 +235,5 @@ export function useCreateFurnishingsAuthorization() {
       return result;
     },
     onSuccess: (_, { projectId }) => invalidateProjectCommerce(queryClient, projectId),
-  });
-}
-
-export function useExecuteFurnishingsAuthorization() {
-  const queryClient = useQueryClient();
-  return useMutation({
-    mutationFn: async ({ documentId, signerName }: { documentId: string; signerName: string }) => {
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const supabase = getSupabase() as any;
-      const { data, error } = await supabase.rpc('execute_furnishings_authorization', {
-        p_proposal_id: documentId,
-        p_signed_name: signerName,
-      });
-      if (error) throw error;
-      const result = data as FurnishingsExecutionResult;
-      if (result.newlyExecuted) {
-        await notifyCommercialTransition(supabase, documentId, 'furnishings_executed');
-      }
-      return result;
-    },
-    onSuccess: (result, { documentId }) => {
-      queryClient.invalidateQueries({ queryKey: commercialKeys.document(documentId) });
-      invalidateProjectCommerce(queryClient, result.projectId);
-    },
   });
 }

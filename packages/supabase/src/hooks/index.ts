@@ -437,7 +437,6 @@ export {
   useAcknowledgeBudgetCheckpoint,
   useOverrideBudgetCheckpoint,
   useCreateFurnishingsAuthorization,
-  useExecuteFurnishingsAuthorization,
 } from './use-commercial-documents';
 export type {
   Proposal,
