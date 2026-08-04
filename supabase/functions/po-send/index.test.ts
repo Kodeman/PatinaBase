@@ -5,7 +5,10 @@
 // Network-touching behavior (auth, storage, Resend) is exercised by the
 // local `supabase functions serve` smoke flow, not here.
 
-import { assertEquals } from "https://deno.land/std@0.168.0/testing/asserts.ts";
+import {
+  assert,
+  assertEquals,
+} from "https://deno.land/std@0.168.0/testing/asserts.ts";
 import {
   buildFallbackSidemark,
   checkPoTotalsCoherence,
@@ -14,8 +17,12 @@ import {
   paymentPatternLabel,
   paymentRowLabel,
   resolveVendorRecipient,
+  vendorConfigurationLines,
   vendorSafeSpecNotes,
 } from "./lib.ts";
+import configurationSpecFixture from "./fixtures/configuration-snapshot.fixture.json" with {
+  type: "json",
+};
 
 // ─── parsePoSendBody — payload validation ────────────────────────────────────
 
@@ -289,4 +296,182 @@ Deno.test("vendorSafeSpecNotes returns null when nothing vendor-safe remains", (
   assertEquals(vendorSafeSpecNotes("  "), null);
   assertEquals(vendorSafeSpecNotes(null), null);
   assertEquals(vendorSafeSpecNotes(undefined), null);
+});
+
+// ─── vendorConfigurationLines (P0-1 — "the PO finally says Walnut") ──────────
+
+Deno.test("vendorConfigurationLines renders the full configured block from the fixture", () => {
+  assertEquals(vendorConfigurationLines(configurationSpecFixture), [
+    'Variant: 96" Bench Seat (VEN-SOFA-96-COM)',
+    "Wood: Walnut",
+    "Hardware Finish: Antique Brass",
+    "Upholstery: Customer's Own Material",
+    "Components: Left Arm (left) · Seat Module ×2",
+    "Dims: 96 × 40 × 33 in",
+    "COM: Belgian Linen 12 — Rogers & Goffigon, Cascade",
+    "COM yardage: 14 yds, railroaded",
+    "COM ship-to: Halden Receiving, 22 Mill Rd, High Point NC",
+    "Sidemark: MWS-HARLOW",
+    "Lead time provisional until COM fabric received",
+    "Config ref: 9f2c1a77b0de",
+  ]);
+});
+
+Deno.test("vendorConfigurationLines never leaks retail price, markup, or a Commercial line", () => {
+  // The vendor document prints trade line amounts and nothing else about
+  // money. The snapshot carries retailPriceCents (1240000) and per-selection
+  // retail deltas — none of it may reach the page.
+  const rendered = vendorConfigurationLines(configurationSpecFixture).join("\n");
+  for (const banned of [
+    "1240000",
+    "12,400",
+    "retail",
+    "Retail",
+    "markup",
+    "Markup",
+    "margin",
+    "Margin",
+    "Commercial",
+    "868000",
+    "$",
+  ]) {
+    assert(
+      !rendered.includes(banned),
+      `vendor spec block leaked "${banned}":\n${rendered}`,
+    );
+  }
+});
+
+Deno.test("vendorConfigurationLines prints every selection group, not just the first four", () => {
+  const lines = vendorConfigurationLines({
+    configuration_snapshot: {
+      productName: "Wide Bed",
+      selections: [
+        { groupName: "Wood", valueLabel: "Walnut" },
+        { groupName: "Size", valueLabel: "King" },
+        { groupName: "Hardware", valueLabel: "Brass" },
+        { groupName: "Nailhead", valueLabel: "None" },
+        { groupName: "Leg", valueLabel: "Tapered" },
+        { groupName: "Piping", valueLabel: "Self" },
+      ],
+    },
+  });
+  assertEquals(lines, [
+    "Wood: Walnut",
+    "Size: King",
+    "Hardware: Brass",
+    "Nailhead: None",
+    "Leg: Tapered",
+    "Piping: Self",
+  ]);
+});
+
+Deno.test("vendorConfigurationLines falls back to codes and omits an unmatched variant", () => {
+  const lines = vendorConfigurationLines({
+    configuration_snapshot: {
+      productName: "Plain Lamp",
+      variant: null,
+      selections: [{ groupCode: "shade", valueCode: "linen-drum" }],
+      components: [],
+      dimensions: {},
+    },
+  });
+  assertEquals(lines, ["shade: linen-drum"]);
+});
+
+Deno.test("vendorConfigurationLines reads a camelCase envelope and an array embed", () => {
+  const camel = {
+    configurationSnapshot: { selections: [{ groupName: "Wood", valueLabel: "Oak" }] },
+    configurationSnapshotHash: "abcdef0123456789",
+  };
+  assertEquals(vendorConfigurationLines(camel), [
+    "Wood: Oak",
+    "Config ref: abcdef012345",
+  ]);
+  // PostgREST returns an object for a UNIQUE-FK embed; tolerate the array
+  // form so a query-shape change can't silently blank the spec block.
+  assertEquals(vendorConfigurationLines([camel]), [
+    "Wood: Oak",
+    "Config ref: abcdef012345",
+  ]);
+});
+
+Deno.test("vendorConfigurationLines emits COM lines only for the parts present, always the provisional warning", () => {
+  assertEquals(
+    vendorConfigurationLines({
+      configuration_snapshot: {
+        selections: [],
+        comDetails: { fabricName: "Mohair 4", railroaded: true },
+      },
+    }),
+    [
+      "COM: Mohair 4",
+      "COM yardage: railroaded",
+      "Lead time provisional until COM fabric received",
+    ],
+  );
+  assertEquals(
+    vendorConfigurationLines({
+      configuration_snapshot: {
+        selections: [],
+        comDetails: { yardage: 8 },
+      },
+    }),
+    ["COM yardage: 8 yds", "Lead time provisional until COM fabric received"],
+  );
+});
+
+Deno.test("vendorConfigurationLines falls back to flat spec fields when the snapshot is empty", () => {
+  assertEquals(
+    vendorConfigurationLines({
+      configuration_id: null,
+      configuration_snapshot: {},
+      configuration_snapshot_hash: null,
+      sku: "ACME-114",
+      material: "White Oak",
+      finish: "Oiled",
+      color_fabric: "Flax",
+      selected_dimensions: { width: 72, depth: 36, height: 30, unit: "in" },
+    }),
+    [
+      "SKU: ACME-114",
+      "Material: White Oak",
+      "Finish: Oiled",
+      "Color/Fabric: Flax",
+      "Dims: 72 × 36 × 30 in",
+    ],
+  );
+});
+
+Deno.test("vendorConfigurationLines tolerates unknown dimension keys", () => {
+  assertEquals(
+    vendorConfigurationLines({
+      configuration_snapshot: {},
+      selected_dimensions: { diameter: 42, seatHeight: 18, unit: "in" },
+    }),
+    ["Dims: diameter 42 · seatHeight 18 in"],
+  );
+  // Width-only is not a W×D×H triple — degrade rather than print "72 ×  × ".
+  assertEquals(
+    vendorConfigurationLines({
+      configuration_snapshot: {},
+      selected_dimensions: { width: 72, unit: "in" },
+    }),
+    ["Dims: width 72 in"],
+  );
+});
+
+Deno.test("vendorConfigurationLines returns [] when there is nothing vendor-safe to say", () => {
+  assertEquals(vendorConfigurationLines(null), []);
+  assertEquals(vendorConfigurationLines(undefined), []);
+  assertEquals(vendorConfigurationLines([]), []);
+  assertEquals(vendorConfigurationLines({ configuration_snapshot: {} }), []);
+  assertEquals(
+    vendorConfigurationLines({
+      configuration_snapshot: {},
+      sku: "   ",
+      selected_dimensions: null,
+    }),
+    [],
+  );
 });

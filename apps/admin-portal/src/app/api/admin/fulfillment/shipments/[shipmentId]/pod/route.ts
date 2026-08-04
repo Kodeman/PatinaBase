@@ -8,8 +8,8 @@ import { gateForDelivery, loadShipmentForGate } from '@/lib/fulfillment-shipment
 //
 // Two steps, both required by the spec:
 //   1. Upload to the existing project-documents storage bucket (00170, the
-//      pattern apps/designer-portal/src/app/api/po/generate/route.ts and
-//      use-projects.ts's useUploadProjectDocument use) under the key
+//      pattern supabase/functions/po-send/index.ts and use-projects.ts's
+//      useUploadProjectDocument use) under the key
 //      fulfillment/pod/{shipment_id}/{uuid}-{filename}.
 //   2. THEN stamp pod_r2_key + open the inspection window server-side via the
 //      RPC. Bound verbatim to fulfillment_record_delivery (00353):
