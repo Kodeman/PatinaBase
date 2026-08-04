@@ -1,0 +1,2035 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="auto">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>The Call Sheet — Patina</title>
+<style>
+/* ============================================================
+   THE CALL SHEET — studio staffing & per-project rosters
+   Self-contained. No external fonts, scripts, or images.
+   Palette: drafting ink / bone paper / verdigris (oxidized copper,
+   literally patina) / brass / oxblood. Type: bookish serif display,
+   system sans body, mono for spec-sheet labels.
+   House style shared with docs/design/mood-board-reimagined/
+   and docs/design/library-variance/.
+   ============================================================ */
+
+:root{
+  --paper:#E7E9E3;
+  --paper-2:#F3F4F0;
+  --card:#FBFBF8;
+  --ink:#16202B;
+  --ink-2:#33404E;
+  --slate:#5D6773;
+  --rule:rgba(22,32,43,.14);
+  --rule-2:rgba(22,32,43,.28);
+  --verdigris:#2F6F63;
+  --verdigris-soft:rgba(47,111,99,.10);
+  --brass:#9A6B1F;
+  --brass-soft:rgba(154,107,31,.10);
+  --oxblood:#8A3A32;
+  --oxblood-soft:rgba(138,58,50,.09);
+  --grid:rgba(22,32,43,.045);
+  --dotc:rgba(22,32,43,.10);
+  --lift:0 2px 10px -6px rgba(22,32,43,.5);
+  --lift-2:0 12px 30px -16px rgba(22,32,43,.65);
+  --shadow:0 1px 0 rgba(22,32,43,.05), 0 10px 30px -22px rgba(22,32,43,.5);
+
+  --display:"Iowan Old Style","Palatino Linotype",Palatino,"Book Antiqua",Georgia,serif;
+  --body:-apple-system,BlinkMacSystemFont,"Segoe UI",system-ui,Roboto,"Helvetica Neue",Arial,sans-serif;
+  --mono:ui-monospace,SFMono-Regular,"SF Mono",Menlo,Consolas,"Liberation Mono",monospace;
+}
+
+@media (prefers-color-scheme: dark){
+  :root[data-theme="auto"]{
+    --paper:#111820;
+    --paper-2:#161E27;
+    --card:#1B252F;
+    --ink:#E6E9E5;
+    --ink-2:#C3CBD2;
+    --slate:#8C98A4;
+    --rule:rgba(230,233,229,.14);
+    --rule-2:rgba(230,233,229,.3);
+    --verdigris:#7CC7B6;
+    --verdigris-soft:rgba(124,199,182,.12);
+    --brass:#D5A24C;
+    --brass-soft:rgba(213,162,76,.12);
+    --oxblood:#DE8478;
+    --oxblood-soft:rgba(222,132,120,.12);
+    --grid:rgba(230,233,229,.04);
+    --dotc:rgba(230,233,229,.09);
+    --lift:0 2px 10px -6px rgba(0,0,0,.8);
+    --lift-2:0 12px 30px -16px rgba(0,0,0,.95);
+    --shadow:0 1px 0 rgba(0,0,0,.3), 0 14px 34px -24px rgba(0,0,0,.9);
+  }
+}
+
+:root[data-theme="dark"]{
+  --paper:#111820;
+  --paper-2:#161E27;
+  --card:#1B252F;
+  --ink:#E6E9E5;
+  --ink-2:#C3CBD2;
+  --slate:#8C98A4;
+  --rule:rgba(230,233,229,.14);
+  --rule-2:rgba(230,233,229,.3);
+  --verdigris:#7CC7B6;
+  --verdigris-soft:rgba(124,199,182,.12);
+  --brass:#D5A24C;
+  --brass-soft:rgba(213,162,76,.12);
+  --oxblood:#DE8478;
+  --oxblood-soft:rgba(222,132,120,.12);
+  --grid:rgba(230,233,229,.04);
+  --dotc:rgba(230,233,229,.09);
+  --lift:0 2px 10px -6px rgba(0,0,0,.8);
+  --lift-2:0 12px 30px -16px rgba(0,0,0,.95);
+  --shadow:0 1px 0 rgba(0,0,0,.3), 0 14px 34px -24px rgba(0,0,0,.9);
+}
+
+*,*::before,*::after{box-sizing:border-box}
+html,body{margin:0;padding:0;height:100%}
+html{-webkit-text-size-adjust:100%}
+
+body{
+  background:var(--paper);
+  color:var(--ink);
+  font-family:var(--body);
+  font-size:16px;
+  line-height:1.55;
+  overflow-x:hidden;
+  background-image:
+    linear-gradient(var(--grid) 1px, transparent 1px),
+    linear-gradient(90deg, var(--grid) 1px, transparent 1px);
+  background-size:28px 28px, 28px 28px;
+}
+
+/* ---------- deck shell ---------- */
+#deck{
+  height:100dvh;
+  overflow-y:auto;
+  overflow-x:hidden;
+  scroll-snap-type:y proximity;
+  /* NB: no `scroll-behavior:smooth` — it cancels programmatic scrolls in
+     Chrome on a snapping container and breaks keyboard navigation. */
+}
+
+.slide{
+  min-height:100dvh;
+  scroll-snap-align:start;
+  display:flex;
+  align-items:center;
+  padding:clamp(24px,4.5vh,60px) clamp(20px,5vw,80px);
+  border-bottom:1px solid var(--rule);
+  position:relative;
+}
+.inner{
+  width:100%;
+  max-width:1180px;
+  margin:0 auto;
+  display:grid;
+  grid-template-columns:132px minmax(0,1fr);
+  gap:clamp(18px,3vw,44px);
+  align-items:start;
+}
+@media (max-width:860px){
+  .inner{grid-template-columns:minmax(0,1fr);gap:14px}
+}
+.gutter{position:sticky;top:0;padding-top:.5rem}
+.main{min-width:0}
+
+/* wide variant — the mock slides get the whole measure */
+.slide.wide .inner{grid-template-columns:minmax(0,1fr);max-width:1320px;gap:0}
+.slide.wide .gutter{position:static;padding:0;display:flex;align-items:center;gap:12px;margin-bottom:.3rem}
+.slide.wide .gutter .num{margin-top:0}
+.slide.wide .gutter .tick{display:none}
+
+/* ---------- ink slides (locally dark in every theme) ---------- */
+.slide.ink{
+  --paper:#111820;
+  --paper-2:#161E27;
+  --card:#1B252F;
+  --ink:#E6E9E5;
+  --ink-2:#C3CBD2;
+  --slate:#8C98A4;
+  --rule:rgba(230,233,229,.14);
+  --rule-2:rgba(230,233,229,.3);
+  --verdigris:#7CC7B6;
+  --verdigris-soft:rgba(124,199,182,.12);
+  --brass:#D5A24C;
+  --brass-soft:rgba(213,162,76,.12);
+  --oxblood:#DE8478;
+  --oxblood-soft:rgba(222,132,120,.12);
+  --grid:rgba(230,233,229,.04);
+  --dotc:rgba(230,233,229,.09);
+  --shadow:0 1px 0 rgba(0,0,0,.3), 0 14px 34px -24px rgba(0,0,0,.9);
+  background:#111820;
+  color:#E6E9E5;
+  background-image:
+    linear-gradient(rgba(230,233,229,.04) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(230,233,229,.04) 1px, transparent 1px);
+  background-size:28px 28px, 28px 28px;
+}
+
+/* ---------- type ---------- */
+.eyebrow{
+  font-family:var(--mono);
+  font-size:11px;
+  letter-spacing:.14em;
+  text-transform:uppercase;
+  color:var(--slate);
+  display:block;
+}
+.gutter .num{
+  font-family:var(--mono);
+  font-size:11px;
+  letter-spacing:.1em;
+  color:var(--verdigris);
+  display:block;
+  margin-top:6px;
+}
+.gutter .tick{
+  display:block;width:34px;height:2px;background:var(--verdigris);
+  margin-top:12px;opacity:.55;
+}
+@media (max-width:860px){ .gutter .tick{display:none} .gutter{position:static} }
+
+h1,h2,h3{font-family:var(--display);font-weight:600;letter-spacing:-.012em;margin:0}
+h1{font-size:clamp(2.4rem,6.2vw,4.4rem);line-height:1.03}
+h2{font-size:clamp(1.6rem,3.3vw,2.7rem);line-height:1.1;margin-bottom:.5rem}
+h3{font-size:clamp(1.02rem,1.6vw,1.26rem);line-height:1.25}
+.lede{
+  font-size:clamp(1rem,1.45vw,1.18rem);
+  color:var(--ink-2);
+  max-width:66ch;
+  margin:.85rem 0 0;
+}
+p{margin:.7rem 0;max-width:70ch}
+.small{font-size:.85rem;color:var(--slate);line-height:1.5}
+strong{font-weight:650;color:var(--ink)}
+em{font-style:italic}
+.vd{color:var(--verdigris)}
+.br{color:var(--brass)}
+.ox{color:var(--oxblood)}
+
+code,.mono{font-family:var(--mono);font-size:.82em}
+code{
+  background:var(--verdigris-soft);
+  color:var(--verdigris);
+  padding:.08em .38em;
+  border-radius:3px;
+  word-break:break-word;
+}
+
+/* ---------- cover ---------- */
+.cover .inner{grid-template-columns:minmax(0,1fr)}
+.wordmark{display:flex;align-items:center;gap:10px;margin-bottom:clamp(20px,5vh,48px)}
+.wordmark svg{display:block}
+.wordmark span{
+  font-family:var(--mono);font-size:11px;letter-spacing:.24em;
+  text-transform:uppercase;color:var(--slate);
+}
+.cover-quote{
+  font-family:var(--display);
+  font-size:clamp(1.4rem,2.8vw,2rem);
+  line-height:1.25;
+  color:var(--ink-2);
+  font-style:italic;
+  border-left:3px solid var(--verdigris);
+  padding-left:clamp(14px,2vw,24px);
+  margin:clamp(22px,4vh,40px) 0 0;
+  max-width:32ch;
+}
+.cover-meta{
+  margin-top:clamp(26px,5vh,52px);
+  display:flex;flex-wrap:wrap;gap:10px 28px;
+  font-family:var(--mono);font-size:11px;letter-spacing:.1em;
+  text-transform:uppercase;color:var(--slate);
+  border-top:1px solid var(--rule);padding-top:16px;
+}
+.cover-meta b{color:var(--ink);font-weight:500}
+
+/* ---------- cards & grids ---------- */
+.grid{display:grid;gap:13px;margin-top:1.05rem}
+.g2{grid-template-columns:repeat(2,minmax(0,1fr))}
+.g3{grid-template-columns:repeat(3,minmax(0,1fr))}
+.g4{grid-template-columns:repeat(4,minmax(0,1fr))}
+@media (max-width:960px){ .g3,.g4{grid-template-columns:repeat(2,minmax(0,1fr))} }
+@media (max-width:640px){ .g2,.g3,.g4{grid-template-columns:minmax(0,1fr)} }
+
+.card{
+  background:var(--card);
+  border:1px solid var(--rule);
+  border-radius:6px;
+  padding:15px 17px;
+  box-shadow:var(--shadow);
+  min-width:0;
+}
+.card h3{margin-bottom:.3rem}
+.card p{margin:.35rem 0}
+.card .small{margin-top:.4rem}
+.card.accent{border-left:3px solid var(--verdigris)}
+.card.warn{border-left:3px solid var(--brass)}
+.card.bad{border-left:3px solid var(--oxblood)}
+.card.tight{padding:10px 12px}
+.card.tight p{font-size:.83rem;color:var(--slate);line-height:1.45;margin:.2rem 0 0}
+
+.kicker{
+  font-family:var(--mono);font-size:10.5px;letter-spacing:.13em;
+  text-transform:uppercase;color:var(--slate);display:block;margin-bottom:.35rem;
+}
+
+/* ---------- pull quotes ---------- */
+.quote{
+  border-left:3px solid var(--verdigris);
+  padding:2px 0 2px 16px;
+  margin:14px 0;
+}
+.quote p{
+  font-family:var(--display);
+  font-style:italic;
+  font-size:clamp(1rem,1.45vw,1.16rem);
+  line-height:1.4;
+  color:var(--ink);
+  margin:0;
+}
+.quote .attr{
+  font-family:var(--mono);font-size:10.5px;letter-spacing:.1em;
+  text-transform:uppercase;color:var(--slate);margin-top:8px;display:block;
+}
+.quote.ox{border-left-color:var(--oxblood)}
+
+.badge-flag{
+  display:inline-block;
+  font-family:var(--mono);font-size:9.5px;letter-spacing:.12em;text-transform:uppercase;
+  color:var(--brass);background:var(--brass-soft);
+  border:1px solid rgba(154,107,31,.3);
+  padding:1px 6px;border-radius:3px;margin-left:8px;vertical-align:1px;
+}
+.badge-flag.live{color:var(--verdigris);background:var(--verdigris-soft);border-color:rgba(47,111,99,.3)}
+.badge-flag.new{color:var(--oxblood);background:var(--oxblood-soft);border-color:rgba(138,58,50,.3)}
+:root[data-theme="dark"] .badge-flag{border-color:rgba(213,162,76,.35)}
+@media (prefers-color-scheme: dark){
+  :root[data-theme="auto"] .badge-flag{border-color:rgba(213,162,76,.35)}
+}
+
+/* ---------- evidence panels ---------- */
+.evidence{
+  background:var(--paper-2);
+  border:1px solid var(--rule);
+  border-left:3px solid var(--brass);
+  border-radius:5px;
+  padding:12px 14px;
+  min-width:0;
+}
+.evidence .where{
+  font-family:var(--mono);font-size:10.5px;color:var(--brass);
+  letter-spacing:.04em;display:block;margin-bottom:6px;word-break:break-word;
+}
+.evidence .what{
+  font-family:var(--mono);font-size:.79rem;color:var(--ink);
+  background:var(--card);border:1px dashed var(--rule-2);
+  border-radius:4px;padding:7px 9px;display:block;margin-bottom:7px;
+  white-space:normal;word-break:break-word;line-height:1.5;
+}
+.evidence .read{font-size:.82rem;color:var(--slate);line-height:1.45;margin:0}
+.evidence.on{border-left-color:var(--verdigris)}
+.evidence.on .where{color:var(--verdigris)}
+
+/* ---------- rails ---------- */
+.rail{
+  background:var(--card);
+  border:1px solid var(--rule);
+  border-radius:6px;
+  padding:12px 15px;
+  margin:9px 0;
+  min-width:0;
+}
+.rail-head{
+  display:flex;align-items:baseline;justify-content:space-between;gap:12px;
+  margin-bottom:6px;flex-wrap:wrap;
+}
+.rail-name{font-family:var(--mono);font-size:11px;letter-spacing:.12em;text-transform:uppercase;color:var(--ink)}
+.rail-kind{font-family:var(--mono);font-size:10px;letter-spacing:.08em;color:var(--slate)}
+.rail p{margin:0;font-size:.87rem;color:var(--ink-2);max-width:80ch}
+
+/* ---------- chip clouds ---------- */
+.chips{display:flex;gap:7px;flex-wrap:wrap;margin-top:.7rem}
+.chip{
+  display:inline-flex;align-items:center;gap:6px;
+  border:1px solid var(--rule-2);
+  border-radius:999px;
+  padding:3px 11px;
+  background:var(--paper-2);
+  font-size:.82rem;color:var(--ink-2);
+  min-width:0;
+}
+.chip.on{border-color:var(--verdigris);background:var(--verdigris-soft);color:var(--verdigris)}
+.chip.add{border-style:dashed;border-color:var(--brass);color:var(--brass);background:var(--brass-soft)}
+.chip.ghost{opacity:.6;border-style:dashed}
+.chip .mono{font-size:9px;letter-spacing:.08em;text-transform:uppercase;opacity:.75}
+
+/* ---------- flow chain ---------- */
+.chain{
+  display:flex;align-items:stretch;gap:2px;flex-wrap:nowrap;
+  overflow-x:auto;padding-bottom:8px;margin-top:1rem;
+}
+.chain .step{
+  flex:0 0 auto;min-width:128px;max-width:190px;
+  border:1px solid var(--rule);border-radius:5px;background:var(--card);
+  padding:9px 11px;
+}
+.chain .step .kicker{margin-bottom:.2rem}
+.chain .step .t{font-size:.86rem;color:var(--ink);line-height:1.3;display:block}
+.chain .step .s{font-size:.74rem;color:var(--slate);margin-top:3px;line-height:1.35;display:block}
+.chain .arr{
+  flex:0 0 auto;align-self:center;color:var(--verdigris);
+  font-family:var(--mono);font-size:13px;padding:0 6px;opacity:.7;
+}
+.chain .step.end{border-color:var(--oxblood);background:var(--oxblood-soft)}
+.chain .step.new{border-color:var(--verdigris);background:var(--verdigris-soft)}
+.chain .step.have{border-style:dashed;opacity:.85}
+
+/* ---------- journey steps (numbered checklist) ---------- */
+.journey{display:grid;gap:10px;margin-top:1rem}
+.jstep{
+  display:grid;grid-template-columns:34px minmax(0,1fr);gap:14px;align-items:start;
+  border:1px solid var(--rule);border-left:3px solid var(--verdigris);
+  border-radius:6px;background:var(--card);padding:12px 15px;box-shadow:var(--shadow);
+}
+.jstep .n{
+  font-family:var(--mono);font-size:13px;color:var(--verdigris);
+  border:1px solid var(--rule-2);border-radius:50%;
+  width:28px;height:28px;display:flex;align-items:center;justify-content:center;
+  background:var(--verdigris-soft);
+}
+.jstep h3{font-size:1.02rem;margin-bottom:.15rem}
+.jstep p{margin:.2rem 0 0;font-size:.87rem;color:var(--ink-2);max-width:78ch}
+.jstep .tag{
+  font-family:var(--mono);font-size:9px;letter-spacing:.11em;text-transform:uppercase;
+  color:var(--slate);border:1px solid var(--rule);border-radius:3px;padding:1px 6px;
+  margin-left:8px;vertical-align:2px;white-space:nowrap;
+}
+.jstep .tag.have{color:var(--verdigris);border-color:var(--verdigris)}
+.jstep .tag.newer{color:var(--oxblood);border-color:var(--oxblood)}
+.jstep.have{border-left-color:var(--slate)}
+
+/* ---------- tables ---------- */
+.tablewrap{overflow-x:auto;margin-top:1rem;border:1px solid var(--rule);border-radius:6px;background:var(--card)}
+table{border-collapse:collapse;width:100%;min-width:760px;font-size:.77rem}
+th,td{text-align:left;padding:6px 11px;border-bottom:1px solid var(--rule);vertical-align:top;line-height:1.34}
+th{
+  font-family:var(--mono);font-size:9.5px;letter-spacing:.1em;text-transform:uppercase;
+  color:var(--slate);font-weight:500;background:var(--paper-2);
+}
+tr:last-child td{border-bottom:none}
+td code{white-space:nowrap}
+th.me,td.me{background:var(--verdigris-soft)}
+th.me{color:var(--verdigris)}
+td.cy{color:var(--verdigris);font-weight:600}
+td.cn{color:var(--oxblood)}
+td.cp{color:var(--brass)}
+td.cu{color:var(--slate)}
+td.lead{color:var(--ink);font-weight:600;font-family:var(--display);font-size:.92rem}
+td.tier{font-family:var(--mono);font-size:.72rem;letter-spacing:.05em;color:var(--brass);white-space:nowrap}
+.legend{
+  display:flex;gap:16px;flex-wrap:wrap;margin-top:9px;
+  font-family:var(--mono);font-size:10px;letter-spacing:.06em;text-transform:uppercase;color:var(--slate);
+}
+.legend b{font-weight:500}
+.legend .sw{display:inline-block;width:9px;height:9px;border-radius:2px;vertical-align:-1px;margin-right:5px}
+
+/* ---------- lists ---------- */
+ul.plain{list-style:none;padding:0;margin:.6rem 0}
+ul.plain li{
+  padding-left:20px;position:relative;margin:.4rem 0;max-width:72ch;
+  font-size:.91rem;color:var(--ink-2);
+}
+ul.plain li::before{
+  content:"";position:absolute;left:2px;top:.62em;
+  width:7px;height:1.5px;background:var(--verdigris);
+}
+ul.plain li strong{color:var(--ink)}
+ul.plain.ox li::before{background:var(--oxblood)}
+ul.plain.tight li{font-size:.83rem;margin:.28rem 0}
+
+/* ---------- roadmap phases ---------- */
+.phase{
+  border:1px solid var(--rule);border-radius:6px;background:var(--card);
+  padding:14px 16px;border-top:3px solid var(--verdigris);min-width:0;
+}
+.phase.p2{border-top-color:#4E8F7F}
+.phase.p3{border-top-color:var(--brass)}
+.phase.p4{border-top-color:var(--oxblood)}
+.phase .when{font-family:var(--mono);font-size:10.5px;letter-spacing:.1em;text-transform:uppercase;color:var(--slate)}
+.phase h3{margin:.3rem 0 .35rem;font-size:1.08rem}
+.phase .val{
+  margin-top:9px;padding-top:9px;border-top:1px dashed var(--rule);
+  font-size:.79rem;color:var(--verdigris);line-height:1.45;
+}
+.phase.p4 .val{color:var(--oxblood)}
+
+/* ---------- callout / note ---------- */
+.callout{
+  border:1px solid var(--verdigris);
+  background:var(--verdigris-soft);
+  border-radius:6px;padding:13px 16px;margin-top:1.05rem;
+}
+.callout p{margin:0;font-size:.93rem;color:var(--ink);max-width:none}
+.callout .kicker{color:var(--verdigris)}
+
+.note{
+  border:1px dashed var(--rule-2);border-radius:6px;padding:12px 15px;margin-top:1rem;
+  background:var(--paper-2);
+}
+.note p{margin:.3rem 0;font-size:.85rem;color:var(--slate);max-width:82ch}
+.note .kicker{color:var(--brass)}
+
+/* ---------- spec / blueprint blocks ---------- */
+.spec{
+  border:1px solid var(--rule);border-radius:6px;background:var(--card);
+  padding:12px 14px;min-width:0;box-shadow:var(--shadow);
+  border-top:3px solid var(--verdigris);
+}
+.spec.alter{border-top-color:var(--brass)}
+.spec.newt{border-top-color:var(--oxblood)}
+.spec .tname{
+  font-family:var(--mono);font-size:11.5px;letter-spacing:.04em;color:var(--ink);
+  display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:7px;
+}
+.spec .op{
+  font-family:var(--mono);font-size:8.5px;letter-spacing:.12em;text-transform:uppercase;
+  border-radius:3px;padding:1px 6px;border:1px solid var(--verdigris);color:var(--verdigris);
+  background:var(--verdigris-soft);white-space:nowrap;
+}
+.spec.alter .op{border-color:var(--brass);color:var(--brass);background:var(--brass-soft)}
+.spec.newt .op{border-color:var(--oxblood);color:var(--oxblood);background:var(--oxblood-soft)}
+.spec ul{list-style:none;margin:0;padding:0}
+.spec li{
+  font-family:var(--mono);font-size:10.5px;line-height:1.6;color:var(--ink-2);
+  padding-left:13px;position:relative;word-break:break-word;
+}
+.spec li::before{content:"·";position:absolute;left:2px;color:var(--slate)}
+.spec li b{color:var(--ink);font-weight:600}
+.spec li i{font-style:normal;color:var(--slate)}
+.spec .why{
+  margin-top:8px;padding-top:8px;border-top:1px dashed var(--rule);
+  font-size:.79rem;color:var(--slate);line-height:1.45;font-family:var(--body);
+}
+
+/* ============================================================
+   MOCKUPS — miniature portal UI, pure CSS
+   ============================================================ */
+.mock{
+  position:relative;
+  border:1px solid var(--rule-2);
+  border-radius:8px;
+  background:var(--card);
+  box-shadow:var(--lift-2);
+  overflow:hidden;
+  display:flex;
+  flex-direction:column;
+  width:100%;
+  margin-top:13px;
+}
+.mock-roster{min-height:clamp(430px,58vh,600px)}
+.mock-invite{min-height:clamp(320px,44vh,430px)}
+
+.mk-note{
+  position:absolute;z-index:8;
+  font-family:var(--mono);font-size:8.5px;line-height:1.5;letter-spacing:.04em;
+  background:var(--card);border:1px solid var(--verdigris);color:var(--verdigris);
+  border-radius:3px;padding:1.5px 6px;white-space:nowrap;
+  box-shadow:var(--lift);
+}
+.mk-note.ox{border-color:var(--oxblood);color:var(--oxblood)}
+
+/* browser + portal chrome */
+.mk-bar{
+  display:flex;align-items:center;gap:9px;
+  padding:6px 10px;background:var(--paper-2);
+  border-bottom:1px solid var(--rule);flex:0 0 auto;
+}
+.mk-dots{display:flex;gap:4px;flex:0 0 auto}
+.mk-dots i{width:7px;height:7px;border-radius:50%;background:var(--rule-2);display:block}
+.mk-url{
+  font-family:var(--mono);font-size:9.5px;color:var(--slate);
+  background:var(--card);border:1px solid var(--rule);border-radius:999px;
+  padding:2px 11px;flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;
+}
+.mk-url b{color:var(--verdigris);font-weight:500}
+
+.mk-nav{display:flex;align-items:center;gap:11px;padding:6px 12px;border-bottom:1px solid var(--rule);flex:0 0 auto;background:var(--card)}
+.mk-mark{font-family:var(--display);font-size:12px;color:var(--ink);flex:0 0 auto}
+.mk-crumb{font-family:var(--mono);font-size:9px;letter-spacing:.05em;color:var(--slate);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.mk-av{margin-left:auto;width:15px;height:15px;border-radius:50%;background:var(--brass-soft);border:1px solid var(--rule-2);flex:0 0 auto}
+
+.mk-page{flex:1;min-height:0;padding:10px 12px 14px;display:flex;flex-direction:column;gap:9px;background:var(--paper)}
+.mk-band{display:flex;gap:5px;flex-wrap:wrap;flex:0 0 auto}
+.mk-band span{
+  font-family:var(--mono);font-size:8px;letter-spacing:.08em;text-transform:uppercase;
+  color:var(--slate);border:1px solid var(--rule);border-radius:999px;padding:1.5px 8px;background:var(--card);
+}
+.mk-band span.on{color:var(--verdigris);border-color:var(--verdigris);background:var(--verdigris-soft)}
+
+/* ---------- the call sheet ---------- */
+.cs-head{display:flex;align-items:baseline;gap:10px;flex-wrap:wrap;flex:0 0 auto}
+.cs-head .t{font-family:var(--display);font-size:clamp(13px,1.5vw,18px);color:var(--ink)}
+.cs-head .c{font-family:var(--mono);font-size:9px;letter-spacing:.09em;text-transform:uppercase;color:var(--slate)}
+.cs-head .acts{margin-left:auto;display:flex;gap:6px;flex-wrap:wrap}
+.cs-head .acts span{
+  font-family:var(--mono);font-size:8.5px;letter-spacing:.08em;text-transform:uppercase;
+  border-radius:4px;padding:3px 10px;border:1px solid var(--rule-2);color:var(--slate);white-space:nowrap;
+}
+.cs-head .acts .solid{background:var(--verdigris);border-color:var(--verdigris);color:var(--card)}
+
+.cs-cols{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:9px;flex:1;min-height:0}
+@media (max-width:900px){ .cs-cols{grid-template-columns:minmax(0,1fr)} }
+.cs-col{
+  border:1px solid var(--rule);border-radius:6px;background:var(--card);
+  display:flex;flex-direction:column;min-width:0;overflow:hidden;
+}
+.cs-ch{
+  padding:6px 10px;border-bottom:1px solid var(--rule);background:var(--paper-2);
+  display:flex;align-items:baseline;justify-content:space-between;gap:8px;
+}
+.cs-ch b{font-family:var(--mono);font-size:8.5px;letter-spacing:.12em;text-transform:uppercase;color:var(--ink);font-weight:600}
+.cs-ch i{font-family:var(--mono);font-size:8.5px;color:var(--slate);font-style:normal}
+.cs-body{padding:7px;display:flex;flex-direction:column;gap:5px;min-height:0}
+
+.pr{
+  display:grid;grid-template-columns:20px minmax(0,1fr);gap:7px;align-items:start;
+  border:1px solid var(--rule);border-radius:5px;background:var(--paper-2);padding:6px 8px;min-width:0;
+}
+.pr .ini{
+  width:20px;height:20px;border-radius:50%;background:var(--card);
+  border:1px solid var(--rule-2);display:flex;align-items:center;justify-content:center;
+  font-family:var(--mono);font-size:8px;color:var(--slate);
+}
+.pr .nm{
+  font-size:10.5px;color:var(--ink);line-height:1.3;display:flex;align-items:center;gap:5px;flex-wrap:wrap;
+}
+.pr .nm b{font-weight:600}
+.pr .tags{display:flex;gap:4px;flex-wrap:wrap;margin-top:4px}
+.pr .tg{
+  font-family:var(--mono);font-size:7.5px;letter-spacing:.07em;text-transform:uppercase;
+  border:1px solid var(--rule-2);border-radius:999px;padding:1px 6px;color:var(--slate);white-space:nowrap;
+}
+.pr .tg.role{color:var(--ink-2);border-color:var(--rule-2);background:var(--card)}
+.pr .tg.trade{color:var(--brass);border-color:var(--brass);background:var(--brass-soft)}
+.pr .tg.spec{color:var(--oxblood);border-color:var(--oxblood);background:var(--oxblood-soft)}
+.pr .tg.acct{color:var(--verdigris);border-color:var(--verdigris);background:var(--verdigris-soft)}
+.pr .tg.link{color:var(--verdigris);border-style:dashed;border-color:var(--verdigris)}
+.pr .tg.only{color:var(--slate);border-style:dashed}
+.pr .sms{
+  width:6px;height:6px;border-radius:50%;background:var(--verdigris);
+  display:inline-block;flex:0 0 auto;box-shadow:0 0 0 2px var(--verdigris-soft);
+}
+.pr .sms.off{background:transparent;border:1px solid var(--rule-2);box-shadow:none}
+.pr.lead{border-color:var(--verdigris);background:var(--verdigris-soft)}
+.cs-add{
+  border:1px dashed var(--rule-2);border-radius:5px;padding:5px 8px;
+  font-family:var(--mono);font-size:8px;letter-spacing:.09em;text-transform:uppercase;color:var(--slate);
+  text-align:center;
+}
+.cs-legend{
+  display:flex;gap:14px;flex-wrap:wrap;flex:0 0 auto;
+  font-family:var(--mono);font-size:8px;letter-spacing:.08em;text-transform:uppercase;color:var(--slate);
+  border-top:1px solid var(--rule);padding-top:7px;
+}
+.cs-legend i{font-style:normal;color:var(--ink-2)}
+
+/* ---------- invite sheet ---------- */
+.iv{
+  max-width:430px;margin:0 auto;width:100%;
+  border:1px solid var(--rule-2);border-radius:7px;background:var(--card);
+  box-shadow:var(--lift-2);padding:13px 15px;position:relative;
+}
+.iv .ivh{font-family:var(--display);font-size:14px;color:var(--ink);margin-bottom:2px}
+.iv .ivs{font-size:9.5px;color:var(--slate);margin-bottom:11px;display:block;line-height:1.45}
+.iv .lbl{font-family:var(--mono);font-size:8px;letter-spacing:.11em;text-transform:uppercase;color:var(--slate);display:block;margin:9px 0 3px}
+.iv .fld{
+  border:1px solid var(--rule);border-radius:4px;background:var(--paper-2);
+  padding:5px 9px;font-size:10.5px;color:var(--ink);display:flex;align-items:center;justify-content:space-between;gap:8px;
+}
+.iv .fld.ph{color:var(--slate)}
+.iv .fld .car{font-family:var(--mono);font-size:9px;color:var(--slate)}
+.iv .fld.sel{border-color:var(--verdigris);background:var(--verdigris-soft);color:var(--verdigris)}
+.iv .seg{display:flex;gap:4px}
+.iv .seg span{
+  flex:1;text-align:center;font-family:var(--mono);font-size:8px;letter-spacing:.08em;text-transform:uppercase;
+  border:1px solid var(--rule);border-radius:4px;padding:4px 0;color:var(--slate);
+}
+.iv .seg span.on{border-color:var(--verdigris);color:var(--verdigris);background:var(--verdigris-soft);font-weight:600}
+.iv .hintline{font-size:8.5px;color:var(--brass);margin-top:5px;line-height:1.45;font-family:var(--body)}
+.iv .btn{
+  margin-top:13px;background:var(--verdigris);color:var(--card);border-radius:5px;
+  text-align:center;padding:6px 0;font-family:var(--mono);font-size:9px;letter-spacing:.11em;text-transform:uppercase;
+}
+.iv .drop{
+  position:absolute;right:15px;top:96px;width:190px;z-index:9;
+  border:1px solid var(--rule-2);border-radius:5px;background:var(--card);box-shadow:var(--lift-2);
+  padding:4px;display:flex;flex-direction:column;gap:1px;
+}
+@media (max-width:720px){ .iv .drop{position:static;width:auto;margin-top:6px} }
+.iv .drop span{
+  font-size:9.5px;color:var(--ink-2);padding:3px 7px;border-radius:3px;
+  display:flex;justify-content:space-between;gap:8px;align-items:center;
+}
+.iv .drop span i{font-family:var(--mono);font-size:7.5px;letter-spacing:.08em;text-transform:uppercase;color:var(--slate);font-style:normal}
+.iv .drop span.on{background:var(--verdigris-soft);color:var(--verdigris)}
+.iv .drop span.on i{color:var(--verdigris)}
+.iv .drop .hd{
+  font-family:var(--mono);font-size:7.5px;letter-spacing:.11em;text-transform:uppercase;color:var(--slate);
+  padding:3px 7px;border-bottom:1px solid var(--rule);margin-bottom:2px;display:block;
+}
+
+/* ---------- flywheel ---------- */
+.wheel{margin-top:1rem;border:1px solid var(--rule);border-radius:6px;background:var(--card);padding:12px;overflow-x:auto}
+.wheel svg{display:block;width:100%;min-width:640px;height:auto}
+.wheel .bx{fill:var(--paper-2);stroke:var(--rule-2);stroke-width:1}
+.wheel .bx.hot{fill:var(--verdigris-soft);stroke:var(--verdigris)}
+.wheel .ttl{font-family:var(--display);font-size:15px;fill:var(--ink)}
+.wheel .sub{font-family:var(--mono);font-size:9px;letter-spacing:.06em;fill:var(--slate)}
+.wheel .arrw{stroke:var(--verdigris);stroke-width:1.4;fill:none}
+.wheel .arrh{fill:var(--verdigris)}
+.wheel .loop{stroke:var(--brass);stroke-width:1.4;fill:none;stroke-dasharray:5 4}
+.wheel .looph{fill:var(--brass)}
+.wheel .loopt{font-family:var(--mono);font-size:9px;letter-spacing:.1em;text-transform:uppercase;fill:var(--brass)}
+
+/* ---------- caption row ---------- */
+.caps{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:12px;margin-top:13px}
+.caps .cap{border-top:1px solid var(--rule);padding-top:7px;min-width:0}
+.caps .cap b{
+  font-family:var(--mono);font-size:9px;letter-spacing:.11em;text-transform:uppercase;
+  color:var(--verdigris);display:block;font-weight:500;
+}
+.caps .cap.was b{color:var(--oxblood)}
+.caps .cap p{font-size:.76rem;color:var(--slate);margin:.25rem 0 0;line-height:1.42;max-width:none}
+
+/* ---------- chrome ---------- */
+#progress{
+  position:fixed;top:0;left:0;height:2px;background:var(--verdigris);
+  width:0;z-index:60;transition:width .18s linear;
+}
+@media (prefers-reduced-motion: reduce){ #progress{transition:none} }
+
+#chrome{
+  position:fixed;right:clamp(12px,2.4vw,26px);bottom:clamp(12px,2.4vh,24px);
+  z-index:60;display:flex;align-items:center;gap:8px;
+  background:var(--card);border:1px solid var(--rule);border-radius:999px;
+  padding:5px 6px 5px 13px;box-shadow:var(--shadow);
+}
+#counter{font-family:var(--mono);font-size:11px;letter-spacing:.1em;color:var(--slate);min-width:52px}
+#counter b{color:var(--ink);font-weight:600}
+.navbtn{
+  appearance:none;border:1px solid var(--rule);background:var(--paper-2);color:var(--ink);
+  width:28px;height:28px;border-radius:999px;cursor:pointer;
+  display:inline-flex;align-items:center;justify-content:center;font-size:13px;line-height:1;
+  font-family:var(--mono);padding:0;
+}
+.navbtn:hover{border-color:var(--verdigris);color:var(--verdigris)}
+.navbtn:focus-visible,#themebtn:focus-visible{outline:2px solid var(--verdigris);outline-offset:2px}
+#themebtn{
+  appearance:none;border:1px solid var(--rule);background:var(--paper-2);color:var(--slate);
+  height:28px;border-radius:999px;cursor:pointer;padding:0 11px;
+  font-family:var(--mono);font-size:10px;letter-spacing:.1em;text-transform:uppercase;
+}
+#themebtn:hover{border-color:var(--verdigris);color:var(--verdigris)}
+
+#hint{
+  position:fixed;left:clamp(12px,2.4vw,26px);bottom:clamp(12px,2.4vh,24px);z-index:60;
+  font-family:var(--mono);font-size:10px;letter-spacing:.1em;text-transform:uppercase;
+  color:var(--slate);opacity:.75;
+}
+@media (max-width:700px){ #hint{display:none} }
+
+/* reveal */
+.slide .main > *, .slide .gutter > *{opacity:0;transform:translateY(8px);transition:opacity .5s ease, transform .5s ease}
+.slide.seen .main > *, .slide.seen .gutter > *{opacity:1;transform:none}
+.slide.seen .main > *:nth-child(2){transition-delay:.06s}
+.slide.seen .main > *:nth-child(3){transition-delay:.12s}
+.slide.seen .main > *:nth-child(4){transition-delay:.17s}
+.slide.seen .main > *:nth-child(5){transition-delay:.21s}
+@media (prefers-reduced-motion: reduce){
+  .slide .main > *, .slide .gutter > *{opacity:1;transform:none;transition:none}
+}
+
+/* ---------- print ---------- */
+@media print{
+  html,body{height:auto;background:#fff;color:#000;background-image:none}
+  #deck{height:auto;overflow:visible}
+  #chrome,#hint,#progress{display:none !important}
+  .slide{
+    min-height:auto;height:auto;page-break-after:always;break-after:page;
+    padding:14mm 12mm;border-bottom:none;display:block;
+  }
+  .slide.ink{background:#fff;background-image:none}
+  .slide:last-child{page-break-after:auto;break-after:auto}
+  .slide .main > *,.slide .gutter > *{opacity:1 !important;transform:none !important}
+  .card,.evidence,.rail,.phase,.spec,.tablewrap,.mock,.jstep,.wheel{break-inside:avoid;box-shadow:none}
+  .mock-roster{min-height:130mm}
+  .mock-invite{min-height:100mm}
+  h1{font-size:30pt}h2{font-size:19pt}
+  .inner{max-width:none}
+  .slide.wide .inner{max-width:none}
+}
+</style>
+</head>
+<body>
+
+<div id="progress" role="presentation"></div>
+
+<div id="deck" tabindex="-1">
+
+<!-- ============ 01 · COVER ============ -->
+<section class="slide cover ink" data-label="Cover">
+  <div class="inner">
+    <div class="main">
+      <div class="wordmark">
+        <svg width="22" height="22" viewBox="0 0 22 22" aria-hidden="true">
+          <rect x="1.5" y="1.5" width="19" height="19" rx="2.5" fill="none" stroke="currentColor" stroke-width="1.2" opacity=".35"/>
+          <path d="M5 16.5 L11 5.5 L17 16.5" fill="none" stroke="currentColor" stroke-width="1.4"/>
+          <line x1="7.6" y1="12" x2="14.4" y2="12" stroke="currentColor" stroke-width="1.1" opacity=".55"/>
+        </svg>
+        <span>Patina · Studio &amp; Project</span>
+      </div>
+
+      <h1>The Call<br>Sheet</h1>
+      <p class="lede">Studio staffing and per-project rosters. Every production needs a crew list — who is on this job, what they do, and how you reach them.</p>
+
+      <blockquote class="cover-quote">A studio is a crew. A project is a production. Patina should know the call sheet.</blockquote>
+
+      <div class="cover-meta">
+        <span>Design direction · <b>for review</b></span>
+        <span>Status <b>proposal — nothing here is built</b></span>
+        <span>Scope <b>staff titles · rolodex · roster</b></span>
+        <span><b>4 August 2026</b></span>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============ 02 · COLD OPEN ============ -->
+<section class="slide" data-label="Cold open">
+  <div class="inner">
+    <div class="gutter"><span class="eyebrow">Act I · Cold open</span><span class="num">02</span><span class="tick"></span></div>
+    <div class="main">
+      <h2>Two people, same morning, both hunting a phone number.</h2>
+
+      <div class="grid g2">
+        <div class="card bad">
+          <span class="kicker">The designer, 8:40 a.m.</span>
+          <p>The tile is landing Thursday and the sub needs the layout. She knows his name. She scrolls four months of texts, finds a thread about a different house, and copies the number out of it. Patina holds the tile spec, the room scan, the PO, and the install date. It does not hold the man who sets the tile.</p>
+        </div>
+        <div class="card bad">
+          <span class="kicker">The founder, 9:15 a.m.</span>
+          <p>Her senior designer is out for two weeks and someone has to reach the drapery workroom. The workroom exists — in that designer's saved vendors, under her login. The studio paid for those relationships across six years of projects and cannot see them.</p>
+        </div>
+      </div>
+
+      <div class="quote">
+        <p>The rolodex is the most valuable thing a studio owns, and right now it lives in a phone.</p>
+        <span class="attr">The problem in one line</span>
+      </div>
+
+      <div class="note">
+        <span class="kicker">Why this is urgent now</span>
+        <p>Studio workspaces shipped. Studios are no longer one designer — they are two, five, nine people sharing projects. The moment a second person joins, "who is on this job" stops being obvious and starts being a question the software has to answer.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============ 03 · WHAT EXISTS ============ -->
+<section class="slide" data-label="Inventory">
+  <div class="inner">
+    <div class="gutter"><span class="eyebrow">Act I · Honest inventory</span><span class="num">03</span><span class="tick"></span></div>
+    <div class="main">
+      <h2>The bones are here. The body is missing.</h2>
+      <p class="lede">Everything below is already in production. Nothing in this deck asks for a new foundation — it asks for the room that sits on the one we poured.</p>
+
+      <div class="grid g3">
+        <div class="card accent">
+          <span class="kicker">Shipped</span>
+          <h3>Studio workspaces</h3>
+          <p class="small"><code>organizations</code> + <code>organization_members</code> carry four permission tiers — owner, admin, member, guest. Invitations, acceptance, shared branding, and co-member RLS all work today.</p>
+        </div>
+        <div class="card accent">
+          <span class="kicker">Shipped</span>
+          <h3>Project parties</h3>
+          <p class="small"><code>project_parties</code> already holds the build side: GC, sub, installer, receiver — with a trade on each, SMS consent columns, and login-less field links so a sub can open a site request without an account.</p>
+        </div>
+        <div class="card accent">
+          <span class="kicker">Shipped</span>
+          <h3>Clients</h3>
+          <p class="small">Clients live in the CRM and reach the client portal through row-level policies tied to the project. Attaching a client is already an access grant, not just a label.</p>
+        </div>
+        <div class="card warn">
+          <span class="kicker">Dormant</span>
+          <h3>Project team members</h3>
+          <p class="small"><code>project_team_members</code> exists in the schema and nothing writes to it. The staff half of the roster has a table and no surface.</p>
+        </div>
+        <div class="card warn">
+          <span class="kicker">Global, not studio</span>
+          <h3>Vendors</h3>
+          <p class="small">Vendors are platform-wide with free-text categories. Fine for a catalog. It cannot answer "who does <em>this studio</em> use for drapery."</p>
+        </div>
+        <div class="card warn">
+          <span class="kicker">Scoped wrong</span>
+          <h3>people_directory</h3>
+          <p class="small">A view that gathers the people around a designer's work — but scoped to the designer, not the studio. Two people in one studio see two different directories.</p>
+        </div>
+      </div>
+
+      <div class="callout">
+        <span class="kicker">Read this way</span>
+        <p>We have permission tiers without job titles, project parties without a studio memory behind them, and a directory that stops at one person's account. Three seams, one shape.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============ 04 · THE GAP ============ -->
+<section class="slide" data-label="The gap">
+  <div class="inner">
+    <div class="gutter"><span class="eyebrow">Act I · The gap</span><span class="num">04</span><span class="tick"></span></div>
+    <div class="main">
+      <h2>Three missing pieces.</h2>
+      <p class="lede">Each one is small. Together they are the difference between a login and a studio.</p>
+
+      <div class="grid g3">
+        <div class="card bad">
+          <span class="kicker">Missing · one</span>
+          <h3>Staff titles</h3>
+          <p class="small">Patina knows Leah is a <em>member</em>. It does not know she is a Senior Designer. Permission is not a job. Without the title, the software cannot route the right work to the right desk, address a person by what they do, or print a crew list anyone recognizes.</p>
+        </div>
+        <div class="card bad">
+          <span class="kicker">Missing · two</span>
+          <h3>A studio rolodex</h3>
+          <p class="small">There is no studio-scoped list of people and companies the studio works with. Contacts are stranded inside individual projects, or inside one designer's saved vendors, and never accumulate into anything the studio owns.</p>
+        </div>
+        <div class="card bad">
+          <span class="kicker">Missing · three</span>
+          <h3>A roster surface</h3>
+          <p class="small">No single screen answers "who is on this job." Staff, client, and trades live in three different places, and two of the three have no UI at all. The question everyone asks first is the one we do not answer.</p>
+        </div>
+      </div>
+
+      <div class="chain">
+        <div class="step have"><span class="kicker">Have</span><span class="t">Permission tiers</span><span class="s">owner · admin · member · guest</span></div>
+        <span class="arr">+</span>
+        <div class="step new"><span class="kicker">Need</span><span class="t">Job titles</span><span class="s">what you actually do</span></div>
+        <span class="arr">+</span>
+        <div class="step new"><span class="kicker">Need</span><span class="t">Studio rolodex</span><span class="s">the people you keep</span></div>
+        <span class="arr">+</span>
+        <div class="step new"><span class="kicker">Need</span><span class="t">Project roster</span><span class="s">the call sheet</span></div>
+        <span class="arr">=</span>
+        <div class="step end"><span class="kicker">Result</span><span class="t">A studio</span><span class="s">not a set of logins</span></div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============ 05 · THESIS ============ -->
+<section class="slide ink" data-label="Thesis">
+  <div class="inner">
+    <div class="gutter"><span class="eyebrow">Act I · Thesis</span><span class="num">05</span><span class="tick"></span></div>
+    <div class="main">
+      <h1 style="font-size:clamp(2rem,4.6vw,3.4rem)">A studio is a crew.<br>A project is a production.<br>Patina should know<br>the call sheet.</h1>
+
+      <p class="lede" style="margin-top:clamp(20px,3.5vh,34px)">A film set does not rebuild its crew from memory every morning. It keeps a rolodex of people it trusts, and every production draws a call sheet from it — this job, these names, these numbers, this week.</p>
+
+      <div class="grid g3" style="margin-top:1.6rem">
+        <div class="card accent">
+          <span class="kicker">The permanent crew</span>
+          <p class="small">Your studio. Titled, tiered, and the same on every job. Hired once, not re-entered per project.</p>
+        </div>
+        <div class="card accent">
+          <span class="kicker">The rolodex</span>
+          <p class="small">Everyone the studio has ever worked with. Built by working, not by data entry. It outlives any one project — and any one employee.</p>
+        </div>
+        <div class="card accent">
+          <span class="kicker">The call sheet</span>
+          <p class="small">This project's crew, drawn from the rolodex in a few taps. Names, roles, trades, and how to reach each one.</p>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============ 06 · TWO QUESTIONS ============ -->
+<section class="slide" data-label="Two systems">
+  <div class="inner">
+    <div class="gutter"><span class="eyebrow">Act II · The cast</span><span class="num">06</span><span class="tick"></span></div>
+    <div class="main">
+      <h2>Two questions, two systems. Keep them apart.</h2>
+      <p class="lede">Every staffing model that fails collapses these into one list. They are not one list.</p>
+
+      <div class="grid g2">
+        <div class="card accent">
+          <span class="kicker">Question one · exists today</span>
+          <h3>Permission tier — what you can touch</h3>
+          <p class="small">Owner, admin, member, guest. Four values, enforced in row-level security, already shipped and already guarded by migration 00319. This is a security decision and it stays exactly as coarse as it is.</p>
+        </div>
+        <div class="card accent">
+          <span class="kicker">Question two · proposed</span>
+          <h3>Job title — what you do</h3>
+          <p class="small">Principal, Senior Designer, Procurement, Bookkeeper. Descriptive, editable, and the thing Patina uses to route work, address people, and print a roster a human recognizes. Never consulted by a policy.</p>
+        </div>
+      </div>
+
+      <div class="quote ox">
+        <p>A Bookkeeper outranks a Senior Designer on invoices and sits below her on everything else. Collapse the two dimensions and one of those facts becomes a lie.</p>
+        <span class="attr">Why they stay orthogonal</span>
+      </div>
+
+      <div class="grid g3">
+        <div class="card tight"><span class="kicker">Titles do</span><p>Suggest a tier at invite time. Label the roster. Route site requests, approvals, and notifications by role.</p></div>
+        <div class="card tight"><span class="kicker">Titles never</span><p>Appear in an RLS policy, gate a route, or change what a query returns. Retitling someone is a cosmetic act.</p></div>
+        <div class="card tight"><span class="kicker">The escape hatch</span><p>Nine curated titles plus free text. A studio that calls the job something else types it and moves on.</p></div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============ 07 · STAFF TITLES ============ -->
+<section class="slide" data-label="Staff titles">
+  <div class="inner">
+    <div class="gutter"><span class="eyebrow">Act II · Staff</span><span class="num">07</span><span class="tick"></span></div>
+    <div class="main">
+      <h2>Nine titles that cover a real studio.</h2>
+      <p class="lede">Drawn from how interior design firms actually staff. The tier column is a <em>suggestion</em> offered at invite time — pre-selected, always editable, never enforced.</p>
+
+      <div class="tablewrap">
+        <table>
+          <thead>
+            <tr>
+              <th style="width:22%">Title</th>
+              <th class="me" style="width:16%">Suggested tier</th>
+              <th>What they do — and what Patina routes to them</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr><td class="lead">Principal</td><td class="me tier">owner</td><td>The studio. Everything, plus signature authority and billing. One per workspace by definition — the account that owns the organization.</td></tr>
+            <tr><td class="lead">Design Director</td><td class="me tier">admin</td><td>Reviews across projects, approves proposals before they leave the studio, sets the standard. Sees every job whether or not she is on it.</td></tr>
+            <tr><td class="lead">Senior Designer</td><td class="me tier">member</td><td>Leads projects. Owns the client relationship, the concept, and the specification on the jobs assigned to her.</td></tr>
+            <tr><td class="lead">Designer</td><td class="me tier">member</td><td>Project work and sourcing. Builds boards, specs pieces, drafts schedules under a lead.</td></tr>
+            <tr><td class="lead">Junior Designer</td><td class="me tier">member</td><td>Support. Capture in the field, spec entry, library work. The person who fills in what the lead sketched.</td></tr>
+            <tr><td class="lead">Design Assistant</td><td class="me tier">member</td><td>Same lane as Junior Designer, different studios use different words. Both ship because the vocabulary is not ours to pick.</td></tr>
+            <tr><td class="lead">Project Manager</td><td class="me tier">member / admin</td><td>Coordination. Site requests, schedules, field parties, install day. The one who knows when the tile lands.</td></tr>
+            <tr><td class="lead">Procurement / Expeditor</td><td class="me tier">member</td><td>Purchase orders, vendor correspondence, receiving and damage claims. Lives in the order rail.</td></tr>
+            <tr><td class="lead">Studio Manager</td><td class="me tier">admin</td><td>Runs the house — staff, the rolodex, branding, templates. Not on the design work, over the studio's shape.</td></tr>
+            <tr><td class="lead">Bookkeeper</td><td class="me tier">guest / member</td><td>Invoices and payments only. The narrowest useful seat in the product, and the one most often filled by someone outside the firm.</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <div class="note">
+        <span class="kicker">Plus one more</span>
+        <p><strong>Custom.</strong> A free-text title alongside the nine. Same storage, no validation beyond length. "Studio Coordinator", "Head of Procurement", "Partner" — a studio's own word for a job is not an error condition.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============ 08 · TIER MATRIX ============ -->
+<section class="slide" data-label="Tiers">
+  <div class="inner">
+    <div class="gutter"><span class="eyebrow">Act II · Permissions</span><span class="num">08</span><span class="tick"></span></div>
+    <div class="main">
+      <h2>What each tier can touch.</h2>
+      <p class="lede">This is the security surface. It is deliberately short — four tiers, one column each, no per-title exceptions anywhere in it.</p>
+
+      <div class="tablewrap">
+        <table>
+          <thead>
+            <tr>
+              <th style="width:30%">Capability</th>
+              <th class="me" style="width:17%">Owner</th>
+              <th style="width:17%">Admin</th>
+              <th style="width:18%">Member</th>
+              <th style="width:18%">Guest</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr><td>Billing, plan, seats</td><td class="me cy">Yes</td><td class="cn">No</td><td class="cn">No</td><td class="cn">No</td></tr>
+            <tr><td>Transfer or delete the studio</td><td class="me cy">Yes</td><td class="cn">No</td><td class="cn">No</td><td class="cn">No</td></tr>
+            <tr><td>Invite staff, set titles &amp; tiers</td><td class="me cy">Yes</td><td class="cy">Yes</td><td class="cn">No</td><td class="cn">No</td></tr>
+            <tr><td>Studio branding &amp; templates</td><td class="me cy">Yes</td><td class="cy">Yes</td><td class="cn">No</td><td class="cn">No</td></tr>
+            <tr><td>Edit the studio rolodex</td><td class="me cy">Yes</td><td class="cy">Yes</td><td class="cy">Yes</td><td class="cn">No</td></tr>
+            <tr><td>Read the studio rolodex</td><td class="me cy">Yes</td><td class="cy">Yes</td><td class="cy">Yes</td><td class="cp">Assigned projects only</td></tr>
+            <tr><td>Create projects &amp; build rosters</td><td class="me cy">Yes</td><td class="cy">Yes</td><td class="cy">Yes</td><td class="cn">No</td></tr>
+            <tr><td>See all studio projects</td><td class="me cy">Yes</td><td class="cy">Yes</td><td class="cp">Assigned + open <b>· R2</b></td><td class="cp">Assigned only</td></tr>
+            <tr><td>Financial surfaces — invoices, POs, AR</td><td class="me cy">Yes</td><td class="cy">Yes</td><td class="cp">Per assignment</td><td class="cp">Scoped — the bookkeeper seat</td></tr>
+            <tr><td>Archive or remove a staff member</td><td class="me cy">Yes</td><td class="cy">Yes</td><td class="cn">No</td><td class="cn">No</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <div class="legend">
+        <span><b class="vd">Yes</b> — full</span>
+        <span><b class="br">Amber</b> — conditional, stated in the cell</span>
+        <span><b class="ox">No</b> — blocked in policy, not just hidden in UI</span>
+        <span><b>R2</b> — open ruling, slide 21</span>
+      </div>
+
+      <div class="note">
+        <span class="kicker">What does not change</span>
+        <p>Not one existing policy is rewritten. The <code>role</code> column on <code>organization_members</code> keeps its four values and its 00319 guard. Job title arrives beside it as new, inert data.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============ 09 · THE ROSTER CAST ============ -->
+<section class="slide" data-label="The cast">
+  <div class="inner">
+    <div class="gutter"><span class="eyebrow">Act II · The cast</span><span class="num">09</span><span class="tick"></span></div>
+    <div class="main">
+      <h2>Who is actually on a job.</h2>
+      <p class="lede">Three sides. A real residential project runs twelve to twenty names across them, and today Patina holds a third of that.</p>
+
+      <div class="grid g3">
+        <div class="card accent">
+          <span class="kicker">Studio side</span>
+          <h3>Your people, assigned</h3>
+          <ul class="plain tight">
+            <li><strong>Lead designer</strong> — owns the job</li>
+            <li><strong>Support designer</strong> — one or several</li>
+            <li><strong>Project manager</strong> — schedule and site</li>
+            <li><strong>Procurement</strong> — POs and receiving</li>
+            <li><strong>Bookkeeper</strong> — invoices only</li>
+          </ul>
+          <p class="small">Drawn from staff. Everyone here has a Patina account already.</p>
+        </div>
+        <div class="card accent">
+          <span class="kicker">Client side</span>
+          <h3>The household, in full</h3>
+          <ul class="plain tight">
+            <li><strong>Client</strong> — the portal account</li>
+            <li><strong>Spouse or partner</strong> — approves half the decisions</li>
+            <li><strong>Family office</strong> — pays the invoices</li>
+            <li><strong>Assistant</strong> — schedules the walkthroughs</li>
+            <li><strong>Property manager</strong> — holds the keys</li>
+          </ul>
+          <p class="small">One client, several people. Today we model the first and lose the rest.</p>
+        </div>
+        <div class="card accent">
+          <span class="kicker">Build &amp; supply side</span>
+          <h3>Everyone who touches the house</h3>
+          <ul class="plain tight">
+            <li><strong>Architect</strong> · <strong>General contractor</strong></li>
+            <li><strong>Superintendent / GC's PM</strong></li>
+            <li><strong>Subs</strong>, by trade</li>
+            <li><strong>Vendors &amp; showrooms</strong>, by specialty</li>
+            <li><strong>Installers</strong> · <strong>Receivers</strong></li>
+            <li><strong>Photographer</strong> · <strong>Stager</strong></li>
+          </ul>
+          <p class="small">Partly modeled today: GC, sub, installer, receiver.</p>
+        </div>
+      </div>
+
+      <div class="callout">
+        <span class="kicker">New party kinds</span>
+        <p>Four additions to the existing four: <strong>architect</strong>, <strong>photographer</strong>, <strong>stager</strong>, and <strong>client</strong> — so the client side of a roster stops being a special case bolted on beside it.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============ 10 · TAXONOMIES ============ -->
+<section class="slide" data-label="Taxonomies">
+  <div class="inner">
+    <div class="gutter"><span class="eyebrow">Act II · Vocabulary</span><span class="num">10</span><span class="tick"></span></div>
+    <div class="main">
+      <h2>Two vocabularies: trades and specialties.</h2>
+      <p class="lede">A sub has a trade. A vendor has a specialty. Both are how you find the right person in a rolodex of four hundred.</p>
+
+      <h3 style="margin-top:1.2rem">Trades <span class="badge-flag live">11 shipped</span> <span class="badge-flag new">12 proposed</span></h3>
+      <div class="chips">
+        <span class="chip on">electrical</span><span class="chip on">plumbing</span><span class="chip on">hvac</span>
+        <span class="chip on">tile</span><span class="chip on">millwork</span><span class="chip on">paint</span>
+        <span class="chip on">flooring</span><span class="chip on">drywall</span><span class="chip on">wallpaper</span>
+        <span class="chip on">window treatments</span><span class="chip on">general</span>
+        <span class="chip add">carpentry / framing</span><span class="chip add">masonry / concrete</span>
+        <span class="chip add">roofing</span><span class="chip add">glazing</span>
+        <span class="chip add">stone countertops</span><span class="chip add">cabinetry</span>
+        <span class="chip add">plaster</span><span class="chip add">metalwork</span>
+        <span class="chip add">low-voltage / AV</span><span class="chip add">appliance install</span>
+        <span class="chip add">landscape</span><span class="chip add">demo</span>
+      </div>
+
+      <h3 style="margin-top:1.4rem">Vendor specialties <span class="badge-flag new">all new</span></h3>
+      <div class="chips">
+        <span class="chip add">furniture</span><span class="chip add">upholstery workroom</span>
+        <span class="chip add">drapery workroom</span><span class="chip add">lighting</span>
+        <span class="chip add">plumbing fixtures</span><span class="chip add">tile &amp; stone</span>
+        <span class="chip add">stone slab</span><span class="chip add">appliances</span>
+        <span class="chip add">kitchen &amp; bath showroom</span><span class="chip add">art &amp; framing</span>
+        <span class="chip add">antiques &amp; vintage</span><span class="chip add">rugs &amp; carpet</span>
+        <span class="chip add">wallpaper</span><span class="chip add">fabric &amp; textiles</span>
+        <span class="chip add">millwork / fabrication</span><span class="chip add">metal &amp; glass fabrication</span>
+        <span class="chip add">hardware</span><span class="chip add">outdoor</span>
+        <span class="chip add">accessories &amp; styling</span><span class="chip add">movers</span>
+        <span class="chip add">receiving &amp; warehouse</span>
+      </div>
+
+      <div class="callout">
+        <span class="kicker">How the vocabulary is stored</span>
+        <p>Seeded platform vocabulary lives in code; the column stays <code>TEXT</code>. A studio that types "terrazzo" gets a chip rendered by the free-text fallback, not a validation error. This is exactly the <code>FieldTrade</code> precedent already shipped on the field side — no lookup tables, no migration to add a word.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============ 11 · DAY ONE ============ -->
+<section class="slide" data-label="Day one">
+  <div class="inner">
+    <div class="gutter"><span class="eyebrow">Act III · Setup</span><span class="num">11</span><span class="tick"></span></div>
+    <div class="main">
+      <h2>Day one, from the owner's chair.</h2>
+      <p class="lede">Five steps. Two of them already exist. None of them takes more than a minute, and step four is allowed to be skipped.</p>
+
+      <div class="journey">
+        <div class="jstep have">
+          <span class="n">1</span>
+          <div>
+            <h3>Name and brand the studio <span class="tag have">exists today</span></h3>
+            <p>Workspace, logo, colors. Unchanged — this is the flow that shipped with studio workspaces.</p>
+          </div>
+        </div>
+        <div class="jstep">
+          <span class="n">2</span>
+          <div>
+            <h3>Set your own title <span class="tag newer">new</span></h3>
+            <p>One picker, defaulted to Principal because you own the workspace. The first place titles show their face.</p>
+          </div>
+        </div>
+        <div class="jstep">
+          <span class="n">3</span>
+          <div>
+            <h3>Invite your crew <span class="tag newer">extends the invite</span></h3>
+            <p>Email, name, title. The title pre-selects a permission tier; you can override it before sending. Same invitation email, same acceptance flow, one more field on the form.</p>
+          </div>
+        </div>
+        <div class="jstep">
+          <span class="n">4</span>
+          <div>
+            <h3>Seed the rolodex — or don't <span class="tag newer">new</span></h3>
+            <p>Three doors: <strong>promote</strong> the vendors and project contacts you already have into the studio rolodex through a review step; <strong>import</strong> a CSV; or <strong>skip</strong>. Skipping is the honest default — the rolodex fills itself from the next four projects whether you seed it or not.</p>
+          </div>
+        </div>
+        <div class="jstep">
+          <span class="n">5</span>
+          <div>
+            <h3>Start the first project <span class="tag have">exists today</span></h3>
+            <p>Which is where the call sheet begins, and where every name you add starts earning its way into the rolodex.</p>
+          </div>
+        </div>
+      </div>
+
+      <div class="note">
+        <span class="kicker">The discipline</span>
+        <p>No empty-state homework. A studio that does nothing on day one still ends up with a full rolodex — it just gets there by working instead of by typing.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============ 12 · INVITING THE CREW ============ -->
+<section class="slide wide" data-label="The invite">
+  <div class="inner">
+    <div class="gutter"><span class="eyebrow">Act III · Setup</span><span class="num">12</span></div>
+    <div class="main">
+      <h2>The invite grows one field.</h2>
+      <p class="lede">Everything under this sheet is already built: the invitation record, the branded email, the acceptance handshake, the co-member policies. We are adding a title picker and letting it suggest the tier.</p>
+
+      <div class="mock mock-invite">
+        <div class="mk-bar">
+          <span class="mk-dots"><i></i><i></i><i></i></span>
+          <span class="mk-url">app.patina.cloud/studio/people &nbsp;<b>› invite</b></span>
+        </div>
+        <div class="mk-page" style="align-items:center;justify-content:center;padding:16px 12px">
+          <div class="iv">
+            <div class="ivh">Invite to Warner Design Studio</div>
+            <span class="ivs">They'll get an email from your studio, branded with your mark. Nothing is charged until they accept.</span>
+
+            <span class="lbl">Email</span>
+            <div class="fld">leah@warnerdesign.co</div>
+
+            <span class="lbl">Name</span>
+            <div class="fld">Leah Warner</div>
+
+            <span class="lbl">Title</span>
+            <div class="fld sel">Senior Designer <span class="car">▾</span></div>
+
+            <div class="drop">
+              <span class="hd">Studio titles</span>
+              <span>Design Director <i>admin</i></span>
+              <span class="on">Senior Designer <i>member</i></span>
+              <span>Designer <i>member</i></span>
+              <span>Junior Designer <i>member</i></span>
+              <span>Project Manager <i>member</i></span>
+              <span>Procurement <i>member</i></span>
+              <span>Studio Manager <i>admin</i></span>
+              <span>Bookkeeper <i>guest</i></span>
+              <span>Custom title… <i>free text</i></span>
+            </div>
+
+            <span class="lbl">Permission tier</span>
+            <div class="seg">
+              <span>Owner</span><span>Admin</span><span class="on">Member</span><span>Guest</span>
+            </div>
+            <p class="hintline">Suggested by the title. Change it if your studio works differently.</p>
+
+            <div class="btn">Send invitation</div>
+          </div>
+          <span class="mk-note" style="left:14px;top:14px">existing invite flow</span>
+          <span class="mk-note ox" style="right:14px;bottom:14px">two new fields, nothing else moves</span>
+        </div>
+      </div>
+
+      <div class="caps">
+        <div class="cap"><b>Title picker</b><p>Nine curated titles plus a custom row. Free text is a first-class option, not a fallback.</p></div>
+        <div class="cap"><b>Suggested tier</b><p>The title moves the segmented control. It is a suggestion — the owner has the last word, always.</p></div>
+        <div class="cap"><b>Email &amp; acceptance</b><p>Untouched. Same branded invitation, same handshake, same co-member policies on the other side.</p></div>
+        <div class="cap was"><b>What we resisted</b><p>A permissions matrix per title. Nine titles times ten capabilities is a support burden, not a feature.</p></div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============ 13 · PROJECT KICKOFF ============ -->
+<section class="slide" data-label="Kickoff">
+  <div class="inner">
+    <div class="gutter"><span class="eyebrow">Act III · Kickoff</span><span class="num">13</span><span class="tick"></span></div>
+    <div class="main">
+      <h2>Staffing a new production.</h2>
+      <p class="lede">The roster fills in the order a designer actually thinks: my people, then the client, then the trades.</p>
+
+      <div class="journey">
+        <div class="jstep have">
+          <span class="n">1</span>
+          <div>
+            <h3>Create the project <span class="tag have">exists today</span></h3>
+            <p>Name, address, scope. Nothing about this step changes.</p>
+          </div>
+        </div>
+        <div class="jstep">
+          <span class="n">2</span>
+          <div>
+            <h3>Studio side auto-fills</h3>
+            <p>Whoever created the project lands as <strong>lead</strong>. Add support designers, a project manager, procurement, and a bookkeeper from a staff typeahead — the list is short and already known, so this is three taps, not a form.</p>
+          </div>
+        </div>
+        <div class="jstep">
+          <span class="n">3</span>
+          <div>
+            <h3>Attach the client</h3>
+            <p>Pick from the CRM or add inline. The same act grants portal access through the policies that already exist — attaching a client has always been a permission, and now it is also a roster row. Client reps follow: spouse, family office, assistant.</p>
+          </div>
+        </div>
+        <div class="jstep">
+          <span class="n">4</span>
+          <div>
+            <h3>Build and supply side</h3>
+            <p>Architect, GC, superintendent, subs by trade, vendors by specialty, installers, receivers. From the rolodex when the studio has one; inline when it doesn't — and either way the entry ends up in the rolodex.</p>
+          </div>
+        </div>
+      </div>
+
+      <div class="quote">
+        <p>By the end of kickoff the project can answer "who do I call about the tile" — which is the question, on every job, every week.</p>
+        <span class="attr">What step four buys</span>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============ 14 · THE CALL SHEET ============ -->
+<section class="slide wide" data-label="Call sheet">
+  <div class="inner">
+    <div class="gutter"><span class="eyebrow">Act III · The surface</span><span class="num">14</span></div>
+    <div class="main">
+      <h2>The call sheet.</h2>
+      <p class="lede">One tab on the project. Three columns, everyone on the job, and how each of them is reachable — read in a glance, printable, and the picker every other rail borrows from.</p>
+
+      <div class="mock mock-roster">
+        <div class="mk-bar">
+          <span class="mk-dots"><i></i><i></i><i></i></span>
+          <span class="mk-url">app.patina.cloud/project/ellsworth-residence/<b>roster</b></span>
+        </div>
+        <div class="mk-nav">
+          <span class="mk-mark">Patina</span>
+          <span class="mk-crumb">Desk › Ellsworth Residence › Call sheet</span>
+          <span class="mk-av"></span>
+        </div>
+        <div class="mk-page">
+          <div class="mk-band">
+            <span>Overview</span><span>Rooms</span><span>Schedule</span><span class="on">Call sheet</span><span>Documents</span><span>Procurement</span>
+          </div>
+
+          <div class="cs-head">
+            <span class="t">Ellsworth Residence</span>
+            <span class="c">16 on the call sheet · 6 reachable by text</span>
+            <span class="acts">
+              <span class="solid">＋ From rolodex</span>
+              <span>＋ New person</span>
+              <span>Print</span>
+            </span>
+          </div>
+
+          <div class="cs-cols">
+            <div class="cs-col">
+              <div class="cs-ch"><b>Studio side</b><i>5</i></div>
+              <div class="cs-body">
+                <div class="pr lead">
+                  <span class="ini">LW</span>
+                  <div>
+                    <span class="nm"><b>Leah Warner</b> <span class="sms"></span></span>
+                    <span class="tags"><span class="tg role">Lead designer</span><span class="tg">Senior Designer</span><span class="tg acct">Account</span></span>
+                  </div>
+                </div>
+                <div class="pr">
+                  <span class="ini">MR</span>
+                  <div>
+                    <span class="nm"><b>Marcus Reed</b> <span class="sms"></span></span>
+                    <span class="tags"><span class="tg role">Project manager</span><span class="tg acct">Account</span></span>
+                  </div>
+                </div>
+                <div class="pr">
+                  <span class="ini">TL</span>
+                  <div>
+                    <span class="nm"><b>Tessa Lund</b> <span class="sms off"></span></span>
+                    <span class="tags"><span class="tg role">Support</span><span class="tg">Junior Designer</span><span class="tg acct">Account</span></span>
+                  </div>
+                </div>
+                <div class="pr">
+                  <span class="ini">DK</span>
+                  <div>
+                    <span class="nm"><b>Dana Kirsch</b> <span class="sms off"></span></span>
+                    <span class="tags"><span class="tg role">Procurement</span><span class="tg acct">Account</span></span>
+                  </div>
+                </div>
+                <div class="pr">
+                  <span class="ini">AD</span>
+                  <div>
+                    <span class="nm"><b>Ann Doyle</b> <span class="sms off"></span></span>
+                    <span class="tags"><span class="tg role">Bookkeeper</span><span class="tg acct">Account · guest</span></span>
+                  </div>
+                </div>
+                <div class="cs-add">＋ assign staff</div>
+              </div>
+            </div>
+
+            <div class="cs-col">
+              <div class="cs-ch"><b>Client side</b><i>3</i></div>
+              <div class="cs-body">
+                <div class="pr">
+                  <span class="ini">ME</span>
+                  <div>
+                    <span class="nm"><b>Margaret Ellsworth</b> <span class="sms"></span></span>
+                    <span class="tags"><span class="tg role">Client</span><span class="tg acct">Portal account</span></span>
+                  </div>
+                </div>
+                <div class="pr">
+                  <span class="ini">TE</span>
+                  <div>
+                    <span class="nm"><b>Tom Ellsworth</b> <span class="sms off"></span></span>
+                    <span class="tags"><span class="tg role">Spouse</span><span class="tg acct">Portal account</span></span>
+                  </div>
+                </div>
+                <div class="pr">
+                  <span class="ini">DP</span>
+                  <div>
+                    <span class="nm"><b>Diane Pratt</b> <span class="sms off"></span></span>
+                    <span class="tags"><span class="tg role">Property manager</span><span class="tg only">Contact only</span></span>
+                  </div>
+                </div>
+                <div class="cs-add">＋ add client rep</div>
+
+                <div class="cs-ch" style="margin-top:6px;border-top:1px solid var(--rule)"><b>Design &amp; record</b><i>2</i></div>
+                <div class="pr">
+                  <span class="ini">JH</span>
+                  <div>
+                    <span class="nm"><b>Hollis &amp; Byrne Architects</b></span>
+                    <span class="tags"><span class="tg role">Architect</span><span class="tg only">Contact only</span></span>
+                  </div>
+                </div>
+                <div class="pr">
+                  <span class="ini">SO</span>
+                  <div>
+                    <span class="nm"><b>Sam Oyelaran</b> <span class="sms off"></span></span>
+                    <span class="tags"><span class="tg role">Photographer</span><span class="tg only">Contact only</span></span>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div class="cs-col">
+              <div class="cs-ch"><b>Build &amp; supply side</b><i>8</i></div>
+              <div class="cs-body">
+                <div class="pr">
+                  <span class="ini">HB</span>
+                  <div>
+                    <span class="nm"><b>Harmon Build Co.</b> <span class="sms"></span></span>
+                    <span class="tags"><span class="tg role">General contractor</span><span class="tg link">Field link</span></span>
+                  </div>
+                </div>
+                <div class="pr">
+                  <span class="ini">RD</span>
+                  <div>
+                    <span class="nm"><b>Ray Delgado</b> <span class="sms"></span></span>
+                    <span class="tags"><span class="tg role">Superintendent</span><span class="tg link">Field link</span></span>
+                  </div>
+                </div>
+                <div class="pr">
+                  <span class="ini">NT</span>
+                  <div>
+                    <span class="nm"><b>Novak Tile &amp; Stone</b> <span class="sms"></span></span>
+                    <span class="tags"><span class="tg role">Sub</span><span class="tg trade">tile</span><span class="tg link">Field link</span></span>
+                  </div>
+                </div>
+                <div class="pr">
+                  <span class="ini">BL</span>
+                  <div>
+                    <span class="nm"><b>Bright Line Electric</b> <span class="sms"></span></span>
+                    <span class="tags"><span class="tg role">Sub</span><span class="tg trade">electrical</span><span class="tg link">Field link</span></span>
+                  </div>
+                </div>
+                <div class="pr">
+                  <span class="ini">WM</span>
+                  <div>
+                    <span class="nm"><b>Whitfield Millwork</b> <span class="sms off"></span></span>
+                    <span class="tags"><span class="tg role">Vendor</span><span class="tg spec">millwork</span><span class="tg only">Contact only</span></span>
+                  </div>
+                </div>
+                <div class="pr">
+                  <span class="ini">KD</span>
+                  <div>
+                    <span class="nm"><b>Kestrel Drapery Workroom</b> <span class="sms off"></span></span>
+                    <span class="tags"><span class="tg role">Vendor</span><span class="tg spec">drapery workroom</span><span class="tg only">Contact only</span></span>
+                  </div>
+                </div>
+                <div class="pr">
+                  <span class="ini">GI</span>
+                  <div>
+                    <span class="nm"><b>Gable Install Group</b> <span class="sms"></span></span>
+                    <span class="tags"><span class="tg role">Installer</span><span class="tg link">Field link</span></span>
+                  </div>
+                </div>
+                <div class="pr">
+                  <span class="ini">RR</span>
+                  <div>
+                    <span class="nm"><b>Ridge Receiving</b> <span class="sms off"></span></span>
+                    <span class="tags"><span class="tg role">Receiver</span><span class="tg link">Field link</span></span>
+                  </div>
+                </div>
+                <div class="cs-add">＋ from rolodex · ＋ new</div>
+              </div>
+            </div>
+          </div>
+
+          <div class="cs-legend">
+            <span><i>Role chip</i> — what they do on this job</span>
+            <span><i class="br">Amber</i> — trade</span>
+            <span><i class="ox">Oxblood</i> — vendor specialty</span>
+            <span><i class="vd">Solid dot</i> — texting consented</span>
+            <span><i>Account · Field link · Contact only</i> — how you reach them</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="caps">
+        <div class="cap"><b>One screen, one question</b><p>Who is on this job. No tabs within tabs, no drill-down to see a phone number.</p></div>
+        <div class="cap"><b>Reach is visible</b><p>Every row states plainly whether this person logs in, opens a link, or just gets a call.</p></div>
+        <div class="cap"><b>Consent is a dot</b><p>The SMS ledger stops being a hidden column. Filled dot means we may text; hollow means we may not.</p></div>
+        <div class="cap"><b>It prints</b><p>A call sheet that cannot be handed to a superintendent on a job site is only half a call sheet.</p></div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============ 15 · TWO WAYS TO ADD ============ -->
+<section class="slide" data-label="Adding">
+  <div class="inner">
+    <div class="gutter"><span class="eyebrow">Act III · Adding</span><span class="num">15</span><span class="tick"></span></div>
+    <div class="main">
+      <h2>Two ways onto the call sheet.</h2>
+      <p class="lede">One for the person you have used before, one for the person you just met. Both end in the same place.</p>
+
+      <div class="grid g2">
+        <div class="card accent">
+          <span class="kicker">Path one</span>
+          <h3>From the rolodex</h3>
+          <p class="small">Search the studio's people by what you need, not by what you remember. <em>Subs → tile.</em> <em>Vendors → drapery workroom.</em> <em>Anyone we used on the Braddock house.</em></p>
+          <p class="small">One tap carries the whole entry across: contact details, trade or specialty, and the history — six projects, last used in March.</p>
+          <div class="chips" style="margin-top:.7rem">
+            <span class="chip ghost">Subs</span><span class="chip on">tile</span><span class="chip ghost">Vendors</span><span class="chip ghost">Installers</span>
+          </div>
+        </div>
+        <div class="card accent">
+          <span class="kicker">Path two</span>
+          <h3>New person, inline</h3>
+          <p class="small">The add-person flow that already exists on project parties, with a trade or specialty picker attached. Name, company, phone, email, role.</p>
+          <p class="small">At save: <strong>"Add to studio rolodex"</strong> — checked by default. That single checkbox is the whole flywheel. Uncheck it and the person stays on this job only.</p>
+          <div class="note" style="margin-top:.7rem">
+            <span class="kicker">The rule</span>
+            <p>The roster row keeps its own snapshot of name, phone, and email as entered. Editing the rolodex entry next year never rewrites what this project's history says.</p>
+          </div>
+        </div>
+      </div>
+
+      <div class="callout">
+        <span class="kicker">Why the checkbox is pre-checked</span>
+        <p>Because the default should be the behavior that pays. A studio that never thinks about the rolodex still builds one — and the designer who does think about it can opt a one-off out in a single click.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============ 16 · THE FLYWHEEL ============ -->
+<section class="slide wide" data-label="Flywheel">
+  <div class="inner">
+    <div class="gutter"><span class="eyebrow">Act III · Compounding</span><span class="num">16</span></div>
+    <div class="main">
+      <h2>Every project makes the next one faster.</h2>
+      <p class="lede">The rolodex is not a data-entry chore that pays off later. It is a byproduct of doing the work, and it compounds without anyone maintaining it.</p>
+
+      <div class="wheel">
+        <svg viewBox="0 0 900 300" role="img" aria-label="Rosters feed the rolodex; the rolodex accrues history; history makes the next project fast; every project feeds back.">
+          <!-- boxes -->
+          <g>
+            <rect class="bx hot" x="15" y="34" width="175" height="82" rx="7"/>
+            <text class="ttl" x="30" y="66">Project roster</text>
+            <text class="sub" x="30" y="86">You staff the job —</text>
+            <text class="sub" x="30" y="100">once, in kickoff.</text>
+          </g>
+          <g>
+            <rect class="bx" x="245" y="34" width="175" height="82" rx="7"/>
+            <text class="ttl" x="260" y="66">Rolodex entry</text>
+            <text class="sub" x="260" y="86">Each new name is</text>
+            <text class="sub" x="260" y="100">kept by the studio.</text>
+          </g>
+          <g>
+            <rect class="bx" x="475" y="34" width="175" height="82" rx="7"/>
+            <text class="ttl" x="490" y="66">History accrues</text>
+            <text class="sub" x="490" y="86">Projects worked,</text>
+            <text class="sub" x="490" y="100">trades, last used.</text>
+          </g>
+          <g>
+            <rect class="bx hot" x="705" y="34" width="180" height="82" rx="7"/>
+            <text class="ttl" x="720" y="66">Next project</text>
+            <text class="sub" x="720" y="86">Staffed in minutes,</text>
+            <text class="sub" x="720" y="100">not in text threads.</text>
+          </g>
+
+          <!-- forward arrows -->
+          <path class="arrw" d="M192 75 H236"/>
+          <path class="arrh" d="M236 75 l-8 -4.5 v9 z"/>
+          <path class="arrw" d="M422 75 H466"/>
+          <path class="arrh" d="M466 75 l-8 -4.5 v9 z"/>
+          <path class="arrw" d="M652 75 H696"/>
+          <path class="arrh" d="M696 75 l-8 -4.5 v9 z"/>
+
+          <!-- return loop -->
+          <path class="loop" d="M795 118 V196 Q795 212 779 212 H118 Q102 212 102 196 V126"/>
+          <path class="looph" d="M102 118 l-5 9 h10 z"/>
+          <text class="loopt" x="330" y="240">every production feeds the rolodex</text>
+        </svg>
+      </div>
+
+      <div class="grid g3">
+        <div class="card tight"><span class="kicker">Month one</span><p>An empty rolodex and a roster you fill by hand. Roughly what a designer does today, minus the scrolling.</p></div>
+        <div class="card tight"><span class="kicker">Month six</span><p>Most of the trades on a new job are already in the list. Kickoff staffing drops from an afternoon to ten minutes.</p></div>
+        <div class="card tight"><span class="kicker">Year one</span><p>The rolodex is the studio's institutional memory of who is good — and it survives the employee who built it.</p></div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============ 17 · DOWNSTREAM RAILS ============ -->
+<section class="slide" data-label="Rails">
+  <div class="inner">
+    <div class="gutter"><span class="eyebrow">Act IV · Why it pays</span><span class="num">17</span><span class="tick"></span></div>
+    <div class="main">
+      <h2>Five rails already built, all waiting on a roster.</h2>
+      <p class="lede">This is the argument for doing it now. Every one of these is shipped or dormant — none needs new infrastructure, all of them need to know who is on the job.</p>
+
+      <div class="rail">
+        <div class="rail-head"><span class="rail-name">Site requests &amp; field links</span><span class="rail-kind">shipped</span></div>
+        <p>The roster becomes the picker — "send the tile sub the site request" turns into a name you tap, not a phone number you hunt for.</p>
+      </div>
+      <div class="rail">
+        <div class="rail-head"><span class="rail-name">SMS</span><span class="rail-kind">built · dormant until Twilio</span></div>
+        <p>The roster is both the consent ledger and the audience list, ready the day 10DLC clears.</p>
+      </div>
+      <div class="rail">
+        <div class="rail-head"><span class="rail-name">Purchase orders</span><span class="rail-kind">shipped</span></div>
+        <p>The vendor picker goes roster-first, rolodex-second, global catalog third — nearest relationship wins.</p>
+      </div>
+      <div class="rail">
+        <div class="rail-head"><span class="rail-name">Client portal</span><span class="rail-kind">shipped</span></div>
+        <p>Attaching a client to the roster <em>is</em> the access grant, through the row-level policies already in production.</p>
+      </div>
+      <div class="rail">
+        <div class="rail-head"><span class="rail-name">Coordination courts</span><span class="rail-kind">shipped</span></div>
+        <p>Address a project by role instead of by person: notify the GC and everyone on electrical, and let the roster resolve the names.</p>
+      </div>
+
+      <div class="callout">
+        <span class="kicker">The shape of the bet</span>
+        <p>We are not proposing five new features. We are proposing the missing input to five features that already exist.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============ 18 · REACH STATES ============ -->
+<section class="slide ink" data-label="Reach">
+  <div class="inner">
+    <div class="gutter"><span class="eyebrow">Act IV · Reach</span><span class="num">18</span><span class="tick"></span></div>
+    <div class="main">
+      <h2>Three ways to be on a call sheet.</h2>
+      <p class="lede">A roster is not a list of users. Most of the people on a job will never see a login screen, and the design has to be at peace with that.</p>
+
+      <div class="grid g3">
+        <div class="card accent">
+          <span class="kicker">Reach state · one</span>
+          <h3>Full account</h3>
+          <p class="small">Staff and clients. Email, password or magic link, a portal, a session. These are the people who live in Patina every week.</p>
+          <p class="small vd">Roughly a quarter of a typical roster.</p>
+        </div>
+        <div class="card accent">
+          <span class="kicker">Reach state · two</span>
+          <h3>Field link</h3>
+          <p class="small">GCs, subs, installers, receivers. A login-less magic link that opens exactly the site request or delivery they need — already built, already in production.</p>
+          <p class="small vd">The rail nobody else in this category has.</p>
+        </div>
+        <div class="card accent">
+          <span class="kicker">Reach state · three</span>
+          <h3>Contact only</h3>
+          <p class="small">The architect, the photographer, the property manager, the workroom. A name, a number, an email, and a place on the sheet. No account, ever, unless they ask.</p>
+          <p class="small vd">The majority.</p>
+        </div>
+      </div>
+
+      <div class="quote">
+        <p>Most of these people will never log in. That's the feature — a tool the trades have to sign up for is a tool the trades ignore.</p>
+        <span class="attr">The design constraint stated plainly</span>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============ 19 · HOW IT'S BUILT ============ -->
+<section class="slide wide" data-label="Blueprint">
+  <div class="inner">
+    <div class="gutter"><span class="eyebrow">Act IV · Blueprint</span><span class="num">19</span></div>
+    <div class="main">
+      <h2>How it's built.</h2>
+      <p class="lede">One new table, two columns on an existing one, one new foreign key, one revived table, and a view that unions the halves. Everything else is surface.</p>
+
+      <div class="grid g2">
+        <div class="spec alter">
+          <div class="tname"><span class="op">alter</span> organization_members</div>
+          <ul>
+            <li><b>job_title</b> <i>text, null</i> — free text, the nine are suggestions</li>
+            <li><b>staff_role</b> <i>text, null</i> — normalized slug for routing</li>
+            <li><i>role — untouched. Four values, 00319 guard unaffected.</i></li>
+          </ul>
+          <p class="why">Additive columns on a table with live policies. No policy is rewritten and no existing row changes meaning.</p>
+        </div>
+
+        <div class="spec newt">
+          <div class="tname"><span class="op">new table</span> studio_contacts</div>
+          <ul>
+            <li><b>organization_id</b> <i>fk → organizations</i> — studio-scoped, always</li>
+            <li><b>kind</b> <i>person | company</i></li>
+            <li><b>parent_contact_id</b> <i>self fk</i> — Ray works at Harmon</li>
+            <li><b>specialties</b> <i>text[]</i> — trades and vendor specialties</li>
+            <li><b>vendor_id</b> <i>fk → vendors, soft</i> — links to the global catalog when there is a match</li>
+            <li><b>profile_id</b> <i>fk → profiles, optional</i> — set if they ever get an account</li>
+            <li><b>archived_at</b> <i>timestamptz</i> — soft delete; history never breaks</li>
+            <li><i>RLS via is_studio_comember() — SECURITY DEFINER, the 00315–00322 pattern</i></li>
+          </ul>
+          <p class="why">The rolodex. Studio-scoped by construction, so there is no path to leaking one studio's people into another.</p>
+        </div>
+
+        <div class="spec alter">
+          <div class="tname"><span class="op">alter</span> project_parties</div>
+          <ul>
+            <li><b>studio_contact_id</b> <i>fk → studio_contacts, null</i></li>
+            <li><b>kind</b> <i>+ architect, photographer, stager, client</i></li>
+            <li><i>name / phone / email stay snapshotted at add time</i></li>
+          </ul>
+          <p class="why">The link is a pointer, not a replacement. A project's record of who worked on it is never rewritten by a later edit to the rolodex.</p>
+        </div>
+
+        <div class="spec">
+          <div class="tname"><span class="op">revive</span> project_team_members</div>
+          <ul>
+            <li><b>project_id</b> · <b>user_id</b> · <b>project_role</b></li>
+            <li><i>lead · support · pm · procurement · bookkeeper</i></li>
+            <li><i>table exists and is dormant — this gives it its first writer</i></li>
+          </ul>
+          <p class="why">The staff half of the roster. No migration needed to create it; it has been sitting in the schema waiting for a surface.</p>
+        </div>
+
+        <div class="spec">
+          <div class="tname"><span class="op">new view</span> v_project_roster</div>
+          <ul>
+            <li><i>union of project_team_members + project_parties</i></li>
+            <li><i>one shape: name, role, trade/specialty, reach state, consent</i></li>
+          </ul>
+          <p class="why">One query behind the call sheet, so the UI never has to know that auth people and phone-first contacts live in two tables.</p>
+        </div>
+
+        <div class="spec alter">
+          <div class="tname"><span class="op">redefine</span> people_directory</div>
+          <ul>
+            <li><i>scope moves from designer → studio</i></li>
+            <li><i>Mine / Studio filter on the surface</i></li>
+            <li><i>widest blast radius in the whole proposal — ships last</i></li>
+          </ul>
+          <p class="why">The one change that alters what an existing screen returns. It is deliberately the final phase.</p>
+        </div>
+      </div>
+
+      <div class="callout">
+        <span class="kicker">Where this lands in the model</span>
+        <p>Contacts become the <strong>studio layer</strong> of the same personal / studio / catalog triad we already run for products. Same instinct, second noun — a designer's own contacts, the studio's shared rolodex, and the global vendor catalog underneath.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============ 20 · NOT BUILDING + SEQUENCE ============ -->
+<section class="slide" data-label="Boundaries">
+  <div class="inner">
+    <div class="gutter"><span class="eyebrow">Act IV · Discipline</span><span class="num">20</span><span class="tick"></span></div>
+    <div class="main">
+      <h2>What we're not building — and the order we build the rest.</h2>
+
+      <div class="grid g3">
+        <div class="card warn tight">
+          <span class="kicker">Not this</span>
+          <h3>A vendor portal</h3>
+          <p>Accounts for workrooms and showrooms. Field links already reach the people who need reaching, without asking a supplier to adopt our software.</p>
+        </div>
+        <div class="card warn tight">
+          <span class="kicker">Not this</span>
+          <h3>Per-title RLS</h3>
+          <p>Nine titles times ten capabilities is ninety support questions. Titles describe; tiers enforce.</p>
+        </div>
+        <div class="card warn tight">
+          <span class="kicker">Not this</span>
+          <h3>One merged people table</h3>
+          <p>Auth-bearing people and phone-first contacts have different lifecycles. They stay separate underneath and look like one list on the surface.</p>
+        </div>
+        <div class="card warn tight">
+          <span class="kicker">Not this</span>
+          <h3>Taxonomy lookup tables</h3>
+          <p>Trades and specialties stay code-resident vocabulary over a <code>TEXT</code> column — the FieldTrade precedent. Adding a word should not need a migration.</p>
+        </div>
+        <div class="card warn tight">
+          <span class="kicker">Not this</span>
+          <h3>SMS activation</h3>
+          <p>Twilio stays dormant. The roster prepares the consent ledger; it does not turn on the sending.</p>
+        </div>
+        <div class="card accent tight">
+          <span class="kicker">And to be clear</span>
+          <h3>Nothing here is built</h3>
+          <p>No migration, no table, no route, no component. This is a direction to approve or redirect, not a status report.</p>
+        </div>
+      </div>
+
+      <h3 style="margin-top:1.5rem">Build sequence — lowest risk first</h3>
+      <div class="grid g4" style="margin-top:.6rem">
+        <div class="phase">
+          <span class="when">Phase 1</span>
+          <h3>Staff titles</h3>
+          <p class="small">Two additive columns, a title picker in the invite, titles on the people screen.</p>
+          <p class="val">Ships alone and is useful alone. Touches no policy.</p>
+        </div>
+        <div class="phase p2">
+          <span class="when">Phase 2</span>
+          <h3>The rolodex</h3>
+          <p class="small"><code>studio_contacts</code>, the specialties vocabulary, and a rolodex tab on the studio's People room.</p>
+          <p class="val">New table, new policies, nothing existing rewritten.</p>
+        </div>
+        <div class="phase p3">
+          <span class="when">Phase 3</span>
+          <h3>Roster wiring</h3>
+          <p class="small">The call sheet, add-from-rolodex, promote-to-rolodex, the new party kinds, <code>v_project_roster</code>.</p>
+          <p class="val">The phase a designer feels. Rides phases 1 and 2.</p>
+        </div>
+        <div class="phase p4">
+          <span class="when">Phase 4</span>
+          <h3>Studio directory</h3>
+          <p class="small"><code>people_directory</code> rescoped from designer to studio, with a Mine / Studio filter.</p>
+          <p class="val">Widest blast radius. Deliberately last, once the rest is proven.</p>
+        </div>
+      </div>
+
+      <div class="note">
+        <span class="kicker">Why this order</span>
+        <p>Each phase is worth shipping on its own, and each one is a strictly smaller risk than the one after it. Phase 1 could go out next week and would already answer "who is the project manager here."</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============ 21 · NEEDS A RULING ============ -->
+<section class="slide" data-label="The ask">
+  <div class="inner">
+    <div class="gutter"><span class="eyebrow">Close · The ask</span><span class="num">21</span><span class="tick"></span></div>
+    <div class="main">
+      <h2>Six rulings, then a green light.</h2>
+      <p class="lede">None of these are engineering questions. All six are yours, and the first phase cannot be scoped honestly without at least R1 and R2.</p>
+
+      <div class="grid g3">
+        <div class="card warn">
+          <span class="kicker">Needs a ruling · R1</span>
+          <p><strong>Rolodex visibility.</strong> Fully shared studio-wide, or does each contact carry a "private to me" flag for designers who protect their sources?</p>
+        </div>
+        <div class="card warn">
+          <span class="kicker">Needs a ruling · R2</span>
+          <p><strong>Member project visibility.</strong> Do members see every project in the studio, or only the ones they are assigned to? This one changes a policy either way.</p>
+        </div>
+        <div class="card warn">
+          <span class="kicker">Needs a ruling · R3</span>
+          <p><strong>GC reach ceiling.</strong> Field-link-forever, or are general contractor accounts on the roadmap? The answer decides how much we invest in the link.</p>
+        </div>
+        <div class="card warn">
+          <span class="kicker">Needs a ruling · R4</span>
+          <p><strong>Client-visible roster.</strong> Show the call sheet in the client portal — transparency sells — or keep it back-of-house?</p>
+        </div>
+        <div class="card warn">
+          <span class="kicker">Needs a ruling · R5</span>
+          <p><strong>Migration consent.</strong> Do a designer's existing contacts fold into the studio rolodex automatically, or does every one of them go through a review step?</p>
+        </div>
+        <div class="card warn">
+          <span class="kicker">Needs a ruling · R6</span>
+          <p><strong>Seats and billing.</strong> Is staff count a pricing dimension now, or free until we have traction? Phase 1 is where seats become countable.</p>
+        </div>
+      </div>
+
+      <div class="grid g2" style="margin-top:1.05rem">
+        <div class="card accent">
+          <span class="kicker">The ask</span>
+          <p><strong>Rule on these six, then green-light Phase 1.</strong></p>
+          <p class="small">Two additive columns and a title picker. No policy rewritten, no existing screen changed, and nothing that has to be undone if a later phase goes a different way.</p>
+        </div>
+        <div class="card">
+          <span class="kicker">Where this lands</span>
+          <p class="small">We already hold the spec, the room, the purchase order, and the install date. What we do not hold is the crew — and the crew is what a studio is actually made of. A studio's real asset is the people it can call. Right now we are asking it to keep them somewhere else.</p>
+        </div>
+      </div>
+
+      <div class="cover-meta" style="margin-top:22px">
+        <span>Deck <b>docs/design/studio-rosters/</b></span>
+        <span>Phases <b>4 · titles, rolodex, roster, directory</b></span>
+        <span>Rulings <b>6 open</b></span>
+        <span>Status <b>proposal — nothing built</b></span>
+      </div>
+    </div>
+  </div>
+</section>
+
+</div><!-- /#deck -->
+
+<div id="chrome">
+  <span id="counter"><b>01</b> / 21</span>
+  <button class="navbtn" id="prev" type="button" aria-label="Previous slide">&#8592;</button>
+  <button class="navbtn" id="next" type="button" aria-label="Next slide">&#8594;</button>
+  <button id="themebtn" type="button" aria-label="Toggle colour theme">Theme</button>
+</div>
+<div id="hint">← → or space · P to print</div>
+
+<script>
+(function(){
+  var deck = document.getElementById('deck');
+  var slides = Array.prototype.slice.call(deck.querySelectorAll('.slide'));
+  var counter = document.getElementById('counter');
+  var progress = document.getElementById('progress');
+  var current = 0;
+
+  function pad(n){ return (n < 10 ? '0' : '') + n; }
+
+  function setCurrent(i){
+    current = Math.max(0, Math.min(slides.length - 1, i));
+    counter.innerHTML = '<b>' + pad(current + 1) + '</b> / ' + slides.length;
+    progress.style.width = (((current + 1) / slides.length) * 100) + '%';
+  }
+
+  function go(i){
+    var t = Math.max(0, Math.min(slides.length - 1, i));
+    /* measured against the container, so it holds whatever the offsetParent is */
+    deck.scrollTop = deck.scrollTop + slides[t].getBoundingClientRect().top;
+    slides[t].classList.add('seen');
+    setCurrent(t);
+  }
+
+  /* which slide is showing */
+  if ('IntersectionObserver' in window){
+    var io = new IntersectionObserver(function(entries){
+      entries.forEach(function(e){
+        if (e.isIntersecting){
+          e.target.classList.add('seen');
+          if (e.intersectionRatio > 0.5) setCurrent(slides.indexOf(e.target));
+        }
+      });
+    }, { threshold: [0.12, 0.55] });
+    slides.forEach(function(s){ io.observe(s); });
+  } else {
+    slides.forEach(function(s){ s.classList.add('seen'); });
+  }
+
+  deck.addEventListener('scroll', function(){
+    /* fallback tracking for browsers where ratios are coarse */
+    var mid = deck.scrollTop + deck.clientHeight * 0.4;
+    for (var i = 0; i < slides.length; i++){
+      if (slides[i].offsetTop <= mid) setCurrent(i);
+    }
+  }, { passive: true });
+
+  document.getElementById('prev').addEventListener('click', function(){ go(current - 1); });
+  document.getElementById('next').addEventListener('click', function(){ go(current + 1); });
+
+  document.addEventListener('keydown', function(e){
+    var tag = (e.target && e.target.tagName) || '';
+    if (tag === 'INPUT' || tag === 'TEXTAREA') return;
+    switch (e.key){
+      case 'ArrowRight': case 'PageDown': go(current + 1); e.preventDefault(); break;
+      case 'ArrowLeft':  case 'PageUp':   go(current - 1); e.preventDefault(); break;
+      case ' ': go(current + (e.shiftKey ? -1 : 1)); e.preventDefault(); break;
+      case 'Home': go(0); e.preventDefault(); break;
+      case 'End': go(slides.length - 1); e.preventDefault(); break;
+      case 'p': case 'P': window.print(); break;
+    }
+  });
+
+  /* theme: auto → light → dark → auto */
+  var root = document.documentElement;
+  var btn = document.getElementById('themebtn');
+  var order = ['auto','light','dark'];
+  var label = { auto: 'Theme', light: 'Light', dark: 'Dark' };
+  var stored = null;
+  try { stored = window.localStorage.getItem('patina-callsheet-theme'); } catch (err) {}
+  if (stored && order.indexOf(stored) > -1){ root.setAttribute('data-theme', stored); btn.textContent = label[stored]; }
+  btn.addEventListener('click', function(){
+    var now = root.getAttribute('data-theme') || 'auto';
+    var nextTheme = order[(order.indexOf(now) + 1) % order.length];
+    root.setAttribute('data-theme', nextTheme);
+    btn.textContent = label[nextTheme];
+    try { window.localStorage.setItem('patina-callsheet-theme', nextTheme); } catch (err) {}
+  });
+
+  setCurrent(0);
+})();
+</script>
+
+</body>
+</html>
