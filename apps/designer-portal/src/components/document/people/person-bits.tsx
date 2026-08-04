@@ -63,6 +63,30 @@ const BADGE: Record<PartyRole, { color: string; border: string }> = {
   receiver: { color: 'var(--color-terracotta)', border: 'var(--color-terracotta)' },
 };
 
+// A company's OWN kind vocabulary (studio_contacts.contact_kind on an
+// entity_kind='company' row — see company-row.tsx's COMPANY_KIND_LABELS) is
+// free TEXT and distinct from PartyRole, but reads the SAME family tints:
+// 'gc' shares the person gc PartyRole's dusty-blue; workroom/showroom/vendor/
+// supplier all share the maker tint (a vendor firm IS a maker's business).
+// Any kind outside this map falls back to the maker tint rather than
+// rendering unstyled.
+const COMPANY_KIND_BADGE: Record<string, { color: string; border: string }> = {
+  gc: BADGE.gc,
+  vendor: BADGE.maker,
+  workroom: BADGE.maker,
+  showroom: BADGE.maker,
+  supplier: BADGE.maker,
+};
+
+/** Badge tint for a company kind (see COMPANY_KIND_BADGE above) — used by
+ *  company-row.tsx's kind pill so a GC firm and a maker/vendor-family firm
+ *  read with the same per-role tints a person's RoleBadge already carries. */
+export function companyKindBadgeStyle(
+  kind: string | null | undefined,
+): { color: string; border: string } {
+  return (kind ? COMPANY_KIND_BADGE[kind] : undefined) ?? BADGE.maker;
+}
+
 const DOT_BG: Record<PartyStatus, string> = {
   active: 'var(--color-golden-hour)',
   warm: 'var(--color-sage)',
