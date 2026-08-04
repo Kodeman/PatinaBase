@@ -304,6 +304,11 @@ verify_jwt = false
 [functions.proposal-send]
 verify_jwt = true
 
+# Commercial transitions are invoked by authenticated portal/server callers.
+# The function additionally verifies document ownership before service-role reads.
+[functions.commercial-document-notify]
+verify_jwt = true
+
 # Web→Field QR handoff (designer portal → Patina Field iOS). The gateway MUST
 # verify the caller's JWT; the function then mints a magiclink token ONLY for
 # the caller's own verified identity (never an arbitrary email). Explicit here
