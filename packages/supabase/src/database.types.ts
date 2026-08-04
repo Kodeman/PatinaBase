@@ -8729,6 +8729,7 @@ export type Database = {
           logo_url: string | null
           name: string
           phone: string | null
+          rolodex_seed_skipped_at: string | null
           settings: Json
           slug: string
           status: Database["public"]["Enums"]["organization_status"]
@@ -8750,6 +8751,7 @@ export type Database = {
           logo_url?: string | null
           name: string
           phone?: string | null
+          rolodex_seed_skipped_at?: string | null
           settings?: Json
           slug: string
           status?: Database["public"]["Enums"]["organization_status"]
@@ -8771,6 +8773,7 @@ export type Database = {
           logo_url?: string | null
           name?: string
           phone?: string | null
+          rolodex_seed_skipped_at?: string | null
           settings?: Json
           slug?: string
           status?: Database["public"]["Enums"]["organization_status"]
@@ -12704,6 +12707,7 @@ export type Database = {
           sms_consent_status: string
           sms_consented_at: string | null
           sms_opt_out_at: string | null
+          studio_contact_id: string | null
           trade: string | null
           updated_at: string
           vendor_id: string | null
@@ -12723,6 +12727,7 @@ export type Database = {
           sms_consent_status?: string
           sms_consented_at?: string | null
           sms_opt_out_at?: string | null
+          studio_contact_id?: string | null
           trade?: string | null
           updated_at?: string
           vendor_id?: string | null
@@ -12742,6 +12747,7 @@ export type Database = {
           sms_consent_status?: string
           sms_consented_at?: string | null
           sms_opt_out_at?: string | null
+          studio_contact_id?: string | null
           trade?: string | null
           updated_at?: string
           vendor_id?: string | null
@@ -12787,6 +12793,13 @@ export type Database = {
             columns: ["project_id"]
             isOneToOne: false
             referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "project_parties_studio_contact_id_fkey"
+            columns: ["studio_contact_id"]
+            isOneToOne: false
+            referencedRelation: "studio_contacts"
             referencedColumns: ["id"]
           },
           {
@@ -19569,6 +19582,126 @@ export type Database = {
         }
         Relationships: []
       }
+      studio_contacts: {
+        Row: {
+          archived_at: string | null
+          company_id: string | null
+          company_name: string | null
+          contact_kind: string
+          created_at: string
+          created_by: string | null
+          email: string | null
+          entity_kind: string
+          full_name: string | null
+          id: string
+          notes: string | null
+          organization_id: string
+          phone: string | null
+          phone_e164: string | null
+          profile_id: string | null
+          specialties: string[]
+          updated_at: string
+          vendor_id: string | null
+        }
+        Insert: {
+          archived_at?: string | null
+          company_id?: string | null
+          company_name?: string | null
+          contact_kind: string
+          created_at?: string
+          created_by?: string | null
+          email?: string | null
+          entity_kind: string
+          full_name?: string | null
+          id?: string
+          notes?: string | null
+          organization_id: string
+          phone?: string | null
+          phone_e164?: string | null
+          profile_id?: string | null
+          specialties?: string[]
+          updated_at?: string
+          vendor_id?: string | null
+        }
+        Update: {
+          archived_at?: string | null
+          company_id?: string | null
+          company_name?: string | null
+          contact_kind?: string
+          created_at?: string
+          created_by?: string | null
+          email?: string | null
+          entity_kind?: string
+          full_name?: string | null
+          id?: string
+          notes?: string | null
+          organization_id?: string
+          phone?: string | null
+          phone_e164?: string | null
+          profile_id?: string | null
+          specialties?: string[]
+          updated_at?: string
+          vendor_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "studio_contacts_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: false
+            referencedRelation: "studio_contacts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "studio_contacts_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "studio_contacts_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "user_engagement_scores"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "studio_contacts_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "studio_contacts_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "v_studios"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "studio_contacts_profile_id_fkey"
+            columns: ["profile_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "studio_contacts_profile_id_fkey"
+            columns: ["profile_id"]
+            isOneToOne: false
+            referencedRelation: "user_engagement_scores"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "studio_contacts_vendor_id_fkey"
+            columns: ["vendor_id"]
+            isOneToOne: false
+            referencedRelation: "vendors"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       studio_invoice_counters: {
         Row: {
           next_number: number
@@ -23692,6 +23825,7 @@ export type Database = {
           logo_url: string | null
           name: string
           phone: string | null
+          rolodex_seed_skipped_at: string | null
           settings: Json
           slug: string
           status: Database["public"]["Enums"]["organization_status"]
@@ -25029,6 +25163,7 @@ export type Database = {
           logo_url: string | null
           name: string
           phone: string | null
+          rolodex_seed_skipped_at: string | null
           settings: Json
           slug: string
           status: Database["public"]["Enums"]["organization_status"]
@@ -25532,6 +25667,7 @@ export type Database = {
         Args: { p_purchase_order_id: string }
         Returns: undefined
       }
+      fold_legacy_contacts_into_studios: { Args: never; Returns: undefined }
       fulfillment_append_evidence: {
         Args: { p_actor: string; p_keys: string[]; p_token: string }
         Returns: Json
@@ -26019,6 +26155,7 @@ export type Database = {
         Returns: number
       }
       is_active_org_member: { Args: { p_org_id: string }; Returns: boolean }
+      is_active_studio_member: { Args: { p_org: string }; Returns: boolean }
       is_addressed_client_decision: {
         Args: { p_decision_id: string }
         Returns: boolean

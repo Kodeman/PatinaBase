@@ -17,6 +17,19 @@ import {
 } from '@/lib/document/people-derivation';
 import { Avatar, RoleBadge, StatusDot } from '../person-bits';
 
+/** The ROLODEX marker (slide 8's `.rolomark`, slide 10's "state B") — a
+ *  clay-bordered pill saying the studio keeps this person, not just this job.
+ *  Mirrors the deck exactly: mono, uppercase, pill radius, clay border. */
+function RolodexMarker() {
+  return (
+    <span
+      className="inline-flex shrink-0 items-center rounded-[16px] border border-[var(--color-clay)] px-2 py-[1px] font-mono text-[8px] uppercase tracking-[0.14em] text-[var(--color-mocha)]"
+    >
+      Rolodex
+    </span>
+  );
+}
+
 /** The SMS-consent chip a field party's row wears (00281 sms_consent_status,
  *  surfaced as status_raw for the field branch). Not asked / Invited / Texting /
  *  Opted out — the field-config vocab, matching the phase-chip idiom. */
@@ -36,6 +49,7 @@ export function PersonRow({
   now,
   onOpen,
   highlighted = false,
+  rolodexMarker = false,
 }: {
   person: PeopleDirectoryRow;
   now: Date;
@@ -44,6 +58,10 @@ export function PersonRow({
    *  profile row (the Room clears it on a timer). Border + tint only — no
    *  ring/shadow (D4). */
   highlighted?: boolean;
+  /** Call Sheet Wave 2 — this person is also a live card in the studio
+   *  rolodex. Callers gate this to `scope==='mine'` (slide 8's mnote: STUDIO
+   *  scope IS the rolodex, so the marker would say nothing new there). */
+  rolodexMarker?: boolean;
 }) {
   const line = useMemo(() => deriveRelationshipLine(person, now), [person, now]);
   const dot = useMemo(() => deriveStatusDot(person, now), [person, now]);
@@ -76,6 +94,7 @@ export function PersonRow({
           {line.text}
         </span>
       </span>
+      {rolodexMarker && <RolodexMarker />}
       {isFieldRosterRole(person.role) && <ConsentChip status={person.status_raw} />}
       <StatusDot status={dot} />
       <span aria-hidden className="shrink-0 text-[0.8rem] text-[var(--color-aged-oak)]">

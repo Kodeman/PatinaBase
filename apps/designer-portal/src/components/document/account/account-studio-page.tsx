@@ -25,9 +25,11 @@ import {
   useLeaveOrganization,
   useTransferOrganizationOwnership,
   useProjects,
+  useStudioContacts,
   type MemberRole,
 } from '@patina/supabase';
 import { useAuth } from '@/hooks/use-auth';
+import { useFeatureFlag } from '@/hooks/use-feature-flag';
 import { Select, StatusBadge, type StatusTone } from '@/components/ui/controls';
 import { monogramOf } from '@/lib/document/account-identity';
 import { StudioInviteModal } from './studio-invite-modal';
@@ -36,6 +38,7 @@ import { StudioSetupChecklist } from './studio-setup-checklist';
 import { MemberTitleLine } from './member-title-line';
 import { studioEvents } from '@/lib/analytics/studio-events';
 import { DocumentAction, DocumentActionGroup } from '../document-action';
+import { RolodexSeedSheet } from '../people/directory/rolodex-seed-sheet';
 
 /** Map studio DB error codes to friendly copy (see 00319 guard + RPCs). */
 function friendlyStudioError(err: unknown, fallback: string): string {
@@ -54,6 +57,19 @@ function friendlyStudioError(err: unknown, fallback: string): string {
   return msg || fallback;
 }
 
+/** Row 4's SKIP write (organizations.rolodex_seed_skipped_at) is owner/admin-
+ *  gated by RLS (00417). The checklist already hides the SKIP control from a
+ *  plain member, but a role change mid-session (or a stale render) can still
+ *  land the write itself on the RLS wall — this is that belt-and-suspenders
+ *  translation, matching rolodex-seed-sheet.tsx's friendlyRolodexError idiom. */
+function friendlySkipSeedError(err: unknown): string {
+  const msg = err instanceof Error ? err.message : String(err ?? '');
+  if (/row-level security|permission denied|PGRST116|42501/i.test(msg)) {
+    return 'Ask an owner or admin to skip this.';
+  }
+  return msg || 'Could not skip this just now.';
+}
+
 const FIELD =
   'w-full max-w-md border-0 border-b border-[var(--color-pearl)] bg-transparent py-2 text-[14px] text-[var(--color-charcoal)] outline-none transition-colors placeholder:text-[var(--text-faint)] focus:border-[var(--color-clay)]';
 const LABEL =
@@ -68,6 +84,13 @@ const STATUS_TONE: Record<string, StatusTone> = {
 export function AccountStudioPage() {
   const { user } = useAuth();
   const { data: orgs, isLoading: orgsLoading } = useOrganizations();
+  // Call Sheet Wave 2 — row 4 ("Seed the rolodex") goes live only behind the
+  // flag; flag-off keeps the checklist in its exact Wave-1 shape (SKIP
+  // disabled, "coming with the rolodex" — studio-setup-checklist.tsx's
+  // default when onSkipSeed/onOpenSeedReview are omitted).
+  const { value: callSheetOn } = useFeatureFlag('call-sheet');
+  const [seedReviewOpen, setSeedReviewOpen] = useState(false);
+  const [skipSeedError, setSkipSeedError] = useState<string | null>(null);
 
   // Prefer a design_studio membership; fall back to the first org of any
   // type (mirrors account-identity.ts's activeStudio resolution, but keeps
@@ -79,6 +102,7 @@ export function AccountStudioPage() {
 
   const { data: members } = useOrganizationMembers(studio?.id ?? '');
   const { data: projects } = useProjects();
+  const { data: contacts } = useStudioContacts(callSheetOn ? (studio?.id ?? null) : null);
 
   const createOrg = useCreateOrganization();
   const updateOrg = useUpdateOrganization();
@@ -133,13 +157,25 @@ export function AccountStudioPage() {
   );
 
   // Day-1 checklist inputs (U3) — own title + crew count read off the same
-  // members list the roster below renders; the rolodex inputs are Wave 2's,
-  // so they're left at the derivation's un-seeded defaults for now.
+  // members list the roster below renders. contactsCount/seedSkipped (Call
+  // Sheet Wave 2) only read real data behind the flag — flag-off leaves them
+  // at the derivation's un-seeded defaults, same as before this wave.
   const myJobTitle =
     members?.find((m) => m.user_id === user?.id)?.job_title ?? null;
   const memberCountBeyondSelf = (members ?? []).filter(
     (m) => m.user_id !== user?.id,
   ).length;
+  const contactsCount = callSheetOn ? (contacts?.length ?? 0) : 0;
+  const seedSkipped = callSheetOn ? !!studio?.rolodex_seed_skipped_at : false;
+
+  const handleSkipSeed = () => {
+    if (!studio || updateOrg.isPending) return;
+    setSkipSeedError(null);
+    updateOrg.mutate(
+      { id: studio.id, rolodex_seed_skipped_at: new Date().toISOString() },
+      { onError: (err) => setSkipSeedError(friendlySkipSeedError(err)) },
+    );
+  };
 
   const handleCreateStudio = () => {
     const name = newStudioName.trim();
@@ -316,9 +352,24 @@ export function AccountStudioPage() {
         myJobTitle={myJobTitle}
         memberCountBeyondSelf={memberCountBeyondSelf}
         projectsCount={projects?.length ?? 0}
+        contactsCount={contactsCount}
+        seedSkipped={seedSkipped}
         onInvite={() => setInviteOpen(true)}
+        onSkipSeed={callSheetOn && canManage ? handleSkipSeed : undefined}
+        skipSeedPending={updateOrg.isPending}
+        onOpenSeedReview={callSheetOn ? () => setSeedReviewOpen(true) : undefined}
+        skipSeedError={skipSeedError}
         className="mb-6 border-b border-[var(--color-pearl)] pb-5"
       />
+
+      {/* Call Sheet Wave 2 — row 4's rolodex review. */}
+      {callSheetOn && (
+        <RolodexSeedSheet
+          open={seedReviewOpen}
+          onClose={() => setSeedReviewOpen(false)}
+          organizationId={studio.id}
+        />
+      )}
 
       {/* Identity */}
       <div className="mb-6">

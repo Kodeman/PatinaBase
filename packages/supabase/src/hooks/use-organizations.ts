@@ -37,6 +37,9 @@ export interface Organization {
   business_verified_at: string | null;
   tax_id: string | null;
   status: OrganizationStatus;
+  /** Call Sheet day-1 checklist row 4 ("Seed the rolodex"): set when the owner
+   *  explicitly skips the seeded-rolodex review (00417). NULL = not skipped. */
+  rolodex_seed_skipped_at: string | null;
   created_at: string;
   updated_at: string;
 }
@@ -105,11 +108,17 @@ export interface AcceptedInvitation {
 // ═══════════════════════════════════════════════════════════════════════════
 
 /**
- * Get all organizations the current user is a member of
+ * Get all organizations the current user is a member of.
+ *
+ * `options.enabled` (default `true`, so existing callers are unchanged) lets
+ * a caller behind a feature flag hold the query back entirely rather than
+ * fetching and discarding the result (see party-profile-sheet.tsx's Call
+ * Sheet Wave 2 promote band).
  */
-export function useOrganizations() {
+export function useOrganizations(options?: { enabled?: boolean }) {
   return useQuery({
     queryKey: ['organizations'],
+    enabled: options?.enabled ?? true,
     queryFn: async () => {
       const supabase = getSupabase();
       const { data: { user } } = await supabase.auth.getUser();
