@@ -86,7 +86,7 @@ Deno.test("non-budget idempotency is strictly document-scoped", () => {
 });
 
 Deno.test(
-  "client-signed requires the exact pending-countersign posture",
+  "client-signed replay remains valid after studio execution",
   () => {
     assertEquals(
       assess({
@@ -101,6 +101,14 @@ Deno.test(
         transition: "client_signed",
         actorRole: "client",
         commercialState: "executed",
+      }),
+      { allowed: true },
+    );
+    assertEquals(
+      assess({
+        transition: "client_signed",
+        actorRole: "client",
+        commercialState: "sent",
       }),
       { allowed: false, reason: "transition_not_committed" },
     );

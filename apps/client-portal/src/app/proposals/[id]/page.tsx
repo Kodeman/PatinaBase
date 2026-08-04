@@ -17,6 +17,7 @@ import { ProposalRequestChangeDialog } from '@/components/proposals/ProposalRequ
 import { ProposalClarifyButton } from '@/components/proposals/ProposalClarifyButton';
 import { QueryFailure } from '@/components/query-failure';
 import { CommercialDocumentShell } from '@/components/commercial-document-shell';
+import { CommercialNotificationRecovery } from '@/components/commercial-notification-recovery';
 
 function formatDate(iso: string): string {
   return new Date(iso).toLocaleDateString('en-US', {
@@ -237,6 +238,10 @@ export default function ClientProposalDetailPage({
           feedbackEnabled={feedbackEnabled}
           sharedByStudio={identity?.name ?? undefined}
         />
+      )}
+
+      {commercialBundle && !isLegacy && (
+        <CommercialNotificationRecovery document={commercialBundle.document} />
       )}
 
       {isActionable && (
