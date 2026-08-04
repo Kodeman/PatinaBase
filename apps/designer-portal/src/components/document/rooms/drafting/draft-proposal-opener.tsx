@@ -1,15 +1,16 @@
 'use client';
 
 /**
- * Draft a proposal for an existing household (R85 · PRO-01) — the ad-hoc entry
- * to the Drafting Room that SKIPS lead → discovery for a repeat client. It
- * creates an EMPTY draft proposal (no template — proposal templates are retired
- * per R85; the Discovery-seeded path covers the seeded case) linked to the
- * chosen household, then walks straight into `/drafting/[id]`.
+ * Draft a design agreement for an existing household (R85 · PRO-01) — the
+ * ad-hoc entry to the Drafting Room that SKIPS lead → discovery for a repeat
+ * client. It creates an EMPTY draft design agreement (no template — templates
+ * are retired per R85; the Discovery-seeded path covers the seeded case)
+ * linked to the chosen household, then walks straight into `/drafting/[id]`.
  *
  * Two exports:
  *   • `useOpenDraftProposal()` — the primitive opener. Integration (the ⌘K
- *     "draft a proposal" row) passes both the profile and designer-client
+ *     "draft a design agreement" row, verb key `draft-proposal` unchanged for
+ *     analytics continuity) passes both the profile and designer-client
  *     relationship identities.
  *   • `DraftProposalSheet` — a paper overlay that reuses the R73 ClientPicker
  *     (invite-and-link a captured household included) to pick the household,
@@ -160,8 +161,8 @@ export function normalizeDraftHouseholds(
 }
 
 /**
- * The household-picker overlay for the ⌘K "draft a proposal" cold start.
- * Integration toggles `open`; on household selection it opens the draft.
+ * The household-picker overlay for the ⌘K "draft a design agreement" cold
+ * start. Integration toggles `open`; on household selection it opens the draft.
  */
 export function DraftProposalSheet({
   open,
@@ -221,7 +222,7 @@ export function DraftProposalSheet({
       className="fixed inset-0 z-[70] flex items-start justify-center bg-[rgba(28,25,23,0.28)] px-4 pt-[18vh]"
       role="dialog"
       aria-modal="true"
-      aria-label="Draft a proposal for an existing household"
+      aria-label="Draft a design agreement for an existing household"
       onMouseDown={(e) => {
         if (e.target === e.currentTarget) onClose();
       }}
@@ -261,7 +262,7 @@ export function openDraftProposalPicker() {
   window.dispatchEvent(new CustomEvent('document:open-draft-proposal'));
 }
 
-/** The layout host for the ⌘K "draft a proposal" cold start. */
+/** The layout host for the ⌘K "draft a design agreement" cold start. */
 export function DraftProposalOverlay() {
   const [open, setOpen] = useState(false);
   useEffect(() => {

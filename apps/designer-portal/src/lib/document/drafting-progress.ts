@@ -55,6 +55,17 @@ export function draftingStateLabel(pct: number): DraftingStateLabel {
   return 'Drafting';
 }
 
+/**
+ * Legacy retirement: no new legacy sending, so the underlying state literal
+ * 'Ready to send' (still returned by draftingStateLabel above — other
+ * consumers key off it) no longer describes a real act once fully drafted.
+ * Every DISPLAY surface reads through this shared mapping so a third
+ * consumer can't drift back to the retired wording independently.
+ */
+export function displayDraftingState(state: DraftingStateLabel | string): string {
+  return state === 'Ready to send' ? 'Fully drafted' : state;
+}
+
 /** The drafter's offer line: what's still open, in plain words (never blocks). */
 export function draftingGaps(f: DraftingFacets): string[] {
   const gaps: string[] = [];

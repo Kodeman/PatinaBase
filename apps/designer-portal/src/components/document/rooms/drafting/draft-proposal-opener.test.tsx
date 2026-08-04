@@ -187,7 +187,7 @@ describe('DraftProposalSheet', () => {
     );
     expect(
       screen.getByRole('dialog', {
-        name: 'Draft a proposal for an existing household',
+        name: 'Draft a design agreement for an existing household',
       }),
     ).toBeVisible();
     expect(onClose).not.toHaveBeenCalled();

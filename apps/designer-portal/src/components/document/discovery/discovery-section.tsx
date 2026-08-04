@@ -5,8 +5,9 @@
  * replaces the inert spine bar. Eight blocks fill in any order (R40 grammar);
  * the Strata Mark is the only progress device; the five essentials → "ready
  * for Direction" (a soft gate). On readiness the designer begins the Direction
- * — a seeded draft proposal (begin_direction_from_discovery, 00224) — and the
- * document re-derives Discovery→Direction, opening the Drafting Room pre-seeded.
+ * — a seeded draft design agreement (begin_direction_from_discovery, 00224) —
+ * and the document re-derives Discovery→Direction, opening the Drafting Room
+ * pre-seeded.
  *
  * The margin holds only the unstructured call Note (R66's load-bearing split);
  * structured facts live in the blocks and seed the proposal field→field.
@@ -14,7 +15,7 @@
  */
 
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { useRouter } from 'next/navigation';
+import { usePathname, useRouter } from 'next/navigation';
 import {
   useDiscovery,
   useUpsertDiscovery,
@@ -32,6 +33,7 @@ import {
   type DiscoveryFacts,
 } from '@/lib/document/discovery-readiness';
 import { formatBudgetRange } from '@/lib/document/discovery-seed';
+import { rememberRoomOrigin } from '@/lib/document/room-origin';
 import type { Option } from './field-kit';
 import {
   ScopeEditor,
@@ -136,6 +138,7 @@ export function DiscoverySection({
   clientName: string;
 }) {
   const router = useRouter();
+  const pathname = usePathname();
   const { data: read } = useDiscovery(engagementId);
   const upsert = useUpsertDiscovery();
   const beginDirection = useBeginDirection();
@@ -269,7 +272,12 @@ export function DiscoverySection({
       { designerClientId: engagementId },
       {
         onSuccess: (proposalId) => {
-          if (proposalId) router.push(`/doc/${proposalId}`);
+          if (proposalId) {
+            // Stash where we came from so "← back" out of the Room returns
+            // here (mirrors draft-proposal-opener.tsx's cold-start opener).
+            rememberRoomOrigin(pathname);
+            router.push(`/drafting/${proposalId}`);
+          }
         },
         onError: (err) => {
           // R83: the failure is explained in place, with a retry act. The RPC
@@ -472,7 +480,7 @@ export function DiscoverySection({
       </DocumentActionGroup>
 
       <p className="mb-2 flex items-center gap-2.5 font-mono text-[10px] uppercase tracking-[0.1em] text-[var(--text-muted)]">
-        The essentials — structured · they open &amp; seed the proposal
+        The essentials — structured · they open &amp; seed the agreement
         <span className="h-px flex-1 bg-[var(--color-pearl)]" />
       </p>
       {essentials.map((b) => (
@@ -490,7 +498,7 @@ export function DiscoverySection({
       ))}
 
       <p className="mb-2 mt-5 flex items-center gap-2.5 font-mono text-[10px] uppercase tracking-[0.1em] text-[var(--text-muted)]">
-        Deepen it — a sharper proposal, not required
+        Deepen it — a sharper agreement, not required
         <span className="h-px flex-1 bg-[var(--color-pearl)]" />
       </p>
       {deepening.map((b) => (

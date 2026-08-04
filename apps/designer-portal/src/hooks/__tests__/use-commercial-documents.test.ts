@@ -21,6 +21,7 @@ jest.mock('@tanstack/react-query', () => ({
 
 import {
   useCountersignDesignServicesAgreement,
+  useCreateFurnishingDraft,
   useCreateFurnishingsAuthorization,
   useOverrideBudgetCheckpoint,
   usePublishBudgetCheckpoint,
@@ -217,6 +218,68 @@ describe('designer commercial document hooks', () => {
         transition: 'budget_published',
         eventId: 'checkpoint-1',
       },
+    });
+  });
+
+  it('creates a project-bound furnishing draft and invalidates project commerce + proposals', async () => {
+    rpc.mockResolvedValue({
+      data: { proposalId: 'furnishing-draft-1', projectId: 'project-1' },
+      error: null,
+    });
+    const mutation = useCreateFurnishingDraft('project-1') as unknown as {
+      mutationFn: (
+        title: string
+      ) => Promise<{ proposalId: string; projectId: string }>;
+      onSuccess: (result: {
+        proposalId: string;
+        projectId: string;
+      }) => void | Promise<void>;
+    };
+
+    const result = await mutation.mutationFn('Furnishing selection');
+
+    expect(rpc).toHaveBeenCalledWith('create_furnishing_wave_draft', {
+      p_project_id: 'project-1',
+      p_title: 'Furnishing selection',
+    });
+    expect(result).toEqual({
+      proposalId: 'furnishing-draft-1',
+      projectId: 'project-1',
+    });
+
+    await mutation.onSuccess(result);
+
+    expect(invalidateQueries).toHaveBeenCalledWith({
+      queryKey: ['working-budget', 'project-1'],
+    });
+    expect(invalidateQueries).toHaveBeenCalledWith({
+      queryKey: ['furnishings-authorizations', 'project-1'],
+    });
+    expect(invalidateQueries).toHaveBeenCalledWith({
+      queryKey: ['project-authority', 'project-1'],
+    });
+    expect(invalidateQueries).toHaveBeenCalledWith({
+      queryKey: ['project-v2', 'project-1'],
+    });
+    expect(invalidateQueries).toHaveBeenCalledWith({
+      queryKey: ['proposals'],
+    });
+  });
+
+  it('trims the title before minting the furnishing draft rpc call', async () => {
+    rpc.mockResolvedValue({
+      data: { proposalId: 'furnishing-draft-2', projectId: 'project-1' },
+      error: null,
+    });
+    const mutation = useCreateFurnishingDraft('project-1') as unknown as {
+      mutationFn: (title: string) => Promise<unknown>;
+    };
+
+    await mutation.mutationFn('  Furnishing selection  ');
+
+    expect(rpc).toHaveBeenCalledWith('create_furnishing_wave_draft', {
+      p_project_id: 'project-1',
+      p_title: 'Furnishing selection',
     });
   });
 
