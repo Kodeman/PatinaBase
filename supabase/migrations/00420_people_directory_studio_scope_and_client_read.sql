@@ -55,12 +55,20 @@
 -- show_to_client = true. It neither feeds nor widens the 00217 path. Worth
 -- stating plainly: a client who ALSO held a party row with
 -- profile_id = auth.uid() on the same project would already have read every
--- party row through 00217 before this file existed. No shipped code sets
--- profile_id on a 'client'-kind party (grepped the party writers — the portal
--- add-party paths and the 00418 fold all leave profile_id NULL; only the
--- coordination resolve path sets it, for logged-in GC/vendor/client_rep seats),
--- so that overlap is theoretical today. If it ever stops being theoretical,
--- 00217 is the policy to revisit, not this one.
+-- party row through 00217 before this file existed. NOTHING in this repo ever
+-- WRITES project_parties.profile_id — not on a 'client'-kind party, not on any
+-- other kind. Grepped every writer: no migration UPDATEs or INSERTs the column
+-- (00217 only READS it via is_coordination_party, 00218's
+-- resolve_coordination_item never touches it, 00418's fold reads it into
+-- studio_contacts); no edge function writes it (sms-dispatch, sms-inbound,
+-- field-daily, site-request-dispatch are all read-only on it); no portal hook
+-- writes it (use-coordination.ts and use-studio-contacts.ts type the column but
+-- never send it — usePromoteToStudioContact stamps studio_contact_id instead).
+-- There is no "resolve path that sets it" — that path does not exist. The
+-- column is currently never populated, so 00217's policy is DORMANT in
+-- practice, and the overlap is not merely theoretical but structurally
+-- impossible until someone ships a writer. If one ever does, 00217 is the
+-- policy to revisit, not this one.
 --
 -- Additive only (D7): CREATE OR REPLACE VIEW + one new permissive SELECT
 -- policy. No grants, no revokes, no column drops. Nothing narrows.
@@ -382,8 +390,10 @@ COMMENT ON POLICY project_parties_client_select ON public.project_parties IS
   'coordination_party_parties_select, under which any user who is the '
   'profile_id of a party row on the project already reads ALL that project''s '
   'parties regardless of show_to_client. That pre-existing path is unchanged '
-  'and unwidened here; no shipped writer sets profile_id on a client-kind '
-  'party, so the two do not overlap in practice today.';
+  'and unwidened here; NO code path anywhere in the repo writes '
+  'project_parties.profile_id (no migration, no edge function, no portal '
+  'hook), so that column is currently never populated and the 00217 policy is '
+  'dormant — the two cannot overlap until a writer ships.';
 
 -- No GRANT/REVOKE in this file: project_parties already grants SELECT to
 -- authenticated (00212) and people_directory already grants SELECT to

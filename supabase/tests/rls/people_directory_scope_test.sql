@@ -24,6 +24,13 @@
 --   (h) DEGENERATE CASE: a solo designer with no studio co-members sees the
 --       same rows as before the migration (own clients / leads / parties),
 --       and zero contacts.
+--   (i) DUAL-STUDIO PINNING (00421): a designer active in TWO studios has no
+--       per-row studio dimension on their clients/leads, so a co-member from
+--       EITHER studio sees ALL of them. Pinned as KNOWN, ACCEPTED semantics.
+--   (j) CO-MEMBER READ COMPLETION (00421): a co-member with NO seat on the
+--       project team now SELECTs that project's parties + team rows and both
+--       v_project_roster branches; a guest co-member and an unrelated designer
+--       still see none; and the co-member's WRITES still fail.
 --
 -- How to run:
 --   docker exec -i supabase_db_supabase psql -U postgres -d postgres \
@@ -37,13 +44,20 @@ BEGIN;
 -- ─── fixtures ──────────────────────────────────────────────────────────────
 -- A = studio owner · B = studio member (teammate) · G = studio GUEST
 -- C = the client on A's project · S = a solo designer with no studio at all
+-- 00421 additions:
+-- M = active non-guest member of studio 1 with NO project-team seat anywhere
+--     (the actor whose Call Sheet rendered EMPTY before 00421)
+-- D = designer active in BOTH studios · N = member of studio 2 ONLY
 INSERT INTO auth.users (id, email, encrypted_password, email_confirmed_at, created_at, updated_at, instance_id, aud, role)
 VALUES
   ('bd000000-0000-4000-8000-000000000001', 'pd-owner@test.invalid',   '', NOW(), NOW(), NOW(), '00000000-0000-0000-0000-000000000000', 'authenticated', 'authenticated'),
   ('bd000000-0000-4000-8000-000000000002', 'pd-member@test.invalid',  '', NOW(), NOW(), NOW(), '00000000-0000-0000-0000-000000000000', 'authenticated', 'authenticated'),
   ('bd000000-0000-4000-8000-000000000003', 'pd-guest@test.invalid',   '', NOW(), NOW(), NOW(), '00000000-0000-0000-0000-000000000000', 'authenticated', 'authenticated'),
   ('bd000000-0000-4000-8000-000000000004', 'pd-client@test.invalid',  '', NOW(), NOW(), NOW(), '00000000-0000-0000-0000-000000000000', 'authenticated', 'authenticated'),
-  ('bd000000-0000-4000-8000-000000000005', 'pd-solo@test.invalid',    '', NOW(), NOW(), NOW(), '00000000-0000-0000-0000-000000000000', 'authenticated', 'authenticated');
+  ('bd000000-0000-4000-8000-000000000005', 'pd-solo@test.invalid',    '', NOW(), NOW(), NOW(), '00000000-0000-0000-0000-000000000000', 'authenticated', 'authenticated'),
+  ('bd000000-0000-4000-8000-000000000006', 'pd-dual@test.invalid',    '', NOW(), NOW(), NOW(), '00000000-0000-0000-0000-000000000000', 'authenticated', 'authenticated'),
+  ('bd000000-0000-4000-8000-000000000007', 'pd-studio2@test.invalid', '', NOW(), NOW(), NOW(), '00000000-0000-0000-0000-000000000000', 'authenticated', 'authenticated'),
+  ('bd000000-0000-4000-8000-000000000008', 'pd-seatless@test.invalid','', NOW(), NOW(), NOW(), '00000000-0000-0000-0000-000000000000', 'authenticated', 'authenticated');
 
 INSERT INTO profiles (id, email, full_name, display_name, created_at, updated_at)
 VALUES
@@ -51,32 +65,58 @@ VALUES
   ('bd000000-0000-4000-8000-000000000002', 'pd-member@test.invalid', 'PD Member', NULL, NOW(), NOW()),
   ('bd000000-0000-4000-8000-000000000003', 'pd-guest@test.invalid',  'PD Guest',  NULL, NOW(), NOW()),
   ('bd000000-0000-4000-8000-000000000004', 'pd-client@test.invalid', 'PD Client', NULL, NOW(), NOW()),
-  ('bd000000-0000-4000-8000-000000000005', 'pd-solo@test.invalid',   'PD Solo',   NULL, NOW(), NOW())
+  ('bd000000-0000-4000-8000-000000000005', 'pd-solo@test.invalid',   'PD Solo',   NULL, NOW(), NOW()),
+  ('bd000000-0000-4000-8000-000000000006', 'pd-dual@test.invalid',   'PD Dual',   NULL, NOW(), NOW()),
+  ('bd000000-0000-4000-8000-000000000007', 'pd-studio2@test.invalid','PD Studio2',NULL, NOW(), NOW()),
+  ('bd000000-0000-4000-8000-000000000008', 'pd-seatless@test.invalid','PD Seatless', NULL, NOW(), NOW())
 ON CONFLICT (id) DO NOTHING;
 
 INSERT INTO organizations (id, type, name, slug)
-VALUES ('bd000000-0000-4000-8000-0000000000a1', 'design_studio', 'PD Studio', 'pd-studio-test');
+VALUES
+  ('bd000000-0000-4000-8000-0000000000a1', 'design_studio', 'PD Studio',     'pd-studio-test'),
+  ('bd000000-0000-4000-8000-0000000000a2', 'design_studio', 'PD Studio Two', 'pd-studio-two-test');
 
 INSERT INTO organization_members (id, user_id, organization_id, role, status, joined_at, job_title, staff_role)
 VALUES
   ('bd000000-0000-4000-8000-00000000ab01', 'bd000000-0000-4000-8000-000000000001', 'bd000000-0000-4000-8000-0000000000a1', 'owner',  'active', NOW(), 'Principal',       'principal'),
   ('bd000000-0000-4000-8000-00000000ab02', 'bd000000-0000-4000-8000-000000000002', 'bd000000-0000-4000-8000-0000000000a1', 'member', 'active', NOW(), 'Junior Designer', 'design'),
-  ('bd000000-0000-4000-8000-00000000ab03', 'bd000000-0000-4000-8000-000000000003', 'bd000000-0000-4000-8000-0000000000a1', 'guest',  'active', NOW(), NULL,              NULL);
+  ('bd000000-0000-4000-8000-00000000ab03', 'bd000000-0000-4000-8000-000000000003', 'bd000000-0000-4000-8000-0000000000a1', 'guest',  'active', NOW(), NULL,              NULL),
+  -- 00421: D holds an active non-guest seat in BOTH studios
+  ('bd000000-0000-4000-8000-00000000ab04', 'bd000000-0000-4000-8000-000000000006', 'bd000000-0000-4000-8000-0000000000a1', 'member', 'active', NOW(), 'Associate',       'design'),
+  ('bd000000-0000-4000-8000-00000000ab05', 'bd000000-0000-4000-8000-000000000006', 'bd000000-0000-4000-8000-0000000000a2', 'member', 'active', NOW(), 'Associate',       'design'),
+  -- N is in studio 2 ONLY; M is in studio 1 ONLY and sits on no project team
+  ('bd000000-0000-4000-8000-00000000ab06', 'bd000000-0000-4000-8000-000000000007', 'bd000000-0000-4000-8000-0000000000a2', 'member', 'active', NOW(), 'Studio Two Hand', 'design'),
+  ('bd000000-0000-4000-8000-00000000ab07', 'bd000000-0000-4000-8000-000000000008', 'bd000000-0000-4000-8000-0000000000a1', 'member', 'active', NOW(), 'Studio Manager',  'ops');
 
 -- ── designer_clients: one per actor ────────────────────────────────────────
+-- c6 / c7 are BOTH D's. The names label which studio's work D was doing when
+-- the card was filed — but designer_clients carries NO studio column, so that
+-- label lives only in this fixture's head. Case (i) pins the consequence.
 INSERT INTO designer_clients (id, designer_id, client_name, status)
 VALUES
   ('bd000000-0000-4000-8000-0000000000c1', 'bd000000-0000-4000-8000-000000000001', 'A Household', 'active'),
   ('bd000000-0000-4000-8000-0000000000c2', 'bd000000-0000-4000-8000-000000000002', 'B Household', 'active'),
   ('bd000000-0000-4000-8000-0000000000c3', 'bd000000-0000-4000-8000-000000000003', 'G Household', 'active'),
-  ('bd000000-0000-4000-8000-0000000000c5', 'bd000000-0000-4000-8000-000000000005', 'S Household', 'active');
+  ('bd000000-0000-4000-8000-0000000000c5', 'bd000000-0000-4000-8000-000000000005', 'S Household', 'active'),
+  ('bd000000-0000-4000-8000-0000000000c6', 'bd000000-0000-4000-8000-000000000006', 'D Household (studio-1 side)', 'active'),
+  ('bd000000-0000-4000-8000-0000000000c7', 'bd000000-0000-4000-8000-000000000006', 'D Household (studio-2 side)', 'active');
 
--- ── leads: one open lead each for A, B and S ───────────────────────────────
+-- ── leads: one open lead each for A, B and S; two for D (one per "side") ───
 INSERT INTO leads (id, designer_id, project_type, contact_name, status)
 VALUES
   ('bd000000-0000-4000-8000-0000000000d1', 'bd000000-0000-4000-8000-000000000001', 'full_home', 'A Lead', 'new'),
   ('bd000000-0000-4000-8000-0000000000d2', 'bd000000-0000-4000-8000-000000000002', 'kitchen',   'B Lead', 'new'),
-  ('bd000000-0000-4000-8000-0000000000d5', 'bd000000-0000-4000-8000-000000000005', 'bath',      'S Lead', 'new');
+  ('bd000000-0000-4000-8000-0000000000d5', 'bd000000-0000-4000-8000-000000000005', 'bath',      'S Lead', 'new'),
+  ('bd000000-0000-4000-8000-0000000000d6', 'bd000000-0000-4000-8000-000000000006', 'kitchen',   'D Lead (studio-1 side)', 'new'),
+  ('bd000000-0000-4000-8000-0000000000d7', 'bd000000-0000-4000-8000-000000000006', 'bath',      'D Lead (studio-2 side)', 'new');
+
+-- ── a saved vendor (00421 §3: the studio's shared maker book) ──────────────
+INSERT INTO vendors (id, name)
+VALUES ('bd000000-0000-4000-8000-00000000ee01', 'PD Test Millworks');
+
+INSERT INTO saved_vendors (id, designer_id, vendor_id, notes)
+VALUES ('bd000000-0000-4000-8000-00000000ee02', 'bd000000-0000-4000-8000-000000000001',
+        'bd000000-0000-4000-8000-00000000ee01', 'A saved this one');
 
 -- ── projects ───────────────────────────────────────────────────────────────
 -- e1: A's project, client = C (the client-read cases live here)
@@ -489,6 +529,254 @@ BEGIN
 
   PERFORM pg_temp.reset_role();
   RAISE NOTICE 'people_directory_scope: case (h) passed.';
+END
+$$;
+
+-- ─── (i) DUAL-STUDIO transitivity — KNOWN, ACCEPTED semantics (00421) ───────
+--
+-- D holds an active non-guest seat in studio 1 AND studio 2. B is in studio 1
+-- only; N is in studio 2 only. Neither designer_clients nor leads carries a
+-- studio column — ownership is a single designer_id — so is_studio_comember(D)
+-- is true for a member of EITHER studio and there is no per-row dimension to
+-- filter on. Result: B sees BOTH of D's client cards and BOTH of D's leads,
+-- including the ones D filed while working the other studio's book, and N sees
+-- the same two from the other side.
+--
+-- This is DELIBERATE and ACCEPTED for this wave, not an oversight. It is the
+-- exact semantics 00316 already shipped for PROJECT sharing (projects_studio_
+-- select is likewise keyed on designer_id alone, so a dual-studio designer's
+-- projects have always been visible to co-members of either studio). Making
+-- the people rows narrower than the projects that hang off them would be an
+-- inconsistency, not a fix.
+--
+-- REVISIT IF multi-studio designers become real (today the product has no UI
+-- for joining a second studio, and _primary_studio_for picks exactly one). The
+-- fix then is a per-row studio dimension carried on the row itself — NOT a
+-- narrower helper, which would silently break the single-studio majority.
+-- This case exists to make that decision loud if anyone changes it.
+DO $$
+DECLARE
+  v_count INTEGER;
+  v_scope TEXT;
+BEGIN
+  PERFORM pg_temp.assume_user('bd000000-0000-4000-8000-000000000002');   -- B (studio 1 only)
+
+  SELECT count(*) INTO v_count FROM people_directory
+   WHERE role = 'client'
+     AND person_id IN ('bd000000-0000-4000-8000-0000000000c6',
+                       'bd000000-0000-4000-8000-0000000000c7');
+  ASSERT v_count = 2,
+    'FAIL i1: a studio-1 co-member must see BOTH of a dual-studio designer''s '
+    'client cards (accepted transitivity — see the case header), got ' || v_count;
+
+  SELECT count(*) INTO v_count FROM people_directory
+   WHERE role = 'lead'
+     AND person_id IN ('bd000000-0000-4000-8000-0000000000d6',
+                       'bd000000-0000-4000-8000-0000000000d7');
+  ASSERT v_count = 2,
+    'FAIL i2: a studio-1 co-member must see BOTH of a dual-studio designer''s '
+    'leads, got ' || v_count;
+
+  -- both read as studio scope (they are not B's own rows)
+  SELECT scope INTO v_scope FROM people_directory
+   WHERE person_id = 'bd000000-0000-4000-8000-0000000000c7';
+  ASSERT v_scope = 'studio',
+    'FAIL i3: the other studio''s card must still read scope=studio, got ' || COALESCE(v_scope, 'NULL');
+  PERFORM pg_temp.reset_role();
+
+  -- Symmetric from the other side: N (studio 2 only) sees the same two cards.
+  PERFORM pg_temp.assume_user('bd000000-0000-4000-8000-000000000007');   -- N
+  SELECT count(*) INTO v_count FROM people_directory
+   WHERE role = 'client'
+     AND person_id IN ('bd000000-0000-4000-8000-0000000000c6',
+                       'bd000000-0000-4000-8000-0000000000c7');
+  ASSERT v_count = 2,
+    'FAIL i4: a studio-2 co-member must see BOTH of the dual-studio designer''s '
+    'client cards, got ' || v_count;
+
+  -- but N reaches NOTHING of studio 1's own book (D is the only bridge, and a
+  -- bridge on a ROW, not on a whole studio: A's and B's rows stay in studio 1)
+  SELECT count(*) INTO v_count FROM people_directory
+   WHERE person_id IN ('bd000000-0000-4000-8000-0000000000c1',
+                       'bd000000-0000-4000-8000-0000000000c2',
+                       'bd000000-0000-4000-8000-0000000000d1',
+                       'bd000000-0000-4000-8000-0000000000d2');
+  ASSERT v_count = 0,
+    'FAIL i5: co-membership must NOT transit studio→studio through a shared '
+    'member — only that member''s OWN rows cross, got ' || v_count;
+  PERFORM pg_temp.reset_role();
+
+  -- and an unrelated designer still sees none of D's rows
+  PERFORM pg_temp.assume_user('bd000000-0000-4000-8000-000000000005');   -- S
+  SELECT count(*) INTO v_count FROM people_directory
+   WHERE person_id IN ('bd000000-0000-4000-8000-0000000000c6',
+                       'bd000000-0000-4000-8000-0000000000c7',
+                       'bd000000-0000-4000-8000-0000000000d6',
+                       'bd000000-0000-4000-8000-0000000000d7');
+  ASSERT v_count = 0, 'FAIL i6: an unrelated designer must see none of D''s rows, got ' || v_count;
+  PERFORM pg_temp.reset_role();
+
+  RAISE NOTICE 'people_directory_scope: case (i) passed.';
+END
+$$;
+
+-- ─── (j) CO-MEMBER READ COMPLETION — the 00421 policies ────────────────────
+--
+-- M is an active non-guest member of studio 1 who sits on NO project team.
+-- Before 00421 that actor's Call Sheet was EMPTY: 00420 widened the VIEW but
+-- project_parties (00212), project_team_members (00084/00087) and
+-- saved_vendors (00009) were still own-project / own-row, so every widened
+-- branch was hollow under security_invoker. These assertions FAIL on any
+-- checkout where 00421 is missing.
+DO $$
+DECLARE
+  v_count  INTEGER;
+  v_raised BOOLEAN;
+BEGIN
+  PERFORM pg_temp.assume_user('bd000000-0000-4000-8000-000000000008');   -- M
+
+  -- j1: the base tables themselves
+  SELECT count(*) INTO v_count FROM project_parties
+   WHERE project_id = 'bd000000-0000-4000-8000-0000000000e1';
+  ASSERT v_count = 2,
+    'FAIL j1a: a seatless co-member must SELECT both parties on a teammate''s '
+    'project, got ' || v_count;
+
+  SELECT count(*) INTO v_count FROM project_parties
+   WHERE project_id = 'bd000000-0000-4000-8000-0000000000e2';
+  ASSERT v_count = 2,
+    'FAIL j1b: …and both parties on the other teammate''s project, got ' || v_count;
+
+  SELECT count(*) INTO v_count FROM project_team_members
+   WHERE project_id = 'bd000000-0000-4000-8000-0000000000e1' AND removed_at IS NULL;
+  ASSERT v_count = 1,
+    'FAIL j1c: a seatless co-member must SELECT the project''s team seats, got ' || v_count;
+
+  -- j2: BOTH v_project_roster branches resolve for that same caller
+  SELECT count(*) INTO v_count FROM v_project_roster
+   WHERE project_id = 'bd000000-0000-4000-8000-0000000000e1' AND source = 'party';
+  ASSERT v_count = 2, 'FAIL j2a: roster party branch must show 2 rows, got ' || v_count;
+
+  SELECT count(*) INTO v_count FROM v_project_roster
+   WHERE project_id = 'bd000000-0000-4000-8000-0000000000e1' AND source = 'team';
+  ASSERT v_count = 1, 'FAIL j2b: roster team branch must show 1 row, got ' || v_count;
+
+  -- j3: the previously-hollow people_directory branches now yield rows
+  SELECT count(*) INTO v_count FROM people_directory
+   WHERE person_id IN ('bd000000-0000-4000-8000-0000000000b1',
+                       'bd000000-0000-4000-8000-0000000000b4',
+                       'bd000000-0000-4000-8000-0000000000b2');
+  ASSERT v_count = 3,
+    'FAIL j3a: the party branch must yield the studio''s parties to a seatless '
+    'co-member, got ' || v_count;
+
+  SELECT count(*) INTO v_count FROM people_directory
+   WHERE role = 'maker' AND person_id = 'bd000000-0000-4000-8000-00000000ee01';
+  ASSERT v_count = 1,
+    'FAIL j3b: the makers branch must yield the studio''s saved vendor, got ' || v_count;
+
+  SELECT count(*) INTO v_count FROM saved_vendors
+   WHERE vendor_id = 'bd000000-0000-4000-8000-00000000ee01';
+  ASSERT v_count = 1,
+    'FAIL j3c: a co-member must SELECT the studio''s saved_vendors row, got ' || v_count;
+
+  -- j4: WRITES still fail — every 00421 policy is SELECT-only.
+  UPDATE project_parties SET display_name = 'Comember Overreach'
+   WHERE id = 'bd000000-0000-4000-8000-0000000000b1';
+  GET DIAGNOSTICS v_count = ROW_COUNT;
+  ASSERT v_count = 0, 'FAIL j4a: a co-member must not UPDATE a party, rows affected: ' || v_count;
+
+  UPDATE project_team_members SET role = 'lead_designer'
+   WHERE id = 'bd000000-0000-4000-8000-0000000000f2';
+  GET DIAGNOSTICS v_count = ROW_COUNT;
+  ASSERT v_count = 0, 'FAIL j4b: a co-member must not UPDATE a team seat, rows affected: ' || v_count;
+
+  UPDATE saved_vendors SET notes = 'stolen'
+   WHERE id = 'bd000000-0000-4000-8000-00000000ee02';
+  GET DIAGNOSTICS v_count = ROW_COUNT;
+  ASSERT v_count = 0, 'FAIL j4c: a co-member must not UPDATE a teammate''s saved vendor, rows affected: ' || v_count;
+
+  DELETE FROM project_parties WHERE id = 'bd000000-0000-4000-8000-0000000000b1';
+  GET DIAGNOSTICS v_count = ROW_COUNT;
+  ASSERT v_count = 0, 'FAIL j4d: a co-member must not DELETE a party, rows affected: ' || v_count;
+
+  v_raised := false;
+  BEGIN
+    INSERT INTO project_parties (id, project_id, party_kind, display_name)
+    VALUES ('bd000000-0000-4000-8000-0000000000be', 'bd000000-0000-4000-8000-0000000000e1', 'gc', 'Comember Sneak');
+  EXCEPTION WHEN insufficient_privilege THEN v_raised := true;
+  END;
+  ASSERT v_raised, 'FAIL j4e: a co-member must not INSERT a party';
+
+  v_raised := false;
+  BEGIN
+    INSERT INTO project_team_members (id, project_id, user_id, role, assigned_by)
+    VALUES ('bd000000-0000-4000-8000-0000000000fe', 'bd000000-0000-4000-8000-0000000000e1',
+            'bd000000-0000-4000-8000-000000000008', 'support_designer',
+            'bd000000-0000-4000-8000-000000000008');
+  EXCEPTION WHEN insufficient_privilege THEN v_raised := true;
+  END;
+  ASSERT v_raised, 'FAIL j4f: a co-member must not INSERT a team seat (self-promotion)';
+
+  v_raised := false;
+  BEGIN
+    INSERT INTO saved_vendors (id, designer_id, vendor_id)
+    VALUES ('bd000000-0000-4000-8000-00000000ee03', 'bd000000-0000-4000-8000-000000000001',
+            'bd000000-0000-4000-8000-00000000ee01');
+  EXCEPTION WHEN insufficient_privilege THEN v_raised := true;
+  END;
+  ASSERT v_raised, 'FAIL j4g: a co-member must not INSERT a saved vendor on a teammate''s behalf';
+  PERFORM pg_temp.reset_role();
+
+  -- j5: a GUEST co-member still sees NONE of it
+  PERFORM pg_temp.assume_user('bd000000-0000-4000-8000-000000000003');   -- G
+  SELECT count(*) INTO v_count FROM project_parties
+   WHERE project_id IN ('bd000000-0000-4000-8000-0000000000e1',
+                        'bd000000-0000-4000-8000-0000000000e2');
+  ASSERT v_count = 0, 'FAIL j5a: a guest must see zero parties, got ' || v_count;
+
+  SELECT count(*) INTO v_count FROM project_team_members
+   WHERE project_id IN ('bd000000-0000-4000-8000-0000000000e1',
+                        'bd000000-0000-4000-8000-0000000000e2');
+  ASSERT v_count = 0, 'FAIL j5b: a guest must see zero team seats, got ' || v_count;
+
+  SELECT count(*) INTO v_count FROM v_project_roster
+   WHERE project_id IN ('bd000000-0000-4000-8000-0000000000e1',
+                        'bd000000-0000-4000-8000-0000000000e2');
+  ASSERT v_count = 0, 'FAIL j5c: a guest must see zero roster rows, got ' || v_count;
+
+  SELECT count(*) INTO v_count FROM saved_vendors
+   WHERE vendor_id = 'bd000000-0000-4000-8000-00000000ee01';
+  ASSERT v_count = 0, 'FAIL j5d: a guest must see zero saved_vendors rows, got ' || v_count;
+  PERFORM pg_temp.reset_role();
+
+  -- j6: an unrelated designer still sees none of it either
+  PERFORM pg_temp.assume_user('bd000000-0000-4000-8000-000000000005');   -- S
+  SELECT count(*) INTO v_count FROM project_parties
+   WHERE project_id IN ('bd000000-0000-4000-8000-0000000000e1',
+                        'bd000000-0000-4000-8000-0000000000e2');
+  ASSERT v_count = 0, 'FAIL j6a: an unrelated designer must see zero parties, got ' || v_count;
+
+  SELECT count(*) INTO v_count FROM project_team_members
+   WHERE project_id IN ('bd000000-0000-4000-8000-0000000000e1',
+                        'bd000000-0000-4000-8000-0000000000e2');
+  ASSERT v_count = 0, 'FAIL j6b: an unrelated designer must see zero team seats, got ' || v_count;
+
+  SELECT count(*) INTO v_count FROM saved_vendors
+   WHERE vendor_id = 'bd000000-0000-4000-8000-00000000ee01';
+  ASSERT v_count = 0, 'FAIL j6c: an unrelated designer must see zero saved_vendors rows, got ' || v_count;
+
+  -- j7: and the CLIENT's read stays exactly as narrow as 00420 made it —
+  -- the co-member widening must not have leaked a second path to the client.
+  PERFORM pg_temp.reset_role();
+  PERFORM pg_temp.assume_user('bd000000-0000-4000-8000-000000000004');   -- C
+  SELECT count(*) INTO v_count FROM project_parties
+   WHERE project_id = 'bd000000-0000-4000-8000-0000000000e1';
+  ASSERT v_count = 0,
+    'FAIL j7: the client must still see only opted-in rows (all off by now), got ' || v_count;
+  PERFORM pg_temp.reset_role();
+
+  RAISE NOTICE 'people_directory_scope: case (j) passed.';
   RAISE NOTICE 'All people_directory scope assertions passed.';
 END
 $$;
