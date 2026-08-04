@@ -12704,6 +12704,7 @@ export type Database = {
           phone_e164: string | null
           profile_id: string | null
           project_id: string
+          show_to_client: boolean
           sms_consent_status: string
           sms_consented_at: string | null
           sms_opt_out_at: string | null
@@ -12724,6 +12725,7 @@ export type Database = {
           phone_e164?: string | null
           profile_id?: string | null
           project_id: string
+          show_to_client?: boolean
           sms_consent_status?: string
           sms_consented_at?: string | null
           sms_opt_out_at?: string | null
@@ -12744,6 +12746,7 @@ export type Database = {
           phone_e164?: string | null
           profile_id?: string | null
           project_id?: string
+          show_to_client?: boolean
           sms_consent_status?: string
           sms_consented_at?: string | null
           sms_opt_out_at?: string | null
@@ -23114,6 +23117,28 @@ export type Database = {
           timelessness?: number | null
           version?: number | null
           warmth?: number | null
+        }
+        Relationships: []
+      }
+      v_project_roster: {
+        Row: {
+          company_name: string | null
+          display_name: string | null
+          email: string | null
+          has_active_field_link: boolean | null
+          job_title: string | null
+          kind: string | null
+          phone: string | null
+          profile_id: string | null
+          project_id: string | null
+          roster_id: string | null
+          show_to_client: boolean | null
+          sms_consent_status: string | null
+          source: string | null
+          staff_role: string | null
+          studio_contact_id: string | null
+          trade: string | null
+          updated_at: string | null
         }
         Relationships: []
       }

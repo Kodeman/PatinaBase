@@ -7973,3 +7973,9 @@ DO $g$ BEGIN
   GRANT EXECUTE ON FUNCTION public.fold_legacy_contacts_into_studios() TO service_role;
 EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
 END $g$;
+
+-- 00419_project_roster_wiring.sql
+DO $g$ BEGIN
+  GRANT SELECT ON public.v_project_roster TO authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
