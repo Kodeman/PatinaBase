@@ -1,0 +1,1473 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="auto">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Two Plans, One Build — Patina Library configuration review</title>
+<style>
+/* ============================================================
+   TWO PLANS, ONE BUILD — PM review of the shipped Library
+   configuration against the variance proposal.
+   Sibling to library-variance-proposal.html: same drafting-ink /
+   graph-paper substrate, same bookish serif + mono spec labels.
+   New here: TWO accents. Verdigris = AS PROPOSED (the oxidised
+   copper of the earlier deck). Copper = AS BUILT (the same metal,
+   before it has weathered). Oxblood marks a gap; slate marks a
+   deliberate divergence.
+   Self-contained. No external fonts, scripts, images, or requests.
+   ============================================================ */
+
+:root{
+  --paper:#E7E9E3;
+  --paper-2:#F3F4F0;
+  --card:#FBFBF8;
+  --ink:#16202B;
+  --ink-2:#33404E;
+  --slate:#5D6773;
+  --rule:rgba(22,32,43,.14);
+  --rule-2:rgba(22,32,43,.28);
+
+  --verdigris:#2F6F63;              /* AS PROPOSED */
+  --verdigris-soft:rgba(47,111,99,.10);
+  --verdigris-line:rgba(47,111,99,.34);
+
+  --copper:#A9552A;                 /* AS BUILT */
+  --copper-soft:rgba(169,85,42,.10);
+  --copper-line:rgba(169,85,42,.34);
+
+  --oxblood:#8A3A32;                /* gap */
+  --oxblood-soft:rgba(138,58,50,.09);
+
+  --brass:#8C6A1C;                  /* caution / notes */
+  --brass-soft:rgba(140,106,28,.10);
+
+  --grid:rgba(22,32,43,.045);
+  --shadow:0 1px 0 rgba(22,32,43,.05), 0 10px 30px -22px rgba(22,32,43,.5);
+
+  --display:"Iowan Old Style","Palatino Linotype",Palatino,"Book Antiqua",Georgia,serif;
+  --body:-apple-system,BlinkMacSystemFont,"Segoe UI",system-ui,Roboto,"Helvetica Neue",Arial,sans-serif;
+  --mono:ui-monospace,SFMono-Regular,"SF Mono",Menlo,Consolas,"Liberation Mono",monospace;
+}
+
+@media (prefers-color-scheme: dark){
+  :root[data-theme="auto"]{
+    --paper:#111820;
+    --paper-2:#161E27;
+    --card:#1B252F;
+    --ink:#E6E9E5;
+    --ink-2:#C3CBD2;
+    --slate:#8C98A4;
+    --rule:rgba(230,233,229,.14);
+    --rule-2:rgba(230,233,229,.3);
+    --verdigris:#7CC7B6;
+    --verdigris-soft:rgba(124,199,182,.12);
+    --verdigris-line:rgba(124,199,182,.4);
+    --copper:#E0925F;
+    --copper-soft:rgba(224,146,95,.13);
+    --copper-line:rgba(224,146,95,.4);
+    --oxblood:#DE8478;
+    --oxblood-soft:rgba(222,132,120,.12);
+    --brass:#D5A24C;
+    --brass-soft:rgba(213,162,76,.12);
+    --grid:rgba(230,233,229,.04);
+    --shadow:0 1px 0 rgba(0,0,0,.3), 0 14px 34px -24px rgba(0,0,0,.9);
+  }
+}
+
+:root[data-theme="dark"]{
+  --paper:#111820;
+  --paper-2:#161E27;
+  --card:#1B252F;
+  --ink:#E6E9E5;
+  --ink-2:#C3CBD2;
+  --slate:#8C98A4;
+  --rule:rgba(230,233,229,.14);
+  --rule-2:rgba(230,233,229,.3);
+  --verdigris:#7CC7B6;
+  --verdigris-soft:rgba(124,199,182,.12);
+  --verdigris-line:rgba(124,199,182,.4);
+  --copper:#E0925F;
+  --copper-soft:rgba(224,146,95,.13);
+  --copper-line:rgba(224,146,95,.4);
+  --oxblood:#DE8478;
+  --oxblood-soft:rgba(222,132,120,.12);
+  --brass:#D5A24C;
+  --brass-soft:rgba(213,162,76,.12);
+  --grid:rgba(230,233,229,.04);
+  --shadow:0 1px 0 rgba(0,0,0,.3), 0 14px 34px -24px rgba(0,0,0,.9);
+}
+
+*,*::before,*::after{box-sizing:border-box}
+html,body{margin:0;padding:0;height:100%}
+html{-webkit-text-size-adjust:100%}
+
+body{
+  background:var(--paper);
+  color:var(--ink);
+  font-family:var(--body);
+  font-size:16px;
+  line-height:1.55;
+  overflow-x:hidden;
+  background-image:
+    linear-gradient(var(--grid) 1px, transparent 1px),
+    linear-gradient(90deg, var(--grid) 1px, transparent 1px);
+  background-size:28px 28px, 28px 28px;
+}
+
+/* ---------- deck shell ---------- */
+#deck{
+  height:100dvh;
+  overflow-y:auto;
+  overflow-x:hidden;
+  scroll-snap-type:y proximity;
+  /* NB: deliberately NO `scroll-behavior:smooth` here. On a snapping
+     scroll container Chrome silently cancels programmatic scrolls,
+     which kills keyboard navigation. Jumps are instant, by design. */
+}
+
+.slide{
+  min-height:100dvh;
+  scroll-snap-align:start;
+  display:flex;
+  align-items:center;
+  padding:clamp(28px,5vh,64px) clamp(20px,5vw,80px);
+  border-bottom:1px solid var(--rule);
+  position:relative;
+}
+.inner{
+  width:100%;
+  max-width:1180px;
+  margin:0 auto;
+  display:grid;
+  grid-template-columns:132px minmax(0,1fr);
+  gap:clamp(18px,3vw,44px);
+  align-items:start;
+}
+@media (max-width:860px){
+  .inner{grid-template-columns:minmax(0,1fr);gap:14px}
+}
+.gutter{position:sticky;top:0;padding-top:.5rem}
+.main{min-width:0}
+
+/* ---------- type ---------- */
+.eyebrow{
+  font-family:var(--mono);
+  font-size:11px;
+  letter-spacing:.14em;
+  text-transform:uppercase;
+  color:var(--slate);
+  display:block;
+}
+.gutter .num{
+  font-family:var(--mono);
+  font-size:11px;
+  letter-spacing:.1em;
+  color:var(--verdigris);
+  display:block;
+  margin-top:6px;
+}
+.gutter .tick{
+  display:block;width:34px;height:2px;
+  background:linear-gradient(90deg,var(--verdigris) 0 50%, var(--copper) 50% 100%);
+  margin-top:12px;opacity:.6;
+}
+@media (max-width:860px){ .gutter .tick{display:none} .gutter{position:static} }
+
+h1,h2,h3{font-family:var(--display);font-weight:600;letter-spacing:-.012em;margin:0}
+h1{font-size:clamp(2.3rem,6vw,4.3rem);line-height:1.04}
+h2{font-size:clamp(1.65rem,3.4vw,2.8rem);line-height:1.1;margin-bottom:.5rem}
+h3{font-size:clamp(1.02rem,1.7vw,1.28rem);line-height:1.25}
+.lede{
+  font-size:clamp(1.02rem,1.5vw,1.2rem);
+  color:var(--ink-2);
+  max-width:66ch;
+  margin:.9rem 0 0;
+}
+p{margin:.7rem 0;max-width:72ch}
+.small{font-size:.86rem;color:var(--slate);line-height:1.5}
+.tiny{font-size:.78rem;color:var(--slate);line-height:1.45}
+strong{font-weight:650;color:var(--ink)}
+em{font-style:italic}
+.vd{color:var(--verdigris)}
+.cu{color:var(--copper)}
+.ox{color:var(--oxblood)}
+.br{color:var(--brass)}
+
+code,.mono{font-family:var(--mono);font-size:.82em}
+code{
+  background:var(--paper-2);
+  color:var(--ink-2);
+  border:1px solid var(--rule);
+  padding:.06em .36em;
+  border-radius:3px;
+  word-break:break-word;
+}
+code.p{background:var(--verdigris-soft);color:var(--verdigris);border-color:var(--verdigris-line)}
+code.b{background:var(--copper-soft);color:var(--copper);border-color:var(--copper-line)}
+
+.kicker{
+  font-family:var(--mono);font-size:10.5px;letter-spacing:.13em;
+  text-transform:uppercase;color:var(--slate);display:block;margin-bottom:.35rem;
+}
+
+/* ---------- cover ---------- */
+.cover .inner{grid-template-columns:minmax(0,1fr)}
+.wordmark{display:flex;align-items:center;gap:10px;margin-bottom:clamp(18px,4vh,40px)}
+.wordmark svg{display:block}
+.wordmark span{
+  font-family:var(--mono);font-size:11px;letter-spacing:.24em;
+  text-transform:uppercase;color:var(--slate);
+}
+.cover-quote{
+  font-family:var(--display);
+  font-size:clamp(1.35rem,2.7vw,1.95rem);
+  line-height:1.28;
+  color:var(--ink-2);
+  font-style:italic;
+  border-left:3px solid var(--copper);
+  padding-left:clamp(14px,2vw,24px);
+  margin:clamp(20px,3.6vh,36px) 0 0;
+  max-width:30ch;
+}
+.cover-meta{
+  margin-top:clamp(24px,5vh,48px);
+  display:flex;flex-wrap:wrap;gap:10px 28px;
+  font-family:var(--mono);font-size:11px;letter-spacing:.1em;
+  text-transform:uppercase;color:var(--slate);
+  border-top:1px solid var(--rule);padding-top:16px;
+}
+.cover-meta b{color:var(--ink);font-weight:500}
+
+.legend{
+  display:flex;flex-wrap:wrap;gap:10px 22px;margin-top:20px;
+  font-family:var(--mono);font-size:10.5px;letter-spacing:.11em;text-transform:uppercase;
+  color:var(--slate);
+}
+.legend span{display:inline-flex;align-items:center;gap:7px}
+.legend i{display:inline-block;width:22px;height:3px;border-radius:2px}
+.legend .l-p{background:var(--verdigris)}
+.legend .l-b{background:var(--copper)}
+.legend .l-g{background:var(--oxblood)}
+.legend .l-d{background:var(--slate)}
+
+/* ---------- cards & grids ---------- */
+.grid{display:grid;gap:13px;margin-top:1.05rem}
+.g2{grid-template-columns:repeat(2,minmax(0,1fr))}
+.g3{grid-template-columns:repeat(3,minmax(0,1fr))}
+.g4{grid-template-columns:repeat(4,minmax(0,1fr))}
+@media (max-width:960px){ .g3,.g4{grid-template-columns:repeat(2,minmax(0,1fr))} }
+@media (max-width:640px){ .g2,.g3,.g4{grid-template-columns:minmax(0,1fr)} }
+
+.card{
+  background:var(--card);
+  border:1px solid var(--rule);
+  border-radius:6px;
+  padding:14px 16px;
+  box-shadow:var(--shadow);
+  min-width:0;
+}
+.card h3{margin-bottom:.3rem}
+.card p{margin:.35rem 0}
+.card .small{margin-top:.4rem}
+.card.prop{border-left:3px solid var(--verdigris)}
+.card.built{border-left:3px solid var(--copper)}
+.card.gap{border-left:3px solid var(--oxblood)}
+.card.note{border-left:3px solid var(--slate)}
+
+/* ---------- signature: AS PROPOSED / AS BUILT panel ---------- */
+.cmp{
+  border:1px solid var(--rule);
+  border-radius:6px;
+  background:var(--card);
+  box-shadow:var(--shadow);
+  overflow:hidden;
+  margin-top:1rem;
+  min-width:0;
+}
+.cmp + .cmp{margin-top:13px}
+.cmp-cols{display:grid;grid-template-columns:repeat(2,minmax(0,1fr))}
+@media (max-width:780px){ .cmp-cols{grid-template-columns:minmax(0,1fr)} }
+.cmp-col{padding:13px 15px 14px;min-width:0}
+.cmp-col.prop{border-top:3px solid var(--verdigris)}
+.cmp-col.built{border-top:3px solid var(--copper);border-left:1px solid var(--rule)}
+@media (max-width:780px){ .cmp-col.built{border-left:none} }
+.cmp-col .tag{
+  font-family:var(--mono);font-size:9.5px;letter-spacing:.16em;text-transform:uppercase;
+  display:block;margin-bottom:.45rem;
+}
+.cmp-col.prop .tag{color:var(--verdigris)}
+.cmp-col.built .tag{color:var(--copper)}
+.cmp-col h3{font-size:1rem;margin-bottom:.25rem}
+.cmp-col p{margin:.3rem 0;font-size:.87rem;color:var(--ink-2);max-width:none;line-height:1.5}
+.cmp-col .refs{margin-top:.55rem;display:flex;flex-wrap:wrap;gap:5px}
+.cmp-col .refs code{font-size:.72rem}
+
+.verdict{
+  border-top:1px solid var(--rule);
+  background:var(--paper-2);
+  padding:8px 15px;
+  display:flex;align-items:baseline;gap:10px;flex-wrap:wrap;
+}
+.verdict .mark{
+  font-family:var(--mono);font-size:9.5px;letter-spacing:.16em;text-transform:uppercase;
+  border:1px solid currentColor;border-radius:3px;padding:1px 7px;flex:0 0 auto;
+}
+.verdict .say{font-size:.83rem;color:var(--slate);line-height:1.45;min-width:0}
+.cmp[data-verdict="converged"] .verdict .mark{color:var(--verdigris);background:var(--verdigris-soft)}
+.cmp[data-verdict="deeper"] .verdict .mark{color:var(--copper);background:var(--copper-soft)}
+.cmp[data-verdict="gap"] .verdict .mark{color:var(--oxblood);background:var(--oxblood-soft)}
+.cmp[data-verdict="divergence"] .verdict .mark{color:var(--slate);background:transparent;border-style:dashed}
+.cmp[data-verdict="gap"]{border-color:rgba(138,58,50,.35)}
+:root[data-theme="dark"] .cmp[data-verdict="gap"]{border-color:rgba(222,132,120,.32)}
+
+/* ---------- convergence pairs ---------- */
+.pair{
+  border:1px solid var(--rule);border-radius:5px;background:var(--card);
+  padding:10px 12px;min-width:0;
+  border-left:3px solid var(--verdigris);
+  position:relative;
+}
+.pair::after{
+  content:"";position:absolute;left:-3px;top:0;width:3px;height:50%;background:var(--copper);
+}
+.pair .n{font-family:var(--mono);font-size:10px;color:var(--slate);letter-spacing:.1em}
+.pair .t{font-size:.88rem;color:var(--ink);margin-top:2px;line-height:1.35;font-weight:600}
+.pair .s{font-size:.79rem;color:var(--slate);margin-top:4px;line-height:1.45}
+.pair .s code{font-size:.72rem}
+
+/* ---------- evidence blocks ---------- */
+.evidence{
+  background:var(--paper-2);
+  border:1px solid var(--rule);
+  border-left:3px solid var(--brass);
+  border-radius:5px;
+  padding:11px 13px;
+  min-width:0;
+}
+.evidence .where{
+  font-family:var(--mono);font-size:10.5px;color:var(--brass);
+  letter-spacing:.04em;display:block;margin-bottom:6px;word-break:break-word;
+}
+.evidence .what{
+  font-family:var(--mono);font-size:.78rem;color:var(--ink);
+  background:var(--card);border:1px dashed var(--rule-2);
+  border-radius:4px;padding:7px 9px;display:block;margin-bottom:7px;
+  white-space:normal;word-break:break-word;line-height:1.5;
+}
+.evidence .read{font-size:.82rem;color:var(--slate);line-height:1.45;margin:0;max-width:none}
+
+/* ---------- quote ---------- */
+.quote{border-left:3px solid var(--copper);padding:2px 0 2px 16px;margin:14px 0}
+.quote p{
+  font-family:var(--display);font-style:italic;
+  font-size:clamp(1rem,1.5vw,1.18rem);line-height:1.4;color:var(--ink);margin:0;max-width:64ch;
+}
+.quote .attr{
+  font-family:var(--mono);font-size:10.5px;letter-spacing:.1em;
+  text-transform:uppercase;color:var(--slate);margin-top:8px;display:block;
+}
+
+/* ---------- chips / rail (kept from the sibling deck) ---------- */
+.rail{
+  background:var(--card);border:1px solid var(--rule);border-radius:6px;
+  padding:12px 14px;margin:10px 0;min-width:0;
+}
+.rail-head{display:flex;align-items:baseline;justify-content:space-between;gap:12px;margin-bottom:9px;flex-wrap:wrap}
+.rail-name{font-family:var(--mono);font-size:11px;letter-spacing:.12em;text-transform:uppercase;color:var(--ink)}
+.rail-kind{font-family:var(--mono);font-size:10px;letter-spacing:.08em;color:var(--slate)}
+.chips{display:flex;gap:7px;flex-wrap:wrap}
+.chip{
+  display:inline-flex;flex-direction:column;gap:2px;
+  border:1px solid var(--rule-2);border-radius:4px;padding:6px 10px 7px;
+  background:var(--paper-2);position:relative;min-width:0;max-width:100%;
+}
+.chip .lab{font-size:.83rem;color:var(--ink);line-height:1.3}
+.chip .delta{font-family:var(--mono);font-size:10px;color:var(--slate);line-height:1.3}
+.chip.on{border-color:var(--copper);background:var(--copper-soft);box-shadow:inset 0 0 0 1px var(--copper)}
+.chip.on .lab{color:var(--copper);font-weight:600}
+.chip.on .delta{color:var(--copper)}
+.chip.blocked{border-style:dashed;border-color:var(--oxblood)}
+.chip.blocked .lab{color:var(--oxblood);text-decoration:line-through;text-decoration-thickness:1px}
+.chip.ghost{opacity:.48}
+
+/* ---------- chain / spine diagram ---------- */
+.spine{
+  display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px;margin-top:1rem;min-width:0;
+}
+@media (max-width:820px){ .spine{grid-template-columns:repeat(2,minmax(0,1fr))} }
+@media (max-width:520px){ .spine{grid-template-columns:minmax(0,1fr)} }
+.spine .step{
+  border:1px solid var(--rule);border-radius:5px;background:var(--card);
+  padding:10px 12px;min-width:0;position:relative;
+}
+.spine .step .t{font-size:.88rem;color:var(--ink);line-height:1.3;display:block}
+.spine .step .s{font-size:.74rem;color:var(--slate);margin-top:5px;line-height:1.5;display:block;word-break:break-word}
+.spine .step .s code{font-size:.66rem;padding:.02em .28em}
+.spine .step:not(:last-child)::after{
+  content:"\2192";position:absolute;right:8px;top:8px;
+  font-family:var(--mono);font-size:12px;color:var(--copper);opacity:.55;
+}
+.spine .step.built{border-color:var(--copper-line);background:var(--copper-soft)}
+.spine .step.dead{border-style:dashed;border-color:var(--oxblood);background:var(--oxblood-soft)}
+.spine .step.dead .t{color:var(--oxblood)}
+.spine .step .kicker{color:var(--slate)}
+.spine .step.dead .kicker{color:var(--oxblood)}
+
+/* ---------- tables ---------- */
+.tablewrap{overflow-x:auto;margin-top:1rem;border:1px solid var(--rule);border-radius:6px;background:var(--card)}
+table{border-collapse:collapse;width:100%;min-width:620px;font-size:.845rem}
+th,td{text-align:left;padding:9px 13px;border-bottom:1px solid var(--rule);vertical-align:top}
+th{
+  font-family:var(--mono);font-size:10px;letter-spacing:.11em;text-transform:uppercase;
+  color:var(--slate);font-weight:500;background:var(--paper-2);
+}
+th.p{color:var(--verdigris)}
+th.b{color:var(--copper)}
+tr:last-child td{border-bottom:none}
+td .st{
+  font-family:var(--mono);font-size:9.5px;letter-spacing:.13em;text-transform:uppercase;
+  border:1px solid currentColor;border-radius:3px;padding:1px 6px;white-space:nowrap;
+}
+.st.solved{color:var(--verdigris);background:var(--verdigris-soft)}
+.st.held{color:var(--slate)}
+.st.hot{color:var(--oxblood);background:var(--oxblood-soft)}
+.st.part{color:var(--brass);background:var(--brass-soft)}
+
+/* ---------- lists ---------- */
+ul.plain{list-style:none;padding:0;margin:.6rem 0}
+ul.plain li{
+  padding-left:20px;position:relative;margin:.42rem 0;max-width:74ch;
+  font-size:.92rem;color:var(--ink-2);line-height:1.5;
+}
+ul.plain li::before{
+  content:"";position:absolute;left:2px;top:.62em;width:7px;height:1.5px;background:var(--copper);
+}
+ul.plain li strong{color:var(--ink)}
+ul.plain.pl li::before{background:var(--verdigris)}
+
+/* ---------- PO paper mock ---------- */
+.po{
+  background:var(--card);border:1px solid var(--rule);border-radius:5px;
+  padding:13px 15px;font-family:var(--mono);font-size:.77rem;line-height:1.7;
+  overflow-x:auto;min-width:0;
+}
+.po .hd{
+  color:var(--slate);border-bottom:1px solid var(--rule);padding-bottom:6px;margin-bottom:8px;
+  font-size:10px;letter-spacing:.12em;text-transform:uppercase;
+}
+.po .row{display:flex;justify-content:space-between;gap:20px;white-space:nowrap}
+.po .spec{margin-top:9px;padding-top:9px;border-top:1px dashed var(--rule-2);white-space:normal}
+.po.p .spec{color:var(--verdigris)}
+.po.p .spec b{color:var(--ink);font-weight:500}
+.po .none{color:var(--oxblood);white-space:normal}
+
+/* ---------- punch list ---------- */
+.pl-band{
+  border:1px solid var(--rule);border-radius:6px;background:var(--card);
+  padding:13px 15px;min-width:0;border-top:3px solid var(--oxblood);
+}
+.pl-band.p1{border-top-color:var(--copper)}
+.pl-band.p2{border-top-color:var(--slate)}
+.pl-band .when{font-family:var(--mono);font-size:10.5px;letter-spacing:.12em;text-transform:uppercase;color:var(--slate)}
+.pl-band h3{margin:.3rem 0 .4rem;font-size:1.04rem}
+.pl-band ol{margin:.3rem 0 0;padding-left:1.1rem}
+.pl-band li{font-size:.85rem;color:var(--ink-2);margin:.35rem 0;line-height:1.45}
+.pl-band li strong{color:var(--ink)}
+.pl-band .why{
+  margin-top:10px;padding-top:9px;border-top:1px dashed var(--rule);
+  font-size:.79rem;color:var(--copper);line-height:1.45;
+}
+
+/* ---------- callout / note ---------- */
+.callout{
+  border:1px solid var(--copper-line);background:var(--copper-soft);
+  border-radius:6px;padding:13px 16px;margin-top:1.05rem;
+}
+.callout p{margin:0;font-size:.93rem;color:var(--ink);max-width:none}
+.callout .kicker{color:var(--copper)}
+.callout.p{border-color:var(--verdigris-line);background:var(--verdigris-soft)}
+.callout.p .kicker{color:var(--verdigris)}
+
+.note{
+  border:1px dashed var(--rule-2);border-radius:6px;padding:12px 15px;margin-top:1rem;
+  background:var(--paper-2);
+}
+.note p{margin:.3rem 0;font-size:.85rem;color:var(--slate);max-width:82ch}
+.note .kicker{color:var(--brass)}
+
+.stat{
+  display:flex;flex-wrap:wrap;gap:10px 26px;margin-top:1.05rem;
+  border-top:1px solid var(--rule);border-bottom:1px solid var(--rule);padding:11px 0;
+}
+.stat div{min-width:0;display:flex;flex-direction:column;gap:2px}
+.stat .v{font-family:var(--mono);font-size:1.12rem;color:var(--copper);line-height:1.2}
+.stat .k{font-family:var(--mono);font-size:9.5px;letter-spacing:.13em;text-transform:uppercase;color:var(--slate);line-height:1.3}
+
+/* ---------- chrome ---------- */
+#progress{
+  position:fixed;top:0;left:0;height:2px;
+  background:linear-gradient(90deg,var(--verdigris),var(--copper));
+  width:0;z-index:60;transition:width .18s linear;
+}
+@media (prefers-reduced-motion: reduce){ #progress{transition:none} }
+
+#chrome{
+  position:fixed;right:clamp(12px,2.4vw,26px);bottom:clamp(12px,2.4vh,24px);
+  z-index:60;display:flex;align-items:center;gap:8px;
+  background:var(--card);border:1px solid var(--rule);border-radius:999px;
+  padding:5px 6px 5px 13px;box-shadow:var(--shadow);
+}
+#counter{font-family:var(--mono);font-size:11px;letter-spacing:.1em;color:var(--slate);min-width:52px}
+#counter b{color:var(--ink);font-weight:600}
+.navbtn{
+  appearance:none;border:1px solid var(--rule);background:var(--paper-2);color:var(--ink);
+  width:28px;height:28px;border-radius:999px;cursor:pointer;
+  display:inline-flex;align-items:center;justify-content:center;font-size:13px;line-height:1;
+  font-family:var(--mono);padding:0;
+}
+.navbtn:hover{border-color:var(--copper);color:var(--copper)}
+.navbtn:focus-visible,#themebtn:focus-visible{outline:2px solid var(--copper);outline-offset:2px}
+#themebtn{
+  appearance:none;border:1px solid var(--rule);background:var(--paper-2);color:var(--slate);
+  height:28px;border-radius:999px;cursor:pointer;padding:0 11px;
+  font-family:var(--mono);font-size:10px;letter-spacing:.1em;text-transform:uppercase;
+}
+#themebtn:hover{border-color:var(--copper);color:var(--copper)}
+
+#hint{
+  position:fixed;left:clamp(12px,2.4vw,26px);bottom:clamp(12px,2.4vh,24px);z-index:60;
+  font-family:var(--mono);font-size:10px;letter-spacing:.1em;text-transform:uppercase;
+  color:var(--slate);opacity:.75;
+}
+@media (max-width:700px){ #hint{display:none} }
+
+/* reveal */
+.slide .main > *, .slide .gutter > *{opacity:0;transform:translateY(8px);transition:opacity .5s ease, transform .5s ease}
+.slide.seen .main > *, .slide.seen .gutter > *{opacity:1;transform:none}
+.slide.seen .main > *:nth-child(2){transition-delay:.06s}
+.slide.seen .main > *:nth-child(3){transition-delay:.12s}
+.slide.seen .main > *:nth-child(4){transition-delay:.17s}
+.slide.seen .main > *:nth-child(5){transition-delay:.21s}
+@media (prefers-reduced-motion: reduce){
+  .slide .main > *, .slide .gutter > *{opacity:1;transform:none;transition:none}
+}
+
+/* ---------- print ---------- */
+@media print{
+  html,body{height:auto;background:#fff;color:#000;background-image:none}
+  #deck{height:auto;overflow:visible}
+  #chrome,#hint,#progress{display:none !important}
+  .slide{
+    min-height:auto;height:auto;page-break-after:always;break-after:page;
+    padding:14mm 12mm;border-bottom:none;display:block;
+  }
+  .slide:last-child{page-break-after:auto;break-after:auto}
+  .slide .main > *,.slide .gutter > *{opacity:1 !important;transform:none !important}
+  .card,.cmp,.evidence,.rail,.pl-band,.pair,.po,.tablewrap,.spine{break-inside:avoid;box-shadow:none}
+  .inner{max-width:none}
+  h1{font-size:29pt}h2{font-size:18pt}
+}
+</style>
+</head>
+<body>
+
+<div id="progress" role="presentation"></div>
+
+<div id="deck" tabindex="-1">
+
+<!-- ============ 01 · COLD OPEN ============ -->
+<section class="slide cover" data-label="Cold open">
+  <div class="inner">
+    <div class="main">
+      <div class="wordmark">
+        <svg width="22" height="22" viewBox="0 0 22 22" aria-hidden="true">
+          <rect x="1.5" y="1.5" width="19" height="19" rx="2.5" fill="none" stroke="currentColor" stroke-width="1.2" opacity=".35"/>
+          <path d="M5 16.5 L11 5.5 L17 16.5" fill="none" stroke="currentColor" stroke-width="1.4"/>
+          <line x1="7.6" y1="12" x2="14.4" y2="12" stroke="currentColor" stroke-width="1.1" opacity=".55"/>
+        </svg>
+        <span>Patina · Library &amp; Catalog</span>
+      </div>
+
+      <h1>Two Plans,<br>One Build</h1>
+      <p class="lede">The implemented Library configuration, read against the variance proposal. Two documents written the same morning, neither aware of the other. One of them got built.</p>
+
+      <blockquote class="cover-quote">The trigger re-checks the hash to the cent. The purchase order still says &ldquo;Sofa.&rdquo;</blockquote>
+
+      <div class="legend" aria-label="How to read this deck">
+        <span><i class="l-p"></i>As proposed</span>
+        <span><i class="l-b"></i>As built</span>
+        <span><i class="l-g"></i>Gap</span>
+        <span><i class="l-d"></i>Divergence</span>
+      </div>
+
+      <div class="cover-meta">
+        <span>PM review · <b>for team review</b></span>
+        <span>Subject <b>migration 00403 · 12 tables</b></span>
+        <span>Baseline <b>the variance proposal</b></span>
+        <span><b>2 August 2026</b></span>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============ 02 · THE TWO PLANS ============ -->
+<section class="slide" data-label="The two plans">
+  <div class="inner">
+    <div class="gutter">
+      <span class="eyebrow">Section</span>
+      <span class="num">02 / 15</span>
+      <span class="tick"></span>
+    </div>
+    <div class="main">
+      <span class="eyebrow">What happened</span>
+      <h2>Same morning. Same problem. Two answers.</h2>
+      <p class="lede">At 07:17 a product review landed at <code>docs/product/library-configuration-proposal.html</code> — <em>&ldquo;A Library built for furniture.&rdquo;</em> Roughly the same hours, a 22-slide variance proposal landed in this folder. Neither cites the other. Two and a half hours after the product review committed, the schema did.</p>
+
+      <div class="stat">
+        <div><span class="v">9</span><span class="k">commits, 2026-08-02</span></div>
+        <div><span class="v">00403</span><span class="k">migration · 4,149 lines</span></div>
+        <div><span class="v">12</span><span class="k">new tables</span></div>
+        <div><span class="v">~25</span><span class="k">RPCs · 9 triggers</span></div>
+        <div><span class="v">+12,542</span><span class="k">lines across 44 files</span></div>
+        <div><span class="v">2.5 h</span><span class="k">from product review to schema</span></div>
+      </div>
+
+      <div class="tablewrap">
+        <table>
+          <thead>
+            <tr><th>The shape</th><th class="p">As proposed &mdash; <code>variance_class</code></th><th class="b">As built &mdash; <code>configuration_mode</code></th><th>Read</th></tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td>One spec, one price</td>
+              <td><code class="p">standard</code></td>
+              <td><code class="b">standard</code></td>
+              <td>Identical. Default value, zero data migration, both plans.</td>
+            </tr>
+            <tr>
+              <td>The bed in four sizes</td>
+              <td><code class="p">optioned</code> &mdash; axes and values with deltas</td>
+              <td><code class="b">variant</code> &mdash; exact sellable SKUs with absolute prices</td>
+              <td>They split what I fused. Their split is the better one &mdash; slide 04.</td>
+            </tr>
+            <tr>
+              <td>The sectional</td>
+              <td><code class="p">kit</code> &mdash; components, one FF&amp;E line</td>
+              <td><code class="b">configured</code> &mdash; options + components + rules</td>
+              <td>Same bet, folded into one mode with a rules engine on top.</td>
+            </tr>
+            <tr>
+              <td>The cabinet that doesn't exist yet</td>
+              <td><code class="p">bespoke</code> &mdash; allowance, promote to Piece</td>
+              <td><code class="b">custom</code> &mdash; brief → quote → approve → build</td>
+              <td>Converged, and theirs shipped the whole state machine.</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      <div class="callout p">
+        <span class="kicker">Their governing rule</span>
+        <p>&ldquo;Materialize exact sellable variants; express the rest as options/components/rules.&rdquo; My deck rejected the Shopify SKU matrix for the same reason, in different words. Nobody built a combinatorial explosion.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============ 03 · CONVERGENCE ============ -->
+<section class="slide" data-label="Convergence">
+  <div class="inner">
+    <div class="gutter">
+      <span class="eyebrow">Section</span>
+      <span class="num">03 / 15</span>
+      <span class="tick"></span>
+    </div>
+    <div class="main">
+      <span class="eyebrow">Credit where it's owed</span>
+      <h2>Ten identical bets, placed independently.</h2>
+      <p class="lede">This is the headline, and it should be read as validation rather than coincidence. Two people looked at the same library and reached for the same ten decisions without conferring. That is the strongest signal in this review.</p>
+
+      <div class="grid g2">
+        <div class="pair">
+          <span class="n">01</span>
+          <span class="t">A mode enum on <code>products</code></span>
+          <span class="s">Four values, default <code>standard</code>, no backfill. Same column, different noun.</span>
+        </div>
+        <div class="pair">
+          <span class="n">02</span>
+          <span class="t">Option groups and values, almost column-for-column</span>
+          <span class="s">Retail and trade price deltas in cents, lead-time deltas, swatches, positions, active flags.</span>
+        </div>
+        <div class="pair">
+          <span class="n">03</span>
+          <span class="t">Selection is a snapshot, never a live pointer</span>
+          <span class="s"><code>project_ffe_specs.configuration_snapshot</code> plus a hash. Drift is detected and surfaced, never silently applied.</span>
+        </div>
+        <div class="pair">
+          <span class="n">04</span>
+          <span class="t">Structured fills free text; free text stays the render source</span>
+          <span class="s">Placement denormalizes selections back into the flat spec fields via <code>string_agg</code> over material and finish groups.</span>
+        </div>
+        <div class="pair">
+          <span class="n">05</span>
+          <span class="t">Products stay canonical; 00380 stays frozen</span>
+          <span class="s"><code>place_product_in_project</code> untouched. The new path composes it instead of forking it.</span>
+        </div>
+        <div class="pair">
+          <span class="n">06</span>
+          <span class="t">No combinatorial explosion</span>
+          <span class="s">Sellable identities are materialized; everything else is expressed as rules.</span>
+        </div>
+        <div class="pair">
+          <span class="n">07</span>
+          <span class="t">A kit is one FF&amp;E line</span>
+          <span class="s">Components, <code>component_sum</code> pricing, a composer with quantity steppers. Same recommendation, same rejected alternative.</span>
+        </div>
+        <div class="pair">
+          <span class="n">08</span>
+          <span class="t">Suggest, then let a human confirm</span>
+          <span class="s">Their editor seeds groups from existing <code>available_colors</code> and finishes with the instruction &ldquo;Check only values the maker truly offers.&rdquo;</span>
+        </div>
+        <div class="pair">
+          <span class="n">09</span>
+          <span class="t">Custom work starts in the project, then earns the Library</span>
+          <span class="s">Promote-to-library after approval. Mirrored direction, identical boundary.</span>
+        </div>
+        <div class="pair">
+          <span class="n">10</span>
+          <span class="t">Both plans demanded designer validation first</span>
+          <span class="s">Neither ran it. Stated plainly on slide 13, because it belongs to both of us.</span>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============ 04 · WHAT THE BUILD DOES BETTER ============ -->
+<section class="slide" data-label="Built better">
+  <div class="inner">
+    <div class="gutter">
+      <span class="eyebrow">Section</span>
+      <span class="num">04 / 15</span>
+      <span class="tick"></span>
+    </div>
+    <div class="main">
+      <span class="eyebrow">Seven places the build wins</span>
+      <h2>Where the shipped thing beats the proposal.</h2>
+
+      <div class="cmp" data-verdict="deeper">
+        <div class="cmp-cols">
+          <div class="cmp-col prop">
+            <span class="tag">As proposed</span>
+            <h3>Every price is a delta</h3>
+            <p>Base price plus additive adjustments per selected value. I listed &ldquo;additive deltas are sometimes wrong&rdquo; as my own risk #2, and mitigated it with a nullable trade delta and a fallback.</p>
+            <div class="refs"><code class="p">product_option_values.price_delta_cents</code></div>
+          </div>
+          <div class="cmp-col built">
+            <span class="tag">As built</span>
+            <h3>A sellable variant is its own row, with its own absolute price</h3>
+            <p>Code, SKU, vendor SKU, status, absolute retail and trade prices, lead time, dimensions, weight, a default flag with a partial unique index &mdash; alongside the delta path, not instead of it.</p>
+            <div class="refs"><code class="b">product_variants</code><code class="b">product_variant_values</code><code class="b">configuration_pricing_strategy</code></div>
+          </div>
+        </div>
+        <div class="verdict"><span class="mark">Built deeper</span><span class="say">This is the middle path I missed. It solves my risk #2 better than my own mitigation did, and it still refuses the SKU matrix.</span></div>
+      </div>
+
+      <div class="grid g3">
+        <div class="card built">
+          <span class="kicker">02 · Rules</span>
+          <h3>&ldquo;Walnut isn't offered with whitewash&rdquo;</h3>
+          <p class="small">Six rule kinds &mdash; compatibility, requirement, exclusion, pricing, lead time, dimension &mdash; over a condition/effect grammar, resolved by a rules engine of roughly 366 lines. I deferred validation entirely. This is a real designer problem and they shipped it.</p>
+        </div>
+        <div class="card built">
+          <span class="kicker">03 · Evaluation</span>
+          <h3>Two-tier pricing truth</h3>
+          <p class="small">An optimistic client-side estimate for feel, then an authoritative <code>evaluate_product_configuration</code> confirm before anything can be placed. Stronger than my additive recompute, and it makes staleness visible instead of invisible.</p>
+        </div>
+        <div class="card built">
+          <span class="kicker">04 · Integrity</span>
+          <h3>SHA-256 all the way down</h3>
+          <p class="small">Snapshot hashes, immutability triggers, versioned configurations with supersession, an append-only commission event log. Deeper than anything I specified.</p>
+        </div>
+        <div class="card built">
+          <span class="kicker">05 · RFQ</span>
+          <h3>The quote request carries the spec</h3>
+          <p class="small"><code>vendor_quote_requests</code> gains configuration snapshot columns and a draft-dedupe index. Absent from my plan entirely.</p>
+        </div>
+        <div class="card built">
+          <span class="kicker">06 · Access</span>
+          <h3>Read-only tables, writes through the front door</h3>
+          <p class="small">All 12 tables carry SELECT-only policies; every write goes through a <code>SECURITY DEFINER</code> RPC. Audience redaction is covered by tests.</p>
+        </div>
+        <div class="card built">
+          <span class="kicker">07 · Commission</span>
+          <h3>My phase 4, shipped now</h3>
+          <p class="small">Revision ledger, eight-status state machine with timestamp coherence, and a post-issue fulfillment truth: submittal → receiving → installed, evidence-gated and sequential.</p>
+        </div>
+      </div>
+
+      <div class="callout">
+        <span class="kicker">The honest summary</span>
+        <p>On the engine itself, the build is the better document. Where the two plans disagree about depth, the build is right and the proposal was conservative.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============ 05 · THE ENGINE TOUR ============ -->
+<section class="slide" data-label="Engine tour">
+  <div class="inner">
+    <div class="gutter">
+      <span class="eyebrow">Section</span>
+      <span class="num">05 / 15</span>
+      <span class="tick"></span>
+    </div>
+    <div class="main">
+      <span class="eyebrow">What exists today</span>
+      <h2>The spine, end to end.</h2>
+      <p class="lede">Authoring and resolution live on the piece. Carry reaches the project, the quote request, and the spec book. Then it stops.</p>
+
+      <div class="spine" role="list" aria-label="Configuration spine">
+        <div class="step built" role="listitem">
+          <span class="kicker">01 · Author</span>
+          <span class="t">On the piece</span>
+          <span class="s"><code>product_option_groups</code> · <code>product_option_values</code> · <code>product_variants</code> · <code>product_components</code> · <code>product_configuration_rules</code></span>
+        </div>
+        <div class="step built" role="listitem">
+          <span class="kicker">02 · Resolve</span>
+          <span class="t">Rules engine</span>
+          <span class="s"><code>evaluate_product_configuration</code> returns validity, completeness, price, lead time, dimensions</span>
+        </div>
+        <div class="step built" role="listitem">
+          <span class="kicker">03 · Record</span>
+          <span class="t">The resolved entity</span>
+          <span class="s"><code>product_configurations</code> &mdash; key + version, status, snapshot, SHA-256 hash, supersession</span>
+        </div>
+        <div class="step built" role="listitem">
+          <span class="kicker">04 · Carry</span>
+          <span class="t">Into the project</span>
+          <span class="s"><code>project_ffe_specs.configuration_snapshot</code> + hash + <code>configuration_locked_at</code></span>
+        </div>
+        <div class="step built" role="listitem">
+          <span class="kicker">05 · Quote &amp; book</span>
+          <span class="t">RFQ and spec book</span>
+          <span class="s"><code>vendor_quote_requests</code> snapshot; a <code>configuration</code> envelope in the hashed spec-book snapshot</span>
+        </div>
+        <div class="step dead" role="listitem">
+          <span class="kicker">06 · Paper</span>
+          <span class="t">The purchase order</span>
+          <span class="s">Unchanged. The route never joins the spec table. Name, quantity, price.</span>
+        </div>
+      </div>
+
+      <div class="grid g3">
+        <div class="card built">
+          <span class="kicker">The room</span>
+          <h3>Piece configuration workspace</h3>
+          <p class="small">1,148 lines. Per-group fieldsets with 64px swatch tiles, delta subtitles, dashed discontinued states, a component composer with steppers and handedness, and a sticky summary rail that separates an estimate from a confirmed price. Source drift raises an alert.</p>
+        </div>
+        <div class="card built">
+          <span class="kicker">The authoring side</span>
+          <h3>Piece configuration editor</h3>
+          <p class="small">1,270 lines. Opens on &ldquo;How is this piece offered?&rdquo;, seeds suggested groups from what the record already knows, and guards every save with a revision token.</p>
+        </div>
+        <div class="card built">
+          <span class="kicker">The long job</span>
+          <h3>Custom commission</h3>
+          <p class="small">631 + 1,007 + 256 lines. Brief, measurements, fabricator, budget; a status footer from draft to issued; then submittal, receiving, installed &mdash; each waiting on real evidence.</p>
+        </div>
+      </div>
+
+      <div class="rail">
+        <div class="rail-head">
+          <span class="rail-name">Library room · &ldquo;Can be ordered as&rdquo;</span>
+          <span class="rail-kind">capability filter · client-side over a 60-item page</span>
+        </div>
+        <div class="chips">
+          <span class="chip on"><span class="lab">Variants</span><span class="delta">3 sizes</span></span>
+          <span class="chip"><span class="lab">Options</span><span class="delta">From $2,400</span></span>
+          <span class="chip"><span class="lab">Modular</span><span class="delta">component sum</span></span>
+          <span class="chip"><span class="lab">Custom</span><span class="delta">Price on request</span></span>
+          <span class="chip ghost"><span class="lab">One spec</span><span class="delta">unchanged</span></span>
+        </div>
+        <p class="tiny" style="margin-top:9px">Card chips read off the denormalized <code>configuration_summary</code>. Because the filter runs client-side over one page of 60, the counts and the filter can disagree on a large library.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============ 06 · THE PO ============ -->
+<section class="slide" data-label="The PO">
+  <div class="inner">
+    <div class="gutter">
+      <span class="eyebrow">Gap 01</span>
+      <span class="num">06 / 15</span>
+      <span class="tick"></span>
+    </div>
+    <div class="main">
+      <span class="eyebrow">The one that matters most</span>
+      <h2>The PO still doesn't say Walnut.</h2>
+      <p class="lede">The build enforces snapshot integrity at the exact moment a configuration meets a purchase order &mdash; and then prints a document that carries none of it.</p>
+
+      <div class="cmp" data-verdict="gap">
+        <div class="cmp-cols">
+          <div class="cmp-col prop">
+            <span class="tag">As proposed</span>
+            <h3>The line item carries its own spec</h3>
+            <p>A snapshot column on the PO line, rendered into the printed order. It was my number-one payoff, and it works with zero axes ever authored &mdash; free text alone would have filled it.</p>
+            <div class="refs"><code class="p">purchase_order_lines.spec_snapshot</code></div>
+            <div class="po p" style="margin-top:11px">
+              <div class="hd">Purchase order · line 1</div>
+              <div class="row"><span>Bracket Lounge Chair</span><span>1 &nbsp; $6,800.00</span></div>
+              <div class="spec">
+                <b>Wood</b> Walnut, oiled &nbsp;·&nbsp; <b>Size</b> 96&Prime; &nbsp;·&nbsp; <b>Grade</b> C, COM by client<br>
+                <b>Lead</b> 14 weeks &nbsp;·&nbsp; <b>Ref</b> configuration a4f2…
+              </div>
+            </div>
+          </div>
+          <div class="cmp-col built">
+            <span class="tag">As built</span>
+            <h3>Integrity enforced, paper unchanged</h3>
+            <p>A trigger fires the moment a spec line is linked to a purchase order. It requires the configuration to be approved or issued, re-verifies validity and completeness, recomputes the hash, checks the pricing still matches, recomputes the PO total &mdash; and raises on any divergence.</p>
+            <p>The PDF route was not touched. <code>purchase_orders</code> took no schema change; the route has zero configuration, spec, or option references, and never joins <code>project_ffe_specs</code>.</p>
+            <div class="refs"><code class="b">lock_configuration_snapshot_on_po_link</code><code class="b">api/po/generate/route.ts</code></div>
+            <div class="po" style="margin-top:11px">
+              <div class="hd">Purchase order · line 1</div>
+              <div class="row"><span>Bracket Lounge Chair</span><span>1 &nbsp; $6,800.00</span></div>
+              <div class="spec none">No spec block. The maker reads a name, a quantity, and a price &mdash; and calls to ask which wood.</div>
+            </div>
+          </div>
+        </div>
+        <div class="verdict"><span class="mark">Gap</span><span class="say">Their own second cut promised a PO configuration handoff. The chain ends one step short of the vendor.</span></div>
+      </div>
+
+      <div class="callout">
+        <span class="kicker">Why this is the cheapest remaining win</span>
+        <p>Everything the printed order needs is already stored, already hashed, and already validated at link time. This is one route joining a table that the trigger has already proven is correct. The engine is finished; the paper isn't.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============ 07 · ONE DOOR ============ -->
+<section class="slide" data-label="One door">
+  <div class="inner">
+    <div class="gutter">
+      <span class="eyebrow">Gap 02</span>
+      <span class="num">07 / 15</span>
+      <span class="tick"></span>
+    </div>
+    <div class="main">
+      <span class="eyebrow">Reachability</span>
+      <h2>A powerful engine with exactly one door.</h2>
+      <p class="lede">Configuration is reachable only from the piece room at <code>/library/[id]</code>. Every other way a designer puts a product into a project walks straight past it.</p>
+
+      <div class="cmp" data-verdict="gap">
+        <div class="cmp-cols">
+          <div class="cmp-col prop">
+            <span class="tag">As proposed</span>
+            <h3>A configure step inside the picker</h3>
+            <p>Standard pieces keep today's single click. Optioned pieces get an axis-rail pane in the same modal, every axis skippable, with &ldquo;decide later&rdquo; recorded as readiness debt. The pick result widens additively so nothing else has to change.</p>
+            <div class="refs"><code class="p">product-picker-modal</code><code class="p">ProductPickResult</code></div>
+          </div>
+          <div class="cmp-col built">
+            <span class="tag">As built</span>
+            <h3>The picker was not touched</h3>
+            <p>Still a seven-field result, no configure step. Proposals, FF&amp;E add, boards and decisions all place products through it. The add-to-project sheet accepts an optional configuration id, and the legacy path is preserved beside it.</p>
+            <div class="refs"><code class="b">place_product_configuration_in_project</code><code class="b">place_product_in_project</code></div>
+          </div>
+        </div>
+        <div class="verdict"><span class="mark">Gap</span><span class="say">Two placement paths now exist. The configured one is the one a designer has to go looking for.</span></div>
+      </div>
+
+      <div class="cmp" data-verdict="gap">
+        <div class="cmp-cols">
+          <div class="cmp-col prop">
+            <span class="tag">As proposed</span>
+            <h3>Decisions read the axis</h3>
+            <p>Compare-across-an-axis derives sibling option cards automatically; the applied decision carries the selection with it into the spec.</p>
+          </div>
+          <div class="cmp-col built">
+            <span class="tag">As built</span>
+            <h3>Decisions are untouched</h3>
+            <p><code>client_decision_options</code> and <code>apply_decision</code> unchanged; the option builder still asks a designer to hand-type Queen versus King and their price difference. Clients never see an option group.</p>
+          </div>
+        </div>
+        <div class="verdict"><span class="mark">Gap</span><span class="say">The one surface where a client meets a choice is the one surface with no bridge to the engine.</span></div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============ 08 · COM AND THE FREE-TEXT SEAM ============ -->
+<section class="slide" data-label="COM">
+  <div class="inner">
+    <div class="gutter">
+      <span class="eyebrow">Gap 03</span>
+      <span class="num">08 / 15</span>
+      <span class="tick"></span>
+    </div>
+    <div class="main">
+      <span class="eyebrow">The missing class</span>
+      <h2>Zero occurrences of COM.</h2>
+      <p class="lede">Customer's own material was the third class in my spectrum and the studio principal's first request. It does not appear in the schema, in the workspace, or in the editor &mdash; anywhere.</p>
+
+      <div class="grid g2">
+        <div class="evidence">
+          <span class="where">The only trace, in the workspace notes field</span>
+          <span class="what">placeholder="COM or install notes"</span>
+          <p class="read">A placeholder in a free-text box is exactly the workaround the discovery catalogued: yardage, railroading, the client's own fabric and its lead time, all living in a notes field where nothing downstream can read them. The build reproduced the workaround rather than replacing it.</p>
+        </div>
+        <div class="card gap">
+          <span class="kicker">What's absent</span>
+          <h3>No COM fields anywhere</h3>
+          <p class="small">No COM flag on option groups, no COM requirements on values, no COM details on a configuration. A piece sold at Grade C with the client's own linen cannot be priced, validated, or specified by the engine &mdash; only described.</p>
+          <p class="small">This also means the rules engine, which can express &ldquo;walnut excludes whitewash,&rdquo; cannot express &ldquo;this frame requires 14 yards, railroaded.&rdquo;</p>
+        </div>
+      </div>
+
+      <div class="cmp" data-verdict="gap">
+        <div class="cmp-cols">
+          <div class="cmp-col prop">
+            <span class="tag">As proposed</span>
+            <h3>Structured fields replace the free-text ones</h3>
+            <p>Axes map one-to-one onto the existing spec fields. Dimensions come from the selected value. The old flat facets get deprecated as the structure fills in behind them.</p>
+          </div>
+          <div class="cmp-col built">
+            <span class="tag">As built</span>
+            <h3>The seam is half-crossed</h3>
+            <p>Placement does denormalize material and finish back into the flat fields &mdash; the good half. But <code>selected_dimensions</code> is still a raw JSON textarea, and the old flat facets (colour chips, a singular finish) remain editable on the very same page as the new editor, un-deprecated.</p>
+          </div>
+        </div>
+        <div class="verdict"><span class="mark">Gap</span><span class="say">Two places to say what colour the chair is, on one screen, with no rule about which wins.</span></div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============ 09 · SCAFFOLD ============ -->
+<section class="slide" data-label="Scaffold">
+  <div class="inner">
+    <div class="gutter">
+      <span class="eyebrow">Gap 04</span>
+      <span class="num">09 / 15</span>
+      <span class="tick"></span>
+    </div>
+    <div class="main">
+      <span class="eyebrow">The old scaffold</span>
+      <h2>There are now two variant systems.</h2>
+      <p class="lede">My proposal asked for one deletion before anything new landed: the dead e-commerce scaffold. It wasn't deleted, so the new work landed beside it.</p>
+
+      <div class="cmp" data-verdict="gap">
+        <div class="cmp-cols">
+          <div class="cmp-col prop">
+            <span class="tag">As proposed</span>
+            <h3>Delete first, then build</h3>
+            <p>Remove the <code>Variant</code> and <code>CustomizationOption</code> types and the admin variant editor. Stop writing the flattened facet arrays. One vocabulary for variance, and it's the new one.</p>
+          </div>
+          <div class="cmp-col built">
+            <span class="tag">As built</span>
+            <h3>Both systems are live</h3>
+            <p>The admin variant editor is still mounted and still pointed at a NestJS service. The old <code>Variant</code> type still sits in <code>product.ts</code>. Next to them, a new 504-line type module with 43 exports, including <code>ProductVariantDefinition</code>, and a real <code>product_variants</code> table.</p>
+            <div class="refs"><code class="b">product_variants</code><code class="b">ProductVariantDefinition</code><code class="p">Variant</code><code class="p">CustomizationOption</code></div>
+          </div>
+        </div>
+        <div class="verdict"><span class="mark">Gap</span><span class="say">Four variant-ish type surfaces, two editors, and no note anywhere saying which one an engineer should reach for.</span></div>
+      </div>
+
+      <div class="note">
+        <span class="kicker">Cost of leaving it</span>
+        <p>It is cheap now and expensive in three months. The admin editor can still write variant data that the new engine will never read, which is the same class of divergence the snapshot triggers exist to prevent &mdash; just one layer up, where no trigger is watching.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============ 10 · FRICTION POSTURE ============ -->
+<section class="slide" data-label="Friction posture">
+  <div class="inner">
+    <div class="gutter">
+      <span class="eyebrow">Divergence</span>
+      <span class="num">10 / 15</span>
+      <span class="tick"></span>
+    </div>
+    <div class="main">
+      <span class="eyebrow">Not a gap &mdash; a genuine disagreement</span>
+      <h2>Decide later, or don't decide at all.</h2>
+
+      <div class="cmp" data-verdict="divergence">
+        <div class="cmp-cols">
+          <div class="cmp-col prop">
+            <span class="tag">As proposed</span>
+            <h3>Warn, never block</h3>
+            <p>Every axis is skippable. &ldquo;Decide later&rdquo; is a real answer that a designer standing in a client's living room can give, and it becomes visible readiness debt rather than an error. The system nags; it does not refuse.</p>
+          </div>
+          <div class="cmp-col built">
+            <span class="tag">As built</span>
+            <h3>Approval-gated</h3>
+            <p>Placing a custom piece requires an approved configuration, an approved revision, and both designer and client approvals. Linking a spec to a PO raises if the configuration is unapproved, stale, or a cent off. The commission footer is a real state machine.</p>
+          </div>
+        </div>
+        <div class="verdict"><span class="mark">Divergence</span><span class="say">Their integrity is stronger than mine. The risk is what a designer does when the gate is closed.</span></div>
+      </div>
+
+      <p>The escape hatch is accidental but real: every legacy path is still fully open. A designer who hits the approval gate can back out, use the picker, and place the same piece with no configuration at all — no warning, no debt recorded, no trace that a decision was skipped. The strictest gate in the system sits on the path that is easiest to avoid.</p>
+
+      <div class="callout p">
+        <span class="kicker">The reconciliation</span>
+        <p>Keep the gate. It's the right call for money and paper. Add the soft path in front of it: let the picker record an incomplete configuration as debt, so the choice a designer defers is captured rather than lost. Strict at the PO, forgiving at the sofa.</p>
+      </div>
+
+      <div class="quote">
+        <p>&ldquo;Never silently alter an approved selection, an issued book, a sent RFQ, or a confirmed PO.&rdquo;</p>
+        <span class="attr">From the product review — and the one line both plans would have written identically</span>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============ 11 · COMPLETENESS AUDIT ============ -->
+<section class="slide" data-label="Completeness">
+  <div class="inner">
+    <div class="gutter">
+      <span class="eyebrow">Process</span>
+      <span class="num">11 / 15</span>
+      <span class="tick"></span>
+    </div>
+    <div class="main">
+      <span class="eyebrow">Stated plainly, not as blame</span>
+      <h2>What a reviewer can and can't confirm.</h2>
+      <p class="lede">These are the seams a second pair of eyes finds in a nine-commit day. Most are hours of work, not days &mdash; but they're the difference between &ldquo;built&rdquo; and &ldquo;landed.&rdquo;</p>
+
+      <div class="grid g2">
+        <div class="card note">
+          <span class="kicker">Ledger</span>
+          <h3>The migration ledger stops at 00382</h3>
+          <p class="small">Objects from 00383 through 00403 exist anyway &mdash; applied out of band via psql, which is a pre-existing pattern here rather than something new. The consequence is real: <code>supabase migration list</code> and <code>db push</code> can't be trusted, and whether 00403 is applied in production can't be determined from the repository. That two email migrations were renumbered past a spec-book collision confirms a numbering collision already happened.</p>
+        </div>
+        <div class="card note">
+          <span class="kicker">Tests</span>
+          <h3>A ~940-line SQL suite that nothing runs</h3>
+          <p class="small">pgTAP-style, executed by hand via psql, registered in no runner. Thirteen TypeScript test files do real work &mdash; nine workspace cases across the bed, sectional and table archetypes, drift repair, revision, plus a 118-line spec-book redaction test. There is no end-to-end walk of any archetype.</p>
+        </div>
+        <div class="card note">
+          <span class="kicker">Data</span>
+          <h3>Every new table is empty locally</h3>
+          <p class="small">No seeds. Nobody has configured a real piece yet, which means the first person to meet this engine will also be the first to find out how it feels.</p>
+        </div>
+        <div class="card gap">
+          <span class="kicker">Rollout</span>
+          <h3>No feature flag anywhere</h3>
+          <p class="small">The house convention is PostHog gating. This ships unconditionally to every designer, before validation. Six analytics events are defined; three have confirmed call sites.</p>
+        </div>
+        <div class="card note">
+          <span class="kicker">Loose ends</span>
+          <h3>Dead exports and an interim shim</h3>
+          <p class="small"><code>useApproveProductConfiguration</code> is exported with no consumer; an <code>onResolutionChange</code> prop is unused. The order assistant carries an explicit dual-shape comment: it accepts both shapes &ldquo;while the Supabase hook migration rolls out.&rdquo; Zero TODOs in the whole change &mdash; the loose ends are in the shape of the code, not in comments.</p>
+        </div>
+        <div class="card gap">
+          <span class="kicker">Visibility</span>
+          <h3>The client approves what they can't see</h3>
+          <p class="small">A commission records &ldquo;Record both approvals&rdquo; via a button the designer presses, while the published spec book redacts configuration from the client audience entirely. The client portal has zero awareness of any of this. That's defensible as a first cut; it needs a stated ruling rather than an accident.</p>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============ 12 · RISK REGISTER SCORED ============ -->
+<section class="slide" data-label="Risk register">
+  <div class="inner">
+    <div class="gutter">
+      <span class="eyebrow">Scored</span>
+      <span class="num">12 / 15</span>
+      <span class="tick"></span>
+    </div>
+    <div class="main">
+      <span class="eyebrow">My register, marked against the build</span>
+      <h2>Two solved, two held, three live.</h2>
+      <p class="lede">The proposal shipped with a risk register and one risk I said could not be mitigated. Scored here wherever the build gives a real answer.</p>
+
+      <div class="tablewrap">
+        <table>
+          <thead>
+            <tr><th>Risk, as written</th><th>Verdict</th><th>What the build actually did</th></tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td><strong>#2 &mdash; additive deltas are sometimes wrong</strong></td>
+              <td><span class="st solved">Solved</span></td>
+              <td>Solved better than my own mitigation: <code>product_variants</code> carries absolute prices for the cases where a delta lies.</td>
+            </tr>
+            <tr>
+              <td><strong>#3 &mdash; the snapshot drifts from the source</strong></td>
+              <td><span class="st solved">Solved</span></td>
+              <td>Stronger than proposed. SHA-256 hashes, immutability triggers, a drift alert in the workspace, and a PO-link trigger that re-verifies before it will let the link stand.</td>
+            </tr>
+            <tr>
+              <td><strong>#5 &mdash; breaking the frozen 00380 invariant</strong></td>
+              <td><span class="st held">Held</span></td>
+              <td><code>place_product_in_project</code> is untouched and composed, not forked. The precedence chain is intact.</td>
+            </tr>
+            <tr>
+              <td><strong>#1 &mdash; structure slows down capture</strong></td>
+              <td><span class="st held">Held</span></td>
+              <td>Held by not being tested: capture is untouched. The extension still flattens scraped variant lists, so the risk is deferred rather than retired.</td>
+            </tr>
+            <tr>
+              <td><strong>#7 &mdash; trade pricing on deltas</strong></td>
+              <td><span class="st part">Present</span></td>
+              <td>Trade price deltas exist on values and absolute trade prices on variants. What happens when a trade price is absent isn't clear from the schema.</td>
+            </tr>
+            <tr>
+              <td><strong>#6 &mdash; building ahead of demand</strong></td>
+              <td><span class="st hot">Materialized</span></td>
+              <td>A rules engine, a commission pipeline and a milestone ledger shipped in one day, unflagged, before a designer has touched any of it. This is the live one.</td>
+            </tr>
+            <tr>
+              <td><strong>The unmitigable one &mdash; no designer validation</strong></td>
+              <td><span class="st hot">Materialized</span></td>
+              <td>For both plans equally. Next slide.</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      <p class="tiny" style="margin-top:12px">One register row isn't scoreable against the build from the repository alone; it's left off rather than guessed at.</p>
+    </div>
+  </div>
+</section>
+
+<!-- ============ 13 · THE SHARED MISS ============ -->
+<section class="slide" data-label="Shared miss">
+  <div class="inner">
+    <div class="gutter">
+      <span class="eyebrow">Both of us</span>
+      <span class="num">13 / 15</span>
+      <span class="tick"></span>
+    </div>
+    <div class="main">
+      <span class="eyebrow">The one failure with two authors</span>
+      <h2>Both plans asked for designers. Neither went and got them.</h2>
+
+      <div class="cmp" data-verdict="divergence">
+        <div class="cmp-cols">
+          <div class="cmp-col built">
+            <span class="tag">The product review</span>
+            <h3>Five to eight sessions before schema lock</h3>
+            <p>Its closing sections recommended designer sessions before the schema hardened, under the heading &ldquo;Recruit now.&rdquo; The document itself says validation &ldquo;is part of the proposed next step&rdquo; and names its research honestly: Programa, Schema.org, OFML, Roomle, Configura &mdash; desk work, not interviews.</p>
+            <p><strong>The schema landed two and a half hours later.</strong></p>
+          </div>
+          <div class="cmp-col prop">
+            <span class="tag">The variance proposal</span>
+            <h3>An unmitigable risk, clearly labelled</h3>
+            <p>My discovery was synthesized composites, not real designers. I put that on its own slide and called it the risk I couldn't mitigate. Then I shipped 22 slides of schema recommendations anyway.</p>
+            <p><strong>Naming a gap is not closing one.</strong></p>
+          </div>
+        </div>
+        <div class="verdict"><span class="mark">Shared miss</span><span class="say">Two documents, one omission, no asymmetry worth arguing about.</span></div>
+      </div>
+
+      <div class="callout">
+        <span class="kicker">The correction</span>
+        <p>One session with Leah, before this reaches every designer. Put a real project in front of the piece workspace, configure a bed, a sectional and a commission, and watch where she stops. Two hours buys back the only thing neither plan could buy for itself &mdash; and it's cheaper now, before the first configuration exists, than it will ever be again.</p>
+      </div>
+
+      <div class="note">
+        <span class="kicker">What to watch for in that session</span>
+        <p>Does she reach for the picker or the piece room? Does she try to type COM into the notes field? Does she skip an option group and expect the system to let her? Does she understand the difference between an estimated price and a confirmed one? Four questions, four schema decisions.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============ 14 · PUNCH LIST ============ -->
+<section class="slide" data-label="Punch list">
+  <div class="inner">
+    <div class="gutter">
+      <span class="eyebrow">Reconciliation</span>
+      <span class="num">14 / 15</span>
+      <span class="tick"></span>
+    </div>
+    <div class="main">
+      <span class="eyebrow">What to do about it</span>
+      <h2>Ten items, in the order they pay.</h2>
+
+      <div class="grid g3">
+        <div class="pl-band">
+          <span class="when">P0 · before designers meet it</span>
+          <h3>Finish the chain, open the door</h3>
+          <ol>
+            <li><strong>The PO says Walnut.</strong> Join <code>project_ffe_specs</code> in the generate route and render a spec block. One route. Completes the promise the link trigger already enforces.</li>
+            <li><strong>Route the picker.</strong> Send optioned and configured pieces from the picker into the configuration flow, or embed the pane. Closes the bypass and retires the second placement path.</li>
+            <li><strong>Decide the rollout.</strong> A flag and a posture, plus the designer session both plans asked for &mdash; before this is in front of everyone.</li>
+          </ol>
+          <div class="why">Each of these is small. Together they turn an engine into a feature.</div>
+        </div>
+        <div class="pl-band p1">
+          <span class="when">P1 · the next pass</span>
+          <h3>Close the classes, clear the ground</h3>
+          <ol start="4">
+            <li><strong>COM and COL.</strong> Either an option-value kind or COM details on the configuration &mdash; whichever the Leah session says.</li>
+            <li><strong>Delete the old scaffold.</strong> The admin variant editor and the old <code>Variant</code> type. One vocabulary.</li>
+            <li><strong>Bridge decisions.</strong> Derive sibling decision cards from an option group so a client can meet a real choice.</li>
+            <li><strong>Make the tests run.</strong> Register the SQL suite in a runner, reconcile the migration ledger, and walk bed, sectional and commission end to end.</li>
+          </ol>
+          <div class="why">Item 7 is the one that lets anyone else touch this code safely.</div>
+        </div>
+        <div class="pl-band p2">
+          <span class="when">P2 · when it earns it</span>
+          <h3>Feed it, and finish the seam</h3>
+          <ol start="8">
+            <li><strong>Capture feeds the groups.</strong> Stop the extension flattening scraped variant lists; land them as suggested groups for a human to confirm.</li>
+            <li><strong>A real dimensions editor,</strong> and deprecate the flat facets sitting beside the new ones.</li>
+            <li><strong>A client-visibility ruling.</strong> Decide what a client sees before they're asked to approve it.</li>
+          </ol>
+          <div class="why">None of these block the pilot. All of them are cheaper decided than discovered.</div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============ 15 · THE ASK ============ -->
+<section class="slide" data-label="The ask">
+  <div class="inner">
+    <div class="gutter">
+      <span class="eyebrow">Close</span>
+      <span class="num">15 / 15</span>
+      <span class="tick"></span>
+    </div>
+    <div class="main">
+      <span class="eyebrow">The ask</span>
+      <h2>Green-light the P0 trio and book the session.</h2>
+      <p class="lede">The hard part is done and it's better than what I proposed. What's left is short, and all of it is between the engine and the people who have to use it.</p>
+
+      <div class="grid g3">
+        <div class="card gap">
+          <span class="kicker">Ask 01</span>
+          <h3>One route</h3>
+          <p class="small">The PO generate route joins the spec table and prints the block. The data is already stored, hashed and validated. This is the last step of a chain that is otherwise finished.</p>
+        </div>
+        <div class="card gap">
+          <span class="kicker">Ask 02</span>
+          <h3>One door more</h3>
+          <p class="small">The picker routes configurable pieces into the flow. Until it does, the engine is optional in practice no matter how strict it is in the database.</p>
+        </div>
+        <div class="card gap">
+          <span class="kicker">Ask 03</span>
+          <h3>One session, one flag</h3>
+          <p class="small">Two hours with Leah and a posture on rollout. Both plans put this in writing on the same morning; neither of us did it. It's the cheapest correction on this list and the only one that can't be written by us.</p>
+        </div>
+      </div>
+
+      <div class="callout">
+        <span class="kicker">Where this lands</span>
+        <p>The library now knows that the chair comes in walnut, in ninety-six inches, in a sectional of five parts, and as a cabinet that doesn't exist yet. It knows it precisely, and it defends that knowledge to the cent. Three short jobs and the maker finally reads it on the order.</p>
+      </div>
+
+      <div class="cover-meta" style="margin-top:24px">
+        <span>Deck <b>docs/design/library-variance/</b></span>
+        <span>Baseline <b>the variance proposal · 22 slides</b></span>
+        <span>Subject <b>00403 · 12 tables · 44 files</b></span>
+        <span>Status <b>review — no code changed</b></span>
+      </div>
+    </div>
+  </div>
+</section>
+
+</div><!-- /#deck -->
+
+<div id="chrome">
+  <span id="counter"><b>01</b> / 15</span>
+  <button class="navbtn" id="prev" type="button" aria-label="Previous slide">&#8592;</button>
+  <button class="navbtn" id="next" type="button" aria-label="Next slide">&#8594;</button>
+  <button id="themebtn" type="button" aria-label="Toggle colour theme">Theme</button>
+</div>
+<div id="hint">← → or space · P to print</div>
+
+<script>
+(function(){
+  var deck = document.getElementById('deck');
+  var slides = Array.prototype.slice.call(deck.querySelectorAll('.slide'));
+  var counter = document.getElementById('counter');
+  var progress = document.getElementById('progress');
+  var current = 0;
+
+  function pad(n){ return (n < 10 ? '0' : '') + n; }
+
+  function setCurrent(i){
+    current = Math.max(0, Math.min(slides.length - 1, i));
+    counter.innerHTML = '<b>' + pad(current + 1) + '</b> / ' + slides.length;
+    progress.style.width = (((current + 1) / slides.length) * 100) + '%';
+  }
+
+  function go(i){
+    var t = Math.max(0, Math.min(slides.length - 1, i));
+    /* Container-relative jump. Measured against #deck's own scrollTop so it
+       holds whatever the offsetParent turns out to be, and stays immune to
+       the smooth-scroll cancellation trap on snapping containers. */
+    deck.scrollTop = deck.scrollTop + slides[t].getBoundingClientRect().top;
+    slides[t].classList.add('seen');
+    setCurrent(t);
+  }
+
+  if ('IntersectionObserver' in window){
+    var io = new IntersectionObserver(function(entries){
+      entries.forEach(function(e){
+        if (e.isIntersecting){
+          e.target.classList.add('seen');
+          if (e.intersectionRatio > 0.5) setCurrent(slides.indexOf(e.target));
+        }
+      });
+    }, { threshold: [0.12, 0.55] });
+    slides.forEach(function(s){ io.observe(s); });
+  } else {
+    slides.forEach(function(s){ s.classList.add('seen'); });
+  }
+
+  deck.addEventListener('scroll', function(){
+    var mid = deck.scrollTop + deck.clientHeight * 0.4;
+    for (var i = 0; i < slides.length; i++){
+      if (slides[i].offsetTop <= mid) setCurrent(i);
+    }
+  }, { passive: true });
+
+  document.getElementById('prev').addEventListener('click', function(){ go(current - 1); });
+  document.getElementById('next').addEventListener('click', function(){ go(current + 1); });
+
+  document.addEventListener('keydown', function(e){
+    var tag = (e.target && e.target.tagName) || '';
+    if (tag === 'INPUT' || tag === 'TEXTAREA') return;
+    switch (e.key){
+      case 'ArrowRight': case 'ArrowDown': case 'PageDown': go(current + 1); e.preventDefault(); break;
+      case 'ArrowLeft':  case 'ArrowUp':   case 'PageUp':   go(current - 1); e.preventDefault(); break;
+      case ' ': go(current + (e.shiftKey ? -1 : 1)); e.preventDefault(); break;
+      case 'Home': go(0); e.preventDefault(); break;
+      case 'End': go(slides.length - 1); e.preventDefault(); break;
+      case 'p': case 'P': window.print(); break;
+    }
+  });
+
+  /* theme: auto → light → dark → auto, persisted */
+  var root = document.documentElement;
+  var btn = document.getElementById('themebtn');
+  var order = ['auto','light','dark'];
+  var label = { auto: 'Theme', light: 'Light', dark: 'Dark' };
+  var stored = null;
+  try { stored = window.localStorage.getItem('patina-variance-theme'); } catch (err) {}
+  if (stored && order.indexOf(stored) > -1){ root.setAttribute('data-theme', stored); btn.textContent = label[stored]; }
+  btn.addEventListener('click', function(){
+    var now = root.getAttribute('data-theme') || 'auto';
+    var nextTheme = order[(order.indexOf(now) + 1) % order.length];
+    root.setAttribute('data-theme', nextTheme);
+    btn.textContent = label[nextTheme];
+    try { window.localStorage.setItem('patina-variance-theme', nextTheme); } catch (err) {}
+  });
+
+  setCurrent(0);
+})();
+</script>
+
+</body>
+</html>
