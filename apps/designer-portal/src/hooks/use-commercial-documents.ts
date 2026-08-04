@@ -262,18 +262,25 @@ export function useSaveServiceAgreement(proposalId: string) {
 
 function mapCountersignResult(value: any): CountersignDesignServicesResult {
   const row = Array.isArray(value) ? value[0] : value;
-  if (!row?.project_id || !row?.billing_authority_id) {
+  const projectId = row?.projectId ?? row?.project_id;
+  const billingAuthorityId =
+    row?.billingAuthorityId ?? row?.billing_authority_id;
+  if (!projectId || !billingAuthorityId) {
     throw new Error(
       "The countersign result did not include its authority links.",
     );
   }
   return {
-    proposalId: String(row.proposal_id),
-    commercialState: asCommercialState(row.commercial_state),
-    projectId: String(row.project_id),
-    agreementId: String(row.agreement_id ?? row.proposal_id),
-    billingAuthorityId: String(row.billing_authority_id),
-    newlyExecuted: Boolean(row.newly_executed),
+    proposalId: String(row.proposalId ?? row.proposal_id),
+    commercialState: asCommercialState(
+      row.commercialState ?? row.commercial_state,
+    ),
+    projectId: String(projectId),
+    agreementId: String(
+      row.agreementId ?? row.agreement_id ?? row.proposalId ?? row.proposal_id,
+    ),
+    billingAuthorityId: String(billingAuthorityId),
+    newlyExecuted: Boolean(row.newlyExecuted ?? row.newly_executed),
   };
 }
 
@@ -291,7 +298,18 @@ export function useCountersignDesignServicesAgreement(proposalId: string) {
         },
       );
       if (error) throw error;
-      return mapCountersignResult(data);
+      const result = mapCountersignResult(data);
+      if (result.newlyExecuted) {
+        void supabase.functions
+          .invoke("commercial-document-notify", {
+            body: { documentId: proposalId, transition: "executed" },
+          })
+          .catch(() => {
+            // The countersign transaction is durable; notification replay is
+            // independent and must not repeat project activation.
+          });
+      }
+      return result;
     },
     onSuccess: (result) => {
       void queryClient.invalidateQueries({
