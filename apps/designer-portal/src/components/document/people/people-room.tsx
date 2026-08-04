@@ -108,16 +108,19 @@ export function PeopleRoom() {
   });
 
   // Wave 4 (00420) scope ruling — left STUDIO-wide (unscoped) on purpose.
-  // `all` does three jobs here: the Room-wide "N people" count (browse), the
+  // `all` does two jobs here: the Room-wide "N people" count (browse) and the
   // ?person= deep-link role resolution (must reach anyone ⌘K or a cross-link
-  // could have named, including a studio-mate's party), and the Engine nudge
-  // (relationship-action — see the `nudge` useMemo below). That last use is a
-  // known gap: the nudge can currently surface a studio-mate's dormant tie,
-  // not just the signed-in designer's own. Not narrowed here because doing so
-  // would also starve the count/deep-link uses, which need the wide read;
-  // splitting the nudge onto its own `scope:'mine'` query is real, scoped-out
-  // follow-up, not this pass's fix.
+  // could have named, including a studio-mate's party). Both genuinely need
+  // the wide read, so `all` stays unscoped.
   const { data: all } = usePeopleDirectory({ role: 'all' });
+  // W5 fix — the Engine nudge (relationship-action, `nudge` useMemo below)
+  // is a personal to-do, not a browse surface: studio visibility ≠ shared
+  // nurture queues. Feeding it from the studio-wide `all` let it surface a
+  // studio-mate's dormant tie as if it were the signed-in designer's own
+  // relationship to chase. A separate `scope:'mine'` read feeds ONLY the
+  // nudge; `all` above is untouched so the count/deep-link uses keep the
+  // wide read they actually need.
+  const { data: mine } = usePeopleDirectory({ role: 'all', scope: 'mine' });
   const now = useMemo(() => new Date(), []);
 
   // Call Sheet Wave 2 — the active studio, for the Companies chip / rolodex
@@ -252,8 +255,9 @@ export function PeopleRoom() {
   }, [all, router]);
 
   // The live Engine nudge: the strongest dormant tie from the nurture queue.
+  // Reads `mine` (scope:'mine'), NOT `all` — see the note above `mine`.
   const nudge = useMemo(() => {
-    const queue = deriveNurtureQueue(all ?? [], now);
+    const queue = deriveNurtureQueue(mine ?? [], now);
     const due = queue.filter((e) => e.due);
     const top = due[0];
     if (!top) return null;
@@ -262,7 +266,7 @@ export function PeopleRoom() {
       name: top.person.display_name,
       since: humanizeSince(top.person.last_touch_at, now),
     };
-  }, [all, now]);
+  }, [mine, now]);
 
   const notify = (message: string) => {
     setToast(message);
