@@ -66,4 +66,17 @@ describe('the proposal mirror (R43 · R86 contract)', () => {
     expect(mirrorSource).toContain('snapshotAfter');
     expect(mirrorSource).not.toContain('refetchInterval');
   });
+
+  it('selects persisted board sections for the shared composition renderer', () => {
+    expect(mirrorSource).toContain(
+      'id, name, canvas_width, canvas_height, background_color, sections, sort_order, proposal_board_items(*)',
+    );
+    expect(mirrorSource).toContain('mapProposalMirrorBoard');
+  });
+
+  it('records mirror presentations with duration and proposal lineage', () => {
+    expect(mirrorSource).toContain('MirrorPresentationAnalytics');
+    expect(mirrorSource).toContain("surface: 'mirror'");
+    expect(mirrorSource).toContain('source_proposal_id: proposalId');
+  });
 });

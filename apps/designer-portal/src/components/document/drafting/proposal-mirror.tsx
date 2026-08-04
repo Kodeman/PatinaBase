@@ -26,7 +26,7 @@
  * Zero shadows (D4).
  */
 
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import {
   assessProposalPaymentSchedule,
@@ -48,10 +48,106 @@ import {
   TimelinePhasesBlock,
   BoardComposition,
 } from '@patina/design-system';
+import { moodBoardEvents } from '@/lib/analytics/mood-board-events';
 
 const getSupabase = () => createBrowserClient() as any;
 
 type AnyRow = any;
+
+export function mapProposalMirrorBoard(board: AnyRow) {
+  return {
+    id: board.id as string,
+    name: board.name as string,
+    canvas_width: board.canvas_width as number,
+    canvas_height: board.canvas_height as number,
+    background_color: board.background_color as string,
+    sections: Array.isArray(board.sections) ? board.sections : [],
+    items: (board.proposal_board_items ?? []) as AnyRow[],
+  };
+}
+
+type MirrorPresentationBoard = ReturnType<typeof mapProposalMirrorBoard>;
+type MirrorPresentationSession = {
+  board: MirrorPresentationBoard;
+  startedAt: number;
+};
+
+function emitMirrorPresentation(
+  proposalId: string,
+  session: MirrorPresentationSession,
+  endedAt: number,
+) {
+  moodBoardEvents.presented({
+    board_id: session.board.id,
+    item_count: session.board.items.length,
+    section_count: session.board.sections.length,
+    surface: 'mirror',
+    duration_ms: Math.max(0, Math.round(endedAt - session.startedAt)),
+    owner_kind: 'proposal',
+    owner_id: proposalId,
+    proposal_id: proposalId,
+    source_proposal_id: proposalId,
+    project_id: null,
+  });
+}
+
+/**
+ * A proposal mirror is itself a presentation surface. Track each non-empty
+ * board from first render until it leaves the mirror (or the mirror unmounts),
+ * then emit the same single duration-bearing event as room Present mode.
+ */
+export function MirrorPresentationAnalytics({
+  proposalId,
+  boards,
+  now = readPerformanceNow,
+}: {
+  proposalId: string;
+  boards: MirrorPresentationBoard[];
+  now?: () => number;
+}) {
+  const sessionsRef = useRef(new Map<string, MirrorPresentationSession>());
+
+  useEffect(() => {
+    const observedAt = now();
+    const visibleBoards = new Map(
+      boards
+        .filter((board) => board.items.length > 0)
+        .map((board) => [board.id, board]),
+    );
+
+    for (const [boardId, session] of sessionsRef.current) {
+      if (visibleBoards.has(boardId)) continue;
+      emitMirrorPresentation(proposalId, session, observedAt);
+    }
+
+    const nextSessions = new Map<string, MirrorPresentationSession>();
+    for (const [boardId, board] of visibleBoards) {
+      const current = sessionsRef.current.get(boardId);
+      if (current) {
+        current.board = board;
+        nextSessions.set(boardId, current);
+      } else {
+        nextSessions.set(boardId, { board, startedAt: observedAt });
+      }
+    }
+    sessionsRef.current = nextSessions;
+  }, [boards, now, proposalId]);
+
+  useEffect(
+    () => () => {
+      const observedAt = now();
+      for (const session of sessionsRef.current.values()) {
+        emitMirrorPresentation(proposalId, session, observedAt);
+      }
+      sessionsRef.current.clear();
+    },
+    [now, proposalId],
+  );
+
+  return null;
+}
+
+const readPerformanceNow = () => performance.now();
 
 async function readProposalSendSnapshot(
   supabase: AnyRow,
@@ -164,7 +260,7 @@ export function useProposalMirrorData(proposalId: string) {
         supabase
           .from('proposal_boards')
           .select(
-            'id, name, canvas_width, canvas_height, background_color, sort_order, proposal_board_items(*)',
+            'id, name, canvas_width, canvas_height, background_color, sections, sort_order, proposal_board_items(*)',
           )
           .eq('proposal_id', proposalId)
           .eq('status', 'active')
@@ -256,14 +352,9 @@ export function useProposalMirrorData(proposalId: string) {
       }));
 
       // Boards → the shared BoardComposition shape (items inlined, z-ordered).
-      const boards = ((boardsRaw ?? []) as AnyRow[]).map((b) => ({
-        id: b.id as string,
-        name: b.name as string,
-        canvas_width: b.canvas_width as number,
-        canvas_height: b.canvas_height as number,
-        background_color: b.background_color as string,
-        items: (b.proposal_board_items ?? []) as AnyRow[],
-      }));
+      const boards = ((boardsRaw ?? []) as AnyRow[]).map(
+        mapProposalMirrorBoard,
+      );
 
       const totalCents = (proposal as AnyRow)?.total_amount ?? 0;
       const paymentSchedule = assessProposalPaymentSchedule(
@@ -455,6 +546,10 @@ export function ProposalPreviewRail({
         clientName ? `What ${clientName} sees` : 'What the client sees'
       }
     >
+      <MirrorPresentationAnalytics
+        proposalId={proposalId}
+        boards={data.boards}
+      />
       <TierInstrument proposalId={proposalId} tier={data.tier} />
 
       <h1 className="font-heading text-[1.35rem] font-medium text-[var(--color-charcoal)]">
