@@ -6,6 +6,18 @@
  * is "due"), the status dot, and the quiet chevron. Hover lifts the paper 2px
  * and warms the edge to clay. Zero shadows (D4); primitives come from
  * person-bits (never forked); the line + dot come from the directory derivation.
+ *
+ * Wave 4 hardening: `person` can now arrive as any of the 12 PartyRole values
+ * (00419's architect/photographer/stager, 00420's 'contact') and in either
+ * scope ('mine' or a co-member's 'studio' row) — this row never branches on
+ * role or scope itself; it renders whatever `deriveStatusDot` /
+ * `deriveRelationshipLine` (people-derivation.ts) and `RoleBadge`
+ * (person-bits.tsx, its own `BADGE` record) hand back, and those are the
+ * functions kept total (no throw, no `undefined`) for every role/scope
+ * combination. A role='contact' row never actually reaches this component in
+ * the Directory today (directory-view.tsx filters it out before render — see
+ * that module's doc) — this component stays safe for one anyway, since it's
+ * one prop change away from being reachable again.
  */
 
 import { useMemo } from 'react';

@@ -21,6 +21,27 @@
  * `usePeopleDirectory` (the org-wide widening of THAT query is Wave 4's
  * `people_directory` view, not this wave's) — the lens's role here is gating
  * the ROLODEX marker on person rows, exactly as specced.
+ *
+ * Wave 4 (U6): STUDIO is now the default lens (`DEFAULT_CONTACT_SCOPE`, lifted
+ * by the Room) and `usePeopleDirectory` reads a studio-scoped `people_directory`
+ * (00420) — a STUDIO-lens roster can now contain OTHER designers' clients/
+ * leads/parties, allied-professional party kinds (architect/photographer/
+ * stager, 00419), and a role='contact' rolodex branch (00420) with no project
+ * at all. person-row.tsx (via people-derivation.ts) is hardened to render
+ * every one of those role/scope combinations gracefully — see that module's
+ * doc comment for the neutral-dot / STUDIO-marker contract.
+ *
+ * `role='contact'` specifically is EXCLUDED from `rows` below, in every chip
+ * (not narrowed per-chip) — never routed through PersonRow. The considered
+ * alternative was routing a company-kind contact (`meta.entity_kind ===
+ * 'company'`) to CompanyRow inline in the All feed while leaving person-kind
+ * contacts to PersonRow; simpler and just as honest: a company-kind contact
+ * already has a home (the Companies chip's card + its people-count expand),
+ * and a person-kind contact has no chip of its own this wave — either one
+ * surfacing a second time under All would read as a duplicate, not a
+ * feature, and CompanyRow doesn't belong inside a `<PersonRow>`-shaped `<ul>`
+ * anyway. A dedicated "kind chip" for standalone person contacts is future
+ * scope, not this wave's.
  */
 
 import { useEffect, useMemo, useRef, useState } from 'react';
@@ -100,7 +121,9 @@ const ROLE_ORDER: Record<PartyRole, number> = {
   maker: 9,
   team: 10,
   // The studio rolodex branch (people_directory role='contact', 00420) —
-  // not yet engaged on a project, so it sorts last.
+  // not yet engaged on a project, so it sorts last. 'contact' rows never
+  // reach this ordering in practice — `rows` filters them out before the
+  // sort (see the module doc) — but the Record must stay total.
   contact: 11,
 };
 
@@ -253,7 +276,12 @@ export function DirectoryView({
   const [seedSheetOpen, setSeedSheetOpen] = useState(false);
 
   const rows = useMemo(() => {
-    const list = [...(data ?? [])];
+    // Wave 4 hardening — a role='contact' row (studio_contacts card with no
+    // matching project party, person OR company) is excluded from every
+    // PersonRow-rendered feed, not narrowed per-chip: it has no chip of its
+    // own, and a company-kind one is already the Companies chip's business.
+    // See the module doc above for the full reasoning.
+    const list = (data ?? []).filter((p) => p.role !== 'contact');
     const scoped = role === 'field' ? list.filter((p) => isFieldRosterRole(p.role)) : list;
     scoped.sort(
       (a, b) =>
@@ -363,17 +391,16 @@ export function DirectoryView({
           actionEvents={['document:open-rolodex-seed-review']}
           className="mb-4"
         >
-          This is the studio&rsquo;s shared book — every active teammate reads
-          and writes the same rows.{' '}
+          The whole studio&rsquo;s book, not just yours.{' '}
           <button
             type="button"
             onClick={() => {
               window.dispatchEvent(new Event('document:open-rolodex-seed-review'));
               setSeedSheetOpen(true);
             }}
-            className="da-score-hover inline-flex min-h-11 items-center font-mono text-[10px] uppercase tracking-[0.1em] text-[var(--color-clay)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-clay)]"
+            className="da-score-hover inline-flex min-h-11 items-center underline decoration-1 underline-offset-2 font-mono text-[10px] uppercase tracking-[0.1em] text-[var(--color-clay)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-clay)]"
           >
-            Review what was seeded
+            review what seeded
           </button>
         </MarginNote>
       )}

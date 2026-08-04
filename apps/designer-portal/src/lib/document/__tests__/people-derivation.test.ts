@@ -33,6 +33,9 @@ function mkPerson(partial: Partial<DirectoryPerson>): DirectoryPerson {
     status_raw: 'active',
     last_touch_at: iso(2),
     meta: {},
+    // 00420's appended column — 'mine' by default so every pre-Wave-4 case
+    // below is unaffected; the Wave 4 describe block overrides it explicitly.
+    scope: 'mine',
     ...partial,
   };
 }
@@ -274,6 +277,60 @@ describe('deriveRelationshipJourney (R51)', () => {
       NOW,
     );
     expect(j[0]!.text).toMatch(/^★★★★★ “a+…”$/);
+  });
+});
+
+describe('Wave 4 hardening — the 00419/00420 roster-widening roles', () => {
+  it('roleLabel maps the allied-professional kinds and the rolodex contact branch', () => {
+    expect(roleLabel('architect')).toBe('Architect');
+    expect(roleLabel('photographer')).toBe('Photographer');
+    expect(roleLabel('stager')).toBe('Stager');
+    expect(roleLabel('contact')).toBe('Contact');
+  });
+
+  it('deriveStatusDot reads a neutral (cool) dot for every widening role — no fabricated signal', () => {
+    for (const role of ['architect', 'photographer', 'stager', 'contact'] as const) {
+      expect(deriveStatusDot(mkPerson({ role }), NOW)).toBe('cool');
+    }
+  });
+
+  it('deriveRelationshipLine never reads "due" for a widening role', () => {
+    for (const role of ['architect', 'photographer', 'stager', 'contact'] as const) {
+      expect(deriveRelationshipLine(mkPerson({ role }), NOW).due).toBe(false);
+    }
+  });
+
+  it('architect/photographer/stager read "Role · project", or the bare role with no project on file', () => {
+    expect(
+      deriveRelationshipLine(mkPerson({ role: 'architect', meta: { project_name: 'Ellsworth' } }), NOW).text,
+    ).toBe('Architect · Ellsworth');
+    expect(deriveRelationshipLine(mkPerson({ role: 'stager' }), NOW).text).toBe('Stager');
+  });
+
+  it('a contact row reads its contact_kind + specialties, falling back to a bare "Contact"', () => {
+    expect(
+      deriveRelationshipLine(
+        mkPerson({ role: 'contact', meta: { contact_kind: 'vendor', specialties: ['lighting', 'hardware'] } }),
+        NOW,
+      ).text,
+    ).toBe('Vendor · Lighting, Hardware');
+    expect(deriveRelationshipLine(mkPerson({ role: 'contact', meta: {} }), NOW).text).toBe('Contact');
+  });
+
+  it('a foreign-scope (STUDIO) row never reads due, and suffixes the mono STUDIO marker', () => {
+    const mine = deriveRelationshipLine(
+      mkPerson({ role: 'lead', status_raw: 'new', scope: 'mine', meta: { project_type: 'kitchen' } }),
+      NOW,
+    );
+    expect(mine.due).toBe(true);
+    expect(mine.text).toBe('New lead · kitchen · respond within 24 hours');
+
+    const studio = deriveRelationshipLine(
+      mkPerson({ role: 'lead', status_raw: 'new', scope: 'studio', meta: { project_type: 'kitchen' } }),
+      NOW,
+    );
+    expect(studio.due).toBe(false);
+    expect(studio.text).toBe('Lead · kitchen · STUDIO');
   });
 });
 

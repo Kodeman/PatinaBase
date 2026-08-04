@@ -1,11 +1,18 @@
-import { render, screen } from '@testing-library/react';
+import { act, fireEvent, render, screen } from '@testing-library/react';
 import { useFeatureFlag } from '@/hooks/use-feature-flag';
 import { DirectoryView } from '../views/directory-view';
+import { DEFAULT_CONTACT_SCOPE } from '../directory/scope-lens';
 import { DIRECTORY_ROLES } from '@/lib/document/directory-roles';
 import type { PeopleViewProps } from '../types';
 
 jest.mock('@/hooks/use-feature-flag', () => ({ useFeatureFlag: jest.fn() }));
 const mockUseFeatureFlag = useFeatureFlag as jest.Mock;
+
+// The MarginNote teach line reports through the wayfinding emitter — mocked
+// so this spec never loads posthog (same posture as margin-note.test.tsx).
+jest.mock('@/lib/analytics/document-events', () => ({
+  documentEvents: { wayfinding: { marginNote: jest.fn() } },
+}));
 
 jest.mock('@patina/supabase', () => ({
   usePeopleDirectory: jest.fn(() => ({ data: [], isLoading: false })),
@@ -18,6 +25,10 @@ jest.mock('@patina/supabase', () => ({
   isFieldRosterRole: (role: string | null | undefined) =>
     !!role && ['gc', 'sub', 'installer', 'receiver'].includes(role),
 }));
+
+beforeEach(() => {
+  window.localStorage.clear();
+});
 
 const NAV: PeopleViewProps = {
   openPerson: jest.fn(),
@@ -93,16 +104,65 @@ describe('DirectoryView — role chip set, flag on', () => {
     }
   });
 
-  it('mounts the ScopeLens defaulting to MINE', () => {
+  it('the lens reflects MINE when the Room passes it (a controlled prop, not its own default)', () => {
     renderDirectory({ scope: 'mine' });
     expect(screen.getByRole('button', { name: 'mine' })).toHaveAttribute('aria-current', 'true');
     expect(screen.getByRole('button', { name: 'studio' })).not.toHaveAttribute('aria-current');
   });
 
-  it('the lens reflects a STUDIO scope when the Room passes one', () => {
+  it('the lens reflects STUDIO when the Room passes it', () => {
     renderDirectory({ scope: 'studio' });
     expect(screen.getByRole('button', { name: 'studio' })).toHaveAttribute('aria-current', 'true');
     expect(screen.getByRole('button', { name: 'mine' })).not.toHaveAttribute('aria-current');
+  });
+});
+
+describe('DirectoryView — U6 (Wave 4): STUDIO is the default lens', () => {
+  it("scope-lens.tsx's DEFAULT_CONTACT_SCOPE — the Room's single source of truth — is 'studio'", () => {
+    expect(DEFAULT_CONTACT_SCOPE).toBe('studio');
+  });
+});
+
+describe('DirectoryView — the STUDIO-lens teach line (R94)', () => {
+  beforeEach(() => {
+    mockUseFeatureFlag.mockReturnValue({ value: true, isLoading: false });
+  });
+
+  it('shows the teach line on first landing in STUDIO scope, with an underlined review link', () => {
+    renderDirectory({ scope: 'studio' });
+    const note = screen.getByRole('note');
+    expect(note).toHaveTextContent("The whole studio’s book, not just yours.");
+    const link = screen.getByRole('button', { name: 'review what seeded' });
+    expect(link).toHaveClass('underline');
+  });
+
+  it('never shows the teach line in MINE scope', () => {
+    renderDirectory({ scope: 'mine' });
+    expect(screen.queryByRole('note')).not.toBeInTheDocument();
+  });
+
+  it('never shows the teach line with the flag off, even in STUDIO scope', () => {
+    mockUseFeatureFlag.mockReturnValue({ value: false, isLoading: false });
+    renderDirectory({ scope: 'studio' });
+    expect(screen.queryByRole('note')).not.toBeInTheDocument();
+  });
+
+  it('recedes for good — marked seen in localStorage — the first time "review what seeded" fires', async () => {
+    renderDirectory({ scope: 'studio' });
+    expect(window.localStorage.getItem('patina:margin-note:rolodex-studio-lens')).toBeNull();
+
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: 'review what seeded' }));
+    });
+
+    expect(screen.queryByRole('note')).not.toBeInTheDocument();
+    expect(window.localStorage.getItem('patina:margin-note:rolodex-studio-lens')).not.toBeNull();
+  });
+
+  it('never renders once the note has already been seen, on a later mount', () => {
+    window.localStorage.setItem('patina:margin-note:rolodex-studio-lens', String(Date.now()));
+    renderDirectory({ scope: 'studio' });
+    expect(screen.queryByRole('note')).not.toBeInTheDocument();
   });
 });
 
