@@ -1,0 +1,2070 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="auto">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>The Call Sheet, drawn — Patina</title>
+<style>
+/* ============================================================
+   THE CALL SHEET, DRAWN — the approved concept fitted to
+   The Document's grammar. Sequel to the-call-sheet-proposal.html.
+   Self-contained: no external fonts, scripts, or images.
+   Deck house style = the concept deck (drafting ink / bone paper /
+   verdigris). Mock scope (.doc) = the designer portal's real tokens.
+   NO box-shadow anywhere in this file — depth is flat paper offsets,
+   1px rules, and value contrast.
+   ============================================================ */
+
+:root{
+  --paper:#E7E9E3;
+  --paper-2:#F3F4F0;
+  --card:#FBFBF8;
+  --ink:#16202B;
+  --ink-2:#33404E;
+  --slate:#5D6773;
+  --rule:rgba(22,32,43,.14);
+  --rule-2:rgba(22,32,43,.28);
+  --verdigris:#2F6F63;
+  --verdigris-soft:rgba(47,111,99,.10);
+  --brass:#9A6B1F;
+  --brass-soft:rgba(154,107,31,.10);
+  --oxblood:#8A3A32;
+  --oxblood-soft:rgba(138,58,50,.09);
+  --grid:rgba(22,32,43,.045);
+
+  --display:"Iowan Old Style","Palatino Linotype",Palatino,"Book Antiqua",Georgia,serif;
+  --body:-apple-system,BlinkMacSystemFont,"Segoe UI",system-ui,Roboto,"Helvetica Neue",Arial,sans-serif;
+  --mono:ui-monospace,SFMono-Regular,"SF Mono",Menlo,Consolas,"Liberation Mono",monospace;
+}
+
+@media (prefers-color-scheme: dark){
+  :root[data-theme="auto"]{
+    --paper:#111820; --paper-2:#161E27; --card:#1B252F;
+    --ink:#E6E9E5; --ink-2:#C3CBD2; --slate:#8C98A4;
+    --rule:rgba(230,233,229,.14); --rule-2:rgba(230,233,229,.3);
+    --verdigris:#7CC7B6; --verdigris-soft:rgba(124,199,182,.12);
+    --brass:#D5A24C; --brass-soft:rgba(213,162,76,.12);
+    --oxblood:#DE8478; --oxblood-soft:rgba(222,132,120,.12);
+    --grid:rgba(230,233,229,.04);
+  }
+}
+:root[data-theme="dark"]{
+  --paper:#111820; --paper-2:#161E27; --card:#1B252F;
+  --ink:#E6E9E5; --ink-2:#C3CBD2; --slate:#8C98A4;
+  --rule:rgba(230,233,229,.14); --rule-2:rgba(230,233,229,.3);
+  --verdigris:#7CC7B6; --verdigris-soft:rgba(124,199,182,.12);
+  --brass:#D5A24C; --brass-soft:rgba(213,162,76,.12);
+  --oxblood:#DE8478; --oxblood-soft:rgba(222,132,120,.12);
+  --grid:rgba(230,233,229,.04);
+}
+
+*,*::before,*::after{box-sizing:border-box}
+html,body{margin:0;padding:0;height:100%}
+html{-webkit-text-size-adjust:100%}
+
+body{
+  background:var(--paper);
+  color:var(--ink);
+  font-family:var(--body);
+  font-size:16px;
+  line-height:1.55;
+  overflow-x:hidden;
+  background-image:
+    linear-gradient(var(--grid) 1px, transparent 1px),
+    linear-gradient(90deg, var(--grid) 1px, transparent 1px);
+  background-size:28px 28px, 28px 28px;
+}
+
+/* ---------- deck shell ---------- */
+#deck{
+  height:100dvh;
+  overflow-y:auto;
+  overflow-x:hidden;
+  scroll-snap-type:y proximity;
+}
+.slide{
+  min-height:100dvh;
+  scroll-snap-align:start;
+  display:flex;
+  align-items:center;
+  padding:clamp(24px,4.5vh,58px) clamp(18px,4.4vw,72px);
+  border-bottom:1px solid var(--rule);
+  position:relative;
+}
+.inner{
+  width:100%;
+  max-width:1180px;
+  margin:0 auto;
+  display:grid;
+  grid-template-columns:126px minmax(0,1fr);
+  gap:clamp(16px,2.6vw,40px);
+  align-items:start;
+}
+@media (max-width:880px){ .inner{grid-template-columns:minmax(0,1fr);gap:14px} }
+.gutter{position:sticky;top:0;padding-top:.4rem}
+.main{min-width:0}
+
+.slide.wide .inner{grid-template-columns:minmax(0,1fr);max-width:1340px;gap:0}
+.slide.wide .gutter{position:static;padding:0;display:flex;align-items:center;gap:12px;margin-bottom:.25rem}
+.slide.wide .gutter .num{margin-top:0}
+.slide.wide .gutter .tick{display:none}
+
+.slide.ink{
+  --paper:#111820; --paper-2:#161E27; --card:#1B252F;
+  --ink:#E6E9E5; --ink-2:#C3CBD2; --slate:#8C98A4;
+  --rule:rgba(230,233,229,.14); --rule-2:rgba(230,233,229,.3);
+  --verdigris:#7CC7B6; --verdigris-soft:rgba(124,199,182,.12);
+  --brass:#D5A24C; --brass-soft:rgba(213,162,76,.12);
+  --oxblood:#DE8478; --oxblood-soft:rgba(222,132,120,.12);
+  background:#111820; color:#E6E9E5;
+  background-image:
+    linear-gradient(rgba(230,233,229,.04) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(230,233,229,.04) 1px, transparent 1px);
+  background-size:28px 28px, 28px 28px;
+}
+
+/* ---------- deck type ---------- */
+.eyebrow{
+  font-family:var(--mono);font-size:11px;letter-spacing:.14em;
+  text-transform:uppercase;color:var(--slate);display:block;
+}
+.gutter .num{font-family:var(--mono);font-size:11px;letter-spacing:.1em;color:var(--verdigris);display:block;margin-top:6px}
+.gutter .tick{display:block;width:34px;height:2px;background:var(--verdigris);margin-top:12px;opacity:.55}
+@media (max-width:880px){ .gutter .tick{display:none} .gutter{position:static} }
+
+h1,h2,h3{font-family:var(--display);font-weight:600;letter-spacing:-.012em;margin:0}
+h1{font-size:clamp(2.3rem,6vw,4.3rem);line-height:1.03}
+h2{font-size:clamp(1.5rem,3.1vw,2.5rem);line-height:1.1;margin-bottom:.4rem}
+h3{font-size:clamp(1rem,1.55vw,1.22rem);line-height:1.25}
+.lede{font-size:clamp(.96rem,1.35vw,1.12rem);color:var(--ink-2);max-width:70ch;margin:.7rem 0 0}
+p{margin:.65rem 0;max-width:70ch}
+.small{font-size:.84rem;color:var(--slate);line-height:1.5}
+strong{font-weight:650;color:var(--ink)}
+.vd{color:var(--verdigris)}.br{color:var(--brass)}.ox{color:var(--oxblood)}
+code,.mono{font-family:var(--mono);font-size:.82em}
+code{background:var(--verdigris-soft);color:var(--verdigris);padding:.08em .38em;border-radius:3px;word-break:break-word}
+
+/* ---------- cover ---------- */
+.cover .inner{grid-template-columns:minmax(0,1fr)}
+.wordmark{display:flex;align-items:center;gap:10px;margin-bottom:clamp(18px,4.5vh,44px)}
+.wordmark span{font-family:var(--mono);font-size:11px;letter-spacing:.24em;text-transform:uppercase;color:var(--slate)}
+.cover-quote{
+  font-family:var(--display);font-size:clamp(1.3rem,2.6vw,1.9rem);line-height:1.25;
+  color:var(--ink-2);font-style:italic;border-left:3px solid var(--verdigris);
+  padding-left:clamp(14px,2vw,24px);margin:clamp(20px,3.6vh,36px) 0 0;max-width:34ch;
+}
+.cover-meta{
+  margin-top:clamp(24px,4.6vh,48px);display:flex;flex-wrap:wrap;gap:10px 26px;
+  font-family:var(--mono);font-size:11px;letter-spacing:.1em;text-transform:uppercase;
+  color:var(--slate);border-top:1px solid var(--rule);padding-top:16px;
+}
+.cover-meta b{color:var(--ink);font-weight:500}
+
+/* ---------- cards ---------- */
+.grid{display:grid;gap:13px;margin-top:1rem}
+.g2{grid-template-columns:repeat(2,minmax(0,1fr))}
+.g3{grid-template-columns:repeat(3,minmax(0,1fr))}
+.g4{grid-template-columns:repeat(4,minmax(0,1fr))}
+@media (max-width:960px){ .g3,.g4{grid-template-columns:repeat(2,minmax(0,1fr))} }
+@media (max-width:640px){ .g2,.g3,.g4{grid-template-columns:minmax(0,1fr)} }
+.card{background:var(--card);border:1px solid var(--rule);border-radius:6px;padding:14px 16px;min-width:0}
+.card h3{margin-bottom:.3rem}
+.card p{margin:.35rem 0}
+.card.accent{border-left:3px solid var(--verdigris)}
+.card.warn{border-left:3px solid var(--brass)}
+.card.bad{border-left:3px solid var(--oxblood)}
+.card.tight{padding:10px 12px}
+.card.tight p{font-size:.82rem;color:var(--slate);line-height:1.45;margin:.2rem 0 0}
+.kicker{font-family:var(--mono);font-size:10.5px;letter-spacing:.13em;text-transform:uppercase;color:var(--slate);display:block;margin-bottom:.3rem}
+.quote{border-left:3px solid var(--verdigris);padding:2px 0 2px 16px;margin:14px 0}
+.quote p{font-family:var(--display);font-style:italic;font-size:clamp(1rem,1.4vw,1.14rem);line-height:1.4;color:var(--ink);margin:0}
+.quote .attr{font-family:var(--mono);font-size:10.5px;letter-spacing:.1em;text-transform:uppercase;color:var(--slate);margin-top:8px;display:block}
+.callout{border:1px solid var(--verdigris);background:var(--verdigris-soft);border-radius:6px;padding:12px 15px;margin-top:1rem}
+.callout p{margin:0;font-size:.92rem;color:var(--ink);max-width:none}
+.callout .kicker{color:var(--verdigris)}
+.note{border:1px dashed var(--rule-2);border-radius:6px;padding:11px 14px;margin-top:.9rem;background:var(--paper-2)}
+.note p{margin:.25rem 0;font-size:.84rem;color:var(--slate);max-width:84ch}
+.note .kicker{color:var(--brass)}
+ul.plain{list-style:none;padding:0;margin:.55rem 0}
+ul.plain li{padding-left:19px;position:relative;margin:.38rem 0;max-width:72ch;font-size:.9rem;color:var(--ink-2)}
+ul.plain li::before{content:"";position:absolute;left:2px;top:.62em;width:7px;height:1.5px;background:var(--verdigris)}
+ul.plain li strong{color:var(--ink)}
+ul.plain.tight li{font-size:.83rem;margin:.28rem 0}
+ul.plain.ox li::before{background:var(--oxblood)}
+.tablewrap{overflow-x:auto;margin-top:1rem;border:1px solid var(--rule);border-radius:6px;background:var(--card)}
+table{border-collapse:collapse;width:100%;min-width:720px;font-size:.78rem}
+th,td{text-align:left;padding:7px 12px;border-bottom:1px solid var(--rule);vertical-align:top;line-height:1.35}
+th{font-family:var(--mono);font-size:9.5px;letter-spacing:.1em;text-transform:uppercase;color:var(--slate);font-weight:500;background:var(--paper-2)}
+tr:last-child td{border-bottom:none}
+td.lead{color:var(--ink);font-weight:600;font-family:var(--display);font-size:.94rem}
+td.where{font-family:var(--mono);font-size:.7rem;letter-spacing:.05em;color:var(--brass)}
+.caps{display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:12px;margin-top:13px}
+.caps .cap{border-top:1px solid var(--rule);padding-top:7px;min-width:0}
+.caps .cap b{font-family:var(--mono);font-size:9px;letter-spacing:.11em;text-transform:uppercase;color:var(--verdigris);display:block;font-weight:500}
+.caps .cap.was b{color:var(--oxblood)}
+.caps .cap p{font-size:.76rem;color:var(--slate);margin:.25rem 0 0;line-height:1.42;max-width:none}
+.figcap{font-size:.79rem;color:var(--slate);margin:.6rem 0 0;max-width:88ch;line-height:1.5}
+.figcap b{font-family:var(--mono);font-size:9px;letter-spacing:.12em;text-transform:uppercase;color:var(--verdigris);font-weight:500}
+
+/* ============================================================
+   MOCK SCOPE — The Document's real design language
+   ============================================================ */
+.doc{
+  --d-page:#FAF7F2;
+  --d-paper:#FCFAF6;
+  --d-p2:#F7F2EB;
+  --d-p3:#F1EBE2;
+  --d-card:#FFFFFF;
+  --d-pearl:#E5E2DD;
+  --d-rule:rgba(44,41,38,.18);
+  --d-char:#2C2926;
+  --d-mocha:#5C4A3C;
+  --d-quiet:#65594E;
+  --d-clay:#C4A57B;
+  --d-oak:#8B7355;
+  --d-sage:#A8B5A0;
+  --d-blue:#8B9CAD;
+  --d-terra:#D4A090;
+  --d-gold:#E8C547;
+  --d-sheet:#D8CCB8;
+  font-family:var(--body);
+  color:var(--d-char);
+  line-height:1.4;
+}
+.scroller{overflow-x:auto;overflow-y:hidden;padding-bottom:8px;margin-top:12px}
+.frame{border:1px solid var(--d-pearl);border-radius:8px;overflow:hidden;background:var(--d-page)}
+.scroller .frame{min-width:920px}
+.scroller.narrow .frame{min-width:660px}
+.fbar{display:flex;align-items:center;gap:10px;padding:7px 12px;background:var(--d-p3);border-bottom:1px solid var(--d-pearl)}
+.fdots{display:flex;gap:5px;flex:0 0 auto}
+.fdots i{width:8px;height:8px;border-radius:50%;background:rgba(44,41,38,.16);display:block}
+.furl{font-family:var(--mono);font-size:10px;letter-spacing:.05em;color:var(--d-quiet);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.furl b{color:var(--d-mocha);font-weight:500}
+.screen{position:relative;background:var(--d-page);padding:18px 22px 22px;min-height:120px}
+.veil{position:absolute;inset:0;background:rgba(20,18,16,.55);z-index:3}
+
+/* stacked flat paper depth — no shadows */
+.stack{position:relative;z-index:4;max-width:640px;margin:0 auto}
+.stack.w760{max-width:760px}
+.stack::before,.stack::after{content:"";position:absolute;border:1px solid var(--d-pearl);border-radius:5px;background:var(--d-p3);z-index:0}
+.stack::before{left:10px;top:10px;right:-10px;bottom:-10px}
+.stack::after{left:5px;top:5px;right:-5px;bottom:-5px;background:var(--d-p2)}
+.sheet{position:relative;z-index:2;background:var(--d-paper);border:1px solid var(--d-sheet);border-radius:5px;padding:16px 20px 18px}
+.shead{display:flex;align-items:baseline;justify-content:space-between;gap:16px;border-bottom:1px solid var(--d-pearl);padding-bottom:9px}
+.shead .st{font-family:var(--mono);font-size:10px;letter-spacing:.22em;text-transform:uppercase;color:var(--d-char)}
+.shead .sx{font-family:var(--mono);font-size:9px;letter-spacing:.14em;text-transform:uppercase;color:var(--d-quiet);white-space:nowrap}
+.ssub{font-family:var(--display);font-style:italic;font-size:14px;color:var(--d-mocha);margin:11px 0 0}
+.vitals{font-family:var(--mono);font-size:9px;letter-spacing:.16em;text-transform:uppercase;color:var(--d-quiet);margin-top:7px}
+
+/* scored ink */
+.si{position:relative;display:inline-block;font-family:var(--mono);font-size:10px;letter-spacing:.16em;text-transform:uppercase;color:var(--d-char);font-weight:500;padding-bottom:9px;line-height:1;white-space:nowrap}
+.si::before{content:"";position:absolute;left:0;right:0;bottom:4.5px;height:1px;background:var(--d-char)}
+.si::after{content:"";position:absolute;left:0;right:0;bottom:1px;height:1px;background:var(--d-clay)}
+.si.sec{color:var(--d-mocha);font-weight:400}
+.si.sec::before{background:rgba(92,74,60,.5)}
+.si.sec::after{display:none}
+.si.ter{color:var(--d-quiet);font-weight:400}
+.si.ter::before{background:rgba(101,89,78,.32)}
+.si.ter::after{display:none}
+.si.dgr::before{background:var(--d-terra)}
+.si.dgr::after{background:var(--d-terra)}
+.si.clay{color:var(--d-clay)}
+.si.clay::before{background:rgba(196,165,123,.75)}
+.si.clay::after{display:none}
+.si.lg{font-size:12px;padding-bottom:11px}
+.si.lg::before{bottom:5.5px}
+.si.lg::after{bottom:1.5px}
+.acts{display:flex;align-items:center;gap:20px;flex-wrap:wrap;margin-top:12px}
+
+/* section header device */
+.sh{display:flex;align-items:center;gap:10px;margin:16px 0 8px}
+.sh .rules{display:flex;flex-direction:column;gap:3px;flex:0 0 auto}
+.sh .rules i{display:block;height:1.5px}
+.sh .rules i:nth-child(1){width:34px;background:var(--d-mocha)}
+.sh .rules i:nth-child(2){width:24px;background:rgba(196,165,123,.7)}
+.sh .rules i:nth-child(3){width:14px;background:rgba(196,165,123,.35)}
+.sh b{font-family:var(--mono);font-size:10px;letter-spacing:.18em;text-transform:uppercase;color:var(--d-char);font-weight:500}
+.sh em{font-family:var(--mono);font-size:10px;letter-spacing:.14em;color:var(--d-clay);font-style:normal}
+
+/* person + company rows */
+.rows{display:flex;flex-direction:column;gap:6px}
+.prow{display:grid;grid-template-columns:auto minmax(0,1fr) auto;gap:12px;align-items:center;background:var(--d-card);border:1px solid var(--d-pearl);border-radius:10px;padding:8px 12px}
+.prow.plain{background:transparent;border-color:transparent}
+.av{width:34px;height:34px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-family:var(--mono);font-size:11px;font-weight:700;color:#fff;letter-spacing:.02em;flex:0 0 auto}
+.av.sq{border-radius:8px}
+.av.lg{width:42px;height:42px;font-size:13px}
+.av.sage{background:#A8B5A0}.av.blue{background:#8B9CAD}.av.terra{background:#D4A090}
+.av.gold{background:#E8C547;color:#4a3d05}.av.mocha{background:#5C4A3C}.av.oak{background:#8B7355}.av.clay{background:#C4A57B}
+.pname{font-size:14px;font-weight:600;color:var(--d-char);display:flex;align-items:center;gap:8px;flex-wrap:wrap;line-height:1.25}
+.tline{font-family:var(--mono);font-size:9px;letter-spacing:.14em;text-transform:uppercase;color:var(--d-oak);margin-top:3px;display:block}
+.rel{font-size:11.5px;color:var(--d-quiet);margin-top:3px;display:block}
+.rside{display:flex;align-items:center;gap:10px;flex:0 0 auto}
+.chev{font-size:15px;color:rgba(101,89,78,.45);line-height:1}
+.rp{font-family:var(--mono);font-size:8px;letter-spacing:.14em;text-transform:uppercase;border:1.5px solid;border-radius:16px;padding:1px 7px;line-height:1.55;white-space:nowrap}
+.rp.client{color:#6f8069;border-color:#A8B5A0}
+.rp.gc{color:#6b7c8d;border-color:#8B9CAD}
+.rp.lead{color:#b0785f;border-color:#D4A090}
+.rp.inst{color:#8d7710;border-color:#E8C547}
+.rp.sub{color:#5C4A3C;border-color:#5C4A3C}
+.rp.maker{color:#8B7355;border-color:#8B7355}
+.rp.team{color:#a1834f;border-color:#C4A57B}
+.reach{font-family:var(--mono);font-size:8.5px;letter-spacing:.14em;text-transform:uppercase;border:1px solid;border-radius:16px;padding:2px 8px;white-space:nowrap}
+.reach.acct{color:#6f8069;border-color:#A8B5A0;background:rgba(168,181,160,.14)}
+.reach.link{color:#8d7710;border-color:#E8C547;background:rgba(232,197,71,.16)}
+.reach.paper{color:var(--d-quiet);border-color:var(--d-pearl);background:var(--d-p2)}
+.cd{width:7px;height:7px;border-radius:50%;display:inline-block;flex:0 0 auto}
+.cd.none{background:#E5E2DD}.cd.inv{background:#E8C547}.cd.tex{background:#A8B5A0}.cd.out{background:#D4A090}
+.more{font-family:var(--mono);font-size:9px;letter-spacing:.14em;text-transform:uppercase;color:var(--d-quiet);padding:5px 2px 1px}
+.sqm{font-size:8px;vertical-align:1.5px;color:var(--d-oak);letter-spacing:0}
+
+/* work blocks */
+.wblist{border-top:1px solid rgba(44,41,38,.09)}
+.wb{display:grid;grid-template-columns:18px minmax(0,1fr) auto;gap:12px;align-items:center;padding:8px 0;border-bottom:1px solid rgba(44,41,38,.09)}
+.tick{width:18px;height:18px;border-radius:2px;border:1.5px solid rgba(101,89,78,.42);position:relative;background:transparent}
+.tick.done{background:var(--d-sage);border-color:var(--d-sage)}
+.tick.done::after{content:"";position:absolute;left:5.5px;top:2px;width:5px;height:9px;border:solid #fff;border-width:0 1.7px 1.7px 0;transform:rotate(42deg)}
+.wb .lab{font-size:13.5px;color:var(--d-char)}
+.wb .lab i{display:block;font-size:11px;color:var(--d-quiet);font-style:italic;font-family:var(--display);margin-top:2px}
+.wb.skipped .lab{color:var(--d-quiet)}
+.wb .skipnote{font-family:var(--mono);font-size:8.5px;letter-spacing:.16em;text-transform:uppercase;color:var(--d-quiet)}
+.derive{font-family:var(--display);font-style:italic;font-size:12.5px;color:var(--d-quiet);margin:9px 0 0}
+
+/* fields */
+.fld{margin-top:13px}
+.flab{font-family:var(--mono);font-size:8.5px;letter-spacing:.18em;text-transform:uppercase;color:var(--d-quiet);display:block;margin-bottom:3px}
+.uin{border-bottom:1px solid rgba(44,41,38,.28);padding:5px 0 7px;font-size:14px;color:var(--d-char);display:flex;align-items:center;justify-content:space-between;gap:10px}
+.uin.ph{color:var(--d-quiet);font-family:var(--display);font-style:italic}
+.uin .car{font-family:var(--mono);font-size:10px;color:var(--d-quiet)}
+.uin .ghost{color:rgba(101,89,78,.45)}
+.tchips{display:flex;gap:8px;flex-wrap:wrap;margin-top:5px}
+.tchip{font-family:var(--mono);font-size:9px;letter-spacing:.14em;text-transform:uppercase;border:1px solid var(--d-pearl);border-radius:16px;padding:4px 12px;color:var(--d-quiet);background:var(--d-card)}
+.tchip.on{border-color:var(--d-clay);background:rgba(196,165,123,.2);color:#7a6034;font-weight:600}
+.hint{font-size:11.5px;color:var(--d-quiet);margin-top:6px;font-family:var(--display);font-style:italic}
+
+/* picker dropdown */
+.drop{border:1px solid var(--d-pearl);border-radius:5px;background:var(--d-paper);padding:5px 0}
+.drop .di{display:flex;align-items:baseline;justify-content:space-between;gap:14px;padding:5px 13px;font-size:13.5px;color:var(--d-char)}
+.drop .di i{font-family:var(--mono);font-size:8.5px;letter-spacing:.14em;text-transform:uppercase;color:var(--d-quiet);font-style:normal}
+.drop .di.on{background:rgba(196,165,123,.16)}
+.drop .di.on i{color:#7a6034}
+.drop .dr{height:1px;background:var(--d-pearl);margin:5px 0}
+.drop .di.cust{font-family:var(--display);font-style:italic;color:var(--d-mocha)}
+
+/* bands + empty states */
+.band{border:1px solid var(--d-pearl);background:var(--d-p2);border-radius:3px;padding:10px 14px;display:flex;align-items:center;gap:18px;flex-wrap:wrap}
+.band p{font-family:var(--display);font-style:italic;font-size:13.5px;color:var(--d-mocha);margin:0;max-width:none}
+.band.ok{background:rgba(168,181,160,.15);border-color:rgba(168,181,160,.55)}
+.band.ok p{color:#55684f}
+.empty{font-family:var(--display);font-style:italic;font-size:13.5px;color:var(--d-quiet);display:flex;align-items:center;gap:16px;flex-wrap:wrap}
+
+/* portal chrome bits used in room mocks */
+.rhead{display:flex;align-items:center;gap:14px;border-bottom:1px solid var(--d-pearl);padding-bottom:10px;flex-wrap:wrap}
+.rback{font-family:var(--mono);font-size:9px;letter-spacing:.16em;text-transform:uppercase;color:var(--d-quiet)}
+.rtitle{font-family:var(--mono);font-size:10px;letter-spacing:.2em;text-transform:uppercase;color:var(--d-char)}
+.askbar{border-bottom:1px solid rgba(44,41,38,.22);padding:7px 0 8px;font-family:var(--display);font-style:italic;font-size:13.5px;color:var(--d-quiet);margin-top:12px}
+.roomgrid{display:grid;grid-template-columns:158px minmax(0,1fr);gap:20px;margin-top:14px}
+.rail{border-right:1px solid var(--d-pearl);padding-right:16px}
+.rail .rg{font-family:var(--mono);font-size:8.5px;letter-spacing:.18em;text-transform:uppercase;color:var(--d-quiet);margin:12px 0 5px}
+.rail .ri{font-size:12.5px;color:var(--d-mocha);padding:3px 0}
+.rail .ri.on{color:var(--d-char);font-weight:600}
+.kchips{display:flex;gap:6px;flex-wrap:wrap}
+.kchip{font-family:var(--mono);font-size:8.5px;letter-spacing:.14em;text-transform:uppercase;border:1px solid var(--d-pearl);border-radius:16px;padding:3px 10px;color:var(--d-quiet);background:var(--d-card)}
+.kchip.on{background:var(--d-char);border-color:var(--d-char);color:var(--d-paper)}
+.lens{display:flex;gap:18px;align-items:center;margin-top:11px}
+.lens span{font-family:var(--mono);font-size:9.5px;letter-spacing:.18em;text-transform:uppercase;color:var(--d-quiet);position:relative;padding-bottom:7px}
+.lens span.on{color:var(--d-char);font-weight:600}
+.lens span.on::before{content:"";position:absolute;left:0;right:0;bottom:2px;height:1px;background:var(--d-clay)}
+.subchips{display:flex;gap:14px;flex-wrap:wrap;margin-top:9px}
+.subchips span{font-family:var(--mono);font-size:8.5px;letter-spacing:.14em;text-transform:uppercase;color:rgba(101,89,78,.7)}
+.subchips span.on{color:var(--d-mocha);border-bottom:1px solid var(--d-clay);padding-bottom:2px}
+.rolomark{font-family:var(--mono);font-size:8px;letter-spacing:.14em;text-transform:uppercase;color:#7a6034;border:1px solid var(--d-clay);border-radius:16px;padding:1px 7px}
+
+/* letterhead / instruments */
+.letter{border-bottom:1px solid var(--d-pearl);padding-bottom:12px}
+.lname{font-family:var(--display);font-size:26px;color:var(--d-char);line-height:1.1}
+.hchip{font-family:var(--mono);font-size:8.5px;letter-spacing:.16em;text-transform:uppercase;color:var(--d-quiet);border:1px solid var(--d-pearl);border-radius:16px;padding:2px 9px;background:var(--d-p2)}
+.instr{display:flex;gap:26px;flex-wrap:wrap;margin-top:13px}
+.ins{display:flex;align-items:baseline;gap:8px}
+.ins b{font-family:var(--mono);font-size:9px;letter-spacing:.18em;text-transform:uppercase;color:var(--d-quiet);font-weight:500}
+.ins i{font-family:var(--mono);font-size:9px;letter-spacing:.14em;color:var(--d-char);font-style:normal}
+.ins.on b{color:var(--d-char)}
+.ins i.warn{color:#b0785f}
+.spine{position:absolute;left:0;top:0;bottom:0;width:24px;background:var(--d-p3);border-right:1px solid var(--d-pearl)}
+.spine i{display:block;height:1px;background:var(--d-pearl);margin:22px 5px}
+
+/* annotations */
+.anno{position:absolute;z-index:6;display:flex;align-items:center}
+.anno .dot,.mnote .dot{width:17px;height:17px;border-radius:50%;background:var(--d-clay);color:#fff;font-family:var(--mono);font-size:9.5px;display:flex;align-items:center;justify-content:center;flex:0 0 auto;line-height:1}
+.anno .ldr{height:1px;background:rgba(44,41,38,.4)}
+.anno.onveil .ldr{background:rgba(250,247,242,.5)}
+.mockgrid{display:grid;grid-template-columns:minmax(0,1fr) 216px;gap:20px;align-items:start}
+@media (max-width:1040px){ .mockgrid{grid-template-columns:minmax(0,1fr)} }
+.mnotes{display:flex;flex-direction:column;gap:12px;padding-top:14px}
+.mnote{display:grid;grid-template-columns:17px minmax(0,1fr);gap:9px;align-items:start}
+.mnote .dot{margin-top:1px}
+.mnote p{font-size:.77rem;color:var(--slate);margin:0;line-height:1.45;max-width:none}
+.mnote p b{color:var(--ink);font-weight:600}
+
+/* specimen strip (slide 4) */
+.spec-strip{display:grid;grid-template-columns:repeat(auto-fit,minmax(252px,1fr));gap:0;border:1px solid var(--d-pearl);border-radius:8px;background:var(--d-page);overflow:hidden}
+.spec-cell{border-right:1px solid var(--d-pearl);border-bottom:1px solid var(--d-pearl);padding:14px 16px 16px;min-width:0}
+.spec-cell .sl{font-family:var(--mono);font-size:8.5px;letter-spacing:.18em;text-transform:uppercase;color:var(--d-quiet);display:block;margin-bottom:11px}
+.spec-cell .sn{font-size:11px;color:var(--d-quiet);margin:10px 0 0;line-height:1.4;max-width:none}
+
+/* anatomy labels */
+.anat{position:relative;padding:8px 0}
+.alab{display:flex;align-items:center;gap:8px;font-family:var(--mono);font-size:8.5px;letter-spacing:.14em;text-transform:uppercase;color:var(--d-quiet)}
+.alab .ln{height:1px;background:rgba(44,41,38,.3);flex:1;min-width:18px;max-width:70px}
+.anatgrid{display:grid;gap:7px;margin-top:10px}
+
+/* client portal house style (slide 17) */
+.cp{font-family:var(--body);color:#2f2c29;line-height:1.45}
+.cp .cpscreen{background:#FBFAF8;padding:20px 24px 24px;position:relative}
+.cp .cphead{display:flex;align-items:center;gap:12px;padding-bottom:14px;border-bottom:1px solid #EEEAE4}
+.cp .cpmark{width:34px;height:34px;border-radius:12px;background:#E7E0D5;display:flex;align-items:center;justify-content:center;font-family:var(--display);font-size:14px;color:#6b5c4a}
+.cp .cpt{font-family:var(--display);font-size:19px;color:#2f2c29}
+.cp .cps{font-size:12px;color:#8a8078}
+.cp h4{font-family:var(--display);font-size:16px;margin:20px 0 10px;font-weight:600}
+.cp .cpcard{background:#fff;border:1px solid #EEEAE4;border-radius:14px;padding:12px 16px;display:flex;align-items:center;gap:13px}
+.cp .cpav{width:36px;height:36px;border-radius:50%;background:#DED6C9;flex:0 0 auto;display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:600;color:#6b5c4a}
+.cp .cpav.sq{border-radius:11px}
+.cp .cpn{font-size:14.5px;font-weight:600}
+.cp .cpr{font-size:12.5px;color:#8a8078;margin-top:1px}
+.cp .cplist{display:flex;flex-direction:column;gap:9px}
+.wm{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;pointer-events:none;z-index:7}
+.wm span{font-family:var(--mono);font-size:clamp(16px,2.3vw,26px);letter-spacing:.42em;color:rgba(44,41,38,.11);transform:rotate(-21deg);white-space:nowrap;text-transform:uppercase}
+
+/* honest "before" select */
+.plainsel{border:1px solid #b9b6b1;border-radius:4px;background:#fff;padding:6px 10px;font-size:13.5px;color:#4a4742;display:flex;align-items:center;justify-content:space-between;gap:12px;font-family:var(--body);max-width:290px}
+.plainsel .ar{font-size:9px;color:#777}
+.plainbtn{border:1px solid #b9b6b1;border-radius:4px;background:#f2f1ef;padding:6px 14px;font-size:13px;color:#3d3a36;display:inline-block;margin-top:12px}
+.radioring{width:14px;height:14px;border-radius:50%;border:1.5px solid var(--d-pearl);flex:0 0 auto;position:relative}
+.radioring.on{border-color:var(--d-clay)}
+.radioring.on::after{content:"";position:absolute;inset:3px;border-radius:50%;background:var(--d-clay)}
+.ba{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:18px;margin-top:14px}
+@media (max-width:900px){ .ba{grid-template-columns:minmax(0,1fr)} }
+.balab{font-family:var(--mono);font-size:9px;letter-spacing:.16em;text-transform:uppercase;color:var(--slate);display:block;margin-bottom:7px}
+.balab.now{color:var(--oxblood)}
+.balab.next{color:var(--verdigris)}
+
+/* the stamp (slide 14) */
+.stamp{display:grid;grid-template-columns:56px minmax(0,1fr);gap:18px;align-items:center;border:1px solid var(--d-pearl);border-radius:5px;background:var(--d-paper);padding:20px 22px}
+.stamp .tick{width:56px;height:56px;border-radius:5px;border-width:2px}
+.stamp .tick.done::after{left:18px;top:8px;width:15px;height:28px;border-width:0 4px 4px 0}
+.stamp .stxt{display:block;font-family:var(--display);font-size:19px;color:var(--d-char);line-height:1.25}
+.stamp .ssub2{display:block;font-size:12.5px;color:var(--d-quiet);margin-top:5px;font-family:var(--display);font-style:italic}
+.stamp .son{font-family:var(--mono);font-size:8.5px;letter-spacing:.16em;text-transform:uppercase;color:#6f8069;margin-top:8px;display:block}
+
+/* ---------- chrome ---------- */
+#progress{position:fixed;top:0;left:0;height:2px;background:var(--verdigris);width:0;z-index:60;transition:width .18s linear}
+@media (prefers-reduced-motion: reduce){ #progress{transition:none} }
+#chrome{
+  position:fixed;right:clamp(12px,2.4vw,26px);bottom:clamp(12px,2.4vh,24px);
+  z-index:60;display:flex;align-items:center;gap:8px;
+  background:var(--card);border:1px solid var(--rule-2);border-radius:999px;padding:5px 6px 5px 13px;
+}
+#counter{font-family:var(--mono);font-size:11px;letter-spacing:.1em;color:var(--slate);min-width:52px}
+#counter b{color:var(--ink);font-weight:600}
+.navbtn{
+  appearance:none;border:1px solid var(--rule);background:var(--paper-2);color:var(--ink);
+  width:28px;height:28px;border-radius:999px;cursor:pointer;display:inline-flex;align-items:center;justify-content:center;
+  font-size:13px;line-height:1;font-family:var(--mono);padding:0;
+}
+.navbtn:hover{border-color:var(--verdigris);color:var(--verdigris)}
+.navbtn:focus-visible,#themebtn:focus-visible{outline:2px solid var(--verdigris);outline-offset:2px}
+#themebtn{
+  appearance:none;border:1px solid var(--rule);background:var(--paper-2);color:var(--slate);
+  height:28px;border-radius:999px;cursor:pointer;padding:0 11px;
+  font-family:var(--mono);font-size:10px;letter-spacing:.1em;text-transform:uppercase;
+}
+#themebtn:hover{border-color:var(--verdigris);color:var(--verdigris)}
+#hint{
+  position:fixed;left:clamp(12px,2.4vw,26px);bottom:clamp(12px,2.4vh,24px);z-index:60;
+  font-family:var(--mono);font-size:10px;letter-spacing:.1em;text-transform:uppercase;color:var(--slate);opacity:.75;
+}
+@media (max-width:700px){ #hint{display:none} }
+
+/* reveal */
+.slide .main > *, .slide .gutter > *{opacity:0;transform:translateY(8px);transition:opacity .5s ease, transform .5s ease}
+.slide.seen .main > *, .slide.seen .gutter > *{opacity:1;transform:none}
+.slide.seen .main > *:nth-child(2){transition-delay:.06s}
+.slide.seen .main > *:nth-child(3){transition-delay:.12s}
+.slide.seen .main > *:nth-child(4){transition-delay:.17s}
+@media (prefers-reduced-motion: reduce){
+  .slide .main > *, .slide .gutter > *{opacity:1;transform:none;transition:none}
+}
+
+/* ---------- print ---------- */
+@media print{
+  html,body{height:auto;background:#fff;color:#000;background-image:none}
+  #deck{height:auto;overflow:visible}
+  #chrome,#hint,#progress{display:none !important}
+  .slide{min-height:auto;height:auto;page-break-after:always;break-after:page;padding:12mm 10mm;border-bottom:none;display:block}
+  .slide.ink{background:#fff;background-image:none;color:#000}
+  .slide:last-child{page-break-after:auto;break-after:auto}
+  .slide .main > *,.slide .gutter > *{opacity:1 !important;transform:none !important}
+  .card,.frame,.spec-strip,.tablewrap,.stamp{break-inside:avoid}
+  .scroller{overflow:visible}
+  .scroller .frame,.scroller.narrow .frame{min-width:0}
+  h1{font-size:28pt}h2{font-size:18pt}
+  .inner,.slide.wide .inner{max-width:none}
+}
+</style>
+</head>
+<body>
+
+<div id="progress" role="presentation"></div>
+
+<div id="deck" tabindex="-1">
+
+<!-- ============ 01 · TITLE ============ -->
+<section class="slide cover ink" data-label="Cover">
+  <div class="inner">
+    <div class="main">
+      <div class="wordmark">
+        <svg width="22" height="22" viewBox="0 0 22 22" aria-hidden="true">
+          <rect x="1.5" y="1.5" width="19" height="19" rx="2.5" fill="none" stroke="currentColor" stroke-width="1.2" opacity=".35"/>
+          <path d="M5 16.5 L11 5.5 L17 16.5" fill="none" stroke="currentColor" stroke-width="1.4"/>
+          <line x1="7.6" y1="12" x2="14.4" y2="12" stroke="currentColor" stroke-width="1.1" opacity=".55"/>
+        </svg>
+        <span>Patina · Studio &amp; Project</span>
+      </div>
+
+      <h1>The Call Sheet,<br>drawn.</h1>
+      <p class="lede">The approved concept, fitted to the Document. Where every new surface lives, and what it looks like in the grammar the portal already owns.</p>
+
+      <blockquote class="cover-quote">The concept deck argued what to build. This one puts it on paper you can point at.</blockquote>
+
+      <div class="cover-meta">
+        <span>Sequel to <b>the concept deck</b></span>
+        <span>Screens <b>8 full · 6 details</b></span>
+        <span>Status <b>nothing built</b></span>
+        <span><b>4 August 2026</b></span>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============ 02 · APPROVED / ADDS ============ -->
+<section class="slide" data-label="Approved">
+  <div class="inner">
+    <div class="gutter"><span class="eyebrow">Act I · Where we are</span><span class="num">02</span><span class="tick"></span></div>
+    <div class="main">
+      <h2>What was approved, and what this adds.</h2>
+      <p class="lede">Nothing below reopens a settled question. The direction stands; this deck draws it.</p>
+
+      <div class="grid g2">
+        <div class="card">
+          <span class="kicker">Approved · the concept deck</span>
+          <ul class="plain tight">
+            <li><strong>Titles are orthogonal to tiers.</strong> Nine titles plus free text; owner / admin / member / guest untouched.</li>
+            <li><strong>The rolodex is a studio asset.</strong> Studio-scoped people and companies, built by working rather than by typing.</li>
+            <li><strong>The roster is the call sheet.</strong> One surface per project: studio side, client side, build &amp; supply.</li>
+            <li><strong>Three reach states.</strong> Account, field link, contact only — most of a crew never logs in.</li>
+            <li><strong>Four phases</strong>, lowest blast radius first.</li>
+          </ul>
+        </div>
+        <div class="card accent">
+          <span class="kicker">Added here · the drawing</span>
+          <ul class="plain tight">
+            <li><strong>Names on screens.</strong> Every surface sits on a real route, in a real frame.</li>
+            <li><strong>Exact placements.</strong> Which sheet, which letterhead instrument, which room, which rail.</li>
+            <li><strong>Every workflow drawn.</strong> Invite, title, promote, add, pick, kick off — start to finish.</li>
+            <li><strong>The vocabulary fix.</strong> One name is already taken; slide 3 takes it back.</li>
+            <li><strong>Seven new rulings (U1–U7)</strong> about the drawing, not the direction.</li>
+          </ul>
+        </div>
+      </div>
+
+      <div class="note">
+        <span class="kicker">The six still open</span>
+        <p>R1 rolodex visibility · R2 member project visibility · R3 GC reach ceiling · R4 client-visible roster · R5 migration consent · R6 seats and billing. Nothing here presumes an answer. Where a screen depends on one, the screen says so on the glass — slide 17 carries a <span class="mono">PENDING RULING R4</span> watermark for exactly that reason.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============ 03 · THE NAMING RULING ============ -->
+<section class="slide" data-label="Naming">
+  <div class="inner">
+    <div class="gutter"><span class="eyebrow">Act I · Vocabulary</span><span class="num">03</span><span class="tick"></span></div>
+    <div class="main">
+      <h2>One name is already taken. We take it back.</h2>
+      <p class="lede">The desk has a "call sheet" today: a checklist of questions to ask on a discovery call. It was always a plan for a call, and it was never a call sheet. It becomes the <strong>Call plan</strong>, and the name goes to the roster — in copy, in routes, in the table names.</p>
+
+      <div class="tablewrap">
+        <table>
+          <thead>
+            <tr><th style="width:20%">Word</th><th style="width:42%">What it names</th><th>Where it lives</th></tr>
+          </thead>
+          <tbody>
+            <tr><td class="lead">The Call Sheet</td><td>Everyone on one job, and how to reach each of them.</td><td class="where">DocSheet on /doc/&lt;project&gt; · letterhead instrument</td></tr>
+            <tr><td class="lead">Call plan</td><td>The questions you'll ask on a discovery call. Renamed, unmoved, unchanged.</td><td class="where">exactly where the old "call sheet" was</td></tr>
+            <tr><td class="lead">The Rolodex</td><td>The studio's book of the people and companies it works with.</td><td class="where">the People Room · STUDIO lens</td></tr>
+            <tr><td class="lead">Studio side · Client side · Build &amp; supply</td><td>The three groups every call sheet is drawn in.</td><td class="where">section headers inside the sheet</td></tr>
+            <tr><td class="lead">Title</td><td>What a person does. Senior Designer, Procurement, Bookkeeper.</td><td class="where">a mono line under the name</td></tr>
+            <tr><td class="lead">Tier</td><td>What a person may touch. Owner, admin, member, guest.</td><td class="where">a select on the member row · unchanged in policy</td></tr>
+            <tr><td class="lead">Account · Field link · On paper</td><td>The three reach states, stated on every row.</td><td class="where">an 8.5px chip, right-aligned</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <div class="callout">
+        <span class="kicker">One word improved on the way</span>
+        <p>"Contact only" becomes <strong>On paper</strong>. Same state, better word: the workroom and the photographer are on the sheet, in ink, and that is the whole of their relationship to the software. It reads as a place to be rather than a thing you lack.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============ 04 · GRAMMAR LEGEND ============ -->
+<section class="slide wide" data-label="Grammar">
+  <div class="inner">
+    <div class="gutter"><span class="eyebrow">Act I · The legend</span><span class="num">04</span></div>
+    <div class="main">
+      <h2>The grammar, laid out once.</h2>
+      <p class="lede">Seven idioms. Every mock that follows is assembled out of these and nothing else.</p>
+
+      <div class="doc">
+        <div class="scroller narrow">
+          <div class="spec-strip" style="min-width:1080px">
+
+            <div class="spec-cell">
+              <span class="sl">Scored ink · actions</span>
+              <div style="display:flex;flex-direction:column;gap:13px;align-items:flex-start">
+                <span class="si lg">Send invitation</span>
+                <span class="si sec">New person</span>
+                <span class="si ter">Print</span>
+                <span class="si dgr">Remove</span>
+              </div>
+              <p class="sn">A word, tracked, with rules under it. No border, no fill, no box. One primary per region — charcoal word, charcoal score, clay score.</p>
+            </div>
+
+            <div class="spec-cell">
+              <span class="sl">DocSheet header</span>
+              <div class="sheet" style="padding:12px 14px">
+                <div class="shead"><span class="st">Call sheet</span><span class="sx">Put back · Esc</span></div>
+                <p class="ssub" style="font-size:12.5px">Everyone on the job, and how to reach them.</p>
+              </div>
+              <p class="sn">The close affordance is always the words <b>Put back · Esc</b>. There is no &times; anywhere in the Document.</p>
+            </div>
+
+            <div class="spec-cell">
+              <span class="sl">Rows · people and companies</span>
+              <div class="rows">
+                <div class="prow">
+                  <span class="av lg sage">RM</span>
+                  <div>
+                    <span class="pname">Rosa Mart&iacute;nez <span class="rp sub">Sub</span> <span class="cd tex"></span></span>
+                    <span class="rel">Mart&iacute;nez Tile Works · tile</span>
+                  </div>
+                  <span class="chev">&rsaquo;</span>
+                </div>
+                <div class="prow">
+                  <span class="av lg sq oak">HB</span>
+                  <div>
+                    <span class="pname">Hale Brothers Builders <span class="rp gc">GC firm</span></span>
+                    <span class="rel">3 people · 4 projects</span>
+                  </div>
+                  <span class="chev">&rsaquo;</span>
+                </div>
+              </div>
+              <p class="sn">42px circle for a person, 42px rounded square for a company. 10px radius card, pearl rule, quiet chevron.</p>
+            </div>
+
+            <div class="spec-cell">
+              <span class="sl">WorkBlock ticks</span>
+              <div class="wblist" style="border-top:none">
+                <div class="wb"><span class="tick done"></span><span class="lab">Name &amp; brand the studio</span><span></span></div>
+                <div class="wb"><span class="tick"></span><span class="lab">Invite your crew</span><span></span></div>
+                <div class="wb skipped" style="border-bottom:none"><span class="tick"></span><span class="lab">Seed the rolodex</span><span class="skipnote">Skipped</span></div>
+              </div>
+              <p class="sn">A stamp, not a SaaS checkbox: the box fills sage and takes a white check. Skipped stays hollow and says so in mono.</p>
+            </div>
+
+            <div class="spec-cell">
+              <span class="sl">Section header</span>
+              <div class="sh" style="margin-top:4px"><span class="rules"><i></i><i></i><i></i></span><b>Build &amp; supply</b><em>8</em></div>
+              <div class="sh"><span class="rules"><i></i><i></i><i></i></span><b>Members</b><em>4</em></div>
+              <p class="sn">Three rules descending — 34, 24, 14 at 1.5px, mocha into clay — then the label, then an optional clay count.</p>
+            </div>
+
+            <div class="spec-cell">
+              <span class="sl">Inline bands</span>
+              <div style="display:flex;flex-direction:column;gap:9px">
+                <div class="band"><p>&ndash;&ensp;Not in the studio rolodex yet.</p><span class="si">Add to the rolodex</span></div>
+                <div class="band ok"><p>In the rolodex &mdash; the whole studio can find them now.</p></div>
+              </div>
+              <p class="sn">Confirmation and error are paper strips at the point of action. Nothing floats. There are no toasts in this deck.</p>
+            </div>
+
+            <div class="spec-cell" style="border-right:none">
+              <span class="sl">Consent dots</span>
+              <div style="display:flex;flex-direction:column;gap:8px;font-family:var(--mono);font-size:8.5px;letter-spacing:.14em;text-transform:uppercase;color:var(--d-quiet)">
+                <span><span class="cd none" style="margin-right:9px"></span>Not asked</span>
+                <span><span class="cd inv" style="margin-right:9px"></span>Invited</span>
+                <span><span class="cd tex" style="margin-right:9px"></span>Texting</span>
+                <span><span class="cd out" style="margin-right:9px"></span>Opted out</span>
+              </div>
+              <p class="sn">Seven pixels carrying the SMS ledger. Filled sage means we may text. Everything else means we may not, yet or ever.</p>
+            </div>
+
+            <div class="spec-cell" style="border-right:none;border-bottom:none">
+              <span class="sl">Empty states</span>
+              <p class="empty" style="margin:0">&ndash;&ensp;No one by that name in the rolodex.&emsp;<span class="si sec">Add someone new</span></p>
+              <p class="sn">An en-dash, an italic sentence, one next move. No illustration, no box, no apology.</p>
+            </div>
+
+          </div>
+        </div>
+      </div>
+
+      <p class="figcap"><b>Read this way</b> &nbsp;Nothing in this deck invents chrome. Every screen that follows is built from grammar the portal already owns — which is also why Phase 1 is a week of work and not a design system.</p>
+    </div>
+  </div>
+</section>
+
+<!-- ============ 05 · THE STUDIO PAGE ============ -->
+<section class="slide wide" data-label="Studio page">
+  <div class="inner">
+    <div class="gutter"><span class="eyebrow">Act II · The studio</span><span class="num">05</span></div>
+    <div class="main">
+      <h2>The Studio page, extended.</h2>
+      <p class="lede">Everything a studio is set up from, on one sheet: the marks it makes, the people it keeps, and a short list of what is still undone.</p>
+
+      <div class="mockgrid">
+        <div class="doc">
+          <div class="scroller">
+            <div class="frame">
+              <div class="fbar">
+                <span class="fdots"><i></i><i></i><i></i></span>
+                <span class="furl">app.patina.cloud/<b>studio</b></span>
+              </div>
+              <div class="screen" style="padding-top:20px">
+
+                <!-- dimmed desk behind -->
+                <div class="letter" style="opacity:.9">
+                  <span class="lname">Middle Studio</span>
+                  <div class="instr">
+                    <span class="ins"><b>Projects</b><i>7</i></span>
+                    <span class="ins"><b>Members</b><i>4</i></span>
+                    <span class="ins"><b>Rolodex</b><i>34</i></span>
+                  </div>
+                </div>
+                <div style="height:150px"></div>
+
+                <div class="veil"></div>
+
+                <div class="stack" style="position:absolute;left:0;right:0;top:34px;margin:0 auto;width:640px;max-width:calc(100% - 96px)">
+                  <div class="sheet">
+                    <div class="shead"><span class="st">The studio</span><span class="sx">Put back · Esc</span></div>
+
+                    <span class="anno" style="position:absolute;left:-54px;top:74px"><span class="dot">1</span><span class="ldr" style="width:36px"></span></span>
+                    <span class="anno" style="position:absolute;left:-54px;top:450px"><span class="dot">2</span><span class="ldr" style="width:36px"></span></span>
+                    <span class="anno" style="position:absolute;left:-54px;top:585px"><span class="dot">3</span><span class="ldr" style="width:36px"></span></span>
+
+                    <div class="sh" style="margin-top:14px"><span class="rules"><i></i><i></i><i></i></span><b>Still to do</b><em>3</em></div>
+                    <div class="wblist">
+                      <div class="wb"><span class="tick done"></span><span class="lab">Name &amp; brand the studio</span><span></span></div>
+                      <div class="wb"><span class="tick done"></span><span class="lab">Set your own title</span><span></span></div>
+                      <div class="wb"><span class="tick"></span><span class="lab">Invite your crew</span><span></span></div>
+                      <div class="wb"><span class="tick"></span><span class="lab">Seed the rolodex<i>the rolodex fills itself from your projects</i></span><span class="si ter">Skip</span></div>
+                      <div class="wb"><span class="tick"></span><span class="lab">Open the first project</span><span></span></div>
+                    </div>
+                    <p class="derive">The marks follow the work. Nothing on this list is something you tick — do the thing and the box fills.</p>
+
+                    <div class="sh"><span class="rules"><i></i><i></i><i></i></span><b>Identity</b></div>
+                    <div style="display:flex;align-items:baseline;gap:14px;flex-wrap:wrap">
+                      <span style="font-family:var(--display);font-size:22px;color:var(--d-char)">Middle Studio</span>
+                      <span style="font-family:var(--mono);font-size:9px;letter-spacing:.14em;text-transform:uppercase;color:var(--d-quiet)">middle-studio</span>
+                      <span class="si sec" style="margin-left:auto">Edit</span>
+                    </div>
+
+                    <div class="sh"><span class="rules"><i></i><i></i><i></i></span><b>Members</b><em>4</em></div>
+                    <div class="rows">
+                      <div class="prow">
+                        <span class="av lg clay">LW</span>
+                        <div>
+                          <span class="pname">Leah Warner <span class="cd tex"></span></span>
+                          <span class="tline">Senior designer</span>
+                        </div>
+                        <span class="rside"><span class="uin" style="border-bottom-color:rgba(44,41,38,.2);font-size:12px;padding:2px 0 3px">Member <span class="car">&#9662;</span></span><span class="chev">&rsaquo;</span></span>
+                      </div>
+                      <div class="prow">
+                        <span class="av lg mocha">MW</span>
+                        <div>
+                          <span class="pname">Marcus Webb <span class="cd tex"></span></span>
+                          <span class="tline">Procurement</span>
+                        </div>
+                        <span class="rside"><span class="uin" style="border-bottom-color:rgba(44,41,38,.2);font-size:12px;padding:2px 0 3px">Member <span class="car">&#9662;</span></span><span class="chev">&rsaquo;</span></span>
+                      </div>
+                      <div class="prow">
+                        <span class="av lg oak">TL</span>
+                        <div>
+                          <span class="pname">Tessa Lund <span class="cd none"></span></span>
+                          <span style="display:block;margin-top:4px"><span class="si clay">Set title</span></span>
+                        </div>
+                        <span class="rside"><span class="uin" style="border-bottom-color:rgba(44,41,38,.2);font-size:12px;padding:2px 0 3px">Member <span class="car">&#9662;</span></span><span class="chev">&rsaquo;</span></span>
+                      </div>
+                      <div class="prow">
+                        <span class="av lg sage">AD</span>
+                        <div>
+                          <span class="pname">Ann Doyle <span class="cd none"></span></span>
+                          <span class="tline">Bookkeeper</span>
+                        </div>
+                        <span class="rside"><span class="uin" style="border-bottom-color:rgba(44,41,38,.2);font-size:12px;padding:2px 0 3px">Guest <span class="car">&#9662;</span></span><span class="chev">&rsaquo;</span></span>
+                      </div>
+                    </div>
+
+                    <div class="acts">
+                      <span class="si">Invite someone</span>
+                      <span class="si sec">The rolodex</span>
+                    </div>
+                  </div>
+                </div>
+
+                <div style="height:640px"></div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="mnotes">
+          <div class="mnote"><span class="dot">1</span><p><b>The checklist reads state.</b> Two ticks are already sage because the studio has a name and the owner has a title. The list is a mirror, not a form.</p></div>
+          <div class="mnote"><span class="dot">2</span><p><b>The title line.</b> Nine mono characters under the name, aged oak. It is the whole of Phase 1 on screen.</p></div>
+          <div class="mnote"><span class="dot">3</span><p><b>An empty title is an affordance.</b> No blank, no placeholder — a clay scored word where the title would be.</p></div>
+          <div class="mnote"><span class="dot">&middot;</span><p>Tier stays a quiet select on the right. Changing it is a security act; changing the title is not.</p></div>
+        </div>
+      </div>
+
+      <p class="figcap"><b>Route</b> &nbsp;/studio &mdash; the sheet opens over the desk, the desk stays legible behind the veil, and Esc puts it back.</p>
+    </div>
+  </div>
+</section>
+
+<!-- ============ 06 · TITLE PICKER DETAIL ============ -->
+<section class="slide wide" data-label="Title picker">
+  <div class="inner">
+    <div class="gutter"><span class="eyebrow">Act II · Detail</span><span class="num">06</span></div>
+    <div class="main">
+      <h2>The member row, taken apart.</h2>
+      <p class="lede">Five parts, one of them new. And the picker behind the new one.</p>
+
+      <div class="doc">
+        <div class="ba" style="gap:26px">
+
+          <div>
+            <span class="balab next">Anatomy · member row</span>
+            <div class="prow" style="padding:11px 14px">
+              <span class="av lg clay">LW</span>
+              <div>
+                <span class="pname">Leah Warner <span class="cd tex"></span></span>
+                <span class="tline">Senior designer</span>
+              </div>
+              <span class="rside"><span class="uin" style="border-bottom-color:rgba(44,41,38,.2);font-size:12.5px;padding:2px 0 3px">Member <span class="car">&#9662;</span></span><span class="chev">&rsaquo;</span></span>
+            </div>
+
+            <div class="anatgrid">
+              <span class="alab"><span class="ln"></span>42px monogram, role tint, white mono initials</span>
+              <span class="alab"><span class="ln"></span>Name &mdash; 14px semibold charcoal</span>
+              <span class="alab"><span class="ln"></span>Consent dot &mdash; 7px, sage means texting</span>
+              <span class="alab"><span class="ln"></span>Title line &mdash; 9px mono, aged oak, <b>new</b></span>
+              <span class="alab"><span class="ln"></span>Tier &mdash; underline select, unchanged in policy</span>
+              <span class="alab"><span class="ln"></span>Chevron &mdash; opens the person, quiet on purpose</span>
+            </div>
+
+            <div class="band" style="margin-top:16px"><p>&ndash;&ensp;Nothing above this line moved. One line was added under a name.</p></div>
+          </div>
+
+          <div>
+            <span class="balab next">The title picker</span>
+            <div class="drop" style="max-width:340px">
+              <span class="di"><span>Principal</span><i>owner</i></span>
+              <span class="di"><span>Design Director</span><i>admin</i></span>
+              <span class="di on"><span>Senior Designer</span><i>member</i></span>
+              <span class="di"><span>Designer</span><i>member</i></span>
+              <span class="di"><span>Junior Designer</span><i>member</i></span>
+              <span class="di"><span>Project Manager</span><i>member</i></span>
+              <span class="di"><span>Procurement</span><i>member</i></span>
+              <span class="di"><span>Studio Manager</span><i>admin</i></span>
+              <span class="di"><span>Bookkeeper</span><i>guest</i></span>
+              <span class="dr"></span>
+              <span class="di cust"><span>Custom title&hellip;</span><i>free text</i></span>
+            </div>
+            <p class="hint" style="max-width:340px">Changing a title never changes permissions.</p>
+
+            <div class="band" style="margin-top:18px;max-width:340px"><p>&ndash;&ensp;Paper, pearl rule, 5px radius. No shadow, because the Document has no light source.</p></div>
+          </div>
+
+        </div>
+      </div>
+
+      <p class="figcap"><b>The tier hint</b> &nbsp;Right-aligned mono, quiet, always visible &mdash; so the person choosing a title can see what it will suggest before it suggests it. The suggestion moves the select on the invite sheet; on an existing member it moves nothing at all.</p>
+    </div>
+  </div>
+</section>
+
+<!-- ============ 07 · THE INVITE SHEET ============ -->
+<section class="slide wide" data-label="Invite">
+  <div class="inner">
+    <div class="gutter"><span class="eyebrow">Act II · The invite</span><span class="num">07</span></div>
+    <div class="main">
+      <h2>The invite becomes a sheet.</h2>
+      <p class="lede">Same invitation record, same branded email, same acceptance handshake. Two new fields, and one modal fewer in the portal.</p>
+
+      <div class="mockgrid">
+        <div class="doc">
+          <div class="scroller">
+            <div class="frame">
+              <div class="fbar">
+                <span class="fdots"><i></i><i></i><i></i></span>
+                <span class="furl">app.patina.cloud/studio &nbsp;<b>&rsaquo; invite</b></span>
+              </div>
+              <div class="screen" style="padding-top:20px">
+
+                <div class="letter" style="opacity:.9">
+                  <span class="lname">Middle Studio</span>
+                  <div class="instr">
+                    <span class="ins"><b>Projects</b><i>7</i></span>
+                    <span class="ins on"><b>Members</b><i>4</i></span>
+                    <span class="ins"><b>Rolodex</b><i>34</i></span>
+                  </div>
+                </div>
+                <div style="height:120px"></div>
+
+                <div class="veil"></div>
+
+                <div class="stack" style="position:absolute;left:0;right:0;top:40px;margin:0 auto;width:640px;max-width:calc(100% - 96px)">
+                  <div class="sheet" style="padding-bottom:22px">
+                    <div class="shead"><span class="st">Invite to Middle Studio</span><span class="sx">Put back · Esc</span></div>
+                    <p class="ssub">They'll get an email from your studio, with your mark on it.</p>
+
+                    <span class="anno" style="position:absolute;left:-54px;top:112px"><span class="dot">1</span><span class="ldr" style="width:36px"></span></span>
+                    <span class="anno" style="position:absolute;left:-54px;top:172px"><span class="dot">2</span><span class="ldr" style="width:36px"></span></span>
+                    <span class="anno" style="position:absolute;left:-54px;top:232px"><span class="dot">3</span><span class="ldr" style="width:36px"></span></span>
+                    <span class="anno" style="position:absolute;left:-54px;top:300px"><span class="dot">4</span><span class="ldr" style="width:36px"></span></span>
+
+                    <div class="fld">
+                      <span class="flab">Email</span>
+                      <div class="uin">leah@middlestudio.co</div>
+                    </div>
+                    <div class="fld">
+                      <span class="flab">Name</span>
+                      <div class="uin">Leah Warner</div>
+                    </div>
+                    <div class="fld">
+                      <span class="flab">Title</span>
+                      <div class="uin">Designer <span class="car">&#9662;</span></div>
+                    </div>
+                    <div class="fld">
+                      <span class="flab">Permission tier</span>
+                      <div class="tchips">
+                        <span class="tchip">Owner</span>
+                        <span class="tchip">Admin</span>
+                        <span class="tchip on">Member</span>
+                        <span class="tchip">Guest</span>
+                      </div>
+                      <p class="hint">Suggested by the title. Change it if your studio works differently.</p>
+                    </div>
+
+                    <div class="acts" style="justify-content:flex-end;margin-top:22px">
+                      <span class="si">Send invitation</span>
+                    </div>
+                  </div>
+                </div>
+
+                <div style="height:320px"></div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="mnotes">
+          <div class="mnote"><span class="dot">1</span><p><b>Underline inputs.</b> The Document does not box its fields — a rule under the value, a mono label over it.</p></div>
+          <div class="mnote"><span class="dot">2</span><p><b>Name is optional in practice.</b> If they accept with a different one, theirs wins. This is what you'll call them until then.</p></div>
+          <div class="mnote"><span class="dot">3</span><p><b>The title picker</b> from slide 6, opened in place. Free text sits at the bottom of the same list.</p></div>
+          <div class="mnote"><span class="dot">4</span><p><b>The tier is chips, not a dropdown</b> &mdash; four values, all worth seeing at once, one tinted clay because the title suggested it.</p></div>
+          <div class="mnote"><span class="dot">&middot;</span><p>Today this is a modal. It becomes a sheet, and the modal dies.</p></div>
+        </div>
+      </div>
+
+      <p class="figcap"><b>One primary per region</b> &nbsp;SEND INVITATION is the only charcoal-and-clay word on the sheet. Put back &middot; Esc is not an action; it is the way out, and it says so in words.</p>
+    </div>
+  </div>
+</section>
+
+<!-- ============ 08 · THE PEOPLE ROOM ============ -->
+<section class="slide wide" data-label="The Rolodex">
+  <div class="inner">
+    <div class="gutter"><span class="eyebrow">Act III · The rolodex</span><span class="num">08</span></div>
+    <div class="main">
+      <h2>The People Room becomes the Rolodex.</h2>
+      <p class="lede">No new room. The room that already gathers the people around your work grows a second lens &mdash; <span class="mono">MINE</span> and <span class="mono">STUDIO</span> &mdash; and the studio's book is what sits behind the second one.</p>
+
+      <div class="mockgrid">
+        <div class="doc">
+          <div class="scroller">
+            <div class="frame" style="min-width:1000px">
+              <div class="fbar">
+                <span class="fdots"><i></i><i></i><i></i></span>
+                <span class="furl">app.patina.cloud/<b>people</b></span>
+              </div>
+              <div class="screen">
+
+                <div class="rhead">
+                  <span class="rback">&larr; The desk</span>
+                  <span class="rtitle">The People Room · 34 people</span>
+                  <span style="margin-left:auto"><span class="si sec">Add person</span></span>
+                </div>
+
+                <div class="askbar">Ask for anyone &mdash; a trade, a company, a job&hellip;</div>
+
+                <div class="roomgrid">
+                  <div class="rail">
+                    <div class="rg">Directory</div>
+                    <div class="ri on">Everyone</div>
+                    <div class="ri">Companies</div>
+                    <div class="ri">Archived</div>
+                    <div class="rg">Relationships</div>
+                    <div class="ri">Worked together</div>
+                    <div class="ri">Never on a job</div>
+                    <div class="rg">Practice groups</div>
+                    <div class="ri">Ellsworth Residence</div>
+                    <div class="ri">Marsh House</div>
+                    <div class="ri">Braddock Remodel</div>
+                  </div>
+
+                  <div>
+                    <div class="kchips">
+                      <span class="kchip">All</span>
+                      <span class="kchip">Field</span>
+                      <span class="kchip">Clients</span>
+                      <span class="kchip">Makers</span>
+                      <span class="kchip">Team</span>
+                      <span class="kchip">GCs</span>
+                      <span class="kchip on">Subs</span>
+                      <span class="kchip">Installers</span>
+                      <span class="kchip">Receivers</span>
+                      <span class="kchip">Companies</span>
+                    </div>
+
+                    <div class="lens">
+                      <span>Mine</span>
+                      <span class="on">Studio</span>
+                    </div>
+
+                    <div class="subchips">
+                      <span class="on">tile</span>
+                      <span>electrical</span>
+                      <span>millwork</span>
+                      <span>paint</span>
+                      <span>+ more</span>
+                    </div>
+
+                    <div class="rows" style="margin-top:14px">
+                      <div class="prow">
+                        <span class="av lg mocha">RM</span>
+                        <div>
+                          <span class="pname">Rosa Mart&iacute;nez <span class="rp sub">Sub</span> <span class="cd tex"></span></span>
+                          <span class="rel">Mart&iacute;nez Tile Works · tile · 3 projects · last: Ellsworth</span>
+                        </div>
+                        <span class="rside"><span class="rolomark">Rolodex</span><span class="chev">&rsaquo;</span></span>
+                      </div>
+                      <div class="prow">
+                        <span class="av lg mocha">HS</span>
+                        <div>
+                          <span class="pname">Hector Salas <span class="rp sub">Sub</span> <span class="cd inv"></span></span>
+                          <span class="rel">Salas &amp; Sons · tile · 1 project · last: Marsh House</span>
+                        </div>
+                        <span class="rside"><span class="rolomark">Rolodex</span><span class="chev">&rsaquo;</span></span>
+                      </div>
+                      <div class="prow">
+                        <span class="av lg mocha">JW</span>
+                        <div>
+                          <span class="pname">Junie Ward <span class="rp sub">Sub</span> <span class="cd none"></span></span>
+                          <span class="rel">Independent · tile · never on a job yet</span>
+                        </div>
+                        <span class="rside"><span class="chev">&rsaquo;</span></span>
+                      </div>
+                      <div class="prow">
+                        <span class="av lg sq oak">MT</span>
+                        <div>
+                          <span class="pname">Mart&iacute;nez Tile Works <span class="rp maker">Sub firm</span></span>
+                          <span class="rel">3 people · 4 projects · last: Ellsworth</span>
+                        </div>
+                        <span class="rside"><span class="rolomark">Rolodex</span><span class="chev">&rsaquo;</span></span>
+                      </div>
+                    </div>
+
+                    <p class="empty" style="margin-top:16px">&ndash;&ensp;That's everyone in tile.&emsp;<span class="si sec">Widen the trade</span></p>
+                  </div>
+                </div>
+
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="mnotes">
+          <div class="mnote"><span class="dot">&middot;</span><p><b>The lens is two words.</b> MINE is the directory a designer has today. STUDIO is the rolodex. Same rows, different scope &mdash; and the widest-blast-radius change in the whole proposal is exactly this toggle.</p></div>
+          <div class="mnote"><span class="dot">&middot;</span><p><b>The ROLODEX marker</b> says the studio keeps this one &mdash; not just this job. Junie Ward has no marker: seeded, never worked, still findable.</p></div>
+          <div class="mnote"><span class="dot">&middot;</span><p><b>Trades are the quiet row.</b> Kind first, trade second, because "a sub" is a coarser question than "tile" and you ask it first.</p></div>
+          <div class="mnote"><span class="dot">&middot;</span><p><b>Companies answer the same filters their people do</b> &mdash; and they are squares.</p></div>
+        </div>
+      </div>
+
+      <p class="figcap"><b>Deviation, noted</b> &nbsp;The company row here is Mart&iacute;nez Tile Works rather than Hale Brothers Builders, so the row set stays honest under the active <span class="mono">SUBS &middot; TILE</span> filters. Hale Brothers keeps its square on slides 9 and 11.</p>
+    </div>
+  </div>
+</section>
+
+<!-- ============ 09 · CIRCLES AND SQUARES ============ -->
+<section class="slide wide" data-label="Circles + squares">
+  <div class="inner">
+    <div class="gutter"><span class="eyebrow">Act III · Detail</span><span class="num">09</span></div>
+    <div class="main">
+      <h2>People are circles. Companies are squares.</h2>
+      <p class="lede">One rule, learned once, and every list in the portal reads faster forever. It costs eight pixels of border radius.</p>
+
+      <div class="doc">
+        <div class="ba" style="gap:26px">
+
+          <div>
+            <span class="balab next">A person</span>
+            <div class="prow" style="padding:11px 14px">
+              <span class="av lg mocha">RM</span>
+              <div>
+                <span class="pname">Rosa Mart&iacute;nez <span class="rp sub">Sub</span> <span class="cd tex"></span></span>
+                <span class="rel">Mart&iacute;nez Tile Works · tile</span>
+              </div>
+              <span class="rside"><span class="reach link">Field link</span><span class="chev">&rsaquo;</span></span>
+            </div>
+            <div class="anatgrid">
+              <span class="alab"><span class="ln"></span>42px circle, 50% radius, role tint behind white initials</span>
+              <span class="alab"><span class="ln"></span>Bordered role pill &mdash; 1.5px, role-coloured, tiny</span>
+              <span class="alab"><span class="ln"></span>Consent dot &mdash; a person can consent, so a person has one</span>
+              <span class="alab"><span class="ln"></span>Relationship line &mdash; where they work, what they do</span>
+              <span class="alab"><span class="ln"></span>Reach chip &mdash; how you get hold of them</span>
+            </div>
+          </div>
+
+          <div>
+            <span class="balab next">A company</span>
+            <div class="prow" style="padding:11px 14px">
+              <span class="av lg sq oak">HB</span>
+              <div>
+                <span class="pname">Hale Brothers Builders <span class="rp gc">GC firm</span></span>
+                <span class="rel">3 people · 4 projects · last: Ellsworth</span>
+              </div>
+              <span class="rside"><span class="chev">&rsaquo;</span></span>
+            </div>
+            <div class="anatgrid">
+              <span class="alab"><span class="ln"></span>42px rounded square, 8px radius &mdash; the only difference</span>
+              <span class="alab"><span class="ln"></span>Firm pill &mdash; the kind, said plainly</span>
+              <span class="alab"><span class="ln"></span><b>No consent dot.</b> A firm cannot consent to a text message</span>
+              <span class="alab"><span class="ln"></span>Relationship line counts people and jobs, not trades</span>
+              <span class="alab"><span class="ln"></span>No reach chip &mdash; you reach a company through a person</span>
+            </div>
+          </div>
+
+        </div>
+
+        <div class="doc" style="margin-top:20px">
+          <div class="band" style="gap:26px">
+            <p style="font-size:15px">&ndash;&ensp;Consent belongs to a phone, and a phone belongs to a person.</p>
+            <span style="display:flex;gap:20px;flex-wrap:wrap;font-family:var(--mono);font-size:8.5px;letter-spacing:.14em;text-transform:uppercase;color:var(--d-quiet)">
+              <span><span class="cd none" style="margin-right:8px"></span>Not asked</span>
+              <span><span class="cd inv" style="margin-right:8px"></span>Invited</span>
+              <span><span class="cd tex" style="margin-right:8px"></span>Texting</span>
+              <span><span class="cd out" style="margin-right:8px"></span>Opted out</span>
+            </span>
+          </div>
+        </div>
+      </div>
+
+      <p class="figcap"><b>Why it matters beyond looks</b> &nbsp;Half the confusion in a roster is "is Hale Brothers a person?" The shape answers before the eye reaches the name &mdash; which is also why Danny Ochoa stays a circle on the call sheet even though his company is on the line beneath him.</p>
+    </div>
+  </div>
+</section>
+
+<!-- ============ 10 · THE PROMOTE MOMENT ============ -->
+<section class="slide wide" data-label="Promote">
+  <div class="inner">
+    <div class="gutter"><span class="eyebrow">Act III · Detail</span><span class="num">10</span></div>
+    <div class="main">
+      <h2>The promote moment.</h2>
+      <p class="lede">A person is on a job. One line says they are not yet the studio's. The same line, in the same place, says when they are.</p>
+
+      <div class="doc">
+        <div class="scroller narrow">
+          <div style="min-width:620px;display:flex;flex-direction:column;gap:20px">
+
+            <div>
+              <span class="balab now" style="font-family:var(--mono)">State A · before</span>
+              <div class="sheet" style="max-width:620px">
+                <div class="shead"><span class="st">Rosa Mart&iacute;nez</span><span class="sx">Put back · Esc</span></div>
+                <div class="prow plain" style="padding:12px 0 6px">
+                  <span class="av lg mocha">RM</span>
+                  <div>
+                    <span class="pname">Rosa Mart&iacute;nez <span class="rp sub">Sub</span> <span class="cd tex"></span></span>
+                    <span class="rel">Mart&iacute;nez Tile Works · tile · on Ellsworth Residence</span>
+                  </div>
+                  <span class="rside"><span class="reach link">Field link</span></span>
+                </div>
+                <div class="band" style="margin-top:10px">
+                  <p>&ndash;&ensp;Not in the studio rolodex yet.</p>
+                  <span class="si">Add to the rolodex</span>
+                </div>
+                <div class="acts" style="margin-top:16px">
+                  <span class="si sec">Text</span>
+                  <span class="si ter">Copy field link</span>
+                  <span class="si dgr" style="margin-left:auto">Remove from the job</span>
+                </div>
+              </div>
+            </div>
+
+            <div>
+              <span class="balab next" style="font-family:var(--mono)">State B · after</span>
+              <div class="sheet" style="max-width:620px">
+                <div class="shead"><span class="st">Rosa Mart&iacute;nez</span><span class="sx">Put back · Esc</span></div>
+                <div class="prow plain" style="padding:12px 0 6px">
+                  <span class="av lg mocha">RM</span>
+                  <div>
+                    <span class="pname">Rosa Mart&iacute;nez <span class="rp sub">Sub</span> <span class="cd tex"></span></span>
+                    <span class="rel">Mart&iacute;nez Tile Works · tile · on Ellsworth Residence</span>
+                  </div>
+                  <span class="rside"><span class="rolomark">Rolodex</span><span class="reach link">Field link</span></span>
+                </div>
+                <div class="band ok" style="margin-top:10px">
+                  <p>In the rolodex &mdash; the whole studio can find them now.</p>
+                </div>
+                <div class="acts" style="margin-top:16px">
+                  <span class="si sec">Text</span>
+                  <span class="si ter">Copy field link</span>
+                  <span class="si dgr" style="margin-left:auto">Remove from the job</span>
+                </div>
+              </div>
+            </div>
+
+          </div>
+        </div>
+      </div>
+
+      <p class="figcap"><b>Bands swap in place</b> &nbsp;Nothing floats, nothing toasts, nothing slides in from a corner and leaves before it is read. The confirmation occupies the exact pixels the invitation did &mdash; and the ROLODEX marker appears on the row above it, so the state is legible after the band is gone.</p>
+    </div>
+  </div>
+</section>
+
+<!-- ============ 11 · THE CALL SHEET ============ -->
+<section class="slide wide" data-label="The Call Sheet">
+  <div class="inner">
+    <div class="gutter"><span class="eyebrow">Act III · The surface</span><span class="num">11</span></div>
+    <div class="main">
+      <h2>The Call Sheet.</h2>
+      <p class="lede">Not a tab. An instrument on the letterhead, and a sheet that opens over the document you were already reading.</p>
+
+      <div class="mockgrid">
+        <div class="doc">
+          <div class="scroller">
+            <div class="frame" style="min-width:1020px">
+              <div class="fbar">
+                <span class="fdots"><i></i><i></i><i></i></span>
+                <span class="furl">app.patina.cloud/doc/<b>ellsworth-residence</b></span>
+              </div>
+              <div class="screen" style="padding-left:52px">
+
+                <div class="spine"><i></i><i></i><i></i><i></i><i></i></div>
+
+                <div class="letter">
+                  <div style="display:flex;align-items:baseline;gap:14px;flex-wrap:wrap">
+                    <span class="lname">Ellsworth Residence</span>
+                    <span class="hchip">The Ellsworths</span>
+                  </div>
+                  <div class="instr">
+                    <span class="ins"><b>Schedule</b><i>12</i></span>
+                    <span class="ins"><b>Decisions</b><i>4</i></span>
+                    <span class="ins on"><b>Call sheet</b><i>16</i><i class="warn">2 on paper</i>
+                      <span class="anno onveil" style="position:relative;z-index:6;margin-left:6px"><span class="ldr" style="width:22px"></span><span class="dot">1</span></span>
+                    </span>
+                    <span class="ins"><b>Procurement</b><i>9</i></span>
+                  </div>
+                </div>
+                <div style="height:96px"></div>
+
+                <div class="veil"></div>
+
+                <div class="stack w760" style="position:absolute;left:52px;right:22px;top:118px;margin:0 auto;width:760px;max-width:calc(100% - 170px)">
+                  <div class="sheet" style="padding-bottom:20px">
+                    <div class="shead"><span class="st">Call sheet</span><span class="sx">Put back · Esc</span></div>
+                    <p class="ssub">Everyone on Ellsworth Residence, and how to reach them.</p>
+                    <p class="vitals">16 on the job · 6 reachable by text · 4 with accounts</p>
+
+                    <span class="anno" style="position:absolute;left:-54px;top:118px"><span class="dot">2</span><span class="ldr" style="width:36px"></span></span>
+                    <span class="anno" style="position:absolute;left:-54px;top:315px"><span class="dot">3</span><span class="ldr" style="width:36px"></span></span>
+                    <span class="anno" style="position:absolute;left:-54px;top:520px"><span class="dot">4</span><span class="ldr" style="width:36px"></span></span>
+                    <span class="anno" style="position:absolute;left:-54px;top:576px"><span class="dot">5</span><span class="ldr" style="width:36px"></span></span>
+
+                    <div class="acts">
+                      <span class="si">From the rolodex</span>
+                      <span class="si sec">New person</span>
+                      <span class="si ter">Print</span>
+                    </div>
+
+                    <div class="sh"><span class="rules"><i></i><i></i><i></i></span><b>Studio side</b><em>5</em></div>
+                    <div class="rows">
+                      <div class="prow">
+                        <span class="av clay">LW</span>
+                        <div>
+                          <span class="pname">Leah Warner <span class="rp lead">Lead designer</span> <span class="cd tex"></span></span>
+                          <span class="tline">Senior designer</span>
+                        </div>
+                        <span class="rside"><span class="reach acct">Account</span><span class="chev">&rsaquo;</span></span>
+                      </div>
+                      <div class="prow">
+                        <span class="av clay">MW</span>
+                        <div>
+                          <span class="pname">Marcus Webb <span class="rp team">Procurement</span> <span class="cd tex"></span></span>
+                          <span class="tline">Procurement</span>
+                        </div>
+                        <span class="rside"><span class="reach acct">Account</span><span class="chev">&rsaquo;</span></span>
+                      </div>
+                      <div class="more">+ 3 more &mdash; support, project manager, bookkeeper</div>
+                    </div>
+
+                    <div class="sh"><span class="rules"><i></i><i></i><i></i></span><b>Client side</b><em>3</em></div>
+                    <div class="rows">
+                      <div class="prow">
+                        <span class="av sage">ME</span>
+                        <div>
+                          <span class="pname">Margaret Ellsworth <span class="rp client">Client</span> <span class="cd tex"></span></span>
+                          <span class="rel">Portal · the Ellsworths</span>
+                        </div>
+                        <span class="rside"><span class="reach acct">Account</span><span class="chev">&rsaquo;</span></span>
+                      </div>
+                      <div class="prow">
+                        <span class="av sage">DE</span>
+                        <div>
+                          <span class="pname">Dana Ellsworth <span class="rp client">Spouse</span> <span class="cd none"></span></span>
+                          <span class="rel">Approves half the decisions · phone only</span>
+                        </div>
+                        <span class="rside"><span class="reach paper">On paper</span><span class="chev">&rsaquo;</span></span>
+                      </div>
+                      <div class="more">+ 1 more &mdash; property manager</div>
+                    </div>
+
+                    <div class="sh"><span class="rules"><i></i><i></i><i></i></span><b>Build &amp; supply</b><em>8</em></div>
+                    <div class="rows">
+                      <div class="prow">
+                        <span class="av blue">DO</span>
+                        <div>
+                          <span class="pname">Danny Ochoa <span class="rp gc">GC</span> <span class="cd tex"></span></span>
+                          <span class="rel"><span class="sqm">&#9632;</span> Hale Brothers Builders</span>
+                        </div>
+                        <span class="rside"><span class="reach link">Field link</span><span class="chev">&rsaquo;</span></span>
+                      </div>
+                      <div class="prow">
+                        <span class="av mocha">RM</span>
+                        <div>
+                          <span class="pname">Rosa Mart&iacute;nez <span class="rp sub">Sub · tile</span> <span class="cd tex"></span></span>
+                          <span class="rel"><span class="sqm">&#9632;</span> Mart&iacute;nez Tile Works</span>
+                        </div>
+                        <span class="rside"><span class="reach link">Field link</span><span class="chev">&rsaquo;</span></span>
+                      </div>
+                      <div class="prow">
+                        <span class="av sq oak">WW</span>
+                        <div>
+                          <span class="pname">Winfield Workroom <span class="rp maker">Vendor · drapery workroom</span></span>
+                          <span class="rel">Cincinnati · 6 projects</span>
+                        </div>
+                        <span class="rside"><span class="reach paper">On paper</span><span class="chev">&rsaquo;</span></span>
+                      </div>
+                      <div class="prow">
+                        <span class="av terra">PK</span>
+                        <div>
+                          <span class="pname">Priya Kapoor <span class="rp maker">Photographer</span> <span class="cd none"></span></span>
+                          <span class="rel">Books the shoot after install</span>
+                        </div>
+                        <span class="rside"><span class="reach paper">On paper</span><span class="chev">&rsaquo;</span></span>
+                      </div>
+                      <div class="more">+ 4 more &mdash; electrical, millwork, installer, receiver</div>
+                    </div>
+
+                  </div>
+                </div>
+
+                <div style="height:840px"></div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="mnotes">
+          <div class="mnote"><span class="dot">1</span><p><b>The doorway.</b> A letterhead instrument, counted like the others, with the one number that needs saying out loud: <span class="mono">2 ON PAPER</span> in terracotta.</p></div>
+          <div class="mnote"><span class="dot">2</span><p><b>Rolodex first.</b> The primary is FROM THE ROLODEX, not NEW PERSON &mdash; because after month two the person you want is already yours.</p></div>
+          <div class="mnote"><span class="dot">3</span><p><b>Three groups, one device.</b> The descending rules do all the sectioning. No boxes, no tabs, no accordions.</p></div>
+          <div class="mnote"><span class="dot">4</span><p><b>Reach chips</b> at 8.5px carry the whole thesis: account, field link, on paper. Most of a crew is the third one.</p></div>
+          <div class="mnote"><span class="dot">5</span><p><b>The chevron opens what already exists</b> &mdash; the party profile sheet from slide 10. No new detail screen is proposed.</p></div>
+        </div>
+      </div>
+
+      <p class="figcap"><b>34px avatars, compact rows</b> &nbsp;Sixteen names have to fit on one sheet without a scroll war. The member rows on the Studio page stay at 42px because there are four of them and they are the studio itself.</p>
+    </div>
+  </div>
+</section>
+
+<!-- ============ 12 · ROW ANATOMY + UNFOLD ============ -->
+<section class="slide wide" data-label="Row + unfold">
+  <div class="inner">
+    <div class="gutter"><span class="eyebrow">Act III · Detail</span><span class="num">12</span></div>
+    <div class="main">
+      <h2>One row, and what is under it.</h2>
+      <p class="lede">The row answers "who". Tapping it answers "how", in place, without leaving the sheet.</p>
+
+      <div class="doc">
+        <div class="scroller narrow">
+          <div style="min-width:640px">
+
+            <span class="balab next" style="font-family:var(--mono)">Folded</span>
+            <div class="prow" style="max-width:660px">
+              <span class="av mocha">RM</span>
+              <div>
+                <span class="pname">Rosa Mart&iacute;nez <span class="rp sub">Sub · tile</span> <span class="cd tex"></span></span>
+                <span class="rel"><span class="sqm">&#9632;</span> Mart&iacute;nez Tile Works</span>
+              </div>
+              <span class="rside"><span class="reach link">Field link</span><span class="chev">&rsaquo;</span></span>
+            </div>
+
+            <div class="anatgrid" style="max-width:660px">
+              <span class="alab"><span class="ln"></span>34px circle &mdash; mocha, because a sub is a sub</span>
+              <span class="alab"><span class="ln"></span>Name, then the role pill, then the consent dot</span>
+              <span class="alab"><span class="ln"></span>Company on the relationship line, marked with a square</span>
+              <span class="alab"><span class="ln"></span>Reach chip &mdash; 8.5px, right-aligned, the whole thesis</span>
+              <span class="alab"><span class="ln"></span>Chevron &mdash; quiet, and the only thing that unfolds</span>
+            </div>
+
+            <div style="height:22px"></div>
+
+            <span class="balab next" style="font-family:var(--mono)">Unfolded, in place</span>
+            <div class="prow" style="max-width:660px;display:block;padding:12px 14px 14px">
+              <div style="display:grid;grid-template-columns:auto minmax(0,1fr) auto;gap:12px;align-items:center">
+                <span class="av mocha">RM</span>
+                <div>
+                  <span class="pname">Rosa Mart&iacute;nez <span class="rp sub">Sub · tile</span> <span class="cd tex"></span></span>
+                  <span class="rel"><span class="sqm">&#9632;</span> Mart&iacute;nez Tile Works</span>
+                </div>
+                <span class="rside"><span class="reach link">Field link</span><span class="chev">&#8964;</span></span>
+              </div>
+
+              <div style="border-top:1px solid var(--d-pearl);margin-top:12px;padding-top:11px;display:flex;gap:26px;flex-wrap:wrap;align-items:center">
+                <span style="font-size:13px;color:var(--d-char)">(513) 555&ndash;0148</span>
+                <span style="font-size:13px;color:var(--d-char)">rosa@martineztile.co</span>
+                <span class="reach" style="color:#6f8069;border-color:#A8B5A0;background:rgba(168,181,160,.14)">Texting since 12 Jun</span>
+              </div>
+
+              <div class="acts" style="margin-top:14px">
+                <span class="si">Text</span>
+                <span class="si sec">Copy field link</span>
+                <span class="si sec">Show to client</span>
+                <span class="si dgr" style="margin-left:auto">Remove</span>
+              </div>
+            </div>
+
+          </div>
+        </div>
+      </div>
+
+      <div class="grid g3" style="margin-top:16px">
+        <div class="card tight"><span class="kicker">The chip is the argument</span><p>Eight and a half pixels of mono, on every row, saying whether this person logs in, opens a link, or only ever gets a call. Nothing else in the product says it at all.</p></div>
+        <div class="card tight"><span class="kicker">SHOW TO CLIENT is conditional</span><p>It exists only if ruling R4 says the client sees a roster, and only if U2 says the choice is per person. Drawn here so the ruling has something to look at.</p></div>
+        <div class="card tight"><span class="kicker">REMOVE is danger, not red</span><p>Charcoal word, two terracotta scores. The Document does not shout; it underlines twice.</p></div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============ 13 · FROM THE ROLODEX ============ -->
+<section class="slide wide" data-label="Picker">
+  <div class="inner">
+    <div class="gutter"><span class="eyebrow">Act III · Adding</span><span class="num">13</span></div>
+    <div class="main">
+      <h2>From the rolodex.</h2>
+      <p class="lede">Search by what you need rather than by what you remember. Subs, tile, and three people the studio already trusts.</p>
+
+      <div class="mockgrid">
+        <div class="doc">
+          <div class="scroller">
+            <div class="frame">
+              <div class="fbar">
+                <span class="fdots"><i></i><i></i><i></i></span>
+                <span class="furl">app.patina.cloud/doc/ellsworth-residence &nbsp;<b>&rsaquo; call sheet &rsaquo; rolodex</b></span>
+              </div>
+              <div class="screen" style="padding-top:20px">
+
+                <div class="letter" style="opacity:.9">
+                  <span class="lname">Ellsworth Residence</span>
+                  <div class="instr"><span class="ins on"><b>Call sheet</b><i>16</i></span></div>
+                </div>
+                <div style="height:80px"></div>
+
+                <div class="veil"></div>
+
+                <div class="stack" style="position:absolute;left:0;right:0;top:34px;margin:0 auto;width:640px;max-width:calc(100% - 96px)">
+                  <div class="sheet">
+                    <div class="shead"><span class="st">From the rolodex</span><span class="sx">Put back · Esc</span></div>
+
+                    <div class="uin ph" style="margin-top:14px">a name, a company, a trade&hellip;</div>
+
+                    <div class="kchips" style="margin-top:14px">
+                      <span class="kchip">All</span>
+                      <span class="kchip">GCs</span>
+                      <span class="kchip on">Subs</span>
+                      <span class="kchip">Makers</span>
+                      <span class="kchip">Installers</span>
+                      <span class="kchip">Receivers</span>
+                      <span class="kchip">Companies</span>
+                    </div>
+                    <div class="subchips">
+                      <span class="on">tile</span>
+                      <span>electrical</span>
+                      <span>millwork</span>
+                      <span>paint</span>
+                      <span>+ more</span>
+                    </div>
+
+                    <div class="rows" style="margin-top:15px">
+                      <div class="prow">
+                        <span class="av mocha">RM</span>
+                        <div>
+                          <span class="pname">Rosa Mart&iacute;nez <span class="rp sub">Sub · tile</span> <span class="cd tex"></span></span>
+                          <span class="rel">3 projects · last: Ellsworth</span>
+                        </div>
+                        <span class="rside"><span class="si sec">Add</span></span>
+                      </div>
+                      <div class="prow">
+                        <span class="av mocha">HS</span>
+                        <div>
+                          <span class="pname">Hector Salas <span class="rp sub">Sub · tile</span> <span class="cd inv"></span></span>
+                          <span class="rel">1 project · last: Marsh House</span>
+                        </div>
+                        <span class="rside"><span class="si sec">Add</span></span>
+                      </div>
+                      <div class="prow">
+                        <span class="av mocha">JW</span>
+                        <div>
+                          <span class="pname">Junie Ward <span class="rp sub">Sub · tile</span> <span class="cd none"></span></span>
+                          <span class="rel">Never on a job yet</span>
+                        </div>
+                        <span class="rside"><span class="si sec">Add</span></span>
+                      </div>
+                    </div>
+
+                    <div class="band" style="margin-top:16px">
+                      <p>&ndash;&ensp;No one by that name in the rolodex.</p>
+                      <span class="si">Add someone new</span>
+                    </div>
+                  </div>
+                </div>
+
+                <div style="height:400px"></div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="mnotes">
+          <div class="mnote"><span class="dot">&middot;</span><p><b>The history line is the whole value.</b> "3 projects · last: Ellsworth" is what a phone's contact list can never say.</p></div>
+          <div class="mnote"><span class="dot">&middot;</span><p><b>"Never on a job yet"</b> is stated, not hidden. A seeded contact is still a real contact.</p></div>
+          <div class="mnote"><span class="dot">&middot;</span><p><b>The fallback is always visible</b> &mdash; not only after a search misses. The way out of the rolodex sits under it from the first frame.</p></div>
+          <div class="mnote"><span class="dot">&middot;</span><p>Chips are pre-scoped from where you tapped: you asked for a sub on the tile line, so the sheet arrives already narrowed.</p></div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============ 14 · INLINE ADD + THE STAMP ============ -->
+<section class="slide wide" data-label="Inline add">
+  <div class="inner">
+    <div class="gutter"><span class="eyebrow">Act III · Adding</span><span class="num">14</span></div>
+    <div class="main">
+      <h2>Adding to the job feeds the book.</h2>
+      <p class="lede">The person you just met on site goes on this call sheet. The default is that the studio keeps them.</p>
+
+      <div class="doc">
+        <div class="ba" style="gap:26px;align-items:start">
+
+          <div>
+            <span class="balab next" style="font-family:var(--mono)">Inline add, unfolded</span>
+            <div class="sheet" style="max-width:420px">
+              <div class="shead"><span class="st">Someone new</span><span class="sx">Put back · Esc</span></div>
+
+              <div class="fld"><span class="flab">Name</span><div class="uin">Hector Salas</div></div>
+              <div class="fld"><span class="flab">Company</span><div class="uin">Salas <span class="ghost">&amp; Sons Tile</span></div></div>
+
+              <div class="fld">
+                <span class="flab">Kind</span>
+                <div class="tchips">
+                  <span class="tchip">GC</span>
+                  <span class="tchip on">Sub</span>
+                  <span class="tchip">Vendor</span>
+                  <span class="tchip">Installer</span>
+                </div>
+              </div>
+              <div class="fld">
+                <span class="flab">Trade</span>
+                <div class="tchips">
+                  <span class="tchip on">tile</span>
+                  <span class="tchip">stone</span>
+                  <span class="tchip">+ more</span>
+                </div>
+              </div>
+
+              <div class="fld"><span class="flab">Phone</span><div class="uin">(513) 555&ndash;0192</div></div>
+              <div class="fld"><span class="flab">Email</span><div class="uin ph">optional</div></div>
+
+              <div class="acts" style="justify-content:flex-end;margin-top:20px">
+                <span class="si">Add to the call sheet</span>
+              </div>
+            </div>
+          </div>
+
+          <div>
+            <span class="balab next" style="font-family:var(--mono)">The stamp, at four times</span>
+            <div class="stamp">
+              <span class="tick done"></span>
+              <div>
+                <span class="stxt">Save to the studio rolodex</span>
+                <span class="ssub2">so the next project starts with them</span>
+                <span class="son">On by default</span>
+              </div>
+            </div>
+
+            <div class="band" style="margin-top:18px">
+              <p>&ndash;&ensp;Uncheck it and Hector belongs to this job only. Nothing else changes.</p>
+            </div>
+
+            <div class="doc" style="margin-top:18px">
+              <div class="anatgrid">
+                <span class="alab"><span class="ln"></span>Square, 2px radius, sage fill, white check &mdash; a stamp</span>
+                <span class="alab"><span class="ln"></span>Never a switch, never a toggle, never a pill</span>
+                <span class="alab"><span class="ln"></span>Label in serif, because it is a sentence, not a setting</span>
+              </div>
+            </div>
+          </div>
+
+        </div>
+      </div>
+
+      <p class="figcap"><b>The whole flywheel is one pre-ticked box</b> &nbsp;Adding to the job feeds the book; the book feeds the next job. A studio that never once thinks about its rolodex still ends the year with one.</p>
+    </div>
+  </div>
+</section>
+
+<!-- ============ 15 · KICKOFF ============ -->
+<section class="slide wide" data-label="Kickoff">
+  <div class="inner">
+    <div class="gutter"><span class="eyebrow">Act III · Kickoff</span><span class="num">15</span></div>
+    <div class="main">
+      <h2>Kickoff asks once, on the paper.</h2>
+      <p class="lede">No roster step in the open-project sheet. Essentials at birth, composition on the document &mdash; where the designer is already looking.</p>
+
+      <div class="doc">
+        <div class="scroller">
+          <div style="min-width:920px;display:flex;flex-direction:column;gap:18px">
+
+            <div>
+              <span class="balab" style="font-family:var(--mono)">Day one &mdash; the band appears once</span>
+              <div class="frame">
+                <div class="fbar">
+                  <span class="fdots"><i></i><i></i><i></i></span>
+                  <span class="furl">app.patina.cloud/doc/<b>ellsworth-residence</b></span>
+                </div>
+                <div class="screen" style="padding-left:52px;padding-bottom:26px">
+                  <div class="spine"><i></i><i></i><i></i></div>
+                  <div class="letter">
+                    <div style="display:flex;align-items:baseline;gap:14px;flex-wrap:wrap">
+                      <span class="lname">Ellsworth Residence</span>
+                      <span class="hchip">The Ellsworths</span>
+                    </div>
+                    <div class="instr">
+                      <span class="ins"><b>Schedule</b><i>&mdash;</i></span>
+                      <span class="ins"><b>Decisions</b><i>&mdash;</i></span>
+                      <span class="ins"><b>Call sheet</b><i>1</i></span>
+                    </div>
+                  </div>
+
+                  <div class="band" style="margin-top:16px">
+                    <p>&ndash;&ensp;You're on the call sheet as lead. Who else is on the job?</p>
+                    <span class="si">From the rolodex</span>
+                    <span class="si sec">New person</span>
+                    <span class="si ter">Later</span>
+                  </div>
+
+                  <p class="empty" style="margin-top:20px">&ndash;&ensp;The rooms are empty too. That's the right shape for a Tuesday.</p>
+                </div>
+              </div>
+            </div>
+
+            <div>
+              <span class="balab next" style="font-family:var(--mono)">Two adds later &mdash; the band keeps count</span>
+              <div class="frame">
+                <div class="fbar">
+                  <span class="fdots"><i></i><i></i><i></i></span>
+                  <span class="furl">app.patina.cloud/doc/<b>ellsworth-residence</b></span>
+                </div>
+                <div class="screen" style="padding-left:52px;padding-bottom:26px">
+                  <div class="spine"><i></i><i></i><i></i></div>
+                  <div class="letter">
+                    <div style="display:flex;align-items:baseline;gap:14px;flex-wrap:wrap">
+                      <span class="lname">Ellsworth Residence</span>
+                      <span class="hchip">The Ellsworths</span>
+                    </div>
+                    <div class="instr">
+                      <span class="ins"><b>Schedule</b><i>&mdash;</i></span>
+                      <span class="ins"><b>Decisions</b><i>&mdash;</i></span>
+                      <span class="ins on"><b>Call sheet</b><i>4</i></span>
+                    </div>
+                  </div>
+
+                  <div class="band" style="margin-top:16px">
+                    <p>&ndash;&ensp;4 on the call sheet. Who else is on the job?</p>
+                    <span class="si">From the rolodex</span>
+                    <span class="si sec">New person</span>
+                    <span class="si ter">Later</span>
+                  </div>
+
+                  <div class="rows" style="margin-top:16px;max-width:620px">
+                    <div class="prow">
+                      <span class="av blue">DO</span>
+                      <div>
+                        <span class="pname">Danny Ochoa <span class="rp gc">GC</span> <span class="cd inv"></span></span>
+                        <span class="rel"><span class="sqm">&#9632;</span> Hale Brothers Builders</span>
+                      </div>
+                      <span class="rside"><span class="reach link">Field link</span><span class="chev">&rsaquo;</span></span>
+                    </div>
+                    <div class="prow">
+                      <span class="av sage">ME</span>
+                      <div>
+                        <span class="pname">Margaret Ellsworth <span class="rp client">Client</span> <span class="cd tex"></span></span>
+                        <span class="rel">Portal · the Ellsworths</span>
+                      </div>
+                      <span class="rside"><span class="reach acct">Account</span><span class="chev">&rsaquo;</span></span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+          </div>
+        </div>
+      </div>
+
+      <p class="figcap"><b>The band retires itself at four names</b> &nbsp;Not at a dismissal, not at a "don't show again" checkbox &mdash; at the point where the sheet is doing its job. A prompt that has been answered should stop asking.</p>
+    </div>
+  </div>
+</section>
+
+<!-- ============ 16 · THE PICKERS ============ -->
+<section class="slide wide" data-label="Pickers">
+  <div class="inner">
+    <div class="gutter"><span class="eyebrow">Act IV · Downstream</span><span class="num">16</span></div>
+    <div class="main">
+      <h2>Every picker in the portal gets better for free.</h2>
+      <p class="lede">This is the one side-by-side in the deck, and it is a deck comparison &mdash; not a pattern the product ships.</p>
+
+      <div class="ba">
+        <div class="doc">
+          <span class="balab now">Today &mdash; coordination composer</span>
+          <div class="frame">
+            <div class="fbar">
+              <span class="fdots"><i></i><i></i><i></i></span>
+              <span class="furl">app.patina.cloud/doc/ellsworth-residence &nbsp;<b>&rsaquo; coordinate</b></span>
+            </div>
+            <div class="screen" style="padding:18px 20px 24px">
+              <span class="flab">Who is this for?</span>
+              <div class="plainsel">Choose the GC&hellip; <span class="ar">&#9662;</span></div>
+              <p style="font-size:12px;color:var(--d-quiet);margin-top:12px;max-width:none">A select of every party on the project, sorted by when it was created, labelled with whatever was typed into a name field months ago.</p>
+              <span class="plainbtn">Continue</span>
+            </div>
+          </div>
+          <p class="figcap" style="color:var(--slate)">Drawn honestly plain, because it is honestly plain.</p>
+        </div>
+
+        <div class="doc">
+          <span class="balab next">Proposed &mdash; call-sheet mini-rows</span>
+          <div class="frame">
+            <div class="fbar">
+              <span class="fdots"><i></i><i></i><i></i></span>
+              <span class="furl">app.patina.cloud/doc/ellsworth-residence &nbsp;<b>&rsaquo; coordinate</b></span>
+            </div>
+            <div class="screen" style="padding:18px 20px 24px">
+              <span class="flab">Who is this for?</span>
+              <div class="rows" style="margin-top:8px">
+                <div class="prow" style="padding:7px 11px">
+                  <span class="radioring on"></span>
+                  <div style="display:flex;align-items:center;gap:11px;min-width:0">
+                    <span class="av blue" style="width:28px;height:28px;font-size:9.5px">DO</span>
+                    <span>
+                      <span class="pname" style="font-size:13px">Danny Ochoa <span class="rp gc">GC</span></span>
+                      <span class="rel" style="font-size:11px"><span class="sqm">&#9632;</span> Hale Brothers Builders</span>
+                    </span>
+                  </div>
+                  <span class="reach link">Field link</span>
+                </div>
+                <div class="prow" style="padding:7px 11px">
+                  <span class="radioring"></span>
+                  <div style="display:flex;align-items:center;gap:11px;min-width:0">
+                    <span class="av mocha" style="width:28px;height:28px;font-size:9.5px">RM</span>
+                    <span>
+                      <span class="pname" style="font-size:13px">Rosa Mart&iacute;nez <span class="rp sub">Sub · tile</span></span>
+                      <span class="rel" style="font-size:11px"><span class="sqm">&#9632;</span> Mart&iacute;nez Tile Works</span>
+                    </span>
+                  </div>
+                  <span class="reach link">Field link</span>
+                </div>
+                <div class="prow" style="padding:7px 11px">
+                  <span class="radioring"></span>
+                  <div style="display:flex;align-items:center;gap:11px;min-width:0">
+                    <span class="av terra" style="width:28px;height:28px;font-size:9.5px">PK</span>
+                    <span>
+                      <span class="pname" style="font-size:13px">Priya Kapoor <span class="rp maker">Photographer</span></span>
+                      <span class="rel" style="font-size:11px">Books the shoot after install</span>
+                    </span>
+                  </div>
+                  <span class="reach paper">On paper</span>
+                </div>
+              </div>
+              <div class="acts" style="margin-top:14px">
+                <span class="si sec">Someone new &rarr;</span>
+                <span class="si" style="margin-left:auto">Continue</span>
+              </div>
+            </div>
+          </div>
+          <p class="figcap" style="color:var(--slate)">Same recipe, unchanged, becomes the site-request assignee picker.</p>
+        </div>
+      </div>
+
+      <div class="callout">
+        <span class="kicker">The shape of the bet, restated</span>
+        <p>Site requests, purchase orders, coordination, SMS audiences and the client portal all already have a picker. None of them has a roster to pick from. One surface fixes five.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============ 17 · CLIENT PORTAL ============ -->
+<section class="slide wide" data-label="Client portal">
+  <div class="inner">
+    <div class="gutter"><span class="eyebrow">Act IV · The client</span><span class="num">17</span></div>
+    <div class="main">
+      <h2>On the job &mdash; the client's half of it.</h2>
+      <p class="lede">The client portal keeps its own house style: lighter, rounder, no mono, nothing borrowed from the Document. What it gains is three names and what they do.</p>
+
+      <div class="cp">
+        <div class="scroller narrow">
+          <div class="frame" style="border-color:#EEEAE4">
+            <div class="fbar" style="background:#F4F1EC;border-color:#EEEAE4">
+              <span class="fdots"><i></i><i></i><i></i></span>
+              <span class="furl" style="color:#8a8078">client.patina.cloud/projects/<b style="color:#6b5c4a">ellsworth-residence</b></span>
+            </div>
+            <div class="cpscreen">
+              <div class="wm"><span>Pending ruling R4</span></div>
+
+              <div class="cphead">
+                <span class="cpmark">MS</span>
+                <div>
+                  <div class="cpt">Ellsworth Residence</div>
+                  <div class="cps">Middle Studio · started March</div>
+                </div>
+              </div>
+
+              <h4>Your team</h4>
+              <div class="cplist">
+                <div class="cpcard">
+                  <span class="cpav">LW</span>
+                  <div><div class="cpn">Leah Warner</div><div class="cpr">Lead designer</div></div>
+                </div>
+                <div class="cpcard">
+                  <span class="cpav">MW</span>
+                  <div><div class="cpn">Marcus Webb</div><div class="cpr">Procurement</div></div>
+                </div>
+              </div>
+
+              <h4>On the job</h4>
+              <div class="cplist">
+                <div class="cpcard">
+                  <span class="cpav sq">HB</span>
+                  <div><div class="cpn">Hale Brothers Builders</div><div class="cpr">General contractor</div></div>
+                </div>
+                <div class="cpcard">
+                  <span class="cpav">RM</span>
+                  <div><div class="cpn">Rosa Mart&iacute;nez</div><div class="cpr">Tile</div></div>
+                </div>
+                <div class="cpcard">
+                  <span class="cpav">PK</span>
+                  <div><div class="cpn">Priya Kapoor</div><div class="cpr">Photographer</div></div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="grid g3" style="margin-top:16px">
+        <div class="card tight"><span class="kicker">What the client sees</span><p>Names and trades. No phone number, no email, no reach chip, no consent dot &mdash; reach goes through the designer, which is the relationship the studio is paid for.</p></div>
+        <div class="card tight"><span class="kicker">What does not change</span><p>The studio header and "Your team" are exactly as they ship today. "On the job" is a new group under them, and nothing above it moves.</p></div>
+        <div class="card warn tight"><span class="kicker">Held on R4</span><p>If the ruling is no, this slide is deleted and the rest of the deck is unaffected. That is why it is drawn last and watermarked.</p></div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============ 18 · THE ASK ============ -->
+<section class="slide" data-label="The ask">
+  <div class="inner">
+    <div class="gutter"><span class="eyebrow">Close · The ask</span><span class="num">18</span><span class="tick"></span></div>
+    <div class="main">
+      <h2>Seven rulings about the drawing.</h2>
+      <p class="lede">The concept deck's six are still open and still yours. These seven come from putting it on paper &mdash; none of them changes the direction, all of them change a screen.</p>
+
+      <div class="grid g4">
+        <div class="card warn tight">
+          <span class="kicker">U1 · the rename</span>
+          <p><strong>Call sheet &harr; call plan.</strong> The discovery-call checklist gives up the name and becomes the Call plan. Renames touch copy, routes, and one table. Yes or no.</p>
+        </div>
+        <div class="card warn tight">
+          <span class="kicker">U2 · per-row visibility</span>
+          <p><strong>SHOW TO CLIENT, per person, or all-or-nothing?</strong> Only lives if R4 says the client sees a roster at all.</p>
+        </div>
+        <div class="card warn tight">
+          <span class="kicker">U3 · registry citizenship</span>
+          <p><strong>The call sheet is the first document-scoped sheet.</strong> Does it earn a place in &#8984;K and the drawer, or stay reachable only from the letterhead?</p>
+        </div>
+        <div class="card warn tight">
+          <span class="kicker">U4 · self-titling</span>
+          <p><strong>May a member set their own title,</strong> or is titling an owner-and-admin act like tiering? Cheapest either way; pick one before the picker ships.</p>
+        </div>
+        <div class="card warn tight">
+          <span class="kicker">U5 · circles and squares</span>
+          <p><strong>Global rule or roster-only?</strong> If global, every avatar in the portal that represents a company changes shape in one pass.</p>
+        </div>
+        <div class="card warn tight">
+          <span class="kicker">U6 · the default lens</span>
+          <p><strong>Does the People Room open on MINE or STUDIO?</strong> STUDIO is the better product and the louder change for a solo designer.</p>
+        </div>
+        <div class="card warn tight">
+          <span class="kicker">U7 · the setup whisper</span>
+          <p><strong>The day-one checklist on the Studio page.</strong> Is a derived to-do list allowed under "notes recede", or does it read as onboarding chrome?</p>
+        </div>
+        <div class="card accent tight">
+          <span class="kicker">And then</span>
+          <p><strong>Rule on U1&ndash;U7 (and the concept's R1&ndash;R6), and Phase 1 starts with the Studio page on slide 5.</strong> Two additive columns, one title picker, one line under a name.</p>
+        </div>
+      </div>
+
+      <div class="quote">
+        <p>The concept deck asked whether a studio should know its crew. This one asks only where to put it &mdash; and the answer, every time, was somewhere the Document already had a drawer.</p>
+        <span class="attr">The close</span>
+      </div>
+
+      <div class="cover-meta" style="margin-top:20px">
+        <span>Deck <b>docs/design/studio-rosters/</b></span>
+        <span>Screens <b>8 full · 6 details</b></span>
+        <span>Rulings <b>6 open + 7 new</b></span>
+        <span>Status <b>proposal — nothing built</b></span>
+      </div>
+    </div>
+  </div>
+</section>
+
+</div><!-- /#deck -->
+
+<div id="chrome">
+  <span id="counter"><b>01</b> / 18</span>
+  <button class="navbtn" id="prev" type="button" aria-label="Previous slide">&#8592;</button>
+  <button class="navbtn" id="next" type="button" aria-label="Next slide">&#8594;</button>
+  <button id="themebtn" type="button" aria-label="Toggle colour theme">Theme</button>
+</div>
+<div id="hint">← → or space · P to print</div>
+
+<script>
+(function(){
+  var deck = document.getElementById('deck');
+  var slides = Array.prototype.slice.call(deck.querySelectorAll('.slide'));
+  var counter = document.getElementById('counter');
+  var progress = document.getElementById('progress');
+  var current = 0;
+
+  function pad(n){ return (n < 10 ? '0' : '') + n; }
+
+  function setCurrent(i){
+    current = Math.max(0, Math.min(slides.length - 1, i));
+    counter.innerHTML = '<b>' + pad(current + 1) + '</b> / ' + slides.length;
+    progress.style.width = (((current + 1) / slides.length) * 100) + '%';
+  }
+
+  function go(i){
+    var t = Math.max(0, Math.min(slides.length - 1, i));
+    deck.scrollTop = deck.scrollTop + slides[t].getBoundingClientRect().top;
+    slides[t].classList.add('seen');
+    setCurrent(t);
+  }
+
+  if ('IntersectionObserver' in window){
+    var io = new IntersectionObserver(function(entries){
+      entries.forEach(function(e){
+        if (e.isIntersecting){
+          e.target.classList.add('seen');
+          if (e.intersectionRatio > 0.5) setCurrent(slides.indexOf(e.target));
+        }
+      });
+    }, { threshold: [0.12, 0.55] });
+    slides.forEach(function(s){ io.observe(s); });
+  } else {
+    slides.forEach(function(s){ s.classList.add('seen'); });
+  }
+
+  deck.addEventListener('scroll', function(){
+    var mid = deck.scrollTop + deck.clientHeight * 0.4;
+    for (var i = 0; i < slides.length; i++){
+      if (slides[i].offsetTop <= mid) setCurrent(i);
+    }
+  }, { passive: true });
+
+  document.getElementById('prev').addEventListener('click', function(){ go(current - 1); });
+  document.getElementById('next').addEventListener('click', function(){ go(current + 1); });
+
+  document.addEventListener('keydown', function(e){
+    var tag = (e.target && e.target.tagName) || '';
+    if (tag === 'INPUT' || tag === 'TEXTAREA') return;
+    switch (e.key){
+      case 'ArrowRight': case 'PageDown': go(current + 1); e.preventDefault(); break;
+      case 'ArrowLeft':  case 'PageUp':   go(current - 1); e.preventDefault(); break;
+      case ' ': go(current + (e.shiftKey ? -1 : 1)); e.preventDefault(); break;
+      case 'Home': go(0); e.preventDefault(); break;
+      case 'End': go(slides.length - 1); e.preventDefault(); break;
+      case 'p': case 'P': window.print(); break;
+    }
+  });
+
+  var root = document.documentElement;
+  var btn = document.getElementById('themebtn');
+  var order = ['auto','light','dark'];
+  var label = { auto: 'Theme', light: 'Light', dark: 'Dark' };
+  var stored = null;
+  try { stored = window.localStorage.getItem('patina-callsheet-ui-theme'); } catch (err) {}
+  if (stored && order.indexOf(stored) > -1){ root.setAttribute('data-theme', stored); btn.textContent = label[stored]; }
+  btn.addEventListener('click', function(){
+    var now = root.getAttribute('data-theme') || 'auto';
+    var nextTheme = order[(order.indexOf(now) + 1) % order.length];
+    root.setAttribute('data-theme', nextTheme);
+    btn.textContent = label[nextTheme];
+    try { window.localStorage.setItem('patina-callsheet-ui-theme', nextTheme); } catch (err) {}
+  });
+
+  setCurrent(0);
+})();
+</script>
+
+</body>
+</html>
