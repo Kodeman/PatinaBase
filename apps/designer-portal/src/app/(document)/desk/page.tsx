@@ -8,10 +8,16 @@
  */
 
 import { useEffect, useState } from 'react';
-import { useProfile } from '@patina/supabase';
+import {
+  useProfile,
+  useOrganizations,
+  useOrganizationMembers,
+  useProjects,
+} from '@patina/supabase';
 import { useDeskEngagements } from '@/hooks/use-desk-engagements';
 import { useAuth } from '@/hooks/use-auth';
 import { useHydrated } from '@/hooks/use-hydrated';
+import { useFeatureFlag } from '@/hooks/use-feature-flag';
 import {
   openCommandBar,
   captureLeadPending,
@@ -23,6 +29,8 @@ import { SectionEyebrow } from '@/components/document/section-eyebrow';
 import { DeskContents } from '@/components/document/desk-contents';
 import { StudioPulse } from '@/components/document/studio-pulse';
 import { MarginNote } from '@/components/document/margin-note';
+import { StudioSetupWhisper } from '@/components/document/account/studio-setup-whisper';
+import { deriveSetupSteps } from '@/lib/document/studio-setup';
 import {
   START_DESK_WALKTHROUGH_EVENT,
   useDeskWalkthroughOffer,
@@ -49,6 +57,21 @@ export default function DeskPage() {
   const showWalkthroughOffer = useDeskWalkthroughOffer(); // R97 — existing-designer tour offer
   const [captureOpen, setCaptureOpen] = useState(false);
   const [openProjectOpen, setOpenProjectOpen] = useState(false);
+
+  // U7 — the setup whisper's inputs. Same design_studio-preferred resolution
+  // as account-studio-page.tsx, kept minimal here since this page only needs
+  // the owner check + open-step count, not the full studio row.
+  const { value: studioWorkspacesEnabled } = useFeatureFlag('studio-workspaces');
+  const { data: orgs } = useOrganizations();
+  const studio = orgs?.find((o) => o.type === 'design_studio') ?? orgs?.[0] ?? null;
+  const { data: studioMembers } = useOrganizationMembers(studio?.id ?? '');
+  const { data: studioProjects } = useProjects();
+  const { openCount: studioSetupOpenCount } = deriveSetupSteps({
+    orgCreatedAt: studio?.created_at ?? null,
+    myJobTitle: studioMembers?.find((m) => m.user_id === user?.id)?.job_title ?? null,
+    memberCountBeyondSelf: (studioMembers ?? []).filter((m) => m.user_id !== user?.id).length,
+    projectsCount: studioProjects?.length ?? 0,
+  });
 
   useMobilePrimaryAction({
     actionKey: 'capture-lead',
@@ -287,6 +310,19 @@ export default function DeskPage() {
               </button>{' '}
               if you&apos;d like the lay of it.
             </MarginNote>
+          )}
+
+          {/* U7 — the setup whisper, MarginNote's visual idiom (Playfair
+              italic, en-dash lead) with a live derivation for visibility
+              instead of MarginNote's once-only localStorage contract, so it
+              rides the same `studio-workspaces` flag the Account sheet's
+              Studio page already gates behind. */}
+          {studioWorkspacesEnabled && (
+            <StudioSetupWhisper
+              isOwner={studio?.membership.role === 'owner'}
+              openCount={studioSetupOpenCount}
+              className="mb-10"
+            />
           )}
 
           <section
