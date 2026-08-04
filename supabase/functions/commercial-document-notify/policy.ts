@@ -137,8 +137,9 @@ export function assessCommercialTransition(
   const { evidence } = input;
   switch (input.transition) {
     case "client_signed":
-      return input.commercialState === "client_signed" &&
-        evidence.clientSignature
+      return (input.commercialState === "client_signed" ||
+          input.commercialState === "executed") &&
+          evidence.clientSignature
         ? { allowed: true }
         : { allowed: false, reason: "transition_not_committed" };
     case "executed":

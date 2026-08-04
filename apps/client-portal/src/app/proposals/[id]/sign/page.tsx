@@ -121,13 +121,18 @@ export default function ClientProposalSignPage({
       const body = (await res.json().catch(() => ({}))) as {
         error?: string;
         projectId?: string | null;
+        notificationDelivery?: { state?: string };
       };
       if (!res.ok) {
         throw new Error(body.error || 'Failed to sign proposal.');
       }
       await invalidateSignedCommercialDocument(queryClient, id, body.projectId ?? null);
       proposalClientEvents.signed({ proposalId: id, signedByName: name.trim() });
-      router.push(`/proposals/${id}`);
+      router.push(
+        body.notificationDelivery?.state === 'pending_retry'
+          ? `/proposals/${id}?delivery=pending_retry`
+          : `/proposals/${id}`,
+      );
       router.refresh();
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to sign proposal.');
