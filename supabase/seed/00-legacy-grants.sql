@@ -7520,6 +7520,24 @@ END $g$;
 
 -- 00412_design_services_commercial_authority.sql
 DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public._is_design_services_project(uuid) FROM PUBLIC, anon, authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00412_design_services_commercial_authority.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public._is_design_services_project(uuid) TO authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00412_design_services_commercial_authority.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.guard_commercial_time_entry_derived_fields() FROM PUBLIC, anon, authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00412_design_services_commercial_authority.sql
+DO $g$ BEGIN
   REVOKE ALL ON FUNCTION public.classify_project_time_entry_authority() FROM PUBLIC, anon, authenticated, service_role;
 EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
 END $g$;
