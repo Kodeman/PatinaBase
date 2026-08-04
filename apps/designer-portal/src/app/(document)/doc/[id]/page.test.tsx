@@ -18,6 +18,7 @@ jest.mock('@patina/supabase', () => ({
   useProjectV2: () => ({ data: undefined }),
   useProjectPhases: () => ({ data: [] }),
   useProposalFeedback: () => ({ data: [] }),
+  useProjectRoster: () => ({ data: [] }),
 }));
 
 jest.mock('@/hooks/use-hydrated', () => ({
