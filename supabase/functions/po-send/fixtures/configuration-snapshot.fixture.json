@@ -1,0 +1,118 @@
+{
+  "_note": "Shared contract fixture for the vendor-facing configuration spec block (P0-1). Shape mirrors project_ffe_specs as PostgREST returns it for the po-send line query, with a configuration_snapshot produced by evaluate_product_configuration (00403) + comDetails merged by save_product_configuration (00413). Asserted by supabase/functions/po-send/index.test.ts; the portal's vendor-audience formatter is expected to agree with the same file.",
+  "configuration_id": "9f1d1a2e-1c3b-4c8a-9f2c-0d5a7b1e4c60",
+  "configuration_snapshot_hash": "9f2c1a77b0de4f3a8c5e1b6d2a90f4c73e8b1d5a6c2f907e4b3a8d1c5f6e2b90",
+  "configuration_locked_at": "2026-08-01T15:04:05.000Z",
+  "sku": "VEN-SOFA-96-COM",
+  "material": "Kiln-dried maple",
+  "finish": "Antique Brass",
+  "color_fabric": "Belgian Linen 12 (Rogers & Goffigon)",
+  "selected_dimensions": { "width": 96, "depth": 40, "height": 33, "unit": "in" },
+  "configuration_snapshot": {
+    "productId": "4c000000-0000-4000-8000-000000000105",
+    "productName": "Halden Sofa",
+    "configurationMode": "configured",
+    "pricingStrategy": "component_sum",
+    "schemaRevision": 3,
+    "variant": {
+      "id": "5a000000-0000-4000-8000-000000000011",
+      "productId": "4c000000-0000-4000-8000-000000000105",
+      "code": "halden-96-com",
+      "name": "96\" Bench Seat",
+      "sku": "HAL-96-BEN",
+      "vendorSku": "VEN-SOFA-96-COM",
+      "status": "active",
+      "retailPriceCents": 1240000,
+      "tradePriceCents": 868000,
+      "leadTimeWeeks": 14,
+      "dimensions": { "width": 96, "depth": 40, "height": 33, "unit": "in" },
+      "weight": 210,
+      "metadata": {},
+      "isDefault": false,
+      "optionValueIds": [
+        "6b000000-0000-4000-8000-000000000101",
+        "6b000000-0000-4000-8000-000000000202",
+        "6b000000-0000-4000-8000-000000000303"
+      ]
+    },
+    "selections": [
+      {
+        "optionGroupId": "7c000000-0000-4000-8000-000000000001",
+        "optionValueId": "6b000000-0000-4000-8000-000000000101",
+        "groupCode": "material",
+        "valueCode": "walnut",
+        "groupName": "Wood",
+        "valueLabel": "Walnut",
+        "retailPriceDeltaCents": 40000,
+        "tradePriceDeltaCents": 28000,
+        "leadTimeDeltaWeeks": 2,
+        "allowsCom": false
+      },
+      {
+        "optionGroupId": "7c000000-0000-4000-8000-000000000002",
+        "optionValueId": "6b000000-0000-4000-8000-000000000202",
+        "groupCode": "finish",
+        "valueCode": "antique-brass",
+        "groupName": "Hardware Finish",
+        "valueLabel": "Antique Brass",
+        "retailPriceDeltaCents": 12000,
+        "tradePriceDeltaCents": 8400,
+        "leadTimeDeltaWeeks": 0,
+        "allowsCom": false
+      },
+      {
+        "optionGroupId": "7c000000-0000-4000-8000-000000000003",
+        "optionValueId": "6b000000-0000-4000-8000-000000000303",
+        "groupCode": "upholstery",
+        "valueCode": "com",
+        "groupName": "Upholstery",
+        "valueLabel": "Customer's Own Material",
+        "retailPriceDeltaCents": 0,
+        "tradePriceDeltaCents": 0,
+        "leadTimeDeltaWeeks": 0,
+        "allowsCom": true
+      }
+    ],
+    "components": [
+      {
+        "componentId": "8d000000-0000-4000-8000-000000000001",
+        "code": "arm-left",
+        "name": "Left Arm",
+        "quantity": 1,
+        "handedness": "left",
+        "retailPriceCents": 180000,
+        "tradePriceCents": 126000,
+        "leadTimeWeeks": 12,
+        "dimensions": { "width": 12, "depth": 40, "height": 33, "unit": "in" }
+      },
+      {
+        "componentId": "8d000000-0000-4000-8000-000000000002",
+        "code": "seat-module",
+        "name": "Seat Module",
+        "quantity": 2,
+        "handedness": null,
+        "retailPriceCents": 320000,
+        "tradePriceCents": 224000,
+        "leadTimeWeeks": 12,
+        "dimensions": { "width": 36, "depth": 40, "height": 33, "unit": "in" }
+      }
+    ],
+    "retailPriceCents": 1240000,
+    "tradePriceCents": 868000,
+    "leadTimeWeeks": 14,
+    "dimensions": { "width": 96, "depth": 40, "height": 33, "unit": "in" },
+    "comDetails": {
+      "optionValueId": "6b000000-0000-4000-8000-000000000303",
+      "fabricName": "Belgian Linen 12",
+      "mill": "Rogers & Goffigon",
+      "pattern": "Cascade",
+      "yardage": 14,
+      "railroaded": true,
+      "shipTo": "Halden Receiving, 22 Mill Rd, High Point NC",
+      "sidemark": "MWS-HARLOW",
+      "secondLeadTimeWeeks": 4,
+      "notes": "Cut for railroaded application; confirm dye lot before cutting."
+    },
+    "capturedAt": "2026-08-01T15:03:59.412Z"
+  }
+}

@@ -51,6 +51,14 @@ export interface PoPdfLine {
   specNotes: string | null;
   /** FF&E category, e.g. "seating", or null. */
   category: string | null;
+  /**
+   * Vendor-safe configuration spec block — one printed line each, under the
+   * item name (P0-1). Built by po-send's `vendorConfigurationLines`: variant,
+   * every option selection, components, dimensions, COM instructions, config
+   * hash. NEVER retail pricing, markup, or the studio "Commercial:" line.
+   * Omit/empty on an unconfigured line — the row renders exactly as before.
+   */
+  configurationLines?: string[];
 }
 
 export interface PoPdfData {
@@ -275,7 +283,16 @@ function PoDocument(data: PoPdfData) {
               View,
               { style: styles.cellItem },
               h(Text, null, line.name),
-              spec ? h(Text, { style: styles.specNotes }, spec) : null
+              spec ? h(Text, { style: styles.specNotes }, spec) : null,
+              // Configuration spec block — one Text per line so react-pdf
+              // wraps each independently inside the (narrow) item column.
+              ...(line.configurationLines ?? []).map((configLine, configIdx) =>
+                h(
+                  Text,
+                  { key: `cfg-${configIdx}`, style: styles.specNotes },
+                  configLine
+                )
+              )
             ),
             h(Text, { style: styles.cellRoom }, line.room ?? '-'),
             h(Text, { style: styles.cellQty }, String(line.quantity)),

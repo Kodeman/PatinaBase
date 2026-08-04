@@ -260,3 +260,227 @@ export function vendorSafeSpecNotes(notes: string | null | undefined): string | 
     .trim();
   return kept || null;
 }
+
+// ─── Vendor configuration spec block (P0-1) ──────────────────────────────────
+//
+// Until now the PO said "Bed" where the designer had specified "Bed — Walnut,
+// Brass, King". Every configured line already carries a locked, hash-verified
+// `project_ffe_specs.configuration_snapshot` by the time the item is linked to
+// a PO (00403's lock trigger enforces it), so the document can finally print
+// what was actually ordered.
+//
+// AUDIENCE RULE — this is a VENDOR document. It prints selections, components,
+// dimensions, COM instructions and the config hash. It NEVER prints
+// retailPriceCents, any markup/margin, or the studio-only "Commercial:" line
+// that formatConfigurationSnapshotForClipboard(…, 'studio') emits in the
+// portal. The trade line amounts already on the PO are the only money here.
+//
+// The portal has the same audience rule in
+// apps/designer-portal/src/components/document/rooms/piece/custom-commission-model.ts
+// (`formatConfigurationSnapshotForClipboard`). Edge functions cannot import
+// from apps/, so the rule is deliberately duplicated; the shared JSON fixture
+// ./fixtures/configuration-snapshot.fixture.json is the contract both sides
+// assert against.
+
+/**
+ * The `spec:project_ffe_specs!…(…)` embed shape, tolerant of camelCase and
+ * snake_case (PostgREST returns snake_case; the portal's camel envelope
+ * reaches this helper in tests and future callers).
+ */
+export interface VendorConfigurationSpec {
+  configuration_id?: string | null;
+  configurationId?: string | null;
+  configuration_snapshot?: unknown;
+  configurationSnapshot?: unknown;
+  snapshot?: unknown;
+  configuration_snapshot_hash?: string | null;
+  configurationSnapshotHash?: string | null;
+  snapshotHash?: string | null;
+  configuration_locked_at?: string | null;
+  configurationLockedAt?: string | null;
+  sku?: string | null;
+  material?: string | null;
+  finish?: string | null;
+  color_fabric?: string | null;
+  colorFabric?: string | null;
+  selected_dimensions?: unknown;
+  selectedDimensions?: unknown;
+}
+
+function readRecord(value: unknown): Record<string, unknown> {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return {};
+  return value as Record<string, unknown>;
+}
+
+function readArray(value: unknown): Record<string, unknown>[] {
+  if (!Array.isArray(value)) return [];
+  return value.filter(
+    (entry): entry is Record<string, unknown> =>
+      !!entry && typeof entry === 'object' && !Array.isArray(entry),
+  );
+}
+
+/** Trimmed string from a string|number cell; null for anything else/blank. */
+function readScalar(value: unknown): string | null {
+  if (typeof value === 'string') return value.trim() || null;
+  if (typeof value === 'number' && Number.isFinite(value)) return String(value);
+  return null;
+}
+
+function readCount(value: unknown): number | null {
+  if (typeof value === 'number' && Number.isFinite(value)) return value;
+  if (typeof value === 'string') {
+    const parsed = Number(value.trim());
+    return Number.isFinite(parsed) ? parsed : null;
+  }
+  return null;
+}
+
+/**
+ * "72 × 36 × 30 in" when width/depth/height all resolve; otherwise up to four
+ * `key value` pairs (unknown-key tolerant — capture, variant and rule-effect
+ * dimensions do not share one key set), with the unit appended when present.
+ */
+function formatDimensions(value: unknown): string | null {
+  const dims = readRecord(value);
+  const unit = readScalar(dims.unit ?? dims.units);
+  const width = readScalar(dims.width ?? dims.w);
+  const depth = readScalar(dims.depth ?? dims.d);
+  const height = readScalar(dims.height ?? dims.h);
+  if (width && depth && height) {
+    return [`${width} × ${depth} × ${height}`, unit].filter(Boolean).join(' ');
+  }
+  const pairs = Object.entries(dims)
+    .filter(([key]) => key !== 'unit' && key !== 'units')
+    .map(([key, entry]) => {
+      const scalar = readScalar(entry);
+      return scalar ? `${key} ${scalar}` : null;
+    })
+    .filter((entry): entry is string => entry !== null);
+  if (pairs.length === 0) return null;
+  return [pairs.slice(0, 4).join(' · '), unit].filter(Boolean).join(' ');
+}
+
+/** COM/COL instruction lines (00413 `comDetails`, merged into the snapshot). */
+function comLines(value: unknown): string[] {
+  const com = readRecord(value);
+  if (Object.keys(com).length === 0) return [];
+  const lines: string[] = [];
+
+  const fabricName = readScalar(com.fabricName ?? com.fabric_name);
+  const millPattern = [
+    readScalar(com.mill),
+    readScalar(com.pattern),
+  ].filter(Boolean).join(', ');
+  if (fabricName && millPattern) lines.push(`COM: ${fabricName} — ${millPattern}`);
+  else if (fabricName || millPattern) lines.push(`COM: ${fabricName || millPattern}`);
+
+  const yardageBits: string[] = [];
+  const yardage = readScalar(com.yardage);
+  if (yardage) yardageBits.push(`${yardage} yds`);
+  if (com.railroaded === true) yardageBits.push('railroaded');
+  if (yardageBits.length > 0) lines.push(`COM yardage: ${yardageBits.join(', ')}`);
+
+  const shipTo = readScalar(com.shipTo ?? com.ship_to);
+  if (shipTo) lines.push(`COM ship-to: ${shipTo}`);
+
+  const sidemark = readScalar(com.sidemark);
+  if (sidemark) lines.push(`Sidemark: ${sidemark}`);
+
+  // Always — a COM order's clock does not start until the fabric lands, and
+  // the vendor is the party who has to know that.
+  lines.push('Lead time provisional until COM fabric received');
+  return lines;
+}
+
+/**
+ * Vendor-safe spec block for one PO line, printed under the item name.
+ *
+ * Configured line (non-empty `configuration_snapshot`):
+ *   Variant: King Walnut (VEN-BED-K-WAL)      ← only when a variant matched
+ *   Wood: Walnut                              ← one line per selection, ALL groups
+ *   Hardware: Antique Brass
+ *   Components: Left arm ×1 · Chaise ×2       ← one joined line
+ *   Dims: 84 × 40 × 34 in
+ *   COM: Belgian Linen 12 — Rogers & Goffigon, Cascade
+ *   COM yardage: 14 yds, railroaded
+ *   COM ship-to: Vendor receiving, 22 Mill Rd
+ *   Sidemark: MWS-HARLOW
+ *   Lead time provisional until COM fabric received
+ *   Config ref: 9f2c1a77b0de
+ *
+ * Unconfigured line (`configuration_snapshot` is `{}` — the column default):
+ *   falls back to the flat spec fields (SKU / Material / Finish / Color-Fabric
+ *   / Dims from selected_dimensions).
+ *
+ * Returns [] when neither source has anything to say.
+ */
+export function vendorConfigurationLines(spec: unknown): string[] {
+  // A PostgREST embed of a UNIQUE FK returns an object, but tolerate the
+  // array form so a query shape change cannot silently blank the block.
+  const source = readRecord(Array.isArray(spec) ? spec[0] : spec) as VendorConfigurationSpec &
+    Record<string, unknown>;
+
+  const snapshot = readRecord(
+    source.configuration_snapshot ?? source.configurationSnapshot ?? source.snapshot,
+  );
+  const lines: string[] = [];
+
+  if (Object.keys(snapshot).length > 0) {
+    const variant = readRecord(snapshot.variant);
+    const variantName = readScalar(variant.name ?? variant.code);
+    if (variantName) {
+      const variantSku = readScalar(variant.vendorSku ?? variant.vendor_sku ?? variant.sku);
+      lines.push(variantSku ? `Variant: ${variantName} (${variantSku})` : `Variant: ${variantName}`);
+    }
+
+    for (const selection of readArray(snapshot.selections)) {
+      const group = readScalar(selection.groupName ?? selection.groupCode);
+      const value = readScalar(selection.valueLabel ?? selection.valueCode);
+      if (group && value) lines.push(`${group}: ${value}`);
+      else if (value) lines.push(value);
+    }
+
+    const componentLabels = readArray(snapshot.components)
+      .map((component) => {
+        const name = readScalar(component.name ?? component.code);
+        if (!name) return null;
+        const quantity = readCount(component.quantity);
+        const handedness = readScalar(component.handedness);
+        const suffix = handedness ? ` (${handedness})` : '';
+        return quantity && quantity > 1 ? `${name} ×${quantity}${suffix}` : `${name}${suffix}`;
+      })
+      .filter((entry): entry is string => entry !== null);
+    if (componentLabels.length > 0) {
+      lines.push(`Components: ${componentLabels.join(' · ')}`);
+    }
+
+    const dims = formatDimensions(snapshot.dimensions);
+    if (dims) lines.push(`Dims: ${dims}`);
+
+    lines.push(...comLines(snapshot.comDetails ?? snapshot.com_details));
+
+    const hash = readScalar(
+      source.configuration_snapshot_hash ??
+        source.configurationSnapshotHash ??
+        source.snapshotHash,
+    );
+    if (hash) lines.push(`Config ref: ${hash.slice(0, 12)}`);
+    return lines;
+  }
+
+  // ── Fallback: flat spec fields (the pre-configuration world) ─────────────
+  const sku = readScalar(source.sku);
+  if (sku) lines.push(`SKU: ${sku}`);
+  const material = readScalar(source.material);
+  if (material) lines.push(`Material: ${material}`);
+  const finish = readScalar(source.finish);
+  if (finish) lines.push(`Finish: ${finish}`);
+  const colorFabric = readScalar(source.color_fabric ?? source.colorFabric);
+  if (colorFabric) lines.push(`Color/Fabric: ${colorFabric}`);
+  const flatDims = formatDimensions(
+    source.selected_dimensions ?? source.selectedDimensions,
+  );
+  if (flatDims) lines.push(`Dims: ${flatDims}`);
+  return lines;
+}

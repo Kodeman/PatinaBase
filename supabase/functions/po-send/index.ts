@@ -60,6 +60,8 @@ import {
   paymentPatternLabel,
   paymentRowLabel,
   resolveVendorRecipient,
+  vendorConfigurationLines,
+  type VendorConfigurationSpec,
   vendorSafeSpecNotes,
 } from './lib.ts';
 
@@ -121,6 +123,8 @@ interface FfeItemRow {
   notes: string | null;
   ffe_category: string | null;
   room: { id: string; name: string } | null;
+  /** project_ffe_specs embed (UNIQUE ffe_item_id → object, not array). */
+  spec: VendorConfigurationSpec | null;
 }
 
 interface PoPaymentRow {
@@ -240,7 +244,12 @@ Deno.serve(async (req: Request) => {
       `
       id, name, quantity, trade_price_cents, unit_price_cents, notes,
       ffe_category,
-      room:project_rooms!project_room_id(id, name)
+      room:project_rooms!project_room_id(id, name),
+      spec:project_ffe_specs!project_ffe_specs_ffe_item_id_fkey(
+        configuration_id, configuration_snapshot,
+        configuration_snapshot_hash, configuration_locked_at,
+        sku, material, finish, color_fabric, selected_dimensions
+      )
     `,
     )
     .eq('purchase_order_id', po.id)
@@ -380,6 +389,11 @@ Deno.serve(async (req: Request) => {
     const quantity = item.quantity ?? 1;
     // TRADE pricing — same COALESCE the 00186 total uses.
     const unitTradeCents = item.trade_price_cents ?? item.unit_price_cents ?? 0;
+    // The configured spec block (P0-1): what the designer actually specified,
+    // vendor-safe (selections / components / dimensions / COM / config hash —
+    // never retail or markup). Empty array for an unconfigured line with no
+    // flat spec fields, which renders exactly as before.
+    const configurationLines = vendorConfigurationLines(item.spec);
     return {
       name: item.name,
       room: item.room?.name ?? null,
@@ -388,6 +402,7 @@ Deno.serve(async (req: Request) => {
       lineTotalCents: unitTradeCents * quantity,
       specNotes: vendorSafeSpecNotes(item.notes),
       category: item.ffe_category,
+      configurationLines: configurationLines.length > 0 ? configurationLines : undefined,
     };
   });
   const tradeTotalCents = lines.reduce((sum, l) => sum + l.lineTotalCents, 0);
