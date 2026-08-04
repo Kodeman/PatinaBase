@@ -1,4 +1,11 @@
-import { assertHostResolvesSafe, assertSafeUrl, UrlError } from '../capture-from-url/ssrf.ts';
+import {
+  assertHostResolvesSafe,
+  assertSafeUrl,
+  denoPinnedHttpTransport,
+  PinnedTransportError,
+  type SafeFetchDependencies,
+  UrlError,
+} from '../capture-from-url/ssrf.ts';
 
 const MAX_REDIRECTS = 3;
 const MAX_IMAGE_BYTES = 5 * 1024 * 1024;
@@ -43,27 +50,47 @@ async function readCappedImage(response: Response): Promise<Uint8Array> {
 }
 
 /** SSRF-guarded PNG/JPEG hydration. Every redirect host is revalidated. */
-export async function loadCompositionImage(startUrl: string): Promise<string> {
+export async function loadCompositionImage(
+  startUrl: string,
+  dependencies: SafeFetchDependencies = {},
+): Promise<string> {
   let currentUrl = startUrl;
+  const transport = dependencies.transport ?? denoPinnedHttpTransport;
   for (let hop = 0; hop <= MAX_REDIRECTS; hop++) {
     const parsed = assertSafeUrl(currentUrl);
-    await assertHostResolvesSafe(parsed.hostname);
-    const controller = new AbortController();
-    const timer = setTimeout(() => controller.abort(), TIMEOUT_MS);
+    const addresses = await assertHostResolvesSafe(
+      parsed.hostname,
+      dependencies.resolver,
+      TIMEOUT_MS,
+    );
+    currentUrl = parsed.toString();
+
     let response: Response;
     try {
-      response = await fetch(currentUrl, {
-        redirect: 'manual',
-        signal: controller.signal,
+      response = await transport.request(parsed, addresses[0], {
         headers: { accept: 'image/png,image/jpeg' },
+        timeoutMs: TIMEOUT_MS,
+        maxBytes: MAX_IMAGE_BYTES,
+        allowedContentTypes: ['image/png', 'image/jpeg'],
       });
     } catch (error) {
-      if (error instanceof Error && error.name === 'AbortError') {
+      if (
+        error instanceof PinnedTransportError && error.reason === 'timeout'
+      ) {
         throw new UrlError('image_timeout', 504);
       }
+      if (
+        error instanceof PinnedTransportError && error.reason === 'too_large'
+      ) {
+        throw new UrlError('image_too_large', 413);
+      }
+      if (
+        error instanceof PinnedTransportError &&
+        error.reason === 'unsupported_content_type'
+      ) {
+        throw new UrlError('unsupported_image_type', 415);
+      }
       throw new UrlError('image_fetch_failed', 502);
-    } finally {
-      clearTimeout(timer);
     }
 
     if (isRedirect(response.status)) {

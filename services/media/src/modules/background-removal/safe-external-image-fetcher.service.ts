@@ -44,11 +44,13 @@ for (const [network, prefix] of [
   ['64:ff9b::', 96],
   ['64:ff9b:1::', 48],
   ['100::', 64],
+  ['2001::', 23],
   ['2001::', 32],
   ['2001:2::', 48],
   ['2001:10::', 28],
   ['2001:db8::', 32],
   ['2002::', 16],
+  ['3fff::', 20],
   ['fc00::', 7],
   ['fe80::', 10],
   ['ff00::', 8],
@@ -61,11 +63,11 @@ export function isPublicAddress(address: string, family: 4 | 6): boolean {
   if (family === 4) {
     return isIP(address) === 4 && !PRIVATE_NETWORKS.check(address, 'ipv4');
   }
-  return (
-    isIP(address) === 6 &&
-    !address.toLowerCase().startsWith('::') &&
-    !PRIVATE_NETWORKS.check(address, 'ipv6')
-  );
+  if (isIP(address) !== 6) return false;
+  const firstHextet = Number.parseInt(address.split(':', 1)[0], 16);
+  const isCurrentGlobalUnicast = Number.isInteger(firstHextet) &&
+    (firstHextet & 0xe000) === 0x2000;
+  return isCurrentGlobalUnicast && !PRIVATE_NETWORKS.check(address, 'ipv6');
 }
 
 @Injectable()

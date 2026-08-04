@@ -34,6 +34,11 @@ describe('SafeExternalImageFetcherService', () => {
     ['64:ff9b::a9fe:a9fe', 6],
     ['2002:7f00:1::', 6],
     ['2001:0000:4136:e378:8000:63bf:3fff:fdd2', 6],
+    ['2001:100::1', 6],
+    ['3fff::1', 6],
+    ['5f00::1', 6],
+    ['fec0::1', 6],
+    ['4000::1', 6],
   ] as Array<[string, 4 | 6]>)('rejects private/reserved address %s', (address, family) => {
     expect(isPublicAddress(address, family)).toBe(false);
   });
