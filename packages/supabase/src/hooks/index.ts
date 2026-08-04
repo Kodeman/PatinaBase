@@ -1555,3 +1555,24 @@ export type {
   ScanRefineArtifactSet,
   UseScanRefineArtifactsOptions,
 } from './use-scan-refine-artifacts';
+
+// The Rolodex (Call Sheet Wave 2, R1) — the shared studio contact book:
+// `studio_contacts` (00417), fully shared at the studio, plus the
+// party→rolodex promote flow.
+export {
+  useStudioContacts,
+  useStudioContact,
+  useAddStudioContact,
+  useUpdateStudioContact,
+  useArchiveStudioContact,
+  useRestoreStudioContact,
+  usePromoteToStudioContact,
+  studioContactKeys,
+} from './use-studio-contacts';
+export type {
+  StudioContact,
+  AddStudioContactInput,
+  UpdateStudioContactInput,
+  StudioContactFilters,
+  PromoteToStudioContactInput,
+} from './use-studio-contacts';
