@@ -150,6 +150,64 @@ function getFinishType(finish: string): 'wood' | 'metal' | 'fabric' | 'other' {
 }
 
 /**
+ * Extract finishes from DOM finish selectors (mirrors extractColorsFromSelectors)
+ */
+function extractFinishesFromSelectors(): { finishes: string[]; confidence: number } {
+  const finishes: string[] = [];
+
+  for (const selector of FINISH_SELECTORS) {
+    try {
+      const elements = document.querySelectorAll(selector);
+      for (const el of elements) {
+        // Check data attributes
+        const dataFinish = el.getAttribute('data-finish') ||
+          el.getAttribute('data-selected-finish') ||
+          el.getAttribute('data-value');
+        if (dataFinish) {
+          finishes.push(dataFinish);
+        }
+
+        // Check title/aria-label
+        const title = el.getAttribute('title') || el.getAttribute('aria-label');
+        if (title) {
+          finishes.push(title);
+        }
+
+        // Check select options
+        if (el.tagName === 'SELECT') {
+          const options = el.querySelectorAll('option');
+          options.forEach(opt => {
+            const value = opt.textContent?.trim();
+            if (value && value !== 'Select' && value !== 'Choose') {
+              finishes.push(value);
+            }
+          });
+        }
+
+        // Check for finish-name labels
+        const label = el.querySelector('.finish-label, .finish-name');
+        if (label?.textContent) {
+          finishes.push(label.textContent.trim());
+        }
+      }
+    } catch {
+      // Invalid selector
+    }
+  }
+
+  // Dedupe and filter
+  const unique = [...new Set(finishes.map(f => f.toLowerCase()))];
+  const normalized = unique
+    .filter(f => f.length > 1 && f.length < 50) // Filter out noise
+    .map(f => f.charAt(0).toUpperCase() + f.slice(1));
+
+  return {
+    finishes: normalized,
+    confidence: normalized.length > 0 ? 0.9 : 0,
+  };
+}
+
+/**
  * Extract colors from DOM color selectors
  */
 function extractColorsFromSelectors(): { colors: string[]; confidence: number } {
@@ -272,6 +330,7 @@ export interface ExtractedColorFinish {
   colors: ExtractedColor[];
   finishes: ExtractedFinish[];
   availableColors: string[];
+  availableFinishes: string[];
 }
 
 /**
@@ -282,6 +341,7 @@ export function extractColorFinishFromDOM(): ExtractedColorFinish {
     colors: [],
     finishes: [],
     availableColors: [],
+    availableFinishes: [],
   };
 
   // 1. Try JSON-LD (highest confidence)
@@ -315,6 +375,21 @@ export function extractColorFinishFromDOM(): ExtractedColorFinish {
         isPrimary: true,
         confidence: 0.85,
         source: 'selector',
+      });
+    }
+  }
+
+  // 2b. Try finish selectors (high confidence, gets available finish variants)
+  const finishSelectorResult = extractFinishesFromSelectors();
+  if (finishSelectorResult.finishes.length > 0) {
+    result.availableFinishes = finishSelectorResult.finishes;
+
+    // First finish is often the selected/default one
+    if (result.finishes.length === 0) {
+      result.finishes.push({
+        name: finishSelectorResult.finishes[0],
+        type: getFinishType(finishSelectorResult.finishes[0]),
+        confidence: 0.85,
       });
     }
   }
@@ -406,6 +481,15 @@ export function extractColorFinishFromDOM(): ExtractedColorFinish {
     const lower = c.name.toLowerCase();
     if (seenColors.has(lower)) return false;
     seenColors.add(lower);
+    return true;
+  });
+
+  // Dedupe finishes by name
+  const seenFinishes = new Set<string>();
+  result.finishes = result.finishes.filter(f => {
+    const lower = f.name.toLowerCase();
+    if (seenFinishes.has(lower)) return false;
+    seenFinishes.add(lower);
     return true;
   });
 

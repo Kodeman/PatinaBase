@@ -233,6 +233,7 @@ export interface ExtractedProductData {
   colors: ExtractedColor[] | null;
   finish: ExtractedFinish | null;
   availableColors: string[] | null;
+  availableFinishes: string[] | null;
   images: ExtractedImage[];
   manufacturer: string | null;
   url: string;

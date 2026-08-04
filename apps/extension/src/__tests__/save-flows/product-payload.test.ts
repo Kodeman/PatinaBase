@@ -14,6 +14,8 @@ const PRODUCTS_COLUMNS = new Set([
   'primary_color', 'secondary_colors',
   // 00152 three-layer catalog
   'layer', 'owner_user_id',
+  // 00232 field-capture origin (now also written by the extension, P2-8)
+  'capture_source', 'capture_provenance',
 ]);
 
 function makeExtractedData(overrides: Partial<ExtractedProductData> = {}): ExtractedProductData {
@@ -29,6 +31,7 @@ function makeExtractedData(overrides: Partial<ExtractedProductData> = {}): Extra
     colors: [{ name: 'Walnut', isPrimary: true, confidence: 0.9, source: 'text' as const }],
     finish: { name: 'Matte', type: 'wood' as const, confidence: 0.8 },
     availableColors: ['Walnut', 'Ebony'],
+    availableFinishes: ['Matte', 'Polished'],
     dimensions: {
       width: 24,
       height: 36,
@@ -140,5 +143,84 @@ describe('buildProductInsertPayload', () => {
       userId: 'u1',
     });
     expect(payload.name).toBe('Extracted Name');
+  });
+
+  describe('capture_source / capture_provenance (P2-8)', () => {
+    it('marks every extension capture with capture_source: web_extension', () => {
+      const payload = buildProductInsertPayload({
+        productName: 'Chair',
+        extractedData: makeExtractedData(),
+        price: '',
+        images: [],
+        vendorId: null,
+        retailerId: null,
+        userId: 'u1',
+      });
+      expect(payload.capture_source).toBe('web_extension');
+    });
+
+    it('lands the full scraped option lists under capture_provenance.captureOptions', () => {
+      const payload = buildProductInsertPayload({
+        productName: 'Chair',
+        extractedData: makeExtractedData({
+          materials: ['Oak', 'Leather'],
+          availableColors: ['Walnut', 'Ebony'],
+          availableFinishes: ['Matte', 'Polished', 'Brushed'],
+        }),
+        price: '',
+        images: [],
+        vendorId: null,
+        retailerId: null,
+        userId: 'u1',
+      });
+
+      expect(payload.capture_provenance.captureOptions).toEqual({
+        colors: ['Walnut', 'Ebony'],
+        finishes: ['Matte', 'Polished', 'Brushed'],
+        materials: ['Oak', 'Leather'],
+        source: 'web_extension',
+        capturedAt: expect.any(String),
+      });
+    });
+
+    it('defaults captureOptions lists to empty arrays when nothing was scraped', () => {
+      const payload = buildProductInsertPayload({
+        productName: 'Chair',
+        extractedData: makeExtractedData({
+          materials: [],
+          availableColors: null,
+          availableFinishes: null,
+        }),
+        price: '',
+        images: [],
+        vendorId: null,
+        retailerId: null,
+        userId: 'u1',
+      });
+
+      expect(payload.capture_provenance.captureOptions).toMatchObject({
+        colors: [],
+        finishes: [],
+        materials: [],
+      });
+    });
+
+    it('keeps the flat finish scalar and available_colors for back-compat', () => {
+      const payload = buildProductInsertPayload({
+        productName: 'Chair',
+        extractedData: makeExtractedData({
+          availableColors: ['Walnut', 'Ebony'],
+          availableFinishes: ['Matte', 'Polished'],
+        }),
+        price: '',
+        images: [],
+        vendorId: null,
+        retailerId: null,
+        userId: 'u1',
+      });
+
+      expect(payload.finish).toBe('Matte');
+      expect(payload.available_colors).toEqual(['Walnut', 'Ebony']);
+    });
   });
 });

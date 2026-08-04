@@ -77,6 +77,12 @@ export interface PieceConfigurationDefinitionView {
   rules: PieceConfigurationRuleView[];
 }
 
+export interface FlatPieceCaptureOptions {
+  colors?: string[];
+  finishes?: string[];
+  materials?: string[];
+}
+
 export interface FlatPieceConfigurationSource {
   id: string;
   name: string;
@@ -90,6 +96,13 @@ export interface FlatPieceConfigurationSource {
   colors?: string[] | null;
   availableColors?: string[] | null;
   finish?: string | null;
+  /**
+   * Scraped option lists from the capture source (extension `capture_provenance
+   * .captureOptions`, P2-8) — a superset of the flat scalar fields above that
+   * suggestedGroupsFromFlatPiece unions in so a captured product with multiple
+   * available finishes/colors/materials still seeds a full suggestion set.
+   */
+  captureOptions?: FlatPieceCaptureOptions | null;
 }
 
 export interface PieceConfigurationSelectionView {
@@ -228,7 +241,10 @@ export function suggestedGroupsFromFlatPiece(
   piece: FlatPieceConfigurationSource,
 ): SuggestedOptionGroup[] {
   const groups: SuggestedOptionGroup[] = [];
-  const materialValues = uniqueClean(piece.materials ?? []);
+  const materialValues = uniqueClean([
+    ...(piece.materials ?? []),
+    ...(piece.captureOptions?.materials ?? []),
+  ]);
   if (materialValues.length > 0) {
     groups.push({
       id: "suggest-material",
@@ -241,6 +257,7 @@ export function suggestedGroupsFromFlatPiece(
   const colorValues = uniqueClean([
     ...(piece.availableColors ?? []),
     ...(piece.colors ?? []),
+    ...(piece.captureOptions?.colors ?? []),
   ]);
   if (colorValues.length > 0) {
     groups.push({
@@ -251,11 +268,15 @@ export function suggestedGroupsFromFlatPiece(
     });
   }
 
-  if (piece.finish?.trim()) {
+  const finishValues = uniqueClean([
+    ...(piece.finish ? [piece.finish] : []),
+    ...(piece.captureOptions?.finishes ?? []),
+  ]);
+  if (finishValues.length > 0) {
     groups.push({
       id: "suggest-finish",
       name: "Finish",
-      values: [piece.finish.trim()],
+      values: finishValues,
       selected: false,
     });
   }
