@@ -12,7 +12,7 @@ import {
   sha256Hex,
   SPEC_BOOK_AUDIENCES,
 } from "./render-model.ts";
-import { frozenSnapshot } from "./test-fixtures.ts";
+import { configuredFurniture, frozenSnapshot } from "./test-fixtures.ts";
 
 const context = {
   revisionNumber: 1,
@@ -127,7 +127,79 @@ Deno.test("internal edition keeps the complete frozen item", async () => {
   );
 });
 
-Deno.test("nested furniture configuration is preserved only in the internal edition", async () => {
+Deno.test("furniture configuration reaches the client edition as labels only", async () => {
+  const source = frozenSnapshot();
+  const configuration = configuredFurniture();
+  const snapshot = frozenSnapshot({
+    items: [{ ...source.items[0], configuration }, source.items[1]],
+  });
+
+  const client = await buildAudienceRenderModel(snapshot, "client", context);
+  const configured = client.items.find((item) => item.id === "item-b")!;
+  assertEquals(configured.configuration, {
+    selections: [
+      { group: "Wood", value: "Walnut" },
+      { group: "Leather", value: "Chestnut" },
+    ],
+    variantName: '96" Left Chaise',
+    components: [
+      { name: "Left arm chaise", quantity: 1 },
+      { name: "Armless loveseat", quantity: 2 },
+    ],
+    dimensions: { width: 96, depth: 40, height: 31, unit: "in" },
+  });
+  assertEquals(
+    client.items.find((item) => item.id === "item-a")?.configuration,
+    undefined,
+  );
+
+  const clientSerialized = JSON.stringify(client);
+  for (
+    const forbidden of [
+      '"retailPriceCents"',
+      '"tradePriceCents"',
+      '"retailPriceDeltaCents"',
+      '"tradePriceDeltaCents"',
+      '"markup"',
+      '"snapshot"',
+      '"snapshotHash"',
+      '"lockedAt"',
+      '"vendorSku"',
+      '"capturedAt"',
+      '"mill"',
+      '"shipTo"',
+      '"sidemark"',
+      "1240000",
+      "868000",
+    ]
+  ) {
+    assertEquals(
+      clientSerialized.includes(forbidden),
+      false,
+      `client leaked ${forbidden}`,
+    );
+  }
+
+  for (const audience of ["vendor", "installer", "care"] as const) {
+    const model = await buildAudienceRenderModel(snapshot, audience, context);
+    assertEquals(
+      JSON.stringify(model).includes("configuration"),
+      false,
+      `${audience} leaked the configuration snapshot`,
+    );
+  }
+
+  const internal = await buildAudienceRenderModel(
+    snapshot,
+    "internal",
+    context,
+  );
+  const consoleItem = internal.items.find((item) => item.id === "item-b")!;
+  assertEquals(consoleItem.raw?.configuration, configuration);
+  assertEquals(consoleItem.configuration, undefined);
+});
+
+Deno.test("custom-commission configuration exposes no client summary or pricing", async () => {
   const source = frozenSnapshot();
   const configuration = furnitureConfiguration(4_120_000, 3_184_000);
   const snapshot = frozenSnapshot({
@@ -137,11 +209,6 @@ Deno.test("nested furniture configuration is preserved only in the internal edit
   for (const audience of ["client", "vendor", "installer", "care"] as const) {
     const model = await buildAudienceRenderModel(snapshot, audience, context);
     const serialized = JSON.stringify(model);
-    assertEquals(
-      serialized.includes('"configuration"'),
-      false,
-      `${audience} leaked the configuration snapshot`,
-    );
     assertEquals(
       serialized.includes('"retailPriceCents"'),
       false,
@@ -153,14 +220,67 @@ Deno.test("nested furniture configuration is preserved only in the internal edit
       `${audience} leaked configuration trade pricing`,
     );
   }
-
-  const internal = await buildAudienceRenderModel(
-    snapshot,
-    "internal",
-    context,
+  const client = await buildAudienceRenderModel(snapshot, "client", context);
+  assertEquals(
+    client.items.find((item) => item.id === "item-b")?.configuration,
+    undefined,
   );
-  const consoleItem = internal.items.find((item) => item.id === "item-b")!;
-  assertEquals(consoleItem.raw?.configuration, configuration);
+});
+
+Deno.test("client configuration summary keeps the COM fabric and drops vendor operations", async () => {
+  const source = frozenSnapshot();
+  const configuration = configuredFurniture({
+    comDetails: {
+      optionValueId: "80000000-0000-4000-8000-000000000001",
+      fabricName: "Highland Linen 12",
+      mill: "Rogers Mill",
+      pattern: "Chalk",
+      yardage: 18.5,
+      railroaded: true,
+      shipTo: "Receiving dock four",
+      sidemark: "MAPLE / CONSOLE",
+      secondLeadTimeWeeks: 6,
+      notes: "Reserve from stock",
+    },
+  });
+  const snapshot = frozenSnapshot({
+    items: [{ ...source.items[0], configuration }, source.items[1]],
+  });
+
+  const client = await buildAudienceRenderModel(snapshot, "client", context);
+  const configured = client.items.find((item) => item.id === "item-b")!;
+  assertEquals(configured.configuration?.comFabric, "Highland Linen 12");
+
+  const serialized = JSON.stringify(client);
+  for (
+    const forbidden of [
+      '"mill"',
+      '"shipTo"',
+      '"sidemark"',
+      '"yardage"',
+      '"railroaded"',
+      '"secondLeadTimeWeeks"',
+      "Rogers Mill",
+      "Receiving dock four",
+      "MAPLE / CONSOLE",
+      "Reserve from stock",
+    ]
+  ) {
+    assertEquals(
+      serialized.includes(forbidden),
+      false,
+      `client leaked ${forbidden}`,
+    );
+  }
+
+  for (const audience of ["vendor", "installer", "care"] as const) {
+    const model = await buildAudienceRenderModel(snapshot, audience, context);
+    assertEquals(
+      JSON.stringify(model).includes("Highland Linen 12"),
+      false,
+      `${audience} leaked the COM fabric`,
+    );
+  }
 });
 
 Deno.test("items sort deterministically by chapter, position, then id", async () => {
@@ -374,6 +494,129 @@ Deno.test("configuration pricing-only changes create an internal addendum change
     name: "Console",
     kind: "changed",
   }]);
+});
+
+Deno.test("labelled configuration price moves leave every client hash untouched", async () => {
+  const source = frozenSnapshot();
+  const base = frozenSnapshot({
+    items: [{
+      ...source.items[0],
+      configuration: configuredFurniture(),
+      contentHash: "hash-b-configuration-labelled-v1",
+    }, source.items[1]],
+  });
+  const current = frozenSnapshot({
+    issue: {
+      type: "addendum",
+      reason: "Vendor price increase",
+      baseRevisionId: "30000000-0000-4000-8000-000000000001",
+    },
+    items: [{
+      ...source.items[0],
+      configuration: configuredFurniture({ priceBump: 55_000 }),
+      contentHash: "hash-b-configuration-labelled-v2",
+    }, source.items[1]],
+  });
+  const addendumContext = {
+    ...context,
+    revisionNumber: 2,
+    issueType: "addendum",
+  } as const;
+
+  for (const audience of ["client", "vendor", "installer", "care"] as const) {
+    const addendum = await buildAudienceRenderModel(
+      current,
+      audience,
+      addendumContext,
+      base,
+    );
+    assertEquals(addendum.items, [], `${audience} received a pricing addendum`);
+    assertEquals(
+      addendum.changes,
+      [],
+      `${audience} received a pricing change ledger entry`,
+    );
+  }
+
+  const [baseClient, currentClient] = await Promise.all([
+    buildAudienceRenderModel(base, "client", context),
+    buildAudienceRenderModel(current, "client", {
+      ...context,
+      revisionNumber: 2,
+      issueType: "full",
+    }),
+  ]);
+  assertEquals(
+    baseClient.items.find((item) => item.id === "item-b")?.contentHash,
+    currentClient.items.find((item) => item.id === "item-b")?.contentHash,
+  );
+});
+
+Deno.test("a configuration selection-label change reaches the client addendum", async () => {
+  const source = frozenSnapshot();
+  const base = frozenSnapshot({
+    items: [{
+      ...source.items[0],
+      configuration: configuredFurniture(),
+      contentHash: "hash-b-configuration-label-v1",
+    }, source.items[1]],
+  });
+  const current = frozenSnapshot({
+    issue: {
+      type: "addendum",
+      reason: "Wood revision",
+      baseRevisionId: "30000000-0000-4000-8000-000000000001",
+    },
+    items: [{
+      ...source.items[0],
+      configuration: configuredFurniture({ woodLabel: "White oak" }),
+      contentHash: "hash-b-configuration-label-v2",
+    }, source.items[1]],
+  });
+
+  const addendum = await buildAudienceRenderModel(
+    current,
+    "client",
+    { ...context, revisionNumber: 2, issueType: "addendum" },
+    base,
+  );
+  assertEquals(addendum.items.map((item) => item.id), ["item-b"]);
+  assertEquals(addendum.changes, [{
+    id: "item-b",
+    documentCode: "PB-201",
+    name: "Console",
+    kind: "changed",
+  }]);
+  assertEquals(addendum.items[0].configuration?.selections[0], {
+    group: "Wood",
+    value: "White oak",
+  });
+});
+
+Deno.test("a client profile that withholds selection also withholds the summary", async () => {
+  const source = frozenSnapshot();
+  const template = source.template as Record<string, unknown>;
+  const profiles = template.audience_profiles as Record<string, unknown>;
+  const snapshot = frozenSnapshot({
+    template: {
+      ...template,
+      audience_profiles: {
+        ...profiles,
+        client: { allow: ["identity", "quantity", "selectedMedia"] },
+      },
+    },
+    items: [
+      { ...source.items[0], configuration: configuredFurniture() },
+      source.items[1],
+    ],
+  });
+
+  const client = await buildAudienceRenderModel(snapshot, "client", context);
+  assertEquals(
+    client.items.find((item) => item.id === "item-b")?.configuration,
+    undefined,
+  );
+  assertEquals(JSON.stringify(client).includes("Walnut"), false);
 });
 
 Deno.test("snapshot limits and requested-audience boundary fail closed", async () => {
