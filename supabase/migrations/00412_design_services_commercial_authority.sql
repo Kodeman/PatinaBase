@@ -2353,6 +2353,16 @@ BEGIN
   -- notes, but never the commercial classification derived from those facts.
   IF current_user IS NOT DISTINCT FROM 'postgres' THEN RETURN NEW; END IF;
 
+  -- Invoice attachment is a server transition, never caller-supplied creation
+  -- state. Reject it before the classifier can derive the rest of the row.
+  IF TG_OP = 'INSERT' THEN
+    IF NEW.invoice_id IS NOT NULL THEN
+      RAISE EXCEPTION 'time entries cannot be created already attached to an invoice'
+        USING ERRCODE = 'check_violation';
+    END IF;
+    RETURN NEW;
+  END IF;
+
   IF NOT public._is_design_services_project(OLD.project_id) THEN RETURN NEW; END IF;
 
   IF OLD.billing_authority_id IS NOT NULL
@@ -2374,6 +2384,11 @@ END;
 $$;
 REVOKE ALL ON FUNCTION public.guard_commercial_time_entry_derived_fields()
   FROM PUBLIC, anon, authenticated, service_role;
+DROP TRIGGER IF EXISTS aaa_guard_time_entry_invoice_insert_trg
+  ON public.project_time_entries;
+CREATE TRIGGER aaa_guard_time_entry_invoice_insert_trg
+BEFORE INSERT ON public.project_time_entries
+FOR EACH ROW EXECUTE FUNCTION public.guard_commercial_time_entry_derived_fields();
 DROP TRIGGER IF EXISTS aab_guard_commercial_time_entry_derived_fields_trg
   ON public.project_time_entries;
 CREATE TRIGGER aab_guard_commercial_time_entry_derived_fields_trg
