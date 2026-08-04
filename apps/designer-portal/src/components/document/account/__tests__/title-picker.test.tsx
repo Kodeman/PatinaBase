@@ -16,7 +16,9 @@ describe('TitlePicker', () => {
 
     for (const role of ALL_STAFF_ROLES) {
       expect(
-        screen.getByRole('option', { name: new RegExp(STAFF_ROLE_LABELS[role]) }),
+        screen.getByRole('option', {
+          name: new RegExp(`^${STAFF_ROLE_LABELS[role]}`),
+        }),
       ).toBeInTheDocument();
     }
     expect(screen.getByText('Custom title…')).toBeInTheDocument();
