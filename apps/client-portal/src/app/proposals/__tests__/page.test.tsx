@@ -152,4 +152,27 @@ describe('ClientProposalsPage', () => {
     expect(screen.getByRole('heading', { name: /awaiting your review/i })).toBeInTheDocument();
     expect(screen.getByText(formatCurrency(750000))).toBeInTheDocument();
   });
+
+  it('moves a superseded legacy row out of pending and into the archive group', () => {
+    // supersede_unsigned_legacy_proposals (00412) sets commercial_state to
+    // 'superseded' on a legacy row WITHOUT touching status — status can
+    // still read "sent". Unlike the vestigial-draft case above, 'superseded'
+    // is the cutover RPC's real, terminal answer and must win: the row
+    // belongs in the archive, not stuck in "Awaiting your review" forever.
+    mockUseClientProposals.mockReturnValue({
+      data: [makeProposal({
+        status: 'sent',
+        document_kind: 'legacy',
+        commercial_state: 'superseded',
+      })],
+      isLoading: false,
+      isError: false,
+    });
+
+    render(<ClientProposalsPage />);
+
+    expect(screen.getByRole('heading', { name: /^archive/i })).toBeInTheDocument();
+    expect(screen.queryByRole('heading', { name: /awaiting your review/i })).not.toBeInTheDocument();
+    expect(screen.getByText(/superseded/i)).toBeInTheDocument();
+  });
 });

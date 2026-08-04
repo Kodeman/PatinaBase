@@ -7,6 +7,11 @@ const mockPush = jest.fn();
 const mockRememberRoomOrigin = jest.fn();
 let mockClients: DesignerClient[] = [];
 let mockCurrentDesignerId = 'designer-current';
+// Toggled by the "defensive handlePick" test only — appends an escape-hatch
+// button that calls the real onChange(null) directly, simulating a
+// null-clientId row getting picked despite the picker's own disabling (the
+// real ClientPicker below is otherwise rendered untouched for every test).
+let mockForceNullPick = false;
 
 jest.mock('next/navigation', () => ({
   usePathname: () => '/desk',
@@ -30,6 +35,31 @@ jest.mock('@/hooks/use-clients', () => ({
 jest.mock('@/lib/document/room-origin', () => ({
   rememberRoomOrigin: (path: string) => mockRememberRoomOrigin(path),
 }));
+
+jest.mock('@/components/portal/client-picker', () => {
+  const React = require('react');
+  const actual = jest.requireActual('@/components/portal/client-picker');
+  return {
+    ...actual,
+    ClientPicker: (props: { onChange: (clientId: string | null) => void }) =>
+      React.createElement(
+        React.Fragment,
+        null,
+        React.createElement(actual.ClientPicker, props),
+        mockForceNullPick
+          ? React.createElement(
+              'button',
+              {
+                type: 'button',
+                'data-testid': 'force-null-pick',
+                onClick: () => props.onChange(null),
+              },
+              'force-null-pick',
+            )
+          : null,
+      ),
+  };
+});
 
 import {
   DraftProposalSheet,
@@ -70,6 +100,34 @@ const relationship = (
   },
 });
 
+// A no-login household — designer_clients.client_id IS NULL, and no email
+// on file either, so it isn't even invitable. Rendered "No email on file"
+// and, in this drafting context, disabled with the login-required hint.
+const noLoginHousehold = (id: string): DesignerClient => ({
+  id,
+  designer_id: 'designer-current',
+  client_id: null,
+  source: 'direct',
+  lead_id: null,
+  status: 'active',
+  notes: null,
+  total_revenue: 0,
+  total_projects: 0,
+  created_at: '2026-08-01T00:00:00Z',
+  updated_at: '2026-08-03T00:00:00Z',
+  client_email: null,
+  client_name: 'No Login Household',
+  referral_source: null,
+  location: null,
+  preferred_contact: null,
+  style_tags: [],
+  style_preferences: {},
+  inspiration_quote: null,
+  last_contacted_at: null,
+  satisfaction_score: null,
+  client: null,
+});
+
 describe('DraftProposalSheet', () => {
   const mockCreateBrowserClient = createBrowserClient as jest.Mock;
   const insert = jest.fn();
@@ -90,6 +148,7 @@ describe('DraftProposalSheet', () => {
     jest.clearAllMocks();
     mockCurrentDesignerId = 'designer-current';
     mockClients = [];
+    mockForceNullPick = false;
     singleResult = { data: { id: 'proposal-1' }, error: null };
     insert.mockImplementation(() => ({
       select: () => ({
@@ -192,5 +251,48 @@ describe('DraftProposalSheet', () => {
     ).toBeVisible();
     expect(onClose).not.toHaveBeenCalled();
     expect(mockPush).not.toHaveBeenCalled();
+  });
+
+  it('disables a no-login household row with a hint instead of silently no-opping', async () => {
+    mockClients = [noLoginHousehold('relationship-no-login')];
+    renderSheet();
+    fireEvent.click(screen.getByTestId('client-picker-trigger'));
+
+    // client_id is null, so the row falls back to the relationship id.
+    const option = await screen.findByTestId('client-picker-option-relationship-no-login');
+    expect(option).toHaveAttribute('aria-disabled', 'true');
+    expect(
+      screen.getByText(/needs a client login before an agreement can be sent/i),
+    ).toBeInTheDocument();
+
+    // cmdk attaches no click handler at all to a disabled Command.Item, so
+    // this click is inert either way — assert the no-op, not just the label.
+    fireEvent.click(option);
+    expect(insert).not.toHaveBeenCalled();
+    expect(mockPush).not.toHaveBeenCalled();
+    expect(onClose).not.toHaveBeenCalled();
+  });
+
+  it('defensive: surfaces an inline error instead of silently closing if a null clientId somehow gets picked', async () => {
+    // Belt-and-braces for handlePick itself — even though the picker disables
+    // no-login rows above, this proves the dialog no longer just closes with
+    // nothing happening if onChange(null) is ever reached some other way.
+    mockForceNullPick = true;
+    mockClients = [relationship('relationship-own', 'designer-current')];
+    renderSheet();
+
+    fireEvent.click(screen.getByTestId('force-null-pick'));
+
+    expect(await screen.findByRole('alert')).toHaveTextContent(
+      /needs a client login before an agreement can be sent/i,
+    );
+    expect(insert).not.toHaveBeenCalled();
+    expect(onClose).not.toHaveBeenCalled();
+    expect(mockPush).not.toHaveBeenCalled();
+    expect(
+      screen.getByRole('dialog', {
+        name: 'Draft a design agreement for an existing household',
+      }),
+    ).toBeVisible();
   });
 });

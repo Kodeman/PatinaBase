@@ -111,6 +111,11 @@ export default function ClientProposalDetailPage({
   const isSigned = commercial.state === 'executed';
   const isExpiredStatus = commercial.state === 'expired';
   const isDeclined = commercial.state === 'declined';
+  // Legacy rows can reach 'superseded' via the cutover RPC even though their
+  // proposal.status never changes. Non-legacy documents already render their
+  // own superseded messaging inside CommercialDocumentShell, so this banner
+  // is scoped to legacy to avoid a duplicate.
+  const isSuperseded = isLegacy && commercial.state === 'superseded';
 
   // Expiry gate: a proposal can still carry status "sent"/"viewed" past its
   // valid_until date if the server-side expiry job hasn't run yet. Treat a
@@ -217,6 +222,31 @@ export default function ClientProposalDetailPage({
             You declined this proposal
             {proposalAudit.declined_at ? ` on ${formatDate(proposalAudit.declined_at)}` : ''}.
             {proposalAudit.decline_reason ? ` Reason: ${proposalAudit.decline_reason}` : ''}
+          </p>
+        </div>
+      )}
+
+      {isSuperseded && (
+        <div
+          className="proposal-print-hide mb-6 flex items-center gap-2 rounded-[3px] border px-4 py-3"
+          style={{
+            background: 'var(--bg-surface)',
+            borderColor: 'var(--border-default)',
+          }}
+          data-testid="proposal-superseded-banner"
+        >
+          <Clock className="h-4 w-4 text-[var(--text-muted)]" />
+          <p className="type-body-small text-[var(--text-primary)]">
+            This edition was replaced and can no longer be signed.
+            {commercial.replacementProposalId ? (
+              <>
+                {' '}<Link className="text-[var(--accent-primary)]" href={`/proposals/${commercial.replacementProposalId}`}>
+                  Open the current edition.
+                </Link>
+              </>
+            ) : (
+              ' Ask your studio for the current edition.'
+            )}
           </p>
         </div>
       )}

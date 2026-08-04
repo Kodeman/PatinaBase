@@ -98,7 +98,7 @@ function makeProposal(overrides: Partial<Proposal> = {}): Proposal {
 // (00414) returns for a legacy proposal — nested under `document`, carrying
 // only id/documentKind/kind/retired/title/status/commercialState/
 // supersededAt/replacementProposalId/validUntil/sentAt.
-function retiredMarker(status: string) {
+function retiredMarker(status: string, overrides: Record<string, unknown> = {}) {
   return {
     document: {
       id: 'legacy-marker-1',
@@ -112,11 +112,12 @@ function retiredMarker(status: string) {
       replacementProposalId: null,
       validUntil: null,
       sentAt: '2026-01-02T00:00:00Z',
+      ...overrides,
     },
   };
 }
 
-function mockPage(status: string) {
+function mockPage(status: string, markerOverrides: Record<string, unknown> = {}) {
   // proposal.signed_at/signed_by_name aren't in the Proposal TS interface
   // (the page reads them via an unknown cast — see proposalAudit in
   // page.tsx), but the real row carries them once accepted.
@@ -138,7 +139,7 @@ function mockPage(status: string) {
     refetch: jest.fn(),
   });
   mockUseClientCommercialDocument.mockReturnValue({
-    data: adaptCommercialDocumentBundle(retiredMarker(status)),
+    data: adaptCommercialDocumentBundle(retiredMarker(status, markerOverrides)),
   });
 }
 
@@ -186,5 +187,30 @@ describe('ClientProposalDetailPage — 00414 retired legacy marker', () => {
     await renderDetailPage('legacy-marker-1');
 
     expect(await screen.findByText(/you declined this proposal/i)).toBeInTheDocument();
+  });
+
+  it('renders the superseded banner and hides Decline/Request-change for a superseded legacy marker, even with status still "sent"', async () => {
+    // supersede_unsigned_legacy_proposals (00412) writes commercial_state =
+    // 'superseded' without touching status — the marker's status can still
+    // read "sent" here. Before the fix, the adapter derived state from that
+    // unrelated status and the row stayed actionable (retirement copy +
+    // Decline + Request-a-change) despite being retired.
+    mockPage('sent', { commercialState: 'superseded' });
+    await renderDetailPage('legacy-marker-1');
+
+    expect(
+      await screen.findByText(/this edition was replaced and can no longer be signed/i),
+    ).toBeInTheDocument();
+    expect(screen.queryByTestId('proposal-decline-trigger')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('proposal-request-change-trigger')).not.toBeInTheDocument();
+    expect(screen.queryByText(/your designer will send a new agreement/i)).not.toBeInTheDocument();
+  });
+
+  it('links to the replacement edition when the superseded marker names one', async () => {
+    mockPage('sent', { commercialState: 'superseded', replacementProposalId: 'proposal-replacement-1' });
+    await renderDetailPage('legacy-marker-1');
+
+    const link = await screen.findByRole('link', { name: /open the current edition/i });
+    expect(link).toHaveAttribute('href', '/proposals/proposal-replacement-1');
   });
 });

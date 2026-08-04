@@ -167,6 +167,21 @@ export function legacyStatusToCommercialState(status: Proposal['status']): Comme
 }
 
 /**
+ * A legacy row's projected commercial_state is normally vestigial (e.g.
+ * 'draft' on a row that was actually sent) and must not override the
+ * historically-governed status semantics — EXCEPT 'superseded', the one
+ * terminal value the cutover RPC (supersede_unsigned_legacy_proposals)
+ * writes onto a legacy row without touching its status. Trust only that
+ * value; every other projected state still defers to status.
+ */
+function resolveLegacyState(
+  projectedState: CommercialDocumentState,
+  legacyState: CommercialDocumentState,
+): CommercialDocumentState {
+  return projectedState === 'superseded' ? 'superseded' : legacyState;
+}
+
+/**
  * Adapts the additive commercial fields returned by list_client_proposals.
  * Legacy rows remain first-class and keep their historical status semantics.
  */
@@ -176,12 +191,8 @@ export function commercialSummaryFromProposal(proposal: Proposal): CommercialDoc
   const source = Object.keys(nested).length > 0 ? nested : raw;
   const kind = oneOf(first(source, 'kind', 'documentKind', 'document_kind'), COMMERCIAL_DOCUMENT_KINDS, 'legacy');
   const legacyState = legacyStatusToCommercialState(proposal.status);
-  // A legacy row's projected commercial_state is vestigial and must never
-  // override its historically-governed status semantics — trusting it could
-  // hide a live legacy proposal (e.g. status "sent") from the pending group.
-  const state = kind === 'legacy'
-    ? legacyState
-    : oneOf(first(source, 'state', 'commercialState', 'commercial_state'), COMMERCIAL_DOCUMENT_STATES, legacyState);
+  const projectedState = oneOf(first(source, 'state', 'commercialState', 'commercial_state'), COMMERCIAL_DOCUMENT_STATES, legacyState);
+  const state = kind === 'legacy' ? resolveLegacyState(projectedState, legacyState) : projectedState;
 
   return {
     id: text(first(source, 'id', 'proposalId', 'proposal_id'), proposal.id),
@@ -279,21 +290,25 @@ export function adaptCommercialDocumentBundle(value: unknown): CommercialDocumen
     ? Math.max(0, Math.round(totalAmountCents * depositPercent / 100))
     : number(depositRequiredValue);
 
+  const legacyDerivedState = legacyStatusToCommercialState(legacyStatus);
+  const projectedDocState = oneOf(
+    first(source, 'state', 'commercialState', 'commercial_state'),
+    COMMERCIAL_DOCUMENT_STATES,
+    legacyDerivedState,
+  );
+  // A legacy row's projected commercial_state is vestigial and must never
+  // override its historically-governed status semantics — except 'superseded'
+  // (see resolveLegacyState above); this mirrors commercialSummaryFromProposal.
+  const documentState = kind === 'legacy'
+    ? resolveLegacyState(projectedDocState, legacyDerivedState)
+    : projectedDocState;
+
   return {
     document: {
       id,
       projectId: nullableText(first(source, 'projectId', 'project_id')),
       kind,
-      // A legacy row's projected commercial_state is vestigial and must never
-      // override its historically-governed status semantics — this mirrors the
-      // same rule in commercialSummaryFromProposal above.
-      state: kind === 'legacy'
-        ? legacyStatusToCommercialState(legacyStatus)
-        : oneOf(
-          first(source, 'state', 'commercialState', 'commercial_state'),
-          COMMERCIAL_DOCUMENT_STATES,
-          legacyStatusToCommercialState(legacyStatus),
-        ),
+      state: documentState,
       title: text(first(source, 'title'), text(proposal.title, 'Commercial document')),
       version: number(first(source, 'version'), 1),
       waveName: nullableText(first(source, 'waveName', 'wave_name')),

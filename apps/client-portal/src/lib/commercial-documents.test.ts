@@ -48,6 +48,33 @@ describe('commercial document client adapter', () => {
     });
   });
 
+  it('trusts a legacy row\'s superseded commercial_state even though status is untouched (cutover RPC)', () => {
+    // supersede_unsigned_legacy_proposals (00412) writes commercial_state =
+    // 'superseded' on a legacy row WITHOUT touching status — so status can
+    // still read "sent" (list_client_proposals keeps the row visible because
+    // its WHERE clause filters on status, not commercial_state). Unlike the
+    // vestigial-'draft' case above, 'superseded' here is the RPC's real,
+    // terminal answer and must win over the derived-from-status value —
+    // otherwise the row derives back to 'sent' and never leaves "Awaiting
+    // your review" even though its detail page treats it as retired.
+    const summary = commercialSummaryFromProposal({
+      id: 'legacy-3',
+      project_id: 'project-1',
+      title: 'Kitchen refresh',
+      status: 'sent',
+      document_kind: 'legacy',
+      commercial_state: 'superseded',
+      version: 1,
+      sent_at: '2026-01-02T00:00:00Z',
+    } as never);
+
+    expect(summary).toMatchObject({
+      id: 'legacy-3',
+      kind: 'legacy',
+      state: 'superseded',
+    });
+  });
+
   describe('a retired legacy marker from get_client_commercial_document_bundle (00414)', () => {
     // The migration stops raising for legacy rows and instead answers with a
     // fixed, minimal marker: {id, documentKind:'legacy', kind:'legacy',
@@ -102,6 +129,23 @@ describe('commercial document client adapter', () => {
         id: 'legacy-marker-1',
         kind: 'legacy',
         state: 'declined',
+      });
+    });
+
+    it('trusts a superseded commercialState even though status is untouched (cutover RPC)', () => {
+      // The marker's commercialState is real DB data (v_proposal.commercial_state),
+      // not hardcoded null — supersede_unsigned_legacy_proposals can leave it
+      // 'superseded' on a row whose status still reads 'sent'. That terminal
+      // value must win over the status-derived 'sent', mirroring the rule in
+      // commercialSummaryFromProposal.
+      const bundle = adaptCommercialDocumentBundle(
+        marker('sent', { commercialState: 'superseded' }),
+      );
+
+      expect(bundle?.document).toMatchObject({
+        id: 'legacy-marker-1',
+        kind: 'legacy',
+        state: 'superseded',
       });
     });
   });

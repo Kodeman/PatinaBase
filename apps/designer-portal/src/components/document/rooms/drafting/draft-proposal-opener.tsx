@@ -15,7 +15,10 @@
  *   • `DraftProposalSheet` — a paper overlay that reuses the R73 ClientPicker
  *     (invite-and-link a captured household included) to pick the household,
  *     then calls the primitive. Mount it from the ⌘K row (integration owns the
- *     row itself).
+ *     row itself). A household with no email on file (no Patina profile and
+ *     not even invitable) has no way to reach the client portal to sign, so
+ *     the picker disables those rows here (`requireClientLogin`) with an
+ *     inline hint rather than letting the dialog silently no-op.
  *
  * Zero shadows (D4); Esc closes; failures render inline (R83 — no toast).
  */
@@ -195,7 +198,13 @@ export function DraftProposalSheet({
   if (!open) return null;
 
   const handlePick = async (clientId: string | null) => {
-    if (!clientId) return;
+    // Defensive: the picker disables no-login rows (client_id null) for this
+    // flow — an agreement can't reach a client who has no way to sign in.
+    // If one somehow gets picked anyway, say so instead of quietly closing.
+    if (!clientId) {
+      setError('Needs a client login before an agreement can be sent — add their email first.');
+      return;
+    }
     setError(null);
     const household = households.find((dc) => dc.client_id === clientId);
     if (!household) {
@@ -241,6 +250,7 @@ export function DraftProposalSheet({
           placeholder={isCreating ? 'Opening the draft…' : 'Search or add a household…'}
           disabled={isCreating}
           clientOptions={households}
+          requireClientLogin
         />
         {error && (
           <div

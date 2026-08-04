@@ -33,6 +33,16 @@ export interface ClientPickerProps {
   onOpenChange?: (open: boolean) => void;
   /** Optional caller-normalized rows. The hook still supplies the default. */
   clientOptions?: DesignerClient[];
+  /**
+   * When true, a household with no email on file (client_id null, not even
+   * invitable) renders its explanatory hint framed around needing a client
+   * login — for flows where the resulting document must reach a client who
+   * can sign in (e.g. drafting a design agreement). Leave false for flows
+   * that legitimately work with a not-yet-linked household (attaching a
+   * household to a document, opening a project) — the generic "No email on
+   * file" tag still applies there, and rows stay non-selectable either way.
+   */
+  requireClientLogin?: boolean;
 }
 
 export function ClientPicker({
@@ -45,6 +55,7 @@ export function ClientPicker({
   open: openProp,
   onOpenChange,
   clientOptions,
+  requireClientLogin = false,
 }: ClientPickerProps) {
   const [openState, setOpenState] = React.useState(false);
   // Controlled when an `open` prop is supplied; otherwise own the state.
@@ -258,6 +269,10 @@ export function ClientPicker({
                   const isInviting = invitingId === dc.id;
                   const isSelected = linkable && dc.client_id === value;
                   const subtitle = subtitleFor(dc);
+                  // Truly stuck (no client_id, no email to invite) — in a
+                  // login-required flow this needs its own explanation, not
+                  // just the generic tag.
+                  const needsLoginHint = requireClientLogin && !linkable && !invitable;
                   return (
                     <React.Fragment key={dc.id}>
                       <CommandPrimitive.Item
@@ -326,6 +341,17 @@ export function ClientPicker({
                           </span>
                         )}
                       </CommandPrimitive.Item>
+                      {/* Login-required flow: explain why a no-email row is
+                          stuck rather than leaving it a mystery greyed-out
+                          row. */}
+                      {needsLoginHint && (
+                        <div
+                          data-testid={`client-picker-login-required-${dc.id}`}
+                          className="px-2 pb-1 pt-0.5 text-[0.7rem] leading-snug text-[var(--text-muted)]"
+                        >
+                          Needs a client login before an agreement can be sent — add their email first.
+                        </div>
+                      )}
                       {/* R83 — quiet inline reason at the act site; no toast. */}
                       {inviteError?.id === dc.id && !isInviting && (
                         <div
