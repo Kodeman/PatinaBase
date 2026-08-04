@@ -82,7 +82,11 @@ describe('designer commercial document hooks', () => {
       p_version_id: 'version-1',
     });
     expect(invoke).toHaveBeenCalledWith('commercial-document-notify', {
-      body: { documentId: 'agreement-1', transition: 'budget_published' },
+      body: {
+        documentId: 'agreement-1',
+        transition: 'budget_published',
+        eventId: 'checkpoint-1',
+      },
     });
     expect(invoke).toHaveBeenCalledTimes(1);
 

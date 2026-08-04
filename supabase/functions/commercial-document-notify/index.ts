@@ -31,6 +31,7 @@ interface ProposalRow {
   id: string;
   title: string;
   client_id: string;
+  project_id: string | null;
   designer_id: string;
   document_kind: string;
   commercial_state: string | null;
@@ -77,14 +78,20 @@ Deno.serve(async (req: Request) => {
 
   let documentId: string;
   let transition: CommercialTransition;
+  let eventId: string | null = null;
   try {
     const body = await req.json();
     documentId = typeof body?.documentId === 'string' ? body.documentId : '';
     transition = body?.transition;
+    eventId = typeof body?.eventId === 'string' ? body.eventId : null;
   } catch {
     return json({ error: 'invalid_body' }, 400);
   }
-  if (!documentId || !TRANSITIONS.has(transition)) {
+  if (
+    !documentId ||
+    !TRANSITIONS.has(transition) ||
+    (transition === 'budget_published' && !eventId)
+  ) {
     return json({ error: 'invalid_transition' }, 400);
   }
 
@@ -92,7 +99,7 @@ Deno.serve(async (req: Request) => {
   const { data, error } = await admin
     .from('proposals')
     .select(`
-      id, title, client_id, designer_id, document_kind, commercial_state, signed_by_name,
+      id, title, client_id, project_id, designer_id, document_kind, commercial_state, signed_by_name,
       client:profiles!client_id(id, full_name, email),
       designer:profiles!designer_id(id, full_name, email)
     `)
@@ -150,6 +157,25 @@ Deno.serve(async (req: Request) => {
     return json({ error: 'transition_not_committed' }, 409);
   }
 
+  if (transition === 'budget_published') {
+    if (!proposal.project_id || !eventId) {
+      return json({ error: 'transition_not_committed' }, 409);
+    }
+    const { data: checkpoint, error: checkpointError } = await admin
+      .from('project_budget_checkpoints')
+      .select('id')
+      .eq('id', eventId)
+      .eq('project_id', proposal.project_id)
+      .maybeSingle();
+    if (checkpointError) {
+      console.error('commercial-document-notify: checkpoint lookup failed', checkpointError);
+      return json({ error: 'lookup_failed' }, 500);
+    }
+    if (!checkpoint) {
+      return json({ error: 'transition_not_committed' }, 409);
+    }
+  }
+
   const { data: serviceTerms } = await admin
     .from('proposal_service_terms')
     .select('billing_ceiling_cents, retainer_amount_cents')
@@ -200,10 +226,11 @@ Deno.serve(async (req: Request) => {
       notificationType: `commercial_${transition}`,
       category: 'operational',
       templateId: `commercial-${transition}-${audience}`,
-      idempotencyKey: `commercial-document/${documentId}/${transition}/${recipient.id}`,
+      idempotencyKey: `commercial-document/${eventId ?? documentId}/${transition}/${recipient.id}`,
       failClosedPolicyReads: true,
       metadata: {
         proposal_id: documentId,
+        budget_checkpoint_id: transition === 'budget_published' ? eventId : null,
         document_kind: proposal.document_kind,
         transition,
         subject: rendered.subject,

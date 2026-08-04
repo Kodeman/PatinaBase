@@ -751,13 +751,20 @@ export function usePublishBudgetCheckpoint(projectId: string) {
         p_version_id: versionId,
       });
       if (error) throw error;
-      try {
-        await supabase.functions.invoke("commercial-document-notify", {
-          body: { documentId: agreementId, transition: "budget_published" },
-        });
-      } catch {
-        // The checkpoint is durable and the edge notification is idempotent.
-        // Delivery can be replayed without publishing another checkpoint.
+      const checkpointId = data?.checkpointId ?? data?.checkpoint_id;
+      if (checkpointId) {
+        try {
+          await supabase.functions.invoke("commercial-document-notify", {
+            body: {
+              documentId: agreementId,
+              transition: "budget_published",
+              eventId: checkpointId,
+            },
+          });
+        } catch {
+          // The checkpoint is durable and the edge notification is idempotent.
+          // Delivery can be replayed without publishing another checkpoint.
+        }
       }
       return data;
     },
