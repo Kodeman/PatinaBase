@@ -51,16 +51,9 @@ const TIER_OPTIONS: { value: InvitableTier; label: string }[] = [
 const LABEL = 'mb-1 block text-[12px] font-medium text-[var(--text-primary)]';
 const HELP = 'text-[12px] leading-relaxed text-[var(--color-aged-oak)]';
 
-/** Friendly copy for the invite edge function's error codes. Notably:
- *  `workspace-member-invite` (00296) currently only accepts member_role
- *  'admin' | 'member' — a Guest-tier invite reaches this branch until the
- *  edge function is extended to accept 'guest' (tracked as a follow-up; see
- *  the PermissionTier chips above, which intentionally offer Guest per the
- *  Call Sheet design). */
+/** Friendly copy for the invite edge function's error codes. */
 function friendlyInviteError(err: unknown): string {
   const msg = err instanceof Error ? err.message : String(err ?? '');
-  if (msg.includes('invalid_member_role'))
-    return 'Guest invites aren’t wired up on the server yet — try Admin or Member for now.';
   if (msg.includes('already_member'))
     return 'That person is already part of this studio.';
   return msg || 'Failed to send the invite.';

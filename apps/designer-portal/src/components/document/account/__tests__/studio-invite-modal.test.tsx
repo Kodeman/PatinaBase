@@ -215,17 +215,21 @@ describe('StudioInviteModal — submit payload', () => {
     expect(payload.staffRole).toBeUndefined();
   });
 
-  it('surfaces a friendly message for an invalid_member_role failure', () => {
-    setMutateState({
-      isError: true,
-      error: new Error('invalid_member_role'),
-    });
+  it('sends a guest invite payload with role=guest (wire member_role=guest)', async () => {
+    const mutate = setMutateState();
     render(
       <StudioInviteModal open onOpenChange={jest.fn()} organizationId="org-1" />,
     );
 
-    expect(
-      screen.getByText(/Guest invites aren.t wired up on the server yet/),
-    ).toBeInTheDocument();
+    await fillEmail();
+    fireEvent.click(screen.getByRole('radio', { name: 'Guest' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Send invite' }));
+
+    expect(mutate).toHaveBeenCalledTimes(1);
+    const payload = mutate.mock.calls[0][0];
+    // useInviteMember (packages/supabase) maps this to member_role on the
+    // workspace-member-invite wire call — the edge function now accepts
+    // 'guest' alongside 'admin'/'member'.
+    expect(payload.role).toBe('guest');
   });
 });

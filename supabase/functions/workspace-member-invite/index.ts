@@ -57,7 +57,7 @@ const INVITE_FROM = Deno.env.get('INVITE_FROM') ?? 'Patina <hello@patina.cloud>'
 const STUDIO_DESIGNER_ROLE = 'studio_designer';
 const INVITE_TTL_DAYS = 7;
 
-type MemberRole = 'member' | 'admin';
+type MemberRole = 'member' | 'admin' | 'guest';
 type TeammateType = 'designer' | 'trades' | 'member';
 
 interface InviteBody {
@@ -129,10 +129,18 @@ async function handleInvite(req: Request): Promise<Response> {
   const email = body.email?.trim().toLowerCase();
   if (!email) return json({ error: 'email_required' }, 400);
 
-  const memberRole: MemberRole = body.member_role === 'admin' ? 'admin' : 'member';
-  if (body.member_role && body.member_role !== 'admin' && body.member_role !== 'member') {
+  if (
+    body.member_role &&
+    body.member_role !== 'admin' &&
+    body.member_role !== 'member' &&
+    body.member_role !== 'guest'
+  ) {
     return json({ error: 'invalid_member_role' }, 400);
   }
+  const memberRole: MemberRole =
+    body.member_role === 'admin' || body.member_role === 'guest'
+      ? body.member_role
+      : 'member';
 
   const teammateType: TeammateType =
     body.teammate_type === 'designer'
