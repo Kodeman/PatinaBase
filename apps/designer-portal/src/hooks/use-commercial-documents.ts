@@ -1,7 +1,8 @@
 "use client";
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { createBrowserClient } from "@patina/supabase";
+import { commercialKeys, createBrowserClient } from "@patina/supabase";
+import type { WorkingBudgetVersion } from "@patina/types";
 import {
   asCommercialDocumentKind,
   asCommercialState,
@@ -12,13 +13,23 @@ import {
   type ServiceAgreementTerms,
   type ServiceRate,
 } from "@/lib/document/commercial-documents";
+import {
+  mapFurnishingsWaves,
+  mapWorkingBudget,
+  validateWorkingBudgetLines,
+  workingBudgetTotals,
+  type FurnishingsWaveView,
+  type WorkingBudgetLineDraft,
+  type WorkingBudgetView,
+} from "@/lib/document/project-commerce";
 
 const getSupabase = () => createBrowserClient() as any;
 
 export const commercialDocumentKeys = {
-  bundle: (proposalId: string) => ["commercial-document", proposalId] as const,
-  authority: (projectId: string) =>
-    ["project-billing-authority", projectId] as const,
+  bundle: commercialKeys.document,
+  authority: commercialKeys.authority,
+  budget: commercialKeys.budget,
+  waves: commercialKeys.waves,
 };
 
 export interface CommercialDocumentBundle {
@@ -255,7 +266,7 @@ export function useSaveServiceAgreement(proposalId: string) {
       void queryClient.invalidateQueries({
         queryKey: ["proposal", proposalId],
       });
-      void queryClient.invalidateQueries({ queryKey: ["commercial-document"] });
+      void queryClient.invalidateQueries({ queryKey: commercialKeys.all });
     },
   });
 }
@@ -568,5 +579,310 @@ export function useProjectBillingAuthority(projectId: string, enabled = true) {
     queryKey: commercialDocumentKeys.authority(projectId),
     enabled: enabled && Boolean(projectId),
     queryFn: () => fetchProjectBillingAuthority(projectId),
+  });
+}
+
+async function fetchWorkingBudget(
+  projectId: string,
+): Promise<WorkingBudgetView> {
+  const supabase = getSupabase();
+  const { data, error } = await supabase.rpc("get_project_working_budget", {
+    p_project_id: projectId,
+  });
+  if (error) throw error;
+  return mapWorkingBudget(data);
+}
+
+export function useWorkingBudget(projectId: string, enabled = true) {
+  return useQuery({
+    queryKey: commercialDocumentKeys.budget(projectId),
+    enabled: enabled && Boolean(projectId),
+    queryFn: () => fetchWorkingBudget(projectId),
+  });
+}
+
+export interface SaveWorkingBudgetDraftInput {
+  projectId: string;
+  version: WorkingBudgetVersion | null;
+  note: string;
+  lines: WorkingBudgetLineDraft[];
+}
+
+async function saveWorkingBudgetDraft({
+  projectId,
+  version,
+  note,
+  lines,
+}: SaveWorkingBudgetDraftInput): Promise<WorkingBudgetView> {
+  const validation = validateWorkingBudgetLines(lines);
+  if (!validation.valid) {
+    throw new Error(Object.values(validation.errors)[0]);
+  }
+
+  const supabase = getSupabase();
+  const { data: authData, error: authError } = await supabase.auth.getUser();
+  if (authError) throw authError;
+  if (!authData.user?.id) throw new Error("Sign in before saving this budget.");
+
+  const totals = workingBudgetTotals(lines);
+  let draftId = version?.state === "draft" ? version.id : null;
+  let createdDraft = false;
+
+  if (!draftId) {
+    const { data, error } = await supabase
+      .from("project_budget_versions")
+      .insert({
+        project_id: projectId,
+        version: (version?.version ?? 0) + 1,
+        status: "draft",
+        low_total_cents: totals.lowCents,
+        target_total_cents: totals.targetCents,
+        high_total_cents: totals.highCents,
+        note: note.trim() || null,
+        created_by: authData.user.id,
+      })
+      .select("id")
+      .single();
+    if (error) throw error;
+    draftId = String(data.id);
+    createdDraft = true;
+  }
+
+  const rows = lines.map((line, sortOrder) => ({
+    id: line.id,
+    budget_version_id: draftId,
+    project_room_id: line.roomId,
+    room_name: line.roomName.trim(),
+    category: line.category.trim(),
+    low_cents: Math.round(line.lowCents),
+    target_cents: Math.round(line.targetCents),
+    high_cents: Math.round(line.highCents),
+    sort_order: sortOrder,
+  }));
+
+  const { error: upsertError } = await supabase
+    .from("project_budget_lines")
+    .upsert(rows, { onConflict: "id" });
+  if (upsertError) {
+    if (createdDraft) {
+      await supabase.from("project_budget_versions").delete().eq("id", draftId);
+    }
+    throw upsertError;
+  }
+
+  if (version?.state === "draft") {
+    const retained = new Set(lines.map((line) => line.id));
+    const removed = version.lines
+      .map((line) => line.id)
+      .filter((lineId) => !retained.has(lineId));
+    if (removed.length > 0) {
+      const { error } = await supabase
+        .from("project_budget_lines")
+        .delete()
+        .in("id", removed)
+        .eq("budget_version_id", draftId);
+      if (error) throw error;
+    }
+  }
+
+  const { error: versionError } = await supabase
+    .from("project_budget_versions")
+    .update({
+      low_total_cents: totals.lowCents,
+      target_total_cents: totals.targetCents,
+      high_total_cents: totals.highCents,
+      note: note.trim() || null,
+    })
+    .eq("id", draftId)
+    .eq("status", "draft");
+  if (versionError) throw versionError;
+
+  return fetchWorkingBudget(projectId);
+}
+
+function invalidateProjectCommerce(
+  queryClient: ReturnType<typeof useQueryClient>,
+  projectId: string,
+) {
+  void queryClient.invalidateQueries({
+    queryKey: commercialDocumentKeys.budget(projectId),
+  });
+  void queryClient.invalidateQueries({
+    queryKey: commercialDocumentKeys.waves(projectId),
+  });
+  void queryClient.invalidateQueries({
+    queryKey: commercialDocumentKeys.authority(projectId),
+  });
+  void queryClient.invalidateQueries({ queryKey: ["project-v2", projectId] });
+}
+
+export function useSaveWorkingBudgetDraft(projectId: string) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationKey: ["save-working-budget", projectId],
+    mutationFn: saveWorkingBudgetDraft,
+    onSuccess: (budget) => {
+      queryClient.setQueryData(
+        commercialDocumentKeys.budget(projectId),
+        budget,
+      );
+      invalidateProjectCommerce(queryClient, projectId);
+    },
+  });
+}
+
+export function usePublishBudgetCheckpoint(projectId: string) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationKey: ["publish-budget-checkpoint", projectId],
+    mutationFn: async ({
+      versionId,
+      agreementId,
+    }: {
+      versionId: string;
+      agreementId: string;
+    }) => {
+      if (!agreementId) {
+        throw new Error("The executed agreement link is unavailable.");
+      }
+      const supabase = getSupabase();
+      const { data, error } = await supabase.rpc("publish_budget_checkpoint", {
+        p_project_id: projectId,
+        p_version_id: versionId,
+      });
+      if (error) throw error;
+      try {
+        await supabase.functions.invoke("commercial-document-notify", {
+          body: { documentId: agreementId, transition: "budget_published" },
+        });
+      } catch {
+        // The checkpoint is durable and the edge notification is idempotent.
+        // Delivery can be replayed without publishing another checkpoint.
+      }
+      return data;
+    },
+    onSuccess: () => invalidateProjectCommerce(queryClient, projectId),
+  });
+}
+
+export function useOverrideBudgetCheckpoint(projectId: string) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationKey: ["override-budget-checkpoint", projectId],
+    mutationFn: async ({
+      checkpointId,
+      reason,
+    }: {
+      checkpointId: string;
+      reason: string;
+    }) => {
+      const trimmedReason = reason.trim();
+      if (trimmedReason.length < 5) {
+        throw new Error("Record a meaningful reason for the override.");
+      }
+      const supabase = getSupabase();
+      const { data, error } = await supabase.rpc("override_budget_checkpoint", {
+        p_checkpoint_id: checkpointId,
+        p_reason: trimmedReason,
+      });
+      if (error) throw error;
+      return data;
+    },
+    onSuccess: () => invalidateProjectCommerce(queryClient, projectId),
+  });
+}
+
+async function fetchFurnishingsWaves(
+  projectId: string,
+): Promise<FurnishingsWaveView[]> {
+  const supabase = getSupabase();
+  const { data, error } = await supabase.rpc(
+    "list_furnishings_authorizations",
+    { p_project_id: projectId },
+  );
+  if (error) throw error;
+  return mapFurnishingsWaves(data);
+}
+
+export function useFurnishingsAuthorizations(
+  projectId: string,
+  enabled = true,
+) {
+  return useQuery({
+    queryKey: commercialDocumentKeys.waves(projectId),
+    enabled: enabled && Boolean(projectId),
+    queryFn: () => fetchFurnishingsWaves(projectId),
+  });
+}
+
+export function useCreateFurnishingsAuthorization(projectId: string) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationKey: ["create-furnishings-authorization", projectId],
+    mutationFn: async ({
+      waveName,
+      sourceProposalId,
+    }: {
+      waveName: string;
+      sourceProposalId: string;
+    }) => {
+      const trimmedName = waveName.trim();
+      if (trimmedName.length < 2) {
+        throw new Error("Name this furnishings authorization wave.");
+      }
+      if (!sourceProposalId) {
+        throw new Error("Choose a draft furnishing proposal to snapshot.");
+      }
+      const supabase = getSupabase();
+      const { data, error } = await supabase.rpc(
+        "create_furnishings_authorization",
+        {
+          p_project_id: projectId,
+          p_wave_name: trimmedName,
+          p_source_proposal_id: sourceProposalId,
+        },
+      );
+      if (error) throw error;
+      return data;
+    },
+    onSuccess: () => invalidateProjectCommerce(queryClient, projectId),
+  });
+}
+
+export function useSendFurnishingsAuthorization(projectId: string) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationKey: ["send-furnishings-authorization", projectId],
+    mutationFn: async (proposalId: string) => {
+      const supabase = getSupabase();
+      const fingerprint =
+        await fetchCommercialDocumentSendFingerprint(proposalId);
+      const { data, error } = await supabase.rpc("send_commercial_document", {
+        p_proposal_id: proposalId,
+        p_expected_fingerprint: fingerprint,
+        p_personal_message: null,
+        p_valid_until: null,
+      });
+      if (error) throw error;
+
+      const sentAt = data?.sentAt ?? data?.sent_at;
+      const dispatchId =
+        data?.proposalSendDispatchId ?? data?.proposal_send_dispatch_id;
+      if (sentAt && dispatchId) {
+        await supabase.functions.invoke("proposal-send", {
+          body: { proposalId, sentAt, dispatchId },
+        });
+      }
+      return data;
+    },
+    onSuccess: (_, proposalId) => {
+      invalidateProjectCommerce(queryClient, projectId);
+      void queryClient.invalidateQueries({
+        queryKey: commercialDocumentKeys.bundle(proposalId),
+      });
+      void queryClient.invalidateQueries({
+        queryKey: ["proposal", proposalId],
+      });
+    },
   });
 }
