@@ -4,6 +4,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useEffect } from 'react';
 import type { RealtimeChannel } from '@supabase/supabase-js';
 import { createBrowserClient } from '../client';
+import type { ProductConfigurationSelection } from '@patina/types';
 import type { ClientDecisionOption, DecisionType } from './use-decisions';
 import { peopleKeys } from './use-people';
 
@@ -167,6 +168,10 @@ export interface CreateCoordinationItemInput {
     costDeltaCents?: number;
     leadTimeDaysDelta?: number;
     productId?: string;
+    /** Saved product configuration this option represents (00413). */
+    configurationId?: string;
+    /** The option's chosen values in the snapshot vocabulary (00413). */
+    selectionSnapshot?: ProductConfigurationSelection[];
   }[];
   /** project_ffe_items.id[] this item blocks (sets blocked_by_decision_id). */
   blockedFfeItemIds?: string[];
@@ -571,6 +576,9 @@ export function useCreateCoordinationItem(projectId: string | null | undefined) 
               cost_delta_cents: opt.costDeltaCents ?? null,
               lead_time_days_delta: opt.leadTimeDaysDelta ?? null,
               product_id: opt.productId ?? null,
+              // 00413 — configuration provenance + the option's selections.
+              configuration_id: opt.configurationId ?? null,
+              selection_snapshot: opt.selectionSnapshot ?? null,
               sort_order: i,
             }))
         : [];
@@ -912,6 +920,8 @@ export function useUpdateCoordinationItem(projectId: string | null | undefined) 
             cost_delta_cents: opt.costDeltaCents ?? null,
             lead_time_days_delta: opt.leadTimeDaysDelta ?? null,
             product_id: opt.productId || null,
+            configuration_id: opt.configurationId || null,
+            selection_snapshot: opt.selectionSnapshot ?? null,
             sort_order: i,
           }));
 

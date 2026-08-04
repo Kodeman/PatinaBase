@@ -37,4 +37,32 @@ export const libraryConfigurationEvents = {
       product_id: productId,
       configuration_mode: mode,
     }),
+  // ── Picker configure step (P0-2) ─────────────────────────────────────────
+  // No flag gates the step, so these three events ARE the rollout telemetry:
+  // opened → confirmed is the completion rate; skipped counts the pieces that
+  // entered a project without a specification.
+  pickerOpened: (productId: string, mode: string, pickerScope: string) =>
+    capture("library_configuration_picker_opened", {
+      product_id: productId,
+      configuration_mode: mode,
+      picker_scope: pickerScope,
+    }),
+  pickerConfirmed: (
+    productId: string,
+    mode: string,
+    pickerScope: string,
+    selectionCount: number,
+  ) =>
+    capture("library_configuration_picker_confirmed", {
+      product_id: productId,
+      configuration_mode: mode,
+      picker_scope: pickerScope,
+      selection_count: selectionCount,
+    }),
+  pickerSkipped: (productId: string, mode: string, pickerScope: string) =>
+    capture("library_configuration_picker_skipped", {
+      product_id: productId,
+      configuration_mode: mode,
+      picker_scope: pickerScope,
+    }),
 };

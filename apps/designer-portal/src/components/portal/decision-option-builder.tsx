@@ -7,6 +7,7 @@ import {
   type LayerProductLayer,
   type ClientDecisionOption,
 } from '@patina/supabase';
+import type { ProductConfigurationSelection } from '@patina/types';
 import {
   ProductPickerModal,
   type ProductPickResult,
@@ -36,6 +37,17 @@ interface DecisionOptionValue {
   manualMode?: boolean;
   /** UI: persist a manual entry as a draft product in the library on submit. */
   saveAsDraft?: boolean;
+  /**
+   * The specification resolved in the picker's configure step (P0-2). Its
+   * `selections` persist to `client_decision_options.selection_snapshot`
+   * (00413) so `apply_decision` can carry the winner's finish/material into
+   * the project spec.
+   */
+  configurationSelections?: ProductConfigurationSelection[];
+  /** Provenance when the option was built from a saved configuration (00413). */
+  savedConfigurationId?: string;
+  /** True when an optioned piece was linked without resolving a spec. */
+  configurationPending?: boolean;
 }
 
 interface DecisionOptionBuilderProps {
@@ -63,6 +75,9 @@ export const emptyOption = (): DecisionOptionValue => ({
   manualMode: false,
   // New manual entries seed the library by default (designer can opt out).
   saveAsDraft: true,
+  configurationSelections: undefined,
+  savedConfigurationId: undefined,
+  configurationPending: false,
 });
 
 export function parsePriceToCents(price: string): number | undefined {
@@ -111,6 +126,9 @@ export function optionToValue(opt: ClientDecisionOption): DecisionOptionValue {
     // A row with no product link is a manual option; show its fields directly.
     manualMode: !opt.product_id,
     saveAsDraft: false,
+    configurationSelections: opt.selection_snapshot ?? undefined,
+    savedConfigurationId: opt.configuration_id ?? undefined,
+    configurationPending: false,
   };
 }
 
@@ -125,6 +143,10 @@ export interface DecisionOptionInput {
   costDeltaCents?: number;
   leadTimeDaysDelta?: number;
   productId?: string;
+  /** Saved product configuration this option represents (00413). */
+  configurationId?: string;
+  /** The option's chosen values in the snapshot vocabulary (00413). */
+  selectionSnapshot?: ProductConfigurationSelection[];
 }
 
 /** Map a builder value to the input the create/update decision hooks expect. */
@@ -139,6 +161,11 @@ export function optionValueToInput(o: DecisionOptionValue): DecisionOptionInput 
     costDeltaCents: parseDeltaToCents(o.costDelta),
     leadTimeDaysDelta: parseInteger(o.leadTimeDelta),
     productId: o.productId || undefined,
+    configurationId: o.savedConfigurationId || undefined,
+    selectionSnapshot:
+      o.configurationSelections && o.configurationSelections.length > 0
+        ? o.configurationSelections
+        : undefined,
   };
 }
 
@@ -238,22 +265,41 @@ export function DecisionOptionBuilder({
   const handlePick = (r: ProductPickResult) => {
     // Denormalize the product onto the option (the client card reads these
     // columns); keep everything editable as overrides afterwards.
+    const selection = r.configurationSelection;
+    // A resolved specification names itself on the client card — "Bed — King ·
+    // Walnut" — and prices at the RESOLVED price, not the product's list price.
+    const baseName = r.name || value.name;
+    const name =
+      selection && selection.label ? `${baseName} — ${selection.label}` : baseName;
+    const priceCents = selection?.retailPriceCents ?? r.priceCents;
     onChange({
       ...value,
       productId: r.productId,
-      name: r.name || value.name,
+      name,
       imageUrl: r.imageUrl ?? value.imageUrl,
-      price: r.priceCents != null ? String(r.priceCents / 100) : value.price,
+      price: priceCents != null ? String(priceCents / 100) : value.price,
       brand: r.vendorName ?? undefined,
       layer: r.layer,
       manualMode: false,
+      configurationSelections: selection?.selections,
+      savedConfigurationId: selection?.savedConfigurationId ?? undefined,
+      configurationPending: r.configurationSkipped === true,
     });
     setPickerOpen(false);
   };
 
   const clearLink = () =>
     // Drop the product link but keep the copied text so a mis-pick never wipes work.
-    onChange({ ...value, productId: undefined, brand: undefined, layer: undefined, manualMode: true });
+    onChange({
+      ...value,
+      productId: undefined,
+      brand: undefined,
+      layer: undefined,
+      manualMode: true,
+      configurationSelections: undefined,
+      savedConfigurationId: undefined,
+      configurationPending: false,
+    });
 
   const picker = (
     <ProductPickerModal
@@ -378,6 +424,17 @@ export function DecisionOptionBuilder({
                     Clear link
                   </Button>
                 </div>
+                {/* Warn, never block: the option is usable, but nobody can
+                    order it until the specification is resolved. */}
+                {value.configurationPending && (
+                  <div
+                    className="mt-1"
+                    style={metaStyle}
+                    data-testid={`option-${index}-configuration-pending`}
+                  >
+                    Configuration pending
+                  </div>
+                )}
               </div>
             </div>
           ) : (

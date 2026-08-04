@@ -309,7 +309,11 @@ export function PieceConfigurationWorkspace({
         await onCustomCommission(savedConfigurationId);
         return;
       }
+      // A host that wires no save callback (the picker's configure step) keeps
+      // no configuration record — it carries the server-confirmed resolution
+      // instead. Only a saving host must persist before placing.
       if (
+        onSaveConfiguration &&
         draftDefinition.mode !== "standard" &&
         (!savedConfigurationId || configurationDirty)
       ) {
@@ -563,7 +567,8 @@ export function PieceConfigurationWorkspace({
       )}
 
       <div className="mt-6 grid gap-4 border-t border-[var(--doc-ink-border)] pt-5 lg:grid-cols-[minmax(0,1fr)_auto]">
-        {!(draftDefinition.mode === "custom" && onCustomCommission) && (
+        {onSaveConfiguration &&
+          !(draftDefinition.mode === "custom" && onCustomCommission) && (
           <div className="grid gap-2 sm:grid-cols-2">
             <label>
               <span className="doc-type-meta mb-1 block font-semibold uppercase tracking-[0.06em]">
@@ -595,11 +600,11 @@ export function PieceConfigurationWorkspace({
         )}
         <div className="flex flex-wrap items-end gap-2">
           {!revisionMode &&
+            onSaveConfiguration &&
             !(draftDefinition.mode === "custom" && onCustomCommission) && (
               <Button
                 variant="secondary"
                 loading={savingConfiguration}
-                disabled={!onSaveConfiguration}
                 onClick={() => void save()}
               >
                 {activeSavedConfiguration ? "Save changes" : "Save for later"}

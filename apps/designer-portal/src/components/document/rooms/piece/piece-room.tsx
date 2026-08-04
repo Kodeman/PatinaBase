@@ -56,6 +56,7 @@ import {
   configurationViewToUpsertInput,
   evaluationToAuthoritative,
   pieceRoomConfigurationRows,
+  pieceToConfigurationSource,
   savedConfigurationToView,
   selectionToEvaluationInput,
 } from "./piece-configuration-adapter";
@@ -66,8 +67,6 @@ import {
   type SavedConfigurationReference,
 } from "./piece-configuration-workspace";
 import type {
-  FlatPieceConfigurationSource,
-  DimensionValue,
   PieceConfigurationDefinitionView,
   PieceConfigurationSelectionView,
 } from "./piece-configuration-model";
@@ -1234,38 +1233,6 @@ export function PieceRoom({ productId }: { productId: string }) {
 }
 
 // ── helpers ───────────────────────────────────────────────────────────────
-function pieceToConfigurationSource(
-  product: PieceProduct | undefined,
-  productId: string,
-): FlatPieceConfigurationSource {
-  return {
-    id: product?.id ?? productId,
-    name: product?.name ?? "A piece",
-    configurationMode: product?.configuration_mode ?? "standard",
-    sku: product?.sku ?? null,
-    priceRetailCents: product?.price_retail ?? null,
-    priceTradeCents: product?.price_trade ?? null,
-    leadTimeWeeks: product?.lead_time_weeks ?? null,
-    dimensions: configurationDimensions(product?.dimensions),
-    materials: product?.materials ?? null,
-    colors: product?.colors ?? null,
-    availableColors: product?.available_colors ?? null,
-    finish: product?.finish ?? null,
-  };
-}
-
-function configurationDimensions(
-  value: unknown,
-): Record<string, DimensionValue> | null {
-  if (!value || typeof value !== "object" || Array.isArray(value)) return null;
-  return Object.fromEntries(
-    Object.entries(value).filter(
-      ([, item]) =>
-        typeof item === "string" || typeof item === "number" || item === null,
-    ),
-  ) as Record<string, DimensionValue>;
-}
-
 function labelStatus(s: string): string {
   return STATUS_OPTIONS.find((o) => o.value === s)?.label ?? s;
 }

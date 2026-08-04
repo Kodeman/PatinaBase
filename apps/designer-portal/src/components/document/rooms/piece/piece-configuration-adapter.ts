@@ -1,5 +1,6 @@
 import type {
   CustomCommissionBrief,
+  ProductConfigurationMode,
   EvaluateProductConfigurationInput,
   ProductConfigurationDefinition,
   ProductConfigurationEvaluation,
@@ -24,6 +25,50 @@ import {
   type SaveConfigurationDraft,
   type SavedConfigurationView,
 } from "./piece-configuration-workspace";
+
+/**
+ * The `products` row columns the flat projection reads. Structural, so both the
+ * Piece room's fully-typed row and a slimmer picker fetch satisfy it.
+ */
+export interface ConfigurationSourceProductRow {
+  id?: string | null;
+  name?: string | null;
+  configuration_mode?: ProductConfigurationMode | null;
+  sku?: string | null;
+  price_retail?: number | null;
+  price_trade?: number | null;
+  lead_time_weeks?: number | null;
+  dimensions?: unknown;
+  materials?: string[] | null;
+  colors?: string[] | null;
+  available_colors?: string[] | null;
+  finish?: string | null;
+}
+
+/**
+ * Project a `products` row onto the flat source the configuration workspace
+ * reads. Lives here (not in the Piece room) because the picker's configure step
+ * needs the same projection — one mapping, two surfaces.
+ */
+export function pieceToConfigurationSource(
+  product: ConfigurationSourceProductRow | null | undefined,
+  productId: string,
+): FlatPieceConfigurationSource {
+  return {
+    id: product?.id ?? productId,
+    name: product?.name ?? "A piece",
+    configurationMode: product?.configuration_mode ?? "standard",
+    sku: product?.sku ?? null,
+    priceRetailCents: product?.price_retail ?? null,
+    priceTradeCents: product?.price_trade ?? null,
+    leadTimeWeeks: product?.lead_time_weeks ?? null,
+    dimensions: toDimensions(product?.dimensions),
+    materials: product?.materials ?? null,
+    colors: product?.colors ?? null,
+    availableColors: product?.available_colors ?? null,
+    finish: product?.finish ?? null,
+  };
+}
 
 export function configurationDefinitionToView(
   definition: ProductConfigurationDefinition | null | undefined,

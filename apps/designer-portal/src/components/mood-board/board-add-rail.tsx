@@ -894,6 +894,9 @@ export function BoardAddRail({
         onClose={() => setPickerOpen(false)}
         onPick={addProduct}
         scope="library"
+        // A board pin is an image on a surface, not a line anyone orders —
+        // keep the one-click grammar and never interrupt it to configure.
+        configureStep={false}
       />
     </div>
   );
