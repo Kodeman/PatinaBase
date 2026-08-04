@@ -56,7 +56,8 @@ import { ScheduleNavProvider } from '@/components/document/schedule/schedule-nav
 import { RippleProvider } from '@/components/document/schedule/schedule-ripple-context';
 import { ProjectScheduleHandoffMount } from '@/components/document/project-schedule-handoff-mount';
 import { LetterheadInstruments } from '@/components/document/letterhead-instruments';
-import { CallSheet, type CallSheetOpenMode } from '@/components/document/roster/call-sheet';
+import { CallSheetMount } from '@/components/document/roster/call-sheet-mount';
+import type { CallSheetOpenMode } from '@/components/document/roster/call-sheet';
 import { KickoffBand } from '@/components/document/roster/kickoff-band';
 import { HouseholdChip } from '@/components/document/household-chip';
 import { ProposalInstruments } from '@/components/document/proposal-instruments';
@@ -812,14 +813,21 @@ export default function DocumentPage({ params }: { params: Promise<{ id: string 
           only; the sheet itself is also flag-gated (self-managed, like every
           other Wave 3 roster component). `openMode` forwards the event's
           detail — 'sheet' from ⌘K/the instrument, 'picker'/'add' from the
-          kickoff band's two doorways (FIX 2). */}
+          kickoff band's two doorways (FIX 2).
+
+          CallSheetMount, not CallSheet: the mount carries the chevron's
+          destination (PartyProfileSheet, over the sheet) and the client
+          identity the roster view cannot give us — `client_name` /
+          `client_profile_id`, the same pair the letterhead instruments read,
+          which become the synthetic row leading the CLIENT SIDE group. */}
       {row.engagement_kind === 'project' && row.project_id && (
-        <CallSheet
+        <CallSheetMount
           open={callSheetOpen}
           onClose={() => setCallSheetOpen(false)}
           projectId={row.project_id}
           projectTitle={row.title}
           clientName={row.client_name}
+          clientProfileId={row.client_profile_id}
           openMode={callSheetMode}
         />
       )}
