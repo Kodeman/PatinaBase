@@ -64,6 +64,7 @@ import { gateState, useSectionGates } from '@/hooks/use-section-work';
 import { deriveFillState } from '@/lib/document/fill-state';
 import { useFeatureFlag } from '@/hooks/use-feature-flag';
 import { useHydrated } from '@/hooks/use-hydrated';
+import { ProjectAuthorityBandForProject } from '@/components/document/commercial/project-authority-band';
 
 const prettyPhase = (phase: string | null) =>
   phase
@@ -633,6 +634,7 @@ export default function DocumentPage({ params }: { params: Promise<{ id: string 
               )}
             {row.active_section === 'project' && row.project_id && (
               <>
+                <ProjectAuthorityBandForProject projectId={row.project_id} />
                 {/* Track 5 — the coordination band (ball-in-court + dependency web).
                     The band resolves designerClientId itself from clientUserId
                     (work-block.tsx pattern); the page passes clientUserId, never a

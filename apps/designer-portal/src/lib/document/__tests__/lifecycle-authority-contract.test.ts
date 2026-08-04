@@ -22,8 +22,10 @@ describe("document lifecycle authority wiring", () => {
   it("carries the chosen designer_clients row into an existing-household draft", () => {
     expect(draftOpener).toMatch(/designerClientId:\s*household\.id/);
     expect(draftOpener).toMatch(
-      /createProposal\.mutateAsync\(\{[\s\S]*designerClientId/,
+      /createAgreement\.mutateAsync\(\{[\s\S]*designerClientId/,
     );
+    expect(draftOpener).toMatch(/document_kind:\s*'design_services'/);
+    expect(draftOpener).toMatch(/commercial_state:\s*'draft'/);
   });
 
   it("routes UUID project completion through close_project with no direct completed update", () => {

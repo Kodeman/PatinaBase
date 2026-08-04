@@ -11,6 +11,9 @@
  */
 
 import { ProposalPreviewRail } from './drafting/proposal-mirror';
+import { useProposal } from '@/hooks/use-proposals';
+import { commercialDocumentExperience } from '@/lib/document/commercial-documents';
+import { ServiceAgreementDocumentBody } from './commercial/commercial-document-body';
 
 export function ProposalPreview({
   proposalId,
@@ -21,6 +24,8 @@ export function ProposalPreview({
   clientName: string;
   onClose: () => void;
 }) {
+  const { data: proposal } = useProposal(proposalId) as { data: any };
+  const experience = commercialDocumentExperience(proposal?.document_kind);
   return (
     <div
       role="dialog"
@@ -51,7 +56,15 @@ export function ProposalPreview({
       </div>
 
       <div className="min-h-0 flex-1 overflow-y-auto px-7 py-8 min-[980px]:px-16">
-        <ProposalPreviewRail proposalId={proposalId} clientName={clientName} />
+        {experience === 'design_services' ? (
+          <ServiceAgreementDocumentBody proposalId={proposalId} clientName={clientName} />
+        ) : experience === 'commercial_readonly' ? (
+          <p className="text-[12px] text-[var(--text-muted)]">
+            This commercial edition is read-only in Wave 1.
+          </p>
+        ) : (
+          <ProposalPreviewRail proposalId={proposalId} clientName={clientName} />
+        )}
       </div>
     </div>
   );
