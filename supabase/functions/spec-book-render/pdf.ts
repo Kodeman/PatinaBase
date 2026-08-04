@@ -13,7 +13,11 @@ import {
   Text,
   View,
 } from "npm:@react-pdf/renderer@4.3.0";
-import type { AudienceItem, AudienceRenderModel } from "./render-model.ts";
+import type {
+  AudienceConfigurationSummary,
+  AudienceItem,
+  AudienceRenderModel,
+} from "./render-model.ts";
 import { renderMediaIdentity } from "./render-model.ts";
 
 const h = React.createElement;
@@ -267,6 +271,23 @@ const styles = StyleSheet.create({
     padding: 12,
     backgroundColor: "#F1EDE7",
   },
+  configurationBlock: {
+    marginTop: 4,
+    paddingTop: 10,
+    borderTopWidth: 1,
+    borderTopColor: "#D8D1C8",
+  },
+  configurationRow: {
+    flexDirection: "row",
+    paddingVertical: 2,
+  },
+  configurationLabel: {
+    width: 132,
+    paddingRight: 10,
+    color: "#8A735F",
+    fontSize: 9,
+  },
+  configurationValue: { flexGrow: 1, fontSize: 9 },
   footer: {
     position: "absolute",
     left: 50,
@@ -306,6 +327,90 @@ function valueText(value: unknown): string {
     return Object.values(record).map(valueText).filter(Boolean).join(", ");
   }
   return "";
+}
+
+const DIMENSION_AXES = ["width", "depth", "height"] as const;
+
+function configurationDimensionsText(
+  dimensions: Record<string, string | number | boolean>,
+): string {
+  const axes = DIMENSION_AXES
+    .map((key) => dimensions[key])
+    .filter((value) => value !== undefined && value !== "")
+    .map(String);
+  const unit = dimensions.unit ?? dimensions.units;
+  const rest = Object.entries(dimensions)
+    .filter(([key]) =>
+      !DIMENSION_AXES.includes(key as typeof DIMENSION_AXES[number]) &&
+      key !== "unit" && key !== "units"
+    )
+    .map(([key, value]) =>
+      `${key.replace(/([A-Z])/g, " $1").toLowerCase()} ${value}`
+    );
+  const primary = axes.length
+    ? [axes.join(" × "), unit === undefined ? "" : String(unit)]
+      .filter(Boolean).join(" ")
+    : "";
+  return [primary, ...rest].filter(Boolean).join(" · ");
+}
+
+/** Client-edition selection summary rows: labels, never pricing. */
+function configurationRows(
+  configuration: AudienceConfigurationSummary,
+  skipDimensions: boolean,
+): Array<readonly [string, string]> {
+  const rows: Array<readonly [string, string]> = [];
+  if (configuration.variantName) {
+    rows.push(["Variant", configuration.variantName]);
+  }
+  for (const selection of configuration.selections) {
+    rows.push([selection.group, selection.value]);
+  }
+  if (configuration.components?.length) {
+    rows.push([
+      "Components",
+      configuration.components
+        .map((component) =>
+          component.quantity > 1
+            ? `${component.name} ×${component.quantity}`
+            : component.name
+        )
+        .join(" · "),
+    ]);
+  }
+  const dimensions = configuration.dimensions && !skipDimensions
+    ? configurationDimensionsText(configuration.dimensions)
+    : "";
+  if (dimensions) rows.push(["Dimensions", dimensions]);
+  if (configuration.comFabric) {
+    rows.push(["COM fabric", configuration.comFabric]);
+  }
+  return rows;
+}
+
+function configurationBlock(item: AudienceItem) {
+  if (!item.configuration) return null;
+  // The spec sheet already prints a Dimensions field when the frozen spec
+  // carries one; the configuration resolves to the same measurements, so
+  // repeating them would read as a contradiction waiting to happen.
+  const rows = configurationRows(
+    item.configuration,
+    Boolean(valueText(item.selection.dimensions).trim()),
+  );
+  if (!rows.length) return null;
+  return h(
+    View,
+    { style: styles.configurationBlock },
+    h(Text, { style: styles.fieldLabel }, "Selections"),
+    ...rows.map(([label, value], index) =>
+      h(
+        View,
+        { key: `${label}-${index}`, style: styles.configurationRow },
+        h(Text, { style: styles.configurationLabel }, label),
+        h(Text, { style: styles.configurationValue }, value),
+      )
+    ),
+  );
 }
 
 function pageFooter(
@@ -399,6 +504,7 @@ function itemPage(
         )
       ),
     ),
+    configurationBlock(item),
     Object.keys(item.notes).length
       ? h(
         View,

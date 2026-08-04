@@ -7,7 +7,7 @@ import {
 import { getDocument } from "npm:pdfjs-dist@4.10.38/legacy/build/pdf.mjs";
 import { buildAudienceRenderModel, sha256Hex } from "./render-model.ts";
 import { buildPagePlan, renderSpecBookPdf } from "./pdf.ts";
-import { frozenSnapshot } from "./test-fixtures.ts";
+import { configuredFurniture, frozenSnapshot } from "./test-fixtures.ts";
 
 const context = {
   revisionNumber: 1,
@@ -119,6 +119,79 @@ Deno.test("extracted external PDFs contain no private cost contact or procuremen
         `${audience} PDF leaked ${marker}`,
       );
     }
+  }
+});
+
+Deno.test("client PDF prints the configuration selections without any pricing", async () => {
+  const source = frozenSnapshot();
+  const configured = frozenSnapshot({
+    items: [
+      {
+        ...source.items[0],
+        configuration: configuredFurniture({
+          comDetails: {
+            optionValueId: "80000000-0000-4000-8000-000000000001",
+            fabricName: "Highland Linen 12",
+            mill: "Rogers Mill",
+            shipTo: "Receiving dock four",
+            sidemark: "MAPLE / CONSOLE",
+          },
+        }),
+      },
+      { ...source.items[1], configuration: configuredFurniture() },
+    ],
+  });
+
+  const client = await buildAudienceRenderModel(configured, "client", context);
+  const text = await extractedText(await renderSpecBookPdf(client));
+  const consolePage = text.split("\n").find((page) => page.includes("PB-201"))!;
+  assert(consolePage.includes("SELECTIONS"));
+  assert(consolePage.includes("Variant"));
+  assert(consolePage.includes("Left Chaise"));
+  assert(consolePage.includes("Wood"));
+  assert(consolePage.includes("Walnut"));
+  assert(consolePage.includes("Leather"));
+  assert(consolePage.includes("Chestnut"));
+  assert(consolePage.includes("Left arm chaise · Armless loveseat ×2"));
+  assert(consolePage.includes("COM fabric"));
+  assert(consolePage.includes("Highland Linen 12"));
+  // The frozen spec already prints its own Dimensions field on this sheet.
+  assert(consolePage.includes("60 × 18 × 30"));
+  assertEquals(consolePage.includes("96 × 40 × 31"), false);
+  // …and a sheet without one falls back to the configuration's dimensions.
+  const loungePage = text.split("\n").find((page) => page.includes("LR-101"))!;
+  assert(loungePage.includes("Dimensions"));
+  assert(loungePage.includes("96 × 40 × 31"));
+  for (
+    const marker of [
+      "1240000",
+      "868000",
+      "12,400",
+      "Rogers Mill",
+      "Receiving dock four",
+      "MAPLE / CONSOLE",
+    ]
+  ) {
+    assertEquals(
+      text.includes(marker),
+      false,
+      `client PDF leaked ${marker}`,
+    );
+  }
+
+  for (const audience of ["vendor", "installer", "care"] as const) {
+    const model = await buildAudienceRenderModel(configured, audience, context);
+    const audienceText = await extractedText(await renderSpecBookPdf(model));
+    assertEquals(
+      audienceText.includes("Walnut"),
+      false,
+      `${audience} PDF leaked the configuration selections`,
+    );
+    assertEquals(
+      audienceText.includes("Highland Linen 12"),
+      false,
+      `${audience} PDF leaked the COM fabric`,
+    );
   }
 });
 

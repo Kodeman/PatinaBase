@@ -43,6 +43,32 @@ export interface RenderMedia {
   caption?: string;
 }
 
+export interface AudienceConfigurationSelection {
+  group: string;
+  value: string;
+}
+
+export interface AudienceConfigurationComponent {
+  name: string;
+  quantity: number;
+}
+
+/**
+ * Client-safe projection of a frozen furniture-configuration snapshot.
+ *
+ * Labels only. Every pricing key (retail/trade/deltas), the snapshot hash, the
+ * lock timestamp, vendor SKUs, and the vendor-operational COM fields (mill,
+ * ship-to, sidemark, yardage) are deliberately absent — a client edition must
+ * read as "what was chosen", never as "what it costs us" or "how it ships".
+ */
+export interface AudienceConfigurationSummary {
+  selections: AudienceConfigurationSelection[];
+  variantName?: string;
+  components?: AudienceConfigurationComponent[];
+  dimensions?: Record<string, string | number | boolean>;
+  comFabric?: string;
+}
+
 export interface AudienceItem {
   id: string;
   chapterId: string | null;
@@ -55,6 +81,7 @@ export interface AudienceItem {
   roomName: string | null;
   quantity: number | null;
   selection: Record<string, unknown>;
+  configuration?: AudienceConfigurationSummary;
   media: RenderMedia[];
   notes: Record<string, string>;
   commercial: Record<string, unknown>;
@@ -157,6 +184,7 @@ const DEFAULT_AUDIENCE_ALLOW: Record<SpecBookAudience, string[]> = {
   client: [
     "identity",
     "selection",
+    "configuration",
     "dimensions",
     "quantity",
     "selectedMedia",
@@ -378,6 +406,113 @@ function normalizeMedia(value: unknown): RenderMedia[] {
   return out;
 }
 
+function configurationSnapshot(value: unknown): JsonRecord | null {
+  if (!isRecord(value)) return null;
+  const snapshot = value.snapshot ?? value.configuration_snapshot;
+  return isRecord(snapshot) ? snapshot : null;
+}
+
+function safeDimensionEntries(
+  value: unknown,
+): Record<string, string | number | boolean> | null {
+  if (!isRecord(value)) return null;
+  const out: Record<string, string | number | boolean> = {};
+  for (const [key, entry] of Object.entries(value)) {
+    // Defence in depth: a stray dimension key carrying a forbidden part would
+    // otherwise fail the whole render closed in assertAudienceModelPrivacy.
+    const compact = key.toLowerCase().replace(/[-\s_]/g, "");
+    if (
+      FORBIDDEN_NON_INTERNAL_KEY_PARTS.some((part) => compact.includes(part))
+    ) {
+      continue;
+    }
+    if (
+      typeof entry === "string" || typeof entry === "number" ||
+      typeof entry === "boolean"
+    ) {
+      if (typeof entry === "string" && !entry.trim()) continue;
+      out[key] = typeof entry === "string" ? entry.trim() : entry;
+    }
+  }
+  return Object.keys(out).length ? out : null;
+}
+
+/**
+ * Build the client-safe configuration summary from a frozen configuration
+ * envelope (`{id, snapshot, snapshotHash, lockedAt}`, 00403).
+ *
+ * Only selection labels, the variant name, component names/quantities, resolved
+ * dimensions, and the COM fabric name are read. Because nothing price-derived
+ * is copied, a configuration whose pricing alone moved produces an identical
+ * summary — and therefore an unchanged client contentHash.
+ */
+function clientConfigurationSummary(
+  value: unknown,
+): AudienceConfigurationSummary | null {
+  const snapshot = configurationSnapshot(value);
+  if (!snapshot) return null;
+
+  const selections: AudienceConfigurationSelection[] = [];
+  if (Array.isArray(snapshot.selections)) {
+    for (const entry of snapshot.selections) {
+      if (!isRecord(entry)) continue;
+      const group = stringValue(
+        entry.groupName ?? entry.group_name ?? entry.groupCode ??
+          entry.group_code,
+      );
+      const label = stringValue(
+        entry.valueLabel ?? entry.value_label ?? entry.valueCode ??
+          entry.value_code,
+      );
+      if (!group || !label) continue;
+      selections.push({ group, value: label });
+    }
+  }
+
+  const variant = isRecord(snapshot.variant) ? snapshot.variant : null;
+  const variantName = variant ? stringValue(variant.name) : null;
+
+  const components: AudienceConfigurationComponent[] = [];
+  if (Array.isArray(snapshot.components)) {
+    for (const entry of snapshot.components) {
+      if (!isRecord(entry)) continue;
+      const name = stringValue(entry.name);
+      if (!name) continue;
+      components.push({
+        name,
+        quantity: Math.max(1, Math.round(numberValue(entry.quantity) ?? 1)),
+      });
+    }
+  }
+
+  const dimensions = safeDimensionEntries(
+    snapshot.dimensions ?? snapshot.resolvedDimensions ??
+      snapshot.resolved_dimensions,
+  );
+
+  const com = isRecord(snapshot.comDetails)
+    ? snapshot.comDetails
+    : isRecord(snapshot.com_details)
+    ? snapshot.com_details
+    : null;
+  const comFabric = com ? stringValue(com.fabricName ?? com.fabric_name) : null;
+
+  if (
+    !selections.length && !variantName && !components.length && !dimensions &&
+    !comFabric
+  ) {
+    return null;
+  }
+
+  return {
+    selections,
+    ...(variantName ? { variantName } : {}),
+    ...(components.length ? { components } : {}),
+    ...(dimensions ? { dimensions } : {}),
+    ...(comFabric ? { comFabric } : {}),
+  };
+}
+
 function note(item: JsonRecord, aliases: string[]): string | null {
   const direct = firstValue(item, aliases);
   if (direct !== undefined) return stringValue(direct);
@@ -538,6 +673,13 @@ function buildSafeItem(
     vendor,
     contentHash: stringValue(item.contentHash ?? item.content_hash) ?? "",
   };
+  // Only the client edition carries the configuration summary; the internal
+  // edition already has the whole envelope in `raw`, and vendor/installer/care
+  // hold no token for it at all.
+  if (audience === "client" && allows("configuration")) {
+    const configuration = clientConfigurationSummary(item.configuration);
+    if (configuration) normalized.configuration = configuration;
+  }
   if (audience === "internal") {
     normalized.raw = canonicalClone(item) as JsonRecord;
   }
@@ -629,12 +771,22 @@ function audienceAllowTokens(
     ? template.audience_profiles
     : {};
   const profile = isRecord(profiles[audience]) ? profiles[audience] : {};
-  const allow = Array.isArray(profile.allow)
+  const explicit = Array.isArray(profile.allow)
     ? profile.allow.filter((entry): entry is string =>
       typeof entry === "string"
     )
-    : DEFAULT_AUDIENCE_ALLOW[audience];
-  return new Set(allow);
+    : null;
+  const allow = new Set(explicit ?? DEFAULT_AUDIENCE_ALLOW[audience]);
+  // `configuration` post-dates every frozen template profile (00380 seeded the
+  // system template with a fixed client allow-list, and revisions freeze the
+  // template row verbatim). The summary is nothing but selection labels, so a
+  // profile that already grants the client `selection` grants the summary too.
+  // Every other audience — and a client profile that withholds `selection` —
+  // stays closed unless a profile names the token itself.
+  if (explicit && audience === "client" && allow.has("selection")) {
+    allow.add("configuration");
+  }
+  return allow;
 }
 
 function rawItemHash(item: JsonRecord): Promise<string> {

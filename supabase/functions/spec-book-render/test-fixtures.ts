@@ -158,3 +158,91 @@ export function frozenSnapshot(
     ...overrides,
   };
 }
+
+// A frozen configuration envelope in the shape 00403 emits: labels, variant,
+// components and dimensions alongside pricing the client must never see.
+export function configuredFurniture(
+  overrides: {
+    woodLabel?: string;
+    priceBump?: number;
+    comDetails?: Record<string, unknown>;
+  } = {},
+) {
+  const { woodLabel = "Walnut", priceBump = 0, comDetails } = overrides;
+  return {
+    id: "40000000-0000-4000-8000-000000000002",
+    snapshot: {
+      productId: "50000000-0000-4000-8000-000000000001",
+      productName: "Ellsworth Sectional",
+      configurationMode: "configured",
+      pricingStrategy: "delta",
+      schemaRevision: 1,
+      variant: {
+        id: "60000000-0000-4000-8000-000000000001",
+        code: "96-lc",
+        name: '96" Left Chaise',
+        sku: "ELL-96-LC",
+        vendorSku: "VND-ELL-96-LC",
+        retailPriceCents: 1_240_000 + priceBump,
+        tradePriceCents: 868_000 + priceBump,
+        leadTimeWeeks: 14,
+      },
+      selections: [
+        {
+          optionGroupId: "70000000-0000-4000-8000-000000000001",
+          optionValueId: "80000000-0000-4000-8000-000000000001",
+          groupCode: "wood",
+          valueCode: woodLabel.toLowerCase().replace(/\s+/g, "-"),
+          groupName: "Wood",
+          valueLabel: woodLabel,
+          retailPriceDeltaCents: 42_000 + priceBump,
+          tradePriceDeltaCents: 29_400 + priceBump,
+          leadTimeDeltaWeeks: 2,
+          allowsCom: true,
+        },
+        {
+          optionGroupId: "70000000-0000-4000-8000-000000000002",
+          optionValueId: "80000000-0000-4000-8000-000000000002",
+          groupCode: "leather",
+          valueCode: "chestnut",
+          groupName: "Leather",
+          valueLabel: "Chestnut",
+          retailPriceDeltaCents: 0,
+          tradePriceDeltaCents: 0,
+          leadTimeDeltaWeeks: 0,
+          allowsCom: false,
+        },
+      ],
+      components: [
+        {
+          componentId: "90000000-0000-4000-8000-000000000001",
+          code: "left-chaise",
+          name: "Left arm chaise",
+          quantity: 1,
+          handedness: "left",
+          retailPriceCents: 620_000 + priceBump,
+          tradePriceCents: 434_000 + priceBump,
+          leadTimeWeeks: 14,
+        },
+        {
+          componentId: "90000000-0000-4000-8000-000000000002",
+          code: "armless-loveseat",
+          name: "Armless loveseat",
+          quantity: 2,
+          handedness: null,
+          retailPriceCents: 310_000 + priceBump,
+          tradePriceCents: 217_000 + priceBump,
+          leadTimeWeeks: 14,
+        },
+      ],
+      retailPriceCents: 1_282_000 + priceBump,
+      tradePriceCents: 897_400 + priceBump,
+      leadTimeWeeks: 16,
+      dimensions: { width: 96, depth: 40, height: 31, unit: "in" },
+      capturedAt: "2026-08-02T12:00:00.000Z",
+      ...(comDetails ? { comDetails } : {}),
+    },
+    snapshotHash: `cfg-${woodLabel}-${priceBump}`,
+    lockedAt: "2026-08-02T12:05:00.000Z",
+  };
+}
