@@ -108,11 +108,17 @@ export interface AcceptedInvitation {
 // ═══════════════════════════════════════════════════════════════════════════
 
 /**
- * Get all organizations the current user is a member of
+ * Get all organizations the current user is a member of.
+ *
+ * `options.enabled` (default `true`, so existing callers are unchanged) lets
+ * a caller behind a feature flag hold the query back entirely rather than
+ * fetching and discarding the result (see party-profile-sheet.tsx's Call
+ * Sheet Wave 2 promote band).
  */
-export function useOrganizations() {
+export function useOrganizations(options?: { enabled?: boolean }) {
   return useQuery({
     queryKey: ['organizations'],
+    enabled: options?.enabled ?? true,
     queryFn: async () => {
       const supabase = getSupabase();
       const { data: { user } } = await supabase.auth.getUser();

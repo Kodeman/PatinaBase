@@ -20,7 +20,7 @@
  * render gracefully with any subset of them present or absent.
  */
 
-import { Avatar, StatusDot } from '../person-bits';
+import { Avatar, StatusDot, companyKindBadgeStyle } from '../person-bits';
 import type { PartyStatus } from '@/lib/document/people-derivation';
 
 /**
@@ -82,6 +82,7 @@ export function CompanyRow({
   }
   if (lastProjectName) bits.push(`last: ${lastProjectName}`);
   const line = bits.length > 0 ? bits.join(' · ') : 'Not yet on a project';
+  const { color: kindColor, border: kindBorder } = companyKindBadgeStyle(kind);
 
   const body = (
     <>
@@ -91,7 +92,10 @@ export function CompanyRow({
           <span className="truncate text-[0.92rem] font-semibold text-[var(--color-charcoal)]">
             {name}
           </span>
-          <span className="rounded-[3px] border-[1.5px] border-[var(--color-aged-oak)] px-2 py-[2px] font-mono text-[0.44rem] font-semibold uppercase tracking-[0.06em] text-[var(--color-aged-oak)]">
+          <span
+            className="rounded-[3px] border-[1.5px] px-2 py-[2px] font-mono text-[0.44rem] font-semibold uppercase tracking-[0.06em]"
+            style={{ color: kindColor, borderColor: kindBorder }}
+          >
             {companyKindLabel(kind)}
           </span>
         </span>
