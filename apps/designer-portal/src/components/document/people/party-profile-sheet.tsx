@@ -16,7 +16,7 @@
  * Zero shadows (D4); typography-first; the Room beneath never unmounts (D1).
  */
 
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import {
   usePerson,
   usePartySmsThread,
@@ -25,6 +25,8 @@ import {
   useCreateFieldLink,
   useRevokeFieldLink,
   useFieldMediaUrl,
+  useOrganizations,
+  useProjectParties,
   fieldLinkUrl,
   type PartyRole,
   type PartySmsMessage,
@@ -36,8 +38,10 @@ import {
   type SmsConsentStatus,
 } from '@patina/types';
 import { fmtDay } from '@/lib/document/format';
+import { useFeatureFlag } from '@/hooks/use-feature-flag';
 import { RoomSheet } from '../rooms/room-sheet';
 import { DocumentAction, DocumentActionRow } from '../document-action';
+import { PromoteBand } from './promote-band';
 
 const META =
   'font-mono text-[9px] uppercase tracking-[0.08em] text-[var(--color-aged-oak)]';
@@ -140,6 +144,35 @@ export function PartyProfileSheet({
   const revokeLink = useRevokeFieldLink();
   const send = useSendPartySms();
 
+  // Call Sheet Wave 2 — the promote band (slide 10). Gated on the flag AND on
+  // finding this party's real project_parties row (the mutation needs the
+  // full row, not just the people_directory projection `person` is).
+  const { value: callSheetOn } = useFeatureFlag('call-sheet');
+  const { data: orgs } = useOrganizations();
+  const organizationId = useMemo(
+    () => orgs?.find((o) => o.type === 'design_studio')?.id ?? orgs?.[0]?.id ?? null,
+    [orgs],
+  );
+  const { data: projectParties } = useProjectParties(open ? person?.project_id : null);
+  const linkedParty = useMemo(
+    () => projectParties?.find((p) => p.id === partyId) ?? null,
+    [projectParties, partyId],
+  );
+  // "Promoted this session" — tracked here, not derived purely from
+  // linkedParty.studio_contact_id, so the confirmation survives the refetch
+  // the promote mutation itself triggers (see promote-band.tsx's module doc).
+  // Self-clears whenever a different party opens.
+  const [justPromotedPartyId, setJustPromotedPartyId] = useState<string | null>(null);
+  useEffect(() => {
+    setJustPromotedPartyId(null);
+  }, [partyId]);
+  const showPromoteBand =
+    callSheetOn &&
+    !!partyId &&
+    !!organizationId &&
+    !!linkedParty &&
+    (!linkedParty.studio_contact_id || justPromotedPartyId === partyId);
+
   const [mintedUrl, setMintedUrl] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
   const [body, setBody] = useState('');
@@ -219,6 +252,17 @@ export function PartyProfileSheet({
         </h2>
         <ConsentChip status={consent} />
       </div>
+
+      {/* Promote band (Call Sheet Wave 2, slide 10) — only when this party
+          isn't (yet) in the studio rolodex and the flag is on. */}
+      {showPromoteBand && linkedParty && organizationId && (
+        <PromoteBand
+          organizationId={organizationId}
+          party={linkedParty}
+          promoted={justPromotedPartyId === partyId}
+          onPromoted={() => setJustPromotedPartyId(partyId)}
+        />
+      )}
 
       {/* Contact card */}
       <dl className="mt-4 grid grid-cols-2 gap-x-6 gap-y-2 border-y border-[var(--color-pearl)] py-3">
