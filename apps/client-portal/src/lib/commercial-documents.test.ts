@@ -24,6 +24,88 @@ describe('commercial document client adapter', () => {
     });
   });
 
+  it('ignores a legacy row\'s projected commercial_state and derives state from its real status', () => {
+    // The migration adds document_kind/commercial_state to list_client_proposals
+    // for every row, legacy included — but a legacy row's commercial_state is a
+    // vestigial projection that must never override its historically-governed
+    // status semantics. Trusting it could hide a live legacy proposal (status
+    // "sent") from the pending group by reading a stale/default "draft".
+    const summary = commercialSummaryFromProposal({
+      id: 'legacy-2',
+      project_id: 'project-1',
+      title: 'Kitchen refresh',
+      status: 'sent',
+      document_kind: 'legacy',
+      commercial_state: 'draft',
+      version: 1,
+      sent_at: '2026-01-02T00:00:00Z',
+    } as never);
+
+    expect(summary).toMatchObject({
+      id: 'legacy-2',
+      kind: 'legacy',
+      state: 'sent',
+    });
+  });
+
+  describe('a retired legacy marker from get_client_commercial_document_bundle (00414)', () => {
+    // The migration stops raising for legacy rows and instead answers with a
+    // fixed, minimal marker: {id, documentKind:'legacy', kind:'legacy',
+    // retired:true, title, status, commercialState, supersededAt,
+    // replacementProposalId, validUntil, sentAt} nested under `document`.
+    // adaptCommercialDocumentBundle must derive state from the marker's real
+    // `status`, not its (always-null-for-legacy) `commercialState`, mirroring
+    // the rule already applied to commercialSummaryFromProposal.
+    function marker(status: string, overrides: Record<string, unknown> = {}) {
+      return {
+        document: {
+          id: 'legacy-marker-1',
+          documentKind: 'legacy',
+          kind: 'legacy',
+          retired: true,
+          title: 'Kitchen refresh',
+          status,
+          commercialState: null,
+          supersededAt: null,
+          replacementProposalId: null,
+          validUntil: null,
+          sentAt: '2026-01-02T00:00:00Z',
+          ...overrides,
+        },
+      };
+    }
+
+    it('resolves a sent legacy marker to a pending, actionable state', () => {
+      const bundle = adaptCommercialDocumentBundle(marker('sent'));
+
+      expect(bundle?.document).toMatchObject({
+        id: 'legacy-marker-1',
+        kind: 'legacy',
+        state: 'sent',
+      });
+    });
+
+    it('resolves an accepted legacy marker to executed, not draft', () => {
+      const bundle = adaptCommercialDocumentBundle(marker('accepted'));
+
+      expect(bundle?.document).toMatchObject({
+        id: 'legacy-marker-1',
+        kind: 'legacy',
+        state: 'executed',
+      });
+    });
+
+    it('resolves a declined legacy marker to declined', () => {
+      const bundle = adaptCommercialDocumentBundle(marker('declined'));
+
+      expect(bundle?.document).toMatchObject({
+        id: 'legacy-marker-1',
+        kind: 'legacy',
+        state: 'declined',
+      });
+    });
+  });
+
   it('adapts the frozen design-services contract and drops internal money fields', () => {
     const bundle = adaptCommercialDocumentBundle({
       document: {
@@ -122,7 +204,7 @@ describe('commercial document client adapter', () => {
     });
   });
 
-  it('maps only curated authority activity and ignores raw time-entry details', () => {
+  it('maps authority rates and ignores raw time-entry details not in the allowlist', () => {
     const summary = adaptProjectCommercialSummary({
       authority: {
         id: 'auth-1',
@@ -133,16 +215,14 @@ describe('commercial document client adapter', () => {
         ceilingCents: 1_800_000,
         accruedCents: 600_000,
         remainingCents: 1_200_000,
-        rates: [],
-        activity: [{ label: 'Concept development', hours: 4, amountCents: 90_000, rawNote: 'Private personnel note', staffCostCents: 20_000 }],
+        rates: [{ id: 'rate-1', version: 1, roleName: 'Principal', hourlyRateCents: 22_500, effectiveAt: '2026-08-01' }],
         timeEntries: [{ note: 'Do not leak me' }],
       },
     });
 
-    expect(summary.authority?.activity).toEqual([
-      { label: 'Concept development', hours: 4, amountCents: 90_000 },
+    expect(summary.authority?.rates).toEqual([
+      { id: 'rate-1', version: 1, roleName: 'Principal', hourlyRateCents: 22_500, effectiveAt: '2026-08-01' },
     ]);
-    expect(JSON.stringify(summary)).not.toContain('Private personnel note');
     expect(JSON.stringify(summary)).not.toContain('Do not leak me');
   });
 

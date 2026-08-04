@@ -67,6 +67,24 @@ export default function ClientProposalSignPage({
   }
 
   const commercial = commercialBundle?.document ?? commercialSummaryFromProposal(proposal);
+
+  if (commercial.kind === 'legacy') {
+    return (
+      <div className="mx-auto max-w-2xl px-6 py-16 text-center">
+        <p className="type-body-small">
+          Your designer will send a new agreement to move this forward.
+        </p>
+        <Link
+          href={`/proposals/${id}`}
+          className="mt-4 inline-flex items-center gap-1 type-meta text-[var(--accent-primary)] no-underline hover:underline"
+        >
+          <ArrowLeft className="h-3.5 w-3.5" />
+          Back to proposal
+        </Link>
+      </div>
+    );
+  }
+
   const isSignable = commercial.state === 'sent';
   if (!isSignable) {
     return (
@@ -153,18 +171,14 @@ export default function ClientProposalSignPage({
       <h1 className="type-page-title">
         {commercial.kind === 'furnishings_authorization'
           ? `Authorize ${commercial.waveName ?? 'furnishings'}`
-          : commercial.kind === 'design_services'
-            ? 'Sign Design Services Agreement'
-            : commercial.kind === 'service_addendum'
-              ? 'Sign Design Services Addendum'
-              : 'Sign Proposal'}
+          : commercial.kind === 'service_addendum'
+            ? 'Sign Design Services Addendum'
+            : 'Sign Design Services Agreement'}
       </h1>
       <p className="type-body mt-2">
         {commercial.kind === 'furnishings_authorization'
           ? `By signing, you authorize only the named furnishing lines, quantities, and client prices in “${proposal.title}”.`
-          : commercial.kind === 'design_services' || commercial.kind === 'service_addendum'
-            ? `By signing, you accept the services, signed role rates, design authorization ceiling, retainer, and terms in “${proposal.title}”. The agreement becomes effective only after the studio countersigns.`
-            : `By signing, you accept the scope, investment, and terms outlined in “${proposal.title}”.`}
+          : `By signing, you accept the services, signed role rates, design authorization ceiling, retainer, and terms in “${proposal.title}”. The agreement becomes effective only after the studio countersigns.`}
       </p>
 
       <form onSubmit={handleSubmit} className="mt-8 space-y-6">

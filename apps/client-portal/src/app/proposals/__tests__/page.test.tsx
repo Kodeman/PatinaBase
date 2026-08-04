@@ -47,6 +47,8 @@ function makeProposal(overrides: Partial<Proposal> = {}): Proposal {
     responded_at: null,
     created_at: '2026-01-01T00:00:00Z',
     updated_at: '2026-01-01T00:00:00Z',
+    document_kind: 'legacy',
+    commercial_state: 'sent',
     ...overrides,
   } as Proposal;
 }
@@ -110,12 +112,16 @@ describe('ClientProposalsPage', () => {
   });
 
   it('shows a client-signed design agreement as awaiting the studio', () => {
+    // sign_design_services_agreement (00412) sets commercial_state to
+    // 'client_signed' but leaves status at 'sent' — only the studio's
+    // countersign flips status to 'accepted' (commercial_state 'executed').
+    // 'accepted' + 'client_signed' is a pair the RPC never produces.
     mockUseClientProposals.mockReturnValue({
       data: [makeProposal({
-        status: 'accepted',
+        status: 'sent',
         document_kind: 'design_services',
         commercial_state: 'client_signed',
-      } as never)],
+      })],
       isLoading: false,
       isError: false,
     });
@@ -124,5 +130,26 @@ describe('ClientProposalsPage', () => {
 
     expect(screen.getByText(/design services · signed by you · awaiting studio/i)).toBeInTheDocument();
     expect(screen.queryByText(formatCurrency(750000))).not.toBeInTheDocument();
+  });
+
+  it('lists a legacy row under "Awaiting your review" even when a projected commercial_state says draft', () => {
+    // The migration adds document_kind/commercial_state to list_client_proposals
+    // for every row, legacy included — but a legacy row's commercial_state is a
+    // vestigial projection the client must ignore. Its real, live status (sent)
+    // must still surface the proposal for review.
+    mockUseClientProposals.mockReturnValue({
+      data: [makeProposal({
+        status: 'sent',
+        document_kind: 'legacy',
+        commercial_state: 'draft',
+      })],
+      isLoading: false,
+      isError: false,
+    });
+
+    render(<ClientProposalsPage />);
+
+    expect(screen.getByRole('heading', { name: /awaiting your review/i })).toBeInTheDocument();
+    expect(screen.getByText(formatCurrency(750000))).toBeInTheDocument();
   });
 });

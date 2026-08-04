@@ -76,7 +76,6 @@ export interface CommercialDocumentBundle {
 
 export interface ProjectAuthoritySummary extends Omit<ProjectBillingAuthoritySummary, 'rates'> {
   rates: CommercialRate[];
-  activity: Array<{ label: string; hours: number; amountCents: number }>;
 }
 
 export type WorkingBudgetLine = Pick<
@@ -177,12 +176,18 @@ export function commercialSummaryFromProposal(proposal: Proposal): CommercialDoc
   const source = Object.keys(nested).length > 0 ? nested : raw;
   const kind = oneOf(first(source, 'kind', 'documentKind', 'document_kind'), COMMERCIAL_DOCUMENT_KINDS, 'legacy');
   const legacyState = legacyStatusToCommercialState(proposal.status);
+  // A legacy row's projected commercial_state is vestigial and must never
+  // override its historically-governed status semantics — trusting it could
+  // hide a live legacy proposal (e.g. status "sent") from the pending group.
+  const state = kind === 'legacy'
+    ? legacyState
+    : oneOf(first(source, 'state', 'commercialState', 'commercial_state'), COMMERCIAL_DOCUMENT_STATES, legacyState);
 
   return {
     id: text(first(source, 'id', 'proposalId', 'proposal_id'), proposal.id),
     projectId: nullableText(first(source, 'projectId', 'project_id')) ?? proposal.project_id,
     kind,
-    state: oneOf(first(source, 'state', 'commercialState', 'commercial_state'), COMMERCIAL_DOCUMENT_STATES, legacyState),
+    state,
     title: text(first(source, 'title'), proposal.title),
     version: number(first(source, 'version'), proposal.version ?? 1),
     waveName: nullableText(first(source, 'waveName', 'wave_name')),
@@ -223,7 +228,7 @@ export function adaptCommercialDocumentBundle(value: unknown): CommercialDocumen
   if (!id) return null;
 
   const legacyStatus = oneOf(
-    proposal.status,
+    first(proposal, 'status') ?? first(source, 'status'),
     ['draft', 'sent', 'viewed', 'accepted', 'declined', 'expired', 'revised'] as const,
     'draft',
   );
@@ -279,11 +284,16 @@ export function adaptCommercialDocumentBundle(value: unknown): CommercialDocumen
       id,
       projectId: nullableText(first(source, 'projectId', 'project_id')),
       kind,
-      state: oneOf(
-        first(source, 'state', 'commercialState', 'commercial_state'),
-        COMMERCIAL_DOCUMENT_STATES,
-        legacyStatusToCommercialState(legacyStatus),
-      ),
+      // A legacy row's projected commercial_state is vestigial and must never
+      // override its historically-governed status semantics — this mirrors the
+      // same rule in commercialSummaryFromProposal above.
+      state: kind === 'legacy'
+        ? legacyStatusToCommercialState(legacyStatus)
+        : oneOf(
+          first(source, 'state', 'commercialState', 'commercial_state'),
+          COMMERCIAL_DOCUMENT_STATES,
+          legacyStatusToCommercialState(legacyStatus),
+        ),
       title: text(first(source, 'title'), text(proposal.title, 'Commercial document')),
       version: number(first(source, 'version'), 1),
       waveName: nullableText(first(source, 'waveName', 'wave_name')),
@@ -389,14 +399,6 @@ export function adaptProjectCommercialSummary(value: unknown): ProjectCommercial
     activeRateVersion: number(first(authorityRaw, 'activeRateVersion', 'active_rate_version')),
     billingThrough: nullableText(first(authorityRaw, 'billingThrough', 'billing_through')),
     rates: adaptRates(authorityRaw.rates),
-    activity: Array.isArray(authorityRaw.activity) ? authorityRaw.activity.map((item) => {
-      const row = record(item);
-      return {
-        label: text(row.label),
-        hours: number(row.hours),
-        amountCents: number(first(row, 'amountCents', 'amount_cents')),
-      };
-    }) : [],
   };
 
   const workingBudget: WorkingBudgetVersion | null = Object.keys(budgetRaw).length === 0 ? null : {
