@@ -91,8 +91,17 @@ const ROLE_ORDER: Record<PartyRole, number> = {
   sub: 3,
   installer: 4,
   receiver: 5,
-  maker: 6,
-  team: 7,
+  // Call Sheet Wave 3/4 (00419/00420) roster-widening kinds — allied
+  // project-scoped professionals, grouped with the field crew they sit beside
+  // on a call sheet, ahead of makers/team.
+  architect: 6,
+  photographer: 7,
+  stager: 8,
+  maker: 9,
+  team: 10,
+  // The studio rolodex branch (people_directory role='contact', 00420) —
+  // not yet engaged on a project, so it sorts last.
+  contact: 11,
 };
 
 /** Empty-state copy is filter-aware so the roster never reads as "broken".

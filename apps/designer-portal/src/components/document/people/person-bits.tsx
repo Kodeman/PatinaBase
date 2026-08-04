@@ -62,6 +62,16 @@ const BADGE: Record<PartyRole, { color: string; border: string }> = {
   sub: { color: 'var(--color-mocha)', border: 'var(--color-mocha)' },
   installer: { color: '#B89A2E', border: 'var(--color-golden-hour)' },
   receiver: { color: 'var(--color-terracotta)', border: 'var(--color-terracotta)' },
+  // Call Sheet Wave 3/4 (00419/00420) roster-widening kinds — same tints as
+  // AVATAR_BG above (architect beside the GC's dusty-blue; photographer/
+  // stager quiet-ink, neither trade nor firm).
+  architect: { color: 'var(--color-dusty-blue)', border: 'var(--color-dusty-blue)' },
+  photographer: { color: 'var(--color-quiet-ink)', border: 'var(--color-quiet-ink)' },
+  stager: { color: 'var(--color-quiet-ink)', border: 'var(--color-quiet-ink)' },
+  // The studio rolodex branch (people_directory role='contact', 00420) —
+  // shares the maker tint (a rolodex entry is vendor/maker-adjacent by
+  // default, same family AVATAR_FALLBACK_BG/COMPANY_KIND_BADGE lean on).
+  contact: { color: 'var(--color-aged-oak)', border: '#cbb48f' },
 };
 
 // A company's OWN kind vocabulary (studio_contacts.contact_kind on an

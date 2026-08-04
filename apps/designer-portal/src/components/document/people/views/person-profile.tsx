@@ -151,6 +151,12 @@ function ClientProfile({
         status_raw: statusRaw,
         last_touch_at: lastTouchAt,
         meta,
+        // Unused by deriveRelationshipJourney's body (only proposals/projects/
+        // decisions/threads/touchpoints/reviews are read) — 'mine' satisfies
+        // the frozen PeopleDirectoryRow contract without a real scope signal
+        // to hand it (this profile is opened from a specific person, not a
+        // directory row carrying 00420's scope column).
+        scope: 'mine',
       },
       // Guard on profileId: useProposals(undefined) returns ALL the designer's
       // proposals (RLS is designer-scoped, not client-scoped). A profileless
@@ -268,6 +274,9 @@ function ClientProfile({
       status_raw: statusRaw,
       last_touch_at: lastTouchAt,
       meta,
+      // Unused by isNurtureDue (switches on role/status_raw/last_touch_at
+      // only) — 'mine' satisfies the frozen PeopleDirectoryRow shape.
+      scope: 'mine',
     },
     now,
   );
@@ -284,6 +293,9 @@ function ClientProfile({
       status_raw: statusRaw,
       last_touch_at: lastTouchAt,
       meta,
+      // Unused by deriveStatusDot (switches on role/status_raw/meta/dormancy
+      // only) — 'mine' satisfies the frozen PeopleDirectoryRow shape.
+      scope: 'mine',
     },
     now,
   );
@@ -475,6 +487,9 @@ function NetworkProfile({
         status_raw: statusRaw,
         last_touch_at: lastTouchAt,
         meta,
+        // Unused by deriveRelationshipJourney's body — see the ClientProfile
+        // comment above; same frozen-contract satisfaction, not a real signal.
+        scope: 'mine',
       },
       projects:
         projectId && projectName

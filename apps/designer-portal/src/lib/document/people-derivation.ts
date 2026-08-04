@@ -130,6 +130,16 @@ export function roleLabel(role: PartyRole): string {
       return 'Installer';
     case 'receiver':
       return 'Receiver';
+    // Call Sheet Wave 3/4 (00419/00420) roster-widening kinds.
+    case 'architect':
+      return 'Architect';
+    case 'photographer':
+      return 'Photographer';
+    case 'stager':
+      return 'Stager';
+    // The studio rolodex branch (people_directory role='contact', 00420).
+    case 'contact':
+      return 'Contact';
   }
 }
 
@@ -182,6 +192,12 @@ export function deriveStatusDot(p: DirectoryPerson, now: Date): PartyStatus {
 
     case 'gc':
     case 'team':
+    // Call Sheet Wave 3/4 (00419/00420) roster-widening kinds — allied
+    // project-scoped professionals, same non-field "on the job" read as gc/
+    // team (no SMS consent state to reflect).
+    case 'architect':
+    case 'photographer':
+    case 'stager':
       return 'active';
 
     // Field kinds (00281): the dot reflects SMS consent (status_raw carries
@@ -192,6 +208,12 @@ export function deriveStatusDot(p: DirectoryPerson, now: Date): PartyStatus {
     case 'receiver':
       if (p.status_raw === 'granted') return 'active';
       if (p.status_raw === 'pending') return 'warm';
+      return 'cool';
+
+    // The studio rolodex branch (people_directory role='contact', 00420) —
+    // a rolodex entry, not a project engagement; no dormancy/consent signal
+    // to derive from, so it reads quiet rather than false-active.
+    case 'contact':
       return 'cool';
   }
 }
@@ -220,6 +242,13 @@ export function isNurtureDue(p: DirectoryPerson, now: Date): boolean {
     case 'sub':
     case 'installer':
     case 'receiver':
+    // Call Sheet Wave 3/4 (00419/00420) roster-widening kinds — coordinated
+    // per-project like gc, never nurture-due.
+    case 'architect':
+    case 'photographer':
+    case 'stager':
+    // The studio rolodex branch (00420) — not a relationship to nurture.
+    case 'contact':
       return false;
   }
 }
@@ -278,6 +307,23 @@ export function deriveRelationshipLine(
       const proj = String(p.meta?.['project_name'] ?? '').trim();
       const bits = [trade || null, proj || null].filter(Boolean);
       return { text: bits.join(' · ') || 'Field party', due: false };
+    }
+
+    // Call Sheet Wave 3/4 (00419/00420) roster-widening kinds — same shape as
+    // 'gc' above: project-scoped allied professionals, no SMS consent state.
+    case 'architect':
+    case 'photographer':
+    case 'stager': {
+      const proj = String(p.meta?.['project_name'] ?? '').trim();
+      const label = roleLabel(p.role);
+      return { text: proj ? `${label} · ${proj}` : label, due: false };
+    }
+
+    // The studio rolodex branch (people_directory role='contact', 00420) —
+    // reads its contact_kind (studio_contacts vocab) rather than a project.
+    case 'contact': {
+      const kind = String(p.meta?.['contact_kind'] ?? '').replace(/_/g, ' ').trim();
+      return { text: kind ? `Rolodex · ${kind}` : 'Rolodex contact', due: false };
     }
   }
 }
