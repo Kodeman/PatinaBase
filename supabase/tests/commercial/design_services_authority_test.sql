@@ -372,8 +372,9 @@ $$;
 
 -- Budget acknowledgement is planning truth only.
 INSERT INTO public.project_budget_versions (
-  id, project_id, version, created_by
+  id, project_id, version, note, created_by
 ) SELECT 'd5500000-0000-4000-8000-000000000001', p.id, 1,
+  'Studio working note — pad the seating line before the walkthrough.',
   'd5000000-0000-4000-8000-000000000001'
 FROM public.projects p WHERE p.proposal_id = 'd5300000-0000-4000-8000-000000000001';
 INSERT INTO public.project_budget_lines (
@@ -409,7 +410,33 @@ BEGIN
     AND v_budget->'checkpoint'->>'versionId' = 'd5500000-0000-4000-8000-000000000001'
     AND v_budget->'checkpoint'->>'acknowledgedBy' = 'd5000000-0000-4000-8000-000000000002',
     'working budget checkpoint adapter fields';
+  -- 00414: the studio's working note and its override rationale are not client
+  -- copy. The client's own acknowledgement stays — that is their act, not the
+  -- studio's, and the portal renders it back to them.
+  ASSERT NOT (v_budget->'version' ? 'note'),
+    'client working budget leaked the studio version note';
+  ASSERT NOT (v_budget->'checkpoint' ? 'overrideBy')
+    AND NOT (v_budget->'checkpoint' ? 'overrideReason'),
+    'client working budget leaked the studio override rationale';
+  ASSERT (v_budget->'checkpoint' ? 'acknowledgedBy')
+    AND (v_budget->'checkpoint' ? 'acknowledgedAt'),
+    'client working budget dropped the client''s own acknowledgement';
 END $$;
+SELECT pg_temp.assume_user('d5000000-0000-4000-8000-000000000001');
+DO $$
+DECLARE v_budget jsonb;
+BEGIN
+  v_budget := public.get_project_working_budget(
+    (SELECT id FROM public.projects WHERE proposal_id = 'd5300000-0000-4000-8000-000000000001')
+  );
+  ASSERT v_budget->'version'->>'note'
+         = 'Studio working note — pad the seating line before the walkthrough.',
+    'studio working budget lost the version note';
+  ASSERT (v_budget->'checkpoint' ? 'overrideBy')
+    AND (v_budget->'checkpoint' ? 'overrideReason'),
+    'studio working budget lost the override rationale';
+END $$;
+SELECT pg_temp.assume_user('d5000000-0000-4000-8000-000000000002');
 
 -- Furnishings are authorized wave-by-wave after budget acknowledgement. The
 -- signed snapshot and paid deposit gate the existing create_purchase_order RPC.
@@ -673,6 +700,13 @@ BEGIN
           = v_bundle->'document'->>'proposalSendDispatchId'
       AND v_bundle->'furnishings'->>'sentAt' = v_bundle->'furnishings'->>'sent_at',
     'bundle persistent send status';
+  -- 00414: the client bundle names the document, not its parties, and never
+  -- carries the studio's internal reason for retiring an edition.
+  ASSERT NOT (v_bundle->'document' ? 'designerId')
+      AND NOT (v_bundle->'document' ? 'clientId'),
+    'bundle leaked party identities';
+  ASSERT NOT (v_bundle->'document' ? 'supersededReason'),
+    'bundle leaked the studio supersession rationale';
 END;
 $$;
 RESET ROLE;

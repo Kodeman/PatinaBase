@@ -24855,6 +24855,10 @@ export type Database = {
           token: string
         }[]
       }
+      create_furnishing_wave_draft: {
+        Args: { p_project_id: string; p_title: string }
+        Returns: Json
+      }
       create_furnishings_authorization: {
         Args: {
           p_project_id: string

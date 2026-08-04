@@ -7733,3 +7733,129 @@ DO $g$ BEGIN
   REVOKE ALL ON FUNCTION public._apply_client_decision_authorized( uuid, uuid, uuid, text, text, text, integer ) FROM PUBLIC, anon, authenticated, service_role;
 EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
 END $g$;
+
+-- 00414_design_services_rail_completion.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.begin_direction_from_discovery(uuid) FROM PUBLIC;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00414_design_services_rail_completion.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.begin_direction_from_discovery(uuid) TO authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00414_design_services_rail_completion.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.create_furnishing_wave_draft(uuid, text) FROM PUBLIC, anon, authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00414_design_services_rail_completion.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.create_furnishing_wave_draft(uuid, text) TO authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00414_design_services_rail_completion.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.send_proposal( uuid, timestamptz, integer, text, text, text, timestamptz ) FROM PUBLIC, anon, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00414_design_services_rail_completion.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.send_proposal( uuid, timestamptz, integer, text, text, text, timestamptz ) TO authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00414_design_services_rail_completion.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.publish_budget_checkpoint(uuid, uuid) FROM PUBLIC, anon, authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00414_design_services_rail_completion.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.publish_budget_checkpoint(uuid, uuid) TO authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00414_design_services_rail_completion.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public._execute_furnishings_authorization_authorized(uuid, text, uuid, text) FROM PUBLIC, anon, authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00414_design_services_rail_completion.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.countersign_design_services_agreement(uuid, text) FROM PUBLIC, anon, authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00414_design_services_rail_completion.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.countersign_design_services_agreement(uuid, text) TO authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00414_design_services_rail_completion.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.guard_budget_immutability() FROM PUBLIC, anon, authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00414_design_services_rail_completion.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.guard_commercial_ledger_write() FROM PUBLIC, anon, authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00414_design_services_rail_completion.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.get_client_commercial_document_bundle(uuid) FROM PUBLIC, anon, authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00414_design_services_rail_completion.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.get_client_commercial_document_bundle(uuid) TO authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00414_design_services_rail_completion.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.list_client_proposals() FROM PUBLIC, anon, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00414_design_services_rail_completion.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.list_client_proposals() TO authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00414_design_services_rail_completion.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.get_project_working_budget(uuid) FROM PUBLIC, anon, authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00414_design_services_rail_completion.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.get_project_working_budget(uuid) TO authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00414_design_services_rail_completion.sql
+DO $g$ BEGIN
+  REVOKE SELECT ON public.commercial_document_signatures FROM authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00414_design_services_rail_completion.sql
+DO $g$ BEGIN
+  GRANT SELECT ( id, proposal_id, party_role, signer_user_id, signed_name, evidence_fingerprint, signed_at, metadata ) ON public.commercial_document_signatures TO authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
