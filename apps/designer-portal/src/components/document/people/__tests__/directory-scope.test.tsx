@@ -14,8 +14,14 @@ jest.mock('@/lib/analytics/document-events', () => ({
   documentEvents: { wayfinding: { marginNote: jest.fn() } },
 }));
 
+// Captures the filters DirectoryView actually passes through to
+// usePeopleDirectory — this is the whole point of the spec below: the U6/Wave
+// 4 ruling ("BROWSE surfaces get the lens") only holds if the query itself is
+// scoped, not just the ScopeLens toggle's visual state.
+const mockUsePeopleDirectory = jest.fn(() => ({ data: [], isLoading: false }));
+
 jest.mock('@patina/supabase', () => ({
-  usePeopleDirectory: jest.fn(() => ({ data: [], isLoading: false })),
+  usePeopleDirectory: (...args: unknown[]) => mockUsePeopleDirectory(...args),
   useStudioContacts: jest.fn(() => ({ data: [], isLoading: false })),
   useArchiveStudioContact: () => ({ mutateAsync: jest.fn(), isPending: false }),
   useRestoreStudioContact: () => ({ mutateAsync: jest.fn(), isPending: false }),
@@ -28,6 +34,7 @@ jest.mock('@patina/supabase', () => ({
 
 beforeEach(() => {
   window.localStorage.clear();
+  mockUsePeopleDirectory.mockClear();
 });
 
 const NAV: PeopleViewProps = {
@@ -120,6 +127,36 @@ describe('DirectoryView — role chip set, flag on', () => {
 describe('DirectoryView — U6 (Wave 4): STUDIO is the default lens', () => {
   it("scope-lens.tsx's DEFAULT_CONTACT_SCOPE — the Room's single source of truth — is 'studio'", () => {
     expect(DEFAULT_CONTACT_SCOPE).toBe('studio');
+  });
+});
+
+describe('DirectoryView — U6 (Wave 4): the lens actually filters the query', () => {
+  beforeEach(() => {
+    mockUseFeatureFlag.mockReturnValue({ value: true, isLoading: false });
+  });
+
+  it('STUDIO (the default) passes no scope filter — the unfiltered, RLS-admitted read', () => {
+    renderDirectory({ scope: 'studio' });
+    expect(mockUsePeopleDirectory).toHaveBeenCalledWith({
+      role: 'all',
+      scope: undefined,
+    });
+  });
+
+  it('toggling to MINE passes scope: "mine" through to the query', () => {
+    renderDirectory({ scope: 'mine' });
+    expect(mockUsePeopleDirectory).toHaveBeenCalledWith({
+      role: 'all',
+      scope: 'mine',
+    });
+  });
+
+  it('MINE composes with a role chip other than "all"', () => {
+    renderDirectory({ scope: 'mine', role: 'client' });
+    expect(mockUsePeopleDirectory).toHaveBeenCalledWith({
+      role: 'client',
+      scope: 'mine',
+    });
   });
 });
 

@@ -39,7 +39,9 @@ export function useDeskReconnectPopulation(): DeskReconnectPopulation {
   // R53: the reconnect surface reads the whole directory once (per-designer,
   // small) and ranks it with the People Room's nurture queue — single-source
   // ranking. Never fails the Desk: while loading or empty, it renders nothing.
-  const query = usePeopleDirectory({ role: 'all' });
+  // studio visibility ≠ shared nurture queues — a relationship-action surface;
+  // the widened (00420) STUDIO roster stays explicitly mine here.
+  const query = usePeopleDirectory({ role: 'all', scope: 'mine' });
   const now = useMemo(() => new Date(), []);
 
   const reconnects = useMemo(() => {

@@ -107,6 +107,16 @@ export function PeopleRoom() {
     target: { kind: 'press', onPress: () => setAddOpen(true) },
   });
 
+  // Wave 4 (00420) scope ruling — left STUDIO-wide (unscoped) on purpose.
+  // `all` does three jobs here: the Room-wide "N people" count (browse), the
+  // ?person= deep-link role resolution (must reach anyone ⌘K or a cross-link
+  // could have named, including a studio-mate's party), and the Engine nudge
+  // (relationship-action — see the `nudge` useMemo below). That last use is a
+  // known gap: the nudge can currently surface a studio-mate's dormant tie,
+  // not just the signed-in designer's own. Not narrowed here because doing so
+  // would also starve the count/deep-link uses, which need the wide read;
+  // splitting the nudge onto its own `scope:'mine'` query is real, scoped-out
+  // follow-up, not this pass's fix.
   const { data: all } = usePeopleDirectory({ role: 'all' });
   const now = useMemo(() => new Date(), []);
 
