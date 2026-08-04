@@ -57,10 +57,37 @@ describe('designer commercial document hooks', () => {
       projectId: 'project-1',
       billingAuthorityId: 'authority-1',
       newlyExecuted: true,
+      notificationDelivery: 'delivered',
     }));
     expect(invoke).toHaveBeenCalledWith('commercial-document-notify', {
       body: { documentId: 'agreement-1', transition: 'executed' },
     });
+  });
+
+  it('keeps countersign durable while returning a retry posture for failed notice delivery', async () => {
+    rpc.mockResolvedValue({
+      data: {
+        proposalId: 'agreement-1',
+        commercialState: 'executed',
+        projectId: 'project-1',
+        agreementId: 'agreement-1',
+        billingAuthorityId: 'authority-1',
+        newlyExecuted: true,
+      },
+      error: null,
+    });
+    invoke.mockResolvedValue({ data: null, error: { message: 'edge unavailable' } });
+    const mutation = useCountersignDesignServicesAgreement('agreement-1') as unknown as {
+      mutationFn: (name: string) => Promise<Record<string, unknown>>;
+    };
+
+    const result = await mutation.mutationFn('Morgan Designer');
+
+    expect(result).toEqual(expect.objectContaining({
+      newlyExecuted: true,
+      notificationDelivery: 'pending_retry',
+    }));
+    expect(invoke).toHaveBeenCalledTimes(1);
   });
 
   it('publishes checkpoints and requires an audited override reason', async () => {
@@ -147,7 +174,7 @@ describe('designer commercial document hooks', () => {
       mutationFn: (proposalId: string) => Promise<unknown>;
     };
 
-    await mutation.mutationFn('wave-proposal-1');
+    const result = await mutation.mutationFn('wave-proposal-1') as Record<string, unknown>;
 
     expect(invoke).toHaveBeenCalledTimes(1);
     expect(invoke).toHaveBeenCalledWith('proposal-send', {
@@ -157,5 +184,40 @@ describe('designer commercial document hooks', () => {
         dispatchId: 'dispatch-1',
       },
     });
+    expect(result).toEqual(expect.objectContaining({
+      _emailDispatched: true,
+      _emailDeliveryState: 'delivered',
+      _emailRetryable: false,
+    }));
+  });
+
+  it('does not repeat the durable FF&E send when edge delivery is pending', async () => {
+    rpc
+      .mockResolvedValueOnce({
+        data: { documentFingerprint: 'fingerprint-1' },
+        error: null,
+      })
+      .mockResolvedValueOnce({
+        data: {
+          sentAt: '2026-08-03T12:00:00Z',
+          proposalSendDispatchId: 'dispatch-1',
+        },
+        error: null,
+      });
+    invoke.mockResolvedValue({ data: null, error: { message: 'edge unavailable' } });
+    const mutation = useSendFurnishingsAuthorization('project-1') as unknown as {
+      mutationFn: (proposalId: string) => Promise<Record<string, unknown>>;
+    };
+
+    const result = await mutation.mutationFn('wave-proposal-1');
+
+    expect(rpc).toHaveBeenCalledTimes(2);
+    expect(invoke).toHaveBeenCalledTimes(1);
+    expect(result).toEqual(expect.objectContaining({
+      _emailDispatched: false,
+      _emailDeliveryState: 'pending',
+      _emailRetryable: true,
+      proposalSendDispatchId: 'dispatch-1',
+    }));
   });
 });

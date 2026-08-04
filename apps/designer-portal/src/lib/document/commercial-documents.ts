@@ -103,6 +103,7 @@ export interface CountersignDesignServicesResult {
   agreementId: string;
   billingAuthorityId: string;
   newlyExecuted: boolean;
+  notificationDelivery?: "delivered" | "pending_retry" | "not_requested";
 }
 
 export type CommercialDocumentExperience =

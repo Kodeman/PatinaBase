@@ -215,6 +215,54 @@ describe('commercial document client adapter', () => {
     expect(furnishings?.furnishings?.items[0].description).toBe('Sectional');
   });
 
+  it('normalizes DB furnishings aliases and derives a safe deposit fallback', () => {
+    const furnishings = adaptCommercialDocumentBundle({
+      document: {
+        id: 'ffe-aliased',
+        projectId: 'project-1',
+        documentKind: 'furnishings_authorization',
+        commercialState: 'executed',
+        title: 'Den authorization',
+        totalAmountCents: 2_400_000,
+        depositPercent: 35,
+      },
+      furnishings: {
+        budgetCheckpointId: 'checkpoint-9',
+        depositPaid: 140_000,
+        items: [],
+      },
+    });
+
+    expect(furnishings?.furnishings).toMatchObject({
+      checkpointId: 'checkpoint-9',
+      depositRequiredCents: 840_000,
+      depositPaidCents: 140_000,
+    });
+  });
+
+  it('prefers authoritative deposit values, including an explicit zero', () => {
+    const furnishings = adaptCommercialDocumentBundle({
+      document: {
+        id: 'ffe-no-deposit',
+        documentKind: 'furnishings_authorization',
+        totalAmountCents: 2_400_000,
+        depositPercent: 35,
+      },
+      furnishings: {
+        budget_checkpoint_id: 'checkpoint-10',
+        deposit_required: 0,
+        deposit_paid: 0,
+        items: [],
+      },
+    });
+
+    expect(furnishings?.furnishings).toMatchObject({
+      checkpointId: 'checkpoint-10',
+      depositRequiredCents: 0,
+      depositPaidCents: 0,
+    });
+  });
+
   it('maps the flat furnishings-list contract to proposal-addressed client links', () => {
     const summary = adaptProjectCommercialSummary({
       projectId: 'project-1',
