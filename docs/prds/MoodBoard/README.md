@@ -4,13 +4,16 @@ Development handoff package for the reimagined Patina mood board. The direction
 deck was approved 2026-08-03; the four scope questions it left open are now
 decided (see [Decision log](#decision-log)).
 
-**Status (2026-08-03):** implementation and local integration are complete on
-`moodboard/ga-integration`. Kody approved direct 100% GA with 31 explicit
-pre-production/manual waivers; five production-only probes remain open for the
-ordered deployment verification. See the
+**Status (2026-08-03):** MoodBoard is deployed to direct 100% GA from main merge
+`625d8bbdf6db6e72ce5202488fcea189be68c7d2`, preserving Kody's 31 explicit
+historical pre-production/manual waivers. Deployment verification and the
+controlled authenticated designer/guest smoke passed; four former waivers and
+both Phase 1 analytics probes now have complete production evidence. Active
+status is 50 Passed, 27 Waived, 2 In progress, 5 Adapted, and 1 Superseded. The
+two In progress rows require future organic client-verdict or disabled
+background-removal telemetry. See the
 [acceptance ledger](./06-acceptance-evidence.md) and
-[release baseline](./07-release-baseline.md). This pre-deploy revision does not
-yet claim a production deployment.
+[release baseline](./07-release-baseline.md).
 
 ## Reading order
 
@@ -55,9 +58,10 @@ Rulings by **Kody**, 2026-08-03:
 
 - Ship directly to **100% GA**. There is no active designer cohort for a
   meaningful canary; run one controlled authenticated smoke walk after deploy.
-- Accept 31 release waivers while retaining their automated evidence and named
-  follow-ups: 43 Passed, 31 Waived, 5 production-only In progress, 5 Adapted,
-  and 1 Superseded.
+- Preserve the historical approval for 31 named release waivers while allowing
+  later production evidence to close them. Four are now Passed, leaving 50
+  Passed, 27 Waived, 2 production-only In progress, 5 Adapted, and 1
+  Superseded.
 - Use a prospective M2 baseline that closes after **both 30 days and 50
   completed room sessions**; accept the current M3 proxy and compare it with
   the first **10 genuine, distinct Done boards**.
@@ -74,6 +78,31 @@ Rulings by **Kody**, 2026-08-03:
 
 The measurement definitions, monitoring window, and full approval record are in
 [07-release-baseline.md](./07-release-baseline.md).
+
+### Production evidence
+
+- Applied Supabase migrations 00406–00411 and deployed Edge versions
+  `capture-from-url` v16, `spec-pdf` v18, and `board-asset-cleanup` v1. The
+  spec-sheet PDF retry passed after safe-image hotfix `ee8151e8`.
+- Verified healthy media deployment
+  `dd07e64e-d7f1-4c7b-84d0-525a2c14de80`, client deployment
+  `f10ceebd-5d8a-4eda-91da-567c913bff36`, and designer deployment
+  `50f6cce1-3535-43fe-aa93-39fa670059e4`. Mirror-parity hotfix `8406a864`
+  restored persisted section bands and the documented `surface = mirror`
+  presentation event; both passed the live probe.
+- Cleanup dry-run job 49718 succeeded with zero candidates and zero deletions;
+  destructive cleanup remains disabled.
+- The [MoodBoard GA PostHog dashboard](https://us.posthog.com/project/326191/dashboard/1949127)
+  is ready with corrected 17-series GA0 coverage, M1–M8, export-failure,
+  guest-renderer, and critical-exception tiles. The production walk exercised
+  the editor, Present/Edit, three exports, template lifecycle, scoped share
+  create/view/revoke, all three proposal entry sources, and project
+  continuation. Retained QA boards
+  `0ac0e62f-3969-4e11-b83f-8163c4637788` and
+  `a34f2026-647c-4b67-b0fc-7a3f1a6db9a5` are excluded from organic KPI
+  reporting. AC2.25 and AC3.27 remain In progress only because no client
+  verdict or disabled background-removal event was manufactured; M8's first
+  eligible authenticated client render remains prospective.
 
 ### Open items (not decided)
 

@@ -1,9 +1,11 @@
 # MoodBoard acceptance evidence ledger
 
 **Audit date:** 2026-08-03
-**Release state:** **Approved by Kody on 2026-08-03 for direct 100% GA with
-explicit release-owner waivers. Five production-only probes remain open and
-must be resolved by the ordered deployment verification.**
+**Release state:** **Deployed to direct 100% GA from main merge
+`625d8bbdf6db6e72ce5202488fcea189be68c7d2` with the explicit release-owner
+waivers preserved. Deployment verification and the controlled authenticated
+designer/guest smoke passed. Two analytics criteria remain prospective: a real
+client verdict and background-removal events while that feature is disabled.**
 
 This is the release gate for the one-time MoodBoard GA. The phase PRDs remain
 authoritative for criterion wording. Every row below has a named workstream,
@@ -15,9 +17,9 @@ or local-stack behavior that was actually observed.
 
 | Status | Count | Meaning |
 |---|---:|---|
-| Passed | 43 | The complete criterion was demonstrated by an observed automated or local-stack check. |
-| Waived | 31 | Kody approved the named pre-production or manual evidence gap on 2026-08-03 for direct GA. The retained automated evidence remains valid; a waiver is not a pass. |
-| In progress | 5 | Implementation and automated evidence exist, but the criterion requires the production deployment probe. |
+| Passed | 50 | The complete criterion was demonstrated by an observed automated, local-stack, or production check. |
+| Waived | 27 | Kody approved the named pre-production or manual evidence gap on 2026-08-03 for direct GA. The retained automated evidence remains valid; a waiver is not a pass. |
+| In progress | 2 | Implementation and automated evidence exist, but the criterion requires future organic production analytics observations. |
 | Adapted | 5 | The approved/intentional GA architecture supersedes the literal test shape; rationale and replacement evidence are in the row. |
 | Superseded | 1 | The approved always-on GA decision removed the flag-off legacy behavior. |
 | **Total** | **85** | 33 Phase 1 + 25 Phase 2 + 27 Phase 3. |
@@ -26,16 +28,17 @@ No criterion is “Pending” or “Unassigned.”
 
 ### Release-owner waiver record
 
-`GA-WAIVER-2026-08-03` applies to all 31 rows marked **Waived**: Kody,
-release owner, approved them on 2026-08-03 so the product can move directly to
-100% GA. The rationale is that implementation and the automated/local-stack
-evidence are complete enough for release, there is no active designer cohort
-for a meaningful canary, and the remaining pre-production browser, hardware,
-visual, persistence, or served-function observations are non-blocking. Each
-row retains the evidence already gathered and names the observation being
-waived. This decision does not convert those rows to Passed. AC1.3, AC1.33,
-AC2.25, AC3.10, and AC3.27 are excluded because their production observations
-remain part of the release probe.
+`GA-WAIVER-2026-08-03` is the historical approval for 31 named rows: Kody,
+release owner, approved them on 2026-08-03 so the product could move directly
+to 100% GA. Four of those rows (AC1.29, AC2.19, AC2.22, and AC3.6) subsequently
+received complete production evidence and are now Passed; 27 remain Waived.
+The rationale is that implementation and the automated/local-stack evidence
+were complete enough for release, there was no active designer cohort for a
+meaningful canary, and the remaining pre-production browser, hardware, visual,
+persistence, or served-function observations were non-blocking. A waiver is
+not a pass. AC1.3, AC1.33, AC2.25, and AC3.27 were excluded from the historical
+waiver because their production analytics observations remained part of the
+release probe; the first two are now Passed.
 
 ## Evidence command catalog
 
@@ -60,14 +63,41 @@ Commands were run from the repository root unless a row says otherwise.
 | SQL-ATOMIC | `supabase/tests/mood_boards/atomic_room_state_test.sql` — `psql 'postgresql://postgres:postgres@127.0.0.1:54322/postgres' -v ON_ERROR_STOP=1 -f supabase/tests/mood_boards/atomic_room_state_test.sql`. | Passed. |
 | STORAGE-LIVE | `supabase/tests/mood_boards/storage_lifecycle_integration_test.ts` — after a fresh local reset, `MOOD_BOARD_LOCAL_STACK=1 deno test --config supabase/functions/deno.json --import-map supabase/tests/mood_boards/storage_lifecycle_import_map.json --allow-env --allow-net --allow-read --allow-run supabase/tests/mood_boards/storage_lifecycle_integration_test.ts`. | 1/1 passed in 34s against real local Storage/PostgREST/DB; teardown proved zero fixture residue. |
 | CLEANUP-DENO | `supabase/functions/board-asset-cleanup/{core_test,run_test}.ts` — `deno test --allow-all --config supabase/functions/deno.json supabase/functions/board-asset-cleanup/core_test.ts supabase/functions/board-asset-cleanup/run_test.ts`. | 7/7 passed. |
-| PDF-DENO | `supabase/functions/_shared/spec-pdf{.importers,,.types}.test.ts` and `supabase/functions/spec-pdf/{core,image-loader}.test.ts` — `deno test --config supabase/functions/deno.json --allow-env --allow-read --allow-net --node-modules-dir=auto supabase/functions/_shared/spec-pdf.importers.test.ts supabase/functions/_shared/spec-pdf.test.ts supabase/functions/_shared/spec-pdf.types.test.ts supabase/functions/spec-pdf/core.test.ts supabase/functions/spec-pdf/image-loader.test.ts`. | 32/32 passed: 24 shared structural checks plus 8 importer/type/core/image checks. |
+| PDF-DENO | `supabase/functions/_shared/spec-pdf{.importers,,.types}.test.ts` and `supabase/functions/spec-pdf/{core,image-loader,pdf-logo}.test.ts` — `deno test --config supabase/functions/deno.json --allow-env --allow-read --allow-net --node-modules-dir=auto supabase/functions/_shared/spec-pdf.importers.test.ts supabase/functions/_shared/spec-pdf.test.ts supabase/functions/_shared/spec-pdf.types.test.ts supabase/functions/spec-pdf/core.test.ts supabase/functions/spec-pdf/image-loader.test.ts supabase/functions/spec-pdf/pdf-logo.test.ts`. | 35/35 passed: shared structural/importer/type checks plus core, image-loader, and safe logo-hydration regressions; Deno check and lint also passed. |
 | EDGE-SSRF | `supabase/functions/capture-from-url/ssrf{,_response_parser,_transport}_test.ts` and `supabase/functions/spec-pdf/image-loader.test.ts` — `deno test --config supabase/functions/deno.json --allow-env --allow-net --allow-read --node-modules-dir=auto supabase/functions/capture-from-url/ssrf_test.ts supabase/functions/capture-from-url/ssrf_response_parser_test.ts supabase/functions/capture-from-url/ssrf_transport_test.ts supabase/functions/spec-pdf/image-loader.test.ts`. | 20/20 passed: vetted-IP connection pinning, per-hop redirect repinning, rebinding refusal, strict HTTP framing/limits, absolute deadline, public-address validation, and PDF image reuse. Hosted Edge transport remains a PROD-PROBE. |
 | MEDIA-GATES | `services/media/src/modules/background-removal/*.spec.ts`, `services/media/test/background-removal.e2e-spec.ts` — `pnpm --filter @patina/media test -- --runInBand src/modules/background-removal && pnpm --filter @patina/media test:e2e -- --runInBand test/background-removal.e2e-spec.ts && pnpm --filter @patina/media build`. | Focused background-removal unit 57/57, focused e2e 6/6, and strict Nest build passed. The unrelated full media suite is not claimed green. |
-| ANALYTICS-UNIT | Designer `src/lib/analytics/__tests__/mood-board-events.test.ts`; client `src/lib/analytics/__tests__/{mood-board-events,mood-board-server}.test.ts` — `pnpm --filter @patina/designer-portal test -- --runInBand src/lib/analytics/__tests__/mood-board-events.test.ts && pnpm --filter @patina/client-portal test -- --runInBand src/lib/analytics/__tests__/mood-board-events.test.ts src/lib/analytics/__tests__/mood-board-server.test.ts`. | Taxonomy, lineage, renderer success/failure, privacy-safe exception, and server-event tests passed. Production capture is not yet probed. |
+| ANALYTICS-UNIT | Designer `src/lib/analytics/__tests__/mood-board-events.test.ts`; client `src/lib/analytics/__tests__/{mood-board-events,mood-board-server}.test.ts` — `pnpm --filter @patina/designer-portal test -- --runInBand src/lib/analytics/__tests__/mood-board-events.test.ts && pnpm --filter @patina/client-portal test -- --runInBand src/lib/analytics/__tests__/mood-board-events.test.ts src/lib/analytics/__tests__/mood-board-server.test.ts`. | Taxonomy, lineage, renderer success/failure, privacy-safe exception, and server-event tests passed. Observed production captures are named in PROD-PROBE; the unavailable verdict/background-removal outcomes remain prospective. |
 | STATIC-CONTRACT | Renderer sources plus `apps/designer-portal/src/lib/document/__tests__/proposal-mirror-contract.test.ts` — `rg -n 'BoardStatic|BoardComposition|BoardsBlock' apps packages/patina-design-system/src && pnpm --filter @patina/designer-portal test -- --runInBand src/lib/document/__tests__/proposal-mirror-contract.test.ts`. | Shared-wrapper/direct-renderer contract passed; legacy `BoardStatic` is absent. |
 | MANUAL-GESTURE | Start `pnpm dev:designer`; on a real precision trackpad run AC1.6 at 5%, 100%, and 400%, recording a Playwright trace/video and console log. | Not yet signed off. |
 | MANUAL-PARITY | Start `pnpm dev:designer` and `pnpm --filter @patina/design-system storybook`; render the golden fixture on room Present, proposal mirror, authenticated client, guest share, and compare screenshots with the shared fixture. | Not yet signed off. |
-| PROD-PROBE | Ordered deployment behavior probe from `05-implementation-addendum.md`: live analytics event inspection, edge-function 200/404 requests, Cloudflare deployment lists, and production object/security checks. | Not run; no production deployment is claimed by this ledger. |
+| PROD-PROBE | Ordered deployment behavior probe from `05-implementation-addendum.md`: migration/function/service/portal deployment inspection, live analytics event inspection, and production maintenance/security checks. | Main merge `625d8bbdf6db6e72ce5202488fcea189be68c7d2`, spec-PDF hotfix `ee8151e8`, and mirror-parity hotfix `8406a864`; migrations 00406–00411 applied; Edge versions `capture-from-url` v16, `spec-pdf` v18, and `board-asset-cleanup` v1; healthy media deployment `dd07e64e-d7f1-4c7b-84d0-525a2c14de80`; client `f10ceebd-5d8a-4eda-91da-567c913bff36`; designer `50f6cce1-3535-43fe-aa93-39fa670059e4`. Cleanup dry-run job 49718 succeeded with zero candidates/deletions and destructive mode disabled. The controlled authenticated designer/guest smoke exercised editor, Present/Edit, three export kinds, template lifecycle, share create/view/revoke, three proposal entry sources, project continuation, and live mirror parity. The [MoodBoard GA dashboard](https://us.posthog.com/project/326191/dashboard/1949127) has durable GA0, M1–M8, export-failure, guest-renderer, and critical-exception tiles. |
+
+### Controlled production smoke record
+
+The retained proposal QA artifact is board
+`0ac0e62f-3969-4e11-b83f-8163c4637788` on proposal
+`47a36fe9-42d5-4ac2-baf7-0c49f01cd35f`, named
+`QA MoodBoard GA 2026-08-03 — retain`. Temporary interaction notes and the
+temporary studio template were deleted. PNG and composition PDF succeeded. The
+first spec-sheet PDF exposed an SVG/font incompatibility; hotfix `ee8151e8`
+hydrates safe PNG/JPEG inputs and omits unsafe logo assets, and the production
+retry succeeded on `spec-pdf` v18. A board-scoped share was created, viewed as
+a guest with no edit or verdict controls, then revoked; the revoked URL showed
+“This link isn’t available.”
+
+The retained project-continuity QA artifact is board
+`a34f2026-647c-4b67-b0fc-7a3f1a6db9a5` on project
+`1ec56674-c2c6-4534-b8f0-70c1e34a2f9f`, named
+`QA MoodBoard GA continuity 2026-08-03 — retain`. It was created from frozen
+snapshot `e950cdc6-4b7a-4508-8980-ca1ea05e4e17`, edited, flushed through Done,
+reopened from the project surface, and remained the sole continuation. Exclude
+both retained board IDs from organic KPI reporting.
+
+After mirror-parity hotfix `8406a864`, the production proposal mirror rendered
+the retained board's persisted `The feeling` and `The pieces` section bands and
+PostHog ingested `mood_board_presented` with `surface = mirror`, duration, item
+and section counts, and proposal lineage. The designer deployment is
+`50f6cce1-3535-43fe-aa93-39fa670059e4`.
 
 ## Phase 1 — The Room
 
@@ -75,7 +105,7 @@ Commands were run from the repository root unless a row says otherwise.
 |---|---|---|---|---|---|
 | AC1.1 | R1.1 | Full-viewport `/board/<id>`, no desk chrome/page scroll/layout shift | Room shell — Designer portal | Adapted | Always-on GA removes the flag precondition. ROOM-E2E test “owns the viewport…” passed; the 44px/focus/scroll-lock checks are in the same path. |
 | AC1.2 | R1.1.5, R1.2.2 | Flag-off redirect and legacy inline editor | Product architecture | Superseded | Approved one-release GA removes the flag-off path and legacy inline editor. Replacement behavior is AC1.1; see `05-implementation-addendum.md` and ROOM-E2E. |
-| AC1.3 | R1.2.5 | Drafting strip, desk recents, and command bar emit distinct open sources | Entry + analytics — Designer portal | In progress | `apps/designer-portal/src/lib/mood-board/navigation.test.ts` via ROOM-UNIT and ANALYTICS-UNIT cover source contracts; PROD-PROBE must observe all three live captures. |
+| AC1.3 | R1.2.5 | Drafting strip, desk recents, and command bar emit distinct open sources | Entry + analytics — Designer portal | Passed | Navigation and analytics contracts pass via ROOM-UNIT/ANALYTICS-UNIT. PROD-PROBE observed `mood_board_opened` for the retained proposal board with `source` equal to `drafting_strip`, `desk_recents`, and `command_bar`. |
 | AC1.4 | R1.2.4 | Command-bar board results outrank Drafting Room and navigate to the board | Desk navigation — Designer portal | Waived | `apps/designer-portal/src/lib/mood-board/navigation.test.ts` via ROOM-UNIT proves ranking/URL construction; interactive command-bar selection remains a release browser probe. |
 | AC1.5 | R1.3.2 | Done/Escape origin fallback and malicious `from` rejection | Room navigation — Designer portal | Waived | Navigation unit tests via ROOM-UNIT cover validation/fallback order; browser coverage of every return origin remains. |
 | AC1.6 | R1.5.2, R1.5.3, R1.5.5 | Trackpad pan, pointer-anchored command-wheel/pinch zoom, Space-drag | Canvas QA — Design system | Waived | CANVAS-UNIT proves plain-wheel pan and control-wheel anchoring; real pinch/two-finger/Space-drag sign-off is MANUAL-GESTURE. |
@@ -101,11 +131,11 @@ Commands were run from the repository root unless a row says otherwise.
 | AC1.26 | R1.16.3 | Section membership derives from center-in-band and clears outside | Sections — Designer portal | Waived | COMMAND-UNIT AC1.26 and CANVAS-UNIT section-bounds behavior passed; persisted enter/leave DB assertions remain. |
 | AC1.27 | R1.16.4 | Dragging a band moves it and members as one undoable command | Sections — Designer portal | Passed | CANVAS-UNIT, COMMAND-UNIT, and CONTROLLER-UNIT AC1.27 passed. |
 | AC1.28 | R1.17.5 | Phase-local legacy renderer byte diff/non-regression | Unified renderer — Design system | Adapted | The renderer landed as one shared `BoardComposition`/ `BoardsBlock` path, so preserving obsolete files byte-for-byte is not meaningful. RENDER-UNIT and STATIC-CONTRACT replace that check; AC2.1 retains the cross-surface visual sign-off. |
-| AC1.29 | R1.18.4 | Project-owned room edits and flushes without barrier error | Project boards — Designer portal | Waived | CONTROLLER-UNIT AC1.29, SUPABASE-UNIT owner hooks, and SQL-ATOMIC cover the owner leg; a routed local-browser project edit/exit remains. |
+| AC1.29 | R1.18.4 | Project-owned room edits and flushes without barrier error | Project boards — Designer portal | Passed | CONTROLLER-UNIT, SUPABASE-UNIT, and SQL-ATOMIC cover the owner leg. PROD-PROBE created retained project board `a34f2026-647c-4b67-b0fc-7a3f1a6db9a5`, renamed it, observed the save barrier clear, exited through Done, and reopened the persisted board without error. |
 | AC1.30 | R1.19.1, R1.19.2, R1.19.5 | Tab/Enter/arrows/live-region keyboard contract | Accessibility — Designer portal | Waived | CANVAS-UNIT and ROOM-E2E cover focus-driven arrows, selection, and containment; exhaustive Tab/Enter/live-region announcement capture remains. |
 | AC1.31 | R1.19.6 | Reduced motion removes easing/animation while guides remain | Accessibility — Designer portal | Waived | ROOM-E2E verifies bounded mobile room and disabled canvas motion; a guide-visible reduced-motion capture remains. |
 | AC1.32 | R1.19.4 | Closing portalled picker preserves room body lock | Accessibility — Designer portal | Passed | ROOM-E2E plus `apps/designer-portal/src/lib/__tests__/full-screen-boundary.test.ts` via ROOM-UNIT prove ref-counted lock/focus behavior. |
-| AC1.33 | Analytics | Four Phase 1 events and all Done booleans | Analytics — Designer portal | In progress | ANALYTICS-UNIT proves names/properties and callers; PROD-PROBE must observe real captures and all four `used_*` values. |
+| AC1.33 | Analytics | Four Phase 1 events and all Done booleans | Analytics — Designer portal | Passed | ANALYTICS-UNIT proves names/properties and callers. PROD-PROBE observed `mood_board_opened`, `mood_board_item_added`, `mood_board_arranged`, and `mood_board_done`; the original drafting session’s Done event had `used_undo`, `used_multiselect`, `used_tidy`, and `used_handles` all true. |
 
 ## Phase 2 — The Audience
 
@@ -129,13 +159,13 @@ Commands were run from the repository root unless a row says otherwise.
 | AC2.16 | R2.4.3 | True project-owned board can be shared and resolved | Share security — Supabase | Passed | SQL-SHARE now mints, resolves, and revokes a board with `project_id` set and `proposal_id` null. |
 | AC2.17 | R2.4.7 | Pre-migration proposal shares remain compatible | Share migrations — Supabase | Passed | SQL-UPGRADE creates the legacy row before migration replay and resolves it afterward. |
 | AC2.18 | R2.4.6 | Revoke produces 404 and persisted revoked status | Share security — Supabase/designer portal | Passed | SQL-SHARE and `board-share-dialog.test.tsx` via ROOM-UNIT cover resolver denial and scoped revoke. |
-| AC2.19 | R2.5.1 | Project surface lists live boards and opens each room | Project boards — Designer portal | Waived | `apps/designer-portal/src/components/document/project-mood-boards.test.tsx` via ROOM-UNIT and SUPABASE-UNIT cover listing/URLs; routed browser navigation remains. |
+| AC2.19 | R2.5.1 | Project surface lists live boards and opens each room | Project boards — Designer portal | Passed | Project mood-board unit coverage and SUPABASE-UNIT cover listing/URLs. PROD-PROBE showed `1 live · 1 frozen`, opened the sole live board, and observed `mood_board_opened` with `source = project_surface`. |
 | AC2.20 | R2.5.2, R2.5.3 | Frozen ID-less snapshot is read-only and safe | Project renderer — Designer portal/design system | Passed | Project mood-board unit plus RENDER-UNIT prove ID-less snapshots have no interactive overlays and do not throw. |
 | AC2.21 | R2.5.4, R2.5.5 | Continue creates one live board and repeat offers lineage board | Project continuity — Supabase/designer portal | Passed | Project mood-board unit and SQL-LINEAGE prove creation/navigation intent and deduplicated source lineage. |
-| AC2.22 | R2.5.6, R2.5.7 | Project chip/Done origin/flush all succeed in routed room | Project room — Designer portal | Waived | CONTROLLER-UNIT AC1.29 proves flush and owner naming; routed chip plus Done-origin browser evidence remains. |
+| AC2.22 | R2.5.6, R2.5.7 | Project chip/Done origin/flush all succeed in routed room | Project room — Designer portal | Passed | CONTROLLER-UNIT proves flush and owner naming. PROD-PROBE observed the project chip, persisted the edit after the save barrier cleared, and Done returned to `/doc/1ec56674-c2c6-4534-b8f0-70c1e34a2f9f`. |
 | AC2.23 | R2.6.1 | Three surfaces directly import `BoardComposition`, no local layout | Unified renderer architecture | Adapted | Client and guest intentionally use the shared `BoardsBlock` wrapper, which itself maps `BoardComposition`; mirror imports it directly. STATIC-CONTRACT proves no surface-local layout. |
 | AC2.24 | R2.6.2 | `BoardStatic` deprecated with zero imports | Unified renderer architecture | Adapted | Stronger result: `BoardStatic` was deleted, not retained/deprecated. STATIC-CONTRACT confirms no declaration or import remains. |
-| AC2.25 | Analytics | Five Phase 2 events and documented properties | Analytics — Designer/client portals | In progress | ANALYTICS-UNIT covers names, owner lineage, server share view, and client-only verdict emission; PROD-PROBE remains. |
+| AC2.25 | Analytics | Five Phase 2 events and documented properties | Analytics — Designer/client portals | In progress | ANALYTICS-UNIT covers names, owner lineage, server share view, and client-only verdict emission. PROD-PROBE observed presented, shared, server-side share-viewed, and project-board-continued events with documented lineage. `mood_board_verdict_given` remains prospective because no authorized client verdict was manufactured. |
 
 ## Phase 3 — The Reach
 
@@ -146,11 +176,11 @@ Commands were run from the repository root unless a row says otherwise.
 | AC3.3 | R3.1.1.5 | Wait for fonts; forced failure uses stable system fallback | Export rendering — Design system | Passed | RENDER-UNIT painter tests cover `document.fonts.ready` ordering and forced rejection fallback. |
 | AC3.4 | R3.1.1.6 | Deleted image object becomes labelled placeholder without abort | Export rendering — Designer portal | Waived | RENDER-UNIT and `board-export-dialog.test.tsx` via ROOM-UNIT prove placeholder reporting; deletion from real Storage followed by browser export remains. |
 | AC3.5 | R3.1.1.7 | 100 pins export under 10s with progress and responsive yielding | Export rendering — Design system | Passed | RENDER-UNIT 100-image test asserts <10s, bounded concurrency, monotonic determinate progress, and cooperative yields. |
-| AC3.6 | R3.1.2.1 | Composition PDF works; legacy board tile PDF unchanged | PDF edge function — Supabase | Waived | PDF-DENO structurally proves both kinds and legacy regression; local served-function HTTP 200/content probes for both payloads remain. |
+| AC3.6 | R3.1.2.1 | Composition PDF works; legacy board tile PDF unchanged | PDF edge function — Supabase | Passed | PDF-DENO structurally proves both kinds and the legacy regression. PROD-PROBE downloaded the composition PDF and, after the safe-image hotfix, the spec-sheet PDF from `spec-pdf` v18. |
 | AC3.7 | R3.1.2.2 | Export UI separates Composition and Spec sheet | Export UX — Designer portal | Passed | `apps/designer-portal/src/components/mood-board/board-export-dialog.test.tsx` via ROOM-UNIT proves distinct labels and request kinds. |
 | AC3.8 | R3.1.2.6 | Other designer receives uniform 404 for both PDF kinds | PDF authorization — Supabase | Passed | PDF-DENO core authorization checks prove exact-owner-only access and indistinguishable 404 responses. |
 | AC3.9 | R3.1.2.5 | Composition model type has no internal money fields | PDF model — Supabase | Passed | `supabase/functions/_shared/spec-pdf.types.test.ts` and shared model tests via PDF-DENO reject trade/markup/margin at type and runtime shape levels. |
-| AC3.10 | R3.1.2.8 | Every shared-PDF importer enumerated and redeployed | Edge-function release — Supabase | In progress | `spec-pdf.importers.test.ts` via PDF-DENO proves the manifest is exhaustive; PROD-PROBE deployment of every listed importer remains. |
+| AC3.10 | R3.1.2.8 | Every shared-PDF importer enumerated and redeployed | Edge-function release — Supabase | Passed | `spec-pdf.importers.test.ts` via PDF-DENO proves the manifest is exhaustive; `spec-pdf` is the sole shared-PDF importer and PROD-PROBE confirms it is ACTIVE at v18. |
 | AC3.11 | R3.2.1–R3.2.4 | 30s cover persists at stable path; launcher/fallback render | Cover lifecycle — Designer portal/Supabase | Passed | STORAGE-LIVE waited the real 30s and verified Storage+DB; `board-cover-art.test.tsx` and lifecycle tests via ROOM-UNIT cover launcher/fallback. |
 | AC3.12 | R3.3.1, R3.3.3 | Product URL placeholder resolves with provenance/host | URL unfurl — Designer portal/Supabase | Waived | `url-unfurl.test.ts`, hook tests, and edge extract tests pass via ROOM-UNIT/Deno; one real reachable-site local-stack resolution remains. |
 | AC3.13 | R3.3.1 | Failed scrape becomes an editable URL note | URL unfurl — Designer portal | Passed | `apps/designer-portal/src/lib/mood-board/url-unfurl.test.ts` via ROOM-UNIT proves deterministic same-ID note fallback and readable failure. |
@@ -167,13 +197,14 @@ Commands were run from the repository root unless a row says otherwise.
 | AC3.24 | R3.6.4, R3.6.5 | Seeded/studio groups materialize real rows with no template link | Templates — Supabase/designer portal | Passed | SQL-TEMPLATE proves fresh board/item materialization; `board-template-dialog.test.tsx` and SUPABASE-UNIT cover both UI/RPC owner legs. |
 | AC3.25 | R3.6.6, RLS | Studio template rename/delete works; seeded mutation denied | Templates — Supabase | Passed | SQL-TEMPLATE exercises own-studio management and seeded update/delete refusal under authenticated RLS. |
 | AC3.26 | RLS | Studio A cannot read/update/delete studio B template | Templates — Supabase | Passed | SQL-TEMPLATE executes the cross-studio visibility/mutation denial. |
-| AC3.27 | Analytics | Seven Phase 3 events and documented properties | Analytics — Designer portal | In progress | ANALYTICS-UNIT proves taxonomy/properties and no-op safety; PROD-PROBE must observe all seven outcomes, including failures. |
+| AC3.27 | Analytics | Seven Phase 3 events and documented properties | Analytics — Designer portal | In progress | ANALYTICS-UNIT proves taxonomy/properties and no-op safety. PROD-PROBE observed template use/save and export success/failure outcomes. URL-unfurl and background-removal outcomes remain organic/prospective; background removal is intentionally disabled, so its events were not manufactured. |
 
 ## Release-wide gate
 
-- [x] Kody approved direct 100% GA and `GA-WAIVER-2026-08-03` for the 31
-  pre-production/manual gaps. Current result: 43 Passed, 31 Waived, 5 In
-  progress, 5 Adapted, 1 Superseded.
+- [x] Kody approved direct 100% GA and `GA-WAIVER-2026-08-03` for 31
+  historical pre-production/manual gaps. Four later received complete
+  production evidence. Current result: 50 Passed, 27 Waived, 2 In progress,
+  5 Adapted, 1 Superseded.
 - [x] M1–M8 release measurement is approved. M2 uses a prospective 30-day and
   50-session baseline, M3 accepts the snapshot proxy before the first 10
   genuine Done boards, and M8 uses the controlled-smoke/prospective policy in
@@ -190,15 +221,28 @@ Commands were run from the repository root unless a row says otherwise.
   regression tests pass locally.
 - [x] Remaining pre-production served-function/browser/manual observations are
   retained in their rows and explicitly waived for this release.
-- [ ] Production migrations/functions/media/client/designer deployment and
-  post-deploy object, security, analytics, and deployment-list probes pass.
+- [x] Main merge `625d8bbdf6db6e72ce5202488fcea189be68c7d2`,
+  migrations 00406–00411, all enumerated Edge importers/functions, media,
+  client, and designer deployments are verified. Media is healthy; cleanup
+  dry-run job 49718 succeeded with zero candidates/deletions and destructive
+  mode disabled.
+- [x] The authenticated designer/guest production smoke observed the three
+  entry sources, the full Phase 1 Done contract, export outcomes, share view,
+  and project continuity. AC2.25 and AC3.27 remain In progress only for future
+  organic verdict/background-removal observations; those outcomes were not
+  manufactured.
 
 ## Claim boundary
 
-Direct 100% GA is approved, but no production deployment or production behavior
-probe is claimed by this pre-deploy revision. Browser evidence is
-Chromium/local-stack unless a row says otherwise. iOS evidence is simulator
+Direct 100% GA deployment and the production evidence named in PROD-PROBE are
+claimed, including the authenticated designer/guest smoke. An authenticated
+client-proposal renderer sample is not claimed: the current QA account had no
+authorized eligible proposal, and the no-external-send constraint prohibited
+creating one through an invitation or magic link. A board-scoped guest share is
+not a substitute for the M8 `surface = client_proposal` sample, so M8 remains
+prospective under its approved 20-render/30-day window. Other browser evidence
+is Chromium/local-stack unless a row says otherwise. iOS evidence is simulator
 compile/focused decoding, not physical-device or live-backend validation. The
-client portal's unrelated pre-existing full-suite failures and the
-design-system's unrelated Text assertions are not treated as MoodBoard passes
-or failures; focused changed-surface gates are named above.
+client portal's unrelated pre-existing full-suite failures and the design-
+system's unrelated Text assertions are not treated as MoodBoard passes or
+failures; focused changed-surface gates are named above.
