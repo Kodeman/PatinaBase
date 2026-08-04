@@ -112,7 +112,36 @@ Deno.serve(async (req: Request) => {
     });
     const { data: authData } = await callerClient.auth.getUser();
     const callerId = authData.user?.id;
-    if (!callerId || (callerId !== proposal.client_id && callerId !== proposal.designer_id)) {
+    let authorized = callerId === proposal.client_id || callerId === proposal.designer_id;
+    if (callerId && !authorized) {
+      const { data: actorMemberships } = await admin
+        .from('organization_members')
+        .select('organization_id')
+        .eq('user_id', callerId)
+        .eq('status', 'active')
+        .neq('role', 'guest');
+      const organizationIds = (actorMemberships ?? []).map((row: any) => row.organization_id);
+      if (organizationIds.length > 0) {
+        const { data: ownerMemberships } = await admin
+          .from('organization_members')
+          .select('organization_id')
+          .eq('user_id', proposal.designer_id)
+          .eq('status', 'active')
+          .neq('role', 'guest')
+          .in('organization_id', organizationIds);
+        const sharedIds = (ownerMemberships ?? []).map((row: any) => row.organization_id);
+        if (sharedIds.length > 0) {
+          const { count } = await admin
+            .from('organizations')
+            .select('id', { count: 'exact', head: true })
+            .in('id', sharedIds)
+            .eq('type', 'design_studio')
+            .eq('status', 'active');
+          authorized = (count ?? 0) > 0;
+        }
+      }
+    }
+    if (!callerId || !authorized) {
       return json({ error: 'document_not_found' }, 404);
     }
   }
