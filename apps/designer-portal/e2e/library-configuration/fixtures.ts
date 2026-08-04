@@ -1,6 +1,16 @@
 /**
  * Seed/teardown fixtures for the library-configuration e2e walks.
  *
+ * ── HOW TO RUN THIS SUITE ──────────────────────────────────────────────────
+ *   pnpm --filter @patina/designer-portal test:e2e:library
+ * That script is the only sanctioned entry point: chromium-only, `--workers=1`.
+ * `playwright.config.ts` sets `fullyParallel: true` and leaves `workers`
+ * unpinned off CI, so a plain `playwright test` runs these spec FILES in
+ * separate workers — where they race one shared local database as one seeded
+ * designer (the spec-book singleton, decision publishes, the picker's library
+ * list). `test.describe.configure({ mode: 'serial' })` only orders tests WITHIN
+ * a file; the cross-file pinning has to come from the runner.
+ *
  * Composes the two sanctioned e2e data helpers:
  *   · `helpers/supabase-admin` — the service-role client, for plain table writes.
  *   · `helpers/psql`           — `psqlAsUser`, for the SECURITY DEFINER RPCs that
@@ -67,6 +77,89 @@ export function designerAndClientIds(): { designerId: string; clientId: string }
     designerId: userIdByEmail(DESIGNER_EMAIL),
     clientId: userIdByEmail(CLIENT_EMAIL),
   };
+}
+
+// ─── Seed scope: what this run created, tracked AS IT IS CREATED ────────────
+//
+// A `beforeAll` that seeds three rows and assigns the ids at the END leaks
+// every row it managed to create before it threw — the afterAll then reads
+// empty arrays and deletes nothing, and the shared local database keeps them
+// forever. So: one scope object, pushed to the instant each row exists, and a
+// teardown that attempts EVERY resource even when one of them fails.
+
+export interface SeedScope {
+  projectIds: string[];
+  productIds: string[];
+  decisionTitles: string[];
+}
+
+export function seedScope(): SeedScope {
+  return { projectIds: [], productIds: [], decisionTitles: [] };
+}
+
+/** Seed a project and record it before the caller can drop it on the floor. */
+export async function seedProjectIn(
+  scope: SeedScope,
+  name: string,
+  designerId: string,
+  clientId: string,
+): Promise<string> {
+  const id = await seedProject(name, designerId, clientId);
+  scope.projectIds.push(id);
+  return id;
+}
+
+/** Seed a product and record it before authoring its schema can throw. */
+export async function seedProductIn(
+  scope: SeedScope,
+  opts: { name: string; ownerUserId: string; priceRetail?: number },
+): Promise<string> {
+  const id = await seedProduct(opts);
+  scope.productIds.push(id);
+  return id;
+}
+
+/**
+ * Register a decision title the walk is about to publish. Titles are known
+ * before the run starts, so they are tracked up front — the row they name may
+ * or may not come to exist, and deleting a title that never landed is a no-op.
+ */
+export function trackDecision(scope: SeedScope, title: string): string {
+  scope.decisionTitles.push(title);
+  return title;
+}
+
+/**
+ * Delete everything the scope recorded, in dependency order, each resource in
+ * its own try/finally so a failure on one never skips the rest. Teardown noise
+ * is logged rather than thrown: a cleanup problem must not mask the test result
+ * that caused it.
+ */
+export function teardownScope(scope: SeedScope): void {
+  for (const title of scope.decisionTitles.splice(0)) {
+    try {
+      deleteDecisionByTitle(title);
+    } catch (err) {
+      // eslint-disable-next-line no-console
+      console.warn(`[library-configuration] teardown: decision "${title}" —`, err);
+    }
+  }
+  for (const productId of scope.productIds.splice(0)) {
+    try {
+      deleteProducts([productId]);
+    } catch (err) {
+      // eslint-disable-next-line no-console
+      console.warn(`[library-configuration] teardown: product ${productId} —`, err);
+    }
+  }
+  for (const projectId of scope.projectIds.splice(0)) {
+    try {
+      deleteProject(projectId);
+    } catch (err) {
+      // eslint-disable-next-line no-console
+      console.warn(`[library-configuration] teardown: project ${projectId} —`, err);
+    }
+  }
 }
 
 /**
