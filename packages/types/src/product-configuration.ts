@@ -25,6 +25,19 @@ export interface ProductOptionValue {
   retailPriceDeltaCents: number;
   tradePriceDeltaCents: number;
   leadTimeDeltaWeeks: number;
+  /**
+   * 00413 — this value is a COM/COL slot: the designer supplies the fabric
+   * rather than choosing one the maker stocks. `get_product_configuration_schema`
+   * always emits it; the upsert RPC defaults it to false when omitted, so it
+   * stays optional on the way in.
+   */
+  allowsCom?: boolean;
+  /**
+   * What the vendor needs from a COM order — expected yardage, railroading,
+   * ship-to. Authoring-side only; the fabric actually specified lives on the
+   * configuration's `comDetails`.
+   */
+  comRequirements?: Record<string, unknown>;
   metadata: Record<string, unknown>;
   position: number;
   isActive: boolean;
@@ -432,6 +445,12 @@ export interface SaveProductConfigurationInput {
     handedness?: 'left' | 'right' | null;
   }>;
   customBrief?: CustomCommissionBrief;
+  /**
+   * COM/COL fabric for this configuration version (00413). The RPC validates
+   * `optionValueId` against the selections it just resolved, rejects it outright
+   * on standard products, and merges it into the snapshot BEFORE hashing.
+   */
+  comDetails?: ProductConfigurationComDetails | null;
 }
 
 export interface PlaceProductConfigurationInput {

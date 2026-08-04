@@ -32,6 +32,7 @@ import { Button } from '@/components/ui/controls';
 import { StrataSweep } from '@/components/ui/strata-sweep';
 import { libraryConfigurationEvents } from '@/lib/analytics/library-configuration-events';
 import {
+  comDetailsViewToInput,
   configurationDefinitionToView,
   evaluationToAuthoritative,
   pieceToConfigurationSource,
@@ -43,6 +44,7 @@ import {
   type AuthoritativeConfigurationResolution,
 } from '@/components/document/rooms/piece/piece-configuration-workspace';
 import type {
+  PieceComDetailsView,
   PieceConfigurationResolutionView,
   PieceConfigurationSelectionView,
 } from '@/components/document/rooms/piece/piece-configuration-model';
@@ -76,6 +78,7 @@ export interface PickerConfigureStepProps {
 export function buildPickConfigurationSelection(
   resolution: PieceConfigurationResolutionView,
   authoritativeSnapshot: Record<string, unknown> | undefined,
+  comDetails?: PieceComDetailsView | null,
 ): ProductPickConfigurationSelection {
   const snapshot = authoritativeSnapshot as
     | Partial<ProductConfigurationSnapshot>
@@ -106,6 +109,10 @@ export function buildPickConfigurationSelection(
     tradePriceCents: snapshot?.tradePriceCents ?? resolution.tradePriceCents ?? null,
     leadTimeWeeks: snapshot?.leadTimeWeeks ?? resolution.leadTimeWeeks ?? null,
     snapshot: authoritativeSnapshot ?? null,
+    // The evaluate RPC knows nothing about COM — the fabric is merged into a
+    // snapshot only by save, which the picker never calls. So carry it beside
+    // the snapshot rather than forging one the server never hashed.
+    comDetails: comDetailsViewToInput(comDetails),
     label: configurationLabel(selections, components, snapshot),
   };
 }
@@ -201,10 +208,12 @@ export function PickerConfigureStep({
     _savedConfigurationId: string | null,
     resolution: PieceConfigurationResolutionView,
     authoritativeSnapshot?: Record<string, unknown>,
+    comDetails?: PieceComDetailsView | null,
   ) => {
     const selection = buildPickConfigurationSelection(
       resolution,
       authoritativeSnapshot,
+      comDetails,
     );
     libraryConfigurationEvents.pickerConfirmed(
       productId,
@@ -274,6 +283,8 @@ export function PickerConfigureStep({
               piece={piece}
               definition={view}
               // The picker configures; it never authors the maker's definition.
+              // `readOnly` suppresses the authoring editor only — COM entry is
+              // a selection, so it stays available here (P1-4).
               readOnly
               definitionLoading={false}
               evaluating={evaluate.isPending}

@@ -1,4 +1,5 @@
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { configurationViewToUpsertInput } from "./piece-configuration-adapter";
 import {
   PieceConfigurationWorkspace,
   selectionKey,
@@ -363,6 +364,7 @@ describe("PieceConfigurationWorkspace", () => {
         "saved-bed-1",
         expect.objectContaining({ valid: true, complete: true }),
         { schemaRevision: 3 },
+        null,
       ),
     );
   });
@@ -593,10 +595,12 @@ describe("PieceConfigurationWorkspace", () => {
         "saved-bed-v6",
         expect.any(Object),
         expect.any(Object),
+        null,
       ),
     );
     expect(onPlace).not.toHaveBeenCalledWith(
       "saved-bed-v5",
+      expect.anything(),
       expect.anything(),
       expect.anything(),
     );
@@ -649,5 +653,237 @@ describe("PieceConfigurationWorkspace", () => {
       ),
     );
     expect(onPlace).not.toHaveBeenCalled();
+  });
+
+  describe("customer's own material", () => {
+    const comSofa: FlatPieceConfigurationSource = {
+      id: "sofa-1",
+      name: "Halden Sofa",
+      configurationMode: "configured",
+      priceRetailCents: 400000,
+      priceTradeCents: 260000,
+      leadTimeWeeks: 12,
+    };
+
+    const comDefinition: PieceConfigurationDefinitionView = {
+      productId: comSofa.id,
+      mode: "configured",
+      revision: 2,
+      optionGroups: [
+        {
+          id: "fabric",
+          name: "Fabric",
+          required: true,
+          values: [
+            { id: "house-linen", label: "House Linen" },
+            {
+              id: "com",
+              label: "Customer's Own Material",
+              allowsCom: true,
+              comRequirements: { yardage: "14 yds", notes: "Railroaded" },
+            },
+          ],
+        },
+      ],
+      variants: [],
+      components: [],
+      rules: [],
+    };
+
+    it("offers COM only once a value the maker opened to it is chosen", () => {
+      render(
+        <PieceConfigurationWorkspace
+          piece={comSofa}
+          definition={comDefinition}
+          readOnly
+          onPlace={jest.fn()}
+        />,
+      );
+
+      expect(screen.queryByTestId("configuration-com")).not.toBeInTheDocument();
+
+      fireEvent.click(screen.getByRole("radio", { name: /House Linen/i }));
+      expect(screen.queryByTestId("configuration-com")).not.toBeInTheDocument();
+
+      fireEvent.click(
+        screen.getByRole("radio", { name: /Customer's Own Material/i }),
+      );
+      expect(screen.getByTestId("configuration-com")).toBeInTheDocument();
+      // The form itself stays folded until the designer opts in.
+      expect(screen.queryByLabelText("Fabric")).not.toBeInTheDocument();
+    });
+
+    it("carries the specified fabric into the save draft and warns on lead time", async () => {
+      const onSaveConfiguration = jest
+        .fn()
+        .mockResolvedValue({ id: "saved-com-1", version: 1 });
+
+      render(
+        <PieceConfigurationWorkspace
+          piece={comSofa}
+          definition={comDefinition}
+          readOnly
+          onSaveConfiguration={onSaveConfiguration}
+          onPlace={jest.fn()}
+        />,
+      );
+
+      fireEvent.click(
+        screen.getByRole("radio", { name: /Customer's Own Material/i }),
+      );
+      expect(
+        screen.queryByText(/Lead time provisional until COM fabric/i),
+      ).not.toBeInTheDocument();
+
+      fireEvent.click(
+        screen.getByRole("checkbox", { name: "Specify the fabric now" }),
+      );
+      fireEvent.change(screen.getByLabelText("Fabric"), {
+        target: { value: "Belgian Linen 12" },
+      });
+      fireEvent.change(screen.getByLabelText("Mill"), {
+        target: { value: "Rogers & Goffigon" },
+      });
+      fireEvent.change(screen.getByLabelText("Sidemark"), {
+        target: { value: "HAYES / LIVING" },
+      });
+      fireEvent.click(screen.getByRole("checkbox", { name: "Railroaded" }));
+
+      expect(screen.getByText(/The maker asks for/i)).toHaveTextContent(
+        "14 yds",
+      );
+      expect(
+        screen.getAllByText(
+          "Lead time provisional until COM fabric is received.",
+        ).length,
+      ).toBeGreaterThan(0);
+
+      fireEvent.click(screen.getByRole("button", { name: "Save for later" }));
+
+      await waitFor(() =>
+        expect(onSaveConfiguration).toHaveBeenCalledWith(
+          expect.objectContaining({
+            comDetails: expect.objectContaining({
+              optionValueId: "com",
+              fabricName: "Belgian Linen 12",
+              mill: "Rogers & Goffigon",
+              sidemark: "HAYES / LIVING",
+              railroaded: true,
+            }),
+          }),
+          null,
+        ),
+      );
+    });
+
+    it("drops the fabric when the COM option is no longer chosen", async () => {
+      const onSaveConfiguration = jest
+        .fn()
+        .mockResolvedValue({ id: "saved-com-2", version: 1 });
+
+      render(
+        <PieceConfigurationWorkspace
+          piece={comSofa}
+          definition={comDefinition}
+          readOnly
+          onSaveConfiguration={onSaveConfiguration}
+          onPlace={jest.fn()}
+        />,
+      );
+
+      fireEvent.click(
+        screen.getByRole("radio", { name: /Customer's Own Material/i }),
+      );
+      fireEvent.click(
+        screen.getByRole("checkbox", { name: "Specify the fabric now" }),
+      );
+      fireEvent.change(screen.getByLabelText("Fabric"), {
+        target: { value: "Belgian Linen 12" },
+      });
+      fireEvent.click(screen.getByRole("radio", { name: /House Linen/i }));
+
+      expect(screen.queryByTestId("configuration-com")).not.toBeInTheDocument();
+      fireEvent.click(screen.getByRole("button", { name: "Save for later" }));
+
+      await waitFor(() =>
+        expect(onSaveConfiguration).toHaveBeenCalledWith(
+          expect.objectContaining({ comDetails: null }),
+          null,
+        ),
+      );
+    });
+
+    it("reopens a saved specification with its fabric restored", () => {
+      render(
+        <PieceConfigurationWorkspace
+          piece={comSofa}
+          definition={comDefinition}
+          readOnly
+          savedConfigurations={[
+            {
+              id: "saved-com-3",
+              name: "Living room COM",
+              version: 2,
+              status: "saved",
+              selection: { optionValueIds: ["com"], components: [] },
+              comDetails: {
+                optionValueId: "com",
+                fabricName: "Mohair Velvet",
+                mill: "Pierre Frey",
+                pattern: "",
+                yardage: "18",
+                railroaded: false,
+                shipTo: "",
+                sidemark: "",
+                secondLeadTimeWeeks: "",
+                notes: "",
+              },
+            },
+          ]}
+          onSaveConfiguration={jest.fn()}
+          onPlace={jest.fn()}
+        />,
+      );
+
+      fireEvent.click(screen.getByRole("button", { name: "Load" }));
+
+      expect(screen.getByLabelText("Fabric")).toHaveValue("Mohair Velvet");
+      expect(screen.getByLabelText("Mill")).toHaveValue("Pierre Frey");
+      expect(screen.getByLabelText("Yardage")).toHaveValue("18");
+    });
+
+    it("authors the COM flag on an option value and maps it into the upsert input", () => {
+      const onDefinitionChange = jest.fn();
+
+      render(
+        <PieceConfigurationWorkspace
+          piece={comSofa}
+          definition={{
+            ...comDefinition,
+            optionGroups: [
+              {
+                ...comDefinition.optionGroups[0],
+                values: [{ id: "house-linen", label: "House Linen" }],
+              },
+            ],
+          }}
+          readOnly={false}
+          onDefinitionChange={onDefinitionChange}
+          onPlace={jest.fn()}
+        />,
+      );
+
+      fireEvent.click(screen.getByRole("checkbox", { name: "Allows COM" }));
+
+      expect(onDefinitionChange).toHaveBeenCalled();
+      const authored = onDefinitionChange.mock.calls.at(-1)?.[0];
+      expect(authored.optionGroups[0].values[0].allowsCom).toBe(true);
+
+      const input = configurationViewToUpsertInput(authored);
+      expect(input.optionGroups[0].values[0]).toMatchObject({
+        allowsCom: true,
+        comRequirements: {},
+      });
+    });
   });
 });

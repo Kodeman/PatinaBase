@@ -1,5 +1,6 @@
 import type {
   CustomCommissionBrief,
+  ProductConfigurationComDetails,
   ProductConfigurationMode,
   EvaluateProductConfigurationInput,
   ProductConfigurationDefinition,
@@ -13,9 +14,13 @@ import type {
 import {
   definitionForConfigurationMode,
   flatDefinition,
+  EMPTY_COM_DETAILS,
+  comDetailsHaveContent,
   type DimensionValue,
   type FlatPieceCaptureOptions,
   type FlatPieceConfigurationSource,
+  type PieceComDetailsView,
+  type PieceComRequirementsView,
   type PieceConfigurationDefinitionView,
   type PieceConfigurationRuleView,
   type PieceConfigurationSelectionView,
@@ -131,6 +136,8 @@ export function configurationDefinitionToView(
         tradePriceDeltaCents: value.tradePriceDeltaCents,
         leadTimeDeltaWeeks: value.leadTimeDeltaWeeks,
         dimensions: readDimensions(value.metadata),
+        allowsCom: value.allowsCom === true,
+        comRequirements: comRequirementsToView(value.comRequirements),
       })),
     })),
     variants: definition.variants.map((variant) => ({
@@ -226,13 +233,24 @@ export function configurationViewToUpsertInput(
                 slugCode(value.label, `value-${valueIndex + 1}`),
               label: value.label,
               description: originalValue?.description ?? null,
+              // JSON null is NOT absent to Postgres: the upsert RPC writes
+              // `v_value->'swatch'` straight through, and jsonb 'null' fails
+              // product_option_values_swatch_check. Omit the key instead.
               swatch: value.swatch
                 ? { hex: value.swatch }
-                : (originalValue?.swatch ?? null),
+                : (originalValue?.swatch ?? undefined),
               media: originalValue?.media ?? [],
               retailPriceDeltaCents: value.retailPriceDeltaCents ?? 0,
               tradePriceDeltaCents: value.tradePriceDeltaCents ?? 0,
               leadTimeDeltaWeeks: value.leadTimeDeltaWeeks ?? 0,
+              allowsCom: value.allowsCom === true,
+              // Spread-preserve: the maker's requirements jsonb may carry keys
+              // this editor never shows (00413 authored them free-form), and an
+              // edit to yardage must not silently drop them.
+              comRequirements: mergeComRequirements(
+                originalValue?.comRequirements,
+                value.comRequirements,
+              ),
               metadata: {
                 ...(originalValue?.metadata ?? {}),
                 ...(value.sku ? { sku: value.sku } : {}),
@@ -253,11 +271,13 @@ export function configurationViewToUpsertInput(
               code: value.code,
               label: value.label,
               description: value.description ?? null,
-              swatch: value.swatch ?? null,
+              swatch: value.swatch ?? undefined,
               media: value.media ?? [],
               retailPriceDeltaCents: value.retailPriceDeltaCents,
               tradePriceDeltaCents: value.tradePriceDeltaCents,
               leadTimeDeltaWeeks: value.leadTimeDeltaWeeks,
+              allowsCom: value.allowsCom === true,
+              comRequirements: value.comRequirements ?? {},
               metadata: value.metadata,
               position: value.position,
               isActive: false,
@@ -279,8 +299,10 @@ export function configurationViewToUpsertInput(
         retailPriceCents: variant.retailPriceCents ?? null,
         tradePriceCents: variant.tradePriceCents ?? null,
         leadTimeWeeks: variant.leadTimeWeeks ?? null,
-        dimensions: variant.dimensions ?? null,
-        weight: original?.weight ?? null,
+        // Same jsonb-null hazard as swatch (product_variants_dimensions_check /
+        // _weight_check): an absent measurement is an absent key.
+        dimensions: variant.dimensions ?? undefined,
+        weight: original?.weight ?? undefined,
         metadata: original?.metadata ?? {},
         isDefault: original?.isDefault ?? false,
         // New option values only have UI-local ids until this transaction
@@ -312,7 +334,7 @@ export function configurationViewToUpsertInput(
           retailPriceCents: component.retailPriceCents ?? 0,
           tradePriceCents: component.tradePriceCents ?? 0,
           leadTimeWeeks: component.leadTimeWeeks ?? 0,
-          dimensions: original?.dimensions ?? null,
+          dimensions: original?.dimensions ?? undefined,
           metadata: original?.metadata ?? {},
           position: original?.position ?? componentIndex,
           isActive: component.active !== false,
@@ -340,7 +362,7 @@ export function configurationViewToUpsertInput(
               retailPriceCents: component.retailPriceCents,
               tradePriceCents: component.tradePriceCents,
               leadTimeWeeks: component.leadTimeWeeks,
-              dimensions: component.dimensions ?? null,
+              dimensions: component.dimensions ?? undefined,
               metadata: component.metadata,
               position: component.position,
               isActive: false,
@@ -462,7 +484,113 @@ export function configurationDraftToSaveInput({
           ),
         }
       : {}),
+    // The RPC rejects comDetails outright on a standard product, so a stale
+    // form left behind by a mode change must never reach it.
+    ...(definition.mode !== "standard" && comDetailsViewToInput(draft.comDetails)
+      ? { comDetails: comDetailsViewToInput(draft.comDetails)! }
+      : {}),
   };
+}
+
+/**
+ * Narrow the form's all-strings COM view to the wire shape, dropping empty
+ * fields entirely so the persisted jsonb records only what the designer
+ * actually said. Returns null when nothing was said at all.
+ */
+export function comDetailsViewToInput(
+  details: PieceComDetailsView | null | undefined,
+): ProductConfigurationComDetails | null {
+  if (!details || !comDetailsHaveContent(details)) return null;
+  const input: ProductConfigurationComDetails = {};
+  if (details.optionValueId) input.optionValueId = details.optionValueId;
+  assignText(input, "fabricName", details.fabricName);
+  assignText(input, "mill", details.mill);
+  assignText(input, "pattern", details.pattern);
+  assignText(input, "yardage", details.yardage);
+  if (details.railroaded) input.railroaded = true;
+  assignText(input, "shipTo", details.shipTo);
+  assignText(input, "sidemark", details.sidemark);
+  const secondLeadTime = Number.parseFloat(details.secondLeadTimeWeeks.trim());
+  if (Number.isFinite(secondLeadTime)) {
+    input.secondLeadTimeWeeks = secondLeadTime;
+  }
+  assignText(input, "notes", details.notes);
+  return input;
+}
+
+/** Rehydrate the form from a snapshot's `comDetails` (00413 merge). */
+export function comDetailsToView(
+  value: unknown,
+): PieceComDetailsView | null {
+  if (!isRecord(value)) return null;
+  const view: PieceComDetailsView = {
+    ...EMPTY_COM_DETAILS,
+    optionValueId: readString(value, "optionValueId", "option_value_id"),
+    fabricName: readString(value, "fabricName", "fabric_name") ?? "",
+    mill: readString(value, "mill") ?? "",
+    pattern: readString(value, "pattern") ?? "",
+    yardage: readScalarText(value.yardage),
+    railroaded: value.railroaded === true,
+    shipTo: readString(value, "shipTo", "ship_to") ?? "",
+    sidemark: readString(value, "sidemark") ?? "",
+    secondLeadTimeWeeks: readScalarText(
+      value.secondLeadTimeWeeks ?? value.second_lead_time_weeks,
+    ),
+    notes: readString(value, "notes") ?? "",
+  };
+  return comDetailsHaveContent(view) ? view : null;
+}
+
+function assignText(
+  input: ProductConfigurationComDetails,
+  key: "fabricName" | "mill" | "pattern" | "yardage" | "shipTo" | "sidemark" | "notes",
+  value: string,
+): void {
+  const trimmed = value.trim();
+  if (trimmed) input[key] = trimmed;
+}
+
+function readScalarText(value: unknown): string {
+  if (typeof value === "string") return value.trim();
+  if (typeof value === "number" && Number.isFinite(value)) return String(value);
+  return "";
+}
+
+function comRequirementsToView(
+  value: unknown,
+): PieceComRequirementsView | null {
+  if (!isRecord(value)) return null;
+  const yardage = readScalarText(value.yardage ?? value.yardageMinimum);
+  const notes = readString(value, "notes", "instructions") ?? "";
+  if (!yardage && !notes) return null;
+  return {
+    ...(yardage ? { yardage } : {}),
+    ...(notes ? { notes } : {}),
+  };
+}
+
+function mergeComRequirements(
+  original: Record<string, unknown> | undefined,
+  view: PieceComRequirementsView | null | undefined,
+): Record<string, unknown> {
+  const merged: Record<string, unknown> = { ...(original ?? {}) };
+  // `yardage` is this surface's canonical key. A requirement authored elsewhere
+  // under `yardageMinimum` is read into the same field, so writing both back
+  // would leave two records of one fact — collapse to the canonical one.
+  delete merged.yardageMinimum;
+  applyRequirement(merged, "yardage", view?.yardage);
+  applyRequirement(merged, "notes", view?.notes);
+  return merged;
+}
+
+function applyRequirement(
+  target: Record<string, unknown>,
+  key: string,
+  value: string | null | undefined,
+): void {
+  const trimmed = (value ?? "").trim();
+  if (trimmed) target[key] = trimmed;
+  else delete target[key];
 }
 
 export function savedConfigurationToView(
@@ -494,6 +622,9 @@ export function savedConfigurationToView(
         handedness: handedness.get(component.componentId) ?? null,
       })),
     },
+    // 00413 merges the fabric into the snapshot before hashing, so reopening a
+    // saved specification shows the COM the designer actually committed to.
+    comDetails: comDetailsToView(saved.snapshot.comDetails),
   };
 }
 

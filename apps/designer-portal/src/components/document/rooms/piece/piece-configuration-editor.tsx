@@ -611,7 +611,55 @@ function OptionValuesEditor({
               value={value.dimensions}
               onChange={(dimensions) => update(value.id, { dimensions })}
             />
+            {value.allowsCom && (
+              <>
+                <Field label="COM yardage" className="min-[980px]:col-span-2">
+                  <Input
+                    aria-label={`${value.label || group.name} COM yardage`}
+                    value={value.comRequirements?.yardage ?? ""}
+                    placeholder="14 yds"
+                    onChange={(event) =>
+                      update(value.id, {
+                        comRequirements: {
+                          ...(value.comRequirements ?? {}),
+                          yardage: event.target.value,
+                        },
+                      })
+                    }
+                  />
+                </Field>
+                <Field
+                  label="COM requirements"
+                  className="min-[980px]:col-span-4"
+                >
+                  <Input
+                    aria-label={`${value.label || group.name} COM requirements`}
+                    value={value.comRequirements?.notes ?? ""}
+                    placeholder="Railroaded; ship to the fabricator's dock"
+                    onChange={(event) =>
+                      update(value.id, {
+                        comRequirements: {
+                          ...(value.comRequirements ?? {}),
+                          notes: event.target.value,
+                        },
+                      })
+                    }
+                  />
+                </Field>
+              </>
+            )}
             <div className="flex items-end justify-end gap-3 min-[980px]:col-span-3">
+              <label className="mb-2 flex items-center gap-2 text-[0.75rem] text-[var(--color-charcoal)]">
+                <input
+                  type="checkbox"
+                  checked={value.allowsCom === true}
+                  onChange={(event) =>
+                    update(value.id, { allowsCom: event.target.checked })
+                  }
+                  className="accent-[var(--color-clay)]"
+                />
+                Allows COM
+              </label>
               <label className="mb-2 flex items-center gap-2 text-[0.75rem] text-[var(--color-charcoal)]">
                 <input
                   type="checkbox"
