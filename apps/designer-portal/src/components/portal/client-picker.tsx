@@ -31,6 +31,8 @@ export interface ClientPickerProps {
   open?: boolean;
   /** Notified when the popover wants to open/close (controlled mode). */
   onOpenChange?: (open: boolean) => void;
+  /** Optional caller-normalized rows. The hook still supplies the default. */
+  clientOptions?: DesignerClient[];
 }
 
 export function ClientPicker({
@@ -42,6 +44,7 @@ export function ClientPicker({
   inlineChip = false,
   open: openProp,
   onOpenChange,
+  clientOptions,
 }: ClientPickerProps) {
   const [openState, setOpenState] = React.useState(false);
   // Controlled when an `open` prop is supplied; otherwise own the state.
@@ -64,7 +67,8 @@ export function ClientPicker({
     null,
   );
 
-  const { data: clients, isLoading } = useClients();
+  const { data: queriedClients, isLoading } = useClients();
+  const clients = clientOptions ?? queriedClients;
   const addClient = useAddClient();
   const inviteAndLink = useInviteAndLinkClient();
 
