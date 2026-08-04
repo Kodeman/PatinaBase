@@ -167,8 +167,21 @@ jest.mock("@/components/ui/strata-sweep", () => ({
 }));
 
 jest.mock("./facet-field", () => {
-  const Field = ({ label = "Dimensions" }: { label?: string }) => (
-    <div>{label}</div>
+  const Field = ({
+    label = "Dimensions",
+    column,
+    readOnly,
+  }: {
+    label?: string;
+    column?: string;
+    readOnly?: boolean;
+  }) => (
+    <div>
+      {label}
+      {readOnly && (
+        <span data-testid={`readonly-${column ?? label}`}>read-only</span>
+      )}
+    </div>
   );
   return {
     FacetText: Field,
@@ -288,5 +301,61 @@ describe("PieceRoom quiet facets", () => {
     expect(screen.getByTestId("custom-commission-sheet")).toHaveTextContent(
       "new-commission",
     );
+  });
+});
+
+describe("PieceRoom — flat-facet gating on configured pieces (P2-9)", () => {
+  beforeEach(() => {
+    mockProduct = editablePiece();
+  });
+
+  it("gates available_colors and finish read-only once configuration_mode leaves standard", () => {
+    mockProduct = { ...editablePiece(), configuration_mode: "variant" };
+    render(<PieceRoom productId="piece-1" />);
+
+    fireEvent.click(screen.getByRole("button", { name: /The piece/i }));
+
+    expect(
+      screen.getByTestId("readonly-available_colors"),
+    ).toBeInTheDocument();
+    expect(screen.getByTestId("readonly-finish")).toBeInTheDocument();
+    // The gate is surgical — sibling flat facets in the same section stay
+    // editable; only available_colors/finish read from the configuration now.
+    expect(
+      screen.queryByTestId("readonly-materials"),
+    ).not.toBeInTheDocument();
+    expect(screen.queryByTestId("readonly-colors")).not.toBeInTheDocument();
+    expect(
+      screen.queryByTestId("readonly-Dimensions"),
+    ).not.toBeInTheDocument();
+  });
+
+  it("leaves available_colors and finish editable while configuration_mode is standard", () => {
+    render(<PieceRoom productId="piece-1" />);
+
+    fireEvent.click(screen.getByRole("button", { name: /The piece/i }));
+
+    expect(
+      screen.queryByTestId("readonly-available_colors"),
+    ).not.toBeInTheDocument();
+    expect(screen.queryByTestId("readonly-finish")).not.toBeInTheDocument();
+  });
+
+  it("keeps the gated facets read-only on an already read-only (catalog) piece too", () => {
+    mockProduct = {
+      ...editablePiece(),
+      layer: "catalog",
+      owner_user_id: null,
+      status: "published",
+      configuration_mode: "configured",
+    };
+    render(<PieceRoom productId="piece-1" />);
+
+    // Catalog pieces render every facet expanded as a static specimen — no
+    // click needed to mount "The piece" section.
+    expect(
+      screen.getByTestId("readonly-available_colors"),
+    ).toBeInTheDocument();
+    expect(screen.getByTestId("readonly-finish")).toBeInTheDocument();
   });
 });

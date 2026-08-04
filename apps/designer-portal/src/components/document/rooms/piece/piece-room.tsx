@@ -836,7 +836,7 @@ export function PieceRoom({ productId }: { productId: string }) {
               serverValue={p.available_colors}
               label="Available colors"
               swatch
-              readOnly={readOnly}
+              readOnly={readOnly || configurationView.mode !== "standard"}
             />
             <FacetText
               productId={p.id}
@@ -844,7 +844,7 @@ export function PieceRoom({ productId }: { productId: string }) {
               serverValue={p.finish}
               label="Finish"
               placeholder="matte, hand-rubbed oil…"
-              readOnly={readOnly}
+              readOnly={readOnly || configurationView.mode !== "standard"}
             />
           </PieceFacet>
 
