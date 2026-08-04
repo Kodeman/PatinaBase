@@ -30,7 +30,7 @@
  * zero shadows (D4).
  */
 
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import {
   useCreateCoordinationItem,
   useUpdateCoordinationItem,
@@ -42,7 +42,9 @@ import {
   type DecisionType,
   type ProjectParty,
 } from '@patina/supabase';
+import type { PartyKind } from '@patina/types';
 import type { SectionTask } from '@/hooks/use-section-work';
+import { useFeatureFlag } from '@/hooks/use-feature-flag';
 import { deriveBlocksKind } from '@/lib/document/coordination-derivation';
 import { canDeleteDecision } from '@/lib/document/decision-edges';
 import { ITEM_TYPE_ORDER, itemTypeToken, chipStyle } from './item-type';
@@ -57,6 +59,8 @@ import {
 } from '@/components/portal/decision-option-builder';
 import { ComposerOptionBuilder } from './composer-option-builder';
 import { DocumentAction, DocumentActionGroup } from '../document-action';
+import { PartyMiniRow } from '../roster/party-mini-row';
+import { RolodexPicker } from '../roster/rolodex-picker';
 
 /** An FF&E line the composer can gate (subset of project_ffe_items). */
 export interface ComposerFfeItem {
@@ -167,6 +171,11 @@ const fieldLabelCls =
 const inputCls =
   'w-full rounded-[6px] border border-[var(--color-pearl)] bg-white px-3 py-2 text-[0.82rem] text-[var(--color-charcoal)] placeholder:italic placeholder:text-[var(--text-muted)] focus:border-[var(--color-clay)] focus:outline-none';
 
+/** The scored word that opens the rolodex from the court block (flag-on only) —
+ *  the portal's shared SCORED INK idiom, not a button. */
+const SCORED_WORD =
+  'da-score-hover min-h-11 inline-flex items-center font-mono text-[9px] uppercase tracking-[0.1em] text-[var(--color-aged-oak)] transition-colors hover:text-[var(--color-mocha)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-clay)]';
+
 export function ItemComposer({
   projectId,
   designerClientId,
@@ -186,6 +195,16 @@ export function ItemComposer({
   const publishItem = usePublishCoordinationItem(projectId);
   const deleteItem = useDeleteCoordinationItem(projectId);
   const materializeDrafts = useMaterializeDraftOptions();
+  // Call Sheet Wave 3 — the court block's <select> becomes a PartyMiniRow radio
+  // list plus a way to the rolodex. Nothing else in the composer forks: the
+  // state (`courtPartyId`), the auto-select-sole-match rule, and the submit
+  // payload are the same in both modes by construction.
+  const { value: callSheetOn } = useFeatureFlag('call-sheet');
+  const [pickerOpen, setPickerOpen] = useState(false);
+  // A party added through the picker arrives asynchronously (the add invalidates
+  // ['project-parties', projectId] and the host re-renders us with a longer
+  // list). Remember the name so we can select the row the moment it lands.
+  const [pendingPartyName, setPendingPartyName] = useState<string | null>(null);
 
   const isEdit = Boolean(editItem);
   // R87 — delete stays draft-only. A published item (pending/expired/responded)
@@ -277,6 +296,16 @@ export function ItemComposer({
     }
   };
 
+  // The picker's add lands here: select the freshly-added party once the host's
+  // refreshed `parties` prop carries it. Never clears an existing pick.
+  useEffect(() => {
+    if (!pendingPartyName) return;
+    const landed = courtParties.find((p) => p.display_name === pendingPartyName);
+    if (!landed) return;
+    setCourtPartyId(landed.id);
+    setPendingPartyName(null);
+  }, [pendingPartyName, courtParties]);
+
   const toggleBlock = (id: string) =>
     setBlocks((prev) => {
       const next = new Set(prev);
@@ -311,6 +340,16 @@ export function ItemComposer({
     court === 'designer'
       ? 'lands in your court'
       : `sends to ${partyFor(court, { party: courtParties.find((p) => p.id === courtPartyId) }).label}`;
+
+  // ONE copy path for the empty court — flag ON and flag OFF render this exact
+  // sentence, so the composer never says two different things about the same
+  // empty court.
+  const emptyCourtCopy = (
+    <>
+      No {court === 'gc' ? 'GC' : 'vendors'} on this project yet &mdash;
+      it&rsquo;ll wait in the {court === 'gc' ? 'GC' : 'vendor'} court.
+    </>
+  );
 
   const handleSave = async (asDraft: boolean) => {
     if (saving) return;
@@ -524,34 +563,103 @@ export function ItemComposer({
         })}
       </div>
 
-      {/* gc/vendor: name the concrete party (a project_parties row). */}
-      {(court === 'gc' || court === 'vendor') && courtParties.length > 0 && (
-        <div className="mb-5">
-          <label className={fieldLabelCls}>
-            Which {court === 'gc' ? 'GC' : 'vendor'}
-          </label>
-          <select
-            value={courtPartyId ?? ''}
-            onChange={(e) => setCourtPartyId(e.target.value || null)}
-            className={inputCls}
-          >
-            <option value="">Unassigned</option>
-            {courtParties.map((p) => (
-              <option key={p.id} value={p.id}>
-                {p.display_name}
-                {p.company_name ? ` · ${p.company_name}` : ''}
-              </option>
-            ))}
-          </select>
-        </div>
-      )}
-      {(court === 'gc' || court === 'vendor') && courtParties.length === 0 && (
-        <p className="mb-5 mt-1 text-[0.66rem] italic text-[var(--color-aged-oak)]">
-          No {court === 'gc' ? 'GC' : 'vendors'} on this project yet &mdash;
-          it&rsquo;ll wait in the {court === 'gc' ? 'GC' : 'vendor'} court.
-        </p>
-      )}
+      {/* gc/vendor: name the concrete party (a project_parties row).
+          Flag OFF renders the shipped <select> unchanged; flag ON renders the
+          same rows as PartyMiniRow radios over the same `courtPartyId`. */}
+      {(court === 'gc' || court === 'vendor') &&
+        courtParties.length > 0 &&
+        (callSheetOn ? (
+          <div className="mb-5">
+            <label className={fieldLabelCls}>
+              Which {court === 'gc' ? 'GC' : 'vendor'}
+            </label>
+            <div
+              role="radiogroup"
+              aria-label={`Which ${court === 'gc' ? 'GC' : 'vendor'}`}
+              className="flex flex-col"
+            >
+              {courtParties.map((p) => (
+                <PartyMiniRow
+                  key={p.id}
+                  name={p.display_name}
+                  kind={p.party_kind}
+                  trade={p.trade}
+                  reach={p.profile_id ? 'account' : 'on_paper'}
+                  subline={p.company_name}
+                  selectable
+                  selected={courtPartyId === p.id}
+                  // Re-picking the chosen row clears it — the radio list's
+                  // stand-in for the select's "Unassigned" option.
+                  onSelect={() =>
+                    setCourtPartyId(courtPartyId === p.id ? null : p.id)
+                  }
+                />
+              ))}
+            </div>
+            <button
+              type="button"
+              onClick={() => setPickerOpen(true)}
+              className={SCORED_WORD}
+            >
+              Someone new
+            </button>
+          </div>
+        ) : (
+          <div className="mb-5">
+            <label className={fieldLabelCls}>
+              Which {court === 'gc' ? 'GC' : 'vendor'}
+            </label>
+            <select
+              value={courtPartyId ?? ''}
+              onChange={(e) => setCourtPartyId(e.target.value || null)}
+              className={inputCls}
+            >
+              <option value="">Unassigned</option>
+              {courtParties.map((p) => (
+                <option key={p.id} value={p.id}>
+                  {p.display_name}
+                  {p.company_name ? ` · ${p.company_name}` : ''}
+                </option>
+              ))}
+            </select>
+          </div>
+        ))}
+      {(court === 'gc' || court === 'vendor') &&
+        courtParties.length === 0 &&
+        (callSheetOn ? (
+          <div className="mb-5">
+            <p className="mt-1 text-[0.66rem] italic text-[var(--color-aged-oak)]">
+              {emptyCourtCopy}
+            </p>
+            <button
+              type="button"
+              onClick={() => setPickerOpen(true)}
+              className={SCORED_WORD}
+            >
+              Someone new
+            </button>
+          </div>
+        ) : (
+          <p className="mb-5 mt-1 text-[0.66rem] italic text-[var(--color-aged-oak)]">
+            {emptyCourtCopy}
+          </p>
+        ))}
       {court !== 'gc' && court !== 'vendor' && <div className="mb-5" />}
+
+      {/* The rolodex, pre-scoped to the court being filled. Mounted only while
+          open so its queries stay off the composer's cold path. */}
+      {callSheetOn && pickerOpen && (court === 'gc' || court === 'vendor') && (
+        <RolodexPicker
+          open
+          onClose={() => setPickerOpen(false)}
+          projectId={projectId}
+          scopeKinds={[court as PartyKind]}
+          onAdded={(name) => {
+            setPendingPartyName(name);
+            setPickerOpen(false);
+          }}
+        />
+      )}
 
       {/* ── The prompt (label + placeholder vary by kind) ── */}
       <div className="mb-5">
