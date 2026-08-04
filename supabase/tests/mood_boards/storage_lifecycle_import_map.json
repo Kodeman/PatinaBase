@@ -1,0 +1,5 @@
+{
+  "imports": {
+    "@patina/design-system": "./storage_lifecycle_types.ts"
+  }
+}

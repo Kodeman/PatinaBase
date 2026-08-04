@@ -93,6 +93,57 @@ VALUES (
   }'::jsonb
 );
 
+-- A separately owned live board exercises the project authorization branch.
+-- It deliberately has no proposal_id; sharing this fixture cannot pass through
+-- the already-covered proposal ownership leg by accident.
+INSERT INTO public.proposal_boards (
+  id,
+  project_id,
+  name,
+  canvas_width,
+  canvas_height,
+  background_color,
+  sections,
+  status,
+  sort_order
+)
+VALUES (
+  'c4061000-0000-4000-8000-000000000002',
+  'b0000000-0000-0000-0000-0000000000d1',
+  'Project-owned share security board',
+  1200,
+  800,
+  '#FAF8F5',
+  '[{"id":"project-zone","name":"Project zone"}]'::jsonb,
+  'active',
+  1
+);
+
+INSERT INTO public.proposal_board_items (
+  id,
+  board_id,
+  type,
+  x,
+  y,
+  width,
+  height,
+  z_index,
+  content,
+  data
+)
+VALUES (
+  'c4061100-0000-4000-8000-000000000002',
+  'c4061000-0000-4000-8000-000000000002',
+  'note',
+  36,
+  48,
+  240,
+  120,
+  1,
+  'Project-only guest-safe note',
+  '{"section_id":"project-zone","internal_note":"must stay private"}'::jsonb
+);
+
 DO $$
 DECLARE
   v_result text;
@@ -244,6 +295,9 @@ DECLARE
   v_data jsonb;
   v_nonboard_matches integer;
   v_count integer;
+  v_project_board_share_id uuid;
+  v_project_board_token text;
+  v_project_payload jsonb;
 BEGIN
   -- Preserve the established proposal-token path as a live compatibility
   -- check, not merely a catalog-signature assertion.
@@ -346,6 +400,67 @@ BEGIN
   WHERE id = v_board_share_id;
   ASSERT v_count = 1,
     'failed/revoked resolutions must not increment view_count';
+
+  -- AC2.16: mint, resolve, and revoke a genuinely project-owned board. The
+  -- explicit owner-shape assertion prevents this from becoming a duplicate of
+  -- the proposal fixture if future seed/schema changes drift.
+  ASSERT EXISTS (
+    SELECT 1
+    FROM public.proposal_boards AS board
+    WHERE board.id = 'c4061000-0000-4000-8000-000000000002'::uuid
+      AND board.proposal_id IS NULL
+      AND board.project_id = 'b0000000-0000-0000-0000-0000000000d1'::uuid
+  ), 'AC2.16 fixture must be project-owned with no proposal';
+
+  PERFORM pg_temp.assume_mood_board_actor(
+    'a0000000-0000-0000-0000-000000000005'
+  );
+  BEGIN
+    PERFORM public.create_board_share(
+      'c4061000-0000-4000-8000-000000000002',
+      'Outsider project share',
+      now() + interval '1 day'
+    );
+    RAISE EXCEPTION 'client unexpectedly shared a project-owned board';
+  EXCEPTION WHEN insufficient_privilege THEN
+    NULL;
+  END;
+
+  PERFORM pg_temp.assume_mood_board_actor(
+    'a0000000-0000-0000-0000-000000000003'
+  );
+  SELECT share.id, share.token
+  INTO v_project_board_share_id, v_project_board_token
+  FROM public.create_board_share(
+    'c4061000-0000-4000-8000-000000000002',
+    'Project board guest link',
+    now() + interval '1 day'
+  ) AS share;
+
+  ASSERT EXISTS (
+    SELECT 1
+    FROM public.document_shares AS share
+    WHERE share.id = v_project_board_share_id
+      AND share.board_id = 'c4061000-0000-4000-8000-000000000002'::uuid
+      AND share.proposal_id IS NULL
+      AND share.spec_book_artifact_id IS NULL
+  ), 'project board share must persist as the sole document-share target';
+
+  v_project_payload := public.resolve_board_share(v_project_board_token);
+  ASSERT v_project_payload #>> '{board,id}' =
+      'c4061000-0000-4000-8000-000000000002'
+     AND v_project_payload #>> '{board,items,0,content}' =
+      'Project-only guest-safe note',
+    format('project-owned board share must resolve its composition: %s', v_project_payload);
+  ASSERT NOT (v_project_payload ? 'project_id')
+     AND NOT ((v_project_payload->'board') ? 'project_id')
+     AND NOT ((v_project_payload #> '{board,items,0,data}') ? 'internal_note'),
+    'project share projection must hide parent identity and private item data';
+
+  ASSERT public.revoke_document_share(v_project_board_share_id),
+    'studio co-member must revoke a project-owned board share';
+  ASSERT public.resolve_board_share(v_project_board_token) IS NULL,
+    'revoked project-owned board share must fail closed';
 END;
 $$;
 
