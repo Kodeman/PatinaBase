@@ -10,12 +10,11 @@
 
 import { useMemo } from 'react';
 import { isFieldRosterRole, type PeopleDirectoryRow } from '@patina/supabase';
-import { SMS_CONSENT_DISPLAY, type SmsConsentStatus } from '@patina/types';
 import {
   deriveRelationshipLine,
   deriveStatusDot,
 } from '@/lib/document/people-derivation';
-import { Avatar, RoleBadge, StatusDot } from '../person-bits';
+import { Avatar, ConsentChip, RoleBadge, StatusDot } from '../person-bits';
 
 /** The ROLODEX marker (slide 8's `.rolomark`, slide 10's "state B") — a
  *  clay-bordered pill saying the studio keeps this person, not just this job.
@@ -26,20 +25,6 @@ function RolodexMarker() {
       className="inline-flex shrink-0 items-center rounded-[16px] border border-[var(--color-clay)] px-2 py-[1px] font-mono text-[8px] uppercase tracking-[0.14em] text-[var(--color-mocha)]"
     >
       Rolodex
-    </span>
-  );
-}
-
-/** The SMS-consent chip a field party's row wears (00281 sms_consent_status,
- *  surfaced as status_raw for the field branch). Not asked / Invited / Texting /
- *  Opted out — the field-config vocab, matching the phase-chip idiom. */
-function ConsentChip({ status }: { status: string | null }) {
-  const key = (status ?? 'not_asked') as SmsConsentStatus;
-  const cfg = SMS_CONSENT_DISPLAY[key] ?? SMS_CONSENT_DISPLAY.not_asked;
-  return (
-    <span className="inline-flex shrink-0 items-center gap-1 font-mono text-[0.5rem] uppercase tracking-[0.06em] text-[var(--color-aged-oak)]">
-      <span aria-hidden className={`inline-block h-1.5 w-1.5 rounded-full ${cfg.dotClass}`} />
-      {cfg.label}
     </span>
   );
 }

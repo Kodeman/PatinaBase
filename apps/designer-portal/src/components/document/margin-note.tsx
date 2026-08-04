@@ -45,6 +45,17 @@ function hasSeen(noteKey: string): boolean {
   }
 }
 
+/**
+ * Public reader for the once-only marker — same store, same key format as the
+ * note itself. Exported so a band that follows the note's dismissal contract
+ * without BEING a MarginNote (the Call Sheet's kickoff band, `kickoff:{id}`)
+ * shares the mechanism instead of inventing a second localStorage convention.
+ * SSR-safe in the same way `hasSeen` is: "seen" off the client.
+ */
+export function hasMarginNoteBeenSeen(noteKey: string): boolean {
+  return hasSeen(noteKey);
+}
+
 /** Retire a note permanently — writes the once-only marker so it never renders
  *  again on any surface. Exported so the Desk Walkthrough can mark the
  *  `desk-first-touch` note seen on tour completion (the tour taught ⌘K, so the

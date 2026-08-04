@@ -8,6 +8,7 @@
  */
 
 import type { PartyRole } from '@patina/supabase';
+import { SMS_CONSENT_DISPLAY, type SmsConsentStatus } from '@patina/types';
 import { roleLabel, type PartyStatus } from '@/lib/document/people-derivation';
 
 /** The avatar's shape (slide 9, "Circles + squares"): a person is a circle, a
@@ -144,6 +145,50 @@ export function RoleBadge({ role }: { role: PartyRole }) {
       style={{ color, borderColor: border }}
     >
       {roleLabel(role)}
+    </span>
+  );
+}
+
+/**
+ * The SMS-consent chip a field party's row wears (00281 sms_consent_status) —
+ * Not asked / Invited / Texting / Opted out, in the field-config vocab.
+ * Extracted here from person-row.tsx (Call Sheet Wave 3) so the directory row
+ * and the call sheet's roster row can never drift apart.
+ *
+ * `dotOnly` renders JUST the tinted dot with the label carried as an
+ * accessible name — the compact roster row (slide 12) sits the dot beside the
+ * name and saves the words for the unfold, where the full chip renders.
+ */
+export function ConsentChip({
+  status,
+  dotOnly = false,
+}: {
+  status: string | null | undefined;
+  dotOnly?: boolean;
+}) {
+  const key = (status ?? 'not_asked') as SmsConsentStatus;
+  const cfg = SMS_CONSENT_DISPLAY[key] ?? SMS_CONSENT_DISPLAY.not_asked;
+
+  if (dotOnly) {
+    return (
+      <span
+        role="img"
+        aria-label={cfg.label}
+        title={cfg.label}
+        data-consent-dot={key}
+        className={`inline-block h-1.5 w-1.5 shrink-0 rounded-full ${cfg.dotClass}`}
+      />
+    );
+  }
+
+  return (
+    <span className="inline-flex shrink-0 items-center gap-1 font-mono text-[0.5rem] uppercase tracking-[0.06em] text-[var(--color-aged-oak)]">
+      <span
+        aria-hidden
+        data-consent-dot={key}
+        className={`inline-block h-1.5 w-1.5 rounded-full ${cfg.dotClass}`}
+      />
+      {cfg.label}
     </span>
   );
 }
