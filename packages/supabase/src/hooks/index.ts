@@ -1574,6 +1574,7 @@ export {
   useArchiveStudioContact,
   useRestoreStudioContact,
   usePromoteToStudioContact,
+  useStudioContactHistory,
   studioContactKeys,
 } from './use-studio-contacts';
 export type {
@@ -1581,5 +1582,6 @@ export type {
   AddStudioContactInput,
   UpdateStudioContactInput,
   StudioContactFilters,
+  StudioContactHistory,
   PromoteToStudioContactInput,
 } from './use-studio-contacts';

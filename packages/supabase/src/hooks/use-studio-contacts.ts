@@ -310,6 +310,83 @@ export function useRestoreStudioContact() {
   });
 }
 
+/** What the rolodex picker's quiet history line says about one card. */
+export interface StudioContactHistory {
+  /** Distinct projects this contact has been a party on. */
+  projectCount: number;
+  /** The most recent of those projects, by the party row's created_at. */
+  lastProjectName: string | null;
+  lastAt: string | null;
+}
+
+/**
+ * Per-contact project history for the rolodex picker's history line —
+ * "3 projects · last: Ellsworth" (slide 13's mnote: "the history line is the
+ * whole value").
+ *
+ * ONE query for the whole visible page: `project_parties` filtered by
+ * `.in('studio_contact_id', ids)`, grouped client-side. Callers pass only the
+ * ids currently on screen (the picker caps its page) — this is deliberately
+ * not a per-card query and deliberately not a server-side rollup; a view for
+ * it would be a later wave's work.
+ *
+ * HONEST LIMITS:
+ *  · RLS scopes `project_parties` to projects the caller can see, so a card
+ *    used on a studio-mate's project can read LOWER than the truth. The line
+ *    is a memory aid, not an audit.
+ *  · A contact with no linked party rows simply gets no entry — the picker
+ *    renders "Never on a job yet" for that, which is the deck's copy.
+ *  · `studio_contact_id` being set does NOT mean "came from the rolodex" (the
+ *    00418 fold stamps client_rep/other rows too, and an evidence-free fold
+ *    card reuses its source party's uuid as its own id). That is fine here:
+ *    this groups by the COLUMN, never by comparing id spaces.
+ */
+export function useStudioContactHistory(contactIds: string[]) {
+  const ids = [...new Set(contactIds.filter(Boolean))].sort();
+  return useQuery({
+    queryKey: ['studio-contact-history', ids],
+    enabled: ids.length > 0,
+    queryFn: async (): Promise<Record<string, StudioContactHistory>> => {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const supabase = getSupabase() as any;
+      const { data, error } = await supabase
+        .from('project_parties')
+        .select('studio_contact_id, project_id, created_at, projects(name)')
+        .in('studio_contact_id', ids);
+      if (error) throw error;
+
+      const acc: Record<string, { projects: Set<string>; lastAt: string | null; lastName: string | null }> = {};
+      for (const raw of (data ?? []) as Array<{
+        studio_contact_id: string | null;
+        project_id: string | null;
+        created_at: string | null;
+        projects?: { name?: string | null } | Array<{ name?: string | null }> | null;
+      }>) {
+        const key = raw.studio_contact_id;
+        if (!key) continue;
+        const bucket = (acc[key] ??= { projects: new Set(), lastAt: null, lastName: null });
+        if (raw.project_id) bucket.projects.add(raw.project_id);
+        const embed = Array.isArray(raw.projects) ? raw.projects[0] : raw.projects;
+        const name = embed?.name ?? null;
+        if (!bucket.lastAt || (raw.created_at && raw.created_at > bucket.lastAt)) {
+          bucket.lastAt = raw.created_at ?? bucket.lastAt;
+          bucket.lastName = name ?? bucket.lastName;
+        }
+      }
+
+      const out: Record<string, StudioContactHistory> = {};
+      for (const [id, b] of Object.entries(acc)) {
+        out[id] = {
+          projectCount: b.projects.size,
+          lastProjectName: b.lastName,
+          lastAt: b.lastAt,
+        };
+      }
+      return out;
+    },
+  });
+}
+
 export interface PromoteToStudioContactInput {
   organizationId: string;
   party: ProjectParty;
