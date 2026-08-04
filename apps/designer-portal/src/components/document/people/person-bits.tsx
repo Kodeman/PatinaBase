@@ -10,7 +10,21 @@
 import type { PartyRole } from '@patina/supabase';
 import { roleLabel, type PartyStatus } from '@/lib/document/people-derivation';
 
-const AVATAR_BG: Record<PartyRole, string> = {
+/** The avatar's shape (slide 9, "Circles + squares"): a person is a circle, a
+ *  company is a rounded square — the ONE visual difference between them.
+ *  Defaults to 'circle' so every pre-Wave-2 call site is unaffected. */
+export type AvatarShape = 'circle' | 'square';
+
+// Keyed loosely by string, not PartyRole: the studio rolodex's contact_kind
+// (00417) is free TEXT and widens past PartyRole — a person card can carry
+// architect/photographer/stager/vendor/client_rep/other (PartyKind, Wave 1),
+// and a company card carries its OWN kind vocabulary entirely (gc/vendor/
+// workroom/showroom/supplier — see company-row.tsx's companyKindLabel). A
+// strict Record<PartyRole,...> would reject every one of those at the call
+// site; AVATAR_FALLBACK_BG covers anything this map doesn't name.
+const AVATAR_FALLBACK_BG = 'var(--color-aged-oak)';
+
+const AVATAR_BG: Record<string, string> = {
   client: 'var(--color-sage)',
   maker: 'var(--color-aged-oak)',
   gc: 'var(--color-dusty-blue)',
@@ -20,6 +34,22 @@ const AVATAR_BG: Record<PartyRole, string> = {
   sub: 'var(--color-mocha)',
   installer: 'var(--color-golden-hour)',
   receiver: 'var(--color-terracotta)',
+  // Call Sheet Wave 2 (00281's later PartyKind widening) — allied design-
+  // adjacent professions and the rolodex's own company kinds. Picked from the
+  // existing palette only (no new tokens): architect sits next to the GC's
+  // dusty-blue (an allied site professional); photographer/stager read quiet
+  // (quiet-ink) rather than warm, since neither is a trade or a firm.
+  architect: 'var(--color-dusty-blue)',
+  photographer: 'var(--color-quiet-ink)',
+  stager: 'var(--color-quiet-ink)',
+  // Company kinds (studio_contacts.contact_kind on an entity_kind='company'
+  // card — see company-row.tsx's COMPANY_KIND_LABELS for the matching label
+  // map). 'vendor' shares the maker tint deliberately: a vendor company IS a
+  // maker's firm.
+  vendor: 'var(--color-aged-oak)',
+  workroom: 'var(--color-mocha)',
+  showroom: 'var(--color-golden-hour)',
+  supplier: 'var(--color-aged-oak)',
 };
 
 const BADGE: Record<PartyRole, { color: string; border: string }> = {
@@ -50,20 +80,30 @@ export function initials(name: string): string {
 export function Avatar({
   name,
   role,
+  shape = 'circle',
   size = 42,
 }: {
   name: string;
-  role: PartyRole;
+  /** PartyRole for a people_directory row, OR a studio_contacts contact_kind
+   *  (person or company) — loosely typed as string so the rolodex's free-text
+   *  kinds resolve through the same tint map without a cast at the call site.
+   *  An unrecognized kind falls back to AVATAR_FALLBACK_BG rather than
+   *  rendering `undefined` as a background. */
+  role: string;
+  /** 'square' (8px radius) is the company avatar — slide 9's one difference. */
+  shape?: AvatarShape;
   size?: number;
 }) {
   return (
     <span
       aria-hidden
-      className="inline-flex shrink-0 items-center justify-center rounded-full font-mono font-semibold text-white"
+      className={`inline-flex shrink-0 items-center justify-center font-mono font-semibold text-white ${
+        shape === 'square' ? 'rounded-[8px]' : 'rounded-full'
+      }`}
       style={{
         width: size,
         height: size,
-        background: AVATAR_BG[role],
+        background: AVATAR_BG[role] ?? AVATAR_FALLBACK_BG,
         fontSize: Math.round(size * 0.32),
       }}
     >
