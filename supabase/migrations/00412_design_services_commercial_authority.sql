@@ -157,6 +157,9 @@ CREATE TABLE IF NOT EXISTS public.project_billing_authorities (
 CREATE INDEX IF NOT EXISTS idx_project_billing_authorities_active
   ON public.project_billing_authorities(project_id, effective_at DESC)
   WHERE status = 'active';
+CREATE UNIQUE INDEX IF NOT EXISTS uniq_project_billing_authorities_active
+  ON public.project_billing_authorities(project_id)
+  WHERE status = 'active';
 
 CREATE TABLE IF NOT EXISTS public.project_billing_authority_rates (
   id uuid PRIMARY KEY DEFAULT extensions.gen_random_uuid(),
@@ -324,9 +327,27 @@ CREATE POLICY proposal_service_rates_studio_rw ON public.proposal_service_rates
 CREATE POLICY commercial_signatures_studio_read ON public.commercial_document_signatures
   FOR SELECT TO authenticated
   USING (EXISTS (SELECT 1 FROM public.proposals p WHERE p.id = proposal_id AND public.is_studio_comember(p.designer_id)));
-CREATE POLICY commercial_signatures_client_read ON public.commercial_document_signatures
-  FOR SELECT TO authenticated
-  USING (EXISTS (SELECT 1 FROM public.proposals p WHERE p.id = proposal_id AND p.client_id = auth.uid()));
+DROP POLICY IF EXISTS commercial_signatures_client_read
+  ON public.commercial_document_signatures;
+
+-- Legacy project clients retain their established FF&E table view. Commercial
+-- origin projects are client-readable only through curated RPCs so trade cost,
+-- markup, PO linkage, and internal provenance never cross the raw table edge.
+DROP POLICY IF EXISTS "Clients can view their project FFE items"
+  ON public.project_ffe_items;
+CREATE POLICY "Clients can view their project FFE items"
+  ON public.project_ffe_items FOR SELECT TO authenticated
+  USING (
+    EXISTS (
+      SELECT 1 FROM public.projects p
+      WHERE p.id = project_ffe_items.project_id AND p.client_id = auth.uid()
+    )
+    AND NOT EXISTS (
+      SELECT 1 FROM public.project_commercial_documents origin
+      WHERE origin.project_id = project_ffe_items.project_id
+        AND origin.is_origin AND origin.document_kind = 'design_services'
+    )
+  );
 
 CREATE POLICY project_commercial_documents_studio_read ON public.project_commercial_documents
   FOR SELECT TO authenticated
@@ -419,6 +440,32 @@ BEGIN
       USING ERRCODE = 'check_violation';
   END IF;
 
+  -- A cut-over legacy edition is terminal. Even canonical legacy GUCs must not
+  -- revive it through send/view/sign/activate/decline or reciprocal linkage.
+  IF OLD.commercial_state = 'superseded' AND (
+    NEW.status IS DISTINCT FROM OLD.status
+    OR NEW.sent_at IS DISTINCT FROM OLD.sent_at
+    OR NEW.viewed_at IS DISTINCT FROM OLD.viewed_at
+    OR NEW.signed_at IS DISTINCT FROM OLD.signed_at
+    OR NEW.signed_by_name IS DISTINCT FROM OLD.signed_by_name
+    OR NEW.signed_ip IS DISTINCT FROM OLD.signed_ip
+    OR NEW.accepted_at IS DISTINCT FROM OLD.accepted_at
+    OR NEW.declined_at IS DISTINCT FROM OLD.declined_at
+    OR NEW.decline_reason IS DISTINCT FROM OLD.decline_reason
+    OR NEW.project_id IS DISTINCT FROM OLD.project_id
+  ) THEN
+    RAISE EXCEPTION 'superseded proposal % is terminal', OLD.id
+      USING ERRCODE = 'check_violation';
+  END IF;
+
+  IF NEW.document_kind <> 'legacy' AND (
+    (NEW.status = 'declined' AND NEW.commercial_state IS DISTINCT FROM 'declined')
+    OR (NEW.commercial_state = 'declined' AND NEW.status IS DISTINCT FROM 'declined')
+  ) THEN
+    RAISE EXCEPTION 'commercial decline must update proposal and commercial state atomically'
+      USING ERRCODE = 'check_violation';
+  END IF;
+
   -- Existing send_proposal remains the only send rail. Mirror that authorized
   -- transition into the separate commercial state without redefining its
   -- hardened fingerprint/dispatch body.
@@ -471,6 +518,87 @@ DROP TRIGGER IF EXISTS aab_guard_commercial_proposal_authority_trg ON public.pro
 CREATE TRIGGER aab_guard_commercial_proposal_authority_trg
 BEFORE INSERT OR UPDATE ON public.proposals
 FOR EACH ROW EXECUTE FUNCTION public.guard_commercial_proposal_authority();
+
+-- Current body lineage: the 00387 row-returning body renamed private by 00390.
+-- Its frozen public JSON wrapper remains untouched. Commercial documents retain
+-- the client-owned, row-locked decline rail with both states changed together.
+CREATE OR REPLACE FUNCTION public._decline_proposal_impl(
+  p_proposal_id uuid,
+  p_reason text DEFAULT NULL
+)
+RETURNS public.proposals
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public, pg_temp
+AS $$
+DECLARE
+  v_actor uuid := auth.uid();
+  v_proposal public.proposals;
+  v_reason text := NULLIF(btrim(COALESCE(p_reason, '')), '');
+  v_previous_decline text := current_setting('app.proposal_decline_id', true);
+  v_previous_commercial text := current_setting('app.commercial_document_id', true);
+BEGIN
+  IF v_actor IS NULL THEN
+    RAISE EXCEPTION 'decline_proposal requires an authenticated user'
+      USING ERRCODE = 'insufficient_privilege';
+  END IF;
+
+  SELECT * INTO v_proposal
+  FROM public.proposals
+  WHERE id = p_proposal_id
+  FOR UPDATE;
+
+  IF NOT FOUND THEN
+    RAISE EXCEPTION 'proposal % not found', p_proposal_id
+      USING ERRCODE = 'no_data_found';
+  END IF;
+  IF v_proposal.client_id IS DISTINCT FROM v_actor THEN
+    RAISE EXCEPTION 'proposal % may only be declined by its client', p_proposal_id
+      USING ERRCODE = 'insufficient_privilege';
+  END IF;
+  IF v_proposal.status = 'declined' THEN
+    IF v_proposal.document_kind <> 'legacy'
+       AND v_proposal.commercial_state IS DISTINCT FROM 'declined' THEN
+      RAISE EXCEPTION 'commercial proposal % has inconsistent declined state', p_proposal_id
+        USING ERRCODE = 'check_violation';
+    END IF;
+    RETURN v_proposal;
+  END IF;
+  IF v_proposal.status NOT IN ('sent', 'viewed') THEN
+    RAISE EXCEPTION 'proposal % is not declinable in status %',
+      p_proposal_id, v_proposal.status
+      USING ERRCODE = 'check_violation';
+  END IF;
+
+  PERFORM set_config('app.proposal_decline_id', p_proposal_id::text, true);
+  IF v_proposal.document_kind <> 'legacy' THEN
+    PERFORM set_config('app.commercial_document_id', p_proposal_id::text, true);
+  END IF;
+  UPDATE public.proposals
+  SET status = 'declined',
+      commercial_state = CASE WHEN document_kind = 'legacy'
+        THEN commercial_state ELSE 'declined' END,
+      declined_at = now(),
+      decline_reason = v_reason,
+      updated_at = now()
+  WHERE id = p_proposal_id
+  RETURNING * INTO v_proposal;
+  PERFORM set_config('app.proposal_decline_id', COALESCE(v_previous_decline, ''), true);
+  PERFORM set_config('app.commercial_document_id', COALESCE(v_previous_commercial, ''), true);
+
+  RETURN v_proposal;
+EXCEPTION WHEN OTHERS THEN
+  PERFORM set_config('app.proposal_decline_id', COALESCE(v_previous_decline, ''), true);
+  PERFORM set_config('app.commercial_document_id', COALESCE(v_previous_commercial, ''), true);
+  RAISE;
+END;
+$$;
+REVOKE ALL ON FUNCTION public._decline_proposal_impl(uuid, text)
+  FROM PUBLIC, anon, authenticated, service_role;
+REVOKE ALL ON FUNCTION public.decline_proposal(uuid, text)
+  FROM PUBLIC, anon, service_role;
+GRANT EXECUTE ON FUNCTION public.decline_proposal(uuid, text)
+  TO authenticated;
 
 CREATE OR REPLACE FUNCTION public.guard_commercial_immutable_row()
 RETURNS trigger
@@ -820,6 +948,8 @@ DECLARE
   v_document_id uuid;
   v_authority_id uuid;
   v_retainer_invoice_id uuid;
+  v_authorized_cents bigint := 0;
+  v_pending_entry record;
   v_newly_executed boolean := false;
   v_name text := btrim(COALESCE(p_signer_name, ''));
   v_previous_accept text := current_setting('app.proposal_accept_id', true);
@@ -916,6 +1046,12 @@ BEGIN
         RAISE EXCEPTION 'service addendum has no executed project origin'
           USING ERRCODE = 'check_violation';
       END IF;
+      -- Different addenda lock different proposal rows. Serialize their
+      -- authority replacement on the shared project before ending/inserting
+      -- the one active authority enforced by the partial unique index.
+      PERFORM 1 FROM public.projects
+      WHERE id = v_project_id
+      FOR UPDATE;
       UPDATE public.project_commercial_documents
       SET executed_at = v_studio_signature.signed_at
       WHERE id = v_document_id;
@@ -962,6 +1098,51 @@ BEGIN
       WHERE r.proposal_id = p_proposal_id
       ORDER BY r.version, r.sort_order, r.role_name;
 
+    IF v_proposal.document_kind = 'service_addendum' THEN
+      SELECT COALESCE(sum(entry.rated_amount_cents), 0)
+      INTO v_authorized_cents
+      FROM public.project_time_entries entry
+      WHERE entry.project_id = v_project_id
+        AND entry.billing_state = 'authorized'
+        AND entry.billable AND entry.duration_minutes IS NOT NULL;
+
+      -- A replacement ceiling is cumulative across the project. Promote only
+      -- the oldest already-rated pending work that now fits; its historical
+      -- authority/rate/amount snapshots never change.
+      FOR v_pending_entry IN
+        SELECT entry.id, entry.rated_amount_cents
+        FROM public.project_time_entries entry
+        JOIN public.project_billing_authorities prior_authority
+          ON prior_authority.id = entry.billing_authority_id
+        WHERE entry.project_id = v_project_id
+          AND entry.billing_state = 'pending_authorization'
+          AND entry.billable AND entry.duration_minutes IS NOT NULL
+          AND entry.rated_amount_cents IS NOT NULL
+          AND entry.authority_rate_id IS NOT NULL
+          AND entry.billing_authority_id <> v_authority_id
+          AND (
+            prior_authority.retainer_activation_policy = 'immediate'
+            OR prior_authority.retainer_amount_cents = 0
+            OR EXISTS (
+              SELECT 1 FROM public.invoices paid_retainer
+              WHERE paid_retainer.id = prior_authority.retainer_invoice_id
+                AND paid_retainer.status = 'paid'
+                AND paid_retainer.amount_paid_cents >= paid_retainer.total_cents
+            )
+          )
+        ORDER BY entry.started_at, entry.id
+        FOR UPDATE OF entry
+      LOOP
+        IF v_authorized_cents + v_pending_entry.rated_amount_cents
+           <= v_terms.billing_ceiling_cents THEN
+          UPDATE public.project_time_entries
+          SET billing_state = 'authorized', updated_at = now()
+          WHERE id = v_pending_entry.id;
+          v_authorized_cents := v_authorized_cents + v_pending_entry.rated_amount_cents;
+        END IF;
+      END LOOP;
+    END IF;
+
     PERFORM set_config('app.proposal_accept_id', COALESCE(v_previous_accept, ''), true);
     PERFORM set_config('app.commercial_document_id', COALESCE(v_previous_commercial, ''), true);
     v_newly_executed := true;
@@ -1005,13 +1186,14 @@ AS $$
 DECLARE
   v_designer_id uuid;
   v_document_kind text;
+  v_commercial_state text;
 BEGIN
   IF auth.uid() IS NULL THEN
     RAISE EXCEPTION 'activate_proposal_as_project requires an authenticated studio author'
       USING ERRCODE = 'insufficient_privilege';
   END IF;
-  SELECT proposal.designer_id, proposal.document_kind
-  INTO v_designer_id, v_document_kind
+  SELECT proposal.designer_id, proposal.document_kind, proposal.commercial_state
+  INTO v_designer_id, v_document_kind, v_commercial_state
   FROM public.proposals AS proposal
   WHERE proposal.id = p_proposal_id FOR UPDATE;
   IF NOT FOUND OR NOT public._can_author_proposal(v_designer_id) THEN
@@ -1020,6 +1202,10 @@ BEGIN
   END IF;
   IF v_document_kind <> 'legacy' THEN
     RAISE EXCEPTION 'commercial documents activate only through their dedicated execution RPC'
+      USING ERRCODE = 'check_violation';
+  END IF;
+  IF v_commercial_state = 'superseded' THEN
+    RAISE EXCEPTION 'superseded proposal % cannot be activated', p_proposal_id
       USING ERRCODE = 'check_violation';
   END IF;
   RETURN public._activate_proposal_as_project_authorized(p_proposal_id, p_start_date);
@@ -1720,11 +1906,16 @@ BEGIN
     RAISE EXCEPTION 'project % has no executed design-services origin', p_project_id
       USING ERRCODE = 'check_violation';
   END IF;
-  SELECT * INTO v_checkpoint FROM public.project_budget_checkpoints
-  WHERE project_id = p_project_id AND status IN ('acknowledged', 'overridden')
-  ORDER BY published_at DESC LIMIT 1 FOR SHARE;
-  IF v_checkpoint.id IS NULL THEN
-    RAISE EXCEPTION 'furnishings authorization requires an acknowledged checkpoint or audited override'
+  SELECT checkpoint.* INTO v_checkpoint
+  FROM public.project_budget_checkpoints checkpoint
+  JOIN public.project_budget_versions version
+    ON version.id = checkpoint.budget_version_id
+  WHERE checkpoint.project_id = p_project_id
+  ORDER BY version.version DESC, checkpoint.published_at DESC, checkpoint.id DESC
+  LIMIT 1 FOR SHARE OF checkpoint;
+  IF v_checkpoint.id IS NULL
+     OR v_checkpoint.status NOT IN ('acknowledged', 'overridden') THEN
+    RAISE EXCEPTION 'latest furnishings checkpoint must be acknowledged or audited override'
       USING ERRCODE = 'check_violation';
   END IF;
 
@@ -1988,9 +2179,21 @@ BEGIN
   RETURN jsonb_build_object(
     'projectId', v_document.project_id,
     'documentId', v_document.id,
+    'checkpointId', v_document.budget_checkpoint_id,
     'appliedItemIds', to_jsonb(v_applied_ids),
     'depositInvoiceId', COALESCE(v_deposit_invoice_id, v_document.deposit_invoice_id),
-    'depositRequiredCents', v_deposit_cents,
+    'depositRequiredCents', COALESCE((SELECT i.total_cents
+      FROM public.invoices i
+      WHERE i.id = COALESCE(v_deposit_invoice_id, v_document.deposit_invoice_id)), v_deposit_cents),
+    'deposit_required_cents', COALESCE((SELECT i.total_cents
+      FROM public.invoices i
+      WHERE i.id = COALESCE(v_deposit_invoice_id, v_document.deposit_invoice_id)), v_deposit_cents),
+    'depositPaidCents', COALESCE((SELECT i.amount_paid_cents
+      FROM public.invoices i
+      WHERE i.id = COALESCE(v_deposit_invoice_id, v_document.deposit_invoice_id)), 0),
+    'deposit_paid_cents', COALESCE((SELECT i.amount_paid_cents
+      FROM public.invoices i
+      WHERE i.id = COALESCE(v_deposit_invoice_id, v_document.deposit_invoice_id)), 0),
     'newlyExecuted', v_newly
   );
 EXCEPTION WHEN OTHERS THEN
@@ -2082,7 +2285,21 @@ BEGIN
     'commercialState', p.commercial_state, 'status', p.status,
     'totalAmountCents', p.total_amount, 'depositPercent', p.deposit_percent,
     'depositInvoiceId', d.deposit_invoice_id, 'executedAt', d.executed_at,
+    'proposalSendDispatchId', p.proposal_send_dispatch_id,
+    'proposal_send_dispatch_id', p.proposal_send_dispatch_id,
+    'sentAt', p.sent_at, 'sent_at', p.sent_at,
+    'checkpointId', d.budget_checkpoint_id,
     'budgetCheckpointId', d.budget_checkpoint_id,
+    'depositRequiredCents', COALESCE((SELECT i.total_cents
+      FROM public.invoices i WHERE i.id = d.deposit_invoice_id),
+      round(p.total_amount * p.deposit_percent / 100.0)::bigint),
+    'deposit_required_cents', COALESCE((SELECT i.total_cents
+      FROM public.invoices i WHERE i.id = d.deposit_invoice_id),
+      round(p.total_amount * p.deposit_percent / 100.0)::bigint),
+    'depositPaidCents', COALESCE((SELECT i.amount_paid_cents
+      FROM public.invoices i WHERE i.id = d.deposit_invoice_id), 0),
+    'deposit_paid_cents', COALESCE((SELECT i.amount_paid_cents
+      FROM public.invoices i WHERE i.id = d.deposit_invoice_id), 0),
     'itemCount', (SELECT count(*) FROM public.furnishing_authorization_items a WHERE a.commercial_document_id = d.id),
     'items', (SELECT COALESCE(jsonb_agg(jsonb_build_object(
       'id', a.id, 'name', a.name, 'roomName', a.room_name, 'category', a.category,
@@ -2117,6 +2334,13 @@ DECLARE
   v_authority public.project_billing_authorities%ROWTYPE;
   v_rate public.project_billing_authority_rates%ROWTYPE;
   v_prior_cents bigint;
+  v_current_version integer;
+  v_project_designer_id uuid;
+  v_team_role text;
+  v_normalized_role text;
+  v_role_match_count integer := 0;
+  v_current_rate_count integer := 0;
+  v_retainer_ready boolean := false;
 BEGIN
   IF TG_OP = 'UPDATE' AND OLD.billing_authority_id IS NOT NULL AND (
     NEW.billing_authority_id IS DISTINCT FROM OLD.billing_authority_id
@@ -2125,6 +2349,14 @@ BEGIN
   ) THEN
     RAISE EXCEPTION 'time-entry authority and rate provenance are immutable'
       USING ERRCODE = 'check_violation';
+  END IF;
+
+  -- Browser-supplied rate/authority ids are never selection authority. New
+  -- rows and previously-unclassified rows are resolved exclusively from the
+  -- signed project authority and server-owned team role below.
+  IF TG_OP = 'INSERT' OR (TG_OP = 'UPDATE' AND OLD.authority_rate_id IS NULL) THEN
+    NEW.billing_authority_id := NULL;
+    NEW.authority_rate_id := NULL;
   END IF;
 
   SELECT EXISTS (
@@ -2146,16 +2378,19 @@ BEGIN
     RETURN NEW;
   END IF;
 
-  IF NEW.billing_authority_id IS NOT NULL THEN
+  IF TG_OP = 'UPDATE' AND OLD.billing_authority_id IS NOT NULL THEN
     SELECT * INTO v_authority FROM public.project_billing_authorities
-    WHERE id = NEW.billing_authority_id AND project_id = NEW.project_id
+    WHERE id = OLD.billing_authority_id AND project_id = NEW.project_id
       AND effective_at <= NEW.started_at
-      AND (ended_at IS NULL OR ended_at > NEW.started_at);
+      AND (ended_at IS NULL OR ended_at > NEW.started_at)
+    FOR UPDATE;
   ELSE
     SELECT * INTO v_authority FROM public.project_billing_authorities
-    WHERE project_id = NEW.project_id AND effective_at <= NEW.started_at
+    WHERE project_id = NEW.project_id AND status = 'active'
+      AND effective_at <= NEW.started_at
       AND (ended_at IS NULL OR ended_at > NEW.started_at)
-    ORDER BY effective_at DESC, id DESC LIMIT 1;
+    ORDER BY effective_at DESC, id DESC LIMIT 1
+    FOR UPDATE;
   END IF;
   IF v_authority.id IS NULL THEN
     NEW.billing_authority_id := NULL;
@@ -2165,32 +2400,104 @@ BEGIN
     RETURN NEW;
   END IF;
 
-  IF NEW.authority_rate_id IS NOT NULL THEN
-    SELECT * INTO v_rate FROM public.project_billing_authority_rates
-    WHERE id = NEW.authority_rate_id
-      AND billing_authority_id = v_authority.id;
+  SELECT max(rate.version) INTO v_current_version
+  FROM public.project_billing_authority_rates rate
+  JOIN public.proposal_service_rates source ON source.id = rate.source_rate_id
+  WHERE rate.billing_authority_id = v_authority.id
+    AND source.effective_at <= NEW.started_at;
+
+  SELECT project.designer_id INTO v_project_designer_id
+  FROM public.projects project WHERE project.id = NEW.project_id;
+  IF v_project_designer_id IS NOT DISTINCT FROM NEW.user_id THEN
+    v_team_role := 'lead_designer';
   ELSE
-    SELECT * INTO v_rate FROM public.project_billing_authority_rates
-    WHERE billing_authority_id = v_authority.id
-    ORDER BY version DESC, created_at, id LIMIT 1;
+    SELECT CASE WHEN count(DISTINCT member.role) = 1 THEN min(member.role) END
+    INTO v_team_role
+    FROM public.project_team_members member
+    WHERE member.project_id = NEW.project_id
+      AND member.user_id = NEW.user_id
+      AND member.removed_at IS NULL;
   END IF;
+  v_normalized_role := regexp_replace(
+    replace(lower(btrim(COALESCE(v_team_role, ''))), '_', ' '),
+    '\s+', ' ', 'g'
+  );
+
+  IF v_current_version IS NOT NULL AND v_normalized_role <> '' THEN
+    SELECT count(*) INTO v_role_match_count
+    FROM public.project_billing_authority_rates rate
+    JOIN public.proposal_service_rates source ON source.id = rate.source_rate_id
+    WHERE rate.billing_authority_id = v_authority.id
+      AND rate.version = v_current_version
+      AND source.effective_at <= NEW.started_at
+      AND regexp_replace(
+        replace(lower(btrim(rate.role_name)), '_', ' '), '\s+', ' ', 'g'
+      ) = v_normalized_role;
+    IF v_role_match_count = 1 THEN
+      SELECT rate.* INTO v_rate
+      FROM public.project_billing_authority_rates rate
+      JOIN public.proposal_service_rates source ON source.id = rate.source_rate_id
+      WHERE rate.billing_authority_id = v_authority.id
+        AND rate.version = v_current_version
+        AND source.effective_at <= NEW.started_at
+        AND regexp_replace(
+          replace(lower(btrim(rate.role_name)), '_', ' '), '\s+', ' ', 'g'
+        ) = v_normalized_role;
+    END IF;
+  END IF;
+
+  IF v_rate.id IS NULL AND v_current_version IS NOT NULL THEN
+    SELECT count(*) INTO v_current_rate_count
+    FROM public.project_billing_authority_rates rate
+    JOIN public.proposal_service_rates source ON source.id = rate.source_rate_id
+    WHERE rate.billing_authority_id = v_authority.id
+      AND rate.version = v_current_version
+      AND source.effective_at <= NEW.started_at;
+    IF v_current_rate_count = 1 THEN
+      SELECT rate.* INTO v_rate
+      FROM public.project_billing_authority_rates rate
+      JOIN public.proposal_service_rates source ON source.id = rate.source_rate_id
+      WHERE rate.billing_authority_id = v_authority.id
+        AND rate.version = v_current_version
+        AND source.effective_at <= NEW.started_at;
+    END IF;
+  END IF;
+
   IF v_rate.id IS NULL THEN
-    RAISE EXCEPTION 'billable design-services time requires a signed authority role rate'
-      USING ERRCODE = 'check_violation';
+    NEW.billing_authority_id := NULL;
+    NEW.authority_rate_id := NULL;
+    NEW.hourly_rate_cents := NULL;
+    NEW.rated_amount_cents := NULL;
+    NEW.billing_state := 'pending_authorization';
+    RETURN NEW;
   END IF;
   NEW.billing_authority_id := v_authority.id;
   NEW.authority_rate_id := v_rate.id;
   NEW.hourly_rate_cents := v_rate.hourly_rate_cents;
 
+  v_retainer_ready := v_authority.retainer_activation_policy = 'immediate'
+    OR v_authority.retainer_amount_cents = 0
+    OR EXISTS (
+      SELECT 1 FROM public.invoices invoice
+      WHERE invoice.id = v_authority.retainer_invoice_id
+        AND invoice.status = 'paid'
+        AND invoice.amount_paid_cents >= invoice.total_cents
+    );
+
   IF NEW.duration_minutes IS NULL THEN
     NEW.rated_amount_cents := NULL;
-    NEW.billing_state := 'authorized';
+    NEW.billing_state := CASE WHEN v_retainer_ready
+      THEN 'authorized' ELSE 'pending_authorization' END;
     RETURN NEW;
   END IF;
   NEW.rated_amount_cents := round(NEW.duration_minutes / 60.0 * v_rate.hourly_rate_cents)::integer;
+  IF NOT v_retainer_ready THEN
+    NEW.billing_state := 'pending_authorization';
+    RETURN NEW;
+  END IF;
   SELECT COALESCE(sum(t.rated_amount_cents), 0) INTO v_prior_cents
   FROM public.project_time_entries t
-  WHERE t.billing_authority_id = v_authority.id
+  WHERE t.project_id = NEW.project_id
     AND t.billing_state = 'authorized'
     AND t.billable AND t.duration_minutes IS NOT NULL
     AND t.id IS DISTINCT FROM NEW.id;
@@ -2444,7 +2751,7 @@ BEGIN
   END IF;
   SELECT * INTO v_authority FROM public.project_billing_authorities
   WHERE project_id = p_project_id
-  ORDER BY effective_at DESC, id DESC LIMIT 1;
+  ORDER BY (status = 'active') DESC, effective_at DESC, id DESC LIMIT 1;
   IF v_authority.id IS NULL THEN RETURN NULL; END IF;
 
   SELECT COALESCE(t.currency, 'USD'), COALESCE(t.current_rate_version, 1)
@@ -2468,7 +2775,7 @@ BEGIN
     SELECT te.*, invoice.status AS invoice_status
     FROM public.project_time_entries te
     LEFT JOIN public.invoices invoice ON invoice.id = te.invoice_id
-    WHERE te.billing_authority_id = v_authority.id AND te.billable
+    WHERE te.project_id = p_project_id AND te.billable
       AND te.duration_minutes IS NOT NULL
   ) rated;
 
@@ -2559,6 +2866,9 @@ BEGIN
       'status', v_proposal.status, 'totalAmountCents', v_proposal.total_amount,
       'depositPercent', v_proposal.deposit_percent,
       'validUntil', v_proposal.valid_until, 'sentAt', v_proposal.sent_at,
+      'sent_at', v_proposal.sent_at,
+      'proposalSendDispatchId', v_proposal.proposal_send_dispatch_id,
+      'proposal_send_dispatch_id', v_proposal.proposal_send_dispatch_id,
       'executedAt', v_document.executed_at,
       'supersededAt', v_proposal.superseded_at,
       'supersededReason', v_proposal.superseded_reason,
@@ -2580,7 +2890,7 @@ BEGIN
     ) ORDER BY r.version DESC, r.sort_order, r.role_name)
       FROM public.proposal_service_rates r WHERE r.proposal_id = p_proposal_id), '[]'::jsonb),
     'signatures', COALESCE((SELECT jsonb_agg(jsonb_build_object(
-      'id', s.id, 'partyRole', s.party_role, 'signerUserId', s.signer_user_id,
+      'id', s.id, 'partyRole', s.party_role,
       'signedName', s.signed_name, 'signedAt', s.signed_at,
       'evidenceFingerprint', s.evidence_fingerprint
     ) ORDER BY s.signed_at, s.id) FROM public.commercial_document_signatures s
@@ -2588,8 +2898,22 @@ BEGIN
     'furnishings', CASE WHEN v_document.document_kind = 'furnishings_authorization'
       THEN jsonb_build_object(
         'documentId', v_document.id, 'waveName', v_document.wave_name,
+        'proposalSendDispatchId', v_proposal.proposal_send_dispatch_id,
+        'proposal_send_dispatch_id', v_proposal.proposal_send_dispatch_id,
+        'sentAt', v_proposal.sent_at, 'sent_at', v_proposal.sent_at,
+        'checkpointId', v_document.budget_checkpoint_id,
         'budgetCheckpointId', v_document.budget_checkpoint_id,
         'depositInvoiceId', v_document.deposit_invoice_id,
+        'depositRequiredCents', COALESCE((SELECT i.total_cents
+          FROM public.invoices i WHERE i.id = v_document.deposit_invoice_id),
+          round(v_proposal.total_amount * v_proposal.deposit_percent / 100.0)::bigint),
+        'deposit_required_cents', COALESCE((SELECT i.total_cents
+          FROM public.invoices i WHERE i.id = v_document.deposit_invoice_id),
+          round(v_proposal.total_amount * v_proposal.deposit_percent / 100.0)::bigint),
+        'depositPaidCents', COALESCE((SELECT i.amount_paid_cents
+          FROM public.invoices i WHERE i.id = v_document.deposit_invoice_id), 0),
+        'deposit_paid_cents', COALESCE((SELECT i.amount_paid_cents
+          FROM public.invoices i WHERE i.id = v_document.deposit_invoice_id), 0),
         'items', COALESCE((SELECT jsonb_agg(jsonb_build_object(
           'id', a.id, 'name', a.name, 'roomName', a.room_name,
           'category', a.category, 'itemType', a.item_type, 'quantity', a.quantity,

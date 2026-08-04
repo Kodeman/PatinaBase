@@ -7268,6 +7268,24 @@ END $g$;
 
 -- 00412_design_services_commercial_authority.sql
 DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public._decline_proposal_impl(uuid, text) FROM PUBLIC, anon, authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00412_design_services_commercial_authority.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.decline_proposal(uuid, text) FROM PUBLIC, anon, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00412_design_services_commercial_authority.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.decline_proposal(uuid, text) TO authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00412_design_services_commercial_authority.sql
+DO $g$ BEGIN
   REVOKE ALL ON FUNCTION public.guard_commercial_immutable_row() FROM PUBLIC, anon, authenticated, service_role;
 EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
 END $g$;
