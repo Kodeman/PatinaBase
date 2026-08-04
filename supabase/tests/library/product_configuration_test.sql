@@ -164,6 +164,13 @@ DECLARE
   v_locked_decision_id uuid;
   v_locked_option_id uuid;
   v_locked_item_id uuid;
+  v_dirty_selections jsonb;
+  v_dirty_decision_id uuid;
+  v_dirty_option_id uuid;
+  v_dirty_updated_at timestamptz;
+  v_stored_snapshot jsonb;
+  v_com_template_id uuid;
+  v_com_template_instance uuid;
 BEGIN
   PERFORM pg_temp.assume_user('4c000000-0000-4000-8000-000000000001');
 
@@ -1096,6 +1103,14 @@ BEGIN
   ASSERT v_com_hash_b IS DISTINCT FROM v_com_hash_a,
     'changing only the COM fabric must change the configuration hash';
 
+  -- One row, one snapshot. The evaluation must describe what was hashed, or a
+  -- reader that goes through the evaluation sees a COM piece with no fabric.
+  ASSERT (SELECT bool_and(evaluation->'snapshot' = snapshot
+                          AND snapshot ? 'comDetails')
+          FROM public.product_configurations
+          WHERE id IN (v_com_config_a, v_com_config_b)),
+    'a saved COM configuration must not store two snapshots that disagree';
+
   -- Placement denormalizes a vendor-readable fabric line onto the spec, from
   -- the snapshot the project copy carries.
   v_place := public.place_product_configuration_in_project(
@@ -1147,6 +1162,19 @@ BEGIN
             AND jsonb_array_length(selection_snapshot) = 3
           FROM public.client_decision_options WHERE id = v_decision_option_id),
     'decision options must carry configuration provenance and its selections';
+
+  -- The fixture has to carry the leak for this to prove anything.
+  ASSERT (SELECT COALESCE(bool_or(entry ? 'tradePriceDeltaCents'
+                                  OR entry ? 'retailPriceDeltaCents'), false)
+          FROM jsonb_array_elements(v_selections) AS chosen(entry)),
+    'a configuration snapshot must carry price deltas, or this test is vacuous';
+  -- The client reads this row. The trade side of the book does not go in it.
+  ASSERT (SELECT COALESCE(bool_or(entry ? 'tradePriceDeltaCents'
+                                  OR entry ? 'retailPriceDeltaCents'), false) = false
+          FROM public.client_decision_options AS option,
+               jsonb_array_elements(option.selection_snapshot) AS chosen(entry)
+          WHERE option.id = v_decision_option_id),
+    'a stored decision option must never carry trade or retail price deltas';
 
   -- Winning writes those selections onto the auto-created specification.
   PERFORM public._apply_client_decision_authorized(
@@ -1227,6 +1255,96 @@ BEGIN
   ASSERT (SELECT material = 'Oak' AND finish = 'Natural' AND color_fabric IS NULL
           FROM public.project_ffe_specs WHERE ffe_item_id = v_locked_item_id),
     'a locked specification must survive the decision feed-through untouched';
+
+  -- Sanitizing is an allowlist rebuild, not a denylist filter: a snapshot key
+  -- invented tomorrow cannot reach the client by being forgotten here.
+  SELECT COALESCE(jsonb_agg(chosen.entry || jsonb_build_object(
+           'internalMargin', 4200,
+           'privateVendorNote', 'do not show the client')
+         ORDER BY chosen.ord), '[]'::jsonb)
+  INTO v_dirty_selections
+  FROM jsonb_array_elements(v_selections) WITH ORDINALITY AS chosen(entry, ord);
+
+  v_dirty_decision_id := '4c000000-0000-4000-8000-000000000052';
+  PERFORM public.create_client_decision(
+    v_dirty_decision_id,
+    jsonb_build_object(
+      'designer_client_id', '4c000000-0000-4000-8000-000000000040',
+      'project_id', '4c000000-0000-4000-8000-000000000031',
+      'title', 'Sofa fabric, second pass',
+      'status', 'pending',
+      'blocking_status', 'non_blocking'),
+    jsonb_build_array(jsonb_build_object(
+      'name', 'COM Sofa alternative',
+      'price', 210000,
+      'quantity', 1,
+      'product_id', '4c000000-0000-4000-8000-000000000105',
+      'selection_snapshot', v_dirty_selections,
+      'sort_order', 0))
+  );
+  SELECT id, selection_snapshot INTO v_dirty_option_id, v_stored_snapshot
+  FROM public.client_decision_options WHERE decision_id = v_dirty_decision_id;
+  ASSERT jsonb_array_length(v_stored_snapshot)
+         = jsonb_array_length(v_dirty_selections),
+    'sanitizing must keep every selection entry, in order';
+  ASSERT (SELECT COALESCE(bool_or(
+            entry ? 'tradePriceDeltaCents' OR entry ? 'retailPriceDeltaCents'
+            OR entry ? 'internalMargin' OR entry ? 'privateVendorNote'), false) = false
+          FROM jsonb_array_elements(v_stored_snapshot) AS chosen(entry)),
+    'create_client_decision must rebuild selection entries from the allowlist';
+  ASSERT (SELECT bool_and(entry ? 'groupCode' AND entry ? 'valueLabel'
+                          AND entry ? 'optionValueId')
+          FROM jsonb_array_elements(v_stored_snapshot) AS chosen(entry)),
+    'sanitizing must keep the vocabulary the specification feed-through reads';
+
+  SELECT updated_at INTO v_dirty_updated_at
+  FROM public.client_decisions WHERE id = v_dirty_decision_id;
+  PERFORM public.update_client_decision(
+    v_dirty_decision_id,
+    '{}'::jsonb,
+    jsonb_build_array(jsonb_build_object(
+      'name', 'COM Sofa alternative, revised',
+      'price', 215000,
+      'quantity', 1,
+      'product_id', '4c000000-0000-4000-8000-000000000105',
+      'selection_snapshot', v_dirty_selections,
+      'sort_order', 0)),
+    v_dirty_updated_at
+  );
+  SELECT selection_snapshot INTO v_stored_snapshot
+  FROM public.client_decision_options WHERE decision_id = v_dirty_decision_id;
+  ASSERT (SELECT COALESCE(bool_or(
+            entry ? 'tradePriceDeltaCents' OR entry ? 'retailPriceDeltaCents'
+            OR entry ? 'internalMargin' OR entry ? 'privateVendorNote'), false) = false
+          FROM jsonb_array_elements(v_stored_snapshot) AS chosen(entry)),
+    'update_client_decision must sanitize on its delete-and-reinsert path too';
+
+  -- A library template is knowledge worth reusing; the fabric one project
+  -- specified is not. Promotion scrubs it and re-hashes what is left.
+  PERFORM public.approve_product_configuration(v_com_config_b, 2);
+  v_template := public.promote_configuration_to_library(
+    v_com_config_b, 'COM Sofa Template'
+  );
+  v_com_template_id := (v_template->>'id')::uuid;
+  ASSERT (SELECT snapshot ? 'comDetails' AND com_details IS NOT NULL
+          FROM public.product_configurations WHERE id = v_com_config_b),
+    'the promotion source must keep the COM fabric it specified';
+  ASSERT (SELECT NOT (snapshot ? 'comDetails')
+            AND com_details IS NULL
+            AND NOT ((evaluation->'snapshot') ? 'comDetails')
+            AND snapshot_hash IS DISTINCT FROM v_com_hash_b
+            AND snapshot_hash = pg_temp.configuration_snapshot_hash(snapshot)
+          FROM public.product_configurations WHERE id = v_com_template_id),
+    'a promoted template must carry no COM fabric and be re-hashed without it';
+
+  v_instance := public.instantiate_product_configuration_template(
+    v_com_template_id, '4c000000-0000-4000-8000-000000000031',
+    'COM Sofa from Template'
+  );
+  v_com_template_instance := (v_instance#>>'{configuration,id}')::uuid;
+  ASSERT (SELECT NOT (snapshot ? 'comDetails') AND com_details IS NULL
+          FROM public.product_configurations WHERE id = v_com_template_instance),
+    'instantiating a scrubbed template must not resurrect the source fabric';
 
   PERFORM set_config('request.jwt.claims', NULL, true);
   PERFORM pg_temp.reset_user();
