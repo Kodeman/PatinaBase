@@ -2323,6 +2323,65 @@ GRANT EXECUTE ON FUNCTION public.list_furnishings_authorizations(uuid)
 
 -- ── Time capture is truthful; invoiceability follows signed authority ──────
 
+CREATE OR REPLACE FUNCTION public._is_design_services_project(p_project_id uuid)
+RETURNS boolean
+LANGUAGE sql
+STABLE
+SECURITY DEFINER
+SET search_path = public, pg_temp
+AS $$
+  SELECT EXISTS (
+    SELECT 1 FROM public.project_commercial_documents document
+    WHERE document.project_id = p_project_id
+      AND document.is_origin AND document.document_kind = 'design_services'
+  );
+$$;
+REVOKE ALL ON FUNCTION public._is_design_services_project(uuid)
+  FROM PUBLIC, anon, authenticated, service_role;
+GRANT EXECUTE ON FUNCTION public._is_design_services_project(uuid)
+  TO authenticated, service_role;
+
+CREATE OR REPLACE FUNCTION public.guard_commercial_time_entry_derived_fields()
+RETURNS trigger
+LANGUAGE plpgsql
+SECURITY INVOKER
+SET search_path = public, pg_temp
+AS $$
+BEGIN
+  -- Canonical SECURITY DEFINER rails (classifier and addendum promotion) run as
+  -- postgres. Browser/table writes may edit source facts such as duration and
+  -- notes, but never the commercial classification derived from those facts.
+  IF current_user IS NOT DISTINCT FROM 'postgres' THEN RETURN NEW; END IF;
+
+  IF NOT public._is_design_services_project(OLD.project_id) THEN RETURN NEW; END IF;
+
+  IF OLD.billing_authority_id IS NOT NULL
+     AND NEW.project_id IS DISTINCT FROM OLD.project_id THEN
+    RAISE EXCEPTION 'bound commercial time entries cannot change projects'
+      USING ERRCODE = 'check_violation';
+  END IF;
+  IF NEW.billing_authority_id IS DISTINCT FROM OLD.billing_authority_id
+     OR NEW.authority_rate_id IS DISTINCT FROM OLD.authority_rate_id
+     OR NEW.hourly_rate_cents IS DISTINCT FROM OLD.hourly_rate_cents
+     OR NEW.rated_amount_cents IS DISTINCT FROM OLD.rated_amount_cents
+     OR NEW.billing_state IS DISTINCT FROM OLD.billing_state
+  THEN
+    RAISE EXCEPTION 'commercial time authority, rate, amount, and billing state are server-derived'
+      USING ERRCODE = 'check_violation';
+  END IF;
+  RETURN NEW;
+END;
+$$;
+REVOKE ALL ON FUNCTION public.guard_commercial_time_entry_derived_fields()
+  FROM PUBLIC, anon, authenticated, service_role;
+DROP TRIGGER IF EXISTS aab_guard_commercial_time_entry_derived_fields_trg
+  ON public.project_time_entries;
+CREATE TRIGGER aab_guard_commercial_time_entry_derived_fields_trg
+BEFORE UPDATE OF project_id, billing_authority_id, authority_rate_id,
+  hourly_rate_cents, rated_amount_cents, billing_state
+ON public.project_time_entries
+FOR EACH ROW EXECUTE FUNCTION public.guard_commercial_time_entry_derived_fields();
+
 CREATE OR REPLACE FUNCTION public.classify_project_time_entry_authority()
 RETURNS trigger
 LANGUAGE plpgsql
@@ -2341,6 +2400,8 @@ DECLARE
   v_role_match_count integer := 0;
   v_current_rate_count integer := 0;
   v_retainer_ready boolean := false;
+  v_is_bound boolean := false;
+  v_project_ceiling_cents bigint;
 BEGIN
   IF TG_OP = 'UPDATE' AND OLD.billing_authority_id IS NOT NULL AND (
     NEW.billing_authority_id IS DISTINCT FROM OLD.billing_authority_id
@@ -2378,15 +2439,39 @@ BEGIN
     RETURN NEW;
   END IF;
 
+  -- Every commercial classifier takes the same stable project lock used by an
+  -- addendum countersign. It serializes project-wide accrued-ceiling reads even
+  -- when the entry binds a superseded authority while another entry binds the
+  -- active replacement authority.
+  SELECT project.designer_id INTO v_project_designer_id
+  FROM public.projects project
+  WHERE project.id = NEW.project_id
+  FOR UPDATE;
+
+  SELECT authority.billing_ceiling_cents INTO v_project_ceiling_cents
+  FROM public.project_billing_authorities authority
+  WHERE authority.project_id = NEW.project_id AND authority.status = 'active'
+  ORDER BY authority.effective_at DESC, authority.id DESC
+  LIMIT 1;
+
   IF TG_OP = 'UPDATE' AND OLD.billing_authority_id IS NOT NULL THEN
+    v_is_bound := true;
     SELECT * INTO v_authority FROM public.project_billing_authorities
     WHERE id = OLD.billing_authority_id AND project_id = NEW.project_id
-      AND effective_at <= NEW.started_at
-      AND (ended_at IS NULL OR ended_at > NEW.started_at)
     FOR UPDATE;
+    SELECT * INTO v_rate FROM public.project_billing_authority_rates
+    WHERE id = OLD.authority_rate_id
+      AND billing_authority_id = OLD.billing_authority_id;
+    IF v_authority.id IS NULL OR v_rate.id IS NULL THEN
+      RAISE EXCEPTION 'bound commercial time entry has invalid authority provenance'
+        USING ERRCODE = 'check_violation';
+    END IF;
+    NEW.billing_authority_id := OLD.billing_authority_id;
+    NEW.authority_rate_id := OLD.authority_rate_id;
+    NEW.hourly_rate_cents := OLD.hourly_rate_cents;
   ELSE
     SELECT * INTO v_authority FROM public.project_billing_authorities
-    WHERE project_id = NEW.project_id AND status = 'active'
+    WHERE project_id = NEW.project_id
       AND effective_at <= NEW.started_at
       AND (ended_at IS NULL OR ended_at > NEW.started_at)
     ORDER BY effective_at DESC, id DESC LIMIT 1
@@ -2400,41 +2485,30 @@ BEGIN
     RETURN NEW;
   END IF;
 
-  SELECT max(rate.version) INTO v_current_version
-  FROM public.project_billing_authority_rates rate
-  JOIN public.proposal_service_rates source ON source.id = rate.source_rate_id
-  WHERE rate.billing_authority_id = v_authority.id
-    AND source.effective_at <= NEW.started_at;
-
-  SELECT project.designer_id INTO v_project_designer_id
-  FROM public.projects project WHERE project.id = NEW.project_id;
-  IF v_project_designer_id IS NOT DISTINCT FROM NEW.user_id THEN
-    v_team_role := 'lead_designer';
-  ELSE
-    SELECT CASE WHEN count(DISTINCT member.role) = 1 THEN min(member.role) END
-    INTO v_team_role
-    FROM public.project_team_members member
-    WHERE member.project_id = NEW.project_id
-      AND member.user_id = NEW.user_id
-      AND member.removed_at IS NULL;
-  END IF;
-  v_normalized_role := regexp_replace(
-    replace(lower(btrim(COALESCE(v_team_role, ''))), '_', ' '),
-    '\s+', ' ', 'g'
-  );
-
-  IF v_current_version IS NOT NULL AND v_normalized_role <> '' THEN
-    SELECT count(*) INTO v_role_match_count
+  IF NOT v_is_bound THEN
+    SELECT max(rate.version) INTO v_current_version
     FROM public.project_billing_authority_rates rate
     JOIN public.proposal_service_rates source ON source.id = rate.source_rate_id
     WHERE rate.billing_authority_id = v_authority.id
-      AND rate.version = v_current_version
-      AND source.effective_at <= NEW.started_at
-      AND regexp_replace(
-        replace(lower(btrim(rate.role_name)), '_', ' '), '\s+', ' ', 'g'
-      ) = v_normalized_role;
-    IF v_role_match_count = 1 THEN
-      SELECT rate.* INTO v_rate
+      AND source.effective_at <= NEW.started_at;
+
+    IF v_project_designer_id IS NOT DISTINCT FROM NEW.user_id THEN
+      v_team_role := 'lead_designer';
+    ELSE
+      SELECT CASE WHEN count(DISTINCT member.role) = 1 THEN min(member.role) END
+      INTO v_team_role
+      FROM public.project_team_members member
+      WHERE member.project_id = NEW.project_id
+        AND member.user_id = NEW.user_id
+        AND member.removed_at IS NULL;
+    END IF;
+    v_normalized_role := regexp_replace(
+      replace(lower(btrim(COALESCE(v_team_role, ''))), '_', ' '),
+      '\s+', ' ', 'g'
+    );
+
+    IF v_current_version IS NOT NULL AND v_normalized_role <> '' THEN
+      SELECT count(*) INTO v_role_match_count
       FROM public.project_billing_authority_rates rate
       JOIN public.proposal_service_rates source ON source.id = rate.source_rate_id
       WHERE rate.billing_authority_id = v_authority.id
@@ -2443,23 +2517,34 @@ BEGIN
         AND regexp_replace(
           replace(lower(btrim(rate.role_name)), '_', ' '), '\s+', ' ', 'g'
         ) = v_normalized_role;
+      IF v_role_match_count = 1 THEN
+        SELECT rate.* INTO v_rate
+        FROM public.project_billing_authority_rates rate
+        JOIN public.proposal_service_rates source ON source.id = rate.source_rate_id
+        WHERE rate.billing_authority_id = v_authority.id
+          AND rate.version = v_current_version
+          AND source.effective_at <= NEW.started_at
+          AND regexp_replace(
+            replace(lower(btrim(rate.role_name)), '_', ' '), '\s+', ' ', 'g'
+          ) = v_normalized_role;
+      END IF;
     END IF;
-  END IF;
 
-  IF v_rate.id IS NULL AND v_current_version IS NOT NULL THEN
-    SELECT count(*) INTO v_current_rate_count
-    FROM public.project_billing_authority_rates rate
-    JOIN public.proposal_service_rates source ON source.id = rate.source_rate_id
-    WHERE rate.billing_authority_id = v_authority.id
-      AND rate.version = v_current_version
-      AND source.effective_at <= NEW.started_at;
-    IF v_current_rate_count = 1 THEN
-      SELECT rate.* INTO v_rate
+    IF v_rate.id IS NULL AND v_current_version IS NOT NULL THEN
+      SELECT count(*) INTO v_current_rate_count
       FROM public.project_billing_authority_rates rate
       JOIN public.proposal_service_rates source ON source.id = rate.source_rate_id
       WHERE rate.billing_authority_id = v_authority.id
         AND rate.version = v_current_version
         AND source.effective_at <= NEW.started_at;
+      IF v_current_rate_count = 1 THEN
+        SELECT rate.* INTO v_rate
+        FROM public.project_billing_authority_rates rate
+        JOIN public.proposal_service_rates source ON source.id = rate.source_rate_id
+        WHERE rate.billing_authority_id = v_authority.id
+          AND rate.version = v_current_version
+          AND source.effective_at <= NEW.started_at;
+      END IF;
     END IF;
   END IF;
 
@@ -2471,9 +2556,11 @@ BEGIN
     NEW.billing_state := 'pending_authorization';
     RETURN NEW;
   END IF;
-  NEW.billing_authority_id := v_authority.id;
-  NEW.authority_rate_id := v_rate.id;
-  NEW.hourly_rate_cents := v_rate.hourly_rate_cents;
+  IF NOT v_is_bound THEN
+    NEW.billing_authority_id := v_authority.id;
+    NEW.authority_rate_id := v_rate.id;
+    NEW.hourly_rate_cents := v_rate.hourly_rate_cents;
+  END IF;
 
   v_retainer_ready := v_authority.retainer_activation_policy = 'immediate'
     OR v_authority.retainer_amount_cents = 0
@@ -2490,7 +2577,10 @@ BEGIN
       THEN 'authorized' ELSE 'pending_authorization' END;
     RETURN NEW;
   END IF;
-  NEW.rated_amount_cents := round(NEW.duration_minutes / 60.0 * v_rate.hourly_rate_cents)::integer;
+  NEW.rated_amount_cents := round(
+    NEW.duration_minutes / 60.0 * CASE WHEN v_is_bound
+      THEN OLD.hourly_rate_cents ELSE v_rate.hourly_rate_cents END
+  )::integer;
   IF NOT v_retainer_ready THEN
     NEW.billing_state := 'pending_authorization';
     RETURN NEW;
@@ -2501,7 +2591,8 @@ BEGIN
     AND t.billing_state = 'authorized'
     AND t.billable AND t.duration_minutes IS NOT NULL
     AND t.id IS DISTINCT FROM NEW.id;
-  IF v_prior_cents + NEW.rated_amount_cents <= v_authority.billing_ceiling_cents THEN
+  IF v_prior_cents + NEW.rated_amount_cents
+     <= COALESCE(v_project_ceiling_cents, v_authority.billing_ceiling_cents) THEN
     NEW.billing_state := 'authorized';
   ELSE
     NEW.billing_state := 'pending_authorization';

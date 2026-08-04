@@ -96,7 +96,7 @@ BEGIN
     jsonb_build_array(
       jsonb_build_object(
         'version', 1, 'roleName', 'Designer', 'hourlyRateCents', 12000,
-        'sortOrder', 0, 'effectiveAt', now()
+        'sortOrder', 0, 'effectiveAt', now() - interval '10 days'
       ),
       jsonb_build_object(
         'version', 1, 'roleName', 'Future Specialist', 'hourlyRateCents', 99000,
@@ -116,7 +116,6 @@ BEGIN
   ASSERT v_sent->>'proposalSendDispatchId' IS NOT NULL, 'commercial send dispatch';
 END;
 $$;
-
 -- Client act records immutable consent but does not produce legacy accepted
 -- state, a project, or a billing authority.
 SELECT pg_temp.assume_user('d5000000-0000-4000-8000-000000000002');
@@ -173,6 +172,9 @@ BEGIN
     'retainer invoice must be issued';
 END;
 $$;
+UPDATE public.project_billing_authorities
+SET effective_at = now() - interval '10 days'
+WHERE source_proposal_id = 'd5300000-0000-4000-8000-000000000001';
 
 -- Signed rates are immutable.
 DO $$ BEGIN
@@ -182,11 +184,10 @@ DO $$ BEGIN
     ASSERT false, 'historical rate update should fail';
   EXCEPTION WHEN check_violation THEN NULL;
   END;
-  ASSERT position(
-    'FOR UPDATE' in pg_get_functiondef(
-      'public.classify_project_time_entry_authority()'::regprocedure
-    )
-  ) > 0, 'time ceiling classifier must serialize on its authority row';
+  ASSERT pg_get_functiondef(
+    'public.classify_project_time_entry_authority()'::regprocedure
+  ) ~ 'FROM public\.projects project\s+WHERE project.id = NEW.project_id\s+FOR UPDATE',
+    'time ceiling classifier must serialize on the stable project row';
   ASSERT pg_get_functiondef(
     'public.countersign_design_services_agreement(uuid,text)'::regprocedure
   ) ~ 'PERFORM 1 FROM public\.projects\s+WHERE id = v_project_id\s+FOR UPDATE',
@@ -209,6 +210,41 @@ DO $$ BEGIN
   ASSERT NOT EXISTS (SELECT 1 FROM public.project_unbilled_time WHERE id = 'd5400000-0000-4000-8000-000000000001'),
     'retainer-gated entry leaked into unbilled view';
 END $$;
+
+INSERT INTO public.invoices (
+  id, project_id, designer_id, client_id, status, currency, memo
+) SELECT
+  'd5410000-0000-4000-8000-000000000001', project.id,
+  'd5000000-0000-4000-8000-000000000001',
+  'd5000000-0000-4000-8000-000000000002', 'draft', 'USD',
+  'Forgery target'
+FROM public.projects project
+WHERE project.proposal_id = 'd5300000-0000-4000-8000-000000000001';
+SET LOCAL ROLE authenticated;
+DO $$ BEGIN
+  BEGIN
+    UPDATE public.project_time_entries
+    SET billing_state = 'authorized', rated_amount_cents = 1,
+        invoice_id = 'd5410000-0000-4000-8000-000000000001'
+    WHERE id = 'd5400000-0000-4000-8000-000000000001';
+    ASSERT false, 'authenticated caller forged invoice-eligible billing state';
+  EXCEPTION WHEN check_violation THEN NULL;
+  END;
+  BEGIN
+    UPDATE public.project_time_entries
+    SET authority_rate_id = NULL, hourly_rate_cents = 1
+    WHERE id = 'd5400000-0000-4000-8000-000000000001';
+    ASSERT false, 'authenticated caller mutated signed rate provenance';
+  EXCEPTION WHEN check_violation THEN NULL;
+  END;
+  ASSERT (SELECT billing_state = 'pending_authorization'
+                 AND rated_amount_cents = 6000 AND invoice_id IS NULL
+                 AND authority_rate_id IS NOT NULL AND hourly_rate_cents = 12000
+          FROM public.project_time_entries
+          WHERE id = 'd5400000-0000-4000-8000-000000000001'),
+    'rejected derived-field write changed the stored entry';
+END $$;
+RESET ROLE;
 
 -- Internal invoice settlement opens retainer-gated invoiceability.
 DO $$
@@ -582,6 +618,8 @@ DECLARE
   v_old_rate_id uuid;
   v_old_pending_authority_id uuid;
   v_old_pending_rate_id uuid;
+  v_support_authority_id uuid;
+  v_support_rate_id uuid;
   v_addendum_id uuid;
   v_created jsonb;
   v_snapshot jsonb;
@@ -618,7 +656,7 @@ BEGIN
       'scope', 'Additional sourcing and installation coordination.',
       'deliverables', jsonb_build_array('Sourcing', 'Installation coordination'),
       'exclusions', jsonb_build_array('Construction administration'),
-      'billingCeilingCents', 35000,
+      'billingCeilingCents', 40000,
       'retainerAmountCents', 0,
       'retainerActivationPolicy', 'immediate',
       'billingCadence', 'monthly', 'currency', 'USD',
@@ -701,6 +739,28 @@ BEGIN
   ASSERT (SELECT hourly_rate_cents FROM public.project_time_entries
           WHERE id = 'd5400000-0000-4000-8000-000000000004') = 10000,
     'support role did not select the signed support rate';
+  SELECT billing_authority_id, authority_rate_id
+  INTO v_support_authority_id, v_support_rate_id
+  FROM public.project_time_entries
+  WHERE id = 'd5400000-0000-4000-8000-000000000004';
+
+  -- Work entered after the addendum but dated inside the prior authority's
+  -- signed interval keeps that historical authority/rate provenance.
+  INSERT INTO public.project_time_entries (
+    id, project_id, user_id, started_at, duration_minutes, billable, activity
+  ) VALUES (
+    'd5400000-0000-4000-8000-000000000007', v_project_id,
+    'd5000000-0000-4000-8000-000000000001', now() - interval '1 day',
+    5, true, 'design'
+  );
+  ASSERT (SELECT billing_authority_id = v_old_authority_id
+                 AND authority_rate_id = v_old_rate_id
+                 AND hourly_rate_cents = 12000
+                 AND rated_amount_cents = 1000
+                 AND billing_state = 'authorized'
+          FROM public.project_time_entries
+          WHERE id = 'd5400000-0000-4000-8000-000000000007'),
+    'late historical time did not bind the superseded effective authority';
 
   -- Caller-selected authority/rate ids are ignored. With multiple current
   -- rates and no server-owned project role, classification fails closed.
@@ -725,11 +785,29 @@ BEGIN
     id, project_id, user_id, started_at, duration_minutes, billable, activity
   ) VALUES (
     'd5400000-0000-4000-8000-000000000006', v_project_id,
-    'd5000000-0000-4000-8000-000000000001', now(), 30, true, 'design'
+    'd5000000-0000-4000-8000-000000000001', now(), 60, true, 'design'
   );
   ASSERT (SELECT billing_state FROM public.project_time_entries
           WHERE id = 'd5400000-0000-4000-8000-000000000006') = 'pending_authorization',
     'addendum incorrectly reset the cumulative project ceiling';
+
+  -- Once an entry is bound, a later team-role change cannot re-select a rate.
+  -- Duration edits recalculate from the immutable hourly snapshot only.
+  UPDATE public.project_team_members
+  SET role = 'vendor'
+  WHERE project_id = v_project_id
+    AND user_id = 'd5000000-0000-4000-8000-000000000004'
+    AND role = 'support_designer';
+  UPDATE public.project_time_entries SET duration_minutes = 60
+  WHERE id = 'd5400000-0000-4000-8000-000000000004';
+  ASSERT (SELECT billing_authority_id = v_support_authority_id
+                 AND authority_rate_id = v_support_rate_id
+                 AND hourly_rate_cents = 10000
+                 AND rated_amount_cents = 10000
+                 AND billing_state = 'authorized'
+          FROM public.project_time_entries
+          WHERE id = 'd5400000-0000-4000-8000-000000000004'),
+    'bound duration edit re-selected authority/rate from the changed role';
 
   BEGIN
     UPDATE public.project_billing_authorities SET status = 'active'
@@ -759,10 +837,10 @@ BEGIN
     'billingThrough', 'rates', 'includesRawEntries'
   ], 'frozen flat authority contract keys';
   ASSERT jsonb_typeof(v_summary->'rates') = 'array', 'flat authority rates';
-  ASSERT (v_summary->>'ceilingCents')::integer = 35000
-      AND (v_summary->>'accruedCents')::integer = 30500
-      AND (v_summary->>'pendingAuthorizationCents')::integer = 7500
-      AND (v_summary->>'remainingCents')::integer = 4500,
+  ASSERT (v_summary->>'ceilingCents')::integer = 40000
+      AND (v_summary->>'accruedCents')::integer = 36500
+      AND (v_summary->>'pendingAuthorizationCents')::integer = 15000
+      AND (v_summary->>'remainingCents')::integer = 3500,
     'authority summary must aggregate the cumulative project ceiling';
   ASSERT NOT (v_summary->>'includesRawEntries')::boolean, 'curated summary marker';
   ASSERT position('notes' in v_summary::text) = 0, 'raw time notes leaked';
