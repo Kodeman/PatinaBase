@@ -37,6 +37,7 @@ import {
   type RecentBoard,
 } from '@patina/supabase';
 import { useAuth } from '@/hooks/use-auth';
+import { useFeatureFlag } from '@/hooks/use-feature-flag';
 import { openAccount } from './account/account-sheet';
 import { openInvoiceComposer } from './accounts/invoice-overlays';
 import { openPost } from './overlays/post-sheet';
@@ -116,6 +117,7 @@ interface PaletteSection {
 // can never drift from the canonical verb/room marks.
 const DRAW_INVOICE_ICON = STUDIO_VERBS.find((v) => v.key === 'draw-invoice')!.icon;
 const DRAFTING_ROOM_ICON = STUDIO_ROOMS.find((r) => r.key === 'drafting-room')!.icon;
+const CALL_SHEET_ICON = STUDIO_LEDGERS.find((l) => l.key === 'call-sheet')!.icon;
 
 /** Set true by {@link openCaptureLead} when the front door is invoked from a
  *  non-Desk surface; the Desk reads + clears it on mount so the sheet opens
@@ -182,6 +184,10 @@ export function CommandBar() {
   // Account actions (Settings / Sign out) belong to the "do anything" surface;
   // the identity itself is answered by the persistent nameplate.
   const { user, signOut } = useAuth();
+  // D1 registry precedent (drafting-room-here): document-scoped surfaces only
+  // ever appear as a "This surface" row, gated on both a project in hand and
+  // the surface's own flag — never in the unfiltered doorway lists.
+  const { value: callSheetOn } = useFeatureFlag('call-sheet');
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState('');
   const [active, setActive] = useState(0);
@@ -351,6 +357,11 @@ export function CommandBar() {
           return () => router.push('/people?add=maker');
         case 'the-post':
           return () => openPost();
+        case 'call-sheet':
+          // Document-scoped (no standalone destination): the sheet is mounted
+          // on /doc/[id] and listens for this event; off that surface it's a
+          // silent no-op, same posture as document:open-section.
+          return () => window.dispatchEvent(new CustomEvent('document:open-call-sheet'));
         case 'drafting-room':
           return () =>
             draftingProposalId
@@ -496,14 +507,29 @@ export function CommandBar() {
           match: '',
         });
       }
+      // Call Sheet — document-scoped AND flag-gated (registry.tsx's `call-sheet`
+      // entry): only ever a "This surface" row, never in the unfiltered
+      // Rooms & ledgers group below, and only once a project doc is in hand.
+      if (inHandRow?.row.project_id && callSheetOn) {
+        thisSurface.push({
+          kind: 'ledger',
+          key: 'call-sheet-here',
+          label: 'Open the call sheet',
+          sub: 'this project · who is on the job',
+          icon: CALL_SHEET_ICON,
+          run: () => window.dispatchEvent(new CustomEvent('document:open-call-sheet')),
+          match: '',
+        });
+      }
       if (thisSurface.length) sections.push({ eyebrow: 'This surface', rows: thisSurface });
 
       sections.push({ eyebrow: 'Begin', rows: STUDIO_VERBS.map(surfaceRow) });
       sections.push({
         eyebrow: 'Rooms & ledgers',
-        rows: [...STUDIO_ROOMS.filter((s) => s.scope === 'global'), ...STUDIO_LEDGERS].map(
-          surfaceRow,
-        ),
+        rows: [
+          ...STUDIO_ROOMS.filter((s) => s.scope === 'global'),
+          ...STUDIO_LEDGERS.filter((s) => s.scope === 'global'),
+        ].map(surfaceRow),
       });
       sections.push({ eyebrow: 'Studio', rows: utilityRows });
     } else {
@@ -561,7 +587,19 @@ export function CommandBar() {
       flatRows: sections.flatMap((s) => s.rows),
       matchCount: matches,
     };
-  }, [query, data, people, recentBoards, recent, inHandRow, router, pathname, user?.email, signOut]);
+  }, [
+    query,
+    data,
+    people,
+    recentBoards,
+    recent,
+    inHandRow,
+    router,
+    pathname,
+    user?.email,
+    signOut,
+    callSheetOn,
+  ]);
 
   // F1 — queried (debounced ~300ms, not per-keystroke) + zeroResult.
   useEffect(() => {

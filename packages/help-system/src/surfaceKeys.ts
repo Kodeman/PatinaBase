@@ -630,6 +630,11 @@ export const SurfaceKeys = {
       LibraryPiece:    'designer-portal/document/library/piece',
       PeoplePerson:    'designer-portal/document/people/person',
       DeskField:       'designer-portal/document/desk/field',
+      // Wave 3 — the Call Sheet. Its own key, distinct from Coordination
+      // (which is the ball-in-court help panel court-bar.tsx already owns):
+      // reusing that key would have made the call sheet's registry blurb
+      // show up as the intro on the ball-in-court panel too.
+      CallSheet:       'designer-portal/document/call-sheet',
     },
   },
   /**

@@ -65,6 +65,7 @@ export const HELP_TOPICS: HelpTopic[] = [
       'designer-portal/document/accounts',
       'designer-portal/document/hours',
       'designer-portal/document/the-post',
+      'designer-portal/document/call-sheet',
     ],
   },
   {

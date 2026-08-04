@@ -15,6 +15,10 @@
  *   · LEDGERS — the sheet-weight books (Orders / Accounts / Hours / The Post)
  *     that slide over whatever is in hand. Dotted leader → a "SHEET" type-tag.
  *     Opening them dispatches the same events the Studio Drawer and ⌘K own.
+ *     Only the *global* ledgers appear here; the Call Sheet is registry
+ *     sheet-weight but document-scoped — like the Drafting Room, it has
+ *     nothing to describe without a project document in hand, so it is never
+ *     a standalone doorway from the Desk.
  *   · BEGIN  — the registry verbs (the front doors that start something new),
  *     each an em-dash lead + icon, wired to the exact same openers the Desk
  *     header and the ⌘K palette use.
@@ -134,6 +138,10 @@ export function DeskContents({ prominent = false }: { prominent?: boolean }) {
   // standalone doorway without a proposal in hand).
   const rooms = STUDIO_ROOMS.filter((room) => room.scope === 'global');
 
+  // Global ledgers only — the document-scoped Call Sheet is excluded the same
+  // way (no standalone doorway without a project document in hand).
+  const ledgers = STUDIO_LEDGERS.filter((ledger) => ledger.scope === 'global');
+
   const openRoom = (key: string) => () => {
     // The Studio Drawer owns room-weight routing (it walks in + remembers the
     // origin); dispatching the same open-ledger event reuses that centralized path.
@@ -195,7 +203,7 @@ export function DeskContents({ prominent = false }: { prominent?: boolean }) {
         <div>
           <ColumnHead>Ledgers</ColumnHead>
           <ul>
-            {STUDIO_LEDGERS.map((ledger) => (
+            {ledgers.map((ledger) => (
               <ContentsRow
                 key={ledger.key}
                 icon={ledger.icon}
