@@ -10,8 +10,15 @@ const mockUseFeatureFlag = useFeatureFlag as jest.Mock;
 
 // The MarginNote teach line reports through the wayfinding emitter — mocked
 // so this spec never loads posthog (same posture as margin-note.test.tsx).
+// actionShown/actionSelected are also mocked: the "review what seeded" click
+// mounts RolodexSeedSheet, whose DocumentAction buttons fire actionShown on
+// mount (same posture as studio-invite-modal.test.tsx).
 jest.mock('@/lib/analytics/document-events', () => ({
-  documentEvents: { wayfinding: { marginNote: jest.fn() } },
+  documentEvents: {
+    wayfinding: { marginNote: jest.fn() },
+    actionShown: jest.fn(),
+    actionSelected: jest.fn(),
+  },
 }));
 
 // Captures the filters DirectoryView actually passes through to
