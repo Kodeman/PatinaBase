@@ -25,13 +25,13 @@ import { usePathname, useRouter } from 'next/navigation';
 import { useProposal } from '@/hooks/use-proposals';
 import { rememberRoomOrigin } from '@/lib/document/room-origin';
 import { useDraftingState } from '@/hooks/use-drafting-state';
+import { displayDraftingState } from '@/lib/document/drafting-progress';
 import {
   DocumentAction,
   DocumentActionGroup,
   DocumentActionRow,
 } from './document-action';
 import { StrataMark } from './strata-mark';
-import { SendSheet } from './overlays/send-sheet';
 import { ProposalVersionHistory } from './proposal-version-history';
 import { ProposalShareInstrument } from './proposal-share-instrument';
 import { ProposalWatch } from './proposal-watch';
@@ -80,7 +80,6 @@ function LegacyProposalInstruments({
   const router = useRouter();
   const pathname = usePathname();
 
-  const [sendOpen, setSendOpen] = useState(false);
   // F6 (walk 2026-07): walking into the Room is a real transition, not an
   // instant swap — acknowledge the act and make it idempotent.
   const [entering, setEntering] = useState(false);
@@ -94,7 +93,9 @@ function LegacyProposalInstruments({
     pct,
     fill,
   } = useDraftingState(proposalId, isDraft);
-  const readyToSend = draftState === 'Ready to send';
+  // No new legacy sending, so this no longer drives an act — only the tint
+  // and the label below, sharing the Drafting Room's same rewording.
+  const fullyDrafted = draftState === 'Ready to send';
 
   // F6: the doorway is a <button> (D1 — documents carry no nav links), so
   // Next.js never prefetches the Room route the way a <Link> would. The push
@@ -126,16 +127,15 @@ function LegacyProposalInstruments({
   useMobilePrimaryAction(
     isDraft
       ? {
-          actionKey: readyToSend ? 'send-proposal' : 'continue-drafting',
+          actionKey: 'continue-drafting',
           surfaceKey: 'open-document',
           regionKey: 'proposal-draft-actions',
-          label: readyToSend ? 'Send the proposal' : 'Continue drafting',
+          label: 'Continue drafting',
           target: {
             kind: 'press',
             onPress: () => {
               if (entering) return;
-              if (readyToSend) setSendOpen(true);
-              else enterDrafting();
+              enterDrafting();
             },
           },
           loading: entering,
@@ -145,14 +145,23 @@ function LegacyProposalInstruments({
   );
 
   // Out the door — the Proposal section becomes the watch view (R71). It carries
-  // its own acts (Preview · Revise · Resend) and overlays.
+  // its own acts (Preview · Resend) and overlays.
   if (!isDraft) {
     return <ProposalWatch proposalId={proposalId} clientName={clientName} />;
   }
 
+  // Legacy retirement: no new legacy sending. A draft here is either a
+  // project-bound furnishing draft (it reaches the client only inside a
+  // named furnishings authorization wave, see project-commerce) or an
+  // orphan legacy draft that stays editable but is no longer sendable —
+  // new client-facing agreements start as design agreements.
+  const modelNote = proposal?.project_id
+    ? 'This selection reaches your client as part of a furnishing wave from the project page.'
+    : 'New client work begins with a design agreement — this earlier-format draft stays for your records.';
+
   // Draft — the Direction WORK BAND (R68): a draft is the work to be done, so it
-  // earns a prominent, in-language CTA. One SOLID filled button; the non-lead act
-  // steps back to a quiet mono second below. Flat: tint + fill, no shadow (D4).
+  // earns a prominent, in-language CTA. One SOLID filled button. Flat: tint +
+  // fill, no shadow (D4).
   return (
     <>
       <DocumentActionGroup
@@ -163,7 +172,7 @@ function LegacyProposalInstruments({
       >
         <div
           className={`mb-2.5 flex items-center gap-4 rounded-[3px] px-4 py-3.5 transition-colors ${
-            readyToSend
+            fullyDrafted
               ? 'bg-[rgba(168,181,160,0.16)]'
               : 'bg-[rgba(229,221,208,0.5)]'
           }`}
@@ -182,9 +191,9 @@ function LegacyProposalInstruments({
                 <>
                   <b>Not started yet</b> — open the Drafting Room to write it
                 </>
-              ) : readyToSend ? (
+              ) : fullyDrafted ? (
                 <>
-                  <b>Ready to send</b> — fully drafted
+                  <b>{displayDraftingState(draftState)}</b> — every facet is written
                 </>
               ) : (
                 <>
@@ -194,18 +203,17 @@ function LegacyProposalInstruments({
             </p>
           </div>
           <DocumentAction
-            actionKey={readyToSend ? 'send-proposal' : 'continue-drafting'}
+            actionKey="continue-drafting"
             variant="primary"
             loading={entering}
             loadingLabel="Opening…"
             trailing="→"
             onClick={() => {
               if (entering) return;
-              if (readyToSend) setSendOpen(true);
-              else enterDrafting();
+              enterDrafting();
             }}
           >
-            {readyToSend ? 'Send the proposal' : 'Continue drafting'}
+            Continue drafting
           </DocumentAction>
         </div>
 
@@ -214,23 +222,6 @@ function LegacyProposalInstruments({
           regionKey="proposal-draft-actions"
           aria-label="Other proposal actions"
         >
-          {readyToSend ? (
-            <DocumentAction
-              actionKey="continue-drafting"
-              variant="secondary"
-              onClick={enterDrafting}
-            >
-              Keep drafting
-            </DocumentAction>
-          ) : (
-            <DocumentAction
-              actionKey="send-proposal"
-              variant="secondary"
-              onClick={() => setSendOpen(true)}
-            >
-              Send the proposal
-            </DocumentAction>
-          )}
           <ProposalShareInstrument
             proposalId={proposalId}
             tier={proposal?.client_visibility_tier}
@@ -239,12 +230,9 @@ function LegacyProposalInstruments({
         </DocumentActionRow>
       </DocumentActionGroup>
 
-      {/* Send — the charcoal DocSheet over the open Proposal (D1). */}
-      <SendSheet
-        proposalId={proposalId}
-        open={sendOpen}
-        onClose={() => setSendOpen(false)}
-      />
+      <p className="mt-2 border-l-2 border-[var(--color-aged-oak)] pl-3 text-[12px] text-[var(--text-muted)]">
+        {modelNote}
+      </p>
     </>
   );
 }

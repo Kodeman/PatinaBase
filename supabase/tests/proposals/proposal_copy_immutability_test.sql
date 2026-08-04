@@ -514,9 +514,16 @@ INSERT INTO fingerprint_column_contract VALUES
          'payment_notes','valid_until','version','parent_proposal_id','template_id',
          'revision_summary','personal_message','cc_email','client_visibility_tier',
          'feedback_enabled','created_at'],
+   -- 00412's commercial columns are lifecycle/edition state, not authored
+   -- payload: document_kind and commercial_state are set by the authoring and
+   -- signature RPCs, and superseded_*/replacement_proposal_id record the
+   -- cut-over of an edition. A copy re-derives all five, so the review
+   -- fingerprint must not carry them.
    ARRAY['project_id','status','sent_at','viewed_at','accepted_at','declined_at',
          'decline_reason','updated_at','client_feedback','signed_at','signed_by_name',
-         'signed_ip','last_nudged_at','nudge_count','proposal_send_dispatch_id']),
+         'signed_ip','last_nudged_at','nudge_count','proposal_send_dispatch_id',
+         'document_kind','commercial_state','superseded_at','superseded_reason',
+         'replacement_proposal_id']),
   ('proposal_sections', 'section',
    ARRAY['id','proposal_id','type','title','body','metadata','sort_order'],
    ARRAY['created_at','updated_at']),

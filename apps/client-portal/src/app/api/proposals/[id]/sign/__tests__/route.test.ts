@@ -8,7 +8,6 @@
  */
 import { NextRequest } from 'next/server';
 import { getUser, createServerClient, createServiceClient } from '@patina/supabase/server';
-import { captureMoodBoardProposalActivated } from '@/lib/analytics/mood-board-server';
 
 import { POST } from '../route';
 
@@ -17,14 +16,10 @@ jest.mock('@patina/supabase/server', () => ({
   createServerClient: jest.fn(),
   createServiceClient: jest.fn(),
 }));
-jest.mock('@/lib/analytics/mood-board-server', () => ({
-  captureMoodBoardProposalActivated: jest.fn().mockResolvedValue(undefined),
-}));
 
 const mockGetUser = getUser as jest.Mock;
 const mockCreateServerClient = createServerClient as jest.Mock;
 const mockCreateServiceClient = createServiceClient as jest.Mock;
-const mockCaptureProposalActivated = captureMoodBoardProposalActivated as jest.Mock;
 
 describe('POST /api/proposals/[id]/sign', () => {
   function makeRequest(
@@ -45,8 +40,6 @@ describe('POST /api/proposals/[id]/sign', () => {
   let userRpcMock: jest.Mock;
   let serviceRpcMock: jest.Mock;
   let invokeMock: jest.Mock;
-  let serviceFromMock: jest.Mock;
-  let boardCountStatusEqMock: jest.Mock;
   let proposalStatus: 'sent' | 'viewed' | 'accepted';
   let validUntil: string | null;
 
@@ -56,10 +49,17 @@ describe('POST /api/proposals/[id]/sign', () => {
     proposalStatus = 'sent';
     validUntil = null;
 
+    // The default preflight resolves to a live commercial kind (never
+    // 'legacy') — prod's get_client_commercial_document_bundle only returns
+    // 'legacy' for rows the migration retires, and those get their own
+    // dedicated tests below. For a commercial edition the RPC only ever
+    // emits documentKind/commercialState (never kind/state) — see 00414's
+    // non-legacy branch — so the mock uses the real field names, exercising
+    // route.ts's actual fallback chain rather than its first alias.
     userRpcMock = jest.fn().mockImplementation((name: string) => {
       if (name === 'get_client_commercial_document_bundle') {
         return Promise.resolve({
-          data: { document: { id: 'prop-1', kind: 'legacy', state: 'sent' } },
+          data: { document: { id: 'prop-1', documentKind: 'design_services', commercialState: 'sent' } },
           error: null,
         });
       }
@@ -80,19 +80,12 @@ describe('POST /api/proposals/[id]/sign', () => {
     });
     serviceRpcMock = jest.fn().mockResolvedValue({
       data: {
-        newly_signed: true,
-        project_id: 'e4061000-0000-4000-8000-000000000001',
+        commercial_state: 'client_signed',
+        newly_client_signed: true,
+        project_id: null,
       },
       error: null,
     });
-    boardCountStatusEqMock = jest.fn().mockResolvedValue({ count: 2, error: null });
-    const boardCountProposalEqMock = jest.fn().mockReturnValue({
-      eq: boardCountStatusEqMock,
-    });
-    const boardCountSelectMock = jest.fn().mockReturnValue({
-      eq: boardCountProposalEqMock,
-    });
-    serviceFromMock = jest.fn().mockReturnValue({ select: boardCountSelectMock });
     invokeMock = jest.fn().mockResolvedValue({ data: { ok: true }, error: null });
 
     mockCreateServerClient.mockResolvedValue({
@@ -101,7 +94,6 @@ describe('POST /api/proposals/[id]/sign', () => {
     });
     mockCreateServiceClient.mockReturnValue({
       rpc: serviceRpcMock,
-      from: serviceFromMock,
     });
   });
 
@@ -149,7 +141,7 @@ describe('POST /api/proposals/[id]/sign', () => {
   it('does not default an unknown commercial kind into legacy activation', async () => {
     userRpcMock.mockResolvedValue({
       data: {
-        document: { id: 'prop-1', kind: 'future_contract', state: 'sent' },
+        document: { id: 'prop-1', documentKind: 'future_contract', commercialState: 'sent' },
       },
       error: null,
     });
@@ -161,137 +153,65 @@ describe('POST /api/proposals/[id]/sign', () => {
     expect(mockCreateServiceClient).not.toHaveBeenCalled();
   });
 
-  it('passes verified client identity and cf-connecting-ip only to the service RPC', async () => {
-    const res = await POST(makeRequest({ 'cf-connecting-ip': '203.0.113.7' }), makeParams());
-
-    expect(res.status).toBe(200);
-    expect(serviceRpcMock).toHaveBeenCalledWith('sign_proposal_with_trusted_ip', {
-      p_proposal_id: 'prop-1',
-      p_signed_name: 'Jamie Homeowner',
-      p_client_id: 'client-1',
-      p_signed_ip: '203.0.113.7',
-    });
-  });
-
-  it('ignores caller-supplied IP, activation, start-date, and client fields', async () => {
-    const res = await POST(
-      makeRequest(
-        { 'cf-connecting-ip': '203.0.113.7' },
-        {
-          signedByName: 'Jamie Homeowner',
-          signedIp: '198.51.100.200',
-          autoActivate: false,
-          startDate: '2040-01-01',
-          clientId: 'attacker-controlled',
-        }
-      ),
-      makeParams()
-    );
-
-    expect(res.status).toBe(200);
-    expect(serviceRpcMock).toHaveBeenCalledWith('sign_proposal_with_trusted_ip', {
-      p_proposal_id: 'prop-1',
-      p_signed_name: 'Jamie Homeowner',
-      p_client_id: 'client-1',
-      p_signed_ip: '203.0.113.7',
-    });
-  });
-
-  it('uses the first x-forwarded-for hop when Cloudflare IP is absent', async () => {
-    const res = await POST(makeRequest({ 'x-forwarded-for': '198.51.100.1, 10.0.0.1' }), makeParams());
-
-    expect(res.status).toBe(200);
-    expect(serviceRpcMock).toHaveBeenCalledWith(
-      'sign_proposal_with_trusted_ip',
-      expect.objectContaining({ p_signed_ip: '198.51.100.1' })
-    );
-  });
-
-  it('passes null trusted IP when no server-side address header is present', async () => {
-    const res = await POST(makeRequest(), makeParams());
-
-    expect(res.status).toBe(200);
-    expect(serviceRpcMock).toHaveBeenCalledWith(
-      'sign_proposal_with_trusted_ip',
-      expect.objectContaining({ p_signed_ip: null })
-    );
-  });
-
-  it('allows an accepted retry so the database can repair a missing project', async () => {
-    proposalStatus = 'accepted';
-    validUntil = '2020-01-01T00:00:00.000Z';
-    serviceRpcMock.mockResolvedValue({
-      data: {
-        newly_signed: false,
-        project_id: 'e4061000-0000-4000-8000-000000000001',
-      },
-      error: null,
+  it('retires legacy signing: the retired-marker bundle responds 410 legacy_signing_retired', async () => {
+    // Post-migration, get_client_commercial_document_bundle returns a minimal
+    // retired marker for legacy rows instead of raising.
+    userRpcMock.mockImplementation((name: string) => {
+      if (name === 'get_client_commercial_document_bundle') {
+        return Promise.resolve({
+          data: {
+            document: {
+              id: 'prop-1',
+              documentKind: 'legacy',
+              kind: 'legacy',
+              retired: true,
+              title: 'Living Room Refresh',
+              status: 'sent',
+              // 00412's guard_commercial_proposal_authority only ever leaves
+              // a legacy row's commercial_state NULL or (post-cutover)
+              // 'superseded' — 'sent' is unreachable on the real column.
+              commercialState: null,
+              supersededAt: null,
+              replacementProposalId: null,
+              validUntil: null,
+              sentAt: '2026-01-01T00:00:00Z',
+            },
+          },
+          error: null,
+        });
+      }
+      if (name === 'get_client_proposal_bundle') {
+        return Promise.resolve({
+          data: { proposal: { id: 'prop-1', status: 'sent', valid_until: null } },
+          error: null,
+        });
+      }
+      return Promise.resolve({ error: null });
     });
 
     const res = await POST(makeRequest(), makeParams());
 
-    expect(res.status).toBe(200);
-    expect(serviceRpcMock).toHaveBeenCalledTimes(1);
+    expect(res.status).toBe(410);
+    expect(await res.json()).toMatchObject({ error: 'legacy_signing_retired' });
+    expect(mockCreateServiceClient).not.toHaveBeenCalled();
     expect(invokeMock).not.toHaveBeenCalled();
-    expect(mockCaptureProposalActivated).toHaveBeenCalledWith({
-      proposalId: 'prop-1',
-      projectId: 'e4061000-0000-4000-8000-000000000001',
-      boardCount: 2,
-    });
   });
 
-  it('sends confirmation only for the transaction that created the signature', async () => {
-    const res = await POST(makeRequest(), makeParams());
-
-    expect(res.status).toBe(200);
-    expect(invokeMock).toHaveBeenCalledTimes(1);
-    expect(invokeMock).toHaveBeenCalledWith('proposal-sign-confirmation', {
-      body: { proposalId: 'prop-1' },
-    });
-  });
-
-  it('records the authoritative active-board count for a newly activated proposal', async () => {
-    const res = await POST(makeRequest(), makeParams());
-
-    expect(res.status).toBe(200);
-    expect(serviceFromMock).toHaveBeenCalledWith('proposal_boards');
-    expect(boardCountStatusEqMock).toHaveBeenCalledWith('status', 'active');
-    expect(mockCaptureProposalActivated).toHaveBeenCalledWith({
-      proposalId: 'prop-1',
-      projectId: 'e4061000-0000-4000-8000-000000000001',
-      boardCount: 2,
-    });
-  });
-
-  it('does not let an activation analytics count failure break signing', async () => {
-    boardCountStatusEqMock.mockRejectedValue(new Error('count unavailable'));
-
-    const res = await POST(makeRequest(), makeParams());
-
-    expect(res.status).toBe(200);
-    expect(mockCaptureProposalActivated).not.toHaveBeenCalled();
-  });
-
-  it('fails closed on a legacy or malformed RPC result without duplicating mail', async () => {
-    serviceRpcMock.mockResolvedValue({ data: {}, error: null });
-
-    const res = await POST(makeRequest(), makeParams());
-
-    expect(res.status).toBe(200);
-    expect(invokeMock).not.toHaveBeenCalled();
-    expect(mockCaptureProposalActivated).not.toHaveBeenCalled();
-  });
-
-  it('does not send confirmation when the authoritative service RPC fails', async () => {
-    serviceRpcMock.mockResolvedValue({
-      data: null,
-      error: { message: 'proposal approval evidence conflicts' },
+  it('retires legacy signing: pre-migration, the bundle RPC still raises for a legacy row and fails closed to 404', async () => {
+    userRpcMock.mockImplementation((name: string) => {
+      if (name === 'get_client_commercial_document_bundle') {
+        return Promise.resolve({
+          data: null,
+          error: { message: 'legacy proposals are not supported by this RPC' },
+        });
+      }
+      return Promise.resolve({ error: null });
     });
 
     const res = await POST(makeRequest(), makeParams());
 
-    expect(res.status).toBe(500);
-    expect(invokeMock).not.toHaveBeenCalled();
+    expect(res.status).toBe(404);
+    expect(mockCreateServiceClient).not.toHaveBeenCalled();
   });
 
   it('records design-services client consent without assuming project activation', async () => {
@@ -299,7 +219,7 @@ describe('POST /api/proposals/[id]/sign', () => {
       if (name === 'get_client_commercial_document_bundle') {
         return Promise.resolve({
           data: {
-            document: { id: 'prop-1', kind: 'design_services', state: 'sent' },
+            document: { id: 'prop-1', documentKind: 'design_services', commercialState: 'sent' },
           },
           error: null,
         });
@@ -347,8 +267,8 @@ describe('POST /api/proposals/[id]/sign', () => {
           data: {
             document: {
               id: 'prop-1',
-              kind: 'furnishings_authorization',
-              state: 'sent',
+              documentKind: 'furnishings_authorization',
+              commercialState: 'sent',
             },
           },
           error: null,
@@ -406,7 +326,7 @@ describe('POST /api/proposals/[id]/sign', () => {
       if (name === 'get_client_commercial_document_bundle') {
         return Promise.resolve({
           data: {
-            document: { id: 'prop-1', kind: 'design_services', state: 'sent' },
+            document: { id: 'prop-1', documentKind: 'design_services', commercialState: 'sent' },
           },
           error: null,
         });
@@ -446,8 +366,8 @@ describe('POST /api/proposals/[id]/sign', () => {
           data: {
             document: {
               id: 'prop-1',
-              kind: 'furnishings_authorization',
-              state: 'sent',
+              documentKind: 'furnishings_authorization',
+              commercialState: 'sent',
             },
           },
           error: null,
@@ -499,8 +419,8 @@ describe('POST /api/proposals/[id]/sign', () => {
           data: {
             document: {
               id: 'prop-1',
-              kind: 'furnishings_authorization',
-              state: 'executed',
+              documentKind: 'furnishings_authorization',
+              commercialState: 'executed',
             },
           },
           error: null,
@@ -551,8 +471,8 @@ describe('POST /api/proposals/[id]/sign', () => {
           data: {
             document: {
               id: 'prop-1',
-              kind: 'design_services',
-              state: 'client_signed',
+              documentKind: 'design_services',
+              commercialState: 'client_signed',
             },
           },
           error: null,
@@ -590,8 +510,8 @@ describe('POST /api/proposals/[id]/sign', () => {
           data: {
             document: {
               id: 'prop-1',
-              kind: 'furnishings_authorization',
-              state: 'sent',
+              documentKind: 'furnishings_authorization',
+              commercialState: 'sent',
             },
           },
           error: null,

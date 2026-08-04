@@ -21,6 +21,12 @@
  * composes (ProposalPreviewRail — "Sarah's copy"). Two-column at 1440px+;
  * below that, the same live copy opens on demand in a DocSheet.
  *
+ * Legacy retirement: no new legacy sending. This Room stays live for facet
+ * editing only — a project-bound draft is a furnishing draft (it reaches the
+ * client only inside a named furnishings authorization wave); an orphan
+ * legacy draft has no client-facing send path here at all. The head act is a
+ * quiet exit, not a send.
+ *
  * A Room — full-bleed paper, zero shadows (D4); reuses RoomShell's physics.
  */
 
@@ -43,14 +49,14 @@ import { verdictChipSpec } from '@/lib/document/verdict-chip';
 import { FacetSection } from './facet-section';
 import { ProposalPreviewRail } from '../../drafting/proposal-mirror';
 import { DocSheet } from '../../overlays/doc-sheet';
-import { SendSheet } from '../../overlays/send-sheet';
 import {
   useDraftingState,
   useDraftingWritesPending,
 } from '@/hooks/use-drafting-state';
-import type { DraftingFacets } from '@/lib/document/drafting-progress';
-import { familyLabel } from '@/lib/document/family-label';
-import { clearRoomOrigin, readRoomOrigin } from '@/lib/document/room-origin';
+import {
+  displayDraftingState,
+  type DraftingFacets,
+} from '@/lib/document/drafting-progress';
 
 // The eight legacy editors — proven, proposalId-addressed, self-persisting.
 import { RoomsInScope } from '@/components/portal/scope-builder/rooms-in-scope';
@@ -75,7 +81,7 @@ import { ServiceAgreementDraftingRoom } from './service-agreement-drafting-room'
 const STATE_TONE: Record<string, { color: string; bg: string }> = {
   Outline: { color: 'var(--color-aged-oak)', bg: 'transparent' },
   Drafting: { color: '#b89a2e', bg: 'transparent' },
-  'Ready to send': { color: 'var(--color-sage)', bg: 'rgba(168,181,160,0.12)' },
+  'Fully drafted': { color: 'var(--color-sage)', bg: 'rgba(168,181,160,0.12)' },
 };
 
 const MOVEMENT = {
@@ -216,7 +222,6 @@ function DraftingRoomEditor({
   proposal: any;
 }) {
   useDocumentSurface(DOCUMENT_SURFACE_KEYS.drafting); // R89 — scope help to the Drafting Room
-  const router = useRouter();
   const { data: summary } = useScopeBuilderSummary(proposalId);
   // The shared drafting state — the SAME ['drafting-facets', id] read the open
   // document's proposal instruments echo, so "what's written" agrees everywhere.
@@ -248,7 +253,6 @@ function DraftingRoomEditor({
   const canComposeDecision = Boolean(composeProjectId && composeClientUserId);
   const [composeRequest, setComposeRequest] =
     useState<ComposeDecisionRequest | null>(null);
-  const [sendOpen, setSendOpen] = useState(false);
   const [previewOpen, setPreviewOpen] = useState(false);
 
   // A1 — the Desk "N lines flagged" walk-in arrives at /drafting/<id>?flagged=1.
@@ -295,7 +299,8 @@ function DraftingRoomEditor({
   const totalProjectCents =
     num(summary?.totalFFEEstimateCents) + num(summary?.totalDesignFeeCents);
 
-  const tone = STATE_TONE[state];
+  const displayState = displayDraftingState(state);
+  const tone = STATE_TONE[displayState];
 
   // Keep exactly one facet in hand. Once the composite read resolves, returning
   // designers land directly in the first unfinished facet; their own selection
@@ -309,26 +314,11 @@ function DraftingRoomEditor({
     );
   }, [facets, facetsLoading]);
 
-  // The send flow lives IN the Room now (no need to leave to send): the head
-  // action opens the SendSheet, weighted by readiness. On a successful send the
-  // proposal is out, so we return to the document it lives in — which now shows
-  // the "With the client" watch view.
-  const returnToDocument = () => {
-    const dest = readRoomOrigin();
-    clearRoomOrigin();
-    router.push(dest);
-  };
-  const openSend = () => {
-    setPreviewOpen(false);
-    setSendOpen(true);
-  };
   const openPreview = () => {
-    setSendOpen(false);
     setPreviewOpen(true);
   };
   const openComposeDecision = (request: ComposeDecisionRequest) => {
     setPreviewOpen(false);
-    setSendOpen(false);
     setComposeRequest(request);
   };
 
@@ -364,59 +354,37 @@ function DraftingRoomEditor({
     pct === 0
       ? 'Start anywhere. Every facet saves into the same sendable draft.'
       : pct >= 100
-        ? 'Ready to send. Every facet is written.'
+        ? 'Fully drafted. Every facet is written.'
         : `Still open: ${gaps.slice(0, 3).join(', ')}${gaps.length > 3 ? '…' : ''}. Choose any facet.`;
 
-  // The Room's single head action: send the proposal. Weighted by readiness —
-  // filled clay once fully drafted, a quiet outline ("send as-is") while still
-  // composing (sending is never blocked, only weighted — mirrors the document's
-  // non-hard-gate). Hidden at 0% — there's nothing to send yet.
-  const clientLabel = proposal?.client_name
-    ? familyLabel(proposal.client_name)
-    : null;
-  const readyToSend = state === 'Ready to send';
-  const sendLabel = readyToSend
-    ? `Send to ${clientLabel ?? 'the client'}`
-    : 'Send as-is';
+  // Legacy retirement: the Room's head act is a quiet exit, not a send — this
+  // Drafting Room stays for facet editing only (a project-bound furnishing
+  // draft reaches the client via a named furnishings authorization wave; an
+  // orphan legacy draft has no new client-facing send path). No mobile
+  // primary action to promote here.
+  useMobilePrimaryAction(null);
 
-  useMobilePrimaryAction(
-    pct > 0
-      ? {
-          actionKey: 'send-proposal',
-          surfaceKey: 'drafting',
-          regionKey: 'room-head',
-          label: sendLabel,
-          target: { kind: 'press', onPress: openSend },
-        }
-      : null,
-  );
-
-  const sendAction =
-    pct > 0 ? (
-      <DocumentAction
-        actionKey="send-proposal"
-        variant="primary"
-        trailing="→"
-        onClick={openSend}
-      >
-        {sendLabel}
-      </DocumentAction>
-    ) : undefined;
+  // RoomShell already renders the way out as its own head word (I107 — "the
+  // way out is a word, not a box"), on every breakpoint. Feed it the label
+  // instead of duplicating the act as a second, >1180px-only exit.
+  const exitLabel = proposal?.project_id
+    ? 'Return to the project'
+    : 'Back to the document';
 
   return (
     <RoomShell
       title="The Drafting Room"
       count={pct > 0 ? `${pct}% drafted` : undefined}
-      // C2 — the share instrument rides beside the send act in the head: a quiet
-      // mono doorway into the tokenized share-link sheet (view-only client copy),
-      // seeded from the proposal's client-visibility tier.
+      backLabel={exitLabel}
+      // C2 — the share instrument is the Room's sole head action: a quiet
+      // mono doorway into the tokenized share-link sheet (view-only client
+      // copy), seeded from the proposal's client-visibility tier.
       action={
         <DocumentActionGroup
           surfaceKey="drafting"
           regionKey="room-head"
           aria-label="Drafting actions"
         >
-          {sendAction}
           <ProposalShareInstrument
             proposalId={proposalId}
             tier={proposal?.client_visibility_tier}
@@ -452,7 +420,7 @@ function DraftingRoomEditor({
                     background: tone.bg,
                   }}
                 >
-                  {state}
+                  {displayState}
                 </span>
                 <span className="doc-type-meta uppercase tracking-[0.08em] opacity-70">
                   Scope · The Offer · The Vision
@@ -749,15 +717,6 @@ function DraftingRoomEditor({
           />
         </section>
       </DocSheet>
-
-      {/* Send — the charcoal DocSheet, opened from the head action. On success
-          it returns us to the document the proposal lives in (the watch view). */}
-      <SendSheet
-        proposalId={proposalId}
-        open={sendOpen}
-        onClose={() => setSendOpen(false)}
-        onSent={returnToDocument}
-      />
 
       {/* C4 — the escalate-to-Decision composer, opened from a flagged line's
           Alternatives band. Mounted only with a project + client in hand. */}

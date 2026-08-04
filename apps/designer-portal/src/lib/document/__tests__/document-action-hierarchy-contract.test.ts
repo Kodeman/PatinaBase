@@ -72,11 +72,27 @@ describe('I91 shared action grammar', () => {
 
   it('keeps proposal-watch leadership mutually exclusive', () => {
     const region = actionRegion(proposalWatch, 'proposal-watch-actions');
-    expect(region).toContain("variant={signable ? 'secondary' : 'primary'}");
     expect(region).toMatch(
       /\{signable && \(\s*<DocumentAction[\s\S]*?variant="primary"/,
     );
     expect(region).toContain('actionKey="mark-proposal-signed"');
+  });
+
+  it('retires Revise and Send in favor of guidance copy (no new legacy sending)', () => {
+    expect(proposalWatch).not.toContain('actionKey="revise-proposal"');
+    expect(proposalWatch).not.toContain('ReviseSheet');
+    expect(proposalWatch).toContain(
+      'Changes now travel as a design services agreement.',
+    );
+    expect(proposalDraft).not.toContain('actionKey="send-proposal"');
+    expect(proposalDraft).not.toContain('SendSheet');
+    expect(drafting).not.toContain('actionKey="send-proposal"');
+    expect(drafting).not.toContain("actionKey: 'send-proposal'");
+    // RoomShell already renders its own way out (I107 — "the way out is a
+    // word, not a box") on every breakpoint; the Room threads its label
+    // rather than duplicating the act as a second, >1180px-only action.
+    expect(drafting).not.toContain('actionKey="exit-drafting-room"');
+    expect(drafting).toContain('backLabel={exitLabel}');
   });
 
   it('keeps work-block commits primary and utilities secondary or tertiary', () => {
@@ -110,7 +126,6 @@ describe('I91 shared action grammar', () => {
     ]) {
       expect(source).toContain('useMobilePrimaryAction');
     }
-    expect(drafting).toMatch(/pct > 0[\s\S]*?actionKey: 'send-proposal'/);
-    expect(drafting).toMatch(/pct > 0 \? \([\s\S]*?variant="primary"/);
+    expect(drafting).toContain('useMobilePrimaryAction(null);');
   });
 });

@@ -25,6 +25,7 @@ import {
   type WorkingBudgetLineDraft,
 } from "@/lib/document/project-commerce";
 import { Button, Input, Select, Textarea } from "@/components/ui/controls";
+import { ProjectFurnishingDraftAction } from "./project-furnishing-draft-action";
 
 const money = (cents: number) =>
   new Intl.NumberFormat("en-US", {
@@ -399,6 +400,11 @@ function BudgetEditor({ projectId }: { projectId: string }) {
               Save the latest changes before publishing.
             </p>
           )}
+          {version?.state === "draft" && !dirty && !agreementId && (
+            <p className="text-right text-[10px] text-[var(--text-muted)]">
+              An executed design agreement is required before publishing.
+            </p>
+          )}
         </div>
       )}
 
@@ -735,19 +741,42 @@ function WaveDetail({
 }
 
 function FurnishingsWaves({ projectId }: { projectId: string }) {
+  // Cache-shared key with BudgetEditor's own call above — one fetch, one
+  // authority read, agreed everywhere on the page.
+  const authorityQuery = useProjectBillingAuthority(projectId);
   const wavesQuery = useFurnishingsAuthorizations(projectId);
-  const proposalsQuery = useProposals({ projectId, status: "draft" });
+  // Widened from status:'draft' — hasLegacyEngagement needs the accepted rows
+  // too, so this now filters client-side instead of at the query.
+  const proposalsQuery = useProposals({ projectId });
   const createWave = useCreateFurnishingsAuthorization(projectId);
   const sendWave = useSendFurnishingsAuthorization(projectId);
   const [waveName, setWaveName] = useState("");
   const [sourceProposalId, setSourceProposalId] = useState("");
   const [actionError, setActionError] = useState<string | null>(null);
 
-  const sourceProposals = (proposalsQuery.data ?? []).filter(
+  const proposals = proposalsQuery.data ?? [];
+  const sourceProposals = proposals.filter(
     (proposal: any) =>
+      proposal.status === "draft" &&
       proposal.document_kind !== "furnishings_authorization" &&
       proposal.document_kind !== "design_services",
   );
+  // Legacy retirement: a project running on a signed pre-rail proposal reads
+  // GRANDFATHERED, not "no agreement" — it has real history, just no
+  // executed design-services origin for create_furnishing_wave_draft /
+  // create_furnishings_authorization to require.
+  const hasLegacyEngagement = proposals.some(
+    (proposal: any) =>
+      proposal.status === "accepted" &&
+      (proposal.document_kind == null || proposal.document_kind === "legacy"),
+  );
+
+  const authority = authorityQuery.data ?? null;
+  const authorityReady =
+    authority != null &&
+    (authority.state === "active" ||
+      authority.state === "retainer_pending" ||
+      authority.state === "exhausted");
 
   const create = async () => {
     setActionError(null);
@@ -774,53 +803,84 @@ function FurnishingsWaves({ projectId }: { projectId: string }) {
         acknowledged budget checkpoint. It never creates another project.
       </p>
 
-      <div className="mt-3 grid gap-2 md:grid-cols-[1fr_1.3fr_auto]">
-        <label className="text-[10px] text-[var(--text-muted)]">
-          Wave name
-          <Input
-            className="mt-1"
-            value={waveName}
-            onChange={(event) => setWaveName(event.target.value)}
-            placeholder="Living Room Essentials"
-          />
-        </label>
-        <label className="text-[10px] text-[var(--text-muted)]">
-          Draft furnishing proposal
-          <Select
-            className="mt-1"
-            value={sourceProposalId}
-            onChange={(event) => setSourceProposalId(event.target.value)}
-          >
-            <option value="">Choose a project draft…</option>
-            {sourceProposals.map((proposal: any) => (
-              <option key={proposal.id} value={proposal.id}>
-                {proposal.title ?? "Untitled proposal"}
-              </option>
-            ))}
-          </Select>
-        </label>
-        <Button
-          className="self-end"
-          size="sm"
-          loading={createWave.isPending}
-          disabled={waveName.trim().length < 2 || !sourceProposalId}
-          onClick={create}
-        >
-          Create wave
-        </Button>
-      </div>
-      {!proposalsQuery.isLoading && sourceProposals.length === 0 && (
-        <p className="mt-2 text-[10px] text-[var(--text-muted)]">
-          Build a draft furnishing proposal for this project before creating a
-          wave.
+      {authorityQuery.isLoading || proposalsQuery.isLoading ? (
+        <p className="mt-3 text-[11px] text-[var(--text-muted)]">
+          Checking the project's design agreement…
         </p>
-      )}
-      {actionError && (
-        <p
-          role="alert"
-          className="mt-2 text-[11px] text-[var(--color-terracotta)]"
-        >
-          {actionError}
+      ) : authorityQuery.isError ? (
+        <p className="mt-3 text-[11px] leading-relaxed text-[var(--color-terracotta)]">
+          The agreement status could not load.{" "}
+          <button
+            type="button"
+            onClick={() => authorityQuery.refetch()}
+            className="underline underline-offset-2"
+          >
+            Retry
+          </button>
+        </p>
+      ) : authorityReady ? (
+        <>
+          <div className="mt-3 grid gap-2 md:grid-cols-[1fr_1.3fr_auto]">
+            <label className="text-[10px] text-[var(--text-muted)]">
+              Wave name
+              <Input
+                className="mt-1"
+                value={waveName}
+                onChange={(event) => setWaveName(event.target.value)}
+                placeholder="Living Room Essentials"
+              />
+            </label>
+            <label className="text-[10px] text-[var(--text-muted)]">
+              Draft furnishing proposal
+              <div className="mt-1 flex items-center gap-2">
+                <Select
+                  className="flex-1"
+                  value={sourceProposalId}
+                  onChange={(event) => setSourceProposalId(event.target.value)}
+                >
+                  <option value="">Choose a project draft…</option>
+                  {sourceProposals.map((proposal: any) => (
+                    <option key={proposal.id} value={proposal.id}>
+                      {proposal.title ?? "Untitled proposal"}
+                    </option>
+                  ))}
+                </Select>
+                <ProjectFurnishingDraftAction projectId={projectId} />
+              </div>
+            </label>
+            <Button
+              className="self-end"
+              size="sm"
+              loading={createWave.isPending}
+              disabled={waveName.trim().length < 2 || !sourceProposalId}
+              onClick={create}
+            >
+              Create wave
+            </Button>
+          </div>
+          {!proposalsQuery.isLoading && sourceProposals.length === 0 && (
+            <p className="mt-2 text-[10px] text-[var(--text-muted)]">
+              Draft a furnishing proposal to begin.
+            </p>
+          )}
+          {actionError && (
+            <p
+              role="alert"
+              className="mt-2 text-[11px] text-[var(--color-terracotta)]"
+            >
+              {actionError}
+            </p>
+          )}
+        </>
+      ) : hasLegacyEngagement ? (
+        <p className="mt-3 text-[11px] leading-relaxed text-[var(--text-muted)]">
+          This project was signed under the earlier agreement format.
+          Furnishing authorization waves need a design agreement in place.
+        </p>
+      ) : (
+        <p className="mt-3 text-[11px] leading-relaxed text-[var(--text-muted)]">
+          An executed design agreement is required before furnishing
+          authorizations.
         </p>
       )}
       <div className="mt-4">

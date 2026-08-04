@@ -233,7 +233,11 @@ export async function fetchCommercialDocumentBundle(
         .order("sort_order", { ascending: true }),
       supabase
         .from("commercial_document_signatures")
-        .select("*")
+        // Explicit columns only — signed_ip must never leave the server; the
+        // rest is exactly what mapSignature reads (see below).
+        .select(
+          "id, proposal_id, party_role, signer_user_id, signed_name, evidence_fingerprint, signed_at, metadata",
+        )
         .eq("proposal_id", proposalId)
         .order("signed_at", { ascending: true }),
     ]);
@@ -625,6 +629,53 @@ export function useCreateServiceAddendum(projectId: string) {
       void queryClient.invalidateQueries({
         queryKey: commercialDocumentKeys.bundle(result.proposalId),
       });
+    },
+  });
+}
+
+export interface CreateFurnishingDraftResult {
+  proposalId: string;
+  projectId: string;
+}
+
+function mapCreateFurnishingDraftResult(
+  value: any,
+): CreateFurnishingDraftResult {
+  const row = Array.isArray(value) ? value[0] : value;
+  const proposalId = row?.proposalId ?? row?.proposal_id;
+  const projectId = row?.projectId ?? row?.project_id;
+  if (!proposalId || !projectId) {
+    throw new Error("The furnishing draft result was incomplete.");
+  }
+  return {
+    proposalId: String(proposalId),
+    projectId: String(projectId),
+  };
+}
+
+// Legacy retirement (item 4 / R85 successor): the furnishing-draft opener for
+// a project that already has a working relationship — mirrors
+// useCreateServiceAddendum's shape, but seeds a furnishing (FF&E) draft
+// rather than a services addendum. R83: errors render inline at the act.
+export function useCreateFurnishingDraft(projectId: string) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationKey: ["create-furnishing-draft", projectId],
+    meta: { errorSurface: "inline" },
+    mutationFn: async (title: string) => {
+      const { data, error } = await getSupabase().rpc(
+        "create_furnishing_wave_draft",
+        {
+          p_project_id: projectId,
+          p_title: title.trim(),
+        },
+      );
+      if (error) throw error;
+      return mapCreateFurnishingDraftResult(data);
+    },
+    onSuccess: async (result) => {
+      await invalidateProjectCommerce(queryClient, result.projectId);
+      void queryClient.invalidateQueries({ queryKey: ["proposals"] });
     },
   });
 }

@@ -3,15 +3,17 @@
 /**
  * ProposalWatch — the "With the client" view (R71). Once a proposal is out the
  * door, the document is parked: nothing the designer does advances it, only the
- * client can (sign / decline / let it expire), short of cloning a revision. So
- * the Proposal section BECOMES a watch view — front and center, in paper grammar
- * — surfacing the engagement we already collect (opens, count, reading time,
- * most-read section) that until now only lived on the legacy /tracking page.
+ * client can (sign / decline / let it expire). So the Proposal section BECOMES
+ * a watch view — front and center, in paper grammar — surfacing the engagement
+ * we already collect (opens, count, reading time, most-read section) that until
+ * now only lived on the legacy /tracking page.
  *
  * Renders for every non-draft proposal:
  *   · awaiting (sent / viewed / revised) — the full watch (figures · the client's
  *     copy as sent · the record · acts).
- *   · terminal (expired / declined) — the same watch, acts lead with Revise.
+ *   · terminal (expired / declined) — the same watch. Legacy retirement: Revise
+ *     is gone (no new legacy sending) — guidance copy explains a changed mind
+ *     now travels as a design services agreement, not a cloned revision.
  *   · settled (accepted) — collapses to a one-line SIGNED seal. The seal READS
  *     whether a project actually exists (F10, walk 2026-07): if it does, "the
  *     project is open" is a doorway into it; if not (a sign that didn't
@@ -20,8 +22,8 @@
  *
  * All state lives in the figures strip + the record (the engagement log). Flat:
  * left-accent + hairlines, zero shadows (D4); no motion (the breath stays on the
- * spine). Overlays (Preview / Revise / Resend) are local state over the still-
- * mounted document (D1).
+ * spine). Overlays (Preview / Resend) are local state over the still-mounted
+ * document (D1).
  */
 
 import { useState } from 'react';
@@ -44,7 +46,6 @@ import { ProposalShareInstrument } from './proposal-share-instrument';
 import { ProposalPreview } from './proposal-preview';
 import { ProposalPreviewRail } from './drafting/proposal-mirror';
 import { SendSheet } from './overlays/send-sheet';
-import { ReviseSheet } from './overlays/revise-sheet';
 import { MarkSignedSheet } from './overlays/mark-signed-sheet';
 import { useMobilePrimaryAction } from './mobile/mobile-shell';
 
@@ -129,7 +130,6 @@ export function ProposalWatch({
   const { data: proposal } = useProposal(proposalId) as { data: any };
 
   const [previewOpen, setPreviewOpen] = useState(false);
-  const [reviseOpen, setReviseOpen] = useState(false);
   const [resendOpen, setResendOpen] = useState(false);
   const [recordOpen, setRecordOpen] = useState(false);
   const [markSignedOpen, setMarkSignedOpen] = useState(false);
@@ -175,15 +175,7 @@ export function ProposalWatch({
           label: 'Mark signed',
           target: { kind: 'press', onPress: () => setMarkSignedOpen(true) },
         }
-      : w?.terminal
-        ? {
-            actionKey: 'revise-proposal',
-            surfaceKey: 'open-document',
-            regionKey: 'proposal-watch-actions',
-            label: 'Revise',
-            target: { kind: 'press', onPress: () => setReviseOpen(true) },
-          }
-        : null,
+      : null,
     { priority: 10 },
   );
 
@@ -302,23 +294,13 @@ export function ProposalWatch({
         aria-label="Proposal actions"
       >
         {w.terminal ? (
-          <>
-            <DocumentAction
-              actionKey="revise-proposal"
-              variant={signable ? 'secondary' : 'primary'}
-              trailing={signable ? undefined : '→'}
-              onClick={() => setReviseOpen(true)}
-            >
-              Revise
-            </DocumentAction>
-            <DocumentAction
-              actionKey="resend-proposal"
-              variant="secondary"
-              onClick={() => setResendOpen(true)}
-            >
-              Email delivery status
-            </DocumentAction>
-          </>
+          <DocumentAction
+            actionKey="resend-proposal"
+            variant="secondary"
+            onClick={() => setResendOpen(true)}
+          >
+            Email delivery status
+          </DocumentAction>
         ) : (
           <>
             <DocumentAction
@@ -327,13 +309,6 @@ export function ProposalWatch({
               onClick={() => setResendOpen(true)}
             >
               Email delivery
-            </DocumentAction>
-            <DocumentAction
-              actionKey="revise-proposal"
-              variant="secondary"
-              onClick={() => setReviseOpen(true)}
-            >
-              Request a change · Revise
             </DocumentAction>
             {/* Nudge — a gentle reminder while it's in their hands. After a nudge
                 it rests for the cooldown, reading "Nudged {date}" so the designer
@@ -376,6 +351,12 @@ export function ProposalWatch({
         <ProposalVersionHistory proposalId={proposalId} />
       </DocumentActionGroup>
 
+      {/* Legacy retirement: Revise is gone — a changed mind travels as a new
+          design services agreement, not a cloned revision of this one. */}
+      <p className="mt-2 border-l-2 border-[var(--color-aged-oak)] pl-3 text-[12px] text-[var(--text-muted)]">
+        Changes now travel as a design services agreement.
+      </p>
+
       {/* The nudge outcome — quiet, inline at the act (R83/R51 grammar). */}
       {nudgeNote && (
         <p
@@ -395,12 +376,6 @@ export function ProposalWatch({
       )}
 
       {/* Overlays — local state over the still-mounted document (D1). */}
-      <ReviseSheet
-        proposalId={proposalId}
-        open={reviseOpen}
-        onClose={() => setReviseOpen(false)}
-        onOpened={(newProposalId) => router.push(`/doc/${newProposalId}`)}
-      />
       <SendSheet
         proposalId={proposalId}
         open={resendOpen}

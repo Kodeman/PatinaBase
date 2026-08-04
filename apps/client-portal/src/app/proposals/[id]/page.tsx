@@ -247,13 +247,15 @@ export default function ClientProposalDetailPage({
       {isActionable && (
         <div className="proposal-print-hide mx-auto mt-6 flex max-w-[760px] flex-col gap-4 rounded-lg border border-[var(--border-default)] bg-[var(--bg-surface)] px-5 py-4 sm:flex-row sm:items-center sm:justify-between">
           <p className="type-body-small text-[var(--text-body)]">
-            {commercial.kind === 'design_services'
-              ? 'Sign to record your consent. The agreement becomes effective only after the studio countersigns.'
-              : commercial.kind === 'furnishings_authorization'
-                ? 'Authorize only the named furnishing lines, quantities, and client prices shown here.'
-                : commercial.kind === 'service_addendum'
-                  ? 'Sign to accept these additional design-services terms.'
-                  : 'Ready to move forward? Sign to confirm the proposal.'}
+            {isLegacy
+              ? 'Your designer will send a new agreement to move this forward — questions and change requests still work in the meantime.'
+              : commercial.kind === 'design_services'
+                ? 'Sign to record your consent. The agreement becomes effective only after the studio countersigns.'
+                : commercial.kind === 'furnishings_authorization'
+                  ? 'Authorize only the named furnishing lines, quantities, and client prices shown here.'
+                  : commercial.kind === 'service_addendum'
+                    ? 'Sign to accept these additional design-services terms.'
+                    : 'Ready to move forward? Sign to confirm the proposal.'}
           </p>
           <div className="flex flex-wrap gap-2">
             {proposal.project_id && <ProposalClarifyButton projectId={proposal.project_id} />}
@@ -273,13 +275,14 @@ export default function ClientProposalDetailPage({
             >
               Decline
             </button>
-            <Link
-              href={`/proposals/${proposal.id}/sign`}
-              className="inline-flex items-center gap-2 rounded-[3px] bg-patina-charcoal px-5 py-2.5 text-sm font-medium text-white no-underline transition hover:opacity-90"
-            >
-              {commercial.kind === 'furnishings_authorization' ? 'Authorize furnishings' :
-                commercial.kind === 'legacy' ? 'Sign proposal' : 'Sign document'}
-            </Link>
+            {!isLegacy && (
+              <Link
+                href={`/proposals/${proposal.id}/sign`}
+                className="inline-flex items-center gap-2 rounded-[3px] bg-patina-charcoal px-5 py-2.5 text-sm font-medium text-white no-underline transition hover:opacity-90"
+              >
+                {commercial.kind === 'furnishings_authorization' ? 'Authorize furnishings' : 'Sign document'}
+              </Link>
+            )}
           </div>
         </div>
       )}

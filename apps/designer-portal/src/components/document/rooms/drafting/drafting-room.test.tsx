@@ -87,12 +87,17 @@ jest.mock('@/hooks/use-drafting-state', () => ({
 jest.mock('../room-shell', () => ({
   RoomShell: ({
     action,
+    backLabel,
     children,
   }: {
     action?: React.ReactNode;
+    backLabel?: string;
     children: React.ReactNode;
   }) => (
     <>
+      {backLabel && (
+        <span data-testid="room-shell-back-label">{backLabel}</span>
+      )}
       {action}
       {children}
     </>
@@ -128,10 +133,6 @@ jest.mock('../../drafting/proposal-mirror', () => ({
   ProposalPreviewRail: ({ clientName }: { clientName?: string }) => (
     <div>Preview for {clientName ?? 'the client'}</div>
   ),
-}));
-
-jest.mock('../../overlays/send-sheet', () => ({
-  SendSheet: () => null,
 }));
 
 jest.mock('@/components/portal/scope-builder/rooms-in-scope', () => ({
@@ -297,6 +298,32 @@ describe('DraftingRoom quiet deep work', () => {
       document.querySelector('[data-action-key="send-proposal"]'),
     ).toBeNull();
     expect(useMobilePrimaryAction).toHaveBeenLastCalledWith(null);
+  });
+
+  it('threads the exit label to RoomShell instead of duplicating its own exit act', () => {
+    // RoomShell already renders the way out as its own head word (I107 — "the
+    // way out is a word, not a box"), on every breakpoint. The Room must not
+    // also mount a second, >1180px-only "exit-drafting-room" action.
+    render(<DraftingRoom proposalId="proposal-1" />);
+
+    expect(screen.getByTestId('room-shell-back-label')).toHaveTextContent(
+      'Return to the project',
+    );
+    expect(
+      document.querySelector('[data-action-key="exit-drafting-room"]'),
+    ).toBeNull();
+  });
+
+  it('labels the exit "Back to the document" for an orphan legacy draft', () => {
+    mockProposalResult = {
+      ...mockProposalResult,
+      data: { ...mockProposalResult.data, project_id: null },
+    };
+    render(<DraftingRoom proposalId="proposal-1" />);
+
+    expect(screen.getByTestId('room-shell-back-label')).toHaveTextContent(
+      'Back to the document',
+    );
   });
 
   it('never mounts editors for an issued proposal and redirects to the document', async () => {

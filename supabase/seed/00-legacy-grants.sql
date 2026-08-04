@@ -7734,74 +7734,128 @@ DO $g$ BEGIN
 EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
 END $g$;
 
--- 00415_decision_selection_and_template_privacy.sql
+-- 00414_design_services_rail_completion.sql
 DO $g$ BEGIN
-  REVOKE EXECUTE ON FUNCTION public._decision_selection_snapshot_safe(jsonb) FROM PUBLIC, anon, authenticated;
+  REVOKE ALL ON FUNCTION public.begin_direction_from_discovery(uuid) FROM PUBLIC;
 EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
 END $g$;
 
--- 00415_decision_selection_and_template_privacy.sql
+-- 00414_design_services_rail_completion.sql
 DO $g$ BEGIN
-  GRANT EXECUTE ON FUNCTION public._decision_selection_snapshot_safe(jsonb) TO service_role;
+  GRANT EXECUTE ON FUNCTION public.begin_direction_from_discovery(uuid) TO authenticated;
 EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
 END $g$;
 
--- 00415_decision_selection_and_template_privacy.sql
+-- 00414_design_services_rail_completion.sql
 DO $g$ BEGIN
-  REVOKE EXECUTE ON FUNCTION public.save_product_configuration(jsonb) FROM PUBLIC, anon;
+  REVOKE ALL ON FUNCTION public.create_furnishing_wave_draft(uuid, text) FROM PUBLIC, anon, authenticated, service_role;
 EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
 END $g$;
 
--- 00415_decision_selection_and_template_privacy.sql
+-- 00414_design_services_rail_completion.sql
 DO $g$ BEGIN
-  GRANT EXECUTE ON FUNCTION public.save_product_configuration(jsonb) TO authenticated, service_role;
+  GRANT EXECUTE ON FUNCTION public.create_furnishing_wave_draft(uuid, text) TO authenticated;
 EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
 END $g$;
 
--- 00415_decision_selection_and_template_privacy.sql
+-- 00414_design_services_rail_completion.sql
 DO $g$ BEGIN
-  REVOKE EXECUTE ON FUNCTION public.promote_configuration_to_library(uuid, text) FROM PUBLIC, anon;
+  REVOKE ALL ON FUNCTION public.send_proposal( uuid, timestamptz, integer, text, text, text, timestamptz ) FROM PUBLIC, anon, service_role;
 EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
 END $g$;
 
--- 00415_decision_selection_and_template_privacy.sql
+-- 00414_design_services_rail_completion.sql
 DO $g$ BEGIN
-  GRANT EXECUTE ON FUNCTION public.promote_configuration_to_library(uuid, text) TO authenticated, service_role;
+  GRANT EXECUTE ON FUNCTION public.send_proposal( uuid, timestamptz, integer, text, text, text, timestamptz ) TO authenticated;
 EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
 END $g$;
 
--- 00415_decision_selection_and_template_privacy.sql
+-- 00414_design_services_rail_completion.sql
 DO $g$ BEGIN
-  REVOKE ALL ON FUNCTION public.create_client_decision( uuid, jsonb, jsonb, uuid[], uuid[] ) FROM PUBLIC, anon, service_role;
+  REVOKE ALL ON FUNCTION public.publish_budget_checkpoint(uuid, uuid) FROM PUBLIC, anon, authenticated, service_role;
 EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
 END $g$;
 
--- 00415_decision_selection_and_template_privacy.sql
+-- 00414_design_services_rail_completion.sql
 DO $g$ BEGIN
-  GRANT EXECUTE ON FUNCTION public.create_client_decision( uuid, jsonb, jsonb, uuid[], uuid[] ) TO authenticated;
+  GRANT EXECUTE ON FUNCTION public.publish_budget_checkpoint(uuid, uuid) TO authenticated;
 EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
 END $g$;
 
--- 00415_decision_selection_and_template_privacy.sql
+-- 00414_design_services_rail_completion.sql
 DO $g$ BEGIN
-  REVOKE ALL ON FUNCTION public.update_client_decision(uuid, jsonb, jsonb, timestamptz) FROM PUBLIC, anon, service_role;
+  REVOKE ALL ON FUNCTION public._execute_furnishings_authorization_authorized(uuid, text, uuid, text) FROM PUBLIC, anon, authenticated, service_role;
 EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
 END $g$;
 
--- 00415_decision_selection_and_template_privacy.sql
+-- 00414_design_services_rail_completion.sql
 DO $g$ BEGIN
-  GRANT EXECUTE ON FUNCTION public.update_client_decision(uuid, jsonb, jsonb, timestamptz) TO authenticated;
+  REVOKE ALL ON FUNCTION public.countersign_design_services_agreement(uuid, text) FROM PUBLIC, anon, authenticated, service_role;
 EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
 END $g$;
 
--- 00416_studio_staff_titles.sql
+-- 00414_design_services_rail_completion.sql
 DO $g$ BEGIN
-  REVOKE ALL ON FUNCTION public.set_my_member_title(uuid, text) FROM PUBLIC, anon;
+  GRANT EXECUTE ON FUNCTION public.countersign_design_services_agreement(uuid, text) TO authenticated;
 EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
 END $g$;
 
--- 00416_studio_staff_titles.sql
+-- 00414_design_services_rail_completion.sql
 DO $g$ BEGIN
-  GRANT EXECUTE ON FUNCTION public.set_my_member_title(uuid, text) TO authenticated, service_role;
+  REVOKE ALL ON FUNCTION public.guard_budget_immutability() FROM PUBLIC, anon, authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00414_design_services_rail_completion.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.guard_commercial_ledger_write() FROM PUBLIC, anon, authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00414_design_services_rail_completion.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.get_client_commercial_document_bundle(uuid) FROM PUBLIC, anon, authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00414_design_services_rail_completion.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.get_client_commercial_document_bundle(uuid) TO authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00414_design_services_rail_completion.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.list_client_proposals() FROM PUBLIC, anon, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00414_design_services_rail_completion.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.list_client_proposals() TO authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00414_design_services_rail_completion.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.get_project_working_budget(uuid) FROM PUBLIC, anon, authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00414_design_services_rail_completion.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.get_project_working_budget(uuid) TO authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00414_design_services_rail_completion.sql
+DO $g$ BEGIN
+  REVOKE SELECT ON public.commercial_document_signatures FROM authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00414_design_services_rail_completion.sql
+DO $g$ BEGIN
+  GRANT SELECT ( id, proposal_id, party_role, signer_user_id, signed_name, evidence_fingerprint, signed_at, metadata ) ON public.commercial_document_signatures TO authenticated;
 EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
 END $g$;

@@ -242,6 +242,15 @@ export interface Proposal {
   parent_proposal_id: string | null;
   revision_summary: string | null;
   client_feedback: string | null;
+  /** Additive commercial-document projection from list_client_proposals. Absent
+   * pre-migration; a legacy row's `commercial_state` is a vestigial projection
+   * and must never be trusted over its historical `status` semantics — see
+   * commercialSummaryFromProposal in the client portal. */
+  document_kind?: 'legacy' | 'design_services' | 'furnishings_authorization' | 'service_addendum';
+  /** No 'expired' — the DB CHECK (00414) retired it; expiry stays a
+   * lazily-evaluated client derivation (see legacyStatusToCommercialState),
+   * never a stored commercial_state. */
+  commercial_state?: 'draft' | 'sent' | 'client_signed' | 'executed' | 'declined' | 'superseded';
   // Joined data
   project?: {
     id: string;

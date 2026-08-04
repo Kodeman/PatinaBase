@@ -253,14 +253,23 @@ export const STUDIO_VERBS: StudioSurface[] = [
   {
     key: 'draft-proposal',
     kind: 'verb',
-    label: 'Draft a proposal',
+    label: 'Draft a design agreement',
     subLabel: 'for an existing household',
-    aliases: ['proposal', 'quote', 'estimate', 'new proposal', 'propose'],
+    aliases: [
+      'proposal',
+      'quote',
+      'estimate',
+      'new proposal',
+      'propose',
+      'agreement',
+      'design agreement',
+      'services agreement',
+    ],
     icon: PenLine,
     scope: 'global',
     help: {
       surfaceKey: 'designer-portal/document/desk',
-      blurb: 'Open the Drafting Room for an existing household.',
+      blurb: 'Open the Drafting Room for an existing household — the services agreement, not a proposal.',
     },
   },
   {

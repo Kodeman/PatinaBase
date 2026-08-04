@@ -64,23 +64,6 @@ export function ProjectCommercialSummary({ projectId }: { projectId: string }) {
             </p>
           )}
 
-          {authority.activity.length > 0 && (
-            <div className="mt-5">
-              <h3 className="type-meta">Work completed this period</h3>
-              <div className="mt-2 divide-y divide-[var(--border-subtle)]">
-                {authority.activity.map((item) => (
-                  <div key={item.label} className="flex justify-between gap-4 py-2 type-body-small">
-                    <span>{item.label} · {item.hours} hours</span>
-                    <span>{money(item.amountCents, authority.currency)}</span>
-                  </div>
-                ))}
-              </div>
-              <p className="type-meta-small mt-2 text-[var(--text-muted)]">
-                Curated service categories only; private studio working details are not part of this summary.
-              </p>
-            </div>
-          )}
-
           {authority.rates.length > 0 && (
             <details className="mt-4">
               <summary className="cursor-pointer type-meta text-[var(--accent-primary)]">Signed role rates</summary>

@@ -191,6 +191,9 @@ export function useBeginDirection() {
       void qc.invalidateQueries({ queryKey: ['document-state'] });
       void qc.invalidateQueries({ queryKey: ['desk'] });
       void qc.invalidateQueries({ queryKey: ['leads'] });
+      // The seeded artifact is a design agreement — its own list/stats keys.
+      void qc.invalidateQueries({ queryKey: ['proposals'] });
+      void qc.invalidateQueries({ queryKey: ['proposal-stats'] });
     },
   });
 }

@@ -29,7 +29,7 @@ describe('ProjectCommercialSummary', () => {
           invoicedCents: 300_000, pendingAuthorizationCents: 50_000, remainingCents: 1_200_000,
           retainerAmountCents: 300_000, retainerPaidCents: 300_000,
           retainerActivationPolicy: 'retainer_paid', activeRateVersion: 1, billingThrough: null,
-          rates: [], activity: [{ label: 'Concept development', hours: 4, amountCents: 90_000 }],
+          rates: [],
         },
         workingBudget: {
           id: 'b1', projectId: 'p1', version: 3, state: 'published', currency: 'USD',
@@ -45,7 +45,6 @@ describe('ProjectCommercialSummary', () => {
     render(<ProjectCommercialSummary projectId="p1" />);
     expect(screen.getByText('$12,000 remaining')).toBeInTheDocument();
     expect(screen.getByText(/\$500 of captured work is pending additional authorization/i)).toBeInTheDocument();
-    expect(screen.getByText(/concept development · 4 hours/i)).toBeInTheDocument();
   });
 
   it('labels the working-budget checkpoint as nonbinding and calls the acknowledgement boundary', () => {
