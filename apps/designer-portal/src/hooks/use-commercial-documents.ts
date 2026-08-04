@@ -40,6 +40,57 @@ export const commercialDocumentKeys = {
     (["furnishings-authorizations", projectId] as const),
 };
 
+export type CommercialNotificationDelivery =
+  | "delivered"
+  | "pending_retry"
+  | "not_requested";
+
+type StudioCommercialNotificationInput = {
+  documentId: string;
+  transition: "executed" | "budget_published";
+  eventId?: string;
+};
+
+async function invokeCommercialNotification(
+  supabase: any,
+  input: StudioCommercialNotificationInput,
+): Promise<CommercialNotificationDelivery> {
+  try {
+    const delivery = await supabase.functions.invoke(
+      "commercial-document-notify",
+      {
+        body: {
+          documentId: input.documentId,
+          transition: input.transition,
+          ...(input.eventId ? { eventId: input.eventId } : {}),
+        },
+      },
+    );
+    if (!delivery.error && delivery.data?.ok === true) return "delivered";
+    console.warn("commercial notification pending retry", {
+      documentId: input.documentId,
+      transition: input.transition,
+      error: delivery.error?.message ?? delivery.data?.error ?? "unconfirmed",
+    });
+    return "pending_retry";
+  } catch (error) {
+    console.warn("commercial notification pending retry", {
+      documentId: input.documentId,
+      transition: input.transition,
+      error: error instanceof Error ? error.message : "transport_error",
+    });
+    return "pending_retry";
+  }
+}
+
+export function useReplayCommercialNotification() {
+  return useMutation({
+    mutationKey: ["replay-commercial-notification"],
+    mutationFn: async (input: StudioCommercialNotificationInput) =>
+      invokeCommercialNotification(getSupabase(), input),
+  });
+}
+
 export interface CommercialDocumentBundle {
   document: CommercialDocument;
   terms: ServiceAgreementTerms | null;
@@ -318,37 +369,13 @@ export function useCountersignDesignServicesAgreement(proposalId: string) {
       );
       if (error) throw error;
       const result = mapCountersignResult(data);
-      let notificationDelivery: "delivered" | "pending_retry" | "not_requested" =
-        "not_requested";
-      if (result.newlyExecuted) {
-        try {
-          const delivery = await supabase.functions.invoke(
-            "commercial-document-notify",
-            {
-              body: { documentId: proposalId, transition: "executed" },
-            },
-          );
-          notificationDelivery =
-            !delivery.error && delivery.data?.ok === true
-              ? "delivered"
-              : "pending_retry";
-          if (notificationDelivery === "pending_retry") {
-            console.warn("commercial countersign notification pending retry", {
-              proposalId,
-              error:
-                delivery.error?.message ??
-                delivery.data?.error ??
-                "unconfirmed",
-            });
-          }
-        } catch (error) {
-          notificationDelivery = "pending_retry";
-          console.warn("commercial countersign notification pending retry", {
-            proposalId,
-            error: error instanceof Error ? error.message : "transport_error",
-          });
-        }
-      }
+      const notificationDelivery =
+        result.commercialState === "executed"
+          ? await invokeCommercialNotification(supabase, {
+              documentId: proposalId,
+              transition: "executed",
+            })
+          : "not_requested";
       return { ...result, notificationDelivery };
     },
     onSuccess: (result) => {
@@ -465,9 +492,7 @@ export function adaptProjectBillingAuthority(
     ? {
         ...authority,
         ...summary,
-        rates: Array.isArray(payload?.rates)
-          ? payload.rates
-          : authority.rates,
+        rates: Array.isArray(payload?.rates) ? payload.rates : authority.rates,
       }
     : null;
   if (!row?.id) return null;
@@ -535,10 +560,9 @@ export async function fetchProjectBillingAuthority(
   projectId: string,
 ): Promise<ProjectBillingAuthority | null> {
   const supabase = getSupabase();
-  const { data, error } = await supabase.rpc(
-    "get_project_authority_summary",
-    { p_project_id: projectId },
-  );
+  const { data, error } = await supabase.rpc("get_project_authority_summary", {
+    p_project_id: projectId,
+  });
   if (error) throw error;
   return adaptProjectBillingAuthority(data);
 }
@@ -551,7 +575,9 @@ export interface CreateServiceAddendumResult {
   commercialState: "draft";
 }
 
-function mapCreateServiceAddendumResult(value: any): CreateServiceAddendumResult {
+function mapCreateServiceAddendumResult(
+  value: any,
+): CreateServiceAddendumResult {
   const row = Array.isArray(value) ? value[0] : value;
   const proposalId = row?.proposalId ?? row?.proposal_id;
   const documentId = row?.documentId ?? row?.document_id ?? proposalId;
@@ -733,16 +759,18 @@ function invalidateProjectCommerce(
   queryClient: ReturnType<typeof useQueryClient>,
   projectId: string,
 ) {
-  void queryClient.invalidateQueries({
-    queryKey: commercialDocumentKeys.budget(projectId),
-  });
-  void queryClient.invalidateQueries({
-    queryKey: commercialDocumentKeys.waves(projectId),
-  });
-  void queryClient.invalidateQueries({
-    queryKey: commercialDocumentKeys.authority(projectId),
-  });
-  void queryClient.invalidateQueries({ queryKey: ["project-v2", projectId] });
+  return Promise.all([
+    queryClient.invalidateQueries({
+      queryKey: commercialDocumentKeys.budget(projectId),
+    }),
+    queryClient.invalidateQueries({
+      queryKey: commercialDocumentKeys.waves(projectId),
+    }),
+    queryClient.invalidateQueries({
+      queryKey: commercialDocumentKeys.authority(projectId),
+    }),
+    queryClient.invalidateQueries({ queryKey: ["project-v2", projectId] }),
+  ]);
 }
 
 export function useSaveWorkingBudgetDraft(projectId: string) {
@@ -755,7 +783,7 @@ export function useSaveWorkingBudgetDraft(projectId: string) {
         commercialDocumentKeys.budget(projectId),
         budget,
       );
-      invalidateProjectCommerce(queryClient, projectId);
+      void invalidateProjectCommerce(queryClient, projectId);
     },
   });
 }
@@ -781,21 +809,16 @@ export function usePublishBudgetCheckpoint(projectId: string) {
       });
       if (error) throw error;
       const checkpointId = data?.checkpointId ?? data?.checkpoint_id;
+      let notificationDelivery: CommercialNotificationDelivery =
+        "not_requested";
       if (checkpointId) {
-        try {
-          await supabase.functions.invoke("commercial-document-notify", {
-            body: {
-              documentId: agreementId,
-              transition: "budget_published",
-              eventId: checkpointId,
-            },
-          });
-        } catch {
-          // The checkpoint is durable and the edge notification is idempotent.
-          // Delivery can be replayed without publishing another checkpoint.
-        }
+        notificationDelivery = await invokeCommercialNotification(supabase, {
+          documentId: agreementId,
+          transition: "budget_published",
+          eventId: checkpointId,
+        });
       }
-      return data;
+      return { ...data, notificationDelivery };
     },
     onSuccess: () => invalidateProjectCommerce(queryClient, projectId),
   });
@@ -958,14 +981,16 @@ export function useSendFurnishingsAuthorization(projectId: string) {
           "The furnishings send instance is incomplete. Refresh before retrying.",
       };
     },
-    onSuccess: (_, proposalId) => {
-      invalidateProjectCommerce(queryClient, projectId);
-      void queryClient.invalidateQueries({
-        queryKey: commercialDocumentKeys.bundle(proposalId),
-      });
-      void queryClient.invalidateQueries({
-        queryKey: ["proposal", proposalId],
-      });
+    onSuccess: async (_, proposalId) => {
+      await Promise.all([
+        invalidateProjectCommerce(queryClient, projectId),
+        queryClient.invalidateQueries({
+          queryKey: commercialDocumentKeys.bundle(proposalId),
+        }),
+        queryClient.invalidateQueries({
+          queryKey: ["proposal", proposalId],
+        }),
+      ]);
     },
   });
 }

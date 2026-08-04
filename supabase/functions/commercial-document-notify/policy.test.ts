@@ -2,6 +2,7 @@ import { assertEquals } from "https://deno.land/std@0.224.0/assert/mod.ts";
 import {
   actorCanNotify,
   assessCommercialTransition,
+  commercialNotificationEventKey,
   documentKindCanNotify,
   type CommercialTransitionEvidence,
   type CommercialTransitionPolicyInput,
@@ -59,6 +60,29 @@ Deno.test("document-kind matrix prevents cross-rail notification copy", () => {
     false,
   );
   assertEquals(documentKindCanNotify("legacy", "client_signed"), false);
+});
+
+Deno.test("non-budget idempotency is strictly document-scoped", () => {
+  assertEquals(
+    commercialNotificationEventKey("executed", "document-1", null),
+    "document-1",
+  );
+  assertEquals(
+    commercialNotificationEventKey("executed", "document-1", "attacker-uuid-1"),
+    null,
+  );
+  assertEquals(
+    commercialNotificationEventKey("executed", "document-1", "attacker-uuid-2"),
+    null,
+  );
+  assertEquals(
+    commercialNotificationEventKey(
+      "budget_published",
+      "document-1",
+      "checkpoint-1",
+    ),
+    "checkpoint-1",
+  );
 });
 
 Deno.test(

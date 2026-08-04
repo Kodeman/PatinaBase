@@ -250,6 +250,8 @@ export interface FurnishingsWaveView {
   depositRequiredCents: number;
   depositInvoiceId: string | null;
   executedAt: string | null;
+  sentAt: string | null;
+  proposalSendDispatchId: string | null;
   checkpointId: string | null;
   itemCount: number;
   items: FurnishingsWaveItemView[];
@@ -288,6 +290,8 @@ export function mapFurnishingsWaves(value: unknown): FurnishingsWaveView[] {
       100,
       cents(row.depositPercent ?? row.deposit_percent),
     );
+    const authoritativeDepositRequired =
+      row.depositRequiredCents ?? row.deposit_required_cents;
     const items = Array.isArray(row.items) ? row.items : [];
     return {
       documentId,
@@ -297,13 +301,19 @@ export function mapFurnishingsWaves(value: unknown): FurnishingsWaveView[] {
       status: text(row.status),
       totalAmountCents,
       depositPercent,
-      depositRequiredCents: Math.round(
-        (totalAmountCents * depositPercent) / 100,
-      ),
+      depositRequiredCents:
+        authoritativeDepositRequired === null ||
+        authoritativeDepositRequired === undefined
+          ? Math.round((totalAmountCents * depositPercent) / 100)
+          : cents(authoritativeDepositRequired),
       depositInvoiceId: nullableText(
         row.depositInvoiceId ?? row.deposit_invoice_id,
       ),
       executedAt: nullableText(row.executedAt ?? row.executed_at),
+      sentAt: nullableText(row.sentAt ?? row.sent_at),
+      proposalSendDispatchId: nullableText(
+        row.proposalSendDispatchId ?? row.proposal_send_dispatch_id,
+      ),
       checkpointId: nullableText(
         row.budgetCheckpointId ?? row.budget_checkpoint_id,
       ),

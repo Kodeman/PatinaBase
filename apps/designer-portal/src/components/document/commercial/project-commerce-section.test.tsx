@@ -2,8 +2,27 @@ import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 
 const sendWave = jest.fn();
 const retryDelivery = jest.fn();
+const replayNotification = jest.fn();
+let mockWorkingBudget: Record<string, unknown> = {
+  isLoading: true,
+  data: null,
+  error: null,
+};
+let mockBillingAuthority: Record<string, unknown> | null = null;
 
 jest.mock("@patina/supabase", () => ({
+  useProposalSendDispatchStatus: () => ({
+    isLoading: false,
+    isError: false,
+    data: {
+      dispatchId: "dispatch-1",
+      proposalId: "proposal-1",
+      sentAt: "2026-08-03T12:00:00Z",
+      state: "pending",
+      attemptCount: 1,
+      retryable: true,
+    },
+  }),
   useRetryProposalSend: () => ({
     mutateAsync: retryDelivery,
     isPending: false,
@@ -11,8 +30,12 @@ jest.mock("@patina/supabase", () => ({
 }));
 
 jest.mock("@/hooks/use-commercial-documents", () => ({
-  useWorkingBudget: () => ({ isLoading: true, data: null, error: null }),
-  useProjectBillingAuthority: () => ({ data: null }),
+  useWorkingBudget: () => mockWorkingBudget,
+  useProjectBillingAuthority: () => ({ data: mockBillingAuthority }),
+  useReplayCommercialNotification: () => ({
+    mutateAsync: replayNotification,
+    isPending: false,
+  }),
   useSaveWorkingBudgetDraft: () => ({
     mutateAsync: jest.fn(),
     isPending: false,
@@ -37,13 +60,15 @@ jest.mock("@/hooks/use-commercial-documents", () => ({
         documentId: "document-1",
         proposalId: "proposal-1",
         waveName: "Living Room Essentials",
-        state: "draft",
-        status: "draft",
+        state: "sent",
+        status: "sent",
         totalAmountCents: 2_000_000,
         depositPercent: 50,
         depositRequiredCents: 1_000_000,
         depositInvoiceId: null,
         executedAt: null,
+        sentAt: "2026-08-03T12:00:00Z",
+        proposalSendDispatchId: "dispatch-1",
         checkpointId: "checkpoint-1",
         itemCount: 0,
         items: [],
@@ -67,24 +92,18 @@ describe("ProjectCommerceSection furnishings delivery recovery", () => {
   beforeEach(() => {
     sendWave.mockReset();
     retryDelivery.mockReset();
+    replayNotification.mockReset();
+    mockWorkingBudget = { isLoading: true, data: null, error: null };
+    mockBillingAuthority = null;
   });
 
-  it("surfaces pending delivery and retries only the existing dispatch", async () => {
-    sendWave.mockResolvedValue({
-      proposalSendDispatchId: "dispatch-1",
-      sentAt: "2026-08-03T12:00:00Z",
-      _emailDispatched: false,
-      _emailDeliveryState: "pending",
-      _emailRetryable: true,
-    });
+  it("rehydrates pending delivery after refresh and retries only the existing dispatch", async () => {
     retryDelivery.mockResolvedValue({
       _emailDispatched: true,
       _emailDeliveryState: "delivered",
       _emailRetryable: false,
     });
     render(<ProjectCommerceSection projectId="project-1" />);
-
-    fireEvent.click(screen.getByRole("button", { name: "Send for signature" }));
 
     expect(
       await screen.findByText(/email delivery is still being confirmed/i),
@@ -103,11 +122,60 @@ describe("ProjectCommerceSection furnishings delivery recovery", () => {
         sentAt: "2026-08-03T12:00:00Z",
       }),
     );
-    expect(sendWave).toHaveBeenCalledTimes(1);
-    await waitFor(() => {
-      expect(
-        screen.queryByText(/email delivery is still being confirmed/i),
-      ).not.toBeInTheDocument();
-    });
+    expect(sendWave).not.toHaveBeenCalled();
+  });
+
+  it("keeps published budget-notice recovery discoverable after refresh", async () => {
+    mockWorkingBudget = {
+      isLoading: false,
+      error: null,
+      data: {
+        version: {
+          id: "version-1",
+          version: 1,
+          state: "published",
+          lines: [
+            {
+              id: "line-1",
+              roomId: null,
+              roomName: "Living room",
+              category: "Seating",
+              lowCents: 100_000,
+              targetCents: 150_000,
+              highCents: 200_000,
+              sortOrder: 0,
+            },
+          ],
+        },
+        checkpoint: {
+          id: "checkpoint-1",
+          checkpointCode: "B-001",
+          state: "published",
+          publishedAt: "2026-08-03T12:00:00Z",
+          acknowledgedAt: null,
+          overrideAt: null,
+          overrideReason: null,
+        },
+        note: "",
+      },
+    };
+    mockBillingAuthority = { agreementId: "agreement-1" };
+    replayNotification.mockResolvedValue("delivered");
+    render(<ProjectCommerceSection projectId="project-1" />);
+
+    fireEvent.click(
+      screen.getByRole("button", { name: "Resend budget notice" }),
+    );
+
+    await waitFor(() =>
+      expect(replayNotification).toHaveBeenCalledWith({
+        documentId: "agreement-1",
+        transition: "budget_published",
+        eventId: "checkpoint-1",
+      }),
+    );
+    expect(
+      await screen.findByText("The working-budget notice is confirmed."),
+    ).toBeVisible();
   });
 });

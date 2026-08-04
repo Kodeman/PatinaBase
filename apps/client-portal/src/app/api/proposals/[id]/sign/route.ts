@@ -1,9 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import {
-  getUser,
-  createServerClient,
-  createServiceClient,
-} from '@patina/supabase/server';
+import { getUser, createServerClient, createServiceClient } from '@patina/supabase/server';
 import { COMMERCIAL_DOCUMENT_KINDS } from '@patina/types';
 import { resolveClientIp } from '@/lib/utils/client-ip';
 import { captureMoodBoardProposalActivated } from '@/lib/analytics/mood-board-server';
@@ -16,7 +12,7 @@ async function notifyCommercialTransition(
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   supabase: any,
   documentId: string,
-  transition: 'client_signed' | 'furnishings_executed' | 'deposit_ready',
+  transition: 'client_signed' | 'furnishings_executed' | 'deposit_ready'
 ): Promise<CommercialNotificationState> {
   try {
     const { data, error } = await supabase.functions.invoke('commercial-document-notify', {
@@ -41,10 +37,7 @@ async function notifyCommercialTransition(
   }
 }
 
-export async function POST(
-  request: NextRequest,
-  { params }: { params: Promise<{ id: string }> }
-) {
+export async function POST(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const user = await getUser();
   if (!user) {
     return NextResponse.json({ error: 'unauthorized' }, { status: 401 });
@@ -54,8 +47,7 @@ export async function POST(
   const body = (await request.json().catch(() => ({}))) as {
     signedByName?: unknown;
   };
-  const signedByName =
-    typeof body.signedByName === 'string' ? body.signedByName.trim() : '';
+  const signedByName = typeof body.signedByName === 'string' ? body.signedByName.trim() : '';
   if (signedByName.length < 2) {
     return NextResponse.json({ error: 'invalid_name' }, { status: 400 });
   }
@@ -70,11 +62,13 @@ export async function POST(
   // activation semantics that are forbidden for a client-only services act.
   const { data: commercialBundle, error: commercialLookupError } = await supabase.rpc(
     'get_client_commercial_document_bundle',
-    { p_proposal_id: id },
+    {
+      p_proposal_id: id,
+    }
   );
   const commercialDocument = commercialBundle?.document;
-  const documentKind = commercialDocument?.kind ?? commercialDocument?.document_kind ??
-    commercialDocument?.documentKind;
+  const documentKind =
+    commercialDocument?.kind ?? commercialDocument?.document_kind ?? commercialDocument?.documentKind;
 
   // Kind selection controls which transaction may run, so absence, an RPC
   // error, or an unknown future value must never fall back to legacy project
@@ -91,10 +85,7 @@ export async function POST(
   // Keep the existing client-safe proposal preflight for expiry and hardened
   // legacy compatibility. Commercial kind still comes only from the dedicated
   // database allowlist above.
-  const { data: bundle, error: fetchError } = await supabase.rpc(
-    'get_client_proposal_bundle',
-    { p_proposal_id: id },
-  );
+  const { data: bundle, error: fetchError } = await supabase.rpc('get_client_proposal_bundle', { p_proposal_id: id });
   const proposal = bundle?.proposal;
 
   if (fetchError || !proposal) {
@@ -102,17 +93,13 @@ export async function POST(
   }
 
   if (documentKind !== 'legacy') {
-    const commercialState = commercialDocument.commercialState ??
-      commercialDocument.commercial_state ?? commercialDocument.state;
+    const commercialState =
+      commercialDocument.commercialState ?? commercialDocument.commercial_state ?? commercialDocument.state;
     const isRetryableFurnishingsExecution =
       documentKind === 'furnishings_authorization' && commercialState === 'executed';
     const isClientSignedServicesRetry =
       documentKind !== 'furnishings_authorization' && commercialState === 'client_signed';
-    if (
-      commercialState !== 'sent' &&
-      !isRetryableFurnishingsExecution &&
-      !isClientSignedServicesRetry
-    ) {
+    if (commercialState !== 'sent' && !isRetryableFurnishingsExecution && !isClientSignedServicesRetry) {
       return NextResponse.json({ error: 'not_signable' }, { status: 409 });
     }
 
@@ -139,23 +126,18 @@ export async function POST(
           p_signed_name: signedByName,
           p_client_id: user.id,
           p_signed_ip: clientIp,
-        },
+        }
       );
       if (executeError) {
         return NextResponse.json({ error: executeError.message || 'sign_failed' }, { status: 500 });
       }
-      const newlyExecuted =
-        executeResult?.newly_executed === true || executeResult?.newlyExecuted === true;
-      const depositInvoiceId =
-        executeResult?.deposit_invoice_id ?? executeResult?.depositInvoiceId ?? null;
+      const newlyExecuted = executeResult?.newly_executed === true || executeResult?.newlyExecuted === true;
+      const depositInvoiceId = executeResult?.deposit_invoice_id ?? executeResult?.depositInvoiceId ?? null;
       let executionNotification: CommercialNotificationState = 'not_requested';
       let depositNotification: CommercialNotificationState = 'not_requested';
-      if (newlyExecuted) {
-        executionNotification = await notifyCommercialTransition(
-          supabase,
-          id,
-          'furnishings_executed',
-        );
+      const executedState = executeResult?.commercial_state ?? executeResult?.commercialState ?? 'executed';
+      if (executedState === 'executed') {
+        executionNotification = await notifyCommercialTransition(supabase, id, 'furnishings_executed');
         if (depositInvoiceId) {
           depositNotification = await notifyCommercialTransition(supabase, id, 'deposit_ready');
         }
@@ -167,9 +149,10 @@ export async function POST(
         depositInvoiceId,
         newlyExecuted,
         notificationDelivery: {
-          state: executionNotification === 'pending_retry' || depositNotification === 'pending_retry'
-            ? 'pending_retry'
-            : executionNotification,
+          state:
+            executionNotification === 'pending_retry' || depositNotification === 'pending_retry'
+              ? 'pending_retry'
+              : executionNotification,
           transitions: {
             furnishingsExecuted: executionNotification,
             depositReady: depositNotification,
@@ -190,33 +173,29 @@ export async function POST(
         p_signed_name: signedByName,
         p_client_id: user.id,
         p_signed_ip: clientIp,
-      },
+      }
     );
     if (signError) {
       return NextResponse.json({ error: signError.message || 'sign_failed' }, { status: 500 });
     }
 
-    const newlyClientSigned =
-      signResult?.newly_client_signed === true || signResult?.newlyClientSigned === true;
+    const newlyClientSigned = signResult?.newly_client_signed === true || signResult?.newlyClientSigned === true;
+    const signedState = signResult?.commercial_state ?? signResult?.commercialState ?? 'client_signed';
     let notificationDelivery: CommercialNotificationState = 'not_requested';
-    if (newlyClientSigned) {
+    if (signedState === 'client_signed') {
       notificationDelivery = await notifyCommercialTransition(supabase, id, 'client_signed');
     }
 
     return NextResponse.json({
       ok: true,
-      commercialState: signResult?.commercial_state ?? signResult?.commercialState ?? 'client_signed',
+      commercialState: signedState,
       newlyClientSigned,
       notificationDelivery: { state: notificationDelivery },
     });
   }
 
   // Legacy compatibility stays on the hardened proposal bundle/signature path.
-  if (
-    proposal.status !== 'sent' &&
-    proposal.status !== 'viewed' &&
-    proposal.status !== 'accepted'
-  ) {
+  if (proposal.status !== 'sent' && proposal.status !== 'viewed' && proposal.status !== 'accepted') {
     return NextResponse.json({ error: 'not_signable' }, { status: 409 });
   }
 
@@ -239,21 +218,15 @@ export async function POST(
   // schedule anchoring.
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const service = createServiceClient() as any;
-  const { data: signResult, error: signError } = await service.rpc(
-    'sign_proposal_with_trusted_ip',
-    {
-      p_proposal_id: id,
-      p_signed_name: signedByName,
-      p_client_id: user.id,
-      p_signed_ip: clientIp,
-    },
-  );
+  const { data: signResult, error: signError } = await service.rpc('sign_proposal_with_trusted_ip', {
+    p_proposal_id: id,
+    p_signed_name: signedByName,
+    p_client_id: user.id,
+    p_signed_ip: clientIp,
+  });
 
   if (signError) {
-    return NextResponse.json(
-      { error: signError.message || 'sign_failed' },
-      { status: 500 }
-    );
+    return NextResponse.json({ error: signError.message || 'sign_failed' }, { status: 500 });
   }
 
   // Only the transaction that created the durable signature may emit the
@@ -261,19 +234,15 @@ export async function POST(
   // race that waited on the proposal lock) return `newly_signed=false`, so a
   // lost response or double submit cannot send duplicate client/designer mail.
   if (signResult?.newly_signed === true) {
-    void supabase.functions
-      .invoke('proposal-sign-confirmation', { body: { proposalId: id } })
-      .catch(() => {
-        // Silent — confirmation email failure should not block sign
-      });
+    void supabase.functions.invoke('proposal-sign-confirmation', { body: { proposalId: id } }).catch(() => {
+      // Silent — confirmation email failure should not block sign
+    });
   }
 
   // Emit on fresh signatures and accepted repair/retry responses. The server
   // helper supplies a deterministic $insert_id, so a lost HTTP response can be
   // retried without either losing the denominator or double-counting it.
-  const projectId = typeof signResult?.project_id === 'string'
-    ? signResult.project_id
-    : null;
+  const projectId = typeof signResult?.project_id === 'string' ? signResult.project_id : null;
   if (projectId) {
     try {
       const { count: boardCount, error: boardCountError } = await service

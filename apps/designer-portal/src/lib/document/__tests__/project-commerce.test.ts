@@ -103,7 +103,10 @@ describe("project commerce adapters", () => {
         commercialState: "sent",
         totalAmountCents: 100_000,
         depositPercent: 50,
+        depositRequiredCents: 45_000,
         budgetCheckpointId: "checkpoint-1",
+        sentAt: "2026-08-03T12:00:00Z",
+        proposalSendDispatchId: "dispatch-1",
         items: [
           {
             id: "item-1",
@@ -136,7 +139,9 @@ describe("project commerce adapters", () => {
     ]);
     expect(waves[0]).toMatchObject({
       checkpointId: "checkpoint-1",
-      depositRequiredCents: 50_000,
+      depositRequiredCents: 45_000,
+      sentAt: "2026-08-03T12:00:00Z",
+      proposalSendDispatchId: "dispatch-1",
     });
     expect(JSON.stringify(waves)).not.toMatch(/trade|vendor|markup/i);
     expect(furnishingsDepositPosture(waves[0])).toBe("awaiting_signature");

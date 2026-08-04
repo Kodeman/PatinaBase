@@ -24,6 +24,7 @@ import {
   useCreateFurnishingsAuthorization,
   useOverrideBudgetCheckpoint,
   usePublishBudgetCheckpoint,
+  useReplayCommercialNotification,
   useSendFurnishingsAuthorization,
 } from '../use-commercial-documents';
 
@@ -53,12 +54,14 @@ describe('designer commercial document hooks', () => {
 
     const result = await mutation.mutationFn('Morgan Designer');
 
-    expect(result).toEqual(expect.objectContaining({
-      projectId: 'project-1',
-      billingAuthorityId: 'authority-1',
-      newlyExecuted: true,
-      notificationDelivery: 'delivered',
-    }));
+    expect(result).toEqual(
+      expect.objectContaining({
+        projectId: 'project-1',
+        billingAuthorityId: 'authority-1',
+        newlyExecuted: true,
+        notificationDelivery: 'delivered',
+      })
+    );
     expect(invoke).toHaveBeenCalledWith('commercial-document-notify', {
       body: { documentId: 'agreement-1', transition: 'executed' },
     });
@@ -76,22 +79,60 @@ describe('designer commercial document hooks', () => {
       },
       error: null,
     });
-    invoke.mockResolvedValue({ data: null, error: { message: 'edge unavailable' } });
+    invoke.mockResolvedValue({
+      data: null,
+      error: { message: 'edge unavailable' },
+    });
     const mutation = useCountersignDesignServicesAgreement('agreement-1') as unknown as {
       mutationFn: (name: string) => Promise<Record<string, unknown>>;
     };
 
     const result = await mutation.mutationFn('Morgan Designer');
 
-    expect(result).toEqual(expect.objectContaining({
-      newlyExecuted: true,
-      notificationDelivery: 'pending_retry',
-    }));
+    expect(result).toEqual(
+      expect.objectContaining({
+        newlyExecuted: true,
+        notificationDelivery: 'pending_retry',
+      })
+    );
     expect(invoke).toHaveBeenCalledTimes(1);
   });
 
+  it('replays the execution notice when a committed countersign is retried', async () => {
+    rpc.mockResolvedValue({
+      data: {
+        proposalId: 'agreement-1',
+        commercialState: 'executed',
+        projectId: 'project-1',
+        agreementId: 'agreement-1',
+        billingAuthorityId: 'authority-1',
+        newlyExecuted: false,
+      },
+      error: null,
+    });
+    invoke.mockResolvedValue({ data: { ok: true }, error: null });
+    const mutation = useCountersignDesignServicesAgreement('agreement-1') as unknown as {
+      mutationFn: (name: string) => Promise<Record<string, unknown>>;
+    };
+
+    const result = await mutation.mutationFn('Morgan Designer');
+
+    expect(result).toEqual(
+      expect.objectContaining({
+        newlyExecuted: false,
+        notificationDelivery: 'delivered',
+      })
+    );
+    expect(invoke).toHaveBeenCalledWith('commercial-document-notify', {
+      body: { documentId: 'agreement-1', transition: 'executed' },
+    });
+  });
+
   it('publishes checkpoints and requires an audited override reason', async () => {
-    rpc.mockResolvedValue({ data: { checkpointId: 'checkpoint-1' }, error: null });
+    rpc.mockResolvedValue({
+      data: { checkpointId: 'checkpoint-1' },
+      error: null,
+    });
     invoke.mockResolvedValue({ data: { ok: true }, error: null });
     const publish = usePublishBudgetCheckpoint('project-1') as unknown as {
       mutationFn: (input: { versionId: string; agreementId: string }) => Promise<unknown>;
@@ -100,10 +141,16 @@ describe('designer commercial document hooks', () => {
       mutationFn: (input: { checkpointId: string; reason: string }) => Promise<unknown>;
     };
 
-    await publish.mutationFn({
+    const published = await publish.mutationFn({
       versionId: 'version-1',
       agreementId: 'agreement-1',
     });
+    expect(published).toEqual(
+      expect.objectContaining({
+        checkpointId: 'checkpoint-1',
+        notificationDelivery: 'delivered',
+      })
+    );
     expect(rpc).toHaveBeenCalledWith('publish_budget_checkpoint', {
       p_project_id: 'project-1',
       p_version_id: 'version-1',
@@ -117,9 +164,9 @@ describe('designer commercial document hooks', () => {
     });
     expect(invoke).toHaveBeenCalledTimes(1);
 
-    await expect(
-      override.mutationFn({ checkpointId: 'checkpoint-1', reason: 'no' }),
-    ).rejects.toThrow('meaningful reason');
+    await expect(override.mutationFn({ checkpointId: 'checkpoint-1', reason: 'no' })).rejects.toThrow(
+      'meaningful reason'
+    );
     await override.mutationFn({
       checkpointId: 'checkpoint-1',
       reason: 'Client confirmed on the recorded call.',
@@ -127,6 +174,49 @@ describe('designer commercial document hooks', () => {
     expect(rpc).toHaveBeenLastCalledWith('override_budget_checkpoint', {
       p_checkpoint_id: 'checkpoint-1',
       p_reason: 'Client confirmed on the recorded call.',
+    });
+  });
+
+  it('surfaces a resolved budget notice invoke error as pending retry', async () => {
+    rpc.mockResolvedValue({
+      data: { checkpointId: 'checkpoint-1' },
+      error: null,
+    });
+    invoke.mockResolvedValue({
+      data: null,
+      error: { message: 'edge unavailable' },
+    });
+    const publish = usePublishBudgetCheckpoint('project-1') as unknown as {
+      mutationFn: (input: { versionId: string; agreementId: string }) => Promise<Record<string, unknown>>;
+    };
+
+    const result = await publish.mutationFn({
+      versionId: 'version-1',
+      agreementId: 'agreement-1',
+    });
+
+    expect(result.notificationDelivery).toBe('pending_retry');
+  });
+
+  it('replays a committed notification with its deterministic event identity', async () => {
+    invoke.mockResolvedValue({ data: { ok: true }, error: null });
+    const replay = useReplayCommercialNotification() as unknown as {
+      mutationFn: (input: { documentId: string; transition: 'budget_published'; eventId: string }) => Promise<string>;
+    };
+
+    await expect(
+      replay.mutationFn({
+        documentId: 'agreement-1',
+        transition: 'budget_published',
+        eventId: 'checkpoint-1',
+      })
+    ).resolves.toBe('delivered');
+    expect(invoke).toHaveBeenCalledWith('commercial-document-notify', {
+      body: {
+        documentId: 'agreement-1',
+        transition: 'budget_published',
+        eventId: 'checkpoint-1',
+      },
     });
   });
 
@@ -169,12 +259,15 @@ describe('designer commercial document hooks', () => {
         },
         error: null,
       });
-    invoke.mockResolvedValue({ data: { delivery_state: 'delivered' }, error: null });
+    invoke.mockResolvedValue({
+      data: { delivery_state: 'delivered' },
+      error: null,
+    });
     const mutation = useSendFurnishingsAuthorization('project-1') as unknown as {
       mutationFn: (proposalId: string) => Promise<unknown>;
     };
 
-    const result = await mutation.mutationFn('wave-proposal-1') as Record<string, unknown>;
+    const result = (await mutation.mutationFn('wave-proposal-1')) as Record<string, unknown>;
 
     expect(invoke).toHaveBeenCalledTimes(1);
     expect(invoke).toHaveBeenCalledWith('proposal-send', {
@@ -184,11 +277,13 @@ describe('designer commercial document hooks', () => {
         dispatchId: 'dispatch-1',
       },
     });
-    expect(result).toEqual(expect.objectContaining({
-      _emailDispatched: true,
-      _emailDeliveryState: 'delivered',
-      _emailRetryable: false,
-    }));
+    expect(result).toEqual(
+      expect.objectContaining({
+        _emailDispatched: true,
+        _emailDeliveryState: 'delivered',
+        _emailRetryable: false,
+      })
+    );
   });
 
   it('does not repeat the durable FF&E send when edge delivery is pending', async () => {
@@ -204,7 +299,10 @@ describe('designer commercial document hooks', () => {
         },
         error: null,
       });
-    invoke.mockResolvedValue({ data: null, error: { message: 'edge unavailable' } });
+    invoke.mockResolvedValue({
+      data: null,
+      error: { message: 'edge unavailable' },
+    });
     const mutation = useSendFurnishingsAuthorization('project-1') as unknown as {
       mutationFn: (proposalId: string) => Promise<Record<string, unknown>>;
     };
@@ -213,11 +311,13 @@ describe('designer commercial document hooks', () => {
 
     expect(rpc).toHaveBeenCalledTimes(2);
     expect(invoke).toHaveBeenCalledTimes(1);
-    expect(result).toEqual(expect.objectContaining({
-      _emailDispatched: false,
-      _emailDeliveryState: 'pending',
-      _emailRetryable: true,
-      proposalSendDispatchId: 'dispatch-1',
-    }));
+    expect(result).toEqual(
+      expect.objectContaining({
+        _emailDispatched: false,
+        _emailDeliveryState: 'pending',
+        _emailRetryable: true,
+        proposalSendDispatchId: 'dispatch-1',
+      })
+    );
   });
 });

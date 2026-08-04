@@ -6,6 +6,7 @@ import { Button, Input } from "@/components/ui/controls";
 import {
   useCommercialDocument,
   useCountersignDesignServicesAgreement,
+  useReplayCommercialNotification,
 } from "@/hooks/use-commercial-documents";
 import { commercialStatusView } from "@/lib/document/commercial-documents";
 import { rememberRoomOrigin } from "@/lib/document/room-origin";
@@ -34,6 +35,7 @@ export function ServiceAgreementInstruments({
   const pathname = usePathname();
   const bundle = useCommercialDocument(proposalId);
   const countersign = useCountersignDesignServicesAgreement(proposalId);
+  const replayNotification = useReplayCommercialNotification();
   const [previewOpen, setPreviewOpen] = useState(false);
   const [sendOpen, setSendOpen] = useState(false);
   const [signerName, setSignerName] = useState("");
@@ -70,10 +72,13 @@ export function ServiceAgreementInstruments({
     try {
       const result = await countersign.mutateAsync(signerName);
       setResultProjectId(result.projectId);
+      const executionMessage = result.newlyExecuted
+        ? "Agreement executed. The project and billing authority are now active."
+        : "The existing execution was verified; no duplicate project or authority was created.";
       setResultMessage(
-        result.newlyExecuted
-          ? "Agreement executed. The project and billing authority are now active."
-          : "The existing execution was verified; no duplicate project or authority was created.",
+        result.notificationDelivery === "pending_retry"
+          ? `${executionMessage} The execution notice is pending; retry it below.`
+          : executionMessage,
       );
     } catch (error) {
       setResultMessage(
@@ -143,6 +148,29 @@ export function ServiceAgreementInstruments({
                   href={`/doc/${projectId}`}
                 >
                   Open the project
+                </DocumentAction>
+              )}
+              {status.isExecuted && (
+                <DocumentAction
+                  actionKey="replay-execution-notice"
+                  variant="secondary"
+                  disabled={replayNotification.isPending}
+                  onClick={async () => {
+                    setResultMessage(null);
+                    const delivery = await replayNotification.mutateAsync({
+                      documentId: proposalId,
+                      transition: "executed",
+                    });
+                    setResultMessage(
+                      delivery === "delivered"
+                        ? "The execution notice is confirmed."
+                        : "The agreement remains executed, but its notice is still pending. You can retry safely.",
+                    );
+                  }}
+                >
+                  {replayNotification.isPending
+                    ? "Checking execution notice…"
+                    : "Resend execution notice"}
                 </DocumentAction>
               )}
             </div>
